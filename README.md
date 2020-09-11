@@ -1,5 +1,8 @@
 # Scanpy meets Spatial Transcriptomics (2 challenges)
 
+## Contributors
+David, Louis, Olle, Sabrina, Anna, Sergei, Mohammad, Ignacio, Giovanni, Hannah
+
 ## Installation
 ```
 git clone https://github.com/theislab/spatial-tools.git
