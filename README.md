@@ -10,6 +10,24 @@ cd spatial-tools
 pip install -e .
 ```
 
+## Workflow
+Now you can find 2 branches `images` and `graph`. Switch to that branch when you have decided your issue: e.g. `git switch graph`.
+After than, create a new branch for the specific subtask you decide to tackle: e.g. `git checkout -b perm-test`. When you have something, push it to github:
+
+```
+git commit -m "init permutation test"
+git push origin perm-test
+```
+
+You can then open a PR from github while workin on it, so people can see the code, comment, review etc. Whatever you push, will appear on the open PR. When you are done, assign somebody to review your code.
+
+Before starting a new task, remember to switch to master and fetch and pull
+```
+git switch master
+git fetch
+git pull
+```
+
 ## Introduction and outline of the challenges
 
 The aim of these challenges is to build preprocessing and analysis tools for spatial modalities: the spatial graph and the tissue image. The topics of the two challenges are the following:
