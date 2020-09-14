@@ -8,24 +8,6 @@ class AssortativityMeasures:
     """
     Class for assortivity measures.
     """
-    def get_networkx_graph(
-            self,
-            adjacency_matrix,
-            node_attributes
-    ):
-        """
-        Function to create networkx graph from adjacency matrix a with node attributes attr.
-        Networkx graph is needed to calculate assortativity coefficients with networkx built-in functions.
-        :param adjacency_matrix: sparse adjacency matrix
-        :param node_attributes: dict of nodes
-        :return: networkx graph G with node_attributes
-        """
-        graph = nx.from_scipy_sparse_matrix(adjacency_matrix)
-        if node_attributes is not None:
-            nx.set_node_attributes(graph, node_attributes)
-        self.graph = graph
-        return self.graph
-
     def calculate_degree_assortativity_coefficient(
             self,
             graph
@@ -64,5 +46,5 @@ class AssortativityMeasures:
         Function that adds assortativity coefficient as unstructured annotation to AnnData object
         :return:
         """
-        # ToDo
+        #  ToDo: add assortativity coefficient as unstructzred annotation to the AnnData object
         raise NotImplementedError
