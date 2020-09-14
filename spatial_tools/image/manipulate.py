@@ -1,5 +1,6 @@
 import numpy as np
 from skimage.transform import rescale
+from skimage.draw import disk
 
 def crop_img(img, x, y, scalef=1.0, sizef=1.0, spot_diameter=89.44476048022638, mask_circle=False, cval=0.0, **kwargs):
     """
@@ -44,4 +45,15 @@ def crop_img(img, x, y, scalef=1.0, sizef=1.0, spot_diameter=89.44476048022638, 
         multichannel = len(img.shape) > 2
         crop = rescale(crop, scalef, preserve_range=True, multichannel=multichannel, **kwargs)
         crop = crop.astype(img.dtype)
+        
+    # mask crop
+    if mask_circle:
+        # get coords inside circle
+        rr, cc = disk(center=(crop.shape[0]//2, crop.shape[1]//2), 
+                                   radius=crop.shape[0]//2, shape=crop.shape)
+        circle = np.zeros_like(crop)
+        circle[rr, cc] = 1
+        # set everything outside circle to cval
+        crop[circle==0] = cval
+        
     return crop
