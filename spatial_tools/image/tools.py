@@ -4,6 +4,8 @@ import os
 import pandas as pd
 from spatial_tools.image.manipulate import crop_img
 import skimage.feature as sk_image
+from skimage.feature import greycoprops
+from skimage.feature import greycomatrix
 
 def read_tif(dataset_folder, dataset_name):
     img = imageio.imread(os.path.join(dataset_folder, f"{dataset_name}_image.tif"))
@@ -70,3 +72,98 @@ def get_hog_features(im):
     hog_pd.columns = [str(col) + '_hog' for col in hog_pd.columns]
     return hog_pd
 
+def summary_stats(img,quantiles=[0.9,0.5,0.1],mean=False,std=False,channels=[0,1,2]):
+    """Calculate summary statistics of color channels
+    
+    Arguments
+    ---------
+    img: np.array 
+        rgb image in uint8 format.
+    qunatiles: list of floats
+        Quantiles that are computed
+    mean: bool
+        Compute mean
+    std: bool
+        Compute std
+    channels: list of ints
+        define for which channels histograms are computed
+        
+    Returns
+    -------
+    dict of feature values
+    
+    """
+    stats = {}
+    for c in channels:
+        for q in quantiles:
+            stats[f'quantile_{q}_ch_{c}'] = np.quantile(img[:,:,c], q)
+        if mean:
+            stats[f'mean_ch_{c}'] = np.mean(img[:,:,c], q)
+        if std:
+            stats[f'std_ch_{c}'] = np.std(img[:,:,c], q)
+    return stats
+
+def color_hist(img,bins=10,channels=[0,1,2],v_range=(0,255)):
+    """Compute histogram counts of color channel values 
+    
+    Arguments
+    ---------
+    img: np.array 
+        rgb image in uint8 format.
+    bins: int
+        number of binned value intervals
+    channels: list of ints
+        define for which channels histograms are computed
+    v_range: tuple of two ints
+        Range on which values are binned.
+        
+    Returns
+    -------
+    dict of feature values
+    
+    """
+    features = {}
+    for c in channels:
+        hist = np.histogram(img[:,:,c], bins=10, range=[0,255], weights=None, density=False)
+        for i,count in enumerate(hist[0]):
+            features[f'ch_{c}_bin_{i}'] = count
+    return features
+    
+    
+def grey_texture_features(img, props=['contrast', 'dissimilarity', 'homogeneity', 'correlation', 'ASM'], distances=[1],angles=[0, np.pi/4, np.pi/2, 3*np.pi/4]):
+    """Calculate texture features
+    
+    A grey level co-occurence matrix (GLCM) is computed for different combinations of distance and angle. 
+    The distance defines the pixel difference of co occurence. The angle define the direction along which 
+    we check for co-occurence. The GLCM includes the number of times that grey-level j occurs at a distance 
+    d and at an angle theta from grey-level i.
+    From a given GLCM texture features are infered.
+    
+    Arguments
+    ---------
+    img: np.array 
+        rgb image in uint8 format.
+    props: list of strs
+        texture features that are calculated. See `prop` in skimage.feature.greycoprops
+    distances: list of ints
+        See `distances` in skimage.feature.greycomatrix 
+    angles: list of floats
+        See `angles` in skimage.feature.greycomatrix 
+        
+    Returns
+    -------
+    dict of feature values
+    
+    """
+    features = {}    
+    # get grey scale image
+    multiplier = [0.299, 0.587, 0.114]
+    grey_img = np.dot(img, multiplier).astype(np.uint8)
+    
+    comatrix = greycomatrix(grey_img, distances=distances, angles=angles, levels=256)
+    for p in props:
+        tmp_features = greycoprops(comatrix, prop=p)
+        for d_idx, d in enumerate(distances):
+            for a_idx, a in enumerate(angles):
+                features[f'{p}_dist_{d}_angle_{a:.2f}'] = tmp_features[d_idx,a_idx]
+    return features
