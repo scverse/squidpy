@@ -9,8 +9,7 @@ from skimage.feature import greycomatrix
 
 def read_tif(dataset_folder, dataset_name):
     img = imageio.imread(os.path.join(dataset_folder, f"{dataset_name}_image.tif"))
-    return imgtures_abt(adata, dataset_folder, dataset_name, features=["hog"]):
-
+    return img
 
 def get_features_abt(adata, dataset_folder, dataset_name, features=["hog"]):
 
@@ -68,7 +67,7 @@ def get_hog_features(im, feature_name):
         hog_dict[f"{feature_name}_{k}"] = hog_feature
     return hog_dict
 
-def summary_stats(img,quantiles=[0.9,0.5,0.1],mean=False,std=False,channels=[0,1,2]):
+def get_summary_stats(img,quantiles=[0.9,0.5,0.1],mean=False,std=False,channels=[0,1,2]):
     """Calculate summary statistics of color channels
     
     Arguments
@@ -99,7 +98,7 @@ def summary_stats(img,quantiles=[0.9,0.5,0.1],mean=False,std=False,channels=[0,1
             stats[f'std_ch_{c}'] = np.std(img[:,:,c], q)
     return stats
 
-def color_hist(img,bins=10,channels=[0,1,2],v_range=(0,255)):
+def get_color_hist(img,bins=10,channels=[0,1,2],v_range=(0,255)):
     """Compute histogram counts of color channel values 
     
     Arguments
@@ -126,7 +125,7 @@ def color_hist(img,bins=10,channels=[0,1,2],v_range=(0,255)):
     return features
     
     
-def grey_texture_features(img, props=['contrast', 'dissimilarity', 'homogeneity', 'correlation', 'ASM'], distances=[1],angles=[0, np.pi/4, np.pi/2, 3*np.pi/4]):
+def get_grey_texture_features(img, props=['contrast', 'dissimilarity', 'homogeneity', 'correlation', 'ASM'], distances=[1],angles=[0, np.pi/4, np.pi/2, 3*np.pi/4]):
     """Calculate texture features
     
     A grey level co-occurence matrix (GLCM) is computed for different combinations of distance and angle. 
