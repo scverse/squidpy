@@ -7,24 +7,19 @@ import skimage.feature as sk_image
 
 def read_tif(dataset_folder, dataset_name):
     img = imageio.imread(os.path.join(dataset_folder, f"{dataset_name}_image.tif"))
-    return img
+    return imgtures_abt(adata, dataset_folder, dataset_name, features=["hog"]):
 
-def features_abt(adata, dataset_folder, dataset_name, features=["hog"], scalef=1, sizef=1, key_added='features', inplace=True):
+
+def get_features_abt(adata, dataset_folder, dataset_name, features=["hog"]):
+
     """
-    Calculate features table from high resolution h&e / fluorescence image for each obs (cell/spot)
-    Args:
-        adata: annotated data matrix
-        dataset_folder: folder containing the tif image
-        dataset_name: name of the dataset (used to read the tif image)
-        features: list of feature names to add to dataframe, default to hog
-        scalef: scale of image crop from which features are calculated
-        sizef: size (neighborhood) of image crop from which features are calculated
-        key_added (string): key under which to add the features in adata.obsm. (default: ``'features'``)
-        inplace (bool): add features matrix to adata, or return features matrix
-    Returns:
-        None or features_log (depending on `inplace` argument)
+    image: array of whole image to crop and calc features from
+    spot_ids: array of integers of the spot_id to analyze
+    xccord, ycoord: array of ints
+    spot_diameter: float
+    features: list of feature names to add to dataframe, default to hog
     """
-    features_log = pd.DataFrame()
+    features_list = []
     
     img = read_tif(dataset_folder, dataset_name)
     
@@ -32,18 +27,19 @@ def features_abt(adata, dataset_folder, dataset_name, features=["hog"], scalef=1
     ycoord = adata.obsm["spatial"][:, 1]
     spot_diameter = adata.uns['spatial'][dataset_name]['scalefactors']['spot_diameter_fullres']
     
-    for spot_id, cell_name  in enumerate(adata.obs.index.tolist()):
-        crop_ = crop_img(img, xcoord[spot_id], ycoord[spot_id], scalef=scalef, 
-                          sizef=sizef, spot_diameter=spot_diameter)
+    cell_names = adata.obs.index.tolist()
+    
+    for spot_id, cell_name  in enumerate(cell_names):
+        crop_ = crop_img(img, xcoord[spot_id], ycoord[spot_id], scalef=1, 
+                          sizef=1, spot_diameter=spot_diameter)
         
-        features_pd = get_features_statistics(crop_, cell_name, features=features)
-        features_log = pd.concat([features_log, features_pd], axis=0)
-        
+        features_dict = get_features_statistics(crop_, cell_name, features=features)        
+        features_list.append(features_dict)
+    
+    features_log = pd.DataFrame(features_list)
+    features_log["cell_name"] = cell_names
     features_log.set_index(["cell_name"], inplace=True)
-    if inplace:
-        adata.obsm[key_added] = features_log
-    else:
-        return features_log
+    return features_log
 
 def get_features_statistics(im, cell_name, features=["hog"]):
     """
@@ -52,21 +48,21 @@ def get_features_statistics(im, cell_name, features=["hog"]):
     features: features to calculate (str), List
     output: pandas Data frame with all features for a image or crop
     """
-    features_pd = pd.DataFrame([cell_name], columns=["cell_name"])
-    
+    stat_dict = {}
     for feature in features:
         if feature == "hog":
-            features_pd = pd.concat([features_pd, get_hog_features(im)], axis=1)
-    return features_pd
+            stat_dict.update(get_hog_features(im, feature))
+    return stat_dict
 
-def get_hog_features(im):
+def get_hog_features(im, feature_name):
     """
     im: image or image crop, numpy array
     spot_id: the spot id of the image element, int
     output: numpy array with hog features
     """
-    features = sk_image.hog(im)
-    hog_pd = pd.DataFrame(features).T
-    hog_pd.columns = [str(col) + '_hog' for col in hog_pd.columns]
-    return hog_pd
+    hog_dict = {}
+    hog_features = sk_image.hog(im)
+    for k, hog_feature in enumerate(hog_features):
+        hog_dict[f"{feature_name}_{k}"] = hog_feature
+    return hog_dict
 
