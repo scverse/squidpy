@@ -1,1 +1,1 @@
-from .ppatterns import ripley_fun
+from .ppatterns import ripley_c
