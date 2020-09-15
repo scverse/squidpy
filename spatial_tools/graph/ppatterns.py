@@ -16,7 +16,11 @@ def ripley_c(adata: ad.AnnData, dist_name: str, cluster_key: str, r_name: str, s
         df_rip[cluster_key]=c
         df_lst.append(df_rip)
 
-    return pd.concat(df_lst,axis=0)
+    df = pd.concat(df_lst,axis=0)
+    # filter by min max dist
+    # minmax_dist = df.groupby(cluster_key)["distance"].max().min()
+    # df = df[df.distance < minmax_dist].copy()
+    return df
 
 
 
