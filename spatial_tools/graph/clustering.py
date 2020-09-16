@@ -21,10 +21,6 @@ def prepare_data_for_clustering(adata):
     adj /= adj.sum(axis=1)
     adata.obsp["self_connected_adj"] = adj
 
-    # prepare UMAP of original node_features
-    sc.pp.neighbors(adata)
-    sc.tl.umap(adata)
-
 def compute_louvain_on_joined_connectivities(adata, alpha, nr_steps):
     """
     Computes louvain clusters based on a weighted sum of a spatial connectivity graph and a connectivity graph
@@ -107,13 +103,15 @@ def plot_louvain_on_graph(adata):
 
 def plot_louvain_on_umap(adata):
     """
-    Plots the computed louvain cluster assignments on top of the UMAP computed on the original node features.
+    Plots the computed louvain cluster assignments on top of the UMAP of the, potentially processed, node features.
 
     Parameters
     ----------
     adata
         The AnnData object.
     """
+    sc.pp.neighbors(adata=adata, use_rep='smooth_features', key_added='umap')
+    sc.tl.umap(adata=adata, neighbors_key='umap')
     sc.pl.umap(adata, color="joined_louvain")
 
 
