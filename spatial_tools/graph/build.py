@@ -10,7 +10,7 @@ def spatial_connectivity(
     adata: "AnnData",
     obsm: str = "spatial",
     key_added: str = "spatial_connectivity",
-    n_degree: int = 1,
+    n_rings: int = 1,
     n_neigh: int = 6,
     radius: Optional[float] = None,
     coord_type: str = "visium",
@@ -26,8 +26,8 @@ def spatial_connectivity(
         Key to spatial coordinates.
     key_added
         Key added to connectivity matrix in obsp.
-    n_degree
-        Degree of connections for Visium data
+    n_rings
+        Number of rings of neighbors for Visium data
     n_neigh
         Number of neighborhoods to consider for non-Visium data
     radius
@@ -37,9 +37,9 @@ def spatial_connectivity(
     """
     if coord_type == "visium":
         Adj = _build_connectivity(adata.obsm[obsm], 6, None, True)
-        if n_degree > 1:
-            # get up to n_degree order connections
-            Adj += Adj**n_degree
+        if n_rings > 1:
+            # get up to n_rings order connections
+            Adj += Adj**n_rings
             Adj.setdiag(0)
             Adj.eliminate_zeros()
             Adj.data[:] = 1.0
