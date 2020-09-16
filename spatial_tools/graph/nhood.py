@@ -4,6 +4,8 @@
 import numpy as np
 from itertools import product, combinations
 import pandas as pd
+import networkx as nx
+
 
 def _count_observations_by_pairs(conn, leiden, positions):
     obs = []
@@ -19,6 +21,7 @@ def _count_observations_by_pairs(conn, leiden, positions):
     obs['k'] = obs['leiden.i'].astype(str) + ":" + obs['leiden.j'].astype(str) 
     obs = obs.sort_values('n.obs', ascending=False)
     return obs
+
 
 def permutation_test_leiden_pairs(adata: "AnnData",
                             n_permutations: int = 10,
@@ -78,10 +81,12 @@ def permutation_test_leiden_pairs(adata: "AnnData",
     
     adata.uns[key_added] = df
 
+
 def centrality_scores(
         adata: "AnnData",
         connectivity_key: str,
-        clusters_key: str
+        clusters_key: str,
+        key_added: str ='centrality_scores'
 ):
     """
     Computes centrality scores per cluster. If no list of of clusters is provided centrality scores will
@@ -94,6 +99,8 @@ def centrality_scores(
         Key to connectivity_matrix in obsp.
     clusters_key
         Key to clusters in obs.
+    key_added
+        Key added to output dataframe in adata.uns.
     """
     graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
     clusters = adata.obs[clusters_key].unique().tolist()
@@ -121,4 +128,4 @@ def centrality_scores(
                       columns=['cluster', 'degree\ncentrality', 'betweenness\ncentrality',
                                'clustering\ncoefficient']
                       )
-    return df
+    adata.uns[key_added] = df
