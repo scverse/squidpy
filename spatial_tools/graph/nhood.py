@@ -3,38 +3,44 @@
 
 import pandas as pd
 import networkx as nx
-import scanpy as sc
+from typing import List
 
 
-def get_cluster_scores_from_adata(
-        adata,
-        clusters: list[str]
+def get_centrality_scores(
+        adata: "AnnData",
+        connectivity_key: str,
+        clusters_key: List[str]
 ):
     """
-    Computes degree centrality per cluster of AnnData object.
-    :param::
-    :return:
-    """
-    sc.pp.neighbors(adata=adata, n_neighbors=15)
-    sc.tl.umap(adata=adata)
+    Computes centrality scores per cluster. If no list of of clusters is provided centrality scores will
+    be evaluated per node. Results are stored in a pandas DataFrame.
 
-    graph = nx.from_scipy_sparse_matrix(adata.obsp['connectivities'])
+    Params
+    ------
+    adata
+        The AnnData object.
+    connectivity_key
+        Key to connectivity_matrix in obsp.
+    """
+    graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
+    clusters = adata.obs[clusters_key].unique().tolist()
 
     degree_centrality = []
     betweenness_centrality = []
     clustering_coefficient = []
 
     for c in clusters:
-        class_node_indices = adata[adata.obs[clusters] == c].obs.index.tolist()
-        class_node_indices = [int(x) for x in class_node_indices]
+        cluster_node_idx = adata[adata.obs[clusters_key] == c].obs.index.tolist()
+        # ensuring that cluster_node_idx are List[int]
+        cluster_node_idx = [int(x) for x in cluster_node_idx]
 
-        centrality = nx.algorithms.centrality.group_degree_centrality(graph, class_node_indices)
+        centrality = nx.algorithms.centrality.group_degree_centrality(graph, cluster_node_idx)
         degree_centrality.append(centrality)
 
-        clustering = nx.algorithms.cluster.clustering(graph, class_node_indices)
+        clustering = nx.algorithms.cluster.clustering(graph, cluster_node_idx)
         clustering_coefficient.append(sum(clustering.values()) / len(clustering.values()))
 
-        subgraph = graph.subgraph(class_node_indices)
+        subgraph = graph.subgraph(cluster_node_idx)
         betweenness = nx.algorithms.centrality.betweenness_centrality(subgraph)
         betweenness_centrality.append(sum(betweenness.values()) / len(betweenness.values()))
 
