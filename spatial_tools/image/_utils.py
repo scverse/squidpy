@@ -2,7 +2,7 @@ import anndata
 import numpy as np
 
 
-import functools import wraps
+from functools import wraps
 from time import time
 
 def timing(f):
