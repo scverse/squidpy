@@ -90,8 +90,7 @@ def cluster_centrality_scores(
         save_networkx_graph: bool=True
 ):
     """
-    Computes centrality scores per cluster. If no list of of clusters is provided centrality scores will
-    be evaluated per node. Results are stored in .uns in the AnnData object.
+    Computes centrality scores per cluster. Results are stored in .uns in the AnnData object.
     Params
     ------
     adata
@@ -112,7 +111,6 @@ def cluster_centrality_scores(
     clusters = adata.obs[clusters_key].unique().tolist()
 
     degree_centrality = []
-    betweenness_centrality = []
     clustering_coefficient = []
     closeness_centrality = []
 
@@ -120,7 +118,6 @@ def cluster_centrality_scores(
         cluster_node_idx = adata[adata.obs[clusters_key] == c].obs.index.tolist()
         # ensuring that cluster_node_idx are List[int]
         cluster_node_idx = [i for i, x in enumerate(cluster_node_idx)]
-        subgraph = graph.subgraph(cluster_node_idx)
 
         centrality = nx.algorithms.centrality.group_degree_centrality(graph, cluster_node_idx)
         degree_centrality.append(centrality)
