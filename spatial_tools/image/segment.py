@@ -12,59 +12,25 @@ Functions exposed: smooth(), segment(), evaluate_nuclei_segmentation()
 """
 
 
-def smooth(
-        adata: anndata.AnnData,
-        img_key: str,
-        method: str,
-        new_img: Union[str, None] = None,
-        copy: bool = False,
-        **kwargs
-):
-    img = _access_img_in_adata(adata=adata, img_key=img_key)
-    if method == "gaussian":
-        img_smoothed = skimage.filters.gaussian(
-            X=img,
-            **kwargs
-        )
-    else:
-        raise ValueError("did not recognize method %s" % method)
-    if copy:
-        adata = adata.copy()
-
-    if new_img is None:
-        new_img = img_key + "_smoothed"
-    _write_img_in_adata(adata=adata, img_key=new_img, img=img_smoothed)
-    if copy:
-        return adata
-
-
 def segment(
-        adata: anndata.AnnData,
-        img_key: str,
+        img,
         model_group: Union[str],
         model_instance: Union[None, SegmentationModel] = None,
         model_kwargs: dict = {},
         crop_kwargs: dict = {},
         new_img: Union[str, None] = None,
-        copy: bool = False,
         **kwargs
 ) -> Union[anndata.AnnData, None]:
     if model_group == "skimage_blob":
-        model_group = SegmentationModelBlob(data=adata, model=model_group)
+        model_group = SegmentationModelBlob(data=img, model=model_group)
     elif model_group == "tensorflow":
-        model_group = SegmentationModelPretrainedTensorflow(data=adata, model=model_instance)
+        model_group = SegmentationModelPretrainedTensorflow(data=img, model=model_instance)
     else:
         raise ValueError("did not recognize model instance %s" % model_group)
 
     model_group.crop(**crop_kwargs)
     img_segmented = model_group.segment(**model_kwargs)
-    if copy:
-        adata = adata.copy()
-    if new_img is None:
-        new_img = img_key + "_segmented"
-    _write_img_in_adata(adata=adata, img_key=new_img, img=img_segmented)
-    if copy:
-        return adata
+    return img_segmented
 
 
 def evaluate_nuclei_segmentation(
@@ -117,11 +83,11 @@ class SegmentationModel:
 
     def __init__(
             self,
-            adata: anndata.AnnData,
+            data: np.ndarray,
             img_key: str,
             model,
     ):
-        self.data = _access_img_in_adata(adata=adata, img_key=img_key)
+        self.data = data
         self.model = model
 
     def crop(self, x=None, y=None, **kwargs):
@@ -198,7 +164,7 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
 
     def __init__(
             self,
-            adata: anndata.AnnData,
+            data: anndata.AnnData,
             img_key: str,
             model,
             **kwargs
@@ -206,7 +172,7 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
         import tensorflow as tf
         assert isinstance(model, tf.keras.model.Model), "model should be a tf keras model instance"
         super(SegmentationModelPretrainedTensorflow, self).__init__(
-            adata=adata,
+            data=data,
             img_key=img_key,
             model=model
         )
