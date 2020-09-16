@@ -2,7 +2,7 @@ import numpy as np
 from skimage.transform import rescale
 from skimage.draw import disk
 
-def crop_img(img, x, y, scalef=1.0, sizef=1.0, spot_diameter=89.44476048022638, mask_circle=False, cval=0.0, **kwargs):
+def crop_img(img, x, y, spot_diameter=89.44476048022638, cval=0.0, **kwargs):
     """
     extract a crop from `img` centered at `x` and `y`. 
     Attrs:
@@ -19,9 +19,14 @@ def crop_img(img, x, y, scalef=1.0, sizef=1.0, spot_diameter=89.44476048022638, 
     assert y < img.shape[0], f"y ({y}) is outsize of image range ({img.shape[0]})"
     assert x < img.shape[1], f"x ({x}) is outsize of image range ({img.shape[1]})"
     
+    sizef = kwargs.get("sizef", 1)
+    scalef = kwargs.get("scalef", 1)
+    mask_circle = kwargs.get("mask_circle", False)
+
     # get image size to crop from fullres image
     s = np.round(spot_diameter*sizef).astype(int)
     assert s > 0, f"image size cannot be 0! spot_diameter: {spot_diameter}, sizef: {sizef}"
+    
     if len(img.shape) == 3:
         crop = (np.zeros((s,s,img.shape[2]))+cval).astype(img.dtype)
     else:

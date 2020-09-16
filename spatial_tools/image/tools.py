@@ -13,7 +13,7 @@ def read_tif(dataset_folder, dataset_name):
     img = imageio.imread(os.path.join(dataset_folder, f"{dataset_name}_image.tif"))
     return img
 
-def get_image_features(adata, dataset_folder, dataset_name, features=["summary"]):
+def get_image_features(adata, dataset_folder, dataset_name, features=["summary"], **kwargs):
 
     """
     image: array of whole image to crop and calc features from
@@ -38,8 +38,7 @@ def get_image_features(adata, dataset_folder, dataset_name, features=["summary"]
     cell_names = adata.obs.index.tolist()
     
     for spot_id, cell_name  in tqdm(enumerate(cell_names)):
-        crop_ = crop_img(img, xcoord[spot_id], ycoord[spot_id], scalef=1, 
-                          sizef=1, spot_diameter=spot_diameter)
+        crop_ = crop_img(img, xcoord[spot_id], ycoord[spot_id], spot_diameter=spot_diameter, **kwargs)
         
         features_dict = get_features_statistics(crop_, cell_name, features=features)        
         features_list.append(features_dict)
