@@ -11,7 +11,7 @@ def read_tif(dataset_folder, dataset_name):
     img = imageio.imread(os.path.join(dataset_folder, f"{dataset_name}_image.tif"))
     return img
 
-def get_features_abt(adata, dataset_folder, dataset_name, features=["summary"]):
+def get_image_features(adata, dataset_folder, dataset_name, features=["summary"]):
 
     """
     image: array of whole image to crop and calc features from
