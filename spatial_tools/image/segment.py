@@ -85,6 +85,25 @@ def evaluate_nuclei_segmentation(
     pass
 
 
+def plot_segmentation(
+        adata,
+        img_key,
+        segment: Union[int, None] = None
+):
+    """
+    Plot segmentation on entire image or of specific crop
+
+    Attrs:
+        adata:
+        img_key:
+        segment:
+    """
+    img = _access_img_in_adata(adata=adata, img_key=img_key)
+    if segment is not None:
+        pass  # TODO
+    # TODO plot image
+
+
 class SegmentationModel:
     """
     Base class for segmentation models.
