@@ -48,7 +48,7 @@ def crop_img(img, x, y, spot_diameter=89.44476048022638, cval=0.0, **kwargs):
     # scale crop
     if scalef != 1:
         multichannel = len(img.shape) > 2
-        crop = rescale(crop, scalef, preserve_range=True, multichannel=multichannel, **kwargs)
+        crop = rescale(crop, scalef, preserve_range=True, multichannel=multichannel)
         crop = crop.astype(img.dtype)
         
     # mask crop
