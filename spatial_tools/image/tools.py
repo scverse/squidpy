@@ -11,7 +11,7 @@ def read_tif(dataset_folder, dataset_name):
     img = imageio.imread(os.path.join(dataset_folder, f"{dataset_name}_image.tif"))
     return img
 
-def get_features_abt(adata, dataset_folder, dataset_name, features=["hog"]):
+def get_features_abt(adata, dataset_folder, dataset_name, features=["summary"]):
 
     """
     image: array of whole image to crop and calc features from
@@ -20,6 +20,11 @@ def get_features_abt(adata, dataset_folder, dataset_name, features=["hog"]):
     spot_diameter: float
     features: list of feature names to add to dataframe, default to hog
     """
+    available_features = ["hog", "texture", "summary", "color_hist"]
+    
+    for feature in features:
+            assert feature in available_features, f"feature: {feature} not a valid feature, select on of {available_features}"
+
     features_list = []
     
     img = read_tif(dataset_folder, dataset_name)
@@ -42,18 +47,27 @@ def get_features_abt(adata, dataset_folder, dataset_name, features=["hog"]):
     features_log.set_index(["cell_name"], inplace=True)
     return features_log
 
-def get_features_statistics(im, cell_name, features=["hog"]):
-    """
+def get_features_statistics(im, cell_name, features):
+
+    '''
     im: image (numpy array)
     spot_id: the spot id of the image element, int
     features: features to calculate (str), List
     output: pandas Data frame with all features for a image or crop
-    """
+    '''
     stat_dict = {}
     for feature in features:
         if feature == "hog":
             stat_dict.update(get_hog_features(im, feature))
+        if feature == "texture":
+            stat_dict.update(get_grey_texture_features(im, feature))
+        if feature == "color_hist":
+            stat_dict.update(get_color_hist(im, feature))
+        if feature == "summary":
+            stat_dict.update(get_summary_stats(im, feature))
     return stat_dict
+
+
 
 def get_hog_features(im, feature_name):
     """
@@ -67,7 +81,9 @@ def get_hog_features(im, feature_name):
         hog_dict[f"{feature_name}_{k}"] = hog_feature
     return hog_dict
 
-def get_summary_stats(img,quantiles=[0.9,0.5,0.1],mean=False,std=False,channels=[0,1,2]):
+
+ 
+def get_summary_stats(img, feature, quantiles=[0.9,0.5,0.1],mean=False,std=False,channels=[0,1,2]):
     """Calculate summary statistics of color channels
     
     Arguments
@@ -91,14 +107,14 @@ def get_summary_stats(img,quantiles=[0.9,0.5,0.1],mean=False,std=False,channels=
     stats = {}
     for c in channels:
         for q in quantiles:
-            stats[f'quantile_{q}_ch_{c}'] = np.quantile(img[:,:,c], q)
+            stats[f'{feature}_quantile_{q}_ch_{c}'] = np.quantile(img[:,:,c], q)
         if mean:
-            stats[f'mean_ch_{c}'] = np.mean(img[:,:,c], q)
+            stats[f'{feature}_mean_ch_{c}'] = np.mean(img[:,:,c], q)
         if std:
-            stats[f'std_ch_{c}'] = np.std(img[:,:,c], q)
+            stats[f'{feature}_std_ch_{c}'] = np.std(img[:,:,c], q)
     return stats
 
-def get_color_hist(img,bins=10,channels=[0,1,2],v_range=(0,255)):
+def get_color_hist(img, feature, bins=10,channels=[0,1,2],v_range=(0,255)):
     """Compute histogram counts of color channel values 
     
     Arguments
@@ -121,11 +137,11 @@ def get_color_hist(img,bins=10,channels=[0,1,2],v_range=(0,255)):
     for c in channels:
         hist = np.histogram(img[:,:,c], bins=10, range=[0,255], weights=None, density=False)
         for i,count in enumerate(hist[0]):
-            features[f'ch_{c}_bin_{i}'] = count
+            features[f'{feature}_ch_{c}_bin_{i}'] = count
     return features
     
     
-def get_grey_texture_features(img, props=['contrast', 'dissimilarity', 'homogeneity', 'correlation', 'ASM'], distances=[1],angles=[0, np.pi/4, np.pi/2, 3*np.pi/4]):
+def get_grey_texture_features(img, feature, props=['contrast', 'dissimilarity', 'homogeneity', 'correlation', 'ASM'], distances=[1],angles=[0, np.pi/4, np.pi/2, 3*np.pi/4]):
     """Calculate texture features
     
     A grey level co-occurence matrix (GLCM) is computed for different combinations of distance and angle. 
@@ -160,5 +176,5 @@ def get_grey_texture_features(img, props=['contrast', 'dissimilarity', 'homogene
         tmp_features = greycoprops(comatrix, prop=p)
         for d_idx, d in enumerate(distances):
             for a_idx, a in enumerate(angles):
-                features[f'{p}_dist_{d}_angle_{a:.2f}'] = tmp_features[d_idx,a_idx]
+                features[f'{feature}_{p}_dist_{d}_angle_{a:.2f}'] = tmp_features[d_idx,a_idx]
     return features
