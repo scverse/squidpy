@@ -6,6 +6,8 @@ from spatial_tools.image.manipulate import crop_img
 import skimage.feature as sk_image
 from skimage.feature import greycoprops
 from skimage.feature import greycomatrix
+from tqdm import tqdm
+
 
 def read_tif(dataset_folder, dataset_name):
     img = imageio.imread(os.path.join(dataset_folder, f"{dataset_name}_image.tif"))
@@ -35,7 +37,7 @@ def get_image_features(adata, dataset_folder, dataset_name, features=["summary"]
     
     cell_names = adata.obs.index.tolist()
     
-    for spot_id, cell_name  in enumerate(cell_names):
+    for spot_id, cell_name  in tqdm(enumerate(cell_names)):
         crop_ = crop_img(img, xcoord[spot_id], ycoord[spot_id], scalef=1, 
                           sizef=1, spot_diameter=spot_diameter)
         
