@@ -57,3 +57,36 @@ def crop_img(img, x, y, scalef=1.0, sizef=1.0, spot_diameter=89.44476048022638, 
         crop[circle==0] = cval
         
     return crop
+
+
+def uncrop_img(crops, x, y, shape):
+    """
+    Re-assemble image from crops and their centres.
+
+    Fills remaining positions with zeros.
+
+    Attrs:
+        crops (List[np.ndarray]): List of image crops.
+        x (int): x coord of crop in `img`
+        y (int): y coord of crop in `img`
+        shape (int): Shape of full image
+    """
+    assert y < shape[0], f"y ({y}) is outsize of image range ({shape[0]})"
+    assert x < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
+
+    img = np.zeros(shape)
+    if len(crops) > 1:
+        for c, x, y in zip(crops, x, y):
+            x0 = x - c.shape[0] // 2
+            x1 = x + c.shape[0] - c.shape[0] // 2
+            y0 = y - c.shape[1] // 2
+            y1 = y + c.shape[1] - c.shape[1] // 2
+            assert x0 >= 0, f"x ({x0}) is outsize of image range ({0})"
+            assert y0 >= 0, f"x ({x0}) is outsize of image range ({0})"
+            assert x1 < shape[0], f"x ({x1}) is outsize of image range ({shape[0]})"
+            assert y1 < shape[1], f"x ({y1}) is outsize of image range ({shape[1]})"
+            img[x0:x1, y0:y1] = c
+        return img
+    else:
+        assert crops[0].shape == shape, "single crop is not of the target shape %s" % str(crops[0].shape)
+        returns crops[0]
