@@ -1,2 +1,2 @@
 from .build import spatial_connectivity
-from .nhood import permutation_test_leiden_pairs, centrality_scores
+from .nhood import permutation_test_leiden_pairs, cluster_centrality_scores, plot_cluster_centrality_scores
