@@ -11,22 +11,21 @@ def read_tif(dataset_folder, dataset_name):
     img = imageio.imread(os.path.join(dataset_folder, f"{dataset_name}_image.tif"))
     return img
 
-def features_abt(adata, dataset_folder, dataset_name, features=["hog"], scalef=1, sizef=1, key_added='features', inplace=True):
+def get_image_features(adata, dataset_folder, dataset_name, features=["summary"]):
+
     """
-    Calculate features table from high resolution h&e / fluorescence image for each obs (cell/spot)
-    Args:
-        adata: annotated data matrix
-        dataset_folder: folder containing the tif image
-        dataset_name: name of the dataset (used to read the tif image)
-        features: list of feature names to add to dataframe, default to hog
-        scalef: scale of image crop from which features are calculated
-        sizef: size (neighborhood) of image crop from which features are calculated
-        key_added (string): key under which to add the features in adata.obsm. (default: ``'features'``)
-        inplace (bool): add features matrix to adata, or return features matrix
-    Returns:
-        None or features_log (depending on `inplace` argument)
+    image: array of whole image to crop and calc features from
+    spot_ids: array of integers of the spot_id to analyze
+    xccord, ycoord: array of ints
+    spot_diameter: float
+    features: list of feature names to add to dataframe, default to hog
     """
-    features_log = pd.DataFrame()
+    available_features = ["hog", "texture", "summary", "color_hist"]
+    
+    for feature in features:
+            assert feature in available_features, f"feature: {feature} not a valid feature, select on of {available_features}"
+
+    features_list = []
     
     img = read_tif(dataset_folder, dataset_name)
     
@@ -34,45 +33,57 @@ def features_abt(adata, dataset_folder, dataset_name, features=["hog"], scalef=1
     ycoord = adata.obsm["spatial"][:, 1]
     spot_diameter = adata.uns['spatial'][dataset_name]['scalefactors']['spot_diameter_fullres']
     
-    for spot_id, cell_name  in enumerate(adata.obs.index.tolist()):
-        crop_ = crop_img(img, xcoord[spot_id], ycoord[spot_id], scalef=scalef, 
-                          sizef=sizef, spot_diameter=spot_diameter)
+    cell_names = adata.obs.index.tolist()
+    
+    for spot_id, cell_name  in enumerate(cell_names):
+        crop_ = crop_img(img, xcoord[spot_id], ycoord[spot_id], scalef=1, 
+                          sizef=1, spot_diameter=spot_diameter)
         
-        features_pd = get_features_statistics(crop_, cell_name, features=features)
-        features_log = pd.concat([features_log, features_pd], axis=0)
-        
+        features_dict = get_features_statistics(crop_, cell_name, features=features)        
+        features_list.append(features_dict)
+    
+    features_log = pd.DataFrame(features_list)
+    features_log["cell_name"] = cell_names
     features_log.set_index(["cell_name"], inplace=True)
-    if inplace:
-        adata.obsm[key_added] = features_log
-    else:
-        return features_log
+    return features_log
 
-def get_features_statistics(im, cell_name, features=["hog"]):
-    """
+def get_features_statistics(im, cell_name, features):
+
+    '''
     im: image (numpy array)
     spot_id: the spot id of the image element, int
     features: features to calculate (str), List
     output: pandas Data frame with all features for a image or crop
-    """
-    features_pd = pd.DataFrame([cell_name], columns=["cell_name"])
-    
+    '''
+    stat_dict = {}
     for feature in features:
         if feature == "hog":
-            features_pd = pd.concat([features_pd, get_hog_features(im)], axis=1)
-    return features_pd
+            stat_dict.update(get_hog_features(im, feature))
+        if feature == "texture":
+            stat_dict.update(get_grey_texture_features(im, feature))
+        if feature == "color_hist":
+            stat_dict.update(get_color_hist(im, feature))
+        if feature == "summary":
+            stat_dict.update(get_summary_stats(im, feature))
+    return stat_dict
 
-def get_hog_features(im):
+
+
+def get_hog_features(im, feature_name):
     """
     im: image or image crop, numpy array
     spot_id: the spot id of the image element, int
     output: numpy array with hog features
     """
-    features = sk_image.hog(im)
-    hog_pd = pd.DataFrame(features).T
-    hog_pd.columns = [str(col) + '_hog' for col in hog_pd.columns]
-    return hog_pd
+    hog_dict = {}
+    hog_features = sk_image.hog(im)
+    for k, hog_feature in enumerate(hog_features):
+        hog_dict[f"{feature_name}_{k}"] = hog_feature
+    return hog_dict
 
-def summary_stats(img,quantiles=[0.9,0.5,0.1],mean=False,std=False,channels=[0,1,2]):
+
+ 
+def get_summary_stats(img, feature, quantiles=[0.9,0.5,0.1],mean=False,std=False,channels=[0,1,2]):
     """Calculate summary statistics of color channels
     
     Arguments
@@ -96,14 +107,14 @@ def summary_stats(img,quantiles=[0.9,0.5,0.1],mean=False,std=False,channels=[0,1
     stats = {}
     for c in channels:
         for q in quantiles:
-            stats[f'quantile_{q}_ch_{c}'] = np.quantile(img[:,:,c], q)
+            stats[f'{feature}_quantile_{q}_ch_{c}'] = np.quantile(img[:,:,c], q)
         if mean:
-            stats[f'mean_ch_{c}'] = np.mean(img[:,:,c], q)
+            stats[f'{feature}_mean_ch_{c}'] = np.mean(img[:,:,c], q)
         if std:
-            stats[f'std_ch_{c}'] = np.std(img[:,:,c], q)
+            stats[f'{feature}_std_ch_{c}'] = np.std(img[:,:,c], q)
     return stats
 
-def color_hist(img,bins=10,channels=[0,1,2],v_range=(0,255)):
+def get_color_hist(img, feature, bins=10,channels=[0,1,2],v_range=(0,255)):
     """Compute histogram counts of color channel values 
     
     Arguments
@@ -126,11 +137,11 @@ def color_hist(img,bins=10,channels=[0,1,2],v_range=(0,255)):
     for c in channels:
         hist = np.histogram(img[:,:,c], bins=10, range=[0,255], weights=None, density=False)
         for i,count in enumerate(hist[0]):
-            features[f'ch_{c}_bin_{i}'] = count
+            features[f'{feature}_ch_{c}_bin_{i}'] = count
     return features
     
     
-def grey_texture_features(img, props=['contrast', 'dissimilarity', 'homogeneity', 'correlation', 'ASM'], distances=[1],angles=[0, np.pi/4, np.pi/2, 3*np.pi/4]):
+def get_grey_texture_features(img, feature, props=['contrast', 'dissimilarity', 'homogeneity', 'correlation', 'ASM'], distances=[1],angles=[0, np.pi/4, np.pi/2, 3*np.pi/4]):
     """Calculate texture features
     
     A grey level co-occurence matrix (GLCM) is computed for different combinations of distance and angle. 
@@ -165,5 +176,5 @@ def grey_texture_features(img, props=['contrast', 'dissimilarity', 'homogeneity'
         tmp_features = greycoprops(comatrix, prop=p)
         for d_idx, d in enumerate(distances):
             for a_idx, a in enumerate(angles):
-                features[f'{p}_dist_{d}_angle_{a:.2f}'] = tmp_features[d_idx,a_idx]
+                features[f'{feature}_{p}_dist_{d}_angle_{a:.2f}'] = tmp_features[d_idx,a_idx]
     return features
