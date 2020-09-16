@@ -5,3 +5,5 @@ __email__ = ", ".join(
         "hannah.spitzer@helmholtz-muenchen.de",
     ]
 )
+
+from .utils import read_seqfish
