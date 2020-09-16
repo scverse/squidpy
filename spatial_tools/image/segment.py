@@ -129,7 +129,7 @@ class SegmentationModel:
         segments = self._segment()
         return uncrop_img(
             crops=segments,
-            x=self.crop_positions[0], 
+            x=self.crop_positions[0],
             y=self.crop_positions[1],
             shape=self.data.shape
         )

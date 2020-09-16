@@ -89,4 +89,4 @@ def uncrop_img(crops, x, y, shape):
         return img
     else:
         assert crops[0].shape == shape, "single crop is not of the target shape %s" % str(crops[0].shape)
-        returns crops[0]
+        return crops[0]
