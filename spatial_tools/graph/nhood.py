@@ -87,7 +87,8 @@ def cluster_centrality_scores(
         connectivity_key: str,
         clusters_key: str,
         key_added: str = 'cluster_centrality_scores',
-        save_networkx_graph: bool=True
+        save_networkx_graph: bool=True,
+        show_plot: bool=True
 ):
     """
     Computes centrality scores per cluster. Results are stored in .uns in the AnnData object.
@@ -103,6 +104,8 @@ def cluster_centrality_scores(
         Key added to output dataframe in adata.uns.
     save_networkx_graph
         Whether to add networkx to adata.uns under key 'networkx_graph'.
+    show_plot
+        Will display the centrality measures as scatterplot.
     """
     graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
     if save_networkx_graph:
@@ -112,12 +115,14 @@ def cluster_centrality_scores(
 
     degree_centrality = []
     clustering_coefficient = []
+    betweenness_centrality = []
     closeness_centrality = []
 
     for c in clusters:
         cluster_node_idx = adata[adata.obs[clusters_key] == c].obs.index.tolist()
         # ensuring that cluster_node_idx are List[int]
         cluster_node_idx = [i for i, x in enumerate(cluster_node_idx)]
+        subgraph = graph.subgraph(cluster_node_idx)
 
         centrality = nx.algorithms.centrality.group_degree_centrality(graph, cluster_node_idx)
         degree_centrality.append(centrality)
@@ -128,44 +133,72 @@ def cluster_centrality_scores(
         closeness = nx.algorithms.centrality.group_closeness_centrality(graph, cluster_node_idx)
         closeness_centrality.append(closeness)
 
-    df = pd.DataFrame(list(zip(clusters, degree_centrality, clustering_coefficient, closeness_centrality)),
-                      columns=['cluster', 'degree centrality', 'clustering coefficient', 'closeness centrality']
+        betweenness = nx.betweenness_centrality(subgraph)
+        betweenness_centrality.append(sum(betweenness.values()))
+
+    df = pd.DataFrame(list(zip(clusters, degree_centrality, clustering_coefficient, closeness_centrality,
+                               betweenness_centrality)),
+                      columns=['cluster', 'degree centrality', 'clustering coefficient', 'closeness centrality',
+                               'betweenness centrality']
                       )
     adata.uns[key_added] = df
+    if show_plot:
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        df = adata.uns[key_added]
+        df = df.rename(columns={"degree centrality": "degree\ncentrality",
+                                "clustering coefficient": "clustering\ncoefficient",
+                                'closeness centrality': 'closeness\ncentrality',
+                                "betweenness centrality": "betweenness\ncentrality"}
+                       )
+        values = ["degree\ncentrality", "clustering\ncoefficient", 'closeness\ncentrality', "betweenness\ncentrality"]
+        for i, value in zip([1, 2, 3, 4], values):
+            plt.subplot(1, 4, i)
+            ax = sns.stripplot(data=df, y="cluster", x=value, size=10, orient="h", linewidth=1)
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            ax.spines['bottom'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            ax.yaxis.grid(True)
+            ax.tick_params(bottom=False, left=False, right=False, top=False)
+            if i > 1:
+                plt.ylabel(None)
+                ax.tick_params(labelleft=False)
 
 
-def plot_cluster_centrality_scores(
+def cluster_interactions(
         adata: "AnnData",
-        centrality_scores_key: str
+        cluster_key: str,
+        key_added: str = 'cluster_interactions',
+        show_plot: bool = True
 ):
     """
-    Plots centrality scores per cluster.
+    Computes interaction matrix for clusters. Results are stored in .uns in the AnnData object.
     Params
     ------
     adata
         The AnnData object.
-    connectivity_key
-        Key to centrality_scores in uns.
+    clusters_key
+        Key to clusters in obs.
+    key_added
+        Key added to output dataframe in adata.uns.
+    show_plot
+        Will display the interaction matrix as heatmap.
     """
-    import seaborn as sns
-    import matplotlib.pyplot as plt
+    graph = adata.uns['networkx_graph']
+    clusters = {i: {cluster_key: str(x)} for i, x in enumerate(adata.obs[cluster_key].tolist())}
+    nx.set_node_attributes(graph, clusters)
 
-    df = adata.uns[centrality_scores_key]
-    df = df.rename(columns={"degree centrality": "degree\ncentrality",
-                            "clustering coefficient": "clustering\ncoefficient",
-                            'closeness centrality': 'closeness\ncentrality'}
-                   )
-    values = ["degree\ncentrality", "clustering\ncoefficient", 'closeness\ncentrality']
-    for i, value in zip([1, 2, 3], values):
-        plt.subplot(1, 3, i)
-        ax = sns.stripplot(data=df, y="cluster", x=value, size=10, orient="h", linewidth=1)
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)
-        ax.spines['bottom'].set_visible(False)
-        ax.spines['left'].set_visible(False)
-        ax.yaxis.grid(True)
-        ax.tick_params(bottom=False, left=False, right=False, top=False)
-        if i > 1:
-            plt.ylabel(None)
-            ax.tick_params(labelleft=False)
+    interaction_matrix = nx.attr_matrix(graph, node_attr=cluster_key)
+    adata.uns[key_added] = interaction_matrix
+    if show_plot:
+        import matplotlib.pyplot as plt
 
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        cax = ax.matshow(interaction_matrix[0])
+        fig.colorbar(cax)
+
+        plt.xticks(range(len(interaction_matrix[1])), interaction_matrix[1], size='small')
+        plt.yticks(range(len(interaction_matrix[1])), interaction_matrix[1], size='small')
