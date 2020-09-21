@@ -1,4 +1,6 @@
+dask
 scanpy
 leidenalg
 anndata>=0.7.4
 scikit-image>=0.17.1
+xarray
