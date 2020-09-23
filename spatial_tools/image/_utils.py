@@ -1,5 +1,6 @@
 import anndata
 import numpy as np
+import tifffile
 
 
 from functools import wraps
@@ -14,6 +15,14 @@ def timing(f):
         print(f"func:{f.__name__} took: {te-ts} sec")
         return result
     return wrap
+
+def _num_pages(fname):
+    """
+    Use tifffile to get the number of pages in the tif
+    """
+    with tifffile.TiffFile(fname) as img:
+        num_pages = len(img.pages)
+    return num_pages
 
 
 def _access_img_in_adata(
