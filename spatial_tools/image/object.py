@@ -1,63 +1,137 @@
-import dask
-import dask.array as da
-import imageio
 import numpy as np
-from typing import Union
+from typing import Union, List
 import xarray as xr
-
+from ._utils import _num_pages 
+from .crop import crop_img
 
 class ImageContainer:
+    """
+    Container for in memory / tif images. Allows for lazy and chunked reading via rasterio and dask
+    An instance of this class is given to all image processing functions, along with an anndata instance
+    if necessary.
+    """
     data: xr.Dataset
-
-    def __init__(self, img: Union[str, np.ndarray], lazy: bool = True, dtype="float32"):
+        
+    def __init__(self, img: Union[str, np.ndarray], img_id: Union[str, List[str]] = None, lazy: bool = True, chunks: int = None, ):
         """
-        Processes image as in memory numpy array or sets up lazy loading from disk via wrapping dask array
-        if image is a file path.
+        Processes image as in memory numpy array or uses xarrays rasterio reading functions to load from disk 
+        (with caching) if image is a file path.
+        If chunks are specified, the xarray is wrapped in a dask lazy dask array using the chunk size.
 
-        An instance of this class is given to all image processing functions, along with and anndata instance
+        An instance of this class is given to all image processing functions, along with an anndata instance
         if necessary.
 
         :param img:
+        :param lazy: use rasterio/dask to lazily load image
+        :param chunks: chunk size for dask
+        :param img_id: name for img. For multi-page tiffs should be a list. 
+            If not specified, DataArrays will be named "image_{i}"
         """
-        if isinstance(img, np.ndarray):
-            pass
-        elif isinstance(img, str):
-            if lazy:
-                shape = None # TODO how can we get access to image shape without loading? in worst case, load once
-                # and immidiately delete again.
-                lazy_img = dask.delayed(imageio.imread)(img)
-                lazy_img = da.from_delayed(lazy_img, shape=shape, dtype=dtype)
-                img = lazy_img
+        if chunks is not None:
+            chunks = {'x': chunks, 'y': chunks}
+        self.chunks = chunks
+        self.lazy = lazy
+        self.data = xr.Dataset()
+        if img is not None:
+            self.add_img(img, img_id)
+        
+    @classmethod
+    def open(cls, fname: str, lazy: bool = True, chunks: int = None):
+        """
+        initialize using a previously saved netcdf file
+        """
+        self = cls(img=None, lazy=lazy, chunks=chunks)
+        self.data = xr.open_dataset(fname, chunks=self.chunks)
+        if not self.lazy:
+            self.data.load()
+        return self
+    
+    def save(self, fname: str):
+        """saves dataset as netcdf file"""
+        self.data.to_netcdf(fname, mode='a')
+        
+        
+    def add_img(self, img: Union[str, np.ndarray], img_id: Union[str, List[str]] = None):
+        """
+        Add layer(s) from numpy image / tiff file. 
+        For numpy arrays, assume that dims are: channels, y, x
+        
+        :param img:
+        :param img_id:
+        :return: None
+        """
+        imgs = self._load_img(img)
+        if img_id is None:
+            img_id = 'image'
+        if isinstance(img_id, str):
+            if len(imgs) > 1:
+                img_ids = [f"{img_id}_{i}" for i in range(len(imgs))]
             else:
-                img = imageio.imread
+                img_ids = [img_id]
+        elif isinstance(img_id, list):
+            img_ids = img_id
+        else:
+            raise ValueError(img_id)
+        assert len(img_ids) == len(imgs), f"Have {len(imgs)} images, but {len(img_ids)} image ids"
+        # add to data
+        for img, img_id in zip(imgs, img_ids):
+            self.data[img_id] = img
+        if not self.lazy:
+            # load in memory
+            self.data.load()
+    
+    def _load_img(self, img: Union[str, np.ndarray]):
+        """
+        Load img as xarray. Supports numpy arrays and (multi-page) tiff files.
+        For numpy arrays, assume that dims are: channels, y, x
+        
+        :returns: list of DataArrays
+        """
+        imgs = []
+        if isinstance(img, np.ndarray):
+            if len(img.shape) == 2:
+                # add empty channel dimension
+                img = img[np.newaxis, :, :]
+            xr_img = xr.DataArray(img, dims=['channels', 'y', 'x'])
+            imgs.append(xr_img)
+        elif isinstance(img, str):
+            # get the number of pages in the file
+            num_pages = _num_pages(img)
+            # read all pages using rasterio
+            for i in range(1, num_pages+1):
+                data = xr.open_rasterio(f"GTIFF_DIR:{i}:{img}", chunks=self.chunks, parse_coordinates=False)
+                data = data.rename({'band': 'channels'})
+                imgs.append(data)
         else:
             raise ValueError(img)
+        return imgs
 
-        self.data = xr.Dataset(
-            {
-                "image": (["x", "y", "channels"], img),
-            },
-            coords={
-                "xpos_pixel": (["x"], np.arange(0, img.shape[0])),
-                "ypos_pixel": (["y"], np.arange(0, img.shape[1])),
-                "xpos": (["x"], np.arange(0, img.shape[0])),  # TODO maybe add actual scaling of image here?
-                "ypos": (["y"], np.arange(0, img.shape[1])),
-            },
-        )
-
-    def add_layer(self, x: np.ndarray, image_id: str, channel_id: str = "1"):
+    def crop(self, x, y, s=100, img_id: Union[str, List[str]] = None, **kwargs):
         """
-        Add layer assuming first two coords are the image coords.
-        :param x:
-        :param id:
-        :return:
+        extract a centered at `x` and `y`. 
+        Attrs:
+            img_ids (list): list of images that should be used to obtain the crop
+            x (int): x coord of crop in `img`
+            y (int): y coord of crop in `img`
+            s (int): width and heigh of the crop in pixels
+            scale (float): resolution of the crop (smaller -> smaller image)
+            mask_circle (bool): mask crop to a circle
+            cval (float): the value outside image boundaries or the mask
+            dtype (str): optional, type to which the output should be (safely cast)
+            
+        Returns:
+            np.ndarray with dimentions: y, x, channels (concatenated over all images)
         """
-        self.data[image_id] = (["x", "y", "channel_id"], x)
-
-    def crop(self):
-        """
-        Yield image crop.
-
-        TODO copy over cropping code.
-        :return:
-        """
+        if img_id is None:
+            img_ids = list(self.data.keys())
+        elif isinstance(img_id, str):
+            img_ids = [img_id]
+        else:
+            img_ids = img_id
+        
+        crops = []
+        for img_id in img_ids:
+            img = self.data[img_id]
+            crops.append(crop_img(img, x, y, s, **kwargs))
+        return np.concatenate(crops, axis=-1)
+    
