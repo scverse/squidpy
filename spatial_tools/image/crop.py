@@ -2,22 +2,41 @@ import numpy as np
 from skimage.transform import rescale
 from skimage.draw import disk
 import skimage.util
+from anndata import AnnData
+from .object import ImageContainer
+import xarray as xr
 
-def crop_iterator(adata, img, **kwargs):
-    """
-    iterator over all obs_ids defined in adata. Yielding crops from high-resolution img 
-    centered around coords defined in adata.obsm['spatial']
+def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
+    """\
+    Iterate over all obs_ids defined in adata and extract crops from img
     
-    :param adata: anndata object
-    :param img: ImageContainer object
-    :param dataset_name: name of the data in adata (if not specified, take first one)
-    :param sizef: amount of context (1.0 means size of spot, larger -> more context)
-    :param scale: resolution of the crop (smaller -> smaller image)
-    mask_circle (bool): mask crop to a circle
-    cval (float): the value outside image boundaries or the mask
-    dtype (str): optional, type to which the output should be (safely cast)
+    Params
+    ------
+    adata: AnnData
+        Spatial dataset (including coords in adata.obsm['spatial']).
+    img: ImageContainer
+        High-resolution image.
+    dataset_name: Optional[str]
+        Name of the spatial data in adata (if not specified, take first one).
+    sizef: float
+        Default is 1.0.
+        Amount of context (1.0 means size of spot, larger -> more context).
+    scale: float
+        Default is 1.0.
+        Resolution of the crop (smaller -> smaller image).
+    mask_circle: bool
+        Mask crop to a circle.
+    cval: float
+        Default is 0
+        The value outside image boundaries or the mask.
+    dtype: Optional[str]
+        Type to which the output should be (safely) cast.
+        Currently supported dtypes: 'uint8'.
     
-    yields: (obs_id, crop)
+    Yields
+    -----
+    (obs_id: Union[int, str], crop: np.ndarray)
+    Crops from high-resolution img centered around coords defined in adata.obsm['spatial'].
     """
     dataset_name = kwargs.get('dataset_name', None)
     if dataset_name is None:
@@ -34,6 +53,7 @@ def crop_iterator(adata, img, **kwargs):
         yield (obs_id, img.crop(x=xcoord[i], y=ycoord[i], s=s, **kwargs))
 
 
+# TODO comment / document
 def uncrop_img(crops, x, y, shape):
     """
     Re-assemble image from crops and their centres.
@@ -66,21 +86,36 @@ def uncrop_img(crops, x, y, shape):
         assert crops[0].shape == shape, "single crop is not of the target shape %s" % str(crops[0].shape)
         return crops[0]
 
-def crop_img(img, x, y, s=100, **kwargs):
-    """
-    extract a crop from xarray `img` centered at `x` and `y`. 
-    Attrs:
-        img (xarray): image to crop from
-        x (int): x coord of crop in `img`
-        y (int): y coord of crop in `img`
-        s (int): width and heigh of the crop in pixels
-        scale (float): resolution of the crop (smaller -> smaller image)
-        mask_circle (bool): mask crop to a circle
-        cval (float): the value outside image boundaries or the mask
-        dtype (str): optional, type to which the output should be (safely cast)
-        
-    Returns:
-        np.ndarray with dimensions: y, x, channels
+def crop_img(img: xr.DataArray, x: int, y: int, s: int = 100, **kwargs) -> np.ndarray:
+    """\
+    Extract a crop centered at `x` and `y`. 
+
+    Params
+    ------
+    img: DataArray
+        Data array to crop from.
+    x: int
+        X coord of crop (in pixel space).
+    y: int
+        Y coord of crop (in pixel space).
+    s: int
+        Width and heigh of the crop in pixels.
+    scale: float
+        Default is 1.0.
+        Resolution of the crop (smaller -> smaller image).
+    mask_circle: bool
+        Default is False.
+        Mask crop to a circle.
+    cval: float
+        Default is 0
+        The value outside image boundaries or the mask.
+    dtype: str
+        Optional, type to which the output should be (safely) cast. 
+        Currently supported dtypes: 'uint8'.
+
+    Returns
+    -------
+    np.ndarray with dimentions: y, x, channels
     """
     scale = kwargs.get("scale", 1.0)
     mask_circle = kwargs.get("mask_circle", False)
