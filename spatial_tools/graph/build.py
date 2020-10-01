@@ -55,7 +55,7 @@ def spatial_connectivity(
 def _build_connectivity(
     coords: np.ndarray,
     n_neigh: int,
-    radius: float = None,
+    radius: Optional[float] = None,
     neigh_correct: bool = False,
     set_diag: bool = False
 ):
