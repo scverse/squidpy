@@ -13,7 +13,7 @@ from tqdm import tqdm
 def read_tif(dataset_folder, dataset_name, rescale=True):
     """Loads and rescales the image in dataset_folder
 
-    Arguments
+    Params
     ---------
     dataset_folder: str
         path to where tif file is stored
@@ -41,7 +41,7 @@ def read_tif(dataset_folder, dataset_name, rescale=True):
 def get_image_features(adata, dataset_folder, dataset_name, features=["summary"], **kwargs):
     """Get image features for spot ids from image file.
 
-    Arguments
+    Params
     ---------
     adata: scanpy adata object
         rgb image in uint8 format.
@@ -86,7 +86,7 @@ def get_image_features(adata, dataset_folder, dataset_name, features=["summary"]
 def get_features_statistics(im, features):
     """Calculate histogram of oriented gradients (hog) features
 
-    Arguments
+    Params
     ---------
     img: np.array
         rgb image in uint8 format.
@@ -113,7 +113,7 @@ def get_features_statistics(im, features):
 def get_hog_features(img, feature_name="hog"):
     """Calculate histogram of oriented gradients (hog) features
 
-    Arguments
+    Params
     ---------
     img: np.array
         rgb image in uint8 format.
@@ -134,7 +134,7 @@ def get_hog_features(img, feature_name="hog"):
 def get_summary_stats(img, feature, quantiles=[0.9, 0.5, 0.1], mean=False, std=False, channels=[0, 1, 2]):
     """Calculate summary statistics of color channels
 
-    Arguments
+    Params
     ---------
     img: np.array
         rgb image in uint8 format.
@@ -166,7 +166,7 @@ def get_summary_stats(img, feature, quantiles=[0.9, 0.5, 0.1], mean=False, std=F
 def get_color_hist(img, feature, bins=10, channels=[0, 1, 2], v_range=(0, 255)):
     """Compute histogram counts of color channel values
 
-    Arguments
+    Params
     ---------
     img: np.array
         rgb image in uint8 format.
@@ -200,7 +200,7 @@ def get_grey_texture_features(img, feature, props=['contrast', 'dissimilarity', 
     d and at an angle theta from grey-level i.
     From a given GLCM texture features are infered.
 
-    Arguments
+    Params
     ---------
     img: np.array
         rgb image in uint8 format.
