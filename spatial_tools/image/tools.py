@@ -189,7 +189,7 @@ def get_color_hist(img, feature, bins=10, channels=[0, 1, 2], v_range=(0, 255)):
             features[f'{feature}_ch_{c}_bin_{i}'] = count
     return features
 
-
+## test
 def get_grey_texture_features(img, feature, props=['contrast', 'dissimilarity', 'homogeneity', 'correlation', 'ASM'],
                               distances=[1], angles=[0, np.pi / 4, np.pi / 2, 3 * np.pi / 4]):
     """Calculate texture features
