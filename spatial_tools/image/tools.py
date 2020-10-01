@@ -130,8 +130,6 @@ def get_hog_features(img, feature_name="hog"):
         hog_dict[f"{feature_name}_{k}"] = hog_feature
     return hog_dict
 
-def test():
-    pass
 
 def get_summary_stats(img, feature, quantiles=[0.9, 0.5, 0.1], mean=False, std=False, channels=[0, 1, 2]):
     """Calculate summary statistics of color channels
