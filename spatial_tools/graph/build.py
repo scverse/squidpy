@@ -35,23 +35,29 @@ def spatial_connectivity(
     coord_type
         Type of coordinate system (Visium vs. general coordinates)
     """
+    coords = adata.obsm[obsm]
+
     if coord_type == "visium":
-        Adj = _build_connectivity(adata.obsm[obsm], 6, None, True)
         if n_rings > 1:
+            Adj = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True)
             # get up to n_rings order connections
             Adj += Adj**n_rings
-            Adj.setdiag(0)
+            Adj.setdiag(0.0)
             Adj.eliminate_zeros()
             Adj.data[:] = 1.0
+        else:
+            Adj = _build_connectivity(coords, 6, neigh_correct=True)
         adata.obsp[key_added] = Adj
     else:
-        adata.obsp[key_added] = _build_connectivity(
-            adata.obsm[obsm], n_neigh, radius, False
-        )
+        adata.obsp[key_added] = _build_connectivity(coords, n_neigh, radius)
 
 
 def _build_connectivity(
-    coords: np.ndarray, n_neigh: int, radius: float, neigh_correct: bool
+    coords: np.ndarray,
+    n_neigh: int,
+    radius: float = None,
+    neigh_correct: bool = False,
+    set_diag: bool = False
 ):
     """
     Build connectivity matrix from spatial coordinates
@@ -78,6 +84,10 @@ def _build_connectivity(
             dist_cutoff = np.median(dists) * 1.3  # There's a small amount of sway
             mask = dists < dist_cutoff
             row_indices, col_indices = row_indices[mask], col_indices[mask]
+
+    if set_diag:
+        row_indices = np.concatenate((row_indices, np.arange(N)))
+        col_indices = np.concatenate((col_indices, np.arange(N)))
 
     return sparse.csr_matrix(
         (np.ones(len(row_indices)), (row_indices, col_indices)), shape=(N, N)
