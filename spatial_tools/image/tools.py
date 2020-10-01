@@ -38,10 +38,6 @@ def read_tif(dataset_folder, dataset_name, rescale=True):
     return img
 
 
-def test_():
-    pass
-
-
 def get_image_features(adata, dataset_folder, dataset_name, features=["summary"], **kwargs):
     """Get image features for spot ids from image file.
 
