@@ -1,17 +1,17 @@
 """Functions for point patterns spatial statistics
 """
 
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
-import anndata as ad
+from anndata import AnnData
 from sklearn.metrics import pairwise_distances
 
 
-def ripleyK(
-    adata: ad.AnnData, cluster_key: str, mode: str = "ripley", support: int = 100, copy: bool = False, return_info: bool = False,
-) -> pd.DataFrame:
+def ripley_k(
+    adata: AnnData, cluster_key: str, mode: str = "ripley", support: int = 100, copy: Optional[bool] = False, return_info: Optional[bool] = False,
+) -> Union[AnnData, pd.DataFrame, None]:
 
     """
     Calculate Ripley's K statistics for each cluster in the tissue coordinates .
@@ -70,11 +70,12 @@ def ripleyK(
         est = Kest(data=coord_sub, radii=r, mode=mode)
         df_est = pd.DataFrame(np.stack([est, r], axis=1))
         df_est.columns = ["ripley_k", "distance"]
-        df_est["leiden"] = c
+        df_est[cluster_key] = c
         df_lst.append(df_est)
 
     df = pd.concat(df_lst, axis=0)
     # filter by min max dist
+    print(df.head())
     minmax_dist = df.groupby(cluster_key)["ripley_k"].max().min()
     df = df[df.ripley_k < minmax_dist].copy()
 
