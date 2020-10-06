@@ -10,7 +10,7 @@ from sklearn.metrics import pairwise_distances
 
 
 def ripleyK(
-    adata: ad.AnnData, cluster_key: str, mode: str = "ripley", support: int = 100
+    adata: ad.AnnData, cluster_key: str, mode: str = "ripley", support: int = 100, copy: bool = False, return_info: bool = False,
 ) -> pd.DataFrame:
 
     """
@@ -18,22 +18,30 @@ def ripleyK(
 
     Parameters
     ----------
-    adata : anndata object
+    adata : anndata.AnnData
         anndata object of spatial transcriptomics data. The function will use coordinates in adata.obsm["spatial]
     cluster_key : str
         Key of cluster labels saved in adata.obs.
     mode: str
-        Keyword which indicates the method for edge effects correction, as reported in \
+        Keyword which indicates the method for edge effects correction, as reported in
         https://docs.astropy.org/en/stable/api/astropy.stats.RipleysKEstimator.html#astropy.stats.RipleysKEstimator.
     support: int
-        Number of points where Ripley's K is evaluated \
+        Number of points where Ripley's K is evaluated
         between a fixed radii with min=0, max=(area/2)**0.5 .
+    copy
+        If an :class:`~anndata.AnnData` is passed, determines whether a copy
+        is returned. Is ignored otherwise.
+    return_info
+        Only relevant when not passing an :class:`~anndata.AnnData`:
+        see “**Returns**”.
 
     Returns
     -------
-    df : pd.DataFrame
-        pandas dataframe where Ripley's K is evaluated for the set of points \
-        for each cluster.
+    adata : anndata.AnnData
+        modifies anndata in place and store Ripley's K stat for each cluster in adata.uns[f"ripley_k_{cluster_key}"].
+        if copy = False and return_info = False
+    df: pandas.DataFrame
+        return dataframe if return_info = True
     """
 
     try:
@@ -69,7 +77,12 @@ def ripleyK(
     # filter by min max dist
     minmax_dist = df.groupby(cluster_key)["ripley_k"].max().min()
     df = df[df.ripley_k < minmax_dist].copy()
-    return df
+
+    if return_info:
+        return df
+    else:
+        adata.uns[f"ripley_k_{cluster_key}"] = df
+        return adata if copy else None
 
 
 ## this was implementation with pointpats
