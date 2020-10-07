@@ -1,0 +1,96 @@
+import pytest
+import numpy as np
+import rasterio.errors
+import warnings
+
+from spatial_tools.image.object import ImageContainer
+
+@pytest.mark.parametrize("shape", 
+                         [(3,100,200),
+                          (1,100,200),
+                          (10,3,100,200),
+                          (10,1,100,200)])
+def test_image_loading(shape, tmpdir):
+    """\
+    initialize ImageObject with tiff / multipagetiff / numpy array and check that loaded data 
+    fits the expected shape + content
+    """
+    import tifffile
+    # ignore NotGeoreferencedWarning here
+    warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
+    img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
+
+    # load as np arrray
+    if len(shape) <= 3:
+        # load as np array
+        cont = ImageContainer(img_orig)
+        # check that contains same information
+        assert (cont.data.image == img_orig).all()
+
+    # save & load as tiff
+    fname = tmpdir.mkdir("data").join("img.tif")
+    tifffile.imsave(fname, img_orig)
+    cont = ImageContainer(str(fname))
+    print(cont)
+    if len(shape) > 3:
+        # multi-channel tiff
+        for i in range(shape[0]):
+            # check for existance of each image in multi-channel tiff
+            assert f'image_{i}' in cont.data
+            # check that contains correct information
+            assert (cont.data[f'image_{i}'] == img_orig[i]).all()
+    else:
+        print(cont.data)
+        # check that contains same information
+        assert (cont.data.image == img_orig).all()
+
+@pytest.mark.parametrize("shape1,shape2", 
+                         [((3,100,200),(3,100,200)),
+                          ((100,200),(3,100,200)),
+                          ((10,3,100,200),(100,200))])
+def test_add_img(shape1, shape2):
+    """\
+    add image to existing ImageObject and check result
+    """
+    # create ImageContainer
+    img_orig = np.random.randint(low=0, high=255, size=(3,100,200), dtype=np.uint8)
+    cont = ImageContainer(img_orig, img_id='img_orig')
+
+    # add image
+    img_new = np.random.randint(low=0, high=255, size=(100,200), dtype=np.uint8)
+    cont.add_img(img_new, img_id='img_new')
+
+    assert 'img_orig' in cont.data
+    assert 'img_new' in cont.data
+    assert (cont.data['img_new'] == img_new).all()
+
+    
+def test_crop(tmpdir):
+    """\
+    crop different img_ids and check result
+    """
+    import tifffile
+    # ignore NotGeoreferencedWarning here
+    warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
+    # create ImageContainer
+    img_orig = np.zeros((10,1,100,200), dtype=np.uint8)
+    # put a dot at y 20, x 50
+    img_orig[:,0,20,50] = range(10,20)
+    # save & load image
+    fname = tmpdir.mkdir("data").join("img.tif")
+    tifffile.imsave(fname, img_orig)
+    cont = ImageContainer(str(fname))
+
+    # crop big crop
+    crop = cont.crop(x=50, y=20, s=300, cval=5, img_id=['image_0', 'image_3', 'image_5'])
+    # shape is s x s x len(img_id)/channels
+    assert crop.shape == (300,300,3)
+    # check that values outside of img are padded with 5
+    assert (crop[0,0] == 5).all() 
+    assert (crop[-1,-1] == 5).all()
+
+    # crop small crop
+    crop = cont.crop(x=50, y=20, s=1, cval=5, img_id=['image_0', 'image_3', 'image_5'])
+    assert crop.shape == (1,1,3)
+    # check that has cropped correct image
+    assert (crop[0,0] == [10,13,15]).all()
