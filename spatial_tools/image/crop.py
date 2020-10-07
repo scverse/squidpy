@@ -149,7 +149,7 @@ def crop_img(img: xr.DataArray, x: int, y: int, s: int = 100, **kwargs) -> np.nd
     crop_x1 = s - max(x1 - img.x.shape[0], 0)
     crop_y1 = s - max(y1 - img.y.shape[0], 0)
     
-    crop[crop_y0:crop_y1, crop_x0:crop_x1] = img[{'y': slice(max(y0,0),y1), 'x': slice(max(x0,0),x1)}].transpose('y', 'x', 'channels')
+    crop[crop_y0:crop_y1, crop_x0:crop_x1] = img[{'y': slice(max(y0,0),y1), 'x': slice(max(x0,0),x1)}].transpose('y', 'x', ...)
     # scale crop
     if scale != 1:
         multichannel = len(img.shape) > 2
@@ -166,6 +166,11 @@ def crop_img(img: xr.DataArray, x: int, y: int, s: int = 100, **kwargs) -> np.nd
         # set everything outside circle to cval
         crop[circle==0] = cval
         
+    # make sure that crop has a channel dimension
+    if len(crop.shape) < 3:
+        crop = crop[:,:,np.newaxis]
+        
+    # convert to dtype
     if dtype is not None:
         crop = convert(crop)
     return crop
