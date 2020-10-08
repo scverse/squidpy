@@ -50,15 +50,15 @@ def segment(
     -----
     """
     if model_group == "skimage_blob":
-        model_group = SegmentationModelBlob(data=img, model=model_group)
+        segmentation_model = SegmentationModelBlob(model=model_group)
     elif model_group == "tensorflow":
-        model_group = SegmentationModelPretrainedTensorflow(data=img, model=model_instance)
+        segmentation_model = SegmentationModelPretrainedTensorflow(model=model_instance)
     else:
         raise ValueError("did not recognize model instance %s" % model_group)
 
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
     crops, x, y = [
-        model_group.segment(
+        segmentation_model.segment(
             arr=x,
             **model_kwargs
         ) for x in crops
@@ -100,7 +100,6 @@ class SegmentationModel:
     Specific seegmentation models can be implemented by inheriting from this class.
     This class is not instantiated by user but used in the background by the functional API.
     """
-    crop_positions: Union[np.ndarray, None]
 
     def __init__(
             self,
@@ -108,7 +107,7 @@ class SegmentationModel:
     ):
         self.model = model
 
-    def segment(self, arr) -> np.ndarray:
+    def segment(self, arr: np.ndarray) -> np.ndarray:
         """
 
         Params
@@ -124,13 +123,13 @@ class SegmentationModel:
         return self._segment(arr)
 
     @abc.abstractmethod
-    def _segment(self, arr) -> List[np.ndarray]:
+    def _segment(self, arr) -> np.ndarray:
         pass
 
 
 class SegmentationModelBlob(SegmentationModel):
 
-    def _segment(self, arr, invert: bool = True, **kwargs) -> List[np.ndarray]:
+    def _segment(self, arr, invert: bool = True, **kwargs) -> np.ndarray:
         """
 
         Params
@@ -181,7 +180,7 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
             model=model
         )
 
-    def _segment(self, arr, **kwargs) -> List[np.ndarray]:
+    def _segment(self, arr, **kwargs) -> np.ndarray:
         """
 
         Params
