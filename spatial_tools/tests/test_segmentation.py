@@ -22,6 +22,6 @@ def test_segmentation_blob(shape):
     img_orig[:, 30:34, 10:16] = 1.
 
     cont = ImageContainer(img_orig, img_id='image_0')
-    segment(img=cont, img_id='image_0', key_added="segment")
+    segment(img=cont, model_group="skimage_blob", model_instance="log", img_id='image_0', key_added="segment")
     # Check that blobs are in segments:
     assert np.all(cont["segment"][img_orig > 0] > 0)
