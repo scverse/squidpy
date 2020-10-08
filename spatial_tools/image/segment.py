@@ -57,14 +57,14 @@ def segment(
         raise ValueError("did not recognize model instance %s" % model_group)
 
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
-    img_segmented, x, y = [
+    crops, x, y = [
         model_group.segment(
             arr=x,
             **model_kwargs
         ) for x in crops
     ]
     img_segmented = uncrop_img(
-        crops=img_segmented,
+        crops=crops,
         x=xcoord,
         y=ycoord,
         shape=img.shape,
