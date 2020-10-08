@@ -16,7 +16,7 @@ def segment(
         img: ImageContainer,
         img_id: str,
         model_group: Union[str],
-        model_instance: Union[None, SegmentationModel] = None,
+        model_instance: Union[None, str, SegmentationModel] = None,
         model_kwargs: dict = {},
         xs=None,
         ys=None,
