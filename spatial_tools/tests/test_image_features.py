@@ -71,7 +71,3 @@ def test_get_summary_stats():
     assert [key for key in stats.keys() if "std" in key] != [], "std not in dict keys"
     assert [key for key in stats.keys() if "quantile" in key] != [], "quantile not in dict keys"
 
-
-# test_get_summary_stats()
-#test_get_hog_features()
-# test_get_image_features(tmpdir = "./")

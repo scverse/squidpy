@@ -2,7 +2,6 @@ import anndata
 import numpy as np
 import tifffile
 
-
 from functools import wraps
 from time import time
 
@@ -23,7 +22,6 @@ def _num_pages(fname):
     with tifffile.TiffFile(fname) as img:
         num_pages = len(img.pages)
     return num_pages
-
 
 def _access_img_in_adata(
         adata: anndata.AnnData,
