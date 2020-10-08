@@ -190,42 +190,43 @@ def get_color_hist(img, feature, bins=10, channels=[0, 1, 2], v_range=(0, 255)):
         for i, count in enumerate(hist[0]):
             features[f'{feature}_ch_{c}_bin_{i}'] = count
     return features
-    
-    
-def get_grey_texture_features(img, feature, props=['contrast', 'dissimilarity', 'homogeneity', 'correlation', 'ASM'], distances=[1],angles=[0, np.pi/4, np.pi/2, 3*np.pi/4]):
+
+
+def get_grey_texture_features(img, feature, props=['contrast', 'dissimilarity', 'homogeneity', 'correlation', 'ASM'],
+                              distances=[1], angles=[0, np.pi / 4, np.pi / 2, 3 * np.pi / 4]):
     """Calculate texture features
-    
-    A grey level co-occurence matrix (GLCM) is computed for different combinations of distance and angle. 
-    The distance defines the pixel difference of co occurence. The angle define the direction along which 
-    we check for co-occurence. The GLCM includes the number of times that grey-level j occurs at a distance 
+
+    A grey level co-occurence matrix (GLCM) is computed for different combinations of distance and angle.
+    The distance defines the pixel difference of co occurence. The angle define the direction along which
+    we check for co-occurence. The GLCM includes the number of times that grey-level j occurs at a distance
     d and at an angle theta from grey-level i.
     From a given GLCM texture features are infered.
-    
+
     Arguments
     ---------
-    img: np.array 
+    img: np.array
         rgb image in uint8 format.
     props: list of strs
         texture features that are calculated. See `prop` in skimage.feature.greycoprops
     distances: list of ints
-        See `distances` in skimage.feature.greycomatrix 
+        See `distances` in skimage.feature.greycomatrix
     angles: list of floats
-        See `angles` in skimage.feature.greycomatrix 
-        
+        See `angles` in skimage.feature.greycomatrix
+
     Returns
     -------
     dict of feature values
-    
+
     """
-    features = {}    
+    features = {}
     # get grey scale image
     multiplier = [0.299, 0.587, 0.114]
     grey_img = np.dot(img, multiplier).astype(np.uint8)
-    
-    comatrix = greycomatrix(grey_img, distances=distances, angles=angles, levels=256)
+
+    comatrix = greycomatrix(grey_img, distances = distances, angles = angles, levels = 256)
     for p in props:
-        tmp_features = greycoprops(comatrix, prop=p)
+        tmp_features = greycoprops(comatrix, prop = p)
         for d_idx, d in enumerate(distances):
             for a_idx, a in enumerate(angles):
-                features[f'{feature}_{p}_dist_{d}_angle_{a:.2f}'] = tmp_features[d_idx,a_idx]
+                features[f'{feature}_{p}_dist_{d}_angle_{a:.2f}'] = tmp_features[d_idx, a_idx]
     return features
