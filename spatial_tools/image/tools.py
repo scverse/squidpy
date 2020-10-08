@@ -118,6 +118,7 @@ def get_hog_features(img, feature_name="hog"):
     Params
     ---------
     img: M, N[, C] np.array
+    img: np.array
         rgb image in uint8 format.
     feature_name: str
         name of feature for string id
