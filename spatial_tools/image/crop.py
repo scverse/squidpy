@@ -53,7 +53,6 @@ def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
         yield (obs_id, img.crop(x=xcoord[i], y=ycoord[i], s=s, **kwargs))
 
 
-# TODO comment / document
 def uncrop_img(crops, x, y, shape):
     """
     Re-assemble image from crops and their centres.
@@ -62,8 +61,8 @@ def uncrop_img(crops, x, y, shape):
 
     Attrs:
         crops (List[np.ndarray]): List of image crops.
-        x (int): x coord of crop in `img`
-        y (int): y coord of crop in `img`
+        x (int): x coords of crop in `img`
+        y (int): y coords of crop in `img`
         shape (int): Shape of full image
     """
     assert y < shape[0], f"y ({y}) is outsize of image range ({shape[0]})"
