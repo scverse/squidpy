@@ -4,7 +4,11 @@
 import numpy as np
 from itertools import product, combinations
 import pandas as pd
+import networkx as nx
 from spatial_tools.graph.build import spatial_connectivity
+from typing import Union
+import random
+
 
 def cartesian(arrays, out=None):
     """
@@ -141,30 +145,32 @@ def _get_output_symmetrical(df):
     res = res.drop_duplicates('k')
     return res
 
-def permutation_test_leiden_pairs_complex(adata, degree_start=1, degree_end=6, n_perm=100):
+def permtest_leiden_pairs_complex(adata, rings_start=1, rings_end=6, n_perm=100, random_seed=500):
     res = []
-    for n_degree in range(degree_start, degree_end):
-        print('# degree', n_degree)
-        print('calculating connectivity graph with degree %i...' % n_degree)
-        spatial_connectivity(adata, n_degree=n_degree)
-        print('permutations...')
+    random.seed(random_seed)
+    for n_rings in range(rings_start, rings_end):
+        print('# degree', n_rings)
+        print('calculating connectivity graph with degree %i...' % n_rings)
+        spatial_connectivity(adata, n_rings=n_rings)
         for count_option in ['edges', 'nodes', 'nodes-dev']:
-            permutation_test_leiden_pairs(adata, n_permutations=n_perm,
+            print('permutations with mode %s...' % count_option)
+            permtest_leiden_pairs(adata, n_permutations=n_perm,
                                           print_log_each=25, log=False,
                                           count_option=count_option)
-            df = adata.uns['nhood_permutation_test'].copy()
-            df['n.degree'] = n_degree
+            df = adata.uns['nhood_permtest'].copy()
+            df['n.rings'] = n_rings
             df['n.perm'] = n_perm
             res.append(df)
     res = pd.concat(res)        
     return(res)
 
-def permutation_test_leiden_pairs(adata: "AnnData",
-                            n_permutations: int = 10,
-                            key_added: str ='nhood_permutation_test',
+def permtest_leiden_pairs(adata: "AnnData",
+                            n_permutations: int = 100,
+                            key_added: str ='nhood_permtest',
                             print_log_each: int = 25,
                             log: bool = True,
                             count_option: str = 'edges',
+                            random_seed: int = 500
                            ):
     """
     Calculate enrichment/depletion of observed leiden pairs in the spatial connectivity graph, versus permutations as background.
@@ -178,6 +184,8 @@ def permutation_test_leiden_pairs(adata: "AnnData",
         Key added to output dataframe in adata.uns.
     count_option
         counting option (edges = count edges, nodes = count nodes)
+    random_seed
+        The number to initialize a pseudorandom number generator.
     """
     
     leiden = adata.obs['leiden']
@@ -196,11 +204,15 @@ def permutation_test_leiden_pairs(adata: "AnnData",
     leiden_rand = leiden.copy()
     perm = []
     
+    random.seed(random_seed)
     if log:
-        print('calculating pairwise enrichment/depletion permutations...')
+        print('calculating pairwise enrichment/depletion permutations (n=%i)...' % n_permutations)
+        if n_permutations <= 100:
+            print('Please consider a high permutation value for reliable Z-score estimates (>500)...')
+
     for pi in range(n_permutations):
         if (pi + 1) % print_log_each == 0 and log:
-            print('%i out of %i permutations' % (pi + 1, n_permutations))
+            print('%i permutations (out of %i)...' % (pi + 1, n_permutations))
         leiden_rand = leiden_rand[np.random.permutation(leiden_rand.shape[0])]
         obs_perm = _count_observations_by_pairs(conn, leiden_rand, positions,
                                                count_option=count_option)
@@ -229,37 +241,57 @@ def permutation_test_leiden_pairs(adata: "AnnData",
     df['n.exp'] = mu
     df['sigma'] = sigma
     df.sort_values('z.score', ascending=False)
-    df = _get_output_symmetrical(df)    
+    
+    # this ensures output is symmetrical
+    df = _get_output_symmetrical(df)
+    
     adata.uns[key_added] = df
+
 
 def cluster_centrality_scores(
         adata: "AnnData",
-        connectivity_key: str,
         clusters_key: str,
-        key_added: str = 'cluster_centrality_scores',
-        save_networkx_graph: bool=True,
-        show_plot: bool=True
+        connectivity_key: Union[str, None] = None,
+        key_added: str = 'cluster_centrality_scores'
 ):
     """
-    Computes centrality scores per cluster. Results are stored in .uns in the AnnData object.
-    Params
-    ------
+    Computes centrality scores per cluster or cell type in AnnData object.
+    Results are stored in .uns in the AnnData object under the key specified in key_added.
+
+    Based among others on methods used for Gene Regulatory Networks (GRNs) in:
+    'CellOracle: Dissecting cell identity via network inference and in silico gene perturbation'
+    Kenji Kamimoto, Christy M. Hoffmann, Samantha A. Morris
+    bioRxiv 2020.02.17.947416; doi: https://doi.org/10.1101/2020.02.17.947416
+
+    Parameters
+    ----------
     adata
         The AnnData object.
-    connectivity_key
-        Key to connectivity_matrix in obsp.
     clusters_key
         Key to clusters in obs.
+    connectivity_key
+        (Optional) Key to connectivity_matrix in obsp.
     key_added
-        Key added to output dataframe in adata.uns.
-    save_networkx_graph
-        Whether to add networkx to adata.uns under key 'networkx_graph'.
-    show_plot
-        Will display the centrality measures as scatterplot.
+        (Optional) Key added to output dataframe in adata.uns.
+
+    Returns
+    -------
     """
-    graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
-    if save_networkx_graph:
+    if clusters_key not in adata.obs_keys():
+        raise ValueError('clusters_key %s not recognized. Choose a different key refering to a cluster in .obs.'
+                         % clusters_key)
+
+    if 'networkx_graph' in adata.uns_keys():
+        print('Using saved networkx graph stored under .uns in AnnData object.')
+        graph = adata.uns['networkx_graph']
+    elif connectivity_key in adata.obsp:
+        graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
+        print('Saving networkx graph based on %s in .uns under key: networkx_graph' % connectivity_key)
         adata.uns['networkx_graph'] = graph
+    else:
+        raise ValueError('Networkx graph not found in .uns and connectivity_key %s not recognized. '
+                         'Choose a different connectivity_key or run first '
+                         'build.spatial_connectivity(adata) on the AnnData object.' % connectivity_key)
 
     clusters = adata.obs[clusters_key].unique().tolist()
 
@@ -292,63 +324,51 @@ def cluster_centrality_scores(
                                'betweenness centrality']
                       )
     adata.uns[key_added] = df
-    if show_plot:
-        import seaborn as sns
-        import matplotlib.pyplot as plt
-
-        df = adata.uns[key_added]
-        df = df.rename(columns={"degree centrality": "degree\ncentrality",
-                                "clustering coefficient": "clustering\ncoefficient",
-                                'closeness centrality': 'closeness\ncentrality',
-                                "betweenness centrality": "betweenness\ncentrality"}
-                       )
-        values = ["degree\ncentrality", "clustering\ncoefficient", 'closeness\ncentrality', "betweenness\ncentrality"]
-        for i, value in zip([1, 2, 3, 4], values):
-            plt.subplot(1, 4, i)
-            ax = sns.stripplot(data=df, y="cluster", x=value, size=10, orient="h", linewidth=1)
-            ax.spines['right'].set_visible(False)
-            ax.spines['top'].set_visible(False)
-            ax.spines['bottom'].set_visible(False)
-            ax.spines['left'].set_visible(False)
-            ax.yaxis.grid(True)
-            ax.tick_params(bottom=False, left=False, right=False, top=False)
-            if i > 1:
-                plt.ylabel(None)
-                ax.tick_params(labelleft=False)
 
 
 def cluster_interactions(
         adata: "AnnData",
-        cluster_key: str,
+        clusters_key: str,
+        connectivity_key: Union[str, None] = None,
+        normalized: bool = False,
         key_added: str = 'cluster_interactions',
-        show_plot: bool = True
 ):
     """
     Computes interaction matrix for clusters. Results are stored in .uns in the AnnData object.
-    Params
-    ------
+
+    Parameters
+    ----------
     adata
         The AnnData object.
     clusters_key
         Key to clusters in obs.
+    connectivity_key
+        (Optional) Key to connectivity_matrix in obsp.
+    normalized
+        (Optional) If True, then each row is normalized by the summation of its values.
     key_added
-        Key added to output dataframe in adata.uns.
-    show_plot
-        Will display the interaction matrix as heatmap.
+        (Optional) Key added to output in adata.uns.
+
+    Returns
+    -------
     """
-    graph = adata.uns['networkx_graph']
-    clusters = {i: {cluster_key: str(x)} for i, x in enumerate(adata.obs[cluster_key].tolist())}
+    if clusters_key not in adata.obs_keys():
+        raise ValueError('clusters_key %s not recognized. Choose a different key refering to a cluster in .obs.'
+                         % clusters_key)
+
+    if 'networkx_graph' in adata.uns_keys():
+        print('Using saved networkx graph stored under .uns in AnnData object.')
+        graph = adata.uns['networkx_graph']
+    elif connectivity_key in adata.obsp:
+        graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
+        print('Saving networkx graph build on adjacency matrix of connectivity_key in .uns under key: '
+              'networkx_graph' % connectivity_key)
+        adata.uns['networkx_graph'] = graph
+    else:
+        raise ValueError('Networkx graph not found in .uns and connectivity_key %s not recognized. '
+                         'Choose a different connectivity_key or run first '
+                         'build.spatial_connectivity(adata) on the AnnData object.' % connectivity_key)
+
+    clusters = {i: {clusters_key: str(x)} for i, x in enumerate(adata.obs[clusters_key].tolist())}
     nx.set_node_attributes(graph, clusters)
-
-    interaction_matrix = nx.attr_matrix(graph, node_attr=cluster_key)
-    adata.uns[key_added] = interaction_matrix
-    if show_plot:
-        import matplotlib.pyplot as plt
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        cax = ax.matshow(interaction_matrix[0])
-        fig.colorbar(cax)
-
-        plt.xticks(range(len(interaction_matrix[1])), interaction_matrix[1], size='small')
-        plt.yticks(range(len(interaction_matrix[1])), interaction_matrix[1], size='small')
+    adata.uns[key_added] = nx.attr_matrix(graph, node_attr=clusters_key, normalized=normalized)

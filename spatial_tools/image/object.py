@@ -91,6 +91,8 @@ class ImageContainer:
         Add layer(s) from numpy image / tiff file. 
         For numpy arrays, assume that dims are: channels, y, x
         
+        The added image has to have the same number of channels as the original image, or no channels. 
+        
         Params
         ------
         img
@@ -102,6 +104,11 @@ class ImageContainer:
         Returns
         -------
         None
+        
+        Raises
+        ------
+        ValueError
+            if img_id is neither a string nor a list
         """
         imgs = self._load_img(img)
         if img_id is None:
@@ -138,13 +145,20 @@ class ImageContainer:
         Returns
         -------
         List of DataArrays containing loaded images.
+        
+        Raises
+        ------
+        ValueError:
+            if img is a np.ndarray and has more than 3 dimensions
         """
         imgs = []
         if isinstance(img, np.ndarray):
+            if len(img.shape) > 3:
+                raise ValueError(f"img has more than 3 dimensions. img.shape is {img.shape}")
+            dims = ['channels', 'y', 'x']
             if len(img.shape) == 2:
-                # add empty channel dimension
-                img = img[np.newaxis, :, :]
-            xr_img = xr.DataArray(img, dims=['channels', 'y', 'x'])
+                dims = ['y', 'x']
+            xr_img = xr.DataArray(img, dims=dims)
             imgs.append(xr_img)
         elif isinstance(img, str):
             # get the number of pages in the file
