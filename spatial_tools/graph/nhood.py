@@ -141,30 +141,32 @@ def _get_output_symmetrical(df):
     res = res.drop_duplicates('k')
     return res
 
-def permutation_test_leiden_pairs_complex(adata, degree_start=1, degree_end=6, n_perm=100):
+def permtest_leiden_pairs_complex(adata, degree_start=1, degree_end=6, n_perm=100, random_seed=500):
     res = []
+    random.seed(random_seed)
     for n_degree in range(degree_start, degree_end):
         print('# degree', n_degree)
         print('calculating connectivity graph with degree %i...' % n_degree)
         spatial_connectivity(adata, n_degree=n_degree)
-        print('permutations...')
         for count_option in ['edges', 'nodes', 'nodes-dev']:
-            permutation_test_leiden_pairs(adata, n_permutations=n_perm,
+            print('permutations with mode %s...' % count_option)
+            permtest_leiden_pairs(adata, n_permutations=n_perm,
                                           print_log_each=25, log=False,
                                           count_option=count_option)
-            df = adata.uns['nhood_permutation_test'].copy()
+            df = adata.uns['nhood_permtest'].copy()
             df['n.degree'] = n_degree
             df['n.perm'] = n_perm
             res.append(df)
     res = pd.concat(res)        
     return(res)
 
-def permutation_test_leiden_pairs(adata: "AnnData",
-                            n_permutations: int = 10,
-                            key_added: str ='nhood_permutation_test',
+def permtest_leiden_pairs(adata: "AnnData",
+                            n_permutations: int = 100,
+                            key_added: str ='nhood_permtest',
                             print_log_each: int = 25,
                             log: bool = True,
                             count_option: str = 'edges',
+                            random_seed: int = 500
                            ):
     """
     Calculate enrichment/depletion of observed leiden pairs in the spatial connectivity graph, versus permutations as background.
@@ -178,6 +180,8 @@ def permutation_test_leiden_pairs(adata: "AnnData",
         Key added to output dataframe in adata.uns.
     count_option
         counting option (edges = count edges, nodes = count nodes)
+    random_seed
+        The number to initialize a pseudorandom number generator.
     """
     
     leiden = adata.obs['leiden']
@@ -196,11 +200,15 @@ def permutation_test_leiden_pairs(adata: "AnnData",
     leiden_rand = leiden.copy()
     perm = []
     
+    random.seed(random_seed)
     if log:
-        print('calculating pairwise enrichment/depletion permutations...')
+        print('calculating pairwise enrichment/depletion permutations (n=%i)...' % n_permutations)
+        if n_permutations <= 100:
+            print('Please consider a high permutation value for reliable Z-score estimates (>500)...')
+
     for pi in range(n_permutations):
         if (pi + 1) % print_log_each == 0 and log:
-            print('%i out of %i permutations' % (pi + 1, n_permutations))
+            print('%i permutations (out of %i)...' % (pi + 1, n_permutations))
         leiden_rand = leiden_rand[np.random.permutation(leiden_rand.shape[0])]
         obs_perm = _count_observations_by_pairs(conn, leiden_rand, positions,
                                                count_option=count_option)
@@ -229,7 +237,10 @@ def permutation_test_leiden_pairs(adata: "AnnData",
     df['n.exp'] = mu
     df['sigma'] = sigma
     df.sort_values('z.score', ascending=False)
-    df = _get_output_symmetrical(df)    
+    
+    # this ensures output is symmetrical
+    df = _get_output_symmetrical(df)
+    
     adata.uns[key_added] = df
 
 def cluster_centrality_scores(
