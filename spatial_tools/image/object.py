@@ -54,6 +54,10 @@ class ImageContainer:
         self.data = xr.Dataset()
         if img is not None:
             self.add_img(img, img_id)
+
+    @property
+    def shape(self):
+        pass  # TODO return image shape from xarray
         
     @classmethod
     def open(cls, fname: str, lazy: bool = True, chunks: Optional[int] = None):
@@ -183,7 +187,7 @@ class ImageContainer:
         y: int
             Y coord of crop (in pixel space).
         s: int
-            Width and heigh of the crop in pixels.
+            Width and heigh of the crop in pixels.  # TODO this should be rectangular not square - 2 params
         scale: float
             Default is 1.0.
             Resolution of the crop (smaller -> smaller image).
@@ -215,4 +219,45 @@ class ImageContainer:
             img = self.data[img_id]
             crops.append(crop_img(img, x, y, s, **kwargs))
         return np.concatenate(crops, axis=-1)
-    
+
+    def crop_equally(
+            self,
+            xs: Union[int, None] = None,
+            ys: Union[int, None] = None,
+            img_id: Optional[Union[str, List[str]]] = None,
+            **kwargs
+    ) -> List[List[np.ndarray], np.ndarray, np.ndarray]:
+        """\
+        Decompose image into equally sized crops
+
+        Params
+        ------
+        xs: int
+            Width of the crops in pixels. Defaults to image size if None.
+        ys: int
+            Height of the crops in pixels. Defaults to image size if None.
+            # TODO add support as soon as crop supports this
+        cval: float
+            Default is 0
+            The value outside image boundaries or the mask.
+        dtype: str
+            Optional, type to which the output should be (safely) cast.
+            Currently supported dtypes: 'uint8'.
+
+        Returns
+        -------
+        Tuple:
+            List[np.ndarray with dimentions: y, x, channels (concatenated over all images)]: crops
+            np.ndarray: length number of crops: x positions of crops
+            np.ndarray: length number of crops: y positions of crops
+        """
+        if xs is None:
+            xs = self.shape[0]
+        if ys is None:
+            ys = self.shape[1]
+        unique_xcoord = np.arange(start=0, end=self.shape[0], step=xs)
+        unique_ycoord = np.arange(start=0, end=self.shape[1], step=xs)  # TODO add ys support here
+        xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
+        ycoords = np.tile(unique_xcoord, len(unique_ycoord))
+        crops = [self.crop(x=x, y=y, s=xs, img_id=img_id) for x, y in zip(xcoords, ycoords)]
+        return crops, xcoords, ycoords

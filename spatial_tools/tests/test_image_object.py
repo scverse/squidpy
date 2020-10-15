@@ -3,6 +3,7 @@ import numpy as np
 import rasterio.errors
 import warnings
 
+from spatial_tools.image.crop import uncrop_img
 from spatial_tools.image.object import ImageContainer
 
 @pytest.mark.parametrize("shape", 
@@ -94,3 +95,25 @@ def test_crop(tmpdir):
     assert crop.shape == (1,1,3)
     # check that has cropped correct image
     assert (crop[0,0] == [10,13,15]).all()
+
+def test_uncrop_img():
+    """\
+    crop image und uncrop again and check equality
+    """
+    # create ImageContainer
+    xdim = 100
+    ydim = 100
+    img_orig = np.zeros((2,1,xdim,ydim), dtype=np.uint8)
+    img_orig[:,0,20,50] = range(10,20)
+    cont = ImageContainer(img=img_orig, img_id='image_0')
+
+    # crop small crop
+    crops, xcoord, ycoord = cont.crop_equally(xs=1, img_id=['image_0'])
+    a = uncrop_img(
+        crops=crops,
+        x=xcoord,
+        y=ycoord,
+        shape=cont.shape,
+    )
+    # check that has cropped correct image
+    assert np.max(np.abs(a - cont["image_0"])) == 0.
