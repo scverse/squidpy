@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Union, List, Optional
+from typing import Union, List, Tuple, Optional
 import xarray as xr
 from ._utils import _num_pages 
 
@@ -226,7 +226,7 @@ class ImageContainer:
             ys: Union[int, None] = None,
             img_id: Optional[Union[str, List[str]]] = None,
             **kwargs
-    ) -> List[List[np.ndarray], np.ndarray, np.ndarray]:
+    ) -> Tuple[List[np.ndarray], np.ndarray, np.ndarray]:
         """\
         Decompose image into equally sized crops
 

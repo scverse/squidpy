@@ -51,6 +51,8 @@ def segment(
     """
     if model_group == "skimage_blob":
         segmentation_model = SegmentationModelBlob(model=model_group)
+    elif model_group == "watershed":
+        segmentation_model = SegmentationModelWatershed(model=model_group)
     elif model_group == "tensorflow":
         segmentation_model = SegmentationModelPretrainedTensorflow(model=model_instance)
     else:
@@ -145,7 +147,7 @@ class SegmentationModelBlob(SegmentationModel):
         Segmentation mask for high-resolution image.
         """
         if invert:
-            arr = [1.-x for x in arr]
+            arr = 1.-arr
 
         if self.model == "log":
             y = skimage.feature.blob_log(
@@ -164,6 +166,46 @@ class SegmentationModelBlob(SegmentationModel):
             )
         else:
             raise ValueError("did not recognize self.model %s" % self.model)
+        return y
+
+
+class SegmentationModelWatershed(SegmentationModel):
+
+    def _segment(self, arr, invert: bool = True, **kwargs) -> np.ndarray:
+        """
+
+        Params
+        ------
+        arr: np.ndarray
+            High-resolution image.
+        kwargs: dicct
+            Model arguments
+
+        Yields
+        -----
+        (x, y, 1)
+        Segmentation mask for high-resolution image.
+        """
+        from skimage.filters import threshold_otsu
+        from scipy import ndimage as ndi
+
+        from skimage.segmentation import watershed
+        from skimage.feature import peak_local_max
+
+        # get binarized image
+        thresh = 0.5
+        mask = arr[:, :, 0] < thresh
+
+        # calculate markers as maximal distanced points from background (locally)
+        distance = ndi.distance_transform_edt(1 - mask)
+        local_maxi = peak_local_max(
+            distance,
+            indices=False,
+            footprint=np.ones((5, 5)),
+            labels=1 - mask
+        )
+        markers = ndi.label(local_maxi)[0]
+        y = watershed(255-arr[:,:,0], markers, mask=1-mask)
         return y
 
 
