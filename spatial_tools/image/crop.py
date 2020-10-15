@@ -65,8 +65,8 @@ def uncrop_img(crops, x, y, shape):
         y (int): y coords of crop in `img`
         shape (int): Shape of full image
     """
-    assert y < shape[0], f"y ({y}) is outsize of image range ({shape[0]})"
-    assert x < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
+    assert np.max(y) < shape[0], f"y ({y}) is outsize of image range ({shape[0]})"
+    assert np.max(x) < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
 
     img = np.zeros(shape)
     if len(crops) > 1:

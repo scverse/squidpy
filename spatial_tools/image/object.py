@@ -56,8 +56,12 @@ class ImageContainer:
             self.add_img(img, img_id)
 
     @property
-    def shape(self):
-        pass  # TODO return image shape from xarray
+    def shape(self) -> Tuple[int, int]:
+        return (self.data.dims["x"], self.data.dims["y"])
+
+    @property
+    def nchannels(self) -> int:
+        return self.data.dims["channels"]
         
     @classmethod
     def open(cls, fname: str, lazy: bool = True, chunks: Optional[int] = None):
@@ -255,8 +259,8 @@ class ImageContainer:
             xs = self.shape[0]
         if ys is None:
             ys = self.shape[1]
-        unique_xcoord = np.arange(start=0, end=self.shape[0], step=xs)
-        unique_ycoord = np.arange(start=0, end=self.shape[1], step=xs)  # TODO add ys support here
+        unique_xcoord = np.arange(start=0, stop=self.shape[0], step=xs)
+        unique_ycoord = np.arange(start=0, stop=self.shape[1], step=xs)  # TODO add ys support here
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
         crops = [self.crop(x=x, y=y, s=xs, img_id=img_id) for x, y in zip(xcoords, ycoords)]

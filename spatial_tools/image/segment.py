@@ -12,70 +12,6 @@ Functions exposed: segment(), evaluate_nuclei_segmentation()
 """
 
 
-def segment(
-        img: ImageContainer,
-        img_id: str,
-        model_group: Union[str],
-        model_instance: Union[None, str, SegmentationModel] = None,
-        model_kwargs: dict = {},
-        xs=None,
-        ys=None,
-        key_added: Union[str, None] = None
-) -> Union[anndata.AnnData, None]:
-    """
-    Segments image.
-
-    Params
-    ------
-    img: ImageContainer
-        High-resolution image.
-    img_id: str
-        Key of image object to segment.
-    model_group: str
-        Name segmentation method to use. Available are:
-            - skimage_blob: Blob extraction with skimage
-            - tensorflow: tensorflow executable model
-    model_instance: float
-        Instance of executable segmentation model or name of specific method within model_group.
-    model_kwargs: Optional [dict]
-        Key word arguments to segmentation method.
-    xs: int
-        Width of the crops in pixels.
-    ys: int
-        Height of the crops in pixels.  # TODO add support as soon as crop supports this
-    key_added: str
-        Key of new image sized array to add into img object. Defaults to "segmentation_$model_group"
-
-    Yields
-    -----
-    """
-    if model_group == "skimage_blob":
-        segmentation_model = SegmentationModelBlob(model=model_group)
-    elif model_group == "watershed":
-        segmentation_model = SegmentationModelWatershed(model=model_group)
-    elif model_group == "tensorflow":
-        segmentation_model = SegmentationModelPretrainedTensorflow(model=model_instance)
-    else:
-        raise ValueError("did not recognize model instance %s" % model_group)
-
-    crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
-    crops, x, y = [
-        segmentation_model.segment(
-            arr=x,
-            **model_kwargs
-        ) for x in crops
-    ]
-    img_segmented = uncrop_img(
-        crops=crops,
-        x=xcoord,
-        y=ycoord,
-        shape=img.shape,
-    )
-
-    img_id = "segmented_" + model_group.lower() if key_added is None else key_added
-    img.add_img(img=img_segmented, img_id=img_id)
-
-
 def evaluate_nuclei_segmentation(
         adata,
         copy: bool = False,
@@ -239,3 +175,67 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
         """
         # Uses callable tensorflow keras model.
         return self.model(arr)
+
+
+def segment(
+        img: ImageContainer,
+        img_id: str,
+        model_group: Union[str],
+        model_instance: Union[None, str, SegmentationModel] = None,
+        model_kwargs: dict = {},
+        xs=None,
+        ys=None,
+        key_added: Union[str, None] = None
+) -> Union[anndata.AnnData, None]:
+    """
+    Segments image.
+
+    Params
+    ------
+    img: ImageContainer
+        High-resolution image.
+    img_id: str
+        Key of image object to segment.
+    model_group: str
+        Name segmentation method to use. Available are:
+            - skimage_blob: Blob extraction with skimage
+            - tensorflow: tensorflow executable model
+    model_instance: float
+        Instance of executable segmentation model or name of specific method within model_group.
+    model_kwargs: Optional [dict]
+        Key word arguments to segmentation method.
+    xs: int
+        Width of the crops in pixels.
+    ys: int
+        Height of the crops in pixels.  # TODO add support as soon as crop supports this
+    key_added: str
+        Key of new image sized array to add into img object. Defaults to "segmentation_$model_group"
+
+    Yields
+    -----
+    """
+    if model_group == "skimage_blob":
+        segmentation_model = SegmentationModelBlob(model=model_instance)
+    elif model_group == "watershed":
+        segmentation_model = SegmentationModelWatershed(model=model_instance)
+    elif model_group == "tensorflow":
+        segmentation_model = SegmentationModelPretrainedTensorflow(model=model_instance)
+    else:
+        raise ValueError("did not recognize model instance %s" % model_group)
+
+    crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
+    crops = [
+        segmentation_model.segment(
+            arr=x,
+            **model_kwargs
+        ) for x in crops
+    ]
+    img_segmented = uncrop_img(
+        crops=crops,
+        x=xcoord,
+        y=ycoord,
+        shape=img.shape,
+    )
+
+    img_id = "segmented_" + model_group.lower() if key_added is None else key_added
+    img.add_img(img=img_segmented, img_id=img_id)
