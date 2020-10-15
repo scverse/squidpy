@@ -1,6 +1,7 @@
 """
 Functions for building graph from spatial coordinates
 """
+import warnings
 import numpy as np
 from scipy import sparse
 from typing import Optional
@@ -14,6 +15,7 @@ def spatial_connectivity(
     n_neigh: int = 6,
     radius: Optional[float] = None,
     coord_type: str = "visium",
+    weighted_graph: bool = True
 ):
     """
     Creates graph from spatial coordinates
@@ -34,6 +36,8 @@ def spatial_connectivity(
         Radius of neighbors for non-Visium data
     coord_type
         Type of coordinate system (Visium vs. general coordinates)
+    weighted_graph
+        Output weighted connectivities
     """
     coords = adata.obsm[obsm]
 
@@ -41,10 +45,25 @@ def spatial_connectivity(
         if n_rings > 1:
             Adj = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True)
             # get up to n_rings order connections
-            Adj += Adj**n_rings
-            Adj.setdiag(0.0)
-            Adj.eliminate_zeros()
-            Adj.data[:] = 1.0
+            if weighted_graph:
+                Res = Adj
+                Walk = Adj
+                for i in range(n_rings-1):
+                    Walk = Walk@Adj
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", sparse.SparseEfficiencyWarning)
+                        Walk[Res.nonzero()] = 0.0
+                    Walk.eliminate_zeros()
+                    Walk.data[:] = float(i+2)
+                    Res = Res+Walk
+                Adj = Res
+                Adj.setdiag(0.0)
+                Adj.eliminate_zeros()
+            else:
+                Adj += Adj**n_rings
+                Adj.setdiag(0.0)
+                Adj.eliminate_zeros()
+                Adj.data[:] = 1.0
         else:
             Adj = _build_connectivity(coords, 6, neigh_correct=True)
         adata.obsp[key_added] = Adj
