@@ -192,7 +192,7 @@ def segment(
         xs=None,
         ys=None,
         key_added: Union[str, None] = None
-) -> Union[anndata.AnnData, None]:
+) -> Union[None]:
     """
     Segments image.
 
@@ -236,6 +236,15 @@ def segment(
             **model_kwargs
         ) for x in crops
     ]
+    # By convention, segments or numbered from 1..number of segments within each crop.
+    # Next, we have to account for that before merging the crops so that segments are not confused.
+    # TODO use overlapping crops to not create confusion at boundaries
+    counter = 0
+    for i, x in enumerate(crops):
+        crop_new = x
+        crop_new[crop_new > 0] = crop_new[crop_new > 0] + counter
+        counter += np.max(x)
+        crops[i] = crop_new
     img_segmented = uncrop_img(
         crops=crops,
         x=xcoord,
@@ -245,3 +254,49 @@ def segment(
 
     img_id = "segmented_" + model_group.lower() if key_added is None else key_added
     img.add_img(img=img_segmented, img_id=img_id)
+
+
+def segment_crops(
+        img: ImageContainer,
+        img_id: str,
+        segmented_img_id: str,
+        xs=None,
+        ys=None,
+) -> List[np.ndarray]:
+    """
+    Segments image.
+
+    Params
+    ------
+    img: ImageContainer
+        High-resolution image.
+    img_id: str
+        Key of image object to take crops from.
+    segmented_img_id: str
+        Key of image object that contains segments.
+    xs: int
+        Width of the crops in pixels.
+    ys: int
+        Height of the crops in pixels.  # TODO add support as soon as crop supports this
+
+    Yields
+    -----
+    Crops centred on segments
+    """
+    segment_centres = [
+        (
+            np.mean(np.where(img.data[segmented_img_id] == i)[0]),
+            np.mean(np.where(img.data[segmented_img_id] == i)[1])
+        )
+        for i in np.sort(list(set(list(np.unique(img.data[segmented_img_id])))-set([0])))
+    ]
+    return [
+        img.crop(
+            x=int(xi),
+            y=int(yi),
+            xs=xs,
+            ys=ys,
+            img_id=img_id
+        ).T
+        for xi, yi in segment_centres
+    ]
