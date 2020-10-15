@@ -181,7 +181,7 @@ class ImageContainer:
             raise ValueError(img)
         return imgs
 
-    def crop(self, x: int, y: int, s: int = 100, img_id: Optional[Union[str, List[str]]] = None, **kwargs) -> np.ndarray:
+    def crop(self, x: int, y: int, xs: int = 100, ys: int = 100, img_id: Optional[Union[str, List[str]]] = None, **kwargs) -> np.ndarray:
         """\
         Extract a crop centered at `x` and `y`. 
         
@@ -191,8 +191,10 @@ class ImageContainer:
             X coord of crop (in pixel space).
         y: int
             Y coord of crop (in pixel space).
-        s: int
-            Width and heigh of the crop in pixels.  # TODO this should be rectangular not square - 2 params
+        xs: int
+            Width of the crop in pixels.
+        ys: int
+            Geigh of the crop in pixels.
         scale: float
             Default is 1.0.
             Resolution of the crop (smaller -> smaller image).
@@ -222,7 +224,7 @@ class ImageContainer:
         crops = []
         for img_id in img_ids:
             img = self.data[img_id]
-            crops.append(crop_img(img, x, y, s, **kwargs))
+            crops.append(crop_img(img, x, y, xs, ys, **kwargs))
         return np.concatenate(crops, axis=-1)
 
     def crop_equally(
@@ -260,9 +262,17 @@ class ImageContainer:
             xs = self.shape[0]
         if ys is None:
             ys = self.shape[1]
-        unique_xcoord = np.arange(start=xs // 2, stop=(self.shape[0] // xs)*xs + xs // 2, step=xs)
-        unique_ycoord = np.arange(startadd_img=ys // 2, stop=(self.shape[0] // ys)*ys + ys // 2, step=ys)  # TODO add ys support here
+        unique_xcoord = np.arange(
+            start=xs // 2,
+            stop=(self.shape[0] // xs)*xs + xs // 2,
+            step=xs
+        )
+        unique_ycoord = np.arange(
+            start=ys // 2,
+            stop=(self.shape[0] // ys)*ys + ys // 2,
+            step=ys
+        )
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
-        crops = [self.crop(x=x, y=y, s=xs, img_id=img_id) for x, y in zip(xcoords, ycoords)]
+        crops = [self.crop(x=x, y=y, xs=xs, ys=ys, img_id=img_id) for x, y in zip(xcoords, ycoords)]
         return crops, xcoords, ycoords

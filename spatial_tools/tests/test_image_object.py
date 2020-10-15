@@ -83,7 +83,7 @@ def test_crop(tmpdir):
     cont = ImageContainer(str(fname))
 
     # crop big crop
-    crop = cont.crop(x=50, y=20, s=300, cval=5, img_id=['image_0', 'image_3', 'image_5'])
+    crop = cont.crop(x=50, y=20, xs=300, ys=300, cval=5, img_id=['image_0', 'image_3', 'image_5'])
     # shape is s x s x len(img_id)/channels
     assert crop.shape == (300,300,3)
     # check that values outside of img are padded with 5
@@ -91,7 +91,7 @@ def test_crop(tmpdir):
     assert (crop[-1,-1] == 5).all()
 
     # crop small crop
-    crop = cont.crop(x=50, y=20, s=1, cval=5, img_id=['image_0', 'image_3', 'image_5'])
+    crop = cont.crop(x=50, y=20, xs=1, ys=1, cval=5, img_id=['image_0', 'image_3', 'image_5'])
     assert crop.shape == (1,1,3)
     # check that has cropped correct image
     assert (crop[0,0] == [10,13,15]).all()

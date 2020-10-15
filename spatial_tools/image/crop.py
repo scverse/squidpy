@@ -85,7 +85,7 @@ def uncrop_img(crops, x, y, shape):
         assert crops[0].shape == shape, "single crop is not of the target shape %s" % str(crops[0].shape)
         return crops[0]
 
-def crop_img(img: xr.DataArray, x: int, y: int, s: int = 100, **kwargs) -> np.ndarray:
+def crop_img(img: xr.DataArray, x: int, y: int, xs: int = 100, ys: int = 100, **kwargs) -> np.ndarray:
     """\
     Extract a crop centered at `x` and `y`. 
 
@@ -97,8 +97,10 @@ def crop_img(img: xr.DataArray, x: int, y: int, s: int = 100, **kwargs) -> np.nd
         X coord of crop (in pixel space).
     y: int
         Y coord of crop (in pixel space).
-    s: int
-        Width and heigh of the crop in pixels.
+    xs: int
+        Width of the crop in pixels.
+    ys: int
+        Geigh of the crop in pixels.
     scale: float
         Default is 1.0.
         Resolution of the crop (smaller -> smaller image).
@@ -129,26 +131,32 @@ def crop_img(img: xr.DataArray, x: int, y: int, s: int = 100, **kwargs) -> np.nd
     
     assert y < img.y.shape[0], f"y ({y}) is outsize of image range ({img.y.shape[0]})"
     assert x < img.x.shape[0], f"x ({x}) is outsize of image range ({img.x.shape[0]})"
-    assert s > 0, f"image size cannot be 0"
+    assert xs > 0, f"image size cannot be 0"
+    assert ys > 0, f"image size cannot be 0"
     
     if len(img.shape) == 3:
-        crop = (np.zeros((s,s,img.channels.shape[0]))+cval).astype(img.dtype)
+        crop = (np.zeros((xs, ys, img.channels.shape[0]))+cval).astype(img.dtype)
     else:
-        crop = (np.zeros((s,s))+cval).astype(img.dtype)
+        crop = (np.zeros((xs, ys))+cval).astype(img.dtype)
         
     # get crop coords
-    x0 = x - s//2
-    x1 = x + s - s//2
-    y0 = y - s//2
-    y1 = y + s - s//2
+    x0 = x - xs//2
+    x1 = x + xs - xs//2
+    y0 = y - ys//2
+    y1 = y + ys - ys//2
     
     # crop image and put in already prepared `crop`
     crop_x0 = min(x0, 0)*-1
     crop_y0 = min(y0, 0)*-1
-    crop_x1 = s - max(x1 - img.x.shape[0], 0)
-    crop_y1 = s - max(y1 - img.y.shape[0], 0)
+    crop_x1 = xs - max(x1 - img.x.shape[0], 0)
+    crop_y1 = ys - max(y1 - img.y.shape[0], 0)
     
-    crop[crop_y0:crop_y1, crop_x0:crop_x1] = img[{'y': slice(max(y0,0),y1), 'x': slice(max(x0,0),x1)}].transpose('y', 'x', ...)
+    crop[crop_y0:crop_y1, crop_x0:crop_x1] = img[
+        {
+            'y': slice(max(y0, 0), y1),
+            'x': slice(max(x0, 0), x1)
+        }
+    ].transpose('y', 'x', ...)
     # scale crop
     if scale != 1:
         multichannel = len(img.shape) > 2
@@ -158,16 +166,19 @@ def crop_img(img: xr.DataArray, x: int, y: int, s: int = 100, **kwargs) -> np.nd
     # mask crop
     if mask_circle:
         # get coords inside circle
-        rr, cc = disk(center=(crop.shape[0]//2, crop.shape[1]//2), 
-                                   radius=crop.shape[0]//2, shape=crop.shape)
+        rr, cc = disk(
+            center=(crop.shape[0]//2, crop.shape[1]//2),
+            radius=crop.shape[0]//2,
+            shape=crop.shape
+        )
         circle = np.zeros_like(crop)
         circle[rr, cc] = 1
         # set everything outside circle to cval
-        crop[circle==0] = cval
+        crop[circle == 0] = cval
         
     # make sure that crop has a channel dimension
     if len(crop.shape) < 3:
-        crop = crop[:,:,np.newaxis]
+        crop = crop[:, :, np.newaxis]
         
     # convert to dtype
     if dtype is not None:
