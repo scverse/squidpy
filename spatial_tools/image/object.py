@@ -132,6 +132,7 @@ class ImageContainer:
             raise ValueError(img_id)
         assert len(img_ids) == len(imgs), f"Have {len(imgs)} images, but {len(img_ids)} image ids"
         # add to data
+        print("adding %s into object" % img_id)
         for img, img_id in zip(imgs, img_ids):
             self.data[img_id] = img
         if not self._lazy:
@@ -259,8 +260,8 @@ class ImageContainer:
             xs = self.shape[0]
         if ys is None:
             ys = self.shape[1]
-        unique_xcoord = np.arange(start=0, stop=self.shape[0], step=xs)
-        unique_ycoord = np.arange(start=0, stop=self.shape[1], step=xs)  # TODO add ys support here
+        unique_xcoord = np.arange(start=xs // 2, stop=(self.shape[0] // xs)*xs + xs // 2, step=xs)
+        unique_ycoord = np.arange(startadd_img=ys // 2, stop=(self.shape[0] // ys)*ys + ys // 2, step=ys)  # TODO add ys support here
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
         crops = [self.crop(x=x, y=y, s=xs, img_id=img_id) for x, y in zip(xcoords, ycoords)]

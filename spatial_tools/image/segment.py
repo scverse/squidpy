@@ -45,7 +45,7 @@ class SegmentationModel:
     ):
         self.model = model
 
-    def segment(self, arr: np.ndarray) -> np.ndarray:
+    def segment(self, arr: np.ndarray, **kwargs) -> np.ndarray:
         """
 
         Params
@@ -58,10 +58,10 @@ class SegmentationModel:
         (x, y, 1)
         Segmentation mask for high-resolution image.
         """
-        return self._segment(arr)
+        return self._segment(arr, **kwargs)
 
     @abc.abstractmethod
-    def _segment(self, arr) -> np.ndarray:
+    def _segment(self, arr, **kwargs) -> np.ndarray:
         pass
 
 
@@ -83,7 +83,7 @@ class SegmentationModelBlob(SegmentationModel):
         Segmentation mask for high-resolution image.
         """
         if invert:
-            arr = 1.-arr
+            arr = 0.-arr
 
         if self.model == "log":
             y = skimage.feature.blob_log(
@@ -107,13 +107,17 @@ class SegmentationModelBlob(SegmentationModel):
 
 class SegmentationModelWatershed(SegmentationModel):
 
-    def _segment(self, arr, invert: bool = True, **kwargs) -> np.ndarray:
+    def _segment(self, arr, thresh=0.5, geq: bool = True, **kwargs) -> np.ndarray:
         """
 
         Params
         ------
         arr: np.ndarray
             High-resolution image.
+        thresh: float
+             Threshold for discretisation of image scale to define areas to segment.
+        geq:
+            Treat thres as uppper or lower (greater-equal = geq) bound for defining state to segement.
         kwargs: dicct
             Model arguments
 
@@ -129,8 +133,10 @@ class SegmentationModelWatershed(SegmentationModel):
         from skimage.feature import peak_local_max
 
         # get binarized image
-        thresh = 0.5
-        mask = arr[:, :, 0] < thresh
+        if geq:
+            mask = arr[:, :, 0] >= thresh
+        else:
+            mask = arr[:, :, 0] < thresh
 
         # calculate markers as maximal distanced points from background (locally)
         distance = ndi.distance_transform_edt(1 - mask)
@@ -141,7 +147,7 @@ class SegmentationModelWatershed(SegmentationModel):
             labels=1 - mask
         )
         markers = ndi.label(local_maxi)[0]
-        y = watershed(255-arr[:,:,0], markers, mask=1-mask)
+        y = watershed(255-arr[:, :, 0], markers, mask=1-mask)
         return y
 
 
@@ -174,7 +180,7 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
         Segmentation mask for high-resolution image.
         """
         # Uses callable tensorflow keras model.
-        return self.model(arr)
+        return self.model(arr, **kwargs)
 
 
 def segment(
