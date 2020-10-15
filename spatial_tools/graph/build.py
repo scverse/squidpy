@@ -6,6 +6,8 @@ import numpy as np
 from scipy import sparse
 from typing import Optional
 
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 def spatial_connectivity(
     adata: "AnnData",
@@ -15,7 +17,8 @@ def spatial_connectivity(
     n_neigh: int = 6,
     radius: Optional[float] = None,
     coord_type: str = "visium",
-    weighted_graph: bool = True
+    weighted_graph: bool = False,
+    transform: str = None,
 ):
     """
     Creates graph from spatial coordinates
@@ -38,6 +41,8 @@ def spatial_connectivity(
         Type of coordinate system (Visium vs. general coordinates)
     weighted_graph
         Output weighted connectivities
+    transform
+        Type of adjacency matrix transform: either `spectral` or `cosine`
     """
     coords = adata.obsm[obsm]
 
@@ -48,27 +53,35 @@ def spatial_connectivity(
             if weighted_graph:
                 Res = Adj
                 Walk = Adj
-                for i in range(n_rings-1):
-                    Walk = Walk@Adj
+                for i in range(n_rings - 1):
+                    Walk = Walk @ Adj
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", sparse.SparseEfficiencyWarning)
                         Walk[Res.nonzero()] = 0.0
                     Walk.eliminate_zeros()
-                    Walk.data[:] = float(i+2)
-                    Res = Res+Walk
+                    Walk.data[:] = float(i + 2)
+                    Res = Res + Walk
                 Adj = Res
                 Adj.setdiag(0.0)
                 Adj.eliminate_zeros()
             else:
-                Adj += Adj**n_rings
+                Adj += Adj ** n_rings
                 Adj.setdiag(0.0)
                 Adj.eliminate_zeros()
                 Adj.data[:] = 1.0
         else:
             Adj = _build_connectivity(coords, 6, neigh_correct=True)
-        adata.obsp[key_added] = Adj
+
     else:
-        adata.obsp[key_added] = _build_connectivity(coords, n_neigh, radius)
+        Adj = _build_connectivity(coords, n_neigh, radius)
+
+    # check transform
+    if transform == "spectral":
+        Adj = _transform_a_spectral(Adj)
+    elif transform == "cosine":
+        Adj = _transform_a_cosine(Adj)
+
+    adata.obsp[key_added] = Adj
 
 
 def _build_connectivity(
@@ -76,7 +89,7 @@ def _build_connectivity(
     n_neigh: int,
     radius: Optional[float] = None,
     neigh_correct: bool = False,
-    set_diag: bool = False
+    set_diag: bool = False,
 ):
     """
     Build connectivity matrix from spatial coordinates
@@ -111,3 +124,14 @@ def _build_connectivity(
     return sparse.csr_matrix(
         (np.ones(len(row_indices)), (row_indices, col_indices)), shape=(N, N)
     )
+
+
+def _transform_a_spectral(a):
+    degrees = np.squeeze(np.array(np.sqrt(1 / a.sum(axis=0))))
+    a_out = a.multiply(np.outer(degrees, degrees))
+    return a_out
+
+
+def _transform_a_cosine(a):
+    a_out = cosine_similarity(a, dense_output=False)
+    return a_out
