@@ -101,7 +101,10 @@ class ImageContainer:
         self.data.to_netcdf(fname, mode="a")
 
     def add_img(
-        self, img: Union[str, np.ndarray], img_id: Union[str, List[str]] = None, channel_id: str = "channels"
+        self,
+        img: Union[str, np.ndarray],
+        img_id: Union[str, List[str]] = None,
+        channel_id: str = "channels",
     ):
         """
         Add layer(s) from numpy image / tiff file.
@@ -149,7 +152,9 @@ class ImageContainer:
             # load in memory
             self.data.load()
 
-    def _load_img(self, img: Union[str, np.ndarray], channel_id: str = "channels") -> List[xr.DataArray]:
+    def _load_img(
+        self, img: Union[str, np.ndarray], channel_id: str = "channels"
+    ) -> List[xr.DataArray]:
         """\
         Load img as xarray. 
         
@@ -281,12 +286,8 @@ class ImageContainer:
             xs = self.shape[0]
         if ys is None:
             ys = self.shape[1]
-        unique_xcoord = np.arange(
-            start=0, stop=(self.shape[0] // xs) * xs, step=xs
-        )
-        unique_ycoord = np.arange(
-            start=0, stop=(self.shape[0] // ys) * ys, step=ys
-        )
+        unique_xcoord = np.arange(start=0, stop=(self.shape[0] // xs) * xs, step=xs)
+        unique_ycoord = np.arange(start=0, stop=(self.shape[0] // ys) * ys, step=ys)
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
         crops = [

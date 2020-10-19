@@ -95,7 +95,6 @@ class SegmentationModelBlob(SegmentationModel):
 
 
 class SegmentationModelWatershed(SegmentationModel):
-
     def _segment(self, arr, thresh=0.5, geq: bool = True, **kwargs) -> np.ndarray:
         """
 
@@ -216,11 +215,14 @@ def segment(
         raise ValueError("did not recognize model instance %s" % model_group)
 
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
-    channel_slice = channel_idx if isinstance(channel_idx, int) else slice(0, crops[0].channels.shape[0])
+    channel_slice = (
+        channel_idx
+        if isinstance(channel_idx, int)
+        else slice(0, crops[0].channels.shape[0])
+    )
     crops = [
         segmentation_model.segment(
-            arr=x[{"channels": channel_slice}].values,
-            **model_kwargs
+            arr=x[{"channels": channel_slice}].values, **model_kwargs
         )
         for x in crops
     ]
@@ -234,11 +236,7 @@ def segment(
         counter += np.max(x)
         crops[i] = xr.DataArray(crop_new[np.newaxis, :, :], dims=["mask", "y", "x"])
     img_segmented = uncrop_img(
-        crops=crops,
-        x=xcoord,
-        y=ycoord,
-        shape=img.shape,
-        channel_id=channel_id
+        crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id
     )
     print(img_segmented)
     img_id = "segmented_" + model_group.lower() if key_added is None else key_added

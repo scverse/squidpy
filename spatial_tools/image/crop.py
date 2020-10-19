@@ -58,11 +58,11 @@ def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
 
 
 def uncrop_img(
-        crops: List[xr.DataArray],
-        x: np.ndarray,
-        y: np.ndarray,
-        shape: Tuple[int, int],
-        channel_id: str = "channels",
+    crops: List[xr.DataArray],
+    x: np.ndarray,
+    y: np.ndarray,
+    shape: Tuple[int, int],
+    channel_id: str = "channels",
 ) -> xr.DataArray:
     """
     Re-assemble image from crops and their centres.
@@ -80,7 +80,9 @@ def uncrop_img(
     assert np.max(x) < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
 
     dims = [channel_id, "y", "x"]
-    img = xr.DataArray(np.zeros((crops[0].coords[channel_id].shape[0], shape[1], shape[0])), dims=dims)
+    img = xr.DataArray(
+        np.zeros((crops[0].coords[channel_id].shape[0], shape[1], shape[0])), dims=dims
+    )
     if len(crops) > 1:
         for c, x, y in zip(crops, x, y):
             x0 = x
@@ -99,7 +101,13 @@ def uncrop_img(
 
 
 def crop_img(
-    img: xr.DataArray, x: int, y: int, xs: int = 100, ys: int = 100, channel_id: str = "channels", **kwargs
+    img: xr.DataArray,
+    x: int,
+    y: int,
+    xs: int = 100,
+    ys: int = 100,
+    channel_id: str = "channels",
+    **kwargs,
 ) -> xr.DataArray:
     """\
     Extract a crop centered at `x` and `y`. 
@@ -150,7 +158,9 @@ def crop_img(
     assert ys > 0, f"image size cannot be 0"
 
     if channel_id in img.dims:
-        crop = (np.zeros((img.coords[channel_id].shape[0], ys, xs)) + cval).astype(img.dtype)
+        crop = (np.zeros((img.coords[channel_id].shape[0], ys, xs)) + cval).astype(
+            img.dtype
+        )
     else:
         crop = (np.zeros((1, ys, xs)) + cval).astype(img.dtype)
     crop = xr.DataArray(crop, dims=[channel_id, "y", "x"])
@@ -167,15 +177,17 @@ def crop_img(
     crop_x1 = xs - max(x1 - img.x.shape[0], 0)
     crop_y1 = ys - max(y1 - img.y.shape[0], 0)
 
-    crop[{
-         channel_id: slice(0, img.channels.shape[0]),
-         "y": slice(crop_y0, crop_y1),
-         "x": slice(crop_x0, crop_x1)
-     }] = img[
+    crop[
+        {
+            channel_id: slice(0, img.channels.shape[0]),
+            "y": slice(crop_y0, crop_y1),
+            "x": slice(crop_x0, crop_x1),
+        }
+    ] = img[
         {
             channel_id: slice(0, img.channels.shape[0]),
             "y": slice(max(y0, 0), y1),
-            "x": slice(max(x0, 0), x1)
+            "x": slice(max(x0, 0), x1),
         }
     ]
 

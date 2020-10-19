@@ -89,7 +89,12 @@ def test_crop(tmpdir):
 
     # crop big crop
     crop = cont.crop(
-        x=50, y=20, xs=300, ys=300, cval=5, img_id="image_0",
+        x=50,
+        y=20,
+        xs=300,
+        ys=300,
+        cval=5,
+        img_id="image_0",
     )
     # shape is s x s x len(img_id)/channels
     assert crop.shape == (10, 300, 300)
@@ -98,7 +103,12 @@ def test_crop(tmpdir):
 
     # crop small crop
     crop = cont.crop(
-        x=50, y=20, xs=1, ys=1, cval=5, img_id="image_0",
+        x=50,
+        y=20,
+        xs=1,
+        ys=1,
+        cval=5,
+        img_id="image_0",
     )
     assert crop.shape == (10, 1, 1)
     # check that has cropped correct image
