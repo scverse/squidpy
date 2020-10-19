@@ -101,7 +101,7 @@ class ImageContainer:
         self.data.to_netcdf(fname, mode="a")
 
     def add_img(
-        self, img: Union[str, np.ndarray], img_id: Union[str, List[str]] = None
+        self, img: Union[str, np.ndarray], img_id: Union[str, List[str]] = None, channel_id: str = "channels"
     ):
         """
         Add layer(s) from numpy image / tiff file.
@@ -126,11 +126,11 @@ class ImageContainer:
         ValueError
             if img_id is neither a string nor a list
         """
-        imgs = self._load_img(img)
+        imgs = self._load_img(img=img, channel_id=channel_id)
         if img_id is None:
             img_id = "image"
         if isinstance(img_id, str):
-            if len(imgs) > 1:
+            if len(imgs) > 1 and isinstance(imgs, list):
                 img_ids = [f"{img_id}_{i}" for i in range(len(imgs))]
             else:
                 img_ids = [img_id]
@@ -149,7 +149,7 @@ class ImageContainer:
             # load in memory
             self.data.load()
 
-    def _load_img(self, img: Union[str, np.ndarray]) -> List[xr.DataArray]:
+    def _load_img(self, img: Union[str, np.ndarray], channel_id: str = "channels") -> List[xr.DataArray]:
         """\
         Load img as xarray. 
         
@@ -176,11 +176,15 @@ class ImageContainer:
                 raise ValueError(
                     f"img has more than 3 dimensions. img.shape is {img.shape}"
                 )
-            dims = ["channels", "y", "x"]
+            dims = [channel_id, "y", "x"]
             if len(img.shape) == 2:
                 dims = ["y", "x"]
             xr_img = xr.DataArray(img, dims=dims)
             imgs.append(xr_img)
+        elif isinstance(img, xr.DataArray):
+            assert "x" in img.dims
+            assert "y" in img.dims
+            imgs.append(img)
         elif isinstance(img, str):
             # get the number of pages in the file
             num_pages = _num_pages(img)
@@ -189,7 +193,7 @@ class ImageContainer:
                 data = xr.open_rasterio(
                     f"GTIFF_DIR:{i}:{img}", chunks=self._chunks, parse_coordinates=False
                 )
-                data = data.rename({"band": "channels"})
+                data = data.rename({"band": channel_id})
                 imgs.append(data)
         else:
             raise ValueError(img)
@@ -203,7 +207,7 @@ class ImageContainer:
         ys: int = 100,
         img_id: Optional[Union[str, List[str]]] = None,
         **kwargs,
-    ) -> np.ndarray:
+    ) -> xr.DataArray:
         """\
         Extract a crop centered at `x` and `y`. 
         
@@ -237,17 +241,10 @@ class ImageContainer:
         from .crop import crop_img
 
         if img_id is None:
-            img_ids = list(self.data.keys())
-        elif isinstance(img_id, str):
-            img_ids = [img_id]
-        else:
-            img_ids = img_id
+            assert False
 
-        crops = []
-        for img_id in img_ids:
-            img = self.data[img_id]
-            crops.append(crop_img(img, x, y, xs, ys, **kwargs))
-        return np.concatenate(crops, axis=-1)
+        img = self.data.data_vars[img_id]
+        return crop_img(img=img, x=x, y=y, xs=xs, ys=ys, **kwargs)
 
     def crop_equally(
         self,
@@ -255,7 +252,7 @@ class ImageContainer:
         ys: Union[int, None] = None,
         img_id: Optional[Union[str, List[str]]] = None,
         **kwargs,
-    ) -> Tuple[List[np.ndarray], np.ndarray, np.ndarray]:
+    ) -> Tuple[List[xr.DataArray], np.ndarray, np.ndarray]:
         """\
         Decompose image into equally sized crops
 
@@ -276,7 +273,7 @@ class ImageContainer:
         Returns
         -------
         Tuple:
-            List[np.ndarray with dimentions: y, x, channels (concatenated over all images)]: crops
+            List[xr.DataArray with dimentions: y, x, channels (concatenated over all images)]: crops
             np.ndarray: length number of crops: x positions of crops
             np.ndarray: length number of crops: y positions of crops
         """
@@ -285,10 +282,10 @@ class ImageContainer:
         if ys is None:
             ys = self.shape[1]
         unique_xcoord = np.arange(
-            start=xs // 2, stop=(self.shape[0] // xs) * xs + xs // 2, step=xs
+            start=0, stop=(self.shape[0] // xs) * xs, step=xs
         )
         unique_ycoord = np.arange(
-            start=ys // 2, stop=(self.shape[0] // ys) * ys + ys // 2, step=ys
+            start=0, stop=(self.shape[0] // ys) * ys, step=ys
         )
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
