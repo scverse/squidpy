@@ -198,8 +198,9 @@ def crop_img(
     # scale crop
     if scale != 1:
         multichannel = len(img.shape) > 2
-        crop = rescale(crop, scale, preserve_range=True, multichannel=multichannel)
+        crop = rescale(crop.values, scale, preserve_range=True, multichannel=multichannel)
         crop = crop.astype(img.dtype)
+        crop = xr.DataArray(crop, dims=[channel_id, "y", "x"])  # need to redefine after rescale
 
     # mask crop
     if mask_circle:
@@ -214,10 +215,6 @@ def crop_img(
         circle[:, rr, cc] = 1
         # set everything outside circle to cval
         crop[circle == 0] = cval
-
-    # make sure that crop has a channel dimension
-    if len(crop.shape) < 3:
-        crop = crop[np.newaxis, :, :]
 
     # convert to dtype
     if dtype is not None:
