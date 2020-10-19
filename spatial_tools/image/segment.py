@@ -3,6 +3,7 @@ import anndata
 import numpy as np
 import skimage
 from typing import List, Union
+import xarray as xr
 
 from .crop import uncrop_img
 from .object import ImageContainer
@@ -121,9 +122,9 @@ class SegmentationModelWatershed(SegmentationModel):
 
         # get binarized image
         if geq:
-            mask = arr[:, :, 0] >= thresh
+            mask = arr >= thresh
         else:
-            mask = arr[:, :, 0] < thresh
+            mask = arr < thresh
 
         # calculate markers as maximal distanced points from background (locally)
         distance = ndi.distance_transform_edt(1 - mask)
@@ -131,7 +132,7 @@ class SegmentationModelWatershed(SegmentationModel):
             distance, indices=False, footprint=np.ones((5, 5)), labels=1 - mask
         )
         markers = ndi.label(local_maxi)[0]
-        y = watershed(255 - arr[:, :, 0], markers, mask=1 - mask)
+        y = watershed(255 - arr, markers, mask=1 - mask)
         return y
 
 
@@ -169,6 +170,7 @@ def segment(
     model_group: Union[str],
     model_instance: Union[None, str, SegmentationModel] = None,
     model_kwargs: dict = {},
+    channel_idx: Union[int, None] = None,
     xs=None,
     ys=None,
     key_added: Union[str, None] = None,
@@ -190,6 +192,8 @@ def segment(
         Instance of executable segmentation model or name of specific method within model_group.
     model_kwargs: Optional [dict]
         Key word arguments to segmentation method.
+    channel_idx: int
+        Channel to use for segmentation.
     xs: int
         Width of the crops in pixels.
     ys: int
@@ -200,6 +204,7 @@ def segment(
     Yields
     -----
     """
+    channel_id = "mask"
     if model_group == "skimage_blob":
         segmentation_model = SegmentationModelBlob(model=model_instance)
     elif model_group == "watershed":
@@ -210,7 +215,17 @@ def segment(
         raise ValueError("did not recognize model instance %s" % model_group)
 
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
-    crops = [segmentation_model.segment(arr=x, **model_kwargs) for x in crops]
+    channel_slice = (
+        channel_idx
+        if isinstance(channel_idx, int)
+        else slice(0, crops[0].channels.shape[0])
+    )
+    crops = [
+        segmentation_model.segment(
+            arr=x[{"channels": channel_slice}].values, **model_kwargs
+        )
+        for x in crops
+    ]
     # By convention, segments or numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
     # TODO use overlapping crops to not create confusion at boundaries
@@ -219,16 +234,12 @@ def segment(
         crop_new = x
         crop_new[crop_new > 0] = crop_new[crop_new > 0] + counter
         counter += np.max(x)
-        crops[i] = crop_new
+        crops[i] = xr.DataArray(crop_new[np.newaxis, :, :], dims=["mask", "y", "x"])
     img_segmented = uncrop_img(
-        crops=crops,
-        x=xcoord,
-        y=ycoord,
-        shape=img.shape,
+        crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id
     )
-
     img_id = "segmented_" + model_group.lower() if key_added is None else key_added
-    img.add_img(img=img_segmented, img_id=img_id)
+    img.add_img(img=img_segmented, img_id=img_id, channel_id=channel_id)
 
 
 def segment_crops(
@@ -237,7 +248,7 @@ def segment_crops(
     segmented_img_id: str,
     xs=None,
     ys=None,
-) -> List[np.ndarray]:
+) -> List[xr.DataArray]:
     """
     Segments image.
 
@@ -268,6 +279,6 @@ def segment_crops(
         )
     ]
     return [
-        img.crop(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id).T
+        img.crop(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id)
         for xi, yi in segment_centres
     ]

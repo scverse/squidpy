@@ -80,46 +80,59 @@ def test_crop(tmpdir):
     # ignore NotGeoreferencedWarning here
     warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
     # create ImageContainer
-    img_orig = np.zeros((10, 1, 100, 200), dtype=np.uint8)
+    xdim = 100
+    ydim = 200
+    img_orig = np.zeros((10, xdim, ydim), dtype=np.uint8)
     # put a dot at y 20, x 50
-    img_orig[:, 0, 20, 50] = range(10, 20)
-    # save & load image
-    fname = tmpdir.mkdir("data").join("img.tif")
-    tifffile.imsave(fname, img_orig)
-    cont = ImageContainer(str(fname))
+    img_orig[:, 20, 50] = range(10, 20)
+    cont = ImageContainer(img_orig, img_id="image_0")
 
     # crop big crop
     crop = cont.crop(
-        x=50, y=20, xs=300, ys=300, cval=5, img_id=["image_0", "image_3", "image_5"]
+        x=50,
+        y=20,
+        xs=301,
+        ys=301,
+        cval=5,
+        img_id="image_0",
     )
     # shape is s x s x len(img_id)/channels
-    assert crop.shape == (300, 300, 3)
+    assert crop.shape == (10, 301, 301)
     # check that values outside of img are padded with 5
-    assert (crop[0, 0] == 5).all()
-    assert (crop[-1, -1] == 5).all()
+    assert (crop[:, 0, 0] == 5).all()
+    assert (crop[:, -1, -1] == 5).all()
 
     # crop small crop
     crop = cont.crop(
-        x=50, y=20, xs=1, ys=1, cval=5, img_id=["image_0", "image_3", "image_5"]
+        x=50,
+        y=20,
+        xs=1,
+        ys=1,
+        cval=5,
+        img_id="image_0",
     )
-    assert crop.shape == (1, 1, 3)
+    assert crop.shape == (10, 1, 1)
     # check that has cropped correct image
-    assert (crop[0, 0] == [10, 13, 15]).all()
+    assert (crop[:3, 0, 0] == [10, 11, 12]).all()
 
 
-def test_uncrop_img():
+def test_uncrop_img(tmpdir):
     """\
-    crop image und uncrop again and check equality
+    crop image and uncrop again and check equality
     """
+    import tifffile
+
     # create ImageContainer
     xdim = 100
     ydim = 100
-    img_orig = np.zeros((2, 1, xdim, ydim), dtype=np.uint8)
-    img_orig[:, 0, 20, 50] = range(10, 20)
-    cont = ImageContainer(img=img_orig, img_id="image_0")
+    # create ImageContainer
+    img_orig = np.zeros((10, xdim, ydim), dtype=np.uint8)
+    # put a dot at y 20, x 50
+    img_orig[:, 20, 50] = range(10, 20)
+    cont = ImageContainer(img_orig, img_id="image_0")
 
     # crop small crop
-    crops, xcoord, ycoord = cont.crop_equally(xs=1, img_id=["image_0"])
+    crops, xcoord, ycoord = cont.crop_equally(xs=5, ys=5, img_id="image_0")
     a = uncrop_img(
         crops=crops,
         x=xcoord,
@@ -127,4 +140,31 @@ def test_uncrop_img():
         shape=cont.shape,
     )
     # check that has cropped correct image
-    assert np.max(np.abs(a - cont["image_0"])) == 0.0
+    assert np.max(np.abs(a - cont.data["image_0"])) == 0.0
+
+
+def test_single_uncrop_img(tmpdir):
+    """\
+    crop image into one crop and uncrop again and check equality
+    """
+    import tifffile
+
+    # create ImageContainer
+    xdim = 100
+    ydim = 100
+    # create ImageContainer
+    img_orig = np.zeros((10, xdim, ydim), dtype=np.uint8)
+    # put a dot at y 20, x 50
+    img_orig[:, 20, 50] = range(10, 20)
+    cont = ImageContainer(img_orig, img_id="image_0")
+
+    # crop small crop
+    crops, xcoord, ycoord = cont.crop_equally(xs=xdim, ys=ydim, img_id="image_0")
+    a = uncrop_img(
+        crops=crops,
+        x=xcoord,
+        y=ycoord,
+        shape=cont.shape,
+    )
+    # check that has cropped correct image
+    assert np.max(np.abs(a - cont.data["image_0"])) == 0.0
