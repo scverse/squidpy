@@ -2,6 +2,7 @@ import numpy as np
 from skimage.transform import rescale
 from skimage.draw import disk
 import skimage.util
+from typing import List, Tuple, Union
 from anndata import AnnData
 from .object import ImageContainer
 import xarray as xr
@@ -56,7 +57,13 @@ def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
         yield (obs_id, img.crop(x=xcoord[i], y=ycoord[i], s=s, **kwargs))
 
 
-def uncrop_img(crops, x, y, shape):
+def uncrop_img(
+        crops: List[xr.DataArray],
+        x: np.ndarray,
+        y: np.ndarray,
+        shape: Tuple[int, int],
+        channel_id: str = "channels",
+) -> xr.DataArray:
     """
     Re-assemble image from crops and their centres.
 
@@ -67,33 +74,33 @@ def uncrop_img(crops, x, y, shape):
         x (int): x coords of crop in `img`
         y (int): y coords of crop in `img`
         shape (int): Shape of full image
+
     """
     assert np.max(y) < shape[0], f"y ({y}) is outsize of image range ({shape[0]})"
     assert np.max(x) < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
 
-    img = np.zeros(shape)
+    dims = [channel_id, "y", "x"]
+    img = xr.DataArray(np.zeros((crops[0].coords[channel_id].shape[0], shape[1], shape[0])), dims=dims)
     if len(crops) > 1:
         for c, x, y in zip(crops, x, y):
-            x0 = x - c.shape[0] // 2
-            x1 = x + c.shape[0] - c.shape[0] // 2
-            y0 = y - c.shape[1] // 2
-            y1 = y + c.shape[1] - c.shape[1] // 2
+            x0 = x
+            x1 = x + c.x.shape[0]
+            y0 = y
+            y1 = y + c.y.shape[0]
             assert x0 >= 0, f"x ({x0}) is outsize of image range ({0})"
-            assert y0 >= 0, f"x ({x0}) is outsize of image range ({0})"
-            assert x1 < shape[0], f"x ({x1}) is outsize of image range ({shape[0]})"
-            assert y1 < shape[1], f"x ({y1}) is outsize of image range ({shape[1]})"
-            img[x0:x1, y0:y1] = c
+            assert y0 >= 0, f"x ({y0}) is outsize of image range ({0})"
+            assert x1 <= shape[0], f"x ({x1}) is outsize of image range ({shape[0]})"
+            assert y1 <= shape[1], f"y ({y1}) is outsize of image range ({shape[1]})"
+            img[:, y0:y1, x0:x1] = c
         return img
     else:
-        assert (
-            crops[0].shape == shape
-        ), "single crop is not of the target shape %s" % str(crops[0].shape)
-        return crops[0]
+        img = crops[0]
+    return img
 
 
 def crop_img(
-    img: xr.DataArray, x: int, y: int, xs: int = 100, ys: int = 100, **kwargs
-) -> np.ndarray:
+    img: xr.DataArray, x: int, y: int, xs: int = 100, ys: int = 100, channel_id: str = "channels", **kwargs
+) -> xr.DataArray:
     """\
     Extract a crop centered at `x` and `y`. 
 
@@ -142,16 +149,17 @@ def crop_img(
     assert xs > 0, f"image size cannot be 0"
     assert ys > 0, f"image size cannot be 0"
 
-    if len(img.shape) == 3:
-        crop = (np.zeros((xs, ys, img.channels.shape[0])) + cval).astype(img.dtype)
+    if channel_id in img.dims:
+        crop = (np.zeros((img.coords[channel_id].shape[0], ys, xs)) + cval).astype(img.dtype)
     else:
-        crop = (np.zeros((xs, ys)) + cval).astype(img.dtype)
+        crop = (np.zeros((1, ys, xs)) + cval).astype(img.dtype)
+    crop = xr.DataArray(crop, dims=[channel_id, "y", "x"])
 
     # get crop coords
-    x0 = x - xs // 2
-    x1 = x + xs - xs // 2
-    y0 = y - ys // 2
-    y1 = y + ys - ys // 2
+    x0 = x
+    x1 = x + xs
+    y0 = y
+    y1 = y + ys
 
     # crop image and put in already prepared `crop`
     crop_x0 = min(x0, 0) * -1
@@ -159,9 +167,18 @@ def crop_img(
     crop_x1 = xs - max(x1 - img.x.shape[0], 0)
     crop_y1 = ys - max(y1 - img.y.shape[0], 0)
 
-    crop[crop_y0:crop_y1, crop_x0:crop_x1] = img[
-        {"y": slice(max(y0, 0), y1), "x": slice(max(x0, 0), x1)}
-    ].transpose("y", "x", ...)
+    crop[{
+         channel_id: slice(0, img.channels.shape[0]),
+         "y": slice(crop_y0, crop_y1),
+         "x": slice(crop_x0, crop_x1)
+     }] = img[
+        {
+            channel_id: slice(0, img.channels.shape[0]),
+            "y": slice(max(y0, 0), y1),
+            "x": slice(max(x0, 0), x1)
+        }
+    ]
+
     # scale crop
     if scale != 1:
         multichannel = len(img.shape) > 2
@@ -183,7 +200,7 @@ def crop_img(
 
     # make sure that crop has a channel dimension
     if len(crop.shape) < 3:
-        crop = crop[:, :, np.newaxis]
+        crop = crop[np.newaxis, :, :]
 
     # convert to dtype
     if dtype is not None:
