@@ -13,9 +13,7 @@ Functions exposed: segment(), evaluate_nuclei_segmentation()
 
 
 def evaluate_nuclei_segmentation(
-        adata,
-        copy: bool = False,
-        **kwargs
+    adata, copy: bool = False, **kwargs
 ) -> Union[anndata.AnnData, None]:
     """
     Perform basic nuclei segmentation evaluation.
@@ -40,8 +38,8 @@ class SegmentationModel:
     """
 
     def __init__(
-            self,
-            model,
+        self,
+        model,
     ):
         self.model = model
 
@@ -66,7 +64,6 @@ class SegmentationModel:
 
 
 class SegmentationModelBlob(SegmentationModel):
-
     def _segment(self, arr, invert: bool = True, **kwargs) -> np.ndarray:
         """
 
@@ -83,30 +80,20 @@ class SegmentationModelBlob(SegmentationModel):
         Segmentation mask for high-resolution image.
         """
         if invert:
-            arr = 0.-arr
+            arr = 0.0 - arr
 
         if self.model == "log":
-            y = skimage.feature.blob_log(
-                image=arr,
-                **kwargs
-            )
+            y = skimage.feature.blob_log(image=arr, **kwargs)
         elif self.model == "dog":
-            y = skimage.feature.blob_dog(
-                image=arr,
-                **kwargs
-            )
+            y = skimage.feature.blob_dog(image=arr, **kwargs)
         elif self.model == "doh":
-            y = skimage.feature.blob_doh(
-                image=arr,
-                **kwargs
-            )
+            y = skimage.feature.blob_doh(image=arr, **kwargs)
         else:
             raise ValueError("did not recognize self.model %s" % self.model)
         return y
 
 
 class SegmentationModelWatershed(SegmentationModel):
-
     def _segment(self, arr, thresh=0.5, geq: bool = True, **kwargs) -> np.ndarray:
         """
 
@@ -141,28 +128,21 @@ class SegmentationModelWatershed(SegmentationModel):
         # calculate markers as maximal distanced points from background (locally)
         distance = ndi.distance_transform_edt(1 - mask)
         local_maxi = peak_local_max(
-            distance,
-            indices=False,
-            footprint=np.ones((5, 5)),
-            labels=1 - mask
+            distance, indices=False, footprint=np.ones((5, 5)), labels=1 - mask
         )
         markers = ndi.label(local_maxi)[0]
-        y = watershed(255-arr[:, :, 0], markers, mask=1-mask)
+        y = watershed(255 - arr[:, :, 0], markers, mask=1 - mask)
         return y
 
 
 class SegmentationModelPretrainedTensorflow(SegmentationModel):
-
-    def __init__(
-            self,
-            model,
-            **kwargs
-    ):
+    def __init__(self, model, **kwargs):
         import tensorflow as tf
-        assert isinstance(model, tf.keras.model.Model), "model should be a tf keras model instance"
-        super(SegmentationModelPretrainedTensorflow, self).__init__(
-            model=model
-        )
+
+        assert isinstance(
+            model, tf.keras.model.Model
+        ), "model should be a tf keras model instance"
+        super(SegmentationModelPretrainedTensorflow, self).__init__(model=model)
 
     def _segment(self, arr, **kwargs) -> np.ndarray:
         """
@@ -184,14 +164,14 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
 
 
 def segment(
-        img: ImageContainer,
-        img_id: str,
-        model_group: Union[str],
-        model_instance: Union[None, str, SegmentationModel] = None,
-        model_kwargs: dict = {},
-        xs=None,
-        ys=None,
-        key_added: Union[str, None] = None
+    img: ImageContainer,
+    img_id: str,
+    model_group: Union[str],
+    model_instance: Union[None, str, SegmentationModel] = None,
+    model_kwargs: dict = {},
+    xs=None,
+    ys=None,
+    key_added: Union[str, None] = None,
 ) -> Union[None]:
     """
     Segments image.
@@ -230,12 +210,7 @@ def segment(
         raise ValueError("did not recognize model instance %s" % model_group)
 
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
-    crops = [
-        segmentation_model.segment(
-            arr=x,
-            **model_kwargs
-        ) for x in crops
-    ]
+    crops = [segmentation_model.segment(arr=x, **model_kwargs) for x in crops]
     # By convention, segments or numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
     # TODO use overlapping crops to not create confusion at boundaries
@@ -257,11 +232,11 @@ def segment(
 
 
 def segment_crops(
-        img: ImageContainer,
-        img_id: str,
-        segmented_img_id: str,
-        xs=None,
-        ys=None,
+    img: ImageContainer,
+    img_id: str,
+    segmented_img_id: str,
+    xs=None,
+    ys=None,
 ) -> List[np.ndarray]:
     """
     Segments image.
@@ -286,17 +261,13 @@ def segment_crops(
     segment_centres = [
         (
             np.mean(np.where(img.data[segmented_img_id] == i)[0]),
-            np.mean(np.where(img.data[segmented_img_id] == i)[1])
+            np.mean(np.where(img.data[segmented_img_id] == i)[1]),
         )
-        for i in np.sort(list(set(list(np.unique(img.data[segmented_img_id])))-set([0])))
+        for i in np.sort(
+            list(set(list(np.unique(img.data[segmented_img_id]))) - set([0]))
+        )
     ]
     return [
-        img.crop(
-            x=int(xi),
-            y=int(yi),
-            xs=xs,
-            ys=ys,
-            img_id=img_id
-        ).T
+        img.crop(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id).T
         for xi, yi in segment_centres
     ]
