@@ -74,7 +74,11 @@ def uncrop_img(
         x (int): x coords of crop in `img`
         y (int): y coords of crop in `img`
         shape (int): Shape of full image
+        channel_id (str): name of channel dim in DataArray
 
+    Returns
+    -------
+    xr.DataArray with dimentions: channels, y, x
     """
     assert np.max(y) < shape[0], f"y ({y}) is outsize of image range ({shape[0]})"
     assert np.max(x) < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
@@ -139,7 +143,7 @@ def crop_img(
 
     Returns
     -------
-    np.ndarray with dimentions: y, x, channels
+    xr.DataArray with dimentions: channels, y, x
     """
     scale = kwargs.get("scale", 1.0)
     mask_circle = kwargs.get("mask_circle", False)
