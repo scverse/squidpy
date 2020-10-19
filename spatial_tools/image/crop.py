@@ -50,7 +50,7 @@ def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
     obs_ids = adata.obs.index.tolist()
     
     for i, obs_id  in enumerate(obs_ids):
-        yield (obs_id, img.crop(x=xcoord[i], y=ycoord[i], s=s, **kwargs))
+        yield (obs_id, img.crop(x=xcoord[i], y=ycoord[i], xs=s, ys=s, **kwargs))
 
 
 def uncrop_img(crops, x, y, shape):
