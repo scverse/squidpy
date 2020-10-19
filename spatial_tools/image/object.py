@@ -107,7 +107,7 @@ class ImageContainer:
         channel_id: str = "channels",
     ):
         """
-        Add layer(s) from numpy image / tiff file.
+        Add layer from numpy image / tiff file.
         For numpy arrays, assume that dims are: channels, y, x
 
         The added image has to have the same number of channels as the original image, or no channels.
@@ -118,7 +118,7 @@ class ImageContainer:
             Numpy array or path to tiff file.
         img_id
             Key (name) to be used for img. For multi-page tiffs this should be a list.
-            If not specified, DataArrays will be named "image_{i}".
+            If not specified, DataArrays will be named "image".
 
         Returns
         -------
@@ -129,32 +129,19 @@ class ImageContainer:
         ValueError
             if img_id is neither a string nor a list
         """
-        imgs = self._load_img(img=img, channel_id=channel_id)
+        img = self._load_img(img=img, channel_id=channel_id)
         if img_id is None:
             img_id = "image"
-        if isinstance(img_id, str):
-            if len(imgs) > 1 and isinstance(imgs, list):
-                img_ids = [f"{img_id}_{i}" for i in range(len(imgs))]
-            else:
-                img_ids = [img_id]
-        elif isinstance(img_id, list):
-            img_ids = img_id
-        else:
-            raise ValueError(img_id)
-        assert len(img_ids) == len(
-            imgs
-        ), f"Have {len(imgs)} images, but {len(img_ids)} image ids"
         # add to data
         print("adding %s into object" % img_id)
-        for img, img_id in zip(imgs, img_ids):
-            self.data[img_id] = img
+        self.data[img_id] = img
         if not self._lazy:
             # load in memory
             self.data.load()
 
     def _load_img(
         self, img: Union[str, np.ndarray], channel_id: str = "channels"
-    ) -> List[xr.DataArray]:
+    ) -> xr.DataArray:
         """\
         Load img as xarray. 
         
@@ -168,14 +155,13 @@ class ImageContainer:
             
         Returns
         -------
-        List of DataArrays containing loaded images.
+        DataArray containing loaded image.
         
         Raises
         ------
         ValueError:
             if img is a np.ndarray and has more than 3 dimensions
         """
-        imgs = []
         if isinstance(img, np.ndarray):
             if len(img.shape) > 3:
                 raise ValueError(
@@ -185,24 +171,24 @@ class ImageContainer:
             if len(img.shape) == 2:
                 dims = ["y", "x"]
             xr_img = xr.DataArray(img, dims=dims)
-            imgs.append(xr_img)
         elif isinstance(img, xr.DataArray):
             assert "x" in img.dims
             assert "y" in img.dims
-            imgs.append(img)
         elif isinstance(img, str):
             # get the number of pages in the file
             num_pages = _num_pages(img)
             # read all pages using rasterio
+            xr_img_byband = []
             for i in range(1, num_pages + 1):
                 data = xr.open_rasterio(
                     f"GTIFF_DIR:{i}:{img}", chunks=self._chunks, parse_coordinates=False
                 )
                 data = data.rename({"band": channel_id})
-                imgs.append(data)
+                xr_img_byband.append(data)
+            xr_img = xr.concat(xr_img_byband, dim=channel_id)
         else:
             raise ValueError(img)
-        return imgs
+        return xr_img
 
     def crop(
         self,
