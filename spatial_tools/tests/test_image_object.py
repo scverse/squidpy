@@ -8,7 +8,7 @@ from spatial_tools.image.object import ImageContainer
 
 
 @pytest.mark.parametrize(
-    "shape", [(3, 100, 200), (1, 100, 200), (10, 3, 100, 200), (10, 1, 100, 200)]
+    "shape", [(3, 100, 200), (1, 100, 200), (10, 1, 100, 200)]
 )
 def test_image_loading(shape, tmpdir):
     """\
@@ -35,11 +35,9 @@ def test_image_loading(shape, tmpdir):
     print(cont)
     if len(shape) > 3:
         # multi-channel tiff
-        for i in range(shape[0]):
-            # check for existance of each image in multi-channel tiff
-            assert f"image_{i}" in cont.data
-            # check that contains correct information
-            assert (cont.data[f"image_{i}"] == img_orig[i]).all()
+        # check for existance of each image in multi-channel tiff
+        # check that contains correct information
+        assert (cont.data["image"] == img_orig[:, 0, :, :]).all()
     else:
         print(cont.data)
         # check that contains same information
