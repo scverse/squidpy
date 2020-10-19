@@ -5,6 +5,7 @@ import tifffile
 from functools import wraps
 from time import time
 
+
 def timing(f):
     @wraps(f)
     def wrap(*args, **kw):
@@ -13,7 +14,9 @@ def timing(f):
         te = time()
         print(f"func:{f.__name__} took: {te-ts} sec")
         return result
+
     return wrap
+
 
 def _num_pages(fname):
     """
@@ -23,9 +26,10 @@ def _num_pages(fname):
         num_pages = len(img.pages)
     return num_pages
 
+
 def _access_img_in_adata(
-        adata: anndata.AnnData,
-        img_key: str,
+    adata: anndata.AnnData,
+    img_key: str,
 ) -> np.ndarray:
     """
     Return image from anndata instance.
@@ -39,11 +43,7 @@ def _access_img_in_adata(
     return adata.uns["spatial"][img_key]
 
 
-def _write_img_in_adata(
-        adata: anndata.AnnData,
-        img_key: str,
-        img: np.ndarray
-):
+def _write_img_in_adata(adata: anndata.AnnData, img_key: str, img: np.ndarray):
     """
     Save image in anndata instance.
 
