@@ -110,7 +110,7 @@ def crop_img(
     **kwargs,
 ) -> xr.DataArray:
     """\
-    Extract a crop centered at `x` and `y`. 
+    Extract a crop right and down from `x` and `y`.
 
     Params
     ------

@@ -238,7 +238,6 @@ def segment(
     img_segmented = uncrop_img(
         crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id
     )
-    print(img_segmented)
     img_id = "segmented_" + model_group.lower() if key_added is None else key_added
     img.add_img(img=img_segmented, img_id=img_id, channel_id=channel_id)
 
@@ -249,7 +248,7 @@ def segment_crops(
     segmented_img_id: str,
     xs=None,
     ys=None,
-) -> List[np.ndarray]:
+) -> List[xr.DataArray]:
     """
     Segments image.
 
@@ -280,6 +279,6 @@ def segment_crops(
         )
     ]
     return [
-        img.crop(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id).T
+        img.crop(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id)
         for xi, yi in segment_centres
     ]

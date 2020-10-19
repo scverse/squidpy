@@ -211,10 +211,13 @@ class ImageContainer:
         xs: int = 100,
         ys: int = 100,
         img_id: Optional[Union[str, List[str]]] = None,
+        centred: bool = True,
         **kwargs,
     ) -> xr.DataArray:
         """\
-        Extract a crop centered at `x` and `y`. 
+        Extract a crop based on coordiantes `x` and `y`.
+
+        Centred on x, y if centred is True, else right and down from x, y.
         
         Params
         ------
@@ -225,7 +228,7 @@ class ImageContainer:
         xs: int
             Width of the crop in pixels.
         ys: int
-            Geigh of the crop in pixels.
+            Height of the crop in pixels.
         scale: float
             Default is 1.0.
             Resolution of the crop (smaller -> smaller image).
@@ -235,6 +238,8 @@ class ImageContainer:
         cval: float
             Default is 0
             The value outside image boundaries or the mask.
+        centred: bool
+            Whether the crop coordinates are centred.
         dtype: str
             Optional, type to which the output should be (safely) cast. 
             Currently supported dtypes: 'uint8'.
@@ -249,6 +254,11 @@ class ImageContainer:
             assert False
 
         img = self.data.data_vars[img_id]
+        if centred:
+            assert xs % 2 == 1, "xs=%f has to be uneven to use centred model" % xs
+            assert ys % 2 == 1, "ys=%f has to be uneven to use centred model" % ys
+            x = x - xs // 2  # move from centre to corner
+            y = y - ys // 2  # move from centre to corner
         return crop_img(img=img, x=x, y=y, xs=xs, ys=ys, **kwargs)
 
     def crop_equally(
@@ -291,7 +301,7 @@ class ImageContainer:
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
         crops = [
-            self.crop(x=x, y=y, xs=xs, ys=ys, img_id=img_id)
+            self.crop(x=x, y=y, xs=xs, ys=ys, img_id=img_id, centred=False)
             for x, y in zip(xcoords, ycoords)
         ]
         return crops, xcoords, ycoords
