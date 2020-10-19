@@ -199,14 +199,17 @@ def crop_img(
 
     # mask crop
     if mask_circle:
+        assert xs == ys, "crop has to be square to use mask_circle"
+        assert xs % 2 == 1, "xs has to be uneven to use mask_circle"
+        assert ys % 2 == 1, "ys has to be uneven to use mask_circle"
         # get coords inside circle
         rr, cc = disk(
-            center=(crop.shape[0] // 2, crop.shape[1] // 2),
-            radius=crop.shape[0] // 2,
+            center=(crop.shape[1] // 2, crop.shape[2] // 2),
+            radius=crop.shape[1] // 2,
             shape=crop.shape,
         )
         circle = np.zeros_like(crop)
-        circle[rr, cc] = 1
+        circle[:, rr, cc] = 1
         # set everything outside circle to cval
         crop[circle == 0] = cval
 
