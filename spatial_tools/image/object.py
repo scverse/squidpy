@@ -1,7 +1,8 @@
 import numpy as np
 from typing import Union, List, Tuple, Optional
 import xarray as xr
-from ._utils import _num_pages 
+from ._utils import _num_pages
+
 
 class ImageContainer:
     """\
@@ -24,10 +25,16 @@ class ImageContainer:
     crop(x, y)
         Crop image centered around coordinates (x,y) from `data`.
     """
+
     data: xr.Dataset
-        
-    def __init__(self, img: Union[str, np.ndarray], img_id: Optional[Union[str, List[str]]] = None, 
-                 lazy: bool = True, chunks: Optional[int] = None):
+
+    def __init__(
+        self,
+        img: Union[str, np.ndarray],
+        img_id: Optional[Union[str, List[str]]] = None,
+        lazy: bool = True,
+        chunks: Optional[int] = None,
+    ):
         """\
         Set up ImageContainer from numpy array or on-disk tiff.
         
@@ -48,7 +55,7 @@ class ImageContainer:
             Chunk size for dask.
         """
         if chunks is not None:
-            chunks = {'x': chunks, 'y': chunks}
+            chunks = {"x": chunks, "y": chunks}
         self._chunks = chunks
         self._lazy = lazy
         self.data = xr.Dataset()
@@ -62,7 +69,7 @@ class ImageContainer:
     @property
     def nchannels(self) -> int:
         return self.data.dims["channels"]
-        
+
     @classmethod
     def open(cls, fname: str, lazy: bool = True, chunks: Optional[int] = None):
         """\
@@ -82,25 +89,26 @@ class ImageContainer:
         if not self._lazy:
             self.data.load()
         return self
-    
+
     def save(self, fname: str):
         """Save dataset as netcdf file.
-        
+
         Params
         ------
         fname
             Path to the saved .nc file.
         """
-        self.data.to_netcdf(fname, mode='a')
-        
-        
-    def add_img(self, img: Union[str, np.ndarray], img_id: Union[str, List[str]] = None):
+        self.data.to_netcdf(fname, mode="a")
+
+    def add_img(
+        self, img: Union[str, np.ndarray], img_id: Union[str, List[str]] = None
+    ):
         """
-        Add layer(s) from numpy image / tiff file. 
+        Add layer(s) from numpy image / tiff file.
         For numpy arrays, assume that dims are: channels, y, x
-        
-        The added image has to have the same number of channels as the original image, or no channels. 
-        
+
+        The added image has to have the same number of channels as the original image, or no channels.
+
         Params
         ------
         img
@@ -108,11 +116,11 @@ class ImageContainer:
         img_id
             Key (name) to be used for img. For multi-page tiffs this should be a list.
             If not specified, DataArrays will be named "image_{i}".
-       
+
         Returns
         -------
         None
-        
+
         Raises
         ------
         ValueError
@@ -120,7 +128,7 @@ class ImageContainer:
         """
         imgs = self._load_img(img)
         if img_id is None:
-            img_id = 'image'
+            img_id = "image"
         if isinstance(img_id, str):
             if len(imgs) > 1:
                 img_ids = [f"{img_id}_{i}" for i in range(len(imgs))]
@@ -130,7 +138,9 @@ class ImageContainer:
             img_ids = img_id
         else:
             raise ValueError(img_id)
-        assert len(img_ids) == len(imgs), f"Have {len(imgs)} images, but {len(img_ids)} image ids"
+        assert len(img_ids) == len(
+            imgs
+        ), f"Have {len(imgs)} images, but {len(img_ids)} image ids"
         # add to data
         print("adding %s into object" % img_id)
         for img, img_id in zip(imgs, img_ids):
@@ -138,7 +148,7 @@ class ImageContainer:
         if not self._lazy:
             # load in memory
             self.data.load()
-    
+
     def _load_img(self, img: Union[str, np.ndarray]) -> List[xr.DataArray]:
         """\
         Load img as xarray. 
@@ -163,25 +173,37 @@ class ImageContainer:
         imgs = []
         if isinstance(img, np.ndarray):
             if len(img.shape) > 3:
-                raise ValueError(f"img has more than 3 dimensions. img.shape is {img.shape}")
-            dims = ['channels', 'y', 'x']
+                raise ValueError(
+                    f"img has more than 3 dimensions. img.shape is {img.shape}"
+                )
+            dims = ["channels", "y", "x"]
             if len(img.shape) == 2:
-                dims = ['y', 'x']
+                dims = ["y", "x"]
             xr_img = xr.DataArray(img, dims=dims)
             imgs.append(xr_img)
         elif isinstance(img, str):
             # get the number of pages in the file
             num_pages = _num_pages(img)
             # read all pages using rasterio
-            for i in range(1, num_pages+1):
-                data = xr.open_rasterio(f"GTIFF_DIR:{i}:{img}", chunks=self._chunks, parse_coordinates=False)
-                data = data.rename({'band': 'channels'})
+            for i in range(1, num_pages + 1):
+                data = xr.open_rasterio(
+                    f"GTIFF_DIR:{i}:{img}", chunks=self._chunks, parse_coordinates=False
+                )
+                data = data.rename({"band": "channels"})
                 imgs.append(data)
         else:
             raise ValueError(img)
         return imgs
 
-    def crop(self, x: int, y: int, xs: int = 100, ys: int = 100, img_id: Optional[Union[str, List[str]]] = None, **kwargs) -> np.ndarray:
+    def crop(
+        self,
+        x: int,
+        y: int,
+        xs: int = 100,
+        ys: int = 100,
+        img_id: Optional[Union[str, List[str]]] = None,
+        **kwargs,
+    ) -> np.ndarray:
         """\
         Extract a crop centered at `x` and `y`. 
         
@@ -213,14 +235,14 @@ class ImageContainer:
         np.ndarray with dimentions: y, x, channels (concatenated over all images)
         """
         from .crop import crop_img
-        
+
         if img_id is None:
             img_ids = list(self.data.keys())
         elif isinstance(img_id, str):
             img_ids = [img_id]
         else:
             img_ids = img_id
-        
+
         crops = []
         for img_id in img_ids:
             img = self.data[img_id]
@@ -228,11 +250,11 @@ class ImageContainer:
         return np.concatenate(crops, axis=-1)
 
     def crop_equally(
-            self,
-            xs: Union[int, None] = None,
-            ys: Union[int, None] = None,
-            img_id: Optional[Union[str, List[str]]] = None,
-            **kwargs
+        self,
+        xs: Union[int, None] = None,
+        ys: Union[int, None] = None,
+        img_id: Optional[Union[str, List[str]]] = None,
+        **kwargs,
     ) -> Tuple[List[np.ndarray], np.ndarray, np.ndarray]:
         """\
         Decompose image into equally sized crops
@@ -263,16 +285,15 @@ class ImageContainer:
         if ys is None:
             ys = self.shape[1]
         unique_xcoord = np.arange(
-            start=xs // 2,
-            stop=(self.shape[0] // xs)*xs + xs // 2,
-            step=xs
+            start=xs // 2, stop=(self.shape[0] // xs) * xs + xs // 2, step=xs
         )
         unique_ycoord = np.arange(
-            start=ys // 2,
-            stop=(self.shape[0] // ys)*ys + ys // 2,
-            step=ys
+            start=ys // 2, stop=(self.shape[0] // ys) * ys + ys // 2, step=ys
         )
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
-        crops = [self.crop(x=x, y=y, xs=xs, ys=ys, img_id=img_id) for x, y in zip(xcoords, ycoords)]
+        crops = [
+            self.crop(x=x, y=y, xs=xs, ys=ys, img_id=img_id)
+            for x, y in zip(xcoords, ycoords)
+        ]
         return crops, xcoords, ycoords
