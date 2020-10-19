@@ -1,9 +1,8 @@
 import numpy as np
-from typing import Union, List, Optional
+from typing import Union, List, Tuple, Optional
 import xarray as xr
 from ._utils import _num_pages
 from imageio import imread
-
 
 class ImageContainer:
     """\
@@ -63,6 +62,14 @@ class ImageContainer:
         if img is not None:
             self.add_img(img, img_id)
 
+    @property
+    def shape(self) -> Tuple[int, int]:
+        return (self.data.dims["x"], self.data.dims["y"])
+
+    @property
+    def nchannels(self) -> int:
+        return self.data.dims["channels"]
+
     @classmethod
     def open(cls, fname: str, lazy: bool = True, chunks: Optional[int] = None):
         """\
@@ -94,10 +101,13 @@ class ImageContainer:
         self.data.to_netcdf(fname, mode="a")
 
     def add_img(
-        self, img: Union[str, np.ndarray], img_id: Union[str, List[str]] = None
+        self,
+        img: Union[str, np.ndarray],
+        img_id: Union[str, List[str]] = None,
+        channel_id: str = "channels",
     ):
-        """
-        Add layer(s) from numpy image / tiff or jpg file.
+        """\
+        Add layer(s) from numpy image / tiff file.
         For numpy arrays, assume that dims are: channels, y, x
 
         The added image has to have the same number of channels as the original image, or no channels.
@@ -119,11 +129,11 @@ class ImageContainer:
         ValueError
             if img_id is neither a string nor a list
         """
-        imgs = self._load_img(img)
+        imgs = self._load_img(img=img, channel_id=channel_id)
         if img_id is None:
             img_id = "image"
         if isinstance(img_id, str):
-            if len(imgs) > 1:
+            if len(imgs) > 1 and isinstance(imgs, list):
                 img_ids = [f"{img_id}_{i}" for i in range(len(imgs))]
             else:
                 img_ids = [img_id]
@@ -135,13 +145,16 @@ class ImageContainer:
             imgs
         ), f"Have {len(imgs)} images, but {len(img_ids)} image ids"
         # add to data
+        print("adding %s into object" % img_id)
         for img, img_id in zip(imgs, img_ids):
             self.data[img_id] = img
         if not self._lazy:
             # load in memory
             self.data.load()
 
-    def _load_img(self, img: Union[str, np.ndarray]) -> List[xr.DataArray]:
+    def _load_img(
+        self, img: Union[str, np.ndarray], channel_id: str = "channels"
+    ) -> List[xr.DataArray]:
         """\
         Load img as xarray. 
         
@@ -171,11 +184,15 @@ class ImageContainer:
                 raise ValueError(
                     f"img has more than 3 dimensions. img.shape is {img.shape}"
                 )
-            dims = ["channels", "y", "x"]
+            dims = [channel_id, "y", "x"]
             if len(img.shape) == 2:
                 dims = ["y", "x"]
             xr_img = xr.DataArray(img, dims=dims)
             imgs.append(xr_img)
+        elif isinstance(img, xr.DataArray):
+            assert "x" in img.dims
+            assert "y" in img.dims
+            imgs.append(img)
         elif isinstance(img, str):
             ext = img.split(".")[-1]
             if ext in ("tif", "tiff"):
@@ -194,7 +211,7 @@ class ImageContainer:
                 img = imread(img)
                 # jpeg has channels as last dim - transpose
                 img = img.transpose(2, 0, 1)
-                dims = ["channels", "y", "x"]
+                dims = [channel_id, "y", "x"]
                 xr_img = xr.DataArray(img, dims=dims)
                 imgs.append(xr_img)
             else:
@@ -207,12 +224,16 @@ class ImageContainer:
         self,
         x: int,
         y: int,
-        s: int = 100,
+        xs: int = 100,
+        ys: int = 100,
         img_id: Optional[Union[str, List[str]]] = None,
+        centred: bool = True,
         **kwargs,
-    ) -> np.ndarray:
+    ) -> xr.DataArray:
         """\
-        Extract a crop centered at `x` and `y`. 
+        Extract a crop based on coordiantes `x` and `y` of `img_id`.
+
+        Centred on x, y if centred is True, else right and down from x, y.
         
         Params
         ------
@@ -220,8 +241,10 @@ class ImageContainer:
             X coord of crop (in pixel space).
         y: int
             Y coord of crop (in pixel space).
-        s: int
-            Width and heigh of the crop in pixels.
+        xs: int
+            Width of the crop in pixels.
+        ys: int
+            Height of the crop in pixels.
         scale: float
             Default is 1.0.
             Resolution of the crop (smaller -> smaller image).
@@ -231,25 +254,72 @@ class ImageContainer:
         cval: float
             Default is 0
             The value outside image boundaries or the mask.
+        centred: bool
+            Whether the crop coordinates are centred.
         dtype: str
             Optional, type to which the output should be (safely) cast. 
             Currently supported dtypes: 'uint8'.
+            TODO: currenty, using this argument will return a numpy array instead of an xarray
             
         Returns
         -------
-        np.ndarray with dimentions: y, x, channels (concatenated over all images)
+        xr.DataArray with dimensions: channels, y, x (concatenated over all images)
         """
         from .crop import crop_img
 
         if img_id is None:
-            img_ids = list(self.data.keys())
-        elif isinstance(img_id, str):
-            img_ids = [img_id]
-        else:
-            img_ids = img_id
+            img_id = list(self.data.keys())[0]
 
-        crops = []
-        for img_id in img_ids:
-            img = self.data[img_id]
-            crops.append(crop_img(img, x, y, s, **kwargs))
-        return np.concatenate(crops, axis=-1)
+        img = self.data.data_vars[img_id]
+        if centred:
+            assert xs % 2 == 1, "xs=%f has to be uneven to use centred model" % xs
+            assert ys % 2 == 1, "ys=%f has to be uneven to use centred model" % ys
+            x = x - xs // 2  # move from centre to corner
+            y = y - ys // 2  # move from centre to corner
+        return crop_img(img=img, x=x, y=y, xs=xs, ys=ys, **kwargs)
+
+    def crop_equally(
+        self,
+        xs: Union[int, None] = None,
+        ys: Union[int, None] = None,
+        img_id: Optional[Union[str, List[str]]] = None,
+        **kwargs,
+    ) -> Tuple[List[xr.DataArray], np.ndarray, np.ndarray]:
+        """\
+        Decompose image into equally sized crops
+
+        Params
+        ------
+        xs: int
+            Width of the crops in pixels. Defaults to image size if None.
+        ys: int
+            Height of the crops in pixels. Defaults to image size if None.
+            # TODO add support as soon as crop supports this
+        cval: float
+            Default is 0
+            The value outside image boundaries or the mask.
+        dtype: str
+            Optional, type to which the output should be (safely) cast.
+            Currently supported dtypes: 'uint8'.
+
+        Returns
+        -------
+        Tuple:
+            List[xr.DataArray with dimentions: y, x, channels (concatenated over all images)]: crops
+            np.ndarray: length number of crops: x positions of crops
+            np.ndarray: length number of crops: y positions of crops
+        """
+        if xs is None:
+            xs = self.shape[0]
+        if ys is None:
+            ys = self.shape[1]
+        unique_xcoord = np.arange(start=0, stop=(self.shape[0] // xs) * xs, step=xs)
+        unique_ycoord = np.arange(start=0, stop=(self.shape[0] // ys) * ys, step=ys)
+        xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
+        ycoords = np.tile(unique_xcoord, len(unique_ycoord))
+        crops = [
+            self.crop(x=x, y=y, xs=xs, ys=ys, img_id=img_id, centred=False)
+            for x, y in zip(xcoords, ycoords)
+        ]
+        return crops, xcoords, ycoords
+

@@ -29,4 +29,3 @@ def test_ripley_k():
     )
 
     # TO-DO assess length of distances
-

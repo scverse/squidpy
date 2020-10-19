@@ -40,7 +40,9 @@ def read_tif(dataset_folder, dataset_name, rescale=True):
     return img
 
 
-def get_image_features(adata, dataset_folder, dataset_name, features=["summary"], **kwargs):
+def get_image_features(
+    adata, dataset_folder, dataset_name, features=["summary"], **kwargs
+):
     """Get image features for spot ids from image file.
 
     Params
@@ -61,7 +63,9 @@ def get_image_features(adata, dataset_folder, dataset_name, features=["summary"]
     available_features = ["hog", "texture", "summary", "color_hist"]
 
     for feature in features:
-        assert feature in available_features, f"feature: {feature} not a valid feature, select on of {available_features} "
+        assert (
+            feature in available_features
+        ), f"feature: {feature} not a valid feature, select on of {available_features} "
 
     features_list = []
 
@@ -69,19 +73,23 @@ def get_image_features(adata, dataset_folder, dataset_name, features=["summary"]
 
     xcoord = adata.obsm["spatial"][:, 0]
     ycoord = adata.obsm["spatial"][:, 1]
-    spot_diameter = adata.uns['spatial'][dataset_name]['scalefactors']['spot_diameter_fullres']
+    spot_diameter = adata.uns["spatial"][dataset_name]["scalefactors"][
+        "spot_diameter_fullres"
+    ]
 
     cell_names = adata.obs.index.tolist()
 
     for spot_id, cell_name in tqdm(enumerate(cell_names)):
-        crop_ = crop_img(img, xcoord[spot_id], ycoord[spot_id], spot_diameter = spot_diameter, **kwargs)
+        crop_ = crop_img(
+            img, xcoord[spot_id], ycoord[spot_id], spot_diameter=spot_diameter, **kwargs
+        )
 
-        features_dict = get_features_statistics(crop_, cell_name, features = features)
+        features_dict = get_features_statistics(crop_, cell_name, features=features)
         features_list.append(features_dict)
 
     features_log = pd.DataFrame(features_list)
     features_log["cell_name"] = cell_names
-    features_log.set_index(["cell_name"], inplace = True)
+    features_log.set_index(["cell_name"], inplace=True)
     return features_log
 
 
@@ -133,7 +141,9 @@ def get_hog_features(img, feature_name="hog"):
     return hog_dict
 
 
-def get_summary_stats(img, feature, quantiles=[0.9, 0.5, 0.1], mean=False, std=False, channels=[0, 1, 2]):
+def get_summary_stats(
+    img, feature, quantiles=[0.9, 0.5, 0.1], mean=False, std=False, channels=[0, 1, 2]
+):
     """Calculate summary statistics of color channels
 
     Params
@@ -165,11 +175,11 @@ def get_summary_stats(img, feature, quantiles=[0.9, 0.5, 0.1], mean=False, std=F
     stats = {}
     for c in channels:
         for q in quantiles:
-            stats[f'{feature}_quantile_{q}_ch_{c}'] = np.quantile(img[:, :, c], q)
+            stats[f"{feature}_quantile_{q}_ch_{c}"] = np.quantile(img[:, :, c], q)
         if mean:
-            stats[f'{feature}_mean_ch_{c}'] = np.mean(img[:, :, c])
+            stats[f"{feature}_mean_ch_{c}"] = np.mean(img[:, :, c])
         if std:
-            stats[f'{feature}_std_ch_{c}'] = np.std(img[:, :, c])
+            stats[f"{feature}_std_ch_{c}"] = np.std(img[:, :, c])
     return stats
 
 
@@ -194,14 +204,21 @@ def get_color_hist(img, feature, bins=10, channels=[0, 1, 2], v_range=(0, 255)):
     """
     features = {}
     for c in channels:
-        hist = np.histogram(img[:, :, c], bins = 10, range = [0, 255], weights = None, density = False)
+        hist = np.histogram(
+            img[:, :, c], bins=10, range=[0, 255], weights=None, density=False
+        )
         for i, count in enumerate(hist[0]):
-            features[f'{feature}_ch_{c}_bin_{i}'] = count
+            features[f"{feature}_ch_{c}_bin_{i}"] = count
     return features
 
 
-def get_grey_texture_features(img, feature, props=['contrast', 'dissimilarity', 'homogeneity', 'correlation', 'ASM'],
-                              distances=[1], angles=[0, np.pi / 4, np.pi / 2, 3 * np.pi / 4]):
+def get_grey_texture_features(
+    img,
+    feature,
+    props=["contrast", "dissimilarity", "homogeneity", "correlation", "ASM"],
+    distances=[1],
+    angles=[0, np.pi / 4, np.pi / 2, 3 * np.pi / 4],
+):
     """Calculate texture features
 
     A grey level co-occurence matrix (GLCM) is computed for different combinations of distance and angle.
@@ -231,10 +248,12 @@ def get_grey_texture_features(img, feature, props=['contrast', 'dissimilarity', 
     multiplier = [0.299, 0.587, 0.114]
     grey_img = np.dot(img, multiplier).astype(np.uint8)
 
-    comatrix = greycomatrix(grey_img, distances = distances, angles = angles, levels = 256)
+    comatrix = greycomatrix(grey_img, distances=distances, angles=angles, levels=256)
     for p in props:
-        tmp_features = greycoprops(comatrix, prop = p)
+        tmp_features = greycoprops(comatrix, prop=p)
         for d_idx, d in enumerate(distances):
             for a_idx, a in enumerate(angles):
-                features[f'{feature}_{p}_dist_{d}_angle_{a:.2f}'] = tmp_features[d_idx, a_idx]
+                features[f"{feature}_{p}_dist_{d}_angle_{a:.2f}"] = tmp_features[
+                    d_idx, a_idx
+                ]
     return features
