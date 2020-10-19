@@ -226,7 +226,7 @@ class ImageContainer:
         y: int,
         xs: int = 100,
         ys: int = 100,
-        img_id: Optional[Union[str, List[str]]] = None,
+        img_id: Optional[str] = None,
         centred: bool = True,
         **kwargs,
     ) -> xr.DataArray:
@@ -245,9 +245,12 @@ class ImageContainer:
             Width of the crop in pixels.
         ys: int
             Height of the crop in pixels.
+        img_id: str
+            id of the image layer to be cropped.
         scale: float
             Default is 1.0.
             Resolution of the crop (smaller -> smaller image).
+            TODO: when scaling, will return a numpy array instead of an xarray
         mask_circle: bool
             Default is False.
             Mask crop to a circle.
@@ -261,6 +264,8 @@ class ImageContainer:
             Currently supported dtypes: 'uint8'.
             TODO: currenty, using this argument will return a numpy array instead of an xarray
             
+        TODO: enable cropping of several channels at once?
+        
         Returns
         -------
         xr.DataArray with dimensions: channels, y, x (concatenated over all images)

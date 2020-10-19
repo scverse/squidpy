@@ -31,7 +31,8 @@ def test_crop_generator():
     )
     for obs_id, crop in crop_generator(adata, cont):
         # crops have expected size?
-        assert crop.x.shape[0] == expected_size
+        assert crop.shape[1] == expected_size
+        assert crop.shape[2] == expected_size
         i += 1
     # expected number of crops are generated?
     assert i == adata.obsm["spatial"].shape[0]

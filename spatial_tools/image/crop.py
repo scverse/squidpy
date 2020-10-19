@@ -54,7 +54,8 @@ def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
 
     obs_ids = adata.obs.index.tolist()
     for i, obs_id in enumerate(obs_ids):
-        yield (obs_id, img.crop(x=xcoord[i], y=ycoord[i], xs=s, ys=s, **kwargs))
+        crop = np.array(img.crop(x=xcoord[i], y=ycoord[i], xs=s, ys=s, **kwargs))
+        yield (obs_id, crop)
 
 
 def uncrop_img(
@@ -139,7 +140,7 @@ def crop_img(
 
     Returns
     -------
-    np.ndarray with dimentions: y, x, channels
+    xr.DataArray with dimentions: channels, y, x
     """
     scale = kwargs.get("scale", 1.0)
     mask_circle = kwargs.get("mask_circle", False)
@@ -194,8 +195,7 @@ def crop_img(
 
     # scale crop
     if scale != 1:
-        multichannel = len(img.shape) > 2
-        crop = rescale(crop, scale, preserve_range=True, multichannel=multichannel)
+        crop = rescale(crop, [1, scale, scale], preserve_range=True)
         crop = crop.astype(img.dtype)
 
     # mask crop
@@ -203,6 +203,9 @@ def crop_img(
         assert xs == ys, "crop has to be square to use mask_circle"
         assert xs % 2 == 1, "xs has to be uneven to use mask_circle"
         assert ys % 2 == 1, "ys has to be uneven to use mask_circle"
+        # need to cast to numpy array to work correctly
+        crop = np.array(crop)
+        print(crop.shape)
         # get coords inside circle
         rr, cc = disk(
             center=(crop.shape[1] // 2, crop.shape[2] // 2),
