@@ -91,14 +91,15 @@ def test_crop(tmpdir):
     crop = cont.crop(
         x=50,
         y=20,
-        xs=300,
-        ys=300,
+        xs=301,
+        ys=301,
         cval=5,
         img_id="image_0",
     )
     # shape is s x s x len(img_id)/channels
-    assert crop.shape == (10, 300, 300)
+    assert crop.shape == (10, 301, 301)
     # check that values outside of img are padded with 5
+    assert (crop[:, 0, 0] == 5).all()
     assert (crop[:, -1, -1] == 5).all()
 
     # crop small crop
