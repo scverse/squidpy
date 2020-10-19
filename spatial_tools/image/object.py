@@ -255,8 +255,8 @@ class ImageContainer:
 
         img = self.data.data_vars[img_id]
         if centred:
-            assert xs % 2 == 1, "xs=%f has to be uneven to use centred model" % xs
-            assert ys % 2 == 1, "ys=%f has to be uneven to use centred model" % ys
+            assert (xs / 2. + x) % 2 == 0, "x and xs/2 have to add up to an integer to use centred model"
+            assert (ys / 2. + y) % 2 == 0, "y and ys/2 have to add up to an integer to use centred model"
             x = x - xs // 2  # move from centre to corner
             y = y - ys // 2  # move from centre to corner
         return crop_img(img=img, x=x, y=y, xs=xs, ys=ys, **kwargs)
