@@ -222,8 +222,8 @@ class ImageContainer:
 
     def crop(
         self,
-        x: int,
-        y: int,
+        x: float,
+        y: float,
         xs: int = 100,
         ys: int = 100,
         img_id: Optional[str] = None,
@@ -237,10 +237,10 @@ class ImageContainer:
         
         Params
         ------
-        x: int
-            X coord of crop (in pixel space).
-        y: int
-            Y coord of crop (in pixel space).
+        x: float
+            X coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if x+xs/2 is integer.
+        y: float
+            Y coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if y+ys/2 is integer.
         xs: int
             Width of the crop in pixels.
         ys: int
@@ -268,7 +268,7 @@ class ImageContainer:
         
         Returns
         -------
-        xr.DataArray with dimensions: channels, y, x (concatenated over all images)
+        xr.DataArray with dimentions: channels, y, x
         """
         from .crop import crop_img
 
@@ -277,10 +277,21 @@ class ImageContainer:
 
         img = self.data.data_vars[img_id]
         if centred:
-            assert xs % 2 == 1, "xs=%f has to be uneven to use centred model" % xs
-            assert ys % 2 == 1, "ys=%f has to be uneven to use centred model" % ys
-            x = x - xs // 2  # move from centre to corner
-            y = y - ys // 2  # move from centre to corner
+            assert xs % 2 == 1, "xs needs to be odd"
+            assert ys % 2 == 1, "ys needs to be odd"
+            #assert (
+            #    xs / 2.0 + x
+            #) % 1 == 0, "x and xs/2 have to add up to an integer to use centred model"
+            #assert (
+            #    ys / 2.0 + y
+            #) % 1 == 0, "y and ys/2 have to add up to an integer to use centred model"
+            x = int(x - xs // 2)  # move from centre to corner
+            y = int(y - ys // 2)  # move from centre to corner
+        else:
+            assert x % 1.0 == 0, "x needs to be integer"
+            assert y % 1.0 == 0, "x needs to be integer"
+            x = int(x)
+            y = int(y)
         return crop_img(img=img, x=x, y=y, xs=xs, ys=ys, **kwargs)
 
     def crop_equally(
@@ -310,7 +321,7 @@ class ImageContainer:
         Returns
         -------
         Tuple:
-            List[xr.DataArray with dimentions: y, x, channels (concatenated over all images)]: crops
+            List[xr.DataArray with dimentions: channels, y, x: crops
             np.ndarray: length number of crops: x positions of crops
             np.ndarray: length number of crops: y positions of crops
         """

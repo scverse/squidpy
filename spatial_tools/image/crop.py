@@ -54,6 +54,7 @@ def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
 
     obs_ids = adata.obs.index.tolist()
     for i, obs_id in enumerate(obs_ids):
+        print(xcoord[i], ycoord[i], s)
         crop = np.array(img.crop(x=xcoord[i], y=ycoord[i], xs=s, ys=s, **kwargs))
         yield (obs_id, crop)
 
@@ -75,7 +76,11 @@ def uncrop_img(
         x (int): x coords of crop in `img`
         y (int): y coords of crop in `img`
         shape (int): Shape of full image
+        channel_id (str): name of channel dim in DataArray
 
+    Returns
+    -------
+    xr.DataArray with dimentions: channels, y, x
     """
     assert np.max(y) < shape[0], f"y ({y}) is outsize of image range ({shape[0]})"
     assert np.max(x) < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
@@ -201,11 +206,6 @@ def crop_img(
     # mask crop
     if mask_circle:
         assert xs == ys, "crop has to be square to use mask_circle"
-        assert xs % 2 == 1, "xs has to be uneven to use mask_circle"
-        assert ys % 2 == 1, "ys has to be uneven to use mask_circle"
-        # need to cast to numpy array to work correctly
-        crop = np.array(crop)
-        print(crop.shape)
         # get coords inside circle
         rr, cc = disk(
             center=(crop.shape[1] // 2, crop.shape[2] // 2),
