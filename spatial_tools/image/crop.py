@@ -6,6 +6,7 @@ from typing import List, Tuple, Union
 from anndata import AnnData
 from .object import ImageContainer
 import xarray as xr
+from ._utils import _round_odd, _round_even
 
 
 def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
@@ -49,12 +50,13 @@ def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
         "spot_diameter_fullres"
     ]
     sizef = kwargs.get("sizef", 1)
-    s = np.round(spot_diameter * sizef).astype(int)
+    s = int(_round_even(spot_diameter * sizef))
+    # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
 
     obs_ids = adata.obs.index.tolist()
-
     for i, obs_id in enumerate(obs_ids):
-        yield (obs_id, img.crop(x=xcoord[i], y=ycoord[i], s=s, **kwargs))
+        crop = np.array(img.crop(x=xcoord[i], y=ycoord[i], xs=s, ys=s, **kwargs))
+        yield (obs_id, crop)
 
 
 def uncrop_img(
@@ -158,6 +160,7 @@ def crop_img(
 
     assert y < img.y.shape[0], f"y ({y}) is outsize of image range ({img.y.shape[0]})"
     assert x < img.x.shape[0], f"x ({x}) is outsize of image range ({img.x.shape[0]})"
+
     assert xs > 0, f"image size cannot be 0"
     assert ys > 0, f"image size cannot be 0"
 
@@ -197,8 +200,7 @@ def crop_img(
 
     # scale crop
     if scale != 1:
-        multichannel = len(img.shape) > 2
-        crop = rescale(crop, scale, preserve_range=True, multichannel=multichannel)
+        crop = rescale(crop, [1, scale, scale], preserve_range=True)
         crop = crop.astype(img.dtype)
 
     # mask crop
