@@ -4,6 +4,7 @@ import xarray as xr
 from ._utils import _num_pages
 from imageio import imread
 
+
 class ImageContainer:
     """\
     Container for in memory or on-disk tiff or jpg images. 
@@ -336,4 +337,3 @@ class ImageContainer:
             for x, y in zip(xcoords, ycoords)
         ]
         return crops, xcoords, ycoords
-
