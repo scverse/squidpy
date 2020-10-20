@@ -6,7 +6,7 @@ from typing import List, Tuple, Union
 from anndata import AnnData
 from .object import ImageContainer
 import xarray as xr
-from ._utils import _round_odd
+from ._utils import _round_odd, _round_even
 
 
 def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
@@ -50,11 +50,11 @@ def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
         "spot_diameter_fullres"
     ]
     sizef = kwargs.get("sizef", 1)
-    s = int(_round_odd(spot_diameter * sizef))
+    s = int(_round_even(spot_diameter * sizef))
+    # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
 
     obs_ids = adata.obs.index.tolist()
     for i, obs_id in enumerate(obs_ids):
-        print(xcoord[i], ycoord[i], s)
         crop = np.array(img.crop(x=xcoord[i], y=ycoord[i], xs=s, ys=s, **kwargs))
         yield (obs_id, crop)
 

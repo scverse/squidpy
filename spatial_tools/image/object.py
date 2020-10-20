@@ -277,14 +277,12 @@ class ImageContainer:
 
         img = self.data.data_vars[img_id]
         if centred:
-            assert xs % 2 == 1, "xs needs to be odd"
-            assert ys % 2 == 1, "ys needs to be odd"
-            #assert (
-            #    xs / 2.0 + x
-            #) % 1 == 0, "x and xs/2 have to add up to an integer to use centred model"
-            #assert (
-            #    ys / 2.0 + y
-            #) % 1 == 0, "y and ys/2 have to add up to an integer to use centred model"
+            assert (
+                xs / 2.0 + x
+            ) % 1 == 0, "x and xs/2 have to add up to an integer to use centred model"
+            assert (
+                ys / 2.0 + y
+            ) % 1 == 0, "y and ys/2 have to add up to an integer to use centred model"
             x = int(x - xs // 2)  # move from centre to corner
             y = int(y - ys // 2)  # move from centre to corner
         else:

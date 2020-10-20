@@ -121,8 +121,8 @@ def test_crop(tmpdir):
     crop = cont.crop(
         x=50,
         y=20,
-        xs=301,
-        ys=301,
+        xs=300,
+        ys=300,
         cval=5,
         img_id="image_0",
         dtype="uint8"

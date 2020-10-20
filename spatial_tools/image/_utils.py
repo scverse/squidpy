@@ -48,6 +48,23 @@ def _round_odd(num: Union[float, int]) -> Union[float, int]:
         return res + 1
     else:
         return res - 1
+    
+def _round_even(num: Union[float, int]) -> Union[float, int]:
+    """\
+    round num to next even integer value
+    
+    Params
+    ------
+    num: float
+        Number to round
+    
+    Returns
+    -------
+    int
+        rounded number to nearest even integer value
+    """
+    res = round(num/2.0)
+    return res*2
 
 def _access_img_in_adata(
     adata: anndata.AnnData,
