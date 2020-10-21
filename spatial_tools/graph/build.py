@@ -83,6 +83,12 @@ def spatial_connectivity(
 
     adata.obsp[key_added] = Adj
 
+    adata.uns["spatial"] = {}
+    neighbors_dict = adata.uns["spatial"]
+    neighbors_dict["connectivities_key"] = key_added
+    neighbors_dict["distances_key"] = "dummy"
+    adata.obsm["X_spatial"] = adata.obsm[obsm]
+
 
 def _build_connectivity(
     coords: np.ndarray,
