@@ -83,7 +83,16 @@ def spatial_connectivity(
         Adj = _transform_a_cosine(Adj)
 
     adata.obsp[key_added] = Adj
-    adata.uns = {'connectivities_key': key_added, 'distances_key': None, 'params': {'n_neighbors': n_neigh , "radius":radius, 'method': coord_type, 'metric': 'euclidean'}}
+    adata.uns = {
+        "connectivities_key": key_added,
+        "distances_key": None,
+        "params": {
+            "n_neighbors": n_neigh,
+            "radius": radius,
+            "method": coord_type,
+            "metric": "euclidean",
+        },
+    }
 
 
 def _build_connectivity(
