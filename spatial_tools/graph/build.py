@@ -6,17 +6,18 @@ import numpy as np
 from scipy import sparse
 from typing import Optional
 
+from typing import Optional, Union
 from sklearn.metrics.pairwise import cosine_similarity
 
 
 def spatial_connectivity(
     adata: "AnnData",
     obsm: str = "spatial",
-    key_added: str = "spatial_connectivity",
+    key_added: str = "spatial_connectivities",
     n_rings: int = 1,
     n_neigh: int = 6,
     radius: Optional[float] = None,
-    coord_type: str = "visium",
+    coord_type: Union[str, None] = "visium",
     weighted_graph: bool = False,
     transform: str = None,
 ):
@@ -82,6 +83,7 @@ def spatial_connectivity(
         Adj = _transform_a_cosine(Adj)
 
     adata.obsp[key_added] = Adj
+    adata.uns = {'connectivities_key': key_added, 'distances_key': None, 'params': {'n_neighbors': n_neigh , "radius":radius, 'method': coord_type, 'metric': 'euclidean'}}
 
 
 def _build_connectivity(
