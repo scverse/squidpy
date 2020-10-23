@@ -178,6 +178,7 @@ class ImageContainer:
         elif isinstance(img, xr.DataArray):
             assert "x" in img.dims
             assert "y" in img.dims
+            xr_img = img
         elif isinstance(img, str):
             ext = img.split(".")[-1]
             if ext in ("tif", "tiff"):
