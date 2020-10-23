@@ -113,6 +113,14 @@ def test_crop(tmpdir):
     # check that has cropped correct image
     assert (crop[:3, 0, 0] == [10, 11, 12]).all()
 
+    # crop casting to dtype
+    img_orig = np.zeros((10, xdim, ydim), dtype=np.uint16)
+    cont = ImageContainer(img_orig, img_id="image_0")
+    crop = cont.crop(
+        x=50, y=20, xs=300, ys=300, cval=5, img_id="image_0", dtype="uint8"
+    )
+    assert crop.dtype == np.uint8
+
 
 def test_uncrop_img(tmpdir):
     """\
