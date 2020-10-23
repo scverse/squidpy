@@ -2,13 +2,14 @@ import numpy as np
 from typing import Union, List, Tuple, Optional
 import xarray as xr
 from ._utils import _num_pages
+from imageio import imread
 
 
 class ImageContainer:
     """\
-    Container for in memory or on-disk tiff images. 
+    Container for in memory or on-disk tiff or jpg images. 
     
-    Allows for lazy and chunked reading via rasterio and dask.
+    Allows for lazy and chunked reading via rasterio and dask (if input is a tiff image).
     An instance of this class is given to all image processing functions, along with an anndata instance
     if necessary.
     
@@ -20,7 +21,7 @@ class ImageContainer:
     Methods
     -------
     add_img(img, img_id)
-        Add layers from numpy / tiff file to `data` with key `img_id`.
+        Add layers from numpy / image file to `data` with key `img_id`.
         
     crop(x, y)
         Crop image centered around coordinates (x,y) from `data`.
@@ -36,7 +37,7 @@ class ImageContainer:
         chunks: Optional[int] = None,
     ):
         """\
-        Set up ImageContainer from numpy array or on-disk tiff.
+        Set up ImageContainer from numpy array or on-disk tiff / jpg.
         
         Processes image as in memory numpy array or uses xarrays rasterio reading functions to load from disk 
         (with caching) if image is a file path.
@@ -106,7 +107,7 @@ class ImageContainer:
         img_id: Union[str, List[str]] = None,
         channel_id: str = "channels",
     ):
-        """
+        """\
         Add layer(s) from numpy image / tiff file.
         For numpy arrays, assume that dims are: channels, y, x
 
@@ -115,7 +116,7 @@ class ImageContainer:
         Params
         ------
         img
-            Numpy array or path to tiff file.
+            Numpy array or path to image file.
         img_id
             Key (name) to be used for img. For multi-page tiffs this should be a list.
             If not specified, DataArrays will be named "image_{i}".
@@ -158,13 +159,16 @@ class ImageContainer:
         """\
         Load img as xarray. 
         
-        Supports numpy arrays and (multi-page) tiff files.
+        Supports numpy arrays and (multi-page) tiff files, and jpg files
         For numpy arrays, assume that dims are: `'channels, y, x'`
+        
+        NOTE: lazy loading via dask is currently not supported for on-disk jpg files. 
+        They will be loaded in memory.
         
         Params
         ------
         img
-            Numpy array or path to tiff file.
+            Numpy array or path to image file.
             
         Returns
         -------
@@ -191,15 +195,28 @@ class ImageContainer:
             assert "y" in img.dims
             imgs.append(img)
         elif isinstance(img, str):
-            # get the number of pages in the file
-            num_pages = _num_pages(img)
-            # read all pages using rasterio
-            for i in range(1, num_pages + 1):
-                data = xr.open_rasterio(
-                    f"GTIFF_DIR:{i}:{img}", chunks=self._chunks, parse_coordinates=False
-                )
-                data = data.rename({"band": channel_id})
-                imgs.append(data)
+            ext = img.split(".")[-1]
+            if ext in ("tif", "tiff"):
+                # get the number of pages in the file
+                num_pages = _num_pages(img)
+                # read all pages using rasterio
+                for i in range(1, num_pages + 1):
+                    data = xr.open_rasterio(
+                        f"GTIFF_DIR:{i}:{img}",
+                        chunks=self._chunks,
+                        parse_coordinates=False,
+                    )
+                    data = data.rename({"band": "channels"})
+                    imgs.append(data)
+            elif ext in ("jpg", "jpeg"):
+                img = imread(img)
+                # jpeg has channels as last dim - transpose
+                img = img.transpose(2, 0, 1)
+                dims = [channel_id, "y", "x"]
+                xr_img = xr.DataArray(img, dims=dims)
+                imgs.append(xr_img)
+            else:
+                raise NotImplementedError(f"Files with extension {ext}")
         else:
             raise ValueError(img)
         return imgs
@@ -210,12 +227,12 @@ class ImageContainer:
         y: float,
         xs: int = 100,
         ys: int = 100,
-        img_id: Optional[Union[str, List[str]]] = None,
+        img_id: Optional[str] = None,
         centred: bool = True,
         **kwargs,
     ) -> xr.DataArray:
         """\
-        Extract a crop based on coordinates `x` and `y`.
+        Extract a crop based on coordiantes `x` and `y` of `img_id`.
 
         Centred on x, y if centred is True, else right and down from x, y.
         
@@ -229,9 +246,12 @@ class ImageContainer:
             Width of the crop in pixels.
         ys: int
             Height of the crop in pixels.
+        img_id: str
+            id of the image layer to be cropped.
         scale: float
             Default is 1.0.
             Resolution of the crop (smaller -> smaller image).
+            TODO: when scaling, will return a numpy array instead of an xarray
         mask_circle: bool
             Default is False.
             Mask crop to a circle.
@@ -243,7 +263,10 @@ class ImageContainer:
         dtype: str
             Optional, type to which the output should be (safely) cast. 
             Currently supported dtypes: 'uint8'.
+            TODO: currenty, using this argument will return a numpy array instead of an xarray
             
+        TODO: enable cropping of several channels at once?
+        
         Returns
         -------
         xr.DataArray with dimentions: channels, y, x
@@ -251,7 +274,7 @@ class ImageContainer:
         from .crop import crop_img
 
         if img_id is None:
-            assert False
+            img_id = list(self.data.keys())[0]
 
         img = self.data.data_vars[img_id]
         if centred:
