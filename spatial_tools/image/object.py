@@ -312,7 +312,7 @@ class ImageContainer:
         if ys is None:
             ys = self.shape[1]
         unique_xcoord = np.arange(start=0, stop=(self.shape[0] // xs) * xs, step=xs)
-        unique_ycoord = np.arange(start=0, stop=(self.shape[0] // ys) * ys, step=ys)
+        unique_ycoord = np.arange(start=0, stop=(self.shape[1] // ys) * ys, step=ys)
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
         crops = [
