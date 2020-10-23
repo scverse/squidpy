@@ -103,7 +103,7 @@ class ImageContainer:
 
     def add_img(
         self,
-        img: Union[str, np.ndarray],
+        img: Union[str, np.ndarray, xr.DataArray],
         img_id: Union[str, List[str]] = None,
         channel_id: str = "channels",
     ):
