@@ -64,7 +64,7 @@ def process_img(
         ]
     else:
         raise ValueError(f"did not recognize processing {processing}")
-    channel_id = img.data.dims[0]  # channels are named the same as in source image
+    channel_id = img.data[img_id].dims[0]  # channels are named the same as in source image
     # Make sure crops are xarrays:
     if not isinstance(crops[0], xr.DataArray):
         dims = [channel_id, "y", "x"]

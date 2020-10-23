@@ -10,7 +10,7 @@ def test_img_processing(xs, ys):
     """\
     Test skimage processing.
     """
-    img_orig = np.zeros((3, 100, 200), dtype=np.uint8)
+    img_orig = np.zeros((3, 100, 100), dtype=np.uint8)
 
     cont = ImageContainer(img_orig, img_id="image_0")
     process_img(
