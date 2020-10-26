@@ -23,15 +23,11 @@ def test_get_image_features(tmpdir):
 
     adata = get_dummy_data()
 
-    dataset_folder = os.path.join(tmpdir, "data")
-    dataset_name = "test_data"
-    img_path = os.path.join(dataset_folder, f"{dataset_name}_image.tif")
+    dataset_folder = os.path.join(tmpdir, "_data")
+    dataset_name = "test"
+    img_name = "test_img.tiff"
 
-    # create temp dir
-    os.makedirs(dataset_folder, exist_ok = True)
-    tifffile.imsave(img_path, img)
-
-    features_pd = get_image_features(adata, dataset_folder, dataset_name, features = features)
+    features_pd = get_image_features(adata, dataset_folder, dataset_name, img_name, features = features)
 
     # remove tmp dir when done
     os.remove(dataset_folder)
@@ -71,3 +67,5 @@ def test_get_summary_stats():
     assert [key for key in stats.keys() if "std" in key] != [], "std not in dict keys"
     assert [key for key in stats.keys() if "quantile" in key] != [], "quantile not in dict keys"
 
+
+test_get_image_features(tmpdir="./")
