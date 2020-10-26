@@ -5,7 +5,10 @@ __pycache__/
 
 # C extensions
 *.so
-
+.DS_Store
+*/.DS_Store
+.idea
+notebooks/data
 # Distribution / packaging
 .Python
 build/
@@ -50,6 +53,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+data/
 
 # Translations
 *.mo

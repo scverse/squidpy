@@ -6,3 +6,4 @@ scikit-image>=0.17.1
 xarray
 rasterio
 netcdf4
+pytest
