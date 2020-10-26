@@ -1,12 +1,12 @@
 from pathlib import Path
 from setuptools import setup, find_packages
 
-long_description = Path('README.md').read_text('utf-8')
+long_description = Path("README.md").read_text("utf-8")
 
 try:
     from spatial_tools import __author__, __email__
 except ImportError:  # Deps not yet installed
-    __author__ = __email__ = ''
+    __author__ = __email__ = ""
 
 setup(
     name="spatial_tools",
