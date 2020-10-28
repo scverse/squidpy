@@ -8,6 +8,8 @@ import pandas as pd
 from anndata import AnnData
 from sklearn.metrics import pairwise_distances
 
+import pysal
+
 
 def ripley_k(
     adata: AnnData,
