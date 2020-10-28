@@ -8,7 +8,8 @@ import pandas as pd
 from anndata import AnnData
 from sklearn.metrics import pairwise_distances
 
-import pysal
+import libpysal
+import esda
 
 
 def ripley_k(
@@ -17,8 +18,7 @@ def ripley_k(
     mode: str = "ripley",
     support: int = 100,
     copy: Optional[bool] = False,
-    return_info: Optional[bool] = False,
-) -> Union[AnnData, pd.DataFrame, None]:
+) -> Union[AnnData, pd.DataFrame]:
 
     """
     Calculate Ripley's K statistics for each cluster in the tissue coordinates .
@@ -37,18 +37,15 @@ def ripley_k(
         between a fixed radii with min=0, max=(area/2)**0.5 .
     copy
         If an :class:`~anndata.AnnData` is passed, determines whether a copy
-        is returned. Is ignored otherwise.
-    return_info
-        Only relevant when not passing an :class:`~anndata.AnnData`:
-        see “**Returns**”.
+        is returned. Otherwise returns dataframe.
 
     Returns
     -------
     adata : anndata.AnnData
         modifies anndata in place and store Ripley's K stat for each cluster in adata.uns[f"ripley_k_{cluster_key}"].
-        if copy = False and return_info = False
+        if copy = False
     df: pandas.DataFrame
-        return dataframe if return_info = True
+        return dataframe if copy = True
     """
 
     try:
@@ -86,11 +83,51 @@ def ripley_k(
     minmax_dist = df.groupby(cluster_key)["ripley_k"].max().min()
     df = df[df.ripley_k < minmax_dist].copy()
 
-    if return_info:
-        return df
-    else:
-        adata.uns[f"ripley_k_{cluster_key}"] = df
-        return adata if copy else None
+    adata.uns[f"ripley_k_{cluster_key}"] = df
+
+    return adata if copy else df
+
+
+def moran(
+    adata: AnnData,
+    cluster_key: str,
+    mode: str = "ripley",
+    support: int = 100,
+    copy: Optional[bool] = False,
+) -> Union[AnnData, list]:
+
+    """
+    Calculate Moran’s I Global Autocorrelation Statistic.
+    Wraps esda.moran.Moran https://pysal.org/esda/generated/esda.Moran.html#esda.Moran
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        anndata object of spatial transcriptomics data. The function will use connectivities in adata.obsp["spatial_connectivities"]
+    genes: str
+        genes used to compute Moran's I statistics.
+    transformation: str
+        Keyword which indicates the transformation to be used, as reported in
+        https://pysal.org/esda/generated/esda.Moran.html#esda.Moran. 
+    copy
+        If an :class:`~anndata.AnnData` is passed, determines whether a copy
+        is returned. Is ignored otherwise.
+
+    Returns
+    -------
+    adata : anndata.AnnData
+        modifies anndata in place and store Ripley's K stat for each cluster in adata.uns[f"ripley_k_{cluster_key}"].
+        if copy = False
+    df: pandas.DataFrame
+        return dataframe if copy = True
+    """
+
+    return adata if copy else df
+
+
+def _compute_moran(y, w):
+    mi = esda.moran.Moran(y, w, permutations=999)
+    return (mi.I, mi.p_z_sim)
 
 
 def _set_weight_class(adata: AnnData):
