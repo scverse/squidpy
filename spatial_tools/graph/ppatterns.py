@@ -10,7 +10,12 @@ from sklearn.metrics import pairwise_distances
 
 
 def ripley_k(
-    adata: AnnData, cluster_key: str, mode: str = "ripley", support: int = 100, copy: Optional[bool] = False, return_info: Optional[bool] = False,
+    adata: AnnData,
+    cluster_key: str,
+    mode: str = "ripley",
+    support: int = 100,
+    copy: Optional[bool] = False,
+    return_info: Optional[bool] = False,
 ) -> Union[AnnData, pd.DataFrame, None]:
 
     """
@@ -84,6 +89,23 @@ def ripley_k(
     else:
         adata.uns[f"ripley_k_{cluster_key}"] = df
         return adata if copy else None
+
+
+def _set_weight_class(adata: AnnData):
+
+    try:
+        a = adata.obsp["spatial_connectivity"].tolil()
+    except ValueError:
+        raise VAlueError(
+            "\n`adata.obsp['spatial_connectivity']` is empty, run `spatial_connectivity` first"
+        )
+
+    neighbors = dict(enumerate(a.rows))
+    weights = dict(enumerate(a.data))
+
+    w = libpysal.weights.W(neighbors, weights, ids=adata.obs.index.values)
+
+    return w
 
 
 ## this was implementation with pointpats
