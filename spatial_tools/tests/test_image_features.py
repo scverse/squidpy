@@ -17,7 +17,7 @@ from spatial_tools.image.tools import (
 def test_get_image_features(tmpdir="./"):
     features = ["hog", "texture", "summary", "color_hist"]
 
-    dataset_folder = os.path.join(tmpdir, "_data")
+    dataset_folder = os.path.join(os.path.dirname(__file__), "_data")
     dataset_name = "V1_Adult_Mouse_Brain"
     img_name = "test_img.jpg"
 
