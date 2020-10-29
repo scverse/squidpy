@@ -1,19 +1,18 @@
-import pytest
-import numpy as np
-import rasterio.errors
 import warnings
 
-from spatial_tools.image.segment import segment
+import pytest
+
+import numpy as np
+
+import rasterio.errors
+
 from spatial_tools.image.object import ImageContainer
+from spatial_tools.image.segment import segment
 
 
 @pytest.mark.parametrize("shape", [(3, 100, 200)])
 def test_segmentation_blob(shape):
-    """\
-    Test skimage blob detection.
-    """
-    import tifffile
-
+    """Test skimage blob detection."""
     # ignore NotGeoreferencedWarning here
     warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
     img_orig = np.zeros(shape, dtype=np.uint8)
