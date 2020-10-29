@@ -1,13 +1,17 @@
-import anndata
-import numpy as np
-import tifffile
-
-from functools import wraps
 from time import time
 from typing import Union
+from functools import wraps
+
+import anndata
+
+import numpy as np
+
+import tifffile
 
 
 def timing(f):
+    """Time a function ``f``."""
+
     @wraps(f)
     def wrap(*args, **kw):
         ts = time()
@@ -20,23 +24,21 @@ def timing(f):
 
 
 def _num_pages(fname):
-    """
-    Use tifffile to get the number of pages in the tif
-    """
+    """Use tifffile to get the number of pages in the tif."""
     with tifffile.TiffFile(fname) as img:
         num_pages = len(img.pages)
     return num_pages
 
 
 def _round_odd(num: Union[float, int]) -> Union[float, int]:
-    """\
-    round num to next odd integer value
-    
+    """
+    Round num to next odd integer value.
+
     Params
     ------
     num: float
         Number to round
-    
+
     Returns
     -------
     int
@@ -52,14 +54,14 @@ def _round_odd(num: Union[float, int]) -> Union[float, int]:
 
 
 def _round_even(num: Union[float, int]) -> Union[float, int]:
-    """\
-    round num to next even integer value
-    
+    """
+    Round num to next even integer value.
+
     Params
     ------
     num: float
         Number to round
-    
+
     Returns
     -------
     int
