@@ -3,12 +3,19 @@
 ## Contributors
 David, Louis, Olle, Sabrina, Anna, Sergei, Mohammad, Ignacio, Giovanni, Hannah
 
-## Installation
+## Installation (for developers)
 ```
 git clone https://github.com/theislab/spatial-tools.git
 cd spatial-tools
-pip install -e .
+pip install -e ".[dev,test]"  # install development and testing requirements, respectively
+pre-commit install  # install pre-commit hooks
 ```
+[Pre-commit](https://pre-commit.com/) will run series of checks to determine if everything is in order, such as whether
+the AST can be parsed, formatting, import/requirements sorting, etc.
+To skip certain lines (especially for flake8), you can append ``# noqa`` or ``# noqa: <error>``, see [here](https://github.com/pycqa/flake8).
+
+In order to run tests, simply type ```tox```.
+
 
 ## Workflow
 Now you can find 2 branches `images` and `graph`. Switch to that branch when you have decided your issue: e.g. `git switch graph`.

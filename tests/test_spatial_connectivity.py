@@ -1,6 +1,9 @@
 import pytest
-import numpy as np
+
 from anndata import AnnData
+
+import numpy as np
+
 from spatial_tools.graph import spatial_connectivity
 
 

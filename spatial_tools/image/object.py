@@ -1,28 +1,31 @@
+from typing import List, Tuple, Union, Optional
+
 import numpy as np
-from typing import Union, List, Tuple, Optional
 import xarray as xr
-from ._utils import _num_pages
+
 from imageio import imread
+
+from ._utils import _num_pages
 
 
 class ImageContainer:
-    """\
+    """
     Container for in memory or on-disk tiff or jpg images.
-    
+
     Allows for lazy and chunked reading via rasterio and dask (if input is a tiff image).
     An instance of this class is given to all image processing functions, along with an anndata instance
     if necessary.
-    
+
     Attributes
     ----------
     data
         Xarray dataset containing the image data
-    
+
     Methods
     -------
     add_img(img, img_id)
         Add layers from numpy / image file to `data` with key `img_id`.
-        
+
     crop(x, y)
         Crop image centered around coordinates (x,y) from `data`.
     """
@@ -36,10 +39,10 @@ class ImageContainer:
         lazy: bool = True,
         chunks: Optional[int] = None,
     ):
-        """\
+        """
         Set up ImageContainer from numpy array or on-disk tiff / jpg.
-        
-        Processes image as in memory numpy array or uses xarrays rasterio reading functions to load from disk 
+
+        Processes image as in memory numpy array or uses xarrays rasterio reading functions to load from disk
         (with caching) if image is a file path.
         If chunks are specified, the xarray is wrapped in a dask lazy dask array using the chunk size.
 
@@ -64,18 +67,18 @@ class ImageContainer:
             self.add_img(img, img_id)
 
     @property
-    def shape(self) -> Tuple[int, int]:
+    def shape(self) -> Tuple[int, int]:  # noqa
         return (self.data.dims["x"], self.data.dims["y"])
 
     @property
-    def nchannels(self) -> int:
+    def nchannels(self) -> int:  # noqa
         return self.data.dims["channels"]
 
     @classmethod
     def open(cls, fname: str, lazy: bool = True, chunks: Optional[int] = None):
-        """\
+        """
         Initialize using a previously saved netcdf file.
-        
+
         Params
         ------
         fname
@@ -92,7 +95,8 @@ class ImageContainer:
         return self
 
     def save(self, fname: str):
-        """Save dataset as netcdf file.
+        """
+        Save dataset as netcdf file.
 
         Params
         ------
@@ -107,10 +111,10 @@ class ImageContainer:
         img_id: Union[str, List[str]] = None,
         channel_id: str = "channels",
     ):
-        """\
+        """
         Add layer from numpy image / tiff file.
-        For numpy arrays, assume that dims are: channels, y, x
 
+        For numpy arrays, assume that dims are: channels, y, x
         The added image has to have the same number of channels as the original image, or no channels.
 
         Params
@@ -140,15 +144,13 @@ class ImageContainer:
             # load in memory
             self.data.load()
 
-    def _load_img(
-        self, img: Union[str, np.ndarray], channel_id: str = "channels"
-    ) -> xr.DataArray:
-        """\
-        Load img as xarray. 
-        
+    def _load_img(self, img: Union[str, np.ndarray], channel_id: str = "channels") -> xr.DataArray:
+        """
+        Load img as xarray.
+
         Supports numpy arrays and (multi-page) tiff files, and jpg files
         For numpy arrays, assume that dims are: `'channels, y, x'`
-        
+
         NOTE: lazy loading via dask is currently not supported for on-disk jpg files.
         They will be loaded in memory.
 
@@ -156,11 +158,11 @@ class ImageContainer:
         ------
         img
             Numpy array or path to image file.
-            
+
         Returns
         -------
         DataArray containing loaded image.
-        
+
         Raises
         ------
         ValueError:
@@ -168,9 +170,7 @@ class ImageContainer:
         """
         if isinstance(img, np.ndarray):
             if len(img.shape) > 3:
-                raise ValueError(
-                    f"img has more than 3 dimensions. img.shape is {img.shape}"
-                )
+                raise ValueError(f"img has more than 3 dimensions. img.shape is {img.shape}")
             dims = [channel_id, "y", "x"]
             if len(img.shape) == 2:
                 dims = ["y", "x"]
@@ -187,9 +187,7 @@ class ImageContainer:
                 # read all pages using rasterio
                 xr_img_byband = []
                 for i in range(1, num_pages + 1):
-                    data = xr.open_rasterio(
-                        f"GTIFF_DIR:{i}:{img}", chunks=self._chunks, parse_coordinates=False
-                    )
+                    data = xr.open_rasterio(f"GTIFF_DIR:{i}:{img}", chunks=self._chunks, parse_coordinates=False)
                     data = data.rename({"band": channel_id})
                     xr_img_byband.append(data)
                 xr_img = xr.concat(xr_img_byband, dim=channel_id)
@@ -215,11 +213,11 @@ class ImageContainer:
         centred: bool = True,
         **kwargs,
     ) -> xr.DataArray:
-        """\
-        Extract a crop based on coordiantes `x` and `y` of `img_id`.
+        """
+        Extract a crop based on coordinates `x` and `y` of `img_id`.
 
         Centred on x, y if centred is True, else right and down from x, y.
-        
+
         Params
         ------
         x: float
@@ -245,10 +243,9 @@ class ImageContainer:
         centred: bool
             Whether the crop coordinates are centred.
         dtype: str
-            Optional, type to which the output should be (safely) cast. 
+            Optional, type to which the output should be (safely) cast.
             Currently supported dtypes: 'uint8'.
             TODO: currenty, using this argument will return a numpy array instead of an xarray
-
         TODO: enable cropping of several channels at once?
 
         Returns
@@ -262,12 +259,8 @@ class ImageContainer:
 
         img = self.data.data_vars[img_id]
         if centred:
-            assert (
-                xs / 2.0 + x
-            ) % 1 == 0, "x and xs/2 have to add up to an integer to use centred model"
-            assert (
-                ys / 2.0 + y
-            ) % 1 == 0, "y and ys/2 have to add up to an integer to use centred model"
+            assert (xs / 2.0 + x) % 1 == 0, "x and xs/2 have to add up to an integer to use centred model"
+            assert (ys / 2.0 + y) % 1 == 0, "y and ys/2 have to add up to an integer to use centred model"
             x = int(x - xs // 2)  # move from centre to corner
             y = int(y - ys // 2)  # move from centre to corner
         else:
@@ -284,8 +277,8 @@ class ImageContainer:
         img_id: Optional[Union[str, List[str]]] = None,
         **kwargs,
     ) -> Tuple[List[xr.DataArray], np.ndarray, np.ndarray]:
-        """\
-        Decompose image into equally sized crops
+        """
+        Decompose image into equally sized crops.
 
         Params
         ------
@@ -316,8 +309,5 @@ class ImageContainer:
         unique_ycoord = np.arange(start=0, stop=(self.data.dims["y"] // ys) * ys, step=ys)
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
-        crops = [
-            self.crop(x=x, y=y, xs=xs, ys=ys, img_id=img_id, centred=False)
-            for x, y in zip(xcoords, ycoords)
-        ]
+        crops = [self.crop(x=x, y=y, xs=xs, ys=ys, img_id=img_id, centred=False) for x, y in zip(xcoords, ycoords)]
         return crops, xcoords, ycoords

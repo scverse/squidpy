@@ -1,10 +1,7 @@
 import matplotlib.pyplot as plt
-from typing import List, Union
 
-def plot_segmentation(
-        img,
-        key: str
-):
+
+def plot_segmentation(img, key: str):
     """
     Plot segmentation on entire image.
 
