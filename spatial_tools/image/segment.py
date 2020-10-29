@@ -1,21 +1,21 @@
+"""Functions exposed: segment(), evaluate_nuclei_segmentation()."""
+
 import abc
-import anndata
-import numpy as np
-import skimage
+from types import MappingProxyType
 from typing import List, Union
+
+import anndata
+
+import numpy as np
 import xarray as xr
+
+import skimage
 
 from .crop import uncrop_img
 from .object import ImageContainer
 
-"""
-Functions exposed: segment(), evaluate_nuclei_segmentation() 
-"""
 
-
-def evaluate_nuclei_segmentation(
-    adata, copy: bool = False, **kwargs
-) -> Union[anndata.AnnData, None]:
+def evaluate_nuclei_segmentation(adata, copy: bool = False, **kwargs) -> Union[anndata.AnnData, None]:
     """
     Perform basic nuclei segmentation evaluation.
 
@@ -46,6 +46,7 @@ class SegmentationModel:
 
     def segment(self, arr: np.ndarray, **kwargs) -> np.ndarray:
         """
+        Segment an image.
 
         Params
         ------
@@ -65,8 +66,11 @@ class SegmentationModel:
 
 
 class SegmentationModelBlob(SegmentationModel):
+    """Segmentation model based on :mod:`skimage` blob detection."""
+
     def _segment(self, arr, invert: bool = True, **kwargs) -> np.ndarray:
         """
+        Segment an image.
 
         Params
         ------
@@ -95,30 +99,32 @@ class SegmentationModelBlob(SegmentationModel):
 
 
 class SegmentationModelWatershed(SegmentationModel):
+    """Segmentation model based on :mod:`skimage` blob detection."""
+
     def _segment(self, arr, thresh=0.5, geq: bool = True, **kwargs) -> np.ndarray:
         """
+        Segment an image.
 
         Params
         ------
         arr: np.ndarray
             High-resolution image.
         thresh: float
-             Threshold for discretisation of image scale to define areas to segment.
+             Threshold for discretization of image scale to define areas to segment.
         geq:
-            Treat thres as uppper or lower (greater-equal = geq) bound for defining state to segement.
+            Treat thres as upper or lower (greater-equal = geq) bound for defining state to segment.
         kwargs: dicct
             Model arguments
 
-        Yields
-        -----
+        Returns
+        -------
         (x, y, 1)
-        Segmentation mask for high-resolution image.
+            Segmentation mask for high-resolution image.
         """
-        from skimage.filters import threshold_otsu
         from scipy import ndimage as ndi
 
-        from skimage.segmentation import watershed
         from skimage.feature import peak_local_max
+        from skimage.segmentation import watershed
 
         # get binarized image
         if geq:
@@ -128,25 +134,24 @@ class SegmentationModelWatershed(SegmentationModel):
 
         # calculate markers as maximal distanced points from background (locally)
         distance = ndi.distance_transform_edt(1 - mask)
-        local_maxi = peak_local_max(
-            distance, indices=False, footprint=np.ones((5, 5)), labels=1 - mask
-        )
+        local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((5, 5)), labels=1 - mask)
         markers = ndi.label(local_maxi)[0]
         y = watershed(255 - arr, markers, mask=1 - mask)
         return y
 
 
 class SegmentationModelPretrainedTensorflow(SegmentationModel):
+    """Segmentation model using :mod:`tensofrlow` model."""
+
     def __init__(self, model, **kwargs):
         import tensorflow as tf
 
-        assert isinstance(
-            model, tf.keras.model.Model
-        ), "model should be a tf keras model instance"
-        super(SegmentationModelPretrainedTensorflow, self).__init__(model=model)
+        assert isinstance(model, tf.keras.model.Model), "model should be a tf keras model instance"
+        super().__init__(model=model)
 
     def _segment(self, arr, **kwargs) -> np.ndarray:
         """
+        Segment an image.
 
         Params
         ------
@@ -169,14 +174,14 @@ def segment(
     img_id: str,
     model_group: Union[str],
     model_instance: Union[None, str, SegmentationModel] = None,
-    model_kwargs: dict = {},
+    model_kwargs: dict = MappingProxyType({}),
     channel_idx: Union[int, None] = None,
     xs=None,
     ys=None,
     key_added: Union[str, None] = None,
 ) -> Union[None]:
     """
-    Segments image.
+    Segment an image.
 
     Params
     ------
@@ -203,6 +208,7 @@ def segment(
 
     Yields
     -----
+    None
     """
     channel_id = "mask"
     if model_group == "skimage_blob":
@@ -215,17 +221,8 @@ def segment(
         raise ValueError("did not recognize model instance %s" % model_group)
 
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
-    channel_slice = (
-        channel_idx
-        if isinstance(channel_idx, int)
-        else slice(0, crops[0].channels.shape[0])
-    )
-    crops = [
-        segmentation_model.segment(
-            arr=x[{"channels": channel_slice}].values, **model_kwargs
-        )
-        for x in crops
-    ]
+    channel_slice = channel_idx if isinstance(channel_idx, int) else slice(0, crops[0].channels.shape[0])
+    crops = [segmentation_model.segment(arr=x[{"channels": channel_slice}].values, **model_kwargs) for x in crops]
     # By convention, segments or numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
     # TODO use overlapping crops to not create confusion at boundaries
@@ -235,9 +232,7 @@ def segment(
         crop_new[crop_new > 0] = crop_new[crop_new > 0] + counter
         counter += np.max(x)
         crops[i] = xr.DataArray(crop_new[np.newaxis, :, :], dims=["mask", "y", "x"])
-    img_segmented = uncrop_img(
-        crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id
-    )
+    img_segmented = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id)
     img_id = "segmented_" + model_group.lower() if key_added is None else key_added
     img.add_img(img=img_segmented, img_id=img_id, channel_id=channel_id)
 
@@ -250,7 +245,7 @@ def segment_crops(
     ys=None,
 ) -> List[xr.DataArray]:
     """
-    Segments image.
+    Segment an image.
 
     Params
     ------
@@ -274,11 +269,6 @@ def segment_crops(
             np.mean(np.where(img.data[segmented_img_id] == i)[0]),
             np.mean(np.where(img.data[segmented_img_id] == i)[1]),
         )
-        for i in np.sort(
-            list(set(list(np.unique(img.data[segmented_img_id]))) - set([0]))
-        )
+        for i in np.sort(list(set(np.unique(img.data[segmented_img_id])) - {0}))
     ]
-    return [
-        img.crop(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id)
-        for xi, yi in segment_centres
-    ]
+    return [img.crop(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id) for xi, yi in segment_centres]

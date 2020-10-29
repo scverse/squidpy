@@ -1,10 +1,11 @@
 from pathlib import Path
+
 from setuptools import setup, find_packages
 
 long_description = Path("README.md").read_text("utf-8")
 
 try:
-    from spatial_tools import __author__, __email__
+    from spatial_tools import __email__, __author__
 except ImportError:  # Deps not yet installed
     __author__ = __email__ = ""
 
@@ -20,9 +21,8 @@ setup(
     license="MIT",
     packages=find_packages(),
     zip_safe=False,
-    install_requires=[
-        l.strip() for l in Path("requirements.txt").read_text("utf-8").splitlines()
-    ],
+    install_requires=[l.strip() for l in Path("requirements.txt").read_text("utf-8").splitlines()],
+    extras_require=dict(dev=["pre-commit>=2.7.1"], test=["tox>=3.20.1"]),
     classifiers=[
         "Programming Language :: Python :: 3.8",
         "Environment :: Console",

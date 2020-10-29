@@ -1,16 +1,14 @@
-"""
-Functions for building graph from spatial coordinates
-"""
+"""Functions for building graph from spatial coordinates."""
 import warnings
-import numpy as np
-from scipy import sparse
 from typing import Optional
 
+import numpy as np
+from scipy import sparse
 from sklearn.metrics.pairwise import cosine_similarity
 
 
 def spatial_connectivity(
-    adata: "AnnData",
+    adata: "AnnData",  # noqa
     obsm: str = "spatial",
     key_added: str = "spatial_connectivity",
     n_rings: int = 1,
@@ -19,9 +17,9 @@ def spatial_connectivity(
     coord_type: str = "visium",
     weighted_graph: bool = False,
     transform: str = None,
-):
+) -> None:
     """
-    Creates graph from spatial coordinates
+    Create a graph from spatial coordinates.
 
     Params
     ------
@@ -43,6 +41,10 @@ def spatial_connectivity(
         Output weighted connectivities
     transform
         Type of adjacency matrix transform: either `spectral` or `cosine`
+
+    Returns
+    -------
+    None
     """
     coords = adata.obsm[obsm]
 
@@ -91,16 +93,12 @@ def _build_connectivity(
     neigh_correct: bool = False,
     set_diag: bool = False,
 ):
-    """
-    Build connectivity matrix from spatial coordinates
-    """
+    """Build connectivity matrix from spatial coordinates."""
     from sklearn.neighbors import NearestNeighbors
 
     N = coords.shape[0]
 
-    tree = NearestNeighbors(
-        n_neighbors=n_neigh or 6, radius=radius or 1, metric="euclidean"
-    )
+    tree = NearestNeighbors(n_neighbors=n_neigh or 6, radius=radius or 1, metric="euclidean")
     tree.fit(coords)
 
     if radius is not None:
@@ -121,9 +119,7 @@ def _build_connectivity(
         row_indices = np.concatenate((row_indices, np.arange(N)))
         col_indices = np.concatenate((col_indices, np.arange(N)))
 
-    return sparse.csr_matrix(
-        (np.ones(len(row_indices)), (row_indices, col_indices)), shape=(N, N)
-    )
+    return sparse.csr_matrix((np.ones(len(row_indices)), (row_indices, col_indices)), shape=(N, N))
 
 
 def _transform_a_spectral(a):

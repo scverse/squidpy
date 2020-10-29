@@ -1,18 +1,22 @@
-import numpy as np
-from skimage.transform import rescale
-from skimage.draw import disk
-import skimage.util
-from typing import List, Tuple, Union
+from typing import List, Tuple
+
 from anndata import AnnData
-from .object import ImageContainer
+
+import numpy as np
 import xarray as xr
-from ._utils import _round_odd, _round_even
+
+import skimage.util
+from skimage.draw import disk
+from skimage.transform import rescale
+
+from ._utils import _round_even
+from .object import ImageContainer
 
 
 def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
-    """\
-    Iterate over all obs_ids defined in adata and extract crops from img
-    
+    """
+    Iterate over all obs_ids defined in adata and extract crops from img.
+
     Params
     ------
     adata: AnnData
@@ -35,9 +39,9 @@ def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
     dtype: Optional[str]
         Type to which the output should be (safely) cast.
         Currently supported dtypes: 'uint8'.
-    
+
     Yields
-    -----
+    ------
     (obs_id: Union[int, str], crop: np.ndarray)
     Crops from high-resolution img centered around coords defined in adata.obsm['spatial'].
     """
@@ -46,9 +50,7 @@ def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
         dataset_name = list(adata.uns["spatial"].keys())[0]
     xcoord = adata.obsm["spatial"][:, 0]
     ycoord = adata.obsm["spatial"][:, 1]
-    spot_diameter = adata.uns["spatial"][dataset_name]["scalefactors"][
-        "spot_diameter_fullres"
-    ]
+    spot_diameter = adata.uns["spatial"][dataset_name]["scalefactors"]["spot_diameter_fullres"]
     sizef = kwargs.get("sizef", 1)
     s = int(_round_even(spot_diameter * sizef))
     # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
@@ -86,9 +88,7 @@ def uncrop_img(
     assert np.max(x) < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
 
     dims = [channel_id, "y", "x"]
-    img = xr.DataArray(
-        np.zeros((crops[0].coords[channel_id].shape[0], shape[1], shape[0])), dims=dims
-    )
+    img = xr.DataArray(np.zeros((crops[0].coords[channel_id].shape[0], shape[1], shape[0])), dims=dims)
     if len(crops) > 1:
         for c, x, y in zip(crops, x, y):
             x0 = x
@@ -115,7 +115,7 @@ def crop_img(
     channel_id: str = "channels",
     **kwargs,
 ) -> xr.DataArray:
-    """\
+    """
     Extract a crop right and down from `x` and `y`.
 
     Params
@@ -140,7 +140,7 @@ def crop_img(
         Default is 0
         The value outside image boundaries or the mask.
     dtype: str
-        Optional, type to which the output should be (safely) cast. 
+        Optional, type to which the output should be (safely) cast.
         Currently supported dtypes: 'uint8'.
 
     Returns
@@ -161,13 +161,11 @@ def crop_img(
     assert y < img.y.shape[0], f"y ({y}) is outsize of image range ({img.y.shape[0]})"
     assert x < img.x.shape[0], f"x ({x}) is outsize of image range ({img.x.shape[0]})"
 
-    assert xs > 0, f"image size cannot be 0"
-    assert ys > 0, f"image size cannot be 0"
+    assert xs > 0, "image size cannot be 0"
+    assert ys > 0, "image size cannot be 0"
 
     if channel_id in img.dims:
-        crop = (np.zeros((img.coords[channel_id].shape[0], ys, xs)) + cval).astype(
-            img.dtype
-        )
+        crop = (np.zeros((img.coords[channel_id].shape[0], ys, xs)) + cval).astype(img.dtype)
     else:
         crop = (np.zeros((1, ys, xs)) + cval).astype(img.dtype)
     crop = xr.DataArray(crop, dims=[channel_id, "y", "x"])
