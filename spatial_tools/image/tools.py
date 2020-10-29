@@ -226,3 +226,87 @@ def get_grey_texture_features(
             for a_idx, a in enumerate(angles):
                 features[f"{feature}_{p}_dist_{d}_angle_{a:.2f}"] = tmp_features[d_idx, a_idx]
     return features
+
+def scale_f(feature,option,name):
+    """helper function for scaling each feature
+    
+    Params
+    ------
+    feature: pd.Series
+        values for one feature
+    option: str, list, lambda fct
+        scaling specification
+    name: str
+        feature name
+        
+    Returns
+    -------
+    pd.Series or np.array
+    
+    """   
+    import types    
+    if len(np.unique(feature)) == 1: 
+        warnings.warn(f"Feature {name} is constant and therefore wasn't scaled.")
+    elif option == "z-score":
+        feature -= np.mean(feature)
+        feature /= np.std(feature)
+    elif (type(option) == list) and (len(option) == 2):
+        f = feature.to_numpy()
+        minimum = np.min(f)
+        feature = (option[1]-option[0])*(f-minimum)/(np.max(f)-minimum) + option[0]
+    elif (type(option) is types.LambdaType):
+        feature = feature.apply(option)
+    else:
+        warnings.warn(f"Scaling option {option} is not supported, therefore feature {name} wasn't scaled.")
+    return feature
+
+
+def scale_features(df,features='all',scaling='z-score',inplace=True):
+    """Scale features
+    
+    Params
+    -----`
+    df: pd.DataFrame
+        Dataframe with image features. Rows: spots, Columns: features.
+    features: str, list of strs
+        Features on which scaling is applied. E.g. features=['feature1','feature3'] (Default: 'all')
+    scaling: str, list of floats, fct, dict of strs & lists & fcts
+        Define how features are scaled. This can be feature specific as well. There are different scaling
+        procedures supported, see the following examples:
+        - scaling == 'z-score':         all features are scaled to zero mean and std 1.
+        - scaling == [0,1]:             all features are linearly scaled to minimum 0 and maximum 1.
+        - scaling == <some lambda fct>: all features are transformed according the given lambda fct
+        - scaling == {'feature1':'z-score','feature3':[-1,2.5],'feature8':<some lambda function>}
+            --> feature1,3 and 8 are transformed according their given options
+    inplace: bool
+        Change features inplace or return copy
+    
+    Returns
+    -------
+    (if not inplace)
+    pd.DataFrame
+    
+    """
+    # Prepare scaling dict
+    if features == 'all':
+        features = df.columns.copy()
+    if type(scaling) != dict:
+        scaling = {f:scaling for f in features}
+    else:
+        overlap_features = [f for f in scaling if f in features]
+        if len(scaling) > len(overlap_features):
+            warnings.warn("There are more features in `scaling` then in `features`, only those in `features` and `scaling` are scaled.")
+            scaling = {s:val for s,val in scaling.items() if s in features}
+        elif len(scaling) < len(features):
+            warnings.warn("There are less features in `scaling` then in `features`, only those in `features` and `scaling` are scaled.")
+    
+    # Scale features
+    if inplace: 
+        d = df
+    else:
+        d = df.copy()
+    for f,s in scaling.items():
+            d[f] = scale_f(d[f],s,f)
+    if not inplace: 
+        return d
+
