@@ -1,24 +1,22 @@
-from tifffile import imread
-from tqdm import tqdm
 import os
-import pandas as pd
+
+from tqdm import tqdm
+
 import numpy as np
+import pandas as pd
 
 import skimage.feature as sk_image
-from skimage.util import img_as_ubyte
-from skimage.feature import greycoprops
-from skimage.feature import greycomatrix
+from skimage.feature import greycoprops, greycomatrix
 
-from spatial_tools.image.crop import crop_img
 from spatial_tools.image.object import ImageContainer
 
 
-def get_image_features(adata, dataset_folder, dataset_name, img_name,features=["summary"], **kwargs):
-
-    """Get image features for spot ids from image file.
+def get_image_features(adata, dataset_folder, dataset_name, img_name, features=("summary",), **_kwargs):
+    """
+    Get image features for spot ids from image file.
 
     Params
-    ---------
+    ------
     adata: scanpy adata object
         rgb image in uint8 format.
     dataset_folder: str
@@ -27,10 +25,10 @@ def get_image_features(adata, dataset_folder, dataset_name, img_name,features=["
         name of data set
     features: list of strings
         features names to be calculated
+
     Returns
     -------
     dict of feature values
-
     """
     available_features = ["hog", "texture", "summary", "color_hist"]
 
@@ -45,13 +43,11 @@ def get_image_features(adata, dataset_folder, dataset_name, img_name,features=["
 
     xcoord = adata.obsm["spatial"][:, 0]
     ycoord = adata.obsm["spatial"][:, 1]
-    spot_diameter = adata.uns["spatial"][dataset_name]["scalefactors"][
-        "spot_diameter_fullres"
-    ]
+    # spot_diameter = adata.uns["spatial"][dataset_name]["scalefactors"]["spot_diameter_fullres"]
 
     cell_names = adata.obs.index.tolist()
 
-    for spot_id, cell_name in tqdm(enumerate(cell_names)):
+    for spot_id, _cell_name in tqdm(enumerate(cell_names)):
         crop_ = ic.crop(xcoord[spot_id], ycoord[spot_id])
 
         # set crop to array
@@ -71,18 +67,19 @@ def get_image_features(adata, dataset_folder, dataset_name, img_name,features=["
 
 
 def get_features_statistics(im, features):
-    """Calculate histogram of oriented gradients (hog) features
+    """
+    Calculate histogram of oriented gradients (hog) features.
 
     Params
     ---------
     img: np.array
         rgb image in uint8 format.
     features: list of strings
-        feature names of features to be extracted
+        feature names of features to be extracted.
+
     Returns
     -------
-    dict of feature values
-
+    dict of feature values.
     """
     stat_dict = {}
     for feature in features:
@@ -98,18 +95,19 @@ def get_features_statistics(im, features):
 
 
 def get_hog_features(img, feature_name="hog"):
-    """Calculate histogram of oriented gradients (hog) features
+    """
+    Calculate histogram of oriented gradients (hog) features.
 
     Params
     ---------
     img: M, N[, C] np.array
         rgb image in uint8 format.
     feature_name: str
-        name of feature for string id
+        name of feature for string id.
+
     Returns
     -------
-    dict of feature values
-
+    dict of feature values.
     """
     hog_dict = {}
     hog_features = sk_image.hog(img)
@@ -118,13 +116,12 @@ def get_hog_features(img, feature_name="hog"):
     return hog_dict
 
 
-def get_summary_stats(
-    img, feature, quantiles=[0.9, 0.5, 0.1], mean=False, std=False, channels=[0, 1, 2]
-):
-    """Calculate summary statistics of color channels
+def get_summary_stats(img, feature, quantiles=(0.9, 0.5, 0.1), mean=False, std=False, channels=(0, 1, 2)):
+    """
+    Calculate summary statistics of color channels.
 
     Params
-    ---------
+    ------
     img: np.array
         rgb image in uint8 format.
     qunatiles: list of floats
@@ -138,8 +135,7 @@ def get_summary_stats(
 
     Returns
     -------
-    dict of feature values
-
+    dict of feature values.
     """
     # if img has no color channel, reshape
     if len(img.shape) == 2:
@@ -160,30 +156,28 @@ def get_summary_stats(
     return stats
 
 
-def get_color_hist(img, feature, bins=10, channels=[0, 1, 2], v_range=(0, 255)):
-    """Compute histogram counts of color channel values
+def get_color_hist(img, feature, bins=10, channels=(0, 1, 2), v_range=(0, 255)):
+    """
+    Compute histogram counts of color channel values.
 
     Params
-    ---------
+    ------
     img: np.array
         rgb image in uint8 format.
     bins: int
-        number of binned value intervals
+        number of binned value intervals.
     channels: list of ints
-        define for which channels histograms are computed
+        define for which channels histograms are computed.
     v_range: tuple of two ints
-        Range on which values are binned.
+        Range on which values are binned..
 
     Returns
     -------
     dict of feature values
-
     """
     features = {}
     for c in channels:
-        hist = np.histogram(
-            img[:, :, c], bins=10, range=[0, 255], weights=None, density=False
-        )
+        hist = np.histogram(img[:, :, c], bins=bins, range=v_range, weights=None, density=False)
         for i, count in enumerate(hist[0]):
             features[f"{feature}_ch_{c}_bin_{i}"] = count
     return features
@@ -192,11 +186,12 @@ def get_color_hist(img, feature, bins=10, channels=[0, 1, 2], v_range=(0, 255)):
 def get_grey_texture_features(
     img,
     feature,
-    props=["contrast", "dissimilarity", "homogeneity", "correlation", "ASM"],
-    distances=[1],
-    angles=[0, np.pi / 4, np.pi / 2, 3 * np.pi / 4],
+    props=("contrast", "dissimilarity", "homogeneity", "correlation", "ASM"),
+    distances=(1,),
+    angles=(0, np.pi / 4, np.pi / 2, 3 * np.pi / 4),
 ):
-    """Calculate texture features
+    """
+    Calculate texture features.
 
     A grey level co-occurence matrix (GLCM) is computed for different combinations of distance and angle.
     The distance defines the pixel difference of co occurence. The angle define the direction along which
@@ -204,21 +199,20 @@ def get_grey_texture_features(
     d and at an angle theta from grey-level i.
     From a given GLCM texture features are infered.
 
-    Arguments
-    ---------
+    Params
+    ------
     img: np.array
         rgb image in uint8 format.
     props: list of strs
-        texture features that are calculated. See `prop` in skimage.feature.greycoprops
+        texture features that are calculated. See `prop` in skimage.feature.greycoprops.
     distances: list of ints
-        See `distances` in skimage.feature.greycomatrix
+        See `distances` in skimage.feature.greycomatrix.
     angles: list of floats
-        See `angles` in skimage.feature.greycomatrix
+        See `angles` in skimage.feature.greycomatrix.
 
     Returns
     -------
     dict of feature values
-
     """
     features = {}
     # get grey scale image
@@ -230,7 +224,5 @@ def get_grey_texture_features(
         tmp_features = greycoprops(comatrix, prop=p)
         for d_idx, d in enumerate(distances):
             for a_idx, a in enumerate(angles):
-                features[f"{feature}_{p}_dist_{d}_angle_{a:.2f}"] = tmp_features[
-                    d_idx, a_idx
-                ]
+                features[f"{feature}_{p}_dist_{d}_angle_{a:.2f}"] = tmp_features[d_idx, a_idx]
     return features

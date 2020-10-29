@@ -1,24 +1,22 @@
-import abc
-import anndata
-import numpy as np
+"""Functions exposed: process_img()."""
+
+from types import MappingProxyType
+from typing import Union, Mapping
+
+import xarray as xr
+
 import skimage
 import skimage.filters
-from typing import List, Union
-import xarray as xr
 
 from .crop import uncrop_img
 from .object import ImageContainer
-
-"""
-Functions exposed: process_img() 
-"""
 
 
 def process_img(
     img: ImageContainer,
     img_id: str,
     processing: Union[str],
-    processing_kwargs: dict = {},
+    processing_kwargs: Mapping = MappingProxyType({}),
     xs=None,
     ys=None,
     key_added: Union[str, None] = None,
@@ -52,30 +50,19 @@ def process_img(
         Key of new image sized array to add into img object. Defaults to "${img_id}_${processing}"
     inplace: bool
         Whether to replace original image by processed one. Use this to save memory.
-
-    Yields
-    -----
     """
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
     if processing == "smooth":
-        crops = [
-            skimage.filters.gaussian(x, **processing_kwargs)
-            for x in crops
-        ]
+        crops = [skimage.filters.gaussian(x, **processing_kwargs) for x in crops]
     else:
         raise ValueError(f"did not recognize processing {processing}")
     channel_id = img.data[img_id].dims[0]  # channels are named the same as in source image
     # Make sure crops are xarrays:
     if not isinstance(crops[0], xr.DataArray):
         dims = [channel_id, "y", "x"]
-        crops = [
-            xr.DataArray(x, dims=dims)
-            for x in crops
-        ]
+        crops = [xr.DataArray(x, dims=dims) for x in crops]
     # Reassemble image:
-    img_proc = uncrop_img(
-        crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id
-    )
+    img_proc = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id)
     if inplace:
         img_id_new = img_id
     else:
