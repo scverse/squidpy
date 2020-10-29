@@ -209,12 +209,12 @@ def crop_img(
         rr, cc = disk(
             center=(crop.shape[1] // 2, crop.shape[2] // 2),
             radius=crop.shape[1] // 2,
-            shape=crop.shape,
+            shape=(crop.shape[1], crop.shape[2]),
         )
         circle = np.zeros_like(crop)
         circle[:, rr, cc] = 1
         # set everything outside circle to cval
-        crop[circle == 0] = cval
+        crop.data[circle == 0] = cval
 
     # convert to dtype
     if dtype is not None:
