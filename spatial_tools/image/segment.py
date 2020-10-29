@@ -197,7 +197,7 @@ def segment(
     xs: int
         Width of the crops in pixels.
     ys: int
-        Height of the crops in pixels.  # TODO add support as soon as crop supports this
+        Height of the crops in pixels.
     key_added: str
         Key of new image sized array to add into img object. Defaults to "segmentation_$model_group"
 
