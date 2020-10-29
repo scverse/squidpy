@@ -10,39 +10,11 @@ from skimage.feature import greycoprops
 from skimage.feature import greycomatrix
 
 from spatial_tools.image.crop import crop_img
+from spatial_tools.image.object import ImageContainer
 
 
-def read_tif(dataset_folder, dataset_name, rescale=True):
-    """Loads and rescales the image in dataset_folder
+def get_image_features(adata, dataset_folder, dataset_name, img_name,features=["summary"], **kwargs):
 
-    Params
-    ---------
-    dataset_folder: str
-        path to where tif file is stored
-    dataset_name: str
-        name of data set
-    rescale: bool
-        features names to be calculated
-    Returns
-    -------
-    np array as image
-
-    """
-    # switch to tiffile to read images
-    img_path = os.path.join(dataset_folder, f"{dataset_name}_image.tif")
-    img = imread(img_path)
-    if len(img.shape) > 2:
-        if img.shape[0] in (2, 3, 4):
-            # is the channel dimension the first dimension?
-            img = np.transpose(img, (1, 2, 0))
-    if rescale:
-        img = img_as_ubyte(img)
-    return img
-
-
-def get_image_features(
-    adata, dataset_folder, dataset_name, features=["summary"], **kwargs
-):
     """Get image features for spot ids from image file.
 
     Params
@@ -69,7 +41,7 @@ def get_image_features(
 
     features_list = []
 
-    img = read_tif(dataset_folder, dataset_name)
+    ic = ImageContainer(os.path.join(dataset_folder, img_name))
 
     xcoord = adata.obsm["spatial"][:, 0]
     ycoord = adata.obsm["spatial"][:, 1]
@@ -80,11 +52,16 @@ def get_image_features(
     cell_names = adata.obs.index.tolist()
 
     for spot_id, cell_name in tqdm(enumerate(cell_names)):
-        crop_ = crop_img(
-            img, xcoord[spot_id], ycoord[spot_id], spot_diameter=spot_diameter, **kwargs
-        )
+        crop_ = ic.crop(xcoord[spot_id], ycoord[spot_id])
 
-        features_dict = get_features_statistics(crop_, cell_name, features=features)
+        # set crop to array
+        crop = np.array(crop_)
+
+        # make image channel last
+        if crop.shape[0] < max(crop.shape):
+            crop = crop.reshape(crop.shape[1], crop.shape[2], crop.shape[0])
+
+        features_dict = get_features_statistics(crop, features=features)
         features_list.append(features_dict)
 
     features_log = pd.DataFrame(features_list)
