@@ -1,10 +1,27 @@
-import pandas as pd
-import anndata as ad
+"""Spatial tools general utility functions."""
 import os
+
+import anndata as ad
+
+import pandas as pd
 
 
 def read_seqfish(base_path: str, dataset: str):
+    """
+    Read seqfish dataset.
 
+    Parameters
+    ----------
+    base_path
+        Path to a directory where the dataset is stores.
+    dataset
+        Type of the dataset. Can be one of `'ob'` or `'svz'`.
+
+    Returns
+    -------
+    :class:`anndata.AnnData`
+        Annotated data object.
+    """
     if dataset == "ob":
         counts_path = os.path.join(base_path, "sourcedata", "ob_counts.csv")
         clusters_path = os.path.join(base_path, "OB_cell_type_annotations.csv")
@@ -12,9 +29,7 @@ def read_seqfish(base_path: str, dataset: str):
     elif dataset == "svz":
         counts_path = os.path.join(base_path, "sourcedata", "cortex_svz_counts.csv")
         clusters_path = os.path.join(base_path, "cortex_svz_cell_type_annotations.csv")
-        centroids_path = os.path.join(
-            base_path, "sourcedata", "cortex_svz_cellcentroids.csv"
-        )
+        centroids_path = os.path.join(base_path, "sourcedata", "cortex_svz_cellcentroids.csv")
     else:
         print("Dataset not available")
 
