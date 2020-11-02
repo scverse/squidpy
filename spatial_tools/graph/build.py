@@ -2,13 +2,15 @@
 import warnings
 from typing import Optional
 
+from anndata import AnnData
+
 import numpy as np
 from scipy import sparse
 from sklearn.metrics.pairwise import cosine_similarity
 
 
 def spatial_connectivity(
-    adata: "AnnData",  # noqa
+    adata: AnnData,
     obsm: str = "spatial",
     key_added: str = "spatial_connectivity",
     n_rings: int = 1,

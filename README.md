@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/theislab/spatial-tools.svg?token=UqaQZpSKCK4qZNfu1sqq&branch=master)](https://travis-ci.com/theislab/spatial-tools)
+
 # Scanpy meets Spatial Transcriptomics (2 challenges)
 
 ## Contributors

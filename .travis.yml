@@ -2,7 +2,17 @@ language: python
 
 os: linux
 
+branches:
+  only:
+    - master
+
 dist: focal
+
+cache:
+  - apt
+  - pip
+  - directories:
+      - "$HOME/.cache/pre-commit"
 
 python:
     - "3.6"
@@ -25,17 +35,40 @@ jobs:
       os: osx
       osx_image: xcode9.4
       env:
-        - PYTHON_VERSION=3.6.5
+        - TRAVIS_PYTHON_VERSION=3.6
 
     - name: "Python 3.7.3 on macOS"
       language: bash
       os: osx
       osx_image: xcode10.2
       env:
-        - PYTHON_VERSION=3.7.3
+        - TRAVIS_PYTHON_VERSION=3.7
 
-    # TODO: macOS 3.8 (through brew)
+    - name: "Python 3.8.6 on macOS"
+      language: bash
+      os: osx
+      osx_image: xcode12.2
+      env:
+        - TRAVIS_PYTHON_VERSION=3.8 PYENV_VERSION=3.8.6
+      addons:
+        homebrew:
+          packages:
+            - pyenv
+            - pyenv-virtualenv
+          update: true
+      before_script:
+        - eval "$(pyenv init -)"
+        - eval "$(pyenv virtualenv-init -)"
+        - pyenv install $PYENV_VERSION
+        - pyenv virtualenv $PYENV_VERSION venv
+        - pyenv activate venv
+        - python --version
 
-install: pip install tox-travis
+before_cache:
+  - rm -f "$HOME/.cache/pip/log/debug.log"  # linux
+  - rm -f "$HOME/Library/Caches/pip/log/debug.log"  # macOS
+
+install:
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then pip install tox-travis; else pip3 install tox-travis; fi
 
 script: tox

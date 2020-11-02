@@ -4,6 +4,8 @@ import random
 from typing import Union
 from itertools import combinations
 
+from anndata import AnnData
+
 import numpy as np
 import pandas as pd
 
@@ -165,7 +167,7 @@ def permtest_leiden_pairs_complex(adata, rings_start=1, rings_end=6, n_perm=100,
 
 
 def permtest_leiden_pairs(
-    adata: "AnnData",  # noqa
+    adata: AnnData,
     n_permutations: int = 100,
     key_added: str = "nhood_permtest",
     print_log_each: int = 25,
@@ -247,7 +249,7 @@ def permtest_leiden_pairs(
 
 
 def cluster_centrality_scores(
-    adata: "AnnData",  # noqa
+    adata: AnnData,
     clusters_key: str,
     connectivity_key: Union[str, None] = None,
     key_added: str = "cluster_centrality_scores",
@@ -335,7 +337,7 @@ def cluster_centrality_scores(
 
 
 def cluster_interactions(
-    adata: "AnnData",  # noqa
+    adata: AnnData,
     clusters_key: str,
     connectivity_key: Union[str, None] = None,
     normalized: bool = False,
