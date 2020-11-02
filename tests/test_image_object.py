@@ -107,6 +107,21 @@ def test_crop(tmpdir):
     # check that has cropped correct image
     assert (crop[:3, 0, 0] == [10, 11, 12]).all()
 
+    # crop with mask_circle
+    crop = cont.crop(
+        x=50,
+        y=20,
+        xs=10,
+        ys=10,
+        cval=5,
+        img_id="image_0",
+        mask_circle=True,
+    )
+    assert (crop[:, 1, 0] == 5).all()
+    assert (crop[:, 2, 2] == 0).all()
+    assert (crop[:, 7, 7] == 0).all()
+    assert (crop[:, 8, 9] == 5).all()
+
     # crop casting to dtype
     img_orig = np.zeros((10, xdim, ydim), dtype=np.uint16)
     cont = ImageContainer(img_orig, img_id="image_0")
