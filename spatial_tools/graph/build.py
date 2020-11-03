@@ -4,6 +4,7 @@ from typing import Optional
 
 from anndata import AnnData
 
+from typing import Optional, Union
 import numpy as np
 from scipy import sparse
 from sklearn.metrics.pairwise import cosine_similarity
@@ -12,13 +13,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 def spatial_connectivity(
     adata: AnnData,
     obsm: str = "spatial",
-    key_added: str = "spatial_connectivity",
     n_rings: int = 1,
     n_neigh: int = 6,
     radius: Optional[float] = None,
-    coord_type: str = "visium",
+    coord_type: Union[str, None] = "visium",
     weighted_graph: bool = False,
     transform: str = None,
+    key_added: str = None,
+):
 ) -> None:
     """
     Create a graph from spatial coordinates.
@@ -85,7 +87,28 @@ def spatial_connectivity(
     elif transform == "cosine":
         Adj = _transform_a_cosine(Adj)
 
-    adata.obsp[key_added] = Adj
+    if key_added is None:
+        key_added = "spatial_neighbors"
+        conns_key = "spatial_connectivities"
+        dists_key = "distances"
+    else:
+        conns_key = key_added + "_connectivities"
+        dists_key = key_added + "_distances"
+
+    # add keys
+    adata.uns[key_added] = {}
+
+    neighbors_dict = adata.uns[key_added]
+
+    neighbors_dict["connectivities_key"] = conns_key
+    neighbors_dict["distances_key"] = dists_key
+
+    neighbors_dict["params"] = {"n_neighbors": n_neigh, "coord_type": coord_type}
+    neighbors_dict["params"]["radius"] = radius
+
+    adata.obsp[conns_key] = Adj
+    # distances not yet added
+    # adata.obsp[dists_key] = None
 
 
 def _build_connectivity(
