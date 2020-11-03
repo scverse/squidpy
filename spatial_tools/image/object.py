@@ -67,11 +67,11 @@ class ImageContainer:
             self.add_img(img, img_id)
 
     @property
-    def shape(self) -> Tuple[int, int]:  # noqa
-        return (self.data.dims["x"], self.data.dims["y"])
+    def shape(self) -> Tuple[int, int]:  # noqa: D102
+        return self.data.dims["x"], self.data.dims["y"]
 
     @property
-    def nchannels(self) -> int:  # noqa
+    def nchannels(self) -> int:  # noqa: D102
         return self.data.dims["channels"]
 
     @classmethod
