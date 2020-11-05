@@ -9,12 +9,13 @@ import numpy as np
 from spatial_tools.image.tools import (
     get_hog_features,
     get_summary_stats,
-    get_image_features,
     get_features_statistics,
+    calculate_image_features,
 )
+from spatial_tools.image.object import ImageContainer
 
 
-def test_get_image_features():
+def test_calculate_image_features():
     features = ["hog", "texture", "summary", "color_hist"]
 
     dataset_folder = os.path.join(os.path.dirname(__file__), "_data")
@@ -23,8 +24,9 @@ def test_get_image_features():
 
     # read in test data
     adata = read_h5ad(os.path.join(dataset_folder, "test_data.h5ad"))
+    img = ImageContainer(os.path.join(dataset_folder, img_name))
 
-    features_pd = get_image_features(adata, dataset_folder, dataset_name, img_name, features=features)
+    features = calculate_image_features(adata, img, features=features)
 
 
 def test_get_features_statistics():

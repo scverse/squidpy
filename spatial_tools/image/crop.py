@@ -1,6 +1,5 @@
+# flake8: noqa
 from typing import List, Tuple
-
-from anndata import AnnData
 
 import numpy as np
 import xarray as xr
@@ -8,57 +7,6 @@ import xarray as xr
 import skimage.util
 from skimage.draw import disk
 from skimage.transform import rescale
-
-from ._utils import _round_even
-from .object import ImageContainer
-
-
-def crop_generator(adata: AnnData, img: ImageContainer, **kwargs):
-    """
-    Iterate over all obs_ids defined in adata and extract crops from img.
-
-    Params
-    ------
-    adata: AnnData
-        Spatial dataset (including coords in adata.obsm['spatial']).
-    img: ImageContainer
-        High-resolution image.
-    dataset_name: Optional[str]
-        Name of the spatial data in adata (if not specified, take first one).
-    sizef: float
-        Default is 1.0.
-        Amount of context (1.0 means size of spot, larger -> more context).
-    scale: float
-        Default is 1.0.
-        Resolution of the crop (smaller -> smaller image).
-    mask_circle: bool
-        Mask crop to a circle.
-    cval: float
-        Default is 0
-        The value outside image boundaries or the mask.
-    dtype: Optional[str]
-        Type to which the output should be (safely) cast.
-        Currently supported dtypes: 'uint8'.
-
-    Yields
-    ------
-    (obs_id: Union[int, str], crop: np.ndarray)
-    Crops from high-resolution img centered around coords defined in adata.obsm['spatial'].
-    """
-    dataset_name = kwargs.get("dataset_name", None)
-    if dataset_name is None:
-        dataset_name = list(adata.uns["spatial"].keys())[0]
-    xcoord = adata.obsm["spatial"][:, 0]
-    ycoord = adata.obsm["spatial"][:, 1]
-    spot_diameter = adata.uns["spatial"][dataset_name]["scalefactors"]["spot_diameter_fullres"]
-    sizef = kwargs.get("sizef", 1)
-    s = int(_round_even(spot_diameter * sizef))
-    # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
-
-    obs_ids = adata.obs.index.tolist()
-    for i, obs_id in enumerate(obs_ids):
-        crop = np.array(img.crop(x=xcoord[i], y=ycoord[i], xs=s, ys=s, **kwargs))
-        yield (obs_id, crop)
 
 
 def uncrop_img(
@@ -68,10 +16,11 @@ def uncrop_img(
     shape: Tuple[int, int],
     channel_id: str = "channels",
 ) -> xr.DataArray:
-    """
-    Re-assemble image from crops and their centres.
+    """\
+    Re-assemble image from crops and their positions.
 
     Fills remaining positions with zeros.
+    Positions are given as upper right corners.
 
     Attrs:
         crops (List[np.ndarray]): List of image crops.
@@ -115,7 +64,7 @@ def crop_img(
     channel_id: str = "channels",
     **kwargs,
 ) -> xr.DataArray:
-    """
+    """\
     Extract a crop right and down from `x` and `y`.
 
     Params
@@ -218,5 +167,5 @@ def crop_img(
 
     # convert to dtype
     if dtype is not None:
-        crop = convert(crop)
+        crop.data = convert(crop.data)
     return crop

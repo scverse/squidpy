@@ -1,10 +1,14 @@
+# flake8: noqa
 from typing import List, Tuple, Union, Optional
+
+from anndata import AnnData
 
 import numpy as np
 import xarray as xr
 
 from imageio import imread
 
+from spatial_tools.image._utils import _round_odd, _round_even
 from ._utils import _num_pages
 
 
@@ -245,12 +249,10 @@ class ImageContainer:
         dtype: str
             Optional, type to which the output should be (safely) cast.
             Currently supported dtypes: 'uint8'.
-            TODO: currenty, using this argument will return a numpy array instead of an xarray
-        TODO: enable cropping of several channels at once?
 
         Returns
         -------
-        xr.DataArray with dimentions: channels, y, x
+        xr.DataArray with dimensions: channels, y, x
         """
         from .crop import crop_img
 
@@ -277,7 +279,7 @@ class ImageContainer:
         img_id: Optional[Union[str, List[str]]] = None,
         **kwargs,
     ) -> Tuple[List[xr.DataArray], np.ndarray, np.ndarray]:
-        """
+        """\
         Decompose image into equally sized crops.
 
         Params
@@ -286,7 +288,6 @@ class ImageContainer:
             Width of the crops in pixels. Defaults to image size if None.
         ys: int
             Height of the crops in pixels. Defaults to image size if None.
-            # TODO add support as soon as crop supports this
         cval: float
             Default is 0
             The value outside image boundaries or the mask.
@@ -297,7 +298,7 @@ class ImageContainer:
         Returns
         -------
         Tuple:
-            List[xr.DataArray with dimentions: channels, y, x: crops
+            List[xr.DataArray] with dimensions: channels, y, x: crops
             np.ndarray: length number of crops: x positions of crops
             np.ndarray: length number of crops: y positions of crops
         """
@@ -311,3 +312,51 @@ class ImageContainer:
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
         crops = [self.crop(x=x, y=y, xs=xs, ys=ys, img_id=img_id, centred=False) for x, y in zip(xcoords, ycoords)]
         return crops, xcoords, ycoords
+
+    def crop_spot_generator(self, adata: AnnData, **kwargs):
+        """
+        Iterate over all obs_ids defined in adata and extract crops from img.
+
+        Implemented for 10x spatial datasets.
+
+        Params
+        ------
+        adata: AnnData
+            Spatial dataset (including coords in adata.obsm['spatial']).
+        dataset_name: Optional[str]
+            Name of the spatial data in adata (if not specified, take first one).
+        sizef: float
+            Default is 1.0.
+            Amount of context (1.0 means size of spot, larger -> more context).
+        scale: float
+            Default is 1.0.
+            Resolution of the crop (smaller -> smaller image).
+        mask_circle: bool
+            Mask crop to a circle.
+        cval: float
+            Default is 0
+            The value outside image boundaries or the mask.
+        dtype: Optional[str]
+            Type to which the output should be (safely) cast.
+            Currently supported dtypes: 'uint8'.
+
+        Yields
+        ------
+        Tuple:
+            Union[int, str]: obs_id of spot from adata
+            xr.DataArray with dimensions channels, y, x: crop
+        """
+        dataset_name = kwargs.get("dataset_name", None)
+        if dataset_name is None:
+            dataset_name = list(adata.uns["spatial"].keys())[0]
+        xcoord = adata.obsm["spatial"][:, 0]
+        ycoord = adata.obsm["spatial"][:, 1]
+        spot_diameter = adata.uns["spatial"][dataset_name]["scalefactors"]["spot_diameter_fullres"]
+        sizef = kwargs.get("sizef", 1)
+        s = int(_round_even(spot_diameter * sizef))
+        # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
+
+        obs_ids = adata.obs.index.tolist()
+        for i, obs_id in enumerate(obs_ids):
+            crop = self.crop(x=xcoord[i], y=ycoord[i], xs=s, ys=s, **kwargs)
+            yield (obs_id, crop)

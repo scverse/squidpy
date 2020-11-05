@@ -71,6 +71,7 @@ def _round_even(num: Union[float, int]) -> Union[float, int]:
     return res * 2
 
 
+# TODO is this function needed?
 def _access_img_in_adata(
     adata: anndata.AnnData,
     img_key: str,
@@ -87,6 +88,7 @@ def _access_img_in_adata(
     return adata.uns["spatial"][img_key]
 
 
+# TODO is this function needed?
 def _write_img_in_adata(adata: anndata.AnnData, img_key: str, img: np.ndarray):
     """
     Save image in anndata instance.
