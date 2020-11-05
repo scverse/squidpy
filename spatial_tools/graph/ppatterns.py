@@ -127,6 +127,7 @@ def moran(
     try:
         # from pointpats import ripley, hull
         import esda
+        import libpysal
     except ImportError:
         raise ImportError("\nplease install esda: \n\n" "\tpip install esda\n")
 
