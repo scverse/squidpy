@@ -1,4 +1,1 @@
-"""Utils
-"""
-
-import numpy as np
+"""Graph utilities."""

@@ -1,13 +1,13 @@
-import numpy as np
-import pytest
-import numpy as np
 import os
+
+import pytest
+
 import anndata as ad
+
+import numpy as np
+
 from spatial_tools.image.crop import crop_generator
-from spatial_tools.image.object import ImageContainer
 from spatial_tools.image._utils import _round_odd, _round_even
-
-
 from spatial_tools.image.object import ImageContainer
 
 
@@ -24,11 +24,7 @@ def test_crop_generator():
     cont = ImageContainer(os.path.join(os.path.dirname(__file__), "_data/test_img.jpg"))
 
     i = 0
-    expected_size = _round_even(
-        adata.uns["spatial"]["V1_Adult_Mouse_Brain"]["scalefactors"][
-            "spot_diameter_fullres"
-        ]
-    )
+    expected_size = _round_even(adata.uns["spatial"]["V1_Adult_Mouse_Brain"]["scalefactors"]["spot_diameter_fullres"])
     for obs_id, crop in crop_generator(adata, cont):
         # crops have expected size?
         assert crop.shape[1] == expected_size

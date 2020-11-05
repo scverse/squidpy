@@ -1,12 +1,11 @@
-"""Functions for point patterns spatial statistics
-"""
+"""Functions for point patterns spatial statistics."""
 
-from typing import Optional, Union
+from typing import Union, Optional
+
+from anndata import AnnData
 
 import numpy as np
 import pandas as pd
-from anndata import AnnData
-from sklearn.metrics import pairwise_distances
 
 import libpysal
 import esda
@@ -21,7 +20,7 @@ def ripley_k(
 ) -> Union[AnnData, pd.DataFrame]:
 
     """
-    Calculate Ripley's K statistics for each cluster in the tissue coordinates .
+    Calculate Ripley's K statistics for each cluster in the tissue coordinates.
 
     Parameters
     ----------
@@ -47,7 +46,6 @@ def ripley_k(
     df: pandas.DataFrame
         return dataframe if copy = True
     """
-
     try:
         # from pointpats import ripley, hull
         from astropy.stats import RipleysKEstimator
@@ -61,12 +59,10 @@ def ripley_k(
     x_min = int(coord[:, 0].min())
     x_max = int(coord[:, 0].max())
     area = int((x_max - x_min) * (y_max - y_min))
-    r = np.linspace(0, ((area / 2)) ** 0.5, support)
+    r = np.linspace(0, (area / 2) ** 0.5, support)
 
     # set estimator
-    Kest = RipleysKEstimator(
-        area=area, x_max=x_max, y_max=y_max, x_min=x_min, y_min=y_min
-    )
+    Kest = RipleysKEstimator(area=area, x_max=x_max, y_max=y_max, x_min=x_min, y_min=y_min)
     df_lst = []
     for c in adata.obs[cluster_key].unique():
         idx = adata.obs[cluster_key].values == c
@@ -147,7 +143,7 @@ def _set_weight_class(adata: AnnData):
     return w
 
 
-## this was implementation with pointpats
+#  this was implementation with pointpats
 
 # def ripley_c(adata: ad.AnnData, dist_key: str, cluster_key: str, r_name: str, support: int):
 
@@ -200,4 +196,3 @@ def _set_weight_class(adata: AnnData):
 #     else:
 #         print("Function not implemented")
 #     return np.stack([*rip], axis=1)
-

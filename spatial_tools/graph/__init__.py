@@ -1,4 +1,3 @@
-from .ppatterns import ripley_k
 from .build import spatial_connectivity
 from .nhood import (
     permtest_leiden_pairs,
