@@ -1,10 +1,9 @@
 """Functions for building graph from spatial coordinates."""
 import warnings
-from typing import Optional
+from typing import Union, Optional
 
 from anndata import AnnData
 
-from typing import Optional, Union
 import numpy as np
 from scipy import sparse
 from sklearn.metrics.pairwise import cosine_similarity
@@ -20,7 +19,6 @@ def spatial_connectivity(
     weighted_graph: bool = False,
     transform: str = None,
     key_added: str = None,
-):
 ) -> None:
     """
     Create a graph from spatial coordinates.
