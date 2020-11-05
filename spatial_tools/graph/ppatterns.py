@@ -3,9 +3,6 @@
 
 from typing import Union, Optional
 
-import esda
-import libpysal
-
 from anndata import AnnData
 
 import numpy as np
@@ -126,6 +123,12 @@ def moran(
     df: pandas.DataFrame
         return dataframe if copy = True
     """
+
+    try:
+        # from pointpats import ripley, hull
+        import esda
+    except ImportError:
+        raise ImportError("\nplease install esda: \n\n" "\tpip install esda\n")
 
     # init weights
     w = _set_weight_class(adata)
