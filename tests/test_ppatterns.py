@@ -1,10 +1,9 @@
-import pytest
-
 import anndata
 
+# flake8: noqa
 import numpy as np
 
-from spatial_tools.graph import ripley_k
+from spatial_tools.graph import moran, ripley_k
 
 
 def get_dummy_data():
@@ -28,3 +27,14 @@ def test_ripley_k():
     assert np.array_equal(adata.obs["cluster"].unique(), adata.uns["ripley_k_cluster"]["cluster"].unique())
 
     # TO-DO assess length of distances
+
+
+def test_moran():
+    """
+    check ripley score and shape
+    """
+    adata = get_dummy_data()
+    moran(adata)
+
+    # assert fdr correction in adata.uns
+    assert "pval_sim_fdr_bh" in adata.var.columns
