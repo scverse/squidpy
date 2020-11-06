@@ -1,5 +1,4 @@
-# flake8: noqa
-from typing import List, Optional
+from typing import Literal, Optional
 
 from anndata import AnnData
 
@@ -15,13 +14,12 @@ from spatial_tools.image.object import ImageContainer
 def calculate_image_features(
     adata: AnnData,
     img: ImageContainer,
-    features: Optional[List[str]] = [
-        "summary",
-    ],
-    key: Optional = None,
+    features: Optional[Literal[..., "summary"]] = "summary",
+    key: Optional[str] = "img_features",
+    copy: Optional[bool] = False,
     **kwargs,
 ):
-    """\
+    """
     Get image features for spot ids from image file.
 
     Params
@@ -34,16 +32,19 @@ def calculate_image_features(
         Features to be calculated. Available features:
         ["hog", "texture", "summary", "color_hist"]
     key: Optional[str]
-        key to use for saving calculated table in adata.obsm.
-        If None, function returns features table
+        Key to use for saving calculated table in adata.obsm.
+        Default is "img_features"
+    copy: Optional[bool]
+        If True, return pd.DataFrame with calculated features.
+        Default is False
     kwargs: keyword arguments passed to ImageContainer.crop_spot_generator function.
         Contain dataset_name, sizef, scale, mask_circle, cval, dtype
 
 
     Returns
     -------
-    None if key is specified
-    pd.DataFrame if key is None
+    None if copy is False
+    pd.DataFrame if copy is True
     """
     available_features = ["hog", "texture", "summary", "color_hist"]
 
@@ -69,11 +70,10 @@ def calculate_image_features(
     features_log.set_index(["obs_id"], inplace=True)
 
     # modify adata in place or return features_log
-    if key is None:
+    if copy:
         return features_log
     else:
         adata.obsm[key] = features_log
-        return
 
 
 def get_features_statistics(im, features):
