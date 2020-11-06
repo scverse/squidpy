@@ -5,7 +5,7 @@ from typing import Union, Optional
 from anndata import AnnData
 
 import numpy as np
-from scipy import sparse
+from scipy.sparse import csr_matrix, SparseEfficiencyWarning
 from sklearn.metrics.pairwise import cosine_similarity
 
 
@@ -16,7 +16,6 @@ def spatial_connectivity(
     n_neigh: int = 6,
     radius: Optional[float] = None,
     coord_type: Union[str, None] = "visium",
-    weighted_graph: bool = False,
     transform: str = None,
     key_added: str = None,
 ) -> None:
@@ -30,7 +29,7 @@ def spatial_connectivity(
     obsm
         Key to spatial coordinates.
     key_added
-        Key added to connectivity matrix in obsp.
+        Key added to connectivity and distance matrices in obsp.
     n_rings
         Number of rings of neighbors for Visium data
     n_neigh
@@ -39,8 +38,6 @@ def spatial_connectivity(
         Radius of neighbors for non-Visium data
     coord_type
         Type of coordinate system (Visium vs. general coordinates)
-    weighted_graph
-        Output weighted connectivities
     transform
         Type of adjacency matrix transform: either `spectral` or `cosine`
 
@@ -53,31 +50,28 @@ def spatial_connectivity(
     if coord_type == "visium":
         if n_rings > 1:
             Adj = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True)
-            # get up to n_rings order connections
-            if weighted_graph:
-                Res = Adj
-                Walk = Adj
-                for i in range(n_rings - 1):
-                    Walk = Walk @ Adj
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore", sparse.SparseEfficiencyWarning)
-                        Walk[Res.nonzero()] = 0.0
-                    Walk.eliminate_zeros()
-                    Walk.data[:] = float(i + 2)
-                    Res = Res + Walk
-                Adj = Res
-                Adj.setdiag(0.0)
-                Adj.eliminate_zeros()
-            else:
-                Adj += Adj ** n_rings
-                Adj.setdiag(0.0)
-                Adj.eliminate_zeros()
-                Adj.data[:] = 1.0
+            Res = Adj
+            Walk = Adj
+            for i in range(n_rings - 1):
+                Walk = Walk @ Adj
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", SparseEfficiencyWarning)
+                    Walk[Res.nonzero()] = 0.0
+                Walk.eliminate_zeros()
+                Walk.data[:] = float(i + 2)
+                Res = Res + Walk
+            Adj = Res
+            Adj.setdiag(0.0)
+            Adj.eliminate_zeros()
+
+            Dst = Adj.copy()
+            Adj.data[:] = 1.0
         else:
             Adj = _build_connectivity(coords, 6, neigh_correct=True)
+            Dst = None
 
     else:
-        Adj = _build_connectivity(coords, n_neigh, radius)
+        Adj, Dst = _build_connectivity(coords, n_neigh, radius, return_distance=True)
 
     # check transform
     if transform == "spectral":
@@ -88,7 +82,7 @@ def spatial_connectivity(
     if key_added is None:
         key_added = "spatial_neighbors"
         conns_key = "spatial_connectivities"
-        dists_key = "distances"
+        dists_key = "spatial_distances"
     else:
         conns_key = key_added + "_connectivities"
         dists_key = key_added + "_distances"
@@ -105,8 +99,8 @@ def spatial_connectivity(
     neighbors_dict["params"]["radius"] = radius
 
     adata.obsp[conns_key] = Adj
-    # distances not yet added
-    # adata.obsp[dists_key] = None
+    if Dst is not None:
+        adata.obsp[dists_key] = Dst
 
 
 def _build_connectivity(
@@ -115,17 +109,22 @@ def _build_connectivity(
     radius: Optional[float] = None,
     neigh_correct: bool = False,
     set_diag: bool = False,
+    return_distance: bool = False,
 ):
     """Build connectivity matrix from spatial coordinates."""
     from sklearn.neighbors import NearestNeighbors
 
     N = coords.shape[0]
 
+    dists_m = None
+    conns_m = None
+
     tree = NearestNeighbors(n_neighbors=n_neigh or 6, radius=radius or 1, metric="euclidean")
     tree.fit(coords)
 
     if radius is not None:
         results = tree.radius_neighbors()
+        dists = np.concatenate(results[0])
         row_indices = np.concatenate(results[1])
         lengths = [len(x) for x in results[1]]
         col_indices = np.repeat(np.arange(N), lengths)
@@ -137,12 +136,18 @@ def _build_connectivity(
             dist_cutoff = np.median(dists) * 1.3  # There's a small amount of sway
             mask = dists < dist_cutoff
             row_indices, col_indices = row_indices[mask], col_indices[mask]
+            dists = dists[mask]
+
+    if return_distance:
+        dists_m = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
 
     if set_diag:
         row_indices = np.concatenate((row_indices, np.arange(N)))
         col_indices = np.concatenate((col_indices, np.arange(N)))
 
-    return sparse.csr_matrix((np.ones(len(row_indices)), (row_indices, col_indices)), shape=(N, N))
+    conns_m = csr_matrix((np.ones(len(row_indices)), (row_indices, col_indices)), shape=(N, N))
+
+    return (conns_m, dists_m) if return_distance else conns_m
 
 
 def _transform_a_spectral(a):
