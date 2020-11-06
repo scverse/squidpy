@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import List, Optional
 
 from anndata import AnnData
 
@@ -14,7 +14,7 @@ from spatial_tools.image.object import ImageContainer
 def calculate_image_features(
     adata: AnnData,
     img: ImageContainer,
-    features: Optional[Literal[..., "summary"]] = "summary",
+    features: Optional[List[str]] = "summary",
     key: Optional[str] = "img_features",
     copy: Optional[bool] = False,
     **kwargs,
