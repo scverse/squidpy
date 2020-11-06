@@ -1,4 +1,3 @@
-# flake8: noqa
 from typing import List, Tuple, Union, Optional
 
 from anndata import AnnData
@@ -8,7 +7,7 @@ import xarray as xr
 
 from imageio import imread
 
-from spatial_tools.image._utils import _round_odd, _round_even
+from spatial_tools.image._utils import _round_even
 from ._utils import _num_pages
 
 
@@ -279,7 +278,7 @@ class ImageContainer:
         img_id: Optional[Union[str, List[str]]] = None,
         **kwargs,
     ) -> Tuple[List[xr.DataArray], np.ndarray, np.ndarray]:
-        """\
+        """
         Decompose image into equally sized crops.
 
         Params

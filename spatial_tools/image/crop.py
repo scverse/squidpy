@@ -1,4 +1,3 @@
-# flake8: noqa
 from typing import List, Tuple
 
 import numpy as np
@@ -16,7 +15,7 @@ def uncrop_img(
     shape: Tuple[int, int],
     channel_id: str = "channels",
 ) -> xr.DataArray:
-    """\
+    """
     Re-assemble image from crops and their positions.
 
     Fills remaining positions with zeros.
@@ -64,7 +63,7 @@ def crop_img(
     channel_id: str = "channels",
     **kwargs,
 ) -> xr.DataArray:
-    """\
+    """
     Extract a crop right and down from `x` and `y`.
 
     Params
