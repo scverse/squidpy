@@ -29,6 +29,12 @@ def calculate_image_features(
     img: ImageContainer
         High resolution image from which feature should be calculated
     features: Optional[List[str]]
+    	Features to be calculated. Available features:
+	(for detailed descriptions see docstrings of each feature's function)
+	"hog": histogram of oriented gradients (`get_hog_features()`)
+	"texture": summary stats based on repeating patterns (`get_grey_texture_feature()`)
+	"summary": summary stats of each color channel (`get_summary_stats()`)
+	"color_hist": counts in bins of each color channel's histogram (`get_color_hist()`)
         Features to be calculated. Available features:
         ["hog", "texture", "summary", "color_hist"]
     key: Optional[str]
