@@ -20,7 +20,6 @@ def spatial_connectivity(
     weighted_graph: bool = False,
     transform: str = None,
     key_added: str = None,
-):
 ) -> None:
     """
     Create a graph from spatial coordinates.

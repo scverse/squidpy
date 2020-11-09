@@ -1,17 +1,15 @@
 """Plotting for graph functions."""
 
 from typing import Union
-
 from anndata import AnnData
-
 import numpy as np
 from pandas import DataFrame
-
 import seaborn as sns
 import matplotlib.pyplot as plt
+import scanpy as sc
 
 
-def plot_cluster_centrality_scores(adata: AnnData, centrality_scores_key: str = "cluster_centrality_scores"):
+def centrality_scores(adata: AnnData, centrality_scores_key: str = "centrality_scores", selected_score: Union[str, None] = None):
     """
     Plot centrality scores as seaborn stripplot.
 
@@ -21,6 +19,8 @@ def plot_cluster_centrality_scores(adata: AnnData, centrality_scores_key: str = 
         The AnnData object.
     centrality_scores_key
         Key to centrality_scores_key in uns.
+    selected_score
+        Whether to plot all scores or only just a selected one.
 
     Returns
     -------
@@ -31,38 +31,57 @@ def plot_cluster_centrality_scores(adata: AnnData, centrality_scores_key: str = 
     else:
         raise ValueError(
             "centrality_scores_key %s not recognized. Choose a different key or run first "
-            "nhood.cluster_centrality_scores(adata) on your AnnData object." % centrality_scores_key
+            "nhood.centrality_scores(adata) on your AnnData object." % centrality_scores_key
         )
+    var = DataFrame(df.columns, columns=[centrality_scores_key])
+    var['index'] = var[centrality_scores_key]
+    var = var.set_index('index')
 
-    df = df.rename(
-        columns={
-            "degree centrality": "degree\ncentrality",
-            "clustering coefficient": "clustering\ncoefficient",
-            "closeness centrality": "closeness\ncentrality",
-            "betweenness centrality": "betweenness\ncentrality",
-        }
+    obs = DataFrame(df['cluster']).rename(columns={'cluster': 'louvain'})
+
+    intermediate_adata = AnnData(
+        X=np.array(df),
+        obs=obs,
+        var=var
     )
-    values = [
-        "degree\ncentrality",
-        "clustering\ncoefficient",
-        "closeness\ncentrality",
-        "betweenness\ncentrality",
-    ]
-    for i, value in zip([1, 2, 3, 4], values):
-        plt.subplot(1, 4, i)
-        ax = sns.stripplot(data=df, y="cluster", x=value, size=10, orient="h", linewidth=1)
-        ax.spines["right"].set_visible(False)
-        ax.spines["top"].set_visible(False)
-        ax.spines["bottom"].set_visible(False)
-        ax.spines["left"].set_visible(False)
-        ax.yaxis.grid(True)
-        ax.tick_params(bottom=False, left=False, right=False, top=False)
-        if i > 1:
-            plt.ylabel(None)
-            ax.tick_params(labelleft=False)
+
+    if selected_score is not None:
+        sc.pl.scatter(
+            intermediate_adata,
+            x=selected_score,
+            y='louvain',
+            color='louvain',
+            size=1000,
+            title=''
+        )
+    else:
+        plt.ioff()
+        ncols = len(intermediate_adata.var.index) - 1
+        fig, ax = plt.subplots(
+            nrows=1, ncols=ncols,
+            figsize=(4 * ncols, 6)
+        )
+        for i in range(ncols):
+            x = list(intermediate_adata.var.index)[i + 1]
+            sc.set_figure_params(figsize=[4, 6])
+            scatter = sc.pl.scatter(
+                intermediate_adata,
+                x=str(x),
+                y='louvain',
+                size=1000,
+                frameon=True,
+                ax=ax[i],
+                show=False
+            )
+            if i > 0:
+                ax[i].set_ylabel('')
+
+        plt.show()
+        plt.close(fig)
+        plt.ion()
 
 
-def plot_cluster_interactions(adata: AnnData, cluster_interactions_key: str = "cluster_interactions"):
+def interaction_matrix(adata: AnnData, cluster_interactions_key: str = "interaction_matrix"):
     """
     Plot cluster interactions as matshow plot.
 
@@ -78,20 +97,25 @@ def plot_cluster_interactions(adata: AnnData, cluster_interactions_key: str = "c
     None
     """
     if cluster_interactions_key in adata.uns_keys():
-        interaction_matrix = adata.uns[cluster_interactions_key]
+        int_matrix = adata.uns[cluster_interactions_key]
     else:
         raise ValueError(
             "cluster_interactions_key %s not recognized. Choose a different key or run first "
             "nhood.cluster_interactions(adata) on your AnnData object." % cluster_interactions_key
         )
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    cax = ax.matshow(interaction_matrix[0])
-    fig.colorbar(cax)
+    array = int_matrix[0]
+    clusters = DataFrame(int_matrix[1], columns=['cluster'])
+    clusters["louvain"] = clusters["cluster"].astype('category')
+    clusters = clusters.set_index('cluster')
 
-    plt.xticks(range(len(interaction_matrix[1])), interaction_matrix[1], size="small")
-    plt.yticks(range(len(interaction_matrix[1])), interaction_matrix[1], size="small")
+    intermediate_adata = AnnData(
+        X=array,
+        obs=clusters,
+        var=clusters
+    )
+
+    sc.pl.heatmap(intermediate_adata, intermediate_adata.var_names, 'louvain')
 
 
 def plot_ripley_k(

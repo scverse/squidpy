@@ -248,11 +248,11 @@ def permtest_leiden_pairs(
     adata.uns[key_added] = df
 
 
-def cluster_centrality_scores(
+def centrality_scores(
     adata: AnnData,
     clusters_key: str,
     connectivity_key: Union[str, None] = None,
-    key_added: str = "cluster_centrality_scores",
+    key_added: str = "centrality_scores",
 ):
     """
     Compute centrality scores per cluster or cell type in AnnData object.
@@ -336,12 +336,12 @@ def cluster_centrality_scores(
     adata.uns[key_added] = df
 
 
-def cluster_interactions(
+def interaction_matrix(
     adata: AnnData,
     clusters_key: str,
     connectivity_key: Union[str, None] = None,
     normalized: bool = False,
-    key_added: str = "cluster_interactions",
+    key_added: str = "interaction_matrix",
 ):
     """
     Compute interaction matrix for clusters. Results are stored in .uns in the AnnData object.
