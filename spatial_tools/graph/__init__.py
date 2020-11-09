@@ -1,8 +1,8 @@
 from .build import spatial_connectivity
 from .nhood import (
-    cluster_interactions,
+    interaction_matrix,
     permtest_leiden_pairs,
-    cluster_centrality_scores,
+    centrality_scores,
 )
 from .ppatterns import ripley_k
 from .clustering import (
