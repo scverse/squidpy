@@ -1,6 +1,6 @@
-import os
+from typing import List, Optional
 
-from tqdm import tqdm
+from anndata import AnnData
 
 import numpy as np
 import pandas as pd
@@ -11,24 +11,46 @@ from skimage.feature import greycoprops, greycomatrix
 from spatial_tools.image.object import ImageContainer
 
 
-def get_image_features(adata, dataset_folder, dataset_name, img_name, features=("summary",), **_kwargs):
+def calculate_image_features(
+    adata: AnnData,
+    img: ImageContainer,
+    features: Optional[List[str]] = "summary",
+    key: Optional[str] = "img_features",
+    copy: Optional[bool] = False,
+    **kwargs,
+):
     """
     Get image features for spot ids from image file.
 
     Params
     ------
-    adata: scanpy adata object
-        rgb image in uint8 format.
-    dataset_folder: str
-        path to where tif file is stored
-    dataset_name: str
-        name of data set
-    features: list of strings
-        features names to be calculated
+    adata: AnnData
+        Spatial scanpy adata object
+    img: ImageContainer
+        High resolution image from which feature should be calculated
+    features: Optional[List[str]]
+    	Features to be calculated. Available features:
+	(for detailed descriptions see docstrings of each feature's function)
+	"hog": histogram of oriented gradients (`get_hog_features()`)
+	"texture": summary stats based on repeating patterns (`get_grey_texture_feature()`)
+	"summary": summary stats of each color channel (`get_summary_stats()`)
+	"color_hist": counts in bins of each color channel's histogram (`get_color_hist()`)
+        Features to be calculated. Available features:
+        ["hog", "texture", "summary", "color_hist"]
+    key: Optional[str]
+        Key to use for saving calculated table in adata.obsm.
+        Default is "img_features"
+    copy: Optional[bool]
+        If True, return pd.DataFrame with calculated features.
+        Default is False
+    kwargs: keyword arguments passed to ImageContainer.crop_spot_generator function.
+        Contain dataset_name, sizef, scale, mask_circle, cval, dtype
+
 
     Returns
     -------
-    dict of feature values
+    None if copy is False
+    pd.DataFrame if copy is True
     """
     available_features = ["hog", "texture", "summary", "color_hist"]
 
@@ -38,32 +60,26 @@ def get_image_features(adata, dataset_folder, dataset_name, img_name, features=(
         ), f"feature: {feature} not a valid feature, select on of {available_features} "
 
     features_list = []
+    obs_ids = []
+    for obs_id, crop in img.crop_spot_generator(adata, **kwargs):
+        # get np.array from crop and restructure to dimensions: y,x,channels
+        crop = crop.transpose("y", "x", ...).data
 
-    ic = ImageContainer(os.path.join(dataset_folder, img_name))
-
-    xcoord = adata.obsm["spatial"][:, 0]
-    ycoord = adata.obsm["spatial"][:, 1]
-    # spot_diameter = adata.uns["spatial"][dataset_name]["scalefactors"]["spot_diameter_fullres"]
-
-    cell_names = adata.obs.index.tolist()
-
-    for spot_id, _cell_name in tqdm(enumerate(cell_names)):
-        crop_ = ic.crop(xcoord[spot_id], ycoord[spot_id])
-
-        # set crop to array
-        crop = np.array(crop_)
-
-        # make image channel last
-        if crop.shape[0] < max(crop.shape):
-            crop = crop.reshape(crop.shape[1], crop.shape[2], crop.shape[0])
-
+        # get features for this crop
         features_dict = get_features_statistics(crop, features=features)
         features_list.append(features_dict)
 
+        obs_ids.append(obs_id)
+
     features_log = pd.DataFrame(features_list)
-    features_log["cell_name"] = cell_names
-    features_log.set_index(["cell_name"], inplace=True)
-    return features_log
+    features_log["obs_id"] = obs_ids
+    features_log.set_index(["obs_id"], inplace=True)
+
+    # modify adata in place or return features_log
+    if copy:
+        return features_log
+    else:
+        adata.obsm[key] = features_log
 
 
 def get_features_statistics(im, features):
