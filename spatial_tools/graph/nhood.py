@@ -67,12 +67,15 @@ def cartesian(arrays, out=None):
 def _count_observations_by_pairs(conn, leiden, positions, count_option='nodes'):
     obs = []
     masks = []
+    
+    leiden = leiden.astype(int)
+    
     leiden_labels_unique = set(map(int, set(leiden)))
     # assert min(leiden_labels_unique) == 1
     
     positions_by_leiden = {li: positions[leiden == li] for li in leiden_labels_unique}
     
-    if count_option == 'edges':        
+    if count_option == 'edges':       
         # for cat in pd.Series(leiden).cat.categories:
         for cat in set(leiden):
             masks.append((leiden == cat).tolist())
@@ -82,11 +85,18 @@ def _count_observations_by_pairs(conn, leiden, positions, count_option='nodes'):
         N = len(set(leiden))
         cluster_counts = np.zeros((N, N), dtype=int)
         for i, mask in enumerate(masks):
-            cluster_counts[i] = [np.ravel(conn[mask].sum(0))[j_mask].sum() for j_mask in masks]
+            # initialize        
+            cluster_counts[i] = [0 for j_mask in masks]
+            for j, j_mask in enumerate(masks):
+                # subset for i and j to avoid duplicate edges counts
+                m = conn[mask,:]
+                m = m[:,j_mask]
+                cluster_counts[i][j] = m.sum()
         
         for i, j in combinations(leiden_labels_unique, r=2):
-            n_edges = cluster_counts[i - 1][j - 1]
+            n_edges = cluster_counts[i][j]
             obs.append([i, j, n_edges, 'edges'])
+            
     elif count_option == 'nodes':
         conn_array = conn.toarray() if (type(conn) != np.ndarray) else conn
         for i, j in combinations(set(leiden), r=2):
@@ -152,7 +162,7 @@ def permtest_leiden_pairs_complex(adata, rings_start=1, rings_end=6, n_perm=100,
         print('# degree', n_rings)
         print('calculating connectivity graph with degree %i...' % n_rings)
         spatial_connectivity(adata, n_rings=n_rings)
-        for count_option in ['edges', 'nodes', 'nodes-dev']:
+        for count_option in ['edges', 'nodes']:
             print('permutations with mode %s...' % count_option)
             permtest_leiden_pairs(adata, n_permutations=n_perm,
                                           print_log_each=25, log=False,
