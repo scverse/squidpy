@@ -1,16 +1,11 @@
-import os
+from anndata import AnnData
 
-import pytest
-
-import anndata as ad
-
-import numpy as np
-
-from spatial_tools.image._utils import _round_odd, _round_even
+from spatial_tools.image._utils import _round_even
 from spatial_tools.image.object import ImageContainer
 
 
-def test_crop_spot_generator():
+# adata and cont are now in conftest.py
+def test_crop_spot_generator(adata: AnnData, cont: ImageContainer):
     """
     for simulated adata + image, generate crops.
     Make sure that the correct amount of crops are generated
@@ -18,10 +13,6 @@ def test_crop_spot_generator():
 
     TODO
     """
-    # load test data
-    adata = ad.read(os.path.join(os.path.dirname(__file__), "_data/test_data.h5ad"))
-    cont = ImageContainer(os.path.join(os.path.dirname(__file__), "_data/test_img.jpg"))
-
     i = 0
     expected_size = _round_even(adata.uns["spatial"]["V1_Adult_Mouse_Brain"]["scalefactors"]["spot_diameter_fullres"])
     for obs_id, crop in cont.crop_spot_generator(adata):

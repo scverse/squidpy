@@ -5,7 +5,7 @@ from typing import Union, Optional
 from anndata import AnnData
 
 import numpy as np
-from scipy.sparse import csr_matrix, SparseEfficiencyWarning
+from scipy.sparse import SparseEfficiencyWarning, csr_matrix
 from sklearn.metrics.pairwise import cosine_similarity
 
 
