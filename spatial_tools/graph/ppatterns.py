@@ -1,12 +1,18 @@
 """Functions for point patterns spatial statistics."""
-# flake8: noqa
-
 from typing import Union, Optional
 
 from anndata import AnnData
 
 import numpy as np
 import pandas as pd
+from scipy.sparse import issparse
+
+try:
+    import esda
+    import libpysal
+except ImportError:
+    esda = None
+    libpysal = None
 
 
 def ripley_k(
@@ -16,7 +22,6 @@ def ripley_k(
     support: int = 100,
     copy: Optional[bool] = False,
 ) -> Union[AnnData, pd.DataFrame]:
-
     """
     Calculate Ripley's K statistics for each cluster in the tissue coordinates.
 
@@ -91,9 +96,9 @@ def moran(
     corr_method: Optional[str] = "fdr_bh",
     copy: Optional[bool] = False,
 ) -> Union[AnnData, list]:
-
     """
     Calculate Moran’s I Global Autocorrelation Statistic.
+
     Wraps esda.moran.Moran https://pysal.org/esda/generated/esda.Moran.html#esda.Moran
 
     Parameters
@@ -122,14 +127,9 @@ def moran(
         if copy = False
     df: pandas.DataFrame
         return dataframe if copy = True
-    """
-
-    try:
-        # from pointpats import ripley, hull
-        import esda
-        import libpysal
-    except ImportError:
-        raise ImportError("\nplease install esda: \n\n" "\tpip install esda\n")
+    """  # noqa: E501
+    if esda is None or libpysal is None:
+        raise ImportError("Please install esda and libpysal: \n\n" "\tpip install esda and libpysal\n")
 
     # init weights
     w = _set_weight_class(adata)
@@ -139,8 +139,10 @@ def moran(
     if not isinstance(gene_names, list):
         gene_names = adata.var_names
 
+    sparse = issparse(adata.X)
+
     for v in gene_names:
-        y = adata[:, v].X.todense()
+        y = adata[:, v].X.todense() if sparse else adata[:, v].X
         mi = _compute_moran(y, w, transformation, permutations)
         lst_mi.append(mi)
 
@@ -170,9 +172,12 @@ def _compute_moran(y, w, transformation, permutations):
 def _set_weight_class(adata: AnnData):
 
     try:
-        a = adata.obsp["spatial_connectivity"].tolil()
-    except ValueError:
-        raise VAlueError("\n`adata.obsp['spatial_connectivity']` is empty, run `spatial_connectivity` first")
+        a = adata.obsp["spatial_connectivities"].tolil()
+    except KeyError:
+        raise KeyError(
+            "\n`adata.obsp['spatial_connectivities']` is empty, run "
+            "`spatial_tools.graph.spatial_connectivity()` first"
+        )
 
     neighbors = dict(enumerate(a.rows))
     weights = dict(enumerate(a.data))
