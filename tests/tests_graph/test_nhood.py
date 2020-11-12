@@ -1,4 +1,5 @@
 import scanpy
+from anndata import AnnData
 
 import numpy as np
 
@@ -13,24 +14,16 @@ from spatial_tools.graph.nhood import (
 )
 
 
-def get_sample_data():
-    adata = scanpy.read("tests/_data/test_data.h5ad")
-    scanpy.pp.pca(adata)
-    scanpy.pp.neighbors(adata)
-    scanpy.tl.leiden(adata, key_added="leiden")
-    spatial_connectivity(adata)
-    return adata
-
-
-def test_cluster_centrality_scores():
+# nhood_data is now in conftest.py
+def test_cluster_centrality_scores(nhood_data: AnnData):
     """
     check that scores fit the expected shape + content
     """
-    adata = get_sample_data()
+    adata = nhood_data
     cluster_centrality_scores(
         adata=adata,
         clusters_key="leiden",
-        connectivity_key="spatial_connectivity",
+        connectivity_key="spatial_connectivities",
         key_added="cluster_centrality_scores",
     )
     # assert saving in .uns
@@ -44,15 +37,15 @@ def test_cluster_centrality_scores():
     assert adata.uns["cluster_centrality_scores"]["betweenness centrality"].dtype == np.dtype("float64")
 
 
-def test_cluster_interactions():
+def test_cluster_interactions(nhood_data: AnnData):
     """
     check that interaction matrix fits the expected shape
     """
-    adata = get_sample_data()
+    adata = nhood_data
     cluster_interactions(
         adata=adata,
         clusters_key="leiden",
-        connectivity_key="spatial_connectivity",
+        connectivity_key="spatial_connectivities",
         normalized=True,
         key_added="cluster_interactions",
     )
@@ -71,10 +64,9 @@ def test_nhood_permtest_toydata():
     i) Verify that the permutation works in a simple connectivity graph
     ii) expected values n_nodes = 5 and n_edges = 6
     """
-    import numpy as np
-
     positions = np.arange(5)
     leiden = np.array([1, 1, 2, 2, 2])
+    # TODO: using leiden = leiden - 1 "fixes" it
     conn = np.array(
         [
             [0, 0, 1, 1, 1],

@@ -1,5 +1,3 @@
-import os
-
 from anndata import AnnData
 
 import numpy as np
@@ -13,16 +11,10 @@ from spatial_tools.image.tools import (
 from spatial_tools.image.object import ImageContainer
 
 
-def test_calculate_image_features(adata: AnnData):
+# cont is now in conftest.py
+def test_calculate_image_features(adata: AnnData, cont: ImageContainer):
     features = ["hog", "texture", "summary", "color_hist"]
-
-    dataset_folder = os.path.join(os.path.dirname(__file__), "_data")
-    img_name = "test_img.jpg"
-
-    # read in test data
-    img = ImageContainer(os.path.join(dataset_folder, img_name))
-
-    _ = calculate_image_features(adata, img, features=features)
+    _ = calculate_image_features(adata, cont, features=features)
 
 
 def test_get_features_statistics():

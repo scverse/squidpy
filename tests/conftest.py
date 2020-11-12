@@ -8,6 +8,11 @@ import pytest
 import scanpy as sc
 from anndata import AnnData
 
+import numpy as np
+
+import spatial_tools as se
+from spatial_tools.image.object import ImageContainer
+
 _adata = sc.read("tests/_data/test_data.h5ad")
 _adata.raw = _adata.copy()
 
@@ -15,6 +20,32 @@ _adata.raw = _adata.copy()
 @pytest.fixture(scope="function")
 def adata() -> AnnData:
     return _adata.copy()
+
+
+@pytest.fixture(scope="function")
+def nhood_data(adata: AnnData) -> AnnData:
+    sc.pp.pca(adata)
+    sc.pp.neighbors(adata)
+    sc.tl.leiden(adata, key_added="leiden")
+    se.graph.spatial_connectivity(adata)
+
+    return adata
+
+
+@pytest.fixture(scope="function")
+def dummy_adata() -> AnnData:
+    r = np.random.RandomState(100)
+    adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
+
+    adata.obsm["spatial"] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
+    se.graph.spatial_connectivity(adata, obsm="spatial", n_rings=2)
+
+    return adata
+
+
+@pytest.fixture(scope="function")
+def cont() -> ImageContainer:
+    return ImageContainer("tests/_data/test_img.jpg")
 
 
 @pytest.fixture

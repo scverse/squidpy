@@ -1,40 +1,31 @@
-import anndata
+from anndata import AnnData
 
-# flake8: noqa
 import numpy as np
 
 from spatial_tools.graph import moran, ripley_k
 
 
-def get_dummy_data():
-    r = np.random.RandomState(100)
-    adata = anndata.AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
-
-    adata.obsm["spatial"] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
-    return adata
-
-
-def test_ripley_k():
+# dummy_adata is now in conftest.py
+def test_ripley_k(dummy_adata: AnnData):
     """
     check ripley score and shape
     """
-    adata = get_dummy_data()
-    ripley_k(adata, cluster_key="cluster")
+    ripley_k(dummy_adata, cluster_key="cluster")
 
     # assert ripley in adata.uns
-    assert "ripley_k_cluster" in adata.uns.keys()
+    assert "ripley_k_cluster" in dummy_adata.uns.keys()
     # assert unique clusters in both
-    assert np.array_equal(adata.obs["cluster"].unique(), adata.uns["ripley_k_cluster"]["cluster"].unique())
+    assert np.array_equal(dummy_adata.obs["cluster"].unique(), dummy_adata.uns["ripley_k_cluster"]["cluster"].unique())
 
     # TO-DO assess length of distances
 
 
-def test_moran():
+def test_moran(dummy_adata: AnnData):
     """
     check ripley score and shape
     """
-    adata = get_dummy_data()
-    moran(adata)
+    # spatial_connectivity is missing
+    moran(dummy_adata)
 
     # assert fdr correction in adata.uns
-    assert "pval_sim_fdr_bh" in adata.var.columns
+    assert "pval_sim_fdr_bh" in dummy_adata.var.columns
