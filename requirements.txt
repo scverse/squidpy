@@ -1,8 +1,12 @@
 anndata>=0.7.4
 dask
+data-science-types  # array typehints
+docrep>=0.3.1
+ipywidgets>=7.5.1  # progress bar
 leidenalg
 netcdf4
 rasterio
 scanpy
 scikit-image>=0.17.1
+tqdm>=4.50.2  # progress bar
 xarray

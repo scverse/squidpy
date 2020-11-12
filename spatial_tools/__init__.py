@@ -6,4 +6,6 @@ __email__ = ", ".join(
     ]
 )
 
+import spatial_tools.graph as graph
+import spatial_tools.image as image
 from .utils import read_seqfish

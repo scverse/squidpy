@@ -3,6 +3,7 @@ import warnings
 import pytest
 
 import numpy as np
+import xarray as xr
 
 import rasterio.errors
 
@@ -68,7 +69,10 @@ def test_add_img(shape1, shape2):
 
 
 def test_crop(tmpdir):
-    """Crop different img_ids and check result."""
+    """Check crop arguments:
+    padding, masking, changing dtype,
+    check that returned crops have correct shape.
+    """
     # ignore NotGeoreferencedWarning here
     warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
     # create ImageContainer
@@ -93,6 +97,7 @@ def test_crop(tmpdir):
     # check that values outside of img are padded with 5
     assert (crop[:, 0, 0] == 5).all()
     assert (crop[:, -1, -1] == 5).all()
+    assert type(crop) == xr.DataArray
 
     # crop small crop
     crop = cont.crop(
@@ -106,12 +111,30 @@ def test_crop(tmpdir):
     assert crop.shape == (10, 1, 1)
     # check that has cropped correct image
     assert (crop[:3, 0, 0] == [10, 11, 12]).all()
+    assert type(crop) == xr.DataArray
+
+    # crop with mask_circle
+    crop = cont.crop(
+        x=50,
+        y=20,
+        xs=10,
+        ys=10,
+        cval=5,
+        img_id="image_0",
+        mask_circle=True,
+    )
+    assert (crop[:, 1, 0] == 5).all()
+    assert (crop[:, 2, 2] == 0).all()
+    assert (crop[:, 7, 7] == 0).all()
+    assert (crop[:, 8, 9] == 5).all()
+    assert type(crop) == xr.DataArray
 
     # crop casting to dtype
     img_orig = np.zeros((10, xdim, ydim), dtype=np.uint16)
     cont = ImageContainer(img_orig, img_id="image_0")
     crop = cont.crop(x=50, y=20, xs=300, ys=300, cval=5, img_id="image_0", dtype="uint8")
-    assert crop.dtype == np.uint8
+    assert crop.data.dtype == np.uint8
+    assert type(crop) == xr.DataArray
 
 
 def test_uncrop_img(tmpdir):
