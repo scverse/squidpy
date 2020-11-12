@@ -1,8 +1,6 @@
 import os
 
-import pytest
-
-from scanpy import read_h5ad
+from anndata import AnnData
 
 import numpy as np
 
@@ -15,18 +13,16 @@ from spatial_tools.image.tools import (
 from spatial_tools.image.object import ImageContainer
 
 
-def test_calculate_image_features():
+def test_calculate_image_features(adata: AnnData):
     features = ["hog", "texture", "summary", "color_hist"]
 
     dataset_folder = os.path.join(os.path.dirname(__file__), "_data")
-    dataset_name = "V1_Adult_Mouse_Brain"
     img_name = "test_img.jpg"
 
     # read in test data
-    adata = read_h5ad(os.path.join(dataset_folder, "test_data.h5ad"))
     img = ImageContainer(os.path.join(dataset_folder, img_name))
 
-    features = calculate_image_features(adata, img, features=features)
+    _ = calculate_image_features(adata, img, features=features)
 
 
 def test_get_features_statistics():

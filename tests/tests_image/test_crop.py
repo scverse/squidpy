@@ -1,12 +1,8 @@
 import os
 
-import pytest
-
 import anndata as ad
 
-import numpy as np
-
-from spatial_tools.image._utils import _round_odd, _round_even
+from spatial_tools.image._utils import _round_even
 from spatial_tools.image.object import ImageContainer
 
 
