@@ -1,30 +1,20 @@
-import os
-
-import pytest
-
-from scanpy import read_h5ad
+from anndata import AnnData
 
 import numpy as np
 
 from spatial_tools.image.tools import (
     get_hog_features,
     get_summary_stats,
-    get_image_features,
     get_features_statistics,
+    calculate_image_features,
 )
+from spatial_tools.image.object import ImageContainer
 
 
-def test_get_image_features():
+# cont is now in conftest.py
+def test_calculate_image_features(adata: AnnData, cont: ImageContainer):
     features = ["hog", "texture", "summary", "color_hist"]
-
-    dataset_folder = os.path.join(os.path.dirname(__file__), "_data")
-    dataset_name = "V1_Adult_Mouse_Brain"
-    img_name = "test_img.jpg"
-
-    # read in test data
-    adata = read_h5ad(os.path.join(dataset_folder, "test_data.h5ad"))
-
-    features_pd = get_image_features(adata, dataset_folder, dataset_name, img_name, features=features)
+    _ = calculate_image_features(adata, cont, features=features)
 
 
 def test_get_features_statistics():
