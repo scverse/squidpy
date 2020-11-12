@@ -6,6 +6,7 @@ from .nhood import (
     permtest_leiden_pairs,
     cluster_centrality_scores,
 )
+from .perm_test import perm_test
 from .ppatterns import moran, ripley_k
 from .clustering import (
     plot_louvain_on_umap,

@@ -1,5 +1,3 @@
-import pytest
-
 import scanpy
 
 import numpy as np
@@ -115,5 +113,5 @@ def test_nhood_permtest_realdata():
         print(result.head())
         print(result.shape)
     except Exception:
-        assert False
+        raise
     assert True

@@ -8,7 +8,6 @@ import xarray as xr
 import rasterio.errors
 
 from spatial_tools.image.crop import uncrop_img
-from spatial_tools.image._utils import _round_odd, _round_even
 from spatial_tools.image.object import ImageContainer
 
 
