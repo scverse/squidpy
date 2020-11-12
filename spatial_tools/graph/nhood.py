@@ -67,55 +67,55 @@ def cartesian(arrays, out=None):
     return out
 
 
-def _count_observations_by_pairs(conn, leiden, positions, count_option="nodes"):
+def _count_observations_by_pairs(conn, leiden, positions, count_option='nodes'):
     obs = []
     masks = []
+    
+    leiden = leiden.astype(int)
+    
     leiden_labels_unique = set(map(int, set(leiden)))
     # assert min(leiden_labels_unique) == 1
-
-    if count_option == "edges":
+    
+    positions_by_leiden = {li: positions[leiden == li] for li in leiden_labels_unique}
+    
+    if count_option == 'edges':       
         # for cat in pd.Series(leiden).cat.categories:
         for cat in set(leiden):
             masks.append((leiden == cat).tolist())
         # _, masks = sc._utils.select_groups(adata, list(adata.obs['leiden'].cat.categories), 'leiden')
-
+        
         # N = len(pd.Series(leiden).cat.categories)
         N = len(set(leiden))
         cluster_counts = np.zeros((N, N), dtype=int)
         for i, mask in enumerate(masks):
-            cluster_counts[i] = [np.ravel(conn[mask].sum(0))[j_mask].sum() for j_mask in masks]
-
+            # initialize        
+            cluster_counts[i] = [0 for j_mask in masks]
+            for j, j_mask in enumerate(masks):
+                # subset for i and j to avoid duplicate edges counts
+                m = conn[mask,:]
+                m = m[:,j_mask]
+                cluster_counts[i][j] = m.sum()
+        
         for i, j in combinations(leiden_labels_unique, r=2):
-            n_edges = cluster_counts[i - 1][j - 1]
-            obs.append([i, j, n_edges, "edges"])
-    elif count_option == "nodes":
+            n_edges = cluster_counts[i][j]
+            obs.append([i, j, n_edges, 'edges'])
+            
+    elif count_option == 'nodes':
         conn_array = conn.toarray() if (type(conn) != np.ndarray) else conn
         for i, j in combinations(set(leiden), r=2):
             x = positions[leiden == i]
             y = positions[leiden == j]
-
+            
             xy = cartesian([x, y])
             x, y = xy[:, 0].flatten(), xy[:, 1].flatten()
 
             edges = conn_array[x, y]
             x_nodes = x[edges == 1]
             y_nodes = y[edges == 1]
+            n_nodes_x, n_nodes_y = x_nodes.shape[0], y_nodes.shape[0]
             nx_uniq, ny_uniq = np.unique(x_nodes).shape[0], np.unique(y_nodes).shape[0]
             obs.append([int(i), int(j), nx_uniq + ny_uniq, count_option])
-    elif count_option == "nodes-dev":
-        for cat in np.unique(leiden):
-            masks.append((leiden == cat).tolist())
-        # _, masks = sc._utils.select_groups(adata, list(adata.obs['leiden'].cat.categories), 'leiden')
 
-        N = len(np.unique(leiden))
-        cluster_counts = np.zeros((N, N), dtype=int)
-        for i, mask in enumerate(masks):
-            cluster_counts[i] = [(np.ravel(conn[mask].sum(0)) > 0).astype(int)[j_mask].sum() for j_mask in masks]
-
-        for i, j in combinations(leiden_labels_unique, r=2):
-            n_nodes = cluster_counts[i - 1][j - 1] + cluster_counts[j - 1][i - 1]
-            # print([i + 1, j + 1, n_edges])
-            obs.append([i, j, n_nodes, count_option])
 
     obs = pd.DataFrame(obs, columns=["leiden.i", "leiden.j", "n.obs", "mode"])
     obs["k"] = obs["leiden.i"].astype(str) + ":" + obs["leiden.j"].astype(str)
@@ -155,7 +155,7 @@ def permtest_leiden_pairs_complex(adata, rings_start=1, rings_end=6, n_perm=100,
         print("# degree", n_rings)
         print("calculating connectivity graph with degree %i..." % n_rings)
         spatial_connectivity(adata, n_rings=n_rings)
-        for count_option in ["edges", "nodes", "nodes-dev"]:
+        for count_option in ["edges", "nodes"]:
             print("permutations with mode %s..." % count_option)
             permtest_leiden_pairs(adata, n_permutations=n_perm, print_log_each=25, log=False, count_option=count_option)
             df = adata.uns["nhood_permtest"].copy()
@@ -193,7 +193,7 @@ def permtest_leiden_pairs(
         The number to initialize a pseudorandom number generator.
     """
     leiden = adata.obs["leiden"]
-    conn = adata.obsp["spatial_connectivity"]
+    conn = adata.obsp["spatial_connectivities"]
     N = adata.shape[0]
     positions = np.arange(N)  # .reshape(w, h)
 
