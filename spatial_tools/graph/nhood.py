@@ -248,8 +248,8 @@ def permtest_leiden_pairs(
 
 def centrality_scores(
     adata: AnnData,
-    clusters_key: str,
-    connectivity_key: Union[str, None] = None,
+    cluster_key: str,
+    connectivity_key: Union[str, None] = "spatial_connectivities",
     key_added: str = "centrality_scores",
 ):
     """
@@ -266,7 +266,7 @@ def centrality_scores(
     ----------
     adata
         The AnnData object.
-    clusters_key
+    cluster_key
         Key to clusters in obs.
     connectivity_key
         (Optional) Key to connectivity_matrix in obsp.
@@ -277,26 +277,22 @@ def centrality_scores(
     -------
     None
     """
-    if clusters_key not in adata.obs_keys():
+    if cluster_key not in adata.obs_keys():
         raise ValueError(
-            "clusters_key %s not recognized. Choose a different key refering to a cluster in .obs." % clusters_key
+            "cluster_key %s not recognized. Choose a different key refering to a cluster in .obs." % cluster_key
         )
 
-    if "networkx_graph" in adata.uns_keys():
-        print("Using saved networkx graph stored under .uns in AnnData object.")
-        graph = adata.uns["networkx_graph"]
-    elif connectivity_key in adata.obsp:
+    if connectivity_key in adata.obsp:
         graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
-        print("Saving networkx graph based on %s in .uns under key: networkx_graph" % connectivity_key)
+        print("Saving networkx graph based on %s in adata.obsp" % connectivity_key)
         adata.uns["networkx_graph"] = graph
     else:
         raise ValueError(
-            "Networkx graph not found in .uns and connectivity_key %s not recognized. "
             "Choose a different connectivity_key or run first "
             "build.spatial_connectivity(adata) on the AnnData object." % connectivity_key
         )
 
-    clusters = adata.obs[clusters_key].unique().tolist()
+    clusters = adata.obs[cluster_key].unique().tolist()
 
     degree_centrality = []
     clustering_coefficient = []
@@ -304,7 +300,7 @@ def centrality_scores(
     closeness_centrality = []
 
     for c in clusters:
-        cluster_node_idx = adata[adata.obs[clusters_key] == c].obs.index.tolist()
+        cluster_node_idx = adata[adata.obs[cluster_key] == c].obs.index.tolist()
         # ensuring that cluster_node_idx are List[int]
         cluster_node_idx = [i for i, x in enumerate(cluster_node_idx)]
         subgraph = graph.subgraph(cluster_node_idx)
@@ -336,7 +332,7 @@ def centrality_scores(
 
 def interaction_matrix(
     adata: AnnData,
-    clusters_key: str,
+    cluster_key: str,
     connectivity_key: Union[str, None] = None,
     normalized: bool = False,
     key_added: str = "interaction_matrix",
@@ -348,7 +344,7 @@ def interaction_matrix(
     ----------
     adata
         The AnnData object.
-    clusters_key
+    cluster_key
         Key to clusters in obs.
     connectivity_key
         (Optional) Key to connectivity_matrix in obsp.
@@ -361,9 +357,9 @@ def interaction_matrix(
     -------
     None
     """
-    if clusters_key not in adata.obs_keys():
+    if cluster_key not in adata.obs_keys():
         raise ValueError(
-            f"clusters_key {clusters_key} not recognized. Choose a different key refering to a cluster in .obs."
+            f"cluster_key {cluster_key} not recognized. Choose a different key refering to a cluster in .obs."
         )
 
     if "networkx_graph" in adata.uns_keys():
@@ -383,6 +379,6 @@ def interaction_matrix(
             "build.spatial_connectivity(adata) on the AnnData object."
         )
 
-    clusters = {i: {clusters_key: str(x)} for i, x in enumerate(adata.obs[clusters_key].tolist())}
-    nx.set_node_attributes(graph, clusters)
-    adata.uns[key_added] = nx.attr_matrix(graph, node_attr=clusters_key, normalized=normalized)
+    cluster = {i: {cluster_key: str(x)} for i, x in enumerate(adata.obs[cluster_key].tolist())}
+    nx.set_node_attributes(graph, cluster)
+    adata.uns[key_added] = nx.attr_matrix(graph, node_attr=cluster_key, normalized=normalized)
