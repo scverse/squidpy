@@ -1,15 +1,21 @@
 """Plotting for graph functions."""
 
 from typing import Union
+
+import scanpy as sc
 from anndata import AnnData
+
 import numpy as np
+import pandas as pd
 from pandas import DataFrame
+
 import seaborn as sns
 import matplotlib.pyplot as plt
-import scanpy as sc
 
 
-def centrality_scores(adata: AnnData, centrality_scores_key: str = "centrality_scores", selected_score: Union[str, None] = None):
+def centrality_scores(
+    adata: AnnData, centrality_scores_key: str = "centrality_scores", selected_score: Union[str, None] = None
+):
     """
     Plot centrality scores as seaborn stripplot.
 
@@ -34,54 +40,32 @@ def centrality_scores(adata: AnnData, centrality_scores_key: str = "centrality_s
             "nhood.centrality_scores(adata) on your AnnData object." % centrality_scores_key
         )
     var = DataFrame(df.columns, columns=[centrality_scores_key])
-    var['index'] = var[centrality_scores_key]
-    var = var.set_index('index')
+    var["index"] = var[centrality_scores_key]
+    var = var.set_index("index")
 
-    obs = DataFrame(df['cluster']).rename(columns={'cluster': 'louvain'})
+    obs = DataFrame(df["cluster"]).rename(columns={"cluster": "louvain"})
 
-    intermediate_adata = AnnData(
-        X=np.array(df),
-        obs=obs,
-        var=var
-    )
+    intermediate_adata = AnnData(X=np.array(df), obs=obs, var=var)
 
     if selected_score is not None:
-        sc.pl.scatter(
-            intermediate_adata,
-            x=selected_score,
-            y='louvain',
-            color='louvain',
-            size=1000,
-            title=''
-        )
+        sc.pl.scatter(intermediate_adata, x=selected_score, y="louvain", color="louvain", size=1000, title="")
     else:
         plt.ioff()
         ncols = len(intermediate_adata.var.index) - 1
-        fig, ax = plt.subplots(
-            nrows=1, ncols=ncols,
-            figsize=(4 * ncols, 6)
-        )
+        fig, ax = plt.subplots(nrows=1, ncols=ncols, figsize=(4 * ncols, 6))
         for i in range(ncols):
             x = list(intermediate_adata.var.index)[i + 1]
             sc.set_figure_params(figsize=[4, 6])
-            scatter = sc.pl.scatter(
-                intermediate_adata,
-                x=str(x),
-                y='louvain',
-                size=1000,
-                frameon=True,
-                ax=ax[i],
-                show=False
-            )
+            sc.pl.scatter(intermediate_adata, x=str(x), y="louvain", size=1000, frameon=True, ax=ax[i], show=False)
             if i > 0:
-                ax[i].set_ylabel('')
+                ax[i].set_ylabel("")
 
         plt.show()
         plt.close(fig)
         plt.ion()
 
 
-def interaction_matrix(adata: AnnData, cluster_interactions_key: str = "interaction_matrix"):
+def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs):
     """
     Plot cluster interactions as matshow plot.
 
@@ -96,26 +80,23 @@ def interaction_matrix(adata: AnnData, cluster_interactions_key: str = "interact
     -------
     None
     """
-    if cluster_interactions_key in adata.uns_keys():
-        int_matrix = adata.uns[cluster_interactions_key]
+    int_key = f"{cluster_key}_interactions"
+    if int_key in adata.uns_keys():
+        array = adata.uns[int_key]
     else:
         raise ValueError(
-            "cluster_interactions_key %s not recognized. Choose a different key or run first "
-            "nhood.cluster_interactions(adata) on your AnnData object." % cluster_interactions_key
+            f"cluster_interactions_key {int_key} not found. \n"
+            "Choose a different key or run first nhood.interaction_matrix(adata)"
         )
+    cat = adata.obs[cluster_key].cat.categories.values.astype(str)
+    idx = {cluster_key: pd.Categorical(cat, categories=cat)}
 
-    array = int_matrix[0]
-    clusters = DataFrame(int_matrix[1], columns=['cluster'])
-    clusters["louvain"] = clusters["cluster"].astype('category')
-    clusters = clusters.set_index('cluster')
+    ad = AnnData(X=array, obs=idx, var=idx)
 
-    intermediate_adata = AnnData(
-        X=array,
-        obs=clusters,
-        var=clusters
-    )
-
-    sc.pl.heatmap(intermediate_adata, intermediate_adata.var_names, 'louvain')
+    colors_key = f"{cluster_key}_colors"
+    if colors_key in adata.uns.keys():
+        ad.uns[colors_key] = adata.uns[colors_key]
+    sc.pl.heatmap(ad, var_names=ad.var_names, groupby=cluster_key, *args, **kwargs)
 
 
 def plot_ripley_k(

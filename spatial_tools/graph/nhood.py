@@ -333,10 +333,10 @@ def centrality_scores(
 def interaction_matrix(
     adata: AnnData,
     cluster_key: str,
-    connectivity_key: Union[str, None] = None,
-    normalized: bool = False,
-    key_added: str = "interaction_matrix",
-):
+    connectivity_key: Union[str, None] = "spatial_connectivities",
+    normalized: bool = True,
+    copy: bool = False,
+) -> None:
     """
     Compute interaction matrix for clusters. Results are stored in .uns in the AnnData object.
 
@@ -352,6 +352,8 @@ def interaction_matrix(
         (Optional) If True, then each row is normalized by the summation of its values.
     key_added
         (Optional) Key added to output in adata.uns.
+    copy
+        If `True`, return the result, otherwise save it to the ``adata`` object.
 
     Returns
     -------
@@ -362,23 +364,19 @@ def interaction_matrix(
             f"cluster_key {cluster_key} not recognized. Choose a different key refering to a cluster in .obs."
         )
 
-    if "networkx_graph" in adata.uns_keys():
-        print("Using saved networkx graph stored under .uns in AnnData object.")
-        graph = adata.uns["networkx_graph"]
-    elif connectivity_key in adata.obsp:
+    if connectivity_key in adata.obsp:
         graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
-        print(
-            f"Saving networkx graph build on adjacency matrix of connectivity_key in .uns under key: "
-            f"networkx_graph{connectivity_key}"
-        )
-        adata.uns["networkx_graph"] = graph
     else:
         raise ValueError(
-            f"Networkx graph not found in .uns and connectivity_key {connectivity_key} not recognized. "
             "Choose a different connectivity_key or run first "
             "build.spatial_connectivity(adata) on the AnnData object."
         )
 
     cluster = {i: {cluster_key: str(x)} for i, x in enumerate(adata.obs[cluster_key].tolist())}
     nx.set_node_attributes(graph, cluster)
-    adata.uns[key_added] = nx.attr_matrix(graph, node_attr=cluster_key, normalized=normalized)
+    int_mat = nx.attr_matrix(
+        graph, node_attr=cluster_key, normalized=normalized, rc_order=adata.obs[cluster_key].cat.categories
+    )
+    adata.uns[f"{cluster_key}_interactions"] = int_mat
+
+    return None if copy is False else int_mat
