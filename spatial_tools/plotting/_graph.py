@@ -65,15 +65,17 @@ def centrality_scores(
         plt.ion()
 
 
-def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs):
+def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> None:
+    # noqa: D205
     """
-    Plot cluster interactions as matshow plot.
+    Plot cluster interaction matrix, as computed with graph.interaction_matrix.
+    Wraps scanpy.plotting.heatmap. Args and kwargs can be passed.
 
     Parameters
     ----------
     adata
         The AnnData object.
-    cluster_interactions_key
+    cluster_key
         Key to cluster_interactions_key in uns.
 
     Returns
