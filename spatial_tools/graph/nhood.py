@@ -122,7 +122,7 @@ def _count_observations_by_pairs(conn, leiden, positions, count_option="nodes"):
     return obs
 
 
-def _get_output_symmetrical(df):
+def _get_output_symmetrical(df: pd.DataFrame):
     """Assure that the output is symmetrical given the permutation paired-events that are calculated."""
     res = df
     res2 = res.copy()
