@@ -2,6 +2,7 @@
 
 from .build import spatial_connectivity
 from .nhood import (
+    nhood_enrichment,
     cluster_interactions,
     permtest_leiden_pairs,
     cluster_centrality_scores,
