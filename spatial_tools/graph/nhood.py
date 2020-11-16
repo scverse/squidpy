@@ -1,10 +1,10 @@
 """Functions for neighborhood enrichment analysis (permutation test, assortativity measures etc.)."""
 
 import random
-from typing import Union, Optional
+from typing import Union, Callable, Optional
 from itertools import combinations
 
-import numba.types as nt  # noqa: F401
+import numba.types as nt
 from numba import njit, prange  # noqa: F401
 
 from anndata import AnnData
@@ -16,6 +16,93 @@ from pandas.api.types import infer_dtype, is_categorical_dtype
 import networkx as nx
 
 from spatial_tools.graph.build import spatial_connectivity
+
+dt = nt.uint32  # data type aliases (both for numpy and numba should match)
+ndt = np.uint32
+_template = """
+@njit(dt[:, :](dt[:], dt[:], dt[:]), parallel={parallel}, fastmath=True)
+def _nenrich_{n_cls}_{parallel}(indices: np.ndarray, indptr: np.ndarray, clustering: np.ndarray) -> np.ndarray:
+    '''
+    Count how many times clusters :math:`i` and :math:`j` are connected.
+
+    Parameters
+    ----------
+    indices
+        :attr:`scipy.sparse.csr_matrix.indices`.
+    indptr
+        :attr:`scipy.sparse.csr_matrix.indptr`.
+    clustering
+        Array of shape ``(n_cells,)`` containig cluster labels ranging from `0` to `n_clusters - 1` inclusive.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        Array of shape ``(n_clusters, n_clusters)`` containing the pairwise counts.
+    '''
+    res = np.zeros((indptr.shape[0] - 1, {n_cls}), dtype=ndt)
+
+    for i in prange(res.shape[0]):
+        xs, xe = indptr[i], indptr[i + 1]
+        cols = indices[xs:xe]
+        for c in cols:
+            res[i, clustering[c]] += 1
+    {init}
+    {loop}
+    {finalize}
+"""
+
+
+def _create_function(n_cls: int, parallel: bool = False) -> Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray]:
+    """
+    Create a :mod:`numba` function which counts the number of connections between clusters.
+
+    Parameters
+    ----------
+    n_cls
+        Number of clusters. We're assuming that cluster labels are `0`, `1`, ..., `n_cls - 1`.
+    parallel
+        Whether to enable :mod:`numba` parallelization.
+
+    Returns
+    -------
+    callable
+        The aforementioned function.
+    """
+    if n_cls <= 1:
+        raise ValueError(f"Expected at least `2` clusters, found `{n_cls}`.")
+
+    rng = range(n_cls)
+    init = "".join(
+        f"""
+    g{i} = np.zeros(({n_cls},), dtype=ndt)"""
+        for i in rng
+    )
+
+    loop_body = """
+        if cl == 0:
+            g0 += res[row]"""
+    loop_body = loop_body + "".join(
+        f"""
+        elif cl == {i}:
+            g{i} += res[row]"""
+        for i in range(1, n_cls)
+    )
+    loop = f"""
+    for row in prange(res.shape[0]):
+        cl = clustering[row]
+        {loop_body}
+        else:
+            assert False, "Unhandled case."
+    """
+    finalize = ", ".join(f"g{i}" for i in rng)
+    finalize = f"return np.stack(({finalize}))"  # must really be a tuple
+
+    fn_key = f"_nenrich_{n_cls}_{parallel}"
+    if fn_key not in globals():
+        template = _template.format(init=init, loop=loop, finalize=finalize, n_cls=n_cls, parallel=parallel)
+        exec(compile(template, "", "exec"), globals())
+
+    return globals()[fn_key]
 
 
 def cartesian(arrays, out=None):
@@ -250,63 +337,13 @@ def permtest_leiden_pairs(
     adata.uns[key_added] = df
 
 
-_template = """
-@njit(nt.uint32[:, :](nt.uint32[:], nt.uint32[:], nt.uint32[:], nt.uint32), parallel={numba_parallel}, fastmath=True)
-def _nenrich_{n_cls}_{numba_parallel}(
-    indices: np.ndarray, indptr: np.ndarray, clustering: np.ndarray, n_cls: nt.uint32
-    ) -> np.ndarray:
-    res = np.zeros((indptr.shape[0] - 1, n_cls), dtype=np.uint32)
-
-    for i in prange(res.shape[0]):
-        xs, xe = indptr[i], indptr[i + 1]
-        rcolor = clustering[i]
-        cols = indices[xs:xe]
-        for c in cols:
-            ccolor = clustering[c]
-            res[i, ccolor] += 1
-    {init}
-    {loop}
-    {finalize}
-"""
-
-
-def _create_template(n_cls: int, numba_parallel: bool = False) -> str:
-    # author: michal klein.
-    rng = range(n_cls)
-    init = "".join(
-        f"""
-    g{i} = np.zeros((n_cls,), dtype=np.uint32)"""
-        for i in rng
-    )
-
-    loop_body = """
-        if cl == 0:
-            g0 += res[row]"""
-    loop_body = loop_body + "".join(
-        f"""
-        elif cl == {i}:
-            g{i} += res[row]"""
-        for i in range(1, n_cls)
-    )
-    loop = f"""
-    for row in prange(res.shape[0]):
-        cl = clustering[row]
-        {loop_body}
-        else:
-            assert False, "Unhandled case."
-    """
-    finalize = ", ".join(f"g{i}" for i in rng)
-    finalize = f"return np.stack(({finalize}))"
-
-    return _template.format(init=init, loop=loop, finalize=finalize, n_cls=n_cls, numba_parallel=numba_parallel)
-
-
 def nhood_enrichment(
     adata: AnnData,
     cluster_key: str,
     connectivity_key: Union[str, None] = "spatial_connectivities",
     n_perms: int = 1000,
     numba_parallel: Optional[bool] = False,
+    seed: Optional[int] = None,
     copy: bool = False,
 ) -> None:
     """
@@ -314,16 +351,18 @@ def nhood_enrichment(
 
     Parameters
     ----------
-    adata:
+    adata
         The AnnData object.
-    clusters_key:
+    cluster_key
         Key to clusters in obs.
-    connectivity_key:
+    connectivity_key
         (Optional) Key to connectivity_matrix in obsp.
-    n_perms:
+    n_perms
         number of permutations (deafult 1000).
-    numba_parallel:
+    numba_parallel
         whether to pass parallel=True in numba code
+    seed
+        Random seed.
     copy
         If `True`, return the result, otherwise save it to the ``adata`` object.
 
@@ -351,21 +390,20 @@ def nhood_enrichment(
     original_clust = adata.obs[cluster_key]
     # map categories
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
-    int_clust = np.array([clust_map[c] for c in original_clust], dtype=np.uint32)
+    int_clust = np.array([clust_map[c] for c in original_clust], dtype=ndt)
 
-    indices, indptr = (adj.indices.astype(np.uint32), adj.indptr.astype(np.uint32))
+    indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
     n_cls = len(clust_map.keys())
 
-    fn_key = f"_nenrich_{n_cls}_{bool(numba_parallel)}"
-    if fn_key not in globals():
-        exec(compile(_create_template(n_cls, numba_parallel), "", "exec"), globals())
-    _test = globals()[fn_key]
+    _test = _create_function(n_cls, parallel=numba_parallel)
 
-    out = np.zeros((n_cls, n_cls, n_perms + 1), dtype=np.uint32)
-    out[:, :, 0] = _test(indices, indptr, int_clust, n_cls)
+    out = np.zeros((n_cls, n_cls, n_perms + 1), dtype=ndt)
+    out[:, :, 0] = _test(indices, indptr, int_clust)
+
+    np.random.seed(seed)  # better way is to use random state (however, it can't be used in the numba function)
     for perm in prange(n_perms):
         np.random.shuffle(int_clust)
-        out[:, :, perm + 1] = _test(indices, indptr, int_clust, n_cls)
+        out[:, :, perm + 1] = _test(indices, indptr, int_clust)
 
     mean = out[:, :, 1:].mean(axis=-1)
     sd = out[:, :, 1:].std(axis=-1)
