@@ -4,6 +4,7 @@ import random
 from typing import Union, Optional
 from itertools import combinations
 
+import numba.types as nt  # noqa: F401
 from numba import njit, prange  # noqa: F401
 
 from anndata import AnnData
