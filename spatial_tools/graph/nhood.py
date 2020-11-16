@@ -357,7 +357,6 @@ def nhood_enrichment(
     n_cls = len(clust_map.keys())
 
     fn_key = f"_nenrich_{n_cls}_{bool(numba_parallel)}"
-    print(globals().keys())
     if fn_key not in globals():
         exec(compile(_create_template(n_cls, numba_parallel), "", "exec"), globals())
     _test = globals()[fn_key]
@@ -374,7 +373,7 @@ def nhood_enrichment(
 
     adata.uns[f"{cluster_key}_nhood_enrichment"] = {"zscore": zscore, "ncount": out[:, :, 0]}
 
-    return None if copy is False else zscore, out[:, :, 0]
+    return None if copy is False else (zscore, out[:, :, 0])
 
 
 def cluster_centrality_scores(
