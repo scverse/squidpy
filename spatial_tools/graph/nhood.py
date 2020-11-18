@@ -250,8 +250,8 @@ def centrality_scores(
     adata: AnnData,
     cluster_key: str,
     connectivity_key: Union[str, None] = "spatial_connectivities",
-    key_added: str = "centrality_scores",
-):
+    copy: bool = False,
+) -> None:
     """
     Compute centrality scores per cluster or cell type in AnnData object.
 
@@ -270,8 +270,8 @@ def centrality_scores(
         Key to clusters in obs.
     connectivity_key
         (Optional) Key to connectivity_matrix in obsp.
-    key_added
-        (Optional) Key added to output dataframe in adata.uns.
+   copy
+        If `True`, return the result, otherwise save it to the ``adata`` object.
 
     Returns
     -------
@@ -279,17 +279,15 @@ def centrality_scores(
     """
     if cluster_key not in adata.obs_keys():
         raise ValueError(
-            "cluster_key %s not recognized. Choose a different key refering to a cluster in .obs." % cluster_key
+            f"cluster_key {cluster_key} not recognized. Choose a different key referring to a cluster in .obs."
         )
 
     if connectivity_key in adata.obsp:
         graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
-        print("Saving networkx graph based on %s in adata.obsp" % connectivity_key)
-        adata.uns["networkx_graph"] = graph
     else:
         raise ValueError(
             "Choose a different connectivity_key or run first "
-            "build.spatial_connectivity(adata) on the AnnData object." % connectivity_key
+            "build.spatial_connectivity(adata) on the AnnData object."
         )
 
     clusters = adata.obs[cluster_key].unique().tolist()
@@ -320,14 +318,16 @@ def centrality_scores(
     df = pd.DataFrame(
         list(zip(clusters, degree_centrality, clustering_coefficient, closeness_centrality, betweenness_centrality)),
         columns=[
-            "cluster",
-            "degree centrality",
-            "clustering coefficient",
-            "closeness centrality",
-            "betweenness centrality",
+            cluster_key,
+            "degree_centrality",
+            "clustering_coefficient",
+            "closeness_centrality",
+            "betweenness_centrality",
         ],
     )
-    adata.uns[key_added] = df
+    adata.uns[f"{cluster_key}_centrality_scores"] = df
+
+    return None if copy is False else df
 
 
 def interaction_matrix(
@@ -350,8 +350,6 @@ def interaction_matrix(
         (Optional) Key to connectivity_matrix in obsp.
     normalized
         (Optional) If True, then each row is normalized by the summation of its values.
-    key_added
-        (Optional) Key added to output in adata.uns.
     copy
         If `True`, return the result, otherwise save it to the ``adata`` object.
 
@@ -361,7 +359,7 @@ def interaction_matrix(
     """
     if cluster_key not in adata.obs_keys():
         raise ValueError(
-            f"cluster_key {cluster_key} not recognized. Choose a different key refering to a cluster in .obs."
+            f"cluster_key {cluster_key} not recognized. Choose a different key referring to a cluster in .obs."
         )
 
     if connectivity_key in adata.obsp:
