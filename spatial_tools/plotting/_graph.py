@@ -57,20 +57,16 @@ def centrality_scores(
     if selected_score is not None:
         sc.pl.scatter(ad, x=selected_score, y=cluster_key, color=cluster_key, size=1000, title="", frameon=True, *args, **kwargs)
     else:
-        plt.ioff()
         nrows = len(ad.var.index) - 1
         fig, ax = plt.subplots(nrows=nrows, ncols=1, figsize=(4, 6 * nrows))
         for i in range(nrows):
             x = list(ad.var.index)[i + 1]
             sc.pl.scatter(ad, x=str(x), y=cluster_key, color=cluster_key, size=1000, ax=ax[i], show=False, frameon=True, *args, **kwargs)
-            if i > 0:
-                ax[i].set_ylabel("")
-
         plt.show()
         plt.close(fig)
-        plt.ion()
     # resetting scanpy plotting params to defaults
     sc.set_figure_params()
+
 
 def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> None:
     # noqa: D205
