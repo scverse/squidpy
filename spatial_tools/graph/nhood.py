@@ -409,7 +409,7 @@ def nhood_enrichment(
     sd = out[:, :, 1:].std(axis=-1)
     zscore = out[:, :, 0] - mean / sd
 
-    adata.uns[f"{cluster_key}_nhood_enrichment"] = {"zscore": zscore, "ncount": out[:, :, 0]}
+    adata.uns[f"{cluster_key}_nhood_enrichment"] = {"zscore": zscore, "count": out[:, :, 0]}
 
     return None if copy is False else (zscore, out[:, :, 0])
 
