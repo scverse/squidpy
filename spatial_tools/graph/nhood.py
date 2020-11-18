@@ -370,7 +370,7 @@ def interaction_matrix(
             "build.spatial_connectivity(adata) on the AnnData object."
         )
 
-    cluster = {i: {cluster_key: str(x)} for i, x in enumerate(adata.obs[cluster_key].tolist())}
+    cluster = {i: {cluster_key: x} for i, x in enumerate(adata.obs[cluster_key].tolist())}
     nx.set_node_attributes(graph, cluster)
     int_mat = nx.attr_matrix(
         graph, node_attr=cluster_key, normalized=normalized, rc_order=adata.obs[cluster_key].cat.categories
