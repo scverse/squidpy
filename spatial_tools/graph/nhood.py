@@ -378,14 +378,13 @@ def nhood_enrichment(
             f"found `{infer_dtype(adata.obs[cluster_key])}`."
         )
 
-    if connectivity_key in adata.obsp:
-        adj = adata.obsp[connectivity_key]
-    else:
-        raise ValueError(
-            f"{connectivity_key} nor present in `adata.obs`"
+    if connectivity_key not in adata.obsp:
+        raise KeyError(
+            f"{connectivity_key} not present in `adata.obs`"
             "Choose a different connectivity_key or run first "
             "build.spatial_connectivity(adata) on the AnnData object."
         )
+    adj = adata.obsp[connectivity_key]
 
     original_clust = adata.obs[cluster_key]
     # map categories
@@ -393,25 +392,23 @@ def nhood_enrichment(
     int_clust = np.array([clust_map[c] for c in original_clust], dtype=ndt)
 
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
-    n_cls = len(clust_map.keys())
+    n_cls = len(clust_map)
 
     _test = _create_function(n_cls, parallel=numba_parallel)
 
-    out = np.zeros((n_cls, n_cls, n_perms + 1), dtype=ndt)
-    out[:, :, 0] = _test(indices, indptr, int_clust)
+    perms = np.zeros((n_cls, n_cls, n_perms), dtype=ndt)
+    count = _test(indices, indptr, int_clust)
 
     np.random.seed(seed)  # better way is to use random state (however, it can't be used in the numba function)
-    for perm in prange(n_perms):
+    for perm in range(n_perms):
         np.random.shuffle(int_clust)
-        out[:, :, perm + 1] = _test(indices, indptr, int_clust)
+        perms[:, :, perm] = _test(indices, indptr, int_clust)
 
-    mean = out[:, :, 1:].mean(axis=-1)
-    sd = out[:, :, 1:].std(axis=-1)
-    zscore = out[:, :, 0] - mean / sd
+    zscore = count - perms.mean(axis=-1) / perms.std(axis=-1)
 
-    adata.uns[f"{cluster_key}_nhood_enrichment"] = {"zscore": zscore, "count": out[:, :, 0]}
+    adata.uns[f"{cluster_key}_nhood_enrichment"] = {"zscore": zscore, "count": count}
 
-    return None if copy is False else (zscore, out[:, :, 0])
+    return (zscore, count) if copy else None
 
 
 def cluster_centrality_scores(
