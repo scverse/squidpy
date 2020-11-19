@@ -51,16 +51,6 @@ class FdrAxis(ModeEnum):  # noqa: D101
     CLUSTERS = "clusters"
 
 
-# one place for optimization:
-# 1. 1st run would mark invalid combinations with NaNs (can be done in parallel)
-# 2. create an inverse mapping from combinations to gene/cluster indices
-# row `i` represents receptor/ligand (r, c) and col `j` cluster tuple (c1, c2)
-# so in essence, the function would iterate over array of shape ``(n_valid_combinations, 6)``
-
-# from the testing data (paul15), the density of pvalues is ~11% (threshold=0.01)
-# downsides: less maintainable, more error prone (the reverse mapping)and higher memory usage (to store it)
-
-# TODO: parallel=False is much faster for smaller data (paul15), make it optional (i.e. user defined with nice defaults
 _template = """
 @njit(parallel={parallel}, cache=False, fastmath=False)
 def _test_{n_cls}_{ret_means}_{parallel}(
@@ -596,7 +586,7 @@ class PermutationTest(PermutationTestABC):
             `Nat Methods 13, 966–967 (2016) <https://doi.org/10.1038/nmeth.4077>`__.
         """  # noqa: D400
         if interactions is None:
-            from omnipath.requests.utils import import_intercell_network
+            from omnipath.interactions import import_intercell_network
 
             start = logg.info("Fetching the interactions from `omnipath`")
             interactions = import_intercell_network(
@@ -604,7 +594,7 @@ class PermutationTest(PermutationTestABC):
                 transmitter_params=transmitter_params,
                 receiver_params=receiver_params,
             )
-            logg.info(f"Fetched `{len(interactions)}` interactions\n" f"    Finish", time=start)
+            logg.info(f"Fetched `{len(interactions)}` interactions\n    Finish", time=start)
 
             # we don't really care about these
             if SOURCE in interactions.columns:
@@ -697,10 +687,10 @@ def _analysis(
         Number of permutations to perform.
     seed
         Random seed.
-    numba_parallel
-        Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
     n_jobs
         Number of parallel jobs to launch.
+    numba_parallel
+        Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
     **kwargs
         Keyword arguments for :func:`spatial_tools.graph._utils.parallelize`, such as ``n_jobs`` or ``backend``.
 
