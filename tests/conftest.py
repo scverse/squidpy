@@ -9,6 +9,7 @@ import scanpy as sc
 from anndata import AnnData
 
 import numpy as np
+import pandas as pd
 
 import spatial_tools as se
 from spatial_tools.image.object import ImageContainer
@@ -41,6 +42,22 @@ def dummy_adata() -> AnnData:
     se.graph.spatial_connectivity(adata, obsm="spatial", n_rings=2)
 
     return adata
+
+
+@pytest.fixture(scope="session")
+def paul15() -> AnnData:
+    # session because we don't modify this dataset
+    adata = sc.datasets.paul15()
+    sc.pp.normalize_per_cell(adata)
+    adata.raw = adata.copy()
+
+    return adata
+
+
+@pytest.fixture(scope="session")
+def paul15_means() -> pd.DataFrame:
+    with open("tests/_data/paul15_means.pickle", "rb") as fin:
+        return pickle.load(fin)
 
 
 @pytest.fixture(scope="function")
