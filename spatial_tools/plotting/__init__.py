@@ -1,6 +1,7 @@
 from ._graph import (
     plot_ripley_k,
-    interaction_matrix,
+    nhood_enrichment,
     centrality_scores,
+    interaction_matrix,
 )
 from ._image import plot_segmentation
