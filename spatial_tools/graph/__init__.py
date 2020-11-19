@@ -1,11 +1,7 @@
 # flake8: noqa
 
 from .build import spatial_connectivity
-from .nhood import (
-    interaction_matrix,
-    permtest_leiden_pairs,
-    centrality_scores,
-)
+from .nhood import nhood_enrichment, cluster_interactions, cluster_centrality_scores
 from .perm_test import perm_test
 from .ppatterns import moran, ripley_k
 from .clustering import (
