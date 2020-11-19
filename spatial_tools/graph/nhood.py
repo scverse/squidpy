@@ -182,29 +182,29 @@ def centrality_scores(
     copy: bool = False,
 ) -> None:
     """
-    Compute centrality scores per cluster or cell type in AnnData object.
+     Compute centrality scores per cluster or cell type in AnnData object.
 
-    Results are stored in .uns in the AnnData object under the key specified in key_added.
+     Results are stored in .uns in the AnnData object under the key specified in key_added.
 
-    Based among others on methods used for Gene Regulatory Networks (GRNs) in:
-    'CellOracle: Dissecting cell identity via network inference and in silico gene perturbation'
-    Kenji Kamimoto, Christy M. Hoffmann, Samantha A. Morris
-    bioRxiv 2020.02.17.947416; doi: https://doi.org/10.1101/2020.02.17.947416
+     Based among others on methods used for Gene Regulatory Networks (GRNs) in:
+     'CellOracle: Dissecting cell identity via network inference and in silico gene perturbation'
+     Kenji Kamimoto, Christy M. Hoffmann, Samantha A. Morris
+     bioRxiv 2020.02.17.947416; doi: https://doi.org/10.1101/2020.02.17.947416
 
-    Parameters
-    ----------
-    adata
-        The AnnData object.
-    cluster_key
-        Key to clusters in obs.
-    connectivity_key
-        (Optional) Key to connectivity_matrix in obsp.
-   copy
-        If `True`, return the result, otherwise save it to the ``adata`` object.
+     Parameters
+     ----------
+     adata
+         The AnnData object.
+     cluster_key
+         Key to clusters in obs.
+     connectivity_key
+         (Optional) Key to connectivity_matrix in obsp.
+    copy
+         If `True`, return the result, otherwise save it to the ``adata`` object.
 
-    Returns
-    -------
-    None
+     Returns
+     -------
+     None
     """
     if cluster_key not in adata.obs_keys():
         raise ValueError(

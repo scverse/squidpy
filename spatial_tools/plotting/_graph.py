@@ -54,22 +54,33 @@ def centrality_scores(
         ad.uns[colors_key] = adata.uns[colors_key]
 
     if selected_score is not None:
-        sc.pl.scatter(ad, x=selected_score, y=cluster_key, color=cluster_key, size=1000, title="", frameon=True, *args, **kwargs)
+        sc.pl.scatter(
+            ad, x=selected_score, y=cluster_key, color=cluster_key, size=1000, title="", frameon=True, *args, **kwargs
+        )
     else:
         nrows = len(ad.var.index) - 1
         fig, ax = plt.subplots(nrows=nrows, ncols=1, figsize=(4, 6 * nrows))
         for i in range(nrows):
             x = list(ad.var.index)[i + 1]
-            sc.pl.scatter(ad, x=str(x), y=cluster_key, color=cluster_key, size=1000, ax=ax[i], show=False, frameon=True, *args, **kwargs)
+            sc.pl.scatter(
+                ad,
+                x=str(x),
+                y=cluster_key,
+                color=cluster_key,
+                size=1000,
+                ax=ax[i],
+                show=False,
+                frameon=True,
+                *args,
+                **kwargs,
+            )
         plt.show()
         plt.close(fig)
 
 
 def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> None:
-    # noqa: D205
     """
     Plot cluster interaction matrix, as computed with graph.interaction_matrix.
-    Wraps scanpy.plotting.heatmap. Args and kwargs can be passed.
 
     Parameters
     ----------
@@ -89,6 +100,39 @@ def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> Non
         raise ValueError(
             f"cluster_interactions_key {int_key} not found. \n"
             "Choose a different key or run first nhood.interaction_matrix(adata)"
+        )
+    cat = adata.obs[cluster_key].cat.categories.values.astype(str)
+    idx = {cluster_key: pd.Categorical(cat, categories=cat)}
+
+    ad = AnnData(X=array, obs=idx, var=idx)
+
+    colors_key = f"{cluster_key}_colors"
+    if colors_key in adata.uns.keys():
+        ad.uns[colors_key] = adata.uns[colors_key]
+    sc.pl.heatmap(ad, var_names=ad.var_names, groupby=cluster_key, *args, **kwargs)
+
+
+def nhood_enrichment(adata: AnnData, cluster_key: str, mode: str = "zscore", *args, **kwargs) -> None:
+    """
+    Plot cluster interaction matrix, as computed with graph.interaction_matrix.
+
+    Parameters
+    ----------
+    adata
+        The AnnData object.
+    cluster_key
+        Key to cluster_interactions_key in uns.
+
+    Returns
+    -------
+    None
+    """
+    int_key = f"{cluster_key}_nhood_enrichment"
+    if int_key in adata.uns_keys():
+        array = adata.uns[int_key][mode]
+    else:
+        raise ValueError(
+            f"key {int_key} not found. \n" "Choose a different key or run first graph.nhood_enrichment(adata)"
         )
     cat = adata.obs[cluster_key].cat.categories.values.astype(str)
     idx = {cluster_key: pd.Categorical(cat, categories=cat)}
