@@ -25,7 +25,6 @@ setup(
     extras_require=dict(
         dev=["pre-commit>=2.7.1"],
         test=["tox>=3.20.1", "pytest-xdist>=2.1.0"],
-        perm_test=["statsmodels>=0.12.0"],  # TODO: add omnipath once it's a package
     ),
     classifiers=[
         "Programming Language :: Python :: 3.8",

@@ -1,249 +1,178 @@
 """Functions for neighborhood enrichment analysis (permutation test, assortativity measures etc.)."""
 
-import random
-from typing import Union
-from itertools import combinations
+from typing import Union, Callable, Optional
+
+import numba.types as nt
+from numba import njit, prange  # noqa: F401
 
 from anndata import AnnData
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import infer_dtype, is_categorical_dtype
 
 import networkx as nx
 
-from spatial_tools.graph.build import spatial_connectivity
-
-
-def cartesian(arrays, out=None):
-    """
-    Generate a cartesian product of input arrays.
-
-    Based on discussion from here
-    https://stackoverflow.com/questions/1208118/using-numpy-to-build-an-array-of-all-combinations-of-two-arrays
+dt = nt.uint32  # data type aliases (both for numpy and numba should match)
+ndt = np.uint32
+_template = """
+@njit(dt[:, :](dt[:], dt[:], dt[:]), parallel={parallel}, fastmath=True)
+def _nenrich_{n_cls}_{parallel}(indices: np.ndarray, indptr: np.ndarray, clustering: np.ndarray) -> np.ndarray:
+    '''
+    Count how many times clusters :math:`i` and :math:`j` are connected.
 
     Parameters
     ----------
-    arrays : list of array-like
-        1-D arrays to form the cartesian product of.
-    out : ndarray
-        Array to place the cartesian product in.
+    indices
+        :attr:`scipy.sparse.csr_matrix.indices`.
+    indptr
+        :attr:`scipy.sparse.csr_matrix.indptr`.
+    clustering
+        Array of shape ``(n_cells,)`` containig cluster labels ranging from `0` to `n_clusters - 1` inclusive.
 
     Returns
     -------
-    out : ndarray
-        2-D array of shape (M, len(arrays)) containing cartesian products
-        formed of input arrays.
+    :class:`numpy.ndarray`
+        Array of shape ``(n_clusters, n_clusters)`` containing the pairwise counts.
+    '''
+    res = np.zeros((indptr.shape[0] - 1, {n_cls}), dtype=ndt)
 
-    Examples
-    --------
-    >>> cartesian(([1, 2, 3], [4, 5], [6, 7]))
-    array([[1, 4, 6],
-           [1, 4, 7],
-           [1, 5, 6],
-           [1, 5, 7],
-           [2, 4, 6],
-           [2, 4, 7],
-           [2, 5, 6],
-           [2, 5, 7],
-           [3, 4, 6],
-           [3, 4, 7],
-           [3, 5, 6],
-           [3, 5, 7]])
+    for i in prange(res.shape[0]):
+        xs, xe = indptr[i], indptr[i + 1]
+        cols = indices[xs:xe]
+        for c in cols:
+            res[i, clustering[c]] += 1
+    {init}
+    {loop}
+    {finalize}
+"""
 
+
+def _create_function(n_cls: int, parallel: bool = False) -> Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray]:
     """
-    arrays = [np.asarray(x) for x in arrays]
-    dtype = arrays[0].dtype
+    Create a :mod:`numba` function which counts the number of connections between clusters.
 
-    n = np.prod([x.size for x in arrays])
-    if out is None:
-        out = np.zeros([n, len(arrays)], dtype=dtype)
+    Parameters
+    ----------
+    n_cls
+        Number of clusters. We're assuming that cluster labels are `0`, `1`, ..., `n_cls - 1`.
+    parallel
+        Whether to enable :mod:`numba` parallelization.
 
-    m = int(n / arrays[0].size)
-    out[:, 0] = np.repeat(arrays[0], m)
-    if arrays[1:]:
-        cartesian(arrays[1:], out=out[0:m, 1:])
-        for j in range(1, arrays[0].size):
-            out[j * m : (j + 1) * m, 1:] = out[0:m, 1:]
-    return out
+    Returns
+    -------
+    callable
+        The aforementioned function.
+    """
+    if n_cls <= 1:
+        raise ValueError(f"Expected at least `2` clusters, found `{n_cls}`.")
 
-
-def _count_observations_by_pairs(conn, leiden, positions, count_option="nodes"):
-    obs = []
-    masks = []
-
-    leiden = leiden.astype(int)
-
-    leiden_labels_unique = set(map(int, set(leiden)))
-    # assert min(leiden_labels_unique) == 1
-
-    # positions_by_leiden = {li: positions[leiden == li] for li in leiden_labels_unique}
-
-    if count_option == "edges":
-        # for cat in pd.Series(leiden).cat.categories:
-        for cat in set(leiden):
-            masks.append((leiden == cat).tolist())
-        # _, masks = sc._utils.select_groups(adata, list(adata.obs['leiden'].cat.categories), 'leiden')
-
-        # N = len(pd.Series(leiden).cat.categories)
-        N = len(set(leiden))
-        cluster_counts = np.zeros((N, N), dtype=int)
-        for i, mask in enumerate(masks):
-            # initialize
-            cluster_counts[i] = [0 for j_mask in masks]
-            for j, j_mask in enumerate(masks):
-                # subset for i and j to avoid duplicate edges counts
-                m = conn[mask, :]
-                m = m[:, j_mask]
-                cluster_counts[i][j] = m.sum()
-
-        for i, j in combinations(leiden_labels_unique, r=2):
-            n_edges = cluster_counts[i][j]
-            obs.append([i, j, n_edges, "edges"])
-
-    elif count_option == "nodes":
-        conn_array = conn.toarray() if (type(conn) != np.ndarray) else conn
-        for i, j in combinations(set(leiden), r=2):
-            x = positions[leiden == i]
-            y = positions[leiden == j]
-
-            xy = cartesian([x, y])
-            x, y = xy[:, 0].flatten(), xy[:, 1].flatten()
-
-            edges = conn_array[x, y]
-            x_nodes = x[edges == 1]
-            y_nodes = y[edges == 1]
-            nx_uniq, ny_uniq = np.unique(x_nodes).shape[0], np.unique(y_nodes).shape[0]
-            obs.append([int(i), int(j), nx_uniq + ny_uniq, count_option])
-
-    obs = pd.DataFrame(obs, columns=["leiden.i", "leiden.j", "n.obs", "mode"])
-    obs["k"] = obs["leiden.i"].astype(str) + ":" + obs["leiden.j"].astype(str)
-    obs = obs.sort_values("n.obs", ascending=False)
-
-    return obs
-
-
-def _get_output_symmetrical(df):
-    """Assure that the output is symmetrical given the permutation paired-events that are calculated."""
-    res = df
-    res2 = res.copy()
-    li = res2["leiden.i"].astype(str)
-    res2["leiden.i"] = res2["leiden.j"]
-    res2["leiden.j"] = li
-    res = pd.concat([res, res2])
-
-    res["k.sorted"] = np.where(
-        res["leiden.i"].astype(int) < res["leiden.j"].astype(int),
-        res["leiden.i"].astype(str) + ":" + res["leiden.j"].astype(str),
-        res["leiden.j"].astype(str) + ":" + res["leiden.i"].astype(str),
+    rng = range(n_cls)
+    init = "".join(
+        f"""
+    g{i} = np.zeros(({n_cls},), dtype=ndt)"""
+        for i in rng
     )
 
-    res["leiden.i"] = res["leiden.i"].astype(int)
-    res["leiden.j"] = res["leiden.j"].astype(int)
+    loop_body = """
+        if cl == 0:
+            g0 += res[row]"""
+    loop_body = loop_body + "".join(
+        f"""
+        elif cl == {i}:
+            g{i} += res[row]"""
+        for i in range(1, n_cls)
+    )
+    loop = f"""
+    for row in prange(res.shape[0]):
+        cl = clustering[row]
+        {loop_body}
+        else:
+            assert False, "Unhandled case."
+    """
+    finalize = ", ".join(f"g{i}" for i in rng)
+    finalize = f"return np.stack(({finalize}))"  # must really be a tuple
 
-    res["k"] = res["leiden.i"].astype(str) + ":" + res["leiden.j"].astype(str)
-    res = res.drop_duplicates("k")
-    return res
+    fn_key = f"_nenrich_{n_cls}_{parallel}"
+    if fn_key not in globals():
+        template = _template.format(init=init, loop=loop, finalize=finalize, n_cls=n_cls, parallel=parallel)
+        exec(compile(template, "", "exec"), globals())
+
+    return globals()[fn_key]
 
 
-def permtest_leiden_pairs_complex(adata, rings_start=1, rings_end=6, n_perm=100, random_seed=500):
-    """Todo."""
-    res = []
-    random.seed(random_seed)
-    for n_rings in range(rings_start, rings_end):
-        print("# degree", n_rings)
-        print("calculating connectivity graph with degree %i..." % n_rings)
-        spatial_connectivity(adata, n_rings=n_rings)
-        for count_option in ["edges", "nodes"]:
-            print("permutations with mode %s..." % count_option)
-            permtest_leiden_pairs(adata, n_permutations=n_perm, print_log_each=25, log=False, count_option=count_option)
-            df = adata.uns["nhood_permtest"].copy()
-            df["n.rings"] = n_rings
-            df["n.perm"] = n_perm
-            res.append(df)
-    res = pd.concat(res)
-    return res
-
-
-def permtest_leiden_pairs(
+def nhood_enrichment(
     adata: AnnData,
-    n_permutations: int = 100,
-    key_added: str = "nhood_permtest",
-    print_log_each: int = 25,
-    log: bool = True,
-    count_option: str = "edges",
-    random_seed: int = 500,
+    cluster_key: str,
+    connectivity_key: Union[str, None] = "spatial_connectivities",
+    n_perms: int = 1000,
+    numba_parallel: Optional[bool] = False,
+    seed: Optional[int] = None,
+    copy: bool = False,
 ) -> None:
     """
-    Calculate enrichment/depletion of observed leiden pairs in the spatial connectivity graph, \
-    versus permutations as background.
+    Compute neighborhood enrichment by permutation test. Results are stored in .uns in the AnnData.
 
-    Params
-    ------
+    Parameters
+    ----------
     adata
         The AnnData object.
-    n_permutations
-        Number of shuffling and recalculations to be done.
-    key_added
-        Key added to output dataframe in adata.uns.
-    count_option
-        counting option (edges = count edges, nodes = count nodes)
-    random_seed
-        The number to initialize a pseudorandom number generator.
+    cluster_key
+        Key to clusters in obs.
+    connectivity_key
+        (Optional) Key to connectivity_matrix in obsp.
+    n_perms
+        number of permutations (deafult 1000).
+    numba_parallel
+        whether to pass parallel=True in numba code
+    seed
+        Random seed.
+    copy
+        If `True`, return the result, otherwise save it to the ``adata`` object.
+
+    Returns
+    -------
+    zscore, nenrich_count
     """
-    leiden = adata.obs["leiden"]
-    conn = adata.obsp["spatial_connectivities"]
-    N = adata.shape[0]
-    positions = np.arange(N)  # .reshape(w, h)
+    if cluster_key not in adata.obs.keys():
+        raise KeyError(f"Cluster key `{cluster_key}` not found in `adata.obs`.")
+    if not is_categorical_dtype(adata.obs[cluster_key]):
+        raise TypeError(
+            f"Expected `adata.obs[{cluster_key}]` to be `categorical`, "
+            f"found `{infer_dtype(adata.obs[cluster_key])}`."
+        )
 
-    # real observations
-    if log:
-        print("calculating pairwise enrichment/depletion on real data...")
-    df = _count_observations_by_pairs(conn, leiden, positions, count_option=count_option)
+    if connectivity_key not in adata.obsp:
+        raise KeyError(
+            f"{connectivity_key} not present in `adata.obs`"
+            "Choose a different connectivity_key or run first "
+            "build.spatial_connectivity(adata) on the AnnData object."
+        )
+    adj = adata.obsp[connectivity_key]
 
-    # permutations
-    leiden_rand = leiden.copy()
-    perm = []
+    original_clust = adata.obs[cluster_key]
+    # map categories
+    clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
+    int_clust = np.array([clust_map[c] for c in original_clust], dtype=ndt)
 
-    random.seed(random_seed)
-    if log:
-        print("calculating pairwise enrichment/depletion permutations (n=%i)..." % n_permutations)
-        if n_permutations <= 100:
-            print("Please consider a high permutation value for reliable Z-score estimates (>500)...")
+    indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
+    n_cls = len(clust_map)
 
-    for pi in range(n_permutations):
-        if (pi + 1) % print_log_each == 0 and log:
-            print("%i permutations (out of %i)..." % (pi + 1, n_permutations))
-        leiden_rand = leiden_rand[np.random.permutation(leiden_rand.shape[0])]
-        obs_perm = _count_observations_by_pairs(conn, leiden_rand, positions, count_option=count_option)
-        obs_perm["permutation.i"] = True
-        perm.append(obs_perm)
-    perm = pd.concat(perm)
+    _test = _create_function(n_cls, parallel=numba_parallel)
 
-    # statistics
-    n_by_leiden = adata.obs["leiden"].astype(int).value_counts().to_dict()
+    perms = np.zeros((n_cls, n_cls, n_perms), dtype=ndt)
+    count = _test(indices, indptr, int_clust)
 
-    mean_by_k = perm.groupby("k").mean()["n.obs"].to_dict()
-    std_by_k = perm.groupby("k").std()["n.obs"].to_dict()
+    np.random.seed(seed)  # better way is to use random state (however, it can't be used in the numba function)
+    for perm in range(n_perms):
+        np.random.shuffle(int_clust)
+        perms[:, :, perm] = _test(indices, indptr, int_clust)
 
-    mu = df["k"].map(mean_by_k)
-    sigma = df["k"].map(std_by_k)
+    zscore = count - perms.mean(axis=-1) / perms.std(axis=-1)
 
-    df["n.i"] = df["leiden.i"].map(n_by_leiden)
-    df["n.j"] = df["leiden.j"].map(n_by_leiden)
+    adata.uns[f"{cluster_key}_nhood_enrichment"] = {"zscore": zscore, "count": count}
 
-    # print((df['n.obs']))
-    # print(mu)
-    # print(sigma)
-    # print((df['n.obs'] - mu) / sigma)
-    df["z.score"] = (df["n.obs"] - mu) / sigma
-    df["n.exp"] = mu
-    df["sigma"] = sigma
-    df.sort_values("z.score", ascending=False)
-
-    # this ensures output is symmetrical
-    df = _get_output_symmetrical(df)
-
-    adata.uns[key_added] = df
+    return (zscore, count) if copy else None
 
 
 def centrality_scores(

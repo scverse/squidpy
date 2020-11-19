@@ -51,18 +51,9 @@ class FdrAxis(ModeEnum):  # noqa: D101
     CLUSTERS = "clusters"
 
 
-# one place for optimization:
-# 1. 1st run would mark invalid combinations with NaNs (can be done in parallel)
-# 2. create an inverse mapping from combinations to gene/cluster indices
-# row `i` represents receptor/ligand (r, c) and col `j` cluster tuple (c1, c2)
-# so in essence, the function would iterate over array of shape ``(n_valid_combinations, 6)``
-
-# from the testing data (paul15), the density of pvalues is ~11% (threshold=0.01)
-# downsides: less maintainable, more error prone (the reverse mapping)and higher memory usage (to store it)
-
 _template = """
-@njit(parallel=True, cache=False, fastmath=False)
-def _test_{n_cls}_{ret_means}(
+@njit(parallel={parallel}, cache=False, fastmath=False)
+def _test_{n_cls}_{ret_means}_{parallel}(
     interactions: np.ndarray[np.uint32],
     interaction_clusters: np.ndarray[np.uint32],
     data: np.ndarray[np.float64],
@@ -83,16 +74,17 @@ def _test_{n_cls}_{ret_means}(
             c1, c2 = interaction_clusters[j]
             m1, m2 = mean[rec, c1], mean[lig, c2]
 
-            if mask[rec, c1] and mask[lig, c2] and m1 > 0 and m2 > 0:
-                res[i, j] += (groups[c1, rec] + groups[c2, lig]) > (m1 + m2)  # division by 2 doesn't matter
+            if m1 > 0 and m2 > 0:
                 {set_means}
+                if mask[rec, c1] and mask[lig, c2]:
+                    res[i, j] += (groups[c1, rec] + groups[c2, lig]) > (m1 + m2)  # division by 2 doesn't matter
             else:
-                res[i, j] = np.nan
+                res[i, j] += np.nan
                 # res_means should be initialized all with 0s
 """
 
 
-def _create_template(n_cls: int, return_means: bool = False) -> str:
+def _create_template(n_cls: int, return_means: bool = False, parallel: bool = True) -> str:
     if n_cls <= 0:
         raise ValueError(f"Expected number of clusters to be positive, found `{n_cls}`.")
 
@@ -132,6 +124,7 @@ def _create_template(n_cls: int, return_means: bool = False) -> str:
 
     return _template.format(
         n_cls=n_cls,
+        parallel=bool(parallel),
         ret_means=int(return_means),
         args=args,
         init=init,
@@ -307,6 +300,7 @@ class PermutationTestABC(ABC):
         alpha: float = 0.05,
         copy: bool = False,
         key_added: str = "ligrec_test",
+        numba_parallel: Optional[bool] = None,
         **kwargs,
     ) -> Optional[Result]:
         """
@@ -339,6 +333,9 @@ class PermutationTestABC(ABC):
             If `True`, return the result, otherwise save it to the ``adata`` object.
         key_added
             Key in ``adata`` :attr:`anndata.AnnData.uns` where the result is stored if ``copy = False``.
+        numba_parallel
+            Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
+            For small datasets or small number of interactions, it's recommended to set this to `False`.
         **kwargs
             Keyword arguments for :func:`spatial_tools.graph._utils.parallelize`, such as ``n_jobs`` or ``backend``.
 
@@ -413,7 +410,15 @@ class PermutationTestABC(ABC):
             f"and `{len(clusters)}` cluster combinations using `{n_jobs}` core(s)"
         )
         res = _analysis(
-            data, interactions_, clusters_, threshold=threshold, n_perms=n_perms, seed=seed, n_jobs=n_jobs, **kwargs
+            data,
+            interactions_,
+            clusters_,
+            threshold=threshold,
+            n_perms=n_perms,
+            seed=seed,
+            n_jobs=n_jobs,
+            numba_parallel=numba_parallel,
+            **kwargs,
         )
 
         res = Result(
@@ -581,7 +586,7 @@ class PermutationTest(PermutationTestABC):
             `Nat Methods 13, 966–967 (2016) <https://doi.org/10.1038/nmeth.4077>`__.
         """  # noqa: D400
         if interactions is None:
-            from omnipath.requests.utils import import_intercell_network
+            from omnipath.interactions import import_intercell_network
 
             start = logg.info("Fetching the interactions from `omnipath`")
             interactions = import_intercell_network(
@@ -589,7 +594,7 @@ class PermutationTest(PermutationTestABC):
                 transmitter_params=transmitter_params,
                 receiver_params=receiver_params,
             )
-            logg.info(f"Fetched `{len(interactions)}` interactions\n" f"    Finish", time=start)
+            logg.info(f"Fetched `{len(interactions)}` interactions\n    Finish", time=start)
 
             # we don't really care about these
             if SOURCE in interactions.columns:
@@ -660,6 +665,7 @@ def _analysis(
     n_perms: int = 1000,
     seed: Optional[int] = None,
     n_jobs: Optional[int] = None,
+    numba_parallel: Optional[bool] = None,
     **kwargs,
 ) -> TempResult:
     """
@@ -683,6 +689,8 @@ def _analysis(
         Random seed.
     n_jobs
         Number of parallel jobs to launch.
+    numba_parallel
+        Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
     **kwargs
         Keyword arguments for :func:`spatial_tools.graph._utils.parallelize`, such as ``n_jobs`` or ``backend``.
 
@@ -713,7 +721,7 @@ def _analysis(
     mean = groups.mean().values.T  # (n_genes, n_clusters)
     mask = groups.apply(lambda c: ((c > 0).sum() / len(c)) >= threshold).values.T  # (n_genes, n_clusters)
     # (n_cells, n_genes)
-    data = np.array(data[[c for c in data.columns if c != "clusters"]].values, dtype=np.float64, order="C")
+    data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
     # all 3 should be C contiguous
 
     return parallelize(
@@ -723,7 +731,16 @@ def _analysis(
         unit="permutation",
         extractor=extractor,
         **kwargs,
-    )(data, mean, mask, interactions, interaction_clusters=interaction_clusters, clustering=clustering, seed=seed)
+    )(
+        data,
+        mean,
+        mask,
+        interactions,
+        interaction_clusters=interaction_clusters,
+        clustering=clustering,
+        seed=seed,
+        numba_parallel=numba_parallel,
+    )
 
 
 def _analysis_helper(
@@ -735,6 +752,7 @@ def _analysis_helper(
     interaction_clusters: np.ndarray[np.uint32],
     clustering: np.ndarray[np.uint32],
     seed: Optional[int] = None,
+    numba_parallel: Optional[bool] = None,
     queue: Optional[Queue] = None,
 ) -> TempResult:
     """
@@ -759,6 +777,8 @@ def _analysis_helper(
         Array of shape ``(n_cells,)`` containing the original clustering.
     seed
         Random seed for :class:`numpy.random.RandomState`.
+    numba_parallel
+        Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
     queue
         Signalling queue to update progress bar.
 
@@ -781,10 +801,15 @@ def _analysis_helper(
     # ideally, these would be both sparse array, but there is no numba impl. (sparse.COO is read-only and very limited)
     # keep it f64, because we're setting NaN
     res = np.zeros((len(interactions), len(interaction_clusters)), dtype=np.float64)
+    numba_parallel = (
+        (np.prod(res.shape) >= 2 ** 20 or clustering.shape[0] >= 2 ** 15) if numba_parallel is None else numba_parallel
+    )
 
-    fn_key = f"_test_{n_cls}_{int(return_means)}"
+    fn_key = f"_test_{n_cls}_{int(return_means)}_{bool(numba_parallel)}"
     if fn_key not in globals():
-        exec(compile(_create_template(n_cls, return_means=return_means), "", "exec"), globals())
+        exec(
+            compile(_create_template(n_cls, return_means=return_means, parallel=numba_parallel), "", "exec"), globals()
+        )
     _test = globals()[fn_key]
 
     if return_means:
