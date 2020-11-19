@@ -14,8 +14,8 @@ import matplotlib.pyplot as plt
 
 
 def centrality_scores(
-    adata: AnnData, centrality_scores_key: str = "centrality_scores", selected_score: Union[str, None] = None
-):
+    adata: AnnData, cluster_key: str, selected_score: Union[str, None] = None, *args, **kwargs
+) -> None:
     """
     Plot centrality scores as seaborn stripplot.
 
@@ -23,8 +23,8 @@ def centrality_scores(
     ----------
     adata
         The AnnData object.
-    centrality_scores_key
-        Key to centrality_scores_key in uns.
+    cluster_key
+        Key to cluster_interactions_key in uns.
     selected_score
         Whether to plot all scores or only just a selected one.
 
@@ -32,37 +32,37 @@ def centrality_scores(
     -------
     None
     """
-    if centrality_scores_key in adata.uns_keys():
-        df = adata.uns[centrality_scores_key]
+    scores_key = f"{cluster_key}_centrality_scores"
+    if scores_key in adata.uns_keys():
+        df = adata.uns[scores_key]
     else:
         raise ValueError(
-            "centrality_scores_key %s not recognized. Choose a different key or run first "
-            "nhood.centrality_scores(adata) on your AnnData object." % centrality_scores_key
+            f"centrality_scores_key {scores_key} not found. \n"
+            "Choose a different key or run first nhood.centrality_scores(adata)"
         )
-    var = DataFrame(df.columns, columns=[centrality_scores_key])
-    var["index"] = var[centrality_scores_key]
+    var = DataFrame(df.columns, columns=[scores_key])
+    var["index"] = var[scores_key]
     var = var.set_index("index")
 
-    obs = DataFrame(df["cluster"]).rename(columns={"cluster": "louvain"})
+    cat = adata.obs[cluster_key].cat.categories.values.astype(str)
+    idx = {cluster_key: pd.Categorical(cat, categories=cat)}
 
-    intermediate_adata = AnnData(X=np.array(df), obs=obs, var=var)
+    ad = AnnData(X=np.array(df), obs=idx, var=var)
+
+    colors_key = f"{cluster_key}_colors"
+    if colors_key in adata.uns.keys():
+        ad.uns[colors_key] = adata.uns[colors_key]
 
     if selected_score is not None:
-        sc.pl.scatter(intermediate_adata, x=selected_score, y="louvain", color="louvain", size=1000, title="")
+        sc.pl.scatter(ad, x=selected_score, y=cluster_key, color=cluster_key, size=1000, title="", frameon=True, *args, **kwargs)
     else:
-        plt.ioff()
-        ncols = len(intermediate_adata.var.index) - 1
-        fig, ax = plt.subplots(nrows=1, ncols=ncols, figsize=(4 * ncols, 6))
-        for i in range(ncols):
-            x = list(intermediate_adata.var.index)[i + 1]
-            sc.set_figure_params(figsize=[4, 6])
-            sc.pl.scatter(intermediate_adata, x=str(x), y="louvain", size=1000, frameon=True, ax=ax[i], show=False)
-            if i > 0:
-                ax[i].set_ylabel("")
-
+        nrows = len(ad.var.index) - 1
+        fig, ax = plt.subplots(nrows=nrows, ncols=1, figsize=(4, 6 * nrows))
+        for i in range(nrows):
+            x = list(ad.var.index)[i + 1]
+            sc.pl.scatter(ad, x=str(x), y=cluster_key, color=cluster_key, size=1000, ax=ax[i], show=False, frameon=True, *args, **kwargs)
         plt.show()
         plt.close(fig)
-        plt.ion()
 
 
 def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> None:
