@@ -8,5 +8,6 @@ netcdf4
 rasterio
 scanpy
 scikit-image>=0.17.1
+statsmodels>=0.12.0
 tqdm>=4.50.2  # progress bar
 xarray

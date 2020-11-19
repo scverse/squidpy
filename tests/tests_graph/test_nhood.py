@@ -1,17 +1,25 @@
-import scanpy
 from anndata import AnnData
 
 import numpy as np
 
 from spatial_tools.graph import (
+    nhood_enrichment,
     cluster_interactions,
     spatial_connectivity,
     cluster_centrality_scores,
 )
-from spatial_tools.graph.nhood import (
-    permtest_leiden_pairs,
-    _count_observations_by_pairs,
-)
+
+
+def test_nhood_enrichment(adata: AnnData):
+
+    ckey = "leiden"
+    spatial_connectivity(adata)
+    nhood_enrichment(adata, cluster_key=ckey)
+
+    assert adata.uns[f"{ckey}_nhood_enrichment"]["zscore"].dtype == np.dtype("float64")
+    assert adata.uns[f"{ckey}_nhood_enrichment"]["count"].dtype == np.dtype("uint32")
+    assert adata.uns[f"{ckey}_nhood_enrichment"]["zscore"].shape[0] == adata.obs.leiden.cat.categories.shape[0]
+    assert adata.uns[f"{ckey}_nhood_enrichment"]["count"].shape[0] == adata.obs.leiden.cat.categories.shape[0]
 
 
 # nhood_data is now in conftest.py
@@ -57,53 +65,3 @@ def test_cluster_interactions(nhood_data: AnnData):
     assert len(adata.obs["leiden"].unique()) == adata.uns["cluster_interactions"][0].shape[1]
     assert type(adata.uns["cluster_interactions"][1]) == list
     assert len(adata.obs["leiden"].unique()) == len(adata.uns["cluster_interactions"][1])
-
-
-def test_nhood_permtest_toydata():
-    """
-    i) Verify that the permutation works in a simple connectivity graph
-    ii) expected values n_nodes = 5 and n_edges = 6
-    """
-    positions = np.arange(5)
-    leiden = np.array([1, 1, 2, 2, 2])
-    # TODO: using leiden = leiden - 1 "fixes" it
-    conn = np.array(
-        [
-            [0, 0, 1, 1, 1],
-            [0, 0, 1, 1, 1],
-            [1, 1, 0, 0, 0],
-            [1, 1, 0, 0, 0],
-            [1, 1, 0, 0, 0],
-        ]
-    )
-    edges = _count_observations_by_pairs(conn, leiden, positions, count_option="edges")
-    nodes = _count_observations_by_pairs(conn, leiden, positions, count_option="nodes")
-    n_edges = list(edges["n.obs"])[0]
-    n_nodes = list(nodes["n.obs"])[0]
-    assert n_nodes == 5 and n_edges == 6
-
-
-def test_nhood_permtest_realdata():
-    """
-    Try to run a more complex test and report the respective statistics as a table.
-    """
-    adata = scanpy.datasets.visium_sge()
-    adata.var_names_make_unique()
-    scanpy.pp.neighbors(adata)
-    scanpy.tl.leiden(adata)
-
-    n_permutations = 25
-    spatial_connectivity(adata, n_rings=3)
-    try:
-        permtest_leiden_pairs(
-            adata,
-            n_permutations=n_permutations,
-            print_log_each=25,
-            count_option="nodes",
-        )
-        result = adata.uns["nhood_permtest"].copy()
-        print(result.head())
-        print(result.shape)
-    except Exception:
-        raise
-    assert True

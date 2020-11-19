@@ -1,4 +1,5 @@
 import sys
+from time import time
 from typing import Tuple, Optional, Sequence, NamedTuple
 
 import pytest
@@ -281,15 +282,61 @@ class TestInvalidBehavior:
         assert not np.allclose(r3.pvalues, r1.pvalues)
         assert not np.allclose(r3.pvalues, r2.pvalues)
 
+    def test_reproducibility_numba_parallel_off(self, adata: AnnData, interactions: Interactions_t):
+        t1 = time()
+        r1 = perm_test(
+            adata,
+            _CK,
+            interactions=interactions,
+            n_perms=25,
+            copy=True,
+            show_progress_bar=False,
+            seed=42,
+            numba_parallel=False,
+        )
+        t1 = time() - t1
+
+        t2 = time()
+        r2 = perm_test(
+            adata,
+            _CK,
+            interactions=interactions,
+            n_perms=25,
+            copy=True,
+            show_progress_bar=False,
+            seed=42,
+            numba_parallel=True,
+        )
+        t2 = time() - t2
+
+        assert r1 is not r2
+        # for such a small data, overhead from parallelization is too high
+        assert t1 <= t2, (t1, t2)
+        np.testing.assert_allclose(r1.means, r2.means)
+        np.testing.assert_allclose(r1.pvalues, r2.pvalues)
+
+    def test_paul15_correct_means(self, paul15: AnnData, paul15_means: pd.DataFrame):
+        res = perm_test(
+            paul15,
+            "paul15_clusters",
+            interactions=list(paul15_means.index.to_list()),
+            fdr_method=None,
+            copy=True,
+            show_progress_bar=False,
+            threshold=0.01,
+            seed=0,
+            n_perms=1,
+            n_jobs=1,
+        )
+
+        np.testing.assert_array_equal(res.means.index, paul15_means.index)
+        np.testing.assert_array_equal(res.means.columns, paul15_means.columns)
+        np.testing.assert_allclose(res.means.values, paul15_means.values)
+
     def test_reproducibility_numba_off(self, adata: AnnData, interactions: Interactions_t, ligrec_no_numba: NamedTuple):
         r = perm_test(
             adata, _CK, interactions=interactions, n_perms=5, copy=True, show_progress_bar=False, seed=42, n_jobs=1
         )
-        import pickle
-
-        with open("ligrec_no_numba.pickle", "wb") as fout:
-            pickle.dump(r, fout)
-
         np.testing.assert_array_equal(r.means.index, ligrec_no_numba.means.index)
         np.testing.assert_array_equal(r.means.columns, ligrec_no_numba.means.columns)
         np.testing.assert_array_equal(r.pvalues.index, ligrec_no_numba.pvalues.index)
