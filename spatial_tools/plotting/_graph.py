@@ -75,7 +75,7 @@ def centrality_scores(
                 **kwargs,
             )
         plt.show()
-        plt.close(fig)
+        #plt.close(fig)
 
 
 def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> None:
