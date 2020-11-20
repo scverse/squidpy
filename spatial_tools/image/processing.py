@@ -33,7 +33,7 @@ def process_img(
     img: ImageContainer
         High-resolution image.
     img_id: str
-        Key of image object to segment.
+        Key of image object to process.
     processing: str
         Name of proccesing method to use. Available are:
 

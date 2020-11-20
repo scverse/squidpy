@@ -1,9 +1,15 @@
 """Spatial tools general utility functions."""
 import os
+import glob
+from typing import Optional
 
+import scanpy as sc
 import anndata as ad
+import scanpy.logging as logg
 
 import pandas as pd
+
+from .image.object import ImageContainer
 
 
 def read_seqfish(base_path: str, dataset: str):
@@ -43,3 +49,38 @@ def read_seqfish(base_path: str, dataset: str):
     adata.obs["louvain"] = pd.Categorical(adata.obs["louvain"])
 
     return adata
+
+
+def read_visium_data(dataset_folder: str, count_file: Optional[str] = None, image_file: Optional[str] = None):
+    """
+    Read adata and tif image from visium dataset.
+
+    Args
+    ----
+    count_file: Optional[str]
+        Name of the h5 file in dataset_folder. If not specified, will use *filtered_feature_bc_matrix.h5
+    image_file: Optional[str]
+        Name of the .tif file in dataset_folder. If not specified, will use *image.tif
+
+    Returns
+    -------
+    AnnData:
+        Count matrix
+    ImageContainer:
+        High resolution tif image
+    """
+    if count_file is None:
+        files = sorted(glob.glob(os.path.join(dataset_folder, "*filtered_feature_bc_matrix.h5")))
+        assert len(files) > 0, f"did not find a count file in {dataset_folder}"
+        count_file = files[0]
+        logg.warning(f"read_visium_data: setting count_file to {count_file}")
+    if image_file is None:
+        files = sorted(glob.glob(os.path.join(dataset_folder, "*image.tif")))
+        assert len(files) > 0, f"did not find a image file in {dataset_folder}"
+        image_file = files[0]
+        logg.warning(f"read_visium_data: setting image_file to {image_file}")
+    # read adata
+    adata = sc.read_visium(dataset_folder, count_file=count_file)
+    # read image
+    img = ImageContainer(os.path.join(dataset_folder, image_file))
+    return adata, img
