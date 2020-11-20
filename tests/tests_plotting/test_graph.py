@@ -14,6 +14,15 @@ ROOT = HERE / "_images"
 FIGS = HERE / "figures"
 
 
+def test_spatial_graph(image_comparer, adata: AnnData):
+    save_and_compare_images = image_comparer(ROOT, FIGS, tol=15)
+
+    adata = adata
+    graph.spatial_connectivity(adata)
+    plotting.spatial_graph(adata)
+    save_and_compare_images("master_spatial_graph")
+
+
 def test_interaction(image_comparer, adata: AnnData):
     save_and_compare_images = image_comparer(ROOT, FIGS, tol=15)
 

@@ -13,6 +13,37 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
+def spatial_graph(
+    adata: AnnData
+) -> None:
+    """
+    Plotting wrapper for scanpy plotting function for spatial graphs.
+
+    Parameters
+    ----------
+    adata
+        The AnnData object.
+
+    Returns
+    -------
+    None
+    """
+    key_added = "spatial"
+    conns_key = "spatial_connectivities"
+    adata.uns[key_added] = {}
+    neighbors_dict = adata.uns[key_added]
+    neighbors_dict["connectivities_key"] = conns_key
+    neighbors_dict["distances_key"] = "dummy"
+
+    sc.pl.embedding(
+        adata,
+        basis="spatial",
+        edges=True,
+        neighbors_key="spatial",
+        edges_width=4
+    )
+
+
 def centrality_scores(
     adata: AnnData, cluster_key: str, selected_score: Union[str, None] = None, *args, **kwargs
 ) -> None:

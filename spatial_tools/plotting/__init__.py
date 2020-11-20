@@ -1,4 +1,5 @@
 from ._graph import (
+    spatial_graph,
     plot_ripley_k,
     nhood_enrichment,
     centrality_scores,
