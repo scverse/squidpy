@@ -168,7 +168,7 @@ def nhood_enrichment(
         np.random.shuffle(int_clust)
         perms[:, :, perm] = _test(indices, indptr, int_clust)
 
-    zscore = count - perms.mean(axis=-1) / perms.std(axis=-1)
+    zscore = (count - perms.mean(axis=-1)) / perms.std(axis=-1)
 
     adata.uns[f"{cluster_key}_nhood_enrichment"] = {"zscore": zscore, "count": count}
 
