@@ -1,6 +1,7 @@
 import sys
 import pickle
 from typing import Tuple, Sequence, NamedTuple
+from pathlib import Path
 from itertools import product
 
 import pytest
@@ -11,8 +12,14 @@ from anndata import AnnData
 import numpy as np
 import pandas as pd
 
+import matplotlib as mpl
+from matplotlib import pyplot
+from matplotlib.testing.compare import compare_images
+
 import spatial_tools as se
 from spatial_tools.image.object import ImageContainer
+
+mpl.use("agg")
 
 _adata = sc.read("tests/_data/test_data.h5ad")
 _adata.raw = _adata.copy()
@@ -95,3 +102,22 @@ def logging_state():
     yield
     sc.settings.logfile = sys.stderr
     sc.settings.verbosity = verbosity_orig
+
+
+def make_comparer(path_expected: Path, path_actual: Path, *, tol: int):
+    def save_and_compare(basename, tolerance=None):
+        path_actual.mkdir(parents=True, exist_ok=True)
+        out_path = path_actual / f"{basename}.png"
+        pyplot.savefig(out_path, dpi=40)
+        pyplot.close()
+        if tolerance is None:
+            tolerance = tol
+        res = compare_images(str(path_expected / f"{basename}.png"), str(out_path), tolerance)
+        assert res is None, res
+
+    return save_and_compare
+
+
+@pytest.fixture
+def image_comparer():
+    return make_comparer
