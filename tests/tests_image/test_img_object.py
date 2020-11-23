@@ -7,8 +7,8 @@ import xarray as xr
 
 import rasterio.errors
 
-from spatial_tools.image.crop import uncrop_img
-from spatial_tools.image.object import ImageContainer
+from squidpy.image.crop import uncrop_img
+from squidpy.image.object import ImageContainer
 
 
 @pytest.mark.parametrize("shape", [(3, 100, 200), (1, 100, 200), (10, 1, 100, 200)])
