@@ -8,10 +8,12 @@ import numpy as np
 from scipy.sparse import SparseEfficiencyWarning, csr_matrix
 from sklearn.metrics.pairwise import cosine_similarity
 
+from squidpy.constants._pkg_constants import SPATIAL_M
+
 
 def spatial_connectivity(
     adata: AnnData,
-    obsm: str = "X_spatial",
+    obsm: str = SPATIAL_M,
     n_rings: int = 1,
     n_neigh: int = 6,
     radius: Optional[float] = None,

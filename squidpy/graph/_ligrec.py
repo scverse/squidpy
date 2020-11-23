@@ -23,12 +23,12 @@ from squidpy._docs import d, inject_docs
 from ._utils import (
     Queue,
     Signal,
-    ModeEnum,
     parallelize,
     _get_n_cores,
     _create_sparse_df,
     _check_tuple_needles,
 )
+from ..constants._utils import ModeEnum
 
 StrSeq = Sequence[str]
 InteractionType = Union[pd.DataFrame, Mapping[str, StrSeq], Tuple[StrSeq, StrSeq], Sequence[Tuple[str, str]], StrSeq]
