@@ -175,57 +175,51 @@ def nhood_enrichment(
     return (zscore, count) if copy else None
 
 
-def cluster_centrality_scores(
+def centrality_scores(
     adata: AnnData,
-    clusters_key: str,
-    connectivity_key: Union[str, None] = None,
-    key_added: str = "cluster_centrality_scores",
-):
+    cluster_key: str,
+    connectivity_key: Union[str, None] = "spatial_connectivities",
+    copy: bool = False,
+) -> None:
     """
-    Compute centrality scores per cluster or cell type in AnnData object.
+     Compute centrality scores per cluster or cell type in AnnData object.
 
-    Results are stored in .uns in the AnnData object under the key specified in key_added.
+     Results are stored in .uns in the AnnData object under the key specified in key_added.
 
-    Based among others on methods used for Gene Regulatory Networks (GRNs) in:
-    'CellOracle: Dissecting cell identity via network inference and in silico gene perturbation'
-    Kenji Kamimoto, Christy M. Hoffmann, Samantha A. Morris
-    bioRxiv 2020.02.17.947416; doi: https://doi.org/10.1101/2020.02.17.947416
+     Based among others on methods used for Gene Regulatory Networks (GRNs) in:
+     'CellOracle: Dissecting cell identity via network inference and in silico gene perturbation'
+     Kenji Kamimoto, Christy M. Hoffmann, Samantha A. Morris
+     bioRxiv 2020.02.17.947416; doi: https://doi.org/10.1101/2020.02.17.947416
 
-    Parameters
-    ----------
-    adata
-        The AnnData object.
-    clusters_key
-        Key to clusters in obs.
-    connectivity_key
-        (Optional) Key to connectivity_matrix in obsp.
-    key_added
-        (Optional) Key added to output dataframe in adata.uns.
+     Parameters
+     ----------
+     adata
+         The AnnData object.
+     cluster_key
+         Key to clusters in obs.
+     connectivity_key
+         (Optional) Key to connectivity_matrix in obsp.
+    copy
+         If `True`, return the result, otherwise save it to the ``adata`` object.
 
-    Returns
-    -------
-    None
+     Returns
+     -------
+     None
     """
-    if clusters_key not in adata.obs_keys():
+    if cluster_key not in adata.obs_keys():
         raise ValueError(
-            "clusters_key %s not recognized. Choose a different key refering to a cluster in .obs." % clusters_key
+            f"cluster_key {cluster_key} not recognized. Choose a different key referring to a cluster in .obs."
         )
 
-    if "networkx_graph" in adata.uns_keys():
-        print("Using saved networkx graph stored under .uns in AnnData object.")
-        graph = adata.uns["networkx_graph"]
-    elif connectivity_key in adata.obsp:
+    if connectivity_key in adata.obsp:
         graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
-        print("Saving networkx graph based on %s in .uns under key: networkx_graph" % connectivity_key)
-        adata.uns["networkx_graph"] = graph
     else:
         raise ValueError(
-            "Networkx graph not found in .uns and connectivity_key %s not recognized. "
             "Choose a different connectivity_key or run first "
-            "build.spatial_connectivity(adata) on the AnnData object." % connectivity_key
+            "build.spatial_connectivity(adata) on the AnnData object."
         )
 
-    clusters = adata.obs[clusters_key].unique().tolist()
+    clusters = adata.obs[cluster_key].unique().tolist()
 
     degree_centrality = []
     clustering_coefficient = []
@@ -233,7 +227,7 @@ def cluster_centrality_scores(
     closeness_centrality = []
 
     for c in clusters:
-        cluster_node_idx = adata[adata.obs[clusters_key] == c].obs.index.tolist()
+        cluster_node_idx = adata[adata.obs[cluster_key] == c].obs.index.tolist()
         # ensuring that cluster_node_idx are List[int]
         cluster_node_idx = [i for i, x in enumerate(cluster_node_idx)]
         subgraph = graph.subgraph(cluster_node_idx)
@@ -253,23 +247,25 @@ def cluster_centrality_scores(
     df = pd.DataFrame(
         list(zip(clusters, degree_centrality, clustering_coefficient, closeness_centrality, betweenness_centrality)),
         columns=[
-            "cluster",
-            "degree centrality",
-            "clustering coefficient",
-            "closeness centrality",
-            "betweenness centrality",
+            "cluster_key",
+            "degree_centrality",
+            "clustering_coefficient",
+            "closeness_centrality",
+            "betweenness_centrality",
         ],
     )
-    adata.uns[key_added] = df
+    adata.uns[f"{cluster_key}_centrality_scores"] = df
+
+    return None if copy is False else df
 
 
-def cluster_interactions(
+def interaction_matrix(
     adata: AnnData,
-    clusters_key: str,
-    connectivity_key: Union[str, None] = None,
-    normalized: bool = False,
-    key_added: str = "cluster_interactions",
-):
+    cluster_key: str,
+    connectivity_key: Union[str, None] = "spatial_connectivities",
+    normalized: bool = True,
+    copy: bool = False,
+) -> None:
     """
     Compute interaction matrix for clusters. Results are stored in .uns in the AnnData object.
 
@@ -277,41 +273,37 @@ def cluster_interactions(
     ----------
     adata
         The AnnData object.
-    clusters_key
+    cluster_key
         Key to clusters in obs.
     connectivity_key
         (Optional) Key to connectivity_matrix in obsp.
     normalized
         (Optional) If True, then each row is normalized by the summation of its values.
-    key_added
-        (Optional) Key added to output in adata.uns.
+    copy
+        If `True`, return the result, otherwise save it to the ``adata`` object.
 
     Returns
     -------
     None
     """
-    if clusters_key not in adata.obs_keys():
+    if cluster_key not in adata.obs_keys():
         raise ValueError(
-            f"clusters_key {clusters_key} not recognized. Choose a different key refering to a cluster in .obs."
+            f"cluster_key {cluster_key} not recognized. Choose a different key referring to a cluster in .obs."
         )
 
-    if "networkx_graph" in adata.uns_keys():
-        print("Using saved networkx graph stored under .uns in AnnData object.")
-        graph = adata.uns["networkx_graph"]
-    elif connectivity_key in adata.obsp:
+    if connectivity_key in adata.obsp:
         graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
-        print(
-            f"Saving networkx graph build on adjacency matrix of connectivity_key in .uns under key: "
-            f"networkx_graph{connectivity_key}"
-        )
-        adata.uns["networkx_graph"] = graph
     else:
         raise ValueError(
-            f"Networkx graph not found in .uns and connectivity_key {connectivity_key} not recognized. "
             "Choose a different connectivity_key or run first "
             "build.spatial_connectivity(adata) on the AnnData object."
         )
 
-    clusters = {i: {clusters_key: str(x)} for i, x in enumerate(adata.obs[clusters_key].tolist())}
-    nx.set_node_attributes(graph, clusters)
-    adata.uns[key_added] = nx.attr_matrix(graph, node_attr=clusters_key, normalized=normalized)
+    cluster = {i: {cluster_key: x} for i, x in enumerate(adata.obs[cluster_key].tolist())}
+    nx.set_node_attributes(graph, cluster)
+    int_mat = nx.attr_matrix(
+        graph, node_attr=cluster_key, normalized=normalized, rc_order=adata.obs[cluster_key].cat.categories
+    )
+    adata.uns[f"{cluster_key}_interactions"] = int_mat
+
+    return None if copy is False else int_mat

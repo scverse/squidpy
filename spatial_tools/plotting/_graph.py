@@ -2,16 +2,51 @@
 
 from typing import Union
 
+import scanpy as sc
 from anndata import AnnData
 
 import numpy as np
+import pandas as pd
 from pandas import DataFrame
 
 import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-def plot_cluster_centrality_scores(adata: AnnData, centrality_scores_key: str = "cluster_centrality_scores"):
+def spatial_graph(adata: AnnData, *args, **kwargs) -> None:
+    """
+    Plot wrapper for scanpy plotting function for spatial graphs.
+
+    Parameters
+    ----------
+    adata
+        The AnnData object.
+
+    Returns
+    -------
+    None
+    """
+    key_added = "spatial"
+    conns_key = "spatial_connectivities"
+    adata.uns[key_added] = {}
+    neighbors_dict = adata.uns[key_added]
+    neighbors_dict["connectivities_key"] = conns_key
+    neighbors_dict["distances_key"] = "dummy"
+
+    sc.pl.embedding(
+        adata,
+        basis="spatial",
+        edges=True,
+        neighbors_key="spatial",
+        edges_width=4,
+        *args,
+        **kwargs,
+    )
+
+
+def centrality_scores(
+    adata: AnnData, cluster_key: str, selected_score: Union[str, None] = None, *args, **kwargs
+) -> None:
     """
     Plot centrality scores as seaborn stripplot.
 
@@ -19,79 +54,125 @@ def plot_cluster_centrality_scores(adata: AnnData, centrality_scores_key: str = 
     ----------
     adata
         The AnnData object.
-    centrality_scores_key
-        Key to centrality_scores_key in uns.
+    cluster_key
+        Key to cluster_interactions_key in uns.
+    selected_score
+        Whether to plot all scores or only just a selected one.
 
     Returns
     -------
     None
     """
-    if centrality_scores_key in adata.uns_keys():
-        df = adata.uns[centrality_scores_key]
+    scores_key = f"{cluster_key}_centrality_scores"
+    if scores_key in adata.uns_keys():
+        df = adata.uns[scores_key]
     else:
         raise ValueError(
-            "centrality_scores_key %s not recognized. Choose a different key or run first "
-            "nhood.cluster_centrality_scores(adata) on your AnnData object." % centrality_scores_key
+            f"centrality_scores_key {scores_key} not found. \n"
+            "Choose a different key or run first nhood.centrality_scores(adata)"
         )
+    var = DataFrame(df.columns, columns=[scores_key])
+    var["index"] = var[scores_key]
+    var = var.set_index("index")
 
-    df = df.rename(
-        columns={
-            "degree centrality": "degree\ncentrality",
-            "clustering coefficient": "clustering\ncoefficient",
-            "closeness centrality": "closeness\ncentrality",
-            "betweenness centrality": "betweenness\ncentrality",
-        }
-    )
-    values = [
-        "degree\ncentrality",
-        "clustering\ncoefficient",
-        "closeness\ncentrality",
-        "betweenness\ncentrality",
-    ]
-    for i, value in zip([1, 2, 3, 4], values):
-        plt.subplot(1, 4, i)
-        ax = sns.stripplot(data=df, y="cluster", x=value, size=10, orient="h", linewidth=1)
-        ax.spines["right"].set_visible(False)
-        ax.spines["top"].set_visible(False)
-        ax.spines["bottom"].set_visible(False)
-        ax.spines["left"].set_visible(False)
-        ax.yaxis.grid(True)
-        ax.tick_params(bottom=False, left=False, right=False, top=False)
-        if i > 1:
-            plt.ylabel(None)
-            ax.tick_params(labelleft=False)
+    cat = adata.obs[cluster_key].cat.categories.values.astype(str)
+    idx = {cluster_key: pd.Categorical(cat, categories=cat)}
+
+    ad = AnnData(X=np.array(df), obs=idx, var=var)
+
+    colors_key = f"{cluster_key}_colors"
+    if colors_key in adata.uns.keys():
+        ad.uns[colors_key] = adata.uns[colors_key]
+
+    if selected_score is not None:
+        sc.pl.scatter(
+            ad, x=selected_score, y=cluster_key, color=cluster_key, size=1000, title="", frameon=True, *args, **kwargs
+        )
+    else:
+        nrows = len(ad.var.index) - 1
+        fig, ax = plt.subplots(nrows=nrows, ncols=1, figsize=(4, 6 * nrows))
+        for i in range(nrows):
+            x = list(ad.var.index)[i + 1]
+            sc.pl.scatter(
+                ad,
+                x=str(x),
+                y=cluster_key,
+                color=cluster_key,
+                size=1000,
+                ax=ax[i],
+                show=False,
+                frameon=True,
+                *args,
+                **kwargs,
+            )
+        plt.show()
 
 
-def plot_cluster_interactions(adata: AnnData, cluster_interactions_key: str = "cluster_interactions"):
+def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> None:
     """
-    Plot cluster interactions as matshow plot.
+    Plot cluster interaction matrix, as computed with graph.interaction_matrix.
 
     Parameters
     ----------
     adata
         The AnnData object.
-    cluster_interactions_key
+    cluster_key
         Key to cluster_interactions_key in uns.
 
     Returns
     -------
     None
     """
-    if cluster_interactions_key in adata.uns_keys():
-        interaction_matrix = adata.uns[cluster_interactions_key]
+    int_key = f"{cluster_key}_interactions"
+    if int_key in adata.uns_keys():
+        array = adata.uns[int_key]
     else:
         raise ValueError(
-            "cluster_interactions_key %s not recognized. Choose a different key or run first "
-            "nhood.cluster_interactions(adata) on your AnnData object." % cluster_interactions_key
+            f"cluster_interactions_key {int_key} not found. \n"
+            "Choose a different key or run first nhood.interaction_matrix(adata)"
         )
+    cat = adata.obs[cluster_key].cat.categories.values.astype(str)
+    idx = {cluster_key: pd.Categorical(cat, categories=cat)}
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    cax = ax.matshow(interaction_matrix[0])
-    fig.colorbar(cax)
+    ad = AnnData(X=array, obs=idx, var=idx)
 
-    plt.xticks(range(len(interaction_matrix[1])), interaction_matrix[1], size="small")
-    plt.yticks(range(len(interaction_matrix[1])), interaction_matrix[1], size="small")
+    colors_key = f"{cluster_key}_colors"
+    if colors_key in adata.uns.keys():
+        ad.uns[colors_key] = adata.uns[colors_key]
+    sc.pl.heatmap(ad, var_names=ad.var_names, groupby=cluster_key, *args, **kwargs)
+
+
+def nhood_enrichment(adata: AnnData, cluster_key: str, mode: str = "zscore", *args, **kwargs) -> None:
+    """
+    Plot cluster interaction matrix, as computed with graph.interaction_matrix.
+
+    Parameters
+    ----------
+    adata
+        The AnnData object.
+    cluster_key
+        Key to cluster_interactions_key in uns.
+
+    Returns
+    -------
+    None
+    """
+    int_key = f"{cluster_key}_nhood_enrichment"
+    if int_key in adata.uns_keys():
+        array = adata.uns[int_key][mode]
+    else:
+        raise ValueError(
+            f"key {int_key} not found. \n" "Choose a different key or run first graph.nhood_enrichment(adata)"
+        )
+    cat = adata.obs[cluster_key].cat.categories.values.astype(str)
+    idx = {cluster_key: pd.Categorical(cat, categories=cat)}
+
+    ad = AnnData(X=array, obs=idx, var=idx)
+
+    colors_key = f"{cluster_key}_colors"
+    if colors_key in adata.uns.keys():
+        ad.uns[colors_key] = adata.uns[colors_key]
+    sc.pl.heatmap(ad, var_names=ad.var_names, groupby=cluster_key, *args, **kwargs)
 
 
 def plot_ripley_k(
