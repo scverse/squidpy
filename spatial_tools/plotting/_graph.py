@@ -13,11 +13,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-def spatial_graph(
-    adata: AnnData
-) -> None:
+def spatial_graph(adata: AnnData, *args, **kwargs) -> None:
     """
-    Plotting wrapper for scanpy plotting function for spatial graphs.
+    Plot wrapper for scanpy plotting function for spatial graphs.
 
     Parameters
     ----------
@@ -40,7 +38,9 @@ def spatial_graph(
         basis="spatial",
         edges=True,
         neighbors_key="spatial",
-        edges_width=4
+        edges_width=4,
+        *args,
+        **kwargs,
     )
 
 
@@ -106,7 +106,6 @@ def centrality_scores(
                 **kwargs,
             )
         plt.show()
-        #plt.close(fig)
 
 
 def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> None:
