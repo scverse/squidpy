@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      max-parallel: 4
+      matrix:
+        python: [3.7, 3.8]  # , 3.9]
+        os: [ubuntu-latest, macos-latest]
+    env:
+      OS: ${{ matrix.os }}
+      PYTHON: ${{ matrix.python }}
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python }}
+        submodules: false
+
+    - name: Get pip cache dir
+      id: pip-cache
+      run: |
+        echo "::set-output name=dir::$(pip cache dir)"
+
+    - name: Cache pip
+      uses: actions/cache@v2
+      with:
+        path: ${{ steps.pip-cache.outputs.dir }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install tox tox-gh-actions codecov
+
+    - name: Installed automake for leidenalg
+      run: |
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          sudo apt install automake
+        elif [[ "$RUNNER_OS" == "macOS" ]]; then
+          brew install automake
+        else
+          echo "$RUNNER_OS not supported"
+          exit 1
+        fi
+
+    - name: Linting
+      run: |
+        tox -e lint
+
+    - name: Documentation check
+      run: |
+        tox -e docs-check
+
+    - name: Testing
+      run: |
+        tox
+      env:
+        PLATFORM: ${{ matrix.platform }}
+
+    - name: Upload coverage to Codecov
+      if: success()
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
+      run: |
+        codecov --no-color --required --flags unittests

@@ -11,8 +11,8 @@ from scanpy.datasets import blobs
 import numpy as np
 import pandas as pd
 
-from spatial_tools.graph import perm_test
-from spatial_tools.graph.perm_test import PermutationTest
+from squidpy.graph import perm_test
+from squidpy.graph._ligrec import PermutationTest
 
 _CK = "leiden"
 Interactions_t = Tuple[Sequence[str], Sequence[str]]
