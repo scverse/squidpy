@@ -13,6 +13,8 @@ from squidpy.image.object import ImageContainer
 
 # cont is now in conftest.py
 def test_calculate_image_features(adata: AnnData, cont: ImageContainer):
+    # Todo - fix test
+    adata.obsm["spatial"] = adata.obsm["X_spatial"]
     features = ["hog", "texture", "summary", "color_hist"]
     _ = calculate_image_features(adata, cont, features=features)
 

@@ -8,7 +8,6 @@ import xarray as xr
 
 from imageio import imread
 
-from squidpy.image._utils import _round_even
 from ._utils import _num_pages
 
 
@@ -204,10 +203,10 @@ class ImageContainer:
             raise ValueError(img)
         return xr_img
 
-    def crop(
+    def crop_corner(
         self,
-        x: float,
-        y: float,
+        x: int,
+        y: int,
         xs: int = 100,
         ys: int = 100,
         img_id: Optional[str] = None,
@@ -215,16 +214,16 @@ class ImageContainer:
         **kwargs,
     ) -> xr.DataArray:
         """
-        Extract a crop based on coordinates `x` and `y` of `img_id`.
+        Extract a crop from upper left corner coordinates `x` and `y` of `img_id`.
 
-        Centred on x, y if centred is True, else right and down from x, y.
+        The crop will be extracted right and down from x, y.
 
         Parameters
         ----------
         x
-            X coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if x+xs/2 is integer.
+            X coord of crop (in pixel space).
         y
-            Y coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if y+ys/2 is integer.
+            Y coord of crop (in pixel space).
         xs
             Width of the crop in pixels.
         ys
@@ -234,15 +233,12 @@ class ImageContainer:
         scale
             Default is 1.0.
             Resolution of the crop (smaller -> smaller image).
-            TODO: when scaling, will return a numpy array instead of an xarray
         mask_circle
             Default is False.
             Mask crop to a circle.
         cval
             Default is 0
             The value outside image boundaries or the mask.
-        centred
-            Whether the crop coordinates are centred.
         dtype
             Optional, type to which the output should be (safely) cast.
             Currently supported dtypes: 'uint8'.
@@ -258,17 +254,61 @@ class ImageContainer:
             img_id = list(self.data.keys())[0]
 
         img = self.data.data_vars[img_id]
-        if centred:
-            assert (xs / 2.0 + x) % 1 == 0, "x and xs/2 have to add up to an integer to use centred model"
-            assert (ys / 2.0 + y) % 1 == 0, "y and ys/2 have to add up to an integer to use centred model"
-            x = int(x - xs // 2)  # move from centre to corner
-            y = int(y - ys // 2)  # move from centre to corner
-        else:
-            assert x % 1.0 == 0, "x needs to be integer"
-            assert y % 1.0 == 0, "x needs to be integer"
-            x = int(x)
-            y = int(y)
         return crop_img(img=img, x=x, y=y, xs=xs, ys=ys, **kwargs)
+
+    def crop_center(
+        self,
+        x: int,
+        y: int,
+        xr: int = 100,
+        yr: int = 100,
+        img_id: Optional[str] = None,
+        **kwargs,
+    ) -> xr.DataArray:
+        """
+        Extract a crop based on coordinates `x` and `y` of `img_id`.
+
+        The extracted crop will be centered on x, y, and have shape `yr*2+1, xr*2+1`.
+
+        Parameters
+        ----------
+        x
+            X coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if x+xs/2 is integer.
+        y
+            Y coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if y+ys/2 is integer.
+        xr
+            Radius of the crop in pixels.
+        yr
+            Height of the crop in pixels.
+        img_id
+            id of the image layer to be cropped.
+        scale
+            Default is 1.0.
+            Resolution of the crop (smaller -> smaller image).
+        mask_circle
+            Default is False.
+            Mask crop to a circle.
+        cval
+            Default is 0
+            The value outside image boundaries or the mask.
+        dtype
+            Optional, type to which the output should be (safely) cast.
+            Currently supported dtypes: 'uint8'.
+
+        Returns
+        -------
+        :class:`xarray.DataArray`
+            Data with dimensions: channels, y, x.
+        """
+        # move from center to corner
+        x = x - xr
+        y = y - yr
+
+        # calculate size
+        xs = xr * 2 + 1
+        ys = yr * 2 + 1
+
+        return self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id, **kwargs)
 
     def crop_equally(
         self,
@@ -309,7 +349,7 @@ class ImageContainer:
         unique_ycoord = np.arange(start=0, stop=(self.data.dims["y"] // ys) * ys, step=ys)
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
-        crops = [self.crop(x=x, y=y, xs=xs, ys=ys, img_id=img_id, centred=False) for x, y in zip(xcoords, ycoords)]
+        crops = [self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id) for x, y in zip(xcoords, ycoords)]
         return crops, xcoords, ycoords
 
     def crop_spot_generator(self, adata: AnnData, **kwargs) -> Iterator[Tuple[int, str]]:
@@ -349,14 +389,13 @@ class ImageContainer:
         dataset_name = kwargs.get("dataset_name", None)
         if dataset_name is None:
             dataset_name = list(adata.uns["spatial"].keys())[0]
-        xcoord = adata.obsm["X_spatial"][:, 0]
-        ycoord = adata.obsm["X_spatial"][:, 1]
+        xcoord = adata.obsm["spatial"][:, 0]
+        ycoord = adata.obsm["spatial"][:, 1]
         spot_diameter = adata.uns["spatial"][dataset_name]["scalefactors"]["spot_diameter_fullres"]
         size = kwargs.get("size", 1)
-        s = int(_round_even(spot_diameter * size))
-        # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
+        r = int(round(spot_diameter * size // 2))
 
         obs_ids = adata.obs.index.tolist()
         for i, obs_id in enumerate(obs_ids):
-            crop = self.crop(x=xcoord[i], y=ycoord[i], xs=s, ys=s, **kwargs)
+            crop = self.crop_center(x=xcoord[i], y=ycoord[i], xr=r, yr=r, **kwargs)
             yield (obs_id, crop)
