@@ -16,8 +16,8 @@ import matplotlib as mpl
 from matplotlib import pyplot
 from matplotlib.testing.compare import compare_images
 
-import spatial_tools as se
-from spatial_tools.image.object import ImageContainer
+import squidpy as se
+from squidpy.image.object import ImageContainer
 
 mpl.use("agg")
 
@@ -45,8 +45,8 @@ def dummy_adata() -> AnnData:
     r = np.random.RandomState(100)
     adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
 
-    adata.obsm["spatial"] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
-    se.graph.spatial_connectivity(adata, obsm="spatial", n_rings=2)
+    adata.obsm["X_spatial"] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
+    se.graph.spatial_connectivity(adata, obsm="X_spatial", n_rings=2)
 
     return adata
 
@@ -95,7 +95,7 @@ def ligrec_no_numba() -> NamedTuple:
         return pickle.load(fin)
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def logging_state():
     # modified from scanpy
     verbosity_orig = sc.settings.verbosity
@@ -121,3 +121,59 @@ def make_comparer(path_expected: Path, path_actual: Path, *, tol: int):
 @pytest.fixture
 def image_comparer():
     return make_comparer
+
+
+@pytest.fixture(scope="function")
+def visium_adata():
+    visium_coords = np.array(
+        [
+            [4193, 7848],
+            [4469, 7848],
+            [4400, 7968],
+            [4262, 7729],
+            [3849, 7968],
+            [4124, 7729],
+            [4469, 7609],
+            [3987, 8208],
+            [4331, 8088],
+            [4262, 7968],
+            [4124, 7968],
+            [4124, 7489],
+            [4537, 7968],
+            [4469, 8088],
+            [4331, 7848],
+            [4056, 7848],
+            [3849, 7729],
+            [4262, 7489],
+            [4400, 8208],
+            [4056, 7609],
+            [3987, 7489],
+            [4262, 8208],
+            [4400, 7489],
+            [4537, 7729],
+            [4606, 7848],
+            [3987, 7968],
+            [3918, 8088],
+            [3918, 7848],
+            [4193, 8088],
+            [4056, 8088],
+            [4193, 7609],
+            [3987, 7729],
+            [4331, 7609],
+            [4124, 8208],
+            [3780, 7848],
+            [3918, 7609],
+            [4400, 7729],
+        ]
+    )
+    adata = AnnData(X=np.ones((visium_coords.shape[0], 3)))
+    adata.obsm["X_spatial"] = visium_coords
+    return adata
+
+
+@pytest.fixture(scope="function")
+def non_visium_adata():
+    non_visium_coords = np.array([[1, 0], [3, 0], [5, 6], [0, 4]])
+    adata = AnnData(X=non_visium_coords)
+    adata.obsm["X_spatial"] = non_visium_coords
+    return adata

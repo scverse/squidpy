@@ -1,0 +1,22 @@
+[paths]
+source =
+    squidpy
+    */site-packages/squidpy
+
+[run]
+branch = true
+parallel = true
+source = squidpy
+omit = */__init__.py
+
+[report]
+exclude_lines =
+    \#.*pragma:\s*no.?cover
+
+    if __name__ == .__main__.
+
+    ^\s*raise AssertionError\b
+    ^\s*raise NotImplementedError\b
+    ^\s*return NotImplemented\b
+show_missing = true
+precision = 2

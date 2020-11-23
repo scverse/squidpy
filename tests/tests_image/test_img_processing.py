@@ -2,8 +2,8 @@ import pytest
 
 import numpy as np
 
-from spatial_tools.image.object import ImageContainer
-from spatial_tools.image.processing import process_img
+from squidpy.image.object import ImageContainer
+from squidpy.image.processing import process_img
 
 
 @pytest.mark.parametrize("xs, ys", [(None, None), (40, 40)])

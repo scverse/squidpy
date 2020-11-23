@@ -138,3 +138,10 @@ dmypy.json
 
 # data
 data
+
+# docs
+docs/source/api/*rst
+docs/source/spelling_wordlist.txt
+
+# Vim .swp
+*.swp
