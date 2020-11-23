@@ -10,6 +10,8 @@ import matplotlib.cm as cmx
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 
+from squidpy.constants._pkg_constants import SPATIAL_M
+
 
 def prepare_data_for_clustering(adata: AnnData) -> None:
     """
@@ -97,7 +99,7 @@ def plot_louvain_on_graph(adata: AnnData) -> None:
     import networkx as nx
 
     g = nx.from_numpy_matrix(adata.obsp["spatial_connectivity"].todense())
-    dict_nodes = {i: p for i, p in enumerate(adata.obsm["spatial"])}
+    dict_nodes = {i: p for i, p in enumerate(adata.obsm[SPATIAL_M])}
     plt.figure(figsize=(8, 8))
     nx.draw_networkx_edges(g, pos=dict_nodes, width=0.1)
     cluster_name = "joined_louvain"

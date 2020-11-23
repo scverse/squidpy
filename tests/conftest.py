@@ -18,6 +18,7 @@ from matplotlib.testing.compare import compare_images
 
 import squidpy as se
 from squidpy.image.object import ImageContainer
+from squidpy.constants._pkg_constants import SPATIAL_M
 
 mpl.use("agg")
 
@@ -45,8 +46,8 @@ def dummy_adata() -> AnnData:
     r = np.random.RandomState(100)
     adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
 
-    adata.obsm["X_spatial"] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
-    se.graph.spatial_connectivity(adata, obsm="X_spatial", n_rings=2)
+    adata.obsm[SPATIAL_M] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
+    se.graph.spatial_connectivity(adata, obsm=SPATIAL_M, n_rings=2)
 
     return adata
 
@@ -167,7 +168,7 @@ def visium_adata():
         ]
     )
     adata = AnnData(X=np.ones((visium_coords.shape[0], 3)))
-    adata.obsm["X_spatial"] = visium_coords
+    adata.obsm[SPATIAL_M] = visium_coords
     return adata
 
 
@@ -175,5 +176,5 @@ def visium_adata():
 def non_visium_adata():
     non_visium_coords = np.array([[1, 0], [3, 0], [5, 6], [0, 4]])
     adata = AnnData(X=non_visium_coords)
-    adata.obsm["X_spatial"] = non_visium_coords
+    adata.obsm[SPATIAL_M] = non_visium_coords
     return adata
