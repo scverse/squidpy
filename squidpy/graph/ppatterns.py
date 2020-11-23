@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
+from squidpy.constants._pkg_constants import SPATIAL_M
+
 try:
     import esda
     import libpysal
@@ -29,7 +31,7 @@ def ripley_k(
     ----------
     adata
         :mod:`anndata` object of spatial transcriptomics data. The function will use coordinates in
-        adata.obsm['X_spatial'].
+        adata.obsm['spatial'].
     cluster_key
         Key of cluster labels saved in :attr:`anndata.AnnData.obs`.
     mode
@@ -54,7 +56,7 @@ def ripley_k(
     except ImportError:
         raise ImportError("\nplease install astropy: \n\n" "\tpip install astropy\n")
 
-    coord = adata.obsm["X_spatial"]
+    coord = adata.obsm[SPATIAL_M]  # TODO: inject SPATIAL_M value to docs
     # set coordinates
     y_min = int(coord[:, 1].min())
     y_max = int(coord[:, 1].max())
