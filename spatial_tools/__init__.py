@@ -8,5 +8,5 @@ __email__ = ", ".join(
 
 import spatial_tools.graph as graph
 import spatial_tools.image as image
+from .utils import read_seqfish, read_visium_data
 import spatial_tools.plotting as plotting
-from .utils import read_seqfish

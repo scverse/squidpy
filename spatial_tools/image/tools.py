@@ -1,4 +1,5 @@
-from typing import List, Optional
+from types import MappingProxyType
+from typing import List, Mapping, Optional
 
 from anndata import AnnData
 
@@ -15,6 +16,7 @@ def calculate_image_features(
     adata: AnnData,
     img: ImageContainer,
     features: Optional[List[str]] = "summary",
+    features_kwargs: Optional[Mapping] = MappingProxyType({}),
     key: Optional[str] = "img_features",
     copy: Optional[bool] = False,
     **kwargs,
@@ -37,6 +39,8 @@ def calculate_image_features(
         "color_hist": counts in bins of each color channel's histogram (`get_color_hist()`)
         Features to be calculated. Available features:
         ["hog", "texture", "summary", "color_hist"]
+    features_kwargs: Optional[dict[str, dict]]
+        keyword arguments for the different features that should be generated.
     key: Optional[str]
         Key to use for saving calculated table in adata.obsm.
         Default is "img_features"
@@ -44,7 +48,7 @@ def calculate_image_features(
         If True, return pd.DataFrame with calculated features.
         Default is False
     kwargs: keyword arguments passed to ImageContainer.crop_spot_generator function.
-        Contain dataset_name, sizef, scale, mask_circle, cval, dtype
+        Contain dataset_name, img_id, sizef, scale, mask_circle, cval, dtype
 
 
     Returns
@@ -53,6 +57,8 @@ def calculate_image_features(
     pd.DataFrame if copy is True
     """
     available_features = ["hog", "texture", "summary", "color_hist"]
+    if isinstance(features, str):
+        features = [features]
 
     for feature in features:
         assert (
@@ -64,9 +70,12 @@ def calculate_image_features(
     for obs_id, crop in img.crop_spot_generator(adata, **kwargs):
         # get np.array from crop and restructure to dimensions: y,x,channels
         crop = crop.transpose("y", "x", ...).data
+        # if crop has no color channel, reshape
+        if len(crop.shape) == 2:
+            crop = crop[:, :, np.newaxis]
 
         # get features for this crop
-        features_dict = get_features_statistics(crop, features=features)
+        features_dict = get_features_statistics(crop, features=features, features_kwargs=features_kwargs)
         features_list.append(features_dict)
 
         obs_ids.append(obs_id)
@@ -82,9 +91,13 @@ def calculate_image_features(
         adata.obsm[key] = features_log
 
 
-def get_features_statistics(im, features):
+def get_features_statistics(
+    img,
+    features,
+    features_kwargs: Optional[Mapping] = MappingProxyType({}),
+):
     """
-    Calculate histogram of oriented gradients (hog) features.
+    Calculate feature statistics.
 
     Params
     ------
@@ -92,6 +105,13 @@ def get_features_statistics(im, features):
         rgb image in uint8 format.
     features: list of strings
         feature names of features to be extracted.
+    features_kwargs: Optional[dict[str, dict]]
+        keyword arguments for the different features that should be generated.
+
+    Raises
+    ------
+    NotImplementedError:
+        if a feature string is not known
 
     Returns
     -------
@@ -99,14 +119,19 @@ def get_features_statistics(im, features):
     """
     stat_dict = {}
     for feature in features:
+        get_feature_fn = None
+        feature_kwargs = features_kwargs.get(feature, {})
         if feature == "hog":
-            stat_dict.update(get_hog_features(im, feature))
-        if feature == "texture":
-            stat_dict.update(get_grey_texture_features(im, feature))
-        if feature == "color_hist":
-            stat_dict.update(get_color_hist(im, feature))
-        if feature == "summary":
-            stat_dict.update(get_summary_stats(im, feature))
+            get_feature_fn = get_hog_features
+        elif feature == "texture":
+            get_feature_fn = get_grey_texture_features
+        elif feature == "color_hist":
+            get_feature_fn = get_color_hist
+        elif feature == "summary":
+            get_feature_fn = get_summary_stats
+        else:
+            raise NotImplementedError(f"feature {feature} is not implemented")
+        stat_dict.update(get_feature_fn(img, **feature_kwargs))
     return stat_dict
 
 
@@ -119,7 +144,7 @@ def get_hog_features(img, feature_name="hog"):
     img: M, N[, C] np.array
         rgb image in uint8 format.
     feature_name: str
-        name of feature for string id.
+        base name of feature in resulting feature values dict.
 
     Returns
     -------
@@ -132,14 +157,16 @@ def get_hog_features(img, feature_name="hog"):
     return hog_dict
 
 
-def get_summary_stats(img, feature, quantiles=(0.9, 0.5, 0.1), mean=False, std=False, channels=(0, 1, 2)):
+def get_summary_stats(img, feature_name="summary", quantiles=(0.9, 0.5, 0.1), mean=False, std=False, channels=None):
     """
     Calculate summary statistics of color channels.
 
     Params
     ------
     img: np.array
-        rgb image in uint8 format.
+        rgb image in uint8 format, in format H, W[, C]
+    feature_name: str
+        base name of feature in resulting feature values dict.
     qunatiles: list of floats
         Quantiles that are computed
     mean: bool
@@ -153,26 +180,24 @@ def get_summary_stats(img, feature, quantiles=(0.9, 0.5, 0.1), mean=False, std=F
     -------
     dict of feature values.
     """
-    # if img has no color channel, reshape
-    if len(img.shape) == 2:
-        img = img.reshape(img.shape[0], img.shape[1], 1)
-
-    # if final axis is not color channel, 3 or 1, then roll axis
-    if (img.shape[-1] != 3) and (img.shape[-1] != 1):
-        img = np.rollaxis(img, 3, 1)
+    # if channels is None, compute features for all channels
+    if channels is None:
+        channels = range(img.shape[-1])
+    if isinstance(channels, int):
+        channels = [channels]
 
     stats = {}
     for c in channels:
         for q in quantiles:
-            stats[f"{feature}_quantile_{q}_ch_{c}"] = np.quantile(img[:, :, c], q)
+            stats[f"{feature_name}_quantile_{q}_ch_{c}"] = np.quantile(img[:, :, c], q)
         if mean:
-            stats[f"{feature}_mean_ch_{c}"] = np.mean(img[:, :, c])
+            stats[f"{feature_name}_mean_ch_{c}"] = np.mean(img[:, :, c])
         if std:
-            stats[f"{feature}_std_ch_{c}"] = np.std(img[:, :, c])
+            stats[f"{feature_name}_std_ch_{c}"] = np.std(img[:, :, c])
     return stats
 
 
-def get_color_hist(img, feature, bins=10, channels=(0, 1, 2), v_range=(0, 255)):
+def get_color_hist(img, feature_name="color_hist", bins=10, channels=None, v_range=(0, 255)):
     """
     Compute histogram counts of color channel values.
 
@@ -180,6 +205,8 @@ def get_color_hist(img, feature, bins=10, channels=(0, 1, 2), v_range=(0, 255)):
     ------
     img: np.array
         rgb image in uint8 format.
+    feature_name: str
+        base name of feature in resulting feature values dict.
     bins: int
         number of binned value intervals.
     channels: list of ints
@@ -191,17 +218,21 @@ def get_color_hist(img, feature, bins=10, channels=(0, 1, 2), v_range=(0, 255)):
     -------
     dict of feature values
     """
+    # if channels is None, compute features for all channels
+    if channels is None:
+        channels = range(img.shape[-1])
+
     features = {}
     for c in channels:
         hist = np.histogram(img[:, :, c], bins=bins, range=v_range, weights=None, density=False)
         for i, count in enumerate(hist[0]):
-            features[f"{feature}_ch_{c}_bin_{i}"] = count
+            features[f"{feature_name}_ch_{c}_bin_{i}"] = count
     return features
 
 
 def get_grey_texture_features(
     img,
-    feature,
+    feature_name="texture",
     props=("contrast", "dissimilarity", "homogeneity", "correlation", "ASM"),
     distances=(1,),
     angles=(0, np.pi / 4, np.pi / 2, 3 * np.pi / 4),
@@ -219,6 +250,8 @@ def get_grey_texture_features(
     ------
     img: np.array
         rgb image in uint8 format.
+    feature_name: str
+        base name of feature in resulting feature values dict.
     props: list of strs
         texture features that are calculated. See `prop` in skimage.feature.greycoprops.
     distances: list of ints
@@ -231,14 +264,18 @@ def get_grey_texture_features(
     dict of feature values
     """
     features = {}
-    # get grey scale image
-    multiplier = [0.299, 0.587, 0.114]
-    grey_img = np.dot(img, multiplier).astype(np.uint8)
+    # if img has only one channel, do not need to convert to grey
+    if img.shape[-1] == 1:
+        grey_img = img[:, :, 0]
+    else:
+        # get grey scale image
+        multiplier = [0.299, 0.587, 0.114]
+        grey_img = np.dot(img, multiplier).astype(np.uint8)
 
     comatrix = greycomatrix(grey_img, distances=distances, angles=angles, levels=256)
     for p in props:
         tmp_features = greycoprops(comatrix, prop=p)
         for d_idx, d in enumerate(distances):
             for a_idx, a in enumerate(angles):
-                features[f"{feature}_{p}_dist_{d}_angle_{a:.2f}"] = tmp_features[d_idx, a_idx]
+                features[f"{feature_name}_{p}_dist_{d}_angle_{a:.2f}"] = tmp_features[d_idx, a_idx]
     return features

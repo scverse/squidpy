@@ -1,5 +1,6 @@
 from typing import List, Tuple, Union, Optional
 
+from scanpy import logging as logg
 from anndata import AnnData
 
 import numpy as np
@@ -141,7 +142,7 @@ class ImageContainer:
         if img_id is None:
             img_id = "image"
         # add to data
-        print("adding %s into object" % img_id)
+        logg.info("adding %s into object" % img_id)
         self.data[img_id] = img
         if not self._lazy:
             # load in memory
@@ -324,7 +325,7 @@ class ImageContainer:
             Spatial dataset (including coords in adata.obsm['spatial']).
         dataset_name: Optional[str]
             Name of the spatial data in adata (if not specified, take first one).
-        sizef: float
+        size: float
             Default is 1.0.
             Amount of context (1.0 means size of spot, larger -> more context).
         scale: float
@@ -351,8 +352,8 @@ class ImageContainer:
         xcoord = adata.obsm["spatial"][:, 0]
         ycoord = adata.obsm["spatial"][:, 1]
         spot_diameter = adata.uns["spatial"][dataset_name]["scalefactors"]["spot_diameter_fullres"]
-        sizef = kwargs.get("sizef", 1)
-        s = int(_round_even(spot_diameter * sizef))
+        size = kwargs.get("size", 1)
+        s = int(_round_even(spot_diameter * size))
         # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
 
         obs_ids = adata.obs.index.tolist()
