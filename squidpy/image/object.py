@@ -10,6 +10,7 @@ from imageio import imread
 
 from squidpy.image._utils import _round_even
 from ._utils import _num_pages
+from ..constants._pkg_constants import SPATIAL_M, SPATIAL_U
 
 
 class ImageContainer:
@@ -348,10 +349,10 @@ class ImageContainer:
         """
         dataset_name = kwargs.get("dataset_name", None)
         if dataset_name is None:
-            dataset_name = list(adata.uns["spatial"].keys())[0]
-        xcoord = adata.obsm["X_spatial"][:, 0]
-        ycoord = adata.obsm["X_spatial"][:, 1]
-        spot_diameter = adata.uns["spatial"][dataset_name]["scalefactors"]["spot_diameter_fullres"]
+            dataset_name = list(adata.uns[SPATIAL_U].keys())[0]
+        xcoord = adata.obsm[SPATIAL_M][:, 0]
+        ycoord = adata.obsm[SPATIAL_M][:, 1]
+        spot_diameter = adata.uns[SPATIAL_U][dataset_name]["scalefactors"]["spot_diameter_fullres"]
         size = kwargs.get("size", 1)
         s = int(_round_even(spot_diameter * size))
         # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
