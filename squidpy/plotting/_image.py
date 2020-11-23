@@ -1,23 +1,33 @@
 import matplotlib.pyplot as plt
+from anndata as AnnData
 
-from squidpy.image import ImageContainer
+from ..image.object import ImageContainer
+
+def interactive(adata: AnnData, img: ImageContainer, *args):
+
+    viewer = napari.view_image(img, rgb=True)
+    layer = viewer.add_shapes(
+        new_shape,
+        shape_type="polygon",
+        edge_width=1,
+        edge_color="white",
+        face_color=colors,
+    )
 
 
-def plot_segmentation(img: ImageContainer, key: str) -> None:
+    return viewer
+
+
+def plot_segmentation(img, key: str):
     """
     Plot segmentation on entire image.
 
-    Parameters
-    ----------
-    img
+    Params
+    ------
+    img: ImageContainer
         High-resolution image.
-    key
+    key: str
         Name of layer that contains segmentation in img.
-
-    Returns
-    -------
-    None
-        TODO.
     """
     arr = img[key]
     plt.imshow(arr)
