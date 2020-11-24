@@ -8,6 +8,8 @@ import numpy as np
 
 import tifffile
 
+from squidpy.constants._pkg_constants import SPATIAL_U
+
 
 def timing(f: Callable[..., Any]) -> Callable[..., Any]:
     """Time a function ``f``."""
@@ -30,6 +32,7 @@ def _num_pages(fname: str) -> int:
     return num_pages
 
 
+# TODO could be removed
 def _round_odd(num: Union[float, int]) -> Union[float, int]:
     """
     Round num to next odd integer value.
@@ -53,6 +56,7 @@ def _round_odd(num: Union[float, int]) -> Union[float, int]:
         return res - 1
 
 
+# TODO could be removed
 def _round_even(num: Union[float, int]) -> Union[float, int]:
     """
     Round num to next even integer value.
@@ -98,4 +102,4 @@ def _write_img_in_adata(adata: AnnData, img_key: str, img: np.ndarray):
     Returns:
         Image (x, y, channels).
     """
-    adata.uns["spatial"][img_key] = img
+    adata.uns[SPATIAL_U][img_key] = img
