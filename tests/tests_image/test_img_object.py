@@ -84,27 +84,27 @@ def test_crop(tmpdir):
     cont = ImageContainer(img_orig, img_id="image_0")
 
     # crop big crop
-    crop = cont.crop(
+    crop = cont.crop_center(
         x=50,
         y=20,
-        xs=300,
-        ys=300,
+        xr=150,
+        yr=150,
         cval=5,
         img_id="image_0",
     )
     # shape is s x s x len(img_id)/channels
-    assert crop.shape == (10, 300, 300)
+    assert crop.shape == (10, 301, 301)
     # check that values outside of img are padded with 5
     assert (crop[:, 0, 0] == 5).all()
     assert (crop[:, -1, -1] == 5).all()
     assert type(crop) == xr.DataArray
 
     # crop small crop
-    crop = cont.crop(
-        x=50.5,
-        y=20.5,
-        xs=1,
-        ys=1,
+    crop = cont.crop_center(
+        x=50,
+        y=20,
+        xr=0,
+        yr=0,
         cval=5,
         img_id="image_0",
     )
@@ -114,11 +114,11 @@ def test_crop(tmpdir):
     assert type(crop) == xr.DataArray
 
     # crop with mask_circle
-    crop = cont.crop(
+    crop = cont.crop_center(
         x=50,
         y=20,
-        xs=10,
-        ys=10,
+        xr=5,
+        yr=5,
         cval=5,
         img_id="image_0",
         mask_circle=True,
@@ -132,7 +132,7 @@ def test_crop(tmpdir):
     # crop casting to dtype
     img_orig = np.zeros((10, xdim, ydim), dtype=np.uint16)
     cont = ImageContainer(img_orig, img_id="image_0")
-    crop = cont.crop(x=50, y=20, xs=300, ys=300, cval=5, img_id="image_0", dtype="uint8")
+    crop = cont.crop_center(x=50, y=20, xr=150, yr=150, cval=5, img_id="image_0", dtype="uint8")
     assert crop.data.dtype == np.uint8
     assert type(crop) == xr.DataArray
 
