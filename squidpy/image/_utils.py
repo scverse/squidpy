@@ -32,6 +32,7 @@ def _num_pages(fname: str) -> int:
     return num_pages
 
 
+# TODO could be removed
 def _round_odd(num: Union[float, int]) -> Union[float, int]:
     """
     Round num to next odd integer value.
@@ -55,6 +56,7 @@ def _round_odd(num: Union[float, int]) -> Union[float, int]:
         return res - 1
 
 
+# TODO could be removed
 def _round_even(num: Union[float, int]) -> Union[float, int]:
     """
     Round num to next even integer value.
