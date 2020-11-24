@@ -1,3 +1,4 @@
+import os
 from typing import List, Tuple, Union, Iterator, Optional
 
 from scanpy import logging as logg
@@ -27,7 +28,7 @@ class ImageContainer:
 
     def __init__(
         self,
-        img: Optional[Union[str, np.ndarray]],
+        img: Optional[Union[str, os.PathLike, np.ndarray]],
         img_id: Optional[Union[str, List[str]]] = None,
         lazy: bool = True,
         chunks: Optional[int] = None,
@@ -107,7 +108,7 @@ class ImageContainer:
 
     def add_img(
         self,
-        img: Union[str, np.ndarray, xr.DataArray],
+        img: Union[str, os.PathLike, np.ndarray, xr.DataArray],
         img_id: Union[str, List[str]] = None,
         channel_id: str = "channels",
     ) -> None:
@@ -145,7 +146,7 @@ class ImageContainer:
             # load in memory
             self.data.load()
 
-    def _load_img(self, img: Union[str, np.ndarray], channel_id: str = "channels") -> xr.DataArray:
+    def _load_img(self, img: Union[str, os.PathLike, np.ndarray], channel_id: str = "channels") -> xr.DataArray:
         """
         Load img as :mod:`xarray`.
 
@@ -180,9 +181,9 @@ class ImageContainer:
             assert "x" in img.dims
             assert "y" in img.dims
             xr_img = img
-        elif isinstance(img, str):
-            ext = img.split(".")[-1]
-            if ext in ("tif", "tiff"):
+        elif isinstance(img, (str, os.PathLike)):
+            ext = os.path.splitext(img)[-1]
+            if ext in (".tif", ".tiff"):
                 # get the number of pages in the file
                 num_pages = _num_pages(img)
                 # read all pages using rasterio
@@ -192,7 +193,7 @@ class ImageContainer:
                     data = data.rename({"band": channel_id})
                     xr_img_byband.append(data)
                 xr_img = xr.concat(xr_img_byband, dim=channel_id)
-            elif ext in ("jpg", "jpeg"):
+            elif ext in (".jpg", ".jpeg"):
                 img = imread(img)
                 # jpeg has channels as last dim - transpose
                 img = img.transpose(2, 0, 1)
