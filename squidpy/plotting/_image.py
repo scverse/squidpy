@@ -19,14 +19,30 @@ def interactive(
     with_qt: Optional[bool] = False,
     color_map: str = "viridis",
     palette: str = "Dark2",
-):
+) -> None:
     """
-    Launch Napari for spot visualization.
+    Interactive Napari session for spot visualization.
 
     Params
-    ______
-    adata:
-        anndata
+    ------
+    adata
+        The AnnData object.
+    img
+        The ImgContainer object.
+    color
+        variables to visualize (either in adata.obs or adata.var_names)
+    n_polygon
+        number of sides of the polygon to plot (6=hexagon)
+    with_qt
+        whether start napari with context. Don't use in notebook, instead use %gui qt in cell
+    color_map
+        string for matplotlib colormap (for continuous variables)
+    palette
+        string for matplotlib palette (for categorical variables)
+
+    Returns
+    -------
+    None
 
     """
     try:
