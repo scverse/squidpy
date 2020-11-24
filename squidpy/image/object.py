@@ -60,6 +60,14 @@ class ImageContainer:
         if img is not None:
             self.add_img(img, img_id)
 
+    def __repr__(self):
+        s = f"ImageContainer object with {len(self.data.keys())} layers\n"
+        for layer in self.data.keys():
+            s += f"    {layer}: "
+            s += ", ".join(f"{dim} ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape))
+            s += "\n"
+        return s
+
     @property
     def shape(self) -> Tuple[int, int]:
         """Image shape."""
