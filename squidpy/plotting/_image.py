@@ -13,7 +13,7 @@ from ..image.object import ImageContainer  # noqa: F401
 
 def interactive(
     adata: AnnData,
-    img: np.ndarray,
+    img: ImageContainer,
     color: Union[str, Sequence[str], None] = None,
     n_polygon: Union[int, Sequence[str]] = 6,
     with_qt: Optional[bool] = False,
@@ -49,11 +49,14 @@ def interactive(
 
     name_lst = color
 
-    if with_qt:
+    img = img.data[library_id[0]].transpose("y", "x", "channels")
+    image = img.values
+
+    if with_qt:  # context for script based run
         with napari.gui_qt():
-            viewer = _open_napari(img, shape_lst, color_lst, name_lst)
+            viewer = _open_napari(image, shape_lst, color_lst, name_lst)
     else:
-        viewer = _open_napari(img, shape_lst, color_lst, name_lst)
+        viewer = _open_napari(image, shape_lst, color_lst, name_lst)
 
     return viewer
 
@@ -66,6 +69,7 @@ def _open_napari(img: np.ndarray, shapes: list, colors: list, names: list):
         raise ImportError("please install napari: pip install 'napari[all]'")
 
     viewer = napari.view_image(img, rgb=True)
+    # add all colors as layers
     for i in range(len(names)):
         layer = viewer.add_shapes(  # noqa: F841
             shapes[i], shape_type="polygon", edge_width=1, edge_color="black", face_color=colors[i], name=names[i]
