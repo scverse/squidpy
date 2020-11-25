@@ -65,8 +65,8 @@ def interactive(
 
     name_lst = color
 
-    img = img.data[library_id[0]].transpose("y", "x", "channels")
-    image = img.values
+    img_library_id = list(img.data.keys())
+    image = img.data[img_library_id[0]].transpose("y", "x", "channels").values
 
     if with_qt:  # context for script based run
         with napari.gui_qt():
