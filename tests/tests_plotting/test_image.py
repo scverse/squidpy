@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import napari
+from qtpy.QtCore import QTimer
+
 from anndata import AnnData
 
 from squidpy import plotting
@@ -16,8 +19,12 @@ def test_napari(adata: AnnData):
 
     gene = adata.var_names[1]
     cluster = "leiden"
+    with napari.gui_qt() as app:
+        viewer = plotting.interactive(adata, cont, [cluster, gene], with_qt=False)
+        time_in_msec = 3000
+        QTimer().singleShot(time_in_msec, app.quit)
 
-    viewer = plotting.interactive(adata, cont, [cluster, gene], with_qt=True)
+    viewer.close()
 
     assert len(viewer.layers[cluster].data) == adata.shape[0]
     assert viewer.layers[cluster].data[0].shape == (6, 2)

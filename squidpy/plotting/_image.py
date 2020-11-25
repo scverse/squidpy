@@ -87,7 +87,7 @@ def _open_napari(img: np.ndarray, shapes: list, colors: list, names: list):
     viewer = napari.view_image(img, rgb=True)
     # add all colors as layers
     for i in range(len(names)):
-        layer = viewer.add_shapes(  # noqa: F841
+        viewer.add_shapes(  # noqa: F841
             shapes[i], shape_type="polygon", edge_width=1, edge_color="black", face_color=colors[i], name=names[i]
         )
 
