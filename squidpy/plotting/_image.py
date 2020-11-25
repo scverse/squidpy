@@ -30,15 +30,15 @@ def interactive(
     img
         The ImgContainer object.
     color
-        variables to visualize (either in adata.obs or adata.var_names)
+        variables to visualize (either in adata.obs or adata.var_names).
     n_polygon
-        number of sides of the polygon to plot (6=hexagon)
+        number of sides of the polygon to plot (6=hexagon).
     with_qt
-        whether start napari with context. Don't use in notebook, instead use %gui qt in cell
+        whether start napari with context. Don't use in notebook, instead use %gui qt in separate cell.
     color_map
-        string for matplotlib colormap (for continuous variables)
+        string for matplotlib colormap (for continuous variables).
     palette
-        string for matplotlib palette (for categorical variables)
+        string for matplotlib palette (for categorical variables).
 
     Returns
     -------
@@ -46,6 +46,7 @@ def interactive(
 
     """
     try:
+        global napari
         import napari
     except ImportError:
         raise ImportError("please install napari: pip install 'napari[all]'")
@@ -68,7 +69,7 @@ def interactive(
     img_library_id = list(img.data.keys())
     image = img.data[img_library_id[0]].transpose("y", "x", "channels").values
 
-    if with_qt:  # context for script based run
+    if with_qt:  # context for script
         with napari.gui_qt():
             viewer = _open_napari(image, shape_lst, color_lst, name_lst)
     else:
@@ -78,11 +79,6 @@ def interactive(
 
 
 def _open_napari(img: np.ndarray, shapes: list, colors: list, names: list):
-
-    try:
-        import napari
-    except ImportError:
-        raise ImportError("please install napari: pip install 'napari[all]'")
 
     viewer = napari.view_image(img, rgb=True)
     # add all colors as layers
