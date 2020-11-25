@@ -21,7 +21,7 @@ def test_napari(adata: AnnData):
     cluster = "leiden"
     with napari.gui_qt() as app:
         viewer = plotting.interactive(adata, cont, [cluster, gene], with_qt=False)
-        time_in_msec = 3000
+        time_in_msec = 1000
         QTimer().singleShot(time_in_msec, app.quit)
 
     viewer.close()
