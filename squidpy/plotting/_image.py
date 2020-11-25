@@ -42,7 +42,7 @@ def interactive(
 
     Returns
     -------
-    None
+    An interactive napari session
 
     """
     try:
