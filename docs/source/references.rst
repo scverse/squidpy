@@ -17,3 +17,6 @@ References
 .. [OmniPath16] Türei, D., Korcsmáros, T., Saez-Rodriguez, J., |br|
     *OmniPath: guidelines and gateway for literature-curated signaling pathway resources.*,  |br|
     `Nat Methods 13, 966–967 (2016) <https://doi.org/10.1038/nmeth.4077>`__.
+
+.. TODO
+.. [Visium] `Visium <https://www.10xgenomics.com/products/spatial-gene-expression>`__
