@@ -8,7 +8,7 @@ from scipy.sparse import csr_matrix
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
 
-from ..image.object import ImageContainer  # noqa: F401
+from squidpy.image.object import ImageContainer
 
 
 def interactive(
@@ -67,7 +67,7 @@ def interactive(
     name_lst = color
 
     img_library_id = list(img.data.keys())
-    image = img.data[img_library_id[0]].transpose("y", "x", "channels").values
+    image = img.data[img_library_id[0]].transpose("y", "x", ...).values
 
     if with_qt:  # context for script
         with napari.gui_qt():
