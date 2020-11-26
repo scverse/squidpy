@@ -52,8 +52,8 @@ def process_img(
     inplace
         Whether to replace original image by processed one. Use this to save memory.
 
-    Return
-    ------
+    Returns
+    -------
     TODO
     """
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)

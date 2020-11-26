@@ -8,9 +8,6 @@ from functools import partial
 from itertools import product
 from collections import namedtuple
 
-# exec/compile needs this in globals()
-from numba import njit, prange  # noqa: F401
-
 from scanpy import logging as logg
 from anndata import AnnData
 
@@ -28,7 +25,10 @@ from ._utils import (
     _create_sparse_df,
     _check_tuple_needles,
 )
-from ..constants._utils import ModeEnum
+from ..constants._constants import FdrAxis, ComplexPolicy
+
+# exec/compile needs this in globals()
+
 
 StrSeq = Sequence[str]
 InteractionType = Union[pd.DataFrame, Mapping[str, StrSeq], Tuple[StrSeq, StrSeq], Sequence[Tuple[str, str]], StrSeq]
@@ -39,17 +39,6 @@ _COMPLEX_DEL = "_"  # delimiter for complexes in omnipath
 
 TempResult = namedtuple("TempResult", ["means", "pvalues"])
 Result = namedtuple("Result", ["means", "pvalues", "metadata"])
-
-
-class ComplexPolicy(ModeEnum):  # noqa: D101
-    MIN = "min"
-    ALL = "all"
-
-
-class FdrAxis(ModeEnum):  # noqa: D101
-    INTERACTIONS = "interactions"
-    CLUSTERS = "clusters"
-
 
 _template = """
 @njit(parallel={parallel}, cache=False, fastmath=False)

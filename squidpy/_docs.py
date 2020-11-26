@@ -2,7 +2,7 @@ from textwrap import dedent
 
 from docrep import DocstringProcessor
 
-d = DocstringProcessor()
+from squidpy.constants._constants import CoordType, Transform
 
 
 def inject_docs(**kwargs):  # noqa: D103
@@ -19,3 +19,15 @@ def inject_docs(**kwargs):  # noqa: D103
         return decorator2
 
     return decorator
+
+
+_adata = """\
+adata
+    Annotated data object.
+"""
+_img_container = """
+    High-resolution image.
+"""
+
+
+d = DocstringProcessor(adata=_adata, img_container=_img_container, coord_type=CoordType, transform=Transform)
