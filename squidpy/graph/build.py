@@ -103,8 +103,8 @@ def spatial_connectivity(
         raise NotImplementedError(transform)
 
     key_added = Key.uns.spatial_neighs(key_added)
-    conns_key = Key.uns.spatial_conn(key_added)
-    dists_key = Key.uns.spatial_dist(key_added)
+    conns_key = Key.obsp.spatial_conn(key_added)
+    dists_key = Key.obsp.spatial_dist(key_added)
 
     # add keys
     neighbors_dict = adata.uns[key_added] = {}

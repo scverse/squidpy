@@ -11,6 +11,7 @@ import tifffile
 from squidpy.constants._pkg_constants import Key
 
 
+# TODO: dead code
 def timing(f: Callable[..., Any]) -> Callable[..., Any]:
     """Time a function ``f``."""
 
@@ -32,13 +33,14 @@ def _num_pages(fname: str) -> int:
     return num_pages
 
 
+# TODO: dead code
 def _round_odd(num: Union[float, int]) -> Union[float, int]:
     """
     Round num to next odd integer value.
 
-    Params
-    ------
-    num: float
+    Parameters
+    ----------
+    num
         Number to round
 
     Returns
@@ -51,28 +53,27 @@ def _round_odd(num: Union[float, int]) -> Union[float, int]:
         return res
     if abs(res + 1 - num) < abs(res - 1 - num):
         return res + 1
-    else:
-        return res - 1
+    return res - 1
 
 
 def _round_even(num: Union[float, int]) -> Union[float, int]:
     """
     Round num to next even integer value.
 
-    Params
-    ------
-    num: float
-        Number to round
+    Parameters
+    ----------
+    num
+        Number to round.
 
     Returns
     -------
     int
-        rounded number to nearest even integer value
+        Rounded number to nearest even integer value.
     """
-    res = round(num / 2.0)
-    return res * 2
+    return 2 * round(num / 2.0)
 
 
+# TODO: dead code
 def _access_img_in_adata(
     adata: AnnData,
     img_key: str,
@@ -89,6 +90,7 @@ def _access_img_in_adata(
     return adata.uns["spatial"][img_key]
 
 
+# TODO: dead code
 def _write_img_in_adata(adata: AnnData, img_key: str, img: np.ndarray):
     """
     Save image in anndata instance.

@@ -37,8 +37,57 @@ _seed = """\
 seed
     Random seed for reproducibility.
 """
+_img_hr = """\
+img
+    High-resolution image.
+"""
+_img_uint8 = """\
+img
+    RGB Image of type :class:`numpy.uint8` of shape ``(height, width [, channels]).``.
+"""
+_feature_name = """\
+feature_name
+    Base name of feature in resulting feature values dict.
+"""
+_feature_ret = """\
+:class:`dict`
+    Dictionary of feature values.
+"""
+_width_height = """\
+xs
+    Width of the crops in pixels.
+ys
+    Height of the crops in pixels.
+"""
+_cluster_key = """\
+cluster_key
+    Key in :attr:`anndata.AnnData.obs` where clustering is stored.
+"""
+# TODO: https://github.com/Chilipp/docrep/issues/21 fixed, this is not necessary
+_crop_extra = """\
+scale
+    Resolution of the crop (smaller -> smaller image).
+mask_circle
+    Mask crop to a circle.
+cval
+    The value outside image boundaries or the mask.
+dtype
+    Type to which the output should be (safely) cast. If `None`, don't recast.
+    Currently supported dtypes: 'uint8'. TODO: pass actualy types instead of strings.
+"""
 
 
 d = DocstringProcessor(
-    adata=_adata, img_container=_img_container, copy=_copy, numba_parallel=_numba_parallel, seed=_seed
+    adata=_adata,
+    img_container=_img_container,
+    copy=_copy,
+    numba_parallel=_numba_parallel,
+    seed=_seed,
+    img_hr=_img_hr,
+    img_uint8=_img_uint8,
+    feature_name=_feature_name,
+    feature_ret=_feature_ret,
+    width_height=_width_height,
+    cluster_key=_cluster_key,
+    crop_extra=_crop_extra,
 )
