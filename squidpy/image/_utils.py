@@ -56,6 +56,7 @@ def _round_odd(num: Union[float, int]) -> Union[float, int]:
     return res - 1
 
 
+# TODO: dead code
 def _round_even(num: Union[float, int]) -> Union[float, int]:
     """
     Round num to next even integer value.

@@ -21,8 +21,25 @@ the AST can be parsed, formatting, import/requirements sorting, etc.
 To skip certain lines (especially for flake8), you can append ``# noqa`` or ``# noqa: <error>``, see
 `here <https://github.com/pycqa/flake8>`__.
 
-In order to run tests, simply type ``tox -e py{37,38}-{linux|macos}``.
-To create the docs, run ``tox -e docs``.
+Tox
+~~~
+To automate common tasks (linting, testing, docs building, we use tox ``pip install tox``). The following commands
+are available:
+
+    - tox -e lint  # just runs pre-commit
+    - tox -e py-{37,38,39}-{linux,macos}  # testing, choose 1 version and 1 os from the brackets matching your system
+    - tox -e check-docs  # checks if the links inside of the docs are correct
+    - tox -e docs  # builds the documentation and prints where it can be found
+
+If for some reason an environment needs to be recreated, you can run ``tox -e <environment> --recreate`` or simply
+delete the *.tox* directory.
+
+Running purely ``tox`` will execute the above steps (and some more) in the order they've been specified.
+This is usually not necessary, since locally, we're interested mostly on running tests.
+
+Alternatively, tests can be still run using ``pytest``, the only requirement needed is *pytest-xdist* (``pip install pytest-xdist``).
+Tox has the benefit that every library needed for the tests (such as astropy, libpysal, ...) is present + coverage difference
+agains master will be printed.
 
 Workflow
 --------
