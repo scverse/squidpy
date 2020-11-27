@@ -135,7 +135,11 @@ def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> Non
     cat = adata.obs[cluster_key].cat.categories.values.astype(str)
     idx = {cluster_key: pd.Categorical(cat, categories=cat)}
 
-    ad = AnnData(X=array, obs=idx, var=idx)
+    ad = AnnData(
+        X=array,
+        obs=idx,
+    )
+    ad.var_names = idx[cluster_key]
 
     colors_key = f"{cluster_key}_colors"
     if colors_key in adata.uns.keys():
@@ -171,7 +175,11 @@ def nhood_enrichment(adata: AnnData, cluster_key: str, mode: str = "zscore", *ar
     cat = adata.obs[cluster_key].cat.categories.values.astype(str)
     idx = {cluster_key: pd.Categorical(cat, categories=cat)}
 
-    ad = AnnData(X=array, obs=idx, var=idx)
+    ad = AnnData(
+        X=array,
+        obs=idx,
+    )
+    ad.var_names = idx[cluster_key]
 
     colors_key = f"{cluster_key}_colors"
     if colors_key in adata.uns.keys():
