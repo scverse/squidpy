@@ -1,6 +1,5 @@
 from anndata import AnnData
 
-from squidpy.image._utils import _round_even
 from squidpy.image.object import ImageContainer
 from squidpy.constants._pkg_constants import Key
 
@@ -15,7 +14,7 @@ def test_crop_spot_generator(adata: AnnData, cont: ImageContainer):
     TODO
     """
     i = 0
-    expected_size = _round_even(adata.uns["spatial"]["V1_Adult_Mouse_Brain"]["scalefactors"]["spot_diameter_fullres"])
+    expected_size = adata.uns["spatial"]["V1_Adult_Mouse_Brain"]["scalefactors"]["spot_diameter_fullres"] // 2 * 2 + 1
     for obs_id, crop in cont.crop_spot_generator(adata):
         # crops have expected size?
         assert crop.shape[1] == expected_size

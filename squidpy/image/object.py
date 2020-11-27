@@ -11,9 +11,8 @@ import xarray as xr
 from imageio import imread
 
 from squidpy._docs import d
-from squidpy.image._utils import _round_even
+from squidpy.image._utils import _num_pages
 from squidpy.constants._pkg_constants import Key
-from ._utils import _num_pages
 
 Pathlike_t = Union[str, Path]
 
@@ -151,7 +150,7 @@ class ImageContainer:
             # load in memory
             self.data.load()
 
-    def _load_img(self, img: Union[str, np.ndarray], channel_id: str = "channels") -> xr.DataArray:
+    def _load_img(self, img: Union[Pathlike_t, np.ndarray], channel_id: str = "channels") -> xr.DataArray:
         """
         Load img as :mod:`xarray`.
 
@@ -192,7 +191,7 @@ class ImageContainer:
         elif isinstance(img, (str, PathLike)):
             img = str(img)
             ext = img.split(".")[-1]
-            if ext in ("tif", "tiff"):  # TODO: constants
+            if ext in (".tif", ".tiff"):  # TODO: constants
                 # get the number of pages in the file
                 num_pages = _num_pages(img)
                 # read all pages using rasterio
@@ -202,7 +201,7 @@ class ImageContainer:
                     data = data.rename({"band": channel_id})
                     xr_img_byband.append(data)
                 xr_img = xr.concat(xr_img_byband, dim=channel_id)
-            elif ext in ("jpg", "jpeg"):  # TODO: constants
+            elif ext in (".jpg", ".jpeg"):  # TODO: constants
                 img = imread(img)
                 # jpeg has channels as last dim - transpose
                 img = img.transpose(2, 0, 1)
@@ -215,32 +214,28 @@ class ImageContainer:
         return xr_img
 
     @d.dedent
-    def crop(
+    def crop_corner(
         self,
-        x: float,
-        y: float,
+        x: int,
+        y: int,
         xs: int = 100,
         ys: int = 100,
         img_id: Optional[str] = None,
-        centred: bool = True,
         **kwargs,
     ) -> xr.DataArray:
         """
-        Extract a crop based on coordinates `x` and `y` of `img_id`.
+        Extract a crop from upper left corner coordinates `x` and `y` of `img_id`.
 
-        Centred on x, y if centred is True, else right and down from x, y.
+        The crop will be extracted right and down from x, y.
 
         Parameters
         ----------
         x
-            X coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if x+xs/2 is integer.
+            X coord of crop (in pixel space).
         y
             Y coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if y+ys/2 is integer.
-        %(width_height)s
         img_id
             id of the image layer to be cropped.
-        centred
-            Whether the crop coordinates are centred.
         kwargs
             Keyword arguments for :func:`squidpy.image.crop_img`.
 
@@ -257,19 +252,53 @@ class ImageContainer:
             img_id = list(self.data.keys())[0]
 
         img = self.data.data_vars[img_id]
-        if centred:
-            assert (xs / 2.0 + x) % 1 == 0, "x and xs/2 have to add up to an integer to use centred model"
-            assert (ys / 2.0 + y) % 1 == 0, "y and ys/2 have to add up to an integer to use centred model"
-            x = int(x - xs // 2)  # move from centre to corner
-            y = int(y - ys // 2)  # move from centre to corner
-        else:
-            assert x % 1.0 == 0, "x needs to be integer"
-            assert y % 1.0 == 0, "x needs to be integer"
-            x = int(x)
-            y = int(y)
         return crop_img(img=img, x=x, y=y, xs=xs, ys=ys, **kwargs)
 
     @d.dedent
+    def crop_center(
+        self,
+        x: int,
+        y: int,
+        xr: int = 100,
+        yr: int = 100,
+        img_id: Optional[str] = None,
+        **kwargs,
+    ) -> xr.DataArray:
+        """
+        Extract a crop based on coordinates `x` and `y` of `img_id`.
+
+        The extracted crop will be centered on x, y, and have shape `yr*2+1, xr*2+1`.
+
+        Parameters
+        ----------
+        x
+            X coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if x+xs/2 is integer.
+        y
+            Y coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if y+ys/2 is integer.
+        xr
+            Radius of the crop in pixels.
+        yr
+            Height of the crop in pixels.
+        img_id
+            id of the image layer to be cropped.
+        kwargs
+            Keyword arguments for :meth:`squidpy.image.ImageContainer.crop_corner`.
+
+        Returns
+        -------
+        :class:`xarray.DataArray`
+            Data with dimensions: channels, y, x.
+        """
+        # move from center to corner
+        x = x - xr
+        y = y - yr
+
+        # calculate size
+        xs = xr * 2 + 1
+        ys = yr * 2 + 1
+
+        return self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id, **kwargs)
+
     def crop_equally(
         self,
         xs: Optional[int] = None,
@@ -307,8 +336,7 @@ class ImageContainer:
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
 
         # TODO: outdated docs or why _kwargs are not passed?
-        crops = [self.crop(x=x, y=y, xs=xs, ys=ys, img_id=img_id, centred=False) for x, y in zip(xcoords, ycoords)]
-
+        crops = [self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id) for x, y in zip(xcoords, ycoords)]
         return crops, xcoords, ycoords
 
     @d.dedent
@@ -345,10 +373,10 @@ class ImageContainer:
         xcoord = adata.obsm[Key.obsm.spatial][:, 0]
         ycoord = adata.obsm[Key.obsm.spatial][:, 1]
         spot_diameter = adata.uns[Key.uns.spatial][dataset_name]["scalefactors"]["spot_diameter_fullres"]
-        s = int(_round_even(spot_diameter * size))
+        r = int(round(spot_diameter * size // 2))
         # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
 
         obs_ids = adata.obs.index.tolist()
         for i, obs_id in enumerate(obs_ids):
-            crop = self.crop(x=xcoord[i], y=ycoord[i], xs=s, ys=s, **kwargs)
+            crop = self.crop_center(x=xcoord[i], y=ycoord[i], xr=r, yr=r, **kwargs)
             yield obs_id, crop
