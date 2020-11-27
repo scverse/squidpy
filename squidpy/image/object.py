@@ -191,7 +191,7 @@ class ImageContainer:
         elif isinstance(img, (str, PathLike)):
             img = str(img)
             ext = img.split(".")[-1]
-            if ext in (".tif", ".tiff"):  # TODO: constants
+            if ext in ("tif", "tiff"):  # TODO: constants
                 # get the number of pages in the file
                 num_pages = _num_pages(img)
                 # read all pages using rasterio
@@ -201,7 +201,7 @@ class ImageContainer:
                     data = data.rename({"band": channel_id})
                     xr_img_byband.append(data)
                 xr_img = xr.concat(xr_img_byband, dim=channel_id)
-            elif ext in (".jpg", ".jpeg"):  # TODO: constants
+            elif ext in ("jpg", "jpeg"):  # TODO: constants
                 img = imread(img)
                 # jpeg has channels as last dim - transpose
                 img = img.transpose(2, 0, 1)
