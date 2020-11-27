@@ -36,9 +36,9 @@ Image
     image.get_summary_stats
     image.calculate_image_features
     image.get_grey_texture_features
-    image.ImageContainer
-    image.segment_img
     image.process_img
+    image.segment_img
+    image.crop_img
 
 Plotting
 ~~~~~~~~

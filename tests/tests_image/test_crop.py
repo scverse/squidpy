@@ -2,7 +2,7 @@ from anndata import AnnData
 
 from squidpy.image._utils import _round_even
 from squidpy.image.object import ImageContainer
-from squidpy.constants._pkg_constants import SPATIAL_M
+from squidpy.constants._pkg_constants import Key
 
 
 # adata and cont are now in conftest.py
@@ -23,7 +23,7 @@ def test_crop_spot_generator(adata: AnnData, cont: ImageContainer):
         assert obs_id == adata.obs.index[i]
         i += 1
     # expected number of crops are generated?
-    assert i == adata.obsm[SPATIAL_M].shape[0]
+    assert i == adata.obsm[Key.obsm.spatial].shape[0]
 
 
 def test_crop_img():

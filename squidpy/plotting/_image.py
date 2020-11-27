@@ -1,16 +1,17 @@
 import matplotlib.pyplot as plt
 
+from squidpy._docs import d
 from squidpy.image import ImageContainer
 
 
+@d.dedent
 def plot_segmentation(img: ImageContainer, key: str) -> None:
     """
     Plot segmentation on entire image.
 
     Parameters
     ----------
-    img
-        High-resolution image.
+    %(img_container)s
     key
         Name of layer that contains segmentation in img.
 

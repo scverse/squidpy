@@ -47,7 +47,7 @@ class Processing(ModeEnum):  # noqa: D101
 
 
 @unique
-class SegmentationModel(ModeEnum):  # noqa: D101
+class SegmentationBackend(ModeEnum):  # noqa: D101
     BLOB = "blob"
     WATERSHED = "watershed"
     TENSORFLOW = "tensorflow"
@@ -58,3 +58,9 @@ class BlobModel(ModeEnum):  # noqa: D101
     LOG = "log"
     DOG = "dog"
     DOH = "doh"
+
+
+@unique
+class Dataset(ModeEnum):  # noqa: D101
+    OB = "ob"
+    SVZ = "svz"

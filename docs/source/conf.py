@@ -62,6 +62,8 @@ intersphinx_mapping = dict(  # noqa: C408
     rasterio=("https://rasterio.readthedocs.io/en/latest/", None),
     skimage=("https://scikit-image.org/docs/stable/", None),
     numba=("https://numba.readthedocs.io/en/stable/", None),
+    xarray=("https://xarray.pydata.org/en/stable/", None),
+    omnipath=("https://omnipath.readthedocs.io/en/latest", None),
 )
 
 # Add any paths that contain templates here, relative to this directory.
