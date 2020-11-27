@@ -4,6 +4,7 @@ from anndata import AnnData
 
 import numpy as np
 from scipy.sparse import csr_matrix
+from pandas.api.types import is_categorical_dtype
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
@@ -96,31 +97,51 @@ def _get_colors(adata: AnnData, colors: list, color_map: str, palette: str):
     for c in colors:
 
         if c in adata.obs_keys():
-            colors_key = f"{c}_colors"
-            if colors_key in adata.uns.keys():
-                cols = adata.uns[colors_key]
+            if is_categorical_dtype(adata.obs[c]):
+                cols = _get_col_categorical(adata, c, palette)
             else:
-                ncat = adata.obs[c].unique().shape[0]
-                cmap = plt.get_cmap(palette, ncat)
-                cols = cmap(np.arange(ncat))
-
-            cols_dict = {k: v for v, k in zip(cols, adata.obs[c].cat.categories)}
-            cols = np.array([cols_dict[k] for k in adata.obs[c]])
-
-        elif c in adata.var_names.values.tolist():
-            if isinstance(adata.X, csr_matrix):
-                gexp = adata[:, c].X.todense().flatten()
-            else:
-                gexp = adata[:, c].X.flatten()
-
-            cmap = plt.get_cmap(color_map)
-            gexp = (gexp - gexp.min()) / (gexp.max() - gexp.min())
-            cols = cmap(gexp)
-            cols = [to_hex(i, keep_alpha=False) for i in cols[-1]]
+                cols = _get_col_continuous(adata, c, color_map)
+        else:
+            cols = _get_col_continuous(adata, c, color_map)
 
         color_lst.append(cols)
 
     return color_lst
+
+
+def _get_col_categorical(adata, c, palette):
+
+    colors_key = f"{c}_colors"
+    if colors_key in adata.uns.keys():
+        cols = adata.uns[colors_key]
+    else:
+        ncat = adata.obs[c].cat.categories.shape[0]
+        cmap = plt.get_cmap(palette, ncat)
+        cols = cmap(np.arange(ncat))
+
+    cols_dict = {k: v for v, k in zip(cols, adata.obs[c].cat.categories)}
+    cols = np.array([cols_dict[k] for k in adata.obs[c]])
+
+    return cols
+
+
+def _get_col_continuous(adata, c, color_map):
+
+    if c in adata.obs_keys():
+        vec = adata.obs[c].values
+    elif c in adata.var_names.values.tolist():
+        if isinstance(adata.X, csr_matrix):
+            vec = np.asarray(adata[:, c].X.todense()).squeeze()
+        else:
+            vec = np.asarray(adata[:, c].X).squeeze()
+
+    cmap = plt.get_cmap(color_map)
+    vec = (vec - vec.min()) / (vec.max() - vec.min())
+    cols = cmap(vec)
+    print(cols.shape)
+    cols = [to_hex(i, keep_alpha=False) for i in cols]
+
+    return cols
 
 
 def _create_shape(arr: np.ndarray, lt: float, n: int):

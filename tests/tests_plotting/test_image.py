@@ -19,8 +19,11 @@ def test_napari(adata: AnnData):
 
     gene = adata.var_names[1]
     cluster = "leiden"
+    obs_continuous = "leiden_continuous"
+    adata.obs[obs_continuous] = adata.obs[cluster].values.astype(int)
+
     with napari.gui_qt() as app:
-        viewer = plotting.interactive(adata, cont, [cluster, gene], with_qt=False)
+        viewer = plotting.interactive(adata, cont, [cluster, gene, obs_continuous], with_qt=False)
         time_in_msec = 1000
         QTimer().singleShot(time_in_msec, app.quit)
 
@@ -28,4 +31,5 @@ def test_napari(adata: AnnData):
 
     assert len(viewer.layers[cluster].data) == adata.shape[0]
     assert viewer.layers[cluster].data[0].shape == (6, 2)
+    assert viewer.layers[obs_continuous].data[0].shape == (6, 2)
     assert viewer.layers[gene].data[0].shape == (6, 2)
