@@ -8,7 +8,7 @@ import numpy as np
 
 import tifffile
 
-from squidpy.constants._pkg_constants import SPATIAL_U
+from squidpy.constants._pkg_constants import Key
 
 
 def timing(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -100,4 +100,4 @@ def _write_img_in_adata(adata: AnnData, img_key: str, img: np.ndarray):
     Returns:
         Image (x, y, channels).
     """
-    adata.uns[SPATIAL_U][img_key] = img
+    adata.uns[Key.uns.spatial][img_key] = img

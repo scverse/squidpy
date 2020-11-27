@@ -276,6 +276,7 @@ class PermutationTestABC(ABC):
 
     @d.get_full_description(base="PT_test")
     @d.get_sections(base="PT_test", sections=["Parameters", "Returns"])
+    @d.dedent
     @inject_docs(src=SOURCE, tgt=TARGET, fa=FdrAxis)
     def test(
         self,
@@ -300,15 +301,14 @@ class PermutationTestABC(ABC):
         cluster_key
             Key in :attr:`anndata.AnnData.obs` where clusters are stored.
         clusters
-            Clusters from :attr:`anndata.AnnData.obs ``[cluster_key]``. Can be specified either as a sequence
+            Clusters from :attr:`anndata.AnnData.obs` ``[cluster_key]``. Can be specified either as a sequence
             of :class:`tuple` or just a sequence of cluster names, in which case all combinations are created.
         n_perms
             Number of permutations for the permutation test.
         threshold
             Do not perform permutation test if any of the interacting components is being expressed
             in less than ``threshold`` percent of cells within a given cluster.
-        seed
-            Random seed for permutation test.
+        %(seed)s
         fdr_method
             Method for false discovery rate correction. If `None`, don't perform FDR correction.
         fdr_axis
@@ -318,19 +318,17 @@ class PermutationTestABC(ABC):
                 - `{fa.CLUSTERS.value!r}` - correct clusters by performing FDR correction across the interactions.
         alpha
             Significance level for FDR correction. Only used when ``fdr_method != None``.
-        copy
-            If `True`, return the result, otherwise save it to the ``adata`` object.
+        %(copy)s
         key_added
             Key in :attr:`anndata.AnnData.uns` where the result is stored if ``copy = False``.
-        numba_parallel
-            Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
-            For small datasets or small number of interactions, it's recommended to set this to `False`.
+        %(numba_parallel)s
         **kwargs
             Keyword arguments for parallelization, such as ``n_jobs`` or ``backend``.
 
         Returns
         -------
         :class:`collections.namedtuple` or None
+            TODO: better return type
             If ``copy = False``, updates ``adata.uns[{{key_added}}]`` with the following triple:
 
                 - `'means'` - :class:`pandas.DataFrame` containing the mean expression.
