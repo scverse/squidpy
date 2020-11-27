@@ -9,8 +9,8 @@ from anndata import AnnData
 
 import pandas as pd
 
+from squidpy.constants._pkg_constants import Key
 from .image.object import ImageContainer
-from .constants._pkg_constants import SPATIAL_M
 
 
 def read_seqfish(base_path: str, dataset: str):
@@ -45,7 +45,7 @@ def read_seqfish(base_path: str, dataset: str):
     centroids = pd.read_csv(centroids_path)
 
     adata = AnnData(counts, obs=pd.concat([clusters, centroids], axis=1))
-    adata.obsm[SPATIAL_M] = adata.obs[["X", "Y"]].to_numpy()
+    adata.obsm[Key.obsm.spatial] = adata.obs[["X", "Y"]].to_numpy()
 
     adata.obs["louvain"] = pd.Categorical(adata.obs["louvain"])
 

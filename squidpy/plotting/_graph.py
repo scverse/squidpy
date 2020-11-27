@@ -12,7 +12,7 @@ from pandas import DataFrame
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from squidpy.constants._pkg_constants import SPATIAL_M, SPATIAL_U
+from squidpy.constants._pkg_constants import Key
 
 
 def spatial_graph(adata: AnnData, *args, **kwargs) -> None:
@@ -30,13 +30,13 @@ def spatial_graph(adata: AnnData, *args, **kwargs) -> None:
         TODO.
     """
     conns_key = "spatial_connectivities"
-    neighbors_dict = adata.uns[SPATIAL_U] = {}
+    neighbors_dict = adata.uns[Key.uns.spatial] = {}
     neighbors_dict["connectivities_key"] = conns_key
     neighbors_dict["distances_key"] = "dummy"  # TODO?
 
     sc.pl.embedding(
         adata,
-        basis=SPATIAL_M,
+        basis=Key.obsm.spatial,
         edges=True,
         neighbors_key="spatial",
         edges_width=4,

@@ -23,7 +23,7 @@ def process_img(
     inplace: bool = False,
 ) -> None:
     """
-    Process image.
+    Process an image.
 
     Note that crop-wise processing can save memory but may change behaviour of cropping if global statistics are used.
     Leave xs and ys as None to process full image in one go.

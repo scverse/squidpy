@@ -21,10 +21,6 @@ Graph
     graph.perm_test
     graph.moran
     graph.ripley_k
-    graph.plot_louvain_on_umap
-    graph.plot_louvain_on_graph
-    graph.prepare_data_for_clustering
-    graph.compute_louvain_on_joined_connectivities
 
 Image
 ~~~~~

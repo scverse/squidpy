@@ -28,8 +28,8 @@ def spatial_connectivity(
     """
     Create a graph from spatial coordinates.
 
-    Params
-    ------
+    Parameters
+    ----------
     %(adata)s
     obsm
         Key in :attr:`anndata.AnnData.obsm` to spatial coordinates.

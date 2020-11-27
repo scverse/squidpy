@@ -36,6 +36,7 @@ class Key:  # noqa: D101
         def spatial_neighs(cls, value: Optional[str] = None) -> str:
             return Key.uns.spatial if value is None else value
 
+    class obsp:  # noqa: D106
         @classmethod
         def spatial_dist(cls, value: Optional[str] = None) -> str:
             return f"{Key.uns.spatial_neighs(value)}_distances"
