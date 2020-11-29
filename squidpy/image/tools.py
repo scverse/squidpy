@@ -25,7 +25,7 @@ def calculate_image_features(
     img: ImageContainer,
     features: Union[str, Iterable[str]] = ImageFeature.SUMMARY.s,
     features_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    key: str = "img_features",  # TODO: Key
+    key: str = "img_features",
     copy: bool = False,
     **kwargs,
 ) -> Optional[pd.DataFrame]:
@@ -91,7 +91,7 @@ def calculate_image_features(
     adata.obsm[key] = features_log
 
 
-# TODO: refactor all of below into ImageContainer
+# TODO: refactor all of below into ImageContainer?
 @d.dedent
 def get_features_statistics(
     img: np.ndarray[np.float64],
@@ -264,7 +264,7 @@ def get_grey_texture_features(
     d and at an angle theta from grey-level i.
 
     From a given GLCM texture features are inferred.
-    TODO: reference to GLCM.
+    TODO: add reference to GLCM.
 
     Parameters
     ----------

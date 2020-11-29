@@ -1,6 +1,7 @@
 """Plotting for graph functions."""
 
-from typing import Optional
+from typing import Tuple, Union, Optional
+from pathlib import Path
 
 import scanpy as sc
 from anndata import AnnData
@@ -13,26 +14,31 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from squidpy._docs import d
+from squidpy.plotting._utils import save_fig
 from squidpy.constants._pkg_constants import Key
-
-# TODO: all plotting functions should have: figsize, dpi, save (and maybe more)
 
 
 @d.dedent
-def spatial_graph(adata: AnnData, **kwargs) -> None:
+def spatial_graph(
+    adata: AnnData,
+    figsize: Optional[Tuple[float, float]] = None,
+    dpi: Optional[int] = None,
+    save: Optional[Union[str, Path]] = None,
+    **kwargs,
+) -> None:
     """
     Plot wrapper for :mod:`scanpy` plotting function for spatial graphs.
 
     Parameters
     ----------
     %(adata)s
+    %(plotting)s
     kwargs
         Keyword arguments for :func:`scanpy.pl.embedding`.
 
     Returns
     -------
-    None
-        TODO.
+    %(plotting_returns)s
     """
     # TODO: expose keys?
     conns_key = "spatial_connectivities"
@@ -40,18 +46,31 @@ def spatial_graph(adata: AnnData, **kwargs) -> None:
     neighbors_dict["connectivities_key"] = conns_key
     neighbors_dict["distances_key"] = "dummy"  # TODO?
 
+    fig, ax = plt.subplots(dpi=dpi, figsize=figsize)
     sc.pl.embedding(
         adata,
         basis=Key.obsm.spatial,
         edges=True,
         neighbors_key="spatial",
         edges_width=4,
+        ax=ax,
         **kwargs,
     )
 
+    if save is not None:
+        save_fig(fig, path=save)
+
 
 @d.dedent
-def centrality_scores(adata: AnnData, cluster_key: str, selected_score: Optional[str] = None, *args, **kwargs) -> None:
+def centrality_scores(
+    adata: AnnData,
+    cluster_key: str,
+    selected_score: Optional[str] = None,
+    figsize: Optional[Tuple[float, float]] = None,
+    dpi: Optional[int] = None,
+    save: Optional[Union[str, Path]] = None,
+    **kwargs,
+) -> None:
     """
     Plot centrality scores.
 
@@ -59,24 +78,23 @@ def centrality_scores(adata: AnnData, cluster_key: str, selected_score: Optional
     ----------
     %(adata)s
     %(cluster_key)s
+    %(plotting)s
     selected_score
         Whether to plot all scores or only just a selected one.
 
     Returns
     -------
-    None
-        TODO.
+    %(plotting_returns)s
     """
     # TODO: better logic - check first in obs and if it's categorical
-    # TODO: if not then raise
     scores_key = f"{cluster_key}_centrality_scores"
-    if scores_key in adata.uns_keys():
-        df = adata.uns[scores_key]
-    else:
+    if scores_key not in adata.uns_keys():
         raise KeyError(
-            f"centrality_scores_key {scores_key} not found. \n"
-            "Choose a different key or run first as `squidpy.nhood.centrality_scores()`"
-        ) from None
+            f"`centrality_scores_key` {scores_key} not found. \n"
+            "Choose a different key or run first as `squidpy.nhood.centrality_scores()`."
+        )
+    df = adata.uns[scores_key]
+
     var = DataFrame(df.columns, columns=[scores_key])
     var["index"] = var[scores_key]
     var = var.set_index("index")
@@ -90,13 +108,21 @@ def centrality_scores(adata: AnnData, cluster_key: str, selected_score: Optional
     if colors_key in adata.uns.keys():
         ad.uns[colors_key] = adata.uns[colors_key]
 
+    # without contrained_layout, the legend is clipped
     if selected_score is not None:
+        fig, ax = plt.subplots(figsize=figsize, dpi=dpi, constrained_layout=True)
         sc.pl.scatter(
-            ad, x=selected_score, y=cluster_key, color=cluster_key, size=1000, title="", frameon=True, *args, **kwargs
+            ad, x=selected_score, y=cluster_key, color=cluster_key, size=1000, title="", frameon=True, ax=ax, **kwargs
         )
     else:
         nrows = len(ad.var.index) - 1
-        fig, ax = plt.subplots(nrows=nrows, ncols=1, figsize=(4, 6 * nrows))
+        fig, ax = plt.subplots(
+            nrows=nrows,
+            ncols=1,
+            figsize=(4, 6 * nrows) if figsize is None else figsize,
+            dpi=dpi,
+            constrained_layout=True,
+        )
         for i in range(nrows):
             x = list(ad.var.index)[i + 1]
             sc.pl.scatter(
@@ -108,14 +134,24 @@ def centrality_scores(adata: AnnData, cluster_key: str, selected_score: Optional
                 ax=ax[i],
                 show=False,
                 frameon=True,
-                *args,
                 **kwargs,
             )
-        plt.show()
+
+    fig.show()
+
+    if save is not None:
+        save_fig(fig, path=save)
 
 
 @d.dedent
-def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> None:
+def interaction_matrix(
+    adata: AnnData,
+    cluster_key: str,
+    figsize: Optional[Tuple[float, float]] = None,
+    dpi: Optional[int] = None,
+    save: Optional[Union[str, Path]] = None,
+    **kwargs,
+) -> None:
     """
     Plot cluster interaction matrix.
 
@@ -125,24 +161,23 @@ def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> Non
     ----------
     %(adata)s
     %(cluster_key)s
+    %(plotting)s
     kwargs
         Keyword arguments for :func:`scanpy.pl.heatmap`.
 
     Returns
     -------
-    None
-        TODO.
+    %(plotting_returns)s
     """
     # TODO: better logic - check first in obs and if it's categorical
-    # TODO: if not then raise
     int_key = f"{cluster_key}_interactions"
-    if int_key in adata.uns_keys():
-        array = adata.uns[int_key]
-    else:
+    if int_key not in adata.uns_keys():
         raise KeyError(
             f"cluster_interactions_key {int_key} not found. \n"
             "Choose a different key or run first `squidpy.graph.interaction_matrix()`."
         )
+    array = adata.uns[int_key]
+
     cat = adata.obs[cluster_key].cat.categories.values.astype(str)
     idx = {cluster_key: pd.Categorical(cat, categories=cat)}
 
@@ -151,11 +186,21 @@ def interaction_matrix(adata: AnnData, cluster_key: str, *args, **kwargs) -> Non
     colors_key = f"{cluster_key}_colors"
     if colors_key in adata.uns.keys():
         ad.uns[colors_key] = adata.uns[colors_key]
-    sc.pl.heatmap(ad, var_names=ad.var_names, groupby=cluster_key, *args, **kwargs)
+
+    # TODO: handle dpi
+    sc.pl.heatmap(ad, var_names=ad.var_names, groupby=cluster_key, figsize=figsize, save=save, **kwargs)
 
 
 @d.dedent
-def nhood_enrichment(adata: AnnData, cluster_key: str, mode: str = "zscore", **kwargs) -> None:
+def nhood_enrichment(
+    adata: AnnData,
+    cluster_key: str,
+    mode: str = "zscore",
+    figsize: Optional[Tuple[float, float]] = None,
+    dpi: Optional[int] = None,
+    save: Optional[Union[str, Path]] = None,
+    **kwargs,
+) -> None:
     """
     Plot neighborhood enrichement.
 
@@ -167,23 +212,22 @@ def nhood_enrichment(adata: AnnData, cluster_key: str, mode: str = "zscore", **k
     %(cluster_key)s
     mode
         TODO.
+    %(plotting)s
     kwargs
         Keyword arguments for :func:`scanpy.pl.heatmap`.
 
     Returns
     -------
-    None
-        TODO.
+    %(plotting_returns)s
     """
     # TODO: better logic - check first in obs and if it's categorical
-    # TODO: if not then raise
     int_key = f"{cluster_key}_nhood_enrichment"
-    if int_key in adata.uns_keys():
-        array = adata.uns[int_key][mode]
-    else:
+    if int_key not in adata.uns_keys():
         raise ValueError(
             f"key {int_key} not found. \n" "Choose a different key or run first `squidpy.graph.nhood_enrichment()`."
         )
+    array = adata.uns[int_key][mode]
+
     cat = adata.obs[cluster_key].cat.categories.values.astype(str)
     idx = {cluster_key: pd.Categorical(cat, categories=cat)}
 
@@ -192,7 +236,8 @@ def nhood_enrichment(adata: AnnData, cluster_key: str, mode: str = "zscore", **k
     colors_key = f"{cluster_key}_colors"
     if colors_key in adata.uns.keys():
         ad.uns[colors_key] = adata.uns[colors_key]
-    sc.pl.heatmap(ad, var_names=ad.var_names, groupby=cluster_key, **kwargs)
+
+    sc.pl.heatmap(ad, var_names=ad.var_names, groupby=cluster_key, figsize=figsize, save=save, **kwargs)
 
 
 @d.dedent
@@ -200,6 +245,9 @@ def plot_ripley_k(
     adata: AnnData,
     cluster_key: str,
     df: Optional[DataFrame] = None,
+    figsize: Optional[Tuple[float, float]] = None,
+    dpi: Optional[int] = None,
+    save: Optional[Union[str, Path]] = None,
     **kwargs,
 ):
     """
@@ -211,13 +259,13 @@ def plot_ripley_k(
     %(cluster_key)s
     df
         Data to plot. If `None`, try getting from ``adata.uns['ripley_k_{cluster_key}']``.
+    %(plotting)s
     kwargs
         Keyword arguments to :func:`seaborn.lineplot`.
 
     Returns
     -------
-    None
-        TODO.
+    %(plotting_returns)s
     """
     # TODO: I really, really discourage this, should be refactored as which key to use
     if df is None:
@@ -240,6 +288,7 @@ def plot_ripley_k(
     else:
         hue_order = palette = None
 
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     sns.lineplot(
         "distance",
         "ripley_k",
@@ -247,5 +296,9 @@ def plot_ripley_k(
         hue_order=hue_order,
         data=df,
         palette=palette,
+        ax=ax,
         **kwargs,
     )
+
+    if save is not None:
+        save_fig(fig, path=save)

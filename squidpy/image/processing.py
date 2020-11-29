@@ -24,7 +24,7 @@ def process_img(
     xs: Optional[int] = None,
     ys: Optional[int] = None,
     key_added: Optional[str] = None,
-    inplace: bool = False,
+    copy: bool = True,
 ) -> None:
     """
     Process an image.
@@ -47,9 +47,7 @@ def process_img(
     %(width_height)s
     key_added
         Key of new image sized array to add into img object. Defaults to ``{{img_id}}_{{processing}}``.
-    inplace
-        TODO: for consistency, rename to copy
-        Whether to replace original image by processed one. Use this to save memory.
+    %(copy)s
 
     Returns
     -------
@@ -71,8 +69,6 @@ def process_img(
         crops = [xr.DataArray(x, dims=dims) for x in crops]
     # Reassemble image:
     img_proc = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id)
-    if inplace:
-        img_id_new = img_id
-    else:
-        img_id_new = img_id + "_" + processing if key_added is None else key_added
+    img_id_new = (img_id + "_" + processing if key_added is None else key_added) if copy else img_id
+
     img.add_img(img=img_proc, img_id=img_id_new, channel_id=channel_id)

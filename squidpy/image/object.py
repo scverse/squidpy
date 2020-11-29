@@ -152,7 +152,7 @@ class ImageContainer:
 
     def _load_img(self, img: Union[Pathlike_t, np.ndarray], channel_id: str = "channels") -> xr.DataArray:
         """
-        Load img as :mod:`xarray`.
+        Load image as :mod:`xarray`.
 
         Supports numpy arrays and (multi-page) tiff files, and jpg files
         For :mod:`numpy` arrays, assume that dims are: ``(channels, y, x)``.
