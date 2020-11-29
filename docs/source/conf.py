@@ -95,6 +95,8 @@ napoleon_use_rtype = True
 napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
+# 403 Client Error: Forbidden for url: https://www.jstor.org/stable/2332142?origin=crossref
+linkcheck_ignore = ["https://doi.org/10.2307/2332142"]
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
