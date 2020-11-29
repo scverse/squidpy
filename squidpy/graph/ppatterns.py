@@ -88,10 +88,10 @@ def ripley_k(
     minmax_dist = df.groupby(cluster_key)["ripley_k"].max().min()
     df = df[df.ripley_k < minmax_dist].copy()
 
-    # TODO: shouldn't this be done only if copy=False?
-    adata.uns[f"ripley_k_{cluster_key}"] = df
+    if copy:
+        return df
 
-    return df if copy else adata
+    adata.uns[f"ripley_k_{cluster_key}"] = df
 
 
 @d.dedent
@@ -103,7 +103,7 @@ def moran(
     permutations: Optional[int] = 1000,
     corr_method: Optional[str] = "fdr_bh",
     copy: Optional[bool] = False,
-) -> Union[AnnData, pd.DataFrame]:
+) -> Optional[pd.DataFrame]:
     """
     Calculate Moran’s I Global Autocorrelation Statistic.
 
@@ -162,9 +162,7 @@ def moran(
     if copy:
         return df
 
-    # TODO: return None if copy=False?
     adata.var = adata.var.join(df, how="left")
-    return adata
 
 
 # TODO: check the return type

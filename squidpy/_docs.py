@@ -73,7 +73,17 @@ cval
     The value outside image boundaries or the mask.
 dtype
     Type to which the output should be (safely) cast. If `None`, don't recast.
-    Currently supported dtypes: 'uint8'. TODO: pass actualy types instead of strings.
+    Currently supported dtypes: 'uint8'. TODO: pass actualy types instead of strings."""
+_plotting = """\
+figsize
+    Size of the figure in inches.
+dpi
+    Dots per inch.
+save
+    Whether to save the plot."""
+_plotting_returns = """\
+None
+    Nothing, just plots the and optionally saves the plot.
 """
 
 
@@ -90,4 +100,5 @@ d = DocstringProcessor(
     width_height=_width_height,
     cluster_key=_cluster_key,
     crop_extra=_crop_extra,
+    plotting_returns=_plotting_returns,
 )

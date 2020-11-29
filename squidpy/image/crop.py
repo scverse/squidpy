@@ -75,7 +75,7 @@ def crop_img(
     x: int,
     y: int,
     channel_id: str = "channels",
-    xs: int = 100,  # TODO: are these default reasonable or should no defaults be specified?
+    xs: int = 100,  # TODO: are these defaults reasonable or should no defaults be specified?
     ys: int = 100,
     scale: float = 1.0,
     mask_circle: bool = False,

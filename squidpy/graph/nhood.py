@@ -174,10 +174,10 @@ def nhood_enrichment(
 
     zscore = (count - perms.mean(axis=-1)) / perms.std(axis=-1)
 
-    # TODO: shouldn't this be done only if copy=False?
-    adata.uns[f"{cluster_key}_nhood_enrichment"] = {"zscore": zscore, "count": count}
+    if copy:
+        return zscore, count
 
-    return (zscore, count) if copy else None
+    adata.uns[f"{cluster_key}_nhood_enrichment"] = {"zscore": zscore, "count": count}
 
 
 # TODO:
@@ -260,10 +260,11 @@ def centrality_scores(
             "betweenness_centrality",
         ],
     )
-    # TODO: shouldn't this be done only if copy=False?
-    adata.uns[f"{cluster_key}_centrality_scores"] = df
 
-    return df if copy else None
+    if copy:
+        return df
+
+    adata.uns[f"{cluster_key}_centrality_scores"] = df
 
 
 @d.dedent
@@ -310,7 +311,8 @@ def interaction_matrix(
     int_mat = nx.attr_matrix(
         graph, node_attr=cluster_key, normalized=normalized, rc_order=adata.obs[cluster_key].cat.categories
     )
-    # TODO: shouldn't this be done only if copy=False?
-    adata.uns[f"{cluster_key}_interactions"] = int_mat
 
-    return int_mat if copy else None
+    if copy:
+        return int_mat
+
+    adata.uns[f"{cluster_key}_interactions"] = int_mat
