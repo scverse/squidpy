@@ -1,4 +1,4 @@
-:github_url: {{ fullname | escape }}
+:github_url: {{ fullname }}
 
 {% extends "!autosummary/base.rst" %}
 

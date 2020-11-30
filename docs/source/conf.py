@@ -8,14 +8,21 @@
 
 import os
 import sys
+from pathlib import Path
 from datetime import datetime
+
+from sphinx_gallery.directives import MiniGallery
+from sphinx_gallery.gen_gallery import DEFAULT_GALLERY_CONF
+
+HERE = Path(__file__).parent
+sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
+sys.path.insert(0, os.path.abspath("_ext"))
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-import squidpy
+import squidpy  # noqa: E402
 
-sys.path.insert(0, os.path.abspath("_ext"))
 needs_sphinx = "3.0"
 
 # -- Project information -----------------------------------------------------
@@ -42,6 +49,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
     "sphinx_last_updated_by_git",
+    "sphinx_gallery.load_style",
     "edit_on_github",
 ]
 intersphinx_mapping = dict(  # noqa: C408
@@ -68,14 +76,14 @@ intersphinx_mapping = dict(  # noqa: C408
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
-source_suffix = [".rst"]
+source_suffix = [".rst", ".ipynb"]
 master_doc = "index"
 pygments_style = "sphinx"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = []
+exclude_patterns = ["**.ipynb", "**.md5", "**.py", "**.ipynb_checkpoints"]  # ignore anything that isn't .rst
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -108,4 +116,8 @@ html_show_sphinx = False
 
 
 def setup(app):  # noqa: D103
+    DEFAULT_GALLERY_CONF["backreferences_dir"] = "gen_modules/backreferences"
+
+    app.add_config_value("sphinx_gallery_conf", DEFAULT_GALLERY_CONF, "html")
+    app.add_directive("minigallery", MiniGallery)
     app.add_css_file("css/custom.css")

@@ -100,5 +100,6 @@ d = DocstringProcessor(
     width_height=_width_height,
     cluster_key=_cluster_key,
     crop_extra=_crop_extra,
+    plotting=_plotting,
     plotting_returns=_plotting_returns,
 )
