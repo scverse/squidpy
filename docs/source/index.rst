@@ -15,6 +15,20 @@ Squidpy
     classes
     references
 
+.. toctree::
+   :caption: Tutorials
+   :maxdepth: 2
+   :hidden:
+
+   auto_tutorials/index.rst
+
+.. toctree::
+   :caption: Gallery
+   :maxdepth: 2
+   :hidden:
+
+   auto_examples/index.rst
+
 .. TODO: fix the :target:s in PyPI and Docs
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/squidpy.svg
