@@ -1,4 +1,5 @@
 """Functions for point patterns spatial statistics."""
+import warnings
 from typing import Tuple, Union, Iterable, Optional
 
 from statsmodels.stats.multitest import multipletests
@@ -13,8 +14,10 @@ from squidpy._docs import d, inject_docs
 from squidpy.constants._pkg_constants import Key
 
 try:
-    import esda
-    import libpysal
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        import esda
+        import libpysal
 except ImportError:
     esda = None
     libpysal = None
