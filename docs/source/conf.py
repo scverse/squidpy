@@ -117,6 +117,7 @@ html_show_sphinx = False
 
 def setup(app):  # noqa: D103
     DEFAULT_GALLERY_CONF["backreferences_dir"] = "gen_modules/backreferences"
+    DEFAULT_GALLERY_CONF["show_signature"] = False
 
     app.add_config_value("sphinx_gallery_conf", DEFAULT_GALLERY_CONF, "html")
     app.add_directive("minigallery", MiniGallery)
