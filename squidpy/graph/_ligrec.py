@@ -20,6 +20,7 @@ from scipy.sparse import csc_matrix
 from pandas.api.types import infer_dtype, is_categorical_dtype
 
 from squidpy._docs import d, inject_docs
+from squidpy.constants._constants import FdrAxis, ComplexPolicy
 from ._utils import (
     Queue,
     Signal,
@@ -28,28 +29,15 @@ from ._utils import (
     _create_sparse_df,
     _check_tuple_needles,
 )
-from ..constants._utils import ModeEnum
 
 StrSeq = Sequence[str]
 InteractionType = Union[pd.DataFrame, Mapping[str, StrSeq], Tuple[StrSeq, StrSeq], Sequence[Tuple[str, str]], StrSeq]
 
 SOURCE = "source"
 TARGET = "target"
-_COMPLEX_DEL = "_"  # delimiter for complexes in omnipath
 
 TempResult = namedtuple("TempResult", ["means", "pvalues"])
 Result = namedtuple("Result", ["means", "pvalues", "metadata"])
-
-
-class ComplexPolicy(ModeEnum):  # noqa: D101
-    MIN = "min"
-    ALL = "all"
-
-
-class FdrAxis(ModeEnum):  # noqa: D101
-    INTERACTIONS = "interactions"
-    CLUSTERS = "clusters"
-
 
 _template = """
 @njit(parallel={parallel}, cache=False, fastmath=False)
@@ -198,7 +186,7 @@ class PermutationTestABC(ABC):
 
     @d.get_full_description(base="PT_prepare")
     @d.get_sections(base="PT_prepare", sections=["Parameters", "Returns"])
-    @inject_docs(src=SOURCE, tgt=TARGET, cp=ComplexPolicy, delim=_COMPLEX_DEL)
+    @inject_docs(src=SOURCE, tgt=TARGET, cp=ComplexPolicy)
     def prepare(
         self, interactions: InteractionType, complex_policy: str = ComplexPolicy.MIN.value
     ) -> "PermutationTestABC":
@@ -216,7 +204,7 @@ class PermutationTestABC(ABC):
                   produced, or a sequence of :class:`tuple` of 2 :class:`str` or a :class:`tuple` of 2 sequences.
 
             If `None`, the interactions are extracted from :mod:`omnipath`. Protein complexes can be specified by
-            delimiting the components using `{delim!r}`, such as `'alpha_beta_gamma'`.
+            delimiting the components using `_`, such as `'alpha_beta_gamma'`.
         complex_policy
             Policy on how to handle complexes. Can be one of:
 
@@ -287,6 +275,7 @@ class PermutationTestABC(ABC):
 
     @d.get_full_description(base="PT_test")
     @d.get_sections(base="PT_test", sections=["Parameters", "Returns"])
+    @d.dedent
     @inject_docs(src=SOURCE, tgt=TARGET, fa=FdrAxis)
     def test(
         self,
@@ -311,15 +300,14 @@ class PermutationTestABC(ABC):
         cluster_key
             Key in :attr:`anndata.AnnData.obs` where clusters are stored.
         clusters
-            Clusters from :attr:`anndata.AnnData.obs ``[cluster_key]``. Can be specified either as a sequence
+            Clusters from :attr:`anndata.AnnData.obs` ``[cluster_key]``. Can be specified either as a sequence
             of :class:`tuple` or just a sequence of cluster names, in which case all combinations are created.
         n_perms
             Number of permutations for the permutation test.
         threshold
             Do not perform permutation test if any of the interacting components is being expressed
             in less than ``threshold`` percent of cells within a given cluster.
-        seed
-            Random seed for permutation test.
+        %(seed)s
         fdr_method
             Method for false discovery rate correction. If `None`, don't perform FDR correction.
         fdr_axis
@@ -329,19 +317,17 @@ class PermutationTestABC(ABC):
                 - `{fa.CLUSTERS.value!r}` - correct clusters by performing FDR correction across the interactions.
         alpha
             Significance level for FDR correction. Only used when ``fdr_method != None``.
-        copy
-            If `True`, return the result, otherwise save it to the ``adata`` object.
+        %(copy)s
         key_added
             Key in :attr:`anndata.AnnData.uns` where the result is stored if ``copy = False``.
-        numba_parallel
-            Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
-            For small datasets or small number of interactions, it's recommended to set this to `False`.
+        %(numba_parallel)s
         **kwargs
             Keyword arguments for parallelization, such as ``n_jobs`` or ``backend``.
 
         Returns
         -------
         :class:`collections.namedtuple` or None
+            TODO: better return type
             If ``copy = False``, updates ``adata.uns[{{key_added}}]`` with the following triple:
 
                 - `'means'` - :class:`pandas.DataFrame` containing the mean expression.
@@ -491,7 +477,7 @@ class PermutationTestABC(ABC):
         """
 
         def find_min_gene_in_complex(complex: str) -> Optional[str]:
-            complexes = [c for c in complex.split(_COMPLEX_DEL) if c in self._data.columns]
+            complexes = [c for c in complex.split("_") if c in self._data.columns]
             if not len(complexes):
                 return None
             if len(complexes) == 1:
@@ -507,9 +493,9 @@ class PermutationTestABC(ABC):
             self.interactions[TARGET] = self.interactions[TARGET].apply(find_min_gene_in_complex)
         elif complex_policy == ComplexPolicy.ALL:
             logg.debug("DEBUG: Creating all gene combinations within complexes")
-            src = self.interactions.pop(SOURCE).apply(lambda s: s.split(_COMPLEX_DEL)).explode()
+            src = self.interactions.pop(SOURCE).apply(lambda s: s.split("_")).explode()
             src.name = SOURCE
-            tgt = self.interactions.pop(TARGET).apply(lambda s: s.split(_COMPLEX_DEL)).explode()
+            tgt = self.interactions.pop(TARGET).apply(lambda s: s.split("_")).explode()
             tgt.name = TARGET
 
             self._interactions = pd.merge(self.interactions, src, how="left", left_index=True, right_index=True)
@@ -559,14 +545,14 @@ class PermutationTest(PermutationTestABC):
         ----------
         %(PT_prepare.parameters)s
         interactions_params
-            Keyword arguments for :func:`omnipath.interactions.import_intercell_networks` defining the interactions.
+            Keyword arguments for :func:`omnipath.interactions.import_intercell_network` defining the interactions.
             These datasets from [OmniPath16]_ are used by default: `'omnipath'`, `'pathwayextra'` `'kinaseextra'`,
             `'ligrecextra'`.
         transmitter_params
-            Keyword arguments for :func:`omnipath.interactions.import_intercell_network.` defining the transmitter
+            Keyword arguments for :func:`omnipath.interactions.import_intercell_network` defining the transmitter
             side of intercellular connections.
         receiver_params
-            Keyword arguments for :func:`omnipath.interactions.import_intercell_network.` defining the receiver
+            Keyword arguments for :func:`omnipath.interactions.import_intercell_network` defining the receiver
             side of intercellular connections.
 
         Returns

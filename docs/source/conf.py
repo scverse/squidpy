@@ -62,6 +62,8 @@ intersphinx_mapping = dict(  # noqa: C408
     rasterio=("https://rasterio.readthedocs.io/en/latest/", None),
     skimage=("https://scikit-image.org/docs/stable/", None),
     numba=("https://numba.readthedocs.io/en/stable/", None),
+    xarray=("https://xarray.pydata.org/en/stable/", None),
+    omnipath=("https://omnipath.readthedocs.io/en/latest", None),
 )
 
 # Add any paths that contain templates here, relative to this directory.
@@ -93,6 +95,8 @@ napoleon_use_rtype = True
 napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
+# 403 Client Error: Forbidden for url: https://www.jstor.org/stable/2332142?origin=crossref
+linkcheck_ignore = ["https://doi.org/10.2307/2332142"]
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
