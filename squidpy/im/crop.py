@@ -19,20 +19,20 @@ def uncrop_img(
     channel_id: str = "channels",
 ) -> xr.DataArray:
     """
-    Re-assemble image from crops and their positions.
+    Re-assemble im from crops and their positions.
 
     Fills remaining positions with zeros. Positions are given as upper right corners.
 
     Parameters
     ----------
     crops
-        List of image crops.
+        List of im crops.
     x
         X coord of crop in pixel space. TODO: nice to have - relative space.
     y
         Y coord of crop in pixel space. TODO: nice to have - relative space.
     shape
-        Shape of full image.
+        Shape of full im.
     channel_id
         Name of channel dim in :class:`xarray.DataArray`.
 
@@ -44,8 +44,8 @@ def uncrop_img(
     # TODO: maybe more descriptive names (y==height, x==width)? + extract to constants...
     # TODO: rewrite asserts
     # TODO: expose remaining positions default value
-    assert np.max(y) < shape[0], f"y ({y}) is outsize of image range ({shape[0]})"
-    assert np.max(x) < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
+    assert np.max(y) < shape[0], f"y ({y}) is outsize of im range ({shape[0]})"
+    assert np.max(x) < shape[1], f"x ({x}) is outsize of im range ({shape[1]})"
 
     dims = [channel_id, "y", "x"]
     img = xr.DataArray(np.zeros((crops[0].coords[channel_id].shape[0], shape[1], shape[0])), dims=dims)
@@ -56,10 +56,10 @@ def uncrop_img(
             y0 = y
             y1 = y + c.y.shape[0]
             # TODO: rewrite asserts
-            assert x0 >= 0, f"x ({x0}) is outsize of image range ({0})"
-            assert y0 >= 0, f"x ({y0}) is outsize of image range ({0})"
-            assert x1 <= shape[0], f"x ({x1}) is outsize of image range ({shape[0]})"
-            assert y1 <= shape[1], f"y ({y1}) is outsize of image range ({shape[1]})"
+            assert x0 >= 0, f"x ({x0}) is outsize of im range ({0})"
+            assert y0 >= 0, f"x ({y0}) is outsize of im range ({0})"
+            assert x1 <= shape[0], f"x ({x1}) is outsize of im range ({shape[0]})"
+            assert y1 <= shape[1], f"y ({y1}) is outsize of im range ({shape[1]})"
             img[:, y0:y1, x0:x1] = c
         return img
     else:
@@ -105,11 +105,11 @@ def crop_img(
     # TODO crop_extra should be created by `@d.keep_kwargs in `crop.py`` after
     # https://github.com/Chilipp/docrep/issues/21 is dealth with
     # TODO: rewrite assertions to "normal" errors so they can be more easily tested against
-    assert y < img.y.shape[0], f"y ({y}) is outsize of image range ({img.y.shape[0]})"
-    assert x < img.x.shape[0], f"x ({x}) is outsize of image range ({img.x.shape[0]})"
+    assert y < img.y.shape[0], f"y ({y}) is outsize of im range ({img.y.shape[0]})"
+    assert x < img.x.shape[0], f"x ({x}) is outsize of im range ({img.x.shape[0]})"
 
-    assert xs > 0, "image size cannot be 0"
-    assert ys > 0, "image size cannot be 0"
+    assert xs > 0, "im size cannot be 0"
+    assert ys > 0, "im size cannot be 0"
 
     if channel_id in img.dims:
         crop = (np.zeros((img.coords[channel_id].shape[0], ys, xs)) + cval).astype(img.dtype)
@@ -123,7 +123,7 @@ def crop_img(
     y0 = y
     y1 = y + ys
 
-    # crop image and put in already prepared `crop`
+    # crop im and put in already prepared `crop`
     crop_x0 = min(x0, 0) * -1
     crop_y0 = min(y0, 0) * -1
     crop_x1 = xs - max(x1 - img.x.shape[0], 0)

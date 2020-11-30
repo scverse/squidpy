@@ -24,7 +24,7 @@ adata
     Annotated data object."""
 _img_container = """\
 img
-    High-resolution image."""
+    High-resolution im."""
 _copy = """\
 copy
     If `True`, return the result, otherwise save it to the ``adata`` object."""
@@ -39,7 +39,7 @@ seed
 """
 _img_hr = """\
 img
-    High-resolution image.
+    High-resolution im.
 """
 _img_uint8 = """\
 img
@@ -66,11 +66,11 @@ cluster_key
 # TODO: https://github.com/Chilipp/docrep/issues/21 fixed, this is not necessary
 _crop_extra = """\
 scale
-    Resolution of the crop (smaller -> smaller image).
+    Resolution of the crop (smaller -> smaller im).
 mask_circle
     Mask crop to a circle.
 cval
-    The value outside image boundaries or the mask.
+    The value outside im boundaries or the mask.
 dtype
     Type to which the output should be (safely) cast. If `None`, don't recast.
     Currently supported dtypes: 'uint8'. TODO: pass actualy types instead of strings."""

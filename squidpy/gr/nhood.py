@@ -222,7 +222,7 @@ def centrality_scores(
 
     # TODO: unify error messages
     if connectivity_key not in adata.obsp:
-        raise KeyError("Choose a different `connectivity_key` or run first `squidpy.graph.spatial_connectivity()`.")
+        raise KeyError("Choose a different `connectivity_key` or run first `squidpy.gr.spatial_connectivity()`.")
     graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
 
     clusters = adata.obs[cluster_key].unique().tolist()

@@ -2,7 +2,7 @@ from anndata import AnnData
 
 import numpy as np
 
-from squidpy.graph import spatial_connectivity
+from squidpy.gr import spatial_connectivity
 
 
 # todo add edge cases

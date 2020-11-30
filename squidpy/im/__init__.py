@@ -1,3 +1,4 @@
+"""The image module."""
 from .crop import crop_img
 from .tools import (
     get_color_hist,

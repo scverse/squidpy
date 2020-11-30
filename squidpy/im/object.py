@@ -11,7 +11,7 @@ import xarray as xr
 from imageio import imread
 
 from squidpy._docs import d
-from squidpy.image._utils import _num_pages
+from squidpy.im._utils import _num_pages
 from squidpy.constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
@@ -21,8 +21,8 @@ class ImageContainer:
     """
     Container for in memory or on-disk tiff or jpg images.
 
-    Allows for lazy and chunked reading via :mod:`rasterio` and :mod:`dask` (if input is a tiff image).
-    An instance of this class is given to all image processing functions, along with an :mod:`anndata` instance,
+    Allows for lazy and chunked reading via :mod:`rasterio` and :mod:`dask` (if input is a tiff im).
+    An instance of this class is given to all im processing functions, along with an :mod:`anndata` instance,
     if necessary.
     """
 
@@ -38,7 +38,7 @@ class ImageContainer:
         """
         Set up ImageContainer from numpy array or on-disk tiff / jpg.
 
-        Processes image as in memory :class:`numpy.array` or uses :mod`xarray`'s :mod:`rasterio` reading functions to
+        Processes im as in memory :class:`numpy.array` or uses :mod`xarray`'s :mod:`rasterio` reading functions to
         load from disk (with caching) if ``img`` is a file path.
         If chunks are specified, the :mod:`xarray` is wrapped in a :mod:`dask`.
 
@@ -50,7 +50,7 @@ class ImageContainer:
             Key (name) to be used for img. For multi-page tiffs this should be a list.
             If not specified, DataArrays will be named 'image_{i}'.
         lazy
-            Use :mod:`rasterio` or :mod:`dask` to lazily load image.
+            Use :mod:`rasterio` or :mod:`dask` to lazily load im.
         chunks
             Chunk size for :mod:`dask`.
         """
@@ -82,7 +82,7 @@ class ImageContainer:
         fname
             Path to the saved .nc file.
         lazy
-            Use :mod:`dask` to lazily load image.
+            Use :mod:`dask` to lazily load im.
         chunks
             Chunk size for :mod:`dask`.
         """
@@ -115,15 +115,15 @@ class ImageContainer:
         channel_id: str = "channels",
     ) -> None:
         """
-        Add layer from numpy image / tiff file.
+        Add layer from numpy im / tiff file.
 
         For numpy arrays, assume that dims are: channels, y, x
-        The added image has to have the same number of channels as the original image, or no channels.
+        The added im has to have the same number of channels as the original im, or no channels.
 
         Parameters
         ----------
         img
-            Numpy array or path to image file.
+            Numpy array or path to im file.
         img_id
             Key (name) to be used for img. For multi-page tiffs this should be a list.
             If not specified, DataArrays will be named "image".
@@ -152,7 +152,7 @@ class ImageContainer:
 
     def _load_img(self, img: Union[Pathlike_t, np.ndarray], channel_id: str = "channels") -> xr.DataArray:
         """
-        Load image as :mod:`xarray`.
+        Load im as :mod:`xarray`.
 
         Supports numpy arrays and (multi-page) tiff files, and jpg files
         For :mod:`numpy` arrays, assume that dims are: ``(channels, y, x)``.
@@ -163,14 +163,14 @@ class ImageContainer:
         Parameters
         ----------
         img
-            :mod:`numpy` array or path to image file.
+            :mod:`numpy` array or path to im file.
         channel_id
             TODO.
 
         Returns
         -------
         :class:`xarray.DataArray`
-            Array containing the loaded image.
+            Array containing the loaded im.
 
         Raises
         ------
@@ -235,9 +235,9 @@ class ImageContainer:
         y
             Y coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if y+ys/2 is integer.
         img_id
-            id of the image layer to be cropped.
+            id of the im layer to be cropped.
         kwargs
-            Keyword arguments for :func:`squidpy.image.crop_img`.
+            Keyword arguments for :func:`squidpy.im.crop_img`.
 
         Returns
         -------
@@ -280,9 +280,9 @@ class ImageContainer:
         yr
             Height of the crop in pixels.
         img_id
-            id of the image layer to be cropped.
+            id of the im layer to be cropped.
         kwargs
-            Keyword arguments for :meth:`squidpy.image.ImageContainer.crop_corner`.
+            Keyword arguments for :meth:`squidpy.im.ImageContainer.crop_corner`.
 
         Returns
         -------
@@ -299,6 +299,7 @@ class ImageContainer:
 
         return self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id, **kwargs)
 
+    @d.dedent
     def crop_equally(
         self,
         xs: Optional[int] = None,
@@ -307,7 +308,7 @@ class ImageContainer:
         **_kwargs,
     ) -> Tuple[List[xr.DataArray], np.ndarray, np.ndarray]:
         """
-        Decompose an image into equally sized crops.
+        Decompose an im into equally sized crops.
 
         Parameters
         ----------
@@ -356,7 +357,7 @@ class ImageContainer:
         size
             Amount of context (1.0 means size of spot, larger -> more context).
         kwargs
-            Keyword arguments for :func:`squidpy.image.crop_img`.
+            Keyword arguments for :func:`squidpy.im.crop_img`.
 
         Yields
         ------

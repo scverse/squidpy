@@ -214,7 +214,7 @@ class PermutationTestABC(ABC):
 
         Returns
         -------
-        :class:`spatial_tools.graph.perm_test.PermutationTestABC`
+        :class:`spatial_tools.gr.perm_test.PermutationTestABC`
             Sets the following attributes and returns self:
 
                 - :paramref:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
@@ -661,7 +661,7 @@ def _analysis(
     numba_parallel
         Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
     **kwargs
-        Keyword arguments for :func:`squidpy.graph._utils.parallelize`, such as ``n_jobs`` or ``backend``.
+        Keyword arguments for :func:`squidpy.gr._utils.parallelize`, such as ``n_jobs`` or ``backend``.
 
     Returns
     -------

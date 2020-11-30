@@ -8,52 +8,52 @@ Import Squidpy as::
 Graph
 ~~~~~
 
-.. module::squidpy.graph
+.. module::squidpy.gr
 .. currentmodule:: squidpy
 
 .. autosummary::
     :toctree: api
 
-    graph.spatial_connectivity
-    graph.nhood_enrichment
-    graph.centrality_scores
-    graph.interaction_matrix
-    graph.perm_test
-    graph.moran
-    graph.ripley_k
+    gr.spatial_connectivity
+    gr.nhood_enrichment
+    gr.centrality_scores
+    gr.interaction_matrix
+    gr.perm_test
+    gr.moran
+    gr.ripley_k
 
 Image
 ~~~~~
 
-.. module::squidpy.image
+.. py:module::squidpy.im
 .. currentmodule:: squidpy
 
 .. autosummary::
     :toctree: api
 
-    image.get_color_hist
-    image.get_hog_features
-    image.get_summary_stats
-    image.calculate_image_features
-    image.get_grey_texture_features
-    image.process_img
-    image.segment_img
-    image.crop_img
+    im.get_color_hist
+    im.get_hog_features
+    im.get_summary_stats
+    im.calculate_image_features
+    im.get_grey_texture_features
+    im.process_img
+    im.segment_img
+    im.crop_img
 
 Plotting
 ~~~~~~~~
 
-.. module::squidpy.plotting
+.. module::squidpy.pl
 .. currentmodule:: squidpy
 
 .. autosummary::
     :toctree: api
 
-    plotting.plot_ripley_k
-    plotting.nhood_enrichment
-    plotting.centrality_scores
-    plotting.interaction_matrix
-    plotting.plot_segmentation
+    pl.plot_ripley_k
+    pl.nhood_enrichment
+    pl.centrality_scores
+    pl.interaction_matrix
+    pl.plot_segmentation
 
 Reading
 ~~~~~~~

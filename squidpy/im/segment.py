@@ -53,7 +53,7 @@ class SegmentationModel:
     @d.dedent
     def segment(self, img: np.ndarray, **kwargs) -> np.ndarray:
         """
-        Segment an image.
+        Segment an im.
 
         Parameters
         ----------
@@ -62,7 +62,7 @@ class SegmentationModel:
         Returns
         -------
         :class:`numpy.ndarray`
-            Segmentation mask for the high-resolution image of shape (x, y, 1).
+            Segmentation mask for the high-resolution im of shape (x, y, 1).
         """
         # TODO: make sure that the dtype is correct
         return self._segment(img, **kwargs)
@@ -117,7 +117,7 @@ class SegmentationModelWatershed(SegmentationModel):
         ----------
         %(segment.parameters)s
         thresh
-             Threshold for discretization of image scale to define areas to segment.
+             Threshold for discretization of im scale to define areas to segment.
         geq
             Treat ``thresh`` as upper or lower (greater-equal = geq) bound for defining state to segment.
         kwargs
@@ -133,8 +133,8 @@ class SegmentationModelWatershed(SegmentationModel):
         from skimage.segmentation import watershed
 
         # TODO check if threshold is in [0, 1].
-        # TODO check image dtype/ranges
-        # get binarized image
+        # TODO check im dtype/ranges
+        # get binarized im
         if geq:
             mask = arr >= thresh
         else:
@@ -197,7 +197,7 @@ def segment(
     ----------
     %(img_container)s
     img_id
-        Key of image object to segment.
+        Key of im object to segment.
     model_group
         Segmentation method to use. Available are:
 
@@ -209,12 +209,12 @@ def segment(
         TODO: this logic should be refactored.
         Instance of executable segmentation model or name of specific method within ``model_group``.
     model_kwargs
-        Keyword arguments for :meth:`squidpy.image.SegmentationModel.segment`.
+        Keyword arguments for :meth:`squidpy.im.SegmentationModel.segment`.
     channel_idx
         Channel to use for segmentation.
     %(width_height)s
     key_added
-        Key of new image sized array to add into img object. Defaults to ``segmented_{{model_group}}``.
+        Key of new im sized array to add into img object. Defaults to ``segmented_{{model_group}}``.
 
     Returns
     -------
@@ -264,9 +264,9 @@ def segment_crops(
     ----------
     %(img_container)s
     img_id
-        Key of image object to take crops from.
+        Key of im object to take crops from.
     segmented_img_id
-        Key of image object that contains segments.
+        Key of im object that contains segments.
     %(width_height)s # TODO add support as soon as crop supports this
 
     Returns

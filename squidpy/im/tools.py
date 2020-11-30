@@ -12,7 +12,7 @@ import skimage.feature as sk_image
 from skimage.feature import greycoprops, greycomatrix
 
 from squidpy._docs import d, inject_docs
-from squidpy.image.object import ImageContainer
+from squidpy.im.object import ImageContainer
 from squidpy.constants._constants import ImageFeature
 
 Feature_t = Dict[str, Any]
@@ -30,7 +30,7 @@ def calculate_image_features(
     **kwargs,
 ) -> Optional[pd.DataFrame]:
     """
-    Get image features for spot ids from image file.
+    Get im features for spot ids from im file.
 
     Parameters
     ----------
@@ -39,12 +39,12 @@ def calculate_image_features(
     features
         Features to be calculated. Available features:
 
-            - `{f.HOG.s!r}`: histogram of oriented gradients :func:`squidpy.image.get_hog_features()`.
+            - `{f.HOG.s!r}`: histogram of oriented gradients :func:`squidpy.im.get_hog_features()`.
             - `{f.TEXTURE.s!r}`: summary stats based on repeating patterns \
-            :func:`squidpy.image.get_grey_texture_features()`.
-            - `{f.SUMMARY.s!r}`: summary stats of each color channel :func:`squidpy.image.get_summary_stats()`.
+            :func:`squidpy.im.get_grey_texture_features()`.
+            - `{f.SUMMARY.s!r}`: summary stats of each color channel :func:`squidpy.im.get_summary_stats()`.
             - `{f.COLOR_HIST.s!r}`: counts in bins of each color channel's histogram \
-            :func:`squidpy.image.get_color_hist()`.
+            :func:`squidpy.im.get_color_hist()`.
 
     features_kwargs
         Keyword arguments for the different features that should be generated.
@@ -52,7 +52,7 @@ def calculate_image_features(
         Key to use for saving calculated table in :attr:`anndata.AnnData.obsm`.
     %(copy)s
     kwargs
-        Keyword arguments for :meth:`squidpy.image.ImageContainer.crop_spot_generator`.
+        Keyword arguments for :meth:`squidpy.im.ImageContainer.crop_spot_generator`.
 
     Returns
     -------
@@ -286,7 +286,7 @@ def get_grey_texture_features(
     if img.shape[-1] == 1:
         grey_img = img[:, :, 0]
     else:
-        # get grey scale image
+        # get grey scale im
         multiplier = [0.299, 0.587, 0.114]
         grey_img = np.dot(img, multiplier).astype(np.uint8)
 
