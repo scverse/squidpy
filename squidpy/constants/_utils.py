@@ -53,4 +53,12 @@ class ABCEnumMeta(EnumMeta, ABCMeta):  # noqa: D101
 
 
 class ModeEnum(ErrorFormatterABC, PrettyEnum, metaclass=ABCEnumMeta):  # noqa: D101
-    pass
+    @property
+    def s(self) -> str:
+        """Return the :paramref:`value` as :class:`str`."""
+        return str(self.value)
+
+    @property
+    def v(self):
+        """Alias for :paramref:`value`."""
+        return self.value

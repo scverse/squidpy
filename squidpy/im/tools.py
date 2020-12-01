@@ -1,5 +1,8 @@
+# TODO: disable data-science-types because below does not generate types in shpinx + create an issue
+from __future__ import annotations
+
 from types import MappingProxyType
-from typing import Any, Dict, List, Tuple, Mapping, Iterable, Optional
+from typing import Any, Dict, Tuple, Union, Mapping, Iterable, Optional
 
 from anndata import AnnData
 
@@ -9,67 +12,66 @@ import pandas as pd
 import skimage.feature as sk_image
 from skimage.feature import greycoprops, greycomatrix
 
-from squidpy.image.object import ImageContainer
+from squidpy._docs import d, inject_docs
+from squidpy.im.object import ImageContainer
+from squidpy.constants._constants import ImageFeature
 
-Img_t = np.ndarray  # TODO: not sure why this fails even with data-science-types: np.ndarray[np.float64]
 Feature_t = Dict[str, Any]
 
 
+@d.dedent
+@inject_docs(f=ImageFeature)
 def calculate_image_features(
     adata: AnnData,
     img: ImageContainer,
-    features: Optional[List[str]] = "summary",
-    features_kwargs: Optional[Mapping] = MappingProxyType({}),
-    key: Optional[str] = "img_features",
-    copy: Optional[bool] = False,
+    features: Union[str, Iterable[str]] = ImageFeature.SUMMARY.s,
+    features_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    key: str = "img_features",
+    copy: bool = False,
     **kwargs,
 ) -> Optional[pd.DataFrame]:
     """
-    Get image features for spot ids from image file.
+    Get im features for spot ids from im file.
 
     Parameters
     ----------
-    adata
-        Spatial adata object
-    img
-        High resolution image from which feature should be calculated
+    %(adata)s
+    %(img_container)s
     features
         Features to be calculated. Available features:
 
-            - `'hog'`: histogram of oriented gradients :func:`squidpy.image.get_hog_features()`.
-            - `'texture'`: summary stats based on repeating patterns :func:`squidpy.image.get_grey_texture_features()`.
-            - `'summary'`: summary stats of each color channel :func:`squidpy.image.get_summary_stats()`.
-            - `'color_hist'`: counts in bins of each color channel's histogram :func:`squidpy.image.get_color_hist()`.
+            - `{f.HOG.s!r}`: histogram of oriented gradients :func:`squidpy.im.get_hog_features()`.
+            - `{f.TEXTURE.s!r}`: summary stats based on repeating patterns \
+            :func:`squidpy.im.get_grey_texture_features()`.
+            - `{f.SUMMARY.s!r}`: summary stats of each color channel :func:`squidpy.im.get_summary_stats()`.
+            - `{f.COLOR_HIST.s!r}`: counts in bins of each color channel's histogram \
+            :func:`squidpy.im.get_color_hist()`.
 
     features_kwargs
-        keyword arguments for the different features that should be generated.
+        Keyword arguments for the different features that should be generated.
     key
         Key to use for saving calculated table in :attr:`anndata.AnnData.obsm`.
-    copy
-        If True, return :class:`pandas.DataFrame` with calculated features.
+    %(copy)s
     kwargs
-        Keyword arguments passed to :meth:`squidpy.image.ImageContainer.crop_spot_generator` function.
+        Keyword arguments for :meth:`squidpy.im.ImageContainer.crop_spot_generator`.
 
     Returns
     -------
     :class:`pandas.DataFrame` or None
-        `None` if ``copy = False``, otherwise the :class:`pandasDataFrame`.
+        TODO: rephrase
+        `None` if ``copy = False``, otherwise the :class:`pandas.DataFrame`.
     """
-    available_features = ["hog", "texture", "summary", "color_hist"]
     if isinstance(features, str):
         features = [features]
 
-    for feature in features:
-        assert (
-            feature in available_features
-        ), f"feature: {feature} not a valid feature, select on of {available_features} "
-
+    features = [ImageFeature(f) for f in features]
     features_list = []
     obs_ids = []
     for obs_id, crop in img.crop_spot_generator(adata, **kwargs):
         # get np.array from crop and restructure to dimensions: y,x,channels
         crop = crop.transpose("y", "x", ...).data
         # if crop has no color channel, reshape
+        # TODO: ndim is more elegant
         if len(crop.shape) == 2:
             crop = crop[:, :, np.newaxis]
 
@@ -79,9 +81,9 @@ def calculate_image_features(
 
         obs_ids.append(obs_id)
 
-    features_log = pd.DataFrame(features_list)
-    features_log["obs_id"] = obs_ids
-    features_log.set_index(["obs_id"], inplace=True)
+    features_log = pd.DataFrame(features_list, index=obs_ids)
+    # features_log["obs_id"] = obs_ids
+    # features_log.set_index(["obs_id"], inplace=True)
 
     # modify adata in place or return features_log
     if copy:
@@ -90,25 +92,26 @@ def calculate_image_features(
     adata.obsm[key] = features_log
 
 
+# TODO: refactor all of below into ImageContainer?
+@d.dedent
 def get_features_statistics(
-    img: Img_t, features: Iterable[str], features_kwargs: Optional[Mapping[str, Any]] = MappingProxyType({})
+    img: np.ndarray[np.float64],
+    features: Iterable[Union[str, ImageFeature]],
+    features_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> Feature_t:
     """
     Calculate feature statistics.
 
     Parameters
     ----------
-    img
-        RGB image in uint8 format.
-    features
-        Feature names of features to be extracted.
+    %(img_uint8)s
+    %(feature_name)s
     features_kwargs
         keyword arguments for the different features that should be generated.
 
     Returns
     -------
-    :class:`dict`
-        Dictionary of feature values.
+    %(feature_ret)s
 
     Raises
     ------
@@ -118,37 +121,39 @@ def get_features_statistics(
     # TODO: valuedispatch would be cleaner
     stat_dict = {}
     for feature in features:
-        feature_kwargs = features_kwargs.get(feature, {})
-        if feature == "hog":
+        feature = ImageFeature(feature)
+        feature_kwargs = features_kwargs.get(feature.s, {})
+
+        if feature == ImageFeature.HOG:
             get_feature_fn = get_hog_features
-        elif feature == "texture":
+        elif feature == ImageFeature.TEXTURE:
             get_feature_fn = get_grey_texture_features
-        elif feature == "color_hist":
+        elif feature == ImageFeature.COLOR_HIST:
             get_feature_fn = get_color_hist
-        elif feature == "summary":
+        elif feature == ImageFeature.SUMMARY:
             get_feature_fn = get_summary_stats
         else:
-            raise NotImplementedError(f"feature {feature} is not implemented")
+            raise NotImplementedError(feature)
+
+        # TODO: refactor
         stat_dict.update(get_feature_fn(img, **feature_kwargs))
 
     return stat_dict
 
 
-def get_hog_features(img: Img_t, feature_name: str = "hog") -> Feature_t:
+@d.dedent
+def get_hog_features(img: np.ndarray[np.float64], feature_name: str = "hog") -> Feature_t:
     """
     Calculate histogram of oriented gradients (hog) features.
 
     Parameters
     ----------
-    img
-        RGB image in uint8 format, in format H, W[, C].
-    feature_name
-        base name of feature in resulting feature values :class:`dict`.
+    %(img_uint8)s
+    %(feature_name)s
 
     Returns
     -------
-    :class:`dict`
-        Dictionary of feature values.
+    %(feature_ret)s
     """
     hog_dict = {}
     hog_features = sk_image.hog(img)
@@ -157,10 +162,11 @@ def get_hog_features(img: Img_t, feature_name: str = "hog") -> Feature_t:
     return hog_dict
 
 
+@d.dedent
 def get_summary_stats(
-    img: Img_t,
+    img: np.ndarray[np.float64],
     feature_name: str = "summary",
-    quantiles: Tuple[int, int, int] = (0.9, 0.5, 0.1),
+    quantiles: Tuple[float, float, float] = (0.9, 0.5, 0.1),
     mean: bool = False,
     std: bool = False,
     channels: Tuple[int, int, int] = (0, 1, 2),
@@ -170,10 +176,8 @@ def get_summary_stats(
 
     Parameters
     ----------
-    img
-        RGB image in uint8 format, in format H, W[, C].
-    feature_name
-        base name of feature in resulting feature values :class:`dict`.
+    %(img_uint8)s
+    %(feature_name)s
     quantiles
         Quantiles that are computed.
     mean
@@ -185,8 +189,7 @@ def get_summary_stats(
 
     Returns
     -------
-    :class:`dict`
-        Dictionary of feature values.
+    %(feature_ret)s
     """
     # if channels is None, compute features for all channels
     if channels is None:
@@ -206,8 +209,9 @@ def get_summary_stats(
     return stats
 
 
+@d.dedent
 def get_color_hist(
-    img: Img_t,
+    img: np.ndarray[np.float64],
     feature_name: str = "color_hist",
     bins: int = 10,
     channels: Tuple[int, int, int] = (0, 1, 2),
@@ -218,10 +222,8 @@ def get_color_hist(
 
     Parameters
     ----------
-    img
-        RGB image in uint8 format.
-    feature_name
-        Base name of feature in resulting feature values dict.
+    %(img_uint8)s
+    %(feature_name)s
     bins
         Number of binned value intervals.
     channels
@@ -231,8 +233,7 @@ def get_color_hist(
 
     Returns
     -------
-    :class:`dict`
-        Dictionary of feature values.
+    %(feature_ret)s
     """
     # if channels is None, compute features for all channels
     if channels is None:
@@ -247,12 +248,13 @@ def get_color_hist(
     return features
 
 
+@d.dedent
 def get_grey_texture_features(
-    img: Img_t,
+    img: np.ndarray[np.float64],
     feature_name: str = "texture",
     props: Iterable[str] = ("contrast", "dissimilarity", "homogeneity", "correlation", "ASM"),
     distances: Iterable[int] = (1,),
-    angles: Iterable[int] = (0, np.pi / 4, np.pi / 2, 3 * np.pi / 4),
+    angles: Iterable[float] = (0, np.pi / 4, np.pi / 2, 3 * np.pi / 4),
 ) -> Feature_t:
     """
     Calculate texture features.
@@ -263,15 +265,14 @@ def get_grey_texture_features(
     d and at an angle theta from grey-level i.
 
     From a given GLCM texture features are inferred.
+    TODO: add reference to GLCM.
 
     Parameters
     ----------
-    img
-        RGB image in uint8 format.
-    feature_name
-        Base name of feature in resulting feature values dict.
+    %(img_uint8)s
+    %(feature_name)s
     props
-        Texture features that are calculated. See `prop` in skimage.feature.greycoprops.
+        Texture features that are calculated. See `prop` in :func:`skimage.feature.greycoprops`.
     distances
         See `distances` in :func:`skimage.feature.greycomatrix`.
     angles
@@ -279,22 +280,21 @@ def get_grey_texture_features(
 
     Returns
     -------
-    :class:`dict`
-        Dictionary of feature values.
+    %(feature_ret)s
     """
     features = {}
     # if img has only one channel, do not need to convert to grey
     if img.shape[-1] == 1:
         grey_img = img[:, :, 0]
     else:
-        # get grey scale image
+        # get grey scale im
         multiplier = [0.299, 0.587, 0.114]
         grey_img = np.dot(img, multiplier).astype(np.uint8)
 
     comatrix = greycomatrix(grey_img, distances=distances, angles=angles, levels=256)
     for p in props:
         tmp_features = greycoprops(comatrix, prop=p)
-        for d_idx, d in enumerate(distances):
+        for d_idx, dist in enumerate(distances):
             for a_idx, a in enumerate(angles):
-                features[f"{feature_name}_{p}_dist_{d}_angle_{a:.2f}"] = tmp_features[d_idx, a_idx]
+                features[f"{feature_name}_{p}_dist_{dist}_angle_{a:.2f}"] = tmp_features[d_idx, a_idx]
     return features
