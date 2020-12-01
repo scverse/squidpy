@@ -332,7 +332,6 @@ class ImageContainer:
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
 
-        # TODO: outdated docs or why _kwargs are not passed?
         crops = [self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id, **kwargs) for x, y in zip(xcoords, ycoords)]
         return crops, xcoords, ycoords
 

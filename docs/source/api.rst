@@ -54,15 +54,3 @@ Plotting
     pl.centrality_scores
     pl.interaction_matrix
     pl.plot_segmentation
-
-Reading
-~~~~~~~
-
-.. module::squidpy
-.. currentmodule:: squidpy
-
-.. autosummary::
-    :toctree: api
-
-    read_seqfish
-    read_visium_data

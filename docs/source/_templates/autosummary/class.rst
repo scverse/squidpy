@@ -1,10 +1,8 @@
-:github_url: {{ fullname | escape  }}
+:github_url: {{ fullname }}
 
 {{ fullname | escape | underline}}
 
 .. currentmodule:: {{ module }}
-
-.. add toctree option to make autodoc generate the pages
 
 .. autoclass:: {{ objname }}
 
@@ -33,3 +31,9 @@
    {%- endfor %}
    {% endif %}
    {% endblock %}
+
+   .. _sphx_glr_backref_{{fullname}}:
+
+   .. minigallery:: {{fullname}}
+       :add-heading: Gallery
+       :heading-level: -

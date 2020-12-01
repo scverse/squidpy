@@ -30,7 +30,7 @@ def process_img(
     Process an image.
 
     Note that crop-wise processing can save memory but may change behaviour of cropping if global statistics are used.
-    Leave ``xs`` and ``ys`` as `None` in order to process the full im in one go.
+    Leave ``xs`` and ``ys`` as `None` in order to process the full image in one go.
 
     Parameters
     ----------
@@ -46,7 +46,7 @@ def process_img(
         Key word arguments to processing method specified by ``processing``.
     %(width_height)s
     key_added
-        Key of new im sized array to add into img object. Defaults to ``{{img_id}}_{{processing}}``.
+        Key of new image sized array to add into img object. Defaults to ``{{img_id}}_{{processing}}``.
     %(copy_cont)s
 
     Returns
@@ -62,7 +62,7 @@ def process_img(
     else:
         raise NotImplementedError(processing)
 
-    channel_id = img.data[img_id].dims[0]  # channels are named the same as in source im
+    channel_id = img.data[img_id].dims[0]  # channels are named the same as in source image
     # Make sure crops are xarrays:
     if not isinstance(crops[0], xr.DataArray):
         dims = [channel_id, "y", "x"]
