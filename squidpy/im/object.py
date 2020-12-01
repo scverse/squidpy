@@ -11,7 +11,7 @@ import xarray as xr
 from imageio import imread
 
 from squidpy._docs import d
-from squidpy.image._utils import _num_pages
+from squidpy.im._utils import _num_pages
 from squidpy.constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
@@ -179,7 +179,7 @@ class ImageContainer:
         """
         if isinstance(img, np.ndarray):
             if len(img.shape) > 3:
-                raise ValueError(f"img has more than 3 dimensions. img.shape is {img.shape}")
+                raise ValueError(f"Img has more than 3 dimensions. img.shape is {img.shape}.")
             dims = [channel_id, "y", "x"]
             if len(img.shape) == 2:
                 dims = ["y", "x"]
@@ -213,7 +213,7 @@ class ImageContainer:
             raise ValueError(img)
         return xr_img
 
-    @d.dedent
+    @d.get_sections(base="crop_corner", sections=["Parameters", "Returns"])
     def crop_corner(
         self,
         x: int,
@@ -235,9 +235,9 @@ class ImageContainer:
         y
             Y coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if y+ys/2 is integer.
         img_id
-            id of the image layer to be cropped.
+            Id of the image layer to be cropped.
         kwargs
-            Keyword arguments for :func:`squidpy.image.crop_img`.
+            Keyword arguments for :func:`squidpy.im.crop_img`.
 
         Returns
         -------
@@ -254,14 +254,16 @@ class ImageContainer:
         img = self.data.data_vars[img_id]
         return crop_img(img=img, x=x, y=y, xs=xs, ys=ys, **kwargs)
 
+    d.delete_kwargs(base_key="crop_corner.parameters", kwargs="kwargs")
+
     @d.dedent
     def crop_center(
         self,
         x: int,
         y: int,
+        img_id: Optional[str] = None,
         xr: int = 100,
         yr: int = 100,
-        img_id: Optional[str] = None,
         **kwargs,
     ) -> xr.DataArray:
         """
@@ -271,23 +273,17 @@ class ImageContainer:
 
         Parameters
         ----------
-        x
-            X coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if x+xs/2 is integer.
-        y
-            Y coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if y+ys/2 is integer.
+        %(crop_corner.parameters.no_kwargs)s
         xr
             Radius of the crop in pixels.
         yr
             Height of the crop in pixels.
-        img_id
-            id of the image layer to be cropped.
         kwargs
-            Keyword arguments for :meth:`squidpy.image.ImageContainer.crop_corner`.
+            Keyword arguments for :meth:`crop_corner`.
 
         Returns
         -------
-        :class:`xarray.DataArray`
-            Data with dimensions: channels, y, x.
+        %(crop_corner.returns)s
         """
         # move from center to corner
         x = x - xr
@@ -299,12 +295,13 @@ class ImageContainer:
 
         return self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id, **kwargs)
 
+    @d.dedent
     def crop_equally(
         self,
         xs: Optional[int] = None,
         ys: Optional[int] = None,
         img_id: Optional[Union[str, List[str]]] = None,
-        **_kwargs,
+        **kwargs,
     ) -> Tuple[List[xr.DataArray], np.ndarray, np.ndarray]:
         """
         Decompose an image into equally sized crops.
@@ -312,8 +309,8 @@ class ImageContainer:
         Parameters
         ----------
         %(width_height)s
-        _kwargs
-            TODO: unused.
+        kwargs
+            Keyword arguments for :meth:`squidpy.im.ImageContainer.crop_corner`.
 
         Returns
         -------
@@ -335,8 +332,7 @@ class ImageContainer:
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_xcoord, len(unique_ycoord))
 
-        # TODO: outdated docs or why _kwargs are not passed?
-        crops = [self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id) for x, y in zip(xcoords, ycoords)]
+        crops = [self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id, **kwargs) for x, y in zip(xcoords, ycoords)]
         return crops, xcoords, ycoords
 
     @d.dedent
@@ -344,7 +340,7 @@ class ImageContainer:
         self, adata: AnnData, dataset_name: Optional[str] = None, size: float = 1.0, **kwargs
     ) -> Iterator[Tuple[Union[int, str], xr.DataArray]]:
         """
-        Iterate over all obs_ids defined in adata and extract crops from img.
+        Iterate over all obs_ids defined in adata and extract crops from images.
 
         Implemented for 10x spatial datasets.
 
@@ -356,7 +352,7 @@ class ImageContainer:
         size
             Amount of context (1.0 means size of spot, larger -> more context).
         kwargs
-            Keyword arguments for :func:`squidpy.image.crop_img`.
+            Keyword arguments for :func:`squidpy.im.crop_img`.
 
         Yields
         ------

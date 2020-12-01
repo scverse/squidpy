@@ -1,4 +1,4 @@
-"""Functions for building graph from spatial coordinates."""
+"""Functions for building gr from spatial coordinates."""
 import warnings
 from typing import Tuple, Union, Optional
 
@@ -26,7 +26,7 @@ def spatial_connectivity(
     key_added: Optional[str] = None,
 ) -> None:
     """
-    Create a graph from spatial coordinates.
+    Create a gr from spatial coordinates.
 
     Parameters
     ----------

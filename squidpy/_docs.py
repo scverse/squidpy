@@ -28,6 +28,9 @@ img
 _copy = """\
 copy
     If `True`, return the result, otherwise save it to the ``adata`` object."""
+_copy_cont = """\
+copy
+    If `True`, return the result, otherwise modify the image container."""
 _numba_parallel = """\
 numba_parallel
     Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
@@ -43,7 +46,7 @@ img
 """
 _img_uint8 = """\
 img
-    RGB Image of type :class:`numpy.uint8` of shape ``(height, width [, channels]).``.
+    RGB image of type :class:`numpy.uint8` of shape ``(height, width [, channels]).``.
 """
 _feature_name = """\
 feature_name
@@ -91,6 +94,7 @@ d = DocstringProcessor(
     adata=_adata,
     img_container=_img_container,
     copy=_copy,
+    copy_cont=_copy_cont,
     numba_parallel=_numba_parallel,
     seed=_seed,
     img_hr=_img_hr,

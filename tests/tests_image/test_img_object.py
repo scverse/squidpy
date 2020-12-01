@@ -7,8 +7,8 @@ import xarray as xr
 
 import rasterio.errors
 
-from squidpy.image.crop import uncrop_img
-from squidpy.image.object import ImageContainer
+from squidpy.im.crop import uncrop_img
+from squidpy.im.object import ImageContainer
 
 
 @pytest.mark.parametrize("shape", [(3, 100, 200), (1, 100, 200), (10, 1, 100, 200)])
@@ -36,7 +36,7 @@ def test_image_loading(shape, tmpdir):
     print(cont)
     if len(shape) > 3:
         # multi-channel tiff
-        # check for existance of each image in multi-channel tiff
+        # check for existance of each im in multi-channel tiff
         # check that contains correct information
         assert (cont.data["image"] == img_orig[:, 0, :, :]).all()
     else:
@@ -54,12 +54,12 @@ def test_image_loading(shape, tmpdir):
     ],
 )
 def test_add_img(shape1, shape2):
-    """Add image to existing ImageObject and check result."""
+    """Add im to existing ImageObject and check result."""
     # create ImageContainer
     img_orig = np.random.randint(low=0, high=255, size=(3, 100, 200), dtype=np.uint8)
     cont = ImageContainer(img_orig, img_id="img_orig")
 
-    # add image
+    # add im
     img_new = np.random.randint(low=0, high=255, size=(100, 200), dtype=np.uint8)
     cont.add_img(img_new, img_id="img_new")
 
@@ -109,7 +109,7 @@ def test_crop(tmpdir):
         img_id="image_0",
     )
     assert crop.shape == (10, 1, 1)
-    # check that has cropped correct image
+    # check that has cropped correct im
     assert (crop[:3, 0, 0] == [10, 11, 12]).all()
     assert type(crop) == xr.DataArray
 
@@ -138,7 +138,7 @@ def test_crop(tmpdir):
 
 
 def test_uncrop_img(tmpdir):
-    """Crop image and uncrop again and check equality."""
+    """Crop im and uncrop again and check equality."""
     # create ImageContainer
     xdim = 100
     ydim = 100
@@ -156,12 +156,12 @@ def test_uncrop_img(tmpdir):
         y=ycoord,
         shape=cont.shape,
     )
-    # check that has cropped correct image
+    # check that has cropped correct im
     assert np.max(np.abs(a - cont.data["image_0"])) == 0.0
 
 
 def test_single_uncrop_img(tmpdir):
-    """Crop image into one crop and uncrop again and check equality."""
+    """Crop im into one crop and uncrop again and check equality."""
     # create ImageContainer
     xdim = 100
     ydim = 100
@@ -179,5 +179,5 @@ def test_single_uncrop_img(tmpdir):
         y=ycoord,
         shape=cont.shape,
     )
-    # check that has cropped correct image
+    # check that has cropped correct im
     assert np.max(np.abs(a - cont.data["image_0"])) == 0.0

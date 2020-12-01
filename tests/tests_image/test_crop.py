@@ -1,13 +1,13 @@
 from anndata import AnnData
 
-from squidpy.image.object import ImageContainer
+from squidpy.im.object import ImageContainer
 from squidpy.constants._pkg_constants import Key
 
 
 # adata and cont are now in conftest.py
 def test_crop_spot_generator(adata: AnnData, cont: ImageContainer):
     """
-    for simulated adata + image, generate crops.
+    for simulated adata + im, generate crops.
     Make sure that the correct amount of crops are generated
     and that the crops have the correct content
 

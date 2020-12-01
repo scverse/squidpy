@@ -145,6 +145,8 @@ data
 # docs
 docs/source/api/*rst
 docs/source/spelling_wordlist.txt
+docs/source/auto_*
+docs/source/gen_modules
 
 # Vim .swp
 *.swp
