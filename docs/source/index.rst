@@ -12,6 +12,7 @@ Squidpy
 
     installation
     api
+    classes
     references
 
 .. TODO: fix the :target:s in PyPI and Docs
