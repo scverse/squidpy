@@ -1,12 +1,12 @@
 Classes
-+++++++
+=======
 
 Image
 ~~~~~
 
 ImageContainer
 --------------
-.. autoclass:: squidpy.image.ImageContainer
+.. autoclass:: squidpy.im.ImageContainer
     :members:
     :inherited-members:
 
