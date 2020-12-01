@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  schedule:
+    - cron: '*/15 * * * *'
   push:
     branches:
       - master
@@ -9,7 +11,7 @@ on:
       - master
 
 jobs:
-  build:
+  test:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
@@ -67,6 +69,7 @@ jobs:
       run: |
         tox -e lint
 
+    # TODO: enable be once squidpy_notebooks is downloadable without authorization
     #- name: Documentation check
     #  run: |
     #    tox -e docs-check
@@ -84,3 +87,17 @@ jobs:
         CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
       run: |
         codecov --no-color --required --flags unittests
+
+  rebuild-examples:
+    # TODO: do we want to test the examples every time? this will only test after merge
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Rebuild tutorials/examples
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.ACCESS_TOKEN }}
+          repository: theislab/squidpy_notebooks
+          event-type: rebuild
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
