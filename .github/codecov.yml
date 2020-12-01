@@ -23,10 +23,6 @@ coverage:
       plotting:
         paths:
           - squidpy/pl/
-      tests:
-        target: 100%
-        paths:
-          - tests/
     patch:
       default:
         target: auto
@@ -43,7 +39,7 @@ parsers:
       macro: no
 
 comment:
-  layout: "reach,diff,flags,files,footer"
+  layout: "reach, diff, files"
   behavior: new
   require_changes: yes
   branches:
