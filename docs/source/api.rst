@@ -21,10 +21,6 @@ Graph
     graph.perm_test
     graph.moran
     graph.ripley_k
-    graph.plot_louvain_on_umap
-    graph.plot_louvain_on_graph
-    graph.prepare_data_for_clustering
-    graph.compute_louvain_on_joined_connectivities
 
 Image
 ~~~~~
@@ -40,9 +36,9 @@ Image
     image.get_summary_stats
     image.calculate_image_features
     image.get_grey_texture_features
-    image.ImageContainer
-    image.segment_img
     image.process_img
+    image.segment_img
+    image.crop_img
 
 Plotting
 ~~~~~~~~

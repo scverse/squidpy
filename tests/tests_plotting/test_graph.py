@@ -7,14 +7,15 @@ from anndata import AnnData
 
 from squidpy import graph, plotting
 
-sc.pl.set_rcParams_defaults()
-sc.set_figure_params(dpi=40, color_map="viridis")
-
 HERE: Path = Path(__file__).parents[1]
 
 ROOT = HERE / "_images"
 FIGS = HERE / "figures"
 TOL = 50
+DPI = 40
+
+sc.pl.set_rcParams_defaults()
+sc.set_figure_params(dpi=40, color_map="viridis")
 
 
 @pytest.mark.skip(reason="X_spatial not in obsm. Apparently already fixed in scanpy's master/dev.")
@@ -56,7 +57,7 @@ def test_centrality_scores_single(image_comparer, adata: AnnData):
     graph.spatial_connectivity(adata)
     graph.centrality_scores(adata, cluster_key=c_key)
 
-    plotting.centrality_scores(adata, cluster_key=c_key, selected_score=selected_score)
+    plotting.centrality_scores(adata, cluster_key=c_key, selected_score=selected_score, dpi=DPI)
     save_and_compare_images("master_scatter_single")
 
 

@@ -37,10 +37,10 @@ def test_spatial_connectivity_non_visium(non_visium_adata: AnnData):
         ]
     )
 
-    spatial_connectivity(non_visium_adata, n_neigh=3, coord_type="non-visium")
+    spatial_connectivity(non_visium_adata, n_neigh=3, coord_type=None)
     spatial_graph = non_visium_adata.obsp["spatial_connectivities"].toarray()
     assert np.array_equal(spatial_graph, correct_knn_graph)
 
-    spatial_connectivity(non_visium_adata, radius=5.0, coord_type="non-visium")
+    spatial_connectivity(non_visium_adata, radius=5.0, coord_type=None)
     spatial_graph = non_visium_adata.obsp["spatial_connectivities"].toarray()
     assert np.array_equal(spatial_graph, correct_radius_graph)

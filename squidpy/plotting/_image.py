@@ -9,7 +9,8 @@ from pandas.api.types import is_categorical_dtype
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
 
-from squidpy.image.object import ImageContainer
+from squidpy._docs import d
+from squidpy.image import ImageContainer
 
 
 def interactive(
@@ -155,15 +156,15 @@ def _get_poly(x, y, lt, n):
     return coord
 
 
-def plot_segmentation(img, key: str):
+@d.dedent
+def plot_segmentation(img: ImageContainer, key: str) -> None:
     """
     Plot segmentation on entire image.
 
-    Params
-    ------
-    img: ImageContainer
-        High-resolution image.
-    key: str
+    Parameters
+    ----------
+    %(img_container)s
+    key
         Name of layer that contains segmentation in img.
     """
     arr = img[key]

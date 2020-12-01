@@ -8,49 +8,62 @@ import numpy as np
 from scipy.sparse import SparseEfficiencyWarning, csr_matrix
 from sklearn.metrics.pairwise import cosine_similarity
 
-from squidpy.constants._pkg_constants import SPATIAL_M
+from squidpy._docs import d, inject_docs
+from squidpy.constants._constants import CoordType, Transform
+from squidpy.constants._pkg_constants import Key
 
 
+@d.dedent
+@inject_docs(t=Transform, c=CoordType)
 def spatial_connectivity(
     adata: AnnData,
-    obsm: str = SPATIAL_M,
+    obsm: str = Key.obsm.spatial,
     n_rings: int = 1,
     n_neigh: int = 6,
     radius: Optional[float] = None,
-    coord_type: Optional[str] = "visium",
+    coord_type: Optional[str] = CoordType.VISIUM.s,
     transform: Optional[str] = None,
     key_added: Optional[str] = None,
 ) -> None:
     """
     Create a graph from spatial coordinates.
 
-    Params
-    ------
-    adata
-        The AnnData object.
+    Parameters
+    ----------
+    %(adata)s
     obsm
-        Key to spatial coordinates.
+        Key in :attr:`anndata.AnnData.obsm` to spatial coordinates.
     key_added
         Key added to connectivity and distance matrices in :attr:`anndata.AnnData.obsp`.
     n_rings
-        Number of rings of neighbors for Visium data.
+        Number of rings of neighbors for [Visium]_ data.
     n_neigh
         Number of neighborhoods to consider for non-Visium data.
     radius
         Radius of neighbors for non-Visium data.
     coord_type
-        Type of coordinate system (Visium vs. general coordinates).
+        Type of coordinate system. Can be one of the following:
+
+            - `{c.VISIUM.s!r}`: [Visium]_ coordinates.
+            - `{c.NONE.v}`: generic coordinates.
     transform
-        Type of adjacency matrix transform: either `spectral` or `cosine`.
+        Type of adjacency matrix transform. Can be one of the following:
+
+            - `{t.SPECTRAL.s!r}`: TODO.
+            - `{t.COSINE.s!r}`: TODO.
+            - `{t.NONE.v}`: TODO.
 
     Returns
     -------
     None
         TODO.
     """
+    transform = Transform(transform)
+    coord_type = CoordType(coord_type)
+
     coords = adata.obsm[obsm]
 
-    if coord_type == "visium":
+    if coord_type == CoordType.VISIUM:
         if n_rings > 1:
             Adj = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True)
             Res = Adj
@@ -74,32 +87,32 @@ def spatial_connectivity(
             Adj = _build_connectivity(coords, 6, neigh_correct=True)
             Dst = None
 
-    else:
+    elif coord_type == CoordType.NONE:
         Adj, Dst = _build_connectivity(coords, n_neigh, radius, return_distance=True)
+    else:
+        raise NotImplementedError(coord_type)
 
     # check transform
-    if transform == "spectral":
+    if transform == Transform.SPECTRAL:
         Adj = _transform_a_spectral(Adj)
-    elif transform == "cosine":
+    elif transform == Transform.COSINE:
         Adj = _transform_a_cosine(Adj)
-
-    if key_added is None:
-        key_added = "spatial_neighbors"
-        conns_key = "spatial_connectivities"
-        dists_key = "spatial_distances"
+    elif transform == Transform.NONE:
+        pass
     else:
-        conns_key = key_added + "_connectivities"
-        dists_key = key_added + "_distances"
+        raise NotImplementedError(transform)
+
+    key_added = Key.uns.spatial_neighs(key_added)
+    conns_key = Key.obsp.spatial_conn(key_added)
+    dists_key = Key.obsp.spatial_dist(key_added)
 
     # add keys
-    adata.uns[key_added] = {}
-
-    neighbors_dict = adata.uns[key_added]
+    neighbors_dict = adata.uns[key_added] = {}
 
     neighbors_dict["connectivities_key"] = conns_key
     neighbors_dict["distances_key"] = dists_key
 
-    neighbors_dict["params"] = {"n_neighbors": n_neigh, "coord_type": coord_type}
+    neighbors_dict["params"] = {"n_neighbors": n_neigh, "coord_type": coord_type.v}
     neighbors_dict["params"]["radius"] = radius
 
     adata.obsp[conns_key] = Adj
@@ -155,10 +168,8 @@ def _build_connectivity(
 
 def _transform_a_spectral(a: np.ndarray) -> np.ndarray:
     degrees = np.squeeze(np.array(np.sqrt(1 / a.sum(axis=0))))
-    a_out = a.multiply(np.outer(degrees, degrees))
-    return a_out
+    return a.multiply(np.outer(degrees, degrees))
 
 
 def _transform_a_cosine(a: np.ndarray) -> np.ndarray:
-    a_out = cosine_similarity(a, dense_output=False)
-    return a_out
+    return cosine_similarity(a, dense_output=False)

@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import numpy as np
 import xarray as xr
@@ -7,7 +7,10 @@ import skimage.util
 from skimage.draw import disk
 from skimage.transform import rescale
 
+from squidpy._docs import d
 
+
+@d.get_sections(base="uncrop_img", sections=["Parameters", "Returns"])
 def uncrop_img(
     crops: List[xr.DataArray],
     x: np.ndarray,
@@ -18,27 +21,29 @@ def uncrop_img(
     """
     Re-assemble image from crops and their positions.
 
-    Fills remaining positions with zeros.
-    Positions are given as upper right corners.
+    Fills remaining positions with zeros. Positions are given as upper right corners.
 
     Parameters
     ----------
     crops
         List of image crops.
     x
-        x coords of crop in `img`.
+        X coord of crop in pixel space. TODO: nice to have - relative space.
     y
-        y coords of crop in `img`.
+        Y coord of crop in pixel space. TODO: nice to have - relative space.
     shape
         Shape of full image.
     channel_id
-        Name of channel dim in DataArray.
+        Name of channel dim in :class:`xarray.DataArray`.
 
     Returns
     -------
-    :class:`xarray.DataArray`
-        Data with dimentions: channels, y, x
+    :class:`xarray.DataArray`:
+        Array of shape ``(channels, y, x)``.
     """
+    # TODO: maybe more descriptive names (y==height, x==width)? + extract to constants...
+    # TODO: rewrite asserts
+    # TODO: expose remaining positions default value
     assert np.max(y) < shape[0], f"y ({y}) is outsize of image range ({shape[0]})"
     assert np.max(x) < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
 
@@ -50,6 +55,7 @@ def uncrop_img(
             x1 = x + c.x.shape[0]
             y0 = y
             y1 = y + c.y.shape[0]
+            # TODO: rewrite asserts
             assert x0 >= 0, f"x ({x0}) is outsize of image range ({0})"
             assert y0 >= 0, f"x ({y0}) is outsize of image range ({0})"
             assert x1 <= shape[0], f"x ({x1}) is outsize of image range ({shape[0]})"
@@ -57,55 +63,38 @@ def uncrop_img(
             img[:, y0:y1, x0:x1] = c
         return img
     else:
+        # TODO: is this the expected behavior? maybe raise?
         img = crops[0]
     return img
 
 
+@d.get_sections(base="crop_img", sections=["Parameters"])
+@d.dedent
 def crop_img(
     img: xr.DataArray,
     x: int,
     y: int,
-    xs: int = 100,
-    ys: int = 100,
     channel_id: str = "channels",
-    **kwargs,
+    xs: int = 100,  # TODO: are these defaults reasonable or should no defaults be specified?
+    ys: int = 100,
+    scale: float = 1.0,
+    mask_circle: bool = False,
+    cval: float = 0.0,
+    dtype: Optional[str] = None,
 ) -> xr.DataArray:
     """
-    Extract a crop right and down from `x` and `y`.
+    Extract a crop right and down from ``x`` and ``y``.
 
     Params
     ------
-    img: DataArray
-        Data array to crop from.
-    x: int
-        X coord of crop (in pixel space).
-    y: int
-        Y coord of crop (in pixel space).
-    xs: int
-        Width of the crop in pixels.
-    ys: int
-        Geigh of the crop in pixels.
-    scale: float
-        Default is 1.0.
-        Resolution of the crop (smaller -> smaller image).
-    mask_circle: bool
-        Default is False.
-        Mask crop to a circle.
-    cval: float
-        Default is 0
-        The value outside image boundaries or the mask.
-    dtype: str
-        Optional, type to which the output should be (safely) cast.
-        Currently supported dtypes: 'uint8'.
+    %(uncrop_img.parameters)s
+    %(width_height)s
+    %(crop_extra)s
 
     Returns
     -------
-    xr.DataArray with dimentions: channels, y, x
+    %(uncrop_img.returns)s
     """
-    scale = kwargs.get("scale", 1.0)
-    mask_circle = kwargs.get("mask_circle", False)
-    cval = kwargs.get("cval", 0.0)
-    dtype = kwargs.get("dtype", None)
     # get conversion function
     if dtype is not None:
         if dtype == "uint8":
@@ -113,6 +102,9 @@ def crop_img(
         else:
             raise NotImplementedError(dtype)
 
+    # TODO crop_extra should be created by `@d.keep_kwargs in `crop.py`` after
+    # https://github.com/Chilipp/docrep/issues/21 is dealth with
+    # TODO: rewrite assertions to "normal" errors so they can be more easily tested against
     assert y < img.y.shape[0], f"y ({y}) is outsize of image range ({img.y.shape[0]})"
     assert x < img.x.shape[0], f"x ({x}) is outsize of image range ({img.x.shape[0]})"
 
@@ -159,7 +151,7 @@ def crop_img(
 
     # mask crop
     if mask_circle:
-        assert xs == ys, "crop has to be square to use mask_circle"
+        assert xs == ys, "Crop has to be square to use mask_circle."
         # get coords inside circle
         rr, cc = disk(
             center=(crop.shape[1] // 2, crop.shape[2] // 2),

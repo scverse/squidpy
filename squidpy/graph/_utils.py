@@ -213,6 +213,7 @@ def _check_tuple_needles(
     return filtered
 
 
+# directly modified from `pandas`' source code
 def _create_sparse_df(data: Union[np.ndarray, spmatrix], index=None, columns=None, fill_value: float = 0):
     """
     Create a new DataFrame from a scipy sparse matrix or numpy array.
