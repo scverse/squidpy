@@ -1,6 +1,7 @@
-from typing import Mapping, Optional
+from typing import List, Union, Optional
 
-import numpy as np
+import anndata as ad
+
 import pandas as pd
 
 import matplotlib.pyplot as plt
@@ -8,55 +9,68 @@ import matplotlib.pyplot as plt
 from squidpy.image import ImageContainer
 
 
-def extract(adata, obsm_cols: Optional[Mapping] = None):
+def extract(adata: ad.AnnData, obsm_key: Union[List["str"], "str"], prefix: Optional[Union[List["str"], "str"]] = None):
     """
     Create a temporary adata object for plotting.
 
-    Move columns defined with `obsm_cols` from obsm to obs to enable the use of
+    Move columns from entry `obsm` in `adata.obsm` to `adata.obs` to enable the use of
     functions from `scanpy.plotting`.
-    Columns are moved to "<obsm-key>_<column-name>".
-    If `adata.obs["<obsm-key>_<column-name>"]` already exists, it is overwritten.
+    If `prefix` is specified, columns are moved to `<prefix>_<column-name>`.
+    Otherwise, column name is kept. If `adata.obs["column-name"]` already exists, it it overwritten.
 
-    For obsm entries that are np.ndarray, specify integer column names in `obsm_cols`.
-    For obsm entries that are pd.DataFrame, specify string column names in `obsm_cols`.
 
     Params
     ------
-    obsm_cols:
-        Dict with `adata.obsm` as keys and `adata.obsm[key]` columns names as values.
-        If None, defaults to all columns from all entries in `adata.obsm`.
+    obsm_key:
+        entry in adata.obsm that should be moved to adata.obs. Can be a list of keys.
+    prefix:
+        prefix to prepend to each column name. Should be a list if obsm_key is a list.
 
     Returns
     -------
     :class:`AnnData`
         Temporary annotated data object with desired entries in `.obs`.
-    """
-    # fill obsm_cols if emptpy
-    if obsm_cols is None:
-        obsm_cols = {}
-        for key, obsm in adata.obsm.items():
-            if isinstance(obsm, pd.DataFrame):
-                obsm_cols[key] = list(obsm.columns)
-            else:
-                obsm_cols[key] = range(obsm.shape)
 
-    # check obsm_cols
-    for key, vals in obsm_cols.items():
-        if key not in adata.obsm.keys():
-            raise IndexError(f"{key} does not exists in adata.obsm")
-        if isinstance(adata.obsm[key], np.ndarray):
-            if not np.all([isinstance(v, int) for v in vals]):
-                raise ValueError(f"obsm entry {key} is a numpy array, but not all values in obsm_cols['{key}'] are int")
+    Raises
+    ------
+    ValueError
+        if number of prefixes does not fit to number of obsm_keys.
+    """
+    # make obsm list
+    if isinstance(obsm_key, str):
+        obsm_key = [obsm_key]
+
+    if prefix is not None:
+        # make prefix list of correct length
+        if isinstance(prefix, str):
+            prefix = [prefix]
+        if len(obsm_key) != len(prefix):
+            # repeat prefix if only one was specified
+            if len(prefix) == 1:
+                prefix = [prefix[0] for _ in obsm_key]
+            else:
+                raise ValueError(f"length of prefix {len(prefix)} does not fit to length of obsm_key {len(obsm_key)}")
+        # append _ to prefix
+        prefix = [f"{p}_" for p in prefix]
+    else:
+        # no prefix
+        # TODO default could also be obsm_key
+        prefix = ["" for _ in obsm_key]
 
     # create tmp_adata and copy obsm columns
     tmp_adata = adata.copy()
-    for key, vals in obsm_cols.items():
-        obsm = adata.obsm[key]
-        for val in vals:
-            if isinstance(adata.obsm[key], pd.DataFrame):
-                tmp_adata.obs[f"{key}_{val}"] = obsm.loc[:, val]
-            else:
-                tmp_adata.obs[f"{key}_{val}"] = obsm[:, val]
+    for i, cur_obsm_key in enumerate(obsm_key):
+        obsm = adata.obsm[cur_obsm_key]
+        if isinstance(obsm, pd.DataFrame):
+            # names will be column_names
+            for col in obsm.columns:
+                obs_key = f"{prefix[i]}{col}"
+                tmp_adata.obs[obs_key] = obsm.loc[:, col]
+        else:
+            # names will be integer indices
+            for j in range(obsm.shape[1]):
+                obs_key = f"{prefix[i]}{j}"
+                tmp_adata.obs[obs_key] = obsm[:, j]
 
     return tmp_adata
 
