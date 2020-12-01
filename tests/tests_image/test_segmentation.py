@@ -6,8 +6,8 @@ import numpy as np
 
 import rasterio.errors
 
-from squidpy.image.object import ImageContainer
-from squidpy.image.segment import segment
+from squidpy.im.object import ImageContainer
+from squidpy.im.segment import segment
 
 
 @pytest.mark.parametrize("shape", [(3, 100, 200)])

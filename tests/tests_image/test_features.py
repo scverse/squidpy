@@ -2,13 +2,13 @@ from anndata import AnnData
 
 import numpy as np
 
-from squidpy.image.tools import (
+from squidpy.im.tools import (
     get_hog_features,
     get_summary_stats,
     get_features_statistics,
     calculate_image_features,
 )
-from squidpy.image.object import ImageContainer
+from squidpy.im.object import ImageContainer
 
 
 # cont is now in conftest.py

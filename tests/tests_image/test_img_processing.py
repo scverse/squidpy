@@ -2,8 +2,8 @@ import pytest
 
 import numpy as np
 
-from squidpy.image.object import ImageContainer
-from squidpy.image.processing import process_img
+from squidpy.im.object import ImageContainer
+from squidpy.im.processing import process_img
 
 
 @pytest.mark.parametrize("xs, ys", [(None, None), (40, 40)])

@@ -7,7 +7,7 @@ __email__ = ", ".join(
 )
 __version__ = "0.0.0"
 
-import squidpy.graph as graph
-import squidpy.image as image
-import squidpy.plotting as plotting
+import squidpy.gr
+import squidpy.im
+import squidpy.pl
 from squidpy.utils import read_seqfish, read_visium_data

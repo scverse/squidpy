@@ -11,8 +11,8 @@ from scanpy.datasets import blobs
 import numpy as np
 import pandas as pd
 
-from squidpy.graph import perm_test
-from squidpy.graph._ligrec import PermutationTest
+from squidpy.gr import perm_test
+from squidpy.gr._ligrec import PermutationTest
 
 _CK = "leiden"
 Interactions_t = Tuple[Sequence[str], Sequence[str]]
