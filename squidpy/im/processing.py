@@ -36,7 +36,7 @@ def process_img(
     ----------
     %(img_container)s
     img_id
-        Key of image object to process.
+        Key of im object to process.
     processing
         Name of processing method to use. Available are:
 
@@ -47,7 +47,7 @@ def process_img(
     %(width_height)s
     key_added
         Key of new image sized array to add into img object. Defaults to ``{{img_id}}_{{processing}}``.
-    %(copy)s
+    %(copy_cont)s
 
     Returns
     -------
@@ -67,7 +67,7 @@ def process_img(
     if not isinstance(crops[0], xr.DataArray):
         dims = [channel_id, "y", "x"]
         crops = [xr.DataArray(x, dims=dims) for x in crops]
-    # Reassemble image:
+    # Reassemble im:
     img_proc = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id)
     img_id_new = (img_id + "_" + processing if key_added is None else key_added) if copy else img_id
 

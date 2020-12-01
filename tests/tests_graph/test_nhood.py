@@ -5,7 +5,7 @@ from anndata import AnnData
 import numpy as np
 import pandas as pd
 
-from squidpy.graph import (
+from squidpy.gr import (
     nhood_enrichment,
     centrality_scores,
     interaction_matrix,

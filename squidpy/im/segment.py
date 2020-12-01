@@ -85,7 +85,7 @@ class SegmentationModelBlob(SegmentationModel):
         ----------
         %(segment.parameters)s
         kwargs
-            Keyword arguments for the :paramref:`_model`.
+            Keyword arguments for :paramref:`_model`.
 
         Returns
         -------
@@ -106,7 +106,7 @@ class SegmentationModelBlob(SegmentationModel):
 
 
 class SegmentationModelWatershed(SegmentationModel):
-    """Segmentation model based on :mod:`skimage` blob detection."""
+    """Segmentation model based on :mod:`skimage` watershed segmentation."""
 
     @d.dedent
     def _segment(self, arr: np.ndarray, thresh: float = 0.5, geq: bool = True, **kwargs) -> np.ndarray:
@@ -121,7 +121,7 @@ class SegmentationModelWatershed(SegmentationModel):
         geq
             Treat ``thresh`` as upper or lower (greater-equal = geq) bound for defining state to segment.
         kwargs
-            Keyword arguments for the :paramref:`_model`.
+            Keyword arguments for :paramref:`_model`.
 
         Returns
         -------
@@ -209,7 +209,7 @@ def segment(
         TODO: this logic should be refactored.
         Instance of executable segmentation model or name of specific method within ``model_group``.
     model_kwargs
-        Keyword arguments for :meth:`squidpy.image.SegmentationModel.segment`.
+        Keyword arguments for :meth:`squidpy.im.SegmentationModel.segment`.
     channel_idx
         Channel to use for segmentation.
     %(width_height)s

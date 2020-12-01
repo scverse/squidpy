@@ -1,5 +1,5 @@
 Classes
-=======
++++++++
 
 Image
 ~~~~~
@@ -10,10 +10,23 @@ ImageContainer
     :members:
     :inherited-members:
 
-SegmentationModel
------------------
-.. autoclass:: squidpy.image.SegmentationModel
+
+SegmentationModelPretrainedTensorflow
+-------------------------------------
+.. autoclass:: squidpy.im.SegmentationModelPretrainedTensorflow
     :members:
     :inherited-members:
 
-.. TODO: include the concerete classes?
+
+SegmentationModelWatershed
+--------------------------
+.. autoclass:: squidpy.im.SegmentationModelWatershed
+    :members:
+    :inherited-members:
+
+
+SegmentationModelBlob
+---------------------
+.. autoclass:: squidpy.im.SegmentationModelBlob
+    :members:
+    :inherited-members:

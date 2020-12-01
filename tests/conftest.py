@@ -17,7 +17,7 @@ from matplotlib import pyplot
 from matplotlib.testing.compare import compare_images
 
 import squidpy as se
-from squidpy.image.object import ImageContainer
+from squidpy.im.object import ImageContainer
 from squidpy.constants._pkg_constants import Key
 
 mpl.use("agg")
@@ -36,7 +36,7 @@ def nhood_data(adata: AnnData) -> AnnData:
     sc.pp.pca(adata)
     sc.pp.neighbors(adata)
     sc.tl.leiden(adata, key_added="leiden")
-    se.graph.spatial_connectivity(adata)
+    se.gr.spatial_connectivity(adata)
 
     return adata
 
@@ -47,7 +47,7 @@ def dummy_adata() -> AnnData:
     adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
 
     adata.obsm[Key.obsm.spatial] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
-    se.graph.spatial_connectivity(adata, obsm=Key.obsm.spatial, n_rings=2)
+    se.gr.spatial_connectivity(adata, obsm=Key.obsm.spatial, n_rings=2)
 
     return adata
 

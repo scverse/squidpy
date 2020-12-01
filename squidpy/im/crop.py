@@ -19,20 +19,20 @@ def uncrop_img(
     channel_id: str = "channels",
 ) -> xr.DataArray:
     """
-    Re-assemble image from crops and their positions.
+    Re-assemble im from crops and their positions.
 
     Fills remaining positions with zeros. Positions are given as upper right corners.
 
     Parameters
     ----------
     crops
-        List of image crops.
+        List of im crops.
     x
         X coord of crop in pixel space. TODO: nice to have - relative space.
     y
         Y coord of crop in pixel space. TODO: nice to have - relative space.
     shape
-        Shape of full image.
+        Shape of full im.
     channel_id
         Name of channel dim in :class:`xarray.DataArray`.
 
@@ -108,8 +108,8 @@ def crop_img(
     assert y < img.y.shape[0], f"y ({y}) is outsize of image range ({img.y.shape[0]})"
     assert x < img.x.shape[0], f"x ({x}) is outsize of image range ({img.x.shape[0]})"
 
-    assert xs > 0, "image size cannot be 0"
-    assert ys > 0, "image size cannot be 0"
+    assert xs > 0, "im size cannot be 0"
+    assert ys > 0, "im size cannot be 0"
 
     if channel_id in img.dims:
         crop = (np.zeros((img.coords[channel_id].shape[0], ys, xs)) + cval).astype(img.dtype)
@@ -123,7 +123,7 @@ def crop_img(
     y0 = y
     y1 = y + ys
 
-    # crop image and put in already prepared `crop`
+    # crop im and put in already prepared `crop`
     crop_x0 = min(x0, 0) * -1
     crop_y0 = min(y0, 0) * -1
     crop_x1 = xs - max(x1 - img.x.shape[0], 0)
