@@ -159,13 +159,18 @@ def _get_poly(x, y, lt, n):
 @d.dedent
 def plot_segmentation(img: ImageContainer, key: str) -> None:
     """
-    Plot segmentation on entire image.
+    Plot segmentation on entire im.
 
     Parameters
     ----------
     %(img_container)s
     key
         Name of layer that contains segmentation in img.
+    %(plotting)s
+
+    Returns
+    -------
+    %(plotting_returns)s
     """
     arr = img[key]
     plt.imshow(arr)

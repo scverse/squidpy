@@ -1,3 +1,4 @@
+"""The plotting module."""
 from ._graph import (
     plot_ripley_k,
     spatial_graph,

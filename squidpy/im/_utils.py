@@ -80,10 +80,10 @@ def _access_img_in_adata(
     img_key: str,
 ) -> np.ndarray:
     """
-    Return image from anndata instance.
+    Return im from anndata instance.
 
     Attrs:
-        adata: Instance to get image from.
+        adata: Instance to get im from.
         img_key:
     Returns:
         Image (x, y, channels).
@@ -94,11 +94,11 @@ def _access_img_in_adata(
 # TODO: dead code
 def _write_img_in_adata(adata: AnnData, img_key: str, img: np.ndarray):
     """
-    Save image in anndata instance.
+    Save im in anndata instance.
 
     Attrs:
-        adata: Instance to get image from.
-        img_key: Name of image in adata object.
+        adata: Instance to get im from.
+        img_key: Name of im in adata object.
         img:
     Returns:
         Image (x, y, channels).
