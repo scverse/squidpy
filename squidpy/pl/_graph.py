@@ -27,7 +27,7 @@ def spatial_graph(
     **kwargs,
 ) -> None:
     """
-    Plot wrapper for :mod:`scanpy` pl function for spatial graphs.
+    Plot wrapper for :mod:`scanpy` plotting function for spatial graphs.
 
     Parameters
     ----------
@@ -237,6 +237,7 @@ def nhood_enrichment(
     if colors_key in adata.uns.keys():
         ad.uns[colors_key] = adata.uns[colors_key]
 
+    # TODO: handle dpi
     sc.pl.heatmap(ad, var_names=ad.var_names, groupby=cluster_key, figsize=figsize, save=save, **kwargs)
 
 

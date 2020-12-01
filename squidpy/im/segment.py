@@ -134,7 +134,7 @@ class SegmentationModelWatershed(SegmentationModel):
 
         # TODO check if threshold is in [0, 1].
         # TODO check image dtype/ranges
-        # get binarized im
+        # get binarized image
         if geq:
             mask = arr >= thresh
         else:

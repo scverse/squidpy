@@ -1,4 +1,4 @@
-|PyPI| |CI| |Docs| |Coverage|
+|PyPI| |CI| |Notebooks| |Docs| |Coverage|
 
 Scanpy meets Spatial Transcriptomics (2 challenges)
 ===================================================
@@ -99,15 +99,18 @@ We'll try to implement and evaluate as many tools as possible. On the spatial gr
 potentially land to Scanpy eventually. On the image side, it will build up as an external package.
 In both cases, we'll use the tools implemented here to wrap up a collaborative protocol article (F1000/Nature Protocols etc.)
 
-.. TODO: fix the :target:s in PyPI and Docs
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/squidpy.svg
     :target: https://img.shields.io/pypi/v/squidpy.svg
     :alt: PyPI
 
 .. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/CI/master
-    :target: https://github.com/theislab/squidpy/actions/
+    :target: https://github.com/theislab/squidpy/actions
     :alt: CI
+
+.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/master
+    :target: https://github.com/theislab/squidpy_notebooks/actions/
+    :alt: Notebooks CI
 
 .. |Docs| image:: https://img.shields.io/readthedocs/squidpy
     :target: https://img.shields.io/readthedocs/squidpy
