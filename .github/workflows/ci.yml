@@ -81,7 +81,7 @@ jobs:
       run: |
         tox -e lint
 
-    # TODO: enable be once squidpy_notebooks is downloadable without authorization
+    # TODO: enable be once squidpy_notebooks is downloadable without authorization and all links are fine
     #- name: Documentation check
     #  run: |
     #    tox -e docs-check
@@ -101,7 +101,6 @@ jobs:
         codecov --no-color --required --flags unittests
 
   rebuild-examples:
-    # TODO: do we want to test the examples every time? this will only test after merge
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     needs: test
