@@ -2,7 +2,7 @@
 
 import abc
 from types import MappingProxyType
-from typing import List, Union, Optional
+from typing import Any, List, Union, Mapping, Optional
 
 import anndata
 
@@ -11,10 +11,13 @@ import xarray as xr
 
 import skimage
 
+from squidpy._docs import d, inject_docs
+from squidpy.constants._constants import SegmentationBackend
 from .crop import uncrop_img
 from .object import ImageContainer
 
 
+# TODO: dead code?
 def evaluate_nuclei_segmentation(adata, copy: bool = False, **kwargs) -> Union[anndata.AnnData, None]:
     """
     Perform basic nuclei segmentation evaluation.
@@ -45,55 +48,58 @@ class SegmentationModel:
     ):
         self.model = model
 
-    def segment(self, arr: np.ndarray, **kwargs) -> np.ndarray:
+    @d.get_full_description(base="segment")
+    @d.get_sections(base="segment", sections=["Parameters", "Returns"])
+    @d.dedent
+    def segment(self, img: np.ndarray, **kwargs) -> np.ndarray:
         """
-        Segment an image.
+        Segment an im.
 
         Parameters
         ----------
-        arr
-            High-resolution image.
+        %(img_hr)s
 
-        Yields
-        ------
-        (x, y, 1)
-            Segmentation mask for high-resolution image.
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            Segmentation mask for the high-resolution im of shape (x, y, 1).
         """
-        return self._segment(arr, **kwargs)
+        # TODO: make sure that the dtype is correct
+        return self._segment(img, **kwargs)
 
+    # TODO: I'd rather make the public method abstract, so that its docs are seen for general user
     @abc.abstractmethod
-    def _segment(self, arr, **kwargs) -> np.ndarray:
+    def _segment(self, arr: np.ndarray, **kwargs) -> np.ndarray:
         pass
 
 
 class SegmentationModelBlob(SegmentationModel):
     """Segmentation model based on :mod:`skimage` blob detection."""
 
-    def _segment(self, arr: np.ndarray, invert: bool = True, **kwargs) -> np.ndarray:
+    @d.dedent
+    def _segment(self, img: np.ndarray, invert: bool = True, **kwargs) -> np.ndarray:
         """
-        Segment an image.
+        %(segment.full_desc)s
 
         Parameters
         ----------
-        arr
-            High-resolution image.
+        %(segment.parameters)s
         kwargs
-            Model arguments
+            Keyword arguments for the :paramref:`_model`.
 
-        Yields
-        ------
-        (x, y, 1)
-            Segmentation mask for high-resolution image.
-        """
+        Returns
+        -------
+        %(segment.returns)s
+        """  # noqa: D400
         if invert:
-            arr = 0.0 - arr
+            img = 0.0 - img
 
         if self.model == "log":
-            y = skimage.feature.blob_log(image=arr, **kwargs)
+            y = skimage.feature.blob_log(image=img, **kwargs)
         elif self.model == "dog":
-            y = skimage.feature.blob_dog(image=arr, **kwargs)
+            y = skimage.feature.blob_dog(image=img, **kwargs)
         elif self.model == "doh":
-            y = skimage.feature.blob_doh(image=arr, **kwargs)
+            y = skimage.feature.blob_doh(image=img, **kwargs)
         else:
             raise ValueError("did not recognize self.model %s" % self.model)
         return y
@@ -102,32 +108,33 @@ class SegmentationModelBlob(SegmentationModel):
 class SegmentationModelWatershed(SegmentationModel):
     """Segmentation model based on :mod:`skimage` blob detection."""
 
-    def _segment(self, arr: np.ndarray, thresh=0.5, geq: bool = True, **kwargs) -> np.ndarray:
+    @d.dedent
+    def _segment(self, arr: np.ndarray, thresh: float = 0.5, geq: bool = True, **kwargs) -> np.ndarray:
         """
-        Segment an image.
+        %(segment.full_desc)s
 
         Parameters
         ----------
-        arr
-            High-resolution image.
+        %(segment.parameters)s
         thresh
-             Threshold for discretization of image scale to define areas to segment.
+             Threshold for discretization of im scale to define areas to segment.
         geq
             Treat ``thresh`` as upper or lower (greater-equal = geq) bound for defining state to segment.
         kwargs
-            Model arguments.
+            Keyword arguments for the :paramref:`_model`.
 
         Returns
         -------
-        (x, y, 1)
-            Segmentation mask for high-resolution image.
-        """
+        %(segment.returns)s
+        """  # noqa: D400
         from scipy import ndimage as ndi
 
         from skimage.feature import peak_local_max
         from skimage.segmentation import watershed
 
-        # get binarized image
+        # TODO check if threshold is in [0, 1].
+        # TODO check im dtype/ranges
+        # get binarized im
         if geq:
             mask = arr >= thresh
         else:
@@ -137,8 +144,8 @@ class SegmentationModelWatershed(SegmentationModel):
         distance = ndi.distance_transform_edt(1 - mask)
         local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((5, 5)), labels=1 - mask)
         markers = ndi.label(local_maxi)[0]
-        y = watershed(255 - arr, markers, mask=1 - mask)
-        return y
+
+        return watershed(255 - arr, markers, mask=1 - mask)
 
 
 class SegmentationModelPretrainedTensorflow(SegmentationModel):
@@ -147,85 +154,87 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
     def __init__(self, model, **_kwargs):
         import tensorflow as tf
 
-        assert isinstance(model, tf.keras.model.Model), "model should be a tf keras model instance"
+        # TODO: maybe just check it's callable?
+        assert isinstance(model, tf.keras.model.Model), "Model should be a tf keras model instance."
         super().__init__(model=model)
 
+    @d.dedent
     def _segment(self, arr: np.ndarray, **kwargs) -> np.ndarray:
         """
-        Segment an image.
+        %(segment.full_desc)s
 
         Parameters
         -----------
-        arr
-            High-resolution image.
+        %(segment.parameters)s
         kwargs
-            Model arguments.
+            Keyword arguments for the :paramref:`_model`.
 
         Returns
         -------
-        (x, y, 1)
-            Segmentation mask for high-resolution image.
-        """
+        %(segment.returns)s
+        """  # noqa: D400
         # Uses callable tensorflow keras model.
         return self.model(arr, **kwargs)
 
 
+@d.dedent
+@inject_docs(m=SegmentationBackend)
 def segment(
     img: ImageContainer,
     img_id: str,
     model_group: Union[str],
     model_instance: Optional[Union[str, SegmentationModel]] = None,
-    model_kwargs: dict = MappingProxyType({}),
+    model_kwargs: Mapping[str, Any] = MappingProxyType({}),
     channel_idx: Optional[int] = None,
     xs: Optional[int] = None,
     ys: Optional[int] = None,
     key_added: Optional[str] = None,
 ) -> None:
     """
-    Segment an image.
+    %(segment.full_desc)s
 
-    Params
-    ------
-    img
-        High-resolution image.
+    Parameters
+    ----------
+    %(img_container)s
     img_id
-        Key of image object to segment.
+        Key of im object to segment.
     model_group
-        Name segmentation method to use. Available are:
+        Segmentation method to use. Available are:
 
-            - `'skimage_blob'`: Blob extraction with skimage.
-            - `'tensorflow'`: tensorflow executable model.
+            - `{m.BLOB.s!r}`: Blob extraction with :mod:`skimage`.
+            - `{m.WATERSHED.s!r}`: TODO.
+            - `{m.TENSORFLOW.s!r}`: :mod:`tensorflow` executable model.
 
     model_instance
-        Instance of executable segmentation model or name of specific method within model_group.
+        TODO: this logic should be refactored.
+        Instance of executable segmentation model or name of specific method within ``model_group``.
     model_kwargs
-        Key word arguments to segmentation method.
+        Keyword arguments for :meth:`squidpy.im.SegmentationModel.segment`.
     channel_idx
         Channel to use for segmentation.
-    xs
-        Width of the crops in pixels.
-    ys
-        Height of the crops in pixels.
+    %(width_height)s
     key_added
-        Key of new image sized array to add into img object. Defaults to "segmentation_$model_group"
+        Key of new im sized array to add into img object. Defaults to ``segmented_{{model_group}}``.
 
     Returns
     -------
-    None
-    """
+    %(segment.returns)s
+    """  # noqa: D400
     channel_id = "mask"
-    if model_group == "skimage_blob":
+    model_group = SegmentationBackend(model_group)
+
+    if model_group == SegmentationBackend.BLOB:
         segmentation_model = SegmentationModelBlob(model=model_instance)
-    elif model_group == "watershed":
+    elif model_group == SegmentationBackend.WATERSHED:
         segmentation_model = SegmentationModelWatershed(model=model_instance)
-    elif model_group == "tensorflow":
+    elif model_group == SegmentationBackend.TENSORFLOW:
         segmentation_model = SegmentationModelPretrainedTensorflow(model=model_instance)
     else:
-        raise ValueError("did not recognize model instance %s" % model_group)
+        raise NotImplementedError(model_group)
 
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
     channel_slice = channel_idx if isinstance(channel_idx, int) else slice(0, crops[0].channels.shape[0])
-    crops = [segmentation_model.segment(arr=x[{"channels": channel_slice}].values, **model_kwargs) for x in crops]
+    crops = [segmentation_model.segment(x[{"channels": channel_slice}].values, **model_kwargs) for x in crops]
     # By convention, segments or numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
     # TODO use overlapping crops to not create confusion at boundaries
@@ -240,6 +249,7 @@ def segment(
     img.add_img(img=img_segmented, img_id=img_id, channel_id=channel_id)
 
 
+@d.dedent
 def segment_crops(
     img: ImageContainer,
     img_id: str,
@@ -248,25 +258,22 @@ def segment_crops(
     ys: Optional[int] = None,
 ) -> List[xr.DataArray]:
     """
-    Segment an image.
+    %(segment.full_desc)s
 
-    Params
-    ------
-    img
-        High-resolution image.
+    Parameters
+    ----------
+    %(img_container)s
     img_id
-        Key of image object to take crops from.
+        Key of im object to take crops from.
     segmented_img_id
-        Key of image object that contains segments.
-    xs
-        Width of the crops in pixels.
-    ys
-        Height of the crops in pixels.  # TODO add support as soon as crop supports this
+        Key of im object that contains segments.
+    %(width_height)s # TODO add support as soon as crop supports this
 
     Returns
     -------
-    Crops centred on segments
-    """
+    TODO: type
+        Crops centred on segments.
+    """  # noqa: D400
     segment_centres = [
         (
             np.mean(np.where(img.data[segmented_img_id] == i)[0]),

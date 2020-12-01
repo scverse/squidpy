@@ -2,7 +2,7 @@ from anndata import AnnData
 
 import numpy as np
 
-from squidpy.graph import moran, ripley_k
+from squidpy.gr import moran, ripley_k
 
 
 # dummy_adata is now in conftest.py
