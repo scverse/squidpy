@@ -9,8 +9,8 @@ from pandas.api.types import is_categorical_dtype
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
 
+from squidpy.im import ImageContainer
 from squidpy._docs import d
-from squidpy.image import ImageContainer
 
 
 def interactive(
