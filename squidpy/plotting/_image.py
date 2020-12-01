@@ -1,6 +1,7 @@
 from typing import List, Union, Optional
 
 import anndata as ad
+import scanpy.logging as logg
 
 import pandas as pd
 
@@ -9,7 +10,11 @@ import matplotlib.pyplot as plt
 from squidpy.image import ImageContainer
 
 
-def extract(adata: ad.AnnData, obsm_key: Union[List["str"], "str"], prefix: Optional[Union[List["str"], "str"]] = None):
+def extract(
+    adata: ad.AnnData,
+    obsm_key: Union[List["str"], "str"] = "img_features",
+    prefix: Optional[Union[List["str"], "str"]] = None,
+):
     """
     Create a temporary adata object for plotting.
 
@@ -36,6 +41,11 @@ def extract(adata: ad.AnnData, obsm_key: Union[List["str"], "str"], prefix: Opti
     ValueError
         if number of prefixes does not fit to number of obsm_keys.
     """
+
+    def _warn_if_exists_obs(adata, obs_key):
+        if obs_key in adata.obs.columns:
+            logg.warning(f"{obs_key} in adata.obs will be overwritten by extract.")
+
     # make obsm list
     if isinstance(obsm_key, str):
         obsm_key = [obsm_key]
@@ -65,11 +75,13 @@ def extract(adata: ad.AnnData, obsm_key: Union[List["str"], "str"], prefix: Opti
             # names will be column_names
             for col in obsm.columns:
                 obs_key = f"{prefix[i]}{col}"
+                _warn_if_exists_obs(tmp_adata, obs_key)
                 tmp_adata.obs[obs_key] = obsm.loc[:, col]
         else:
             # names will be integer indices
             for j in range(obsm.shape[1]):
                 obs_key = f"{prefix[i]}{j}"
+                _warn_if_exists_obs(tmp_adata, obs_key)
                 tmp_adata.obs[obs_key] = obsm[:, j]
 
     return tmp_adata
