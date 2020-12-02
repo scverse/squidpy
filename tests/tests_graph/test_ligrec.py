@@ -236,9 +236,8 @@ class TestInvalidBehavior:
         assert r.means.sparse.density <= 0.15
         assert r.pvalues.sparse.density <= 0.95
 
-        # subsetting makes .sparse available for some reason
-        # with pytest.raises(AttributeError, match=r"Can only use the '.sparse' accessor with Sparse data."):
-        #     _ = r.metadata.sparse
+        with pytest.raises(AttributeError, match=r"Can only use the '.sparse' accessor with Sparse data."):
+            _ = r.metadata.sparse
 
         np.testing.assert_array_equal(r.metadata.columns, ["metadata"])
         np.testing.assert_array_equal(r.metadata["metadata"], interactions["metadata"])
@@ -360,6 +359,7 @@ class TestInvalidBehavior:
             copy=False,
             show_progress_bar=False,
             complex_policy="all",
+            n_jobs=2,
         )
 
         err = capsys.readouterr().err
@@ -369,5 +369,26 @@ class TestInvalidBehavior:
         assert "DEBUG: Creating all gene combinations within complexes" in err
         assert "DEBUG: Removing interactions with no genes in the data" in err
         assert "DEBUG: Removing genes not in any interaction" in err
-        assert "Running `5` permutations on `25` interactions and `25` cluster combinations using `1` core(s)" in err
+        assert "Running `5` permutations on `25` interactions and `25` cluster combinations using `2` core(s)" in err
         assert "Adding `adata.uns['ligrec_test']`" in err
+
+    def test_non_uniqueness(self, adata: AnnData, interactions: Interactions_t):
+        # add complexes
+        expected = {(r.upper(), l.upper()) for r, l in interactions}
+        interactions += (
+            (f"{interactions[-1][0]}_{interactions[-1][1]}", f"{interactions[-2][0]}_{interactions[-2][1]}"),
+        ) * 2
+        interactions += interactions[:3]
+        res = perm_test(
+            adata,
+            _CK,
+            interactions=interactions,
+            n_perms=1,
+            copy=True,
+            show_progress_bar=False,
+            seed=42,
+            numba_parallel=True,
+        )
+
+        assert len(res.pvalues) == len(expected)
+        assert set(res.pvalues.index.to_list()) == expected
