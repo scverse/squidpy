@@ -421,8 +421,7 @@ class PermutationTestABC(ABC):
                 columns=pd.MultiIndex.from_tuples(clusters, names=["cluster_1", "cluster_2"]),
                 fill_value=np.nan,
             ),
-            # apparently, the subsetting makes .sparse attribute available
-            metadata=interactions[interactions.columns.difference([SOURCE, TARGET])],
+            metadata=self.interactions[self.interactions.columns.difference([SOURCE, TARGET])],
         )
         res.metadata.index = res.means.index.copy()
 
