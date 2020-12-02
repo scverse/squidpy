@@ -6,4 +6,5 @@ from ._graph import (
     centrality_scores,
     interaction_matrix,
 )
-from ._image import extract, plot_segmentation
+from ._image import plot_segmentation
+from ._utils import extract
