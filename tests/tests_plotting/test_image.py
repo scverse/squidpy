@@ -2,7 +2,7 @@ import scanpy as sc
 from anndata import AnnData
 
 import squidpy as sq
-from squidpy.image import ImageContainer
+from squidpy.im import ImageContainer
 
 
 def test_extract(adata: AnnData, cont: ImageContainer, caplog):
@@ -31,13 +31,13 @@ def test_extract(adata: AnnData, cont: ImageContainer, caplog):
     # get obsm that is a numpy array
     adata.obsm["pca_features"] = sc.pp.pca(adata.obsm["img_features"], n_comps=3)
     # extract columns
-    extr_adata = sq.plotting.extract(adata, obsm_key="pca_features", prefix="pca_features")
+    extr_adata = sq.pl.extract(adata, obsm_key="pca_features", prefix="pca_features")
     # Test that expected columns exist
     for col in ["pca_features_0", "pca_features_1", "pca_features_2"]:
         assert col in extr_adata.obs.columns
 
     # extract multiple obsm at once (no prefix)
-    extr_adata = sq.plotting.extract(adata, obsm_key=["img_features", "pca_features"])
+    extr_adata = sq.pl.extract(adata, obsm_key=["img_features", "pca_features"])
     # Test that expected columns exist
     for col in [
         "summary_quantile_0.9_ch_0",
