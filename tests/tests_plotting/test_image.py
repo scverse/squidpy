@@ -10,10 +10,10 @@ def test_extract(adata: AnnData, cont: ImageContainer, caplog):
     Calculate features and extract columns to obs
     """
     # get obsm
-    sq.image.calculate_image_features(adata, cont, features=["summary"])
+    sq.im.calculate_image_features(adata, cont, features=["summary"])
 
     # extract columns (default values)
-    extr_adata = sq.plotting.extract(adata)
+    extr_adata = sq.pl.extract(adata)
     # Test that expected columns exist
     for col in [
         "summary_quantile_0.9_ch_0",
@@ -59,6 +59,6 @@ def test_extract(adata: AnnData, cont: ImageContainer, caplog):
     # currently logging to stderr, and not captured by caplog
     # extract obsm twice and make sure that warnings are issued
     # with caplog.at_level(logging.WARNING):
-    #    extr2_adata = sq.plotting.extract(extr_adata, obsm_key=['pca_features'])
+    #    extr2_adata = sq.pl.extract(extr_adata, obsm_key=['pca_features'])
     #    log = caplog.text
     #    assert "will be overwritten by extract" in log
