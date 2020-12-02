@@ -20,3 +20,5 @@ exclude_lines =
     ^\s*return NotImplemented\b
 show_missing = true
 precision = 2
+skip_empty = True
+sort = Miss

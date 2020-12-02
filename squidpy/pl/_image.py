@@ -7,7 +7,8 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
-from squidpy.image import ImageContainer
+from squidpy.im import ImageContainer
+from squidpy._docs import d
 
 
 def extract(
@@ -87,21 +88,21 @@ def extract(
     return tmp_adata
 
 
+@d.dedent
 def plot_segmentation(img: ImageContainer, key: str) -> None:
     """
-    Plot segmentation on entire image.
+    Plot segmentation on entire im.
 
     Parameters
     ----------
-    img
-        High-resolution image.
+    %(img_container)s
     key
         Name of layer that contains segmentation in img.
+    %(plotting)s
 
     Returns
     -------
-    None
-        TODO.
+    %(plotting_returns)s
     """
     arr = img[key]
     plt.imshow(arr)

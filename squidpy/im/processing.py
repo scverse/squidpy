@@ -1,75 +1,74 @@
 """Functions exposed: process_img()."""
 
 from types import MappingProxyType
-from typing import Union, Mapping, Optional
+from typing import Any, Union, Mapping, Optional
 
 import xarray as xr
 
 import skimage
 import skimage.filters
 
+from squidpy._docs import d, inject_docs
+from squidpy.constants._constants import Processing
 from .crop import uncrop_img
 from .object import ImageContainer
 
 
+@d.dedent
+@inject_docs(p=Processing)
 def process_img(
     img: ImageContainer,
     img_id: str,
     processing: Union[str],
-    processing_kwargs: Mapping = MappingProxyType({}),
+    processing_kwargs: Mapping[str, Any] = MappingProxyType({}),
     xs: Optional[int] = None,
     ys: Optional[int] = None,
     key_added: Optional[str] = None,
-    inplace: bool = False,
+    copy: bool = True,
 ) -> None:
     """
-    Process image.
+    Process an image.
 
     Note that crop-wise processing can save memory but may change behaviour of cropping if global statistics are used.
-    Leave xs and ys as None to process full image in one go.
+    Leave ``xs`` and ``ys`` as `None` in order to process the full image in one go.
 
     Parameters
     ----------
-    img
-        High-resolution image.
+    %(img_container)s
     img_id
-        Key of image object to process.
+        Key of im object to process.
     processing
         Name of processing method to use. Available are:
 
-            - `'smooth'`: see :func:`skimage.filters.gaussian`.
+            - `{p.SMOOTH.s!r}`: :func:`skimage.filters.gaussian`.
 
     processing_kwargs
-        Key word arguments to processing method. Available are:
-
-            - for ``processing = 'smooth'``: see :func:`skimage.filters.gaussian`.
-    xs
-        Width of the crops in pixels.
-    ys
-        Height of the crops in pixels.
+        Key word arguments to processing method specified by ``processing``.
+    %(width_height)s
     key_added
-        Key of new image sized array to add into img object. Defaults to "${img_id}_${processing}"
-    inplace
-        Whether to replace original image by processed one. Use this to save memory.
+        Key of new image sized array to add into img object. Defaults to ``{{img_id}}_{{processing}}``.
+    %(copy_cont)s
 
-    Return
-    ------
-    TODO
+    Returns
+    -------
+    None
+        TODO
     """
+    processing = Processing(processing)
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
-    if processing == "smooth":
+
+    if processing == Processing.SMOOTH:
         crops = [skimage.filters.gaussian(x, **processing_kwargs) for x in crops]
     else:
-        raise ValueError(f"did not recognize processing {processing}")
+        raise NotImplementedError(processing)
+
     channel_id = img.data[img_id].dims[0]  # channels are named the same as in source image
     # Make sure crops are xarrays:
     if not isinstance(crops[0], xr.DataArray):
         dims = [channel_id, "y", "x"]
         crops = [xr.DataArray(x, dims=dims) for x in crops]
-    # Reassemble image:
+    # Reassemble im:
     img_proc = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id)
-    if inplace:
-        img_id_new = img_id
-    else:
-        img_id_new = img_id + "_" + processing if key_added is None else key_added
+    img_id_new = (img_id + "_" + processing if key_added is None else key_added) if copy else img_id
+
     img.add_img(img=img_proc, img_id=img_id_new, channel_id=channel_id)
