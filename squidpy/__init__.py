@@ -10,3 +10,4 @@ __version__ = "0.0.0"
 import squidpy.gr
 import squidpy.im
 import squidpy.pl
+from squidpy.utils import read_visium_data
