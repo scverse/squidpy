@@ -172,6 +172,10 @@ class PermutationTestABC(ABC):
     def __init__(self, adata: AnnData):
         if not isinstance(adata, AnnData):
             raise TypeError(f"Expected `adata` to be of type `anndata.AnnData`, found `{type(adata).__name__}`.")
+        if not adata.n_obs:
+            raise ValueError("No cells are in `adata.obs_names`.")
+        if not adata.n_vars:
+            raise ValueError("No genes are in `adata.var_names`.")
         if adata.raw is None:
             raise AttributeError("No `.raw` attribute found.")
         if adata.raw.n_obs != adata.n_obs:
@@ -250,27 +254,29 @@ class PermutationTestABC(ABC):
                 f"found `{type(interactions).__name__}`"
             )
 
-        logg.debug("DEBUG: Removing duplicate interactions")
-        self.interactions.drop_duplicates(subset=(SOURCE, TARGET), inplace=True, keep="first")
+        if self.interactions.empty:
+            raise ValueError("The interactions are empty")
 
-        if self._interactions.empty:
-            raise ValueError("After removing duplicates, no interactions remain.")
-
-        logg.debug("DEBUG: Removing duplicate genes in the data")
-        n_genes_prior = self._data.shape[1]
-        if self._data.shape[1] != n_genes_prior:
-            logg.warning(f"Removed `{n_genes_prior - self._data.shape[1]}` duplicate gene(s)")
-
-        if self._data.empty:
-            raise ValueError("After removing duplicate genes, the data is empty.")
-
+        # first uppercaseA, then drop duplicates
         self._data.columns = self._data.columns.str.upper()
         self._interactions[SOURCE] = self.interactions[SOURCE].str.upper()
         self._interactions[TARGET] = self.interactions[TARGET].str.upper()
 
+        logg.debug("DEBUG: Removing duplicate interactions")
+        self.interactions.drop_duplicates(subset=(SOURCE, TARGET), inplace=True, keep="first")
+
+        logg.debug("DEBUG: Removing duplicate genes in the data")
+        n_genes_prior = self._data.shape[1]
+        self._data = self._data.loc[:, ~self._data.columns.duplicated()]
+        if self._data.shape[1] != n_genes_prior:
+            logg.warning(f"Removed `{n_genes_prior - self._data.shape[1]}` duplicate gene(s)")
+
         self._filter_interactions_complexes(complex_policy)
         self._filter_interactions_by_genes()
         self._trim_data()
+
+        # this is necessary because of complexes
+        self.interactions.drop_duplicates(subset=(SOURCE, TARGET), inplace=True, keep="first")
 
         return self
 
@@ -417,7 +423,7 @@ class PermutationTestABC(ABC):
             ),
             metadata=self.interactions[self.interactions.columns.difference([SOURCE, TARGET])],
         )
-        res.metadata.index = res.means.index
+        res.metadata.index = res.means.index.copy()
 
         if fdr_method is not None:
             logg.info(
@@ -538,6 +544,7 @@ class PermutationTest(PermutationTestABC):
         interactions_params: Mapping[str, Any] = MappingProxyType({}),
         transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
         receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
+        **_,
     ) -> "PermutationTest":
         """
         %(PT_prepare.full_desc)s
@@ -614,7 +621,7 @@ def perm_test(
     """  # noqa: D400
     return (
         PermutationTest(adata)
-        .prepare(interactions, complex_policy=complex_policy)
+        .prepare(interactions, complex_policy=complex_policy, **kwargs)
         .test(
             cluster_key=cluster_key,
             threshold=threshold,
