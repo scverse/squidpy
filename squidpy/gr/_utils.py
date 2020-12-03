@@ -33,6 +33,7 @@ def parallelize(
     extractor: Optional[Callable[[Any], Any]] = None,
     show_progress_bar: bool = True,
     use_runner: bool = False,
+    **_,
 ) -> Any:
     """
     Parallelize function call over a collection of elements.
