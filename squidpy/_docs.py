@@ -88,6 +88,14 @@ _plotting_returns = """\
 None
     Nothing, just plots the and optionally saves the plot.
 """
+_parallelize = """\
+n_jobs
+    Number of parallel jobs.
+backend
+    Parallelization backend to use. See :class:`joblib.Parallel` for available options.
+show_progress_bar
+    Whether to show the progress bar or not.
+"""
 
 
 d = DocstringProcessor(
@@ -106,4 +114,5 @@ d = DocstringProcessor(
     crop_extra=_crop_extra,
     plotting=_plotting,
     plotting_returns=_plotting_returns,
+    parallelize=_parallelize,
 )

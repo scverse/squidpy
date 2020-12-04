@@ -1,5 +1,5 @@
 from os import PathLike
-from typing import List, Tuple, Union, Iterator, Optional
+from typing import Any, List, Tuple, Union, Iterable, Iterator, Optional
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -11,7 +11,7 @@ import xarray as xr
 from imageio import imread
 
 from squidpy._docs import d
-from squidpy.im._utils import _num_pages
+from squidpy.im._utils import _num_pages, _unique_order_preserving
 from squidpy.constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
@@ -337,7 +337,12 @@ class ImageContainer:
 
     @d.dedent
     def crop_spot_generator(
-        self, adata: AnnData, dataset_name: Optional[str] = None, size: float = 1.0, **kwargs
+        self,
+        adata: AnnData,
+        dataset_name: Optional[str] = None,
+        size: float = 1.0,
+        obs_ids: Optional[Iterable[Any]] = None,
+        **kwargs,
     ) -> Iterator[Tuple[Union[int, str], xr.DataArray]]:
         """
         Iterate over all obs_ids defined in adata and extract crops from images.
@@ -351,8 +356,10 @@ class ImageContainer:
             Name of the spatial data in adata (if not specified, take first one).
         size
             Amount of context (1.0 means size of spot, larger -> more context).
+        obs_ids
+            Observations from :attr:`adata.obs_names` for which to generate the crops.
         kwargs
-            Keyword arguments for :func:`squidpy.im.crop_img`.
+            Keyword arguments for :meth:`crop_center`.
 
         Yields
         ------
@@ -372,7 +379,9 @@ class ImageContainer:
         r = int(round(spot_diameter * size // 2))
         # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
 
-        obs_ids = adata.obs.index.tolist()
-        for i, obs_id in enumerate(obs_ids):
+        obs_ids, seen = _unique_order_preserving(adata.obs.index if obs_ids is None else obs_ids)
+        indices = [i for i, obs in enumerate(adata.obs.index) if obs in seen]
+
+        for i, obs_id in zip(indices, obs_ids):
             crop = self.crop_center(x=xcoord[i], y=ycoord[i], xr=r, yr=r, **kwargs)
             yield obs_id, crop
