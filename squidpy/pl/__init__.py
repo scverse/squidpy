@@ -7,5 +7,5 @@ from ._graph import (
     interaction_matrix,
 )
 from ._image import plot_segmentation
-from ._interactive import interactive
 from ._utils import extract
+from ._interactive import interactive
