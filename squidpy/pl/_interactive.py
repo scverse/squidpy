@@ -14,49 +14,66 @@ from matplotlib.colors import to_rgba
 
 from skimage.draw import disk
 
+from squidpy._docs import d
 from squidpy.im.object import ImageContainer
+from squidpy.constants._pkg_constants import Key
 
 
+@d.get_full_description(base="AD2NAP")
+@d.get_sections(base="AD2NAP", sections=["Parameters", "Returns"])
+@d.dedent
 class AnnData2Napari:
     """
-    Class to interact with Napari.
+    Explore AnnData with Napari.
 
     Parameters
     ----------
-    adata
-        the adata object
+    %(adata)s
+    %(img_container)s
+    obsm
+        Key in :attr:`anndata.AnnData.obsm` to spatial coordinates.
+    library_id
+        library id in :attr:`anndata.AnnData.uns.keys()`
+    palette
+        palette to use for categorical data, if missing in :attr:`anndata.AnnData.uns`
 
+    Returns
+    -------
+    None
+        A Napari instance is launched in the current session.
     """
 
     def __init__(
         self,
         adata: ad.AnnData,
         img: ImageContainer,
-        obsm_key: str = "spatial",
+        obsm: str = "spatial",
         library_id: str = None,
         palette: str = "Set1",
-    ) -> None:
+    ):
 
-        self.genes = adata.var_names.sort_values().values
-        self.obs = adata.obs.columns.sort_values().values
-
-        self.coords = adata.obsm[obsm_key]
+        self.genes_sorted = adata.var_names.sort_values().values
+        self.obs_sorted = adata.obs.columns.sort_values().values
+        self.coords = adata.obsm[obsm]
         self.palette = palette
-
         self.adata = adata
-        self.image = self._get_image(img, library_id)
-        self.img_shape = img.shape[0:2]
-
-        self.mask_lst = _get_mask(self.adata, self.coords)
-
-    def _get_image(self, img: ImageContainer, library_id: str = None):
 
         if library_id is None:
-            library_id = list(img.data.keys())[0]
+            library_id = list(adata.uns["spatial"].keys())[0]
 
-        image = img.data[library_id].transpose("y", "x", ...).values
+        self.image = img.data[library_id].transpose("y", "x", ...).values
 
-        return image
+        spot_radius = round(adata.uns["spatial"][library_id]["scalefactors"]["spot_diameter_fullres"]) * 0.5
+        self.mask_lst = self._get_mask(spot_radius)
+
+    def _get_mask(self, spot_radius):
+        mask_lst = []
+        for i in np.arange(self.coords.shape[0]):
+            y, x = self.coords[i, :]
+            rr, cc = disk((x, y), spot_radius)
+            mask_lst.append((rr, cc))
+
+        return mask_lst
 
     def _get_gene(self, name):
 
@@ -83,15 +100,15 @@ class AnnData2Napari:
 
     def _get_layer(self, name):
 
-        if name in self.genes:
+        if name in self.genes_sorted:
             vec = self._get_gene(name)
-        elif name in self.obs:
+        elif name in self.obs_sorted:
             vec = self._get_obs(name)
 
         if len(vec.shape) > 1:
-            _layer = np.zeros(self.img_shape + (4,))
+            _layer = np.zeros(self.image.shape[0:2] + (4,))
         else:
-            _layer = np.zeros(self.img_shape)
+            _layer = np.zeros(self.image.shape[0:2])
 
         for i, c in enumerate(self.mask_lst):
             rr, cc = c
@@ -117,8 +134,8 @@ class AnnData2Napari:
         """Launch Napari."""
         self.viewer = napari.view_image(self.image, rgb=True)
 
-        gene_widget = self._get_widget(self.genes, title="Genes")
-        obs_widget = self._get_widget(self.obs, title="Obs")
+        gene_widget = self._get_widget(self.genes_sorted, title="Genes")
+        obs_widget = self._get_widget(self.obs_sorted, title="Obs")
 
         @magicgui(call_button="get obs")
         def get_obs_layer() -> None:
@@ -157,29 +174,33 @@ class AnnData2Napari:
             name="genes",
         )
 
-        return
+        return self
 
 
-def _get_mask(adata, coords):
-    mask_lst = []
+@d.dedent
+def interactive(
+    adata: ad.AnnData,
+    img: ImageContainer,
+    obsm: str = Key.obsm.spatial,
+    library_id: str = None,
+    palette: str = "Set1",
+    **kwargs,
+) -> None:
+    """
+    %(ADATA2NAPARI.full_desc)s .
 
-    spot_radius = _get_radius(adata)
-    for i in np.arange(coords.shape[0]):
-        y, x = coords[i, :]
-        rr, cc = disk((x, y), spot_radius)
-        mask_lst.append((rr, cc))
+    Parameters
+    ----------
+    %(ADATA2NAPARI.parameters)s
 
-    return mask_lst
-
-
-def _get_radius(adata):
-    library_id = list(adata.uns["spatial"].keys())
-    spot_radius = round(adata.uns["spatial"][library_id[0]]["scalefactors"]["spot_diameter_fullres"]) * 0.5
-    return spot_radius
+    Returns
+    -------
+    %(ADATA2NAPARI.returns)s
+    """
+    return AnnData2Napari(adata, img, obsm, library_id, palette, **kwargs).open_napari()
 
 
 def _get_col_categorical(adata, c, palette):
-
     colors_key = f"{c}_colors"
     if colors_key in adata.uns.keys():
         cols = [to_rgba(i) for i in adata.uns[colors_key]]

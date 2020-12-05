@@ -7,4 +7,4 @@ from ._graph import (
     interaction_matrix,
 )
 from ._image import plot_segmentation
-from ._interactive import AnnData2Napari
+from ._interactive import interactive
