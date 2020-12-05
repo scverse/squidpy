@@ -38,7 +38,7 @@ SOURCE = "source"
 TARGET = "target"
 
 TempResult = namedtuple("TempResult", ["means", "pvalues"])
-Result = namedtuple("Result", ["means", "pvalues", "metadata"])
+LigrecResult = namedtuple("LigrecResult", ["means", "pvalues", "metadata"])
 
 _template = """
 @njit(parallel={parallel}, cache=False, fastmath=False)
@@ -182,7 +182,7 @@ class PermutationTestABC(ABC):
             raise ValueError(f"Expected `{adata.n_obs}` cells in `.raw` object, found `{adata.raw.n_obs}`.")
 
         self._data = pd.DataFrame.sparse.from_spmatrix(
-            csc_matrix(adata.raw.X), index=adata.obs_names, columns=adata.var_names
+            csc_matrix(adata.raw.X), index=adata.raw.obs_names, columns=adata.raw.var_names
         )
         self._adata = adata
 
@@ -219,7 +219,7 @@ class PermutationTestABC(ABC):
 
         Returns
         -------
-        :class:`spatial_tools.gr.perm_test.PermutationTestABC`
+        :class:`spatial_tools.gr.PermutationTestABC`
             Sets the following attributes and returns self:
 
                 - :paramref:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
@@ -298,7 +298,7 @@ class PermutationTestABC(ABC):
         key_added: str = "ligrec_test",
         numba_parallel: Optional[bool] = None,
         **kwargs,
-    ) -> Optional[Result]:
+    ) -> Optional[LigrecResult]:
         """
         Perform the permutation test as described in [CellPhoneDB20]_.
 
@@ -408,7 +408,7 @@ class PermutationTestABC(ABC):
             **kwargs,
         )
 
-        res = Result(
+        res = LigrecResult(
             means=_create_sparse_df(
                 res.means,
                 index=pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET]),
@@ -430,7 +430,7 @@ class PermutationTestABC(ABC):
                 f"Performing FDR correction across the `{fdr_axis.value}` "
                 f"using method `{fdr_method}` at level `{alpha}`"
             )
-            res = Result(
+            res = LigrecResult(
                 means=res.means,
                 pvalues=_fdr_correct(res.pvalues, fdr_method, fdr_axis, alpha=alpha),
                 metadata=res.metadata.set_index(res.means.index),
@@ -594,7 +594,7 @@ class PermutationTest(PermutationTestABC):
 
 
 @d.dedent
-def perm_test(
+def ligrec(
     adata: AnnData,
     cluster_key: str,
     interactions: Optional[InteractionType] = None,
@@ -605,7 +605,7 @@ def perm_test(
     copy: bool = False,
     key_added: str = "ligrec_test",
     **kwargs,
-) -> Optional[Result]:
+) -> Optional[LigrecResult]:
     """
     %(PT_test.full_desc)s
 

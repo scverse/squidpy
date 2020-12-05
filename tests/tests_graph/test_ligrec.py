@@ -11,7 +11,7 @@ from scanpy.datasets import blobs
 import numpy as np
 import pandas as pd
 
-from squidpy.gr import perm_test
+from squidpy.gr import ligrec
 from squidpy.gr._ligrec import PermutationTest
 
 _CK = "leiden"
@@ -22,80 +22,80 @@ Complexes_t = Sequence[Tuple[str, str]]
 class TestInvalidBehavior:
     def test_not_adata(self):
         with pytest.raises(TypeError, match=r"Expected `adata` to be of type `anndata.AnnData`"):
-            perm_test(None, _CK)
+            ligrec(None, _CK)
 
     def test_adata_no_raw(self, adata: AnnData):
         del adata.raw
         with pytest.raises(AttributeError, match=r"No `.raw` attribute"):
-            perm_test(adata, _CK)
+            ligrec(adata, _CK)
 
     def test_raw_has_different_n_obs(self, adata: AnnData):
         adata.raw = blobs(n_observations=adata.n_obs + 1)
         with pytest.raises(ValueError, match=rf"Expected `{adata.n_obs}` cells in `.raw`"):
-            perm_test(adata, _CK)
+            ligrec(adata, _CK)
 
     def test_invalid_cluster_key(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(KeyError, match=r"Cluster key `'foobar'` not found"):
-            perm_test(adata, cluster_key="foobar", interactions=interactions)
+            ligrec(adata, cluster_key="foobar", interactions=interactions)
 
     def test_cluster_key_is_not_categorical(self, adata: AnnData, interactions: Interactions_t):
         adata.obs[_CK] = adata.obs[_CK].astype("string")
         with pytest.raises(TypeError, match=rf"Expected `adata.obs\[{_CK!r}\]` to be `categorical`"):
-            perm_test(adata, _CK, interactions=interactions)
+            ligrec(adata, _CK, interactions=interactions)
 
     def test_only_1_cluster(self, adata: AnnData, interactions: Interactions_t):
         adata.obs["foo"] = 1
         adata.obs["foo"] = adata.obs["foo"].astype("category")
         with pytest.raises(ValueError, match=r"Expected at least `2` clusters, found `1`."):
-            perm_test(adata, "foo", interactions=interactions)
+            ligrec(adata, "foo", interactions=interactions)
 
     def test_invalid_complex_policy(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(ValueError):
-            perm_test(adata, _CK, interactions=interactions, complex_policy="foobar")
+            ligrec(adata, _CK, interactions=interactions, complex_policy="foobar")
 
     def test_invalid_fdr_axis(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(ValueError):
-            perm_test(adata, _CK, interactions=interactions, fdr_axis="foobar", fdr_method="fdr_bh")
+            ligrec(adata, _CK, interactions=interactions, fdr_axis="foobar", fdr_method="fdr_bh")
 
     def test_too_few_permutations(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(ValueError, match=r"Expected `n_perms` to be positive"):
-            perm_test(adata, _CK, interactions=interactions, n_perms=0)
+            ligrec(adata, _CK, interactions=interactions, n_perms=0)
 
     def test_invalid_interactions_type(self, adata: AnnData):
         with pytest.raises(TypeError, match=r"Expected either a `pandas.DataFrame`"):
-            perm_test(adata, _CK, interactions=42)
+            ligrec(adata, _CK, interactions=42)
 
     def test_invalid_interactions_dict(self, adata: AnnData):
         with pytest.raises(KeyError, match=r"Column .* is not in `interactions`."):
-            perm_test(adata, _CK, interactions={"foo": ["foo"], "target": ["bar"]})
+            ligrec(adata, _CK, interactions={"foo": ["foo"], "target": ["bar"]})
         with pytest.raises(KeyError, match=r"Column .* is not in `interactions`."):
-            perm_test(adata, _CK, interactions={"source": ["foo"], "bar": ["bar"]})
+            ligrec(adata, _CK, interactions={"source": ["foo"], "bar": ["bar"]})
 
     def test_invalid_interactions_dataframe(self, adata: AnnData, interactions: Interactions_t):
         df = pd.DataFrame(interactions, columns=["foo", "target"])
         with pytest.raises(KeyError, match=r"Column .* is not in `interactions`."):
-            perm_test(adata, _CK, interactions=df)
+            ligrec(adata, _CK, interactions=df)
 
         df = pd.DataFrame(interactions, columns=["source", "bar"])
         with pytest.raises(KeyError, match=r"Column .* is not in `interactions`."):
-            perm_test(adata, _CK, interactions=df)
+            ligrec(adata, _CK, interactions=df)
 
     def test_interactions_invalid_sequence(self, adata: AnnData, interactions: Interactions_t):
         interactions += ("foo", "bar", "bar")
         with pytest.raises(ValueError, match=r"Not all interactions are of length `2`."):
-            perm_test(adata, _CK, interactions=interactions)
+            ligrec(adata, _CK, interactions=interactions)
 
     def test_interactions_only_invalid_names(self, adata: AnnData):
         with pytest.raises(ValueError, match=r"After filtering by genes"):
-            perm_test(adata, _CK, interactions=["foo", "bar", "baz"])
+            ligrec(adata, _CK, interactions=["foo", "bar", "baz"])
 
     def test_invalid_clusters(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(ValueError, match=r"Invalid cluster `'foo'`."):
-            perm_test(adata, _CK, interactions=interactions, clusters=["foo"])
+            ligrec(adata, _CK, interactions=interactions, clusters=["foo"])
 
     def test_invalid_clusters_mix(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(TypeError, match=r"Expected a `Sequence`."):
-            perm_test(adata, _CK, interactions=interactions, clusters=["foo", ("bar", "baz")])
+            ligrec(adata, _CK, interactions=interactions, clusters=["foo", ("bar", "baz")])
 
     def test_all_genes_capitalized(self, adata: AnnData, interactions: Interactions_t):
         pt = PermutationTest(adata).prepare(interactions=interactions)
@@ -145,7 +145,7 @@ class TestInvalidBehavior:
         )
 
     def test_fdr_axis_works(self, adata: AnnData, interactions: Interactions_t):
-        rc = perm_test(
+        rc = ligrec(
             adata,
             _CK,
             interactions=interactions,
@@ -156,7 +156,7 @@ class TestInvalidBehavior:
             show_progress_bar=False,
             copy=True,
         )
-        ri = perm_test(
+        ri = ligrec(
             adata,
             _CK,
             interactions=interactions,
@@ -175,7 +175,7 @@ class TestInvalidBehavior:
 
     def test_inplace_key_added(self, adata: AnnData, interactions: Interactions_t):
         assert "foobar" not in adata.uns
-        res = perm_test(
+        res = ligrec(
             adata, _CK, interactions=interactions, n_perms=5, copy=False, key_added="foobar", show_progress_bar=False
         )
 
@@ -189,7 +189,7 @@ class TestInvalidBehavior:
 
     def test_return_no_write(self, adata: AnnData, interactions: Interactions_t):
         assert "foobar" not in adata.uns
-        r = perm_test(
+        r = ligrec(
             adata, _CK, interactions=interactions, n_perms=5, copy=True, key_added="foobar", show_progress_bar=False
         )
 
@@ -201,7 +201,7 @@ class TestInvalidBehavior:
 
     @pytest.mark.parametrize("fdr_method", [None, "fdr_bh"])
     def test_pvals_in_correct_range(self, adata: AnnData, interactions: Interactions_t, fdr_method: Optional[str]):
-        r = perm_test(
+        r = ligrec(
             adata,
             _CK,
             interactions=interactions,
@@ -219,7 +219,7 @@ class TestInvalidBehavior:
             assert np.nanmin(r.pvalues.values) >= 0, np.nanmin(r.pvalues.values)
 
     def test_result_correct_index(self, adata: AnnData, interactions: Interactions_t):
-        r = perm_test(adata, _CK, interactions=interactions, n_perms=5, copy=True, show_progress_bar=False)
+        r = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=True, show_progress_bar=False)
 
         np.testing.assert_array_equal(r.means.index, r.pvalues.index)
         np.testing.assert_array_equal(r.pvalues.index, r.metadata.index)
@@ -231,7 +231,7 @@ class TestInvalidBehavior:
     def test_result_is_sparse(self, adata: AnnData, interactions: Interactions_t):
         interactions = pd.DataFrame(interactions, columns=["source", "target"])
         interactions["metadata"] = "foo"
-        r = perm_test(adata, _CK, interactions=interactions, n_perms=5, seed=2, copy=True, show_progress_bar=False)
+        r = ligrec(adata, _CK, interactions=interactions, n_perms=5, seed=2, copy=True, show_progress_bar=False)
 
         assert r.means.sparse.density <= 0.15
         assert r.pvalues.sparse.density <= 0.95
@@ -244,7 +244,7 @@ class TestInvalidBehavior:
 
     @pytest.mark.parametrize("n_jobs", [1, 2])
     def test_reproducibility_cores(self, adata: AnnData, interactions: Interactions_t, n_jobs: int):
-        r1 = perm_test(
+        r1 = ligrec(
             adata,
             _CK,
             interactions=interactions,
@@ -254,7 +254,7 @@ class TestInvalidBehavior:
             seed=42,
             n_jobs=n_jobs,
         )
-        r2 = perm_test(
+        r2 = ligrec(
             adata,
             _CK,
             interactions=interactions,
@@ -264,7 +264,7 @@ class TestInvalidBehavior:
             seed=42,
             n_jobs=n_jobs,
         )
-        r3 = perm_test(
+        r3 = ligrec(
             adata,
             _CK,
             interactions=interactions,
@@ -285,7 +285,7 @@ class TestInvalidBehavior:
 
     def test_reproducibility_numba_parallel_off(self, adata: AnnData, interactions: Interactions_t):
         t1 = time()
-        r1 = perm_test(
+        r1 = ligrec(
             adata,
             _CK,
             interactions=interactions,
@@ -298,7 +298,7 @@ class TestInvalidBehavior:
         t1 = time() - t1
 
         t2 = time()
-        r2 = perm_test(
+        r2 = ligrec(
             adata,
             _CK,
             interactions=interactions,
@@ -317,7 +317,7 @@ class TestInvalidBehavior:
         np.testing.assert_allclose(r1.pvalues, r2.pvalues)
 
     def test_paul15_correct_means(self, paul15: AnnData, paul15_means: pd.DataFrame):
-        res = perm_test(
+        res = ligrec(
             paul15,
             "paul15_clusters",
             interactions=list(paul15_means.index.to_list()),
@@ -335,7 +335,7 @@ class TestInvalidBehavior:
         np.testing.assert_allclose(res.means.values, paul15_means.values)
 
     def test_reproducibility_numba_off(self, adata: AnnData, interactions: Interactions_t, ligrec_no_numba: NamedTuple):
-        r = perm_test(
+        r = ligrec(
             adata, _CK, interactions=interactions, n_perms=5, copy=True, show_progress_bar=False, seed=42, n_jobs=1
         )
         np.testing.assert_array_equal(r.means.index, ligrec_no_numba.means.index)
@@ -351,7 +351,7 @@ class TestInvalidBehavior:
         s.logfile = sys.stderr
         s.verbosity = 4
 
-        perm_test(
+        ligrec(
             adata,
             _CK,
             interactions=interactions,
@@ -379,7 +379,7 @@ class TestInvalidBehavior:
             (f"{interactions[-1][0]}_{interactions[-1][1]}", f"{interactions[-2][0]}_{interactions[-2][1]}"),
         ) * 2
         interactions += interactions[:3]
-        res = perm_test(
+        res = ligrec(
             adata,
             _CK,
             interactions=interactions,
