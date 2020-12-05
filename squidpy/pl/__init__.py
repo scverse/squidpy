@@ -8,3 +8,4 @@ from ._graph import (
 )
 from ._image import plot_segmentation
 from ._interactive import interactive
+from ._utils import extract
