@@ -1,4 +1,4 @@
-"""Plotting for graph functions."""
+"""Plotting for gr functions."""
 
 from typing import Tuple, Union, Optional
 from pathlib import Path
@@ -14,7 +14,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from squidpy._docs import d
-from squidpy.plotting._utils import save_fig
+from squidpy.pl._utils import save_fig
 from squidpy.constants._pkg_constants import Key
 
 
@@ -155,7 +155,7 @@ def interaction_matrix(
     """
     Plot cluster interaction matrix.
 
-    The interaction matrix is computed by :func:`squidpy.graph.interaction_matrix`.
+    The interaction matrix is computed by :func:`squidpy.gr.interaction_matrix`.
 
     Parameters
     ----------
@@ -174,7 +174,7 @@ def interaction_matrix(
     if int_key not in adata.uns_keys():
         raise KeyError(
             f"cluster_interactions_key {int_key} not found. \n"
-            "Choose a different key or run first `squidpy.graph.interaction_matrix()`."
+            "Choose a different key or run first `squidpy.gr.interaction_matrix()`."
         )
     array = adata.uns[int_key]
 
@@ -208,7 +208,7 @@ def nhood_enrichment(
     """
     Plot neighborhood enrichement.
 
-    The enrichment is computed by :func:`squidpy.graph.nhood_enrichment`.
+    The enrichment is computed by :func:`squidpy.gr.nhood_enrichment`.
 
     Parameters
     ----------
@@ -228,7 +228,7 @@ def nhood_enrichment(
     int_key = f"{cluster_key}_nhood_enrichment"
     if int_key not in adata.uns_keys():
         raise ValueError(
-            f"key {int_key} not found. \n" "Choose a different key or run first `squidpy.graph.nhood_enrichment()`."
+            f"key {int_key} not found. \n" "Choose a different key or run first `squidpy.gr.nhood_enrichment()`."
         )
     array = adata.uns[int_key][mode]
 
@@ -245,6 +245,7 @@ def nhood_enrichment(
     if colors_key in adata.uns.keys():
         ad.uns[colors_key] = adata.uns[colors_key]
 
+    # TODO: handle dpi
     sc.pl.heatmap(ad, var_names=ad.var_names, groupby=cluster_key, figsize=figsize, save=save, **kwargs)
 
 

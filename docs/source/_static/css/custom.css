@@ -1,0 +1,11 @@
+div.sphx-glr-download a[href$=".py"] {
+    display: none !important;
+}
+
+div.sphx-glr-download-link-note {
+   display: none !important;
+}
+
+p.sphx-glr-signature {
+   display: none !important;
+}
