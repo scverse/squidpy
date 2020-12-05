@@ -98,8 +98,8 @@ class AnnData2Napari:
 
         return vec
 
-    def _get_layer(self, name):
-
+    def get_layer(self, name):
+        """Get layer from name."""
         if name in self.genes_sorted:
             vec = self._get_gene(name)
         elif name in self.obs_sorted:
@@ -142,7 +142,7 @@ class AnnData2Napari:
 
             name = obs_widget.currentItem().text()
 
-            _layer = self._get_layer(name)
+            _layer = self.get_layer(name)
             logg.warning(f"Loading `{name}` layer")
 
             if len(_layer.shape) > 2:
@@ -156,7 +156,7 @@ class AnnData2Napari:
 
             name = gene_widget.currentItem().text()
 
-            _layer = self._get_layer(name)
+            _layer = self.get_layer(name)
             logg.warning(f"Loading `{name}` layer")
 
             self.viewer.add_image(_layer, name=name, colormap="magma", blending="additive")
