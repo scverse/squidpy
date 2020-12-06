@@ -226,7 +226,7 @@ def ligrec(
         .style(
             **kwargs,
         )
-        .legend(size_title=r"$-\log_{10} ~ P$", colorbar_title=r"$log_{2}(\frac{molecule1 + molecule2}{2} + 1)$")
+        .legend(size_title=r"$-\log_{10} ~ P$", colorbar_title=r"$log_2(\frac{molecule_1 + molecule_2}{2} + 1)$")
     )
     if dendrogram:
         dp.add_dendrogram(size=1.6)
