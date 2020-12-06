@@ -202,7 +202,7 @@ def ligrec(
 
     if dendrogram:
         sc.pp.pca(adata)
-        sc.tl.dendrogram(adata, groupby="groups")
+        sc.tl.dendrogram(adata, groupby="groups", key_added="dendrogram")
 
     kwargs.setdefault("cmap", "viridis")
     kwargs.setdefault("grid", True)
@@ -243,11 +243,7 @@ def ligrec(
         dp.ax_dict["mainplot_ax"].set_xticklabels(labs)
 
     if alpha is not None:
-        mapper = (
-            np.argsort(adata.uns["dendrogram_groups"]["categories_idx_ordered"])
-            if dendrogram
-            else np.arange(len(pvals))
-        )
+        mapper = np.argsort(adata.uns["dendrogram"]["categories_idx_ordered"]) if dendrogram else np.arange(len(pvals))
         mean_min, mean_max = np.nanmin(means), np.nanmax(means)
         mean_delta = mean_max - mean_min
 

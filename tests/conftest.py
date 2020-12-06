@@ -1,7 +1,7 @@
 import sys
 import pickle
 from abc import ABC, ABCMeta
-from typing import Tuple, Callable, Optional, Sequence, NamedTuple
+from typing import Tuple, Callable, Optional, Sequence
 from pathlib import Path
 from functools import wraps
 from itertools import product
@@ -20,6 +20,7 @@ from matplotlib.testing.compare import compare_images
 
 import squidpy as sp
 from squidpy.im.object import ImageContainer
+from squidpy.gr._ligrec import LigrecResult
 from squidpy.constants._pkg_constants import Key
 
 mpl.use("agg")
@@ -87,7 +88,7 @@ def interactions(adata: AnnData) -> Tuple[Sequence[str], Sequence[str]]:
     return tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def complexes(adata: AnnData) -> Sequence[Tuple[str, str]]:
     g = adata.raw.var_names
     return [
@@ -100,13 +101,14 @@ def complexes(adata: AnnData) -> Sequence[Tuple[str, str]]:
 
 
 @pytest.fixture(scope="session")
-def ligrec_no_numba() -> NamedTuple:
+def ligrec_no_numba() -> LigrecResult:
     with open("tests/_data/ligrec_no_numba.pickle", "rb") as fin:
-        return pickle.load(fin)
+        data = pickle.load(fin)  # saved as tuple in case of renaming LigrecResult
+        return LigrecResult(means=data[0], pvalues=data[1], metadata=data[2])
 
 
 @pytest.fixture(scope="session")
-def ligrec_result() -> NamedTuple:
+def ligrec_result() -> LigrecResult:
     adata = _adata.copy()
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
     return sp.gr.ligrec(
