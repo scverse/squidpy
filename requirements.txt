@@ -8,7 +8,7 @@ magicgui
 napari
 netcdf4
 omnipath>=1.0.0
-PyQt5
+pyqt5
 rasterio
 scanpy
 scikit-image>=0.17.1
