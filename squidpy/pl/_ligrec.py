@@ -3,6 +3,7 @@ from pathlib import Path
 from functools import partial
 
 import scanpy as sc
+from scanpy import logging as logg
 from anndata import AnnData
 
 import numpy as np
@@ -124,7 +125,7 @@ def ligrec(
     swap_axes
         Whether to show the cluster combinations as rows and the interacting pairs as columns.
     alpha
-        Significance threshold. All elements with p-values less or equal to ``alpha`` will be marked by toruses
+        Significance threshold. All elements with p-values less or equal to ``alpha`` will be marked by tori
         instead of dots.
     %(plotting)s
     kwargs
@@ -140,14 +141,13 @@ def ligrec(
         adata = adata.uns[key]
 
     if not isinstance(adata, LigrecResult):
-        pass
-        # raise TypeError(
-        #    f"Expected `adata` to be either of type `anndata.AnnData` or `LigrecResult`,"
-        #    f"found `{type(adata).__name__}`."
-        # )
+        raise TypeError(
+            f"Expected `adata` to be either of type `anndata.AnnData` or `LigrecResult`, "
+            f"found `{type(adata).__name__}`."
+        )
 
-    if alpha is not None and alpha <= 0:
-        raise ValueError(f"Expected `alpha` to be positive, found `{alpha}`.")
+    if alpha is not None and not (0 <= alpha <= 1):
+        raise ValueError(f"Expected `alpha` to be in range `[0, 1]`, found `{alpha}`.")
 
     if src_clusters is None:
         src_clusters = adata.pvalues.columns.get_level_values(0)
@@ -226,7 +226,7 @@ def ligrec(
         .style(
             **kwargs,
         )
-        .legend(size_title=r"$-\log_{10} ~ P$", colorbar_title=r"$log_{2}(\frac{ligand + receptor}{2} + 1)$")
+        .legend(size_title=r"$-\log_{10} ~ P$", colorbar_title=r"$log_{2}(\frac{molecule1 + molecule2}{2} + 1)$")
     )
     if dendrogram:
         dp.add_dendrogram(size=1.6)
@@ -253,9 +253,9 @@ def ligrec(
 
         yy, xx = np.where(pvals.values >= -np.log10(alpha))
         if len(xx) and len(yy):
-            # TODO: log number of significant
+            logg.info(f"Found `{len(yy)}` significant interactions at level `{alpha}`")
             ss = 0.33 * (adata.X[yy, xx] * (dp.largest_dot - dp.smallest_dot) + dp.smallest_dot)
-            # TODO: determine if below is truly needed
+            # just a precaution to
             cc = np.vectorize(partial(_get_black_or_white, cmap=cmap))((means.values[yy, xx] - mean_min) / mean_delta)
 
             # must be after ss = ..., cc = ...
