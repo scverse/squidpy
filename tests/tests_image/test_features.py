@@ -50,3 +50,18 @@ def test_get_summary_stats():
     assert [key for key in stats.keys() if "mean" in key] != [], "mean not in dict keys"
     assert [key for key in stats.keys() if "std" in key] != [], "std not in dict keys"
     assert [key for key in stats.keys() if "quantile" in key] != [], "quantile not in dict keys"
+
+    
+def test_scale_features(data: pd.DataFrame, key: str, inplace: bool):
+    adata = AnnData(obs=pd.DataFrame(index=data.index),obsm={key:data})
+    options = ['scale',(0,1),'abs','robust','uniform','normal',lambda x: x*x]
+    
+    for o in options:  
+        scale_features(data,features='all',scaling=o,inplace=inplace)
+        scale_features(adata,key=key,features='all',scaling=o,inplace=inplace)
+        
+    options_dict = {c:options[i] for i,c in enumerate(data.columns[:min(len(data.columns),len(options))])}
+    dicts_features = [key for key in options_dict]        
+        
+    scale_features(data,features=dicts_features,scaling=options_dict,inplace=inplace)
+    scale_features(adata,key=key,features=dicts_features,scaling=options_dict,inplace=inplace) 

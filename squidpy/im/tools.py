@@ -1,8 +1,10 @@
 # TODO: disable data-science-types because below does not generate types in shpinx + create an issue
 from __future__ import annotations
 
+import warnings
+
 from types import MappingProxyType
-from typing import Any, Dict, Tuple, Union, Mapping, Iterable, Optional
+from typing import Any, Dict, Tuple, Union, Mapping, Iterable, Optional, Callable
 
 from anndata import AnnData
 
@@ -11,6 +13,8 @@ import pandas as pd
 
 import skimage.feature as sk_image
 from skimage.feature import greycoprops, greycomatrix
+import sklearn
+from sklearn import preprocessing
 
 from squidpy._docs import d, inject_docs
 from squidpy.im.object import ImageContainer
@@ -298,3 +302,117 @@ def get_grey_texture_features(
             for a_idx, a in enumerate(angles):
                 features[f"{feature_name}_{p}_dist_{dist}_angle_{a:.2f}"] = tmp_features[d_idx, a_idx]
     return features
+
+
+def scale_f(
+    feature_df: pd.DataFrame,
+    option: Union[str,Callable[float,float]]
+) -> np.array:
+    """helper function for scaling each feature
+    
+    Params
+    ------
+    feature: pd.DataFrame
+        features that are scaled according `option`
+    option: str, list, lambda fct
+        scaling specification
+        
+    Returns
+    -------
+    np.array
+    
+    """   
+    import types    
+    if option == "scale":
+        return preprocessing.scale(feature_df.values, axis=0, with_mean=True, with_std=True, copy=True)
+    elif (type(option) == tuple)  and (len(option) == 2):
+        return preprocessing.minmax_scale(feature_df.values, feature_range=(option[0], option[1]), axis=0, copy=True)
+    elif option == 'abs':
+        return preprocessing.maxabs_scale(feature_df.values, axis=0, copy=True)
+    elif option == 'robust':
+        return preprocessing.robust_scale(feature_df.values, axis=0, with_centering=True, with_scaling=True, quantile_range=(25.0, 75.0), copy=True)
+    elif option == 'uniform':
+        return preprocessing.quantile_transform(feature_df.values,n_quantiles=np.min([1000,len(feature_df)]), axis=0, output_distribution='uniform',random_state=1234, copy=True)
+    elif option == 'normal':
+        return preprocessing.quantile_transform(feature_df.values,n_quantiles=np.min([1000,len(feature_df)]), axis=0, output_distribution='normal', random_state=1234, copy=True)
+    elif (type(option) is types.LambdaType):
+        return feature_df.apply(option).values
+    else:
+        warnings.warn(f"Scaling option {option} is not supported")
+
+
+def scale_features(
+    data: Union[AnnData,pd.DataFrame],
+    key: str = 'features',
+    features: Union[str,list(str)] = 'all',
+    scaling: Union[str,tuple(float),Callable[float,float],dict[str,Union[str,tuple(float),Callable[float,float]]]] = 'scale',
+    inplace: bool = True
+) -> Optional[pd.DataFrame]:
+    """Scale features
+    
+    Different scaling options are provided: See Parameter `scaling` for short descriptions. For detailed
+    descriptions check the sklearn.preprocessing documentation of the functions wrapped in the helper
+    function `scale_f()`.
+    
+    Parameters
+    ----------
+    data: AnnData object or pd.DataFrame
+        Dataframe with image features. Rows: spots, Columns: features.
+        If an AnnData is given features are expected to be in adata.obsm[key]
+    key: str
+        key for features in adata.obsm (only relevant when type(data)==AnnData)
+    features: str, list of strs
+        Features on which scaling is applied. E.g. features=['feature1','feature3'] (Default: 'all')
+    scaling: str, tuple of floats, fct, dict of strs & tuples & fcts
+        Define how features are scaled. This can be feature specific as well. There are different scaling
+        procedures supported, see the following examples:
+        - scaling == 'scale':            all features are scaled to zero mean and std 1.
+        - scaling == (0,1):              linearly scaled to minimum 0 and maximum 1.
+        - scaling == 'abs':              linearly scaled to the [-1,1] range according the maximal absolute value.
+        - scaling == 'robust':           centered to the median and component wise scaled according to the interquartile range.
+        - scaling == 'uniform'/'normal': transformed to follow a uniform/normal distribution.
+        - scaling == <some lambda fct>:  transformed according the given lambda fct.
+        Feature specific:
+        - scaling == {'feature1':'scale','feature3':[-1,2.5],'feature8':<some lambda function>}
+            --> feature1, 3 and 8 are transformed according their given options
+    inplace: bool
+        Change features inplace or return copy
+    
+    Returns
+    -------
+    if not inplace:
+        pd.DataFrame with scaled features
+    """
+    df = data if isinstance(data, pd.DataFrame) else data.obsm[key]
+    
+    # Prepare scaling dict
+    if features == 'all':
+        features = df.columns.copy()
+    if type(scaling) != dict:
+        if type(scaling) == list: scaling = tuple(scaling)
+        scale_options = [scaling]
+        feature_lists = [features]
+    else:
+        overlap_features = [f for f in scaling if f in features]
+        scaling = {key:(val if (type(val) != list) else tuple(val)) for key,val in scaling.items()}
+        if len(scaling) > len(overlap_features):
+            warnings.warn("There are more features in `scaling` then in `features`, only those in `features` and `scaling` are scaled.")
+        elif len(scaling) < len(features):
+            warnings.warn("There are less features in `scaling` then in `features`, only those in `features` and `scaling` are scaled.")
+        scale_options = [o for s,o in scaling.items()]
+        scale_options = set(scale_options)
+        feature_lists = []
+        for o in scale_options:
+            feature_lists.append([f for f in overlap_features if (scaling[f] == o)])
+
+    # Scale features
+    if inplace: 
+        d = df
+    else:
+        d = df.copy()
+    for i,o in enumerate(scale_options):
+        f_names = feature_lists[i]
+        d[f_names] = scale_f(d[f_names],o)
+    if not inplace: 
+        return d    
+        

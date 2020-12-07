@@ -6,6 +6,7 @@ from .tools import (
     get_summary_stats,
     calculate_image_features,
     get_grey_texture_features,
+    scale_features,
 )
 from .object import ImageContainer
 from .segment import (
