@@ -1,6 +1,9 @@
+import pytest
+
 from anndata import AnnData
 
 import numpy as np
+import pandas as pd
 
 from squidpy.im.tools import (
     get_hog_features,
@@ -11,10 +14,13 @@ from squidpy.im.tools import (
 from squidpy.im.object import ImageContainer
 
 
-# cont is now in conftest.py
-def test_calculate_image_features(adata: AnnData, cont: ImageContainer):
+@pytest.mark.parametrize("n_jobs", [1, 2])
+def test_calculate_image_features(adata: AnnData, cont: ImageContainer, n_jobs: int):
     features = ["hog", "texture", "summary", "color_hist"]
-    _ = calculate_image_features(adata, cont, features=features)
+    res = calculate_image_features(adata, cont, features=features, copy=True, n_jobs=n_jobs)
+
+    assert isinstance(res, pd.DataFrame)
+    np.testing.assert_array_equal(res.index, adata.obs_names)
 
 
 def test_get_features_statistics():
