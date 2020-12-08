@@ -2,7 +2,7 @@ name: CI
 
 on:
   schedule:
-    - cron: '* * * * 1'  # run every Monday
+    - cron: '00 09 * * 1'  # run every Monday at 09:00
   push:
     branches:
       - master
@@ -42,7 +42,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
       with:
-        fetch-depth: '0'
+        fetch-depth: 0
     - name: Set up Python ${{ matrix.python }}
       uses: actions/setup-python@v2
       with:
@@ -57,9 +57,9 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ${{ steps.pip-cache.outputs.dir }}
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-${{ runner.python }}-pip-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-pip-
+          ${{ runner.os }}-${{ runner.python }}-pip-
 
     - name: Install dependencies
       run: |
