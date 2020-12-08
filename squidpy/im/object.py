@@ -28,12 +28,14 @@ class ImageContainer:
 
     data: xr.Dataset
 
+    @d.dedent
     def __init__(
         self,
         img: Optional[Union[Pathlike_t, np.ndarray]] = None,
         img_id: Optional[Union[str, List[str]]] = None,
         lazy: bool = True,
         chunks: Optional[int] = None,
+        **kwargs,
     ):
         """
         Set up ImageContainer from numpy array or on-disk tiff / jpg.
@@ -44,11 +46,7 @@ class ImageContainer:
 
         Parameters
         ----------
-        img
-            An array or a path to tiff file.
-        img_id
-            Key (name) to be used for img. For multi-page tiffs this should be a list.
-            If not specified, DataArrays will be named 'image_{i}'.
+        %(add_img.parameters)s
         lazy
             Use :mod:`rasterio` or :mod:`dask` to lazily load image.
         chunks
@@ -60,7 +58,7 @@ class ImageContainer:
         self._lazy = lazy
         self.data = xr.Dataset()
         if img is not None:
-            self.add_img(img, img_id)
+            self.add_img(img, img_id, **kwargs)
 
     def __repr__(self):
         s = f"ImageContainer object with {len(self.data.keys())} layers\n"
@@ -116,37 +114,34 @@ class ImageContainer:
         """
         self.data.to_netcdf(fname, mode="a")
 
+    @d.dedent
+    @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
     def add_img(
         self,
         img: Union[Pathlike_t, np.ndarray, xr.DataArray],
-        img_id: Union[str, List[str]] = None,
+        img_id: Optional[str] = None,
         channel_id: str = "channels",
     ) -> None:
         """
         Add layer from numpy image / tiff file.
 
-        For numpy arrays, assume that dims are: channels, y, x
-        The added image has to have the same number of channels as the original image, or no channels.
+        For :mod:`numpy` arrays, assume that dims are: ``(channels, y, x)``.
 
         Parameters
         ----------
-        img
-            Numpy array or path to image file.
+        %(_load_img.parameters)s
         img_id
-            Key (name) to be used for img. For multi-page tiffs this should be a list.
+            Key (name) to be used for img.
             If not specified, DataArrays will be named "image".
-        channel_id
-            TODO.
 
         Returns
         -------
         None
-            TODO.
+            Nothing, just adds img to `.data`
 
         Raises
         ------
-        :class:`ValueError`
-            If ``img_id`` is neither a string nor a list.
+        %(_load_img.raises)s
         """
         img = self._load_img(img=img, channel_id=channel_id)
         if img_id is None:
@@ -158,6 +153,7 @@ class ImageContainer:
             # load in memory
             self.data.load()
 
+    @d.get_sections(base="_load_img", sections=["Parameters", "Raises"])
     def _load_img(self, img: Union[Pathlike_t, np.ndarray], channel_id: str = "channels") -> xr.DataArray:
         """
         Load image as :mod:`xarray`.
@@ -173,7 +169,7 @@ class ImageContainer:
         img
             :mod:`numpy` array or path to image file.
         channel_id
-            TODO.
+            Name for the channel dimension. Default is "channels".
 
         Returns
         -------
@@ -253,8 +249,6 @@ class ImageContainer:
             Array of shape ``(channels, y, x)``.
         """
         from .crop import crop_img
-
-        # TODO: TODO: when scaling, will return a numpy array instead of an xarray
 
         if img_id is None:
             img_id = list(self.data.keys())[0]
@@ -338,7 +332,7 @@ class ImageContainer:
         unique_ycoord = np.arange(start=0, stop=(self.data.dims["y"] // ys) * ys, step=ys)
 
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
-        ycoords = np.tile(unique_xcoord, len(unique_ycoord))
+        ycoords = np.tile(unique_ycoord, len(unique_xcoord))
 
         crops = [self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id, **kwargs) for x, y in zip(xcoords, ycoords)]
         return crops, xcoords, ycoords
