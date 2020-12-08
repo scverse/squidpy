@@ -330,8 +330,7 @@ class PermutationTestABC(ABC):
             Key in :attr:`anndata.AnnData.uns` where the result is stored if ``copy = False``.
             If `None`, it will be saved under ``'{{cluster_key}}_ligrec'``.
         %(numba_parallel)s
-        **kwargs
-            Keyword arguments for parallelization, such as ``n_jobs`` or ``backend``.
+        %(parallelize)s
 
         Returns
         -------
