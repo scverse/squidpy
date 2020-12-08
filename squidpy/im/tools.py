@@ -4,6 +4,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Dict, List, Tuple, Union, Mapping, Iterable, Optional
 
+from scanpy import logging as logg
 from anndata import AnnData
 
 import numpy as np
@@ -70,7 +71,9 @@ def calculate_image_features(
         features = [features]
     features = [ImageFeature(f) for f in features]
 
-    n_jobs = _get_n_cores(kwargs.pop("n_jobs", None))
+    n_jobs = _get_n_cores(n_jobs)
+    logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
+
     res = parallelize(
         _calculate_image_features_helper,
         collection=adata.obs.index,
