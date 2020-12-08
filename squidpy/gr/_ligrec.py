@@ -328,8 +328,7 @@ class PermutationTestABC(ABC):
         key_added
             Key in :attr:`anndata.AnnData.uns` where the result is stored if ``copy = False``.
         %(numba_parallel)s
-        **kwargs
-            Keyword arguments for parallelization, such as ``n_jobs`` or ``backend``.
+        %(parallelize)s
 
         Returns
         -------
