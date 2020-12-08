@@ -116,7 +116,7 @@ def ligrec_result() -> LigrecResult:
     )
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="function", autouse=True)
 def logging_state():
     # modified from scanpy
     verbosity_orig = sc.settings.verbosity

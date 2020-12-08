@@ -92,7 +92,7 @@ class CustomDotplot(sc.pl.DotPlot):  # noqa: D101
 
 @d.dedent
 def ligrec(
-    adata: Union[AnnData, Tuple[pd.DataFrame, pd.DataFrame]],
+    adata: Union[AnnData, LigrecResult],
     key: Optional[str] = None,
     src_clusters: Optional[Union[str, Sequence[str]]] = None,
     tgt_clusters: Optional[Union[str, Sequence[str]]] = None,
@@ -108,10 +108,13 @@ def ligrec(
     """
     Plot results of receptor-ligand permutation test.
 
+    :math:`molecule_1` belongs to the source clusters displayed on the top (or on the right, if ``swap_axes = True``,
+    whereas :math:`molecule_2` belongs to the target clusters.
+
     Parameters
     ----------
     %(adata)s
-        It can also be a :class:`namedtuple` as returned by :func:`squidpy.gr.ligrec`.
+        It can also be a :class:`LigrecResult` as returned by :func:`squidpy.gr.ligrec`.
     key
         Key in :attr:`anndata.AnnData.uns`. Only used when ``adata`` is of type :class:`AnnData`.
     src_clusters
