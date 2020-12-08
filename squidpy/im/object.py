@@ -114,45 +114,6 @@ class ImageContainer:
         """
         self.data.to_netcdf(fname, mode="a")
 
-    @d.dedent
-    @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
-    def add_img(
-        self,
-        img: Union[Pathlike_t, np.ndarray, xr.DataArray],
-        img_id: Optional[str] = None,
-        channel_id: str = "channels",
-    ) -> None:
-        """
-        Add layer from numpy image / tiff file.
-
-        For :mod:`numpy` arrays, assume that dims are: ``(channels, y, x)``.
-
-        Parameters
-        ----------
-        %(_load_img.parameters)s
-        img_id
-            Key (name) to be used for img.
-            If not specified, DataArrays will be named "image".
-
-        Returns
-        -------
-        None
-            Nothing, just adds img to `.data`
-
-        Raises
-        ------
-        %(_load_img.raises)s
-        """
-        img = self._load_img(img=img, channel_id=channel_id)
-        if img_id is None:
-            img_id = "image"
-        # add to data
-        logg.info(f"Adding `{img_id}` into object")
-        self.data[img_id] = img
-        if not self._lazy:
-            # load in memory
-            self.data.load()
-
     @d.get_sections(base="_load_img", sections=["Parameters", "Raises"])
     def _load_img(self, img: Union[Pathlike_t, np.ndarray], channel_id: str = "channels") -> xr.DataArray:
         """
@@ -216,6 +177,45 @@ class ImageContainer:
         else:
             raise ValueError(img)
         return xr_img
+
+    @d.dedent
+    @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
+    def add_img(
+        self,
+        img: Union[Pathlike_t, np.ndarray, xr.DataArray],
+        img_id: Optional[str] = None,
+        channel_id: str = "channels",
+    ) -> None:
+        """
+        Add layer from numpy image / tiff file.
+
+        For :mod:`numpy` arrays, assume that dims are: ``(channels, y, x)``.
+
+        Parameters
+        ----------
+        %(_load_img.parameters)s
+        img_id
+            Key (name) to be used for img.
+            If not specified, DataArrays will be named "image".
+
+        Returns
+        -------
+        None
+            Nothing, just adds img to `.data`
+
+        Raises
+        ------
+        %(_load_img.raises)s
+        """
+        img = self._load_img(img=img, channel_id=channel_id)
+        if img_id is None:
+            img_id = "image"
+        # add to data
+        logg.info(f"Adding `{img_id}` into object")
+        self.data[img_id] = img
+        if not self._lazy:
+            # load in memory
+            self.data.load()
 
     @d.get_sections(base="crop_corner", sections=["Parameters", "Returns"])
     def crop_corner(
