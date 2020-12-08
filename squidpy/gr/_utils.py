@@ -66,6 +66,7 @@ def parallelize(
 
     Returns
     -------
+    :class:`typing.Any`
         The result depending on ``callable``, ``extractor``.
     """
     if show_progress_bar:

@@ -1,5 +1,5 @@
 import os
-from typing import List, Union, Optional
+from typing import List, Union, Hashable, Iterable, Optional
 from pathlib import Path
 
 import anndata as ad
@@ -135,3 +135,24 @@ def extract(
                 tmp_adata.obs[obs_key] = obsm[:, j]
 
     return tmp_adata
+
+
+def _contrasting_color(r: int, g: int, b: int) -> str:
+    for val in [r, g, b]:
+        assert 0 <= val <= 255
+
+    return "#000000" if r * 0.299 + g * 0.587 + b * 0.114 > 186 else "#ffffff"
+
+
+def _get_black_or_white(value: float, cmap) -> str:
+    if not (0.0 <= value <= 1.0):
+        raise ValueError(f"Value must be in range `[0, 1]`, found `{value}`.")
+
+    r, g, b, *_ = [int(c * 255) for c in cmap(value)]
+    return _contrasting_color(r, g, b)
+
+
+def _unique_order_preserving(iterable: Iterable[Hashable]) -> List[Hashable]:
+    """Remove items from an iterable while preserving the order."""
+    seen = set()
+    return [i for i in iterable if i not in seen and not seen.add(i)]
