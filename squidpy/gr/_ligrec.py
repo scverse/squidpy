@@ -335,7 +335,6 @@ class PermutationTestABC(ABC):
         Returns
         -------
         :class:`collections.namedtuple` or None
-            TODO: better return type
             If ``copy = False``, updates ``adata.uns[{{key_added}}]`` with the following triple:
 
                 - `'means'` - :class:`pandas.DataFrame` containing the mean expression.
