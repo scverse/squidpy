@@ -17,6 +17,8 @@ from squidpy.constants._pkg_constants import Key
 Pathlike_t = Union[str, Path]
 
 
+@d.dedent  # trick to overcome not top-down order
+@d.dedent
 class ImageContainer:
     """
     Container for in memory or on-disk tiff or jpg images.
@@ -24,11 +26,18 @@ class ImageContainer:
     Allows for lazy and chunked reading via :mod:`rasterio` and :mod:`dask` (if input is a tiff image).
     An instance of this class is given to all image processing functions, along with an :mod:`anndata` instance,
     if necessary.
+
+    Parameters
+    ----------
+    %(add_img.parameters)s
+    lazy
+        Use :mod:`rasterio` or :mod:`dask` to lazily load image.
+    chunks
+        Chunk size for :mod:`dask`.
     """
 
     data: xr.Dataset
 
-    @d.dedent
     def __init__(
         self,
         img: Optional[Union[Pathlike_t, np.ndarray]] = None,
@@ -37,21 +46,6 @@ class ImageContainer:
         chunks: Optional[int] = None,
         **kwargs,
     ):
-        """
-        Set up ImageContainer from numpy array or on-disk tiff / jpg.
-
-        Processes image as in memory :class:`numpy.array` or uses :mod`xarray`'s :mod:`rasterio` reading functions to
-        load from disk (with caching) if ``img`` is a file path.
-        If chunks are specified, the :mod:`xarray` is wrapped in a :mod:`dask`.
-
-        Parameters
-        ----------
-        %(add_img.parameters)s
-        lazy
-            Use :mod:`rasterio` or :mod:`dask` to lazily load image.
-        chunks
-            Chunk size for :mod:`dask`.
-        """
         if chunks is not None:
             chunks = {"x": chunks, "y": chunks}
         self._chunks = chunks
