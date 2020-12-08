@@ -121,4 +121,5 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
         pl.ligrec(ligrec_result, cmap="inferno")
 
     def test_plot_kwargs(self, ligrec_result: LigrecResult):
+        # color_on is intentionally ignored
         pl.ligrec(ligrec_result, grid=False, color_on="square", x_padding=2, y_padding=2)

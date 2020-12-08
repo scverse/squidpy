@@ -12,7 +12,8 @@ import numpy as np
 import pandas as pd
 
 from squidpy.gr import ligrec
-from squidpy.gr._ligrec import PermutationTest
+from squidpy.gr._ligrec import LigrecResult, PermutationTest
+from squidpy.constants._pkg_constants import Key
 
 _CK = "leiden"
 Interactions_t = Tuple[Sequence[str], Sequence[str]]
@@ -173,6 +174,19 @@ class TestInvalidBehavior:
 
         assert not np.allclose(rc.pvalues.values[mask], ri.pvalues.values[mask])
 
+    def test_inplace_default_key(self, adata: AnnData, interactions: Interactions_t):
+        key = Key.uns.ligrec(_CK)
+        assert key not in adata.uns
+        res = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=False, show_progress_bar=False)
+
+        assert res is None
+        assert isinstance(adata.uns[key], LigrecResult)
+        r = adata.uns[key]
+        assert len(r) == 3
+        assert isinstance(r.means, pd.DataFrame)
+        assert isinstance(r.pvalues, pd.DataFrame)
+        assert isinstance(r.metadata, pd.DataFrame)
+
     def test_inplace_key_added(self, adata: AnnData, interactions: Interactions_t):
         assert "foobar" not in adata.uns
         res = ligrec(
@@ -180,7 +194,7 @@ class TestInvalidBehavior:
         )
 
         assert res is None
-        assert isinstance(adata.uns["foobar"], tuple)
+        assert isinstance(adata.uns["foobar"], LigrecResult)
         r = adata.uns["foobar"]
         assert len(r) == 3
         assert isinstance(r.means, pd.DataFrame)

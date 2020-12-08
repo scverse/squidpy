@@ -106,7 +106,7 @@ def ligrec(
     **kwargs,
 ) -> None:
     """
-    Plot results of receptor-ligand permutation test.
+    Plot the result of receptor-ligand permutation test.
 
     :math:`molecule_1` belongs to the source clusters displayed on the top (or on the right, if ``swap_axes = True``,
     whereas :math:`molecule_2` belongs to the target clusters.
@@ -209,6 +209,7 @@ def ligrec(
 
     kwargs.setdefault("cmap", "viridis")
     kwargs.setdefault("grid", True)
+    kwargs.pop("color_on", None)  # interferes with tori
     cmap = plt.get_cmap(kwargs["cmap"])
 
     dp = (

@@ -30,6 +30,7 @@ from ._utils import (
     _create_sparse_df,
     _check_tuple_needles,
 )
+from ..constants._pkg_constants import Key
 
 StrSeq = Sequence[str]
 InteractionType = Union[pd.DataFrame, Mapping[str, StrSeq], Tuple[StrSeq, StrSeq], Sequence[Tuple[str, str]], StrSeq]
@@ -295,7 +296,7 @@ class PermutationTestABC(ABC):
         fdr_axis: str = FdrAxis.INTERACTIONS.value,
         alpha: float = 0.05,
         copy: bool = False,
-        key_added: str = "ligrec_test",
+        key_added: Optional[str] = None,
         numba_parallel: Optional[bool] = None,
         **kwargs,
     ) -> Optional[LigrecResult]:
@@ -327,6 +328,7 @@ class PermutationTestABC(ABC):
         %(copy)s
         key_added
             Key in :attr:`anndata.AnnData.uns` where the result is stored if ``copy = False``.
+            If `None`, it will be saved under ``'{{cluster_key}}_ligrec'``.
         %(numba_parallel)s
         **kwargs
             Keyword arguments for parallelization, such as ``n_jobs`` or ``backend``.
@@ -440,6 +442,7 @@ class PermutationTestABC(ABC):
             logg.info("Finish", time=start)
             return res
 
+        key_added = Key.uns.ligrec(cluster_key, key_added)
         logg.info(f"Adding `adata.uns[{key_added!r}]`\n    Finish", time=start)
         self._adata.uns[key_added] = res
 
@@ -603,7 +606,7 @@ def ligrec(
     fdr_method: Optional[str] = None,
     fdr_axis: str = FdrAxis.CLUSTERS.value,
     copy: bool = False,
-    key_added: str = "ligrec_test",
+    key_added: Optional[str] = None,
     **kwargs,
 ) -> Optional[LigrecResult]:
     """
