@@ -373,6 +373,7 @@ class TestInvalidBehavior:
             copy=False,
             show_progress_bar=False,
             complex_policy="all",
+            key_added="ligrec_test",
             n_jobs=2,
         )
 

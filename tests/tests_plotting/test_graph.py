@@ -83,7 +83,7 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
 
     def test_invalid_clusters(self, ligrec_result: LigrecResult):
         with pytest.raises(ValueError, match=r"No clusters have been selected"):
-            pl.ligrec(ligrec_result, src_clusters="foo", tgt_clusters="bar")
+            pl.ligrec(ligrec_result, source_groups="foo", target_groups="bar")
 
     def test_all_interactions_empty(self, ligrec_result: LigrecResult):
         empty = pd.DataFrame(np.nan, index=ligrec_result.pvalues.index, columns=ligrec_result.pvalues.columns)
@@ -94,11 +94,11 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
 
     def test_plot_source_clusters(self, ligrec_result: LigrecResult):
         src_cls = ligrec_result.pvalues.columns.get_level_values(0)[0]
-        pl.ligrec(ligrec_result, src_clusters=src_cls)
+        pl.ligrec(ligrec_result, source_groups=src_cls)
 
     def test_plot_target_clusters(self, ligrec_result: LigrecResult):
         tgt_cls = ligrec_result.pvalues.columns.get_level_values(1)[0]
-        pl.ligrec(ligrec_result, tgt_clusters=tgt_cls)
+        pl.ligrec(ligrec_result, target_groups=tgt_cls)
 
     def test_plot_remove_empty_interactions(self, ligrec_result: LigrecResult):
         tmp = deepcopy(ligrec_result)

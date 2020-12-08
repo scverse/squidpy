@@ -94,8 +94,8 @@ class CustomDotplot(sc.pl.DotPlot):  # noqa: D101
 def ligrec(
     adata: Union[AnnData, LigrecResult],
     key: Optional[str] = None,
-    src_clusters: Optional[Union[str, Sequence[str]]] = None,
-    tgt_clusters: Optional[Union[str, Sequence[str]]] = None,
+    source_groups: Optional[Union[str, Sequence[str]]] = None,
+    target_groups: Optional[Union[str, Sequence[str]]] = None,
     remove_empty_interactions: bool = True,
     dendrogram: bool = False,
     alpha: Optional[float] = 0.001,
@@ -117,9 +117,9 @@ def ligrec(
         It can also be a :class:`LigrecResult` as returned by :func:`squidpy.gr.ligrec`.
     key
         Key in :attr:`anndata.AnnData.uns`. Only used when ``adata`` is of type :class:`AnnData`.
-    src_clusters
+    source_groups
         Source interaction clusters. If `None`, select all clusters.
-    tgt_clusters
+    target_groups
         Target interaction clusters. If `None`, select all clusters.
     remove_empty_interactions
         Whether to remove interactions which have `NaN` values in all cluster combinations.
@@ -152,21 +152,21 @@ def ligrec(
     if alpha is not None and not (0 <= alpha <= 1):
         raise ValueError(f"Expected `alpha` to be in range `[0, 1]`, found `{alpha}`.")
 
-    if src_clusters is None:
-        src_clusters = adata.pvalues.columns.get_level_values(0)
-    elif isinstance(src_clusters, str):
-        src_clusters = [src_clusters]
+    if source_groups is None:
+        source_groups = adata.pvalues.columns.get_level_values(0)
+    elif isinstance(source_groups, str):
+        source_groups = [source_groups]
 
-    if tgt_clusters is None:
-        tgt_clusters = adata.pvalues.columns.get_level_values(1)
-    if isinstance(tgt_clusters, str):
-        tgt_clusters = [tgt_clusters]
+    if target_groups is None:
+        target_groups = adata.pvalues.columns.get_level_values(1)
+    if isinstance(target_groups, str):
+        target_groups = [target_groups]
 
-    src_clusters = _unique_order_preserving(src_clusters)
-    tgt_clusters = _unique_order_preserving(tgt_clusters)
+    source_groups = _unique_order_preserving(source_groups)
+    target_groups = _unique_order_preserving(target_groups)
 
-    pvals = adata.pvalues.loc[:, (src_clusters, tgt_clusters)]
-    means = adata.means.loc[:, (src_clusters, tgt_clusters)]
+    pvals = adata.pvalues.loc[:, (source_groups, target_groups)]
+    means = adata.means.loc[:, (source_groups, target_groups)]
 
     if pvals.empty:
         raise ValueError("No clusters have been selected.")
