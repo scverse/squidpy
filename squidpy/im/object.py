@@ -8,7 +8,9 @@ from anndata import AnnData
 import numpy as np
 import xarray as xr
 
+import skimage
 from imageio import imread
+from skimage.transform import rescale
 
 from squidpy._docs import d
 from squidpy.im._utils import _num_pages, _unique_order_preserving
@@ -17,23 +19,44 @@ from squidpy.constants._pkg_constants import Key
 Pathlike_t = Union[str, Path]
 
 
+# helper function for scaling one xarray
+def _scale_xarray(arr, scale):
+    dtype = arr.dtype
+    dims = arr.dims
+
+    # rescale only in x and y dim
+    scales = np.ones(len(dims))
+    scales[np.in1d(dims, ["y", "x"])] = scale
+
+    arr = rescale(arr.values, scales, preserve_range=True, order=1)
+    arr = arr.astype(dtype)
+    # recreate DataArray
+    arr = xr.DataArray(arr, dims=dims)
+
+    return arr
+
+
 @d.dedent  # trick to overcome not top-down order
 @d.dedent
 class ImageContainer:
     """
-    Container for in memory or on-disk tiff or jpg images.
+    Container for in memory `np.ndarray`/`xr.DataArray` or on-disk tiff/jpg images.
 
-    Allows for lazy and chunked reading via :mod:`rasterio` and :mod:`dask` (if input is a tiff image).
+    Wraps :class:`xarray.Dataset` to store several image layers with the same x and y dimensions in one object.
+    Dimensions of stored images are `(y, x, <channel_dimension>, ...)`.
+    The channel dimension may vary between image layers.
+
+    Allows for lazy and chunked reading via :mod:`rasterio` and :mod:`dask` if the input is a tiff image).
     An instance of this class is given to all image processing functions, along with an :mod:`anndata` instance,
     if necessary.
 
     Parameters
     ----------
     %(add_img.parameters)s
-    lazy
-        Use :mod:`rasterio` or :mod:`dask` to lazily load image.
-    chunks
-        Chunk size for :mod:`dask`.
+
+    Raises
+    ------
+    %(add_img.raises)s
     """
 
     data: xr.Dataset
@@ -42,17 +65,14 @@ class ImageContainer:
         self,
         img: Optional[Union[Pathlike_t, np.ndarray]] = None,
         img_id: Optional[Union[str, List[str]]] = None,
-        lazy: bool = True,
-        chunks: Optional[int] = None,
         **kwargs,
     ):
-        if chunks is not None:
-            chunks = {"x": chunks, "y": chunks}
-        self._chunks = chunks
-        self._lazy = lazy
         self.data = xr.Dataset()
+        chunks = kwargs.pop("chunks", None)
         if img is not None:
-            self.add_img(img, img_id, **kwargs)
+            if chunks is not None:
+                chunks = {"x": chunks, "y": chunks}
+            self.add_img(img, img_id, chunks=chunks, **kwargs)
 
     def __repr__(self):
         s = f"ImageContainer object with {len(self.data.keys())} layers\n"
@@ -62,14 +82,18 @@ class ImageContainer:
             s += "\n"
         return s
 
+    def __getitem__(self, key):
+        return self.data[key]
+
     @property
     def shape(self) -> Tuple[int, int]:
-        """Image shape."""
-        return self.data.dims["x"], self.data.dims["y"]
+        """Image shape (y, x)."""  # noqa: D402
+        return self.data.dims["y"], self.data.dims["x"]  # TODO changed shape, need to catch all calls to img.shape
 
     @property
     def nchannels(self) -> int:
         """Number of channels."""  # noqa: D401
+        # TODO this might fail, if we name channels sth else than "channels"
         return self.data.dims["channels"]
 
     @classmethod
@@ -86,11 +110,19 @@ class ImageContainer:
         chunks
             Chunk size for :mod:`dask`.
         """
-        self = cls(img=None, lazy=lazy, chunks=chunks)
-        self.data = xr.open_dataset(fname, chunks=self._chunks)
-        if not self._lazy:
+        self = cls()
+        self.data = xr.open_dataset(fname, chunks=chunks)
+        if not lazy:
             self.data.load()
         return self
+
+        def __repr__(self):
+            s = f"ImageContainer object with {len(self.data.keys())} layers\n"
+            for layer in self.data.keys():
+                s += f"    {layer}: "
+                s += ", ".join(f"{dim} ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape))
+                s += "\n"
+            return s
 
     def save(self, fname: Pathlike_t) -> None:
         """
@@ -104,44 +136,76 @@ class ImageContainer:
         Returns
         -------
         None
-            TODO.
+            Nothing, just saves the data.
         """
         self.data.to_netcdf(fname, mode="a")
 
-    @d.get_sections(base="_load_img", sections=["Parameters", "Raises"])
-    def _load_img(self, img: Union[Pathlike_t, np.ndarray], channel_id: str = "channels") -> xr.DataArray:
+    @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
+    def add_img(
+        self,
+        img: Union[Pathlike_t, np.ndarray, xr.DataArray],
+        img_id: Optional[str] = None,
+        channel_id: str = "channels",
+        lazy: bool = True,
+        chunks: Optional[int] = None,
+    ) -> None:
         """
-        Load image as :mod:`xarray`.
+        Add layer from in memory `np.ndarray`/`xr.DataArray` or on-disk tiff/jpg image.
 
-        Supports numpy arrays and (multi-page) tiff files, and jpg files
-        For :mod:`numpy` arrays, assume that dims are: ``(channels, y, x)``.
+        For :mod:`numpy` arrays, assume that dims are: ``(y, x, channel_id)``.
 
-        NOTE: lazy loading via :mod:`dask` is currently not supported for on-disk jpg files.
+        NOTE: lazy loading via :mod:`dask` is not supported for on-disk jpg files.
         They will be loaded in memory.
 
         Parameters
         ----------
         img
             :mod:`numpy` array or path to image file.
+        img_id
+            Key (name) to be used for img.
+            If not specified, DataArrays will be named "image".
         channel_id
-            Name for the channel dimension. Default is "channels".
+            Name of the channel dimension. Default is "channels".
+        lazy
+            Use :mod:`rasterio` or :mod:`dask` to lazily load image.
+        chunks
+            Chunk size for :mod:`dask`, used in call to `xr.open_rasterio` for tiff images.
 
         Returns
         -------
-        :class:`xarray.DataArray`
-            Array containing the loaded image.
+        None
+            Nothing, just adds img to `.data`
 
         Raises
         ------
         :class:`ValueError`
             If ``img`` is a :class:`np.ndarray` and has more than 3 dimensions.
         """
+        img = self._load_img(img=img, channel_id=channel_id, chunks=chunks)
+        if img_id is None:
+            img_id = "image"
+        # add to data
+        logg.info(f"Adding `{img_id}` into object")
+        self.data[img_id] = img
+        if lazy:
+            # load in memory
+            self.data.load()
+
+    def _load_img(
+        self, img: Union[Pathlike_t, np.ndarray], channel_id: str = "channels", chunks: Optional[int] = None
+    ) -> xr.DataArray:
+        """
+        Load image as :mod:`xarray`.
+
+        See :meth:`add_img` for more details.
+        """
         if isinstance(img, np.ndarray):
             if len(img.shape) > 3:
                 raise ValueError(f"Img has more than 3 dimensions. img.shape is {img.shape}.")
-            dims = [channel_id, "y", "x"]
+            dims = ["y", "x", channel_id]
             if len(img.shape) == 2:
-                dims = ["y", "x"]
+                # add channel dimension
+                img = img[:, :, np.newaxis]
             xr_img = xr.DataArray(img, dims=dims)
         elif isinstance(img, xr.DataArray):
             assert "x" in img.dims
@@ -156,15 +220,16 @@ class ImageContainer:
                 # read all pages using rasterio
                 xr_img_byband = []
                 for i in range(1, num_pages + 1):
-                    data = xr.open_rasterio(f"GTIFF_DIR:{i}:{img}", chunks=self._chunks, parse_coordinates=False)
+                    data = xr.open_rasterio(f"GTIFF_DIR:{i}:{img}", chunks=chunks, parse_coordinates=False)
                     data = data.rename({"band": channel_id})
                     xr_img_byband.append(data)
                 xr_img = xr.concat(xr_img_byband, dim=channel_id)
+                print(xr_img.dims)
+                xr_img = xr_img.transpose("y", "x", ...)
+                # TODO transpose xr_img to have channels as last dim
             elif ext in ("jpg", "jpeg"):  # TODO: constants
                 img = imread(img)
-                # jpeg has channels as last dim - transpose
-                img = img.transpose(2, 0, 1)
-                dims = [channel_id, "y", "x"]
+                dims = ["y", "x", channel_id]
                 xr_img = xr.DataArray(img, dims=dims)
             else:
                 raise NotImplementedError(f"Files with extension `{ext}`.")
@@ -172,57 +237,21 @@ class ImageContainer:
             raise ValueError(img)
         return xr_img
 
-    @d.dedent
-    @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
-    def add_img(
-        self,
-        img: Union[Pathlike_t, np.ndarray, xr.DataArray],
-        img_id: Optional[str] = None,
-        channel_id: str = "channels",
-    ) -> None:
-        """
-        Add layer from numpy image / tiff file.
-
-        For :mod:`numpy` arrays, assume that dims are: ``(channels, y, x)``.
-
-        Parameters
-        ----------
-        %(_load_img.parameters)s
-        img_id
-            Key (name) to be used for img.
-            If not specified, DataArrays will be named "image".
-
-        Returns
-        -------
-        None
-            Nothing, just adds img to `.data`
-
-        Raises
-        ------
-        %(_load_img.raises)s
-        """
-        img = self._load_img(img=img, channel_id=channel_id)
-        if img_id is None:
-            img_id = "image"
-        # add to data
-        logg.info(f"Adding `{img_id}` into object")
-        self.data[img_id] = img
-        if not self._lazy:
-            # load in memory
-            self.data.load()
-
+    # TODO fix docstrings!
     @d.get_sections(base="crop_corner", sections=["Parameters", "Returns"])
     def crop_corner(
         self,
         x: int,
         y: int,
-        xs: int = 100,
-        ys: int = 100,
-        img_id: Optional[str] = None,
-        **kwargs,
+        xs: int,
+        ys: int,
+        scale: float = 1.0,
+        mask_circle: bool = False,
+        cval: float = 0.0,
+        dtype: Optional[str] = None,
     ) -> xr.DataArray:
         """
-        Extract a crop from upper left corner coordinates `x` and `y` of `img_id`.
+        Extract a crop from upper left corner coordinates `x` and `y`.
 
         The crop will be extracted right and down from x, y.
 
@@ -231,51 +260,110 @@ class ImageContainer:
         x
             X coord of crop (in pixel space).
         y
-            Y coord of crop (in pixel space). Can be float (ie. int+0.5) if model is centered and if y+ys/2 is integer.
-        img_id
-            Id of the image layer to be cropped.
-        kwargs
-            Keyword arguments for :func:`squidpy.im.crop_img`.
+            Y coord of crop (in pixel space).
+        xs
+            Width of the crops in pixels.
+        ys
+            Height of the crops in pixels.
+        scale
+            Resolution of the crop (smaller -> smaller image).
+            Rescaling is done using `skimage.transform.rescale`.
+        mask_circle
+            Mask crop to a circle.
+        cval
+            The value outside image boundaries or the mask.
+        dtype
+            Type to which the output should be (safely) cast. If `None`, don't recast.
+            Currently supported dtypes: 'uint8'. TODO: pass actualy types instead of strings.
 
         Returns
         -------
-        :class:`xarray.DataArray`
-            Array of shape ``(channels, y, x)``.
+        :class:`ImageContainer`
+            cropped ImageContainer
         """
-        from .crop import crop_img
+        # get conversion function
+        if dtype is not None:
+            if dtype == "uint8":
+                convert = skimage.util.img_as_ubyte
+            else:
+                raise NotImplementedError(dtype)
 
-        if img_id is None:
-            img_id = list(self.data.keys())[0]
+        # TODO: rewrite assertions to "normal" errors so they can be more easily tested against
+        assert y < self.data.y.shape[0], f"y ({y}) is outsize of image range ({self.data.y.shape[0]})"
+        assert x < self.data.x.shape[0], f"x ({x}) is outsize of image range ({self.data.x.shape[0]})"
 
-        img = self.data.data_vars[img_id]
-        return crop_img(img=img, x=x, y=y, xs=xs, ys=ys, **kwargs)
+        assert xs > 0, "im size cannot be 0"
+        assert ys > 0, "im size cannot be 0"
 
-    d.delete_kwargs(base_key="crop_corner.parameters", kwargs="kwargs")
+        # get crop coords
+        x0 = x
+        x1 = x + xs
+        y0 = y
+        y1 = y + ys
+
+        # make coords fit the image
+        crop_x0 = max(x0, 0)
+        crop_y0 = max(y0, 0)
+        crop_x1 = min(self.data.x.shape[0], x1)
+        crop_y1 = min(self.data.y.shape[0], y1)
+
+        # create cropped xr.Dataset
+        crop = self.data.isel(x=slice(crop_x0, crop_x1), y=slice(crop_y0, crop_y1))
+
+        # pad crop if necessary
+        if [x0, x1, y0, y1] != [crop_x0, crop_x1, crop_y0, crop_y1]:
+            print("padding crop")
+            crop = crop.pad(
+                x=(abs(x0 - crop_x0), abs(x1 - crop_x1)),
+                y=(abs(y0 - crop_y0), abs(y1 - crop_y1)),
+                mode="constant",
+                constant_values=cval,
+            )
+
+        # scale crop
+        crop = crop.map(_scale_xarray, scale=scale)
+
+        # mask crop
+        if mask_circle:
+            assert xs == ys, "Crop has to be square to use mask_circle."
+            c = crop.x.shape[0] // 2
+            crop = crop.where((crop.x - c) ** 2 + (crop.y - c) ** 2 <= c ** 2, other=cval)
+
+        # convert to dtype
+        if dtype is not None:
+            crop = crop.map(convert)
+
+        # return crop as ImageContainer
+        crop_cont = ImageContainer()
+        crop_cont.data = crop
+        return crop_cont
 
     @d.dedent
     def crop_center(
         self,
         x: int,
         y: int,
-        img_id: Optional[str] = None,
         xr: int = 100,
         yr: int = 100,
+        scale: float = 1.0,
+        mask_circle: bool = False,
+        cval: float = 0.0,
+        dtype: Optional[str] = None,
         **kwargs,
     ) -> xr.DataArray:
         """
-        Extract a crop based on coordinates `x` and `y` of `img_id`.
+        Extract a crop based on coordinates `x` and `y`.
 
         The extracted crop will be centered on x, y, and have shape `yr*2+1, xr*2+1`.
 
         Parameters
         ----------
-        %(crop_corner.parameters.no_kwargs)s
+        %(crop_corner.parameters)s
+        TODO remove xs and xs from docstring
         xr
             Radius of the crop in pixels.
         yr
-            Height of the crop in pixels.
-        kwargs
-            Keyword arguments for :meth:`crop_corner`.
+            Radius of the crop in pixels.
 
         Returns
         -------
@@ -289,7 +377,7 @@ class ImageContainer:
         xs = xr * 2 + 1
         ys = yr * 2 + 1
 
-        return self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id, **kwargs)
+        return self.crop_corner(x=x, y=y, xs=xs, ys=ys, **kwargs)
 
     @d.dedent
     def crop_equally(
