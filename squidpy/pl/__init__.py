@@ -8,4 +8,5 @@ from ._graph import (
 )
 from ._image import plot_segmentation
 from ._utils import extract
+from ._ligrec import ligrec
 from ._interactive import interactive
