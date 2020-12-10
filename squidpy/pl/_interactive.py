@@ -8,13 +8,16 @@ from PyQt5.QtWidgets import QListWidget
 
 from scanpy import logging as logg
 from anndata import AnnData
-from scanpy.plotting._utils import _set_colors_for_categorical_obs
+from scanpy.plotting._utils import (
+    _set_colors_for_categorical_obs,
+    _set_default_colors_for_categorical_obs,
+)
 
 import numpy as np
 from scipy.sparse import spmatrix
 from pandas.api.types import is_object_dtype, is_categorical_dtype
 
-from matplotlib.colors import to_rgb
+from matplotlib.colors import to_rgba
 
 from skimage.draw import disk
 
@@ -48,7 +51,9 @@ class AnnData2Napari:
         if library_id is None:
             library_id = list(adata.uns[obsm].keys())[0]
 
-        self._image = img.data[library_id].transpose("y", "x", ...).values
+        library_id_img = list(img.data.keys())[0]
+
+        self._image = img.data[library_id_img].transpose("y", "x", ...).values
 
         spot_radius = round(adata.uns[obsm][library_id]["scalefactors"]["spot_diameter_fullres"]) * 0.5
         self._masks = self._get_mask(spot_radius)
@@ -68,7 +73,7 @@ class AnnData2Napari:
 
     def _get_gene(self, name):
 
-        idx = np.where(name == self.adata.var_names)[0]
+        idx = np.where(name == self._adata.var_names)[0]
         if not len(idx):
             raise ValueError(f"{name} not present in `adata.var_names`")
         else:
@@ -86,13 +91,11 @@ class AnnData2Napari:
     def _get_obs(self, name):
 
         ser = self._adata.obs[name].copy()
-
-        if is_object_dtype(ser):
-            if is_categorical_dtype(ser):
-                vec = _get_col_categorical(ser, name, self._palette)
-            else:
-                ser = ser.astype("category")
-                vec = _get_col_categorical(ser, name, self._palette)
+        if is_categorical_dtype(ser):
+            vec = _get_col_categorical(self._adata, name, self._palette)
+        elif is_object_dtype(ser) and not is_categorical_dtype(ser):
+            ser = ser.astype("category")
+            vec = _get_col_categorical(self._adata, name, self._palette)
         else:
             vec = ser.values
             vec = (vec - vec.min()) / (vec.max() - vec.min())
@@ -107,9 +110,8 @@ class AnnData2Napari:
             vec = self._get_obs(name)
         else:
             raise KeyError(f"{name} not present in either `var_names` or `obs`")
-
         if vec.ndim > 1:
-            _layer = np.zeros(self._image.shape[0:2] + (3,))
+            _layer = np.zeros(self._image.shape[0:2] + (4,))
         else:
             _layer = np.zeros(self._image.shape[0:2])
 
@@ -147,7 +149,11 @@ class AnnData2Napari:
             logg.warning(f"Loading `{name}` layer")
 
             if _layer.ndim > 2:
-                self.viewer.add_image(_layer, name=name, rgb=True)
+                self.viewer.add_image(
+                    _layer,
+                    name=name,
+                    rgb=True,
+                )
             else:
                 self.viewer.add_image(_layer, name=name, colormap="magma", blending="additive")
             return
@@ -158,7 +164,7 @@ class AnnData2Napari:
             name = gene_widget.currentItem().text()
 
             _layer = self.get_layer(name)
-            logg.debug(f"Loading `{name}` layer")
+            logg.warning(f"Loading `{name}` layer")
 
             self.viewer.add_image(_layer, name=name, colormap="magma", blending="additive")
             return
@@ -208,15 +214,19 @@ def interactive(
     None
         A Napari instance is launched in the current session.
     """
-    return AnnData2Napari(adata, img, obsm, library_id, palette, **kwargs).open_napari()
+    return AnnData2Napari(adata, img, obsm, library_id, palette, **kwargs).open_napari(**kwargs)
 
 
 def _get_col_categorical(adata, c, palette):
     colors_key = f"{c}_colors"
-    if colors_key in adata.uns.keys():
-        cols = [to_rgb(i) for i in adata.uns[colors_key]]
-    else:
-        _set_colors_for_categorical_obs(adata, c, palette)
-        cols = [to_rgb(i) for i in adata.uns[colors_key]]
+    if colors_key not in adata.uns.keys():
+        if palette:
+            _set_colors_for_categorical_obs(adata, c, palette)
+        else:
+            _set_default_colors_for_categorical_obs(adata, c)
+    cols = [to_rgba(i) for i in adata.uns[colors_key]]
+
+    cols_dict = {k: v for v, k in zip(cols, adata.obs[c].cat.categories)}
+    cols = np.array([cols_dict[k] for k in adata.obs[c]])
 
     return cols

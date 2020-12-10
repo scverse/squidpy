@@ -1,34 +1,35 @@
-from pathlib import Path
-
-import napari
-from qtpy.QtCore import QTimer
+import pytest
+from napari.conftest import make_test_viewer  # noqa: F401
 
 from anndata import AnnData
 
 from squidpy.im import ImageContainer
 from squidpy.pl import interactive
 
-HERE: Path = Path(__file__).parents[1]
-IMG_PATH = HERE / "_data/test_img.jpg"
+
+@pytest.fixture(autouse=True, scope="session")
+def load_napari_conftest(pytestconfig):
+    from napari import conftest
+
+    pytestconfig.pluginmanager.register(conftest, "napari-conftest")
 
 
-def test_napari(adata: AnnData):
+@pytest.mark.qt
+@pytest.mark.parametrize(
+    "gene, cluster, obs_cont",
+    [
+        ("Shoc2", "leiden", "leiden_cont"),
+    ],
+)
+def test_viewer(make_test_viewer, adata: AnnData, cont: ImageContainer, gene, cluster, obs_cont):  # noqa: F811
 
-    library_id = list(adata.uns["spatial"].keys())
-    img = ImageContainer(str(IMG_PATH), img_id=library_id[0])
+    adata.obs[obs_cont] = adata.obs[cluster].values.astype(int)
 
-    gene = adata.var_names[1]
-    cluster = "leiden"
-    obs_continuous = "leiden_continuous"
-    adata.obs[obs_continuous] = adata.obs[cluster].values.astype(int)
+    ad2nap = interactive(adata, cont)
 
-    with napari.gui_qt() as app:
-        ad2nap = interactive(adata, img)
-        time_in_msec = 1000
-        QTimer().singleShot(time_in_msec, app.quit)
+    assert ad2nap.viewer.layers[0].name == "Image"
+    assert ad2nap.viewer.layers["Image"].data.shape == cont.shape[::-1] + (3,)
 
-    ad2nap.viewer.close()
-
-    assert ad2nap.get_layer(cluster).shape == img.shape[::-1] + (4,)
-    assert ad2nap.get_layer(obs_continuous).shape == img.shape[::-1]
-    assert ad2nap.get_layer(gene).shape == img.shape[::-1]
+    assert ad2nap.get_layer(cluster).shape == cont.shape[::-1] + (4,)
+    assert ad2nap.get_layer(obs_cont).shape == cont.shape[::-1]
+    assert ad2nap.get_layer(gene).shape == cont.shape[::-1]
