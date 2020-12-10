@@ -1,83 +1,125 @@
-from pathlib import Path
+from copy import deepcopy
 
 import pytest
+from conftest import DPI, PlotTester, PlotTesterMeta
 
 import scanpy as sc
 from anndata import AnnData
 
+import numpy as np
+import pandas as pd
+
 from squidpy import gr, pl
+from squidpy.gr._ligrec import LigrecResult
 
-HERE: Path = Path(__file__).parents[1]
+C_KEY = "leiden"
 
-ROOT = HERE / "_images"
-FIGS = HERE / "figures"
-TOL = 50
-DPI = 40
 
 sc.pl.set_rcParams_defaults()
 sc.set_figure_params(dpi=40, color_map="viridis")
 
-
-@pytest.mark.skip(reason="X_spatial not in obsm. Apparently already fixed in scanpy's master/dev.")
-def test_spatial_graph(image_comparer, adata: AnnData):
-    save_and_compare_images = image_comparer(ROOT, FIGS, tol=TOL)
-
-    gr.spatial_connectivity(adata)
-    pl.spatial_graph(adata)
-    save_and_compare_images("master_spatial_graph")
+# WARNING:
+# 1. all classes must both subclass PlotTester and use metaclass=PlotTesterMeta
+# 2. tests which produce a plot must be prefixed with `test_plot_`
+# 3. if the tolerance needs to be change, don't prefix the function with `test_plot_`, but with something else
+#    the comp. function can be accessed as `self.compare(<your_filename>, tolerance=<your_tolerance>)`
 
 
-def test_interaction(image_comparer, adata: AnnData):
-    save_and_compare_images = image_comparer(ROOT, FIGS, tol=TOL)
+class TestGraph(PlotTester, metaclass=PlotTesterMeta):
+    @pytest.mark.skip(reason="X_spatial not in obsm. Apparently already fixed in scanpy's master/dev.")
+    def test_plot_spatial_graph(self, adata: AnnData):
+        gr.spatial_connectivity(adata)
+        pl.spatial_graph(adata)
 
-    c_key = "leiden"
-    gr.spatial_connectivity(adata)
-    gr.interaction_matrix(adata, cluster_key=c_key)
+    def test_plot_interaction(self, adata: AnnData):
+        gr.spatial_connectivity(adata)
+        gr.interaction_matrix(adata, cluster_key=C_KEY)
 
-    pl.interaction_matrix(adata, cluster_key=c_key)
-    save_and_compare_images("master_heatmap")
+        pl.interaction_matrix(adata, cluster_key=C_KEY)
 
+    def test_plot_centrality_scores(self, adata: AnnData):
+        gr.spatial_connectivity(adata)
+        gr.centrality_scores(adata, cluster_key=C_KEY)
 
-def test_centrality_scores(image_comparer, adata: AnnData):
-    save_and_compare_images = image_comparer(ROOT, FIGS, tol=TOL)
+        pl.centrality_scores(adata, cluster_key=C_KEY)
 
-    c_key = "leiden"
-    gr.spatial_connectivity(adata)
-    gr.centrality_scores(adata, cluster_key=c_key)
+    def test_plot_centrality_scores_single(self, adata: AnnData):
+        selected_score = "degree_centrality"
+        gr.spatial_connectivity(adata)
+        gr.centrality_scores(adata, cluster_key=C_KEY)
 
-    pl.centrality_scores(adata, cluster_key=c_key)
-    save_and_compare_images("master_scatter")
+        pl.centrality_scores(adata, cluster_key=C_KEY, selected_score=selected_score, dpi=DPI)
 
+    def test_plot_nhood_enrichment(self, adata: AnnData):
+        gr.spatial_connectivity(adata)
+        gr.nhood_enrichment(adata, cluster_key=C_KEY)
 
-def test_centrality_scores_single(image_comparer, adata: AnnData):
-    save_and_compare_images = image_comparer(ROOT, FIGS, tol=TOL)
+        pl.nhood_enrichment(adata, cluster_key=C_KEY)
 
-    c_key = "leiden"
-    selected_score = "degree_centrality"
-    gr.spatial_connectivity(adata)
-    gr.centrality_scores(adata, cluster_key=c_key)
+    def test_plot_ripley_k(self, adata: AnnData):
+        gr.spatial_connectivity(adata)
+        gr.ripley_k(adata, cluster_key=C_KEY)
 
-    pl.centrality_scores(adata, cluster_key=c_key, selected_score=selected_score, dpi=DPI)
-    save_and_compare_images("master_scatter_single")
-
-
-def test_nhood_enrichment(image_comparer, adata: AnnData):
-    save_and_compare_images = image_comparer(ROOT, FIGS, tol=TOL)
-
-    c_key = "leiden"
-    gr.spatial_connectivity(adata)
-    gr.nhood_enrichment(adata, cluster_key=c_key)
-
-    pl.nhood_enrichment(adata, cluster_key=c_key)
-    save_and_compare_images("master_nhood_enrichment")
+        pl.plot_ripley_k(adata, cluster_key=C_KEY)
 
 
-def test_ripley_k(image_comparer, adata: AnnData):
-    save_and_compare_images = image_comparer(ROOT, FIGS, tol=TOL)
+class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
+    def test_invalid_type(self):
+        with pytest.raises(TypeError, match=r"Expected `adata` .+ found `int`."):
+            pl.ligrec(42)
 
-    c_key = "leiden"
-    gr.spatial_connectivity(adata)
-    gr.ripley_k(adata, cluster_key=c_key)
+    def test_invalid_key(self, adata: AnnData):
+        with pytest.raises(KeyError, match=r"Key `foobar` not found in `adata.uns`."):
+            pl.ligrec(adata, key="foobar")
 
-    pl.plot_ripley_k(adata, cluster_key=c_key)
-    save_and_compare_images("master_ripley_k")
+    def test_valid_key_invalid_object(self, adata: AnnData):
+        adata.uns["foobar"] = "baz"
+        with pytest.raises(TypeError, match=r"Expected `adata` .+ found `str`."):
+            pl.ligrec(adata, key="foobar")
+
+    def test_invalid_alpha(self, ligrec_result: LigrecResult):
+        with pytest.raises(ValueError, match=r"Expected `alpha`"):
+            pl.ligrec(ligrec_result, alpha=1.2)
+
+    def test_invalid_clusters(self, ligrec_result: LigrecResult):
+        with pytest.raises(ValueError, match=r"No clusters have been selected"):
+            pl.ligrec(ligrec_result, source_groups="foo", target_groups="bar")
+
+    def test_all_interactions_empty(self, ligrec_result: LigrecResult):
+        empty = pd.DataFrame(np.nan, index=ligrec_result.pvalues.index, columns=ligrec_result.pvalues.columns)
+        tmp = type(ligrec_result)(empty, empty, empty)
+
+        with pytest.raises(ValueError, match=r"After removing empty interactions, none remain."):
+            pl.ligrec(tmp, remove_empty_interactions=True)
+
+    def test_plot_source_clusters(self, ligrec_result: LigrecResult):
+        src_cls = ligrec_result.pvalues.columns.get_level_values(0)[0]
+        pl.ligrec(ligrec_result, source_groups=src_cls)
+
+    def test_plot_target_clusters(self, ligrec_result: LigrecResult):
+        tgt_cls = ligrec_result.pvalues.columns.get_level_values(1)[0]
+        pl.ligrec(ligrec_result, target_groups=tgt_cls)
+
+    def test_plot_remove_empty_interactions(self, ligrec_result: LigrecResult):
+        tmp = deepcopy(ligrec_result)
+        tmp.pvalues.values[:2, :] = np.nan
+        pl.ligrec(tmp, remove_empty_interactions=True)
+
+    def test_plot_dendrogram(self, ligrec_result: LigrecResult):
+        pl.ligrec(ligrec_result, dendrogram=True)
+
+    def test_plot_swap_axes(self, ligrec_result: LigrecResult):
+        pl.ligrec(ligrec_result, swap_axes=True)
+
+    def test_plot_swap_axes_dedrogram(self, ligrec_result: LigrecResult):
+        pl.ligrec(ligrec_result, swap_axes=True, dendrogram=True)
+
+    def test_plot_alpha(self, ligrec_result: LigrecResult):
+        pl.ligrec(ligrec_result, alpha=1)
+
+    def test_plot_cmap(self, ligrec_result: LigrecResult):
+        pl.ligrec(ligrec_result, cmap="inferno")
+
+    def test_plot_kwargs(self, ligrec_result: LigrecResult):
+        # color_on is intentionally ignored
+        pl.ligrec(ligrec_result, grid=False, color_on="square", x_padding=2, y_padding=2)
