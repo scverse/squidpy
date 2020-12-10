@@ -251,7 +251,7 @@ def segment(
     # TODO quickfix for img.shape here, will change this behaviour soon! img.shape should return y, x (and not x,y)
     # img_segmented = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape[::-1], channel_id=channel_id)
     # img_id = "segmented_" + model_group.s if key_added is None else key_added
-    # img.add_img(img=img_segmented, img_id=img_id, channel_id=channel_id)
+    # img.add_img(img=img_segmented, img_id=img_id, channel_id=channel_id
 
 
 @d.dedent

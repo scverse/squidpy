@@ -30,6 +30,7 @@ from ._utils import (
     _create_sparse_df,
     _check_tuple_needles,
 )
+from ..constants._pkg_constants import Key
 
 StrSeq = Sequence[str]
 InteractionType = Union[pd.DataFrame, Mapping[str, StrSeq], Tuple[StrSeq, StrSeq], Sequence[Tuple[str, str]], StrSeq]
@@ -38,7 +39,7 @@ SOURCE = "source"
 TARGET = "target"
 
 TempResult = namedtuple("TempResult", ["means", "pvalues"])
-Result = namedtuple("Result", ["means", "pvalues", "metadata"])
+LigrecResult = namedtuple("LigrecResult", ["means", "pvalues", "metadata"])
 
 _template = """
 @njit(parallel={parallel}, cache=False, fastmath=False)
@@ -182,7 +183,7 @@ class PermutationTestABC(ABC):
             raise ValueError(f"Expected `{adata.n_obs}` cells in `.raw` object, found `{adata.raw.n_obs}`.")
 
         self._data = pd.DataFrame.sparse.from_spmatrix(
-            csc_matrix(adata.raw.X), index=adata.obs_names, columns=adata.var_names
+            csc_matrix(adata.raw.X), index=adata.raw.obs_names, columns=adata.raw.var_names
         )
         self._adata = adata
 
@@ -219,7 +220,7 @@ class PermutationTestABC(ABC):
 
         Returns
         -------
-        :class:`spatial_tools.gr.perm_test.PermutationTestABC`
+        :class:`spatial_tools.gr.PermutationTestABC`
             Sets the following attributes and returns self:
 
                 - :paramref:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
@@ -295,10 +296,10 @@ class PermutationTestABC(ABC):
         fdr_axis: str = FdrAxis.INTERACTIONS.value,
         alpha: float = 0.05,
         copy: bool = False,
-        key_added: str = "ligrec_test",
+        key_added: Optional[str] = None,
         numba_parallel: Optional[bool] = None,
         **kwargs,
-    ) -> Optional[Result]:
+    ) -> Optional[LigrecResult]:
         """
         Perform the permutation test as described in [CellPhoneDB20]_.
 
@@ -327,13 +328,13 @@ class PermutationTestABC(ABC):
         %(copy)s
         key_added
             Key in :attr:`anndata.AnnData.uns` where the result is stored if ``copy = False``.
+            If `None`, it will be saved under ``'{{cluster_key}}_ligrec'``.
         %(numba_parallel)s
         %(parallelize)s
 
         Returns
         -------
         :class:`collections.namedtuple` or None
-            TODO: better return type
             If ``copy = False``, updates ``adata.uns[{{key_added}}]`` with the following triple:
 
                 - `'means'` - :class:`pandas.DataFrame` containing the mean expression.
@@ -407,7 +408,7 @@ class PermutationTestABC(ABC):
             **kwargs,
         )
 
-        res = Result(
+        res = LigrecResult(
             means=_create_sparse_df(
                 res.means,
                 index=pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET]),
@@ -429,7 +430,7 @@ class PermutationTestABC(ABC):
                 f"Performing FDR correction across the `{fdr_axis.value}` "
                 f"using method `{fdr_method}` at level `{alpha}`"
             )
-            res = Result(
+            res = LigrecResult(
                 means=res.means,
                 pvalues=_fdr_correct(res.pvalues, fdr_method, fdr_axis, alpha=alpha),
                 metadata=res.metadata.set_index(res.means.index),
@@ -439,6 +440,7 @@ class PermutationTestABC(ABC):
             logg.info("Finish", time=start)
             return res
 
+        key_added = Key.uns.ligrec(cluster_key, key_added)
         logg.info(f"Adding `adata.uns[{key_added!r}]`\n    Finish", time=start)
         self._adata.uns[key_added] = res
 
@@ -593,7 +595,7 @@ class PermutationTest(PermutationTestABC):
 
 
 @d.dedent
-def perm_test(
+def ligrec(
     adata: AnnData,
     cluster_key: str,
     interactions: Optional[InteractionType] = None,
@@ -602,9 +604,9 @@ def perm_test(
     fdr_method: Optional[str] = None,
     fdr_axis: str = FdrAxis.CLUSTERS.value,
     copy: bool = False,
-    key_added: str = "ligrec_test",
+    key_added: Optional[str] = None,
     **kwargs,
-) -> Optional[Result]:
+) -> Optional[LigrecResult]:
     """
     %(PT_test.full_desc)s
 

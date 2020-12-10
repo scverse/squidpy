@@ -18,7 +18,7 @@ Graph
     gr.nhood_enrichment
     gr.centrality_scores
     gr.interaction_matrix
-    gr.perm_test
+    gr.ligrec
     gr.moran
     gr.ripley_k
 
@@ -53,3 +53,4 @@ Plotting
     pl.centrality_scores
     pl.interaction_matrix
     pl.plot_segmentation
+    pl.ligrec
