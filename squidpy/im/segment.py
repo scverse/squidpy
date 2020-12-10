@@ -129,6 +129,7 @@ class SegmentationModelWatershed(SegmentationModel):
         """  # noqa: D400
         from scipy import ndimage as ndi
 
+        from skimage.util import invert
         from skimage.feature import peak_local_max
         from skimage.segmentation import watershed
 
@@ -144,8 +145,7 @@ class SegmentationModelWatershed(SegmentationModel):
         distance = ndi.distance_transform_edt(1 - mask)
         local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((5, 5)), labels=1 - mask)
         markers = ndi.label(local_maxi)[0]
-
-        return watershed(255 - arr, markers, mask=1 - mask)
+        return watershed(invert(arr), markers, mask=1 - mask)
 
 
 class SegmentationModelPretrainedTensorflow(SegmentationModel):
@@ -193,6 +193,9 @@ def segment(
     """
     %(segment.full_desc)s
 
+    If xs and ys are defined, iterate over crops of size `(xs,ys)` and segment those.
+    Recommended for large images.
+
     Parameters
     ----------
     %(img_container)s
@@ -235,17 +238,19 @@ def segment(
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
     channel_slice = channel_idx if isinstance(channel_idx, int) else slice(0, crops[0].channels.shape[0])
     crops = [segmentation_model.segment(x[{"channels": channel_slice}].values, **model_kwargs) for x in crops]
-    # By convention, segments or numbered from 1..number of segments within each crop.
+    # By convention, segments are numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
     # TODO use overlapping crops to not create confusion at boundaries
     counter = 0
     for i, x in enumerate(crops):
         crop_new = x
+        num_segments = np.max(x)
         crop_new[crop_new > 0] = crop_new[crop_new > 0] + counter
-        counter += np.max(x)
+        counter += num_segments
         crops[i] = xr.DataArray(crop_new[np.newaxis, :, :], dims=["mask", "y", "x"])
-    img_segmented = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id)
-    img_id = "segmented_" + model_group.lower() if key_added is None else key_added
+    # TODO quickfix for img.shape here, will change this behaviour soon! img.shape should return y, x (and not x,y)
+    img_segmented = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape[::-1], channel_id=channel_id)
+    img_id = "segmented_" + model_group.s if key_added is None else key_added
     img.add_img(img=img_segmented, img_id=img_id, channel_id=channel_id)
 
 

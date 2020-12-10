@@ -31,3 +31,19 @@ def test_segmentation_blob(shape):
     )
     # Check that blobs are in segments:
     assert np.mean(cont.data["segment"].values[0][img_orig[0] > 0] > 0) > 0.5
+
+    # test segmentation with crops
+    # TODO test fails with xs=ys=10. Maybe due to border effects?
+    segment(
+        img=cont,
+        model_group="watershed",
+        img_id="image_0",
+        xs=11,
+        ys=11,
+        key_added="segment_crops",
+        channel_idx=0,
+        model_kwargs={"geq": False},
+    )
+
+    # Check that blobs are in segments:
+    assert np.mean(cont.data["segment_crops"].values[0][img_orig[0] > 0] > 0) > 0.5

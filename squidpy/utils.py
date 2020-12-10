@@ -33,7 +33,7 @@ def read_visium_data(
     :class:`anndata.AnnData`
         Annotated data object.
     :class:`squidpy.image.ImageContainer`
-        The high resolution tiff im.
+        The high resolution tiff image.
     """
     # TODO: refactor asserts
     dataset_folder = Path(dataset_folder)
@@ -44,8 +44,8 @@ def read_visium_data(
         count_file = files[0]
         logg.warning(f"read_visium_data: setting count_file to {count_file}")
     if image_file is None:
-        files = sorted(glob.glob(os.path.join(dataset_folder, "*im.tif")))
-        assert len(files) > 0, f"did not find a im file in {dataset_folder}"
+        files = sorted(glob.glob(os.path.join(dataset_folder, "*image.tif")))
+        assert len(files) > 0, f"did not find an image file in {dataset_folder}"
         image_file = files[0]
         logg.warning(f"read_visium_data: setting image_file to {image_file}")
     # read adata
