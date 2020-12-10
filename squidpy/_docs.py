@@ -56,6 +56,12 @@ _feature_ret = """\
 :class:`dict`
     Dictionary of feature values.
 """
+_xy_coord = """\
+x
+    X coord of crop (in pixel space).
+y
+    Y coord of crop (in pixel space).
+"""
 _width_height = """\
 xs
     Width of the crops in pixels.

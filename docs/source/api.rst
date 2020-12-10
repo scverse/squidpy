@@ -38,7 +38,6 @@ Image
     im.get_grey_texture_features
     im.process_img
     im.segment_img
-    im.crop_img
 
 Plotting
 ~~~~~~~~

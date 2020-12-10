@@ -13,7 +13,6 @@ import skimage
 
 from squidpy._docs import d, inject_docs
 from squidpy.constants._constants import SegmentationBackend
-from .crop import uncrop_img
 from .object import ImageContainer
 
 
@@ -248,10 +247,11 @@ def segment(
         crop_new[crop_new > 0] = crop_new[crop_new > 0] + counter
         counter += num_segments
         crops[i] = xr.DataArray(crop_new[np.newaxis, :, :], dims=["mask", "y", "x"])
+        print(channel_id)
     # TODO quickfix for img.shape here, will change this behaviour soon! img.shape should return y, x (and not x,y)
-    img_segmented = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape[::-1], channel_id=channel_id)
-    img_id = "segmented_" + model_group.s if key_added is None else key_added
-    img.add_img(img=img_segmented, img_id=img_id, channel_id=channel_id)
+    # img_segmented = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape[::-1], channel_id=channel_id)
+    # img_id = "segmented_" + model_group.s if key_added is None else key_added
+    # img.add_img(img=img_segmented, img_id=img_id, channel_id=channel_id)
 
 
 @d.dedent

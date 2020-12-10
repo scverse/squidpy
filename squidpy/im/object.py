@@ -10,30 +10,12 @@ import xarray as xr
 
 import skimage
 from imageio import imread
-from skimage.transform import rescale
 
 from squidpy._docs import d
-from squidpy.im._utils import _num_pages, _unique_order_preserving
+from squidpy.im._utils import _num_pages, _scale_xarray, _unique_order_preserving
 from squidpy.constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
-
-
-# helper function for scaling one xarray
-def _scale_xarray(arr, scale):
-    dtype = arr.dtype
-    dims = arr.dims
-
-    # rescale only in x and y dim
-    scales = np.ones(len(dims))
-    scales[np.in1d(dims, ["y", "x"])] = scale
-
-    arr = rescale(arr.values, scales, preserve_range=True, order=1)
-    arr = arr.astype(dtype)
-    # recreate DataArray
-    arr = xr.DataArray(arr, dims=dims)
-
-    return arr
 
 
 @d.dedent  # trick to overcome not top-down order
@@ -156,6 +138,7 @@ class ImageContainer:
 
         NOTE: lazy loading via :mod:`dask` is not supported for on-disk jpg files.
         They will be loaded in memory.
+        NOTE: multi-page tiffs will be loaded in one DataArray, with the concatenated channel dimensions.
 
         Parameters
         ----------
@@ -224,7 +207,6 @@ class ImageContainer:
                     data = data.rename({"band": channel_id})
                     xr_img_byband.append(data)
                 xr_img = xr.concat(xr_img_byband, dim=channel_id)
-                print(xr_img.dims)
                 xr_img = xr_img.transpose("y", "x", ...)
                 # TODO transpose xr_img to have channels as last dim
             elif ext in ("jpg", "jpeg"):  # TODO: constants
@@ -237,8 +219,8 @@ class ImageContainer:
             raise ValueError(img)
         return xr_img
 
-    # TODO fix docstrings!
     @d.get_sections(base="crop_corner", sections=["Parameters", "Returns"])
+    @d.dedent
     def crop_corner(
         self,
         x: int,
@@ -247,9 +229,10 @@ class ImageContainer:
         ys: int,
         scale: float = 1.0,
         mask_circle: bool = False,
-        cval: float = 0.0,
+        cval: float = 0,
         dtype: Optional[str] = None,
-    ) -> xr.DataArray:
+        preserve_dtype: bool = True,
+    ) -> "ImageContainer":
         """
         Extract a crop from upper left corner coordinates `x` and `y`.
 
@@ -257,14 +240,8 @@ class ImageContainer:
 
         Parameters
         ----------
-        x
-            X coord of crop (in pixel space).
-        y
-            Y coord of crop (in pixel space).
-        xs
-            Width of the crops in pixels.
-        ys
-            Height of the crops in pixels.
+        %(xy_coord)s
+        %(width_height)s
         scale
             Resolution of the crop (smaller -> smaller image).
             Rescaling is done using `skimage.transform.rescale`.
@@ -275,6 +252,9 @@ class ImageContainer:
         dtype
             Type to which the output should be (safely) cast. If `None`, don't recast.
             Currently supported dtypes: 'uint8'. TODO: pass actualy types instead of strings.
+        perserve_dtype
+            Make sure that dtype of all layers of the crop stays the same. True by default.
+            Depending on type of cval, types might be promoted to float otherwise.
 
         Returns
         -------
@@ -295,6 +275,10 @@ class ImageContainer:
         assert xs > 0, "im size cannot be 0"
         assert ys > 0, "im size cannot be 0"
 
+        # get dtypes before cropping
+        if preserve_dtype and dtype is None:
+            orig_dtypes = {key: arr.dtype for key, arr in self.data.items()}
+
         # get crop coords
         x0 = x
         x1 = x + xs
@@ -312,7 +296,6 @@ class ImageContainer:
 
         # pad crop if necessary
         if [x0, x1, y0, y1] != [crop_x0, crop_x1, crop_y0, crop_y1]:
-            print("padding crop")
             crop = crop.pad(
                 x=(abs(x0 - crop_x0), abs(x1 - crop_x1)),
                 y=(abs(y0 - crop_y0), abs(y1 - crop_y1)),
@@ -321,7 +304,8 @@ class ImageContainer:
             )
 
         # scale crop
-        crop = crop.map(_scale_xarray, scale=scale)
+        if scale != 1:
+            crop = crop.map(_scale_xarray, scale=scale)
 
         # mask crop
         if mask_circle:
@@ -329,8 +313,11 @@ class ImageContainer:
             c = crop.x.shape[0] // 2
             crop = crop.where((crop.x - c) ** 2 + (crop.y - c) ** 2 <= c ** 2, other=cval)
 
-        # convert to dtype
-        if dtype is not None:
+        # convert dtypes
+        if preserve_dtype and dtype is None:
+            for key in orig_dtypes.keys():
+                crop[key] = crop[key].astype(orig_dtypes[key])
+        elif dtype is not None:
             crop = crop.map(convert)
 
         # return crop as ImageContainer
@@ -343,14 +330,10 @@ class ImageContainer:
         self,
         x: int,
         y: int,
-        xr: int = 100,
-        yr: int = 100,
-        scale: float = 1.0,
-        mask_circle: bool = False,
-        cval: float = 0.0,
-        dtype: Optional[str] = None,
+        xr: int,
+        yr: int,
         **kwargs,
-    ) -> xr.DataArray:
+    ) -> "ImageContainer":
         """
         Extract a crop based on coordinates `x` and `y`.
 
@@ -358,12 +341,13 @@ class ImageContainer:
 
         Parameters
         ----------
-        %(crop_corner.parameters)s
-        TODO remove xs and xs from docstring
+        %(xy_coord)s
         xr
             Radius of the crop in pixels.
         yr
             Radius of the crop in pixels.
+        kwargs
+            Keyword arguments are passed to :meth:`crop_corner`.
 
         Returns
         -------
@@ -380,13 +364,12 @@ class ImageContainer:
         return self.crop_corner(x=x, y=y, xs=xs, ys=ys, **kwargs)
 
     @d.dedent
-    def crop_equally(
+    def generate_equal_crops(
         self,
         xs: Optional[int] = None,
         ys: Optional[int] = None,
-        img_id: Optional[Union[str, List[str]]] = None,
         **kwargs,
-    ) -> Tuple[List[xr.DataArray], np.ndarray, np.ndarray]:
+    ) -> Iterator[Tuple["ImageContainer", int, int]]:
         """
         Decompose an image into equally sized crops.
 
@@ -401,33 +384,37 @@ class ImageContainer:
         :class:`tuple`
             Triple of the following:
 
-                - crops of shape ``(channels, y, x)``.
-                - x-positions of the crops.
-                - y-positions of the crops.
+                - crop of size ``(ys, xs)``.
+                - x-position of the crop.
+                - y-position of the crop.
         """
         if xs is None:
-            xs = self.shape[0]
+            xs = self.data.x.shape[0]
         if ys is None:
-            ys = self.shape[1]
+            ys = self.data.y.shape[0]
 
+        # TODO: selecting coords like this means that we will have a small border at the right and bottom
+        # where pixels are not selected. Depending on the crops size, this can be a substantial amount
+        # of the image. Should use stop=(self.data.dims["x"] // xs) * (xs + 1) - 1
+        # need to implement partial assembly of crops in uncrop_img to make it work.
         unique_xcoord = np.arange(start=0, stop=(self.data.dims["x"] // xs) * xs, step=xs)
         unique_ycoord = np.arange(start=0, stop=(self.data.dims["y"] // ys) * ys, step=ys)
 
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
         ycoords = np.tile(unique_ycoord, len(unique_xcoord))
 
-        crops = [self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id, **kwargs) for x, y in zip(xcoords, ycoords)]
-        return crops, xcoords, ycoords
+        for x, y in zip(xcoords, ycoords):
+            yield self.crop_corner(x=x, y=y, xs=xs, ys=ys, **kwargs), x, y
 
     @d.dedent
-    def crop_spot_generator(
+    def generate_spot_crops(
         self,
         adata: AnnData,
         dataset_name: Optional[str] = None,
         size: float = 1.0,
         obs_ids: Optional[Iterable[Any]] = None,
         **kwargs,
-    ) -> Iterator[Tuple[Union[int, str], xr.DataArray]]:
+    ) -> Iterator[Tuple["ImageContainer", Union[int, str]]]:
         """
         Iterate over all obs_ids defined in adata and extract crops from images.
 
@@ -450,8 +437,9 @@ class ImageContainer:
         :class:`tuple`
             Tuple of the following:
 
-                - obs_id of spot from ``adata``.
-                - crop of shape ``(channels, y, x)``.
+                - :class:`ImageContainer`: crop at the spot position.
+                - :class:`str`: obs_id of spot from ``adata``.
+
         """
         if dataset_name is None:
             dataset_name = list(adata.uns[Key.uns.spatial].keys())[0]
@@ -461,11 +449,78 @@ class ImageContainer:
         ycoord = adata.obsm[Key.obsm.spatial][:, 1]
         spot_diameter = adata.uns[Key.uns.spatial][dataset_name]["scalefactors"]["spot_diameter_fullres"]
         r = int(round(spot_diameter * size // 2))
-        # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
 
         obs_ids, seen = _unique_order_preserving(adata.obs.index if obs_ids is None else obs_ids)
         indices = [i for i, obs in enumerate(adata.obs.index) if obs in seen]
 
         for i, obs_id in zip(indices, obs_ids):
             crop = self.crop_center(x=xcoord[i], y=ycoord[i], xr=r, yr=r, **kwargs)
-            yield obs_id, crop
+            yield crop, obs_id
+
+    @d.get_sections(base="uncrop_img", sections=["Parameters", "Returns"])
+    @classmethod
+    def uncrop_img(
+        cls,
+        crops: List["ImageContainer"],
+        x: np.ndarray,
+        y: np.ndarray,
+        shape: Tuple[int, int],
+    ) -> "ImageContainer":
+        """
+        Re-assemble im from crops and their positions.
+
+        Fills remaining positions with zeros. Positions are given as upper right corners.
+
+        Parameters
+        ----------
+        crops
+            List of im crops.
+        x
+            X coord of crop in pixel space. TODO: nice to have - relative space.
+        y
+            Y coord of crop in pixel space. TODO: nice to have - relative space.
+        shape
+            Shape of full image (y, x).
+
+        Returns
+        -------
+        :class:`ImageContainer`
+            assembled image with shape (y, x)
+        """
+        # TODO: maybe more descriptive names (y==height, x==width)? + extract to constants...
+        # TODO: rewrite asserts
+        # TODO: expose remaining positions default value
+        assert np.max(y) < shape[0], f"y ({y}) is outsize of image range ({shape[0]})"
+        assert np.max(x) < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
+
+        # check if can trivially return crop
+        if len(crops) == 1:
+            if crops[0].shape[:2] == shape:
+                # have only one crop with already correct shape
+                return crops[0]
+
+        # create resulting dataset
+        img_ids = crops[0].data.keys()
+        data = xr.Dataset()
+        for image_id in img_ids:
+            orig_img = crops[0].data[image_id]
+            # get shape for this DataArray
+            cur_shape = [shape[0], shape[1]] + list(orig_img.shape[2:])
+            data[image_id] = xr.DataArray(np.zeros(cur_shape, dtype=orig_img.dtype), dims=orig_img.dims)
+
+        # fill data with crops
+        for c, x, y in zip(crops, x, y):
+            x0 = x
+            x1 = x + c.data[list(img_ids)[0]].x.shape[0]
+            y0 = y
+            y1 = y + c.data[list(img_ids)[0]].y.shape[0]
+            # TODO: rewrite asserts
+            assert x0 >= 0, f"x ({x0}) is outsize of image range ({0})"
+            assert y0 >= 0, f"x ({y0}) is outsize of image range ({0})"
+            assert x1 <= shape[1], f"x ({x1}) is outsize of image range ({shape[1]})"
+            assert y1 <= shape[0], f"y ({y1}) is outsize of image range ({shape[0]})"
+            for image_id in img_ids:
+                data[image_id][y0:y1, x0:x1] = c[image_id]
+        self = cls()
+        self.data = data
+        return self

@@ -10,7 +10,6 @@ import skimage.filters
 
 from squidpy._docs import d, inject_docs
 from squidpy.constants._constants import Processing
-from .crop import uncrop_img
 from .object import ImageContainer
 
 
@@ -68,7 +67,7 @@ def process_img(
         dims = [channel_id, "y", "x"]
         crops = [xr.DataArray(x, dims=dims) for x in crops]
     # Reassemble im:
-    img_proc = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id)
-    img_id_new = (img_id + "_" + processing if key_added is None else key_added) if copy else img_id
+    # img_proc = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id)
+    # img_id_new = (img_id + "_" + processing if key_added is None else key_added) if copy else img_id
 
-    img.add_img(img=img_proc, img_id=img_id_new, channel_id=channel_id)
+    # img.add_img(img=img_proc, img_id=img_id_new, channel_id=channel_id)
