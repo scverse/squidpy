@@ -1,5 +1,7 @@
 from typing import List, Tuple, Optional
 
+import scanpy.logging as logg
+
 import numpy as np
 import xarray as xr
 
@@ -32,7 +34,7 @@ def uncrop_img(
     y
         Y coord of crop in pixel space. TODO: nice to have - relative space.
     shape
-        Shape of full im.
+        Shape of full image (y, x).
     channel_id
         Name of channel dim in :class:`xarray.DataArray`.
 
@@ -48,7 +50,9 @@ def uncrop_img(
     assert np.max(x) < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
 
     dims = [channel_id, "y", "x"]
-    img = xr.DataArray(np.zeros((crops[0].coords[channel_id].shape[0], shape[1], shape[0])), dims=dims)
+    img = xr.DataArray(
+        np.zeros((crops[0].coords[channel_id].shape[0], shape[0], shape[1]), dtype=crops[0].dtype), dims=dims
+    )
     if len(crops) > 1:
         for c, x, y in zip(crops, x, y):
             x0 = x
@@ -58,8 +62,8 @@ def uncrop_img(
             # TODO: rewrite asserts
             assert x0 >= 0, f"x ({x0}) is outsize of image range ({0})"
             assert y0 >= 0, f"x ({y0}) is outsize of image range ({0})"
-            assert x1 <= shape[0], f"x ({x1}) is outsize of image range ({shape[0]})"
-            assert y1 <= shape[1], f"y ({y1}) is outsize of image range ({shape[1]})"
+            assert x1 <= shape[1], f"x ({x1}) is outsize of image range ({shape[1]})"
+            assert y1 <= shape[0], f"y ({y1}) is outsize of image range ({shape[0]})"
             img[:, y0:y1, x0:x1] = c
         return img
     else:
@@ -74,7 +78,7 @@ def crop_img(
     img: xr.DataArray,
     x: int,
     y: int,
-    channel_id: str = "channels",
+    channel_id: str = None,
     xs: int = 100,  # TODO: are these defaults reasonable or should no defaults be specified?
     ys: int = 100,
     scale: float = 1.0,
@@ -111,10 +115,18 @@ def crop_img(
     assert xs > 0, "im size cannot be 0"
     assert ys > 0, "im size cannot be 0"
 
-    if channel_id in img.dims:
-        crop = (np.zeros((img.coords[channel_id].shape[0], ys, xs)) + cval).astype(img.dtype)
-    else:
-        crop = (np.zeros((1, ys, xs)) + cval).astype(img.dtype)
+    # assign channel_id
+    if channel_id is None:
+        if len(img.dims) == 3:
+            dims = list(img.dims)
+            dims.remove("x")
+            dims.remove("y")
+            channel_id = dims[0]
+        else:
+            raise ValueError("Cannot assign channel_id. Please specify channel_id upon call to segment")
+    logg.debug(f"using channel id {channel_id}")
+
+    crop = (np.zeros((img.coords[channel_id].shape[0], ys, xs)) + cval).astype(img.dtype)
     crop = xr.DataArray(crop, dims=[channel_id, "y", "x"])
 
     # get crop coords
@@ -129,15 +141,9 @@ def crop_img(
     crop_x1 = xs - max(x1 - img.x.shape[0], 0)
     crop_y1 = ys - max(y1 - img.y.shape[0], 0)
 
-    crop[
+    crop[{channel_id: slice(0, crop.shape[0]), "y": slice(crop_y0, crop_y1), "x": slice(crop_x0, crop_x1)}] = img[
         {
-            channel_id: slice(0, img.channels.shape[0]),
-            "y": slice(crop_y0, crop_y1),
-            "x": slice(crop_x0, crop_x1),
-        }
-    ] = img[
-        {
-            channel_id: slice(0, img.channels.shape[0]),
+            channel_id: slice(0, crop.shape[0]),
             "y": slice(max(y0, 0), y1),
             "x": slice(max(x0, 0), x1),
         }
