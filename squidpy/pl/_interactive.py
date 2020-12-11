@@ -146,7 +146,7 @@ class AnnData2Napari:
             name = obs_widget.currentItem().text()
 
             _layer = self.get_layer(name)
-            logg.warning(f"Loading `{name}` layer")
+            logg.info(f"Loading `{name}` layer")
 
             if _layer.ndim > 2:
                 self.viewer.add_image(
@@ -164,7 +164,7 @@ class AnnData2Napari:
             name = gene_widget.currentItem().text()
 
             _layer = self.get_layer(name)
-            logg.warning(f"Loading `{name}` layer")
+            logg.info(f"Loading `{name}` layer")
 
             self.viewer.add_image(_layer, name=name, colormap="magma", blending="additive")
             return
@@ -194,7 +194,7 @@ def interactive(
     **kwargs,
 ) -> None:
     """
-    Explore AnnData with Napari.
+    Explore :mod:`anndata` with :mod:`napari`.
 
     Parameters
     ----------
@@ -203,10 +203,10 @@ def interactive(
     obsm
         Key in :attr:`anndata.AnnData.obsm` to spatial coordinates.
     library_id
-        library id in :attr:`anndata.AnnData.uns`.
+        Library id in :attr:`anndata.AnnData.uns`.
     palette
         Palette should be either a valid :func:`~matplotlib.pyplot.colormaps` string,
-        a sequence of colors (in a format that can be understood by matplotlib,
+        a sequence of colors (in a format that can be understood by :mod:`matplotlib`,
         eg. RGB, RGBS, hex, or a cycler object with key='color'.
 
     Returns
