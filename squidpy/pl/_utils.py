@@ -2,11 +2,15 @@ import os
 from typing import List, Union, Hashable, Iterable, Optional
 from pathlib import Path
 
+from numba import njit, prange
+
 import anndata as ad
 from scanpy import logging as logg
 from scanpy import settings
 
+import numpy as np
 import pandas as pd
+from scipy.sparse import issparse, spmatrix
 
 from matplotlib.figure import Figure
 
@@ -156,3 +160,43 @@ def _unique_order_preserving(iterable: Iterable[Hashable]) -> List[Hashable]:
     """Remove items from an iterable while preserving the order."""
     seen = set()
     return [i for i in iterable if i not in seen and not seen.add(i)]
+
+
+@njit(cache=True, fastmath=True)
+def _point_inside_triangles(triangles: np.ndarray) -> int:
+    # modified from napari
+    AB = triangles[:, 1, :] - triangles[:, 0, :]
+    AC = triangles[:, 2, :] - triangles[:, 0, :]
+    BC = triangles[:, 2, :] - triangles[:, 1, :]
+
+    s_AB = -AB[:, 0] * triangles[:, 0, 1] + AB[:, 1] * triangles[:, 0, 0] >= 0
+    s_AC = -AC[:, 0] * triangles[:, 0, 1] + AC[:, 1] * triangles[:, 0, 0] >= 0
+    s_BC = -BC[:, 0] * triangles[:, 1, 1] + BC[:, 1] * triangles[:, 1, 0] >= 0
+
+    return np.sum((s_AB != s_AC) & (s_AB == s_BC))
+
+
+@njit(parallel=True)
+def _points_inside_triangles(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
+    out = np.empty(
+        len(
+            points,
+        ),
+        dtype=np.int32,
+    )
+    for i in prange(len(out)):
+        out[i] = _point_inside_triangles(triangles - points[i])
+
+    return out
+
+
+def _min_max_norm(vec: Union[spmatrix, np.ndarray]) -> np.ndarray:
+    if issparse(vec):
+        vec = vec.A.squeeze()
+    vec = np.asarray(vec, dtype=np.float64)
+    if vec.ndim != 1:
+        raise ValueError(f"Expected `1` dimension, found `{vec.ndim}`.")
+
+    maxx, minn = np.nanmax(vec), np.nanmin(vec)
+
+    return np.ones_like(vec) if np.isclose(minn, maxx) else (vec - minn) / (maxx - minn)
