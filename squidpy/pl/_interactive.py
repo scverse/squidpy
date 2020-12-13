@@ -1,4 +1,5 @@
 from typing import Tuple, Union, Optional, Sequence
+from pathlib import Path
 from functools import lru_cache
 
 import napari
@@ -236,7 +237,6 @@ class AnnData2Napari:
                     # TODO: is this everything? or can user add metadata?
                     self.adata.uns[layer.name] = {"meshes": layer.data.copy()}
 
-        # TODO: use napari's context manager?
         self._viewer = napari.view_image(self._image, **kwargs)
         self.viewer.layers[0].events.select.connect(lambda e: slider.setVisible(False))
         self.viewer.bind_key("Shift-E", export)
@@ -265,6 +265,24 @@ class AnnData2Napari:
         )
 
         return self
+
+    def screenshot(self, path: Optional[Union[str, Path]]) -> Optional[np.ndarray]:
+        """
+        Take a screenshot.
+
+        Parameters
+        ----------
+        path
+            If `None`, don't save the screenshot.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The screenshot.
+        """
+        if self.viewer is None:
+            raise RuntimeError("No viewer is initialized.")
+        return self.viewer.window.screenshot(path)
 
 
 @d.dedent
