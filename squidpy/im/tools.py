@@ -4,7 +4,7 @@ from __future__ import annotations
 import warnings
 
 from types import MappingProxyType
-from typing import Any, Dict, Tuple, Union, Mapping, Iterable, Optional, Callable
+from typing import Any, Dict, List, Tuple, Union, Mapping, Iterable, Optional, Callable
 
 from anndata import AnnData
 
