@@ -18,7 +18,7 @@
 # *   (at your option) any later version.                                   *
 # *                                                                         *
 # ***************************************************************************/
-from typing import Tuple, Iterable, Optional
+from typing import Tuple, Union, Iterable, Optional
 
 from PyQt5 import QtGui, QtCore, QtWidgets
 
@@ -325,11 +325,17 @@ class ListWidget(QtWidgets.QListWidget):
 
     def __init__(self, items: Iterable[str], title: Optional[str] = None):
         super().__init__()
+        self.setWindowTitle(title)
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.addItems(items)
-        self.sortItems(QtCore.Qt.AscendingOrder)
 
-        self.setWindowTitle(title)
+    def addItems(self, labels: Union[str, Iterable[str]]) -> None:
+        if isinstance(labels, str) or not isinstance(labels, Iterable):
+            labels = (labels,)
+        labels = tuple(label for label in labels if self.findItems(label, QtCore.Qt.MatchExactly) is not None)
+        if len(labels):
+            super().addItems(labels)
+            self.sortItems(QtCore.Qt.AscendingOrder)
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Return:

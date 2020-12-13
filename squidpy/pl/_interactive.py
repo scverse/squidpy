@@ -1,6 +1,5 @@
 from typing import Tuple, Union, Optional, Sequence
 from pathlib import Path
-from functools import lru_cache
 
 import napari
 from cycler import Cycler
@@ -12,6 +11,7 @@ from anndata import AnnData
 from scanpy.plotting._utils import _set_default_colors_for_categorical_obs
 
 import numpy as np
+import pandas as pd
 from pandas.api.types import (
     infer_dtype,
     is_object_dtype,
@@ -47,11 +47,13 @@ class AnnData2Napari:
         obsm: str = Key.obsm.spatial,
         palette: Union[str, Sequence[str], Cycler] = "viridis",
         library_id: Optional[str] = None,
+        key_added: str = "selected",
     ):
         self._adata = adata
         self._viewer = None
         self._coords = adata.obsm[obsm][:, ::-1]
         self._palette = palette
+        self._key_added = key_added
 
         # TODO: empty check
         if library_id is None:
@@ -99,7 +101,6 @@ class AnnData2Napari:
 
         raise TypeError(f"Invalid column type `{infer_dtype(ser)}` for `adata.obs[{name!r}]`.")
 
-    @lru_cache(maxsize=32)
     def _get_layer(self, name: str) -> np.ndarray:
         """Get layer from name."""
         if name in self.adata.var_names:
@@ -125,10 +126,10 @@ class AnnData2Napari:
         """
 
         @magicgui(call_button="Select observation")
-        def get_obs_layer() -> None:
-            # TODO: async?
-            for item in obs_widget.selectedItems():
-                name = item.text()
+        def get_obs_layer(items=None) -> None:
+            # TODO: async? duplicate handling? (e.g. if duplicate, set selected)
+            for item in obs_widget.selectedItems() if items is None else items:
+                name = item if isinstance(item, str) else item.text()
                 _layer = self._get_layer(name)
 
                 # TODO: more robust when determining categorical
@@ -158,11 +159,11 @@ class AnnData2Napari:
             layer.selected = True
 
         @magicgui(call_button="Select gene")
-        def get_gene_layer() -> None:
-            # TODO: async?
+        def get_gene_layer(items=None) -> None:
+            # TODO: async? duplicate handling?
             layers = []
-            for item in gene_widget.selectedItems():
-                name = item.text()
+            for item in gene_widget.selectedItems() if items is None else items:
+                name = item if isinstance(item, str) else item.text()
                 _layer = self._get_layer(name)
 
                 logg.info(f"Loading `{name}` layer")
@@ -232,22 +233,34 @@ class AnnData2Napari:
 
                     logg.info(f"Adding `adata.obs[{layer.name!r}]`\n       `adata.uns[{layer.name}!r]['meshes']`")
 
-                    # TODO: key_added in __init__?
-                    self.adata.obs[layer.name] = _points_inside_triangles(self._coords, triangles)
-                    # TODO: is this everything? or can user add metadata?
-                    self.adata.uns[layer.name] = {"meshes": layer.data.copy()}
+                    key = f"{layer.name}_{self._key_added}"
+                    self.adata.obs[key] = pd.Categorical(_points_inside_triangles(self._coords, triangles))
+                    self.adata.uns[key] = {"meshes": layer.data.copy()}
+
+                    # handles uniqueness + sorting + non iterable
+                    obs_widget.addItems(key)
+                    # update already present layer
+                    if key in viewer.layers:
+                        layer = viewer.layers[key]
+                        layer.face_color = _get_col_categorical(self.adata, key)
+                        layer._update_thumbnail()
+                        layer.refresh_colors()
 
         self._viewer = napari.view_image(self._image, **kwargs)
         self.viewer.layers[0].events.select.connect(lambda e: slider.setVisible(False))
         self.viewer.bind_key("Shift-E", export)
 
+        # Select genes widget
         gene_widget = ListWidget(self.adata.var_names, title="Genes")
         gene_btn = get_gene_layer.Gui()
         gene_widget.enter_pressed.connect(gene_btn)
+        gene_widget.doubleClicked.connect(lambda item: get_gene_layer(items=(item.data(),)))
 
+        # Select observations widget
         obs_widget = ListWidget(self.adata.obs.columns, title="Observations")
         obs_btn = get_obs_layer.Gui()
         obs_widget.enter_pressed.connect(obs_btn)
+        obs_widget.doubleClicked.connect(lambda item: get_obs_layer(items=(item.data(),)))
 
         cgui = clip.Gui()
         slider: DoubleRangeSlider = cgui.get_widget("percentile")
@@ -295,7 +308,7 @@ def interactive(
     palette: Union[str, Sequence[str], Cycler] = "viridis",
     library_id: Optional[str] = None,
     **kwargs,
-) -> None:
+) -> AnnData2Napari:
     """
     Explore :mod:`anndata` with :mod:`napari`.
 
@@ -321,7 +334,7 @@ def interactive(
     return AnnData2Napari(adata, img=img, obsm=obsm, library_id=library_id, palette=palette).open_napari(**kwargs)
 
 
-def _get_col_categorical(adata: AnnData, c: str, palette) -> np.ndarray:
+def _get_col_categorical(adata: AnnData, c: str, _palette=None) -> np.ndarray:
     # TODO: nice-to-have enable colorbar in Qt
     colors_key = f"{c}_colors"
     if colors_key not in adata.uns.keys():
@@ -333,5 +346,4 @@ def _get_col_categorical(adata: AnnData, c: str, palette) -> np.ndarray:
     cols = [to_rgba(i) for i in adata.uns[colors_key]]
 
     col_dict = dict(zip(adata.obs[c].cat.categories, cols))
-    # TODO: pandas.apply
     return np.array([col_dict[v] for v in adata.obs[c]])
