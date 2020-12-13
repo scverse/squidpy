@@ -13,7 +13,6 @@ import pandas as pd
 
 import skimage.feature as sk_image
 from skimage.feature import greycoprops, greycomatrix
-import sklearn
 from sklearn import preprocessing
 
 from squidpy._docs import d, inject_docs
@@ -308,7 +307,7 @@ def scale_f(
     feature_df: pd.DataFrame,
     option: Union[str,Callable[float,float]]
 ) -> np.array:
-    """helper function for scaling each feature
+    """Helper funciton, scales features.
     
     Params
     ------
@@ -325,17 +324,20 @@ def scale_f(
     import types    
     if option == "scale":
         return preprocessing.scale(feature_df.values, axis=0, with_mean=True, with_std=True, copy=True)
-    elif (type(option) == tuple)  and (len(option) == 2):
+    elif isinstance(option, tuple) and (len(option) == 2):
         return preprocessing.minmax_scale(feature_df.values, feature_range=(option[0], option[1]), axis=0, copy=True)
     elif option == 'abs':
         return preprocessing.maxabs_scale(feature_df.values, axis=0, copy=True)
     elif option == 'robust':
-        return preprocessing.robust_scale(feature_df.values, axis=0, with_centering=True, with_scaling=True, quantile_range=(25.0, 75.0), copy=True)
+        return preprocessing.robust_scale(feature_df.values, axis=0, with_centering=True, with_scaling=True, 
+                                          quantile_range=(25.0, 75.0), copy=True)
     elif option == 'uniform':
-        return preprocessing.quantile_transform(feature_df.values,n_quantiles=np.min([1000,len(feature_df)]), axis=0, output_distribution='uniform',random_state=1234, copy=True)
+        return preprocessing.quantile_transform(feature_df.values,n_quantiles=np.min([1000,len(feature_df)]), axis=0,
+                                                output_distribution='uniform',random_state=1234, copy=True)
     elif option == 'normal':
-        return preprocessing.quantile_transform(feature_df.values,n_quantiles=np.min([1000,len(feature_df)]), axis=0, output_distribution='normal', random_state=1234, copy=True)
-    elif (type(option) is types.LambdaType):
+        return preprocessing.quantile_transform(feature_df.values,n_quantiles=np.min([1000,len(feature_df)]), axis=0,
+                                                output_distribution='normal', random_state=1234, copy=True)
+    elif isinstance(tst,types.LambdaType):
         return feature_df.apply(option).values
     else:
         warnings.warn(f"Scaling option {option} is not supported")
@@ -348,7 +350,7 @@ def scale_features(
     scaling: Union[str,tuple(float),Callable[float,float],dict[str,Union[str,tuple(float),Callable[float,float]]]] = 'scale',
     inplace: bool = True
 ) -> Optional[pd.DataFrame]:
-    """Scale features
+    """Scales features.
     
     Different scaling options are provided: See Parameter `scaling` for short descriptions. For detailed
     descriptions check the sklearn.preprocessing documentation of the functions wrapped in the helper
@@ -388,13 +390,13 @@ def scale_features(
     # Prepare scaling dict
     if features == 'all':
         features = df.columns.copy()
-    if type(scaling) != dict:
-        if type(scaling) == list: scaling = tuple(scaling)
+    if not isinstance(scaling, dict):
+        if isinstance(scaling, list): scaling = tuple(scaling)
         scale_options = [scaling]
         feature_lists = [features]
     else:
         overlap_features = [f for f in scaling if f in features]
-        scaling = {key:(val if (type(val) != list) else tuple(val)) for key,val in scaling.items()}
+        scaling = {key:(val if (not isinstance(val,list)) else tuple(val)) for key,val in scaling.items()}
         if len(scaling) > len(overlap_features):
             warnings.warn("There are more features in `scaling` then in `features`, only those in `features` and `scaling` are scaled.")
         elif len(scaling) < len(features):

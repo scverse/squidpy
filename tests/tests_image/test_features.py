@@ -1,12 +1,14 @@
 from anndata import AnnData
 
 import numpy as np
+import pandas as pd
 
 from squidpy.im.tools import (
     get_hog_features,
     get_summary_stats,
     get_features_statistics,
     calculate_image_features,
+    scale_features,
 )
 from squidpy.im.object import ImageContainer
 
@@ -61,7 +63,7 @@ def test_scale_features(data: pd.DataFrame, key: str, inplace: bool):
         scale_features(adata,key=key,features='all',scaling=o,inplace=inplace)
         
     options_dict = {c:options[i] for i,c in enumerate(data.columns[:min(len(data.columns),len(options))])}
-    dicts_features = [key for key in options_dict]        
+    dicts_features = list(options_dict)
         
     scale_features(data,features=dicts_features,scaling=options_dict,inplace=inplace)
     scale_features(adata,key=key,features=dicts_features,scaling=options_dict,inplace=inplace) 
