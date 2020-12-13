@@ -51,6 +51,7 @@ extensions = [
     "sphinx_last_updated_by_git",
     "sphinx_gallery.load_style",
     "edit_on_github",
+    # "typed_returns",  # TODO: enable this in the future (once more control is possible)
 ]
 intersphinx_mapping = dict(  # noqa: C408
     python=("https://docs.python.org/3", None),

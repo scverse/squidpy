@@ -6,6 +6,7 @@ import warnings
 from types import MappingProxyType
 from typing import Any, Dict, List, Tuple, Union, Mapping, Iterable, Optional, Callable
 
+from scanpy import logging as logg
 from anndata import AnnData
 
 import numpy as np
@@ -16,6 +17,7 @@ from skimage.feature import greycoprops, greycomatrix
 from sklearn import preprocessing
 
 from squidpy._docs import d, inject_docs
+from squidpy.gr._utils import Signal, parallelize, _get_n_cores
 from squidpy.im.object import ImageContainer
 from squidpy.constants._constants import ImageFeature
 
@@ -31,6 +33,9 @@ def calculate_image_features(
     features_kwargs: Mapping[str, Any] = MappingProxyType({}),
     key: str = "img_features",
     copy: bool = False,
+    n_jobs: Optional[int] = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
     **kwargs,
 ) -> Optional[pd.DataFrame]:
     """
@@ -55,6 +60,7 @@ def calculate_image_features(
     key
         Key to use for saving calculated table in :attr:`anndata.AnnData.obsm`.
     %(copy)s
+    %(parallelize)s
     kwargs
         Keyword arguments for :meth:`squidpy.im.ImageContainer.crop_spot_generator`.
 
@@ -66,15 +72,41 @@ def calculate_image_features(
     """
     if isinstance(features, str):
         features = [features]
-
     features = [ImageFeature(f) for f in features]
+
+    n_jobs = _get_n_cores(n_jobs)
+    logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
+
+    res = parallelize(
+        _calculate_image_features_helper,
+        collection=adata.obs.index,
+        extractor=pd.concat,
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
+    )(adata, img, features=features, features_kwargs=features_kwargs, **kwargs)
+
+    if copy:
+        return res
+
+    adata.obsm[key] = res
+
+
+def _calculate_image_features_helper(
+    obs_ids: Iterable[Any],
+    adata: AnnData,
+    img: ImageContainer,
+    features: List[ImageFeature],
+    features_kwargs: Mapping[str, Any],
+    queue=None,
+    **kwargs,
+) -> pd.DataFrame:
     features_list = []
-    obs_ids = []
-    for obs_id, crop in img.crop_spot_generator(adata, **kwargs):
+
+    for _, crop in img.crop_spot_generator(adata, obs_ids=obs_ids, **kwargs):
         # get np.array from crop and restructure to dimensions: y,x,channels
         crop = crop.transpose("y", "x", ...).data
         # if crop has no color channel, reshape
-        # TODO: ndim is more elegant
         if len(crop.shape) == 2:
             crop = crop[:, :, np.newaxis]
 
@@ -82,17 +114,13 @@ def calculate_image_features(
         features_dict = get_features_statistics(crop, features=features, features_kwargs=features_kwargs)
         features_list.append(features_dict)
 
-        obs_ids.append(obs_id)
+        if queue is not None:
+            queue.put(Signal.UPDATE)
 
-    features_log = pd.DataFrame(features_list, index=obs_ids)
-    # features_log["obs_id"] = obs_ids
-    # features_log.set_index(["obs_id"], inplace=True)
+    if queue is not None:
+        queue.put(Signal.FINISH)
 
-    # modify adata in place or return features_log
-    if copy:
-        return features_log
-
-    adata.obsm[key] = features_log
+    return pd.DataFrame(features_list, index=list(obs_ids))
 
 
 # TODO: refactor all of below into ImageContainer?

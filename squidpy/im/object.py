@@ -1,5 +1,5 @@
 from os import PathLike
-from typing import List, Tuple, Union, Iterator, Optional
+from typing import Any, List, Tuple, Union, Iterable, Iterator, Optional
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -11,12 +11,14 @@ import xarray as xr
 from imageio import imread
 
 from squidpy._docs import d
-from squidpy.im._utils import _num_pages
+from squidpy.im._utils import _num_pages, _unique_order_preserving
 from squidpy.constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
 
 
+@d.dedent  # trick to overcome not top-down order
+@d.dedent
 class ImageContainer:
     """
     Container for in memory or on-disk tiff or jpg images.
@@ -24,6 +26,14 @@ class ImageContainer:
     Allows for lazy and chunked reading via :mod:`rasterio` and :mod:`dask` (if input is a tiff image).
     An instance of this class is given to all image processing functions, along with an :mod:`anndata` instance,
     if necessary.
+
+    Parameters
+    ----------
+    %(add_img.parameters)s
+    lazy
+        Use :mod:`rasterio` or :mod:`dask` to lazily load image.
+    chunks
+        Chunk size for :mod:`dask`.
     """
 
     data: xr.Dataset
@@ -34,33 +44,15 @@ class ImageContainer:
         img_id: Optional[Union[str, List[str]]] = None,
         lazy: bool = True,
         chunks: Optional[int] = None,
+        **kwargs,
     ):
-        """
-        Set up ImageContainer from numpy array or on-disk tiff / jpg.
-
-        Processes image as in memory :class:`numpy.array` or uses :mod`xarray`'s :mod:`rasterio` reading functions to
-        load from disk (with caching) if ``img`` is a file path.
-        If chunks are specified, the :mod:`xarray` is wrapped in a :mod:`dask`.
-
-        Parameters
-        ----------
-        img
-            An array or a path to tiff file.
-        img_id
-            Key (name) to be used for img. For multi-page tiffs this should be a list.
-            If not specified, DataArrays will be named 'image_{i}'.
-        lazy
-            Use :mod:`rasterio` or :mod:`dask` to lazily load image.
-        chunks
-            Chunk size for :mod:`dask`.
-        """
         if chunks is not None:
             chunks = {"x": chunks, "y": chunks}
         self._chunks = chunks
         self._lazy = lazy
         self.data = xr.Dataset()
         if img is not None:
-            self.add_img(img, img_id)
+            self.add_img(img, img_id, **kwargs)
 
     def __repr__(self):
         s = f"ImageContainer object with {len(self.data.keys())} layers\n"
@@ -116,48 +108,7 @@ class ImageContainer:
         """
         self.data.to_netcdf(fname, mode="a")
 
-    def add_img(
-        self,
-        img: Union[Pathlike_t, np.ndarray, xr.DataArray],
-        img_id: Union[str, List[str]] = None,
-        channel_id: str = "channels",
-    ) -> None:
-        """
-        Add layer from numpy image / tiff file.
-
-        For numpy arrays, assume that dims are: channels, y, x
-        The added image has to have the same number of channels as the original image, or no channels.
-
-        Parameters
-        ----------
-        img
-            Numpy array or path to image file.
-        img_id
-            Key (name) to be used for img. For multi-page tiffs this should be a list.
-            If not specified, DataArrays will be named "image".
-        channel_id
-            TODO.
-
-        Returns
-        -------
-        None
-            TODO.
-
-        Raises
-        ------
-        :class:`ValueError`
-            If ``img_id`` is neither a string nor a list.
-        """
-        img = self._load_img(img=img, channel_id=channel_id)
-        if img_id is None:
-            img_id = "image"
-        # add to data
-        logg.info(f"Adding `{img_id}` into object")
-        self.data[img_id] = img
-        if not self._lazy:
-            # load in memory
-            self.data.load()
-
+    @d.get_sections(base="_load_img", sections=["Parameters", "Raises"])
     def _load_img(self, img: Union[Pathlike_t, np.ndarray], channel_id: str = "channels") -> xr.DataArray:
         """
         Load image as :mod:`xarray`.
@@ -173,7 +124,7 @@ class ImageContainer:
         img
             :mod:`numpy` array or path to image file.
         channel_id
-            TODO.
+            Name for the channel dimension. Default is "channels".
 
         Returns
         -------
@@ -221,6 +172,45 @@ class ImageContainer:
             raise ValueError(img)
         return xr_img
 
+    @d.dedent
+    @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
+    def add_img(
+        self,
+        img: Union[Pathlike_t, np.ndarray, xr.DataArray],
+        img_id: Optional[str] = None,
+        channel_id: str = "channels",
+    ) -> None:
+        """
+        Add layer from numpy image / tiff file.
+
+        For :mod:`numpy` arrays, assume that dims are: ``(channels, y, x)``.
+
+        Parameters
+        ----------
+        %(_load_img.parameters)s
+        img_id
+            Key (name) to be used for img.
+            If not specified, DataArrays will be named "image".
+
+        Returns
+        -------
+        None
+            Nothing, just adds img to `.data`
+
+        Raises
+        ------
+        %(_load_img.raises)s
+        """
+        img = self._load_img(img=img, channel_id=channel_id)
+        if img_id is None:
+            img_id = "image"
+        # add to data
+        logg.info(f"Adding `{img_id}` into object")
+        self.data[img_id] = img
+        if not self._lazy:
+            # load in memory
+            self.data.load()
+
     @d.get_sections(base="crop_corner", sections=["Parameters", "Returns"])
     def crop_corner(
         self,
@@ -253,8 +243,6 @@ class ImageContainer:
             Array of shape ``(channels, y, x)``.
         """
         from .crop import crop_img
-
-        # TODO: TODO: when scaling, will return a numpy array instead of an xarray
 
         if img_id is None:
             img_id = list(self.data.keys())[0]
@@ -338,14 +326,19 @@ class ImageContainer:
         unique_ycoord = np.arange(start=0, stop=(self.data.dims["y"] // ys) * ys, step=ys)
 
         xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
-        ycoords = np.tile(unique_xcoord, len(unique_ycoord))
+        ycoords = np.tile(unique_ycoord, len(unique_xcoord))
 
         crops = [self.crop_corner(x=x, y=y, xs=xs, ys=ys, img_id=img_id, **kwargs) for x, y in zip(xcoords, ycoords)]
         return crops, xcoords, ycoords
 
     @d.dedent
     def crop_spot_generator(
-        self, adata: AnnData, dataset_name: Optional[str] = None, size: float = 1.0, **kwargs
+        self,
+        adata: AnnData,
+        dataset_name: Optional[str] = None,
+        size: float = 1.0,
+        obs_ids: Optional[Iterable[Any]] = None,
+        **kwargs,
     ) -> Iterator[Tuple[Union[int, str], xr.DataArray]]:
         """
         Iterate over all obs_ids defined in adata and extract crops from images.
@@ -359,8 +352,10 @@ class ImageContainer:
             Name of the spatial data in adata (if not specified, take first one).
         size
             Amount of context (1.0 means size of spot, larger -> more context).
+        obs_ids
+            Observations from :attr:`adata.obs_names` for which to generate the crops.
         kwargs
-            Keyword arguments for :func:`squidpy.im.crop_img`.
+            Keyword arguments for :meth:`crop_center`.
 
         Yields
         ------
@@ -380,7 +375,9 @@ class ImageContainer:
         r = int(round(spot_diameter * size // 2))
         # TODO: could also use round_odd and add 0.5 for xcoord and ycoord
 
-        obs_ids = adata.obs.index.tolist()
-        for i, obs_id in enumerate(obs_ids):
+        obs_ids, seen = _unique_order_preserving(adata.obs.index if obs_ids is None else obs_ids)
+        indices = [i for i, obs in enumerate(adata.obs.index) if obs in seen]
+
+        for i, obs_id in zip(indices, obs_ids):
             crop = self.crop_center(x=xcoord[i], y=ycoord[i], xr=r, yr=r, **kwargs)
             yield obs_id, crop
