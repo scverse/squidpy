@@ -307,7 +307,7 @@ def scale_f(
     feature_df: pd.DataFrame,
     option: Union[str,Callable[float,float]]
 ) -> np.array:
-    """Helper funciton, scales features.
+    """Wraps sklearn functions and others for scaling.
     
     Params
     ------
@@ -337,7 +337,7 @@ def scale_f(
     elif option == 'normal':
         return preprocessing.quantile_transform(feature_df.values,n_quantiles=np.min([1000,len(feature_df)]), axis=0,
                                                 output_distribution='normal', random_state=1234, copy=True)
-    elif isinstance(tst,types.LambdaType):
+    elif isinstance(option,types.LambdaType):
         return feature_df.apply(option).values
     else:
         warnings.warn(f"Scaling option {option} is not supported")
