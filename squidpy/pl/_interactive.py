@@ -103,7 +103,8 @@ class AnnData2Napari:
         ser = self._adata.obs[name]
         if is_categorical_dtype(ser) or is_object_dtype(ser) or is_string_dtype(ser):
             return _get_col_categorical(self._adata, name, self._palette)
-        elif is_numeric_dtype(ser):
+
+        if is_numeric_dtype(ser):
             vec = ser.values
             return (vec - vec.min()) / (vec.max() - vec.min())
 
@@ -157,12 +158,18 @@ class AnnData2Napari:
             name = obs_widget.currentItem().text()
 
             _layer = self._get_layer(name)
-            properties = {"val": _layer}
+            if isinstance(_layer[0], tuple):
+                face_color = list(map(list, _layer))
+                properties = None
+            else:
+                face_color = "val"
+                properties = {"val": _layer}
+
             logg.info(f"Loading `{name}` layer")
             self._viewer.add_points(
                 self._coords,
                 size=self._spot_radius,
-                face_color="val",
+                face_color=face_color,
                 properties=properties,
                 name=name,
                 face_colormap="magma",
@@ -238,13 +245,11 @@ def interactive(
 def _get_col_categorical(adata, c, palette):
     colors_key = f"{c}_colors"
     if colors_key not in adata.uns.keys():
-        if palette:
+        if palette is not None:
             _set_colors_for_categorical_obs(adata, c, palette)
         else:
             _set_default_colors_for_categorical_obs(adata, c)
     cols = [to_rgba(i) for i in adata.uns[colors_key]]
 
-    cols_dict = {k: v for v, k in zip(cols, adata.obs[c].cat.categories)}
-    cols = np.array([cols_dict[k] for k in adata.obs[c]])
-
-    return cols
+    col_dict = dict(zip(adata.obs[c].cat.categories, cols))
+    return adata.obs[c].astype(str).apply(lambda r: col_dict[r]).to_numpy()
