@@ -1,5 +1,13 @@
-from typing import List, Union, Optional, Sequence
-from functools import partial
+from typing import List, Union, Callable, Optional, Sequence
+from functools import partial, lru_cache
+
+try:
+    from functools import cached_property
+except ImportError:  # <3.8
+
+    def cached_property(fn: Callable) -> Callable:  # noqa: D103
+        return lru_cache(maxsize=1)(property(fn))
+
 
 import napari
 from cycler import Cycler
@@ -15,7 +23,13 @@ from scanpy.plotting._utils import (
 
 import numpy as np
 from scipy.sparse import spmatrix
-from pandas.api.types import is_object_dtype, is_categorical_dtype
+from pandas.api.types import (
+    infer_dtype,
+    is_object_dtype,
+    is_string_dtype,
+    is_numeric_dtype,
+    is_categorical_dtype,
+)
 
 from matplotlib.colors import to_rgba
 
@@ -38,15 +52,16 @@ class AnnData2Napari:
         adata: AnnData,
         img: ImageContainer,
         obsm: str = Key.obsm.spatial,
-        palette: Union[str, Sequence[str], Cycler] = None,
+        palette: Optional[Union[str, Sequence[str], Cycler]] = None,
         library_id: Optional[str] = None,
     ):
 
         self._genes_sorted = adata.var_names.sort_values().values
         self._obs_sorted = adata.obs.columns.sort_values().values
-        self._coords = adata.obsm[obsm]
+        self._coords = adata.obsm[obsm][:, ::-1]
         self._palette = palette
         self._adata = adata
+        self._viewer = None
 
         if library_id is None:
             library_id = list(adata.uns[obsm].keys())[0]
@@ -54,31 +69,27 @@ class AnnData2Napari:
         library_id_img = list(img.data.keys())[0]
 
         self._image = img.data[library_id_img].transpose("y", "x", ...).values
+        self._spot_radius = round(adata.uns[obsm][library_id]["scalefactors"]["spot_diameter_fullres"]) * 0.5
 
-        spot_radius = round(adata.uns[obsm][library_id]["scalefactors"]["spot_diameter_fullres"]) * 0.5
-        self._masks = self._get_mask(spot_radius)
+    @cached_property
+    def masks(self) -> np.ndarray:
+        """Get spot masks."""
+        # n x s x 2
+        return np.apply_along_axis(partial(disk, radius=self._spot_radius), 1, self._coords[:, ::-1])
 
     @property
-    def masks(self) -> np.ndarray:
-        """Get spot masks as list."""
-        return self._masks
+    def viewer(self):
+        """:mod:`napari` viewer."""
+        return self._viewer
 
-    def _get_mask(self, spot_radius):
-
-        dsk = partial(disk, radius=spot_radius)
-        vfunc = np.vectorize(lambda y, x: dsk((x, y)), otypes=[tuple])
-        mask_lst = vfunc(self._coords[:, 0], self._coords[:, 1])
-
-        return mask_lst
-
-    def _get_gene(self, name):
+    def _get_gene(self, name: str) -> np.ndarray:
 
         idx = np.where(name == self._adata.var_names)[0]
         if not len(idx):
-            raise ValueError(f"{name} not present in `adata.var_names`")
-        else:
-            idx = idx[0]
+            raise KeyError(f"Name `{name}` not present in `adata.var_names`.")
+        idx = idx[0]
 
+        # TODO: use_get_var
         if isinstance(self._adata.X, spmatrix):
             vec = self._adata.X[:, idx].todense()
         else:
@@ -89,43 +100,31 @@ class AnnData2Napari:
         return vec
 
     def _get_obs(self, name):
-
-        ser = self._adata.obs[name].copy()
-        if is_categorical_dtype(ser):
-            vec = _get_col_categorical(self._adata, name, self._palette)
-        elif is_object_dtype(ser) and not is_categorical_dtype(ser):
-            ser = ser.astype("category")
-            vec = _get_col_categorical(self._adata, name, self._palette)
-        else:
+        ser = self._adata.obs[name]
+        if is_categorical_dtype(ser) or is_object_dtype(ser) or is_string_dtype(ser):
+            return _get_col_categorical(self._adata, name, self._palette)
+        elif is_numeric_dtype(ser):
             vec = ser.values
-            vec = (vec - vec.min()) / (vec.max() - vec.min())
+            return (vec - vec.min()) / (vec.max() - vec.min())
 
-        return vec
+        raise TypeError(f"Invalid column type `{infer_dtype(ser)}` for `adata.obs[{name!r}]`.")
 
-    def get_layer(self, name):
+    @lru_cache(maxsize=256)
+    def _get_layer(self, name: str) -> np.ndarray:
         """Get layer from name."""
         if name in self._genes_sorted:
             vec = self._get_gene(name)
         elif name in self._obs_sorted:
             vec = self._get_obs(name)
         else:
-            raise KeyError(f"{name} not present in either `var_names` or `obs`")
-        if vec.ndim > 1:
-            _layer = np.zeros(self._image.shape[0:2] + (4,))
-        else:
-            _layer = np.zeros(self._image.shape[0:2])
-
-        for arr, v in zip(self._masks, vec):
-            rr, cc = arr
-            _layer[rr, cc] = v
-
-        return _layer
+            raise KeyError(f"`{name}` is not present in either `adata.var_names` or `adata.obs`.")
+        return vec
 
     def _get_widget(
         self,
         obj_lst: List[str],
         title: Optional[str] = None,
-    ):
+    ) -> QListWidget:
 
         list_widget = QListWidget()
         list_widget.setWindowTitle(title)
@@ -133,9 +132,21 @@ class AnnData2Napari:
             list_widget.addItem(i)
         return list_widget
 
-    def open_napari(self, **kwargs):
-        """Launch Napari."""
-        self.viewer = napari.view_image(self._image, rgb=True, **kwargs)
+    def open_napari(self, **kwargs) -> "AnnData2Napari":
+        """
+        Launch :mod:`napari`.
+
+        Parameters
+        ----------
+        kwargs
+            Keyword arguments for :func:`napari.view_image`.
+
+        Returns
+        -------
+        TODO.
+            TODO.
+        """
+        self._viewer = napari.view_image(self._image, rgb=True, **kwargs)
 
         gene_widget = self._get_widget(self._genes_sorted, title="Genes")
         obs_widget = self._get_widget(self._obs_sorted, title="Observations")
@@ -145,29 +156,36 @@ class AnnData2Napari:
 
             name = obs_widget.currentItem().text()
 
-            _layer = self.get_layer(name)
+            _layer = self._get_layer(name)
+            properties = {"val": _layer}
             logg.info(f"Loading `{name}` layer")
-
-            if _layer.ndim > 2:
-                self.viewer.add_image(
-                    _layer,
-                    name=name,
-                    rgb=True,
-                )
-            else:
-                self.viewer.add_image(_layer, name=name, colormap="magma", blending="additive")
-            return
+            self._viewer.add_points(
+                self._coords,
+                size=self._spot_radius,
+                face_color="val",
+                properties=properties,
+                name=name,
+                face_colormap="magma",
+                blending="additive",
+            )
 
         @magicgui(call_button="Select gene")
         def get_gene_layer() -> None:
 
             name = gene_widget.currentItem().text()
 
-            _layer = self.get_layer(name)
+            _layer = self._get_layer(name)
             logg.info(f"Loading `{name}` layer")
-
-            self.viewer.add_image(_layer, name=name, colormap="magma", blending="additive")
-            return
+            properties = {"val": _layer}
+            self._viewer.add_points(
+                self._coords,
+                size=self._spot_radius,
+                face_color="val",
+                properties=properties,
+                name=name,
+                face_colormap="magma",
+                blending="additive",
+            )
 
         gene_exec = get_gene_layer.Gui()
         gene_widget.itemChanged.connect(gene_exec)
@@ -175,7 +193,7 @@ class AnnData2Napari:
         obs_exec = get_obs_layer.Gui()
         obs_widget.itemChanged.connect(obs_exec)
 
-        self.viewer.window.add_dock_widget(
+        self._viewer.window.add_dock_widget(
             [gene_widget, gene_exec, obs_widget, obs_exec],
             area="right",
             name="genes",
@@ -211,10 +229,10 @@ def interactive(
 
     Returns
     -------
-    None
-        A Napari instance is launched in the current session.
+    TODO
+        TODO.
     """
-    return AnnData2Napari(adata, img, obsm, library_id, palette, **kwargs).open_napari(**kwargs)
+    return AnnData2Napari(adata, img, obsm, library_id, palette).open_napari(**kwargs)
 
 
 def _get_col_categorical(adata, c, palette):
