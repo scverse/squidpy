@@ -1,5 +1,5 @@
 from time import time
-from typing import Any, Union, Callable
+from typing import Any, Set, List, Tuple, Union, Callable, Hashable, Iterable
 from functools import wraps
 
 from anndata import AnnData
@@ -104,3 +104,9 @@ def _write_img_in_adata(adata: AnnData, img_key: str, img: np.ndarray):
         Image (x, y, channels).
     """
     adata.uns[Key.uns.spatial][img_key] = img
+
+
+def _unique_order_preserving(iterable: Iterable[Hashable]) -> Tuple[List[Hashable], Set[Hashable]]:
+    """Remove items from an iterable while preserving the order."""
+    seen = set()
+    return [i for i in iterable if i not in seen and not seen.add(i)], seen

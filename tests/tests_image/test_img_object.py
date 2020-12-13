@@ -136,6 +136,24 @@ def test_crop(tmpdir):
     assert crop.data.dtype == np.uint8
     assert type(crop) == xr.DataArray
 
+    # crop with different channel_id
+    img_orig = np.zeros((10, xdim, ydim), dtype=np.uint8)
+    # put a dot at y 20, x 50
+    img_orig[:, 20, 50] = range(10, 20)
+    cont = ImageContainer(img_orig, img_id="image_1", channel_id="mask")
+    crop = cont.crop_center(
+        x=50,
+        y=20,
+        xr=0,
+        yr=0,
+        cval=5,
+        img_id="image_1",
+    )
+    assert crop.shape == (10, 1, 1)
+    # check that has cropped correct im
+    assert (crop[:3, 0, 0] == [10, 11, 12]).all()
+    assert type(crop) == xr.DataArray
+
 
 def test_uncrop_img(tmpdir):
     """Crop im and uncrop again and check equality."""

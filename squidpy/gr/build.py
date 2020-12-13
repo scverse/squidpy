@@ -62,7 +62,6 @@ def spatial_connectivity(
     coord_type = CoordType(coord_type)
 
     coords = adata.obsm[obsm]
-
     if coord_type == CoordType.VISIUM:
         if n_rings > 1:
             Adj = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True)
