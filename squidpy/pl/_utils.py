@@ -163,7 +163,7 @@ def _unique_order_preserving(iterable: Iterable[Hashable]) -> List[Hashable]:
 
 
 @njit(cache=True, fastmath=True)
-def _point_inside_triangles(triangles: np.ndarray) -> int:
+def _point_inside_triangles(triangles: np.ndarray) -> bool:
     # modified from napari
     AB = triangles[:, 1, :] - triangles[:, 0, :]
     AC = triangles[:, 2, :] - triangles[:, 0, :]
@@ -173,7 +173,7 @@ def _point_inside_triangles(triangles: np.ndarray) -> int:
     s_AC = -AC[:, 0] * triangles[:, 0, 1] + AC[:, 1] * triangles[:, 0, 0] >= 0
     s_BC = -BC[:, 0] * triangles[:, 1, 1] + BC[:, 1] * triangles[:, 1, 0] >= 0
 
-    return np.sum((s_AB != s_AC) & (s_AB == s_BC))
+    return np.any((s_AB != s_AC) & (s_AB == s_BC))
 
 
 @njit(parallel=True)
@@ -182,7 +182,7 @@ def _points_inside_triangles(points: np.ndarray, triangles: np.ndarray) -> np.nd
         len(
             points,
         ),
-        dtype=np.int32,
+        dtype=np.bool_,
     )
     for i in prange(len(out)):
         out[i] = _point_inside_triangles(triangles - points[i])
@@ -199,4 +199,4 @@ def _min_max_norm(vec: Union[spmatrix, np.ndarray]) -> np.ndarray:
 
     maxx, minn = np.nanmax(vec), np.nanmin(vec)
 
-    return np.ones_like(vec) if np.isclose(minn, maxx) else (vec - minn) / (maxx - minn)
+    return np.ones_like(vec) if np.isclose(minn, maxx) else ((vec - minn) / (maxx - minn))
