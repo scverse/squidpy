@@ -56,7 +56,6 @@ class RangeSlider(QtWidgets.QSlider):
         self.valueChanged.connect(self.lowValueChanged)
         self.valueChanged.connect(self.highValueChanged)
 
-    @property
     def lowValue(self):
         return self._low
 
@@ -72,7 +71,6 @@ class RangeSlider(QtWidgets.QSlider):
             self.lowValueChanged.emit(self._low)
             self.valueChanged.emit(self._low)
 
-    @property
     def highValue(self):
         return self._high
 
@@ -298,7 +296,7 @@ class RangeSlider(QtWidgets.QSlider):
         self.setHighValue(value[1])
 
     def value(self) -> Tuple[int, int]:
-        return self.lowValue, self.highValue
+        return self.lowValue(), self.highValue()
 
 
 class DoubleRangeSlider(RangeSlider):
@@ -308,23 +306,18 @@ class DoubleRangeSlider(RangeSlider):
         super().__init__(*args, **kwargs)
 
     def value(self) -> Tuple[float, float]:
-        return super().lowValue / self.PRECISION, super().highValue / self.PRECISION
+        return super().lowValue() / self.PRECISION, super().highValue() / self.PRECISION
 
     def setValue(self, value: Tuple[float, float]):
-        self.setLowValue(value[0])
-        self.setHighValue(value[1])
+        # should only access this, not setLowValue
+        self.setLowValue(value[0] * self.PRECISION)
+        self.setHighValue(value[1] * self.PRECISION)
 
     def setMinimum(self, a0: int) -> None:
         super().setMinimum(a0 * self.PRECISION)
 
     def setMaximum(self, a0: int) -> None:
         super().setMaximum(a0 * self.PRECISION)
-
-    def setLowValue(self, low):
-        super().setLowValue(low * self.PRECISION)
-
-    def setHighValue(self, high):
-        super().setHighValue(high * self.PRECISION)
 
 
 class ListWidget(QtWidgets.QListWidget):

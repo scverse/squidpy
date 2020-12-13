@@ -91,9 +91,7 @@ class AnnData2Napari:
             return _get_col_categorical(self.adata, name, self._palette)
         if is_integer_dtype(ser) and ser.nunique() <= 2:  # most likely a boolean
             self.adata.obs[name] = self.adata.obs[name].astype("category")
-            c = _get_col_categorical(self.adata, name, self._palette)
-            print(c)
-            return c
+            return _get_col_categorical(self.adata, name, self._palette)
 
         if is_numeric_dtype(ser):
             return _min_max_norm(ser.values)
@@ -156,6 +154,8 @@ class AnnData2Napari:
                 if is_categorical:
                     layer.events.select.connect(lambda e: slider.setVisible(False))
 
+            layer.selected = True
+
         @magicgui(call_button="Select gene")
         def get_gene_layer() -> None:
             # TODO: async?
@@ -180,6 +180,8 @@ class AnnData2Napari:
                 layer.selected = False
                 layers.append(layer)
                 layer.events.select.connect(selected_handler)
+
+            layer.selected = True
 
         def selected_handler(event) -> None:
             source: Points = event.source
