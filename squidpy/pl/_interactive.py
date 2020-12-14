@@ -150,13 +150,13 @@ class AnnData2Napari:
                     # TODO: maybe add some policy in __init__: categorical would be always opaque
                     blending="additive",
                 )
-                layer.selected = False
+                # layer.selected = False
 
                 # if it's categorical, remove the slider from bottom
                 if is_categorical:
                     layer.events.select.connect(lambda e: slider.setVisible(False))
 
-            layer.selected = True
+            # layer.selected = True
 
         @magicgui(call_button="Select gene")
         def get_gene_layer(items=None) -> None:
@@ -252,14 +252,10 @@ class AnnData2Napari:
 
         # Select genes widget
         gene_widget = ListWidget(self.adata.var_names, title="Genes")
-        gene_btn = get_gene_layer.Gui()
-        gene_widget.enter_pressed.connect(gene_btn)
         gene_widget.doubleClicked.connect(lambda item: get_gene_layer(items=(item.data(),)))
 
         # Select observations widget
         obs_widget = ListWidget(self.adata.obs.columns, title="Observations")
-        obs_btn = get_obs_layer.Gui()
-        obs_widget.enter_pressed.connect(obs_btn)
         obs_widget.doubleClicked.connect(lambda item: get_obs_layer(items=(item.data(),)))
 
         cgui = clip.Gui()
@@ -272,14 +268,14 @@ class AnnData2Napari:
         self._viewer.window.add_dock_widget(
             # TODO: the btns are a bit redundant, since pressing ENTER works
             # maybe we can remove them and add instead QLabels on top
-            [gene_widget, gene_btn, obs_widget, obs_btn],
+            [gene_widget, obs_widget],
             area="right",
             name="genes",
         )
 
         return self
 
-    def screenshot(self, path: Optional[Union[str, Path]]) -> Optional[np.ndarray]:
+    def screenshot(self, path: Optional[Union[str, Path]] = None) -> Optional[np.ndarray]:
         """
         Take a screenshot.
 
