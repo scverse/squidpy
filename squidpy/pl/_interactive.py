@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Optional, Sequence
+from typing import Tuple, Union, Literal, Optional, Sequence
 from pathlib import Path
 
 import napari
@@ -39,6 +39,9 @@ class AnnData2Napari:
 
     napari is launched with AnnData2Napari.open_napari()
     """
+
+    TEXT_SIZE: int = 24
+    TEXT_COLOR: str = "white"
 
     # TODO: paletter -> point_cmap
     # TODO: image cmap if not able to change it?
@@ -100,7 +103,7 @@ class AnnData2Napari:
         if is_categorical_dtype(ser) or is_object_dtype(ser) or is_string_dtype(ser):
             return _get_col_categorical(self.adata, name, self._palette)
         if is_integer_dtype(ser) and ser.nunique() <= 2:  # most likely a boolean
-            self.adata.obs[name] = self.adata.obs[name].astype("category")
+            self.adata.obs[name] = self.adata.obs[name].astype(bool).astype("category")
             return _get_col_categorical(self.adata, name, self._palette)
 
         if is_numeric_dtype(ser):
@@ -138,7 +141,7 @@ class AnnData2Napari:
             layer = None
             for item in obs_widget.selectedItems() if items is None else items:
                 name = item if isinstance(item, str) else item.text()
-                if name in (_layer.name for _layer in self.viewer.layers):
+                if name in self.viewer.layers:
                     logg.warning(f"Selected layer `{name}` is already loaded")
                     continue
                 _layer = self._get_layer(name)
@@ -163,9 +166,30 @@ class AnnData2Napari:
                 layer.editable = False
                 layer.selected = False
 
-                # if it's categorical, remove the slider from bottom
+                # if it's categorical, remove the slider from bottom and add labels
                 if is_categorical:
                     layer.events.select.connect(lambda e: slider.setVisible(False))
+
+                    cat = self.adata.obs[name]
+                    df = pd.concat([cat, pd.DataFrame(self._coords, index=cat.index)], axis=1)
+                    df = df.groupby(name)[[0, 1]].apply(lambda r: list(np.median(r.values, axis=0)))
+                    df = pd.DataFrame((item for item in df), index=df.index, columns=["x", "y"])
+
+                    text = {
+                        "text": "{cluster}",
+                        "size": self.TEXT_SIZE,
+                        "color": self.TEXT_COLOR,
+                        "anchor": "center",
+                        "blending": "opaque",
+                    }
+                    self.viewer.add_points(
+                        df.values,
+                        properties={"cluster": df.index},
+                        text=text,
+                        size=0,
+                        edge_width=0,
+                        name=f"{name}_labels",
+                    )
 
             if layer is not None:
                 layer.selected = True
@@ -176,7 +200,7 @@ class AnnData2Napari:
             layer = None
             for item in gene_widget.selectedItems() if items is None else items:
                 name = item if isinstance(item, str) else item.text()
-                if name in (_layer.name for _layer in self.viewer.layers):
+                if name in self.viewer.layers:
                     logg.warning(f"Selected layer `{name}` is already loaded")
                     continue
                 _layer = self._get_layer(name)
@@ -239,7 +263,6 @@ class AnnData2Napari:
         def export(viewer: napari.Viewer) -> None:
             # TODO: async?
             for layer in viewer.layers:
-                # TODO: warn if exporting nothing
                 if isinstance(layer, Shapes) and layer.selected:
                     if not len(layer.data):
                         logg.warning(f"Shape layer `{layer.name}` has no visible shapes")
@@ -323,10 +346,10 @@ def interactive(
     # TODO: make sure we're passing correct pallette
     # TODO: handle None palette?
     palette: Union[str, Sequence[str], Cycler] = None,
-    color_map: Union[Colormap, str, None] = "viridis",
+    color_map: Optional[Union[Colormap, str]] = "viridis",
     library_id: Optional[str] = None,
     key_added: Optional[str] = "selected",
-    blending: Optional[str] = "opaque",
+    blending: Literal["translucent", "opaque", "additive"] = "opaque",
     **kwargs,
 ) -> AnnData2Napari:
     """
@@ -351,7 +374,16 @@ def interactive(
         TODO.
     """
     # TODO: only HVG subset
-    return AnnData2Napari(adata, img=img, obsm=obsm, library_id=library_id, palette=palette).open_napari(**kwargs)
+    return AnnData2Napari(
+        adata,
+        img=img,
+        obsm=obsm,
+        library_id=library_id,
+        palette=palette,
+        color_map=color_map,
+        key_added=key_added,
+        blending=blending,
+    ).open_napari(**kwargs)
 
 
 def _get_col_categorical(adata: AnnData, c: str, _palette=None) -> np.ndarray:

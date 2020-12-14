@@ -326,6 +326,7 @@ class ListWidget(QtWidgets.QListWidget):
     def __init__(self, items: Iterable[str], title: Optional[str] = None):
         super().__init__()
         self.setWindowTitle(title)
+        self.setSortingEnabled(False)
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.addItems(items)
 
