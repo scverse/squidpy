@@ -39,7 +39,6 @@ jobs:
       OS: ${{ matrix.os }}
       PYTHON: ${{ matrix.python }}
       PLATOFRM: ${{ matrix.platform }}
-      DISPLAY: '99.0'
 
     steps:
     - uses: actions/checkout@v2
@@ -82,13 +81,10 @@ jobs:
 
     # https://pytest-qt.readthedocs.io/en/latest/troubleshooting.html#github-actions
     - name: Install dependencies for PyQt5
+      if: startsWith(matrix.os, 'ubuntu')
       run: |
-        if [[ "$RUNNER_OS" == "Linux" ]]; then
-          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
-          /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -screen 0 1920x1200x24 -ac +extension GLX
-        else
-          echo "$RUNNER_OS not supported for PyQt5 dependencies"
-        fi
+        sudo apt install xvbf libxkbcommon-x11-0 -y
+        sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
 
     - name: Linting
       run: |
@@ -102,6 +98,8 @@ jobs:
     - name: Testing
       run: |
         tox
+      env:
+        DISPLAY: ":42"
 
     - name: Upload coverage to Codecov
       if: success()
