@@ -8,7 +8,10 @@ from napari.layers import Points, Shapes
 
 from scanpy import logging as logg
 from anndata import AnnData
-from scanpy.plotting._utils import _set_default_colors_for_categorical_obs
+from scanpy.plotting._utils import (
+    _set_colors_for_categorical_obs,
+    _set_default_colors_for_categorical_obs,
+)
 
 import numpy as np
 import pandas as pd
@@ -21,7 +24,7 @@ from pandas.api.types import (
     is_categorical_dtype,
 )
 
-from matplotlib.colors import to_rgba
+from matplotlib.colors import Colormap, to_rgba
 
 from squidpy._docs import d
 from squidpy.im.object import ImageContainer
@@ -45,7 +48,8 @@ class AnnData2Napari:
         adata: AnnData,
         img: ImageContainer,
         obsm: str = Key.obsm.spatial,
-        palette: Union[str, Sequence[str], Cycler] = "viridis",
+        palette: Union[str, Sequence[str], Cycler] = None,
+        color_map: Union[Colormap, str, None] = "viridis",
         library_id: Optional[str] = None,
         key_added: str = "selected",
     ):
@@ -53,6 +57,7 @@ class AnnData2Napari:
         self._viewer = None
         self._coords = adata.obsm[obsm][:, ::-1]
         self._palette = palette
+        self._cmap = color_map
         self._key_added = key_added
 
         # TODO: empty check
@@ -147,7 +152,6 @@ class AnnData2Napari:
                     face_color=face_color,
                     properties={"value": _layer},
                     name=name,
-                    face_colormap=self._palette,
                     # TODO: maybe add some policy in __init__: categorical would be always opaque
                     blending="additive",
                 )
@@ -177,7 +181,7 @@ class AnnData2Napari:
                     face_color="value",
                     properties={"value": _layer},
                     name=name,
-                    face_colormap=self._palette,
+                    face_colormap=self._cmap,
                     blending="additive",
                     # percentile metadata
                     metadata={"min": 0, "max": 100, "data": _layer},
@@ -284,7 +288,7 @@ class AnnData2Napari:
 
             return self
 
-    def screenshot(self, path: Optional[Union[str, Path]] = None) -> np.ndarray:
+    def screenshot(self, path: Optional[Union[str, Path]] = None) -> Optional[np.ndarray]:
         """
         Take a screenshot.
 
@@ -310,7 +314,8 @@ def interactive(
     obsm: str = Key.obsm.spatial,
     # TODO: make sure we're passing correct pallette
     # TODO: handle None palette?
-    palette: Union[str, Sequence[str], Cycler] = "viridis",
+    palette: Union[str, Sequence[str], Cycler] = None,
+    color_map: Union[Colormap, str, None] = "viridis",
     library_id: Optional[str] = None,
     **kwargs,
 ) -> AnnData2Napari:
@@ -344,10 +349,10 @@ def _get_col_categorical(adata: AnnData, c: str, _palette=None) -> np.ndarray:
     colors_key = f"{c}_colors"
     if colors_key not in adata.uns.keys():
         # TODO: this needs a categorical palette, not continuous
-        # if palette is not None:
-        #    _set_colors_for_categorical_obs(adata, c, palette)
-        # else:
-        _set_default_colors_for_categorical_obs(adata, c)
+        if _palette is not None:
+            _set_colors_for_categorical_obs(adata, c, _palette)
+        else:
+            _set_default_colors_for_categorical_obs(adata, c)
     cols = [to_rgba(i) for i in adata.uns[colors_key]]
 
     col_dict = dict(zip(adata.obs[c].cat.categories, cols))
