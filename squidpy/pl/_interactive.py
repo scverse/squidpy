@@ -132,10 +132,13 @@ class AnnData2Napari:
 
         @magicgui(call_button="Select observation")
         def get_obs_layer(items=None) -> None:
-            # TODO: async? duplicate handling? (e.g. if duplicate, set selected)
+            # TODO: async?
             layer = None
             for item in obs_widget.selectedItems() if items is None else items:
                 name = item if isinstance(item, str) else item.text()
+                if name in (_layer.name for _layer in self.viewer.layers):
+                    logg.warning(f"Selected layer `{name}` is already loaded")
+                    continue
                 _layer = self._get_layer(name)
 
                 # TODO: more robust when determining categorical
@@ -167,10 +170,13 @@ class AnnData2Napari:
 
         @magicgui(call_button="Select gene")
         def get_gene_layer(items=None) -> None:
-            # TODO: async? duplicate handling?
+            # TODO: async?
             layer = None
             for item in gene_widget.selectedItems() if items is None else items:
                 name = item if isinstance(item, str) else item.text()
+                if name in (_layer.name for _layer in self.viewer.layers):
+                    logg.warning(f"Selected layer `{name}` is already loaded")
+                    continue
                 _layer = self._get_layer(name)
 
                 logg.info(f"Loading `{name}` layer")
