@@ -38,6 +38,8 @@ jobs:
     env:
       OS: ${{ matrix.os }}
       PYTHON: ${{ matrix.python }}
+      PLATOFRM: ${{ matrix.platform }}
+      DISPLAY: '99.0'
 
     steps:
     - uses: actions/checkout@v2
@@ -66,15 +68,26 @@ jobs:
         python -m pip install --upgrade pip
         pip install tox tox-gh-actions codecov
 
-    - name: Installed automake for leidenalg
+    - name: Installed dependencies for leidenalg
       run: |
         if [[ "$RUNNER_OS" == "Linux" ]]; then
-          sudo apt install automake
+          sudo apt update -y
+          sudo apt install automake -y
         elif [[ "$RUNNER_OS" == "macOS" ]]; then
           brew install automake
         else
-          echo "$RUNNER_OS not supported"
+          echo "$RUNNER_OS not supported for leidenalg dependencies"
           exit 1
+        fi
+
+    # https://pytest-qt.readthedocs.io/en/latest/troubleshooting.html#github-actions
+    - name: Install dependencies for PyQt5
+      run: |
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
+          /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -screen 0 1920x1200x24 -ac +extension GLX
+        else
+          echo "$RUNNER_OS not supported for PyQt5 dependencies"
         fi
 
     - name: Linting
@@ -89,16 +102,14 @@ jobs:
     - name: Testing
       run: |
         tox
-      env:
-        PLATFORM: ${{ matrix.platform }}
 
     - name: Upload coverage to Codecov
       if: success()
+      run: |
+        codecov --no-color --required --flags unittests
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
-      run: |
-        codecov --no-color --required --flags unittests
 
   rebuild-examples:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'

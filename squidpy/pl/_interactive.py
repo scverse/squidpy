@@ -250,40 +250,41 @@ class AnnData2Napari:
                         layer._update_thumbnail()
                         layer.refresh_colors()
 
-        self._viewer = napari.view_image(self._image, **kwargs)
-        self.viewer.layers[0].events.select.connect(lambda e: slider.setVisible(False))
-        self.viewer.bind_key("Shift-E", export)
+        with napari.gui_qt():
+            self._viewer = napari.view_image(self._image, **kwargs)
+            self.viewer.layers[0].events.select.connect(lambda e: slider.setVisible(False))
+            self.viewer.bind_key("Shift-E", export)
 
-        # Select genes widget
-        gene_widget = ListWidget(self.adata.var_names, title="Genes")
-        gene_btn = get_gene_layer.Gui()
-        gene_widget.enter_pressed.connect(gene_btn)
-        gene_widget.doubleClicked.connect(lambda item: get_gene_layer(items=(item.data(),)))
+            # Select genes widget
+            gene_widget = ListWidget(self.adata.var_names, title="Genes")
+            gene_btn = get_gene_layer.Gui()
+            gene_widget.enter_pressed.connect(gene_btn)
+            gene_widget.doubleClicked.connect(lambda item: get_gene_layer(items=(item.data(),)))
 
-        # Select observations widget
-        obs_widget = ListWidget(self.adata.obs.columns, title="Observations")
-        obs_btn = get_obs_layer.Gui()
-        obs_widget.enter_pressed.connect(obs_btn)
-        obs_widget.doubleClicked.connect(lambda item: get_obs_layer(items=(item.data(),)))
+            # Select observations widget
+            obs_widget = ListWidget(self.adata.obs.columns, title="Observations")
+            obs_btn = get_obs_layer.Gui()
+            obs_widget.enter_pressed.connect(obs_btn)
+            obs_widget.doubleClicked.connect(lambda item: get_obs_layer(items=(item.data(),)))
 
-        cgui = clip.Gui()
-        slider: DoubleRangeSlider = cgui.get_widget("percentile")
-        # TODO: move to bottom?
-        # ideally, we would inject this to `Points` widget group, but it would be very hacky/brittle
-        self.viewer.window.add_dock_widget(cgui, area="left", name="percentile")
+            cgui = clip.Gui()
+            slider: DoubleRangeSlider = cgui.get_widget("percentile")
+            # TODO: move to bottom?
+            # ideally, we would inject this to `Points` widget group, but it would be very hacky/brittle
+            self.viewer.window.add_dock_widget(cgui, area="left", name="percentile")
 
-        # TODO: see if we can disallow deleting the image layer (e.g. by consuming deleting event on that layer)
-        self._viewer.window.add_dock_widget(
-            # TODO: the btns are a bit redundant, since pressing ENTER works
-            # maybe we can remove them and add instead QLabels on top
-            [gene_widget, gene_btn, obs_widget, obs_btn],
-            area="right",
-            name="genes",
-        )
+            # TODO: see if we can disallow deleting the image layer (e.g. by consuming deleting event on that layer)
+            self._viewer.window.add_dock_widget(
+                # TODO: the btns are a bit redundant, since pressing ENTER works
+                # maybe we can remove them and add instead QLabels on top
+                [gene_widget, gene_btn, obs_widget, obs_btn],
+                area="right",
+                name="genes",
+            )
 
-        return self
+            return self
 
-    def screenshot(self, path: Optional[Union[str, Path]]) -> Optional[np.ndarray]:
+    def screenshot(self, path: Optional[Union[str, Path]] = None) -> np.ndarray:
         """
         Take a screenshot.
 
@@ -299,7 +300,7 @@ class AnnData2Napari:
         """
         if self.viewer is None:
             raise RuntimeError("No viewer is initialized.")
-        return self.viewer.window.screenshot(path)
+        return self.viewer.screenshot(path, canvas_only=True)
 
 
 @d.dedent
