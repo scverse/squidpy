@@ -21,6 +21,11 @@
 from typing import Tuple, Union, Iterable, Optional
 
 from PyQt5 import QtGui, QtCore, QtWidgets
+from vispy import scene
+from vispy.scene import widgets
+from vispy.color.colormap import Colormap, MatplotlibColormap
+
+import numpy as np
 
 
 class RangeSlider(QtWidgets.QSlider):
@@ -344,3 +349,100 @@ class ListWidget(QtWidgets.QListWidget):
             self.enter_pressed.emit()
         else:
             super().keyPressEvent(event)
+
+
+class ColorBarWidget2(QtWidgets.QWidget):
+    FORMAT = "{:.02f}"
+
+    cmapChanged = QtCore.pyqtSignal(str)
+    climChanged = QtCore.pyqtSignal((float, float))
+
+    def __init__(self, cmap: str, label: Optional[str] = None, width: Optional[int] = 300, height: Optional[int] = 50):
+        super().__init__()
+
+        self._cmap = cmap or ""
+        self._clim = (0.0, 1.0)
+
+        self._width = width
+        self._height = height
+        self._label = label
+
+        self.__initUI()
+
+    def __initUI(self):
+        self.setFixedWidth(self._width)
+        self.setFixedHeight(self._height)
+
+        # cheat a litte - bgcol is napari's bgcolor - hope nobody uses the lightmode
+        self._canvas = scene.SceneCanvas(size=(self._width, self._height), bgcolor="#262930")
+        # TODO: place the labels more nicely (+ ticks)
+        self._colorbar = widgets.ColorBarWidget(
+            self._create_colormap(self.getCmap()),
+            orientation="top",
+            label=self._label,
+            label_color="white",
+            clim=self.getClim(),
+            border_width=1.0,
+            border_color="black",
+            padding=(0.15, 0.5),
+            axis_ratio=0.25,
+            innterpolation="linear",
+        )
+
+        self._canvas.central_widget.add_widget(self._colorbar)
+
+        self.climChanged.connect(self.onClimChanged)
+        self.cmapChanged.connect(self.onCmapChanged)
+
+    def _create_colormap(self, cmap: str) -> Colormap:
+        minn, maxx = self.getClim()
+        cm = MatplotlibColormap(cmap)
+
+        return Colormap(cm[np.linspace(minn, maxx, len(cm.colors))], interpolation="linear")
+
+    def setCmap(self, cmap: str) -> None:
+        if self._cmap == cmap:
+            return
+
+        self._cmap = cmap
+        self.cmapChanged.emit(cmap)
+
+    def getCmap(self) -> str:
+        return self._cmap
+
+    def onCmapChanged(self, value: str) -> None:
+        # this does not trigger update for some reason...
+        self._colorbar.cmap = self._create_colormap(value)
+        self._colorbar._colorbar._update()
+
+    def setClim(self, value: Tuple[float, float]) -> None:
+        if value == self._clim:
+            return
+
+        value = tuple(sorted(np.clip(value, 0.0, 1.0)))
+        self._clim = value
+        self.climChanged.emit(*value)
+
+    def getClim(self) -> Tuple[float, float]:
+        return self._clim
+
+    def onClimChanged(self, minn: float, maxx: float) -> None:
+        self._colorbar.cmap = self._create_colormap(self.getCmap())
+        self._colorbar.clim = (self.FORMAT.format(minn), self.FORMAT.format(maxx))
+
+    def getCanvas(self) -> scene.SceneCanvas:
+        return self._canvas
+
+    def getColorBar(self):
+        return self._colorbar
+
+    def setLayout(self, layout) -> None:
+        layout.addWidget(self.getCanvas().native)
+        super().setLayout(layout)
+
+    def update_color(self) -> None:
+        # when changing selected layers that have the same limit
+        # could also trigger it as self._colorbar.clim = self.getClim()
+        # but the above option also updates geometry
+        # cbarwidget->cbar->cbarvisual
+        self._colorbar._colorbar._colorbar._update()

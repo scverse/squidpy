@@ -5,6 +5,7 @@ import napari
 from cycler import Cycler
 from magicgui import magicgui
 from napari.layers import Points, Shapes
+from PyQt5.QtWidgets import QVBoxLayout
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -29,7 +30,7 @@ from matplotlib.colors import Colormap, to_rgb
 from squidpy._docs import d
 from squidpy.im.object import ImageContainer
 from squidpy.pl._utils import _min_max_norm, _points_inside_triangles
-from squidpy.pl._widgets import ListWidget, DoubleRangeSlider
+from squidpy.pl._widgets import ListWidget, ColorBarWidget2, DoubleRangeSlider
 from squidpy.constants._pkg_constants import Key
 
 
@@ -230,7 +231,11 @@ class AnnData2Napari:
             if source.selected:
                 # restore slider to the selected's ranges
                 # TODO: constants
-                slider.setValue((source.metadata["min"], source.metadata["max"]))
+                val = (source.metadata["min"], source.metadata["max"])
+                slider.setValue(val)
+                cbw.setClim((val[0] / 100, val[1] / 100))
+                cbw.update_color()
+
                 slider.setVisible(True)
 
         @magicgui(
@@ -251,6 +256,7 @@ class AnnData2Napari:
                 # multiple can be selected
                 if isinstance(layer, Points) and layer.selected:
                     v = layer.metadata["data"]
+
                     clipped = np.clip(v, *np.percentile(v, percentile))
                     # save the percentile
                     layer.metadata = {**layer.metadata, "min": percentile[0], "max": percentile[1]}
@@ -259,6 +265,8 @@ class AnnData2Napari:
                     layer.properties = {"value": clipped}
                     layer._update_thumbnail()  # can't find another way to force it
                     layer.refresh_colors()
+
+                    cbw.setClim((np.min(clipped), np.max(clipped)))
 
         def export(viewer: napari.Viewer) -> None:
             # TODO: async?
@@ -287,6 +295,7 @@ class AnnData2Napari:
 
         with napari.gui_qt():
             self._viewer = napari.view_image(self._image, **kwargs)
+            # TODO: use hidden + hide also cbar
             self.viewer.layers[0].events.select.connect(lambda e: slider.setVisible(False))
             self.viewer.bind_key("Shift-E", export)
 
@@ -302,11 +311,17 @@ class AnnData2Napari:
             obs_widget.enter_pressed.connect(obs_btn)
             obs_widget.doubleClicked.connect(lambda item: get_obs_layer(items=(item.data(),)))
 
+            layout = QVBoxLayout()
+
             cgui = clip.Gui()
             slider: DoubleRangeSlider = cgui.get_widget("percentile")
-            # TODO: move to bottom?
+
+            cbw = ColorBarWidget2(self._cmap)
+            cbw.setLayout(layout)
+            layout.addWidget(cgui)
+
             # ideally, we would inject this to `Points` widget group, but it would be very hacky/brittle
-            self.viewer.window.add_dock_widget(cgui, area="left", name="percentile")
+            self.viewer.window.add_dock_widget([cgui, cbw], area="left", name="Percentile")
 
             # TODO: see if we can disallow deleting the image layer (e.g. by consuming deleting event on that layer)
             self._viewer.window.add_dock_widget(
