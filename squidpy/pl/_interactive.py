@@ -128,6 +128,7 @@ class AnnData2Napari:
         @magicgui(call_button="Select observation")
         def get_obs_layer(items=None) -> None:
             # TODO: async? duplicate handling? (e.g. if duplicate, set selected)
+            layer = None
             for item in obs_widget.selectedItems() if items is None else items:
                 name = item if isinstance(item, str) else item.text()
                 _layer = self._get_layer(name)
@@ -150,18 +151,20 @@ class AnnData2Napari:
                     # TODO: maybe add some policy in __init__: categorical would be always opaque
                     blending="additive",
                 )
+                layer.editable = False
                 layer.selected = False
 
                 # if it's categorical, remove the slider from bottom
                 if is_categorical:
                     layer.events.select.connect(lambda e: slider.setVisible(False))
 
-            layer.selected = True
+            if layer is not None:
+                layer.selected = True
 
         @magicgui(call_button="Select gene")
         def get_gene_layer(items=None) -> None:
             # TODO: async? duplicate handling?
-            layers = []
+            layer = None
             for item in gene_widget.selectedItems() if items is None else items:
                 name = item if isinstance(item, str) else item.text()
                 _layer = self._get_layer(name)
@@ -179,11 +182,12 @@ class AnnData2Napari:
                     # percentile metadata
                     metadata={"min": 0, "max": 100, "data": _layer},
                 )
+                layer.editable = False
                 layer.selected = False
-                layers.append(layer)
                 layer.events.select.connect(selected_handler)
 
-            layer.selected = True
+            if layer is not None:
+                layer.selected = True
 
         def selected_handler(event) -> None:
             source: Points = event.source
