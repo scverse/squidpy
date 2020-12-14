@@ -51,7 +51,8 @@ class AnnData2Napari:
         palette: Union[str, Sequence[str], Cycler] = None,
         color_map: Union[Colormap, str, None] = "viridis",
         library_id: Optional[str] = None,
-        key_added: str = "selected",
+        key_added: Optional[str] = "selected",
+        blending: Optional[str] = "opaque",
     ):
         self._adata = adata
         self._viewer = None
@@ -59,6 +60,7 @@ class AnnData2Napari:
         self._palette = palette
         self._cmap = color_map
         self._key_added = key_added
+        self._layer_blending = blending
 
         # TODO: empty check
         if library_id is None:
@@ -156,7 +158,7 @@ class AnnData2Napari:
                     properties={"value": _layer},
                     name=name,
                     # TODO: maybe add some policy in __init__: categorical would be always opaque
-                    blending="additive",
+                    blending=self._layer_blending,
                 )
                 layer.editable = False
                 layer.selected = False
@@ -188,7 +190,7 @@ class AnnData2Napari:
                     properties={"value": _layer},
                     name=name,
                     face_colormap=self._cmap,
-                    blending="additive",
+                    blending=self._layer_blending,
                     # percentile metadata
                     metadata={"min": 0, "max": 100, "data": _layer},
                 )
@@ -323,6 +325,8 @@ def interactive(
     palette: Union[str, Sequence[str], Cycler] = None,
     color_map: Union[Colormap, str, None] = "viridis",
     library_id: Optional[str] = None,
+    key_added: Optional[str] = "selected",
+    blending: Optional[str] = "opaque",
     **kwargs,
 ) -> AnnData2Napari:
     """
