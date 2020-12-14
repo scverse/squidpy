@@ -166,6 +166,7 @@ class AnnData2Napari:
                 )
                 layer.editable = False
                 layer.selected = False
+                self._hide_point_controls(layer)
 
                 # if it's categorical, remove the slider from bottom and add labels
                 if is_categorical:
@@ -222,6 +223,7 @@ class AnnData2Napari:
                 layer.editable = False
                 layer.selected = False
                 layer.events.select.connect(selected_handler)
+                self._hide_point_controls(layer)
 
             if layer is not None:
                 layer.selected = True
@@ -333,6 +335,33 @@ class AnnData2Napari:
             )
 
             return self
+
+    def _hide_point_controls(self, layer: Points) -> None:
+        # TODO: move this up
+        to_hide = {
+            "symbol:": "symbolComboBox",
+            "point size:": "sizeSlider",
+            "face color:": "faceColorEdit",
+            "edge color:": "edgeColorEdit",
+            "n-dim:": "ndimCheckBox",
+        }
+        points_controls = self.viewer.window.qt_viewer.controls.widgets[layer]
+
+        from qtpy.QtWidgets import QLabel, QGridLayout
+
+        gl: QGridLayout = points_controls.grid_layout
+
+        labels = {}
+        for i in range(gl.count()):
+            item = gl.itemAt(i).widget()
+            if isinstance(item, QLabel):
+                labels[item.text()] = item
+
+        for key, attr in to_hide.items():
+            attr = getattr(points_controls, attr, None)
+            if key in labels and attr is not None:
+                attr.setHidden(True)
+                labels[key].setHidden(True)
 
     def screenshot(self, path: Optional[Union[str, Path]] = None) -> Optional[np.ndarray]:
         """
