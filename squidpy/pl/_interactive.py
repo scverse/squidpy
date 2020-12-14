@@ -24,7 +24,7 @@ from pandas.api.types import (
     is_categorical_dtype,
 )
 
-from matplotlib.colors import Colormap, to_rgba
+from matplotlib.colors import Colormap, to_rgb
 
 from squidpy._docs import d
 from squidpy.im.object import ImageContainer
@@ -363,7 +363,7 @@ def _get_col_categorical(adata: AnnData, c: str, _palette=None) -> np.ndarray:
             _set_colors_for_categorical_obs(adata, c, _palette)
         else:
             _set_default_colors_for_categorical_obs(adata, c)
-    cols = [to_rgba(i) for i in adata.uns[colors_key]]
+    cols = [to_rgb(i) for i in adata.uns[colors_key]]
 
     col_dict = dict(zip(adata.obs[c].cat.categories, cols))
     return np.array([col_dict[v] for v in adata.obs[c]])
