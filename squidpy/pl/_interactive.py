@@ -16,6 +16,7 @@ from scanpy.plotting._utils import (
 
 import numpy as np
 import pandas as pd
+from scipy.spatial import KDTree
 from pandas.api.types import (
     infer_dtype,
     is_object_dtype,
@@ -136,6 +137,13 @@ class AnnData2Napari:
             TODO.
         """
 
+        def point_closest_to_med(needles: pd.Series, haystack: pd.Series):
+            # return needles.iloc[np.argmin(np.sum((needles - haystack) ** 2))]
+            ix = np.argmin(np.sum((needles - haystack) ** 2))
+            res = [False] * len(needles)
+            res[ix] = True
+            return res
+
         @magicgui(call_button="Select observation")
         def get_obs_layer(items=None) -> None:
             # TODO: async?
@@ -147,35 +155,29 @@ class AnnData2Napari:
                     continue
                 _layer = self._get_layer(name)
 
-                # TODO: more robust when determining categorical
+                # TODO: be more robust when determining categorical (refactor the whole FN)
                 # TODO: constant ("value")
                 face_color = _layer if isinstance(_layer[0], np.ndarray) else "value"
-                # TODO: nice to have - legend (should be fairly easy [either as text + shape in napari or Qt widgets])
                 is_categorical = not isinstance(face_color, str)
+                properties, text = {"value": _layer}, None
 
-                logg.info(f"Loading `{name}` layer")
-                # TODO: disable already added points?
-                layer = self.viewer.add_points(
-                    self._coords,
-                    size=self._spot_radius,
-                    face_color=face_color,
-                    properties={"value": _layer},
-                    name=name,
-                    # TODO: maybe add some policy in __init__: categorical would be always opaque
-                    blending=self._layer_blending,
-                )
-                layer.editable = False
-                layer.selected = False
-                self._hide_point_controls(layer)
-
-                # if it's categorical, remove the slider from bottom and add labels
                 if is_categorical:
-                    layer.events.select.connect(lambda e: slider.setVisible(False))
+                    df = pd.DataFrame(self._coords)
+                    df[name] = self.adata.obs[name].values
+                    df = df.groupby(name)[[0, 1]].apply(lambda g: list(np.median(g.values, axis=0)))
+                    df = pd.DataFrame(r for r in df)
 
-                    cat = self.adata.obs[name]
-                    df = pd.concat([cat, pd.DataFrame(self._coords, index=cat.index)], axis=1)
-                    df = df.groupby(name)[[0, 1]].apply(lambda r: list(np.median(r.values, axis=0)))
-                    df = pd.DataFrame((item for item in df), index=df.index, columns=["x", "y"])
+                    kdtree = KDTree(self._coords)
+                    clusters = np.full(
+                        (
+                            len(
+                                self._coords,
+                            )
+                        ),
+                        fill_value="",
+                    )
+                    clusters[kdtree.query(df.values)[1]] = df.index
+                    properties["cluster"] = clusters
 
                     text = {
                         "text": "{cluster}",
@@ -184,14 +186,27 @@ class AnnData2Napari:
                         "anchor": "center",
                         "blending": "opaque",
                     }
-                    self.viewer.add_points(
-                        df.values,
-                        properties={"cluster": df.index},
-                        text=text,
-                        size=0,
-                        edge_width=0,
-                        name=f"{name}_labels",
-                    )
+
+                logg.info(f"Loading `{name}` layer")
+                # TODO: disable already added points?
+                layer = self.viewer.add_points(
+                    self._coords,
+                    name=name,
+                    size=self._spot_radius,
+                    face_color=face_color,
+                    edge_width=1,
+                    text=text,
+                    blending=self._layer_blending,
+                    properties=properties,
+                )
+
+                layer.editable = False
+                layer.selected = False
+                self._hide_point_controls(layer)
+
+                # if it's categorical, remove the slider from bottom and add labels
+                if is_categorical:
+                    layer.events.select.connect(lambda e: slider.setVisible(False))
 
             if layer is not None:
                 layer.selected = True
@@ -211,12 +226,13 @@ class AnnData2Napari:
                 # TODO: disable already added points?
                 layer = self.viewer.add_points(
                     self._coords,
+                    name=name,
                     size=self._spot_radius,
                     face_color="value",
-                    properties={"value": _layer},
-                    name=name,
                     face_colormap=self._cmap,
+                    edge_width=1,
                     blending=self._layer_blending,
+                    properties={"value": _layer},
                     # percentile metadata
                     metadata={"min": 0, "max": 100, "data": _layer},
                 )
@@ -244,7 +260,7 @@ class AnnData2Napari:
             auto_call=True,
             labels=False,  # TODO: setVisible(False) doesn't remove the label
             percentile={
-                "widget_type": DoubleRangeSlider,
+                "widget_type": DoubleRangeSlider,  # TODO: maybe use QHRangeSlider from napari
                 "minimum": 0,
                 "maximum": 100,
                 "value": (0, 100),
@@ -316,6 +332,7 @@ class AnnData2Napari:
             layout = QVBoxLayout()
 
             cgui = clip.Gui()
+            # TODO: enable slider for obs
             slider: DoubleRangeSlider = cgui.get_widget("percentile")
 
             cbw = ColorBarWidget2(self._cmap)
