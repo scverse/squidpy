@@ -2,19 +2,18 @@
 from __future__ import annotations
 
 import warnings
-
 from types import MappingProxyType
-from typing import Any, Dict, List, Tuple, Union, Mapping, Iterable, Optional, Callable
+from typing import Any, Dict, List, Tuple, Union, Mapping, Callable, Iterable, Optional
 
 from scanpy import logging as logg
 from anndata import AnnData
 
 import numpy as np
 import pandas as pd
+from sklearn import preprocessing
 
 import skimage.feature as sk_image
 from skimage.feature import greycoprops, greycomatrix
-from sklearn import preprocessing
 
 from squidpy._docs import d, inject_docs
 from squidpy.gr._utils import Signal, parallelize, _get_n_cores
@@ -331,59 +330,72 @@ def get_grey_texture_features(
     return features
 
 
-def scale_f(
-    feature_df: pd.DataFrame,
-    option: Union[str,Callable[float,float]]
-) -> np.array:
-    """Wraps sklearn functions and others for scaling.
-    
+def scale_f(feature_df: pd.DataFrame, option: Union[str, Callable[float, float]]) -> np.array:
+    """Wrap sklearn functions and others for scaling.
+
     Params
     ------
     feature: pd.DataFrame
         features that are scaled according `option`
     option: str, list, lambda fct
         scaling specification
-        
+
     Returns
     -------
     np.array
-    
-    """   
-    import types    
+
+    """
+    import types
+
     if option == "scale":
         return preprocessing.scale(feature_df.values, axis=0, with_mean=True, with_std=True, copy=True)
     elif isinstance(option, tuple) and (len(option) == 2):
         return preprocessing.minmax_scale(feature_df.values, feature_range=(option[0], option[1]), axis=0, copy=True)
-    elif option == 'abs':
+    elif option == "abs":
         return preprocessing.maxabs_scale(feature_df.values, axis=0, copy=True)
-    elif option == 'robust':
-        return preprocessing.robust_scale(feature_df.values, axis=0, with_centering=True, with_scaling=True, 
-                                          quantile_range=(25.0, 75.0), copy=True)
-    elif option == 'uniform':
-        return preprocessing.quantile_transform(feature_df.values,n_quantiles=np.min([1000,len(feature_df)]), axis=0,
-                                                output_distribution='uniform',random_state=1234, copy=True)
-    elif option == 'normal':
-        return preprocessing.quantile_transform(feature_df.values,n_quantiles=np.min([1000,len(feature_df)]), axis=0,
-                                                output_distribution='normal', random_state=1234, copy=True)
-    elif isinstance(option,types.LambdaType):
+    elif option == "robust":
+        return preprocessing.robust_scale(
+            feature_df.values, axis=0, with_centering=True, with_scaling=True, quantile_range=(25.0, 75.0), copy=True
+        )
+    elif option == "uniform":
+        return preprocessing.quantile_transform(
+            feature_df.values,
+            n_quantiles=np.min([1000, len(feature_df)]),
+            axis=0,
+            output_distribution="uniform",
+            random_state=1234,
+            copy=True,
+        )
+    elif option == "normal":
+        return preprocessing.quantile_transform(
+            feature_df.values,
+            n_quantiles=np.min([1000, len(feature_df)]),
+            axis=0,
+            output_distribution="normal",
+            random_state=1234,
+            copy=True,
+        )
+    elif isinstance(option, types.LambdaType):
         return feature_df.apply(option).values
     else:
         warnings.warn(f"Scaling option {option} is not supported")
 
 
 def scale_features(
-    data: Union[AnnData,pd.DataFrame],
-    key: str = 'features',
-    features: Union[str,list(str)] = 'all',
-    scaling: Union[str,tuple(float),Callable[float,float],dict[str,Union[str,tuple(float),Callable[float,float]]]] = 'scale',
-    inplace: bool = True
+    data: Union[AnnData, pd.DataFrame],
+    key: str = "features",
+    features: Union[str, list(str)] = "all",
+    scaling: Union[
+        str, tuple(float), Callable[float, float], dict[str, Union[str, tuple(float), Callable[float, float]]]
+    ] = "scale",
+    inplace: bool = True,
 ) -> Optional[pd.DataFrame]:
     """Scales features.
-    
+
     Different scaling options are provided: See Parameter `scaling` for short descriptions. For detailed
     descriptions check the sklearn.preprocessing documentation of the functions wrapped in the helper
     function `scale_f()`.
-    
+
     Parameters
     ----------
     data: AnnData object or pd.DataFrame
@@ -399,7 +411,8 @@ def scale_features(
         - scaling == 'scale':            all features are scaled to zero mean and std 1.
         - scaling == (0,1):              linearly scaled to minimum 0 and maximum 1.
         - scaling == 'abs':              linearly scaled to the [-1,1] range according the maximal absolute value.
-        - scaling == 'robust':           centered to the median and component wise scaled according to the interquartile range.
+        - scaling == 'robust':           centered to the median and component wise scaled according to the
+                                         interquartile range.
         - scaling == 'uniform'/'normal': transformed to follow a uniform/normal distribution.
         - scaling == <some lambda fct>:  transformed according the given lambda fct.
         Feature specific:
@@ -407,42 +420,48 @@ def scale_features(
             --> feature1, 3 and 8 are transformed according their given options
     inplace: bool
         Change features inplace or return copy
-    
+
     Returns
     -------
     if not inplace:
         pd.DataFrame with scaled features
     """
     df = data if isinstance(data, pd.DataFrame) else data.obsm[key]
-    
+
     # Prepare scaling dict
-    if features == 'all':
+    if features == "all":
         features = df.columns.copy()
     if not isinstance(scaling, dict):
-        if isinstance(scaling, list): scaling = tuple(scaling)
+        if isinstance(scaling, list):
+            scaling = tuple(scaling)
         scale_options = [scaling]
         feature_lists = [features]
     else:
         overlap_features = [f for f in scaling if f in features]
-        scaling = {key:(val if (not isinstance(val,list)) else tuple(val)) for key,val in scaling.items()}
+        scaling = {key: (val if (not isinstance(val, list)) else tuple(val)) for key, val in scaling.items()}
         if len(scaling) > len(overlap_features):
-            warnings.warn("There are more features in `scaling` then in `features`, only those in `features` and `scaling` are scaled.")
+            warnings.warn(
+                "There are more features in `scaling` then in `features`, "
+                "only those in `features` and `scaling` are scaled."
+            )
         elif len(scaling) < len(features):
-            warnings.warn("There are less features in `scaling` then in `features`, only those in `features` and `scaling` are scaled.")
-        scale_options = [o for s,o in scaling.items()]
+            warnings.warn(
+                "There are less features in `scaling` then in `features`, "
+                "only those in `features` and `scaling` are scaled."
+            )
+        scale_options = [o for s, o in scaling.items()]
         scale_options = set(scale_options)
         feature_lists = []
         for o in scale_options:
             feature_lists.append([f for f in overlap_features if (scaling[f] == o)])
 
     # Scale features
-    if inplace: 
+    if inplace:
         d = df
     else:
         d = df.copy()
-    for i,o in enumerate(scale_options):
+    for i, o in enumerate(scale_options):
         f_names = feature_lists[i]
-        d[f_names] = scale_f(d[f_names],o)
-    if not inplace: 
-        return d    
-        
+        d[f_names] = scale_f(d[f_names], o)
+    if not inplace:
+        return d

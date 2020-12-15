@@ -222,3 +222,8 @@ class PlotTester(ABC):
         res = compare_images(str(EXPECTED / f"{basename}.png"), str(out_path), TOL if tolerance is None else tolerance)
 
         assert res is None, res
+
+
+@pytest.fixture(scope="session")
+def feature_df() -> pd.DataFrame:
+    return pd.read_csv("tests/_data/feature_df.csv", index_col=0)
