@@ -150,7 +150,7 @@ class AnnData2Napari:
             layer = None
             for item in obs_widget.selectedItems() if items is None else items:
                 name = item if isinstance(item, str) else item.text()
-                if name in self.viewer.layers:
+                if name in (_lay.name for _lay in self.viewer.layers):
                     logg.warning(f"Selected layer `{name}` is already loaded")
                     continue
                 _layer = self._get_layer(name)
@@ -217,7 +217,7 @@ class AnnData2Napari:
             layer = None
             for item in gene_widget.selectedItems() if items is None else items:
                 name = item if isinstance(item, str) else item.text()
-                if name in self.viewer.layers:
+                if name in (_lay.name for _lay in self.viewer.layers):
                     logg.warning(f"Selected layer `{name}` is already loaded")
                     continue
                 _layer = self._get_layer(name)
