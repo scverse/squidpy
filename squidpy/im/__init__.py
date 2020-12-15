@@ -2,11 +2,11 @@
 from .crop import crop_img
 from .tools import (
     get_color_hist,
+    scale_features,
     get_hog_features,
     get_summary_stats,
     calculate_image_features,
     get_grey_texture_features,
-    scale_features,
 )
 from .object import ImageContainer
 from .segment import (
