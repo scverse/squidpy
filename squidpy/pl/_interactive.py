@@ -165,7 +165,7 @@ class AnnData2Napari:
                     df = pd.DataFrame(self._coords)
                     df[name] = self.adata.obs[name].values
                     df = df.groupby(name)[[0, 1]].apply(lambda g: list(np.median(g.values, axis=0)))
-                    df = pd.DataFrame(r for r in df)
+                    df = pd.DataFrame((r for r in df), index=df.index)
 
                     kdtree = KDTree(self._coords)
                     clusters = np.full(
@@ -175,6 +175,7 @@ class AnnData2Napari:
                             )
                         ),
                         fill_value="",
+                        dtype=object,
                     )
                     clusters[kdtree.query(df.values)[1]] = df.index
                     properties["cluster"] = clusters
