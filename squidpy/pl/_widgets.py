@@ -1,24 +1,5 @@
-# /***************************************************************************
-# Name                 : RangeSlider
-# Description          : A slider for ranges
-# Date                 : Jun 20, 2012
-# copyright            : (C) 2012 by Giuseppe Sucameli
-# email                : brush.tyler@gmail.com
-#
-# the code is based on RangeSlider by phil
-# (see https://svn.enthought.com/enthought/browser/TraitsBackendQt/trunk/enthought/traits/ui/qt4/extra/range_slider.py)
-# licensed under GPLv2
-# ***************************************************************************/
-
-# /**************************************************************************
-# *                                                                         *
-# *   This program is free software; you can redistribute it and/or modify  *
-# *   it under the terms of the GNU General Public License as published by  *
-# *   the Free Software Foundation; either version 2 of the License, or     *
-# *   (at your option) any later version.                                   *
-# *                                                                         *
-# ***************************************************************************/
-from typing import Tuple, Union, Iterable, Optional
+from abc import abstractmethod
+from typing import Any, Tuple, Union, Iterable, Optional
 
 from PyQt5 import QtCore, QtWidgets
 from vispy import scene
@@ -32,34 +13,108 @@ import numpy as np
 from squidpy.pl._utils import ALayer
 
 
-class AListWidget(QtWidgets.QListWidget):
-    rawChanged = QtCore.pyqtSignal()
-    layerChanged = QtCore.pyqtSignal()
+# TODO: should ingerit from ABC, but MC conflict (need to see how it's done for Qt)
+class ListWidget(QtWidgets.QListWidget):
     indexChanged = QtCore.pyqtSignal(object)
     enterPressed = QtCore.pyqtSignal(object)
 
-    def __init__(self, alayer: ALayer, attr: str, controller, unique: bool = True, multiselect: bool = True, **kwargs):
-        if attr not in ALayer.VALID_ATTRIBUTES:
-            raise ValueError(f"Invalid attribute `{attr}`. Valid options are: `{list(ALayer.VALID_ATTRIBUTES)}`.")
+    def __init__(self, controller: Any, unique: bool = True, multiselect: bool = True, **kwargs):
         super().__init__(**kwargs)
-
         if multiselect:
             self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
-
-        self._adata_layer = alayer
-        self._controller = controller
+        else:
+            self.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
 
         self._index = 0
-        self._attr = attr
-        self._getter = getattr(self._adata_layer, f"get_{attr}")
         self._unique = unique
-
-        self.rawChanged.connect(self._onChange)
-        self.layerChanged.connect(self._onChange)
+        self._controller = controller
 
         self.itemDoubleClicked.connect(lambda item: self._onAction((item.text(),)))
         self.enterPressed.connect(self._onAction)
         self.indexChanged.connect(self._onAction)
+
+    @abstractmethod
+    def setIndex(self, index: Union[str, int]):
+        pass
+
+    def getIndex(self):
+        return self._index
+
+    @abstractmethod
+    def _onAction(self, items: Iterable[str]):
+        pass
+
+    def addItems(self, labels: Union[str, Iterable[str]]) -> None:
+        if isinstance(labels, str) or not isinstance(labels, Iterable):
+            labels = (labels,)
+        if self._unique:
+            labels = tuple(label for label in labels if self.findItems(label, QtCore.Qt.MatchExactly) is not None)
+        if len(labels):
+            super().addItems(labels)
+            self.sortItems(QtCore.Qt.AscendingOrder)
+
+    def keyPressEvent(self, event):
+        if event.key() == QtCore.Qt.Key_Return:
+            event.accept()
+            self.enterPressed.emit(tuple(s.text() for s in self.selectedItems()))
+        else:
+            super().keyPressEvent(event)
+
+
+class LibraryListWidget(ListWidget):
+    def __init__(self, controller: Any, **kwargs):
+        super().__init__(controller, **kwargs)
+
+        self.currentTextChanged.connect(self._onAction)
+
+    def setIndex(self, index: str):
+        # not used
+        if index == self._index:
+            return
+
+        self._index = index
+        self.indexChanged.emit(tuple(s.text() for s in self.selectedItems()))
+
+    def _onAction(self, items: Union[str, Iterable[str]]):
+        if isinstance(items, str):
+            items = (items,)
+
+        for item in items:
+            if self._controller._add_image(item):
+                # only add 1 item
+                break
+
+
+class TwoStateCheckBox(QtWidgets.QCheckBox):
+    checkChanged = QtCore.pyqtSignal(bool)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.setTristate(False)
+        self.setChecked(False)
+        self.stateChanged.connect(self._onStateChanged)
+
+    def _onStateChanged(self, state):
+        self.checkChanged.emit(state == QtCore.Qt.Checked)
+
+
+class AListWidget(ListWidget):
+    rawChanged = QtCore.pyqtSignal()
+    layerChanged = QtCore.pyqtSignal()
+
+    def __init__(self, controller: Any, alayer: ALayer, attr: str, **kwargs):
+        if attr not in ALayer.VALID_ATTRIBUTES:
+            raise ValueError(f"Invalid attribute `{attr}`. Valid options are: `{list(ALayer.VALID_ATTRIBUTES)}`.")
+        super().__init__(controller, **kwargs)
+
+        self._adata_layer = alayer
+
+        self._attr = attr
+        self._getter = getattr(self._adata_layer, f"get_{attr}")
+
+        self.rawChanged.connect(self._onChange)
+        self.layerChanged.connect(self._onChange)
 
         self._onChange()
 
@@ -96,7 +151,7 @@ class AListWidget(QtWidgets.QListWidget):
         return self._index
 
     def setLayer(self, layer: Optional[str]):
-        if layer == "None":
+        if layer in ("default", "None"):
             layer = None
         if layer == self.getLayer():
             return
@@ -107,22 +162,6 @@ class AListWidget(QtWidgets.QListWidget):
     def getLayer(self) -> Optional[str]:
         return self._adata_layer.layer
 
-    def addItems(self, labels: Union[str, Iterable[str]]) -> None:
-        if isinstance(labels, str) or not isinstance(labels, Iterable):
-            labels = (labels,)
-        if self._unique:
-            labels = tuple(label for label in labels if self.findItems(label, QtCore.Qt.MatchExactly) is not None)
-        if len(labels):
-            super().addItems(labels)
-            self.sortItems(QtCore.Qt.AscendingOrder)
-
-    def keyPressEvent(self, event):
-        if event.key() == QtCore.Qt.Key_Return:
-            event.accept()
-            self.enterPressed.emit(tuple(s.text() for s in self.selectedItems()))
-        else:
-            super().keyPressEvent(event)
-
 
 class ObsmIndexWidget(QtWidgets.QComboBox):
     def __init__(self, alayer: ALayer, max_visible: int = 6, **kwargs):
@@ -132,9 +171,6 @@ class ObsmIndexWidget(QtWidgets.QComboBox):
         self.view().setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
         self.setMaxVisibleItems(max_visible)
         self.setStyleSheet("combobox-popup: 0;")
-
-    def _onSelectionChanged(self, texts: Union[QtWidgets.QListWidgetItem, int, Iterable[str]]) -> None:
-        pass
 
     def addItems(self, texts: Union[QtWidgets.QListWidgetItem, int, Iterable[str]]) -> None:
         if isinstance(texts, QtWidgets.QListWidgetItem):
@@ -150,19 +186,18 @@ class ObsmIndexWidget(QtWidgets.QComboBox):
 
 
 class CBarWidget(QtWidgets.QWidget):
-    FORMAT = "{:.02f}"
-    N_TICKS = 5
+    FORMAT = "{:0.2f}"
 
     cmapChanged = QtCore.pyqtSignal(str)
     climChanged = QtCore.pyqtSignal((float, float))
 
     def __init__(
-        self, cmap: str, label: Optional[str] = None, width: Optional[int] = 300, height: Optional[int] = 50, **kwargs
+        self, cmap: str, label: Optional[str] = None, width: Optional[int] = 250, height: Optional[int] = 50, **kwargs
     ):
         super().__init__(**kwargs)
 
         self._cmap = cmap or ""
-        self._clim = (0, 1)
+        self._clim = (0.0, 1.0)
         self._oclim = self._clim
 
         self._width = width
@@ -175,11 +210,10 @@ class CBarWidget(QtWidgets.QWidget):
         self.setFixedWidth(self._width)
         self.setFixedHeight(self._height)
 
-        # cheat a litte - bgcol is napari's bgcolor - hope nobody uses the lightmode
+        # use napari's BG color for dark mode
         self._canvas = scene.SceneCanvas(
-            size=(self._width, self._height), bgcolor="#262930", parent=self, decorate=False, resizable=False, dpi=120
+            size=(self._width, self._height), bgcolor="#262930", parent=self, decorate=False, resizable=False, dpi=150
         )
-        # TODO: place the labels more nicely (+ ticks)
         self._colorbar = widgets.ColorBarWidget(
             self._create_colormap(self.getCmap()),
             orientation="top",
@@ -188,9 +222,8 @@ class CBarWidget(QtWidgets.QWidget):
             clim=self.getClim(),
             border_width=1.0,
             border_color="black",
-            padding=(0.15, 0.5),
-            axis_ratio=0.25,
-            pos=(0, 0),
+            padding=(0.33, 0.167),
+            axis_ratio=0.05,
             innterpolation="linear",
         )
 

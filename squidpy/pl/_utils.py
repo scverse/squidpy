@@ -270,6 +270,7 @@ class ALayer:
 
         self._adata = adata
         self._layer = None
+        self._previous_layer = None
         self._raw = is_raw
         self._palette = palette
 
@@ -285,7 +286,8 @@ class ALayer:
     def layer(self, layer: Optional[str] = None) -> None:
         if layer not in (None,) + tuple(self.adata.layers.keys()):
             raise KeyError(f"Invalid layer `{layer}`. Valid options are: `{[None] + list(self.adata.layers.keys())}`.")
-        self._layer = layer
+        self._previous_layer = layer
+        # handle in raw setter
         self.raw = False
 
     @property
@@ -297,7 +299,10 @@ class ALayer:
         if is_raw:
             if self.adata.raw is None:
                 raise AttributeError("Attribute `.raw` is `None`.")
-            self.layer = None
+            self._previous_layer = self.layer
+            self._layer = None
+        else:
+            self._layer = self._previous_layer
         self._raw = is_raw
 
     @_ensure_dense_vector
