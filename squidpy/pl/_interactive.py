@@ -228,6 +228,8 @@ class AnnData2Napari:
 
     def _add_points(self, vec: Union[np.ndarray, pd.Series], key: str, layer_name: str) -> None:
         def move_to_front(_):
+            if not layer.visible:
+                return
             try:
                 index = self.viewer.layers.index(layer)
             except ValueError:
