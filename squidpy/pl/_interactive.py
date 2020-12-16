@@ -221,9 +221,9 @@ class AnnData2Napari:
             fill_value="",
             dtype=object,
         )
-        # index consists of the categories and need not be string
+        # index consists of the categories that need not be string
         clusters[kdtree.query(df.values)[1]] = df.index.astype(str)
-        colors = np.array([col_dict[v] if v != "" else (0, 0, 0) for v in clusters])
+        colors = np.array([col_dict[v] if v != "" else (0, 0, 0) for v in vec])
 
         return {"clusters": clusters, "colors": colors}
 
@@ -252,7 +252,7 @@ class AnnData2Napari:
             text = {
                 "text": "{clusters}",
                 "size": self.TEXT_SIZE,
-                "color": properties["colors"],
+                "color": "white",  # properties["colors"],
                 "anchor": "center",
                 "blending": "translucent",
             }
@@ -273,6 +273,11 @@ class AnnData2Napari:
             properties=properties,
             metadata=metadata,
         )
+        # https://github.com/napari/napari/issues/2019
+        # TODO: uncomment the 2 lines below once a solution is found for the contrast
+        # we could use the selected points where the cluster labels are position as a black BG
+        # layer._text._color = properties["colors"]
+        # layer._text.events.color()
 
         slider = self._hide_point_controls(layer, is_categorical=is_categorical)
         if not is_categorical:
@@ -285,17 +290,18 @@ class AnnData2Napari:
 
     def _hide_point_controls(self, layer: Points, is_categorical: bool) -> Optional[QHRangeSlider]:
         def clip(percentile: Tuple[float, float] = (0, 100)) -> None:
-            v = layer.metadata["data"]
-            clipped = np.clip(v, *np.percentile(v, percentile))
-            # save the percentile
-            layer.metadata = {**layer.metadata, "perc": percentile}
-            # TODO: use constants
-            layer.face_color = "value"
-            layer.properties = {"value": clipped}
-            layer._update_thumbnail()  # can't find another way to force it
-            layer.refresh_colors()
+            if layer.selected:
+                v = layer.metadata["data"]
+                clipped = np.clip(v, *np.percentile(v, percentile))
+                # save the percentile
+                layer.metadata = {**layer.metadata, "perc": percentile}
+                # TODO: use constants
+                layer.face_color = "value"
+                layer.properties = {"value": clipped}
+                layer._update_thumbnail()  # can't find another way to force it
+                layer.refresh_colors()
 
-            self._colorbar.setClim((np.min(clipped), np.max(clipped)))
+                self._colorbar.setClim((np.min(clipped), np.max(clipped)))
 
         # TODO: constants
         to_hide = {
