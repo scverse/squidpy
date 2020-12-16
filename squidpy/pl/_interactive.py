@@ -37,7 +37,6 @@ class AnnData2Napari:
     """
 
     TEXT_SIZE: int = 24
-    TEXT_COLOR: str = "white"
 
     # TODO: paletter -> point_cmap
     # TODO: image cmap if not able to change it?
@@ -201,7 +200,7 @@ class AnnData2Napari:
 
             return self
 
-    def _get_label_positions(self, vec: pd.Series) -> Dict[str, np.ndarray]:
+    def _get_label_positions(self, vec: pd.Series, col_dict: dict) -> Dict[str, np.ndarray]:
         # TODO: do something more clever
         df = pd.DataFrame(self._coords)
         df["clusters"] = vec.values
@@ -220,8 +219,9 @@ class AnnData2Napari:
         )
         # index consists of the categories and need not be string
         clusters[kdtree.query(df.values)[1]] = df.index.astype(str)
+        colors = np.array([col_dict[v] if v != "" else (0, 0, 0) for v in clusters])
 
-        return {"clusters": clusters}
+        return {"clusters": clusters, "colors": colors}
 
     def _add_points(self, vec: Union[np.ndarray, pd.Series], key: str, layer_name: str) -> None:
         def _selected_handler(event) -> None:
@@ -240,12 +240,15 @@ class AnnData2Napari:
         if isinstance(vec, pd.Series):
             if not is_categorical_dtype(vec):
                 raise TypeError(f"Expected a `categorical` type, found `{infer_dtype(vec)}`.")
-            properties, metadata = self._get_label_positions(vec), None
-            is_categorical, face_color = True, _get_categorical(self.adata, key=key, palette=self._palette, vec=vec)
+
+            face_color, col_dict = _get_categorical(self.adata, key=key, palette=self._palette, vec=vec)
+            is_categorical = True
+            properties, metadata = self._get_label_positions(vec, col_dict), None
+
             text = {
                 "text": "{clusters}",
                 "size": self.TEXT_SIZE,
-                "color": self.TEXT_COLOR,
+                "color": properties["colors"],
                 "anchor": "center",
                 "blending": "translucent",
             }
@@ -434,4 +437,4 @@ def _get_categorical(
     cols = [to_rgb(i) for i in adata.uns[f"{key}_colors"]]
 
     col_dict = dict(zip(adata.obs[key].cat.categories, cols))
-    return np.array([col_dict[v] for v in adata.obs[key]])
+    return np.array([col_dict[v] for v in adata.obs[key]]), col_dict
