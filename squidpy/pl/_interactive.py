@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, Union, Literal, Optional, Sequence
+from typing import Dict, Union, Literal, Optional, Sequence
 from pathlib import Path
 
 import napari
@@ -12,7 +12,6 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
 )
-from napari._qt.widgets.qt_range_slider import QHRangeSlider
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -28,7 +27,7 @@ from matplotlib.colors import Colormap, to_rgb
 from squidpy._docs import d
 from squidpy.im.object import ImageContainer
 from squidpy.pl._utils import ALayer, _points_inside_triangles
-from squidpy.pl._widgets import CBarWidget, AListWidget, ObsmIndexWidget
+from squidpy.pl._widgets import CBarWidget, AListWidget, RangeSlider, ObsmIndexWidget
 from squidpy.constants._pkg_constants import Key
 
 
@@ -228,14 +227,13 @@ class AnnData2Napari:
         return {"clusters": clusters, "colors": colors}
 
     def _add_points(self, vec: Union[np.ndarray, pd.Series], key: str, layer_name: str) -> None:
-        def _selected_handler(event) -> None:
-            source: Points = event.source
-            # TODO: constants
-            slider.setValues(source.metadata["perc"])
+        def move_to_front(_):
+            try:
+                index = self.viewer.layers.index(layer)
+            except ValueError:
+                return
 
-            self._colorbar.setOclim(source.metadata["minmax"])
-            self._colorbar.setClim((np.min(source.properties["value"]), np.max(source.properties["value"])))
-            self._colorbar.update_color()
+            self.viewer.layers.move(index, -1)
 
         if layer_name in (_lay.name for _lay in self.viewer.layers):
             logg.warning(f"Selected layer `{layer_name}` is already loaded")
@@ -279,30 +277,14 @@ class AnnData2Napari:
         # layer._text._color = properties["colors"]
         # layer._text.events.color()
 
-        slider = self._hide_point_controls(layer, is_categorical=is_categorical)
-        if not is_categorical:
-            layer.events.select.connect(_selected_handler)
+        self._hide_point_controls(layer, is_categorical=is_categorical)
 
         layer.editable = False
-        # TODO: if the cbar were local, we don't have to do this
-        layer.selected = False
-        layer.selected = True
+        # QoL change: selected layer is brought to the top
+        # TODO: only for opaque blending?
+        layer.events.select.connect(move_to_front)
 
-    def _hide_point_controls(self, layer: Points, is_categorical: bool) -> Optional[QHRangeSlider]:
-        def clip(percentile: Tuple[float, float] = (0, 100)) -> None:
-            if layer.selected:
-                v = layer.metadata["data"]
-                clipped = np.clip(v, *np.percentile(v, percentile))
-                # save the percentile
-                layer.metadata = {**layer.metadata, "perc": percentile}
-                # TODO: use constants
-                layer.face_color = "value"
-                layer.properties = {"value": clipped}
-                layer._update_thumbnail()  # can't find another way to force it
-                layer.refresh_colors()
-
-                self._colorbar.setClim((np.min(clipped), np.max(clipped)))
-
+    def _hide_point_controls(self, layer: Points, is_categorical: bool):
         # TODO: constants
         to_hide = {
             "symbol:": "symbolComboBox",
@@ -331,13 +313,18 @@ class AnnData2Napari:
             idx = gl.indexOf(attr)
             row, *_ = gl.getItemPosition(idx)
 
-            slider = QHRangeSlider(initial_values=(0, 100), data_range=(0, 100), step_size=0.01, collapsible=False)
-            slider.valuesChanged.connect(clip)
+            slider = RangeSlider(
+                layer=layer,
+                colorbar=self._colorbar,
+                initial_values=(0, 100),
+                data_range=(0, 100),
+                step_size=0.01,
+                collapsible=False,
+            )
+            slider.valuesChanged.emit((0, 100))
 
             gl.replaceWidget(labels[key], QLabel("percentile:"))
             gl.replaceWidget(attr, slider)
-
-            return slider
 
             # TODO: try also adding the new cbar? fixed canvas is problem (need to look into vispy)
             # TODO: otherwise just use global - local would be nicer since for raw, we could change the format

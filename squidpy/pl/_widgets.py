@@ -23,7 +23,9 @@ from typing import Tuple, Union, Iterable, Optional
 from PyQt5 import QtCore, QtWidgets
 from vispy import scene
 from vispy.scene import widgets
+from napari.layers import Points
 from vispy.color.colormap import Colormap, MatplotlibColormap
+from napari._qt.widgets.qt_range_slider import QHRangeSlider
 
 import numpy as np
 
@@ -265,3 +267,33 @@ class CBarWidget(QtWidgets.QWidget):
         # but the above option also updates geometry
         # cbarwidget->cbar->cbarvisual
         self._colorbar._colorbar._colorbar._update()
+
+
+class RangeSlider(QHRangeSlider):
+    def __init__(self, *args, layer: Points, colorbar, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._layer: Points = layer
+        self._colorbar = colorbar
+
+        self._layer.events.select.connect(self._onLayerSelected)
+        self.valuesChanged.connect(self._onValueChange)
+
+    # TODO: use constants
+    def _onValueChange(self, percentile: Tuple[float, float]):
+        v = self._layer.metadata["data"]
+        clipped = np.clip(v, *np.percentile(v, percentile))
+
+        self._layer.metadata = {**self._layer.metadata, "perc": percentile}
+        self._layer.face_color = "value"
+        self._layer.properties = {"value": clipped}
+        self._layer._update_thumbnail()  # can't find another way to force it
+        self._layer.refresh_colors()
+
+        self._onLayerSelected()
+
+    def _onLayerSelected(self, _event=None) -> None:
+        source: Points = self._layer
+        self._colorbar.setOclim(source.metadata["minmax"])
+        self._colorbar.setClim((np.min(source.properties["value"]), np.max(source.properties["value"])))
+        self._colorbar.update_color()
