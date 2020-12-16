@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
 )
+from napari._qt.widgets.qt_range_slider import QHRangeSlider
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -27,12 +28,7 @@ from matplotlib.colors import Colormap, to_rgb
 from squidpy._docs import d
 from squidpy.im.object import ImageContainer
 from squidpy.pl._utils import ALayer, _points_inside_triangles
-from squidpy.pl._widgets import (
-    CBarWidget,
-    AListWidget,
-    ObsmIndexWidget,
-    DoubleRangeSlider,
-)
+from squidpy.pl._widgets import CBarWidget, AListWidget, ObsmIndexWidget
 from squidpy.constants._pkg_constants import Key
 
 
@@ -235,7 +231,7 @@ class AnnData2Napari:
         def _selected_handler(event) -> None:
             source: Points = event.source
             # TODO: constants
-            slider.setValue(source.metadata["perc"])
+            slider.setValues(source.metadata["perc"])
 
             self._colorbar.setOclim(source.metadata["minmax"])
             self._colorbar.setClim((np.min(source.properties["value"]), np.max(source.properties["value"])))
@@ -287,12 +283,9 @@ class AnnData2Napari:
         layer.selected = False
         layer.selected = True
 
-    def _hide_point_controls(self, layer: Points, is_categorical: bool) -> Optional[DoubleRangeSlider]:
-        def clip(_percentile: Tuple[float, float] = (0, 100)) -> None:
+    def _hide_point_controls(self, layer: Points, is_categorical: bool) -> Optional[QHRangeSlider]:
+        def clip(percentile: Tuple[float, float] = (0, 100)) -> None:
             v = layer.metadata["data"]
-
-            # TODO: fix the signal (percentile is 1000 larger because of the scaling constant)
-            percentile = slider.value()
             clipped = np.clip(v, *np.percentile(v, percentile))
             # save the percentile
             layer.metadata = {**layer.metadata, "perc": percentile}
@@ -332,12 +325,8 @@ class AnnData2Napari:
             idx = gl.indexOf(attr)
             row, *_ = gl.getItemPosition(idx)
 
-            # TODO: use slider from napari?
-            slider = DoubleRangeSlider(parent=gl.parent())
-            slider.setMinimum(0)
-            slider.setMaximum(100)
-            slider.setValue((0, 100))
-            slider.valueChanged.connect(clip)
+            slider = QHRangeSlider(initial_values=(0, 100), data_range=(0, 100), step_size=0.01, collapsible=False)
+            slider.valuesChanged.connect(clip)
 
             gl.replaceWidget(labels[key], QLabel("percentile:"))
             gl.replaceWidget(attr, slider)
