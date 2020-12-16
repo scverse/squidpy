@@ -1,16 +1,27 @@
 import os
-from typing import List, Union, Hashable, Iterable, Optional
+from typing import List, Tuple, Union, Hashable, Iterable, Optional, Sequence
 from pathlib import Path
+from functools import wraps
 
 from numba import njit, prange
 
 import anndata as ad
 from scanpy import logging as logg
 from scanpy import settings
+from anndata import AnnData
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import issparse, spmatrix
+from pandas._libs.lib import infer_dtype
+from pandas.core.dtypes.common import (
+    is_bool_dtype,
+    is_object_dtype,
+    is_string_dtype,
+    is_integer_dtype,
+    is_numeric_dtype,
+    is_categorical_dtype,
+)
 
 from matplotlib.figure import Figure
 
@@ -200,3 +211,135 @@ def _min_max_norm(vec: Union[spmatrix, np.ndarray]) -> np.ndarray:
     maxx, minn = np.nanmax(vec), np.nanmin(vec)
 
     return np.ones_like(vec) if np.isclose(minn, maxx) else ((vec - minn) / (maxx - minn))
+
+
+# TODO: type + comment
+def _ensure_dense_vector(fn):
+    @wraps(fn)
+    def decorator(self: "ALayer", *args, **kwargs) -> Tuple[Optional[Union[pd.Series, np.ndarray]], Optional[str]]:
+        normalize = kwargs.pop("normalize", False)
+        res, fmt = fn(self, *args, **kwargs)
+        if res is None:
+            return None, None
+
+        if isinstance(res, pd.Series):
+            if is_categorical_dtype(res):
+                return res, fmt
+            if is_string_dtype(res) or is_object_dtype(res) or is_bool_dtype(res):
+                return res.astype("category"), fmt
+            if is_integer_dtype(res):
+                unique = res.unique()
+                n_uniq = len(unique)
+                if n_uniq <= 2 and (set(unique) & {0, 1}):
+                    return res.astype(bool).astype("category"), fmt
+                if len(unique) <= len(res) // 100:
+                    return res.astype("category"), fmt
+            elif not is_numeric_dtype(res):
+                raise TypeError(f"Unable to process `pandas.Series` of type `{infer_dtype(res)}`.")
+            res = res.to_numpy()
+        elif issparse(res):
+            res = res.toarray()
+        elif not isinstance(res, (np.ndarray, Sequence)):
+            raise TypeError(f"Unable to process result of type `{type(res).__name__}`.")
+
+        res = np.asarray(np.squeeze(res))
+        if res.ndim != 1:
+            raise ValueError(f"Expected 1-dimensional array, found `{res.ndim}`.")
+
+        return (_min_max_norm(res) if normalize else res), fmt
+
+    return decorator
+
+
+def _only_not_raw(fn):
+    @wraps(fn)
+    def decorator(self, *args, **kwargs):
+        return None if self.raw else fn(self, *args, **kwargs)
+
+    return decorator
+
+
+# TODO: clean-up + docstrings
+class ALayer:
+    VALID_ATTRIBUTES = ("obs", "var", "obsm")
+
+    # TODO: properly type palette
+    def __init__(self, adata: AnnData, is_raw: bool = False, palette: Optional[str] = None):
+        if is_raw and adata.raw is None:
+            raise AttributeError("Attribute `.raw` is `None`.")
+
+        self._adata = adata
+        self._layer = None
+        self._raw = is_raw
+        self._palette = palette
+
+    @property
+    def adata(self) -> AnnData:
+        return self._adata
+
+    @property
+    def layer(self) -> Optional[str]:
+        return self._layer
+
+    @layer.setter
+    def layer(self, layer: Optional[str] = None) -> None:
+        if layer not in (None,) + tuple(self.adata.layers.keys()):
+            raise KeyError(f"Invalid layer `{layer}`. Valid options are: `{[None] + list(self.adata.layers.keys())}`.")
+        self._layer = layer
+        self.raw = False
+
+    @property
+    def raw(self) -> bool:
+        return self._raw
+
+    @raw.setter
+    def raw(self, is_raw: bool) -> None:
+        if is_raw:
+            if self.adata.raw is None:
+                raise AttributeError("Attribute `.raw` is `None`.")
+            self.layer = None
+        self._raw = is_raw
+
+    @_ensure_dense_vector
+    def get_obs(self, name: str, **_) -> Tuple[Optional[Union[pd.Series, np.ndarray]], str]:
+        if name not in self.adata.obs.columns:
+            raise KeyError(f"Key `{name}` not found in `adata.obs`.")
+        return self.adata.obs[name], self._format_key(name, layer_modifier=False)
+
+    @_ensure_dense_vector
+    def get_var(self, name: Union[str, int], **_) -> Tuple[Optional[np.ndarray], str]:
+        adata = self.adata.raw if self.raw else self.adata
+        try:
+            ix = adata._normalize_indices((slice(None), name))
+        except KeyError:
+            raise KeyError(f"Key `{name}` not found in `adata.{'raw.' if self.raw else ''}var_names`.") from None
+
+        return self.adata._get_X(use_raw=self.raw, layer=self.layer)[ix], self._format_key(name, layer_modifier=True)
+
+    def get_items(self, attr: str) -> tuple:
+        adata = self.adata.raw if self.raw and attr in ("var",) else self.adata
+        if attr in ("obs", "obsm"):
+            return tuple(map(str, getattr(adata, attr).keys()))
+        return tuple(map(str, getattr(adata, attr).index))
+
+    @_ensure_dense_vector
+    def get_obsm(self, name: str, index: int = 0) -> Tuple[Optional[np.ndarray], str]:
+        if name not in self.adata.obsm:
+            raise KeyError(name)
+        if not isinstance(index, int):
+            raise ValueError(index)
+        res = self.adata.obsm[name]
+
+        return (res if res.ndim == 1 else res[:, index]), self._format_key(name, layer_modifier=False, index=index)
+
+    def _format_key(self, key: str, layer_modifier: bool = False, index: Optional[int] = None) -> str:
+        if not layer_modifier:
+            return str(key) + (f":{index}" if index is not None else "")
+
+        return str(key) + (":raw" if self.raw else f":{self.layer}" if self.layer is not None else "")
+
+    def repr(self):
+        return f"{self.__class__.__name__}<raw={self.raw}, layer={self.layer}>"
+
+    def str(self):
+        return repr(self)
