@@ -447,6 +447,7 @@ class ObsmIndexWidget(QtWidgets.QComboBox):
 
 class CBarWidget(QtWidgets.QWidget):
     FORMAT = "{:.02f}"
+    N_TICKS = 5
 
     cmapChanged = QtCore.pyqtSignal(str)
     climChanged = QtCore.pyqtSignal((float, float))
@@ -471,7 +472,9 @@ class CBarWidget(QtWidgets.QWidget):
         self.setFixedHeight(self._height)
 
         # cheat a litte - bgcol is napari's bgcolor - hope nobody uses the lightmode
-        self._canvas = scene.SceneCanvas(size=(self._width, self._height), bgcolor="#262930")
+        self._canvas = scene.SceneCanvas(
+            size=(self._width, self._height), bgcolor="#262930", parent=self, decorate=False, resizable=False, dpi=120
+        )
         # TODO: place the labels more nicely (+ ticks)
         self._colorbar = widgets.ColorBarWidget(
             self._create_colormap(self.getCmap()),
@@ -483,6 +486,7 @@ class CBarWidget(QtWidgets.QWidget):
             border_color="black",
             padding=(0.15, 0.5),
             axis_ratio=0.25,
+            pos=(0, 0),
             innterpolation="linear",
         )
 
@@ -539,6 +543,7 @@ class CBarWidget(QtWidgets.QWidget):
         self._oclim = value
 
     def onClimChanged(self, minn: float, maxx: float) -> None:
+        # ticks are not working with vispy's colorbar
         self._colorbar.cmap = self._create_colormap(self.getCmap())
         self._colorbar.clim = (self.FORMAT.format(minn), self.FORMAT.format(maxx))
 

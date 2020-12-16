@@ -4,7 +4,14 @@ from pathlib import Path
 import napari
 from cycler import Cycler
 from napari.layers import Points, Shapes
-from PyQt5.QtWidgets import QLabel, QCheckBox, QComboBox, QGridLayout, QHBoxLayout
+from PyQt5.QtWidgets import (
+    QLabel,
+    QWidget,
+    QCheckBox,
+    QComboBox,
+    QGridLayout,
+    QHBoxLayout,
+)
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -165,27 +172,28 @@ class AnnData2Napari:
             layer_widget.setCurrentIndex(0)
 
             # raw selection
-            layer_raw_label = QLabel("Raw:")
-            layer_raw_label.setToolTip("Access the .raw attribute.")
-            layer_raw = QCheckBox(parent=parent)
-            layer_raw.setChecked(False)
-            layer_raw.stateChanged.connect(layer_widget.setDisabled)
-            layer_raw.stateChanged.connect(lambda state: var_widget.setRaw(state))
-            layer_raw.stateChanged.connect(lambda state: var_lab.setText("Genes[raw]:" if state else "Genes:"))
+            raw_widget = QWidget()
+            raw_layout = QHBoxLayout()
+            raw_label = QLabel("Raw:")
+            raw_label.setToolTip("Access the .raw attribute.")
+            raw = QCheckBox(parent=parent)
+            raw.setChecked(False)
+            raw.stateChanged.connect(layer_widget.setDisabled)
+            raw.stateChanged.connect(lambda state: var_widget.setRaw(state))
+            raw.stateChanged.connect(lambda state: var_lab.setText("Genes[raw]:" if state else "Genes:"))
+            raw_layout.addWidget(raw_label)
+            raw_layout.addWidget(raw)
+            raw_layout.addStretch()
+            raw_widget.setLayout(raw_layout)
 
-            # TODO: make specific for layer? tricky part is getting the width right
-            # TODO: if not, make sure it's hidden if cat. layer selected
-            # colorbar
-            self._colorbar = CBarWidget(self._cmap)
-            self._colorbar.setLayout(QHBoxLayout())
+            self._colorbar = CBarWidget(self._cmap, height=50)
 
-            self.viewer.window.add_dock_widget([self._colorbar], area="left", name="Percentile")
+            self.viewer.window.add_dock_widget(self._colorbar, area="left", name="Percentile")
             self._viewer.window.add_dock_widget(
                 [
                     layer_label,
                     layer_widget,
-                    layer_raw_label,
-                    layer_raw,
+                    raw_widget,
                     var_lab,
                     var_widget,
                     obs_label,
@@ -410,6 +418,7 @@ def interactive(
         TODO.
     """
     # TODO: only HVG subset
+    # TODO: deprecate in favor of ImageContainer.interactive()
     return AnnData2Napari(
         adata,
         img=img,
