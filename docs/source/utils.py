@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 import requests
 from sphinx_gallery.directives import MiniGallery
 
+HERE = Path(__file__).parent
 ENDPOINT_FMT = "https://api.github.com/repos/{org}/{repo}/contents/docs/source/"
 
 # TODO: once the repo is public, token will not be needed
@@ -117,11 +118,10 @@ class MaybeMiniGallery(MiniGallery):
         for obj in obj_list:
             path = os.path.join("/", backreferences_dir, f"{obj}.examples")  # Sphinx treats this as the source dir
 
-            if os.path.isfile(path):
+            if (HERE / path[1:]).exists():
                 new_list.append(obj)
 
         self.arguments[0] = " ".join(new_list)
-
         try:
             return super().run()
         except UnboundLocalError:

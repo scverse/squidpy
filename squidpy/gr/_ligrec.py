@@ -9,14 +9,12 @@ from functools import partial
 from itertools import product
 from collections import namedtuple
 
-# exec/compile needs this in globals()
-from numba import njit, prange  # noqa: F401
-
 from scanpy import logging as logg
 from anndata import AnnData
 
 import numpy as np
 import pandas as pd
+from numba import njit, prange  # noqa: F401
 from scipy.sparse import csc_matrix
 from pandas.api.types import infer_dtype, is_categorical_dtype
 
