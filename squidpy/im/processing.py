@@ -3,8 +3,6 @@
 from types import MappingProxyType
 from typing import Any, Union, Mapping, Optional
 
-import xarray as xr
-
 import skimage
 import skimage.filters
 
@@ -23,8 +21,8 @@ def process_img(
     xs: Optional[int] = None,
     ys: Optional[int] = None,
     key_added: Optional[str] = None,
-    copy: bool = True,
-) -> None:
+    copy: bool = False,
+) -> Union[None, ImageContainer]:
     """
     Process an image.
 
@@ -35,7 +33,7 @@ def process_img(
     ----------
     %(img_container)s
     img_id
-        Key of im object to process.
+        Key of image object to process.
     processing
         Name of processing method to use. Available are:
 
@@ -51,23 +49,30 @@ def process_img(
     Returns
     -------
     None
-        TODO
+        If ``copy = False``: Stores processed image in ``img`` with key ``key_added``.
+    :class:`ImageContainer`
+        Processed image with key ``key_added``.
     """
+    # Note: for processing function that modify the number of channels, need to add a channel_id argument
     processing = Processing(processing)
-    crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
+    img_id_new = img_id + "_" + str(processing) if key_added is None else key_added
 
-    if processing == Processing.SMOOTH:
-        crops = [skimage.filters.gaussian(x, **processing_kwargs) for x in crops]
+    # process crops
+    xcoord = []
+    ycoord = []
+    crops = []
+    for crop, x, y in img.generate_equal_crops(xs=xs, ys=ys):
+        xcoord.append(x)
+        ycoord.append(y)
+        if processing == Processing.SMOOTH:
+            crops.append(ImageContainer(skimage.filters.gaussian(crop[img_id], **processing_kwargs), img_id=img_id_new))
+        else:
+            raise NotImplementedError(processing)
+
+    # Reassemble image:
+    img_proc = ImageContainer.uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape)
+
+    if copy:
+        return img_proc
     else:
-        raise NotImplementedError(processing)
-
-    channel_id = img.data[img_id].dims[0]  # channels are named the same as in source image
-    # Make sure crops are xarrays:
-    if not isinstance(crops[0], xr.DataArray):
-        dims = [channel_id, "y", "x"]
-        crops = [xr.DataArray(x, dims=dims) for x in crops]
-    # Reassemble im:
-    # img_proc = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id)
-    # img_id_new = (img_id + "_" + processing if key_added is None else key_added) if copy else img_id
-
-    # img.add_img(img=img_proc, img_id=img_id_new, channel_id=channel_id)
+        img.add_img(img=img_proc[img_id_new], img_id=img_id_new)

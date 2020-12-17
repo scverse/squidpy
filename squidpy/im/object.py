@@ -138,6 +138,7 @@ class ImageContainer:
 
         NOTE: lazy loading via :mod:`dask` is not supported for on-disk jpg files.
         They will be loaded in memory.
+
         NOTE: multi-page tiffs will be loaded in one DataArray, with the concatenated channel dimensions.
 
         Parameters
