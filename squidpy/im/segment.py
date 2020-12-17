@@ -213,7 +213,7 @@ def segment(
     model_kwargs
         Keyword arguments for :meth:`squidpy.im.SegmentationModel.segment`.
     channel_idx
-        Channel to use for segmentation.
+        Channel index to use for segmentation.
     %(width_height)s
     key_added
         Key of new image sized array to add into img object. Defaults to ``segmented_{{model_group}}``.
@@ -222,7 +222,7 @@ def segment(
     -------
     %(segment.returns)s
     """  # noqa: D400
-    channel_id = "mask"
+    # channel_id = "mask"
     model_group = SegmentationBackend(model_group)
 
     if model_group == SegmentationBackend.BLOB:
@@ -234,9 +234,19 @@ def segment(
     else:
         raise NotImplementedError(model_group)
 
-    crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
-    channel_slice = channel_idx if isinstance(channel_idx, int) else slice(0, crops[0].channels.shape[0])
-    crops = [segmentation_model.segment(x[{"channels": channel_slice}].values, **model_kwargs) for x in crops]
+    # TODO what happens if we have more than 3 channel dims? Does code work?
+    channel_slice = channel_idx  # if isinstance(channel_idx, int) else slice(0, crops[0].channels.shape[0])
+    img_id_new = "segmented_" + model_group.s if key_added is None else key_added
+
+    # segment crops
+    xcoord = []
+    ycoord = []
+    crops = []  # segmented crops will be numpy arrays
+    for crop, x, y in img.generate_equal_crops(xs=xs, ys=ys):
+        xcoord.append(x)
+        ycoord.append(y)
+        crops.append(segmentation_model.segment(crop[img_id][{"channels": channel_slice}].values, **model_kwargs))
+
     # By convention, segments are numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
     # TODO use overlapping crops to not create confusion at boundaries
@@ -246,11 +256,12 @@ def segment(
         num_segments = np.max(x)
         crop_new[crop_new > 0] = crop_new[crop_new > 0] + counter
         counter += num_segments
-        crops[i] = xr.DataArray(crop_new[np.newaxis, :, :], dims=["mask", "y", "x"])
-        print(channel_id)
-    # TODO quickfix for img.shape here, will change this behaviour soon! img.shape should return y, x (and not x,y)
-    # img_segmented = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape[::-1], channel_id=channel_id)
+        crops[i] = ImageContainer(crop_new, img_id=img_id_new, channel_id="mask")
+
+    img_segmented = ImageContainer.uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape)
     # img_id = "segmented_" + model_group.s if key_added is None else key_added
+    return img_segmented  # TODO test and add copy  argument
+
     # img.add_img(img=img_segmented, img_id=img_id, channel_id=channel_id
 
 
