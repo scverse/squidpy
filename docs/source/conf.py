@@ -5,23 +5,19 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 # -- Path setup --------------------------------------------------------------
-
 import os
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
-from sphinx_gallery.directives import MiniGallery
 from sphinx_gallery.gen_gallery import DEFAULT_GALLERY_CONF
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
 sys.path.insert(0, os.path.abspath("_ext"))
 
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
 import squidpy  # noqa: E402
+from docs.source.utils import MaybeMiniGallery, _download_notebooks  # noqa: E402
 
 needs_sphinx = "3.0"
 
@@ -31,6 +27,8 @@ project = "squidpy"
 author = squidpy.__author__
 copyright = f"{datetime.now():%Y}, {author}"
 github_repo = "https://github.com/theislab/squidpy"
+
+_download_notebooks(org="theislab", repo="squidpy_notebooks", raise_exc=False)
 
 # The full version, including alpha/beta/rc tags
 release = f"master ({squidpy.__version__})"
@@ -85,6 +83,8 @@ pygments_style = "sphinx"
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ["**.ipynb", "**.md5", "**.py", "**.ipynb_checkpoints"]  # ignore anything that isn't .rst
+# because squidpy_notebooks doesn't commit the .py files (and we don't allow downloading them by hiding the html)
+suppress_warnings = ["download.not_readable"]
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -118,8 +118,10 @@ html_show_sphinx = False
 
 def setup(app):  # noqa: D103
     DEFAULT_GALLERY_CONF["backreferences_dir"] = "gen_modules/backreferences"
+    DEFAULT_GALLERY_CONF["download_all_examples"] = False
     DEFAULT_GALLERY_CONF["show_signature"] = False
+    DEFAULT_GALLERY_CONF["log_level"] = {"backreference_missing": "info"}
 
     app.add_config_value("sphinx_gallery_conf", DEFAULT_GALLERY_CONF, "html")
-    app.add_directive("minigallery", MiniGallery)
+    app.add_directive("minigallery", MaybeMiniGallery)
     app.add_css_file("css/custom.css")
