@@ -116,9 +116,11 @@ class SegmentationModelWatershed(SegmentationModel):
         ----------
         %(segment.parameters)s
         thresh
-             Threshold for discretization of image scale to define areas to segment.
+             Threshold for creation of masked image. The areas to segment should be contained in this mask.
         geq
-            Treat ``thresh`` as upper or lower (greater-equal = geq) bound for defining state to segment.
+            Treat ``thresh`` as upper or lower (greater-equal = geq) bound for defining areas to segment.
+            If ``geq=True``, mask is defined as ``mask = arr >= thresh``, meaning high values in arr
+            denote areas to segment.
         kwargs
             Keyword arguments for :paramref:`_model`.
 
@@ -132,7 +134,7 @@ class SegmentationModelWatershed(SegmentationModel):
         from skimage.feature import peak_local_max
         from skimage.segmentation import watershed
 
-        # TODO check if threshold is in [0, 1].
+        # TODO check if threshold is in [0, 1]. - no threshold does not need to be in [0, 1]
         # TODO check image dtype/ranges
         # get binarized image
         if geq:
@@ -141,14 +143,14 @@ class SegmentationModelWatershed(SegmentationModel):
             mask = arr < thresh
 
         # calculate markers as maximal distanced points from background (locally)
-        distance = ndi.distance_transform_edt(1 - mask)
-        local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((5, 5)), labels=1 - mask)
+        distance = ndi.distance_transform_edt(mask)
+        local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((5, 5)), labels=mask)
         markers = ndi.label(local_maxi)[0]
-        return watershed(invert(arr), markers, mask=1 - mask)
+        return watershed(invert(arr), markers, mask=mask)
 
 
 class SegmentationModelPretrainedTensorflow(SegmentationModel):
-    """Segmentation model using :mod:`tensofrlow` model."""
+    """Segmentation model using :mod:`tensorflow` model."""
 
     def __init__(self, model, **_kwargs):
         import tensorflow as tf
@@ -178,17 +180,18 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
 
 @d.dedent
 @inject_docs(m=SegmentationBackend)
-def segment(
+def segment_img(
     img: ImageContainer,
     img_id: str,
     model_group: Union[str],
     model_instance: Optional[Union[str, SegmentationModel]] = None,
     model_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    channel_idx: Optional[int] = None,
+    channel_idx: Optional[int] = 0,
     xs: Optional[int] = None,
     ys: Optional[int] = None,
     key_added: Optional[str] = None,
-) -> None:
+    copy: bool = False,
+) -> Union[None, ImageContainer]:
     """
     %(segment.full_desc)s
 
@@ -217,12 +220,16 @@ def segment(
     %(width_height)s
     key_added
         Key of new image sized array to add into img object. Defaults to ``segmented_{{model_group}}``.
+    %(copy_cont)s
 
     Returns
     -------
-    %(segment.returns)s
+    None
+        If ``copy = False``: Stores processed image in ``img`` with key ``key_added``.
+    :class:`ImageContainer`
+        Segmented image with key ``key_added``.
     """  # noqa: D400
-    # channel_id = "mask"
+    channel_id = "mask"  # TODO could make this a parameter
     model_group = SegmentationBackend(model_group)
 
     if model_group == SegmentationBackend.BLOB:
@@ -234,8 +241,6 @@ def segment(
     else:
         raise NotImplementedError(model_group)
 
-    # TODO what happens if we have more than 3 channel dims? Does code work?
-    channel_slice = channel_idx  # if isinstance(channel_idx, int) else slice(0, crops[0].channels.shape[0])
     img_id_new = "segmented_" + model_group.s if key_added is None else key_added
 
     # segment crops
@@ -245,7 +250,7 @@ def segment(
     for crop, x, y in img.generate_equal_crops(xs=xs, ys=ys):
         xcoord.append(x)
         ycoord.append(y)
-        crops.append(segmentation_model.segment(crop[img_id][{"channels": channel_slice}].values, **model_kwargs))
+        crops.append(segmentation_model.segment(crop[img_id][{"channels": channel_idx}].values, **model_kwargs))
 
     # By convention, segments are numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
@@ -256,15 +261,17 @@ def segment(
         num_segments = np.max(x)
         crop_new[crop_new > 0] = crop_new[crop_new > 0] + counter
         counter += num_segments
-        crops[i] = ImageContainer(crop_new, img_id=img_id_new, channel_id="mask")
+        crops[i] = ImageContainer(crop_new, img_id=img_id_new, channel_id=channel_id)
 
     img_segmented = ImageContainer.uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape)
-    # img_id = "segmented_" + model_group.s if key_added is None else key_added
-    return img_segmented  # TODO test and add copy  argument
+    if copy:
+        return img_segmented
+    else:
+        # add segmented image to img
+        img.add_img(img=img_segmented[img_id_new], img_id=img_id_new)
 
-    # img.add_img(img=img_segmented, img_id=img_id, channel_id=channel_id
 
-
+# TODO dead code?
 @d.dedent
 def segment_crops(
     img: ImageContainer,

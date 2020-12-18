@@ -12,6 +12,6 @@ from .segment import (
     SegmentationModelBlob,
     SegmentationModelWatershed,
     SegmentationModelPretrainedTensorflow,
+    segment_img,
 )
-from .segment import segment as segment_img
 from .processing import process_img
