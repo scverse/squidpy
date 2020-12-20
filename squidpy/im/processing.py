@@ -9,9 +9,9 @@ import skimage
 import skimage.filters
 
 from squidpy._docs import d, inject_docs
+from squidpy.im.crop import uncrop_img
+from squidpy.im.object import ImageContainer
 from squidpy.constants._constants import Processing
-from .crop import uncrop_img
-from .object import ImageContainer
 
 
 @d.dedent

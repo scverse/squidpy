@@ -1,8 +1,8 @@
 """Functions exposed: segment(), evaluate_nuclei_segmentation()."""
 
-import abc
 from types import MappingProxyType
 from typing import Any, List, Union, Mapping, Optional
+import abc
 
 import anndata
 
@@ -12,9 +12,9 @@ import xarray as xr
 import skimage
 
 from squidpy._docs import d, inject_docs
+from squidpy.im.crop import uncrop_img
+from squidpy.im.object import ImageContainer
 from squidpy.constants._constants import SegmentationBackend
-from .crop import uncrop_img
-from .object import ImageContainer
 
 
 # TODO: dead code?

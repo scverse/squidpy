@@ -4,11 +4,12 @@
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+from pathlib import Path
+from datetime import datetime
+
 # -- Path setup --------------------------------------------------------------
 import os
 import sys
-from pathlib import Path
-from datetime import datetime
 
 from sphinx_gallery.gen_gallery import DEFAULT_GALLERY_CONF
 
@@ -16,8 +17,8 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
 sys.path.insert(0, os.path.abspath("_ext"))
 
-import squidpy  # noqa: E402
 from docs.source.utils import MaybeMiniGallery, _download_notebooks  # noqa: E402
+import squidpy  # noqa: E402
 
 needs_sphinx = "3.0"
 
@@ -49,7 +50,7 @@ extensions = [
     "sphinx_last_updated_by_git",
     "sphinx_gallery.load_style",
     "edit_on_github",
-    "typed_returns",  # TODO: enable this in the future (once more control is possible)
+    "typed_returns",
 ]
 intersphinx_mapping = dict(  # noqa: C408
     python=("https://docs.python.org/3", None),

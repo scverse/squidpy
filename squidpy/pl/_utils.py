@@ -1,10 +1,9 @@
-import os
 from typing import List, Union, Hashable, Iterable, Optional
 from pathlib import Path
+import os
 
+from scanpy import logging as logg, settings
 import anndata as ad
-from scanpy import logging as logg
-from scanpy import settings
 
 import pandas as pd
 

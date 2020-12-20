@@ -1,11 +1,11 @@
-import os
 from typing import Tuple, Union, Callable, Optional
 from logging import info, warning
 from pathlib import Path
 from urllib.parse import urljoin
+import os
 
-import requests
 from sphinx_gallery.directives import MiniGallery
+import requests
 
 HERE = Path(__file__).parent
 ENDPOINT_FMT = "https://api.github.com/repos/{org}/{repo}/contents/docs/source/"

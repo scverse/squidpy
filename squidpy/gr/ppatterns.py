@@ -1,14 +1,14 @@
 """Functions for point patterns spatial statistics."""
-import warnings
 from typing import Tuple, Union, Iterable, Optional
+import warnings
 
 from statsmodels.stats.multitest import multipletests
 
 from anndata import AnnData
 
+from scipy.sparse import issparse
 import numpy as np
 import pandas as pd
-from scipy.sparse import issparse
 
 from squidpy._docs import d, inject_docs
 from squidpy.constants._pkg_constants import Key
@@ -16,9 +16,9 @@ from squidpy.constants._pkg_constants import Key
 try:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
+        from libpysal.weights import W
         import esda
         import libpysal
-        from libpysal.weights import W
 except ImportError:
     esda = None
     libpysal = None

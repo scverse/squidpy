@@ -1,27 +1,27 @@
-import sys
-import pickle
 from abc import ABC, ABCMeta
 from typing import Tuple, Callable, Optional, Sequence
 from pathlib import Path
 from functools import wraps
 from itertools import product
+import sys
+import pickle
 
 import pytest
 
-import scanpy as sc
 from anndata import AnnData
+import scanpy as sc
 
 import numpy as np
 import pandas as pd
 
-import matplotlib as mpl
 from matplotlib import pyplot
 from matplotlib.testing.compare import compare_images
+import matplotlib as mpl
 
-import squidpy as sp
 from squidpy.im.object import ImageContainer
 from squidpy.gr._ligrec import LigrecResult
 from squidpy.constants._pkg_constants import Key
+import squidpy as sp
 
 mpl.use("agg")
 HERE: Path = Path(__file__).parent

@@ -1,17 +1,14 @@
 """Spatial tools general utility functions."""
-import os
-import glob
 from typing import Tuple, Union, Optional
 from pathlib import Path
+import os
+import glob
 
+from anndata import AnnData
 import scanpy as sc
 import scanpy.logging as logg
-from anndata import AnnData
 
-from squidpy._docs import inject_docs  # noqa: F401
-from squidpy.constants._constants import Dataset  # noqa: F401
-from squidpy.constants._pkg_constants import Key  # noqa: F401
-from .im.object import ImageContainer
+from squidpy.im.object import ImageContainer
 
 
 def read_visium_data(

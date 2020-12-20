@@ -10,8 +10,8 @@ from anndata import AnnData
 import numpy as np
 import pandas as pd
 
-import skimage.feature as sk_image
 from skimage.feature import greycoprops, greycomatrix
+import skimage.feature as sk_image
 
 from squidpy._docs import d, inject_docs
 from squidpy.gr._utils import Signal, parallelize, _get_n_cores

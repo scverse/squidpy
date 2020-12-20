@@ -1,6 +1,6 @@
-import sys
 from time import time
 from typing import Tuple, Optional, Sequence, NamedTuple
+import sys
 
 import pytest
 

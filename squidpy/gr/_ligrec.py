@@ -12,15 +12,14 @@ from collections import namedtuple
 from scanpy import logging as logg
 from anndata import AnnData
 
-import numpy as np
-import pandas as pd
 from numba import njit, prange  # noqa: F401
 from scipy.sparse import csc_matrix
 from pandas.api.types import infer_dtype, is_categorical_dtype
+import numpy as np
+import pandas as pd
 
 from squidpy._docs import d, inject_docs
-from squidpy.constants._constants import FdrAxis, ComplexPolicy
-from ._utils import (
+from squidpy.gr._utils import (
     Queue,
     Signal,
     parallelize,
@@ -28,7 +27,8 @@ from ._utils import (
     _create_sparse_df,
     _check_tuple_needles,
 )
-from ..constants._pkg_constants import Key
+from squidpy.constants._constants import FdrAxis, ComplexPolicy
+from squidpy.constants._pkg_constants import Key
 
 StrSeq = Sequence[str]
 InteractionType = Union[pd.DataFrame, Mapping[str, StrSeq], Tuple[StrSeq, StrSeq], Sequence[Tuple[str, str]], StrSeq]

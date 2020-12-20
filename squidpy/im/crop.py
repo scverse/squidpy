@@ -5,9 +5,9 @@ import scanpy.logging as logg
 import numpy as np
 import xarray as xr
 
-import skimage.util
 from skimage.draw import disk
 from skimage.transform import rescale
+import skimage.util
 
 from squidpy._docs import d
 

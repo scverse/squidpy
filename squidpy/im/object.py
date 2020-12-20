@@ -11,6 +11,7 @@ import xarray as xr
 from imageio import imread
 
 from squidpy._docs import d
+from squidpy.im.crop import crop_img
 from squidpy.im._utils import _num_pages, _unique_order_preserving
 from squidpy.constants._pkg_constants import Key
 
@@ -239,8 +240,6 @@ class ImageContainer:
         -------
         Array of shape ``(channels, y, x)``.
         """
-        from .crop import crop_img
-
         if img_id is None:
             img_id = list(self.data.keys())[0]
 

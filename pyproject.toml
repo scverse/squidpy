@@ -25,7 +25,9 @@ exclude = '''
 '''
 
 [tool.isort]
-skip = "docs/source/conf.py"
+profile = "black"
+py_version = "38"
+skip = "docs/source/conf.py,.tox,build"
 line_length = 88
 multi_line_output = 3
 include_trailing_comma = true
@@ -42,3 +44,15 @@ balanced_wrapping = true
 force_grid_wrap = 0
 length_sort = "1"
 indent = "    "
+
+from_first = true
+order_by_type = true
+atomic = true
+combine_star = true
+combine_as_imports = true
+honor_noqa = true
+remove_redundant_aliases = true
+only_modified = true
+group_by_package = true
+force_alphabetical_sort_within_sections = true
+lexicographical = true

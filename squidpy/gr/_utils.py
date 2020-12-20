@@ -6,8 +6,8 @@ from multiprocessing import Manager, cpu_count
 
 import joblib as jl
 
-import numpy as np
 from scipy.sparse import issparse, spmatrix, csc_matrix
+import numpy as np
 
 
 class Signal(Enum):

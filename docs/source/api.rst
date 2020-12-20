@@ -55,13 +55,3 @@ Plotting
     pl.interaction_matrix
     pl.plot_segmentation
     pl.ligrec
-
-IO
-~~
-.. module::squidpy
-.. currentmodule:: squidpy
-
-.. autosummary::
-    :toctree: api
-
-    read_visium_data

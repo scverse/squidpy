@@ -3,12 +3,12 @@
 from typing import Tuple, Union, Optional
 from pathlib import Path
 
-import scanpy as sc
 from anndata import AnnData
+import scanpy as sc
 
+from pandas import DataFrame
 import numpy as np
 import pandas as pd
-from pandas import DataFrame
 
 import seaborn as sns
 import matplotlib.pyplot as plt

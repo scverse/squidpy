@@ -89,7 +89,7 @@ def test_interaction_matrix_normalize(nhood_data: AnnData, normalized: bool):
     )
     n_cls = adata.obs["leiden"].nunique()
 
-    assert isinstance(res, np.matrix)
+    assert isinstance(res, np.ndarray)
     assert res.shape == (n_cls, n_cls)
 
     if normalized:

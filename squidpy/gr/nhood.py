@@ -4,11 +4,11 @@ from typing import Tuple, Callable, Optional
 
 from anndata import AnnData
 
+from numba import njit, prange  # noqa: F401
+from pandas.api.types import infer_dtype, is_categorical_dtype
 import numpy as np
 import pandas as pd
 import numba.types as nt
-from numba import njit, prange  # noqa: F401
-from pandas.api.types import infer_dtype, is_categorical_dtype
 
 import networkx as nx
 
