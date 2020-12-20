@@ -29,7 +29,6 @@ def evaluate_nuclei_segmentation(adata, copy: bool = False, **kwargs) -> Union[a
         copy:
         kwargs:
     """
-    pass
 
 
 class SegmentationModel:

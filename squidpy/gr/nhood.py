@@ -63,8 +63,7 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[np.ndarray
 
     Returns
     -------
-    callable
-        The aforementioned function.
+    The aforementioned function.
     """
     if n_cls <= 1:
         raise ValueError(f"Expected at least `2` clusters, found `{n_cls}`.")
@@ -132,10 +131,10 @@ def nhood_enrichment(
 
     Returns
     -------
-    :class:`tuple`
-        zscore and nenrich_count.  TODO: be more verbose
-    None
-        If ``copy = False``.  TODO: explain where the result is saved.
+    If ``copy = True``, returns the z-score and the enrichment count. Otherwise, it modifies the ``adata`` with the
+    following keys:
+
+        - TODO: add more info
     """
     if cluster_key not in adata.obs.keys():
         raise KeyError(f"Cluster key `{cluster_key}` not found in `adata.obs`.")
@@ -207,11 +206,10 @@ def centrality_scores(
 
     Returns
     -------
-    :class:`pandas.DataFrame`
-        The result.
-    None
-        If ``copy = False``.  TODO: rephrase (e.g. what columns to expect).
-        Results are stored in :attr:`anndata.AnnData.uns` [``{cluster_key}_centrality_scores``].
+    If ``copy = True`` returns a :class:`pandas.DataFrame`. Otherwise, it modifies the ``adata`` object with the
+    following keys:
+
+        - :attr:`anndata.AnnData.uns` ``[{cluster_key}_centrality_scores]`` - the centrality scores.
     """
     if cluster_key not in adata.obs_keys():
         raise ValueError(
@@ -273,7 +271,7 @@ def interaction_matrix(
     connectivity_key: Optional[str] = Key.obsp.spatial_conn(),
     normalized: bool = True,
     copy: bool = False,
-) -> Optional[np.matrix]:
+) -> Optional[np.ndarray]:
     """
     Compute interaction matrix for clusters.
 
@@ -290,10 +288,10 @@ def interaction_matrix(
 
     Returns
     -------
-    :class:`np.matrix`
-        The interaction matrix.
-    None
-        If ``copy = False``. Results are in :attr:`anndata.AnnData.uns`. TODO: rephrase
+    If ``copy = True`` returns a :class:`numpy.ndarray`. Otherwise, it modifies the ``adata`` object with the
+    following keys:
+
+        - :attr:`anndata.AnnData.uns` ``[{cluster_key}_interactions]`` - the interaction matrix.
     """
     if cluster_key not in adata.obs_keys():
         raise ValueError(
@@ -310,6 +308,7 @@ def interaction_matrix(
     int_mat = nx.attr_matrix(
         graph, node_attr=cluster_key, normalized=normalized, rc_order=adata.obs[cluster_key].cat.categories
     )
+    int_mat = np.asarray(int_mat)
 
     if copy:
         return int_mat

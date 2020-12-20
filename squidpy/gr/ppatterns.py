@@ -18,9 +18,11 @@ try:
         warnings.simplefilter("ignore", UserWarning)
         import esda
         import libpysal
+        from libpysal.weights import W
 except ImportError:
     esda = None
     libpysal = None
+    W = None
 
 
 @d.dedent
@@ -54,16 +56,14 @@ def ripley_k(
 
     Returns
     -------
-    :class:`anndata.AnnData`
-        Modifies ``adata`` and store Ripley's K stat for each cluster in ``adata.uns['ripley_k_{{cluster_key}}']``.
-    :class:`pandas.DataFrame`
-        Return a dataframe if ``copy = True``.  TODO: rephrase
+    If ``copy = True``, returns a :class:`pandas.DataFrame`. Otherwise, it modifies ``adata`` and store Ripley's K stat
+    for each cluster in ``adata.uns['ripley_k_{{cluster_key}}']``.
     """
     try:
         # from pointpats import ripley, hull
         from astropy.stats import RipleysKEstimator
     except ImportError:
-        raise ImportError("Please install `astropy` as: `pip install astropy`.") from None
+        raise ImportError("Please install `astropy` as `pip install astropy`.") from None
 
     coord = adata.obsm[Key.obsm.spatial]
     # set coordinates
@@ -112,9 +112,8 @@ def moran(
 
     Parameters
     ----------
-    %(adata)s
-        The function will use connectivities in ``adata.obsp[{key!r}]``.
-        TODO: expose key
+    adata
+        The function will use connectivities in ``adata.obsp[{key!r}]``. TODO: expose key
     gene_names
         List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute Moran's I statistics
         [Moran50]_. If None, it's computed for all genes.
@@ -129,14 +128,11 @@ def moran(
 
     Returns
     -------
-    :class:`anndata.AnnData`
-        Modifies ``adata`` in place and stores Global Moran's I stats in :attr:`anndata.AnnData.var`.
-        If ``copy = False``.
-    :class:`pandas.DataFrame`
-        If ``copy = True`` TODO: be more verbose as what columns are written>
+    If ``copy = True``, returns a :class:`pandas.DataFrame`. Otherwise, it modifies ``adata`` in place and stores
+    Global Moran's I stats in :attr:`anndata.AnnData.var`.
     """
     if esda is None or libpysal is None:
-        raise ImportError("Please install `esda` and `libpysal` as: `pip install esda libpysal`.")
+        raise ImportError("Please install `esda` and `libpysal` as `pip install esda libpysal`.")
 
     # TODO: use_raw?
     # init weights
@@ -147,7 +143,7 @@ def moran(
     if gene_names is None:
         gene_names = adata.var_names
     if not isinstance(gene_names, Iterable):
-        raise TypeError("TODO")
+        raise TypeError(f"Expected `gene_names` to be `Iterable`, found `{type(gene_names).__name__}`.")
 
     sparse = issparse(adata.X)
 
@@ -176,7 +172,7 @@ def _compute_moran(y, w, transformation, permutations) -> Tuple[np.ndarray, np.n
 
 # TODO: expose the key?
 # TODO: is return type correct?
-def _set_weight_class(adata: AnnData) -> np.ndarray:
+def _set_weight_class(adata: AnnData) -> W:
 
     try:
         a = adata.obsp[Key.obsp.spatial_conn()].tolil()

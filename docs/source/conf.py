@@ -7,8 +7,8 @@
 # -- Path setup --------------------------------------------------------------
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
+from datetime import datetime
 
 from sphinx_gallery.gen_gallery import DEFAULT_GALLERY_CONF
 
@@ -25,7 +25,7 @@ needs_sphinx = "3.0"
 
 project = "squidpy"
 author = squidpy.__author__
-copyright = f"{datetime.now():%Y}, {author}"
+copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
 github_repo = "https://github.com/theislab/squidpy"
 
 _download_notebooks(org="theislab", repo="squidpy_notebooks", raise_exc=False)
@@ -49,7 +49,7 @@ extensions = [
     "sphinx_last_updated_by_git",
     "sphinx_gallery.load_style",
     "edit_on_github",
-    # "typed_returns",  # TODO: enable this in the future (once more control is possible)
+    "typed_returns",  # TODO: enable this in the future (once more control is possible)
 ]
 intersphinx_mapping = dict(  # noqa: C408
     python=("https://docs.python.org/3", None),
@@ -71,6 +71,7 @@ intersphinx_mapping = dict(  # noqa: C408
     numba=("https://numba.readthedocs.io/en/stable/", None),
     xarray=("https://xarray.pydata.org/en/stable/", None),
     omnipath=("https://omnipath.readthedocs.io/en/latest", None),
+    napari=("https://napari.org/docs/dev/", None),
 )
 
 # Add any paths that contain templates here, relative to this directory.

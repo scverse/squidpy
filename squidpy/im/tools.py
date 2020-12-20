@@ -36,21 +36,21 @@ def calculate_image_features(
     **kwargs,
 ) -> Optional[pd.DataFrame]:
     """
-    Get im features for spot ids from im file.
+    Get image features for spot ids.
 
     Parameters
     ----------
     %(adata)s
     %(img_container)s
     features
-        Features to be calculated. Available features:
+        Features to be calculated. Valid options are:
 
             - `{f.HOG.s!r}`: histogram of oriented gradients :func:`squidpy.im.get_hog_features()`.
-            - `{f.TEXTURE.s!r}`: summary stats based on repeating patterns \
-            :func:`squidpy.im.get_grey_texture_features()`.
+            - `{f.TEXTURE.s!r}`: summary stats based on repeating patterns
+              :func:`squidpy.im.get_grey_texture_features()`.
             - `{f.SUMMARY.s!r}`: summary stats of each color channel :func:`squidpy.im.get_summary_stats()`.
-            - `{f.COLOR_HIST.s!r}`: counts in bins of each color channel's histogram \
-            :func:`squidpy.im.get_color_hist()`.
+            - `{f.COLOR_HIST.s!r}`: counts in bins of each color channel's histogram
+              :func:`squidpy.im.get_color_hist()`.
 
     features_kwargs
         Keyword arguments for the different features that should be generated.
@@ -63,9 +63,7 @@ def calculate_image_features(
 
     Returns
     -------
-    :class:`pandas.DataFrame` or None
-        TODO: rephrase
-        `None` if ``copy = False``, otherwise the :class:`pandas.DataFrame`.
+    `None` if ``copy = False``, otherwise the :class:`pandas.DataFrame`.
     """
     if isinstance(features, str):
         features = [features]

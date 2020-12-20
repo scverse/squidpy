@@ -36,12 +36,12 @@ _adata = sc.read("tests/_data/test_data.h5ad")
 _adata.raw = _adata.copy()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def adata() -> AnnData:
     return _adata.copy()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def nhood_data(adata: AnnData) -> AnnData:
     sc.pp.pca(adata)
     sc.pp.neighbors(adata)
@@ -51,7 +51,7 @@ def nhood_data(adata: AnnData) -> AnnData:
     return adata
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def dummy_adata() -> AnnData:
     r = np.random.RandomState(100)
     adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
@@ -78,17 +78,17 @@ def paul15_means() -> pd.DataFrame:
         return pickle.load(fin)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def cont() -> ImageContainer:
     return ImageContainer("tests/_data/test_img.jpg")
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def interactions(adata: AnnData) -> Tuple[Sequence[str], Sequence[str]]:
     return tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def complexes(adata: AnnData) -> Sequence[Tuple[str, str]]:
     g = adata.raw.var_names
     return [
@@ -116,8 +116,8 @@ def ligrec_result() -> LigrecResult:
     )
 
 
-@pytest.fixture(scope="function", autouse=True)
-def logging_state():
+@pytest.fixture(autouse=True)
+def _logging_state():
     # modified from scanpy
     verbosity_orig = sc.settings.verbosity
     yield
@@ -125,7 +125,7 @@ def logging_state():
     sc.settings.verbosity = verbosity_orig
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def visium_adata():
     visium_coords = np.array(
         [
@@ -173,7 +173,7 @@ def visium_adata():
     return adata
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def non_visium_adata():
     non_visium_coords = np.array([[1, 0], [3, 0], [5, 6], [0, 4]])
     adata = AnnData(X=non_visium_coords)

@@ -153,6 +153,7 @@ def _fdr_correct(pvals: pd.DataFrame, fdr_method: str, fdr_axis: FdrAxis, alpha:
 
 @d.get_full_description(base="PT")
 @d.get_sections(base="PT", sections=["Parameters"])
+@d.dedent
 class PermutationTestABC(ABC):
     """
     Class for receptor-ligand interaction testing.
@@ -164,8 +165,8 @@ class PermutationTestABC(ABC):
 
     Parameters
     ----------
-    adata
-        Annotated data object. Must contain :attr:`anndata.AnnData.raw` attribute.
+    %(adata)s
+        Must contain :attr:`anndata.AnnData.raw` attribute.
     """
 
     def __init__(self, adata: AnnData):
@@ -218,10 +219,9 @@ class PermutationTestABC(ABC):
 
         Returns
         -------
-        :class:`spatial_tools.gr.PermutationTestABC`
-            Sets the following attributes and returns self:
+        Sets the following attributes and returns :paramref:`self`:
 
-                - :paramref:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
+            - :paramref:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
         """
         complex_policy = ComplexPolicy(complex_policy)
 
@@ -321,6 +321,7 @@ class PermutationTestABC(ABC):
 
                 - `{fa.INTERACTIONS.value!r}` - correct interactions by performing FDR correction across the clusters.
                 - `{fa.CLUSTERS.value!r}` - correct clusters by performing FDR correction across the interactions.
+
         alpha
             Significance level for FDR correction. Only used when ``fdr_method != None``.
         %(copy)s
@@ -332,17 +333,16 @@ class PermutationTestABC(ABC):
 
         Returns
         -------
-        :class:`collections.namedtuple` or None
-            If ``copy = False``, updates ``adata.uns[{{key_added}}]`` with the following triple:
+        If ``copy = False``, updates ``adata.uns[{{key_added}}]`` with the following triple:
 
-                - `'means'` - :class:`pandas.DataFrame` containing the mean expression.
-                - `'pvalues'` - :class:`pandas.DataFrame` containing the possibly corrected p-values.
-                - `'metadata'` - :class:`pandas.DataFrame` containing interaction metadata.
+            - `'means'` - :class:`pandas.DataFrame` containing the mean expression.
+            - `'pvalues'` - :class:`pandas.DataFrame` containing the possibly corrected p-values.
+            - `'metadata'` - :class:`pandas.DataFrame` containing interaction metadata.
 
-            Otherwise, just returns the result.
+        Otherwise, just returns the result.
 
-            `NaN` p-values mark combinations for which the mean expression of one of the interacting components was `0`
-            or it didn't pass the ``threshold`` percentage of cells being expressed within a given cluster.
+        `NaN` p-values mark combinations for which the mean expression of one of the interacting components was `0`
+        or it didn't pass the ``threshold`` percentage of cells being expressed within a given cluster.
         """  # noqa: E501
         if n_perms <= 0:
             raise ValueError(f"Expected `n_perms` to be positive, found `{n_perms}`.")
@@ -370,7 +370,7 @@ class PermutationTestABC(ABC):
 
         if all(map(lambda c: isinstance(c, str), clusters)):
             clusters = product(clusters, repeat=2)
-        clusters = sorted(_check_tuple_needles(clusters, cluster_cats, msg="Invalid cluster `{!r}`.", reraise=True))
+        clusters = sorted(_check_tuple_needles(clusters, cluster_cats, msg="Invalid cluster `{0!r}`.", reraise=True))
 
         interactions = self.interactions[[SOURCE, TARGET]]
 
@@ -467,23 +467,22 @@ class PermutationTestABC(ABC):
         complex_policy
             Policy on how to handle complexes. Can be one of:
 
-                - `{cp.MIN.value!r}` - select gene with the minimum average expression.
-                This is the same as in [CellPhoneDB20]_.
+                - `{cp.MIN.value!r}` - select gene with the minimum average expression. This is the same as in
+                  [CellPhoneDB20]_.
                 - `{cp.ALL.value!r}` - select all possible combinations between complexes `{src!r}` and `{tgt!r}`.
 
         Returns
         -------
-        None
-            Nothing, just updates the following fields:
+        Nothing, just updates the following fields:
 
-                - :paramref:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
+            - :paramref:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
 
-            Note that for ``complex_policy={cp.ALL.value!r}``, all pairwise comparison within complex are created,
-            but no filtering happens at this stage - genes not present in the data are filtered at a later stage.
+        Note that for ``complex_policy={cp.ALL.value!r}``, all pairwise comparison within complex are created,
+        but no filtering happens at this stage - genes not present in the data are filtered at a later stage.
         """
 
-        def find_min_gene_in_complex(complex: str) -> Optional[str]:
-            complexes = [c for c in complex.split("_") if c in self._data.columns]
+        def find_min_gene_in_complex(_complex: str) -> Optional[str]:
+            complexes = [c for c in _complex.split("_") if c in self._data.columns]
             if not len(complexes):
                 return None
             if len(complexes) == 1:
@@ -667,16 +666,15 @@ def _analysis(
         Number of parallel jobs to launch.
     numba_parallel
         Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
-    **kwargs
+    kwargs
         Keyword arguments for :func:`squidpy.gr._utils.parallelize`, such as ``n_jobs`` or ``backend``.
 
     Returns
     -------
-    :class:`collections.namedtuple`
-        Tuple of the following format:
+    Tuple of the following format:
 
-            - `'means'` - array of shape ``(n_interactions, n_interaction_clusters)`` containing the means.
-            - `'pvalues'` - array of shape ``(n_interactions, n_interaction_clusters)`` containing the p-values.
+        - `'means'` - array of shape ``(n_interactions, n_interaction_clusters)`` containing the means.
+        - `'pvalues'` - array of shape ``(n_interactions, n_interaction_clusters)`` containing the p-values.
     """
 
     def extractor(res: Sequence[TempResult]) -> TempResult:
@@ -760,13 +758,12 @@ def _analysis_helper(
 
     Returns
     -------
-    :class:`collections.namedtuple`
-        Tuple of the following format:
+    Tuple of the following format:
 
-            - `'means'` - array of shape ``(n_interactions, n_interaction_clusters)`` containing the true test
-              statistic. It is `None` if ``min(perms)!=0`` so that only 1 worker calculates it.
-            - `'pvalues'` - array of shape ``(n_interactions, n_interaction_clusters)``  containing `np.sum(T0 > T)`
-              where `T0` is the test statistic under null hypothesis and `T` is the true test statistic.
+        - `'means'` - array of shape ``(n_interactions, n_interaction_clusters)`` containing the true test
+          statistic. It is `None` if ``min(perms)!=0`` so that only 1 worker calculates it.
+        - `'pvalues'` - array of shape ``(n_interactions, n_interaction_clusters)``  containing `np.sum(T0 > T)`
+          where `T0` is the test statistic under null hypothesis and `T` is the true test statistic.
     """
     rs = np.random.RandomState(None if seed is None else perms[0] + seed)
 

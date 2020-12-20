@@ -61,30 +61,28 @@ def save_fig(fig: Figure, path: Union[str, os.PathLike], make_dir: bool = True, 
 @d.dedent
 def extract(
     adata: ad.AnnData,
-    obsm_key: Union[List["str"], "str"] = "img_features",
-    prefix: Optional[Union[List["str"], "str"]] = None,
+    obsm_key: Union[List[str], str] = "img_features",
+    prefix: Optional[Union[List[str], str]] = None,
 ) -> ad.AnnData:
     """
     Create a temporary adata object for plotting.
 
-    Move columns from entry `obsm` in `adata.obsm` to `adata.obs` to enable the use of
-    `scanpy.plotting` functions.
-    If `prefix` is specified, columns are moved to `<prefix>_<column-name>`.
-    Otherwise, column name is kept.
+    Move columns from entry `obsm` in `adata.obsm` to `adata.obs` to enable the use of `scanpy.plotting` functions.
+    If `prefix` is specified, columns are moved to `<prefix>_<column-name>`. Otherwise, column name is kept.
+
     Warning: If `adata.obs["<column-name>"]` already exists, it is overwritten.
 
-
-    Params
-    ------
+    Parameters
+    ----------
     %(adata)s
-    obsm_key:
-        entry in adata.obsm that should be moved to adata.obs. Can be a list of keys.
-    prefix:
-        prefix to prepend to each column name. Should be a list if obsm_key is a list.
+    obsm_key
+        entry in adata.obsm that should be moved to :attr:`anndata.AnnData.obs`. Can be a list of keys.
+    prefix
+        prefix to prepend to each column name. Should be a list if ``obsm_key`` is a list.
 
     Returns
     -------
-        Temporary annotated data object with desired entries in `.obs`.
+    Temporary :class:`anndata.AnnData` object with desired entries in :attr:`anndata.AnnData.obs`.
 
     Raises
     ------

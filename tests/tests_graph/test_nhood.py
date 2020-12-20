@@ -67,11 +67,10 @@ def test_interaction_matrix_copy(nhood_data: AnnData, copy: bool):
         assert res is None
         assert key in adata.uns_keys()
         res = adata.uns[key]
-    # else:
-    # TODO: should it really write?
-    #    assert key not in adata.uns_keys()
+    else:
+        assert key not in adata.uns_keys()
 
-    assert isinstance(res, np.matrix)
+    assert isinstance(res, np.ndarray)
     assert res.shape == (n_cls, n_cls)
 
 

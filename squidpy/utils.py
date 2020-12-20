@@ -28,12 +28,13 @@ def read_visium_data(
         Name of the .h5 file in the ``dataset_folder``. If not specified, will use `*filtered_feature_bc_matrix.h5`.
     image_file
         Name of the .tiff file in the ``dataset_folder``. If not specified, will use `*im.tif`.
+
     Returns
     -------
-    :class:`anndata.AnnData`
-        Annotated data object.
-    :class:`squidpy.image.ImageContainer`
-        The high resolution tiff image.
+    A :class:`tuple` of the following:
+
+        - Annotated data object.
+        - The high resolution tiff image.
     """
     # TODO: refactor asserts
     dataset_folder = Path(dataset_folder)

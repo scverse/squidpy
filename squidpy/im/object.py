@@ -73,7 +73,7 @@ class ImageContainer:
         return self.data.dims["channels"]
 
     @classmethod
-    def open(cls, fname: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":
+    def open(cls, fname: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":  # noqa: A003
         """
         Initialize using a previously saved netcdf file.
 
@@ -103,8 +103,7 @@ class ImageContainer:
 
         Returns
         -------
-        None
-            TODO.
+        TODO
         """
         self.data.to_netcdf(fname, mode="a")
 
@@ -128,8 +127,7 @@ class ImageContainer:
 
         Returns
         -------
-        :class:`xarray.DataArray`
-            Array containing the loaded image.
+        Array containing the loaded image.
 
         Raises
         ------
@@ -239,8 +237,7 @@ class ImageContainer:
 
         Returns
         -------
-        :class:`xarray.DataArray`
-            Array of shape ``(channels, y, x)``.
+        Array of shape ``(channels, y, x)``.
         """
         from .crop import crop_img
 
@@ -310,12 +307,11 @@ class ImageContainer:
 
         Returns
         -------
-        :class:`tuple`
-            Triple of the following:
+        Triple of the following:
 
-                - crops of shape ``(channels, y, x)``.
-                - x-positions of the crops.
-                - y-positions of the crops.
+            - crops of shape ``(channels, y, x)``.
+            - x-positions of the crops.
+            - y-positions of the crops.
         """
         if xs is None:
             xs = self.shape[0]
@@ -359,11 +355,10 @@ class ImageContainer:
 
         Yields
         ------
-        :class:`tuple`
-            Tuple of the following:
+        Tuple of the following:
 
-                - obs_id of spot from ``adata``.
-                - crop of shape ``(channels, y, x)``.
+            - obs_id of spot from ``adata``.
+            - crop of shape ``(channels, y, x)``.
         """
         if dataset_name is None:
             dataset_name = list(adata.uns[Key.uns.spatial].keys())[0]

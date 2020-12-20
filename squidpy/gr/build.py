@@ -55,8 +55,7 @@ def spatial_connectivity(
 
     Returns
     -------
-    None
-        TODO.
+    TODO
     """
     transform = Transform(transform)
     coord_type = CoordType(coord_type)

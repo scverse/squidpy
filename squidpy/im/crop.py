@@ -40,8 +40,7 @@ def uncrop_img(
 
     Returns
     -------
-    :class:`xarray.DataArray`:
-        Array of shape ``(channels, y, x)``.
+    Array of shape ``(channels, y, x)``.
     """
     # TODO: maybe more descriptive names (y==height, x==width)? + extract to constants...
     # TODO: rewrite asserts

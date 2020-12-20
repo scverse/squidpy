@@ -66,8 +66,7 @@ def parallelize(
 
     Returns
     -------
-    :class:`typing.Any`
-        The result depending on ``callable``, ``extractor``.
+    The result depending on ``callable``, ``extractor``.
     """
     if show_progress_bar:
         try:
@@ -224,8 +223,6 @@ def _create_sparse_df(data: Union[np.ndarray, spmatrix], index=None, columns=Non
 
         - allow creation also from :class:`numpy.ndarray`
         - expose ``fill_values``
-
-    .. versionadded:: 0.25.0
 
     Parameters
     ----------
