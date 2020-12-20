@@ -258,7 +258,7 @@ def plot_ripley_k(
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
     **kwargs,
-):
+) -> None:
     """
     Plot Ripley K estimate for each cluster.
 

@@ -39,11 +39,16 @@ class SegmentationModel:
     Specific segmentation models can be implemented by inheriting from this class.
 
     This class is not instantiated by user but used in the background by the functional API.
+
+    Parameters
+    ----------
+    model
+        Underlying segmentation model.
     """
 
     def __init__(
         self,
-        model,
+        model: Any,
     ):
         self.model = model
 
@@ -60,8 +65,7 @@ class SegmentationModel:
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            Segmentation mask for the high-resolution image of shape (x, y, 1).
+        Segmentation mask for the high-resolution image of shape (x, y, 1).
         """
         # TODO: make sure that the dtype is correct
         return self._segment(img, **kwargs)
@@ -220,7 +224,7 @@ def segment(
 
     Returns
     -------
-    %(segment.returns)s
+    Nothing, just updates ``img``.
     """  # noqa: D400
     channel_id = "mask"
     model_group = SegmentationBackend(model_group)
@@ -275,8 +279,7 @@ def segment_crops(
 
     Returns
     -------
-    TODO: type
-        Crops centred on segments.
+    Crops centred on segments.
     """  # noqa: D400
     segment_centres = [
         (

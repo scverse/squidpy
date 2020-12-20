@@ -185,6 +185,7 @@ def get_hog_features(img: np.ndarray[np.float64], feature_name: str = "hog") -> 
     hog_features = sk_image.hog(img)
     for k, hog_feature in enumerate(hog_features):
         hog_dict[f"{feature_name}_{k}"] = hog_feature
+
     return hog_dict
 
 
@@ -196,7 +197,7 @@ def get_summary_stats(
     mean: bool = False,
     std: bool = False,
     channels: Tuple[int, int, int] = (0, 1, 2),
-):
+) -> Feature_t:
     """
     Calculate summary statistics of color channels.
 
@@ -209,7 +210,7 @@ def get_summary_stats(
     mean
         Compute mean.
     std
-        Compute std.
+        Compute standard deviation.
     channels
         Define for which channels histograms are computed.
 
@@ -323,4 +324,5 @@ def get_grey_texture_features(
         for d_idx, dist in enumerate(distances):
             for a_idx, a in enumerate(angles):
                 features[f"{feature_name}_{p}_dist_{dist}_angle_{a:.2f}"] = tmp_features[d_idx, a_idx]
+
     return features

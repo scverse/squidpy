@@ -51,7 +51,7 @@ def process_img(
 
     Returns
     -------
-    TODO
+    Nothing, just updates ``img``.
     """
     processing = Processing(processing)
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
