@@ -1,11 +1,4 @@
 """The image module."""
-from .tools import (
-    get_color_hist,
-    get_hog_features,
-    get_summary_stats,
-    calculate_image_features,
-    get_grey_texture_features,
-)
 from .object import ImageContainer
 from .segment import (
     SegmentationModel,
@@ -13,5 +6,11 @@ from .segment import (
     SegmentationModelWatershed,
     SegmentationModelPretrainedTensorflow,
     segment_img,
+)
+from .features import (
+    get_summary_features,
+    get_texture_features,
+    get_histogram_features,
+    calculate_image_features,
 )
 from .processing import process_img

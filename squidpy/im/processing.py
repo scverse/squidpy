@@ -21,6 +21,7 @@ def process_img(
     xs: Optional[int] = None,
     ys: Optional[int] = None,
     key_added: Optional[str] = None,
+    channel_id: str = "channels",
     copy: bool = False,
 ) -> Union[None, ImageContainer]:
     """
@@ -38,12 +39,15 @@ def process_img(
         Name of processing method to use. Available are:
 
             - `{p.SMOOTH.s!r}`: :func:`skimage.filters.gaussian`.
+            - `{p.GRAY.s!r}`: :func:`skimage.color.rgb2gray`.
 
     processing_kwargs
         Key word arguments to processing method specified by ``processing``.
     %(width_height)s
     key_added
-        Key of new image sized array to add into img object. Defaults to ``{{img_id}}_{{processing}}``.
+        Key of new image layer to add into img object. Defaults to ``{{img_id}}_{{processing}}``.
+    channel_id
+        Name of the channel dimension of the new image layer. Default is "channels".
     %(copy_cont)s
 
     Returns
@@ -65,7 +69,19 @@ def process_img(
         xcoord.append(x)
         ycoord.append(y)
         if processing == Processing.SMOOTH:
-            crops.append(ImageContainer(skimage.filters.gaussian(crop[img_id], **processing_kwargs), img_id=img_id_new))
+            crops.append(
+                ImageContainer(
+                    skimage.filters.gaussian(crop[img_id], **processing_kwargs),
+                    img_id=img_id_new,
+                    channel_id=channel_id,
+                )
+            )
+        elif processing == Processing.GRAY:
+            crops.append(
+                ImageContainer(
+                    skimage.color.rgb2gray(crop[img_id], **processing_kwargs), img_id=img_id_new, channel_id=channel_id
+                )
+            )
         else:
             raise NotImplementedError(processing)
 

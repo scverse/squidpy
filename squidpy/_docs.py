@@ -44,9 +44,9 @@ _img_hr = """\
 img
     High-resolution image.
 """
-_img_uint8 = """\
-img
-    RGB image of type :class:`numpy.uint8` of shape ``(height, width [, channels]).``.
+_img_id = """\
+img_id
+    Key of image layer in ``img`` that should be processed.
 """
 _feature_name = """\
 feature_name
@@ -112,7 +112,7 @@ d = DocstringProcessor(
     numba_parallel=_numba_parallel,
     seed=_seed,
     img_hr=_img_hr,
-    img_uint8=_img_uint8,
+    img_id=_img_id,
     feature_name=_feature_name,
     feature_ret=_feature_ret,
     width_height=_width_height,

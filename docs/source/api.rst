@@ -31,11 +31,11 @@ Image
 .. autosummary::
     :toctree: api
 
-    im.get_color_hist
-    im.get_hog_features
-    im.get_summary_stats
+    im.get_histogram_features
+    im.get_summary_features
     im.calculate_image_features
-    im.get_grey_texture_features
+    im.get_texture_features
+    im.get_summary_features
     im.process_img
     im.segment_img
 
