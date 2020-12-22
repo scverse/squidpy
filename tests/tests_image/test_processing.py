@@ -6,7 +6,7 @@ from squidpy.im.object import ImageContainer
 from squidpy.im.processing import process_img
 
 
-@pytest.mark.parametrize("xs, ys", [(None, None), (40, 40)])
+@pytest.mark.parametrize(("xs", "ys"), [(None, None), (40, 40)])
 @pytest.mark.parametrize("processing", ["smooth", "gray"])
 def test_img_processing(xs, ys, processing):
     """Test skimage processing."""
