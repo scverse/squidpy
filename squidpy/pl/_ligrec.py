@@ -2,15 +2,15 @@ from typing import Tuple, Union, Optional, Sequence
 from pathlib import Path
 from functools import partial
 
-import scanpy as sc
 from scanpy import logging as logg
 from anndata import AnnData
+import scanpy as sc
 
 import numpy as np
 import pandas as pd
 
-import matplotlib.pyplot as plt
 from matplotlib.colorbar import ColorbarBase
+import matplotlib.pyplot as plt
 
 from squidpy._docs import d
 from squidpy.pl._utils import save_fig, _get_black_or_white, _unique_order_preserving

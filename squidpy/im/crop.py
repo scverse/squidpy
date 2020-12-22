@@ -5,9 +5,9 @@ import scanpy.logging as logg
 import numpy as np
 import xarray as xr
 
-import skimage.util
 from skimage.draw import disk
 from skimage.transform import rescale
+import skimage.util
 
 from squidpy._docs import d
 
@@ -40,8 +40,7 @@ def uncrop_img(
 
     Returns
     -------
-    :class:`xarray.DataArray`:
-        Array of shape ``(channels, y, x)``.
+    Array of shape ``(channels, y, x)``.
     """
     # TODO: maybe more descriptive names (y==height, x==width)? + extract to constants...
     # TODO: rewrite asserts

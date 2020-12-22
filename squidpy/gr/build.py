@@ -1,12 +1,12 @@
 """Functions for building gr from spatial coordinates."""
-import warnings
 from typing import Tuple, Union, Optional
+import warnings
 
 from anndata import AnnData
 
-import numpy as np
-from scipy.sparse import SparseEfficiencyWarning, csr_matrix
+from scipy.sparse import csr_matrix, SparseEfficiencyWarning
 from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 from squidpy._docs import d, inject_docs
 from squidpy.constants._constants import CoordType, Transform
@@ -55,8 +55,7 @@ def spatial_connectivity(
 
     Returns
     -------
-    None
-        TODO.
+    TODO
     """
     transform = Transform(transform)
     coord_type = CoordType(coord_type)
