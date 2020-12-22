@@ -10,8 +10,8 @@ from anndata import AnnData
 import numpy as np
 import pandas as pd
 
-import skimage.measure
 from skimage.feature import greycoprops, greycomatrix
+import skimage.measure
 
 from squidpy._docs import d, inject_docs
 from squidpy.gr._utils import Signal, parallelize, _get_n_cores
@@ -47,12 +47,12 @@ def calculate_image_features(
     features
         Features to be calculated. Available features:
 
-            - `{f.TEXTURE.s!r}`: summary stats based on repeating patterns \
-            :func:`squidpy.im.get_texture_features()`.
-            - `{f.SUMMARY.s!r}`: summary stats of each image channel :func:`squidpy.im.get_summary_features()`.
-            - `{f.COLOR_HIST.s!r}`: counts in bins of image channel's histogram \
-            :func:`squidpy.im.get_histogram_features()`.
-            - `{f.SEGMENTATION.s!r}`: stats of a cell segmentation mask :func:`squidpy.im.get_segmentation_features()`.
+        - `{f.TEXTURE.s!r}`: summary stats based on repeating patterns \
+          :func:`squidpy.im.get_texture_features()`.
+        - `{f.SUMMARY.s!r}`: summary stats of each image channel :func:`squidpy.im.get_summary_features()`.
+        - `{f.COLOR_HIST.s!r}`: counts in bins of image channel's histogram \
+          :func:`squidpy.im.get_histogram_features()`.
+        - `{f.SEGMENTATION.s!r}`: stats of a cell segmentation mask :func:`squidpy.im.get_segmentation_features()`.
 
     features_kwargs
         Keyword arguments for the different features that should be generated.
@@ -113,12 +113,6 @@ def _calculate_image_features_helper(
         img_id = list(img.data.keys())[0]
 
     for crop, _ in img.generate_spot_crops(adata, obs_ids=obs_ids, **kwargs):
-
-        # get np.array from crop and restructure to dimensions: y,x,channels
-        # crop = crop.transpose("y", "x", ...).data
-        # if crop has no color channel, reshape
-        # if len(crop.shape) == 2:
-        #    crop = crop[:, :, np.newaxis]
 
         # get features for this crop
         # TODO this could be solved in a more elegant manner
@@ -250,7 +244,6 @@ def get_histogram_features(
     return features
 
 
-# TODO continue here
 @d.dedent
 def get_texture_features(
     img: ImageContainer,

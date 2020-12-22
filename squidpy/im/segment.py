@@ -227,8 +227,8 @@ def segment_img(
 
     Returns
     -------
-    If ``copy = False`` stores processed image in ``img`` with key ``key_added``.
-    Otherwise returns segmented image.
+    Nothing, just updates ``img`` with the segmented image in layer ``key_added``.
+    If ``copy = True``, returns the segmented image.
     """  # noqa: D400
     channel_id = "mask"  # TODO could make this a parameter
     model_group = SegmentationBackend(model_group)

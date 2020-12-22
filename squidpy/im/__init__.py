@@ -1,5 +1,4 @@
 """The image module."""
-from squidpy.im.crop import crop_img
 from squidpy.im.object import ImageContainer
 from squidpy.im.segment import (
     segment_img,

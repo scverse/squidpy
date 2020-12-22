@@ -53,7 +53,7 @@ def process_img(
     Returns
     -------
     Nothing, just updates ``img`` with the processed image in layer ``key_added``.
-    If ``copy = True``, returns the processed image
+    If ``copy = True``, returns the processed image.
     """
     # Note: for processing function that modify the number of channels, need to add a channel_id argument
     processing = Processing(processing)
