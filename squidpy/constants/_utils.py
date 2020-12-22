@@ -23,7 +23,7 @@ def _pretty_raise_enum(cls, fun):
 
 
 class ErrorFormatterABC(ABC):  # noqa: D101
-    __error_format__ = "Invalid option `{!r}` for `{}`. Valid options are: `{}`."
+    __error_format__ = "Invalid option `{0!r}` for `{1}`. Valid options are: `{2}`."
 
     @classmethod
     def _format(cls, value):

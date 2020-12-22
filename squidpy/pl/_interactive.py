@@ -1,21 +1,22 @@
 from typing import Dict, Union, Literal, Optional, Sequence
 from pathlib import Path
 
-import napari
 from cycler import Cycler
-from napari.layers import Points, Shapes
-from PyQt5.QtWidgets import QLabel, QWidget, QComboBox, QGridLayout, QHBoxLayout
 
 from scanpy import logging as logg
 from anndata import AnnData
 from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
-import numpy as np
-import pandas as pd
 from scipy.spatial import KDTree
 from pandas.api.types import infer_dtype, is_categorical_dtype
+import numpy as np
+import pandas as pd
 
-from matplotlib.colors import Colormap, to_rgb
+from PyQt5.QtWidgets import QLabel, QWidget, QComboBox, QGridLayout, QHBoxLayout
+
+from napari.layers import Points, Shapes
+from matplotlib.colors import to_rgb, Colormap
+import napari
 
 from squidpy._docs import d
 from squidpy.im.object import ImageContainer
@@ -113,7 +114,6 @@ class AnnData2Napari:
         Returns
         -------
         TODO.
-            TODO.
         """
 
         def export(viewer: napari.Viewer) -> None:
@@ -374,8 +374,7 @@ class AnnData2Napari:
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The screenshot.
+        The screenshot.
         """
         if self.viewer is None:
             raise RuntimeError("No viewer is initialized.")
@@ -411,8 +410,7 @@ def interactive(
 
     Returns
     -------
-    TODO
-        TODO.
+    TODO.
     """
     # TODO: only HVG subset
     # TODO: deprecate in favor of ImageContainer.interactive()
@@ -442,4 +440,5 @@ def _get_categorical(
     cols = [to_rgb(i) for i in adata.uns[f"{key}_colors"]]
 
     col_dict = dict(zip(adata.obs[key].cat.categories, cols))
+
     return np.array([col_dict[v] for v in adata.obs[key]]), col_dict

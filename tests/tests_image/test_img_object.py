@@ -46,7 +46,7 @@ def test_image_loading(shape, tmpdir):
 
 
 @pytest.mark.parametrize(
-    "shape1,shape2",
+    ("shape1", "shape2"),
     [
         ((3, 100, 200), (3, 100, 200)),
         ((100, 200), (3, 100, 200)),

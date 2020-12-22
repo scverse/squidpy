@@ -1,14 +1,16 @@
 from abc import abstractmethod
 from typing import Any, Tuple, Union, Iterable, Optional
 
-from PyQt5 import QtCore, QtWidgets
 from vispy import scene
 from vispy.scene import widgets
-from napari.layers import Points
 from vispy.color.colormap import Colormap, MatplotlibColormap
-from napari._qt.widgets.qt_range_slider import QHRangeSlider
 
 import numpy as np
+
+from PyQt5 import QtCore, QtWidgets
+
+from napari.layers import Points
+from napari._qt.widgets.qt_range_slider import QHRangeSlider
 
 from squidpy.pl._utils import ALayer
 
@@ -186,7 +188,7 @@ class ObsmIndexWidget(QtWidgets.QComboBox):
 
 
 class CBarWidget(QtWidgets.QWidget):
-    FORMAT = "{:0.2f}"
+    FORMAT = "{0:0.2f}"
 
     cmapChanged = QtCore.pyqtSignal(str)
     climChanged = QtCore.pyqtSignal((float, float))

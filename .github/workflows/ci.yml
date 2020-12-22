@@ -90,7 +90,7 @@ jobs:
       run: |
         tox -e lint
 
-    # TODO: enable be once squidpy_notebooks is downloadable without authorization and all links are fine
+    # TODO: enable once we're public (fails because links are missing)
     #- name: Documentation check
     #  run: |
     #    tox -e docs-check

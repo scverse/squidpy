@@ -9,9 +9,9 @@ import skimage
 import skimage.filters
 
 from squidpy._docs import d, inject_docs
+from squidpy.im.crop import uncrop_img
+from squidpy.im.object import ImageContainer
 from squidpy.constants._constants import Processing
-from .crop import uncrop_img
-from .object import ImageContainer
 
 
 @d.dedent
@@ -51,8 +51,7 @@ def process_img(
 
     Returns
     -------
-    None
-        TODO
+    Nothing, just updates ``img``.
     """
     processing = Processing(processing)
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)

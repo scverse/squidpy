@@ -1,8 +1,8 @@
-import scanpy as sc
 from anndata import AnnData
+import scanpy as sc
 
-import squidpy as sq
 from squidpy.im import ImageContainer
+import squidpy as sq
 
 
 def test_extract(adata: AnnData, cont: ImageContainer, caplog):

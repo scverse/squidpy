@@ -1,17 +1,12 @@
-import os
 from typing import List, Tuple, Union, Hashable, Iterable, Optional, Sequence
 from pathlib import Path
 from functools import wraps
+import os
 
-from numba import njit, prange
-
-import anndata as ad
-from scanpy import logging as logg
-from scanpy import settings
+from scanpy import logging as logg, settings
 from anndata import AnnData
 
-import numpy as np
-import pandas as pd
+from numba import njit, prange
 from scipy.sparse import issparse, spmatrix
 from pandas._libs.lib import infer_dtype
 from pandas.core.dtypes.common import (
@@ -22,6 +17,8 @@ from pandas.core.dtypes.common import (
     is_numeric_dtype,
     is_categorical_dtype,
 )
+import numpy as np
+import pandas as pd
 
 from matplotlib.figure import Figure
 
@@ -75,31 +72,29 @@ def save_fig(fig: Figure, path: Union[str, os.PathLike], make_dir: bool = True, 
 
 @d.dedent
 def extract(
-    adata: ad.AnnData,
-    obsm_key: Union[List["str"], "str"] = "img_features",
-    prefix: Optional[Union[List["str"], "str"]] = None,
-) -> ad.AnnData:
+    adata: AnnData,
+    obsm_key: Union[List[str], str] = "img_features",
+    prefix: Optional[Union[List[str], str]] = None,
+) -> AnnData:
     """
     Create a temporary adata object for plotting.
 
-    Move columns from entry `obsm` in `adata.obsm` to `adata.obs` to enable the use of
-    `scanpy.plotting` functions.
-    If `prefix` is specified, columns are moved to `<prefix>_<column-name>`.
-    Otherwise, column name is kept.
+    Move columns from entry `obsm` in `adata.obsm` to `adata.obs` to enable the use of `scanpy.plotting` functions.
+    If `prefix` is specified, columns are moved to `<prefix>_<column-name>`. Otherwise, column name is kept.
+
     Warning: If `adata.obs["<column-name>"]` already exists, it is overwritten.
 
-
-    Params
-    ------
+    Parameters
+    ----------
     %(adata)s
-    obsm_key:
-        entry in adata.obsm that should be moved to adata.obs. Can be a list of keys.
-    prefix:
-        prefix to prepend to each column name. Should be a list if obsm_key is a list.
+    obsm_key
+        entry in adata.obsm that should be moved to :attr:`anndata.AnnData.obs`. Can be a list of keys.
+    prefix
+        prefix to prepend to each column name. Should be a list if ``obsm_key`` is a list.
 
     Returns
     -------
-        Temporary annotated data object with desired entries in `.obs`.
+    Temporary :class:`anndata.AnnData` object with desired entries in :attr:`anndata.AnnData.obs`.
 
     Raises
     ------
@@ -259,8 +254,20 @@ def _only_not_raw(fn):
     return decorator
 
 
-# TODO: clean-up + docstrings
+# TODO: clean-up
 class ALayer:
+    """
+    Class which helps with :class:`anndata.AnnData` layer logic.
+
+    Parameters
+    ----------
+    %(adata)s
+    is_raw
+        Whether we want to access :attr:`anndata.AnnData.raw`.
+    palette
+        Color palette for categorical variables which don't have colors in :attr:`anndata.AnnData.uns`.
+    """
+
     VALID_ATTRIBUTES = ("obs", "var", "obsm")
 
     # TODO: properly type palette
@@ -276,10 +283,12 @@ class ALayer:
 
     @property
     def adata(self) -> AnnData:
+        """The underlying annotated data object."""  # noqa: D401
         return self._adata
 
     @property
     def layer(self) -> Optional[str]:
+        """Layer in :attr:`anndata.AnnData.layers`."""
         return self._layer
 
     @layer.setter
@@ -292,6 +301,7 @@ class ALayer:
 
     @property
     def raw(self) -> bool:
+        """Whether to access :attr:`anndata.AnnData.raw`."""
         return self._raw
 
     @raw.setter
@@ -307,12 +317,37 @@ class ALayer:
 
     @_ensure_dense_vector
     def get_obs(self, name: str, **_) -> Tuple[Optional[Union[pd.Series, np.ndarray]], str]:
+        """
+        Return an observation.
+
+        Parameters
+        ----------
+        name
+            Key in :attr:`anndata.AnnData.obs` to access.
+
+        Returns
+        -------
+        The values and the formatted ``name``.
+        """
         if name not in self.adata.obs.columns:
             raise KeyError(f"Key `{name}` not found in `adata.obs`.")
         return self.adata.obs[name], self._format_key(name, layer_modifier=False)
 
     @_ensure_dense_vector
     def get_var(self, name: Union[str, int], **_) -> Tuple[Optional[np.ndarray], str]:
+        """
+        Return a gene.
+
+        Parameters
+        ----------
+        name
+            Gene name in :attr:`anndata.AnnData.var_names` or :attr:`anndata.AnnData.raw.var_names`,
+            based on :paramref:`raw`.
+
+        Returns
+        -------
+        The values and the formatted ``name``.
+        """
         adata = self.adata.raw if self.raw else self.adata
         try:
             ix = adata._normalize_indices((slice(None), name))
@@ -322,6 +357,18 @@ class ALayer:
         return self.adata._get_X(use_raw=self.raw, layer=self.layer)[ix], self._format_key(name, layer_modifier=True)
 
     def get_items(self, attr: str) -> tuple:
+        """
+        Return valid keys for an attribute.
+
+        Parameters
+        ----------
+        attr
+            Attribute of :mod:`anndata.AnnData` to access.
+
+        Returns
+        -------
+        The available items.
+        """
         adata = self.adata.raw if self.raw and attr in ("var",) else self.adata
         if attr in ("obs", "obsm"):
             return tuple(map(str, getattr(adata, attr).keys()))
@@ -329,6 +376,20 @@ class ALayer:
 
     @_ensure_dense_vector
     def get_obsm(self, name: str, index: int = 0) -> Tuple[Optional[np.ndarray], str]:
+        """
+        Return a vector from :attr:`anndata.AnnData.obsm`.
+
+        Parameters
+        ----------
+        name
+            Key in :attr:`anndata.AnnData.obsm`.
+        index
+            Index of the vector.
+
+        Returns
+        -------
+        The values and the formatted ``name``.
+        """
         if name not in self.adata.obsm:
             raise KeyError(name)
         if not isinstance(index, int):
@@ -343,8 +404,8 @@ class ALayer:
 
         return str(key) + (":raw" if self.raw else f":{self.layer}" if self.layer is not None else "")
 
-    def repr(self):
+    def __repr__(self):
         return f"{self.__class__.__name__}<raw={self.raw}, layer={self.layer}>"
 
-    def str(self):
+    def __str__(self):
         return repr(self)
