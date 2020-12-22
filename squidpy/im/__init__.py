@@ -1,16 +1,17 @@
 """The image module."""
-from .object import ImageContainer
-from .segment import (
+from squidpy.im.crop import crop_img
+from squidpy.im.object import ImageContainer
+from squidpy.im.segment import (
+    segment_img,
     SegmentationModel,
     SegmentationModelBlob,
     SegmentationModelWatershed,
     SegmentationModelPretrainedTensorflow,
-    segment_img,
 )
-from .features import (
+from squidpy.im.features import (
     get_summary_features,
     get_texture_features,
     get_histogram_features,
     calculate_image_features,
 )
-from .processing import process_img
+from squidpy.im.processing import process_img

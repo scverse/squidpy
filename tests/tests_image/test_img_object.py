@@ -45,7 +45,7 @@ def test_image_loading(shape, tmpdir):
 
 
 @pytest.mark.parametrize(
-    "shape1,shape2",
+    ("shape1", "shape2"),
     [
         ((100, 200, 3), (100, 200, 1)),
         ((100, 200, 3), (100, 200)),
@@ -179,7 +179,7 @@ def test_generate_spot_crops(adata: AnnData, cont: ImageContainer):
     assert i == adata.obsm[Key.obsm.spatial].shape[0]
 
 
-@pytest.mark.parametrize("ys,xs", [(10, 10), (None, None), (10, 20)])
+@pytest.mark.parametrize(("ys", "xs"), [(10, 10), (None, None), (10, 20)])
 def test_generate_equal_crops(ys, xs):
     """
     for simulated data, create equally sized crops.

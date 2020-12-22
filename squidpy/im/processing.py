@@ -7,8 +7,8 @@ import skimage
 import skimage.filters
 
 from squidpy._docs import d, inject_docs
+from squidpy.im.object import ImageContainer
 from squidpy.constants._constants import Processing
-from .object import ImageContainer
 
 
 @d.dedent
@@ -52,10 +52,8 @@ def process_img(
 
     Returns
     -------
-    None
-        If ``copy = False``: Stores processed image in ``img`` with key ``key_added``.
-    :class:`ImageContainer`
-        Processed image with key ``key_added``.
+    Nothing, just updates ``img`` with the processed image in layer ``key_added``.
+    If ``copy = True``, returns the processed image
     """
     # Note: for processing function that modify the number of channels, need to add a channel_id argument
     processing = Processing(processing)

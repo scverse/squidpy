@@ -1,8 +1,8 @@
 """Functions exposed: segment(), evaluate_nuclei_segmentation()."""
 
-import abc
 from types import MappingProxyType
 from typing import Any, List, Union, Mapping, Optional
+import abc
 
 import anndata
 
@@ -12,8 +12,8 @@ import xarray as xr
 import skimage
 
 from squidpy._docs import d, inject_docs
+from squidpy.im.object import ImageContainer
 from squidpy.constants._constants import SegmentationBackend
-from .object import ImageContainer
 
 
 # TODO: dead code?
@@ -28,7 +28,6 @@ def evaluate_nuclei_segmentation(adata, copy: bool = False, **kwargs) -> Union[a
         copy:
         kwargs:
     """
-    pass
 
 
 class SegmentationModel:
@@ -39,11 +38,16 @@ class SegmentationModel:
     Specific segmentation models can be implemented by inheriting from this class.
 
     This class is not instantiated by user but used in the background by the functional API.
+
+    Parameters
+    ----------
+    model
+        Underlying segmentation model.
     """
 
     def __init__(
         self,
-        model,
+        model: Any,
     ):
         self.model = model
 
@@ -60,8 +64,7 @@ class SegmentationModel:
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            Segmentation mask for the high-resolution image of shape (x, y, 1).
+        Segmentation mask for the high-resolution image of shape (x, y, 1).
         """
         # TODO: make sure that the dtype is correct
         return self._segment(img, **kwargs)
@@ -224,10 +227,8 @@ def segment_img(
 
     Returns
     -------
-    None
-        If ``copy = False``: Stores processed image in ``img`` with key ``key_added``.
-    :class:`ImageContainer`
-        Segmented image with key ``key_added``.
+    If ``copy = False`` stores processed image in ``img`` with key ``key_added``.
+    Otherwise returns segmented image.
     """  # noqa: D400
     channel_id = "mask"  # TODO could make this a parameter
     model_group = SegmentationBackend(model_group)
@@ -294,8 +295,7 @@ def segment_crops(
 
     Returns
     -------
-    TODO: type
-        Crops centred on segments.
+    Crops centred on segments.
     """  # noqa: D400
     segment_centres = [
         (

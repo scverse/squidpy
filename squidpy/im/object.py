@@ -8,8 +8,8 @@ from anndata import AnnData
 import numpy as np
 import xarray as xr
 
-import skimage
 from imageio import imread
+import skimage
 
 from squidpy._docs import d
 from squidpy.im._utils import _num_pages, _scale_xarray, _unique_order_preserving
@@ -79,7 +79,7 @@ class ImageContainer:
         return self.data.dims["channels"]
 
     @classmethod
-    def open(cls, fname: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":
+    def open(cls, fname: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":  # noqa: A003
         """
         Initialize using a previously saved netcdf file.
 
@@ -117,8 +117,7 @@ class ImageContainer:
 
         Returns
         -------
-        None
-            Nothing, just saves the data.
+        Nothing, just saves the data to ``fname``.
         """
         self.data.to_netcdf(fname, mode="a")
 
@@ -157,8 +156,7 @@ class ImageContainer:
 
         Returns
         -------
-        None
-            Nothing, just adds img to `.data`
+        Nothing, just adds loaded img to ``data`` with key ``img_id``.
 
         Raises
         ------
@@ -259,8 +257,7 @@ class ImageContainer:
 
         Returns
         -------
-        :class:`ImageContainer`
-            cropped ImageContainer
+        cropped image.
         """
         # get conversion function
         if dtype is not None:
@@ -382,12 +379,12 @@ class ImageContainer:
 
         Returns
         -------
-        :class:`tuple`
-            Triple of the following:
+        Triple of the following:
 
-                - crop of size ``(ys, xs)``.
-                - x-position of the crop.
-                - y-position of the crop.
+            - crop of size ``(ys, xs)``.
+            - x-position of the crop.
+            - y-position of the crop.
+
         """
         if xs is None:
             xs = self.data.x.shape[0]
@@ -435,11 +432,10 @@ class ImageContainer:
 
         Yields
         ------
-        :class:`tuple`
-            Tuple of the following:
+        Tuple of the following:
 
-                - :class:`ImageContainer`: crop at the spot position.
-                - :class:`str`: obs_id of spot from ``adata``.
+            - crop of size ``(ys, xs)``.
+            - obs_id of spot from ``adata``.
 
         """
         if dataset_name is None:
@@ -481,12 +477,11 @@ class ImageContainer:
         y
             Y coord of crop in pixel space. TODO: nice to have - relative space.
         shape
-            Shape of full image (y, x).
+            Shape of full image ``(y, x)``.
 
         Returns
         -------
-        :class:`ImageContainer`
-            assembled image with shape (y, x)
+        assembled image with shape ``(y, x)``
         """
         # TODO: maybe more descriptive names (y==height, x==width)? + extract to constants...
         # TODO: rewrite asserts

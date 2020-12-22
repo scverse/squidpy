@@ -6,8 +6,8 @@ from multiprocessing import Manager, cpu_count
 
 import joblib as jl
 
-import numpy as np
 from scipy.sparse import issparse, spmatrix, csc_matrix
+import numpy as np
 
 
 class Signal(Enum):
@@ -66,8 +66,7 @@ def parallelize(
 
     Returns
     -------
-    :class:`typing.Any`
-        The result depending on ``callable``, ``extractor``.
+    The result depending on ``callable``, ``extractor``.
     """
     if show_progress_bar:
         try:
@@ -224,8 +223,6 @@ def _create_sparse_df(data: Union[np.ndarray, spmatrix], index=None, columns=Non
 
         - allow creation also from :class:`numpy.ndarray`
         - expose ``fill_values``
-
-    .. versionadded:: 0.25.0
 
     Parameters
     ----------

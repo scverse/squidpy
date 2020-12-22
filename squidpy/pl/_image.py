@@ -7,7 +7,7 @@ from squidpy._docs import d
 @d.dedent
 def plot_segmentation(img: ImageContainer, key: str) -> None:
     """
-    Plot segmentation on entire im.
+    Plot segmentation on entire image.
 
     Parameters
     ----------
