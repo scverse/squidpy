@@ -1,10 +1,10 @@
 from copy import deepcopy
 
-import pytest
 from conftest import DPI, PlotTester, PlotTesterMeta
+import pytest
 
-import scanpy as sc
 from anndata import AnnData
+import scanpy as sc
 
 import numpy as np
 import pandas as pd
