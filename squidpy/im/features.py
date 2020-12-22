@@ -295,6 +295,7 @@ def get_texture_features(
     return features
 
 
+@d.dedent
 def get_segmentation_features(
     img: ImageContainer,
     img_id: str,
@@ -306,10 +307,10 @@ def get_segmentation_features(
     std: bool = False,
 ):
     """
-    Calculate segmentation features using :func:`skimage.region.regionprops`.
+    Calculate segmentation features using :func:`skimage.measure.regionprops`.
 
     Features are calculated using ``label_img_id``, a cell segmentation of ``img``
-    (e.g. resulting from calling `sq.img.segment_img`).
+    (e.g. resulting from calling :func:`squidpy.im.segment_img`).
     Depending on the specified parameters, mean and std of the requested props is returned.
     For the 'label' feature, the number of labels is returned, i.e. the number of cells in this img.
 
@@ -322,7 +323,7 @@ def get_segmentation_features(
         Channels for which segmentation features are computed. Default is all channels.
         Only relevant for features that use the intensity image ``img``.
     props
-        Segmentation features that are calculated. See `properties` in :func:`skimage.feature.regionprops_table`.
+        Segmentation features that are calculated. See `properties` in :func:`skimage.measure.regionprops_table`.
         Supported props:
 
         - area
