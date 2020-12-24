@@ -14,7 +14,12 @@ def test_img_processing(xs, ys, processing):
 
     cont = ImageContainer(img_orig, img_id="image_0")
     process_img(
-        img=cont, processing=processing, img_id="image_0", xs=xs, ys=ys, key_added="processed", channel_id="proc"
+        img=cont,
+        processing=processing,
+        img_id="image_0",
+        xs=xs,
+        ys=ys,
+        key_added="processed",
     )
     if processing == "smooth":
         assert cont.data["image_0"].shape == cont.data["processed"].shape

@@ -21,7 +21,7 @@ def process_img(
     xs: Optional[int] = None,
     ys: Optional[int] = None,
     key_added: Optional[str] = None,
-    channel_id: str = "channels",
+    channel_id: Optional[str] = None,
     copy: bool = False,
 ) -> Union[None, ImageContainer]:
     """
@@ -47,7 +47,9 @@ def process_img(
     key_added
         Key of new image layer to add into img object. Defaults to ``{{img_id}}_{{processing}}``.
     channel_id
-        Name of the channel dimension of the new image layer. Default is "channels".
+        Name of the channel dimension of the new image layer.
+        Default is the same as the input image if the processing function does not change the number
+        of channels, and ``{{channel}}_{{processing}}`` if it does.
     %(copy_cont)s
 
     Returns
@@ -55,8 +57,11 @@ def process_img(
     Nothing, just updates ``img`` with the processed image in layer ``key_added``.
     If ``copy = True``, returns the processed image.
     """
-    # Note: for processing function that modify the number of channels, need to add a channel_id argument
     processing = Processing(processing)
+    if channel_id is None:
+        channel_id = img[img_id].dims[-1]
+        if processing == Processing.GRAY:
+            channel_id = f"{channel_id}_{processing}"
     img_id_new = img_id + "_" + str(processing) if key_added is None else key_added
 
     # process crops
