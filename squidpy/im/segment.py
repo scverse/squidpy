@@ -142,6 +142,7 @@ class SegmentationModelWatershed(SegmentationModel):
         # get binarized image
         if geq:
             mask = arr >= thresh
+            arr = invert(arr)
         else:
             mask = arr < thresh
 
@@ -149,7 +150,7 @@ class SegmentationModelWatershed(SegmentationModel):
         distance = ndi.distance_transform_edt(mask)
         local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((5, 5)), labels=mask)
         markers = ndi.label(local_maxi)[0]
-        return watershed(invert(arr), markers, mask=mask)
+        return watershed(arr, markers, mask=mask)
 
 
 class SegmentationModelPretrainedTensorflow(SegmentationModel):
@@ -230,7 +231,9 @@ def segment_img(
     Nothing, just updates ``img`` with the segmented image in layer ``key_added``.
     If ``copy = True``, returns the segmented image.
     """  # noqa: D400
-    channel_id = "mask"  # TODO could make this a parameter
+    # channel name is last dimension of img
+    channel_id = img[img_id].dims[-1]
+    channel_id_new = f"segmented_{channel_id}"  # TODO could make this a parameter
     model_group = SegmentationBackend(model_group)
 
     if model_group == SegmentationBackend.BLOB:
@@ -251,7 +254,7 @@ def segment_img(
     for crop, x, y in img.generate_equal_crops(xs=xs, ys=ys):
         xcoord.append(x)
         ycoord.append(y)
-        crops.append(segmentation_model.segment(crop[img_id][{"channels": channel_idx}].values, **model_kwargs))
+        crops.append(segmentation_model.segment(crop[img_id][{channel_id: channel_idx}].values, **model_kwargs))
 
     # By convention, segments are numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
@@ -262,7 +265,7 @@ def segment_img(
         num_segments = np.max(x)
         crop_new[crop_new > 0] = crop_new[crop_new > 0] + counter
         counter += num_segments
-        crops[i] = ImageContainer(crop_new, img_id=img_id_new, channel_id=channel_id)
+        crops[i] = ImageContainer(crop_new, img_id=img_id_new, channel_id=channel_id_new)
 
     img_segmented = ImageContainer.uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape)
     if copy:
