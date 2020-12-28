@@ -88,7 +88,7 @@ jobs:
       run: |
         echo "::set-output name=dir::$(pip cache dir)"
 
-    - name: Retrieve pip cache
+    - name: Restore pip cache
       uses: actions/cache@v2
       with:
         path: ${{ steps.pip-cache-dir.outputs.dir }}
@@ -100,6 +100,14 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install tox tox-gh-actions codecov
+
+    - name: Restore tox cache
+      uses: actions/cache@v2
+      with:
+        path: .tox
+        key: ${{ runner.os }}-${{ runner.python }}-tox-${{ hashFiles('**/tox.ini') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.python }}-tox-
 
     - name: Installed automake for leidenalg
       run: |
