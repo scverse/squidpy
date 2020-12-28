@@ -39,6 +39,7 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.8
+
       - name: Get Python's hash
         id: py
         run: |
@@ -47,17 +48,18 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: precommit-${{ steps.py.outputs.hash }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install tox
-      - run: |
-          tox -e lint
 
-    # TODO: enable once we're public (fails because links are missing)
-    #- name: Documentation check
-    #  run: |
-    #    tox -e docs-check
+      - name: Linting
+        run: |
+          tox -e lint
+      #- name: Documentation check
+      #  run: |
+      #    tox -e docs-check
 
   test:
     needs: init
@@ -87,7 +89,6 @@ jobs:
       id: pip-cache-dir
       run: |
         echo "::set-output name=dir::$(pip cache dir)"
-
     - name: Restore pip cache
       uses: actions/cache@v2
       with:
