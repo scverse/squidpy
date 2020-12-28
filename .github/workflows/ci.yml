@@ -27,7 +27,7 @@ jobs:
 
   test:
     needs: init
-    if: ${{ needs.init.outputs.skip == 'false' }}
+    if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
     strategy:

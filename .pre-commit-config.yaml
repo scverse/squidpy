@@ -21,7 +21,6 @@ repos:
     rev: v3.4.0
     hooks:
     -   id: detect-private-key
-    -   id: no-commit-to-branch
     -   id: check-merge-conflict
     -   id: check-ast
     -   id: check-symlinks
