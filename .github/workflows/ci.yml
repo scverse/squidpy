@@ -40,14 +40,13 @@ jobs:
         with:
           python-version: 3.8
 
-      - name: Get Python's hash
-        id: py
-        run: |
-          echo "::set-output name=hash::$(python -c 'import hashlib, sys; print(hashlib.sha256(sys.version.encode() + sys.executable.encode()).hexdigest())')"
       - uses: actions/cache@v2
         with:
           path: ~/.cache/pre-commit
-          key: precommit-${{ steps.py.outputs.hash }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          key: precommit-${{ env.pythonLocation }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            precommit-${{ env.pythonLocation }}-
+            precommit-
 
       - name: Install dependencies
         run: |
@@ -93,24 +92,27 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ${{ steps.pip-cache-dir.outputs.dir }}
-        key: ${{ runner.os }}-${{ runner.python }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: pip-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.python }}-pip-
+          pip-${{ runner.os }}-${{ env.pythonLocation }}-
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install tox tox-gh-actions codecov
 
+    # caching .tox is not encouraged, but since we're private and this shaves off ~1min from the step, it should be ok
+    # if any problems occur and/or once the package is public, this can be removed
     - name: Restore tox cache
       uses: actions/cache@v2
       with:
         path: .tox
-        key: ${{ runner.os }}-${{ runner.python }}-tox-${{ hashFiles('**/tox.ini') }}
+        key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/tox.ini') }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.python }}-tox-
+          tox-${{ runner.os }}-${{ env.pythonLocation }}-
+          tox-${{ runner.os }}-
 
-    - name: Installed automake for leidenalg
+    - name: Installed dependencies for leidenalg
       run: |
         if [[ "$RUNNER_OS" == "Linux" ]]; then
           sudo apt install automake
@@ -134,6 +136,19 @@ jobs:
         CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
       run: |
         codecov --no-color --required --flags unittests
+
+  rebuild-notebooks:
+    needs: [lint, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rebuild tutorials/examples
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.ACCESS_TOKEN }}
+          repository: theislab/squidpy_notebooks
+          event-type: rebuild
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
   deploy:
     needs: [lint, test]
@@ -162,16 +177,3 @@ jobs:
           password: ${{ secrets.PYPI_PASSWORD }}
           skip_existing: true
           verbose: true
-
-  rebuild-examples:
-    needs: [lint, test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Rebuild tutorials/examples
-        uses: peter-evans/repository-dispatch@v1
-        with:
-          token: ${{ secrets.ACCESS_TOKEN }}
-          repository: theislab/squidpy_notebooks
-          event-type: rebuild
-          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
