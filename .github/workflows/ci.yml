@@ -6,6 +6,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
   pull_request:
     branches:
       - master
@@ -25,12 +27,46 @@ jobs:
           commit-filter: '[ci skip];[ci-skip];[skip ci];[skip-ci]'
           commit-filter-separator: ';'
 
+  lint:
+    needs: init
+    if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
+      - uses: actions/cache@v2
+        with:
+          path: ~/.cache/pre-commit
+          key: precommit-${{ env.pythonLocation }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            precommit-${{ env.pythonLocation }}-
+            precommit-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox
+
+      - name: Linting
+        run: |
+          tox -e lint
+      #- name: Documentation check
+      #  run: |
+      #    tox -e docs-check
+
   test:
     needs: init
-    if: ${{ needs.init.outputs.skip == 'false' }}
+    if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       max-parallel: 4
       matrix:
         python: [3.8]  # , 3.7, 3.9]
@@ -49,24 +85,34 @@ jobs:
         python-version: ${{ matrix.python }}
 
     - name: Get pip cache dir
-      id: pip-cache
+      id: pip-cache-dir
       run: |
         echo "::set-output name=dir::$(pip cache dir)"
-
-    - name: Cache pip
+    - name: Restore pip cache
       uses: actions/cache@v2
       with:
-        path: ${{ steps.pip-cache.outputs.dir }}
-        key: ${{ runner.os }}-${{ runner.python }}-pip-${{ hashFiles('**/requirements.txt') }}
+        path: ${{ steps.pip-cache-dir.outputs.dir }}
+        key: pip-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.python }}-pip-
+          pip-${{ runner.os }}-${{ env.pythonLocation }}-
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install tox tox-gh-actions codecov
 
-    - name: Installed automake for leidenalg
+    # caching .tox is not encouraged, but since we're private and this shaves off ~1min from the step, it should be ok
+    # if any problems occur and/or once the package is public, this can be removed
+    - name: Restore tox cache
+      uses: actions/cache@v2
+      with:
+        path: .tox
+        key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/tox.ini') }}
+        restore-keys: |
+          tox-${{ runner.os }}-${{ env.pythonLocation }}-
+          tox-${{ runner.os }}-
+
+    - name: Installed dependencies for leidenalg
       run: |
         if [[ "$RUNNER_OS" == "Linux" ]]; then
           sudo apt install automake
@@ -77,22 +123,13 @@ jobs:
           exit 1
         fi
 
-    - name: Linting
-      run: |
-        tox -e lint
-
-    # TODO: enable once we're public (fails because links are missing)
-    #- name: Documentation check
-    #  run: |
-    #    tox -e docs-check
-
     - name: Testing
       run: |
         tox
       env:
         PLATFORM: ${{ matrix.platform }}
 
-    - name: Upload coverage to Codecov
+    - name: Upload coverage
       if: success()
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -100,10 +137,10 @@ jobs:
       run: |
         codecov --no-color --required --flags unittests
 
-  rebuild-examples:
+  rebuild-notebooks:
+    needs: [lint, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    needs: test
     steps:
       - name: Rebuild tutorials/examples
         uses: peter-evans/repository-dispatch@v1
@@ -112,3 +149,31 @@ jobs:
           repository: theislab/squidpy_notebooks
           event-type: rebuild
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+
+  deploy:
+    needs: [lint, test]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Install pypa/build
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+      - name: Build a binary wheel and a source tarball
+        run: |
+          python -m build --sdist --wheel --outdir dist/
+
+      - name: Publish package on PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_PASSWORD }}
+          skip_existing: true
+          verbose: true

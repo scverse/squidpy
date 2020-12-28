@@ -40,7 +40,7 @@ parsers:
 
 comment:
   layout: "reach, diff, files"
-  behavior: new
-  require_changes: yes
+  behavior: default
+  require_changes: true
   branches:
     - master

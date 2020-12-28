@@ -21,17 +21,16 @@ repos:
     rev: v3.4.0
     hooks:
     -   id: detect-private-key
-    -   id: no-commit-to-branch
     -   id: check-merge-conflict
     -   id: check-ast
     -   id: check-symlinks
     -   id: check-added-large-files
     -   id: check-executables-have-shebangs
     -   id: fix-encoding-pragma
-        args: ['--remove']  # for Python3 codebase, it"s not necessary
+        args: ["--remove"]  # for Python3 codebase, it"s not necessary
     -   id: end-of-file-fixer
     -   id: mixed-line-ending
-        args: ['--fix=lf']
+        args: ["--fix=lf"]
     -   id: trailing-whitespace
     -   id: check-case-conflict
     -   id: check-docstring-first
@@ -50,7 +49,8 @@ repos:
   rev: v1.4
   hooks:
     - id: autoflake
-      args: ['--in-place', '--remove-all-unused-imports', '--remove-unused-variable', "--ignore-init-module-imports"]
+      args: ["--recursive", "--in-place", "--remove-all-unused-imports", "--remove-unused-variables",
+             "--ignore-init-module-imports"]
 -   repo: https://github.com/myint/rstcheck
     rev: master
     hooks:
