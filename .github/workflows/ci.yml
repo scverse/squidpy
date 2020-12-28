@@ -6,6 +6,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
   pull_request:
     branches:
       - master
@@ -25,12 +27,45 @@ jobs:
           commit-filter: '[ci skip];[ci-skip];[skip ci];[skip-ci]'
           commit-filter-separator: ';'
 
+  lint:
+    needs: init
+    if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Get Python's hash
+        id: py
+        run: |
+          echo "::set-output name=hash::$(python -c 'import hashlib, sys; print(hashlib.sha256(sys.version.encode() + sys.executable.encode()).hexdigest())')"
+      - uses: actions/cache@v2
+        with:
+          path: ~/.cache/pre-commit
+          key: precommit-${{ steps.py.outputs.hash }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox
+      - run: |
+          tox -e linting
+
+    # TODO: enable once we're public (fails because links are missing)
+    #- name: Documentation check
+    #  run: |
+    #    tox -e docs-check
+
   test:
     needs: init
     if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       max-parallel: 4
       matrix:
         python: [3.8]  # , 3.7, 3.9]
@@ -49,19 +84,21 @@ jobs:
         python-version: ${{ matrix.python }}
 
     - name: Get pip cache dir
-      id: pip-cache
+      id: pip-cache-dir
       run: |
         echo "::set-output name=dir::$(pip cache dir)"
 
     - name: Cache pip
+      id: pip-cache
       uses: actions/cache@v2
       with:
-        path: ${{ steps.pip-cache.outputs.dir }}
+        path: ${{ steps.pip-cache-dir.outputs.dir }}
         key: ${{ runner.os }}-${{ runner.python }}-pip-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-${{ runner.python }}-pip-
 
     - name: Install dependencies
+      if: steps.pip-cache.outputs.cache-hit == 'false'
       run: |
         python -m pip install --upgrade pip
         pip install tox tox-gh-actions codecov
@@ -77,22 +114,13 @@ jobs:
           exit 1
         fi
 
-    - name: Linting
-      run: |
-        tox -e lint
-
-    # TODO: enable once we're public (fails because links are missing)
-    #- name: Documentation check
-    #  run: |
-    #    tox -e docs-check
-
     - name: Testing
       run: |
         tox
       env:
         PLATFORM: ${{ matrix.platform }}
 
-    - name: Upload coverage to Codecov
+    - name: Upload coverage
       if: success()
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -100,10 +128,38 @@ jobs:
       run: |
         codecov --no-color --required --flags unittests
 
+  deploy:
+    needs: [lint, test]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Install pypa/build
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+      - name: Build a binary wheel and a source tarball
+        run: |
+          python -m build --sdist --wheel --outdir dist/
+
+      - name: Publish package on PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_PASSWORD }}
+          skip_existing: true
+          verbose: true
+
   rebuild-examples:
+    needs: [lint, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    needs: test
     steps:
       - name: Rebuild tutorials/examples
         uses: peter-evans/repository-dispatch@v1
