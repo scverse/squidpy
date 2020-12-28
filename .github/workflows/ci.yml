@@ -52,7 +52,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install tox
       - run: |
-          tox -e linting
+          tox -e lint
 
     # TODO: enable once we're public (fails because links are missing)
     #- name: Documentation check
