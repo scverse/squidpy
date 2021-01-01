@@ -19,7 +19,7 @@ Run the following::
 `Pre-commit <https://pre-commit.com/>`__ will run series of checks to determine if everything is in order,
 such as whether the AST can be parsed, formatting, import/requirements sorting, etc.
 To skip certain lines (especially for flake8), you can append ``# noqa`` or ``# noqa: <error>``, see
-`here <https://github.com/pycqa/flake8>`__.
+`here <https://github.com/pycqa/flake8>`__. As for ``mypy``, the errors can be ignored as ``# type: ignore[foo,bar]``.
 
 Tox
 ~~~
