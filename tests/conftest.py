@@ -5,7 +5,6 @@ from functools import wraps
 from itertools import product
 import sys
 import pickle
-
 import pytest
 
 from anndata import AnnData
@@ -85,7 +84,7 @@ def cont() -> ImageContainer:
 
 @pytest.fixture()
 def interactions(adata: AnnData) -> Tuple[Sequence[str], Sequence[str]]:
-    return tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
+    return tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))  # type: ignore
 
 
 @pytest.fixture()

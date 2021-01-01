@@ -1,11 +1,10 @@
-# taken from scanpy
-import re
-
+from typing import List, Iterable, Iterator
 from sphinx.application import Sphinx
 from sphinx.ext.napoleon import NumpyDocstring
+import re
 
 
-def _process_return(lines):
+def _process_return(lines: Iterable[str]) -> Iterator[str]:
     for line in lines:
         m = re.fullmatch(r"(?P<param>\w+)\s+:\s+(?P<type>[\w.]+)", line)
         if m:
@@ -15,13 +14,13 @@ def _process_return(lines):
             yield line
 
 
-def _parse_returns_section(self, section):
+def _parse_returns_section(self: NumpyDocstring, section: str) -> List[str]:
     lines_raw = list(_process_return(self._dedent(self._consume_to_next_section())))
-    lines = self._format_block(":returns: ", lines_raw)
+    lines: List[str] = self._format_block(":returns: ", lines_raw)
     if lines and lines[-1]:
         lines.append("")
     return lines
 
 
-def setup(app: Sphinx):
+def setup(app: Sphinx) -> None:
     NumpyDocstring._parse_returns_section = _parse_returns_section

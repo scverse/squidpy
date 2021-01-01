@@ -21,7 +21,7 @@ def uncrop_img(
     channel_id: str = "channels",
 ) -> xr.DataArray:
     """
-    Re-assemble im from crops and their positions.
+    Reassemble im from crops and their positions.
 
     Fills remaining positions with zeros. Positions are given as upper right corners.
 
@@ -77,7 +77,7 @@ def crop_img(
     img: xr.DataArray,
     x: int,
     y: int,
-    channel_id: str = None,
+    channel_id: Optional[str] = None,
     xs: int = 100,  # TODO: are these defaults reasonable or should no defaults be specified?
     ys: int = 100,
     scale: float = 1.0,

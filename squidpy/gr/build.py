@@ -1,5 +1,5 @@
 """Functions for building gr from spatial coordinates."""
-from typing import Tuple, Union, Optional
+from typing import Any, Dict, Tuple, Union, Optional
 import warnings
 
 from anndata import AnnData
@@ -21,8 +21,8 @@ def spatial_connectivity(
     n_rings: int = 1,
     n_neigh: int = 6,
     radius: Optional[float] = None,
-    coord_type: Optional[str] = CoordType.VISIUM.s,
-    transform: Optional[str] = None,
+    coord_type: Optional[Union[str, CoordType]] = CoordType.VISIUM.s,
+    transform: Optional[Union[str, Transform]] = None,
     key_added: Optional[str] = None,
 ) -> None:
     """
@@ -63,7 +63,7 @@ def spatial_connectivity(
     coords = adata.obsm[obsm]
     if coord_type == CoordType.VISIUM:
         if n_rings > 1:
-            Adj = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True)
+            Adj: np.ndarray = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True, return_distance=False)
             Res = Adj
             Walk = Adj
             # TODO: can't this ben done in log(n_rings - 1) with recursion?
@@ -105,7 +105,7 @@ def spatial_connectivity(
     dists_key = Key.obsp.spatial_dist(key_added)
 
     # add keys
-    neighbors_dict = adata.uns[key_added] = {}
+    neighbors_dict: Dict[str, Any] = {}
 
     neighbors_dict["connectivities_key"] = conns_key
     neighbors_dict["distances_key"] = dists_key
@@ -116,6 +116,8 @@ def spatial_connectivity(
     adata.obsp[conns_key] = Adj
     if Dst is not None:
         adata.obsp[dists_key] = Dst
+
+    adata.uns[key_added] = neighbors_dict
 
 
 def _build_connectivity(

@@ -1,6 +1,4 @@
 from copy import deepcopy
-
-from conftest import DPI, PlotTester, PlotTesterMeta
 import pytest
 
 from anndata import AnnData
@@ -10,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from squidpy import gr, pl
+from tests.conftest import DPI, PlotTester, PlotTesterMeta
 from squidpy.gr._ligrec import LigrecResult
 
 C_KEY = "leiden"
@@ -89,7 +88,7 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
         empty = pd.DataFrame(np.nan, index=ligrec_result.pvalues.index, columns=ligrec_result.pvalues.columns)
         tmp = type(ligrec_result)(empty, empty, empty)
 
-        with pytest.raises(ValueError, match=r"After removing empty interactions, none remain."):
+        with pytest.raises(ValueError, match=r"After removing NaN interactions, none remain."):
             pl.ligrec(tmp, remove_empty_interactions=True)
 
     def test_plot_source_clusters(self, ligrec_result: LigrecResult):

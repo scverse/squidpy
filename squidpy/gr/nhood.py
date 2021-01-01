@@ -99,7 +99,7 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[np.ndarray
         template = _template.format(init=init, loop=loop, finalize=finalize, n_cls=n_cls, parallel=parallel)
         exec(compile(template, "", "exec"), globals())
 
-    return globals()[fn_key]
+    return globals()[fn_key]  # type: ignore[no-any-return]
 
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
