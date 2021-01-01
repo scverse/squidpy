@@ -185,7 +185,7 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
 def segment(
     img: ImageContainer,
     img_id: str,
-    model_group: Union[str],
+    model_group: Union[str, SegmentationBackend],
     model_instance: Optional[Union[str, SegmentationModel]] = None,
     model_kwargs: Mapping[str, Any] = MappingProxyType({}),
     channel_idx: Optional[int] = None,
@@ -230,7 +230,7 @@ def segment(
     model_group = SegmentationBackend(model_group)
 
     if model_group == SegmentationBackend.BLOB:
-        segmentation_model = SegmentationModelBlob(model=model_instance)
+        segmentation_model: SegmentationModel = SegmentationModelBlob(model=model_instance)
     elif model_group == SegmentationBackend.WATERSHED:
         segmentation_model = SegmentationModelWatershed(model=model_instance)
     elif model_group == SegmentationBackend.TENSORFLOW:
@@ -275,7 +275,7 @@ def segment_crops(
         Key of image object to take crops from.
     segmented_img_id
         Key of image object that contains segments.
-    %(width_height)s # TODO add support as soon as crop supports this
+    %(width_height)s # TODO: add support as soon as crop supports this
 
     Returns
     -------
@@ -288,4 +288,4 @@ def segment_crops(
         )
         for i in np.sort(list(set(np.unique(img.data[segmented_img_id])) - {0}))
     ]
-    return [img.crop(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id) for xi, yi in segment_centres]
+    return [img.crop_center(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id) for xi, yi in segment_centres]

@@ -1,8 +1,8 @@
 """Graph utilities."""
 from enum import Enum
-from typing import Any, Tuple, Union, TypeVar, Callable, Optional, Sequence
+from typing import Any, List, Tuple, Union, Callable, Optional, Sequence
 from threading import Thread
-from multiprocessing import Manager, cpu_count
+from multiprocessing import Queue, Manager, cpu_count
 
 import joblib as jl
 
@@ -19,9 +19,6 @@ class Signal(Enum):
     UPDATE_FINISH = 3
 
 
-Queue = TypeVar("Queue")
-
-
 def parallelize(
     callback: Callable[[Any], Any],
     collection: Sequence[Any],
@@ -30,7 +27,7 @@ def parallelize(
     unit: str = "",
     use_ixs: bool = False,
     backend: str = "loky",
-    extractor: Optional[Callable[[Any], Any]] = None,
+    extractor: Optional[Callable[..., Any]] = None,
     show_progress_bar: bool = True,
     use_runner: bool = False,
     **_,
@@ -44,12 +41,12 @@ def parallelize(
         Function to parallelize. Can either accept a whole chunk (``use_runner=False``) or just a single
         element (``use_runner=True``).
     collection
-        Sequence of items which to chunkify.
+        Sequence of items to split into chunks.
     n_jobs
         Number of parallel jobs.
     n_split
         Split ``collection`` into ``n_split`` chunks.
-        If <= 0, ``collection`` is assumed to be already chunkified.
+        If <= 0, ``collection`` is assumed to be already split into chunks.
     unit
         Unit of the progress bar.
     use_ixs
@@ -76,8 +73,8 @@ def parallelize(
     else:
         tqdm = None
 
-    def runner(iterable, *args, queue: Optional[Queue] = None, **kwargs):
-        result = []
+    def runner(iterable, *args, queue: Optional[Queue] = None, **kwargs) -> List[Any]:
+        result: List[Any] = []
 
         for it in iterable:
             res = callback(it, *args, **kwargs)
@@ -91,7 +88,7 @@ def parallelize(
 
         return result
 
-    def update(pbar, queue, n_total):
+    def update(pbar, queue: Queue, n_total: int) -> None:
         n_finished = 0
         while n_finished < n_total:
             try:

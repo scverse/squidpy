@@ -20,6 +20,7 @@ def plot_segmentation(img: ImageContainer, key: str) -> None:
     -------
     %(plotting_returns)s
     """
-    arr = img[key]
+    # TODO: remove the type: ignore once IC is indexable
+    arr = img[key]  # type: ignore
     plt.imshow(arr)
     # todo add other channels in background

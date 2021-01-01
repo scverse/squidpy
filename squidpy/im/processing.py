@@ -19,7 +19,7 @@ from squidpy.constants._constants import Processing
 def process_img(
     img: ImageContainer,
     img_id: str,
-    processing: Union[str],
+    processing: Union[str, Processing],
     processing_kwargs: Mapping[str, Any] = MappingProxyType({}),
     xs: Optional[int] = None,
     ys: Optional[int] = None,
@@ -68,6 +68,6 @@ def process_img(
         crops = [xr.DataArray(x, dims=dims) for x in crops]
     # Reassemble im:
     img_proc = uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape, channel_id=channel_id)
-    img_id_new = (img_id + "_" + processing if key_added is None else key_added) if copy else img_id
+    img_id_new = (img_id + "_" + processing.v if key_added is None else key_added) if copy else img_id
 
     img.add_img(img=img_proc, img_id=img_id_new, channel_id=channel_id)

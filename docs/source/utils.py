@@ -65,7 +65,7 @@ def _download_file(url: str, path: str) -> Tuple[bool, int]:
 
 
 @_cleanup
-def _download_dir(url: str, *, path: str, depth: int) -> Tuple[bool, Optional[Union[Exception, str]]]:
+def _download_dir(url: str, *, path: Union[str, Path], depth: int) -> Tuple[bool, Optional[Union[Exception, str]]]:
     if depth == 0:
         return False, f"Maximum depth `{DEPTH}` reached."
 

@@ -343,7 +343,7 @@ class PermutationTestABC(ABC):
 
         `NaN` p-values mark combinations for which the mean expression of one of the interacting components was `0`
         or it didn't pass the ``threshold`` percentage of cells being expressed within a given cluster.
-        """  # noqa: E501
+        """
         if n_perms <= 0:
             raise ValueError(f"Expected `n_perms` to be positive, found `{n_perms}`.")
 

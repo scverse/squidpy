@@ -1,4 +1,4 @@
-from typing import List, Union, Hashable, Iterable, Optional
+from typing import List, Union, Optional
 from pathlib import Path
 import os
 
@@ -35,17 +35,17 @@ def save_fig(fig: Figure, path: Union[str, os.PathLike], make_dir: bool = True, 
     None
         Just saves the plot.
     """
-    path = Path(path)
-
     if os.path.splitext(path)[1] == "":
         path = f"{path}.{ext}"
+
+    path = Path(path)
 
     if not path.is_absolute():
         path = Path(settings.figdir) / path
 
     if make_dir:
         try:
-            os.makedirs(Path.parent, exist_ok=True)
+            os.makedirs(str(Path.parent), exist_ok=True)
         except OSError as e:
             logg.debug(f"Unable to create directory `{Path.parent}`. Reason: `{e}`.")
 
@@ -147,9 +147,3 @@ def _get_black_or_white(value: float, cmap) -> str:
 
     r, g, b, *_ = [int(c * 255) for c in cmap(value)]
     return _contrasting_color(r, g, b)
-
-
-def _unique_order_preserving(iterable: Iterable[Hashable]) -> List[Hashable]:
-    """Remove items from an iterable while preserving the order."""
-    seen = set()
-    return [i for i in iterable if i not in seen and not seen.add(i)]

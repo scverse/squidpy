@@ -1,5 +1,4 @@
-from os import PathLike
-from typing import Any, List, Tuple, Union, Iterable, Iterator, Optional
+from typing import Any, List, Tuple, Union, Hashable, Iterable, Iterator, Optional
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -11,8 +10,9 @@ import xarray as xr
 from imageio import imread
 
 from squidpy._docs import d
+from squidpy.utils import _unique_order_preserving
 from squidpy.im.crop import crop_img
-from squidpy.im._utils import _num_pages, _unique_order_preserving
+from squidpy.im._utils import _num_pages
 from squidpy.constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
@@ -47,9 +47,7 @@ class ImageContainer:
         chunks: Optional[int] = None,
         **kwargs,
     ):
-        if chunks is not None:
-            chunks = {"x": chunks, "y": chunks}
-        self._chunks = chunks
+        self._chunks = None if chunks is None else {"x": chunks, "y": chunks}
         self._lazy = lazy
         self.data = xr.Dataset()
         if img is not None:
@@ -146,7 +144,7 @@ class ImageContainer:
             assert "x" in img.dims
             assert "y" in img.dims
             xr_img = img
-        elif isinstance(img, (str, PathLike)):
+        elif isinstance(img, (str, Path)):
             img = str(img)
             ext = img.split(".")[-1]
             if ext in ("tif", "tiff"):  # TODO: constants
@@ -334,7 +332,7 @@ class ImageContainer:
         size: float = 1.0,
         obs_ids: Optional[Iterable[Any]] = None,
         **kwargs,
-    ) -> Iterator[Tuple[Union[int, str], xr.DataArray]]:
+    ) -> Iterator[Tuple[Hashable, xr.DataArray]]:
         """
         Iterate over all obs_ids defined in adata and extract crops from images.
 

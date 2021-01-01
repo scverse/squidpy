@@ -13,7 +13,8 @@ from matplotlib.colorbar import ColorbarBase
 import matplotlib.pyplot as plt
 
 from squidpy._docs import d
-from squidpy.pl._utils import save_fig, _get_black_or_white, _unique_order_preserving
+from squidpy.utils import _unique_order_preserving
+from squidpy.pl._utils import save_fig, _get_black_or_white
 from squidpy.gr._ligrec import LigrecResult
 
 _SEP = " | "
@@ -162,8 +163,8 @@ def ligrec(
     if isinstance(target_groups, str):
         target_groups = [target_groups]
 
-    source_groups = _unique_order_preserving(source_groups)
-    target_groups = _unique_order_preserving(target_groups)
+    source_groups, _ = _unique_order_preserving(source_groups)  # type: ignore
+    target_groups, _ = _unique_order_preserving(target_groups)  # type: ignore
 
     pvals = adata.pvalues.loc[:, (source_groups, target_groups)]
     means = adata.means.loc[:, (source_groups, target_groups)]

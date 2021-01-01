@@ -22,6 +22,6 @@ def _html_page_context(app, _pagename, templatename, context, doctree):
     context["conf_py_path"] = "/docs/source/"
 
 
-def setup(app):  # noqa: D103
+def setup(app):
     app.add_config_value("github_repo", "", True)
     app.connect("html-page-context", _html_page_context)

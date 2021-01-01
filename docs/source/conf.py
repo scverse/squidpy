@@ -118,7 +118,7 @@ html_theme_options = dict(navigation_depth=4, logo_only=True)  # noqa: C408
 html_show_sphinx = False
 
 
-def setup(app):  # noqa: D103
+def setup(app):
     DEFAULT_GALLERY_CONF["backreferences_dir"] = "gen_modules/backreferences"
     DEFAULT_GALLERY_CONF["download_all_examples"] = False
     DEFAULT_GALLERY_CONF["show_signature"] = False
