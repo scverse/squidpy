@@ -67,7 +67,7 @@ class ImageContainer:
     @property
     def nchannels(self) -> int:
         """Number of channels."""  # noqa: D401
-        return self.data.dims["channels"]
+        return self.data.dims["channels"]  # type: ignore[no-any-return]
 
     @classmethod
     def open(cls, fname: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":  # noqa: A003

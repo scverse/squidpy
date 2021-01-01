@@ -507,7 +507,7 @@ class PermutationTestABC(ABC):
 
             df = self._data[complexes].mean()
 
-            return df.index[df.argmin()]
+            return df.index[df.argmin()]  # type: ignore[no-any-return]
 
         if TYPE_CHECKING:
             assert isinstance(self._interactions, pd.DataFrame)
@@ -611,7 +611,8 @@ class PermutationTest(PermutationTestABC):
             interactions[SOURCE] = interactions[SOURCE].str.lstrip("COMPLEX:")
             interactions[TARGET] = interactions[TARGET].str.lstrip("COMPLEX:")
 
-        return super().prepare(interactions, complex_policy=complex_policy)
+        _ = super().prepare(interactions, complex_policy=complex_policy)
+        return self
 
 
 @d.dedent
@@ -640,7 +641,7 @@ def ligrec(
     -------
     %(PT_test.returns)s
     """  # noqa: D400
-    return (
+    return (  # type: ignore[no-any-return]
         PermutationTest(adata)
         .prepare(interactions, complex_policy=complex_policy, **kwargs)
         .test(
@@ -723,7 +724,7 @@ def _analysis(
     data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
     # all 3 should be C contiguous
 
-    return parallelize(
+    return parallelize(  # type: ignore[no-any-return]
         _analysis_helper,
         np.arange(n_perms, dtype=np.int32),
         n_jobs=n_jobs,
@@ -755,7 +756,7 @@ def _analysis_helper(
     queue: Optional[SigQueue] = None,
 ) -> TempResult:
     """
-    Run the mean, percent an shuffled analysis.
+    Run the results of mean, percent and shuffled analysis.
 
     Parameters
     ----------

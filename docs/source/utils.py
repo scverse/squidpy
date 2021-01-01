@@ -122,7 +122,7 @@ class MaybeMiniGallery(MiniGallery):
 
         self.arguments[0] = " ".join(new_list)
         try:
-            return super().run()
+            return super().run()  # type: ignore[no-any-return]
         except UnboundLocalError:
             # no gallery files
             return []

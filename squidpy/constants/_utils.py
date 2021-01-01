@@ -51,7 +51,7 @@ class ABCEnumMeta(EnumMeta, ABCMeta):
     def __call__(cls, *args: Any, **kw: Any) -> EnumMeta:  # noqa: D102
         if getattr(cls, "__error_format__", None) is None:
             raise TypeError(f"Can't instantiate class `{cls.__name__}` without `__error_format__` class attribute.")
-        return super().__call__(*args, **kw)
+        return super().__call__(*args, **kw)  # type: ignore[no-any-return]
 
     def __new__(  # noqa: D102
         cls, clsname: str, bases: Tuple[EnumMeta, ...], namespace: Dict[str, Any]
