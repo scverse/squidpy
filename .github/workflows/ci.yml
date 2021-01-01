@@ -2,7 +2,7 @@ name: CI
 
 on:
     schedule:
-    -   cron: 00 09 * * 1   # run every Monday at 09:00
+    -   cron: 00 09 * * 1     # run every Monday at 09:00
     push:
         branches:
         -   master
