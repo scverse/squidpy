@@ -1,179 +1,179 @@
 name: CI
 
 on:
-  schedule:
-    - cron: '00 09 * * 1'  # run every Monday at 09:00
-  push:
-    branches:
-      - master
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
-  pull_request:
-    branches:
-      - master
+    schedule:
+    -   cron: 00 09 * * 1     # run every Monday at 09:00
+    push:
+        branches:
+        -   master
+        tags:
+        -   v[0-9]+.[0-9]+.[0-9]+
+    pull_request:
+        branches:
+        -   master
 
 jobs:
-  init:
-    runs-on: ubuntu-latest
-    outputs:
-      skip: ${{ steps.ci-skip-step.outputs.ci-skip }}
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - id: ci-skip-step
-        uses: mstachniuk/ci-skip@master
-        with:
-          commit-filter: '[ci skip];[ci-skip];[skip ci];[skip-ci]'
-          commit-filter-separator: ';'
+    init:
+        runs-on: ubuntu-latest
+        outputs:
+            skip: ${{ steps.ci-skip-step.outputs.ci-skip }}
+        steps:
+        -   uses: actions/checkout@v2
+            with:
+                fetch-depth: 0
+        -   id: ci-skip-step
+            uses: mstachniuk/ci-skip@master
+            with:
+                commit-filter: '[ci skip];[ci-skip];[skip ci];[skip-ci]'
+                commit-filter-separator: ;
 
-  lint:
-    needs: init
-    if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.8
+    lint:
+        needs: init
+        if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
+        runs-on: ubuntu-latest
+        steps:
+        -   uses: actions/checkout@v2
+            with:
+                fetch-depth: 0
+        -   name: Set up Python
+            uses: actions/setup-python@v2
+            with:
+                python-version: 3.8
 
-      - uses: actions/cache@v2
-        with:
-          path: ~/.cache/pre-commit
-          key: precommit-${{ env.pythonLocation }}-${{ hashFiles('.pre-commit-config.yaml') }}
-          restore-keys: |
-            precommit-${{ env.pythonLocation }}-
-            precommit-
+        -   uses: actions/cache@v2
+            with:
+                path: ~/.cache/pre-commit
+                key: precommit-${{ env.pythonLocation }}-${{ hashFiles('.pre-commit-config.yaml') }}
+                restore-keys: |
+                    precommit-${{ env.pythonLocation }}-
+                    precommit-
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install tox
+        -   name: Install dependencies
+            run: |
+                python -m pip install --upgrade pip
+                pip install tox
 
-      - name: Linting
-        run: |
-          tox -e lint
+        -   name: Linting
+            run: |
+                tox -e lint
       #- name: Documentation check
       #  run: |
-      #    tox -e docs-check
+      #    tox -e check-docs
 
-  test:
-    needs: init
-    if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
-    timeout-minutes: 10
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      max-parallel: 4
-      matrix:
-        python: [3.8]  # , 3.7, 3.9]
-        os: [ubuntu-latest]  # , macos-latest]
-    env:
-      OS: ${{ matrix.os }}
-      PYTHON: ${{ matrix.python }}
+    test:
+        needs: init
+        if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
+        timeout-minutes: 10
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            max-parallel: 4
+            matrix:
+                python: [3.8] # , 3.7, 3.9]
+                os: [ubuntu-latest] # , macos-latest]
+        env:
+            OS: ${{ matrix.os }}
+            PYTHON: ${{ matrix.python }}
 
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-    - name: Set up Python ${{ matrix.python }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python }}
+        steps:
+        -   uses: actions/checkout@v2
+            with:
+                fetch-depth: 0
+        -   name: Set up Python ${{ matrix.python }}
+            uses: actions/setup-python@v2
+            with:
+                python-version: ${{ matrix.python }}
 
-    - name: Get pip cache dir
-      id: pip-cache-dir
-      run: |
-        echo "::set-output name=dir::$(pip cache dir)"
-    - name: Restore pip cache
-      uses: actions/cache@v2
-      with:
-        path: ${{ steps.pip-cache-dir.outputs.dir }}
-        key: pip-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          pip-${{ runner.os }}-${{ env.pythonLocation }}-
+        -   name: Get pip cache dir
+            id: pip-cache-dir
+            run: |
+                echo "::set-output name=dir::$(pip cache dir)"
+        -   name: Restore pip cache
+            uses: actions/cache@v2
+            with:
+                path: ${{ steps.pip-cache-dir.outputs.dir }}
+                key: pip-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}
+                restore-keys: |
+                    pip-${{ runner.os }}-${{ env.pythonLocation }}-
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install tox tox-gh-actions codecov
+        -   name: Install dependencies
+            run: |
+                python -m pip install --upgrade pip
+                pip install tox tox-gh-actions codecov
 
     # caching .tox is not encouraged, but since we're private and this shaves off ~1min from the step, it should be ok
     # if any problems occur and/or once the package is public, this can be removed
-    - name: Restore tox cache
-      uses: actions/cache@v2
-      with:
-        path: .tox
-        key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/tox.ini') }}
-        restore-keys: |
-          tox-${{ runner.os }}-${{ env.pythonLocation }}-
-          tox-${{ runner.os }}-
+        -   name: Restore tox cache
+            uses: actions/cache@v2
+            with:
+                path: .tox
+                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/tox.ini') }}
+                restore-keys: |
+                    tox-${{ runner.os }}-${{ env.pythonLocation }}-
+                    tox-${{ runner.os }}-
 
-    - name: Installed dependencies for leidenalg
-      run: |
-        if [[ "$RUNNER_OS" == "Linux" ]]; then
-          sudo apt install automake
-        elif [[ "$RUNNER_OS" == "macOS" ]]; then
-          brew install automake
-        else
-          echo "$RUNNER_OS not supported"
-          exit 1
-        fi
+        -   name: Installed dependencies for leidenalg
+            run: |
+                if [[ "$RUNNER_OS" == "Linux" ]]; then
+                  sudo apt install automake
+                elif [[ "$RUNNER_OS" == "macOS" ]]; then
+                  brew install automake
+                else
+                  echo "$RUNNER_OS not supported"
+                  exit 1
+                fi
 
-    - name: Testing
-      run: |
-        tox
-      env:
-        PLATFORM: ${{ matrix.platform }}
+        -   name: Testing
+            run: |
+                tox -vv
+            env:
+                PLATFORM: ${{ matrix.os }}
 
-    - name: Upload coverage
-      if: success()
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
-      run: |
-        codecov --no-color --required --flags unittests
+        -   name: Upload coverage
+            if: success()
+            env:
+                CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+                CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
+            run: |
+                codecov --no-color --required --flags unittests
 
-  rebuild-notebooks:
-    needs: [lint, test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Rebuild tutorials/examples
-        uses: peter-evans/repository-dispatch@v1
-        with:
-          token: ${{ secrets.ACCESS_TOKEN }}
-          repository: theislab/squidpy_notebooks
-          event-type: rebuild
-          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+    rebuild-notebooks:
+        needs: [lint, test]
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        runs-on: ubuntu-latest
+        steps:
+        -   name: Rebuild tutorials/examples
+            uses: peter-evans/repository-dispatch@v1
+            with:
+                token: ${{ secrets.ACCESS_TOKEN }}
+                repository: theislab/squidpy_notebooks
+                event-type: rebuild
+                client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
-  deploy:
-    needs: [lint, test]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.8
-      - name: Install pypa/build
-        run: |
-          python -m pip install --upgrade pip
-          pip install build
-      - name: Build a binary wheel and a source tarball
-        run: |
-          python -m build --sdist --wheel --outdir dist/
+    deploy:
+        needs: [lint, test]
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+        runs-on: ubuntu-latest
+        steps:
+        -   uses: actions/checkout@v2
+            with:
+                fetch-depth: 0
+        -   name: Set up Python
+            uses: actions/setup-python@v2
+            with:
+                python-version: 3.8
+        -   name: Install pypa/build
+            run: |
+                python -m pip install --upgrade pip
+                pip install build
+        -   name: Build a binary wheel and a source tarball
+            run: |
+                python -m build --sdist --wheel --outdir dist/
 
-      - name: Publish package on PyPI
-        uses: pypa/gh-action-pypi-publish@master
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_PASSWORD }}
-          skip_existing: true
-          verbose: true
+        -   name: Publish package on PyPI
+            uses: pypa/gh-action-pypi-publish@master
+            with:
+                user: __token__
+                password: ${{ secrets.PYPI_PASSWORD }}
+                skip_existing: true
+                verbose: true

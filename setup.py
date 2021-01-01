@@ -1,30 +1,38 @@
 from pathlib import Path
-
 from setuptools import setup, find_packages
 
-long_description = Path("README.rst").read_text("utf-8")
-
 try:
-    from squidpy import __email__, __author__, __version__
-except ImportError:  # Deps not yet installed
-    __author__ = __email__ = ""
+    from squidpy import __email__, __author__, __version__, __maintainer__
+except ImportError:
+    __author__ = __maintainer__ = ""
+    __email__ = ""
     __version__ = "0.0.0"
 
 setup(
     name="squidpy",
+    use_scm_version=True,
+    setup_requires=["setuptools_scm"],
     version=__version__,
-    description="tools for spatial transcriptomics data",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    url="https://github.com/theislab/squidpy",
     author=__author__,
     author_email=__email__,
+    maintainer=__author__,
+    maintainer_email=__email__,
+    description=Path("README.rst").read_text("utf-8").splitlines()[2],
+    long_description=Path("README.rst").read_text("utf-8"),
+    long_description_content_type="text/x-rst; charset=UTF-8",
+    url="https://github.com/theislab/squidpy",
+    download_url="https://pypi.org/project/squidpy/",
+    project_urls={
+        "Documentation": "https://squidpy.readthedocs.io/en/latest",
+        "Source Code": "https://github.com/theislab/squidpy",
+    },
     license="MIT",
+    platforms=["Linux", "MacOSX"],
     packages=find_packages(),
     zip_safe=False,
     install_requires=[l.strip() for l in Path("requirements.txt").read_text("utf-8").splitlines()],
     extras_require=dict(
-        dev=["pre-commit>=2.7.1"],
+        dev=["pre-commit>=2.9.0"],
         test=["tox>=3.20.1"],
         docs=[
             l.strip()
@@ -33,14 +41,23 @@ setup(
         ],
     ),
     classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Science/Research",
+        "Natural Language :: English",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: POSIX :: Linux",
+        "Operating System :: MacOS :: MacOS X",
+        "Typing :: Typed",
+        "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Environment :: Console",
         "Framework :: Jupyter",
         "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: MIT License",
-        "Natural Language :: English",
-        "Operating System :: POSIX :: Linux",
+        "Topic :: Scientific/Engineering :: Bio-Informatics",
+        "Topic :: Scientific/Engineering :: Visualization",
     ],
+    # TODO: populate me
+    keywords=sorted({}),
 )

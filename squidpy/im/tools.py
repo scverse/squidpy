@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, Dict, List, Tuple, Union, Mapping, Iterable, Optional
+from typing import Any, Dict, List, Tuple, Union, Mapping, Iterable, Optional, Sequence
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -14,11 +14,12 @@ from skimage.feature import greycoprops, greycomatrix
 import skimage.feature as sk_image
 
 from squidpy._docs import d, inject_docs
-from squidpy.gr._utils import Signal, parallelize, _get_n_cores
+from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
 from squidpy.im.object import ImageContainer
 from squidpy.constants._constants import ImageFeature
 
 Feature_t = Dict[str, Any]
+Channel_t = Sequence[int]
 
 
 @d.dedent
@@ -33,7 +34,7 @@ def calculate_image_features(
     n_jobs: Optional[int] = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
-    **kwargs,
+    **kwargs: Any,
 ) -> Optional[pd.DataFrame]:
     """
     Get image features for spot ids.
@@ -65,9 +66,9 @@ def calculate_image_features(
     -------
     `None` if ``copy = False``, otherwise the :class:`pandas.DataFrame`.
     """
-    if isinstance(features, str):
+    if isinstance(features, (str, ImageFeature)):
         features = [features]
-    features = [ImageFeature(f) for f in features]
+    features = [ImageFeature(f) for f in features]  # type: ignore[no-redef,misc]
 
     n_jobs = _get_n_cores(n_jobs)
     logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
@@ -93,8 +94,8 @@ def _calculate_image_features_helper(
     img: ImageContainer,
     features: List[ImageFeature],
     features_kwargs: Mapping[str, Any],
-    queue=None,
-    **kwargs,
+    queue: Optional[SigQueue] = None,
+    **kwargs: Any,
 ) -> pd.DataFrame:
     features_list = []
 
@@ -196,7 +197,7 @@ def get_summary_stats(
     quantiles: Tuple[float, float, float] = (0.9, 0.5, 0.1),
     mean: bool = False,
     std: bool = False,
-    channels: Tuple[int, int, int] = (0, 1, 2),
+    channels: Optional[Union[int, Channel_t]] = None,
 ) -> Feature_t:
     """
     Calculate summary statistics of color channels.
@@ -221,8 +222,8 @@ def get_summary_stats(
     # if channels is None, compute features for all channels
     if channels is None:
         channels = range(img.shape[-1])
-    if isinstance(channels, int):
-        channels = [channels]
+    elif isinstance(channels, int):
+        channels = (channels,)
 
     stats = {}
     for c in channels:
@@ -241,7 +242,7 @@ def get_color_hist(
     img: np.ndarray[np.float64],
     feature_name: str = "color_hist",
     bins: int = 10,
-    channels: Tuple[int, int, int] = (0, 1, 2),
+    channels: Optional[Union[int, Channel_t]] = None,
     v_range: Tuple[int, int] = (0, 255),
 ) -> Feature_t:
     """
@@ -265,6 +266,8 @@ def get_color_hist(
     # if channels is None, compute features for all channels
     if channels is None:
         channels = range(img.shape[-1])
+    elif isinstance(channels, int):
+        channels = (channels,)
 
     features = {}
     for c in channels:

@@ -2,11 +2,10 @@
 from typing import Tuple, Union, Iterable, Optional
 import warnings
 
-from statsmodels.stats.multitest import multipletests
-
 from anndata import AnnData
 
 from scipy.sparse import issparse
+from statsmodels.stats.multitest import multipletests
 import numpy as np
 import pandas as pd
 
@@ -102,8 +101,8 @@ def ripley_k(
 def moran(
     adata: AnnData,
     gene_names: Optional[Iterable[str]] = None,
-    transformation: Optional[str] = "r",
-    permutations: Optional[int] = 1000,
+    transformation: str = "r",
+    permutations: int = 1000,
     corr_method: Optional[str] = "fdr_bh",
     copy: Optional[bool] = False,
 ) -> Optional[pd.DataFrame]:
@@ -164,8 +163,7 @@ def moran(
     adata.var = adata.var.join(df, how="left")
 
 
-# TODO: check the return type
-def _compute_moran(y, w, transformation, permutations) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _compute_moran(y: np.ndarray, w: W, transformation: str, permutations: int) -> Tuple[float, float, float]:
     mi = esda.moran.Moran(y, w, transformation=transformation, permutations=permutations)
     return mi.I, mi.p_z_sim, mi.VI_sim
 

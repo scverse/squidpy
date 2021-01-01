@@ -1,46 +1,46 @@
 codecov:
-  require_ci_to_pass: true
-  branch: master
-  strict_yaml_branch: master
+    require_ci_to_pass: true
+    branch: master
+    strict_yaml_branch: master
 
 coverage:
-  precision: 2
-  round: down
-  range: "80...100"
-  status:
-    project:
-      default:
-        target: auto
-        threshold: 1%
-        if_ci_failed: error
-        only_pulls: true
-      graph:
-        paths:
-          - squidpy/gr/
-      image:
-        paths:
-          - squidpy/im/
-      plotting:
-        paths:
-          - squidpy/pl/
-    patch:
-      default:
-        target: auto
-        threshold: 0%
-        if_ci_failed: error
-        only_pulls: false
+    precision: 2
+    round: down
+    range: 80...100
+    status:
+        project:
+            default:
+                target: auto
+                threshold: 1%
+                if_ci_failed: error
+                only_pulls: true
+            graph:
+                paths:
+                -   squidpy/gr/
+            image:
+                paths:
+                -   squidpy/im/
+            plotting:
+                paths:
+                -   squidpy/pl/
+        patch:
+            default:
+                target: auto
+                threshold: 0%
+                if_ci_failed: error
+                only_pulls: false
 
 parsers:
-  gcov:
-    branch_detection:
-      conditional: yes
-      loop: yes
-      method: no
-      macro: no
+    gcov:
+        branch_detection:
+            conditional: yes
+            loop: yes
+            method: no
+            macro: no
 
 comment:
-  layout: "reach, diff, files"
-  behavior: default
-  require_changes: true
-  branches:
-    - master
+    layout: reach, diff, files
+    behavior: default
+    require_changes: true
+    branches:
+    -   master

@@ -6,6 +6,7 @@ ipywidgets>=7.5.1  # progress bar
 leidenalg
 netcdf4
 omnipath>=1.0.0
+pandas
 rasterio
 scanpy
 scikit-image>=0.17.1
