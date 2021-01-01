@@ -10,8 +10,7 @@ repos:
     rev: v0.790
     hooks:
     -   id: mypy
-        additional_dependencies: [numpy>=1.15.0, scipy>=1.5.0]
-        args: [--no-strict-optional, --ignore-missing-imports, --warn-no-return]
+        additional_dependencies: [numpy>=1.15.0, scipy>=1.5.0, pandas]
 -   repo: https://github.com/psf/black
     rev: 20.8b1
     hooks:
@@ -56,16 +55,16 @@ repos:
     -   id: check-yaml
     -   id: check-toml
     -   id: requirements-txt-fixer
--   repo: https://gitlab.com/pycqa/flake8
-    rev: 3.8.4
-    hooks:
-    -   id: flake8
-        additional_dependencies: [flake8-tidy-imports, flake8-docstrings, flake8-rst-docstrings, flake8-comprehensions, flake8-bugbear, flake8-logging-format, flake8-blind-except, flake8-builtins, flake8-pytest-style, flake8-mock, flake8-string-format]
 -   repo: https://github.com/myint/autoflake
     rev: v1.4
     hooks:
     -   id: autoflake
         args: [--in-place, --remove-all-unused-imports, --remove-unused-variable, --ignore-init-module-imports]
+-   repo: https://gitlab.com/pycqa/flake8
+    rev: 3.8.4
+    hooks:
+    -   id: flake8
+        additional_dependencies: [flake8-tidy-imports, flake8-docstrings, flake8-rst-docstrings, flake8-comprehensions, flake8-bugbear, flake8-logging-format, flake8-blind-except, flake8-builtins, flake8-pytest-style, flake8-mock, flake8-string-format]
 -   repo: https://github.com/jumanjihouse/pre-commit-hooks
     rev: 2.1.4
     hooks:

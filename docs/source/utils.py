@@ -1,10 +1,9 @@
-from typing import Tuple, Union, Callable, Optional
+from typing import Any, List, Tuple, Union, Callable, Optional
 from logging import info, warning
 from pathlib import Path
 from urllib.parse import urljoin
-import os
-
 from sphinx_gallery.directives import MiniGallery
+import os
 import requests
 
 HERE = Path(__file__).parent
@@ -24,8 +23,8 @@ GENMOD_DIR = "gen_modules"
 REF = "master"
 
 
-def _cleanup(fn: Callable) -> Callable:
-    def decorator(*args, **kwargs):
+def _cleanup(fn: Callable[..., Tuple[bool, Any]]) -> Callable[..., Tuple[bool, Any]]:
+    def decorator(*args: Any, **kwargs: Any) -> Tuple[bool, Any]:
         try:
             ok, resp = fn(*args, **kwargs)
         except Exception as e:
@@ -92,9 +91,9 @@ def _download_dir(url: str, *, path: Union[str, Path], depth: int) -> Tuple[bool
     return True, None
 
 
-def _download_notebooks(org: str, repo: str, raise_exc: bool = False):
+def _download_notebooks(org: str, repo: str, raise_exc: bool = False) -> None:
     token = os.environ.get(f"{repo.upper()}_TOKEN", None)
-    if token is None and False:
+    if token is None:
         info("No token information in the environment found. Not processing examples")
         return
 
@@ -109,7 +108,7 @@ def _download_notebooks(org: str, repo: str, raise_exc: bool = False):
 
 
 class MaybeMiniGallery(MiniGallery):
-    def run(self):
+    def run(self) -> List[str]:
         config = self.state.document.settings.env.config
         backreferences_dir = config.sphinx_gallery_conf["backreferences_dir"]
         obj_list = self.arguments[0].split()

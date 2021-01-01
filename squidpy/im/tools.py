@@ -14,7 +14,7 @@ from skimage.feature import greycoprops, greycomatrix
 import skimage.feature as sk_image
 
 from squidpy._docs import d, inject_docs
-from squidpy.gr._utils import Signal, parallelize, _get_n_cores
+from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
 from squidpy.im.object import ImageContainer
 from squidpy.constants._constants import ImageFeature
 
@@ -34,7 +34,7 @@ def calculate_image_features(
     n_jobs: Optional[int] = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
-    **kwargs,
+    **kwargs: Any,
 ) -> Optional[pd.DataFrame]:
     """
     Get image features for spot ids.
@@ -68,7 +68,7 @@ def calculate_image_features(
     """
     if isinstance(features, (str, ImageFeature)):
         features = [features]
-    features: List[ImageFeature] = [ImageFeature(f) for f in features]  # type: ignore
+    features = [ImageFeature(f) for f in features]  # type: ignore[no-redef,misc]
 
     n_jobs = _get_n_cores(n_jobs)
     logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
@@ -94,8 +94,8 @@ def _calculate_image_features_helper(
     img: ImageContainer,
     features: List[ImageFeature],
     features_kwargs: Mapping[str, Any],
-    queue=None,
-    **kwargs,
+    queue: Optional[SigQueue] = None,
+    **kwargs: Any,
 ) -> pd.DataFrame:
     features_list = []
 

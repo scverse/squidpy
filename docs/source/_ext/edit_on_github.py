@@ -1,11 +1,14 @@
 """Based on gist.github.com/MantasVaitkunas/7c16de233812adcb7028."""
-
+from typing import Any, Dict, Optional
+from sphinx.application import Sphinx
 import warnings
 
 __licence__ = "BSD (3 clause)"
 
 
-def _html_page_context(app, _pagename, templatename, context, doctree):
+def _html_page_context(
+    app: Sphinx, _pagename: str, templatename: str, context: Dict[str, Any], doctree: Optional[Any]
+) -> None:
     # doctree is None - otherwise viewcode fails
     if templatename != "page.html" or doctree is None:
         return
@@ -22,6 +25,6 @@ def _html_page_context(app, _pagename, templatename, context, doctree):
     context["conf_py_path"] = "/docs/source/"
 
 
-def setup(app):
+def setup(app: Sphinx) -> None:
     app.add_config_value("github_repo", "", True)
     app.connect("html-page-context", _html_page_context)

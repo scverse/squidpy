@@ -6,12 +6,12 @@
 
 from pathlib import Path
 from datetime import datetime
+from sphinx.application import Sphinx
+from sphinx_gallery.gen_gallery import DEFAULT_GALLERY_CONF
 
 # -- Path setup --------------------------------------------------------------
 import os
 import sys
-
-from sphinx_gallery.gen_gallery import DEFAULT_GALLERY_CONF
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
@@ -118,7 +118,7 @@ html_theme_options = dict(navigation_depth=4, logo_only=True)  # noqa: C408
 html_show_sphinx = False
 
 
-def setup(app):
+def setup(app: Sphinx) -> None:
     DEFAULT_GALLERY_CONF["backreferences_dir"] = "gen_modules/backreferences"
     DEFAULT_GALLERY_CONF["download_all_examples"] = False
     DEFAULT_GALLERY_CONF["show_signature"] = False

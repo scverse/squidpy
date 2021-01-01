@@ -58,7 +58,7 @@ jobs:
                 tox -e lint
       #- name: Documentation check
       #  run: |
-      #    tox -e docs-check
+      #    tox -e check-docs
 
     test:
         needs: init
@@ -125,9 +125,9 @@ jobs:
 
         -   name: Testing
             run: |
-                tox
+                tox -vv
             env:
-                PLATFORM: ${{ matrix.platform }}
+                PLATFORM: ${{ matrix.os }}
 
         -   name: Upload coverage
             if: success()

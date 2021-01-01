@@ -1,14 +1,13 @@
-"""Spatial tools general utility functions."""
-from typing import Set, List, Tuple, Union, Hashable, Iterable, Optional
+from typing import Tuple, Union, Optional
 from pathlib import Path
 import os
 import glob
 
+from scanpy import logging as logg
 from anndata import AnnData
 import scanpy as sc
-import scanpy.logging as logg
 
-from squidpy.im.object import ImageContainer
+from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 
 
 def read_visium_data(
@@ -51,10 +50,3 @@ def read_visium_data(
     # read im
     img = ImageContainer(os.path.join(dataset_folder, image_file))
     return adata, img
-
-
-def _unique_order_preserving(iterable: Iterable[Hashable]) -> Tuple[List[Hashable], Set[Hashable]]:
-    """Remove items from an iterable while preserving the order."""
-    seen: Set[Hashable] = set()
-    seen_add = seen.add
-    return [i for i in iterable if not (i in seen or seen_add(i))], seen

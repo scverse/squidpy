@@ -1,15 +1,15 @@
+from docrep import DocstringProcessor
+from typing import Any, Callable
 from textwrap import dedent
 
-from docrep import DocstringProcessor
 
-
-def inject_docs(**kwargs):  # noqa: D103
+def inject_docs(**kwargs: Any) -> Callable[..., Any]:  # noqa: D103
     # taken from scanpy
-    def decorator(obj):
+    def decorator(obj: Any) -> Any:
         obj.__doc__ = dedent(obj.__doc__).format(**kwargs)
         return obj
 
-    def decorator2(obj):
+    def decorator2(obj: Any) -> Any:
         obj.__doc__ = dedent(kwargs["__doc__"])
         return obj
 

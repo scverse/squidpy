@@ -1,20 +1,14 @@
 """Internal constants not exposed to the user."""
-from typing import Callable, Optional
-
-# rough proposal:
-# _M -> obsm
-# _U -> uns
-# _O -> obs
-# _V -> var
+from typing import Any, Callable, Optional
 
 _SEP = "_"
 
 
 class cprop:  # noqa: D101
-    def __init__(self, f: Callable):
+    def __init__(self, f: Callable[..., str]):
         self.f = f
 
-    def __get__(self, obj, owner):
+    def __get__(self, obj: Any, owner: Any) -> str:
         return self.f(owner)
 
 

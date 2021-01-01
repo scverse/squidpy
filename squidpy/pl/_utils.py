@@ -1,19 +1,20 @@
-from typing import List, Union, Optional
+from typing import Any, List, Union, Optional
 from pathlib import Path
 import os
 
 from scanpy import logging as logg, settings
-import anndata as ad
+from anndata import AnnData
 
 import pandas as pd
 
+from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 
 from squidpy._docs import d
 
 
 @d.dedent
-def save_fig(fig: Figure, path: Union[str, os.PathLike], make_dir: bool = True, ext: str = "png", **kwargs) -> None:
+def save_fig(fig: Figure, path: Union[str, Path], make_dir: bool = True, ext: str = "png", **kwargs: Any) -> None:
     """
     Save a figure.
 
@@ -59,25 +60,25 @@ def save_fig(fig: Figure, path: Union[str, os.PathLike], make_dir: bool = True, 
 
 @d.dedent
 def extract(
-    adata: ad.AnnData,
+    adata: AnnData,
     obsm_key: Union[List[str], str] = "img_features",
     prefix: Optional[Union[List[str], str]] = None,
-) -> ad.AnnData:
+) -> AnnData:
     """
-    Create a temporary adata object for plotting.
+    Create a temporary :class:`anndata.AnnData` object for plotting.
 
     Move columns from entry `obsm` in `adata.obsm` to `adata.obs` to enable the use of `scanpy.plotting` functions.
     If `prefix` is specified, columns are moved to `<prefix>_<column-name>`. Otherwise, column name is kept.
 
-    Warning: If `adata.obs["<column-name>"]` already exists, it is overwritten.
+    Warning: If `adata.obs["<column-name>"]` already exists, it will be overwritten.
 
     Parameters
     ----------
     %(adata)s
     obsm_key
-        entry in adata.obsm that should be moved to :attr:`anndata.AnnData.obs`. Can be a list of keys.
+        Entries in :attr:`anndata.AnnData.obsm` that should be moved to :attr:`anndata.AnnData.obs`.
     prefix
-        prefix to prepend to each column name. Should be a list if ``obsm_key`` is a list.
+        Prefix to prepend to each column name. Should be a :class;`list` if ``obsm_key`` is a :class:`list`.
 
     Returns
     -------
@@ -86,10 +87,10 @@ def extract(
     Raises
     ------
     ValueError
-        if number of prefixes does not fit to number of obsm_keys.
+        If number of ``prefixes`` does not fit to number of ``obsm_keys``.
     """
-
-    def _warn_if_exists_obs(adata, obs_key):
+    # TODO: move to utils?
+    def _warn_if_exists_obs(adata: AnnData, obs_key: str) -> None:
         if obs_key in adata.obs.columns:
             logg.warning(f"{obs_key} in adata.obs will be overwritten by extract.")
 
@@ -141,7 +142,7 @@ def _contrasting_color(r: int, g: int, b: int) -> str:
     return "#000000" if r * 0.299 + g * 0.587 + b * 0.114 > 186 else "#ffffff"
 
 
-def _get_black_or_white(value: float, cmap) -> str:
+def _get_black_or_white(value: float, cmap: Colormap) -> str:
     if not (0.0 <= value <= 1.0):
         raise ValueError(f"Value must be in range `[0, 1]`, found `{value}`.")
 
