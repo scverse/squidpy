@@ -14,13 +14,11 @@ If you wish to contribute to ``SquidPy``, please make sure you're familiar with 
 
 Introduction and outline of the challenges
 ------------------------------------------
-
 The aim of these challenges is to build preprocessing and analysis tools for spatial modalities: the spatial graph and
 the tissue image. The topics of the two challenges are the following:
 
 Spatial graph
 ~~~~~~~~~~~~~
-
 - Build graph from spatial coordinates that account for different neighborhood size (wrt to coordinate distance)
 - Tools for neighborhood enrichment analysis
     - Permutation-based test (e.g. HistoCAT)
@@ -29,7 +27,6 @@ Spatial graph
 
 Tissue image
 ~~~~~~~~~~~~
-
 - Efficiently access and crop image tile under spot, accounting for different resolutions (on-disk)?
 - Extract image features from image tiles for each spot (scikit-image.features), save them in either new adata,
   or as obs.
@@ -38,7 +35,6 @@ Tissue image
 
 Logistics
 ~~~~~~~~~
-
 The Hackathon is organized in an ***agile development format***, where issues that refer to specific tasks are grouped
 together in **milestones**. What you will find in the repo:
 
@@ -49,7 +45,6 @@ together in **milestones**. What you will find in the repo:
 
 Anticipated outcomes
 ~~~~~~~~~~~~~~~~~~~~
-
 We'll try to implement and evaluate as many tools as possible. On the spatial graph side, what's interesting will
 potentially land to Scanpy eventually. On the image side, it will build up as an external package.
 In both cases, we'll use the tools implemented here to wrap up a collaborative protocol article
@@ -65,7 +60,7 @@ In both cases, we'll use the tools implemented here to wrap up a collaborative p
     :alt: CI
 
 .. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/master
-    :target: https://github.com/theislab/squidpy_notebooks/actions/
+    :target: https://github.com/theislab/squidpy_notebooks/actions
     :alt: Notebooks CI
 
 .. |Docs| image:: https://img.shields.io/readthedocs/squidpy
