@@ -7,7 +7,7 @@ Contributors
 ------------
 David, Louis, Olle, Sabrina, Anna, Sergei, Mohammad, Ignacio, Giovanni, Hannah
 
-Contribution guidelines
+Contributing to SquidPy
 -----------------------
 If you wish to contribute to ``SquidPy``, please make sure you're familiar with our
 `Contributing guide <CONTRIBUTING.rst>`_.

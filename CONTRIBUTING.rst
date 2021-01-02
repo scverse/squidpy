@@ -28,7 +28,7 @@ Optionally install pre-commit. This will ensure that the pushed code passes the 
     pre-commit install
 
 Although the last step is not necessary, it is highly recommended, since it will help you to pass the linting step
-(see the `Code style guide`_).
+(see `Code style guide`_).
 
 Codebase structure
 ------------------
@@ -49,7 +49,7 @@ Tests structure:
 
   - `tests/tests_graph <tests/tests_graph>`__: tests for the graph module.
   - `tests/tests_image <tests/tests_image>`__: tests for the image module.
-  - `tests/tests_plotting <tests/tests_lotting>`__ test for the plotting module.
+  - `tests/tests_plotting <tests/tests_plotting>`__ test for the plotting module.
   - `tests/conftest.py <tests/conftest.py>`__: ``pytest`` fixtures and utility functions.
   - `tests/_images <tests/_images>`__: ground-truth images for plotting tests.
   - `tests/_data <tests/_data>`__: data used for testing, such as ``anndata.AnnData`` or images.
@@ -61,12 +61,12 @@ You can use ``tox`` to check the changes::
 
     tox -e lint
 
-Furthermore, we also require that::
+Furthermore, we also require that:
 
 - functions are fully type-annotated.
 - exceptions messages are capitalized and end with ``.``.
 - warning messages are capitalized and do not end with ``.``.
-- when referring to variable inside a message, enclose its name in .
+- when referring to variable inside a message, enclose its name in \`.
 
 
 Testing
@@ -76,7 +76,7 @@ We use ``tox`` to automate our testing, as well as linting and documentation cre
     tox -e py{37,38,39}-{linux,macos}
 
 depending on the Python version(s) in your ``PATH`` and your operating system. We use ``flake8`` and ``mypy`` to further
-analyze the code. Use ``noqa: <error1>,<error2>`` to ignore certain ``flake8`` errors and
+analyze the code. Use ``# noqa: <error1>,<error2>`` to ignore certain ``flake8`` errors and
 ``# type: ignore[error1,error2]`` to ignore specific ``mypy`` errors.
 
 To run only a subset of tests, run::
