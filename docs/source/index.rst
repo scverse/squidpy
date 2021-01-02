@@ -1,4 +1,4 @@
-|PyPI| |CI| |Docs| |Coverage|
+|PyPI| |CI| |Notebooks| |Docs| |Coverage|
 
 .. TODO: add nice title, description badges
 
@@ -39,7 +39,7 @@ Squidpy
     :alt: CI
 
 .. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/master
-    :target: https://github.com/theislab/squidpy_notebooks/actions/
+    :target: https://github.com/theislab/squidpy_notebooks/actions
     :alt: Notebooks CI
 
 .. |Docs| image:: https://img.shields.io/readthedocs/squidpy

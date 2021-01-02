@@ -49,7 +49,7 @@ Tests structure:
 
   - `tests/tests_graph <tests/tests_graph>`__: tests for the graph module.
   - `tests/tests_image <tests/tests_image>`__: tests for the image module.
-  - `tests/tests_plotting <tests/tests_plotting>`__ test for the plotting module.
+  - `tests/tests_plotting <tests/tests_plotting>`__ tests for the plotting module.
   - `tests/conftest.py <tests/conftest.py>`__: ``pytest`` fixtures and utility functions.
   - `tests/_images <tests/_images>`__: ground-truth images for plotting tests.
   - `tests/_data <tests/_data>`__: data used for testing, such as ``anndata.AnnData`` or images.
