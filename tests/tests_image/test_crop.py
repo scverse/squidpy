@@ -31,4 +31,3 @@ def test_crop_img():
 
     TODO currently done in test_image_objecct.test_crop
     """
-    pass

@@ -1,10 +1,10 @@
 """Functions exposed: segment(), evaluate_nuclei_segmentation()."""
 
-import abc
 from types import MappingProxyType
 from typing import Any, List, Union, Mapping, Optional
+import abc
 
-import anndata
+from anndata import AnnData
 
 import numpy as np
 import xarray as xr
@@ -12,13 +12,13 @@ import xarray as xr
 import skimage
 
 from squidpy._docs import d, inject_docs
+from squidpy.im.crop import uncrop_img
+from squidpy.im.object import ImageContainer
 from squidpy.constants._constants import SegmentationBackend
-from .crop import uncrop_img
-from .object import ImageContainer
 
 
 # TODO: dead code?
-def evaluate_nuclei_segmentation(adata, copy: bool = False, **kwargs) -> Union[anndata.AnnData, None]:
+def evaluate_nuclei_segmentation(adata: AnnData, copy: bool = False, **kwargs: Any) -> Optional[AnnData]:
     """
     Perform basic nuclei segmentation evaluation.
 
@@ -29,7 +29,6 @@ def evaluate_nuclei_segmentation(adata, copy: bool = False, **kwargs) -> Union[a
         copy:
         kwargs:
     """
-    pass
 
 
 class SegmentationModel:
@@ -40,18 +39,23 @@ class SegmentationModel:
     Specific segmentation models can be implemented by inheriting from this class.
 
     This class is not instantiated by user but used in the background by the functional API.
+
+    Parameters
+    ----------
+    model
+        Underlying segmentation model.
     """
 
     def __init__(
         self,
-        model,
+        model: Any,
     ):
         self.model = model
 
     @d.get_full_description(base="segment")
     @d.get_sections(base="segment", sections=["Parameters", "Returns"])
     @d.dedent
-    def segment(self, img: np.ndarray, **kwargs) -> np.ndarray:
+    def segment(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
         """
         Segment an image.
 
@@ -61,15 +65,14 @@ class SegmentationModel:
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            Segmentation mask for the high-resolution image of shape (x, y, 1).
+        Segmentation mask for the high-resolution image of shape (x, y, 1).
         """
         # TODO: make sure that the dtype is correct
         return self._segment(img, **kwargs)
 
     # TODO: I'd rather make the public method abstract, so that its docs are seen for general user
     @abc.abstractmethod
-    def _segment(self, arr: np.ndarray, **kwargs) -> np.ndarray:
+    def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
         pass
 
 
@@ -77,7 +80,7 @@ class SegmentationModelBlob(SegmentationModel):
     """Segmentation model based on :mod:`skimage` blob detection."""
 
     @d.dedent
-    def _segment(self, img: np.ndarray, invert: bool = True, **kwargs) -> np.ndarray:
+    def _segment(self, img: np.ndarray, invert: bool = True, **kwargs: Any) -> np.ndarray:
         """
         %(segment.full_desc)s
 
@@ -85,7 +88,7 @@ class SegmentationModelBlob(SegmentationModel):
         ----------
         %(segment.parameters)s
         kwargs
-            Keyword arguments for :paramref:`_model`.
+            Keyword arguments for :attr:`_model`.
 
         Returns
         -------
@@ -109,7 +112,7 @@ class SegmentationModelWatershed(SegmentationModel):
     """Segmentation model based on :mod:`skimage` watershed segmentation."""
 
     @d.dedent
-    def _segment(self, arr: np.ndarray, thresh: float = 0.5, geq: bool = True, **kwargs) -> np.ndarray:
+    def _segment(self, arr: np.ndarray, thresh: float = 0.5, geq: bool = True, **kwargs: Any) -> np.ndarray:
         """
         %(segment.full_desc)s
 
@@ -121,7 +124,7 @@ class SegmentationModelWatershed(SegmentationModel):
         geq
             Treat ``thresh`` as upper or lower (greater-equal = geq) bound for defining state to segment.
         kwargs
-            Keyword arguments for :paramref:`_model`.
+            Keyword arguments for :attr:`_model`.
 
         Returns
         -------
@@ -148,18 +151,19 @@ class SegmentationModelWatershed(SegmentationModel):
         return watershed(invert(arr), markers, mask=1 - mask)
 
 
+# TODO: too long of a name
 class SegmentationModelPretrainedTensorflow(SegmentationModel):
     """Segmentation model using :mod:`tensofrlow` model."""
 
-    def __init__(self, model, **_kwargs):
+    def __init__(self, model, **_: Any):  # type: ignore[no-untyped-def]
         import tensorflow as tf
 
         # TODO: maybe just check it's callable?
-        assert isinstance(model, tf.keras.model.Model), "Model should be a tf keras model instance."
+        assert isinstance(model, tf.keras.model.Model), "Model should be a `tensorflow.keras.model` instance."
         super().__init__(model=model)
 
     @d.dedent
-    def _segment(self, arr: np.ndarray, **kwargs) -> np.ndarray:
+    def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
         """
         %(segment.full_desc)s
 
@@ -167,7 +171,7 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
         -----------
         %(segment.parameters)s
         kwargs
-            Keyword arguments for the :paramref:`_model`.
+            Keyword arguments for the :attr:`_model`.
 
         Returns
         -------
@@ -182,7 +186,7 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
 def segment(
     img: ImageContainer,
     img_id: str,
-    model_group: Union[str],
+    model_group: Union[str, SegmentationBackend],
     model_instance: Optional[Union[str, SegmentationModel]] = None,
     model_kwargs: Mapping[str, Any] = MappingProxyType({}),
     channel_idx: Optional[int] = None,
@@ -221,13 +225,13 @@ def segment(
 
     Returns
     -------
-    %(segment.returns)s
+    Nothing, just updates ``img``.
     """  # noqa: D400
     channel_id = "mask"
     model_group = SegmentationBackend(model_group)
 
     if model_group == SegmentationBackend.BLOB:
-        segmentation_model = SegmentationModelBlob(model=model_instance)
+        segmentation_model: SegmentationModel = SegmentationModelBlob(model=model_instance)
     elif model_group == SegmentationBackend.WATERSHED:
         segmentation_model = SegmentationModelWatershed(model=model_instance)
     elif model_group == SegmentationBackend.TENSORFLOW:
@@ -236,7 +240,7 @@ def segment(
         raise NotImplementedError(model_group)
 
     crops, xcoord, ycoord = img.crop_equally(xs=xs, ys=ys, img_id=img_id)
-    channel_slice = channel_idx if isinstance(channel_idx, int) else slice(0, crops[0].channels.shape[0])
+    channel_slice = slice(0, crops[0].channels.shape[0]) if channel_idx is None else channel_idx
     crops = [segmentation_model.segment(x[{"channels": channel_slice}].values, **model_kwargs) for x in crops]
     # By convention, segments are numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
@@ -272,12 +276,11 @@ def segment_crops(
         Key of image object to take crops from.
     segmented_img_id
         Key of image object that contains segments.
-    %(width_height)s # TODO add support as soon as crop supports this
+    %(width_height)s # TODO: add support as soon as crop supports this
 
     Returns
     -------
-    TODO: type
-        Crops centred on segments.
+    Crops centred on segments.
     """  # noqa: D400
     segment_centres = [
         (
@@ -286,4 +289,4 @@ def segment_crops(
         )
         for i in np.sort(list(set(np.unique(img.data[segmented_img_id])) - {0}))
     ]
-    return [img.crop(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id) for xi, yi in segment_centres]
+    return [img.crop_center(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id) for xi, yi in segment_centres]

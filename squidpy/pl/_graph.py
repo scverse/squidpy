@@ -1,14 +1,14 @@
 """Plotting for gr functions."""
 
-from typing import Tuple, Union, Optional
+from typing import Any, Tuple, Union, Optional
 from pathlib import Path
 
-import scanpy as sc
 from anndata import AnnData
+import scanpy as sc
 
+from pandas import DataFrame
 import numpy as np
 import pandas as pd
-from pandas import DataFrame
 
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -24,7 +24,7 @@ def spatial_graph(
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> None:
     """
     Plot wrapper for :mod:`scanpy` plotting function for spatial graphs.
@@ -69,7 +69,7 @@ def centrality_scores(
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> None:
     """
     Plot centrality scores.
@@ -148,9 +148,9 @@ def interaction_matrix(
     adata: AnnData,
     cluster_key: str,
     figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
+    dpi: Optional[int] = None,  # FIXME
     save: Optional[Union[str, Path]] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> None:
     """
     Plot cluster interaction matrix.
@@ -201,9 +201,9 @@ def nhood_enrichment(
     cluster_key: str,
     mode: str = "zscore",
     figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
+    dpi: Optional[int] = None,  # FIXME
     save: Optional[Union[str, Path]] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> None:
     """
     Plot neighborhood enrichement.
@@ -257,8 +257,8 @@ def plot_ripley_k(
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> None:
     """
     Plot Ripley K estimate for each cluster.
 
@@ -285,7 +285,7 @@ def plot_ripley_k(
             try:
                 palette = list(adata.uns[f"{cluster_key}_colors"])
             except KeyError:
-                palette = None
+                palette = None  # type: ignore[assignment]
 
         except KeyError:
             raise KeyError(
@@ -295,7 +295,7 @@ def plot_ripley_k(
                 "\ta dataframe"
             ) from None
     else:
-        hue_order = palette = None
+        hue_order = palette = None  # type: ignore[assignment]
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     sns.lineplot(

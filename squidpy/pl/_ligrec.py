@@ -1,19 +1,21 @@
-from typing import Tuple, Union, Optional, Sequence
+from typing import Any, Tuple, Union, Optional, Sequence
 from pathlib import Path
 from functools import partial
 
-import scanpy as sc
 from scanpy import logging as logg
 from anndata import AnnData
+import scanpy as sc
 
 import numpy as np
 import pandas as pd
 
-import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.colorbar import ColorbarBase
+import matplotlib.pyplot as plt
 
 from squidpy._docs import d
-from squidpy.pl._utils import save_fig, _get_black_or_white, _unique_order_preserving
+from squidpy._utils import _unique_order_preserving
+from squidpy.pl._utils import save_fig, _get_black_or_white
 from squidpy.gr._ligrec import LigrecResult
 
 _SEP = " | "
@@ -27,12 +29,12 @@ class CustomDotplot(sc.pl.DotPlot):  # noqa: D101
     DEFAULT_NUM_COLORBAR_TICKS = 5
     DEFAULT_NUM_LEGEND_DOTS = 5
 
-    def __init__(self, minn: float, delta: float, *args, **kwargs):
+    def __init__(self, minn: float, delta: float, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._delta = delta
         self._minn = minn
 
-    def _plot_size_legend(self, size_legend_ax):
+    def _plot_size_legend(self, size_legend_ax: Axes) -> None:
         y = self.BASE ** -((self.dot_max * self._delta) + self._minn)
         x = self.BASE ** -((self.dot_min * self._delta) + self._minn)
         size_range = -(np.logspace(x, y, self.DEFAULT_NUM_LEGEND_DOTS + 1, base=10).astype(np.float64))
@@ -70,7 +72,7 @@ class CustomDotplot(sc.pl.DotPlot):  # noqa: D101
         xmin, xmax = size_legend_ax.get_xlim()
         size_legend_ax.set_xlim(xmin - 0.15, xmax + 0.5)
 
-    def _plot_colorbar(self, color_legend_ax, normalize):
+    def _plot_colorbar(self, color_legend_ax: Axes, normalize: bool) -> None:
         cmap = plt.get_cmap(self.cmap)
 
         ColorbarBase(
@@ -103,7 +105,7 @@ def ligrec(
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> None:
     """
     Plot the result of receptor-ligand permutation test.
@@ -162,8 +164,8 @@ def ligrec(
     if isinstance(target_groups, str):
         target_groups = [target_groups]
 
-    source_groups = _unique_order_preserving(source_groups)
-    target_groups = _unique_order_preserving(target_groups)
+    source_groups, _ = _unique_order_preserving(source_groups)  # type: ignore[no-redef,assignment]
+    target_groups, _ = _unique_order_preserving(target_groups)  # type: ignore[no-redef,assignment]
 
     pvals = adata.pvalues.loc[:, (source_groups, target_groups)]
     means = adata.means.loc[:, (source_groups, target_groups)]
@@ -177,7 +179,7 @@ def ligrec(
         means = means.loc[mask]
 
         if pvals.empty:
-            raise ValueError("After removing empty interactions, none remain.")
+            raise ValueError("After removing NaN interactions, none remain.")
 
     start, label_ranges = 0, {}
     for cls, size in (pvals.groupby(level=0, axis=1)).size().to_dict().items():

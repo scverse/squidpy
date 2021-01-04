@@ -1,13 +1,14 @@
 import matplotlib.pyplot as plt
 
-from squidpy.im import ImageContainer
+# TODO: not sure why this happens, we might want to restructure a bit the directories
+from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
 
 
 @d.dedent
 def plot_segmentation(img: ImageContainer, key: str) -> None:
     """
-    Plot segmentation on entire im.
+    Plot segmentation on entire image.
 
     Parameters
     ----------
@@ -20,6 +21,7 @@ def plot_segmentation(img: ImageContainer, key: str) -> None:
     -------
     %(plotting_returns)s
     """
+    # TODO: remove the type: ignore once IC is indexable
     arr = img[key]
     plt.imshow(arr)
     # todo add other channels in background

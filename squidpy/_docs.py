@@ -1,15 +1,15 @@
+from docrep import DocstringProcessor
+from typing import Any, Callable
 from textwrap import dedent
 
-from docrep import DocstringProcessor
 
-
-def inject_docs(**kwargs):  # noqa: D103
+def inject_docs(**kwargs: Any) -> Callable[..., Any]:  # noqa: D103
     # taken from scanpy
-    def decorator(obj):
+    def decorator(obj: Any) -> Any:
         obj.__doc__ = dedent(obj.__doc__).format(**kwargs)
         return obj
 
-    def decorator2(obj):
+    def decorator2(obj: Any) -> Any:
         obj.__doc__ = dedent(kwargs["__doc__"])
         return obj
 
@@ -34,38 +34,29 @@ copy
 _numba_parallel = """\
 numba_parallel
     Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
-    For small datasets or small number of interactions, it's recommended to set this to `False`.
-"""
+    For small datasets or small number of interactions, it's recommended to set this to `False`."""
 _seed = """\
 seed
-    Random seed for reproducibility.
-"""
+    Random seed for reproducibility."""
 _img_hr = """\
 img
-    High-resolution image.
-"""
+    High-resolution image."""
 _img_uint8 = """\
 img
-    RGB image of type :class:`numpy.uint8` of shape ``(height, width [, channels]).``.
-"""
+    RGB image of type :class:`numpy.uint8` of shape ``(height, width [, channels]).``."""
 _feature_name = """\
 feature_name
-    Base name of feature in resulting feature values dict.
-"""
+    Base name of feature in resulting feature values dict."""
 _feature_ret = """\
-:class:`dict`
-    Dictionary of feature values.
-"""
+Dictionary of feature values."""
 _width_height = """\
 xs
     Width of the crops in pixels.
 ys
-    Height of the crops in pixels.
-"""
+    Height of the crops in pixels."""
 _cluster_key = """\
 cluster_key
-    Key in :attr:`anndata.AnnData.obs` where clustering is stored.
-"""
+    Key in :attr:`anndata.AnnData.obs` where clustering is stored."""
 # TODO: https://github.com/Chilipp/docrep/issues/21 fixed, this is not necessary
 _crop_extra = """\
 scale
@@ -85,8 +76,7 @@ dpi
 save
     Whether to save the plot."""
 _plotting_returns = """\
-None
-    Nothing, just plots the and optionally saves the plot.
+Nothing, just plots the and optionally saves the plot.
 """
 _parallelize = """\
 n_jobs
@@ -94,8 +84,7 @@ n_jobs
 backend
     Parallelization backend to use. See :class:`joblib.Parallel` for available options.
 show_progress_bar
-    Whether to show the progress bar or not.
-"""
+    Whether to show the progress bar or not."""
 
 
 d = DocstringProcessor(

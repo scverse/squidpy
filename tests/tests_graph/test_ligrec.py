@@ -1,7 +1,6 @@
-import sys
 from time import time
-from typing import Tuple, Optional, Sequence, NamedTuple
-
+from typing import Tuple, Optional, Sequence, TYPE_CHECKING
+import sys
 import pytest
 
 from scanpy import settings as s
@@ -51,11 +50,11 @@ class TestInvalidBehavior:
             ligrec(adata, "foo", interactions=interactions)
 
     def test_invalid_complex_policy(self, adata: AnnData, interactions: Interactions_t):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"Invalid option `'foobar'` for `ComplexPolicy`."):
             ligrec(adata, _CK, interactions=interactions, complex_policy="foobar")
 
     def test_invalid_fdr_axis(self, adata: AnnData, interactions: Interactions_t):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"Invalid option `'foobar'` for `FdrAxis`."):
             ligrec(adata, _CK, interactions=interactions, fdr_axis="foobar", fdr_method="fdr_bh")
 
     def test_too_few_permutations(self, adata: AnnData, interactions: Interactions_t):
@@ -82,7 +81,7 @@ class TestInvalidBehavior:
             ligrec(adata, _CK, interactions=df)
 
     def test_interactions_invalid_sequence(self, adata: AnnData, interactions: Interactions_t):
-        interactions += ("foo", "bar", "bar")
+        interactions += ("foo", "bar", "bar")  # type: ignore
         with pytest.raises(ValueError, match=r"Not all interactions are of length `2`."):
             ligrec(adata, _CK, interactions=interactions)
 
@@ -95,7 +94,7 @@ class TestInvalidBehavior:
             ligrec(adata, _CK, interactions=interactions, clusters=["foo"])
 
     def test_invalid_clusters_mix(self, adata: AnnData, interactions: Interactions_t):
-        with pytest.raises(TypeError, match=r"Expected a `Sequence`."):
+        with pytest.raises(ValueError, match=r"Expected a `tuple` of length `2`, found `3`."):
             ligrec(adata, _CK, interactions=interactions, clusters=["foo", ("bar", "baz")])
 
     def test_all_genes_capitalized(self, adata: AnnData, interactions: Interactions_t):
@@ -244,6 +243,8 @@ class TestInvalidBehavior:
 
     def test_result_is_sparse(self, adata: AnnData, interactions: Interactions_t):
         interactions = pd.DataFrame(interactions, columns=["source", "target"])
+        if TYPE_CHECKING:
+            assert isinstance(interactions, pd.DataFrame)
         interactions["metadata"] = "foo"
         r = ligrec(adata, _CK, interactions=interactions, n_perms=5, seed=2, copy=True, show_progress_bar=False)
 
@@ -348,7 +349,9 @@ class TestInvalidBehavior:
         np.testing.assert_array_equal(res.means.columns, paul15_means.columns)
         np.testing.assert_allclose(res.means.values, paul15_means.values)
 
-    def test_reproducibility_numba_off(self, adata: AnnData, interactions: Interactions_t, ligrec_no_numba: NamedTuple):
+    def test_reproducibility_numba_off(
+        self, adata: AnnData, interactions: Interactions_t, ligrec_no_numba: LigrecResult
+    ):
         r = ligrec(
             adata, _CK, interactions=interactions, n_perms=5, copy=True, show_progress_bar=False, seed=42, n_jobs=1
         )
@@ -390,10 +393,10 @@ class TestInvalidBehavior:
     def test_non_uniqueness(self, adata: AnnData, interactions: Interactions_t):
         # add complexes
         expected = {(r.upper(), l.upper()) for r, l in interactions}
-        interactions += (
+        interactions += (  # type: ignore
             (f"{interactions[-1][0]}_{interactions[-1][1]}", f"{interactions[-2][0]}_{interactions[-2][1]}"),
         ) * 2
-        interactions += interactions[:3]
+        interactions += interactions[:3]  # type: ignore
         res = ligrec(
             adata,
             _CK,
@@ -402,7 +405,7 @@ class TestInvalidBehavior:
             copy=True,
             show_progress_bar=False,
             seed=42,
-            numba_parallel=True,
+            numba_parallel=False,
         )
 
         assert len(res.pvalues) == len(expected)

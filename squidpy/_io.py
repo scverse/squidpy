@@ -1,17 +1,13 @@
-"""Spatial tools general utility functions."""
-import os
-import glob
 from typing import Tuple, Union, Optional
 from pathlib import Path
+import os
+import glob
 
-import scanpy as sc
-import scanpy.logging as logg
+from scanpy import logging as logg
 from anndata import AnnData
+import scanpy as sc
 
-from squidpy._docs import inject_docs  # noqa: F401
-from squidpy.constants._constants import Dataset  # noqa: F401
-from squidpy.constants._pkg_constants import Key  # noqa: F401
-from .im.object import ImageContainer
+from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 
 
 def read_visium_data(
@@ -28,12 +24,13 @@ def read_visium_data(
         Name of the .h5 file in the ``dataset_folder``. If not specified, will use `*filtered_feature_bc_matrix.h5`.
     image_file
         Name of the .tiff file in the ``dataset_folder``. If not specified, will use `*im.tif`.
+
     Returns
     -------
-    :class:`anndata.AnnData`
-        Annotated data object.
-    :class:`squidpy.image.ImageContainer`
-        The high resolution tiff image.
+    A :class:`tuple` of the following:
+
+        - Annotated data object.
+        - The high resolution tiff image.
     """
     # TODO: refactor asserts
     dataset_folder = Path(dataset_folder)
