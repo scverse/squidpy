@@ -4,26 +4,17 @@ import warnings
 
 from anndata import AnnData
 
+from numba import njit
 from scipy.sparse import issparse
+from sklearn.metrics import pairwise_distances
+from pandas.api.types import infer_dtype, is_categorical_dtype
 from statsmodels.stats.multitest import multipletests
 import numpy as np
 import pandas as pd
-from scipy.sparse import issparse
-from sklearn.metrics import pairwise_distances
-from sklearn.preprocessing import LabelEncoder
-import seaborn as sns
-import matplotlib.pyplot as plt
-from pathlib import Path
+import numba.types as nt
 
 from squidpy._docs import d, inject_docs
 from squidpy.constants._pkg_constants import Key
-
-
-
-
-
-
-
 
 try:
     with warnings.catch_warnings():
@@ -198,78 +189,190 @@ def _set_weight_class(adata: AnnData) -> W:
     return libpysal.weights.W(neighbors, weights, ids=adata.obs.index.values)
 
 
-def neighborhood_plot(
-        adata: AnnData,
-        spatial_key: str,
-        cluster_key: str,
-        condition: str,
-        max_distance: int,
-        step: int,
-        figsize: Optional[Tuple[float, float]] = None,
-        dpi: Optional[int] = None,
-        save: Optional[Union[str, Path]] = None,
-        **kwargs,
-):
+it = nt.int32
+ft = nt.float32
+tt = nt.UniTuple
+
+
+@njit(
+    ft[:, :](it[:], ft[:, :], tt(ft, 2), it[:]),
+    parallel=False,
+    fastmath=True,
+)
+def _occur_count(
+    clust: np.ndarray,
+    pw_dist: np.ndarray,
+    thres: Tuple[np.float32, np.float32],
+    labs_unique: np.int32,
+) -> np.ndarray:
+
+    num = labs_unique.shape[0]
+    co_occur = np.zeros((num, num), dtype=ft)
+    probs_con = np.zeros((num, num), dtype=ft)
+
+    thres_min, thres_max = thres
+
+    idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > thres_min))
+    x = clust[idx_x]
+    y = clust[idx_y]
+    for i, j in zip(x, y):
+        co_occur[i, j] += 1
+
+    probs_matrix = co_occur / np.sum(co_occur)
+    probs = np.sum(probs_matrix, axis=1)
+
+    for c in labs_unique:
+        probs_conditional = co_occur[c] / np.sum(co_occur[c])
+        probs_con[c, :] = probs_conditional / probs
+
+    return probs_con
+
+
+@d.dedent
+def co_occurrence(
+    adata: AnnData,
+    cluster_key: str,
+    spatial_key: Optional[str] = Key.obsm.spatial,
+    steps: int = 50,
+    copy: bool = False,
+) -> Optional[np.ndarray]:
     """
-    Neighborhood Plot
+    Compute co-occurrence probability of clusters across spatial dimensions.
+
     Parameters
     ----------
-    adata: `~anndata.AnnData`
-            Annotated data matrix.
-    spatial_key: `str`
-            String label for the spatial data
-    cluster_key: `str`
-            String label for the clusters
-    condition: `str`
-            String specifying the cluster used for conditioning
-    max_distance: `int`
-            Integer specifying the maximum offset distance
-    step: `int`
-            Integer for generating intervals sequence from 0 to max_distance
-    kwargs
-        Keyword arguments to :func:`seaborn.lineplot`.
+    %(adata)s
+    cluster_key
+        Cluster key in :attr:`anndata.AnnData.obs`.
+    spatial_key
+        Spatial key in :attr:`anndata.AnnData.obsm`.
+    steps
+        number of step to compute radius for co-occurrence.
+    %(copy)s
+
     Returns
     -------
-    Neighborhood plot
+    If ``copy = True`` returns a :class:`numpy.ndarray`. Otherwise, it modifies the ``adata`` object with the
+    following keys:
+
+        - :attr:`anndata.AnnData.uns` ``[{cluster_key}_co_occurrence]`` - the centrality scores.
     """
-    pairwise_dis = pairwise_distances(adata.obsm[spatial_key])
+    ip = np.int32
+    fp = np.float32
+    if cluster_key not in adata.obs.keys():
+        raise KeyError(f"Cluster key `{cluster_key}` not found in `adata.obs`.")
+    if not is_categorical_dtype(adata.obs[cluster_key]):
+        raise TypeError(
+            f"Expected `adata.obs[{cluster_key}]` to be `categorical`, "
+            f"found `{infer_dtype(adata.obs[cluster_key])}`."
+        )
+    if spatial_key not in adata.obsm:
+        raise KeyError(f"{spatial_key} not present in `adata.obs`" "Choose a different spatial_key or run first ")
 
-    features = np.unique(adata.obs[cluster_key])
-    f_num = features.size
+    spatial = adata.obsm[spatial_key]
+    original_clust = adata.obs[cluster_key]
+    dist = pairwise_distances(spatial).astype(fp)
 
-    le = LabelEncoder()
-    le.fit(features)
+    thres_max = dist.max() / 2
+    thres_min = np.amin(np.array(dist)[dist != np.amin(dist)]).astype(fp)
+    clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
 
-    df = pd.DataFrame({'label': features, 'ratio': 0, 'distance': 0})
+    labs = np.array([clust_map[c] for c in original_clust], dtype=ip)
 
-    intervals = list(range(0, max_distance + 1, step))
+    labs_unique = np.array(list(clust_map.values()), dtype=ip)
+    n_cls = labs_unique.shape[0]
 
-    for i in range(1, len(intervals)):
-        co_occur = np.zeros((f_num, f_num))
+    interval = np.linspace(thres_min, thres_max, num=steps, dtype=fp)
 
-        rows = adata.obs[cluster_key][np.where((pairwise_dis <= intervals[i]) & (pairwise_dis > intervals[i - 1]))[0]]
-        cols = adata.obs[cluster_key][np.where((pairwise_dis <= intervals[i]) & (pairwise_dis > intervals[i - 1]))[1]]
+    out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
+    for i in range(interval.shape[0] - 1):
+        cond_prob = _occur_count(labs, dist, (interval[i], interval[i + 1]), labs_unique)
+        out[:, :, i] = cond_prob
 
-        rows_idx = le.transform(rows)
-        cols_idx = le.transform(cols)
+    if copy:
+        return out
 
-        np.add.at(co_occur, [rows_idx, cols_idx], 1)
-        probs_matrix = co_occur / np.sum(co_occur)
-        probs = np.sum(probs_matrix, axis=1)
+    adata.uns[f"{cluster_key}_co_occurrence"] = out
 
-        idx = le.transform([condition]).item()
-        probs_conditional = co_occur[idx] / np.sum(co_occur[idx])
 
-        df = df.append(pd.DataFrame({'label': features, 'ratio': probs_conditional / probs, 'distance': intervals[i]}))
+# def neighborhood_plot(
+#     adata: AnnData,
+#     spatial_key: str,
+#     cluster_key: str,
+#     condition: str,
+#     max_distance: int,
+#     step: int,
+#     figsize: Optional[Tuple[float, float]] = None,
+#     dpi: Optional[int] = None,
+#     save: Optional[Union[str, Path]] = None,
+#     **kwargs,
+# ) -> Optional[np.ndarray, np.ndarray] :
+#     """
+#     Neighborhood Plot
+#     Parameters
+#     ----------
+#     adata: `~anndata.AnnData`
+#             Annotated data matrix.
+#     spatial_key: `str`
+#             String label for the spatial data
+#     cluster_key: `str`
+#             String label for the clusters
+#     condition: `str`
+#             String specifying the cluster used for conditioning
+#     max_distance: `int`
+#             Integer specifying the maximum offset distance
+#     step: `int`
+#             Integer for generating intervals sequence from 0 to max_distance
+#     kwargs
+#         Keyword arguments to :func:`seaborn.lineplot`.
+#     Returns
+#     -------
+#     Neighborhood plot
+#     """
+#     pairwise_dis = pairwise_distances(adata.obsm[spatial_key])
 
-    df_wide = df.pivot("distance", "label", "ratio")
+#     features = np.unique(adata.obs[cluster_key])
+#     f_num = features.size
 
-    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-    g = sns.lineplot(data=df_wide, dashes=False)
-    g.set_xticks(intervals)
-    g.set_xticklabels(g.get_xticks(), size=7)
-    plt.ylabel("Probability Ratio")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+#     le = LabelEncoder()
+#     le.fit(features)
 
-    if save is not None:
-        save_fig(fig, path=save)
+#     df = pd.DataFrame({"label": features, "ratio": 0, "distance": 0})
+
+#     intervals = list(range(0, max_distance + 1, step))
+
+#     for i in range(1, len(intervals)):
+#         co_occur = np.zeros((f_num, f_num))
+
+#         rows = adata.obs[cluster_key][np.where((pairwise_dis <= intervals[i])
+#           & (pairwise_dis > intervals[i - 1]))[0]]
+#         cols = adata.obs[cluster_key][np.where((pairwise_dis <= intervals[i])
+#           & (pairwise_dis > intervals[i - 1]))[1]]
+
+#         rows_idx = le.transform(rows)
+#         cols_idx = le.transform(cols)
+
+#         np.add.at(co_occur, (rows_idx, cols_idx), 1)
+#         probs_matrix = co_occur / np.sum(co_occur)
+#         probs = np.sum(probs_matrix, axis=1)
+
+#         idx = le.transform([condition]).item()
+#         probs_conditional = co_occur[idx] / np.sum(co_occur[idx])
+
+#         df = df.append(pd.DataFrame(
+# {"label": features, "ratio": probs_conditional / probs,
+# "distance": intervals[i]}))
+
+#     return df
+
+# df_wide = df.pivot("distance", "label", "ratio")
+
+# fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+# g = sns.lineplot(data=df_wide, dashes=False)
+# g.set_xticks(intervals)
+# g.set_xticklabels(g.get_xticks(), size=7)
+# plt.ylabel("Probability Ratio")
+# plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+# if save is not None:
+#     save_fig(fig, path=save)
