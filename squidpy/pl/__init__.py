@@ -1,6 +1,7 @@
 """The plotting module.."""
 from squidpy.pl._graph import (
-    plot_ripley_k,
+    ripley_k,
+    co_occurrence,
     spatial_graph,
     nhood_enrichment,
     centrality_scores,

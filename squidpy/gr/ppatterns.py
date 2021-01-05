@@ -235,7 +235,7 @@ def co_occurrence(
     spatial_key: Optional[str] = Key.obsm.spatial,
     steps: int = 50,
     copy: bool = False,
-) -> Optional[np.ndarray]:
+) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
     Compute co-occurrence probability of clusters across spatial dimensions.
 
@@ -252,7 +252,7 @@ def co_occurrence(
 
     Returns
     -------
-    If ``copy = True`` returns a :class:`numpy.ndarray`. Otherwise, it modifies the ``adata`` object with the
+    If ``copy = True`` returns two :class:`numpy.ndarray`. Otherwise, it modifies the ``adata`` object with the
     following keys:
 
         - :attr:`anndata.AnnData.uns` ``[{cluster_key}_co_occurrence]`` - the centrality scores.
@@ -290,6 +290,6 @@ def co_occurrence(
         out[:, :, i] = cond_prob
 
     if copy:
-        return out
+        return (out, interval)
 
-    adata.uns[f"{cluster_key}_co_occurrence"] = out
+    adata.uns[f"{cluster_key}_co_occurrence"] = {"occ": out, "interval": interval}

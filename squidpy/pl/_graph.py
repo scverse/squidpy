@@ -10,6 +10,7 @@ from pandas import DataFrame
 import numpy as np
 import pandas as pd
 
+from matplotlib import ticker
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -250,7 +251,7 @@ def nhood_enrichment(
 
 
 @d.dedent
-def plot_ripley_k(
+def ripley_k(
     adata: AnnData,
     cluster_key: str,
     df: Optional[DataFrame] = None,
@@ -280,7 +281,7 @@ def plot_ripley_k(
     if df is None:
         try:
             df = adata.uns[f"ripley_k_{cluster_key}"]
-            hue_order = list(np.sort(adata.obs[cluster_key].unique()))
+            hue_order = list(adata.obs[cluster_key].cat.categories)
 
             try:
                 palette = list(adata.uns[f"{cluster_key}_colors"])
@@ -289,7 +290,7 @@ def plot_ripley_k(
 
         except KeyError:
             raise KeyError(
-                f"\\looks like `riply_k_{cluster_key}` was not used\n\n"
+                f"\\looks like `ripley_k_{cluster_key}` was not used\n\n"
                 "\\is not present in adata.uns,\n"
                 "\tplease rerun ripley_k or pass\n"
                 "\ta dataframe"
@@ -301,13 +302,87 @@ def plot_ripley_k(
     sns.lineplot(
         "distance",
         "ripley_k",
-        hue="leiden",
+        hue=cluster_key,
         hue_order=hue_order,
         data=df,
         palette=palette,
         ax=ax,
         **kwargs,
     )
+
+    if save is not None:
+        save_fig(fig, path=save)
+
+
+@d.dedent
+def co_occurrence(
+    adata: AnnData,
+    cluster_key: str,
+    group: str,
+    df: Optional[DataFrame] = None,
+    figsize: Optional[Tuple[float, float]] = None,
+    dpi: Optional[int] = None,
+    save: Optional[Union[str, Path]] = None,
+    **kwargs: Any,
+) -> None:
+    """
+    Plot Ripley K estimate for each cluster.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(cluster_key)s
+    group
+        Cluster instance to plot conditional probability
+    df
+        Data to plot. If `None`, try getting from ``adata.uns['{cluster_key}_co_occurrence']``.
+    %(plotting)s
+    kwargs
+        Keyword arguments to :func:`seaborn.lineplot`.
+
+    Returns
+    -------
+    %(plotting_returns)s
+    """
+    # TODO: I really, really discourage this, should be refactored as which key to use
+    if df is None:
+        try:
+            out = adata.uns[f"{cluster_key}_co_occurrence"]["occ"]
+            interval = adata.uns[f"{cluster_key}_co_occurrence"]["interval"]
+            idx = np.where(adata.obs[cluster_key].cat.categories == group)[0][0]
+            df = pd.DataFrame(out[idx, :, :].T, columns=adata.obs[cluster_key].cat.categories)
+            hue_order = list(adata.obs[cluster_key].cat.categories)
+
+            try:
+                palette = adata.uns[f"{cluster_key}_colors"]
+            except KeyError:
+                palette = None
+
+        except KeyError:
+            raise KeyError(
+                f"\\looks like `{cluster_key}_co_occurrence` was not used\n\n"
+                "\\is not present in adata.uns,\n"
+                "\tplease rerun ripley_k or pass\n"
+                "\ta dataframe"
+            ) from None
+    else:
+        hue_order = palette = None  # type: ignore[assignment]
+        np.arange(df.shape[0])
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    g = sns.lineplot(
+        # "distance",
+        # "Probability ratio",
+        # hue=cluster_key,
+        dashes=False,
+        hue_order=hue_order,
+        data=df,
+        palette=palette,
+        ax=ax,
+        **kwargs,
+    )
+    g.set_xticks(np.arange(interval.shape[0]))
+    g.xaxis.set_major_locator(ticker.LinearLocator(10))
 
     if save is not None:
         save_fig(fig, path=save)
