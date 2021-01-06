@@ -1,7 +1,5 @@
 from anndata import AnnData
 
-import numpy as np
-
 from squidpy.gr import moran, ripley_k, co_occurrence
 
 
@@ -9,14 +7,14 @@ def test_ripley_k(adata: AnnData):
     """
     check ripley score and shape
     """
-    ripley_k(adata, cluster_key="cluster")
+    ripley_k(adata, cluster_key="leiden")
 
     # assert ripley in adata.uns
-    assert "ripley_k_cluster" in adata.uns.keys()
-    # assert unique clusters in both
-    assert np.array_equal(adata.obs["cluster"].unique(), adata.uns["ripley_k_cluster"]["cluster"].unique())
-
-    # TO-DO assess length of distances
+    assert "ripley_k_leiden" in adata.uns.keys()
+    # assert clusters intersection
+    cat_ripley = set(adata.uns["ripley_k_leiden"]["leiden"].unique())
+    cat_adata = set(adata.obs["leiden"].cat.categories)
+    assert cat_ripley.isdisjoint(cat_adata) is False
 
 
 def test_moran(dummy_adata: AnnData):
@@ -34,7 +32,7 @@ def test_co_occurrence(adata: AnnData):
     """
     check ripley score and shape
     """
-    co_occurrence(adata, cluster_key="cluster")
+    co_occurrence(adata, cluster_key="leiden")
 
     # assert occurrence in adata.uns
     assert "cluster_co_occurrence" in adata.uns.keys()
