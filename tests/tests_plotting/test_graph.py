@@ -59,7 +59,12 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
         gr.spatial_connectivity(adata)
         gr.ripley_k(adata, cluster_key=C_KEY)
 
-        pl.plot_ripley_k(adata, cluster_key=C_KEY)
+        pl.ripley_k(adata, cluster_key=C_KEY)
+
+    def test_plot_co_occurrence(self, adata: AnnData):
+        gr.co_occurrence(adata, cluster_key=C_KEY)
+
+        pl.co_occurrence(adata, cluster_key=C_KEY)
 
 
 class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
