@@ -35,12 +35,12 @@ def test_co_occurrence(adata: AnnData):
     co_occurrence(adata, cluster_key="leiden")
 
     # assert occurrence in adata.uns
-    assert "cluster_co_occurrence" in adata.uns.keys()
-    assert "occ" in adata.uns["cluster_co_occurrence"].keys()
-    assert "interval" in adata.uns["cluster_co_occurrence"].keys()
+    assert "leiden_co_occurrence" in adata.uns.keys()
+    assert "occ" in adata.uns["leiden_co_occurrence"].keys()
+    assert "interval" in adata.uns["leiden_co_occurrence"].keys()
 
     # assert shapes
-    arr = adata.uns["cluster_co_occurrence"]["occ"]
+    arr = adata.uns["leiden_co_occurrence"]["occ"]
     assert arr.ndim == 3
     assert arr.shape[2] == 49
-    assert arr.shape[1] == arr.shape[0] == adata.obs["cluster"].unique().shape[0]
+    assert arr.shape[1] == arr.shape[0] == adata.obs["leiden"].unique().shape[0]
