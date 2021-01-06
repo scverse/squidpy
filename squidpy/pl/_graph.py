@@ -1,6 +1,6 @@
 """Plotting for gr functions."""
 
-from typing import Any, Tuple, Union, Optional
+from typing import Any, List, Tuple, Union, Optional
 from pathlib import Path
 
 from anndata import AnnData
@@ -10,7 +10,6 @@ from pandas import DataFrame
 import numpy as np
 import pandas as pd
 
-from matplotlib import ticker
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -318,7 +317,7 @@ def ripley_k(
 def co_occurrence(
     adata: AnnData,
     cluster_key: str,
-    group: str,
+    group: Union[str, List[str]],
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
@@ -341,7 +340,6 @@ def co_occurrence(
     -------
     %(plotting_returns)s
     """
-    # TODO: I really, really discourage this, should be refactored as which key to use
     try:
         occurrence_data = adata.uns[f"{cluster_key}_co_occurrence"]
     except KeyError:
@@ -352,9 +350,8 @@ def co_occurrence(
         ) from None
 
     out = occurrence_data["occ"]
-    interval = occurrence_data["interval"]
-    idx = np.where(adata.obs[cluster_key].cat.categories == group)[0][0]
-    df = pd.DataFrame(out[idx, :, :].T, columns=adata.obs[cluster_key].cat.categories)
+    interval = occurrence_data["interval"][1:]
+    categories = adata.obs[cluster_key].cat.categories
     hue_order = list(adata.obs[cluster_key].cat.categories)
 
     try:
@@ -362,19 +359,29 @@ def co_occurrence(
     except KeyError:
         palette = None
 
-    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-    g = sns.lineplot(
-        dashes=False,
-        hue_order=hue_order,
-        data=df,
-        palette=palette,
-        ax=ax,
-        **kwargs,
-    )
-    g.set(xlabel="Distance (coord units)", ylabel=f"P(x|{group})/p(x)")
-    g.set_xticklabels(np.round(interval, 2), rotation=45)
-    g.xaxis.set_major_locator(ticker.LinearLocator(10))
-    g.legend(loc="center left", bbox_to_anchor=(1, 0.5))
+    if isinstance(group, str):
+        group = list(group)
 
+    fig, axs = plt.subplots(1, len(group), figsize=figsize, dpi=dpi)
+    for i, g in enumerate(group):
+        idx = np.where(adata.obs[cluster_key].cat.categories == g)[0][0]
+        df = pd.DataFrame(out[idx, :, :].T.copy(), columns=categories)
+        df_long = pd.melt(df)
+        df_long.columns = [cluster_key, "probability"]
+        df_long["distance"] = np.tile(interval, len(categories))
+
+        sns.lineplot(
+            x="distance",
+            y="probability",
+            dashes=False,
+            hue=cluster_key,
+            hue_order=hue_order,
+            data=df_long,
+            palette=palette,
+            ax=axs[i],
+            **kwargs,
+        )
+        axs[i].legend(loc="center left", bbox_to_anchor=(1, 0.5))
+    fig.tight_layout()
     if save is not None:
         save_fig(fig, path=save)
