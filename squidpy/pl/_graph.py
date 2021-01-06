@@ -253,7 +253,6 @@ def nhood_enrichment(
 def ripley_k(
     adata: AnnData,
     cluster_key: str,
-    df: Optional[DataFrame] = None,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
@@ -266,8 +265,6 @@ def ripley_k(
     ----------
     %(adata)s
     %(cluster_key)s
-    df
-        Data to plot. If `None`, try getting from ``adata.uns['ripley_k_{cluster_key}']``.
     %(plotting)s
     kwargs
         Keyword arguments to :func:`seaborn.lineplot`.
@@ -276,31 +273,26 @@ def ripley_k(
     -------
     %(plotting_returns)s
     """
-    # TODO: I really, really discourage this, should be refactored as which key to use
-    if df is None:
-        try:
-            df = adata.uns[f"ripley_k_{cluster_key}"]
-            hue_order = list(adata.obs[cluster_key].cat.categories)
+    try:
+        df = adata.uns[f"ripley_k_{cluster_key}"]
+    except KeyError:
+        raise KeyError(
+            f"\\looks like `ripley_k_{cluster_key}`\n"
+            "\\is not present in adata.uns,\n"
+            "\tplease rerun `squidpy.gr.ripley_k`"
+        ) from None
 
-            try:
-                palette = list(adata.uns[f"{cluster_key}_colors"])
-            except KeyError:
-                palette = None  # type: ignore[assignment]
+    hue_order = list(adata.obs[cluster_key].cat.categories)
 
-        except KeyError:
-            raise KeyError(
-                f"\\looks like `ripley_k_{cluster_key}` was not used\n\n"
-                "\\is not present in adata.uns,\n"
-                "\tplease rerun ripley_k or pass\n"
-                "\ta dataframe"
-            ) from None
-    else:
-        hue_order = palette = None  # type: ignore[assignment]
+    try:
+        palette = adata.uns[f"{cluster_key}_colors"]
+    except KeyError:
+        palette = None
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     sns.lineplot(
-        "distance",
-        "ripley_k",
+        x="distance",
+        y="ripley_k",
         hue=cluster_key,
         hue_order=hue_order,
         data=df,
@@ -308,6 +300,7 @@ def ripley_k(
         ax=ax,
         **kwargs,
     )
+    ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 
     if save is not None:
         save_fig(fig, path=save)
@@ -382,6 +375,7 @@ def co_occurrence(
             **kwargs,
         )
         axs[i].legend(loc="center left", bbox_to_anchor=(1, 0.5))
+        axs[i].set(ylabel=f"p(exp|{g})/p(exp)")
     fig.tight_layout()
     if save is not None:
         save_fig(fig, path=save)
