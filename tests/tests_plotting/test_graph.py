@@ -22,6 +22,7 @@ sc.set_figure_params(dpi=40, color_map="viridis")
 # 2. tests which produce a plot must be prefixed with `test_plot_`
 # 3. if the tolerance needs to be change, don't prefix the function with `test_plot_`, but with something else
 #    the comp. function can be accessed as `self.compare(<your_filename>, tolerance=<your_tolerance>)`
+#    ".png" is appended to <your_filename>, no need to set it
 
 
 class TestGraph(PlotTester, metaclass=PlotTesterMeta):
@@ -59,7 +60,13 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
         gr.spatial_connectivity(adata)
         gr.ripley_k(adata, cluster_key=C_KEY)
 
-        pl.plot_ripley_k(adata, cluster_key=C_KEY)
+        pl.ripley_k(adata, cluster_key=C_KEY)
+
+    def test_tol_plot_co_occurrence(self, adata: AnnData):
+        gr.co_occurrence(adata, cluster_key=C_KEY)
+
+        pl.co_occurrence(adata, cluster_key=C_KEY, group=["0", "2"])
+        self.compare("Graph_co_occurrence", tolerance=70)
 
 
 class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
