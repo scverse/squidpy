@@ -1,4 +1,6 @@
 """Functions for point patterns spatial statistics."""
+from __future__ import annotations
+
 from typing import Tuple, Union, Iterable, Optional
 import warnings
 
@@ -200,11 +202,11 @@ tt = nt.UniTuple
     fastmath=True,
 )
 def _occur_count(
-    clust: np.ndarray,
-    pw_dist: np.ndarray,
+    clust: np.ndarray[np.int32],
+    pw_dist: np.ndarray[np.float32],
     thres: Tuple[np.float32, np.float32],
-    labs_unique: np.int32,
-) -> np.ndarray:
+    labs_unique: np.ndarray[np.int32],
+) -> np.ndarray[np.float32]:
 
     num = labs_unique.shape[0]
     co_occur = np.zeros((num, num), dtype=ft)
@@ -242,17 +244,16 @@ def co_occurrence(
     Parameters
     ----------
     %(adata)s
-    cluster_key
-        Cluster key in :attr:`anndata.AnnData.obs`.
+    %(cluster_key)s
     spatial_key
         Spatial key in :attr:`anndata.AnnData.obsm`.
     steps
-        number of step to compute radius for co-occurrence.
+        Number of step to compute radius for co-occurrence.
     %(copy)s
 
     Returns
     -------
-    If ``copy = True`` returns two :class:`numpy.ndarray`. Otherwise, it modifies the ``adata`` object with the
+    If ``copy = True`` returns two :class:`numpy.array`. Otherwise, it modifies the ``adata`` object with the
     following keys:
 
         - :attr:`anndata.AnnData.uns` ``[{cluster_key}_co_occurrence]`` - the centrality scores.
@@ -267,13 +268,13 @@ def co_occurrence(
             f"found `{infer_dtype(adata.obs[cluster_key])}`."
         )
     if spatial_key not in adata.obsm:
-        raise KeyError(f"{spatial_key} not present in `adata.obs`" "Choose a different spatial_key or run first ")
+        raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.obsm`.")
 
     spatial = adata.obsm[spatial_key]
     original_clust = adata.obs[cluster_key]
     dist = pairwise_distances(spatial).astype(fp)
 
-    thres_max = dist.max() / 2
+    thres_max = dist.max() / 2.0
     thres_min = np.amin(np.array(dist)[dist != np.amin(dist)]).astype(fp)
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
 
@@ -290,6 +291,6 @@ def co_occurrence(
         out[:, :, i] = cond_prob
 
     if copy:
-        return (out, interval)
+        return out, interval
 
     adata.uns[f"{cluster_key}_co_occurrence"] = {"occ": out, "interval": interval}
