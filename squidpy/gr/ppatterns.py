@@ -7,7 +7,7 @@ import warnings
 from anndata import AnnData
 
 from numba import njit
-from scipy.sparse import issparse
+from scipy.sparse import issparse, isspmatrix_lil
 from sklearn.metrics import pairwise_distances
 from pandas.api.types import infer_dtype, is_categorical_dtype
 from statsmodels.stats.multitest import multipletests
@@ -35,6 +35,7 @@ except ImportError:
 def ripley_k(
     adata: AnnData,
     cluster_key: str,
+    spatial_key: str = Key.obsm.spatial,
     mode: str = "ripley",
     support: int = 100,
     copy: Optional[bool] = False,
@@ -45,19 +46,15 @@ def ripley_k(
     Parameters
     ----------
     %(adata)s
-        The function will use coordinates in ``adata.obsm[{key!r}]``.
-        TODO: expose key.
-    cluster_key
-        Key of cluster labels saved in :attr:`anndata.AnnData.obs`.
-        TODO: docrep.
+    %(cluster_key)s
+    %(spatial_key)s
     mode
         Keyword which indicates the method for edge effects correction, as reported in
         :class:`astropy.stats.RipleysKEstimator`.
     support
         Number of points where Ripley's K is evaluated between a fixed radii with :math:`min=0`,
         :math:`max=\sqrt{{area \over 2}}`.
-    copy
-        If an :class:`anndata.AnnData` is passed, determines whether a copy is returned.
+    %(copy)s
 
     Returns
     -------
@@ -70,7 +67,7 @@ def ripley_k(
     except ImportError:
         raise ImportError("Please install `astropy` as `pip install astropy`.") from None
 
-    coord = adata.obsm[Key.obsm.spatial]
+    coord = adata.obsm[spatial_key]
     # set coordinates
     y_min = int(coord[:, 1].min())
     y_max = int(coord[:, 1].max())
@@ -106,6 +103,7 @@ def ripley_k(
 @inject_docs(key=Key.obsp.spatial_conn())
 def moran(
     adata: AnnData,
+    connectivities_key: str = Key.obsp.spatial_conn(),
     gene_names: Optional[Iterable[str]] = None,
     transformation: str = "r",
     permutations: int = 1000,
@@ -117,8 +115,8 @@ def moran(
 
     Parameters
     ----------
-    adata
-        The function will use connectivities in ``adata.obsp[{key!r}]``. TODO: expose key
+    %(adata)s
+    %(conn_key)s
     gene_names
         List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute Moran's I statistics
         [Moran50]_. If None, it's computed for all genes.
@@ -139,9 +137,8 @@ def moran(
     if esda is None or libpysal is None:
         raise ImportError("Please install `esda` and `libpysal` as `pip install esda libpysal`.")
 
-    # TODO: use_raw?
     # init weights
-    w = _set_weight_class(adata)
+    w = _set_weight_class(adata, key=connectivities_key)
 
     lst_mi = []
 
@@ -174,19 +171,18 @@ def _compute_moran(y: np.ndarray, w: W, transformation: str, permutations: int) 
     return mi.I, mi.p_z_sim, mi.VI_sim
 
 
-# TODO: expose the key?
-# TODO: is return type correct?
-def _set_weight_class(adata: AnnData) -> W:
-
+def _set_weight_class(adata: AnnData, key: str) -> W:
     try:
-        a = adata.obsp[Key.obsp.spatial_conn()].tolil()
+        X = adata.obsp[key]
+        if not isspmatrix_lil(X):
+            X = X.tolil()
     except KeyError:
         raise KeyError(
-            f"`adata.obsp[{Key.obsp.spatial_conn()!r}]` is empty, run `squidpy.graph.spatial_connectivity()` first."
+            f"Please run `squidpy.gr.spatial_connectivity(..., key_added={key.replace('_connectivities', '')!r})`."
         ) from None
 
-    neighbors = dict(enumerate(a.rows))
-    weights = dict(enumerate(a.data))
+    neighbors = dict(enumerate(X.rows))
+    weights = dict(enumerate(X.data))
 
     return libpysal.weights.W(neighbors, weights, ids=adata.obs.index.values)
 
@@ -245,8 +241,7 @@ def co_occurrence(
     ----------
     %(adata)s
     %(cluster_key)s
-    spatial_key
-        Spatial key in :attr:`anndata.AnnData.obsm`.
+    %(spatial_key)s
     steps
         Number of step to compute radius for co-occurrence.
     %(copy)s

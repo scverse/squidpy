@@ -45,7 +45,7 @@ def nhood_data(adata: AnnData) -> AnnData:
     sc.pp.pca(adata)
     sc.pp.neighbors(adata)
     sc.tl.leiden(adata, key_added="leiden")
-    sp.gr.spatial_connectivity(adata)
+    sp.gr.spatial_neighbors(adata)
 
     return adata
 
@@ -56,7 +56,7 @@ def dummy_adata() -> AnnData:
     adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
 
     adata.obsm[Key.obsm.spatial] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
-    sp.gr.spatial_connectivity(adata, obsm=Key.obsm.spatial, n_rings=2)
+    sp.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
 
     return adata
 
@@ -169,6 +169,7 @@ def visium_adata():
     )
     adata = AnnData(X=np.ones((visium_coords.shape[0], 3)))
     adata.obsm[Key.obsm.spatial] = visium_coords
+    adata.uns[Key.uns.spatial] = {}
     return adata
 
 

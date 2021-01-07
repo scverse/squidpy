@@ -57,6 +57,12 @@ ys
 _cluster_key = """\
 cluster_key
     Key in :attr:`anndata.AnnData.obs` where clustering is stored."""
+_spatial_key = """\
+spatial_key
+    Key in :attr:`anndata.AnnData.obsm` where spatial coordinates are stored."""
+_conn_key = """\
+conn_key
+    Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored."""
 # TODO: https://github.com/Chilipp/docrep/issues/21 fixed, this is not necessary
 _crop_extra = """\
 scale
@@ -100,6 +106,8 @@ d = DocstringProcessor(
     feature_ret=_feature_ret,
     width_height=_width_height,
     cluster_key=_cluster_key,
+    spatial_key=_spatial_key,
+    conn_key=_conn_key,
     crop_extra=_crop_extra,
     plotting=_plotting,
     plotting_returns=_plotting_returns,
