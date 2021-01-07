@@ -1,6 +1,7 @@
 """Plotting for gr functions."""
 
-from typing import Any, Tuple, Union, Optional
+from types import MappingProxyType
+from typing import Any, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
 from pathlib import Path
 
 from anndata import AnnData
@@ -250,13 +251,13 @@ def nhood_enrichment(
 
 
 @d.dedent
-def plot_ripley_k(
+def ripley_k(
     adata: AnnData,
     cluster_key: str,
-    df: Optional[DataFrame] = None,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
+    legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> None:
     """
@@ -266,9 +267,9 @@ def plot_ripley_k(
     ----------
     %(adata)s
     %(cluster_key)s
-    df
-        Data to plot. If `None`, try getting from ``adata.uns['ripley_k_{cluster_key}']``.
     %(plotting)s
+    legend_kwargs
+        Keyword arguments for :func:`matplotlib.pyplot.legend`.
     kwargs
         Keyword arguments to :func:`seaborn.lineplot`.
 
@@ -276,38 +277,117 @@ def plot_ripley_k(
     -------
     %(plotting_returns)s
     """
-    # TODO: I really, really discourage this, should be refactored as which key to use
-    if df is None:
-        try:
-            df = adata.uns[f"ripley_k_{cluster_key}"]
-            hue_order = list(np.sort(adata.obs[cluster_key].unique()))
+    try:
+        df = adata.uns[f"ripley_k_{cluster_key}"]
+    except KeyError:
+        raise KeyError(f"Please run `squidpy.gr.ripley_k(..., cluster_key={cluster_key!r})`.") from None
 
-            try:
-                palette = list(adata.uns[f"{cluster_key}_colors"])
-            except KeyError:
-                palette = None  # type: ignore[assignment]
+    legend_kwargs = dict(legend_kwargs)
+    if "loc" not in legend_kwargs:
+        legend_kwargs["loc"] = "center left"
+        legend_kwargs.setdefault("bbox_to_anchor", (1, 0.5))
 
-        except KeyError:
-            raise KeyError(
-                f"\\looks like `riply_k_{cluster_key}` was not used\n\n"
-                "\\is not present in adata.uns,\n"
-                "\tplease rerun ripley_k or pass\n"
-                "\ta dataframe"
-            ) from None
-    else:
-        hue_order = palette = None  # type: ignore[assignment]
+    hue_order = list(adata.obs[cluster_key].cat.categories)
+    palette = adata.uns.get(f"{cluster_key}_colors", None)
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     sns.lineplot(
-        "distance",
-        "ripley_k",
-        hue="leiden",
+        x="distance",
+        y="ripley_k",
+        hue=cluster_key,
         hue_order=hue_order,
         data=df,
         palette=palette,
         ax=ax,
         **kwargs,
     )
+    ax.legend(**legend_kwargs)
+
+    if save is not None:
+        save_fig(fig, path=save)
+
+
+@d.dedent
+def co_occurrence(
+    adata: AnnData,
+    cluster_key: str,
+    group: Optional[Union[str, Sequence[str]]] = None,
+    figsize: Optional[Tuple[float, float]] = None,
+    dpi: Optional[int] = None,
+    save: Optional[Union[str, Path]] = None,
+    legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    **kwargs: Any,
+) -> None:
+    """
+    Plot co-occurrence probability ratio for each cluster.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(cluster_key)s
+    group
+        Cluster instance to plot conditional probability.
+    %(plotting)s
+    legend_kwargs
+        Keyword arguments for :func:`matplotlib.pyplot.legend`.
+    kwargs
+        Keyword arguments to :func:`seaborn.lineplot`.
+
+    Returns
+    -------
+    %(plotting_returns)s
+    """
+    try:
+        occurrence_data = adata.uns[f"{cluster_key}_co_occurrence"]
+    except KeyError:
+        raise KeyError(f"Please run `squidpy.gr.co_occurence(..., cluster_key={cluster_key!r})`.") from None
+
+    legend_kwargs = dict(legend_kwargs)
+    if "loc" not in legend_kwargs:
+        legend_kwargs["loc"] = "center left"
+        legend_kwargs.setdefault("bbox_to_anchor", (1, 0.5))
+
+    if isinstance(group, str):
+        group = (group,)
+
+    out = occurrence_data["occ"]
+    interval = occurrence_data["interval"][1:]
+    categories = adata.obs[cluster_key].cat.categories
+
+    if group is None:
+        group = categories
+    group = np.array(group)
+    if TYPE_CHECKING:
+        assert isinstance(group, Sequence)
+
+    group = sorted(group[np.isin(group, categories)])
+    if not len(group):
+        raise ValueError("No valid groups have been found.")
+
+    hue_order = list(adata.obs[cluster_key].cat.categories)
+    palette = adata.uns.get(f"{cluster_key}_colors", None)
+
+    fig, axs = plt.subplots(1, len(group), figsize=figsize, dpi=dpi, constrained_layout=True)
+    axs = np.ravel(axs)  # make into iterable
+
+    for g, ax in zip(group, axs):
+        idx = np.where(adata.obs[cluster_key].cat.categories == g)[0][0]
+        df = pd.DataFrame(out[idx, :, :].T, columns=categories).melt(var_name=cluster_key, value_name="probability")
+        df["distance"] = np.tile(interval, len(categories))
+
+        sns.lineplot(
+            x="distance",
+            y="probability",
+            data=df,
+            dashes=False,
+            hue=cluster_key,
+            hue_order=hue_order,
+            palette=palette,
+            ax=ax,
+            **kwargs,
+        )
+        ax.legend(**legend_kwargs)
+        ax.set_ylabel(rf"$\frac{{p(exp|{g})}}{{p(exp)}}$")
 
     if save is not None:
         save_fig(fig, path=save)

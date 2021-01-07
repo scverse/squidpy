@@ -1,13 +1,19 @@
 """Functions for point patterns spatial statistics."""
+from __future__ import annotations
+
 from typing import Tuple, Union, Iterable, Optional
 import warnings
 
 from anndata import AnnData
 
+from numba import njit
 from scipy.sparse import issparse
+from sklearn.metrics import pairwise_distances
+from pandas.api.types import infer_dtype, is_categorical_dtype
 from statsmodels.stats.multitest import multipletests
 import numpy as np
 import pandas as pd
+import numba.types as nt
 
 from squidpy._docs import d, inject_docs
 from squidpy.constants._pkg_constants import Key
@@ -183,3 +189,108 @@ def _set_weight_class(adata: AnnData) -> W:
     weights = dict(enumerate(a.data))
 
     return libpysal.weights.W(neighbors, weights, ids=adata.obs.index.values)
+
+
+it = nt.int32
+ft = nt.float32
+tt = nt.UniTuple
+
+
+@njit(
+    ft[:, :](it[:], ft[:, :], tt(ft, 2), it[:]),
+    parallel=False,
+    fastmath=True,
+)
+def _occur_count(
+    clust: np.ndarray[np.int32],
+    pw_dist: np.ndarray[np.float32],
+    thres: Tuple[np.float32, np.float32],
+    labs_unique: np.ndarray[np.int32],
+) -> np.ndarray[np.float32]:
+
+    num = labs_unique.shape[0]
+    co_occur = np.zeros((num, num), dtype=ft)
+    probs_con = np.zeros((num, num), dtype=ft)
+
+    thres_min, thres_max = thres
+
+    idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > thres_min))
+    x = clust[idx_x]
+    y = clust[idx_y]
+    for i, j in zip(x, y):
+        co_occur[i, j] += 1
+
+    probs_matrix = co_occur / np.sum(co_occur)
+    probs = np.sum(probs_matrix, axis=1)
+
+    for c in labs_unique:
+        probs_conditional = co_occur[c] / np.sum(co_occur[c])
+        probs_con[c, :] = probs_conditional / probs
+
+    return probs_con
+
+
+@d.dedent
+def co_occurrence(
+    adata: AnnData,
+    cluster_key: str,
+    spatial_key: Optional[str] = Key.obsm.spatial,
+    steps: int = 50,
+    copy: bool = False,
+) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    """
+    Compute co-occurrence probability of clusters across spatial dimensions.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(cluster_key)s
+    spatial_key
+        Spatial key in :attr:`anndata.AnnData.obsm`.
+    steps
+        Number of step to compute radius for co-occurrence.
+    %(copy)s
+
+    Returns
+    -------
+    If ``copy = True`` returns two :class:`numpy.array`. Otherwise, it modifies the ``adata`` object with the
+    following keys:
+
+        - :attr:`anndata.AnnData.uns` ``[{cluster_key}_co_occurrence]`` - the centrality scores.
+    """
+    ip = np.int32
+    fp = np.float32
+    if cluster_key not in adata.obs.keys():
+        raise KeyError(f"Cluster key `{cluster_key}` not found in `adata.obs`.")
+    if not is_categorical_dtype(adata.obs[cluster_key]):
+        raise TypeError(
+            f"Expected `adata.obs[{cluster_key}]` to be `categorical`, "
+            f"found `{infer_dtype(adata.obs[cluster_key])}`."
+        )
+    if spatial_key not in adata.obsm:
+        raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.obsm`.")
+
+    spatial = adata.obsm[spatial_key]
+    original_clust = adata.obs[cluster_key]
+    dist = pairwise_distances(spatial).astype(fp)
+
+    thres_max = dist.max() / 2.0
+    thres_min = np.amin(np.array(dist)[dist != np.amin(dist)]).astype(fp)
+    clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
+
+    labs = np.array([clust_map[c] for c in original_clust], dtype=ip)
+
+    labs_unique = np.array(list(clust_map.values()), dtype=ip)
+    n_cls = labs_unique.shape[0]
+
+    interval = np.linspace(thres_min, thres_max, num=steps, dtype=fp)
+
+    out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
+    for i in range(interval.shape[0] - 1):
+        cond_prob = _occur_count(labs, dist, (interval[i], interval[i + 1]), labs_unique)
+        out[:, :, i] = cond_prob
+
+    if copy:
+        return out, interval
+
+    adata.uns[f"{cluster_key}_co_occurrence"] = {"occ": out, "interval": interval}
