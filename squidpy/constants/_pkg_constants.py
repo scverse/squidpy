@@ -41,8 +41,8 @@ class Key:  # noqa: D101
 
         @classmethod
         def spatial_dist(cls, value: Optional[str] = None) -> str:
-            return f"{Key.obsp.spatial}_distances" if value is not None else f"{value}_distances"
+            return f"{Key.obsp.spatial}_distances" if value is None else f"{value}_distances"
 
         @classmethod
         def spatial_conn(cls, value: Optional[str] = None) -> str:
-            return f"{Key.obsp.spatial}_connectivities" if value is not None else f"{value}_distances"
+            return f"{Key.obsp.spatial}_connectivities" if value is None else f"{value}_connectivities"
