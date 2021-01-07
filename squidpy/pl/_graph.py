@@ -16,50 +16,6 @@ import matplotlib.pyplot as plt
 
 from squidpy._docs import d
 from squidpy.pl._utils import save_fig
-from squidpy.constants._pkg_constants import Key
-
-
-@d.dedent
-def spatial_graph(
-    adata: AnnData,
-    figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
-    save: Optional[Union[str, Path]] = None,
-    **kwargs: Any,
-) -> None:
-    """
-    Plot wrapper for :mod:`scanpy` plotting function for spatial graphs.
-
-    Parameters
-    ----------
-    %(adata)s
-    %(plotting)s
-    kwargs
-        Keyword arguments for :func:`scanpy.pl.embedding`.
-
-    Returns
-    -------
-    %(plotting_returns)s
-    """
-    # TODO: expose keys?
-    conns_key = "spatial_connectivities"
-    neighbors_dict = adata.uns[Key.uns.spatial] = {}
-    neighbors_dict["connectivities_key"] = conns_key
-    neighbors_dict["distances_key"] = "dummy"  # TODO?
-
-    fig, ax = plt.subplots(dpi=dpi, figsize=figsize)
-    sc.pl.embedding(
-        adata,
-        basis=Key.obsm.spatial,
-        edges=True,
-        neighbors_key="spatial",
-        edges_width=4,
-        ax=ax,
-        **kwargs,
-    )
-
-    if save is not None:
-        save_fig(fig, path=save)
 
 
 @d.dedent

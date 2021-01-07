@@ -2,7 +2,6 @@
 from squidpy.pl._graph import (
     ripley_k,
     co_occurrence,
-    spatial_graph,
     nhood_enrichment,
     centrality_scores,
     interaction_matrix,

@@ -15,24 +15,31 @@ from squidpy.constants._pkg_constants import Key
 
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)
-def spatial_connectivity(
+def spatial_neighbors(
     adata: AnnData,
-    obsm: str = Key.obsm.spatial,
+    spatial_key: str = Key.obsm.spatial,
+    coord_type: Optional[Union[str, CoordType]] = None,
     n_rings: int = 1,
     n_neigh: int = 6,
     radius: Optional[float] = None,
-    coord_type: Optional[Union[str, CoordType]] = CoordType.VISIUM.s,
     transform: Optional[Union[str, Transform]] = None,
     key_added: Optional[str] = None,
 ) -> None:
     """
-    Create a gr from spatial coordinates.
+    Create a graph from spatial coordinates.
 
     Parameters
     ----------
     %(adata)s
-    obsm
-        Key in :attr:`anndata.AnnData.obsm` to spatial coordinates.
+    %(spatial_key)s
+    coord_type
+        Type of coordinate system. Can be one of the following:
+
+            - `{c.VISIUM.s!r}`: [Visium]_ coordinates.
+            - `{c.GENERIC.s!r}`: generic coordinates.
+
+        If `None`, use `{c.VISIUM.s!r}` if ``spatial_key`` is present in :attr:`anndata.AnnData.obsm`,
+        otherwise use `{c.GENERIC.s!r}`.
     key_added
         Key added to connectivity and distance matrices in :attr:`anndata.AnnData.obsp`.
     n_rings
@@ -41,11 +48,6 @@ def spatial_connectivity(
         Number of neighborhoods to consider for non-Visium data.
     radius
         Radius of neighbors for non-Visium data.
-    coord_type
-        Type of coordinate system. Can be one of the following:
-
-            - `{c.VISIUM.s!r}`: [Visium]_ coordinates.
-            - `{c.NONE.v}`: generic coordinates.
     transform
         Type of adjacency matrix transform. Can be one of the following:
 
@@ -58,9 +60,13 @@ def spatial_connectivity(
     TODO
     """
     transform = Transform(transform)
-    coord_type = CoordType(coord_type)
+    if coord_type is None:
+        coord_type = CoordType.VISIUM if Key.uns.spatial in adata.uns else CoordType.GENERIC
+    else:
+        coord_type = CoordType(coord_type)
 
-    coords = adata.obsm[obsm]
+    coords = adata.obsm[spatial_key]
+
     if coord_type == CoordType.VISIUM:
         if n_rings > 1:
             Adj: np.ndarray = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True, return_distance=False)
@@ -85,7 +91,7 @@ def spatial_connectivity(
             Adj = _build_connectivity(coords, 6, neigh_correct=True)
             Dst = None
 
-    elif coord_type == CoordType.NONE:
+    elif coord_type == CoordType.GENERIC:
         Adj, Dst = _build_connectivity(coords, n_neigh, radius, return_distance=True)
     else:
         raise NotImplementedError(coord_type)

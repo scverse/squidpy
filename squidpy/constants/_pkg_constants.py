@@ -28,17 +28,21 @@ class Key:  # noqa: D101
 
         @classmethod
         def spatial_neighs(cls, value: Optional[str] = None) -> str:
-            return Key.uns.spatial if value is None else value
+            return Key.obsp.spatial if value is None else value
 
         @classmethod
         def ligrec(cls, cluster: str, value: Optional[str] = None) -> str:
             return f"{cluster}_ligrec" if value is None else value
 
     class obsp:  # noqa: D106
+        @cprop
+        def spatial(cls) -> str:
+            return f"{Key.obsm.spatial}_neighbors"
+
         @classmethod
         def spatial_dist(cls, value: Optional[str] = None) -> str:
-            return f"{Key.uns.spatial_neighs(value)}_distances"
+            return f"{Key.obsp.spatial}_distances" if value is None else f"{value}_distances"
 
         @classmethod
         def spatial_conn(cls, value: Optional[str] = None) -> str:
-            return f"{Key.uns.spatial_neighs(value)}_connectivities"
+            return f"{Key.obsp.spatial}_connectivities" if value is None else f"{value}_connectivities"
