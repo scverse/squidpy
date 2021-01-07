@@ -26,11 +26,6 @@ sc.set_figure_params(dpi=40, color_map="viridis")
 
 
 class TestGraph(PlotTester, metaclass=PlotTesterMeta):
-    @pytest.mark.skip(reason="X_spatial not in obsm. Apparently already fixed in scanpy's master/dev.")
-    def test_plot_spatial_graph(self, adata: AnnData):
-        gr.spatial_neighbors(adata)
-        pl.spatial_graph(adata)
-
     def test_plot_interaction(self, adata: AnnData):
         gr.spatial_neighbors(adata)
         gr.interaction_matrix(adata, cluster_key=C_KEY)
