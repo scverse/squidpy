@@ -19,6 +19,7 @@ from squidpy.pl._utils import save_fig
 from squidpy.constants._pkg_constants import Key
 
 
+# TODO: this functions seems highly redundant
 @d.dedent
 def spatial_graph(
     adata: AnnData,
@@ -41,7 +42,7 @@ def spatial_graph(
     -------
     %(plotting_returns)s
     """
-    # TODO: expose keys?
+    # TODO: expose key?
     conns_key = "spatial_connectivities"
     neighbors_dict = adata.uns[Key.uns.spatial] = {}
     neighbors_dict["connectivities_key"] = conns_key
