@@ -15,24 +15,33 @@ from squidpy.constants._pkg_constants import Key
 
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)
-def spatial_connectivity(
+def spatial_neighbors(
     adata: AnnData,
     obsm: str = Key.obsm.spatial,
+    coord_type: Optional[Union[str, CoordType]] = CoordType.EMPTY,
     n_rings: int = 1,
     n_neigh: int = 6,
     radius: Optional[float] = None,
-    coord_type: Optional[Union[str, CoordType]] = CoordType.VISIUM.s,
     transform: Optional[Union[str, Transform]] = None,
     key_added: Optional[str] = None,
 ) -> None:
     """
-    Create a gr from spatial coordinates.
+    Create a graph from spatial coordinates.
+
+    If `coord_type={c.EMPTY.v}` and `adata.uns["spatial"]` not empty set coord_type={c.VISIUM.s}.
+    If `coord_type={c.NONE.v}` and `radius=None` use standard `sklearn.neighbors.NearestNeighbors`.
 
     Parameters
     ----------
     %(adata)s
     obsm
         Key in :attr:`anndata.AnnData.obsm` to spatial coordinates.
+    coord_type
+        Type of coordinate system. Can be one of the following:
+
+            - `{c.VISIUM.s!r}`: [Visium]_ coordinates.
+            - `{c.NONE.v}`: generic coordinates.
+            - `{c.EMPTY.v}`: generic coordinates.
     key_added
         Key added to connectivity and distance matrices in :attr:`anndata.AnnData.obsp`.
     n_rings
@@ -41,11 +50,6 @@ def spatial_connectivity(
         Number of neighborhoods to consider for non-Visium data.
     radius
         Radius of neighbors for non-Visium data.
-    coord_type
-        Type of coordinate system. Can be one of the following:
-
-            - `{c.VISIUM.s!r}`: [Visium]_ coordinates.
-            - `{c.NONE.v}`: generic coordinates.
     transform
         Type of adjacency matrix transform. Can be one of the following:
 
@@ -59,6 +63,12 @@ def spatial_connectivity(
     """
     transform = Transform(transform)
     coord_type = CoordType(coord_type)
+
+    try:  # infer coord_type
+        if coord_type == CoordType.EMPTY and adata.uns[Key.uns.spatial] is not None:
+            coord_type = CoordType.VISIUM
+    except KeyError:
+        coord_type = CoordType.NONE
 
     coords = adata.obsm[obsm]
     if coord_type == CoordType.VISIUM:

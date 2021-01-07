@@ -39,6 +39,7 @@ class Transform(ModeEnum):  # noqa: D101
 class CoordType(ModeEnum):  # noqa: D101
     VISIUM = "visium"
     NONE = None
+    EMPTY = 0
 
 
 @unique
