@@ -126,7 +126,7 @@ def ligrec(
     target_groups
         Target interaction clusters. If `None`, select all clusters.
     means_range
-        Only show interactions whose means are in this **closed** interval.
+        Only show interactions whose means are within this **closed** interval.
     pvalue_threshold
         Only show interactions with p-value <= ``pvalue_threshold``.
     dendrogram
@@ -134,8 +134,7 @@ def ligrec(
     swap_axes
         Whether to show the cluster combinations as rows and the interacting pairs as columns.
     alpha
-        Significance threshold. All elements with p-values less or equal to ``alpha`` will be marked by tori
-        instead of dots.
+        Significance threshold. All elements with p-values <= ``alpha`` will be marked by tori instead of dots.
     %(plotting)s
     kwargs
         Keyword arguments for :meth:`scanpy.pl.DotPlot.style`.
