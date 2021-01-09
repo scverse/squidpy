@@ -70,11 +70,11 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
             pl.ligrec(42)
 
     def test_invalid_key(self, adata: AnnData):
-        with pytest.raises(KeyError, match=r"Key `foobar` not found in `adata.uns`."):
+        with pytest.raises(KeyError, match=r"Key `foobar_ligrec` not found in `adata.uns`."):
             pl.ligrec(adata, cluster_key="foobar")
 
     def test_valid_key_invalid_object(self, adata: AnnData):
-        adata.uns["foobar"] = "baz"
+        adata.uns["foobar_ligrec"] = "baz"
         with pytest.raises(TypeError, match=r"Expected `adata` .+ found `str`."):
             pl.ligrec(adata, cluster_key="foobar")
 
@@ -82,15 +82,19 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
         with pytest.raises(ValueError, match=r"Expected `alpha`"):
             pl.ligrec(ligrec_result, alpha=1.2)
 
+    def test_invalid_means_range_size(self, ligrec_result: LigrecResult):
+        with pytest.raises(ValueError, match=r"Expected `means_range` to be a sequence of size `2`, found `3`."):
+            pl.ligrec(ligrec_result, means_range=[0, 1, 2])
+
     def test_invalid_clusters(self, ligrec_result: LigrecResult):
-        with pytest.raises(ValueError, match=r"No clusters have been selected"):
+        with pytest.raises(ValueError, match=r"No clusters have been selected."):
             pl.ligrec(ligrec_result, source_groups="foo", target_groups="bar")
 
     def test_all_interactions_empty(self, ligrec_result: LigrecResult):
         empty = pd.DataFrame(np.nan, index=ligrec_result.pvalues.index, columns=ligrec_result.pvalues.columns)
         tmp = type(ligrec_result)(empty, empty, empty)
 
-        with pytest.raises(ValueError, match=r"After removing NaN interactions, none remain."):
+        with pytest.raises(ValueError, match=r"After removing rows with only NaN interactions, none remain."):
             pl.ligrec(tmp, remove_empty_interactions=True)
 
     def test_plot_source_clusters(self, ligrec_result: LigrecResult):
@@ -101,10 +105,16 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
         tgt_cls = ligrec_result.pvalues.columns.get_level_values(1)[0]
         pl.ligrec(ligrec_result, target_groups=tgt_cls)
 
-    def test_plot_remove_empty_interactions(self, ligrec_result: LigrecResult):
+    def test_plot_no_remove_empty_interactions(self, ligrec_result: LigrecResult):
         tmp = deepcopy(ligrec_result)
         tmp.pvalues.values[:2, :] = np.nan
-        pl.ligrec(tmp, remove_empty_interactions=True)
+        pl.ligrec(tmp, remove_empty_interactions=False)
+
+    def test_plot_pvalue_threshold(self, ligrec_result: LigrecResult):
+        pl.ligrec(ligrec_result, pvalue_threshold=0.05)
+
+    def test_plot_means_range(self, ligrec_result: LigrecResult):
+        pl.ligrec(ligrec_result, means_range=(0.5, 1))
 
     def test_plot_dendrogram(self, ligrec_result: LigrecResult):
         pl.ligrec(ligrec_result, dendrogram=True)

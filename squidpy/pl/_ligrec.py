@@ -121,7 +121,6 @@ def ligrec(
         It can also be a :class:`LigrecResult` as returned by :func:`squidpy.gr.ligrec`.
     cluster_key
         Key in :attr:`anndata.AnnData.uns`. Only used when ``adata`` is of type :class:`AnnData`.
-        If `None`, i
     source_groups
         Source interaction clusters. If `None`, select all clusters.
     target_groups
@@ -160,7 +159,8 @@ def ligrec(
             f"found `{type(adata).__name__}`."
         )
     if len(means_range) != 2:
-        raise ValueError(f"Expected `means_range` to be of length `2`, found `{len(means_range)}`.")
+        raise ValueError(f"Expected `means_range` to be a sequence of size `2`, found `{len(means_range)}`.")
+    means_range = tuple(sorted(means_range))  # type: ignore[assignment]
 
     if alpha is not None and not (0 <= alpha <= 1):
         raise ValueError(f"Expected `alpha` to be in range `[0, 1]`, found `{alpha}`.")
@@ -188,15 +188,15 @@ def ligrec(
     pvals = pvals[pvals <= pvalue_threshold]
 
     if remove_empty_interactions:
-        mask = pd.isnull(means) | pd.isnull(pvals)
-        mask_rows = ~mask.all(axis=1)
+        mask = ~(pd.isnull(means) | pd.isnull(pvals))
+        mask_rows = mask.any(axis=1)
         pvals = pvals.loc[mask_rows]
         means = means.loc[mask_rows]
 
         if pvals.empty:
             raise ValueError("After removing rows with only NaN interactions, none remain.")
 
-        mask_cols = ~mask.all(axis=0)
+        mask_cols = mask.any(axis=0)
         pvals = pvals.loc[:, mask_cols]
         means = means.loc[:, mask_cols]
 
@@ -204,7 +204,6 @@ def ligrec(
             raise ValueError("After removing columns with only NaN interactions, none remain.")
 
     start, label_ranges = 0, {}
-
     for cls, size in (pvals.groupby(level=0, axis=1)).size().to_dict().items():
         label_ranges[cls] = (start, start + size - 1)
         start += size
@@ -215,7 +214,7 @@ def ligrec(
     pvals.columns = map(_SEP.join, pvals.columns.to_flat_index())
     pvals.index = map(_SEP.join, pvals.index.to_flat_index())
 
-    means = means[label_ranges.keys()]
+    means = means[label_ranges.keys()].fillna(0)
     means.columns = map(_SEP.join, means.columns.to_flat_index())
     means.index = map(_SEP.join, means.index.to_flat_index())
     means = np.log2(means + 1)
@@ -275,10 +274,11 @@ def ligrec(
         dp.ax_dict["mainplot_ax"].set_xticklabels(labs)
 
     if alpha is not None:
-        mapper = np.argsort(adata.uns["dendrogram"]["categories_idx_ordered"]) if dendrogram else np.arange(len(pvals))
         yy, xx = np.where(pvals.values >= -np.log10(alpha))
-
         if len(xx) and len(yy):
+            mapper = (
+                np.argsort(adata.uns["dendrogram"]["categories_idx_ordered"]) if dendrogram else np.arange(len(pvals))
+            )
             logg.info(f"Found `{len(yy)}` significant interactions at level `{alpha}`")
             ss = 0.33 * (adata.X[yy, xx] * (dp.largest_dot - dp.smallest_dot) + dp.smallest_dot)
 

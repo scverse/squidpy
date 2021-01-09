@@ -111,7 +111,7 @@ def ligrec_result() -> LigrecResult:
     adata = _adata.copy()
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
     return sp.gr.ligrec(
-        adata, "leiden", interactions=interactions, n_perms=25, n_jobs=1, show_progress_bar=False, copy=True
+        adata, "leiden", interactions=interactions, n_perms=25, n_jobs=1, show_progress_bar=False, copy=True, seed=0
     )
 
 
