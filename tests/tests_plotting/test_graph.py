@@ -57,6 +57,17 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
 
         pl.ripley_k(adata, cluster_key=C_KEY)
 
+    def test_plot_ripley_k_palette(self, adata: AnnData):
+
+        from matplotlib.cm import get_cmap
+
+        cmap = get_cmap("Spectral")
+
+        gr.spatial_neighbors(adata)
+        gr.ripley_k(adata, cluster_key=C_KEY)
+        adata.uns[f"{C_KEY}_colors"] = cmap(range(adata.obs[C_KEY].unique().shape[0]))
+        pl.ripley_k(adata, cluster_key=C_KEY)
+
     def test_tol_plot_co_occurrence(self, adata: AnnData):
         gr.co_occurrence(adata, cluster_key=C_KEY)
 
