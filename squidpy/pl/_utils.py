@@ -1,4 +1,14 @@
-from typing import Any, List, Tuple, Union, Hashable, Iterable, Optional, Sequence
+from typing import (
+    Any,
+    List,
+    Tuple,
+    Union,
+    Callable,
+    Hashable,
+    Iterable,
+    Optional,
+    Sequence,
+)
 from pathlib import Path
 from functools import wraps
 import os
@@ -24,6 +34,8 @@ from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 
 from squidpy._docs import d
+
+Tmp_t = Tuple[Optional[Union[pd.Series, np.ndarray]], Optional[str]]
 
 
 @d.dedent
@@ -166,11 +178,11 @@ def _get_black_or_white(value: float, cmap: Colormap) -> str:
 def _unique_order_preserving(iterable: Iterable[Hashable]) -> List[Hashable]:
     """Remove items from an iterable while preserving the order."""
     seen = set()
-    return [i for i in iterable if i not in seen and not seen.add(i)]
+    return [i for i in iterable if i not in seen and not seen.add(i)]  # type: ignore[func-returns-value]
 
 
 @njit(cache=True, fastmath=True)
-def _point_inside_triangles(triangles: np.ndarray) -> bool:
+def _point_inside_triangles(triangles: np.ndarray) -> np.bool_:
     # modified from napari
     AB = triangles[:, 1, :] - triangles[:, 0, :]
     AC = triangles[:, 2, :] - triangles[:, 0, :]
@@ -209,10 +221,9 @@ def _min_max_norm(vec: Union[spmatrix, np.ndarray]) -> np.ndarray:
     return np.ones_like(vec) if np.isclose(minn, maxx) else ((vec - minn) / (maxx - minn))
 
 
-# TODO: type + comment
-def _ensure_dense_vector(fn):
+def _ensure_dense_vector(fn: Callable[..., Tmp_t]) -> Callable[..., Tmp_t]:
     @wraps(fn)
-    def decorator(self: "ALayer", *args, **kwargs) -> Tuple[Optional[Union[pd.Series, np.ndarray]], Optional[str]]:
+    def decorator(self: "ALayer", *args: Any, **kwargs: Any) -> Tmp_t:
         normalize = kwargs.pop("normalize", False)
         res, fmt = fn(self, *args, **kwargs)
         if res is None:
@@ -247,15 +258,14 @@ def _ensure_dense_vector(fn):
     return decorator
 
 
-def _only_not_raw(fn):
+def _only_not_raw(fn: Callable[..., Optional[Any]]) -> Callable[..., Optional[Any]]:
     @wraps(fn)
-    def decorator(self, *args, **kwargs):
+    def decorator(self: "ALayer", *args: Any, **kwargs: Any) -> Optional[Any]:
         return None if self.raw else fn(self, *args, **kwargs)
 
     return decorator
 
 
-# TODO: clean-up
 class ALayer:
     """
     Class which helps with :class:`anndata.AnnData` layer logic.
@@ -277,8 +287,8 @@ class ALayer:
             raise AttributeError("Attribute `.raw` is `None`.")
 
         self._adata = adata
-        self._layer = None
-        self._previous_layer = None
+        self._layer: Optional[str] = None
+        self._previous_layer: Optional[str] = None
         self._raw = is_raw
         self._palette = palette
 
@@ -317,7 +327,7 @@ class ALayer:
         self._raw = is_raw
 
     @_ensure_dense_vector
-    def get_obs(self, name: str, **_) -> Tuple[Optional[Union[pd.Series, np.ndarray]], str]:
+    def get_obs(self, name: str, **_: Any) -> Tuple[Optional[Union[pd.Series, np.ndarray]], str]:
         """
         Return an observation.
 
@@ -335,7 +345,7 @@ class ALayer:
         return self.adata.obs[name], self._format_key(name, layer_modifier=False)
 
     @_ensure_dense_vector
-    def get_var(self, name: Union[str, int], **_) -> Tuple[Optional[np.ndarray], str]:
+    def get_var(self, name: Union[str, int], **_: Any) -> Tuple[Optional[np.ndarray], str]:
         """
         Return a gene.
 
@@ -357,7 +367,7 @@ class ALayer:
 
         return self.adata._get_X(use_raw=self.raw, layer=self.layer)[ix], self._format_key(name, layer_modifier=True)
 
-    def get_items(self, attr: str) -> tuple:
+    def get_items(self, attr: str) -> Tuple[str, ...]:
         """
         Return valid keys for an attribute.
 
@@ -399,14 +409,14 @@ class ALayer:
 
         return (res if res.ndim == 1 else res[:, index]), self._format_key(name, layer_modifier=False, index=index)
 
-    def _format_key(self, key: str, layer_modifier: bool = False, index: Optional[int] = None) -> str:
+    def _format_key(self, key: Union[str, int], layer_modifier: bool = False, index: Optional[int] = None) -> str:
         if not layer_modifier:
             return str(key) + (f":{index}" if index is not None else "")
 
         return str(key) + (":raw" if self.raw else f":{self.layer}" if self.layer is not None else "")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}<raw={self.raw}, layer={self.layer}>"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return repr(self)
