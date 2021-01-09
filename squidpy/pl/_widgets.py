@@ -1,7 +1,6 @@
 from abc import abstractmethod
-from typing import Any, Tuple, Union, Iterable, Optional
-
 from vispy import scene
+from typing import Any, Tuple, Union, Iterable, Optional
 from vispy.scene import widgets
 from vispy.color.colormap import Colormap, MatplotlibColormap
 

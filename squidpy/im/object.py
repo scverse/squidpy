@@ -1,5 +1,4 @@
-from os import PathLike
-from typing import Any, List, Tuple, Union, Iterable, Iterator, Optional
+from typing import Any, List, Tuple, Union, Hashable, Iterable, Iterator, Optional
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -11,8 +10,9 @@ import xarray as xr
 from imageio import imread
 
 from squidpy._docs import d
+from squidpy._utils import _unique_order_preserving
 from squidpy.im.crop import crop_img
-from squidpy.im._utils import _num_pages, _unique_order_preserving
+from squidpy.im._utils import _num_pages
 from squidpy.constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
@@ -37,25 +37,21 @@ class ImageContainer:
         Chunk size for :mod:`dask`.
     """
 
-    data: xr.Dataset
-
     def __init__(
         self,
         img: Optional[Union[Pathlike_t, np.ndarray]] = None,
         img_id: Optional[Union[str, List[str]]] = None,
         lazy: bool = True,
         chunks: Optional[int] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
-        if chunks is not None:
-            chunks = {"x": chunks, "y": chunks}
-        self._chunks = chunks
+        self._chunks = None if chunks is None else {"x": chunks, "y": chunks}
         self._lazy = lazy
-        self.data = xr.Dataset()
+        self.data: xr.Dataset = xr.Dataset()
         if img is not None:
             self.add_img(img, img_id, **kwargs)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         s = f"ImageContainer object with {len(self.data.keys())} layers\n"
         for layer in self.data.keys():
             s += f"    {layer}: "
@@ -71,7 +67,7 @@ class ImageContainer:
     @property
     def nchannels(self) -> int:
         """Number of channels."""  # noqa: D401
-        return self.data.dims["channels"]
+        return self.data.dims["channels"]  # type: ignore[no-any-return]
 
     @classmethod
     def open(cls, fname: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":  # noqa: A003
@@ -137,7 +133,7 @@ class ImageContainer:
         """
         if isinstance(img, np.ndarray):
             if len(img.shape) > 3:
-                raise ValueError(f"Img has more than 3 dimensions. img.shape is {img.shape}.")
+                raise ValueError(f"Img has more than 3 dimensions. img.shape is: `{img.shape}`.")
             dims = [channel_id, "y", "x"]
             if len(img.shape) == 2:
                 dims = ["y", "x"]
@@ -146,7 +142,7 @@ class ImageContainer:
             assert "x" in img.dims
             assert "y" in img.dims
             xr_img = img
-        elif isinstance(img, (str, PathLike)):
+        elif isinstance(img, (str, Path)):
             img = str(img)
             ext = img.split(".")[-1]
             if ext in ("tif", "tiff"):  # TODO: constants
@@ -218,7 +214,7 @@ class ImageContainer:
         xs: int = 100,
         ys: int = 100,
         img_id: Optional[str] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> xr.DataArray:
         """
         Extract a crop from upper left corner coordinates `x` and `y` of `img_id`.
@@ -256,7 +252,7 @@ class ImageContainer:
         img_id: Optional[str] = None,
         xr: int = 100,
         yr: int = 100,
-        **kwargs,
+        **kwargs: Any,
     ) -> xr.DataArray:
         """
         Extract a crop based on coordinates `x` and `y` of `img_id`.
@@ -293,7 +289,7 @@ class ImageContainer:
         xs: Optional[int] = None,
         ys: Optional[int] = None,
         img_id: Optional[Union[str, List[str]]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Tuple[List[xr.DataArray], np.ndarray, np.ndarray]:
         """
         Decompose an image into equally sized crops.
@@ -333,8 +329,8 @@ class ImageContainer:
         dataset_name: Optional[str] = None,
         size: float = 1.0,
         obs_ids: Optional[Iterable[Any]] = None,
-        **kwargs,
-    ) -> Iterator[Tuple[Union[int, str], xr.DataArray]]:
+        **kwargs: Any,
+    ) -> Iterator[Tuple[Hashable, xr.DataArray]]:
         """
         Iterate over all obs_ids defined in adata and extract crops from images.
 

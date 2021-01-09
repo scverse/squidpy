@@ -1,7 +1,6 @@
+from cycler import Cycler
 from typing import Dict, Union, Literal, Optional, Sequence
 from pathlib import Path
-
-from cycler import Cycler
 
 from scanpy import logging as logg
 from anndata import AnnData

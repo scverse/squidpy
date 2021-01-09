@@ -1,6 +1,4 @@
 from copy import deepcopy
-
-from conftest import DPI, PlotTester, PlotTesterMeta
 import pytest
 
 from anndata import AnnData
@@ -10,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from squidpy import gr, pl
+from tests.conftest import DPI, PlotTester, PlotTesterMeta
 from squidpy.gr._ligrec import LigrecResult
 
 C_KEY = "leiden"
@@ -23,44 +22,46 @@ sc.set_figure_params(dpi=40, color_map="viridis")
 # 2. tests which produce a plot must be prefixed with `test_plot_`
 # 3. if the tolerance needs to be change, don't prefix the function with `test_plot_`, but with something else
 #    the comp. function can be accessed as `self.compare(<your_filename>, tolerance=<your_tolerance>)`
+#    ".png" is appended to <your_filename>, no need to set it
 
 
 class TestGraph(PlotTester, metaclass=PlotTesterMeta):
-    @pytest.mark.skip(reason="X_spatial not in obsm. Apparently already fixed in scanpy's master/dev.")
-    def test_plot_spatial_graph(self, adata: AnnData):
-        gr.spatial_connectivity(adata)
-        pl.spatial_graph(adata)
-
     def test_plot_interaction(self, adata: AnnData):
-        gr.spatial_connectivity(adata)
+        gr.spatial_neighbors(adata)
         gr.interaction_matrix(adata, cluster_key=C_KEY)
 
         pl.interaction_matrix(adata, cluster_key=C_KEY)
 
     def test_plot_centrality_scores(self, adata: AnnData):
-        gr.spatial_connectivity(adata)
+        gr.spatial_neighbors(adata)
         gr.centrality_scores(adata, cluster_key=C_KEY)
 
         pl.centrality_scores(adata, cluster_key=C_KEY)
 
     def test_plot_centrality_scores_single(self, adata: AnnData):
         selected_score = "degree_centrality"
-        gr.spatial_connectivity(adata)
+        gr.spatial_neighbors(adata)
         gr.centrality_scores(adata, cluster_key=C_KEY)
 
         pl.centrality_scores(adata, cluster_key=C_KEY, selected_score=selected_score, dpi=DPI)
 
     def test_plot_nhood_enrichment(self, adata: AnnData):
-        gr.spatial_connectivity(adata)
+        gr.spatial_neighbors(adata)
         gr.nhood_enrichment(adata, cluster_key=C_KEY)
 
         pl.nhood_enrichment(adata, cluster_key=C_KEY)
 
     def test_plot_ripley_k(self, adata: AnnData):
-        gr.spatial_connectivity(adata)
+        gr.spatial_neighbors(adata)
         gr.ripley_k(adata, cluster_key=C_KEY)
 
-        pl.plot_ripley_k(adata, cluster_key=C_KEY)
+        pl.ripley_k(adata, cluster_key=C_KEY)
+
+    def test_tol_plot_co_occurrence(self, adata: AnnData):
+        gr.co_occurrence(adata, cluster_key=C_KEY)
+
+        pl.co_occurrence(adata, cluster_key=C_KEY, group=["0", "2"])
+        self.compare("Graph_co_occurrence", tolerance=70)
 
 
 class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
@@ -89,7 +90,7 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
         empty = pd.DataFrame(np.nan, index=ligrec_result.pvalues.index, columns=ligrec_result.pvalues.columns)
         tmp = type(ligrec_result)(empty, empty, empty)
 
-        with pytest.raises(ValueError, match=r"After removing empty interactions, none remain."):
+        with pytest.raises(ValueError, match=r"After removing NaN interactions, none remain."):
             pl.ligrec(tmp, remove_empty_interactions=True)
 
     def test_plot_source_clusters(self, ligrec_result: LigrecResult):
