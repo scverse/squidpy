@@ -71,12 +71,12 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
 
     def test_invalid_key(self, adata: AnnData):
         with pytest.raises(KeyError, match=r"Key `foobar` not found in `adata.uns`."):
-            pl.ligrec(adata, key="foobar")
+            pl.ligrec(adata, cluster_key="foobar")
 
     def test_valid_key_invalid_object(self, adata: AnnData):
         adata.uns["foobar"] = "baz"
         with pytest.raises(TypeError, match=r"Expected `adata` .+ found `str`."):
-            pl.ligrec(adata, key="foobar")
+            pl.ligrec(adata, cluster_key="foobar")
 
     def test_invalid_alpha(self, ligrec_result: LigrecResult):
         with pytest.raises(ValueError, match=r"Expected `alpha`"):
