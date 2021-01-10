@@ -1,5 +1,12 @@
 from cycler import Cycler
-from typing import Dict, Union, Literal, Optional, Sequence
+from typing import Any, Dict, Tuple, Union, Optional, Sequence, TYPE_CHECKING
+
+try:
+    # [ py<3.8 ]
+    from typing import Literal  # type: ignore[attr-defined]
+except ImportError:
+    from typing_extensions import Literal
+
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -14,7 +21,7 @@ import pandas as pd
 from PyQt5.QtWidgets import QLabel, QWidget, QComboBox, QGridLayout, QHBoxLayout
 
 from napari.layers import Points, Shapes
-from matplotlib.colors import to_rgb, Colormap
+from matplotlib.colors import to_rgb
 import napari
 
 from squidpy._docs import d
@@ -29,6 +36,8 @@ from squidpy.pl._widgets import (
     LibraryListWidget,
 )
 from squidpy.constants._pkg_constants import Key
+
+Palette_t = Optional[Union[str, Sequence[str], Cycler]]
 
 
 class AnnData2Napari:
@@ -48,17 +57,17 @@ class AnnData2Napari:
         adata: AnnData,
         img: ImageContainer,
         obsm: str = Key.obsm.spatial,
-        palette: Union[str, Sequence[str], Cycler] = None,
-        color_map: Union[Colormap, str, None] = "viridis",
-        key_added: Optional[str] = "selected",
-        blending: Optional[str] = "opaque",
+        palette: Palette_t = None,
+        color_map: str = "viridis",
+        key_added: Optional[str] = "selected",  # TODO: cannot handle None, use constants
+        blending: Optional[str] = "opaque",  # TODO: cannot handle None, use constants
     ):
         self._adata = adata
         self._key_added = key_added
         self._obsm_key = obsm
 
         self._coords = adata.obsm[obsm][:, ::-1]
-        self.spot_d = 0
+        self._spot_diameter = 0
 
         self._palette = palette
         self._cmap = color_map
@@ -77,8 +86,8 @@ class AnnData2Napari:
         # with CTX manager, we could easily do it
 
         # UI
-        self._colorbar = None
-        self._viewer = None
+        self._colorbar: Optional[CBarWidget] = None
+        self._viewer: Optional[napari.Viewer] = None
 
     def _add_image(self, library: str) -> bool:
         if self.viewer is None:
@@ -97,11 +106,11 @@ class AnnData2Napari:
         # TODO: what about coords?
         # TODO: should we add the library to layer name modifiers for genes?
         # this has to be stateful
-        self.spot_d = self.adata.uns[self._obsm_key][library]["scalefactors"]["spot_diameter_fullres"]
+        self._spot_diameter = self.adata.uns[self._obsm_key][library]["scalefactors"]["spot_diameter_fullres"]
 
         return True
 
-    def open_napari(self, **kwargs) -> "AnnData2Napari":
+    def open_napari(self, **_: Any) -> "AnnData2Napari":
         """
         Launch :mod:`napari`.
 
@@ -146,6 +155,9 @@ class AnnData2Napari:
 
         with napari.gui_qt():
             self._viewer = napari.Viewer(title="TODO - CHANGE ME")
+            if TYPE_CHECKING:
+                assert isinstance(self.viewer, napari.Viewer)
+
             self.viewer.bind_key("Shift-E", export)
             parent = self.viewer.window._qt_window
 
@@ -193,7 +205,7 @@ class AnnData2Napari:
             raw_layout = QHBoxLayout()
             raw_label = QLabel("Raw:", parent=parent)
             raw_label.setToolTip("Access the .raw attribute.")
-            raw = TwoStateCheckBox(parent=parent)
+            raw = TwoStateCheckBox(parent=parent)  # type: ignore[no-untyped-call]
             raw.setDisabled(self.adata.raw is None)
             raw.checkChanged.connect(layer_widget.setDisabled)
             raw.checkChanged.connect(var_widget.setRaw)
@@ -226,7 +238,8 @@ class AnnData2Napari:
 
             return self
 
-    def _get_label_positions(self, vec: pd.Series, col_dict: dict) -> Dict[str, np.ndarray]:
+    # TODO: col_dict
+    def _get_label_positions(self, vec: pd.Series, col_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
         # TODO: do something more clever/robust
         df = pd.DataFrame(self._coords)
         df["clusters"] = vec.values
@@ -250,7 +263,10 @@ class AnnData2Napari:
         return {"clusters": clusters, "colors": colors}
 
     def _add_points(self, vec: Union[np.ndarray, pd.Series], key: str, layer_name: str) -> None:
-        def move_to_front(_) -> None:
+        def move_to_front(_: Any) -> None:
+            if TYPE_CHECKING:
+                assert isinstance(self.viewer, napari.Viewer)
+
             if not layer.visible:
                 return
             try:
@@ -259,6 +275,9 @@ class AnnData2Napari:
                 return
 
             self.viewer.layers.move(index, -1)
+
+        if TYPE_CHECKING:
+            assert isinstance(self.viewer, napari.Viewer)
 
         if layer_name in (_lay.name for _lay in self.viewer.layers):
             logg.warning(f"Point layer `{layer_name}` is already loaded")
@@ -280,7 +299,7 @@ class AnnData2Napari:
                 "blending": "translucent",
             }
         else:
-            is_categorical, text, face_color = False, None, "value"
+            is_categorical, text, face_color = False, None, "value"  # type: ignore[assignment]
             properties = {"value": vec}
             metadata = {"perc": (0, 100), "data": vec, "minmax": (np.min(vec), np.max(vec))}
 
@@ -288,7 +307,7 @@ class AnnData2Napari:
         layer: Points = self.viewer.add_points(
             self._coords,
             name=layer_name,
-            size=self.spot_d,
+            size=self._spot_diameter,
             face_color=face_color,
             edge_width=1,
             text=text,
@@ -309,7 +328,9 @@ class AnnData2Napari:
         # TODO: only for opaque blending?
         layer.events.select.connect(move_to_front)
 
-    def _hide_point_controls(self, layer: Points, is_categorical: bool):
+    def _hide_point_controls(self, layer: Points, is_categorical: bool) -> None:
+        if TYPE_CHECKING:
+            assert isinstance(self.viewer, napari.Viewer)
         # TODO: constants
         to_hide = {
             "symbol:": "symbolComboBox",
@@ -331,7 +352,7 @@ class AnnData2Napari:
         for key, attr in to_hide.items():
             attr = getattr(points_controls, attr, None)
             if key in labels and attr is not None:
-                attr.setHidden(True)
+                attr.setHidden(True)  # type: ignore[attr-defined]
                 labels[key].setHidden(True)
 
         if not is_categorical:
@@ -351,7 +372,7 @@ class AnnData2Napari:
             gl.replaceWidget(labels[key], QLabel("percentile:"))
             gl.replaceWidget(attr, slider)
 
-    @property
+    @property  # type: ignore[misc]
     @d.dedent
     def adata(self) -> AnnData:
         """%(adata)s"""  # noqa: D400
@@ -387,11 +408,12 @@ def interactive(
     obsm: str = Key.obsm.spatial,
     # TODO: make sure we're passing correct pallette
     # TODO: handle None palette?
-    palette: Union[str, Sequence[str], Cycler] = None,
-    color_map: Optional[Union[Colormap, str]] = "viridis",
-    key_added: Optional[str] = "selected",
-    blending: Literal["translucent", "opaque", "additive"] = "opaque",
-    **kwargs,
+    palette: Palette_t = None,
+    # TODO: use cmap? or diff. the name (pallete can like cat_cmap and color_map cont_cmap)
+    color_map: str = "viridis",
+    key_added: Optional[str] = "selected",  # TODO: cannot handle none.
+    blending: Literal["translucent", "opaque", "additive"] = "opaque",  # type: ignore[name-defined]
+    **kwargs: Any,
 ) -> AnnData2Napari:
     """
     Explore :mod:`anndata` with :mod:`napari`.
@@ -406,6 +428,12 @@ def interactive(
         Palette should be either a valid :func:`~matplotlib.pyplot.colormaps` string,
         a sequence of colors (in a format that can be understood by :mod:`matplotlib`,
         eg. RGB, RGBS, hex, or a cycler object with key='color'.
+    color_map
+        TODO.
+    key_added
+        TODO.
+    blending
+        TODO.
 
     Returns
     -------
@@ -425,8 +453,11 @@ def interactive(
 
 
 def _get_categorical(
-    adata: AnnData, key: str, palette: Optional[str] = None, vec: Optional[pd.Series] = None
-) -> np.ndarray:
+    adata: AnnData,
+    key: str,
+    palette: Palette_t = None,
+    vec: Optional[pd.Series] = None,
+) -> Tuple[np.ndarray, Dict[Any, np.ndarray]]:
     if vec is not None:
         # TODO: do we really want to do this? alt. is to create dummy column and delete artefacts from the adata object
         if not is_categorical_dtype(vec):

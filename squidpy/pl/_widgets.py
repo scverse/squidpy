@@ -193,11 +193,16 @@ class CBarWidget(QtWidgets.QWidget):
     climChanged = QtCore.pyqtSignal((float, float))
 
     def __init__(
-        self, cmap: str, label: Optional[str] = None, width: Optional[int] = 250, height: Optional[int] = 50, **kwargs
+        self,
+        cmap: Union[str, Colormap],
+        label: Optional[str] = None,
+        width: Optional[int] = 250,
+        height: Optional[int] = 50,
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self._cmap = cmap or ""
+        self._cmap = cmap  # TODO: check if Colormap can be there
         self._clim = (0.0, 1.0)
         self._oclim = self._clim
 
