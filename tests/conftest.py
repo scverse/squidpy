@@ -30,6 +30,7 @@ ACTUAL = HERE / "figures"
 TOL = 50
 DPI = 40
 
+C_KEY_PALETTE = "leiden"
 
 _adata = sc.read("tests/_data/test_data.h5ad")
 _adata.raw = _adata.copy()
@@ -38,6 +39,17 @@ _adata.raw = _adata.copy()
 @pytest.fixture()
 def adata() -> AnnData:
     return _adata.copy()
+
+
+@pytest.fixture()
+def adata_palette() -> AnnData:
+    from matplotlib.cm import get_cmap
+
+    cmap = get_cmap("Spectral")
+
+    adata_palette = _adata.copy()
+    adata_palette.uns[f"{C_KEY_PALETTE}_colors"] = cmap(range(adata_palette.obs[C_KEY_PALETTE].unique().shape[0]))
+    return adata_palette.copy()
 
 
 @pytest.fixture()

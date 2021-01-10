@@ -243,15 +243,17 @@ def ripley_k(
         legend_kwargs["loc"] = "center left"
         legend_kwargs.setdefault("bbox_to_anchor", (1, 0.5))
 
-    hue_order = list(adata.obs[cluster_key].cat.categories)
+    categories = adata.obs[cluster_key].cat.categories
     palette = adata.uns.get(f"{cluster_key}_colors", None)
+    if palette is not None:
+        palette = {k: v for k, v in zip(categories, palette)}
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     sns.lineplot(
         x="distance",
         y="ripley_k",
         hue=cluster_key,
-        hue_order=hue_order,
+        hue_order=categories,
         data=df,
         palette=palette,
         ax=ax,
@@ -309,7 +311,6 @@ def co_occurrence(
     out = occurrence_data["occ"]
     interval = occurrence_data["interval"][1:]
     categories = adata.obs[cluster_key].cat.categories
-
     if group is None:
         group = categories
     group = np.array(group)
@@ -320,14 +321,15 @@ def co_occurrence(
     if not len(group):
         raise ValueError("No valid groups have been found.")
 
-    hue_order = list(adata.obs[cluster_key].cat.categories)
     palette = adata.uns.get(f"{cluster_key}_colors", None)
+    if palette is not None:
+        palette = {k: v for k, v in zip(categories, palette)}
 
     fig, axs = plt.subplots(1, len(group), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
 
     for g, ax in zip(group, axs):
-        idx = np.where(adata.obs[cluster_key].cat.categories == g)[0][0]
+        idx = np.where(categories == g)[0][0]
         df = pd.DataFrame(out[idx, :, :].T, columns=categories).melt(var_name=cluster_key, value_name="probability")
         df["distance"] = np.tile(interval, len(categories))
 
@@ -337,7 +339,7 @@ def co_occurrence(
             data=df,
             dashes=False,
             hue=cluster_key,
-            hue_order=hue_order,
+            hue_order=categories,
             palette=palette,
             ax=ax,
             **kwargs,
