@@ -205,7 +205,7 @@ class AnnData2Napari:
             raw_layout = QHBoxLayout()
             raw_label = QLabel("Raw:", parent=parent)
             raw_label.setToolTip("Access the .raw attribute.")
-            raw = TwoStateCheckBox(parent=parent)  # type: ignore[no-untyped-call]
+            raw = TwoStateCheckBox(parent=parent)
             raw.setDisabled(self.adata.raw is None)
             raw.checkChanged.connect(layer_widget.setDisabled)
             raw.checkChanged.connect(var_widget.setRaw)
@@ -331,6 +331,7 @@ class AnnData2Napari:
     def _hide_point_controls(self, layer: Points, is_categorical: bool) -> None:
         if TYPE_CHECKING:
             assert isinstance(self.viewer, napari.Viewer)
+            assert isinstance(self._colorbar, CBarWidget)
         # TODO: constants
         to_hide = {
             "symbol:": "symbolComboBox",
