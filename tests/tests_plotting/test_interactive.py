@@ -1,4 +1,3 @@
-from conftest import PlotTester, PlotTesterMeta
 import pytest
 
 from anndata import AnnData
@@ -7,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from squidpy.im import ImageContainer
 from squidpy.pl import interactive
+from tests.conftest import PlotTester, PlotTesterMeta
 
 
 @pytest.mark.qt
