@@ -55,7 +55,7 @@ def test_extract(adata: AnnData, cont: ImageContainer, caplog):
     ]:
         assert col in extr_adata.obs.columns
 
-    # TODO comment this in as soon as the logging is working properly
+    # TODO: test similarly to ligrec
     # currently logging to stderr, and not captured by caplog
     # extract obsm twice and make sure that warnings are issued
     # with caplog.at_level(logging.WARNING):
