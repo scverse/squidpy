@@ -234,3 +234,21 @@ class PlotTester(ABC):
         res = compare_images(str(EXPECTED / f"{basename}.png"), str(out_path), TOL if tolerance is None else tolerance)
 
         assert res is None, res
+
+
+def pytest_addoption(parser):
+    parser.addoption("--test-napari", action="store_true", help="Test interactive image viewer")
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--test-napari"):
+        return
+    skip_slow = pytest.mark.skip(reason="Need --test-napari option to test interactive image viewer")
+    for item in items:
+        if "qt" in item.keywords:
+            item.add_marker(skip_slow)
+
+
+@pytest.fixture(scope="session")
+def _test_napari(pytestconfig):
+    _ = pytestconfig.getoption("--test-napari", skip=True)
