@@ -15,9 +15,11 @@ from typing import (
     Iterable,
     Optional,
     Sequence,
+    Generator,
     TYPE_CHECKING,
 )
 from threading import Thread
+from contextlib import contextmanager
 from multiprocessing import Manager, cpu_count
 
 import numpy as np
@@ -202,3 +204,27 @@ def _get_n_cores(n_cores: Optional[int]) -> int:
         return cpu_count() + 1 + n_cores
 
     return n_cores
+
+
+@contextmanager
+def verbosity(level: int) -> Generator[None, None, None]:
+    """
+    Temporarily set the verbosity level of :mod:`scanpy`.
+
+    Parameters
+    ----------
+    level
+        The new verbosity leve.
+
+    Returns
+    -------
+    Nothing.
+    """
+    import scanpy as sc
+
+    verbosity = sc.settings.verbosity
+    sc.settings.verbosity = level
+    try:
+        yield
+    finally:
+        sc.settings.verbosity = verbosity
