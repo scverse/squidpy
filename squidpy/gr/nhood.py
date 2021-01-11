@@ -250,7 +250,7 @@ def centrality_scores(
     df = pd.DataFrame(
         list(zip(clusters, degree_centrality, clustering_coefficient, closeness_centrality, betweenness_centrality)),
         columns=[
-            "cluster_key",
+            cluster_key,
             "degree_centrality",
             "clustering_coefficient",
             "closeness_centrality",
