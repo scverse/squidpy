@@ -43,7 +43,7 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
         gr.spatial_neighbors(adata)
         gr.centrality_scores(adata, cluster_key=C_KEY)
 
-        pl.centrality_scores(adata, cluster_key=C_KEY, selected_score=selected_score, dpi=DPI)
+        pl.centrality_scores(adata, cluster_key=C_KEY, score=selected_score, dpi=DPI)
 
     def test_plot_nhood_enrichment(self, adata: AnnData):
         gr.spatial_neighbors(adata)
