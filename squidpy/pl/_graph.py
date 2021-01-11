@@ -7,7 +7,6 @@ from pathlib import Path
 from anndata import AnnData
 import scanpy as sc
 
-from pandas import DataFrame
 import numpy as np
 import pandas as pd
 
@@ -22,10 +21,11 @@ from squidpy.pl._utils import save_fig
 def centrality_scores(
     adata: AnnData,
     cluster_key: str,
-    selected_score: Optional[str] = None,
+    score: Optional[Union[str, Sequence[str]]] = None,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
+    legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> None:
     """
@@ -35,9 +35,9 @@ def centrality_scores(
     ----------
     %(adata)s
     %(cluster_key)s
-    %(plotting)s
-    selected_score
+    score
         Whether to plot all scores or only just a selected one.
+    %(plotting)s
 
     Returns
     -------
@@ -50,51 +50,46 @@ def centrality_scores(
             f"`centrality_scores_key` {scores_key} not found. \n"
             "Choose a different key or run first as `squidpy.nhood.centrality_scores()`."
         )
+    legend_kwargs = dict(legend_kwargs)
+    if "loc" not in legend_kwargs:
+        legend_kwargs["loc"] = "center left"
+        legend_kwargs.setdefault("bbox_to_anchor", (1, 0.5))
     df = adata.uns[scores_key]
 
-    var = DataFrame(df.columns, columns=[scores_key])
-    var["index"] = var[scores_key]
-    var = var.set_index("index")
+    categories = df.columns[1:].values
+    clusters = adata.obs[cluster_key].cat.categories
+    if score is None:
+        score = categories
+    score = np.array(score)
+    if TYPE_CHECKING:
+        assert isinstance(score, Sequence)
 
-    cat = adata.obs[cluster_key].cat.categories.values.astype(str)
-    idx = {cluster_key: pd.Categorical(cat, categories=cat)}
+    score = sorted(score[np.isin(score, categories)])
+    if not len(score):
+        raise ValueError("No valid groups have been found.")
 
-    ad = AnnData(X=np.array(df), obs=idx, var=var)
+    palette = adata.uns.get(f"{cluster_key}_colors", None)
+    if palette is not None:
+        palette = {k: v for k, v in zip(clusters, palette)}
 
-    colors_key = f"{cluster_key}_colors"
-    if colors_key in adata.uns.keys():
-        ad.uns[colors_key] = adata.uns[colors_key]
+    fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
+    axs = np.ravel(axs)  # make into iterable
+    print(score)
+    print(axs)
+    for g, ax in zip(score, axs):
 
-    # without contrained_layout, the legend is clipped
-    if selected_score is not None:
-        fig, ax = plt.subplots(figsize=figsize, dpi=dpi, constrained_layout=True)
-        sc.pl.scatter(
-            ad, x=selected_score, y=cluster_key, color=cluster_key, size=1000, title="", frameon=True, ax=ax, **kwargs
+        sns.scatterplot(
+            x=g,
+            y=cluster_key,
+            data=df,
+            hue=cluster_key,
+            hue_order=clusters,
+            palette=palette,
+            ax=ax,
+            **kwargs,
         )
-    else:
-        nrows = len(ad.var.index) - 1
-        fig, ax = plt.subplots(
-            nrows=nrows,
-            ncols=1,
-            figsize=(4, 6 * nrows) if figsize is None else figsize,
-            dpi=dpi,
-            constrained_layout=True,
-        )
-        for i in range(nrows):
-            x = list(ad.var.index)[i + 1]
-            sc.pl.scatter(
-                ad,
-                x=str(x),
-                y=cluster_key,
-                color=cluster_key,
-                size=1000,
-                ax=ax[i],
-                show=False,
-                frameon=True,
-                **kwargs,
-            )
-
-    fig.show()
+        ax.yaxis.set_ticklabels([])
+        ax.legend(**legend_kwargs)
 
     if save is not None:
         save_fig(fig, path=save)
