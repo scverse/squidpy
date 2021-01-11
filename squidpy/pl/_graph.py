@@ -74,8 +74,6 @@ def centrality_scores(
 
     fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
-    print(score)
-    print(axs)
     for g, ax in zip(score, axs):
 
         sns.scatterplot(
