@@ -6,11 +6,7 @@ import numpy as np
 import pandas as pd
 
 from squidpy.im.object import ImageContainer
-from squidpy.im.features import (
-    get_summary_features,
-    calculate_image_features,
-    get_segmentation_features,
-)
+from squidpy.im.features import calculate_image_features
 
 
 @pytest.mark.parametrize("n_jobs", [1, 2])
@@ -28,8 +24,8 @@ def test_calculate_image_features(adata: AnnData, cont: ImageContainer, n_jobs: 
 def test_get_summary_features():
     img = ImageContainer(np.random.randint(low=0, high=255, size=(100, 100, 3), dtype=np.uint8), img_id="image")
     feature = "test_summary_stats"
-    stats = get_summary_features(
-        img, img_id="image", feature_name=feature, quantiles=[0.9, 0.5, 0.1], mean=True, std=True, channels=[0, 1, 2]
+    stats = img.get_summary_features(
+        img_id="image", feature_name=feature, quantiles=[0.9, 0.5, 0.1], mean=True, std=True, channels=[0, 1, 2]
     )
 
     assert isinstance(stats, dict)
@@ -49,8 +45,8 @@ def test_get_segmentation_features():
 
     props = ["area", "label", "mean_intensity"]
     feature_name = "segmentation"
-    stats = get_segmentation_features(
-        img, img_id="image", feature_name=feature_name, props=props, label_img_id="segmented", mean=True, std=True
+    stats = img.get_segmentation_features(
+        img_id="image", feature_name=feature_name, props=props, label_img_id="segmented", mean=True, std=True
     )
 
     assert isinstance(stats, dict)

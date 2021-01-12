@@ -13,6 +13,7 @@ import skimage
 from squidpy._docs import d
 from squidpy._utils import _unique_order_preserving
 from squidpy.im._utils import _num_pages, _scale_xarray
+from squidpy.im.feature_mixin import FeatureMixin
 from squidpy.constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
@@ -20,7 +21,7 @@ Pathlike_t = Union[str, Path]
 
 @d.dedent  # trick to overcome not top-down order
 @d.dedent
-class ImageContainer:
+class ImageContainer(FeatureMixin):
     """
     Container for in memory `np.ndarray`/`xr.DataArray` or on-disk tiff/jpg images.
 

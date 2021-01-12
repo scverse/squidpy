@@ -31,11 +31,7 @@ Image
 .. autosummary::
     :toctree: api
 
-    im.get_histogram_features
-    im.get_summary_features
     im.calculate_image_features
-    im.get_texture_features
-    im.get_segmentation_features
     im.process_img
     im.segment_img
 

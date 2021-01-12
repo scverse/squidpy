@@ -7,11 +7,5 @@ from squidpy.im.segment import (
     SegmentationModelWatershed,
     SegmentationModelPretrainedTensorflow,
 )
-from squidpy.im.features import (
-    get_summary_features,
-    get_texture_features,
-    get_histogram_features,
-    calculate_image_features,
-    get_segmentation_features,
-)
+from squidpy.im.features import calculate_image_features
 from squidpy.im.processing import process_img
