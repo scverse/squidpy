@@ -1,15 +1,15 @@
+from docrep import DocstringProcessor
+from typing import Any, Callable
 from textwrap import dedent
 
-from docrep import DocstringProcessor
 
-
-def inject_docs(**kwargs):  # noqa: D103
+def inject_docs(**kwargs: Any) -> Callable[..., Any]:  # noqa: D103
     # taken from scanpy
-    def decorator(obj):
+    def decorator(obj: Any) -> Any:
         obj.__doc__ = dedent(obj.__doc__).format(**kwargs)
         return obj
 
-    def decorator2(obj):
+    def decorator2(obj: Any) -> Any:
         obj.__doc__ = dedent(kwargs["__doc__"])
         return obj
 
@@ -62,6 +62,12 @@ ys
 _cluster_key = """\
 cluster_key
     Key in :attr:`anndata.AnnData.obs` where clustering is stored."""
+_spatial_key = """\
+spatial_key
+    Key in :attr:`anndata.AnnData.obsm` where spatial coordinates are stored."""
+_conn_key = """\
+conn_key
+    Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored."""
 # TODO: https://github.com/Chilipp/docrep/issues/21 fixed, this is not necessary
 _crop_extra = """\
 scale
@@ -105,6 +111,8 @@ d = DocstringProcessor(
     feature_ret=_feature_ret,
     width_height=_width_height,
     cluster_key=_cluster_key,
+    spatial_key=_spatial_key,
+    conn_key=_conn_key,
     crop_extra=_crop_extra,
     plotting=_plotting,
     plotting_returns=_plotting_returns,

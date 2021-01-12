@@ -1,6 +1,5 @@
-import warnings
-
 import pytest
+import warnings
 
 import numpy as np
 

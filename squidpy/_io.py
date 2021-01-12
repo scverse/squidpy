@@ -1,14 +1,13 @@
-"""Spatial tools general utility functions."""
 from typing import Tuple, Union, Optional
 from pathlib import Path
 import os
 import glob
 
+from scanpy import logging as logg
 from anndata import AnnData
 import scanpy as sc
-import scanpy.logging as logg
 
-from squidpy.im.object import ImageContainer
+from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 
 
 def read_visium_data(

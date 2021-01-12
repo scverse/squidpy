@@ -1,12 +1,12 @@
 """Plotting for gr functions."""
 
-from typing import Tuple, Union, Optional
+from types import MappingProxyType
+from typing import Any, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
 from pathlib import Path
 
 from anndata import AnnData
 import scanpy as sc
 
-from pandas import DataFrame
 import numpy as np
 import pandas as pd
 
@@ -15,61 +15,18 @@ import matplotlib.pyplot as plt
 
 from squidpy._docs import d
 from squidpy.pl._utils import save_fig
-from squidpy.constants._pkg_constants import Key
-
-
-@d.dedent
-def spatial_graph(
-    adata: AnnData,
-    figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
-    save: Optional[Union[str, Path]] = None,
-    **kwargs,
-) -> None:
-    """
-    Plot wrapper for :mod:`scanpy` plotting function for spatial graphs.
-
-    Parameters
-    ----------
-    %(adata)s
-    %(plotting)s
-    kwargs
-        Keyword arguments for :func:`scanpy.pl.embedding`.
-
-    Returns
-    -------
-    %(plotting_returns)s
-    """
-    # TODO: expose keys?
-    conns_key = "spatial_connectivities"
-    neighbors_dict = adata.uns[Key.uns.spatial] = {}
-    neighbors_dict["connectivities_key"] = conns_key
-    neighbors_dict["distances_key"] = "dummy"  # TODO?
-
-    fig, ax = plt.subplots(dpi=dpi, figsize=figsize)
-    sc.pl.embedding(
-        adata,
-        basis=Key.obsm.spatial,
-        edges=True,
-        neighbors_key="spatial",
-        edges_width=4,
-        ax=ax,
-        **kwargs,
-    )
-
-    if save is not None:
-        save_fig(fig, path=save)
 
 
 @d.dedent
 def centrality_scores(
     adata: AnnData,
     cluster_key: str,
-    selected_score: Optional[str] = None,
+    score: Optional[Union[str, Sequence[str]]] = None,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
-    **kwargs,
+    legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    **kwargs: Any,
 ) -> None:
     """
     Plot centrality scores.
@@ -78,9 +35,9 @@ def centrality_scores(
     ----------
     %(adata)s
     %(cluster_key)s
-    %(plotting)s
-    selected_score
+    score
         Whether to plot all scores or only just a selected one.
+    %(plotting)s
 
     Returns
     -------
@@ -93,51 +50,44 @@ def centrality_scores(
             f"`centrality_scores_key` {scores_key} not found. \n"
             "Choose a different key or run first as `squidpy.nhood.centrality_scores()`."
         )
+    legend_kwargs = dict(legend_kwargs)
+    if "loc" not in legend_kwargs:
+        legend_kwargs["loc"] = "center left"
+        legend_kwargs.setdefault("bbox_to_anchor", (1, 0.5))
     df = adata.uns[scores_key]
 
-    var = DataFrame(df.columns, columns=[scores_key])
-    var["index"] = var[scores_key]
-    var = var.set_index("index")
+    categories = df.columns[1:].values
+    clusters = adata.obs[cluster_key].cat.categories
+    if score is None:
+        score = categories
+    score = np.array(score)
+    if TYPE_CHECKING:
+        assert isinstance(score, Sequence)
 
-    cat = adata.obs[cluster_key].cat.categories.values.astype(str)
-    idx = {cluster_key: pd.Categorical(cat, categories=cat)}
+    score = sorted(score[np.isin(score, categories)])
+    if not len(score):
+        raise ValueError("No valid groups have been found.")
 
-    ad = AnnData(X=np.array(df), obs=idx, var=var)
+    palette = adata.uns.get(f"{cluster_key}_colors", None)
+    if palette is not None:
+        palette = {k: v for k, v in zip(clusters, palette)}
 
-    colors_key = f"{cluster_key}_colors"
-    if colors_key in adata.uns.keys():
-        ad.uns[colors_key] = adata.uns[colors_key]
+    fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
+    axs = np.ravel(axs)  # make into iterable
+    for g, ax in zip(score, axs):
 
-    # without contrained_layout, the legend is clipped
-    if selected_score is not None:
-        fig, ax = plt.subplots(figsize=figsize, dpi=dpi, constrained_layout=True)
-        sc.pl.scatter(
-            ad, x=selected_score, y=cluster_key, color=cluster_key, size=1000, title="", frameon=True, ax=ax, **kwargs
+        sns.scatterplot(
+            x=g,
+            y=cluster_key,
+            data=df,
+            hue=cluster_key,
+            hue_order=clusters,
+            palette=palette,
+            ax=ax,
+            **kwargs,
         )
-    else:
-        nrows = len(ad.var.index) - 1
-        fig, ax = plt.subplots(
-            nrows=nrows,
-            ncols=1,
-            figsize=(4, 6 * nrows) if figsize is None else figsize,
-            dpi=dpi,
-            constrained_layout=True,
-        )
-        for i in range(nrows):
-            x = list(ad.var.index)[i + 1]
-            sc.pl.scatter(
-                ad,
-                x=str(x),
-                y=cluster_key,
-                color=cluster_key,
-                size=1000,
-                ax=ax[i],
-                show=False,
-                frameon=True,
-                **kwargs,
-            )
-
-    fig.show()
+        ax.yaxis.set_ticklabels([])
+        ax.legend(**legend_kwargs)
 
     if save is not None:
         save_fig(fig, path=save)
@@ -148,9 +98,9 @@ def interaction_matrix(
     adata: AnnData,
     cluster_key: str,
     figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
+    dpi: Optional[int] = None,  # FIXME
     save: Optional[Union[str, Path]] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> None:
     """
     Plot cluster interaction matrix.
@@ -201,9 +151,9 @@ def nhood_enrichment(
     cluster_key: str,
     mode: str = "zscore",
     figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
+    dpi: Optional[int] = None,  # FIXME
     save: Optional[Union[str, Path]] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> None:
     """
     Plot neighborhood enrichement.
@@ -250,14 +200,14 @@ def nhood_enrichment(
 
 
 @d.dedent
-def plot_ripley_k(
+def ripley_k(
     adata: AnnData,
     cluster_key: str,
-    df: Optional[DataFrame] = None,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
-    **kwargs,
+    legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    **kwargs: Any,
 ) -> None:
     """
     Plot Ripley K estimate for each cluster.
@@ -266,9 +216,9 @@ def plot_ripley_k(
     ----------
     %(adata)s
     %(cluster_key)s
-    df
-        Data to plot. If `None`, try getting from ``adata.uns['ripley_k_{cluster_key}']``.
     %(plotting)s
+    legend_kwargs
+        Keyword arguments for :func:`matplotlib.pyplot.legend`.
     kwargs
         Keyword arguments to :func:`seaborn.lineplot`.
 
@@ -276,38 +226,119 @@ def plot_ripley_k(
     -------
     %(plotting_returns)s
     """
-    # TODO: I really, really discourage this, should be refactored as which key to use
-    if df is None:
-        try:
-            df = adata.uns[f"ripley_k_{cluster_key}"]
-            hue_order = list(np.sort(adata.obs[cluster_key].unique()))
+    try:
+        df = adata.uns[f"ripley_k_{cluster_key}"]
+    except KeyError:
+        raise KeyError(f"Please run `squidpy.gr.ripley_k(..., cluster_key={cluster_key!r})`.") from None
 
-            try:
-                palette = list(adata.uns[f"{cluster_key}_colors"])
-            except KeyError:
-                palette = None
+    legend_kwargs = dict(legend_kwargs)
+    if "loc" not in legend_kwargs:
+        legend_kwargs["loc"] = "center left"
+        legend_kwargs.setdefault("bbox_to_anchor", (1, 0.5))
 
-        except KeyError:
-            raise KeyError(
-                f"\\looks like `riply_k_{cluster_key}` was not used\n\n"
-                "\\is not present in adata.uns,\n"
-                "\tplease rerun ripley_k or pass\n"
-                "\ta dataframe"
-            ) from None
-    else:
-        hue_order = palette = None
+    categories = adata.obs[cluster_key].cat.categories
+    palette = adata.uns.get(f"{cluster_key}_colors", None)
+    if palette is not None:
+        palette = {k: v for k, v in zip(categories, palette)}
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     sns.lineplot(
-        "distance",
-        "ripley_k",
-        hue="leiden",
-        hue_order=hue_order,
+        x="distance",
+        y="ripley_k",
+        hue=cluster_key,
+        hue_order=categories,
         data=df,
         palette=palette,
         ax=ax,
         **kwargs,
     )
+    ax.legend(**legend_kwargs)
+
+    if save is not None:
+        save_fig(fig, path=save)
+
+
+@d.dedent
+def co_occurrence(
+    adata: AnnData,
+    cluster_key: str,
+    group: Optional[Union[str, Sequence[str]]] = None,
+    figsize: Optional[Tuple[float, float]] = None,
+    dpi: Optional[int] = None,
+    save: Optional[Union[str, Path]] = None,
+    legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    **kwargs: Any,
+) -> None:
+    """
+    Plot co-occurrence probability ratio for each cluster.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(cluster_key)s
+    group
+        Cluster instance to plot conditional probability.
+    %(plotting)s
+    legend_kwargs
+        Keyword arguments for :func:`matplotlib.pyplot.legend`.
+    kwargs
+        Keyword arguments to :func:`seaborn.lineplot`.
+
+    Returns
+    -------
+    %(plotting_returns)s
+    """
+    try:
+        occurrence_data = adata.uns[f"{cluster_key}_co_occurrence"]
+    except KeyError:
+        raise KeyError(f"Please run `squidpy.gr.co_occurence(..., cluster_key={cluster_key!r})`.") from None
+
+    legend_kwargs = dict(legend_kwargs)
+    if "loc" not in legend_kwargs:
+        legend_kwargs["loc"] = "center left"
+        legend_kwargs.setdefault("bbox_to_anchor", (1, 0.5))
+
+    if isinstance(group, str):
+        group = (group,)
+
+    out = occurrence_data["occ"]
+    interval = occurrence_data["interval"][1:]
+    categories = adata.obs[cluster_key].cat.categories
+    if group is None:
+        group = categories
+    group = np.array(group)
+    if TYPE_CHECKING:
+        assert isinstance(group, Sequence)
+
+    group = sorted(group[np.isin(group, categories)])
+    if not len(group):
+        raise ValueError("No valid groups have been found.")
+
+    palette = adata.uns.get(f"{cluster_key}_colors", None)
+    if palette is not None:
+        palette = {k: v for k, v in zip(categories, palette)}
+
+    fig, axs = plt.subplots(1, len(group), figsize=figsize, dpi=dpi, constrained_layout=True)
+    axs = np.ravel(axs)  # make into iterable
+
+    for g, ax in zip(group, axs):
+        idx = np.where(categories == g)[0][0]
+        df = pd.DataFrame(out[idx, :, :].T, columns=categories).melt(var_name=cluster_key, value_name="probability")
+        df["distance"] = np.tile(interval, len(categories))
+
+        sns.lineplot(
+            x="distance",
+            y="probability",
+            data=df,
+            dashes=False,
+            hue=cluster_key,
+            hue_order=categories,
+            palette=palette,
+            ax=ax,
+            **kwargs,
+        )
+        ax.legend(**legend_kwargs)
+        ax.set_ylabel(rf"$\frac{{p(exp|{g})}}{{p(exp)}}$")
 
     if save is not None:
         save_fig(fig, path=save)

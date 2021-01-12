@@ -16,7 +16,7 @@ from squidpy.constants._constants import Processing
 def process_img(
     img: ImageContainer,
     img_id: str,
-    processing: Union[str],
+    processing: Union[str, Processing],
     processing_kwargs: Mapping[str, Any] = MappingProxyType({}),
     xs: Optional[int] = None,
     ys: Optional[int] = None,
@@ -92,6 +92,6 @@ def process_img(
     img_proc = ImageContainer.uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape)
 
     if copy:
-        return img_proc
+        return img_proc  # type: ignore[no-any-return]
     else:
         img.add_img(img=img_proc[img_id_new], img_id=img_id_new)

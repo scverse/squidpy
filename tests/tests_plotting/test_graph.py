@@ -1,6 +1,4 @@
 from copy import deepcopy
-
-from conftest import DPI, PlotTester, PlotTesterMeta
 import pytest
 
 from anndata import AnnData
@@ -10,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from squidpy import gr, pl
+from tests.conftest import DPI, PlotTester, PlotTesterMeta
 from squidpy.gr._ligrec import LigrecResult
 
 C_KEY = "leiden"
@@ -23,44 +22,60 @@ sc.set_figure_params(dpi=40, color_map="viridis")
 # 2. tests which produce a plot must be prefixed with `test_plot_`
 # 3. if the tolerance needs to be change, don't prefix the function with `test_plot_`, but with something else
 #    the comp. function can be accessed as `self.compare(<your_filename>, tolerance=<your_tolerance>)`
+#    ".png" is appended to <your_filename>, no need to set it
 
 
 class TestGraph(PlotTester, metaclass=PlotTesterMeta):
-    @pytest.mark.skip(reason="X_spatial not in obsm. Apparently already fixed in scanpy's master/dev.")
-    def test_plot_spatial_graph(self, adata: AnnData):
-        gr.spatial_connectivity(adata)
-        pl.spatial_graph(adata)
-
     def test_plot_interaction(self, adata: AnnData):
-        gr.spatial_connectivity(adata)
+        gr.spatial_neighbors(adata)
         gr.interaction_matrix(adata, cluster_key=C_KEY)
 
         pl.interaction_matrix(adata, cluster_key=C_KEY)
 
     def test_plot_centrality_scores(self, adata: AnnData):
-        gr.spatial_connectivity(adata)
+        gr.spatial_neighbors(adata)
         gr.centrality_scores(adata, cluster_key=C_KEY)
 
         pl.centrality_scores(adata, cluster_key=C_KEY)
 
     def test_plot_centrality_scores_single(self, adata: AnnData):
         selected_score = "degree_centrality"
-        gr.spatial_connectivity(adata)
+        gr.spatial_neighbors(adata)
         gr.centrality_scores(adata, cluster_key=C_KEY)
 
-        pl.centrality_scores(adata, cluster_key=C_KEY, selected_score=selected_score, dpi=DPI)
+        pl.centrality_scores(adata, cluster_key=C_KEY, score=selected_score, dpi=DPI)
 
     def test_plot_nhood_enrichment(self, adata: AnnData):
-        gr.spatial_connectivity(adata)
+        gr.spatial_neighbors(adata)
         gr.nhood_enrichment(adata, cluster_key=C_KEY)
 
         pl.nhood_enrichment(adata, cluster_key=C_KEY)
 
     def test_plot_ripley_k(self, adata: AnnData):
-        gr.spatial_connectivity(adata)
+        gr.spatial_neighbors(adata)
         gr.ripley_k(adata, cluster_key=C_KEY)
 
-        pl.plot_ripley_k(adata, cluster_key=C_KEY)
+        pl.ripley_k(adata, cluster_key=C_KEY)
+
+    def test_plot_ripley_k_palette(self, adata_palette: AnnData):
+
+        adata = adata_palette
+        gr.spatial_neighbors(adata)
+        gr.ripley_k(adata, cluster_key=C_KEY)
+        pl.ripley_k(adata, cluster_key=C_KEY)
+
+    def test_tol_plot_co_occurrence(self, adata: AnnData):
+        gr.co_occurrence(adata, cluster_key=C_KEY)
+
+        pl.co_occurrence(adata, cluster_key=C_KEY, group=["0", "2"])
+        self.compare("Graph_co_occurrence", tolerance=70)
+
+    def test_tol_plot_co_occurrence_palette(self, adata_palette: AnnData):
+        adata = adata_palette
+        gr.co_occurrence(adata, cluster_key=C_KEY)
+
+        pl.co_occurrence(adata, cluster_key=C_KEY, group=["0", "2"])
+        self.compare("Graph_co_occurrence_palette", tolerance=70)
 
 
 class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
@@ -69,27 +84,31 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
             pl.ligrec(42)
 
     def test_invalid_key(self, adata: AnnData):
-        with pytest.raises(KeyError, match=r"Key `foobar` not found in `adata.uns`."):
-            pl.ligrec(adata, key="foobar")
+        with pytest.raises(KeyError, match=r"Key `foobar_ligrec` not found in `adata.uns`."):
+            pl.ligrec(adata, cluster_key="foobar")
 
     def test_valid_key_invalid_object(self, adata: AnnData):
-        adata.uns["foobar"] = "baz"
+        adata.uns["foobar_ligrec"] = "baz"
         with pytest.raises(TypeError, match=r"Expected `adata` .+ found `str`."):
-            pl.ligrec(adata, key="foobar")
+            pl.ligrec(adata, cluster_key="foobar")
 
     def test_invalid_alpha(self, ligrec_result: LigrecResult):
         with pytest.raises(ValueError, match=r"Expected `alpha`"):
             pl.ligrec(ligrec_result, alpha=1.2)
 
+    def test_invalid_means_range_size(self, ligrec_result: LigrecResult):
+        with pytest.raises(ValueError, match=r"Expected `means_range` to be a sequence of size `2`, found `3`."):
+            pl.ligrec(ligrec_result, means_range=[0, 1, 2])
+
     def test_invalid_clusters(self, ligrec_result: LigrecResult):
-        with pytest.raises(ValueError, match=r"No clusters have been selected"):
+        with pytest.raises(ValueError, match=r"No clusters have been selected."):
             pl.ligrec(ligrec_result, source_groups="foo", target_groups="bar")
 
     def test_all_interactions_empty(self, ligrec_result: LigrecResult):
         empty = pd.DataFrame(np.nan, index=ligrec_result.pvalues.index, columns=ligrec_result.pvalues.columns)
         tmp = type(ligrec_result)(empty, empty, empty)
 
-        with pytest.raises(ValueError, match=r"After removing empty interactions, none remain."):
+        with pytest.raises(ValueError, match=r"After removing rows with only NaN interactions, none remain."):
             pl.ligrec(tmp, remove_empty_interactions=True)
 
     def test_plot_source_clusters(self, ligrec_result: LigrecResult):
@@ -100,10 +119,16 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
         tgt_cls = ligrec_result.pvalues.columns.get_level_values(1)[0]
         pl.ligrec(ligrec_result, target_groups=tgt_cls)
 
-    def test_plot_remove_empty_interactions(self, ligrec_result: LigrecResult):
+    def test_plot_no_remove_empty_interactions(self, ligrec_result: LigrecResult):
         tmp = deepcopy(ligrec_result)
         tmp.pvalues.values[:2, :] = np.nan
-        pl.ligrec(tmp, remove_empty_interactions=True)
+        pl.ligrec(tmp, remove_empty_interactions=False)
+
+    def test_plot_pvalue_threshold(self, ligrec_result: LigrecResult):
+        pl.ligrec(ligrec_result, pvalue_threshold=0.05)
+
+    def test_plot_means_range(self, ligrec_result: LigrecResult):
+        pl.ligrec(ligrec_result, means_range=(0.5, 1))
 
     def test_plot_dendrogram(self, ligrec_result: LigrecResult):
         pl.ligrec(ligrec_result, dendrogram=True)

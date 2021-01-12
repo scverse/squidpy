@@ -1,6 +1,5 @@
-import warnings
-
 import pytest
+import warnings
 
 from anndata import AnnData
 

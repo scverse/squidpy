@@ -2,23 +2,25 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, Dict, List, Tuple, Union, Mapping, Iterable, Optional
+from typing import Any, Dict, List, Tuple, Union, Mapping, Iterable, Optional, Sequence
 
 from scanpy import logging as logg
 from anndata import AnnData
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 from skimage.feature import greycoprops, greycomatrix
 import skimage.measure
 
 from squidpy._docs import d, inject_docs
-from squidpy.gr._utils import Signal, parallelize, _get_n_cores
+from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
 from squidpy.im.object import ImageContainer
 from squidpy.constants._constants import ImageFeature
 
 Feature_t = Dict[str, Any]
+Channel_t = Sequence[int]
 
 
 @d.dedent
@@ -33,8 +35,8 @@ def calculate_image_features(
     copy: bool = False,
     n_jobs: Optional[int] = None,
     backend: str = "loky",
-    show_progress_bar: bool = True,
-    **kwargs,
+    show_progress_bar: bool = False,
+    **kwargs: Any,
 ) -> Optional[pd.DataFrame]:
     """
     Calculate image features for all obs_ids in adata, using the high-resolution tissue image contained in ``img``.
@@ -66,18 +68,16 @@ def calculate_image_features(
 
     Returns
     -------
-    :class:`pandas.DataFrame` or None
-        TODO: rephrase
-        `None` if ``copy = False``, otherwise the :class:`pandas.DataFrame`.
+    `None` if ``copy = False``, otherwise the :class:`pandas.DataFrame`.
 
     Raises
     ------
     :class:`NotImplementedError`
         If a feature string is not known.
     """
-    if isinstance(features, str):
+    if isinstance(features, (str, ImageFeature)):
         features = [features]
-    features = [ImageFeature(f) for f in features]
+    features = [ImageFeature(f) for f in features]  # type: ignore[no-redef,misc]
 
     n_jobs = _get_n_cores(n_jobs)
     logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
@@ -104,8 +104,8 @@ def _calculate_image_features_helper(
     img_id: Optional[str],
     features: List[ImageFeature],
     features_kwargs: Mapping[str, Any],
-    queue=None,
-    **kwargs,
+    queue: Optional[SigQueue] = None,
+    **kwargs: Any,
 ) -> pd.DataFrame:
     features_list = []
 
@@ -115,7 +115,7 @@ def _calculate_image_features_helper(
     for crop, _ in img.generate_spot_crops(adata, obs_ids=obs_ids, **kwargs):
 
         # get features for this crop
-        # TODO this could be solved in a more elegant manner
+        # TODO: valuedispatch would be cleaner
         # TODO could the values ImageFeature.TEXTURE etc be functions?
         features_dict = {}
         for feature in features:
@@ -145,13 +145,13 @@ def _calculate_image_features_helper(
     return pd.DataFrame(features_list, index=list(obs_ids))
 
 
-def _get_channels(xr_img, channels):
+def _get_channels(xr_img: xr.DataArray, channels: Optional[Union[int, Channel_t]]) -> Channel_t:
     """Get correct channel ranges for feature calculation."""
     # if channels is None, compute features for all channels
     if channels is None:
         channels = range(xr_img.shape[-1])
-    if isinstance(channels, int):
-        channels = [channels]
+    elif isinstance(channels, int):
+        channels = (channels,)
     return channels
 
 
@@ -160,11 +160,11 @@ def get_summary_features(
     img: ImageContainer,
     img_id: str,
     feature_name: str = "summary",
-    channels: Optional[Union[Tuple[int], int]] = None,
-    quantiles: Tuple[float] = (0.9, 0.5, 0.1),
+    channels: Optional[Union[int, Channel_t]] = None,
+    quantiles: Sequence[float] = (0.9, 0.5, 0.1),
     mean: bool = False,
     std: bool = False,
-):
+) -> Feature_t:
     """
     Calculate summary statistics of image channels.
 
@@ -193,9 +193,9 @@ def get_summary_features(
         for q in quantiles:
             features[f"{feature_name}_quantile_{q}_ch_{c}"] = np.quantile(img[img_id][:, :, c], q)
         if mean:
-            features[f"{feature_name}_mean_ch_{c}"] = np.mean(img[img_id][:, :, c])
+            features[f"{feature_name}_mean_ch_{c}"] = np.mean(img[img_id][:, :, c].values)
         if std:
-            features[f"{feature_name}_std_ch_{c}"] = np.std(img[img_id][:, :, c])
+            features[f"{feature_name}_std_ch_{c}"] = np.std(img[img_id][:, :, c].values)
 
     return features
 
@@ -205,7 +205,7 @@ def get_histogram_features(
     img: ImageContainer,
     img_id: str,
     feature_name: str = "histogram",
-    channels: Optional[Tuple[int]] = None,
+    channels: Optional[Union[int, Channel_t]] = None,
     bins: int = 10,
     v_range: Optional[Tuple[int, int]] = None,
 ) -> Feature_t:
@@ -249,7 +249,7 @@ def get_texture_features(
     img: ImageContainer,
     img_id: str,
     feature_name: str = "texture",
-    channels: Optional[Tuple[int]] = None,
+    channels: Optional[Union[int, Channel_t]] = None,
     props: Iterable[str] = ("contrast", "dissimilarity", "homogeneity", "correlation", "ASM"),
     distances: Iterable[int] = (1,),
     angles: Iterable[float] = (0, np.pi / 4, np.pi / 2, 3 * np.pi / 4),
@@ -281,7 +281,20 @@ def get_texture_features(
     Returns
     -------
     %(feature_ret)s
+
+    Raises
+    ------
+    ValueError
+        if image has values larger than 255, which is not supported by
+        :func:`skimage.feature.greycomatrix`.
     """
+    # check that image has values < 256
+    if np.max(img[img_id].values) > 255:
+        raise ValueError(
+            f'img["{img_id}"] has a maximum value of {np.max(img[img_id].values)}. \
+            This is not supported, please cast your image to `uint8` before calling this function. \
+            You might be able to use `sq.im.calculate_image_features(..., dtype="uint8")'
+        )
     channels = _get_channels(img[img_id], channels)
 
     features = {}
@@ -300,12 +313,12 @@ def get_segmentation_features(
     img: ImageContainer,
     img_id: str,
     feature_name: str = "segmentation",
-    channels: Optional[Tuple[int]] = None,
-    label_img_id: Optional[ImageContainer] = None,
+    channels: Optional[Union[int, Channel_t]] = None,
+    label_img_id: Optional[str] = None,
     props: Iterable[str] = ("label", "area", "mean_intensity"),
     mean: bool = True,
     std: bool = False,
-):
+) -> Feature_t:
     """
     Calculate segmentation features using :func:`skimage.measure.regionprops`.
 

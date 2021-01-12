@@ -1,4 +1,3 @@
-from os import PathLike
 from typing import Any, List, Tuple, Union, Iterable, Iterator, Optional
 from pathlib import Path
 
@@ -12,7 +11,8 @@ from imageio import imread
 import skimage
 
 from squidpy._docs import d
-from squidpy.im._utils import _num_pages, _scale_xarray, _unique_order_preserving
+from squidpy._utils import _unique_order_preserving
+from squidpy.im._utils import _num_pages, _scale_xarray
 from squidpy.constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
@@ -41,22 +41,20 @@ class ImageContainer:
     %(add_img.raises)s
     """
 
-    data: xr.Dataset
-
     def __init__(
         self,
         img: Optional[Union[Pathlike_t, np.ndarray]] = None,
         img_id: Optional[Union[str, List[str]]] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
-        self.data = xr.Dataset()
+        self.data: xr.Dataset = xr.Dataset()
         chunks = kwargs.pop("chunks", None)
         if img is not None:
             if chunks is not None:
                 chunks = {"x": chunks, "y": chunks}
             self.add_img(img, img_id, chunks=chunks, **kwargs)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         s = f"ImageContainer object with {len(self.data.keys())} layers\n"
         for layer in self.data.keys():
             s += f"    {layer}: "
@@ -64,7 +62,7 @@ class ImageContainer:
             s += "\n"
         return s
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> xr.DataArray:
         return self.data[key]
 
     @property
@@ -76,7 +74,7 @@ class ImageContainer:
     def nchannels(self) -> int:
         """Number of channels."""  # noqa: D401
         # TODO this might fail, if we name channels sth else than "channels"
-        return self.data.dims["channels"]
+        return self.data.dims["channels"]  # type: ignore[no-any-return]
 
     @classmethod
     def open(cls, fname: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":  # noqa: A003
@@ -97,14 +95,6 @@ class ImageContainer:
         if not lazy:
             self.data.load()
         return self
-
-        def __repr__(self):
-            s = f"ImageContainer object with {len(self.data.keys())} layers\n"
-            for layer in self.data.keys():
-                s += f"    {layer}: "
-                s += ", ".join(f"{dim} ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape))
-                s += "\n"
-            return s
 
     def save(self, fname: Pathlike_t) -> None:
         """
@@ -183,7 +173,7 @@ class ImageContainer:
         """
         if isinstance(img, np.ndarray):
             if len(img.shape) > 3:
-                raise ValueError(f"Img has more than 3 dimensions. img.shape is {img.shape}.")
+                raise ValueError(f"Img has more than 3 dimensions. img.shape is `{img.shape}`.")
             dims = ["y", "x", channel_id]
             if len(img.shape) == 2:
                 # add channel dimension
@@ -193,7 +183,7 @@ class ImageContainer:
             assert "x" in img.dims
             assert "y" in img.dims
             xr_img = img
-        elif isinstance(img, (str, PathLike)):
+        elif isinstance(img, (str, Path)):
             img = str(img)
             ext = img.split(".")[-1]
             if ext in ("tif", "tiff"):  # TODO: constants
@@ -330,7 +320,7 @@ class ImageContainer:
         y: int,
         xr: int,
         yr: int,
-        **kwargs,
+        **kwargs: Any,
     ) -> "ImageContainer":
         """
         Extract a crop based on coordinates `x` and `y`.
@@ -359,14 +349,14 @@ class ImageContainer:
         xs = xr * 2 + 1
         ys = yr * 2 + 1
 
-        return self.crop_corner(x=x, y=y, xs=xs, ys=ys, **kwargs)
+        return self.crop_corner(x=x, y=y, xs=xs, ys=ys, **kwargs)  # type: ignore[no-any-return]
 
     @d.dedent
     def generate_equal_crops(
         self,
         xs: Optional[int] = None,
         ys: Optional[int] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Iterator[Tuple["ImageContainer", int, int]]:
         """
         Decompose an image into equally sized crops.
@@ -411,7 +401,7 @@ class ImageContainer:
         dataset_name: Optional[str] = None,
         size: float = 1.0,
         obs_ids: Optional[Iterable[Any]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Iterator[Tuple["ImageContainer", Union[int, str]]]:
         """
         Iterate over all obs_ids defined in adata and extract crops from images.
@@ -452,7 +442,7 @@ class ImageContainer:
 
         for i, obs_id in zip(indices, obs_ids):
             crop = self.crop_center(x=xcoord[i], y=ycoord[i], xr=r, yr=r, **kwargs)
-            yield crop, obs_id
+            yield crop, obs_id  # type: ignore[misc]
 
     @d.get_sections(base="uncrop_img", sections=["Parameters", "Returns"])
     @classmethod

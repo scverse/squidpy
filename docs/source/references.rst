@@ -11,7 +11,8 @@ References
     `bioRxiv 2020.02.17.947416 <https://doi.org/10.1101/2020.02.17.947416>`__.
 
 .. [CellPhoneDB20] Efremova, M., Vento-Tormo, M., Teichmann, S. A. et al., |br|
-    *CellPhoneDB: inferring cell–cell communication from combined expression of multi-subunit ligand–receptor complexes.*, |br|
+    *CellPhoneDB: inferring cell–cell communication from combined expression of multi-subunit
+    ligand–receptor complexes.*, |br|
     `Nat Protoc 15, 1484–1506 (2020) <https://doi.org/10.1038/s41596-020-0292-x>`__.
 
 .. TODO: link-check failes because jstor is evil
