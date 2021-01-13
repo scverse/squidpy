@@ -38,10 +38,9 @@ def test_moran(dummy_adata: AnnData):
     assert dummy_adata.uns[MORAN_K].columns.shape == (4,)
     # test highly variable
     assert dummy_adata.uns[MORAN_K].shape != df.shape
-    # assert idx are sorted
-    assert ~np.array_equal(idx_df, idx_adata)
-    # assert elements are same
-    assert np.all(np.in1d(idx_df, idx_adata))
+    # assert idx are sorted and contain same elements
+    assert not np.array_equal(idx_df, idx_adata)
+    assert np.array_equal(sorted(idx_df), sorted(idx_adata))
 
 
 def test_co_occurrence(adata: AnnData):

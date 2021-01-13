@@ -148,7 +148,7 @@ def nhood_enrichment(
         raise KeyError(
             f"{connectivity_key} not present in `adata.obs`"
             "Choose a different connectivity_key or run first "
-            "build.spatial_connectivity(adata) on the AnnData object."
+            "gr.spatial_neighbors on the AnnData object."
         )
     adj = adata.obsp[connectivity_key]
 
@@ -299,7 +299,7 @@ def interaction_matrix(
         )
 
     if connectivity_key not in adata.obsp:
-        raise KeyError("Choose a different `connectivity_key` or run first `squidpy.build.spatial_connectivity()`.")
+        raise KeyError("Choose a different `connectivity_key` or run first `squidpy.gr.spatial_neighbors()`.")
     graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
 
     cluster = {i: {cluster_key: x} for i, x in enumerate(adata.obs[cluster_key].tolist())}
