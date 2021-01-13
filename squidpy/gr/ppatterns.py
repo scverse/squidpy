@@ -1,13 +1,20 @@
 """Functions for point patterns spatial statistics."""
 from __future__ import annotations
 
-from typing import Tuple, Union, Iterable, Optional
+try:
+    # [ py<3.8 ]
+    from typing import Literal  # type: ignore[attr-defined]
+except ImportError:
+    from typing_extensions import Literal
+
+from typing import Tuple, Union, Iterable, Optional, Sequence
 import warnings
 
+from scanpy import logging as logg
 from anndata import AnnData
 
 from numba import njit
-from scipy.sparse import issparse, isspmatrix_lil
+from scipy.sparse import isspmatrix_lil
 from sklearn.metrics import pairwise_distances
 from pandas.api.types import infer_dtype, is_categorical_dtype
 from statsmodels.stats.multitest import multipletests
@@ -16,6 +23,7 @@ import pandas as pd
 import numba.types as nt
 
 from squidpy._docs import d, inject_docs
+from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
 from squidpy.constants._pkg_constants import Key
 
 try:
@@ -30,6 +38,11 @@ except ImportError:
     W = None
 
 
+it = nt.int32
+ft = nt.float32
+tt = nt.UniTuple
+
+
 @d.dedent
 @inject_docs(key=Key.obsm.spatial)
 def ripley_k(
@@ -38,8 +51,8 @@ def ripley_k(
     spatial_key: str = Key.obsm.spatial,
     mode: str = "ripley",
     support: int = 100,
-    copy: Optional[bool] = False,
-) -> Union[AnnData, pd.DataFrame]:
+    copy: bool = False,
+) -> Optional[pd.DataFrame]:
     r"""
     Calculate Ripley's K statistics for each cluster in the tissue coordinates.
 
@@ -103,12 +116,17 @@ def ripley_k(
 @inject_docs(key=Key.obsp.spatial_conn())
 def moran(
     adata: AnnData,
-    connectivities_key: str = Key.obsp.spatial_conn(),
-    gene_names: Optional[Iterable[str]] = None,
-    transformation: str = "r",
+    connectivity_key: str = Key.obsp.spatial_conn(),
+    genes: Optional[Union[str, Sequence[str]]] = None,
+    transformation: Literal["r", "B", "D", "U", "V"] = "B",  # type: ignore[name-defined]
     permutations: int = 1000,
     corr_method: Optional[str] = "fdr_bh",
-    copy: Optional[bool] = False,
+    layer: Optional[str] = None,
+    seed: Optional[int] = None,
+    copy: bool = False,
+    n_jobs: Optional[int] = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
 ) -> Optional[pd.DataFrame]:
     """
     Calculate Moran’s I Global Autocorrelation Statistic.
@@ -117,53 +135,104 @@ def moran(
     ----------
     %(adata)s
     %(conn_key)s
-    gene_names
+    genes
         List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute Moran's I statistics
-        [Moran50]_. If None, it's computed for all genes.
+        [Moran50]_. If `None`, it's computed for `highly_variable` in attr:`anndata.AnnData.var`,
+        if present, else it is computed for all genes.
     transformation
-        Keyword which indicates the transformation to be used, as reported in :class:`esda.Moran`.
+        Transformation to be used, as reported in :class:`esda.Moran`. Default: `"B"` binary.
     permutations
-        Keyword which indicates the number of permutations to be performed, as reported in :class:`esda.Moran`.
+        Number of permutations to be performed, as reported in :class:`esda.Moran`.
     corr_method
         Correction method for multiple testing. See :func:`statsmodels.stats.multitest.multipletests` for available
         methods.
+    layer
+        Which layer in :attr:`anndata.AnnData.layers` to use. If `None`, :attr:`anndata.AnnData.X` is used.
+    %(seed)s
     %(copy)s
+    %(parallelize)s
 
     Returns
     -------
     If ``copy = True``, returns a :class:`pandas.DataFrame`. Otherwise, it modifies ``adata`` in place and stores
-    Global Moran's I stats in :attr:`anndata.AnnData.var`.
+    Global Moran's I stats in :attr:`anndata.uns["moranI"]`.
     """
     if esda is None or libpysal is None:
         raise ImportError("Please install `esda` and `libpysal` as `pip install esda libpysal`.")
 
-    # init weights
-    w = _set_weight_class(adata, key=connectivities_key)
+    if isinstance(genes, str):
+        genes = (genes,)
+    elif genes is None:
+        if "highly_variable" in adata.var.columns:
+            genes = adata[:, adata.var.highly_variable.values].var_names.values.tolist()
+        else:
+            genes = adata.var_names.values.tolist()
+    if not isinstance(genes, Sequence):
+        raise TypeError(f"Expected `genes` to be `Sequence`, found `{type(genes).__name__}`.")
+    if not len(genes):
+        raise ValueError("No genes have been selected.")
 
-    lst_mi = []
+    if connectivity_key not in adata.obsp:
+        raise KeyError(
+            f"{connectivity_key} not present in `adata.obsp`."
+            "Choose a different connectivity_key or run first "
+            "gr.spatial_neighbors(adata) on the AnnData object."
+        )
 
-    if gene_names is None:
-        gene_names = adata.var_names
-    if not isinstance(gene_names, Iterable):
-        raise TypeError(f"Expected `gene_names` to be `Iterable`, found `{type(gene_names).__name__}`.")
+    w = _set_weight_class(adata, key=connectivity_key)  # init weights
 
-    sparse = issparse(adata.X)
+    n_jobs = _get_n_cores(n_jobs)
+    logg.info(f"Calculating for `{len(genes)}` genes using `{n_jobs}` core(s)")
 
-    for v in gene_names:
-        y = adata[:, v].X.todense() if sparse else adata[:, v].X
-        mi = _compute_moran(y, w, transformation, permutations)
-        lst_mi.append(mi)
-
-    df = pd.DataFrame(lst_mi, index=gene_names, columns=["I", "pval_sim", "VI_sim"])
+    df = parallelize(
+        _moran_helper,
+        collection=genes,
+        extractor=pd.concat,
+        use_ixs=True,
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
+    )(adata=adata, weights=w, transformation=transformation, permutations=permutations, layer=layer, seed=seed)
 
     if corr_method is not None:
         _, pvals_adj, _, _ = multipletests(df["pval_sim"].values, alpha=0.05, method=corr_method)
         df[f"pval_sim_{corr_method}"] = pvals_adj
 
+    # df.index = genes
+    df.sort_values(by="I", ascending=False, inplace=True)
+
     if copy:
         return df
 
-    adata.var = adata.var.join(df, how="left")
+    adata.uns["moranI"] = df
+
+
+def _moran_helper(
+    ix: int,
+    gen: Iterable[str],
+    adata: AnnData,
+    weights: W,
+    transformation: Literal["r", "B", "D", "U", "V"] = "B",  # type: ignore[name-defined]
+    permutations: int = 1000,
+    layer: Optional[str] = None,
+    seed: Optional[int] = None,
+    queue: Optional[SigQueue] = None,
+) -> pd.DataFrame:
+    if seed is not None:
+        np.random.seed(seed + ix)
+
+    moran_list = []
+    for g in gen:
+        mi = _compute_moran(adata.obs_vector(g, layer=layer), weights, transformation, permutations)
+        moran_list.append(mi)
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return pd.DataFrame(moran_list, columns=["I", "pval_sim", "VI_sim"], index=gen)
 
 
 def _compute_moran(y: np.ndarray, w: W, transformation: str, permutations: int) -> Tuple[float, float, float]:
@@ -172,24 +241,14 @@ def _compute_moran(y: np.ndarray, w: W, transformation: str, permutations: int) 
 
 
 def _set_weight_class(adata: AnnData, key: str) -> W:
-    try:
-        X = adata.obsp[key]
-        if not isspmatrix_lil(X):
-            X = X.tolil()
-    except KeyError:
-        raise KeyError(
-            f"Please run `squidpy.gr.spatial_connectivity(..., key_added={key.replace('_connectivities', '')!r})`."
-        ) from None
+    X = adata.obsp[key]
+    if not isspmatrix_lil(X):
+        X = X.tolil()
 
     neighbors = dict(enumerate(X.rows))
     weights = dict(enumerate(X.data))
 
     return libpysal.weights.W(neighbors, weights, ids=adata.obs.index.values)
-
-
-it = nt.int32
-ft = nt.float32
-tt = nt.UniTuple
 
 
 @njit(
