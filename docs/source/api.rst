@@ -31,14 +31,9 @@ Image
 .. autosummary::
     :toctree: api
 
-    im.get_color_hist
-    im.get_hog_features
-    im.get_summary_stats
     im.calculate_image_features
-    im.get_grey_texture_features
     im.process_img
     im.segment_img
-    im.crop_img
 
 Plotting
 ~~~~~~~~

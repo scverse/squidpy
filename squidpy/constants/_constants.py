@@ -9,10 +9,10 @@ from squidpy.constants._utils import ModeEnum
 # @document_enum
 @unique
 class ImageFeature(ModeEnum):  # noqa: D101
-    HOG = "hog"  # doc: This would be a docstring.
-    TEXTURE = "texture"
+    TEXTURE = "texture"  # doc: This would be a docstring.
     SUMMARY = "summary"
-    COLOR_HIST = "color_hist"
+    COLOR_HIST = "histogram"
+    SEGMENTATION = "segmentation"
 
 
 # _ligrec.py
@@ -44,6 +44,7 @@ class CoordType(ModeEnum):  # noqa: D101
 @unique
 class Processing(ModeEnum):  # noqa: D101
     SMOOTH = "smooth"
+    GRAY = "gray"
 
 
 @unique
