@@ -1,5 +1,6 @@
 from anndata import AnnData
 
+from pandas.testing import assert_frame_equal
 import numpy as np
 
 from squidpy.gr import moran, ripley_k, co_occurrence
@@ -27,7 +28,8 @@ def test_moran(dummy_adata: AnnData):
     """
     moran(dummy_adata)
     dummy_adata.var["highly_variable"] = np.random.choice([True, False], size=dummy_adata.var_names.shape)
-    df = moran(dummy_adata, copy=True)
+    df = moran(dummy_adata, copy=True, n_jobs=1)
+    df_parallel = moran(dummy_adata, copy=True, n_jobs=2)
 
     idx_df = df.index.values
     idx_adata = dummy_adata[:, dummy_adata.var.highly_variable.values].var_names.values
@@ -40,7 +42,9 @@ def test_moran(dummy_adata: AnnData):
     assert dummy_adata.uns[MORAN_K].shape != df.shape
     # assert idx are sorted and contain same elements
     assert not np.array_equal(idx_df, idx_adata)
-    assert np.array_equal(sorted(idx_df), sorted(idx_adata))
+    np.testing.assert_array_equal(sorted(idx_df), sorted(idx_adata))
+    # check parallel gives same results
+    assert_frame_equal(df, df_parallel, rtol=1)
 
 
 def test_co_occurrence(adata: AnnData):

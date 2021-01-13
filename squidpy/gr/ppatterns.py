@@ -111,7 +111,7 @@ def ripley_k(
 def moran(
     adata: AnnData,
     connectivity_key: str = Key.obsp.spatial_conn(),
-    genes: Optional[Sequence[str]] = None,
+    genes: Optional[Union[str, Sequence[str]]] = None,
     transformation: Literal["r", "B", "D", "U", "V"] = "B",  # type: ignore[name-defined]
     permutations: int = 1000,
     corr_method: Optional[str] = "fdr_bh",
@@ -154,13 +154,16 @@ def moran(
 
     if genes is None:
         if "highly_variable" in adata.var.columns:
-            genes = adata[:, adata.var.highly_variable.values].var_names.values
+            genes = adata[:, adata.var.highly_variable.values].var_names.values.tolist()
         else:
-            genes = adata.var_names.values
+            genes = adata.var_names.values.tolist()
     else:
-        genes = np.array(genes)
+        if isinstance(genes, str):
+            genes = [
+                genes,
+            ]
     if not isinstance(genes, Sequence):
-        raise TypeError(f"Expected `genes` to be `Iterable`, found `{type(genes).__name__}`.")
+        raise TypeError(f"Expected `genes` to be `Sequence`, found `{type(genes).__name__}`.")
 
     if connectivity_key not in adata.obsp:
         raise KeyError(
