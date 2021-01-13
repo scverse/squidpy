@@ -6,7 +6,8 @@ try:
     from typing import Literal  # type: ignore[attr-defined]
 except ImportError:
     from typing_extensions import Literal
-from typing import Any, Tuple, Union, Iterable, Optional, Sequence
+
+from typing import Tuple, Union, Iterable, Optional, Sequence
 import warnings
 
 from scanpy import logging as logg
@@ -37,6 +38,11 @@ except ImportError:
     W = None
 
 
+it = nt.int32
+ft = nt.float32
+tt = nt.UniTuple
+
+
 @d.dedent
 @inject_docs(key=Key.obsm.spatial)
 def ripley_k(
@@ -46,7 +52,7 @@ def ripley_k(
     mode: str = "ripley",
     support: int = 100,
     copy: bool = False,
-) -> Union[AnnData, pd.DataFrame]:
+) -> Optional[pd.DataFrame]:
     r"""
     Calculate Ripley's K statistics for each cluster in the tissue coordinates.
 
@@ -115,7 +121,8 @@ def moran(
     transformation: Literal["r", "B", "D", "U", "V"] = "B",  # type: ignore[name-defined]
     permutations: int = 1000,
     corr_method: Optional[str] = "fdr_bh",
-    layer: Optional[Union[str, None]] = None,
+    layer: Optional[str] = None,
+    seed: Optional[int] = None,
     copy: bool = False,
     n_jobs: Optional[int] = None,
     backend: str = "loky",
@@ -130,7 +137,7 @@ def moran(
     %(conn_key)s
     genes
         List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute Moran's I statistics
-        [Moran50]_. If None, it's computed for `highly_variable` in attr:`anndata.AnnData.var`,
+        [Moran50]_. If `None`, it's computed for `highly_variable` in attr:`anndata.AnnData.var`,
         if present, else it is computed for all genes.
     transformation
         Transformation to be used, as reported in :class:`esda.Moran`. Default: `"B"` binary.
@@ -140,7 +147,8 @@ def moran(
         Correction method for multiple testing. See :func:`statsmodels.stats.multitest.multipletests` for available
         methods.
     layer
-        What layer values should be returned from. If None, X is used.
+        Which layer in :attr:`anndata.AnnData.layers` to use. If `None`, :attr:`anndata.AnnData.X` is used.
+    %(seed)s
     %(copy)s
     %(parallelize)s
 
@@ -152,18 +160,17 @@ def moran(
     if esda is None or libpysal is None:
         raise ImportError("Please install `esda` and `libpysal` as `pip install esda libpysal`.")
 
-    if genes is None:
+    if isinstance(genes, str):
+        genes = (genes,)
+    elif genes is None:
         if "highly_variable" in adata.var.columns:
             genes = adata[:, adata.var.highly_variable.values].var_names.values.tolist()
         else:
             genes = adata.var_names.values.tolist()
-    else:
-        if isinstance(genes, str):
-            genes = [
-                genes,
-            ]
     if not isinstance(genes, Sequence):
         raise TypeError(f"Expected `genes` to be `Sequence`, found `{type(genes).__name__}`.")
+    if not len(genes):
+        raise ValueError("No genes have been selected.")
 
     if connectivity_key not in adata.obsp:
         raise KeyError(
@@ -175,16 +182,17 @@ def moran(
     w = _set_weight_class(adata, key=connectivity_key)  # init weights
 
     n_jobs = _get_n_cores(n_jobs)
-    logg.info(f"Calculating `{len(genes)}` genes using `{n_jobs}` core(s)")
+    logg.info(f"Calculating for `{len(genes)}` genes using `{n_jobs}` core(s)")
 
     df = parallelize(
         _moran_helper,
         collection=genes,
         extractor=pd.concat,
+        use_ixs=True,
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(adata=adata, weights=w, transformation=transformation, permutations=permutations, layer=layer)
+    )(adata=adata, weights=w, transformation=transformation, permutations=permutations, layer=layer, seed=seed)
 
     if corr_method is not None:
         _, pvals_adj, _, _ = multipletests(df["pval_sim"].values, alpha=0.05, method=corr_method)
@@ -200,14 +208,18 @@ def moran(
 
 
 def _moran_helper(
-    gen: Iterable[Any],
+    ix: int,
+    gen: Iterable[str],
     adata: AnnData,
     weights: W,
     transformation: Literal["r", "B", "D", "U", "V"] = "B",  # type: ignore[name-defined]
     permutations: int = 1000,
-    layer: Optional[Union[str, None]] = None,
+    layer: Optional[str] = None,
+    seed: Optional[int] = None,
     queue: Optional[SigQueue] = None,
 ) -> pd.DataFrame:
+    if seed is not None:
+        np.random.seed(seed + ix)
 
     moran_list = []
     for g in gen:
@@ -237,11 +249,6 @@ def _set_weight_class(adata: AnnData, key: str) -> W:
     weights = dict(enumerate(X.data))
 
     return libpysal.weights.W(neighbors, weights, ids=adata.obs.index.values)
-
-
-it = nt.int32
-ft = nt.float32
-tt = nt.UniTuple
 
 
 @njit(
