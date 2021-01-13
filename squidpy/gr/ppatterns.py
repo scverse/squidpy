@@ -146,7 +146,7 @@ def moran(
 
     if genes is None:
         if "highly_variable" in adata.var.columns:
-            genes = adata[:, adata.obs.highly_variable is True].var_names
+            genes = adata[:, adata.var.highly_variable.values].var_names
         else:
             genes = adata.var_names
     if not isinstance(genes, Iterable):

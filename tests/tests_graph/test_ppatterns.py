@@ -1,6 +1,10 @@
 from anndata import AnnData
 
+import numpy as np
+
 from squidpy.gr import moran, ripley_k, co_occurrence
+
+MORAN_K = "moranI"
 
 
 def test_ripley_k(adata: AnnData):
@@ -19,13 +23,25 @@ def test_ripley_k(adata: AnnData):
 
 def test_moran(dummy_adata: AnnData):
     """
-    check ripley score and shape
+    check moran results
     """
-    # spatial_connectivity is missing
     moran(dummy_adata)
+    dummy_adata.var["highly_variable"] = np.random.choice([True, False], size=dummy_adata.var_names.shape)
+    df = moran(dummy_adata, copy=True)
 
+    idx_df = df.index.values
+    idx_adata = dummy_adata[:, dummy_adata.var.highly_variable.values].var_names.values
+
+    assert MORAN_K in dummy_adata.uns.keys()
     # assert fdr correction in adata.uns
-    assert "pval_sim_fdr_bh" in dummy_adata.var.columns
+    assert "pval_sim_fdr_bh" in dummy_adata.uns[MORAN_K]
+    assert dummy_adata.uns[MORAN_K].columns.shape == (4,)
+    # test highly variable
+    assert dummy_adata.uns[MORAN_K].shape != df.shape
+    # assert idx are sorted
+    assert ~np.array_equal(idx_df, idx_adata)
+    # assert elements are same
+    assert np.all(np.in1d(idx_df, idx_adata))
 
 
 def test_co_occurrence(adata: AnnData):
