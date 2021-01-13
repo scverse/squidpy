@@ -134,11 +134,12 @@ def moran(
         Correction method for multiple testing. See :func:`statsmodels.stats.multitest.multipletests` for available
         methods.
     %(copy)s
+    %(parallelize)s
 
     Returns
     -------
     If ``copy = True``, returns a :class:`pandas.DataFrame`. Otherwise, it modifies ``adata`` in place and stores
-    Global Moran's I stats in :attr:`anndata.AnnData.var`.
+    Global Moran's I stats in :attr:`anndata.uns["moranI"]`.
     """
     if esda is None or libpysal is None:
         raise ImportError("Please install `esda` and `libpysal` as `pip install esda libpysal`.")
