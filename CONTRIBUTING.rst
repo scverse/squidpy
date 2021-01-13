@@ -11,6 +11,7 @@ Table of Contents
 - `Writing tutorials/examples`_
 - `Creating a new release`_
 - `Submitting a PR`_
+- `Troubleshooting`_
 
 Contributing to SquidPy
 -----------------------
@@ -147,3 +148,9 @@ Before submitting a new pull request, please make sure you followed these instru
 - make sure that all tests pass locally (see `Testing`_).
 - if there is no issue which this PR solves, create a new `one <https://github.com/theislab/squidpy/issues/new>`__
   briefly explaining problem is
+
+Troubleshooting
+---------------
+- **shellcheck: command not found**
+  This happens during the linting step and is most likely due to missing ``shellcheck`` on the system.
+  See these `installation instructions <https://github.com/koalaman/shellcheck#installing>`__ on how to install it.
