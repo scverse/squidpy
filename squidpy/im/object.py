@@ -1,4 +1,4 @@
-from typing import Any, List, Tuple, Union, Iterable, Iterator, Optional
+from typing import Any, List, Tuple, Union, TypeVar, Iterable, Iterator, Optional
 
 try:
     from typing import Literal  # type: ignore[attr-defined]
@@ -23,6 +23,7 @@ from squidpy.im.feature_mixin import FeatureMixin
 from squidpy.constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
+Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependecies
 
 
 @d.dedent  # trick to overcome not top-down order
@@ -528,15 +529,15 @@ class ImageContainer(FeatureMixin):
 
     @d.get_sections(base="interactive", sections=["Parameters"])
     @d.dedent
-    def interactive(  # type: ignore[no-untyped-def]
+    def interactive(
         self,
         adata: AnnData,
         spatial_key: str = Key.obsm.spatial,
         cont_cmap: str = "viridis",
         cat_cmap: Optional[str] = None,
-        blending: Literal["opaque", "translucent", "adidtive"] = "opaque",  # type: ignore[name-defined]
+        blending: Literal["opaque", "translucent", "adidtive"] = "opaque",
         key_added: str = "shapes",
-    ):
+    ) -> Interactive:
         """
         Launch :mod:`napari` viewer.
 
@@ -547,14 +548,14 @@ class ImageContainer(FeatureMixin):
         cont_cmap
             Colormap for continuous variables.
         cat_cmap
-            Colormap for categorical variables. Only used when no colors are found in :attr:`anndata.AnnData.uns`
-            for keys in :attr:`anndata.AnnData.obs`.
+            Colormap for categorical variables in :attr:`anndata.AnnData.obs`. If `None`, use :mod:`scanpy`'s default.
         blending
             Method which determines how RGB and alpha values of :class:`napari.layers.Shapes` are mixed.
         key_added
             Key where to store :class:`napari.layers.Shapes` which can be exported by pressing `SHIFT-E`:
 
-                - :attr:`anndata.AnnData.obs` ``['{layer_name}_{key_added}']`` - boolean mask containing selected cells.
+                - :attr:`anndata.AnnData.obs` ``['{layer_name}_{key_added}']`` - boolean mask containing theselected
+                  cells.
                 - :attr:`anndata.AnnData.uns` ``['{layer_name}_{key_added}']['meshes']`` - list of :class:`numpy.array`,
                   defining a mesh in the spatial coordinates.
 
@@ -563,15 +564,14 @@ class ImageContainer(FeatureMixin):
 
         Returns
         -------
-        :class:`squidpy.pl.Interactive`
-            Interactive view of this container. Screenshot of the canvas can be
-            taken by using :meth:`squidpy.pl.Interactive.screenshot`
+        Interactive view of this container. Screenshot of the canvas can be
+        taken by using :meth:`squidpy.pl.Interactive.screenshot`.
         """
         from squidpy.pl import Interactive
 
-        return Interactive(
-            adata=adata,
+        return Interactive(  # type: ignore[no-any-return]
             img=self,
+            adata=adata,
             spatial_key=spatial_key,
             cont_cmap=cont_cmap,
             cat_cmap=cat_cmap,

@@ -11,7 +11,16 @@ from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
 from squidpy.pl._utils import save_fig
 from squidpy.constants._pkg_constants import Key
-from squidpy.pl.interactive._controller import ImageController
+
+try:
+    pass
+
+except ImportError as e:
+    _error: Optional[str] = str(e)
+else:
+    from squidpy.pl.interactive._controller import ImageController
+
+    _error = None
 
 
 @d.dedent
@@ -21,19 +30,23 @@ class Interactive:
 
     Parameters
     ----------
+    %(img_container)s
     %(interactive.parameters)s
     """
 
     def __init__(
         self,
-        adata: AnnData,
         img: ImageContainer,
+        adata: AnnData,
         spatial_key: str = Key.obsm.spatial,
         cont_cmap: str = "viridis",
         cat_cmap: Optional[str] = None,
         blending: str = "opaque",
         key_added: str = "shapes",
     ):
+        if _error is not None:
+            raise ImportError(f"Unable to import the interactive viewer. Reason: {_error}.")
+
         self._controller = ImageController(
             adata,
             img,
@@ -44,19 +57,21 @@ class Interactive:
             key_added=key_added,
         )
 
-    @d.dedent
+    @d.get_full_description(base="cont_show")
+    @d.get_sections(base="cont_show", sections=["Parameters", "Returns"])
     def show(self, restore: bool = False) -> "Interactive":
         """
-        %(cont_show.full_desc)s
+        Launch the :class:`napari.Viewer`.
 
         Parameters
         ----------
-        %(cont_show.parameters)s
+        restore
+            Whether to reinitialize the GUI after it has been destroyed.
 
         Returns
         -------
-        %(cont_show.returns)s
-        """  # noqa: D400
+        Nothing, just launches the viewer.
+        """
         self._controller.show(restore=restore)
         return self
 
@@ -100,7 +115,7 @@ class Interactive:
         return arr if return_result else None
 
     def close(self) -> None:
-        """Close the :class:`napari.Viewer`."""
+        """Close the viewer."""
         self._controller.close()
 
     def __repr__(self) -> str:

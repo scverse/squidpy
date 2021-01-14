@@ -115,7 +115,7 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         cnt.add_image("foobar")
         err = capsys.readouterr().err
 
-        assert "Unable to load spot diameter from `adata" in err
+        assert "Unable to load spot diameter. Reason: " in err
         assert viewer._controller.view.layernames == {"V1_Adult_Mouse_Brain"}
 
         # dummy value, doesn't matter until we start drawing points

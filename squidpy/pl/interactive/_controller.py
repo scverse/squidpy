@@ -144,21 +144,19 @@ class ImageController:
             self._save_shapes(layer, key=key)
             self._update_obs_items(key)
 
-    @d.get_full_description(base="cont_show")
-    @d.get_sections(base="cont_show", sections=["Parameters", "Returns"])
+    @d.dedent
     def show(self, restore: bool = False) -> None:
         """
-        Launch the :class:`napari.Viewer`.
+        %(cont_show.full_desc)s
 
         Parameters
         ----------
-        restore
-            Whether to reinitialize the GUI after it has been destroyed.
+        %(cont_show.parameters)s
 
         Returns
         -------
-        Nothing, just launches the viewer.
-        """
+        %(cont_show.returns)s
+        """  # noqa: D400
         try:
             self.view.viewer.show()
         except RuntimeError:
@@ -204,9 +202,6 @@ class ImageController:
         self.view.layers.move(index, -1)
 
     def _get_spot_diameter(self, dataset: str) -> Optional[float]:
-        if dataset not in self.model.adata.uns[self.model.spatial_key]:
-            logg.warning(f"Unable to load spot diameter from `adata.uns[{self.model.spatial_key!r}][{dataset!r}]`")
-            return None
         try:
             return float(self.model.adata.uns[self.model.spatial_key][dataset]["scalefactors"]["spot_diameter_fullres"])
         except KeyError as e:
@@ -254,6 +249,7 @@ class ImageController:
 
     def _hide_points_controls(self, layer: Points, is_categorical: bool) -> None:
         try:
+            # shouldn't happen
             points_controls = self.view.viewer.window.qt_viewer.controls.widgets[layer]
         except KeyError:
             return
@@ -267,13 +263,14 @@ class ImageController:
                 labels[item.text()] = item
 
         label_key, widget = "", None
+        # remove all widgets which can modify the layer
         for label_key, widget_name in _WIDGETS_TO_HIDE.items():
             widget = getattr(points_controls, widget_name, None)
             if label_key in labels and widget is not None:
                 widget.setHidden(True)
                 labels[label_key].setHidden(True)
 
-        if not is_categorical:
+        if not is_categorical:  # add the slider
             idx = gl.indexOf(widget)
             row, *_ = gl.getItemPosition(idx)
 
