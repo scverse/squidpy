@@ -1,14 +1,4 @@
-from typing import (
-    Any,
-    List,
-    Tuple,
-    Union,
-    Callable,
-    Hashable,
-    Iterable,
-    Optional,
-    Sequence,
-)
+from typing import Any, List, Tuple, Union, Callable, Optional, Sequence
 from pathlib import Path
 from functools import wraps
 import os
@@ -157,12 +147,6 @@ def extract(
                 tmp_adata.obs[obs_key] = obsm[:, j]
 
     return tmp_adata
-
-
-def _unique_order_preserving(iterable: Iterable[Hashable]) -> List[Hashable]:
-    """Remove items from an iterable while preserving the order."""
-    seen = set()
-    return [i for i in iterable if i not in seen and not seen.add(i)]  # type: ignore[func-returns-value]
 
 
 @njit(cache=True, fastmath=True)

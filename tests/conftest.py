@@ -95,6 +95,11 @@ def cont() -> ImageContainer:
 
 
 @pytest.fixture()
+def napari_cont() -> ImageContainer:
+    return ImageContainer("tests/_data/test_img.jpg", img_id="V1_Adult_Mouse_Brain")
+
+
+@pytest.fixture()
 def interactions(adata: AnnData) -> Tuple[Sequence[str], Sequence[str]]:
     return tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))  # type: ignore
 

@@ -35,9 +35,12 @@ class ImageView:
         self.viewer.bind_key("Shift-E", self.controller.export)
         parent = self.viewer.window._qt_window
 
-        # TODO: there's got to be some better way
-        lib_haystack = set(self.model.adata.uns[self.model.spatial_key].keys())
-        lib_ixs = [ix for ix in self.model.container.data.keys() if ix in lib_haystack]
+        lib_ixs = set(self.model.adata.uns[self.model.spatial_key].keys()) & set(self.model.container.data.keys())
+        if not len(lib_ixs):
+            raise ValueError(
+                f"Unable to find any valid libraries. Please check if the corresponding names between "
+                f"`ImageContainer.data.keys()` and `adata.uns[{self.model.spatial_key!r}].keys()` match."
+            )
 
         # TODO: reintroduce tooltips?
         # library
