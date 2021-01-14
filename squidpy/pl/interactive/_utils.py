@@ -37,7 +37,7 @@ def _get_categorical(
 
 def _position_cluster_labels(coords: np.ndarray, clusters: pd.Series, colors: np.ndarray) -> Dict[str, np.ndarray]:
     if not is_categorical_dtype(clusters):
-        raise TypeError(f"Expected `clusters` to be categorical type, found `{infer_dtype(clusters)}`.")
+        raise TypeError(f"Expected `clusters` to be `categorical`, found `{infer_dtype(clusters)}`.")
 
     df = pd.DataFrame(coords)
     df["clusters"] = clusters.values

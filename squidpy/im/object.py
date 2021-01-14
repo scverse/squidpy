@@ -1,4 +1,10 @@
 from typing import Any, List, Tuple, Union, Iterable, Iterator, Optional
+
+try:
+    from typing import Literal  # type: ignore[attr-defined]
+except ImportError:
+    from typing_extensions import Literal
+
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -528,7 +534,7 @@ class ImageContainer(FeatureMixin):
         spatial_key: str = Key.obsm.spatial,
         cont_cmap: str = "viridis",
         cat_cmap: Optional[str] = None,
-        blending: str = "opaque",
+        blending: Literal["opaque", "translucent", "adidtive"] = "opaque",  # type: ignore[name-defined]
         key_added: str = "shapes",
     ):
         """
@@ -544,7 +550,7 @@ class ImageContainer(FeatureMixin):
             Colormap for categorical variables. Only used when no colors are found in :attr:`anndata.AnnData.uns`
             for keys in :attr:`anndata.AnnData.obs`.
         blending
-            Method used for blending multiple layers.
+            Method which determines how RGB and alpha values of :class:`napari.layers.Shapes` are mixed.
         key_added
             Key where to store :class:`napari.layers.Shapes` which can be exported by pressing `SHIFT-E`:
 

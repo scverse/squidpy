@@ -35,20 +35,19 @@ class ImageView:
         self.viewer.bind_key("Shift-E", self.controller.export)
         parent = self.viewer.window._qt_window
 
-        lib_ixs = set(self.model.adata.uns[self.model.spatial_key].keys()) & set(self.model.container.data.keys())
-        if not len(lib_ixs):
+        dataset_ixs = set(self.model.adata.uns[self.model.spatial_key].keys()) & set(self.model.container.data.keys())
+        if not len(dataset_ixs):
             raise ValueError(
-                f"Unable to find any valid libraries. Please check if the corresponding names between "
+                f"Unable to find any valid datasets. Please check if the corresponding names between "
                 f"`ImageContainer.data.keys()` and `adata.uns[{self.model.spatial_key!r}].keys()` match."
             )
 
-        # TODO: reintroduce tooltips?
-        # library
-        lib_lab = QLabel("Library:")
-        lib_widget = LibraryListWidget(self.controller, multiselect=False, unique=True)
-        lib_widget.setMaximumHeight(100)
-        lib_widget.addItems(lib_ixs)
-        lib_widget.setCurrentItem(lib_widget.item(0))
+        # dataset
+        dataset_lab = QLabel("Dataset:")
+        dataset_widget = LibraryListWidget(self.controller, multiselect=False, unique=True)
+        dataset_widget.setMaximumHeight(100)
+        dataset_widget.addItems(dataset_ixs)
+        dataset_widget.setCurrentItem(dataset_widget.item(0))
 
         # gene
         var_lab = QLabel("Genes:", parent=parent)
@@ -87,8 +86,8 @@ class ImageView:
         raw_widget.setLayout(raw_layout)
 
         widgets = (
-            lib_lab,
-            lib_widget,
+            dataset_lab,
+            dataset_widget,
             layer_label,
             layer_widget,
             raw_widget,

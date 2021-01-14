@@ -49,31 +49,31 @@ class ImageController:
 
         self.view._init_UI()
 
-    def add_image(self, library: str) -> bool:
+    def add_image(self, dataset: str) -> bool:
         """
         Add a new :mod:`napari` image layer.
 
         Parameters
         ----------
-        library
+        dataset
             Key in the underlying's :class:`ImageContainer` which contains the image.
 
         Returns
         -------
         `True` if the layer has been added, otherwise `False`.
         """
-        if library in self.view.layernames:
-            logg.warning(f"Image layer `{library}` is already loaded")
+        if dataset in self.view.layernames:
+            logg.warning(f"Image layer `{dataset}` is already loaded")
             return False
 
-        spot_diameter = self._get_spot_diameter(library)
+        spot_diameter = self._get_spot_diameter(dataset)
         if spot_diameter is None:
             return False
         self.model.spot_diameter = spot_diameter
 
         self.view.viewer.add_image(
-            self.model.container.data[library].transpose("y", "x", ...).values,
-            name=library,
+            self.model.container.data[dataset].transpose("y", "x", ...).values,
+            name=dataset,
             rgb=True,
             colormap=self.model.cont_cmap,
             blending=self.model.blending,
@@ -81,19 +81,19 @@ class ImageController:
 
         return True
 
-    def add_points(self, vec: Union[np.ndarray, pd.Series], key: str, layer_name: str) -> bool:
+    def add_points(self, vec: Union[np.ndarray, pd.Series], layer_name: str, key: Optional[str] = None) -> bool:
         """
         Add a new :mod:`napari` points layer.
 
         Parameters
         ----------
         vec
-            The data. If :class:`pandas.Series`, it is expected to be categorical.
+            Values to plot. If :class:`pandas.Series`, it is expected to be categorical.
+        layer_name
+            Name of the layer to add.
         key
             Key from :attr:`anndata.AnnData.obs` from where the data was taken from.
             Only used when ``vec`` is :class:`pandas.Series`.
-        layer_name
-            Name of the layer to add.
 
         Returns
         -------
@@ -203,12 +203,12 @@ class ImageController:
 
         self.view.layers.move(index, -1)
 
-    def _get_spot_diameter(self, library: str) -> Optional[float]:
-        if library not in self.model.adata.uns[self.model.spatial_key]:
-            logg.warning(f"Unable to load spot diameter from `adata.uns[{self.model.spatial_key!r}][{library!r}]`")
+    def _get_spot_diameter(self, dataset: str) -> Optional[float]:
+        if dataset not in self.model.adata.uns[self.model.spatial_key]:
+            logg.warning(f"Unable to load spot diameter from `adata.uns[{self.model.spatial_key!r}][{dataset!r}]`")
             return None
         try:
-            return float(self.model.adata.uns[self.model.spatial_key][library]["scalefactors"]["spot_diameter_fullres"])
+            return float(self.model.adata.uns[self.model.spatial_key][dataset]["scalefactors"]["spot_diameter_fullres"])
         except KeyError as e:
             logg.warning(f"Unable to load spot diameter. Reason: {e}")
             return None
