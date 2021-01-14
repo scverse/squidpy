@@ -195,7 +195,7 @@ def segment_img(
     """
     %(segment.full_desc)s
 
-    If ``xs`` and ``ys`` are defined, iterate over crops of size `(xs, ys)` and segment those.
+    If ``xs`` and ``ys`` are defined, iterate over crops of size ``(xs, ys)`` and segment those.
     Recommended for large images.
 
     Parameters
@@ -210,13 +210,14 @@ def segment_img(
             - `{m.TENSORFLOW.s!r}`: :mod:`tensorflow` executable model.
 
     model_instance
-        TODO: this logic should be refactored.
+        TODO: refactore me!
+
         Instance of executable segmentation model or name of specific method within ``model_group``.
     channel_idx
         Channel index to use for segmentation.
     %(width_height)s
     key_added
-        Key of new image sized array to add into img object. Defaults to ``segmented_{{model_group}}``.
+        Key of new image sized array to add into img object. If `None`, use ``segmented_{{model_group}}``.
     %(copy_cont)s
     %(segment_kwargs)s
 

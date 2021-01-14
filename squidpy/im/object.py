@@ -529,7 +529,7 @@ class ImageContainer(FeatureMixin):
         cont_cmap: str = "viridis",
         cat_cmap: Optional[str] = None,
         blending: str = "opaque",
-        key_added: Optional[str] = None,
+        key_added: str = "shapes",
     ):
         """
         Launch :mod:`napari` viewer.
@@ -546,16 +546,20 @@ class ImageContainer(FeatureMixin):
         blending
             Method used for blending multiple layers.
         key_added
-            If not `None`, allow exporting of a currently selected by pressing `SHIFT-E` into:
+            Key where to store :class:`napari.layers.Shapes` which can be exported by pressing `SHIFT-E`:
 
                 - :attr:`anndata.AnnData.obs` ``['{layer_name}_{key_added}']`` - boolean mask containing selected cells.
                 - :attr:`anndata.AnnData.uns` ``['{layer_name}_{key_added}']['meshes']`` - list of :class:`numpy.array`,
-                  defining a mesh in the spatial coordinates
+                  defining a mesh in the spatial coordinates.
+
+            See :mod:`napari`'s `tutorial <https://napari.org/tutorials/fundamentals/shapes.html>`__ for more
+            information about different mesh types, such as circles, squares etc.
 
         Returns
         -------
         :class:`squidpy.pl.Interactive`
-            Interactive view of this container.
+            Interactive view of this container. Screenshot of the canvas can be
+            taken by using :meth:`squidpy.pl.Interactive.screenshot`
         """
         from squidpy.pl import Interactive
 

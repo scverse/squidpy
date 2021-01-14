@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
 from squidpy.pl._utils import save_fig
+from squidpy.constants._pkg_constants import Key
 from squidpy.pl.interactive._controller import ImageController
 
 
@@ -27,11 +28,11 @@ class Interactive:
         self,
         adata: AnnData,
         img: ImageContainer,
-        spatial_key: str = "TODO",
+        spatial_key: str = Key.obsm.spatial,
         cont_cmap: str = "viridis",
         cat_cmap: Optional[str] = None,
         blending: str = "opaque",
-        key_added: Optional[str] = None,
+        key_added: str = "shapes",
     ):
         self._controller = ImageController(
             adata,
@@ -79,7 +80,7 @@ class Interactive:
 
         Returns
         -------
-        Image array if ``return_result = True``, otherwise nothing.
+        None if ``return_result = False``, otherwise the image array.
         """
         try:
             arr = self._controller.screenshot(path=None)

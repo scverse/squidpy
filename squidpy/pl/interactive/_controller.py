@@ -128,10 +128,6 @@ class ImageController:
 
     def export(self, _: Viewer) -> None:
         """Export shapes into :class:`AnnData` object."""
-        if self.model.key_added is None:
-            logg.warning("Exporting is disabled because `key_added` is not specified")
-            return
-
         for layer in self.view.layers:
             if not isinstance(layer, Shapes) or not layer.selected:
                 continue

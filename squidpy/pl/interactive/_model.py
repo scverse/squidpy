@@ -24,7 +24,7 @@ class ImageModel:
     cat_cmap: Optional[str] = field(default=None, repr=False)
     cont_cmap: str = field(default="viridis", repr=False)
     blending: str = field(default="opaque", repr=False)
-    key_added: Optional[str] = None
+    key_added: str = "shapes"
 
     def __post_init__(self) -> None:
         self.alayer = ALayer(self.adata, is_raw=False, palette=self.cat_cmap)

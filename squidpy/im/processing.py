@@ -41,9 +41,10 @@ def process_img(
 
     %(width_height)s
     key_added
-        Key of new image layer to add into ``img`` object. Defaults to ``{{img_id}}_{{processing}}``.
+        Key of new image layer to add into ``img`` object. If `None`, use ``{{img_id}}_{{processing}}``.
     channel_id
         Name of the channel dimension of the new image layer.
+
         Default is the same as the input image if the processing function does not change the number
         of channels, and ``{{channel}}_{{processing}}`` if it does.
     %(copy_cont)s

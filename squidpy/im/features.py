@@ -23,7 +23,7 @@ def calculate_image_features(
     img_id: Optional[str] = None,
     features: Union[str, Iterable[str]] = ImageFeature.SUMMARY.s,
     features_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    key: str = "img_features",
+    key_added: str = "img_features",
     copy: bool = False,
     n_jobs: Optional[int] = None,
     backend: str = "loky",
@@ -31,7 +31,7 @@ def calculate_image_features(
     **kwargs: Any,
 ) -> Optional[pd.DataFrame]:
     """
-    Calculate image features for all obs_ids in adata, using the high-resolution tissue image contained in ``img``.
+    Calculate image features for all observations in ``adata``.
 
     Parameters
     ----------
@@ -52,9 +52,8 @@ def calculate_image_features(
 
     features_kwargs
         Keyword arguments for the different features that should be generated.
-    key
+    key_added
         Key to use for saving calculated table in :attr:`anndata.AnnData.obsm`.
-        TODO: should this be called key_added?
     %(copy)s
     %(parallelize)s
     kwargs
@@ -88,7 +87,7 @@ def calculate_image_features(
     if copy:
         return res
 
-    adata.obsm[key] = res
+    adata.obsm[key_added] = res
 
 
 def _calculate_image_features_helper(
