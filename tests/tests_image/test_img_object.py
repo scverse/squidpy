@@ -27,20 +27,23 @@ def test_image_loading(shape, tmpdir):
         # load as np array
         cont = ImageContainer(img_orig)
         # check that contains same information
-        assert (cont.data.image == img_orig).all()
+        assert (cont["image"] == img_orig).all()
 
     # save & load as tiff
     fname = tmpdir.mkdir("data").join("img.tif")
     tifffile.imsave(fname, img_orig)
     cont = ImageContainer(str(fname))
+    print(cont.data)
+    print(cont.data["image"])
+
     if len(shape) > 3:
         # multi-channel tiff
         # check for existance of each im in multi-channel tiff
         # check that contains correct information
-        assert (cont.data["image"] == img_orig[:, :, :, 0].transpose(1, 2, 0)).all()
+        assert (cont["image"] == img_orig[:, :, :, 0].transpose(1, 2, 0)).all()
     else:
         # check that contains same information
-        assert (cont.data.image == img_orig).all()
+        assert (cont["image"] == img_orig).all()
 
 
 @pytest.mark.parametrize(

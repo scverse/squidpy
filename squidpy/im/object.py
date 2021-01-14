@@ -45,18 +45,19 @@ class ImageContainer(FeatureMixin):
     def __init__(
         self,
         img: Optional[Union[Pathlike_t, np.ndarray]] = None,
-        img_id: Optional[Union[str, List[str]]] = None,
+        img_id: str = "image",
         **kwargs: Any,
     ):
-        self.data: xr.Dataset = xr.Dataset()
+        self._data: xr.Dataset = xr.Dataset()
+
         chunks = kwargs.pop("chunks", None)
         if img is not None:
             if chunks is not None:
                 chunks = {"x": chunks, "y": chunks}
-            self.add_img(img, img_id, chunks=chunks, **kwargs)
+            self.add_img(img, img_id=img_id, chunks=chunks, **kwargs)
 
     def __repr__(self) -> str:
-        s = f"ImageContainer object with {len(self.data.keys())} layers\n"
+        s = f"{self.__class__.__name__} object with {len(self.data.keys())} layer(s)\n"
         for layer in self.data.keys():
             s += f"    {layer}: "
             s += ", ".join(f"{dim} ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape))
@@ -67,8 +68,13 @@ class ImageContainer(FeatureMixin):
         return self.data[key]
 
     @property
+    def data(self) -> xr.Dataset:
+        """Underlying data container."""
+        return self._data
+
+    @property
     def shape(self) -> Tuple[int, int]:
-        """Image shape (y, x)."""  # noqa: D402
+        """Image shape `(y, x)`."""
         return self.data.dims["y"], self.data.dims["x"]  # TODO changed shape, need to catch all calls to img.shape
 
     @property
@@ -92,7 +98,7 @@ class ImageContainer(FeatureMixin):
             Chunk size for :mod:`dask`.
         """
         self = cls()
-        self.data = xr.open_dataset(fname, chunks=chunks)
+        self._data = xr.open_dataset(fname, chunks=chunks)
         if not lazy:
             self.data.load()
         return self
@@ -116,7 +122,7 @@ class ImageContainer(FeatureMixin):
     def add_img(
         self,
         img: Union[Pathlike_t, np.ndarray, xr.DataArray],
-        img_id: Optional[str] = None,
+        img_id: str = "image",
         channel_id: str = "channels",
         lazy: bool = True,
         chunks: Optional[int] = None,
@@ -124,7 +130,7 @@ class ImageContainer(FeatureMixin):
         """
         Add layer from in memory `np.ndarray`/`xr.DataArray` or on-disk tiff/jpg image.
 
-        For :mod:`numpy` arrays, assume that dims are: ``(y, x, channel_id)``.
+        For :mod:`numpy` arrays, we assume that dims are: `(y, x, channel_id)`.
 
         NOTE: lazy loading via :mod:`dask` is not supported for on-disk jpg files.
         They will be loaded in memory.
@@ -137,13 +143,12 @@ class ImageContainer(FeatureMixin):
             :mod:`numpy` array or path to image file.
         img_id
             Key (name) to be used for img.
-            If not specified, DataArrays will be named "image".
         channel_id
-            Name of the channel dimension. Default is "channels".
+            Name of the channel dimension.
         lazy
             Use :mod:`rasterio` or :mod:`dask` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`, used in call to `xr.open_rasterio` for tiff images.
+            Chunk size for :mod:`dask`, used in call to :func:`xarray.open_rasterio` for tiff images.
 
         Returns
         -------
@@ -151,15 +156,14 @@ class ImageContainer(FeatureMixin):
 
         Raises
         ------
-        :class:`ValueError`
+        ValueError
             If ``img`` is a :class:`np.ndarray` and has more than 3 dimensions.
         """
         img = self._load_img(img=img, channel_id=channel_id, chunks=chunks)
-        if img_id is None:
-            img_id = "image"
         # add to data
         logg.info(f"Adding `{img_id}` into object")
         self.data[img_id] = img
+        # TODO: is this correct?
         if lazy:
             # load in memory
             self.data.load()
@@ -172,6 +176,7 @@ class ImageContainer(FeatureMixin):
 
         See :meth:`add_img` for more details.
         """
+        # TODO: singlemethoddispatch
         if isinstance(img, np.ndarray):
             if len(img.shape) > 3:
                 raise ValueError(f"Img has more than 3 dimensions. img.shape is `{img.shape}`.")
@@ -204,9 +209,10 @@ class ImageContainer(FeatureMixin):
                 dims = ["y", "x", channel_id]
                 xr_img = xr.DataArray(img, dims=dims)
             else:
-                raise NotImplementedError(f"Files with extension `{ext}`.")
+                raise ValueError(f"Files with extension `{ext}`.")
         else:
-            raise ValueError(img)
+            raise TypeError(img)
+
         return xr_img
 
     @d.get_sections(base="crop_corner", sections=["Parameters", "Returns"])
@@ -224,9 +230,9 @@ class ImageContainer(FeatureMixin):
         preserve_dtype: bool = True,
     ) -> "ImageContainer":
         """
-        Extract a crop from upper left corner coordinates `x` and `y`.
+        Extract a crop from upper left corner coordinates ``x`` and ``y``.
 
-        The crop will be extracted right and down from x, y.
+        The crop will be extracted right and down from ``x``, ``y``.
 
         Parameters
         ----------
@@ -234,21 +240,21 @@ class ImageContainer(FeatureMixin):
         %(width_height)s
         scale
             Resolution of the crop (smaller -> smaller image).
-            Rescaling is done using `skimage.transform.rescale`.
+            Rescaling is done using :func:`skimage.transform.rescale`.
         mask_circle
             Mask crop to a circle.
         cval
             The value outside image boundaries or the mask.
         dtype
             Type to which the output should be (safely) cast. If `None`, don't recast.
-            Currently supported dtypes: 'uint8'. TODO: pass actualy types instead of strings.
-        perserve_dtype
-            Make sure that dtype of all layers of the crop stays the same. True by default.
-            Depending on type of cval, types might be promoted to float otherwise.
+            Currently supported dtypes: 'uint8'.
+        preserve_dtype
+            Make sure that dtype of all layers of the crop stays the same.
+            Depending on type of ``cval``, types might be promoted to :class:`float` otherwise.
 
         Returns
         -------
-        cropped image.
+        Cropped image.
         """
         # get conversion function
         if dtype is not None:
@@ -258,8 +264,8 @@ class ImageContainer(FeatureMixin):
                 raise NotImplementedError(dtype)
 
         # TODO: rewrite assertions to "normal" errors so they can be more easily tested against
-        assert y < self.data.y.shape[0], f"y ({y}) is outsize of image range ({self.data.y.shape[0]})"
-        assert x < self.data.x.shape[0], f"x ({x}) is outsize of image range ({self.data.x.shape[0]})"
+        assert y < self.data.y.shape[0], f"y ({y}) is outside of image range ({self.data.y.shape[0]})"
+        assert x < self.data.x.shape[0], f"x ({x}) is outside of image range ({self.data.x.shape[0]})"
 
         assert xs > 0, "im size cannot be 0"
         assert ys > 0, "im size cannot be 0"
@@ -310,8 +316,9 @@ class ImageContainer(FeatureMixin):
             crop = crop.map(convert)
 
         # return crop as ImageContainer
+        # TODO: add class method from_xarray?
         crop_cont = ImageContainer()
-        crop_cont.data = crop
+        crop_cont._data = crop
         return crop_cont
 
     @d.dedent
@@ -324,9 +331,9 @@ class ImageContainer(FeatureMixin):
         **kwargs: Any,
     ) -> "ImageContainer":
         """
-        Extract a crop based on coordinates `x` and `y`.
+        Extract a crop based on coordinates ``x`` and ``y``.
 
-        The extracted crop will be centered on x, y, and have shape `yr*2+1, xr*2+1`.
+        The extracted crop will be centered on ``x``, ``y``, and have shape ``(yr * 2 + 1, xr * 2 + 1)``.
 
         Parameters
         ----------
@@ -375,7 +382,6 @@ class ImageContainer(FeatureMixin):
             - crop of size ``(ys, xs)``.
             - x-position of the crop.
             - y-position of the crop.
-
         """
         if xs is None:
             xs = self.data.x.shape[0]
@@ -405,7 +411,7 @@ class ImageContainer(FeatureMixin):
         **kwargs: Any,
     ) -> Iterator[Tuple["ImageContainer", Union[int, str]]]:
         """
-        Iterate over all obs_ids defined in adata and extract crops from images.
+        Iterate over all ``obs_ids`` in :attr:`adata.obs_names` and extract crops from images.
 
         Implemented for 10x spatial datasets.
 
@@ -413,7 +419,7 @@ class ImageContainer(FeatureMixin):
         ----------
         %(adata)s
         dataset_name
-            Name of the spatial data in adata (if not specified, take first one).
+            Name of the spatial data in ``adata`` (if not specified, take first one).
         size
             Amount of context (1.0 means size of spot, larger -> more context).
         obs_ids
@@ -427,8 +433,8 @@ class ImageContainer(FeatureMixin):
 
             - crop of size ``(ys, xs)``.
             - obs_id of spot from ``adata``.
-
         """
+        # TODO: I'd just require to supply dataset name
         if dataset_name is None:
             dataset_name = list(adata.uns[Key.uns.spatial].keys())[0]
 
@@ -445,8 +451,8 @@ class ImageContainer(FeatureMixin):
             crop = self.crop_center(x=xcoord[i], y=ycoord[i], xr=r, yr=r, **kwargs)
             yield crop, obs_id  # type: ignore[misc]
 
-    @d.get_sections(base="uncrop_img", sections=["Parameters", "Returns"])
     @classmethod
+    @d.get_sections(base="uncrop_img", sections=["Parameters", "Returns"])
     def uncrop_img(
         cls,
         crops: List["ImageContainer"],
@@ -455,30 +461,30 @@ class ImageContainer(FeatureMixin):
         shape: Tuple[int, int],
     ) -> "ImageContainer":
         """
-        Re-assemble im from crops and their positions.
+        Re-assemble image from crops and their positions.
 
         Fills remaining positions with zeros. Positions are given as upper right corners.
 
         Parameters
         ----------
         crops
-            List of im crops.
+            List of image crops.
         x
-            X coord of crop in pixel space. TODO: nice to have - relative space.
+            X coord of crop in pixel space.
         y
-            Y coord of crop in pixel space. TODO: nice to have - relative space.
+            Y coord of crop in pixel space.
         shape
             Shape of full image ``(y, x)``.
 
         Returns
         -------
-        assembled image with shape ``(y, x)``
+        Assembled image with shape ``(y, x)``.
         """
         # TODO: maybe more descriptive names (y==height, x==width)? + extract to constants...
         # TODO: rewrite asserts
         # TODO: expose remaining positions default value
-        assert np.max(y) < shape[0], f"y ({y}) is outsize of image range ({shape[0]})"
-        assert np.max(x) < shape[1], f"x ({x}) is outsize of image range ({shape[1]})"
+        assert np.max(y) < shape[0], f"y ({y}) is outside of image range ({shape[0]})"
+        assert np.max(x) < shape[1], f"x ({x}) is outside of image range ({shape[1]})"
 
         # check if can trivially return crop
         if len(crops) == 1:
@@ -502,12 +508,63 @@ class ImageContainer(FeatureMixin):
             y0 = y
             y1 = y + c.data[list(img_ids)[0]].y.shape[0]
             # TODO: rewrite asserts
-            assert x0 >= 0, f"x ({x0}) is outsize of image range ({0})"
-            assert y0 >= 0, f"x ({y0}) is outsize of image range ({0})"
-            assert x1 <= shape[1], f"x ({x1}) is outsize of image range ({shape[1]})"
-            assert y1 <= shape[0], f"y ({y1}) is outsize of image range ({shape[0]})"
+            assert x0 >= 0, f"x ({x0}) is outside of image range (0)"
+            assert y0 >= 0, f"x ({y0}) is outside of image range (0)"
+            assert x1 <= shape[1], f"x ({x1}) is outside of image range ({shape[1]})"
+            assert y1 <= shape[0], f"y ({y1}) is outside of image range ({shape[0]})"
             for image_id in img_ids:
                 data[image_id][y0:y1, x0:x1] = c[image_id]
+
         self = cls()
-        self.data = data
+        self._data = data
+
         return self
+
+    @d.get_sections(base="interactive", sections=["Parameters"])
+    @d.dedent
+    def interactive(  # type: ignore[no-untyped-def]
+        self,
+        adata: AnnData,
+        spatial_key: str = Key.obsm.spatial,
+        cont_cmap: str = "viridis",
+        cat_cmap: Optional[str] = None,
+        blending: str = "opaque",
+        key_added: Optional[str] = None,
+    ):
+        """
+        Launch :mod:`napari` viewer.
+
+        Parameters
+        ----------
+        %(adata)s
+        %(spatial_key)s
+        cont_cmap
+            Colormap for continuous variables.
+        cat_cmap
+            Colormap for categorical variables. Only used when no colors are found in :attr:`anndata.AnnData.uns`
+            for keys in :attr:`anndata.AnnData.obs`.
+        blending
+            Method used for blending multiple layers.
+        key_added
+            If not `None`, allow exporting of a currently selected by pressing `SHIFT-E` into:
+
+                - :attr:`anndata.AnnData.obs` ``['{layer_name}_{key_added}']`` - boolean mask containing selected cells.
+                - :attr:`anndata.AnnData.uns` ``['{layer_name}_{key_added}']['meshes']`` - list of :class:`numpy.array`,
+                  defining a mesh in the spatial coordinates
+
+        Returns
+        -------
+        :class:`squidpy.pl.Interactive`
+            Interactive view of this container.
+        """
+        from squidpy.pl import Interactive
+
+        return Interactive(
+            adata=adata,
+            img=self,
+            spatial_key=spatial_key,
+            cont_cmap=cont_cmap,
+            cat_cmap=cat_cmap,
+            blending=blending,
+            key_added=key_added,
+        ).show()

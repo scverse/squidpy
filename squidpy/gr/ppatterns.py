@@ -137,7 +137,7 @@ def moran(
     %(conn_key)s
     genes
         List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute Moran's I statistics
-        [Moran50]_. If `None`, it's computed for `highly_variable` in attr:`anndata.AnnData.var`,
+        [Moran50]_. If `None`, it's computed for `highly_variable` in :attr:`anndata.AnnData.var`,
         if present, else it is computed for all genes.
     transformation
         Transformation to be used, as reported in :class:`esda.Moran`. Default: `"B"` binary.

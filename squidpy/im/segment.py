@@ -1,13 +1,11 @@
 """Functions exposed: segment(), evaluate_nuclei_segmentation()."""
 
-from types import MappingProxyType
-from typing import Any, List, Union, Mapping, Optional
+from typing import Any, List, Union, Optional
 import abc
 
 from anndata import AnnData
 
 import numpy as np
-import xarray as xr
 
 import skimage
 
@@ -64,7 +62,7 @@ class SegmentationModel:
 
         Returns
         -------
-        Segmentation mask for the high-resolution image of shape (x, y, 1).
+        Segmentation mask for the high-resolution image of shape `(x, y, 1)`.
         """
         # TODO: make sure that the dtype is correct
         return self._segment(img, **kwargs)
@@ -86,8 +84,7 @@ class SegmentationModelBlob(SegmentationModel):
         Parameters
         ----------
         %(segment.parameters)s
-        kwargs
-            Keyword arguments for :attr:`_model`.
+        %(segment_kwargs)s
 
         Returns
         -------
@@ -97,14 +94,13 @@ class SegmentationModelBlob(SegmentationModel):
             img = 0.0 - img
 
         if self.model == "log":
-            y = skimage.feature.blob_log(image=img, **kwargs)
-        elif self.model == "dog":
-            y = skimage.feature.blob_dog(image=img, **kwargs)
-        elif self.model == "doh":
-            y = skimage.feature.blob_doh(image=img, **kwargs)
-        else:
-            raise ValueError("did not recognize self.model %s" % self.model)
-        return y
+            return skimage.feature.blob_log(image=img, **kwargs)
+        if self.model == "dog":
+            return skimage.feature.blob_dog(image=img, **kwargs)
+        if self.model == "doh":
+            return skimage.feature.blob_doh(image=img, **kwargs)
+
+        raise NotImplementedError(f"Unknown blob model `{self.model}`.")
 
 
 class SegmentationModelWatershed(SegmentationModel):
@@ -122,10 +118,9 @@ class SegmentationModelWatershed(SegmentationModel):
              Threshold for creation of masked image. The areas to segment should be contained in this mask.
         geq
             Treat ``thresh`` as upper or lower (greater-equal = geq) bound for defining areas to segment.
-            If ``geq=True``, mask is defined as ``mask = arr >= thresh``, meaning high values in arr
+            If ``geq=True``, mask is defined as ``mask = arr >= thresh``, meaning high values in ``arr``
             denote areas to segment.
-        kwargs
-            Keyword arguments for :attr:`_model`.
+        %(segment_kwargs)s
 
         Returns
         -------
@@ -150,6 +145,7 @@ class SegmentationModelWatershed(SegmentationModel):
         distance = ndi.distance_transform_edt(mask)
         local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((5, 5)), labels=mask)
         markers = ndi.label(local_maxi)[0]
+
         return watershed(arr, markers, mask=mask)
 
 
@@ -172,8 +168,7 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
         Parameters
         -----------
         %(segment.parameters)s
-        kwargs
-            Keyword arguments for the :attr:`_model`.
+        %(segment_kwargs)s
 
         Returns
         -------
@@ -190,42 +185,40 @@ def segment_img(
     img_id: str,
     model_group: Union[str, SegmentationBackend],
     model_instance: Optional[Union[str, SegmentationModel]] = None,
-    model_kwargs: Mapping[str, Any] = MappingProxyType({}),
     channel_idx: Optional[int] = 0,
     xs: Optional[int] = None,
     ys: Optional[int] = None,
     key_added: Optional[str] = None,
     copy: bool = False,
+    **kwargs: Any,
 ) -> Union[None, ImageContainer]:
     """
     %(segment.full_desc)s
 
-    If xs and ys are defined, iterate over crops of size `(xs,ys)` and segment those.
+    If ``xs`` and ``ys`` are defined, iterate over crops of size `(xs, ys)` and segment those.
     Recommended for large images.
 
     Parameters
     ----------
     %(img_container)s
-    img_id
-        Key of image object to segment.
+    %(img_id)s
     model_group
         Segmentation method to use. Available are:
 
             - `{m.BLOB.s!r}`: Blob extraction with :mod:`skimage`.
-            - `{m.WATERSHED.s!r}`: TODO.
+            - `{m.WATERSHED.s!r}`: :func:`skimage.segmentation.watershed`.
             - `{m.TENSORFLOW.s!r}`: :mod:`tensorflow` executable model.
 
     model_instance
         TODO: this logic should be refactored.
         Instance of executable segmentation model or name of specific method within ``model_group``.
-    model_kwargs
-        Keyword arguments for :meth:`squidpy.im.SegmentationModel.segment`.
     channel_idx
         Channel index to use for segmentation.
     %(width_height)s
     key_added
         Key of new image sized array to add into img object. Defaults to ``segmented_{{model_group}}``.
     %(copy_cont)s
+    %(segment_kwargs)s
 
     Returns
     -------
@@ -255,7 +248,7 @@ def segment_img(
     for crop, x, y in img.generate_equal_crops(xs=xs, ys=ys):
         xcoord.append(x)
         ycoord.append(y)
-        crops.append(segmentation_model.segment(crop[img_id][{channel_id: channel_idx}].values, **model_kwargs))
+        crops.append(segmentation_model.segment(crop[img_id][{channel_id: channel_idx}].values, **kwargs))
 
     # By convention, segments are numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
@@ -271,9 +264,9 @@ def segment_img(
     img_segmented = ImageContainer.uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape)
     if copy:
         return img_segmented  # type: ignore[no-any-return]
-    else:
-        # add segmented image to img
-        img.add_img(img=img_segmented[img_id_new], img_id=img_id_new)
+
+    # add segmented image to img
+    img.add_img(img=img_segmented[img_id_new], img_id=img_id_new)
 
 
 # TODO dead code?
@@ -284,7 +277,7 @@ def segment_crops(
     segmented_img_id: str,
     xs: Optional[int] = None,
     ys: Optional[int] = None,
-) -> List[xr.DataArray]:
+) -> List[ImageContainer]:
     """
     %(segment.full_desc)s
 

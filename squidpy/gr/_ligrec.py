@@ -573,7 +573,7 @@ class PermutationTest(PermutationTestABC):
         %(PT_prepare.parameters)s
         interactions_params
             Keyword arguments for :func:`omnipath.interactions.import_intercell_network` defining the interactions.
-            These datasets from are used by default: `omnipath`, `pathwayextra` `kinaseextra`, `ligrecextra`.
+            These datasets from [OmniPath16]_ are default: `omnipath`, `pathwayextra`, `kinaseextra`, `ligrecextra`.
         transmitter_params
             Keyword arguments for :func:`omnipath.interactions.import_intercell_network` defining the transmitter
             side of intercellular connections.

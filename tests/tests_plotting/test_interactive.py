@@ -24,7 +24,7 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         adata.obs[obs_cont] = adata.obs[cluster].values.astype(int)
 
         ad2nap = interactive(adata, cont)
-        viewer = ad2nap.viewer
+        viewer = ad2nap.view
 
         assert viewer.layers[0].name == "Image"
         assert viewer.layers["Image"].data.shape == cont.shape[::-1] + (3,)

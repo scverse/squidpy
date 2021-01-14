@@ -95,7 +95,7 @@ suppress_warnings = ["download.not_readable"]
 # a list of builtin themes.
 #
 autosummary_generate = True
-autodoc_member_order = "alphabetical"
+autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
 autodoc_docstring_signature = True
 autodoc_follow_wrapped = False
