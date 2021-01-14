@@ -39,6 +39,7 @@ setup(
             for l in (Path("docs") / "requirements.txt").read_text("utf-8").splitlines()
             if not l.startswith("-r")
         ],
+        interactive=["PyQt5>=5.15.0", "napari>=0.4.2"],
     ),
     classifiers=[
         "Development Status :: 4 - Beta",
