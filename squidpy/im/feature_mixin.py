@@ -13,17 +13,18 @@ import skimage.measure
 from squidpy._docs import d
 
 Feature_t = Dict[str, Any]
-Channel_t = Sequence[int]
+Channel_t = Union[int, Sequence[int]]
 
 
-def _get_channels(xr_img: xr.DataArray, channels: Optional[Union[int, Channel_t]]) -> Channel_t:
+def _get_channels(xr_img: xr.DataArray, channels: Optional[Channel_t]) -> Tuple[int, ...]:
     """Get correct channel ranges for feature calculation."""
     # if channels is None, compute features for all channels
     if channels is None:
         channels = range(xr_img.shape[-1])
     elif isinstance(channels, int):
         channels = (channels,)
-    return channels
+
+    return tuple(channels)
 
 
 # define protocol to get rid of mypy indexing errors
@@ -46,7 +47,7 @@ class FeatureMixin:
         self: HasGetItemProtocol,
         img_id: str,
         feature_name: str = "summary",
-        channels: Optional[Union[int, Channel_t]] = None,
+        channels: Optional[Channel_t] = None,
         quantiles: Sequence[float] = (0.9, 0.5, 0.1),
         mean: bool = False,
         std: bool = False,
@@ -58,8 +59,7 @@ class FeatureMixin:
         ----------
         %(img_id)s
         %(feature_name)s
-        channels
-            Channels for which summary features are computed. Default is all channels
+        %(channels)s
         quantiles
             Quantiles that are computed.
         mean
@@ -89,7 +89,7 @@ class FeatureMixin:
         self: HasGetItemProtocol,
         img_id: str,
         feature_name: str = "histogram",
-        channels: Optional[Union[int, Channel_t]] = None,
+        channels: Optional[Channel_t] = None,
         bins: int = 10,
         v_range: Optional[Tuple[int, int]] = None,
     ) -> Feature_t:
@@ -102,13 +102,11 @@ class FeatureMixin:
         ----------
         %(img_id)s
         %(feature_name)s
-        channels
-            Channels for which histograms are computed. Default is all channels
+        %(channels)s
         bins
             Number of binned value intervals.
-
         v_range
-            Range on which values are binned. Default is whole image range
+            Range on which values are binned. If `None`, use the whole image range.
 
         Returns
         -------
@@ -116,7 +114,8 @@ class FeatureMixin:
         """
         channels = _get_channels(self[img_id], channels)
         # if v_range is None, use whole-image range
-        v_range = np.min(self[img_id].values), np.max(self[img_id].values)
+        if v_range is None:
+            v_range = np.min(self[img_id].values), np.max(self[img_id].values)
 
         features = {}
         for c in channels:
@@ -131,7 +130,7 @@ class FeatureMixin:
         self: HasGetItemProtocol,
         img_id: str,
         feature_name: str = "texture",
-        channels: Optional[Union[int, Channel_t]] = None,
+        channels: Optional[Channel_t] = None,
         props: Iterable[str] = ("contrast", "dissimilarity", "homogeneity", "correlation", "ASM"),
         distances: Iterable[int] = (1,),
         angles: Iterable[float] = (0, np.pi / 4, np.pi / 2, 3 * np.pi / 4),
@@ -139,26 +138,25 @@ class FeatureMixin:
         """
         Calculate texture features.
 
-        A grey level co-occurence matrix (GLCM) is computed for different combinations of distance and angle.
-        The distance defines the pixel difference of co occurence. The angle define the direction along which
-        we check for co-occurence. The GLCM includes the number of times that grey-level j occurs at a distance
-        d and at an angle theta from grey-level i.
+        A grey level co-occurrence matrix (`GLCM <https://en.wikipedia.org/wiki/Co-occurrence_matrix>`__) is computed
+        for different combinations of distance and angle.
 
-        From a given GLCM texture features are inferred.
-        TODO: add reference to GLCM.
+        The distance defines the pixel difference of co-occurrence. The angle define the direction along which
+        we check for co-occurrence. The GLCM includes the number of times that grey-level :math:`j` occurs at a distance
+        :math:`d` and at an angle theta from grey-level :math:`i`.
 
         Parameters
         ----------
         %(img_id)s
         %(feature_name)s
-        channels
-            Channels for which histograms are computed. Default is all channels.
+        %(channels)s
         props
-            Texture features that are calculated. See `prop` in :func:`skimage.feature.greycoprops`.
+            Texture features that are calculated. See the `prop` argument in :func:`skimage.feature.greycoprops`.
         distances
-            See `distances` in :func:`skimage.feature.greycomatrix`.
+            See the `distances` argument in :func:`skimage.feature.greycomatrix`.
         angles
-            See `angles` in :func:`skimage.feature.greycomatrix`.
+            See the `angles` argument in :func:`skimage.feature.greycomatrix`.
+
         Returns
         -------
         %(feature_ret)s
@@ -166,8 +164,7 @@ class FeatureMixin:
         Raises
         ------
         ValueError
-            if image has values larger than 255, which is not supported by
-            :func:`skimage.feature.greycomatrix`.
+            If image has values > 255, which is not supported by :func:`skimage.feature.greycomatrix`.
         """
         # check that image has values < 256
         if np.max(self[img_id].values) > 255:
@@ -192,9 +189,9 @@ class FeatureMixin:
     def get_segmentation_features(
         self: HasGetItemProtocol,
         img_id: str,
+        label_img_id: str,
         feature_name: str = "segmentation",
-        channels: Optional[Union[int, Channel_t]] = None,
-        label_img_id: Optional[str] = None,
+        channels: Optional[Channel_t] = None,
         props: Iterable[str] = ("label", "area", "mean_intensity"),
         mean: bool = True,
         std: bool = False,
@@ -204,7 +201,8 @@ class FeatureMixin:
 
         Features are calculated using ``label_img_id``, a cell segmentation of ``img_id``
         (e.g. resulting from calling :func:`squidpy.im.segment_img`).
-        Depending on the specified parameters, mean and std of the requested props is returned.
+
+        Depending on the specified parameters, mean and std of the requested props are returned.
         For the 'label' feature, the number of labels is returned, i.e. the number of cells in this img.
 
         Parameters
@@ -212,8 +210,7 @@ class FeatureMixin:
         %(img_container)s
         %(img_id)s
         %(feature_name)s
-        channels
-            Channels for which segmentation features are computed. Default is all channels.
+        %(channels)s
             Only relevant for features that use the intensity image ``img_id``.
         props
             Segmentation features that are calculated. See `properties` in :func:`skimage.measure.regionprops_table`.
@@ -247,16 +244,9 @@ class FeatureMixin:
         Returns
         -------
         %(feature_ret)s
-
-        Raises
-        ------
-        ValueError
-            if ``label_img_id`` is None
         """
         # TODO check that passed a valid prop
         channels = _get_channels(self[img_id], channels)
-        if label_img_id is None:
-            raise ValueError("Please pass a value for label_img_id to get_segmentation_features")
 
         features = {}
         # calculate features that do not depend on the intensity image

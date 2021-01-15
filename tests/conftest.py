@@ -95,6 +95,11 @@ def cont() -> ImageContainer:
 
 
 @pytest.fixture()
+def napari_cont() -> ImageContainer:
+    return ImageContainer("tests/_data/test_img.jpg", img_id="V1_Adult_Mouse_Brain")
+
+
+@pytest.fixture()
 def interactions(adata: AnnData) -> Tuple[Sequence[str], Sequence[str]]:
     return tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))  # type: ignore
 
@@ -237,13 +242,13 @@ class PlotTester(ABC):
 
 
 def pytest_addoption(parser):
-    parser.addoption("--test-napari", action="store_true", help="Test interactive image viewer")
+    parser.addoption("--test-napari", action="store_true", help="Test interactive image view")
 
 
 def pytest_collection_modifyitems(config, items):
     if config.getoption("--test-napari"):
         return
-    skip_slow = pytest.mark.skip(reason="Need --test-napari option to test interactive image viewer")
+    skip_slow = pytest.mark.skip(reason="Need --test-napari option to test interactive image view")
     for item in items:
         if "qt" in item.keywords:
             item.add_marker(skip_slow)

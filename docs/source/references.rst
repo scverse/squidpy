@@ -15,7 +15,7 @@ References
     ligand–receptor complexes.*, |br|
     `Nat Protoc 15, 1484–1506 (2020) <https://doi.org/10.1038/s41596-020-0292-x>`__.
 
-.. TODO: link-check failes because jstor is evil
+.. TODO: link-check fails because jstor is evil
 .. [Moran50] Moran, P. A. P., |br|
     *Notes on Continuous Stochastic Phenomena.*,  |br|
     `Biometrika, vol. 37, no. 1/2, 1950, pp. 17–23 <https://doi.org/10.2307/2332142>`__.

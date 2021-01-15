@@ -84,7 +84,7 @@ class LibraryListWidget(ListWidget):
             items = (items,)
 
         for item in items:
-            if self._controller._add_image(item):
+            if self._controller.add_image(item):
                 # only add 1 item
                 break
 
@@ -129,7 +129,7 @@ class AListWidget(ListWidget):
     def _onAction(self, items: Iterable[str]) -> None:
         for item in sorted(set(items)):
             vec, name = self._getter(item, index=self.getIndex())
-            self._controller._add_points(vec, key=item, layer_name=name)
+            self._controller.add_points(vec, key=item, layer_name=name)
 
     def setRaw(self, is_raw: bool) -> None:
         if is_raw == self.getRaw():

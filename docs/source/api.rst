@@ -14,13 +14,14 @@ Graph
 .. autosummary::
     :toctree: api
 
-    gr.spatial_connectivity
+    gr.spatial_neighbors
     gr.nhood_enrichment
     gr.centrality_scores
     gr.interaction_matrix
     gr.ligrec
     gr.moran
     gr.ripley_k
+    gr.co_occurrence
 
 Image
 ~~~~~
@@ -44,9 +45,10 @@ Plotting
 .. autosummary::
     :toctree: api
 
-    pl.plot_ripley_k
     pl.nhood_enrichment
     pl.centrality_scores
     pl.interaction_matrix
     pl.plot_segmentation
     pl.ligrec
+    pl.ripley_k
+    pl.co_occurrence

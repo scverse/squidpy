@@ -10,6 +10,11 @@ ImageContainer
     :members:
     :inherited-members:
 
+InteractiveViewer
+-----------------
+.. autoclass:: squidpy.pl.Interactive
+    :members:
+    :inherited-members:
 
 SegmentationModelPretrainedTensorflow
 -------------------------------------

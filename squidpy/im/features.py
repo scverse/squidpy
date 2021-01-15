@@ -23,7 +23,7 @@ def calculate_image_features(
     img_id: Optional[str] = None,
     features: Union[str, Iterable[str]] = ImageFeature.SUMMARY.s,
     features_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    key: str = "img_features",
+    key_added: str = "img_features",
     copy: bool = False,
     n_jobs: Optional[int] = None,
     backend: str = "loky",
@@ -31,7 +31,7 @@ def calculate_image_features(
     **kwargs: Any,
 ) -> Optional[pd.DataFrame]:
     """
-    Calculate image features for all obs_ids in adata, using the high-resolution tissue image contained in ``img``.
+    Calculate image features for all observations in ``adata``.
 
     Parameters
     ----------
@@ -42,17 +42,18 @@ def calculate_image_features(
         Features to be calculated. Available features:
 
         - `{f.TEXTURE.s!r}`: summary stats based on repeating patterns \
-          :func:`squidpy.im.get_texture_features()`.
-        - `{f.SUMMARY.s!r}`: summary stats of each image channel :func:`squidpy.im.get_summary_features()`.
+          :meth:`squidpy.im.ImageContainer.get_texture_features()`.
+        - `{f.SUMMARY.s!r}`: summary stats of each image channel \
+          :meth:`squidpy.im.ImageContainer.get_summary_features()`.
         - `{f.COLOR_HIST.s!r}`: counts in bins of image channel's histogram \
-          :func:`squidpy.im.get_histogram_features()`.
-        - `{f.SEGMENTATION.s!r}`: stats of a cell segmentation mask :func:`squidpy.im.get_segmentation_features()`.
+          :meth:`squidpy.im.ImageContainer.get_histogram_features()`.
+        - `{f.SEGMENTATION.s!r}`: stats of a cell segmentation mask \
+          :meth:`squidpy.im.ImageContainer.get_segmentation_features()`.
 
     features_kwargs
         Keyword arguments for the different features that should be generated.
-    key
+    key_added
         Key to use for saving calculated table in :attr:`anndata.AnnData.obsm`.
-        TODO: should this be called key_added?
     %(copy)s
     %(parallelize)s
     kwargs
@@ -64,8 +65,8 @@ def calculate_image_features(
 
     Raises
     ------
-    :class:`NotImplementedError`
-        If a feature string is not known.
+    NotImplementedError
+        If a feature is not known.
     """
     if isinstance(features, (str, ImageFeature)):
         features = [features]
@@ -86,7 +87,7 @@ def calculate_image_features(
     if copy:
         return res
 
-    adata.obsm[key] = res
+    adata.obsm[key_added] = res
 
 
 def _calculate_image_features_helper(
@@ -105,7 +106,6 @@ def _calculate_image_features_helper(
         img_id = list(img.data.keys())[0]
 
     for crop, _ in img.generate_spot_crops(adata, obs_ids=obs_ids, **kwargs):
-
         # get features for this crop
         # TODO: valuedispatch would be cleaner
         # TODO could the values ImageFeature.TEXTURE etc be functions?

@@ -1,14 +1,4 @@
-from typing import (
-    Any,
-    List,
-    Tuple,
-    Union,
-    Callable,
-    Hashable,
-    Iterable,
-    Optional,
-    Sequence,
-)
+from typing import Any, List, Tuple, Union, Callable, Optional, Sequence
 from pathlib import Path
 from functools import wraps
 import os
@@ -30,12 +20,11 @@ from pandas.core.dtypes.common import (
 import numpy as np
 import pandas as pd
 
-from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 
 from squidpy._docs import d
 
-Tmp_t = Tuple[Optional[Union[pd.Series, np.ndarray]], Optional[str]]
+Vector_name_t = Tuple[Optional[Union[pd.Series, np.ndarray]], Optional[str]]
 
 
 @d.dedent
@@ -73,7 +62,7 @@ def save_fig(fig: Figure, path: Union[str, Path], make_dir: bool = True, ext: st
         try:
             os.makedirs(str(Path.parent), exist_ok=True)
         except OSError as e:
-            logg.debug(f"Unable to create directory `{Path.parent}`. Reason: `{e}`.")
+            logg.debug(f"Unable to create directory `{Path.parent}`. Reason: `{e}`")
 
     logg.debug(f"Saving figure to `{path!r}`")
 
@@ -160,27 +149,6 @@ def extract(
     return tmp_adata
 
 
-def _contrasting_color(r: int, g: int, b: int) -> str:
-    for val in [r, g, b]:
-        assert 0 <= val <= 255
-
-    return "#000000" if r * 0.299 + g * 0.587 + b * 0.114 > 186 else "#ffffff"
-
-
-def _get_black_or_white(value: float, cmap: Colormap) -> str:
-    if not (0.0 <= value <= 1.0):
-        raise ValueError(f"Value must be in range `[0, 1]`, found `{value}`.")
-
-    r, g, b, *_ = [int(c * 255) for c in cmap(value)]
-    return _contrasting_color(r, g, b)
-
-
-def _unique_order_preserving(iterable: Iterable[Hashable]) -> List[Hashable]:
-    """Remove items from an iterable while preserving the order."""
-    seen = set()
-    return [i for i in iterable if i not in seen and not seen.add(i)]  # type: ignore[func-returns-value]
-
-
 @njit(cache=True, fastmath=True)
 def _point_inside_triangles(triangles: np.ndarray) -> np.bool_:
     # modified from napari
@@ -221,9 +189,9 @@ def _min_max_norm(vec: Union[spmatrix, np.ndarray]) -> np.ndarray:
     return np.ones_like(vec) if np.isclose(minn, maxx) else ((vec - minn) / (maxx - minn))
 
 
-def _ensure_dense_vector(fn: Callable[..., Tmp_t]) -> Callable[..., Tmp_t]:
+def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vector_name_t]:
     @wraps(fn)
-    def decorator(self: "ALayer", *args: Any, **kwargs: Any) -> Tmp_t:
+    def decorator(self: "ALayer", *args: Any, **kwargs: Any) -> Vector_name_t:
         normalize = kwargs.pop("normalize", False)
         res, fmt = fn(self, *args, **kwargs)
         if res is None:
@@ -268,7 +236,7 @@ def _only_not_raw(fn: Callable[..., Optional[Any]]) -> Callable[..., Optional[An
 
 class ALayer:
     """
-    Class which helps with :class:`anndata.AnnData` layer logic.
+    Class which helps with :attr:`anndata.AnnData.layers` logic.
 
     Parameters
     ----------
