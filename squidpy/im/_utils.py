@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import numpy as np
 import xarray as xr
 
@@ -27,3 +29,39 @@ def _scale_xarray(arr: xr.DataArray, scale: float) -> xr.DataArray:
     # recreate DataArray
     arr = xr.DataArray(arr, dims=dims)
     return arr
+
+
+@dataclass(frozen=True)
+class CropCoords:
+    """Top-left and bottom right-corners of a crop."""
+
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+    def __post_init__(self) -> None:
+        if self.x0 > self.x1:
+            raise ValueError(f"Expected `x0` <= `x1`, found `{self.x0}` > `{self.x1}`.")
+        if self.y0 > self.y1:
+            raise ValueError(f"Expected `y0` <= `y1`, found `{self.y0}` > `{self.y1}`.")
+
+    @property
+    def dx(self) -> float:
+        """Height."""
+        return self.x1 - self.x0
+
+    @property
+    def dy(self) -> float:
+        """Width."""
+        return self.x1 - self.x0
+
+    @property
+    def center_x(self) -> float:
+        """Center of height."""
+        return self.x0 + self.dx / 2.0
+
+    @property
+    def center_y(self) -> float:
+        """Width of height."""
+        return self.x0 + self.dy / 2.0

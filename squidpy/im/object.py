@@ -18,7 +18,7 @@ import skimage
 
 from squidpy._docs import d
 from squidpy._utils import _unique_order_preserving
-from squidpy.im._utils import _num_pages, _scale_xarray
+from squidpy.im._utils import _num_pages, CropCoords, _scale_xarray
 from squidpy.im.feature_mixin import FeatureMixin
 from squidpy.constants._pkg_constants import Key
 
@@ -56,6 +56,7 @@ class ImageContainer(FeatureMixin):
         **kwargs: Any,
     ):
         self._data: xr.Dataset = xr.Dataset()
+        self._data.attrs["crop"] = None
 
         chunks = kwargs.pop("chunks", None)
         if img is not None:
@@ -295,6 +296,7 @@ class ImageContainer(FeatureMixin):
 
         # create cropped xr.Dataset
         crop = self.data.isel(x=slice(crop_x0, crop_x1), y=slice(crop_y0, crop_y1))
+        crop.attrs["crop"] = CropCoords(crop_x0, crop_y0, crop_x1, crop_y1)
 
         # pad crop if necessary
         if [x0, x1, y0, y1] != [crop_x0, crop_x1, crop_y0, crop_y1]:
@@ -394,6 +396,8 @@ class ImageContainer(FeatureMixin):
             xs = self.data.x.shape[0]
         if ys is None:
             ys = self.data.y.shape[0]
+
+        # TODO: if equal length of self, generate copy
 
         # TODO: selecting coords like this means that we will have a small border at the right and bottom
         # where pixels are not selected. Depending on the crops size, this can be a substantial amount

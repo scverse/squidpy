@@ -105,8 +105,8 @@ class ImageController:
             self.model.coordinates,
             name=layer_name,
             size=self.model.spot_diameter,
+            opacity=0.8,  # not triggered on 1st draw
             edge_width=1,
-            opacity=0.8,
             blending=self.model.blending,
             face_colormap=self.model.cont_cmap,
             edge_colormap=self.model.cont_cmap,

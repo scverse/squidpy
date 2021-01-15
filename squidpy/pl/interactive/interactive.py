@@ -97,6 +97,11 @@ class Interactive:
         """Close the viewer."""
         self._controller.close()
 
+    @property
+    def adata(self) -> AnnData:
+        """Annodated data object."""
+        return self._controller.model.adata
+
     def __repr__(self) -> str:
         return f"Interactive view of {repr(self._controller.model.container)}"
 

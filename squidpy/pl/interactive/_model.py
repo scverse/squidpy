@@ -6,6 +6,7 @@ from anndata import AnnData
 import numpy as np
 
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
+from squidpy.im._utils import CropCoords
 from squidpy.pl._utils import ALayer
 from squidpy.constants._pkg_constants import Key
 
@@ -28,8 +29,25 @@ class ImageModel:
     key_added: str = "shapes"
 
     def __post_init__(self) -> None:
-        self.alayer = ALayer(self.adata, is_raw=False, palette=self.cat_cmap)
         self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1]
+
+        if self.container.data.attrs.get("crop", None) is not None:
+            c: CropCoords = self.container.data.attrs["crop"]
+
+            mask = (
+                (self.coordinates[:, 0] >= c.x0)
+                & (self.coordinates[:, 0] <= c.x1)
+                & (self.coordinates[:, 1] >= c.y0)
+                & (self.coordinates[:, 1] <= c.y1)
+            )
+
+            self.adata = self.adata[mask, :].copy()
+            self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1]
+            # shift appropriately
+            self.coordinates[:, 0] -= c.x0
+            self.coordinates[:, 1] -= c.y0
+
+        self.alayer = ALayer(self.adata, is_raw=False, palette=self.cat_cmap)
 
         if self.library_id is None:
             haystack = list(self.adata.uns[self.spatial_key].keys())
