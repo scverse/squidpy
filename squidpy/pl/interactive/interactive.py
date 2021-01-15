@@ -13,13 +13,10 @@ from squidpy.pl._utils import save_fig
 from squidpy.constants._pkg_constants import Key
 
 try:
-    pass
-
+    from squidpy.pl.interactive._controller import ImageController
 except ImportError as e:
     _error: Optional[str] = str(e)
 else:
-    from squidpy.pl.interactive._controller import ImageController
-
     _error = None
 
 
