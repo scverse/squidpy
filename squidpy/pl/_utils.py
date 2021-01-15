@@ -62,7 +62,7 @@ def save_fig(fig: Figure, path: Union[str, Path], make_dir: bool = True, ext: st
         try:
             os.makedirs(str(Path.parent), exist_ok=True)
         except OSError as e:
-            logg.debug(f"Unable to create directory `{Path.parent}`. Reason: `{e}`.")
+            logg.debug(f"Unable to create directory `{Path.parent}`. Reason: `{e}`")
 
     logg.debug(f"Saving figure to `{path!r}`")
 

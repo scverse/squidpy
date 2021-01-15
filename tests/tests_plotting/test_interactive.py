@@ -9,16 +9,10 @@ import numpy as np
 
 from squidpy.im import ImageContainer
 from tests.conftest import DPI, PlotTester, PlotTesterMeta
-from squidpy.constants._pkg_constants import Key
 
 
 @pytest.mark.qt
 class TestNapari(PlotTester, metaclass=PlotTesterMeta):
-    def test_no_valid_libraries(self, qtbot, adata: AnnData, cont: ImageContainer):
-        with pytest.raises(ValueError, match=r"Unable to find any valid datasets\..*"):
-            # in adata, there's 'V1_Adult_Mouse_Brain', in cont it's named as 'image'
-            _ = cont.interactive(adata)
-
     def test_add_same_layer(self, qtbot, adata: AnnData, napari_cont: ImageContainer, capsys):
         from napari.layers import Points
 
@@ -99,11 +93,8 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
 
         viewer.screenshot(dpi=DPI)
 
-    def test_plot_add_image(self, qtbot, adata: AnnData, napari_cont: ImageContainer, capsys):
+    def test_plot_add_image(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
         from napari.layers import Image
-
-        s.logfile = sys.stderr
-        s.verbosity = 4
 
         viewer = napari_cont.interactive(adata)
         cnt = viewer._controller
@@ -111,18 +102,29 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         img[..., 0] = 1.0  # all red image
 
         napari_cont.add_img(img, img_id="foobar")
-
-        cnt.add_image("foobar")
-        err = capsys.readouterr().err
-
-        assert "Unable to load spot diameter. Reason: " in err
-        assert viewer._controller.view.layernames == {"V1_Adult_Mouse_Brain"}
-
-        # dummy value, doesn't matter until we start drawing points
-        adata.uns[Key.uns.spatial]["foobar"] = {"scalefactors": {"spot_diameter_fullres": 0}}
         cnt.add_image("foobar")
 
         assert viewer._controller.view.layernames == {"V1_Adult_Mouse_Brain", "foobar"}
         assert isinstance(viewer._controller.view.layers["foobar"], Image)
 
+        viewer.screenshot(dpi=DPI)
+
+    def test_plot_crop_center(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
+        viewer = napari_cont.crop_corner(0, 0, 500, 500).interactive(adata)
+        bdata = viewer.adata
+        cnt = viewer._controller
+
+        cnt.add_points(bdata.obs_vector(bdata.var_names[42]), layer_name="foo")
+
+        assert bdata.n_obs < adata.n_obs
+        viewer.screenshot(dpi=DPI)
+
+    def test_plot_crop_corner(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
+        viewer = napari_cont.crop_center(500, 500, 250, 250).interactive(adata)
+        bdata = viewer.adata
+        cnt = viewer._controller
+
+        cnt.add_points(bdata.obs_vector(bdata.var_names[42]), layer_name="foo")
+
+        assert bdata.n_obs < adata.n_obs
         viewer.screenshot(dpi=DPI)

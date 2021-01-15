@@ -295,7 +295,7 @@ class ImageContainer(FeatureMixin):
         crop_y1 = min(self.data.y.shape[0], y1)
 
         # create cropped xr.Dataset
-        crop = self.data.isel(x=slice(crop_x0, crop_x1), y=slice(crop_y0, crop_y1))
+        crop = self.data.isel(x=slice(crop_x0, crop_x1), y=slice(crop_y0, crop_y1)).copy(deep=False)
         crop.attrs["crop"] = CropCoords(crop_x0, crop_y0, crop_x1, crop_y1)
 
         # pad crop if necessary

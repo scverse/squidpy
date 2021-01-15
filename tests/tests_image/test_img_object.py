@@ -7,6 +7,7 @@ import numpy as np
 
 import rasterio.errors
 
+from squidpy.im._utils import CropCoords
 from squidpy.im.object import ImageContainer
 from squidpy.constants._pkg_constants import Key
 
@@ -245,3 +246,10 @@ def test_single_uncrop_img(tmpdir):
 
     # check that has cropped correct image
     assert np.max(np.abs(a.data["image_0"] - cont.data["image_0"])) == 0.0
+
+
+def test_crop_metadata(cont: ImageContainer) -> None:
+    crop = cont.crop_corner(0, 0, 50, 50)
+
+    assert cont.data.attrs["crop"] is None
+    assert crop.data.attrs["crop"] == CropCoords(0, 0, 50, 50)
