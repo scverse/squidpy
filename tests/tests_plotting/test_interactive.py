@@ -28,7 +28,7 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
 
         err = capsys.readouterr().err
 
-        assert "Point layer `layer1` is already loaded" in err
+        assert "Layer `layer1` is already loaded" in err
         assert len(viewer._controller.view.layers) == 2
         assert viewer._controller.view.layernames == {"V1_Adult_Mouse_Brain", "layer1"}
         assert isinstance(viewer._controller.view.layers["layer1"], Points)
