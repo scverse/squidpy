@@ -7,6 +7,7 @@ import numpy as np
 
 import rasterio.errors
 
+from squidpy.im._utils import CropCoords
 from squidpy.im.object import ImageContainer
 from squidpy.constants._pkg_constants import Key
 
@@ -27,20 +28,23 @@ def test_image_loading(shape, tmpdir):
         # load as np array
         cont = ImageContainer(img_orig)
         # check that contains same information
-        assert (cont.data.image == img_orig).all()
+        assert (cont["image"] == img_orig).all()
 
     # save & load as tiff
     fname = tmpdir.mkdir("data").join("img.tif")
     tifffile.imsave(fname, img_orig)
     cont = ImageContainer(str(fname))
+    print(cont.data)
+    print(cont.data["image"])
+
     if len(shape) > 3:
         # multi-channel tiff
         # check for existance of each im in multi-channel tiff
         # check that contains correct information
-        assert (cont.data["image"] == img_orig[:, :, :, 0].transpose(1, 2, 0)).all()
+        assert (cont["image"] == img_orig[:, :, :, 0].transpose(1, 2, 0)).all()
     else:
         # check that contains same information
-        assert (cont.data.image == img_orig).all()
+        assert (cont["image"] == img_orig).all()
 
 
 @pytest.mark.parametrize(
@@ -242,3 +246,10 @@ def test_single_uncrop_img(tmpdir):
 
     # check that has cropped correct image
     assert np.max(np.abs(a.data["image_0"] - cont.data["image_0"])) == 0.0
+
+
+def test_crop_metadata(cont: ImageContainer) -> None:
+    crop = cont.crop_corner(0, 0, 50, 50)
+
+    assert cont.data.attrs["crop"] is None
+    assert crop.data.attrs["crop"] == CropCoords(0, 0, 50, 50)

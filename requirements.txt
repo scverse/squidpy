@@ -1,17 +1,15 @@
-# TODO: pin the versions
+# TODO: pin the versions (at least min)
 anndata>=0.7.4
 dask
 data-science-types  # array typehints
 docrep>=0.3.1
 ipywidgets>=7.5.1  # progress bar
-leidenalg  # TODO: rather use scanpy with extra args
-napari  # TODO: optionall move to extra
+leidenalg  # TODO: do we actually use it? if so, I'd rather use scanpy with extra args
 netcdf4
 omnipath>=1.0.4
 pandas
-pyqt5  # TODO: optionally move to extra
 rasterio
-scanpy
+scanpy>=1.6.0
 scikit-image>=0.17.1
 statsmodels>=0.12.0
 tqdm>=4.50.2  # progress bar

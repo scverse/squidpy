@@ -9,3 +9,5 @@ div.sphx-glr-download-link-note {
 p.sphx-glr-signature {
    display: none !important;
 }
+
+.wy-nav-content { max-width: 950px }

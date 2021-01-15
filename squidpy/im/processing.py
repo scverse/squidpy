@@ -1,7 +1,6 @@
 """Functions exposed: process_img()."""
 
-from types import MappingProxyType
-from typing import Any, Union, Mapping, Optional
+from typing import Any, Union, Optional
 
 import skimage
 import skimage.filters
@@ -17,13 +16,13 @@ def process_img(
     img: ImageContainer,
     img_id: str,
     processing: Union[str, Processing],
-    processing_kwargs: Mapping[str, Any] = MappingProxyType({}),
     xs: Optional[int] = None,
     ys: Optional[int] = None,
     key_added: Optional[str] = None,
     channel_id: Optional[str] = None,
     copy: bool = False,
-) -> Union[None, ImageContainer]:
+    **kwargs: Any,
+) -> Optional[ImageContainer]:
     """
     Process an image.
 
@@ -33,24 +32,24 @@ def process_img(
     Parameters
     ----------
     %(img_container)s
-    img_id
-        Key of image object to process.
+    %(img_id)s
     processing
-        Name of processing method to use. Available are:
+        Name of processing method to use. Valid options are are:
 
             - `{p.SMOOTH.s!r}`: :func:`skimage.filters.gaussian`.
             - `{p.GRAY.s!r}`: :func:`skimage.color.rgb2gray`.
 
-    processing_kwargs
-        Key word arguments to processing method specified by ``processing``.
     %(width_height)s
     key_added
-        Key of new image layer to add into img object. Defaults to ``{{img_id}}_{{processing}}``.
+        Key of new image layer to add into ``img`` object. If `None`, use ``{{img_id}}_{{processing}}``.
     channel_id
         Name of the channel dimension of the new image layer.
+
         Default is the same as the input image if the processing function does not change the number
         of channels, and ``{{channel}}_{{processing}}`` if it does.
     %(copy_cont)s
+    kwargs
+        Keyword arguments to processing method specified by ``processing``.
 
     Returns
     -------
@@ -65,25 +64,21 @@ def process_img(
     img_id_new = img_id + "_" + str(processing) if key_added is None else key_added
 
     # process crops
-    xcoord = []
-    ycoord = []
-    crops = []
+    xcoord, ycoord, crops = [], [], []
     for crop, x, y in img.generate_equal_crops(xs=xs, ys=ys):
         xcoord.append(x)
         ycoord.append(y)
         if processing == Processing.SMOOTH:
             crops.append(
                 ImageContainer(
-                    skimage.filters.gaussian(crop[img_id], **processing_kwargs),
+                    skimage.filters.gaussian(crop[img_id], **kwargs),
                     img_id=img_id_new,
                     channel_id=channel_id,
                 )
             )
         elif processing == Processing.GRAY:
             crops.append(
-                ImageContainer(
-                    skimage.color.rgb2gray(crop[img_id], **processing_kwargs), img_id=img_id_new, channel_id=channel_id
-                )
+                ImageContainer(skimage.color.rgb2gray(crop[img_id], **kwargs), img_id=img_id_new, channel_id=channel_id)
             )
         else:
             raise NotImplementedError(processing)
@@ -93,5 +88,5 @@ def process_img(
 
     if copy:
         return img_proc  # type: ignore[no-any-return]
-    else:
-        img.add_img(img=img_proc[img_id_new], img_id=img_id_new)
+
+    img.add_img(img=img_proc[img_id_new], img_id=img_id_new)

@@ -24,6 +24,23 @@ from multiprocessing import Manager, cpu_count
 
 import numpy as np
 
+try:
+    from functools import singledispatchmethod  # type: ignore[attr-defined]
+except ImportError:
+    from functools import singledispatch, update_wrapper
+
+    def singledispatchmethod(func: Callable[..., Any]) -> Callable[..., Any]:
+        """Backport of `singledispatchmethod` for < Python 3.8."""
+        dispatcher = singledispatch(func)
+
+        def wrapper(*args: Any, **kw: Any) -> Any:
+            return dispatcher.dispatch(args[1].__class__)(*args, **kw)
+
+        wrapper.register = dispatcher.register  # type: ignore[attr-defined]
+        update_wrapper(wrapper, func)
+
+        return wrapper
+
 
 class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
     """Signalling queue."""

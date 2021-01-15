@@ -68,7 +68,7 @@ spatial_key
 _conn_key = """\
 conn_key
     Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored."""
-# TODO: https://github.com/Chilipp/docrep/issues/21 fixed, this is not necessary
+# TODO: https://github.com/Chilipp/docrep/issues/21 fixes this, this is not necessary
 _crop_extra = """\
 scale
     Resolution of the crop (smaller -> smaller image).
@@ -96,6 +96,12 @@ backend
     Parallelization backend to use. See :class:`joblib.Parallel` for available options.
 show_progress_bar
     Whether to show the progress bar or not."""
+_channels = """\
+channels
+    Channels for this feature is computed. If `None`, use all channels."""
+_segment_kwargs = """\
+kwargs
+    Keyword arguments for the underlying model."""
 
 
 d = DocstringProcessor(
@@ -108,6 +114,7 @@ d = DocstringProcessor(
     img_hr=_img_hr,
     img_id=_img_id,
     feature_name=_feature_name,
+    xy_coord=_xy_coord,
     feature_ret=_feature_ret,
     width_height=_width_height,
     cluster_key=_cluster_key,
@@ -117,4 +124,6 @@ d = DocstringProcessor(
     plotting=_plotting,
     plotting_returns=_plotting_returns,
     parallelize=_parallelize,
+    channels=_channels,
+    segment_kwargs=_segment_kwargs,
 )
