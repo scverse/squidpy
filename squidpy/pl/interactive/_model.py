@@ -17,6 +17,7 @@ class ImageModel:
     adata: AnnData
     container: ImageContainer
     spatial_key: str = field(default=Key.obsm.spatial, repr=False)
+    library_id: Optional[str] = None
     spot_diameter: float = field(default=0, init=False)
     coordinates: np.ndarray = field(init=False, repr=False)
     alayer: ALayer = field(init=False, repr=True)
@@ -29,3 +30,22 @@ class ImageModel:
     def __post_init__(self) -> None:
         self.alayer = ALayer(self.adata, is_raw=False, palette=self.cat_cmap)
         self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1]
+
+        if self.library_id is None:
+            haystack = list(self.adata.uns[self.spatial_key].keys())
+            if not len(haystack):
+                raise ValueError()
+            if len(haystack) > 1:
+                raise ValueError()
+
+            self.library_id = haystack[0]
+
+        try:
+            self.spot_diameter = float(
+                self.adata.uns[self.spatial_key][self.library_id]["scalefactors"]["spot_diameter_fullres"]
+            )
+        except KeyError:
+            raise KeyError(
+                f"Unable to get the spot diameter from "
+                f"`adata.uns[{self.spatial_key!r}][{self.library_id!r}]['scalefactors'['spot_diameter_fullres']]`"
+            ) from None

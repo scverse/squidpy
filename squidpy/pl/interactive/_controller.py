@@ -66,11 +66,6 @@ class ImageController:
             logg.warning(f"Image layer `{dataset}` is already loaded")
             return False
 
-        spot_diameter = self._get_spot_diameter(dataset)
-        if spot_diameter is None:
-            return False
-        self.model.spot_diameter = spot_diameter
-
         self.view.viewer.add_image(
             self.model.container.data[dataset].transpose("y", "x", ...).values,
             name=dataset,
@@ -200,13 +195,6 @@ class ImageController:
             return
 
         self.view.layers.move(index, -1)
-
-    def _get_spot_diameter(self, dataset: str) -> Optional[float]:
-        try:
-            return float(self.model.adata.uns[self.model.spatial_key][dataset]["scalefactors"]["spot_diameter_fullres"])
-        except KeyError as e:
-            logg.warning(f"Unable to load spot diameter. Reason: {e}")
-            return None
 
     def _save_shapes(self, layer: Shapes, key: str) -> None:
         shape_list = layer._data_view

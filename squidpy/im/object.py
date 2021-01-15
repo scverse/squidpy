@@ -533,6 +533,7 @@ class ImageContainer(FeatureMixin):
         self,
         adata: AnnData,
         spatial_key: str = Key.obsm.spatial,
+        library_id: Optional[str] = None,
         cont_cmap: str = "viridis",
         cat_cmap: Optional[str] = None,
         blending: Literal["opaque", "translucent", "adidtive"] = "opaque",
@@ -545,6 +546,8 @@ class ImageContainer(FeatureMixin):
         ----------
         %(adata)s
         %(spatial_key)s
+        library_id
+            Key in :attr:`anndata.AnnData.uns` ['spatial'] used to get the spot diameter.
         cont_cmap
             Colormap for continuous variables.
         cat_cmap
@@ -554,7 +557,7 @@ class ImageContainer(FeatureMixin):
         key_added
             Key where to store :class:`napari.layers.Shapes` which can be exported by pressing `SHIFT-E`:
 
-                - :attr:`anndata.AnnData.obs` ``['{layer_name}_{key_added}']`` - boolean mask containing theselected
+                - :attr:`anndata.AnnData.obs` ``['{layer_name}_{key_added}']`` - boolean mask containing the selected
                   cells.
                 - :attr:`anndata.AnnData.uns` ``['{layer_name}_{key_added}']['meshes']`` - list of :class:`numpy.array`,
                   defining a mesh in the spatial coordinates.
@@ -573,6 +576,7 @@ class ImageContainer(FeatureMixin):
             img=self,
             adata=adata,
             spatial_key=spatial_key,
+            library_id=library_id,
             cont_cmap=cont_cmap,
             cat_cmap=cat_cmap,
             blending=blending,

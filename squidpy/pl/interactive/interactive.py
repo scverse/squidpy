@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
 from squidpy.pl._utils import save_fig
-from squidpy.constants._pkg_constants import Key
 
 try:
     from squidpy.pl.interactive._controller import ImageController
@@ -31,28 +30,11 @@ class Interactive:
     %(interactive.parameters)s
     """
 
-    def __init__(
-        self,
-        img: ImageContainer,
-        adata: AnnData,
-        spatial_key: str = Key.obsm.spatial,
-        cont_cmap: str = "viridis",
-        cat_cmap: Optional[str] = None,
-        blending: str = "opaque",
-        key_added: str = "shapes",
-    ):
+    def __init__(self, img: ImageContainer, adata: AnnData, **kwargs: Any):
         if _error is not None:
             raise ImportError(f"Unable to import the interactive viewer. Reason: {_error}.")
 
-        self._controller = ImageController(
-            adata,
-            img,
-            spatial_key=spatial_key,
-            cat_cmap=cat_cmap,
-            cont_cmap=cont_cmap,
-            blending=blending,
-            key_added=key_added,
-        )
+        self._controller = ImageController(adata, img, **kwargs)
 
     @d.get_full_description(base="cont_show")
     @d.get_sections(base="cont_show", sections=["Parameters", "Returns"])
