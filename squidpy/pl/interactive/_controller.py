@@ -49,26 +49,27 @@ class ImageController:
 
         self.view._init_UI()
 
-    def add_image(self, dataset: str) -> bool:
+    def add_image(self, library_id: str) -> bool:
         """
         Add a new :mod:`napari` image layer.
 
         Parameters
         ----------
-        dataset
+        library_id
             Key in the underlying's :class:`ImageContainer` which contains the image.
 
         Returns
         -------
         `True` if the layer has been added, otherwise `False`.
         """
-        if dataset in self.view.layernames:
-            logg.warning(f"Image layer `{dataset}` is already loaded")
+        if library_id in self.view.layernames:
+            self._handle_already_present(library_id)
             return False
 
+        logg.info(f"Creating image `{library_id}` layer")
         self.view.viewer.add_image(
-            self.model.container.data[dataset].transpose("y", "x", ...).values,
-            name=dataset,
+            self.model.container.data[library_id].transpose("y", "x", ...).values,
+            name=library_id,
             rgb=True,
             colormap=self.model.cont_cmap,
             blending=self.model.blending,
@@ -95,17 +96,16 @@ class ImageController:
         `True` if the layer has been added, otherwise `False`.
         """
         if layer_name in self.view.layernames:
-            logg.warning(f"Point layer `{layer_name}` is already loaded")
+            self._handle_already_present(layer_name)
             return False
 
-        logg.info(f"Creating `{layer_name}` layer")
-
+        logg.info(f"Creating point `{layer_name}` layer")
         properties = self._get_points_properties(vec, key=key)
         layer: Points = self.view.viewer.add_points(
             self.model.coordinates,
             name=layer_name,
             size=self.model.spot_diameter,
-            opacity=0.8,  # not triggered on 1st draw
+            opacity=1,
             edge_width=1,
             blending=self.model.blending,
             face_colormap=self.model.cont_cmap,
@@ -183,6 +183,11 @@ class ImageController:
         The screenshot as an RGB array of shape `(height, width, 3)`.
         """
         return self.view.viewer.screenshot(path, canvas_only=True)
+
+    def _handle_already_present(self, layer_name: str) -> None:
+        logg.warning(f"Layer `{layer_name}` is already loaded")
+        self.view.layers.unselect_all()
+        self.view.layers[layer_name].selected = True
 
     def _move_layer_to_front(self, event: Any) -> None:
         layer = event.source
