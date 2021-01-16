@@ -218,11 +218,7 @@ def centrality_scores(
     closeness_centrality = []
 
     for c in clusters:
-        cluster_node_idx = adata[adata.obs[cluster_key] == c].obs.index.tolist()
-        # ensuring that cluster_node_idx are List[int]
-        # TODO: this seems wrong (or why not just list(range(adata[adata.obs[cluster_key] == c].n_obs))?
-        # TODO: each sub-graph will be using indices (0, 1, ..., len(cluster) - 1)
-        cluster_node_idx = [i for i, x in enumerate(cluster_node_idx)]
+        cluster_node_idx = np.where(adata.obs[cluster_key] == c)[0]
         subgraph = graph.subgraph(cluster_node_idx)
 
         centrality = nx.algorithms.centrality.group_degree_centrality(graph, cluster_node_idx)
