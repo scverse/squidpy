@@ -52,9 +52,9 @@ def spatial_neighbors(
     transform
         Type of adjacency matrix transform. Valid options are:
 
-            - `{t.SPECTRAL.s!r}` - TODO.
-            - `{t.COSINE.s!r}` - TODO.
-            - `{t.NONE.v}` - TODO.
+            - `{t.SPECTRAL.s!r}` - TODO
+            - `{t.COSINE.s!r}` - TODO
+            - `{t.NONE.v}` - TODO
 
     key_added
         Key which controls where the results are saved.
@@ -71,7 +71,7 @@ def spatial_neighbors(
     _assert_positive(n_neigh, name="n_neigh")
     _assert_spatial_basis(adata, spatial_key)
 
-    transform = Transform(transform)
+    transform = Transform.NONE if transform is None else Transform(transform)
     if coord_type is None:
         coord_type = CoordType.VISIUM if Key.uns.spatial in adata.uns else CoordType.GENERIC
     else:

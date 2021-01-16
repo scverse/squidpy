@@ -17,10 +17,10 @@ from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
 from squidpy._utils import singledispatchmethod
 from squidpy.pl._utils import _points_inside_triangles
-from squidpy.pl.interactive._view import ImageView
-from squidpy.pl.interactive._model import ImageModel
-from squidpy.pl.interactive._utils import _get_categorical, _position_cluster_labels
-from squidpy.pl.interactive._widgets import RangeSlider
+from squidpy.pl._interactive._view import ImageView
+from squidpy.pl._interactive._model import ImageModel
+from squidpy.pl._interactive._utils import _get_categorical, _position_cluster_labels
+from squidpy.pl._interactive._widgets import RangeSlider
 
 # label string: attribute name
 _WIDGETS_TO_HIDE = {

@@ -140,6 +140,7 @@ def nhood_enrichment(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - the enrichment z-score.
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
     """
+    # TODO: recheck
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -159,8 +160,7 @@ def nhood_enrichment(
     count = _test(indices, indptr, int_clust)
 
     rs = np.random.RandomState(seed=seed)
-    # TODO: parallelize?
-    # alt: incremental mean/std
+    # TODO: parallelize? alternatively incremental mean/std so that we don't need to save all the perms?
     for perm in range(n_perms):
         rs.shuffle(int_clust)
         perms[:, :, perm] = _test(indices, indptr, int_clust)
@@ -218,9 +218,10 @@ def centrality_scores(
     closeness_centrality = []
 
     for c in clusters:
-        # TODO: this seems wrong (or why not just list(range(adata[adata.obs[cluster_key] == c].n_obs))?
         cluster_node_idx = adata[adata.obs[cluster_key] == c].obs.index.tolist()
         # ensuring that cluster_node_idx are List[int]
+        # TODO: this seems wrong (or why not just list(range(adata[adata.obs[cluster_key] == c].n_obs))?
+        # TODO: each sub-graph will be using indices (0, 1, ..., len(cluster) - 1)
         cluster_node_idx = [i for i, x in enumerate(cluster_node_idx)]
         subgraph = graph.subgraph(cluster_node_idx)
 

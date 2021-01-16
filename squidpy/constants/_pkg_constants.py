@@ -54,6 +54,10 @@ class Key:  # noqa: D101
         def ripley_k(cls, cluster: str) -> str:
             return f"{cluster}_ripley_k"
 
+        @classmethod
+        def colors(cls, cluster: str) -> str:
+            return f"{cluster}_colors"
+
     class obsp:  # noqa: D106
         @cprop
         def spatial(cls) -> str:

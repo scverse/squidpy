@@ -4,8 +4,8 @@ from PyQt5.QtWidgets import QLabel, QWidget, QComboBox, QHBoxLayout
 
 import napari
 
-from squidpy.pl.interactive._model import ImageModel
-from squidpy.pl.interactive._widgets import (
+from squidpy.pl._interactive._model import ImageModel
+from squidpy.pl._interactive._widgets import (
     CBarWidget,
     AListWidget,
     ObsmIndexWidget,

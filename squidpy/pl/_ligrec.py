@@ -119,8 +119,8 @@ def ligrec(
     ----------
     %(adata)s
         It can also be a :class:`LigrecResult` as returned by :func:`squidpy.gr.ligrec`.
-    cluster_key
-        Key in :attr:`anndata.AnnData.uns`. Only used when ``adata`` is of type :class:`AnnData`.
+    %(cluster_key)s
+        Only used when ``adata`` is of type :class:`AnnData`.
     source_groups
         Source interaction clusters. If `None`, select all clusters.
     target_groups
@@ -167,12 +167,12 @@ def ligrec(
     if source_groups is None:
         source_groups = adata.pvalues.columns.get_level_values(0)
     elif isinstance(source_groups, str):
-        source_groups = [source_groups]
+        source_groups = (source_groups,)
 
     if target_groups is None:
         target_groups = adata.pvalues.columns.get_level_values(1)
     if isinstance(target_groups, str):
-        target_groups = [target_groups]
+        target_groups = (target_groups,)
 
     source_groups, _ = _unique_order_preserving(source_groups)  # type: ignore[no-redef,assignment]
     target_groups, _ = _unique_order_preserving(target_groups)  # type: ignore[no-redef,assignment]

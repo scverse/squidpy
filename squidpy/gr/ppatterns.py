@@ -281,7 +281,6 @@ def _occur_count(
     thres: Tuple[np.float32, np.float32],
     labs_unique: np.ndarray[np.int32],
 ) -> np.ndarray[np.float32]:
-
     num = labs_unique.shape[0]
     co_occur = np.zeros((num, num), dtype=ft)
     probs_con = np.zeros((num, num), dtype=ft)

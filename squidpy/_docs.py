@@ -89,6 +89,10 @@ dpi
     Dots per inch.
 save
     Whether to save the plot."""
+_cat_plotting = f"""\
+palette
+    Categorcal colormap for the clusters. If `None`, TODO.
+{_plotting}"""
 _plotting_returns = """\
 Nothing, just plots the and optionally saves the plot.
 """
@@ -144,6 +148,7 @@ d = DocstringProcessor(
     conn_key=_conn_key,
     crop_extra=_crop_extra,
     plotting=_plotting,
+    cat_plotting=_cat_plotting,
     plotting_returns=_plotting_returns,
     parallelize=_parallelize,
     channels=_channels,

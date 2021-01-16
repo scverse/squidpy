@@ -113,25 +113,24 @@ def _create_sparse_df(
 
 def _assert_categorical_obs(adata: AnnData, key: str) -> None:
     if key not in adata.obs:
-        raise KeyError()
+        raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
 
     if not is_categorical_dtype(adata.obs[key]):
-        raise TypeError(f"Expected `adata.obs[{key}]` to be `categorical`, found `{infer_dtype(adata.obs[key])}`.")
+        raise TypeError(f"Expected `adata.obs[{key!r}]` to be `categorical`, found `{infer_dtype(adata.obs[key])}`.")
 
 
 def _assert_connectivity_key(adata: AnnData, key: str) -> None:
     if key not in adata.obsp:
-        # TODO: nicer message
+        key_added = key.replace("_connectivities", "")
         raise KeyError(
-            f"{key} not present in `adata.obs`"
-            "Choose a different connectivity_key or run first "
-            "gr.spatial_neighbors on the AnnData object."
+            f"Spatial connectivity key `{key}` not found in `adata.obsp`. "
+            f"Please run `squidpy.gr.spatial_neighbors(..., key_added={key_added!r})` first."
         )
 
 
 def _assert_spatial_basis(adata: AnnData, key: str) -> None:
     if key not in adata.obsm:
-        raise KeyError("TODO")
+        raise KeyError(f"Spatial basis `{key}` not found in `adata.obsm`.")
 
 
 def _assert_non_empty_sequence(seq: Union[Hashable, Iterable[Hashable]], convert_scalar: bool = True) -> List[Hashable]:
@@ -140,41 +139,23 @@ def _assert_non_empty_sequence(seq: Union[Hashable, Iterable[Hashable]], convert
             raise TypeError("TODO")
         seq = (seq,)
 
-    res = _unique_order_preserving(seq)[0]
+    res, _ = _unique_order_preserving(seq)
     if not len(res):
         raise ValueError("TODO")
 
     return res
 
 
-def _subset_by_clusters(
-    adata: AnnData, key: str, clusters: Optional[Union[Any, Iterable[Any]]], copy: bool = False
-) -> AnnData:
-    _assert_categorical_obs(adata, key)
-
-    if clusters is None:
-        return adata
-
-    if isinstance(clusters, str) or not isinstance(clusters, Iterable):
-        clusters = (clusters,)
-
-    clusters = set(clusters)
-    viable_clusters = set(adata.obs[key].cat.categories)
-    if not clusters & viable_clusters:
-        raise ValueError()
-
-    mask = np.isin(adata.obs[key], list(clusters))
-    adata = adata[mask, :]
-
-    if not adata.n_obs:
-        raise ValueError()
-
-    return adata.copy() if copy else adata
+def _get_valid_values(needle: Sequence[Any], haystack: Sequence[Any]) -> Sequence[Any]:
+    res = [n for n in needle if n in haystack]
+    if not len(res):
+        raise ValueError(f"No valid values were found. Valid values are `{sorted(set(haystack))}`.")
+    return res
 
 
-def _assert_positive(n_perms: int, *, name: str) -> None:
-    if n_perms <= 0:
-        raise ValueError(f"Expected `{name}` to be non-negative, found `{n_perms}`.")
+def _assert_positive(value: int, *, name: str) -> None:
+    if value <= 0:
+        raise ValueError(f"Expected `{name}` to be non-negative, found `{value}`.")
 
 
 def _save_data(

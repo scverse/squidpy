@@ -531,7 +531,7 @@ class ImageContainer(FeatureMixin):
 
         return self
 
-    @d.get_sections(base="interactive", sections=["Parameters"])
+    @d.get_sections(base="_interactive", sections=["Parameters"])
     @d.dedent
     def interactive(
         self,
