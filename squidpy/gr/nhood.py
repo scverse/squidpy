@@ -1,7 +1,9 @@
-"""Functions for neighborhood enrichment analysis (permutation test, assortativity measures etc.)."""
+"""Functions for neighborhood enrichment analysis (permutation test, centralities measures etc.)."""
 
-from typing import Tuple, Callable, Optional
+from typing import Any, Tuple, Union, Callable, Iterable, Optional, Sequence
+from functools import partial
 
+from scanpy import logging as logg
 from anndata import AnnData
 
 from numba import njit, prange  # noqa: F401
@@ -13,6 +15,8 @@ import numba.types as nt
 import networkx as nx
 
 from squidpy._docs import d
+from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
+from squidpy.constants._constants import Centrality
 from squidpy.constants._pkg_constants import Key
 
 dt = nt.uint32  # data type aliases (both for numpy and numba should match)
@@ -184,25 +188,39 @@ def nhood_enrichment(
 
 
 @d.dedent
+# @inject_docs(key=Key.obsp.spatial_conn(), c=Centrality)
 def centrality_scores(
     adata: AnnData,
     cluster_key: str,
+    centrality: Union[str, Sequence[str], None] = None,
     connectivity_key: Optional[str] = Key.obsp.spatial_conn(),
     copy: bool = False,
+    n_jobs: Optional[int] = None,
+    backend: str = "loky",
+    show_progress_bar: bool = False,
 ) -> Optional[pd.DataFrame]:
     """
     Compute centrality scores per cluster or cell type.
 
-    Based among others on methods used for Gene Regulatory Networks (GRNs) in [CellOracle20]_.
+    Wraps methods in `networkx.algorithms.group_centrality` [NetworkX08].
+    Inspired by usage in  Gene Regulatory Networks (GRNs) in [CellOracle20]_.
 
     Parameters
     ----------
     %(adata)s
     cluster_key
         Cluster key in :attr:`anndata.AnnData.obs`.
-    connectivity_key
-        Connectivity matrix key in :attr:`anndata.AnnData.obsp`.
+    centrality
+        Centrality measures as described in :class:`networkx.algorithms.centrality`.\
+        if `None`, computes all. Available centralities:
+        Available centralities are the following:
+            - `{c.BETWEENNESS.s!r}`
+            - `{c.CLOSENESS.s!r}`
+            - `{c.CLUSTERING.s!r}`
+            - `{c.DEGREE.s!r}`
+    %(conn_key)s
     %(copy)s
+    %(parallelize)s
 
     Returns
     -------
@@ -215,53 +233,84 @@ def centrality_scores(
         raise ValueError(
             f"`cluster_key` {cluster_key!r} not recognized. Choose a different key referring to a cluster in .obs."
         )
-    # TODO: check for categorical dtype
+    if not is_categorical_dtype(adata.obs[cluster_key]):
+        raise TypeError(
+            f"Expected `adata.obs[{cluster_key}]` to be `categorical`, "
+            f"found `{infer_dtype(adata.obs[cluster_key])}`."
+        )
 
     # TODO: unify error messages
     if connectivity_key not in adata.obsp:
-        raise KeyError("Choose a different `connectivity_key` or run first `squidpy.gr.spatial_connectivity()`.")
+        raise KeyError("Choose a different `connectivity_key` or run first `squidpy.gr.spatial_neighbors()`.")
+
+    if isinstance(centrality, (str, Centrality)):
+        centrality = [centrality]
+    elif centrality is None:
+        centrality = [c.s for c in Centrality]
+
+    centralities = [Centrality(c) for c in centrality]
+
+    n_jobs = _get_n_cores(n_jobs)
+    logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` core(s)")
+
     graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
 
-    clusters = adata.obs[cluster_key].unique().tolist()
+    cat = adata.obs[cluster_key].cat.categories.values
+    clusters = adata.obs[cluster_key].values
 
-    degree_centrality = []
-    clustering_coefficient = []
-    betweenness_centrality = []
-    closeness_centrality = []
+    fun_dict = {}
+    for c in centralities:
+        if c == Centrality.BETWEENNESS:
+            fun_dict[c.s] = partial(nx.algorithms.centrality.group_betweenness_centrality, graph)
+        elif c == Centrality.CLOSENESS:
+            fun_dict[c.s] = partial(nx.algorithms.centrality.group_closeness_centrality, graph)
+        elif c == Centrality.DEGREE:
+            fun_dict[c.s] = partial(nx.algorithms.centrality.group_degree_centrality, graph)
+        elif c == Centrality.CLUSTERING:
+            fun_dict[c.s] = partial(nx.algorithms.cluster.average_clustering, graph)
 
-    for c in clusters:
-        cluster_node_idx = adata[adata.obs[cluster_key] == c].obs.index.tolist()
-        # ensuring that cluster_node_idx are List[int]
-        cluster_node_idx = [i for i, x in enumerate(cluster_node_idx)]
-        subgraph = graph.subgraph(cluster_node_idx)
+    res_list = []
+    for k, v in fun_dict.items():
+        df = parallelize(
+            _centrality_scores_helper,
+            collection=cat,
+            extractor=pd.concat,
+            use_ixs=False,
+            n_jobs=n_jobs,
+            backend=backend,
+            show_progress_bar=show_progress_bar,
+        )(clusters=clusters, fun=v, method=k)
+        res_list.append(df)
 
-        centrality = nx.algorithms.centrality.group_degree_centrality(graph, cluster_node_idx)
-        degree_centrality.append(centrality)
-
-        clustering = nx.algorithms.cluster.average_clustering(graph, cluster_node_idx)
-        clustering_coefficient.append(clustering)
-
-        closeness = nx.algorithms.centrality.group_closeness_centrality(graph, cluster_node_idx)
-        closeness_centrality.append(closeness)
-
-        betweenness = nx.betweenness_centrality(subgraph)
-        betweenness_centrality.append(sum(betweenness.values()))
-
-    df = pd.DataFrame(
-        list(zip(clusters, degree_centrality, clustering_coefficient, closeness_centrality, betweenness_centrality)),
-        columns=[
-            cluster_key,
-            "degree_centrality",
-            "clustering_coefficient",
-            "closeness_centrality",
-            "betweenness_centrality",
-        ],
-    )
+    df = pd.concat(res_list, axis=1)
 
     if copy:
         return df
 
     adata.uns[f"{cluster_key}_centrality_scores"] = df
+
+
+def _centrality_scores_helper(
+    cat: Iterable[Any],
+    clusters: Sequence[str],
+    fun: Callable[..., float],
+    method: str,
+    queue: Optional[SigQueue] = None,
+) -> pd.DataFrame:
+
+    res_list = []
+    for c in cat:
+        idx = np.where(clusters == c)[0]
+        res = fun(idx)
+        res_list.append(res)
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return pd.DataFrame(res_list, columns=[method], index=cat)
 
 
 @d.dedent

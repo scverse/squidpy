@@ -27,3 +27,8 @@ References
 .. TODO: how to reference this properly?
 .. [Visium] 10X Genomics |br|
     `Visium <https://www.10xgenomics.com/products/spatial-gene-expression>`__.
+
+.. [NetworkX08]
+    Aric A. Hagberg, Daniel A. Schult and Pieter J. Swart, |br|
+    *Exploring Network Structure, Dynamics, and Function using NetworkX*, |br|
+    `SciPyProceedings_11 2008 <http://conference.scipy.org/proceedings/SciPy2008/paper_2/>`__.

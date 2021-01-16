@@ -65,3 +65,11 @@ class BlobModel(ModeEnum):  # noqa: D101
 class Dataset(ModeEnum):  # noqa: D101
     OB = "ob"
     SVZ = "svz"
+
+
+@unique
+class Centrality(ModeEnum):  # noqa: D101
+    DEGREE = "degree_centrality"
+    CLUSTERING = "average_clustering"
+    CLOSENESS = "closeness_centrality"
+    BETWEENNESS = "betweenness_centrality"
