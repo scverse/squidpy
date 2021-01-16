@@ -1,6 +1,15 @@
 """Functions for point patterns spatial statistics."""
 from __future__ import annotations
 
+from squidpy.gr._utils import (
+    _save_data,
+    _assert_positive,
+    _assert_spatial_basis,
+    _assert_categorical_obs,
+    _assert_connectivity_key,
+    _assert_non_empty_sequence,
+)
+
 try:
     # [ py<3.8 ]
     from typing import Literal  # type: ignore[attr-defined]
@@ -16,7 +25,6 @@ from anndata import AnnData
 from numba import njit
 from scipy.sparse import isspmatrix_lil
 from sklearn.metrics import pairwise_distances
-from pandas.api.types import infer_dtype, is_categorical_dtype
 from statsmodels.stats.multitest import multipletests
 import numpy as np
 import pandas as pd
@@ -41,6 +49,8 @@ except ImportError:
 it = nt.int32
 ft = nt.float32
 tt = nt.UniTuple
+ip = np.int32
+fp = np.float32
 
 
 @d.dedent
@@ -62,8 +72,8 @@ def ripley_k(
     %(cluster_key)s
     %(spatial_key)s
     mode
-        Keyword which indicates the method for edge effects correction, as reported in
-        :class:`astropy.stats.RipleysKEstimator`.
+        Keyword which indicates the method for edge effects correction.
+        See :class:`astropy.stats.RipleysKEstimator` for valid options.
     support
         Number of points where Ripley's K is evaluated between a fixed radii with :math:`min=0`,
         :math:`max=\sqrt{{area \over 2}}`.
@@ -71,8 +81,14 @@ def ripley_k(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`pandas.DataFrame`. Otherwise, it modifies ``adata`` and store Ripley's K stat
-    for each cluster in ``adata.uns['ripley_k_{{cluster_key}}']``.
+    If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
+
+        - `'ripley_k'` - the Ripley's K statistic.
+        - `'distance'` - TODO.
+
+    Otherwise, modifies the ``adata`` with the following key:
+
+        - :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_ripley_k']`` - the above mentioned dataframe.
     """
     try:
         # from pointpats import ripley, hull
@@ -80,7 +96,9 @@ def ripley_k(
     except ImportError:
         raise ImportError("Please install `astropy` as `pip install astropy`.") from None
 
+    _assert_spatial_basis(adata, key=spatial_key)
     coord = adata.obsm[spatial_key]
+
     # set coordinates
     y_min = int(coord[:, 1].min())
     y_max = int(coord[:, 1].max())
@@ -92,6 +110,9 @@ def ripley_k(
     # set estimator
     Kest = RipleysKEstimator(area=area, x_max=x_max, y_max=y_max, x_min=x_min, y_min=y_min)
     df_lst = []
+
+    # TODO: how long does this take (i.e. does it make sense to measure the elapse time?)
+    logg.info("Calculating Ripley's K")
     for c in adata.obs[cluster_key].unique():
         idx = adata.obs[cluster_key].values == c
         coord_sub = coord[idx, :]
@@ -110,6 +131,7 @@ def ripley_k(
         return df
 
     adata.uns[f"ripley_k_{cluster_key}"] = df
+    _save_data(adata, attr="uns", key=Key.uns.ripley_k(cluster_key), data=df)
 
 
 @d.dedent
@@ -119,7 +141,7 @@ def moran(
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: Optional[Union[str, Sequence[str]]] = None,
     transformation: Literal["r", "B", "D", "U", "V"] = "B",  # type: ignore[name-defined]
-    permutations: int = 1000,
+    n_perms: int = 1000,
     corr_method: Optional[str] = "fdr_bh",
     layer: Optional[str] = None,
     seed: Optional[int] = None,
@@ -137,53 +159,50 @@ def moran(
     %(conn_key)s
     genes
         List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute Moran's I statistics
-        [Moran50]_. If `None`, it's computed for `highly_variable` in :attr:`anndata.AnnData.var`,
-        if present, else it is computed for all genes.
+        [Moran50]_.
+
+        If `None`, it's computed for `'highly_variable'` in :attr:`anndata.AnnData.var`, if present.
+        Otherwise, it's computed for all genes.
     transformation
-        Transformation to be used, as reported in :class:`esda.Moran`. Default: `"B"` binary.
-    permutations
-        Number of permutations to be performed, as reported in :class:`esda.Moran`.
-    corr_method
-        Correction method for multiple testing. See :func:`statsmodels.stats.multitest.multipletests` for available
-        methods.
+        Transformation to be used, as reported in :class:`esda.Moran`. Default is `"B"`, binary.
+    %(n_perms)s
+    %(corr_method)s
     layer
-        Which layer in :attr:`anndata.AnnData.layers` to use. If `None`, :attr:`anndata.AnnData.X` is used.
+        Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
     %(seed)s
     %(copy)s
     %(parallelize)s
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`pandas.DataFrame`. Otherwise, it modifies ``adata`` in place and stores
-    Global Moran's I stats in :attr:`anndata.uns["moranI"]`.
+    If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
+
+        - `'I'` - Moran's I statistic.
+        - `'pval_sim'` - TODO
+        - `'VI_sim'` - TODO
+        - `'pval_sim_{{corr_method}}'` - the corrected p-values, if ``corr_method != None`` .
+
+    Otherwise, modifies the ``adata`` with the following key:
+
+        - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe.
     """
     if esda is None or libpysal is None:
         raise ImportError("Please install `esda` and `libpysal` as `pip install esda libpysal`.")
 
-    if isinstance(genes, str):
-        genes = (genes,)
-    elif genes is None:
+    _assert_positive(n_perms, name="n_perms")
+    _assert_connectivity_key(adata, connectivity_key)
+
+    if genes is None:
         if "highly_variable" in adata.var.columns:
-            genes = adata[:, adata.var.highly_variable.values].var_names.values.tolist()
+            genes = adata[:, adata.var.highly_variable.values].var_names.values
         else:
-            genes = adata.var_names.values.tolist()
-    if not isinstance(genes, Sequence):
-        raise TypeError(f"Expected `genes` to be `Sequence`, found `{type(genes).__name__}`.")
-    if not len(genes):
-        raise ValueError("No genes have been selected.")
-
-    if connectivity_key not in adata.obsp:
-        raise KeyError(
-            f"{connectivity_key} not present in `adata.obsp`."
-            "Choose a different connectivity_key or run first "
-            "gr.spatial_neighbors(adata) on the AnnData object."
-        )
-
-    w = _set_weight_class(adata, key=connectivity_key)  # init weights
+            genes = adata.var_names.values
+    genes = _assert_non_empty_sequence(genes)  # type: ignore[assignment]
 
     n_jobs = _get_n_cores(n_jobs)
-    logg.info(f"Calculating for `{len(genes)}` genes using `{n_jobs}` core(s)")
+    start = logg.info(f"Calculating for `{len(genes)}` genes using `{n_jobs}` core(s)")
 
+    w = _set_weight_class(adata, key=connectivity_key)  # init weights
     df = parallelize(
         _moran_helper,
         collection=genes,
@@ -192,19 +211,19 @@ def moran(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(adata=adata, weights=w, transformation=transformation, permutations=permutations, layer=layer, seed=seed)
+    )(adata=adata, weights=w, transformation=transformation, permutations=n_perms, layer=layer, seed=seed)
 
     if corr_method is not None:
         _, pvals_adj, _, _ = multipletests(df["pval_sim"].values, alpha=0.05, method=corr_method)
         df[f"pval_sim_{corr_method}"] = pvals_adj
 
-    # df.index = genes
     df.sort_values(by="I", ascending=False, inplace=True)
 
     if copy:
+        logg.info("Finish", time=start)
         return df
 
-    adata.uns["moranI"] = df
+    _save_data(adata, attr="uns", key="moranI", data=df, time=start)
 
 
 def _moran_helper(
@@ -289,7 +308,7 @@ def _occur_count(
 def co_occurrence(
     adata: AnnData,
     cluster_key: str,
-    spatial_key: Optional[str] = Key.obsm.spatial,
+    spatial_key: str = Key.obsm.spatial,
     steps: int = 50,
     copy: bool = False,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
@@ -302,27 +321,20 @@ def co_occurrence(
     %(cluster_key)s
     %(spatial_key)s
     steps
-        Number of step to compute radius for co-occurrence.
+        Number of step to compute radius for the co-occurrence.
     %(copy)s
 
     Returns
     -------
-    If ``copy = True`` returns two :class:`numpy.array`. Otherwise, it modifies the ``adata`` object with the
-    following keys:
+    If ``copy = True``, returns the co-occurence probability and the TODO.
 
-        - :attr:`anndata.AnnData.uns` ``[{cluster_key}_co_occurrence]`` - the centrality scores.
+    Otherwise, modifies the ``adata`` with the following keys:
+
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['occ']`` - the co-occurrence probabilities.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - TODO.
     """
-    ip = np.int32
-    fp = np.float32
-    if cluster_key not in adata.obs.keys():
-        raise KeyError(f"Cluster key `{cluster_key}` not found in `adata.obs`.")
-    if not is_categorical_dtype(adata.obs[cluster_key]):
-        raise TypeError(
-            f"Expected `adata.obs[{cluster_key}]` to be `categorical`, "
-            f"found `{infer_dtype(adata.obs[cluster_key])}`."
-        )
-    if spatial_key not in adata.obsm:
-        raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.obsm`.")
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_spatial_basis(adata, key=spatial_key)
 
     spatial = adata.obsm[spatial_key]
     original_clust = adata.obs[cluster_key]
@@ -340,11 +352,17 @@ def co_occurrence(
     interval = np.linspace(thres_min, thres_max, num=steps, dtype=fp)
 
     out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
+    start = logg.info("Calculating co-occurrence probabilities")
+
+    # TODO: parallelize (i.e. what's the interval length?)
     for i in range(interval.shape[0] - 1):
         cond_prob = _occur_count(labs, dist, (interval[i], interval[i + 1]), labs_unique)
         out[:, :, i] = cond_prob
 
     if copy:
+        logg.info("Finish", time=start)
         return out, interval
 
-    adata.uns[f"{cluster_key}_co_occurrence"] = {"occ": out, "interval": interval}
+    _save_data(
+        adata, attr="uns", key=Key.uns.co_occurrence(cluster_key), data={"occ": out, "interval": interval}, time=start
+    )

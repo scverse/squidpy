@@ -124,7 +124,7 @@ def _create_template(n_cls: int, return_means: bool = False, parallel: bool = Tr
 
 
 def _fdr_correct(
-    pvals: pd.DataFrame, fdr_method: str, fdr_axis: Union[str, FdrAxis], alpha: float = 0.05
+    pvals: pd.DataFrame, corr_method: str, fdr_axis: Union[str, FdrAxis], alpha: float = 0.05
 ) -> pd.DataFrame:
     """Correct p-values for FDR along specific axis in ``pvals``."""
     from pandas.core.arrays.sparse import SparseArray
@@ -133,7 +133,7 @@ def _fdr_correct(
     def fdr(pvals: pd.Series[np.float64]) -> SparseArray[np.float64]:
         _, qvals, _, _ = multipletests(
             np.nan_to_num(pvals.values, copy=True, nan=1.0),
-            method=fdr_method,
+            method=corr_method,
             alpha=alpha,
             is_sorted=False,
             returnsorted=False,
@@ -296,7 +296,7 @@ class PermutationTestABC(ABC):
         n_perms: int = 1000,
         threshold: float = 0.01,
         seed: Optional[int] = None,
-        fdr_method: Optional[str] = None,
+        corr_method: Optional[str] = None,
         fdr_axis: Union[str, FdrAxis] = FdrAxis.INTERACTIONS.v,
         alpha: float = 0.05,
         copy: bool = False,
@@ -318,16 +318,14 @@ class PermutationTestABC(ABC):
             Do not perform permutation test if any of the interacting components is being expressed
             in less than ``threshold`` percent of cells within a given cluster.
         %(seed)s
-        fdr_method
-            Method for false discovery rate correction. If `None`, don't perform FDR correction.
+        %(corr_method)s
         fdr_axis
-            Axis over which to perform the FDR correction. Only used when ``fdr_method != None``. Valid options are:
+            Axis over which to perform the FDR correction. Only used when ``corr_method != None``. Valid options are:
 
                 - `{fa.INTERACTIONS.s!r}` - correct interactions by performing FDR correction across the clusters.
                 - `{fa.CLUSTERS.s!r}` - correct clusters by performing FDR correction across the interactions.
-
         alpha
-            Significance level for FDR correction. Only used when ``fdr_method != None``.
+            Significance level for FDR correction. Only used when ``corr_method != None``.
         %(copy)s
         key_added
             Key in :attr:`anndata.AnnData.uns` where the result is stored if ``copy = False``.
@@ -342,7 +340,7 @@ class PermutationTestABC(ABC):
         _assert_positive(n_perms, name="n_perms")
         _assert_categorical_obs(self._adata, key=cluster_key)
 
-        if fdr_method is not None:
+        if corr_method is not None:
             fdr_axis = FdrAxis(fdr_axis)
         if TYPE_CHECKING:
             assert isinstance(fdr_axis, FdrAxis)
@@ -420,14 +418,14 @@ class PermutationTestABC(ABC):
         )
         res.metadata.index = res.means.index.copy()
 
-        if fdr_method is not None:
+        if corr_method is not None:
             logg.info(
                 f"Performing FDR correction across the `{fdr_axis.v}` "
-                f"using method `{fdr_method}` at level `{alpha}`"
+                f"using method `{corr_method}` at level `{alpha}`"
             )
             res = LigrecResult(
                 means=res.means,
-                pvalues=_fdr_correct(res.pvalues, fdr_method, fdr_axis, alpha=alpha),
+                pvalues=_fdr_correct(res.pvalues, corr_method, fdr_axis, alpha=alpha),
                 metadata=res.metadata.set_index(res.means.index),
             )
 
@@ -607,7 +605,7 @@ def ligrec(
     interactions: Optional[Interaction_t] = None,
     complex_policy: str = ComplexPolicy.MIN.v,
     threshold: float = 0.01,
-    fdr_method: Optional[str] = None,
+    corr_method: Optional[str] = None,
     fdr_axis: str = FdrAxis.CLUSTERS.v,
     copy: bool = False,
     key_added: Optional[str] = None,
@@ -632,7 +630,7 @@ def ligrec(
         .test(
             cluster_key=cluster_key,
             threshold=threshold,
-            fdr_method=fdr_method,
+            corr_method=corr_method,
             fdr_axis=fdr_axis,
             copy=copy,
             key_added=key_added,

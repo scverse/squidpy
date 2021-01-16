@@ -133,11 +133,12 @@ def nhood_enrichment(
 
     Returns
     -------
-    If ``copy = True``, returns the z-score and the enrichment count. Otherwise, it modifies the ``adata`` with the
-    following keys:
+    If ``copy = True``, returns a :class:`tuple` with the z-score and the enrichment count.
 
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - enrichment z-score.
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - enrichment count.
+    Otherwise, modifies the ``adata`` with the following keys:
+
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - the enrichment z-score.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
     """
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
@@ -194,14 +195,15 @@ def centrality_scores(
     -------
     If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
 
-        - `'degree_centrality'` -
-        - `'clustering_coefficient'` -
-        - `'closeness_centrality'` -
-        - `'betweenness_centrality'` -
+        - `'degree_centrality'` - TODO.
+        - `'clustering_coefficient'` - TODO.
+        - `'closeness_centrality'` - TODO.
+        - `'betweenness_centrality'` - TODO.
 
-    Otherwise, it modifies the ``adata`` object with the following keys:
+    Otherwise, modifies the ``adata`` with the following key:
 
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_centrality_scores']`` - centrality scores, as mentioned above.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_centrality_scores']`` - the centrality scores,
+          as mentioned above.
     """
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
@@ -271,10 +273,11 @@ def interaction_matrix(
 
     Returns
     -------
-    If ``copy = True``, returns the interaction matrix. Otherwise, it modifies the ``adata`` object with the
-    following key:
+    If ``copy = True``, returns the interaction matrix.
 
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_interactions']`` - interaction matrix.
+    Otherwise, modifies the ``adata`` with the following key:
+
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_interactions']`` - the interaction matrix.
     """
     # TODO: improve the return docstring
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)

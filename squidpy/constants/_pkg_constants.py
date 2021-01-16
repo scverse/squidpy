@@ -46,6 +46,14 @@ class Key:  # noqa: D101
         def interaction_matrix(cls, cluster: str) -> str:
             return f"{cluster}_interactions"
 
+        @classmethod
+        def co_occurrence(cls, cluster: str) -> str:
+            return f"{cluster}_co_occurrence"
+
+        @classmethod
+        def ripley_k(cls, cluster: str) -> str:
+            return f"{cluster}_ripley_k"
+
     class obsp:  # noqa: D106
         @cprop
         def spatial(cls) -> str:

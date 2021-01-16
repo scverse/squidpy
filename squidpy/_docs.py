@@ -38,7 +38,7 @@ numba_parallel
 _seed = """\
 seed
     Random seed for reproducibility."""
-_n_perms = """
+_n_perms = """\
 n_perms
     Number of permutations for the permutation test."""
 _img_hr = """\
@@ -106,19 +106,23 @@ _segment_kwargs = """\
 kwargs
     Keyword arguments for the underlying model."""
 
-_ligrec_test_returns = """
+_ligrec_test_returns = """\
 If ``copy = True``, returns a :class:`typing.NamedTuple`:
 
     - `'means'` - :class:`pandas.DataFrame` containing the mean expression.
     - `'pvalues'` - :class:`pandas.DataFrame` containing the possibly corrected p-values.
     - `'metadata'` - :class:`pandas.DataFrame` containing interaction metadata.
 
-Otherwise, it modifies the ``adata`` object with the following key:
+Otherwise, modifies the ``adata`` object with the following key:
 
     - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - the above mentioned triple.
 
 `NaN` p-values mark combinations for which the mean expression of one of the interacting components was 0
 or it didn't pass the ``threshold`` percentage of cells being expressed within a given cluster."""
+_corr_method = """\
+corr_method
+    Correction method for multiple testing. See :func:`statsmodels.stats.multitest.multipletests`
+    for valid options."""
 
 
 d = DocstringProcessor(
@@ -145,4 +149,5 @@ d = DocstringProcessor(
     channels=_channels,
     segment_kwargs=_segment_kwargs,
     ligrec_test_returns=_ligrec_test_returns,
+    corr_method=_corr_method,
 )

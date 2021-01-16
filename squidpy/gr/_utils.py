@@ -1,5 +1,5 @@
 """Graph utilities."""
-from typing import Any, Tuple, Union, Iterable, Optional, Sequence
+from typing import Any, List, Tuple, Union, Hashable, Iterable, Optional, Sequence
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -8,6 +8,8 @@ from scipy.sparse import issparse, spmatrix, csc_matrix
 from pandas.api.types import infer_dtype, is_categorical_dtype
 import numpy as np
 import pandas as pd
+
+from squidpy._utils import _unique_order_preserving
 
 
 def _check_tuple_needles(
@@ -132,8 +134,21 @@ def _assert_spatial_basis(adata: AnnData, key: str) -> None:
         raise KeyError("TODO")
 
 
+def _assert_non_empty_sequence(seq: Union[Hashable, Iterable[Hashable]], convert_scalar: bool = True) -> List[Hashable]:
+    if isinstance(seq, str) or not isinstance(seq, Iterable):
+        if not convert_scalar:
+            raise TypeError("TODO")
+        seq = (seq,)
+
+    res = _unique_order_preserving(seq)[0]
+    if not len(res):
+        raise ValueError("TODO")
+
+    return res
+
+
 def _subset_by_clusters(
-    adata: AnnData, key: str, clusters: Optional[Union[Any, Sequence[Any]]], copy: bool = False
+    adata: AnnData, key: str, clusters: Optional[Union[Any, Iterable[Any]]], copy: bool = False
 ) -> AnnData:
     _assert_categorical_obs(adata, key)
 
@@ -148,7 +163,7 @@ def _subset_by_clusters(
     if not clusters & viable_clusters:
         raise ValueError()
 
-    mask = np.isin(adata.obs[key], tuple(clusters))
+    mask = np.isin(adata.obs[key], list(clusters))
     adata = adata[mask, :]
 
     if not adata.n_obs:

@@ -26,8 +26,8 @@ def test_moran_seq_par(dummy_adata: AnnData):
     """Check whether moran results are the same for seq. and parallel computation."""
     moran(dummy_adata)
     dummy_adata.var["highly_variable"] = np.random.choice([True, False], size=dummy_adata.var_names.shape)
-    df = moran(dummy_adata, copy=True, n_jobs=1, seed=42, permutations=50)
-    df_parallel = moran(dummy_adata, copy=True, n_jobs=2, seed=42, permutations=50)
+    df = moran(dummy_adata, copy=True, n_jobs=1, seed=42, n_perms=50)
+    df_parallel = moran(dummy_adata, copy=True, n_jobs=2, seed=42, n_perms=50)
 
     idx_df = df.index.values
     idx_adata = dummy_adata[:, dummy_adata.var.highly_variable.values].var_names.values
@@ -52,8 +52,8 @@ def test_moran_reproducibility(dummy_adata: AnnData, n_jobs: int):
     moran(dummy_adata)
     dummy_adata.var["highly_variable"] = np.random.choice([True, False], size=dummy_adata.var_names.shape)
     # seed will work only when multiprocessing/loky
-    df_1 = moran(dummy_adata, copy=True, n_jobs=n_jobs, seed=42, permutations=50)
-    df_2 = moran(dummy_adata, copy=True, n_jobs=n_jobs, seed=42, permutations=50)
+    df_1 = moran(dummy_adata, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
+    df_2 = moran(dummy_adata, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
 
     idx_df = df_1.index.values
     idx_adata = dummy_adata[:, dummy_adata.var.highly_variable.values].var_names.values
