@@ -91,8 +91,12 @@ save
     Whether to save the plot."""
 _cat_plotting = f"""\
 palette
-    Categorcal colormap for the clusters. If `None`, TODO.
-{_plotting}"""
+    Categorical colormap for the clusters. If `None`, try using from :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``.
+{_plotting}"""  # noqa: E501
+_heatmap_plotting = f"""\
+cmap
+    Continuous colormap to use.
+{_cat_plotting}"""
 _plotting_returns = """\
 Nothing, just plots the and optionally saves the plot.
 """
@@ -155,4 +159,5 @@ d = DocstringProcessor(
     segment_kwargs=_segment_kwargs,
     ligrec_test_returns=_ligrec_test_returns,
     corr_method=_corr_method,
+    heatmap_plotting=_heatmap_plotting,
 )

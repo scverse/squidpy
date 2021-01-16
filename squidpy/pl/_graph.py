@@ -5,8 +5,6 @@ from typing import Any, Tuple, Union, Mapping, Optional, Sequence
 
 from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
-from matplotlib.collections import LineCollection
-
 try:
     from typing import Literal  # type: ignore[attr-defined]
 except ImportError:
@@ -15,7 +13,6 @@ except ImportError:
 from pathlib import Path
 
 from anndata import AnnData
-import scanpy as sc
 
 import numpy as np
 import pandas as pd
@@ -30,7 +27,7 @@ from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_non_empty_sequence,
 )
-from squidpy.pl._utils import save_fig
+from squidpy.pl._utils import _heatmap, save_fig
 from squidpy.constants._pkg_constants import Key
 
 Palette_t = Optional[Union[str, mcolors.ListedColormap]]
@@ -148,6 +145,8 @@ def interaction_matrix(
     adata: AnnData,
     cluster_key: str,
     palette: Palette_t = None,
+    annotate: bool = True,
+    cmap: str = "viridis",
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
@@ -162,9 +161,9 @@ def interaction_matrix(
     ----------
     %(adata)s
     %(cluster_key)s
-    %(plotting)s
+    %(heatmap_plotting)s
     kwargs
-        Keyword arguments for :func:`scanpy.pl.heatmap`.
+        Keyword arguments for :func:`matplotlib.pyplot.imshow`.
 
     Returns
     -------
@@ -173,22 +172,18 @@ def interaction_matrix(
     _assert_categorical_obs(adata, key=cluster_key)
     array = _get_data(adata, cluster_key=cluster_key, func_name="interaction_matrix")
 
-    # TODO: why str?
-    cat = adata.obs[cluster_key].cat.categories.values.astype(str)
-    idx = {cluster_key: pd.Categorical(cat, categories=cat)}
-
-    ad = AnnData(
-        X=array,
-        obs=idx,
-    )
-    ad.var_names = idx[cluster_key]
+    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
     _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
 
-    res = sc.pl.heatmap(
-        ad, var_names=ad.var_names, groupby=cluster_key, figsize=figsize, save=None, show=False, **kwargs
+    fig = _heatmap(
+        ad,
+        title="Interaction matrix",
+        cont_cmap=cmap,
+        annotate=annotate,
+        figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
+        dpi=dpi,
+        **kwargs,
     )
-    fig = res["heatmap_ax"].get_figure()
-    fig.dpi = fig.dpi if dpi is None else dpi
 
     if save is not None:
         save_fig(fig, path=save)
@@ -199,6 +194,8 @@ def nhood_enrichment(
     adata: AnnData,
     cluster_key: str,
     mode: Literal["zscore", "count"] = "zscore",  # type: ignore[name-defined]
+    annotate: bool = True,
+    cmap: str = "viridis",
     palette: Palette_t = None,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
@@ -220,7 +217,7 @@ def nhood_enrichment(
             - `'zscore'` - TODO.
             - `'count'` - TODO.
 
-    %(cat_plotting)s
+    %(heatmap_plotting)s
     kwargs
         Keyword arguments for :func:`scanpy.pl.heatmap`.
 
@@ -231,31 +228,18 @@ def nhood_enrichment(
     _assert_categorical_obs(adata, key=cluster_key)
     array = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")[mode]
 
-    # TODO: why str?
-    cat = adata.obs[cluster_key].cat.categories
-    idx = {cluster_key: pd.Categorical(cat)}
-
-    ad = AnnData(
-        X=array,
-        obs=idx,
-    )
-    ad.var_names = cat.values
+    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
     _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
 
-    res = sc.pl.heatmap(
-        ad, var_names=ad.var_names, groupby=cluster_key, figsize=figsize, save=None, show=True, **kwargs
+    fig = _heatmap(
+        ad,
+        title="Neighborhood enrichment",
+        cont_cmap=cmap,
+        annotate=annotate,
+        figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
+        dpi=dpi,
+        **kwargs,
     )
-
-    # remove the ugly horizontal lines
-    # TODO: maybe use seaborn? (it has it's own set of issues with cbar)
-    ax = res["heatmap_ax"]
-    for c in ax.collections:
-        if isinstance(c, LineCollection):
-            c.remove()
-            break
-
-    fig = ax.get_figure()
-    fig.dpi = fig.dpi if dpi is None else dpi
 
     if save is not None:
         save_fig(fig, path=save)

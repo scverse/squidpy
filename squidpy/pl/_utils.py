@@ -1,6 +1,7 @@
-from typing import Any, List, Tuple, Union, Callable, Optional, Sequence
+from typing import Any, List, Tuple, Union, Callable, Optional, Sequence, TYPE_CHECKING
 from pathlib import Path
 from functools import wraps
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import os
 
 from scanpy import logging as logg, settings
@@ -20,9 +21,12 @@ from pandas.core.dtypes.common import (
 import numpy as np
 import pandas as pd
 
+from matplotlib import colors as mcolors, pyplot as plt
 from matplotlib.figure import Figure
+import matplotlib as mpl
 
 from squidpy._docs import d
+from squidpy.constants._pkg_constants import Key
 
 Vector_name_t = Tuple[Optional[Union[pd.Series, np.ndarray]], Optional[str]]
 
@@ -388,3 +392,111 @@ class ALayer:
 
     def __str__(self) -> str:
         return repr(self)
+
+
+def _contrasting_color(r: int, g: int, b: int) -> str:
+    for val in [r, g, b]:
+        assert 0 <= val <= 255
+
+    return "#000000" if r * 0.299 + g * 0.587 + b * 0.114 > 186 else "#ffffff"
+
+
+def _get_black_or_white(value: float, cmap: mcolors.Colormap) -> str:
+    if not (0.0 <= value <= 1.0):
+        raise ValueError(f"Value must be in range `[0, 1]`, found `{value}`.")
+
+    r, g, b, *_ = [int(c * 255) for c in cmap(value)]
+    return _contrasting_color(r, g, b)
+
+
+def _annotate_heatmap(
+    im: mpl.image.AxesImage, valfmt: str = "{x:.2f}", cmap: Union[mpl.colors.Colormap, str] = "viridis", **kwargs: Any
+) -> None:
+    # modified from matplotlib's site
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
+
+    data = im.get_array()
+    kw = {"ha": "center", "va": "center"}
+    kw.update(**kwargs)
+
+    if isinstance(valfmt, str):
+        valfmt = mpl.ticker.StrMethodFormatter(valfmt)
+    if TYPE_CHECKING:
+        assert callable(valfmt)
+
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            kw.update(color=_get_black_or_white(im.norm(data[i, j]), cmap))
+            im.axes.text(j, i, valfmt(data[i, j], None), **kw)
+
+
+def _get_cmap_norm(
+    adata: AnnData,
+    key: str,
+    *,
+    invert: bool = False,
+) -> Tuple[mcolors.ListedColormap, mcolors.BoundaryNorm, int]:
+    n_cls = adata.obs[key].nunique()
+
+    colors = adata.uns[Key.uns.colors(key)]
+    if invert:
+        colors = colors[::-1]
+
+    cmap = mcolors.ListedColormap(colors)
+    norm = mcolors.BoundaryNorm(np.arange(n_cls + 1), cmap.N)
+
+    return cmap, norm, n_cls
+
+
+def _heatmap(
+    adata: AnnData,
+    title: str = "",
+    cont_cmap: str = "viridis",
+    annotate: bool = True,
+    figsize: Optional[Tuple[float, float]] = None,
+    dpi: Optional[int] = None,
+    **kwargs: Any,
+) -> mpl.figure.Figure:
+    key = list(adata.obs.keys())[0]
+    fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
+
+    cmap, norm, n_cls = _get_cmap_norm(adata, key, invert=True)
+    sm = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)
+
+    minn, maxx = np.nanmin(adata.X), np.nanmax(adata.X)
+    norm = mpl.colors.Normalize(vmin=minn, vmax=maxx)
+    cont_cmap = plt.get_cmap(cont_cmap)
+
+    im = ax.imshow(adata.X[:, ::-1], cmap=cont_cmap)
+    ax.tick_params(top=False, bottom=False, labeltop=False, labelbottom=False)
+
+    ax.set_xticks([])
+    ax.set_yticks(np.arange(n_cls))
+    ax.set_yticklabels(adata.obs[key])
+    ax.set_ylabel(key)
+
+    if annotate:
+        _annotate_heatmap(im, cmap=cont_cmap, **kwargs)
+
+    divider = make_axes_locatable(ax)
+    row_cats = divider.append_axes("right", size="2%", pad=0)
+    col_cats = divider.append_axes("top", size="2%", pad=0)
+    cax = divider.append_axes("right", size="1%", pad=0.2)
+
+    _ = mpl.colorbar.ColorbarBase(
+        cax,
+        cmap=cont_cmap,
+        norm=norm,
+        ticks=np.linspace(np.nanmin(adata.X), np.nanmax(adata.X), 10),
+        orientation="vertical",
+        format="%0.2f",
+    )
+    c = fig.colorbar(sm, cax=col_cats, orientation="horizontal")
+    c.set_ticks([])
+    c = fig.colorbar(sm, cax=row_cats, orientation="vertical")
+    c.set_ticks([])
+
+    col_cats.set_title(title)
+
+    return fig
