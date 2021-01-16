@@ -14,7 +14,7 @@ import networkx as nx
 from squidpy._docs import d
 from squidpy.gr._utils import (
     _save_data,
-    _assert_n_perms,
+    _assert_positive,
     _assert_categorical_obs,
     _assert_connectivity_key,
 )
@@ -136,13 +136,13 @@ def nhood_enrichment(
     If ``copy = True``, returns the z-score and the enrichment count. Otherwise, it modifies the ``adata`` with the
     following keys:
 
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - the enrichment z-score.
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - enrichment z-score.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - enrichment count.
     """
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
-    _assert_n_perms(n_perms)
+    _assert_positive(n_perms, name="n_perms")
 
     adj = adata.obsp[connectivity_key]
     original_clust = adata.obs[cluster_key]
@@ -192,10 +192,16 @@ def centrality_scores(
 
     Returns
     -------
-    If ``copy = True`` returns a :class:`pandas.DataFrame`. Otherwise, it modifies the ``adata`` object with the
-    following keys:
+    If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
 
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_centrality_scores']`` - the centrality scores.
+        - `'degree_centrality'` -
+        - `'clustering_coefficient'` -
+        - `'closeness_centrality'` -
+        - `'betweenness_centrality'` -
+
+    Otherwise, it modifies the ``adata`` object with the following keys:
+
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_centrality_scores']`` - centrality scores, as mentioned above.
     """
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
@@ -265,10 +271,10 @@ def interaction_matrix(
 
     Returns
     -------
-    If ``copy = True`` returns a :class:`numpy.ndarray`. Otherwise, it modifies the ``adata`` object with the
-    following keys:
+    If ``copy = True``, returns the interaction matrix. Otherwise, it modifies the ``adata`` object with the
+    following key:
 
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_interactions']`` - the interaction matrix.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_interactions']`` - interaction matrix.
     """
     # TODO: improve the return docstring
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)

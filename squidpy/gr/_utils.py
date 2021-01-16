@@ -127,6 +127,11 @@ def _assert_connectivity_key(adata: AnnData, key: str) -> None:
         )
 
 
+def _assert_spatial_basis(adata: AnnData, key: str) -> None:
+    if key not in adata.obsm:
+        raise KeyError("TODO")
+
+
 def _subset_by_clusters(
     adata: AnnData, key: str, clusters: Optional[Union[Any, Sequence[Any]]], copy: bool = False
 ) -> AnnData:
@@ -152,12 +157,20 @@ def _subset_by_clusters(
     return adata.copy() if copy else adata
 
 
-def _assert_n_perms(n_perms: int) -> None:
+def _assert_positive(n_perms: int, *, name: str) -> None:
     if n_perms <= 0:
-        raise ValueError(f"Expected `n_perms` to be non-negative, found `{n_perms}`.")
+        raise ValueError(f"Expected `{name}` to be non-negative, found `{n_perms}`.")
 
 
-def _save_data(adata: AnnData, *, attr: str, key: str, data: Any) -> None:
-    logg.info(f"Adding `adata.{attr}[{key!r}]`")
+def _save_data(
+    adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool = True, time: Optional[Any] = None
+) -> None:
     obj = getattr(adata, attr)
     obj[key] = data
+
+    if prefix:
+        logg.info(f"Adding `adata.{attr}[{key!r}]`")
+    else:
+        logg.info(f"       `adata.{attr}[{key!r}]`")
+    if time is not None:
+        logg.info("Finish", time=time)
