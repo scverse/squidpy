@@ -192,7 +192,7 @@ class PermutationTestABC(ABC):
     @d.get_sections(base="PT_prepare", sections=["Parameters", "Returns"])
     @inject_docs(src=SOURCE, tgt=TARGET, cp=ComplexPolicy)
     def prepare(
-        self, interactions: Interaction_t, complex_policy: str = ComplexPolicy.MIN.value
+        self, interactions: Interaction_t, complex_policy: Union[str, ComplexPolicy] = ComplexPolicy.MIN.value
     ) -> "PermutationTestABC":
         """
         Prepare self for running the permutation test.
@@ -222,7 +222,7 @@ class PermutationTestABC(ABC):
 
             - :attr:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
         """
-        complex_policy = ComplexPolicy(complex_policy)  # type: ignore[no-redef,assignment]
+        complex_policy = ComplexPolicy(complex_policy)
 
         if isinstance(interactions, Sequence):
             if not len(interactions):
@@ -309,8 +309,7 @@ class PermutationTestABC(ABC):
         clusters
             Clusters from :attr:`anndata.AnnData.obs` ``[{{cluster_key}}]``. Can be specified either as a sequence
             of :class:`tuple` or just a sequence of cluster names, in which case all combinations are created.
-        n_perms
-            Number of permutations for the permutation test.
+        %(n_perms)
         threshold
             Do not perform permutation test if any of the interacting components is being expressed
             in less than ``threshold`` percent of cells within a given cluster.
@@ -656,6 +655,7 @@ def ligrec(
     )
 
 
+@d.dedent
 def _analysis(
     data: pd.DataFrame,
     interactions: np.ndarray[np.uint32],
@@ -682,10 +682,8 @@ def _analysis(
         Array of shape `(n_interaction_clusters, 2)`.
     threshold
         Percentage threshold for removing lowly expressed genes in clusters.
-    n_perms
-        Number of permutations to perform.
-    seed
-        Random seed.
+    %(n_perms)
+    %(seed)s
     n_jobs
         Number of parallel jobs to launch.
     numba_parallel

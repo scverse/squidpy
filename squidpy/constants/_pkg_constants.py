@@ -34,6 +34,18 @@ class Key:  # noqa: D101
         def ligrec(cls, cluster: str, value: Optional[str] = None) -> str:
             return f"{cluster}_ligrec" if value is None else value
 
+        @classmethod
+        def nhood_enrichment(cls, cluster: str) -> str:
+            return f"{cluster}_nhood_enrichment"
+
+        @classmethod
+        def centrality_scores(cls, cluster: str) -> str:
+            return f"{cluster}_centrality_scores"
+
+        @classmethod
+        def interaction_matrix(cls, cluster: str) -> str:
+            return f"{cluster}_interactions"
+
     class obsp:  # noqa: D106
         @cprop
         def spatial(cls) -> str:

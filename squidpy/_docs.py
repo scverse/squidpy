@@ -38,6 +38,9 @@ numba_parallel
 _seed = """\
 seed
     Random seed for reproducibility."""
+_n_perms = """
+n_perms
+    Number of permutations for the permutation test."""
 _img_hr = """\
 img
     High-resolution image."""
@@ -111,6 +114,7 @@ d = DocstringProcessor(
     copy_cont=_copy_cont,
     numba_parallel=_numba_parallel,
     seed=_seed,
+    n_perms=_n_perms,
     img_hr=_img_hr,
     img_id=_img_id,
     feature_name=_feature_name,

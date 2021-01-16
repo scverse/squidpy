@@ -1,7 +1,11 @@
 """Graph utilities."""
-from typing import Any, Tuple, Union, Optional, Sequence
+from typing import Any, Tuple, Union, Iterable, Optional, Sequence
+
+from scanpy import logging as logg
+from anndata import AnnData
 
 from scipy.sparse import issparse, spmatrix, csc_matrix
+from pandas.api.types import infer_dtype, is_categorical_dtype
 import numpy as np
 import pandas as pd
 
@@ -103,3 +107,57 @@ def _create_sparse_df(
         arrays.append(arr)
 
     return DataFrame._from_arrays(arrays, columns=columns, index=index, verify_integrity=False)
+
+
+def _assert_categorical_obs(adata: AnnData, key: str) -> None:
+    if key not in adata.obs:
+        raise KeyError()
+
+    if not is_categorical_dtype(adata.obs[key]):
+        raise TypeError(f"Expected `adata.obs[{key}]` to be `categorical`, found `{infer_dtype(adata.obs[key])}`.")
+
+
+def _assert_connectivity_key(adata: AnnData, key: str) -> None:
+    if key not in adata.obsp:
+        # TODO: nicer message
+        raise KeyError(
+            f"{key} not present in `adata.obs`"
+            "Choose a different connectivity_key or run first "
+            "gr.spatial_neighbors on the AnnData object."
+        )
+
+
+def _subset_by_clusters(
+    adata: AnnData, key: str, clusters: Optional[Union[Any, Sequence[Any]]], copy: bool = False
+) -> AnnData:
+    _assert_categorical_obs(adata, key)
+
+    if clusters is None:
+        return adata
+
+    if isinstance(clusters, str) or not isinstance(clusters, Iterable):
+        clusters = (clusters,)
+
+    clusters = set(clusters)
+    viable_clusters = set(adata.obs[key].cat.categories)
+    if not clusters & viable_clusters:
+        raise ValueError()
+
+    mask = np.isin(adata.obs[key], tuple(clusters))
+    adata = adata[mask, :]
+
+    if not adata.n_obs:
+        raise ValueError()
+
+    return adata.copy() if copy else adata
+
+
+def _assert_n_perms(n_perms: int) -> None:
+    if n_perms <= 0:
+        raise ValueError(f"Expected `n_perms` to be non-negative, found `{n_perms}`.")
+
+
+def _save_data(adata: AnnData, *, attr: str, key: str, data: Any) -> None:
+    logg.info(f"Adding `adata.{attr}[{key!r}]`")
+    obj = getattr(adata, attr)
+    obj[key] = data
