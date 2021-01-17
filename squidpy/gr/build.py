@@ -63,9 +63,9 @@ def spatial_neighbors(
     -------
     Modifies the ``adata`` with the following keys:
 
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_connectivities']`` - Spatial connectivity matrix.
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - Spatial distances matrix.
-        - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - Spatial neighbors dictionary.
+        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_connectivities']`` - spatial connectivity matrix.
+        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - spatial distances matrix.
+        - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - spatial neighbors dictionary.
     """
     _assert_positive(n_rings, name="n_rings")
     _assert_positive(n_neigh, name="n_neigh")

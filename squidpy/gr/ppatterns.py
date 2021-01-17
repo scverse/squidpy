@@ -179,8 +179,8 @@ def moran(
 
         - `'I'` - Moran's I statistic.
         - `'pval_sim'` - p-value based on permutations.
-        - `'VI_sim'` - variance of I from permutations.
-        - `'pval_sim_{{corr_method}}'` - the corrected p-values, if ``corr_method != None`` .
+        - `'VI_sim'` - variance of `'I'` from permutations.
+        - `'pval_sim_{{corr_method}}'` - the corrected p-values if ``corr_method != None`` .
 
     Otherwise, modifies the ``adata`` with the following key:
 
@@ -320,7 +320,7 @@ def co_occurrence(
     %(cluster_key)s
     %(spatial_key)s
     n_steps
-        Number of distance thresholds at which co-occurrence is computed.\
+        Number of distance thresholds at which co-occurrence is computed.
 
     %(copy)s
 
@@ -330,10 +330,10 @@ def co_occurrence(
 
     Otherwise, modifies the ``adata`` with the following keys:
 
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['occ']`` \
-            the co-occurrence probabilities across interval thresholds.
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` \
-            the distance thresholds computed at  `n_steps` .
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['occ']`` - the co-occurrence probabilities
+          across interval thresholds.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
+          computed at ``n_steps``.
     """
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)

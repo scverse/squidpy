@@ -190,7 +190,6 @@ def centrality_scores(
     """
     Compute centrality scores per cluster or cell type.
 
-    Wraps methods in `networkx.algorithms.group_centrality` [NetworkX08].
     Inspired by usage in  Gene Regulatory Networks (GRNs) in [CellOracle20]_.
 
     Parameters
@@ -198,13 +197,12 @@ def centrality_scores(
     %(adata)s
     %(cluster_key)s
     score
-        Centrality measures as described in :class:`networkx.algorithms.centrality`.\
-        if `None`, computes all. Available centralities:
+        Centrality measures as described in :class:`networkx.algorithms.centrality` [NetworkX08]_.
+        If `None`, use all the options below. Valid options are:
 
-        Available centralities are the following:
-            - `{c.CLOSENESS.s!r}`: measure of how close the group is to other nodes.
-            - `{c.CLUSTERING.s!r}`: measure of the degree to which nodes cluster together.
-            - `{c.DEGREE.s!r}`: fraction of non-group members connected to group members.
+            - `{c.CLOSENESS.s!r}` - measure of how close the group is to other nodes.
+            - `{c.CLUSTERING.s!r}` - measure of the degree to which nodes cluster together.
+            - `{c.DEGREE.s!r}` - fraction of non-group members connected to group members.
 
     %(conn_key)s
     %(copy)s
@@ -229,9 +227,6 @@ def centrality_scores(
 
     centralities = [Centrality(c) for c in centrality]
 
-    n_jobs = _get_n_cores(n_jobs)
-    logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` core(s)")
-
     graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
 
     cat = adata.obs[cluster_key].cat.categories.values
@@ -245,6 +240,11 @@ def centrality_scores(
             fun_dict[c.s] = partial(nx.algorithms.centrality.group_degree_centrality, graph)
         elif c == Centrality.CLUSTERING:
             fun_dict[c.s] = partial(nx.algorithms.cluster.average_clustering, graph)
+        else:
+            raise NotImplementedError(f"Centrality `{c}` is not yet implemented.")
+
+    n_jobs = _get_n_cores(n_jobs)
+    logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` core(s)")
 
     res_list = []
     for k, v in fun_dict.items():
@@ -317,7 +317,6 @@ def interaction_matrix(
 
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_interactions']`` - the interaction matrix.
     """
-    # TODO: improve the return docstring
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)

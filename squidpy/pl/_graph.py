@@ -133,7 +133,6 @@ def centrality_scores(
             ax=ax,
             **kwargs,
         )
-        # TODO: revert (remove) the 2 lines below?
         ax.set_title(str(g).replace("_", " ").capitalize())
         ax.set_xlabel("value")
 
@@ -149,7 +148,7 @@ def interaction_matrix(
     adata: AnnData,
     cluster_key: str,
     palette: Palette_t = None,
-    annotate: bool = True,
+    annotate: bool = False,
     cmap: str = "viridis",
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
@@ -167,7 +166,7 @@ def interaction_matrix(
     %(cluster_key)s
     %(heatmap_plotting)s
     kwargs
-        Keyword arguments for :func:`matplotlib.pyplot.imshow`.
+        Keyword arguments for :func:`matplotlib.pyplot.text`.
 
     Returns
     -------
@@ -198,7 +197,7 @@ def nhood_enrichment(
     adata: AnnData,
     cluster_key: str,
     mode: Literal["zscore", "count"] = "zscore",  # type: ignore[name-defined]
-    annotate: bool = True,
+    annotate: bool = False,
     cmap: str = "viridis",
     palette: Palette_t = None,
     figsize: Optional[Tuple[float, float]] = None,
@@ -224,7 +223,7 @@ def nhood_enrichment(
 
     %(heatmap_plotting)s
     kwargs
-        Keyword arguments for :func:`scanpy.pl.heatmap`.
+        Keyword arguments for :func:`matplotlib.pyplot.text`.
 
     Returns
     -------
@@ -383,8 +382,6 @@ def co_occurrence(
             **kwargs,
         )
         ax.legend(**legend_kwargs)
-        # TODO: revert?
-        # ax.set_ylabel(rf"$\frac{{p(exp|{g})}}{{p(exp)}}$")
         ax.set_title(rf"$\frac{{p(exp|{g})}}{{p(exp)}}$")
         ax.set_ylabel("value")
 

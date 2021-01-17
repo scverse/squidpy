@@ -71,7 +71,6 @@ spatial_key
 _conn_key = """\
 conn_key
     Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored."""
-# TODO: https://github.com/Chilipp/docrep/issues/21 fixes this, this is not necessary
 _crop_extra = """\
 scale
     Resolution of the crop (smaller -> smaller image).
@@ -92,7 +91,7 @@ save
 _cat_plotting = f"""\
 palette
     Categorical colormap for the clusters.
-    If `None`, try using from :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``.
+    If `None`, use :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``, if available.
 {_plotting}"""
 _heatmap_plotting = f"""\
 cmap
