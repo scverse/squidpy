@@ -538,8 +538,8 @@ class ImageContainer(FeatureMixin):
         adata: AnnData,
         spatial_key: str = Key.obsm.spatial,
         library_id: Optional[str] = None,
-        cont_cmap: str = "viridis",
-        cat_cmap: Optional[str] = None,
+        cmap: str = "viridis",
+        palette: Optional[str] = None,
         blending: Literal["opaque", "translucent", "adidtive"] = "opaque",
         key_added: str = "shapes",
     ) -> Interactive:
@@ -552,9 +552,9 @@ class ImageContainer(FeatureMixin):
         %(spatial_key)s
         library_id
             Key in :attr:`anndata.AnnData.uns` ['spatial'] used to get the spot diameter.
-        cont_cmap
+        cmap
             Colormap for continuous variables.
-        cat_cmap
+        palette
             Colormap for categorical variables in :attr:`anndata.AnnData.obs`. If `None`, use :mod:`scanpy`'s default.
         blending
             Method which determines how RGB and alpha values of :class:`napari.layers.Shapes` are mixed.
@@ -581,8 +581,8 @@ class ImageContainer(FeatureMixin):
             adata=adata,
             spatial_key=spatial_key,
             library_id=library_id,
-            cont_cmap=cont_cmap,
-            cat_cmap=cat_cmap,
+            cmap=cmap,
+            palette=palette,
             blending=blending,
             key_added=key_added,
         ).show()

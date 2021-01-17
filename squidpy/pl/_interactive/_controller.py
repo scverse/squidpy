@@ -71,7 +71,7 @@ class ImageController:
             self.model.container.data[library_id].transpose("y", "x", ...).values,
             name=library_id,
             rgb=True,
-            colormap=self.model.cont_cmap,
+            colormap=self.model.cmap,
             blending=self.model.blending,
         )
 
@@ -108,8 +108,8 @@ class ImageController:
             opacity=1,
             edge_width=1,
             blending=self.model.blending,
-            face_colormap=self.model.cont_cmap,
-            edge_colormap=self.model.cont_cmap,
+            face_colormap=self.model.cmap,
+            edge_colormap=self.model.cmap,
             **properties,
         )
         # https://github.com/napari/napari/issues/2019
@@ -232,7 +232,7 @@ class ImageController:
 
     @_get_points_properties.register(pd.Series)  # type: ignore[no-redef]
     def _(self, vec: pd.Series, key: str) -> Dict[str, Any]:
-        face_color = _get_categorical(self.model.adata, key=key, palette=self.model.cat_cmap, vec=vec)
+        face_color = _get_categorical(self.model.adata, key=key, palette=self.model.palette, vec=vec)
         return {
             "text": {"text": "{clusters}", "size": 24, "color": "white", "anchor": "center"},
             "face_color": face_color,

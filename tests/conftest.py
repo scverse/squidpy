@@ -242,13 +242,13 @@ class PlotTester(ABC):
 
 
 def pytest_addoption(parser):
-    parser.addoption("--test-napari", action="store_true", help="Test _interactive image view")
+    parser.addoption("--test-napari", action="store_true", help="Test interactive image view")
 
 
 def pytest_collection_modifyitems(config, items):
     if config.getoption("--test-napari"):
         return
-    skip_slow = pytest.mark.skip(reason="Need --test-napari option to test _interactive image view")
+    skip_slow = pytest.mark.skip(reason="Need --test-napari option to test interactive image view")
     for item in items:
         if "qt" in item.keywords:
             item.add_marker(skip_slow)

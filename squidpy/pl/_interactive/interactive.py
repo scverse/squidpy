@@ -32,7 +32,7 @@ class Interactive:
 
     def __init__(self, img: ImageContainer, adata: AnnData, **kwargs: Any):
         if _error is not None:
-            raise ImportError(f"Unable to import the _interactive viewer. Reason: {_error}.")
+            raise ImportError(f"Unable to import the interactive viewer. Reason `{_error}`.")
 
         self._controller = ImageController(adata, img, **kwargs)
 

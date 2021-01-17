@@ -23,8 +23,8 @@ class ImageModel:
     coordinates: np.ndarray = field(init=False, repr=False)
     alayer: ALayer = field(init=False, repr=True)
 
-    cat_cmap: Optional[str] = field(default=None, repr=False)
-    cont_cmap: str = field(default="viridis", repr=False)
+    palette: Optional[str] = field(default=None, repr=False)
+    cmap: str = field(default="viridis", repr=False)
     blending: str = field(default="opaque", repr=False)
     key_added: str = "shapes"
 
@@ -47,7 +47,7 @@ class ImageModel:
             self.coordinates[:, 0] -= c.x0
             self.coordinates[:, 1] -= c.y0
 
-        self.alayer = ALayer(self.adata, is_raw=False, palette=self.cat_cmap)
+        self.alayer = ALayer(self.adata, is_raw=False, palette=self.palette)
 
         if self.library_id is None:
             haystack = list(self.adata.uns[self.spatial_key].keys())

@@ -99,7 +99,7 @@ class ImageView:
             obsm_widget,
             obsm_index_widget,
         )
-        self._colorbar = CBarWidget(self.model.cont_cmap, parent=parent)
+        self._colorbar = CBarWidget(self.model.cmap, parent=parent)
 
         self.viewer.window.add_dock_widget(self._colorbar, area="left", name="percentile")
         self.viewer.window.add_dock_widget(widgets, area="right", name="genes")
