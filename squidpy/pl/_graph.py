@@ -216,10 +216,11 @@ def nhood_enrichment(
     %(adata)s
     %(cluster_key)s
     mode
-        TODO. Valid options are:
+        Which :func:`squidpy.gr.nhood_enrichment` result to plot. \
+            Valid options are:
 
-            - `'zscore'` - TODO.
-            - `'count'` - TODO.
+            - `'zscore'` - z-score values of enrichment statistic.
+            - `'count'` - enrichment count.
 
     %(heatmap_plotting)s
     kwargs

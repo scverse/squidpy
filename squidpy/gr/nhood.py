@@ -180,7 +180,7 @@ def nhood_enrichment(
 def centrality_scores(
     adata: AnnData,
     cluster_key: str,
-    score: Union[str, Sequence[str], None] = None,
+    score: Optional[Union[str, Iterable[str]]] = None,
     connectivity_key: Optional[str] = None,
     copy: bool = False,
     n_jobs: Optional[int] = None,
@@ -196,31 +196,26 @@ def centrality_scores(
     Parameters
     ----------
     %(adata)s
-    cluster_key
-        Cluster key in :attr:`anndata.AnnData.obs`.
+    %(cluster_key)s
     score
         Centrality measures as described in :class:`networkx.algorithms.centrality`.\
         if `None`, computes all. Available centralities:
+
         Available centralities are the following:
-            - `{c.CLOSENESS.s!r}`
-            - `{c.CLUSTERING.s!r}`
-            - `{c.DEGREE.s!r}`
+            - `{c.CLOSENESS.s!r}`: measure of how close the group is to other nodes.
+            - `{c.CLUSTERING.s!r}`: measure of the degree to which nodes cluster together.
+            - `{c.DEGREE.s!r}`: fraction of non-group members connected to group members.
+
     %(conn_key)s
     %(copy)s
     %(parallelize)s
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
-
-        - `'degree_centrality'` - TODO.
-        - `'clustering_coefficient'` - TODO.
-        - `'closeness_centrality'` - TODO.
-        - `'betweenness_centrality'` - TODO.
-
+    If ``copy = True``, returns a :class:`pandas.DataFrame`.
     Otherwise, modifies the ``adata`` with the following key:
 
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_centrality_scores']`` - the centrality scores,
+        - :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_centrality_scores']`` - the centrality scores,
           as mentioned above.
     """
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)

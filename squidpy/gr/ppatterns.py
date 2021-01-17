@@ -84,7 +84,7 @@ def ripley_k(
     If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
 
         - `'ripley_k'` - the Ripley's K statistic.
-        - `'distance'` - TODO.
+        - `'distance'` - set of distances where the estimator was evaluated.
 
     Otherwise, modifies the ``adata`` with the following key:
 
@@ -178,8 +178,8 @@ def moran(
     If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
 
         - `'I'` - Moran's I statistic.
-        - `'pval_sim'` - TODO
-        - `'VI_sim'` - TODO
+        - `'pval_sim'` - p-value based on permutations.
+        - `'VI_sim'` - variance of I from permutations.
         - `'pval_sim_{{corr_method}}'` - the corrected p-values, if ``corr_method != None`` .
 
     Otherwise, modifies the ``adata`` with the following key:
@@ -308,29 +308,32 @@ def co_occurrence(
     adata: AnnData,
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
-    steps: int = 50,
+    n_steps: int = 50,
     copy: bool = False,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
-    Compute co-occurrence probability of clusters across spatial dimensions.
+    Compute co-occurrence probability of clusters across `n_steps` distance thresholds in spatial dimensions.
 
     Parameters
     ----------
     %(adata)s
     %(cluster_key)s
     %(spatial_key)s
-    steps
-        Number of step to compute radius for the co-occurrence.
+    n_steps
+        Number of distance thresholds at which co-occurrence is computed.\
+
     %(copy)s
 
     Returns
     -------
-    If ``copy = True``, returns the co-occurence probability and the TODO.
+    If ``copy = True``, returns the co-occurence probability and the distance thresholds intervals.
 
     Otherwise, modifies the ``adata`` with the following keys:
 
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['occ']`` - the co-occurrence probabilities.
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - TODO.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['occ']`` \
+            the co-occurrence probabilities across interval thresholds.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` \
+            the distance thresholds computed at  `n_steps` .
     """
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
@@ -348,7 +351,7 @@ def co_occurrence(
     labs_unique = np.array(list(clust_map.values()), dtype=ip)
     n_cls = labs_unique.shape[0]
 
-    interval = np.linspace(thres_min, thres_max, num=steps, dtype=fp)
+    interval = np.linspace(thres_min, thres_max, num=n_steps, dtype=fp)
 
     out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
     start = logg.info("Calculating co-occurrence probabilities")

@@ -52,9 +52,9 @@ def spatial_neighbors(
     transform
         Type of adjacency matrix transform. Valid options are:
 
-            - `{t.SPECTRAL.s!r}` - TODO
-            - `{t.COSINE.s!r}` - TODO
-            - `{t.NONE.v}` - TODO
+            - `{t.SPECTRAL.s!r}` - spectral transformation of the adjacency matrix.
+            - `{t.COSINE.s!r}` - cosine transformation of the adjacency matrix.
+            - `{t.NONE.v}` - no transformation of the adjacency matrix.
 
     key_added
         Key which controls where the results are saved.
@@ -63,9 +63,9 @@ def spatial_neighbors(
     -------
     Modifies the ``adata`` with the following keys:
 
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_connectivities']`` - TODO
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - TODO
-        - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - TODO
+        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_connectivities']`` - Spatial connectivity matrix.
+        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - Spatial distances matrix.
+        - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - Spatial neighbors dictionary.
     """
     _assert_positive(n_rings, name="n_rings")
     _assert_positive(n_neigh, name="n_neigh")
