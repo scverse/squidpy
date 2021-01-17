@@ -140,7 +140,6 @@ def nhood_enrichment(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - the enrichment z-score.
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
     """
-    # TODO: recheck
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)

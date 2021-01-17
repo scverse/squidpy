@@ -35,7 +35,7 @@ class TestInvalidBehavior:
             ligrec(adata, _CK)
 
     def test_invalid_cluster_key(self, adata: AnnData, interactions: Interactions_t):
-        with pytest.raises(KeyError, match=r"Cluster key `'foobar'` not found"):
+        with pytest.raises(KeyError, match=r"Cluster key `foobar` not found"):
             ligrec(adata, cluster_key="foobar", interactions=interactions)
 
     def test_cluster_key_is_not_categorical(self, adata: AnnData, interactions: Interactions_t):
@@ -97,6 +97,8 @@ class TestInvalidBehavior:
         with pytest.raises(ValueError, match=r"Expected a `tuple` of length `2`, found `3`."):
             ligrec(adata, _CK, interactions=interactions, clusters=["foo", ("bar", "baz")])
 
+
+class TestValidBehavior:
     def test_all_genes_capitalized(self, adata: AnnData, interactions: Interactions_t):
         pt = PermutationTest(adata).prepare(interactions=interactions)
         genes = pd.Series([g for gs in pt.interactions[["source", "target"]].values for g in gs], dtype="string")

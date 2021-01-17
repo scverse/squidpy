@@ -45,7 +45,7 @@ def adata() -> AnnData:
 def adata_palette() -> AnnData:
     from matplotlib.cm import get_cmap
 
-    cmap = get_cmap("Spectral")
+    cmap = get_cmap("Set1")
 
     adata_palette = _adata.copy()
     adata_palette.uns[f"{C_KEY_PALETTE}_colors"] = cmap(range(adata_palette.obs[C_KEY_PALETTE].unique().shape[0]))

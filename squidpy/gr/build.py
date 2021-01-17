@@ -5,7 +5,7 @@ import warnings
 from scanpy import logging as logg
 from anndata import AnnData
 
-from scipy.sparse import csr_matrix, SparseEfficiencyWarning
+from scipy.sparse import spmatrix, csr_matrix, SparseEfficiencyWarning
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
@@ -118,7 +118,7 @@ def spatial_neighbors(
     else:
         raise NotImplementedError(transform)
 
-    key_added = Key.uns.spatial_neighs(key_added)
+    neighs_key = Key.uns.spatial_neighs(key_added)
     conns_key = Key.obsp.spatial_conn(key_added)
     dists_key = Key.obsp.spatial_dist(key_added)
 
@@ -132,7 +132,7 @@ def spatial_neighbors(
         _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
         neighbors_dict["distances_key"] = dists_key
 
-    _save_data(adata, attr="uns", key=key_added, data=neighbors_dict, prefix=False, time=start)
+    _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
 
 
 def _build_connectivity(
@@ -184,5 +184,5 @@ def _transform_a_spectral(a: Union[csr_matrix, np.ndarray]) -> np.ndarray:
     return a.multiply(np.outer(degrees, degrees))
 
 
-def _transform_a_cosine(a: Union[csr_matrix, np.ndarray]) -> np.ndarray:
+def _transform_a_cosine(a: Union[spmatrix, np.ndarray]) -> Union[np.ndarray, spmatrix]:
     return cosine_similarity(a, dense_output=False)

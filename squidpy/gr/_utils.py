@@ -155,7 +155,7 @@ def _get_valid_values(needle: Sequence[Any], haystack: Sequence[Any]) -> Sequenc
 
 def _assert_positive(value: int, *, name: str) -> None:
     if value <= 0:
-        raise ValueError(f"Expected `{name}` to be non-negative, found `{value}`.")
+        raise ValueError(f"Expected `{name}` to be positive, found `{value}`.")
 
 
 def _save_data(

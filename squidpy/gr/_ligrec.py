@@ -433,7 +433,7 @@ class PermutationTestABC(ABC):
             logg.info("Finish", time=start)
             return res
 
-        _save_data(self._data, attr="uns", key=Key.uns.ligrec(cluster_key, key_added), data=res, time=start)
+        _save_data(self._adata, attr="uns", key=Key.uns.ligrec(cluster_key, key_added), data=res, time=start)
 
     def _trim_data(self) -> None:
         """Subset genes :attr:`_data` to those present in interactions."""

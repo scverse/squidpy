@@ -11,7 +11,6 @@ from squidpy.gr import (
     spatial_neighbors,
     interaction_matrix,
 )
-from squidpy.constants._pkg_constants import Key
 
 
 def test_nhood_enrichment(adata: AnnData):
@@ -34,7 +33,7 @@ def test_centrality_scores(nhood_data: AnnData):
     centrality_scores(
         adata=adata,
         cluster_key="leiden",
-        connectivity_key=Key.obsp.spatial_conn(),
+        connectivity_key="spatial",
     )
     # assert saving in .uns
     key = "leiden_centrality_scores"
@@ -57,7 +56,7 @@ def test_interaction_matrix_copy(nhood_data: AnnData, copy: bool):
     res = interaction_matrix(
         adata=adata,
         cluster_key="leiden",
-        connectivity_key=Key.obsp.spatial_conn(),
+        connectivity_key="spatial",
         copy=copy,
     )
     # assert saving in .uns
@@ -84,7 +83,7 @@ def test_interaction_matrix_normalize(nhood_data: AnnData, normalized: bool):
     res = interaction_matrix(
         adata=adata,
         cluster_key="leiden",
-        connectivity_key=Key.obsp.spatial_conn(),
+        connectivity_key="spatial",
         copy=True,
         normalized=normalized,
     )

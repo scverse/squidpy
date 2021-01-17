@@ -396,7 +396,7 @@ class ALayer:
 
 def _contrasting_color(r: int, g: int, b: int) -> str:
     for val in [r, g, b]:
-        assert 0 <= val <= 255
+        assert 0 <= val <= 255, f"Color value `{val}` is not in `[0, 255]`."
 
     return "#000000" if r * 0.299 + g * 0.587 + b * 0.114 > 186 else "#ffffff"
 
@@ -427,7 +427,10 @@ def _annotate_heatmap(
 
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
-            kw.update(color=_get_black_or_white(im.norm(data[i, j]), cmap))
+            val = im.norm(data[i, j])
+            if np.isnan(val):
+                continue
+            kw.update(color=_get_black_or_white(val, cmap))
             im.axes.text(j, i, valfmt(data[i, j], None), **kw)
 
 
@@ -452,7 +455,7 @@ def _get_cmap_norm(
 def _heatmap(
     adata: AnnData,
     title: str = "",
-    cont_cmap: str = "viridis",
+    cont_cmap: Union[str, mcolors.Colormap] = "viridis",
     annotate: bool = True,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
@@ -467,10 +470,12 @@ def _heatmap(
     minn, maxx = np.nanmin(adata.X), np.nanmax(adata.X)
     norm = mpl.colors.Normalize(vmin=minn, vmax=maxx)
     cont_cmap = plt.get_cmap(cont_cmap)
+    cont_cmap.set_bad(color="grey")
 
-    im = ax.imshow(adata.X[:, ::-1], cmap=cont_cmap)
+    im = ax.imshow(adata.X[:, ::-1], cmap=cont_cmap, norm=norm)
+
+    ax.grid(False)
     ax.tick_params(top=False, bottom=False, labeltop=False, labelbottom=False)
-
     ax.set_xticks([])
     ax.set_yticks(np.arange(n_cls))
     ax.set_yticklabels(adata.obs[key])

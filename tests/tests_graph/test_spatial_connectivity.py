@@ -3,6 +3,7 @@ from anndata import AnnData
 import numpy as np
 
 from squidpy.gr import spatial_neighbors
+from squidpy.constants._pkg_constants import Key
 
 
 # todo add edge cases
@@ -12,7 +13,7 @@ def test_spatial_neighbors_visium(visium_adata: AnnData):
     """
     for i, n_neigh in enumerate((6, 18, 36)):
         spatial_neighbors(visium_adata, n_rings=i + 1)
-        assert visium_adata.obsp["spatial_neighbors_connectivities"][0].sum() == n_neigh
+        assert visium_adata.obsp[Key.obsp.spatial_conn()][0].sum() == n_neigh
 
 
 def test_spatial_neighbors_non_visium(non_visium_adata: AnnData):
@@ -38,9 +39,9 @@ def test_spatial_neighbors_non_visium(non_visium_adata: AnnData):
     )
 
     spatial_neighbors(non_visium_adata, n_neigh=3, coord_type=None)
-    spatial_graph = non_visium_adata.obsp["spatial_neighbors_connectivities"].toarray()
+    spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
     assert np.array_equal(spatial_graph, correct_knn_graph)
 
     spatial_neighbors(non_visium_adata, radius=5.0, coord_type=None)
-    spatial_graph = non_visium_adata.obsp["spatial_neighbors_connectivities"].toarray()
+    spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
     assert np.array_equal(spatial_graph, correct_radius_graph)

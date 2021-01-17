@@ -91,8 +91,9 @@ save
     Whether to save the plot."""
 _cat_plotting = f"""\
 palette
-    Categorical colormap for the clusters. If `None`, try using from :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``.
-{_plotting}"""  # noqa: E501
+    Categorical colormap for the clusters.
+    If `None`, try using from :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``.
+{_plotting}"""
 _heatmap_plotting = f"""\
 cmap
     Continuous colormap to use.
