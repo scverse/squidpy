@@ -214,7 +214,6 @@ def centrality_scores(
         Centrality measures as described in :class:`networkx.algorithms.centrality`.\
         if `None`, computes all. Available centralities:
         Available centralities are the following:
-            - `{c.BETWEENNESS.s!r}`
             - `{c.CLOSENESS.s!r}`
             - `{c.CLUSTERING.s!r}`
             - `{c.DEGREE.s!r}`
@@ -260,9 +259,7 @@ def centrality_scores(
 
     fun_dict = {}
     for c in centralities:
-        if c == Centrality.BETWEENNESS:
-            fun_dict[c.s] = partial(nx.algorithms.centrality.group_betweenness_centrality, graph)
-        elif c == Centrality.CLOSENESS:
+        if c == Centrality.CLOSENESS:
             fun_dict[c.s] = partial(nx.algorithms.centrality.group_closeness_centrality, graph)
         elif c == Centrality.DEGREE:
             fun_dict[c.s] = partial(nx.algorithms.centrality.group_degree_centrality, graph)

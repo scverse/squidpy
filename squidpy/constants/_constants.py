@@ -72,4 +72,3 @@ class Centrality(ModeEnum):  # noqa: D101
     DEGREE = "degree_centrality"
     CLUSTERING = "average_clustering"
     CLOSENESS = "closeness_centrality"
-    BETWEENNESS = "betweenness_centrality"

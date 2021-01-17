@@ -15,16 +15,14 @@ References
     ligand–receptor complexes.*, |br|
     `Nat Protoc 15, 1484–1506 (2020) <https://doi.org/10.1038/s41596-020-0292-x>`__.
 
-.. TODO: link-check failes because jstor is evil
-.. [Moran50] Moran, P. A. P., |br|
-    *Notes on Continuous Stochastic Phenomena.*,  |br|
-    `Biometrika, vol. 37, no. 1/2, 1950, pp. 17–23 <https://doi.org/10.2307/2332142>`__.
+.. [Moran50] Rey, Sergio J. and Anselin, Luc, |br|
+    *PySAL: A Python Library of Spatial Analytical Methods*,  |br|
+    `The Review of Regional Studies, vol. 37, 1, 2007, pp. 17–23 <https://pysal.org/esda/index.html>`__.
 
 .. [OmniPath16] Türei, D., Korcsmáros, T., Saez-Rodriguez, J., |br|
     *OmniPath: guidelines and gateway for literature-curated signaling pathway resources.*,  |br|
     `Nat Methods 13, 966–967 (2016) <https://doi.org/10.1038/nmeth.4077>`__.
 
-.. TODO: how to reference this properly?
 .. [Visium] 10X Genomics |br|
     `Visium <https://www.10xgenomics.com/products/spatial-gene-expression>`__.
 

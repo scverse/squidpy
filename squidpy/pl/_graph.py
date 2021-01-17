@@ -54,9 +54,10 @@ def centrality_scores(
     if "loc" not in legend_kwargs:
         legend_kwargs["loc"] = "center left"
         legend_kwargs.setdefault("bbox_to_anchor", (1, 0.5))
-    df = adata.uns[scores_key]
+    df = adata.uns[scores_key].copy()
+    categories = df.columns.values
+    df[cluster_key] = df.index.values
 
-    categories = df.columns[1:].values
     clusters = adata.obs[cluster_key].cat.categories
     if score is None:
         score = categories
@@ -71,7 +72,7 @@ def centrality_scores(
     palette = adata.uns.get(f"{cluster_key}_colors", None)
     if palette is not None:
         palette = {k: v for k, v in zip(clusters, palette)}
-
+    print(score)
     fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
     for g, ax in zip(score, axs):
