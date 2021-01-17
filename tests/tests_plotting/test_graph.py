@@ -67,14 +67,14 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
     def test_tol_plot_co_occurrence(self, adata: AnnData):
         gr.co_occurrence(adata, cluster_key=C_KEY)
 
-        pl.co_occurrence(adata, cluster_key=C_KEY, group=["0", "2"])
+        pl.co_occurrence(adata, cluster_key=C_KEY, clusters=["0", "2"])
         self.compare("Graph_co_occurrence", tolerance=70)
 
     def test_tol_plot_co_occurrence_palette(self, adata_palette: AnnData):
         adata = adata_palette
         gr.co_occurrence(adata, cluster_key=C_KEY)
 
-        pl.co_occurrence(adata, cluster_key=C_KEY, group=["0", "2"])
+        pl.co_occurrence(adata, cluster_key=C_KEY, clusters=["0", "2"])
         self.compare("Graph_co_occurrence_palette", tolerance=70)
 
 
