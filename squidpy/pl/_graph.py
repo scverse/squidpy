@@ -99,14 +99,16 @@ def centrality_scores(
     %(plotting_returns)s
     """
     _assert_categorical_obs(adata, key=cluster_key)
-    df = _get_data(adata, cluster_key=cluster_key, func_name="centrality_scores")
+    df = _get_data(adata, cluster_key=cluster_key, func_name="centrality_scores").copy()
 
     legend_kwargs = dict(legend_kwargs)
     if "loc" not in legend_kwargs:
         legend_kwargs["loc"] = "center left"
         legend_kwargs.setdefault("bbox_to_anchor", (1, 0.5))
 
-    scores = df.columns.difference([cluster_key])
+    scores = df.columns.values
+    df[cluster_key] = df.index.values
+
     clusters = adata.obs[cluster_key].cat.categories
     palette = _get_palette(adata, cluster_key=cluster_key, categories=clusters) if palette is None else palette
 
@@ -114,9 +116,11 @@ def centrality_scores(
     score = _assert_non_empty_sequence(score)  # type: ignore[assignment]
     score = sorted(_get_valid_values(score, scores))
 
-    fig, axs = plt.subplots(
-        1, len(score), figsize=(5 * len(score), 5) if figsize is None else figsize, dpi=dpi, constrained_layout=True
-    )
+    palette = adata.uns.get(f"{cluster_key}_colors", None)
+    if palette is not None:
+        palette = {k: v for k, v in zip(clusters, palette)}
+    print(score)
+    fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
     for g, ax in zip(score, axs):
         sns.scatterplot(

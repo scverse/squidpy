@@ -42,9 +42,8 @@ def test_centrality_scores(nhood_data: AnnData):
     assert isinstance(adata.uns[key], pd.DataFrame)
     assert len(adata.obs["leiden"].unique()) == adata.uns[key].shape[0]
     assert adata.uns[key]["degree_centrality"].dtype == np.dtype("float64")
-    assert adata.uns[key]["clustering_coefficient"].dtype == np.dtype("float64")
+    assert adata.uns[key]["average_clustering"].dtype == np.dtype("float64")
     assert adata.uns[key]["closeness_centrality"].dtype == np.dtype("float64")
-    assert adata.uns[key]["betweenness_centrality"].dtype == np.dtype("float64")
 
 
 @pytest.mark.parametrize("copy", [True, False])
