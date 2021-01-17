@@ -4,8 +4,8 @@ from PyQt5.QtWidgets import QLabel, QWidget, QComboBox, QHBoxLayout
 
 import napari
 
-from squidpy.pl.interactive._model import ImageModel
-from squidpy.pl.interactive._widgets import (
+from squidpy.pl._interactive._model import ImageModel
+from squidpy.pl._interactive._widgets import (
     CBarWidget,
     AListWidget,
     ObsmIndexWidget,
@@ -99,7 +99,7 @@ class ImageView:
             obsm_widget,
             obsm_index_widget,
         )
-        self._colorbar = CBarWidget(self.model.cont_cmap, parent=parent)
+        self._colorbar = CBarWidget(self.model.cmap, parent=parent)
 
         self.viewer.window.add_dock_widget(self._colorbar, area="left", name="percentile")
         self.viewer.window.add_dock_widget(widgets, area="right", name="genes")

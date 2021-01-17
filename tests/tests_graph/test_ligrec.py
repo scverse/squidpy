@@ -35,7 +35,7 @@ class TestInvalidBehavior:
             ligrec(adata, _CK)
 
     def test_invalid_cluster_key(self, adata: AnnData, interactions: Interactions_t):
-        with pytest.raises(KeyError, match=r"Cluster key `'foobar'` not found"):
+        with pytest.raises(KeyError, match=r"Cluster key `foobar` not found"):
             ligrec(adata, cluster_key="foobar", interactions=interactions)
 
     def test_cluster_key_is_not_categorical(self, adata: AnnData, interactions: Interactions_t):
@@ -55,7 +55,7 @@ class TestInvalidBehavior:
 
     def test_invalid_fdr_axis(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(ValueError, match=r"Invalid option `'foobar'` for `FdrAxis`."):
-            ligrec(adata, _CK, interactions=interactions, fdr_axis="foobar", fdr_method="fdr_bh")
+            ligrec(adata, _CK, interactions=interactions, fdr_axis="foobar", corr_method="fdr_bh")
 
     def test_too_few_permutations(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(ValueError, match=r"Expected `n_perms` to be positive"):
@@ -97,6 +97,8 @@ class TestInvalidBehavior:
         with pytest.raises(ValueError, match=r"Expected a `tuple` of length `2`, found `3`."):
             ligrec(adata, _CK, interactions=interactions, clusters=["foo", ("bar", "baz")])
 
+
+class TestValidBehavior:
     def test_all_genes_capitalized(self, adata: AnnData, interactions: Interactions_t):
         pt = PermutationTest(adata).prepare(interactions=interactions)
         genes = pd.Series([g for gs in pt.interactions[["source", "target"]].values for g in gs], dtype="string")
@@ -221,7 +223,7 @@ class TestInvalidBehavior:
             n_perms=5,
             copy=True,
             show_progress_bar=False,
-            fdr_method=fdr_method,
+            corr_method=fdr_method,
             threshold=0,
         )
 
@@ -336,7 +338,7 @@ class TestInvalidBehavior:
             paul15,
             "paul15_clusters",
             interactions=list(paul15_means.index.to_list()),
-            fdr_method=None,
+            corr_method=None,
             copy=True,
             show_progress_bar=False,
             threshold=0.01,

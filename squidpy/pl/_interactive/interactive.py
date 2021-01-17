@@ -12,7 +12,7 @@ from squidpy._docs import d
 from squidpy.pl._utils import save_fig
 
 try:
-    from squidpy.pl.interactive._controller import ImageController
+    from squidpy.pl._interactive._controller import ImageController
 except ImportError as e:
     _error: Optional[str] = str(e)
 else:
@@ -27,12 +27,12 @@ class Interactive:
     Parameters
     ----------
     %(img_container)s
-    %(interactive.parameters)s
+    %(_interactive.parameters)s
     """
 
     def __init__(self, img: ImageContainer, adata: AnnData, **kwargs: Any):
         if _error is not None:
-            raise ImportError(f"Unable to import the interactive viewer. Reason: {_error}.")
+            raise ImportError(f"Unable to import the interactive viewer. Reason `{_error}`.")
 
         self._controller = ImageController(adata, img, **kwargs)
 

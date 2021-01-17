@@ -1,14 +1,17 @@
 """Functions for building gr from spatial coordinates."""
-from typing import Any, Dict, Tuple, Union, Optional
+from typing import Tuple, Union, Optional
 import warnings
 
+from scanpy import logging as logg
 from anndata import AnnData
 
-from scipy.sparse import csr_matrix, SparseEfficiencyWarning
+from scipy.sparse import spmatrix, csr_matrix, SparseEfficiencyWarning
+from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 from squidpy._docs import d, inject_docs
+from squidpy.gr._utils import _save_data, _assert_positive, _assert_spatial_basis
 from squidpy.constants._constants import CoordType, Transform
 from squidpy.constants._pkg_constants import Key
 
@@ -35,13 +38,11 @@ def spatial_neighbors(
     coord_type
         Type of coordinate system. Can be one of the following:
 
-            - `{c.VISIUM.s!r}`: [Visium]_ coordinates.
-            - `{c.GENERIC.s!r}`: generic coordinates.
+            - `{c.VISIUM!r}`: [Visium]_ coordinates.
+            - `{c.GENERIC!r}`: generic coordinates.
 
-        If `None`, use `{c.VISIUM.s!r}` if ``spatial_key`` is present in :attr:`anndata.AnnData.obsm`,
-        otherwise use `{c.GENERIC.s!r}`.
-    key_added
-        Key added to connectivity and distance matrices in :attr:`anndata.AnnData.obsp`.
+        If `None`, use `{c.VISIUM!r}` if ``spatial_key`` is present in :attr:`anndata.AnnData.obsm`,
+        otherwise use `{c.GENERIC!r}`.
     n_rings
         Number of rings of neighbors for [Visium]_ data.
     n_neigh
@@ -49,37 +50,48 @@ def spatial_neighbors(
     radius
         Radius of neighbors for non-Visium data.
     transform
-        Type of adjacency matrix transform. Can be one of the following:
+        Type of adjacency matrix transform. Valid options are:
 
-            - `{t.SPECTRAL.s!r}`: TODO.
-            - `{t.COSINE.s!r}`: TODO.
-            - `{t.NONE.v}`: TODO.
+            - `{t.SPECTRAL.s!r}` - spectral transformation of the adjacency matrix.
+            - `{t.COSINE.s!r}` - cosine transformation of the adjacency matrix.
+            - `{t.NONE.v}` - no transformation of the adjacency matrix.
+
+    key_added
+        Key which controls where the results are saved.
 
     Returns
     -------
-    TODO
+    Modifies the ``adata`` with the following keys:
+
+        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_connectivities']`` - spatial connectivity matrix.
+        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - spatial distances matrix.
+        - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - spatial neighbors dictionary.
     """
-    transform = Transform(transform)
+    _assert_positive(n_rings, name="n_rings")
+    _assert_positive(n_neigh, name="n_neigh")
+    _assert_spatial_basis(adata, spatial_key)
+
+    transform = Transform.NONE if transform is None else Transform(transform)
     if coord_type is None:
         coord_type = CoordType.VISIUM if Key.uns.spatial in adata.uns else CoordType.GENERIC
     else:
         coord_type = CoordType(coord_type)
 
-    coords = adata.obsm[spatial_key]
+    start = logg.info(f"Creating graph using `{coord_type}` coordinates and `{transform}` transform")
 
+    coords = adata.obsm[spatial_key]
     if coord_type == CoordType.VISIUM:
         if n_rings > 1:
-            Adj: np.ndarray = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True, return_distance=False)
+            Adj: csr_matrix = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True, return_distance=False)
             Res = Adj
             Walk = Adj
-            # TODO: can't this ben done in log(n_rings - 1) with recursion?
             for i in range(n_rings - 1):
                 Walk = Walk @ Adj
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", SparseEfficiencyWarning)
                     Walk[Res.nonzero()] = 0.0
                 Walk.eliminate_zeros()
-                Walk.data[:] = float(i + 2)
+                Walk.data[:] = i + 2.0
                 Res = Res + Walk
             Adj = Res
             Adj.setdiag(0.0)
@@ -106,24 +118,21 @@ def spatial_neighbors(
     else:
         raise NotImplementedError(transform)
 
-    key_added = Key.uns.spatial_neighs(key_added)
+    neighs_key = Key.uns.spatial_neighs(key_added)
     conns_key = Key.obsp.spatial_conn(key_added)
     dists_key = Key.obsp.spatial_dist(key_added)
 
-    # add keys
-    neighbors_dict: Dict[str, Any] = {}
+    neighbors_dict = {
+        "connectivities_key": conns_key,
+        "params": {"n_neighbors": n_neigh, "coord_type": coord_type.v, "radius": radius, "transform": transform.v},
+    }
 
-    neighbors_dict["connectivities_key"] = conns_key
-    neighbors_dict["distances_key"] = dists_key
-
-    neighbors_dict["params"] = {"n_neighbors": n_neigh, "coord_type": coord_type.v}
-    neighbors_dict["params"]["radius"] = radius
-
-    adata.obsp[conns_key] = Adj
+    _save_data(adata, attr="obsp", key=conns_key, data=Adj)
     if Dst is not None:
-        adata.obsp[dists_key] = Dst
+        _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
+        neighbors_dict["distances_key"] = dists_key
 
-    adata.uns[key_added] = neighbors_dict
+    _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
 
 
 def _build_connectivity(
@@ -133,10 +142,8 @@ def _build_connectivity(
     neigh_correct: bool = False,
     set_diag: bool = False,
     return_distance: bool = False,
-) -> Union[Tuple[csr_matrix, csr_matrix], np.ndarray]:
+) -> Union[Tuple[csr_matrix, csr_matrix], csr_matrix]:
     """Build connectivity matrix from spatial coordinates."""
-    from sklearn.neighbors import NearestNeighbors
-
     N = coords.shape[0]
 
     dists_m = None
@@ -172,10 +179,10 @@ def _build_connectivity(
     return (conns_m, dists_m) if return_distance else conns_m
 
 
-def _transform_a_spectral(a: np.ndarray) -> np.ndarray:
-    degrees = np.squeeze(np.array(np.sqrt(1 / a.sum(axis=0))))
+def _transform_a_spectral(a: Union[csr_matrix, np.ndarray]) -> np.ndarray:
+    degrees = np.squeeze(np.array(np.sqrt(1.0 / a.sum(axis=0))))
     return a.multiply(np.outer(degrees, degrees))
 
 
-def _transform_a_cosine(a: np.ndarray) -> np.ndarray:
+def _transform_a_cosine(a: Union[spmatrix, np.ndarray]) -> Union[np.ndarray, spmatrix]:
     return cosine_similarity(a, dense_output=False)

@@ -1,9 +1,15 @@
 """Graph utilities."""
-from typing import Any, Tuple, Union, Optional, Sequence
+from typing import Any, List, Tuple, Union, Hashable, Iterable, Optional, Sequence
+
+from scanpy import logging as logg
+from anndata import AnnData
 
 from scipy.sparse import issparse, spmatrix, csc_matrix
+from pandas.api.types import infer_dtype, is_categorical_dtype
 import numpy as np
 import pandas as pd
+
+from squidpy._utils import _unique_order_preserving
 
 
 def _check_tuple_needles(
@@ -103,3 +109,64 @@ def _create_sparse_df(
         arrays.append(arr)
 
     return DataFrame._from_arrays(arrays, columns=columns, index=index, verify_integrity=False)
+
+
+def _assert_categorical_obs(adata: AnnData, key: str) -> None:
+    if key not in adata.obs:
+        raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
+
+    if not is_categorical_dtype(adata.obs[key]):
+        raise TypeError(f"Expected `adata.obs[{key!r}]` to be `categorical`, found `{infer_dtype(adata.obs[key])}`.")
+
+
+def _assert_connectivity_key(adata: AnnData, key: str) -> None:
+    if key not in adata.obsp:
+        key_added = key.replace("_connectivities", "")
+        raise KeyError(
+            f"Spatial connectivity key `{key}` not found in `adata.obsp`. "
+            f"Please run `squidpy.gr.spatial_neighbors(..., key_added={key_added!r})` first."
+        )
+
+
+def _assert_spatial_basis(adata: AnnData, key: str) -> None:
+    if key not in adata.obsm:
+        raise KeyError(f"Spatial basis `{key}` not found in `adata.obsm`.")
+
+
+def _assert_non_empty_sequence(seq: Union[Hashable, Iterable[Hashable]], convert_scalar: bool = True) -> List[Hashable]:
+    if isinstance(seq, str) or not isinstance(seq, Iterable):
+        if not convert_scalar:
+            raise TypeError("TODO")
+        seq = (seq,)
+
+    res, _ = _unique_order_preserving(seq)
+    if not len(res):
+        raise ValueError("TODO")
+
+    return res
+
+
+def _get_valid_values(needle: Sequence[Any], haystack: Sequence[Any]) -> Sequence[Any]:
+    res = [n for n in needle if n in haystack]
+    if not len(res):
+        raise ValueError(f"No valid values were found. Valid values are `{sorted(set(haystack))}`.")
+    return res
+
+
+def _assert_positive(value: int, *, name: str) -> None:
+    if value <= 0:
+        raise ValueError(f"Expected `{name}` to be positive, found `{value}`.")
+
+
+def _save_data(
+    adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool = True, time: Optional[Any] = None
+) -> None:
+    obj = getattr(adata, attr)
+    obj[key] = data
+
+    if prefix:
+        logg.info(f"Adding `adata.{attr}[{key!r}]`")
+    else:
+        logg.info(f"       `adata.{attr}[{key!r}]`")
+    if time is not None:
+        logg.info("Finish", time=time)

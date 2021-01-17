@@ -68,14 +68,14 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         viewer.screenshot(dpi=DPI)
 
     def test_plot_cont_cmap(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
-        viewer = napari_cont.interactive(adata, cont_cmap="inferno")
+        viewer = napari_cont.interactive(adata, cmap="inferno")
         cnt = viewer._controller
 
         cnt.add_points(adata.obs_vector(adata.var_names[42]), layer_name="wex")
         viewer.screenshot(dpi=DPI)
 
     def test_plot_cat_cmap(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
-        viewer = napari_cont.interactive(adata, cat_cmap="Set3")
+        viewer = napari_cont.interactive(adata, palette="Set3")
         cnt = viewer._controller
 
         cnt.add_points(adata.obs["leiden"].astype("category"), key="in_tissue", layer_name="exort")

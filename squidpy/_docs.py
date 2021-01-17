@@ -38,6 +38,9 @@ numba_parallel
 _seed = """\
 seed
     Random seed for reproducibility."""
+_n_perms = """\
+n_perms
+    Number of permutations for the permutation test."""
 _img_hr = """\
 img
     High-resolution image."""
@@ -68,7 +71,6 @@ spatial_key
 _conn_key = """\
 conn_key
     Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored."""
-# TODO: https://github.com/Chilipp/docrep/issues/21 fixes this, this is not necessary
 _crop_extra = """\
 scale
     Resolution of the crop (smaller -> smaller image).
@@ -86,6 +88,15 @@ dpi
     Dots per inch.
 save
     Whether to save the plot."""
+_cat_plotting = f"""\
+palette
+    Categorical colormap for the clusters.
+    If `None`, use :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``, if available.
+{_plotting}"""
+_heatmap_plotting = f"""\
+cmap
+    Continuous colormap to use.
+{_cat_plotting}"""
 _plotting_returns = """\
 Nothing, just plots the and optionally saves the plot.
 """
@@ -103,6 +114,24 @@ _segment_kwargs = """\
 kwargs
     Keyword arguments for the underlying model."""
 
+_ligrec_test_returns = """\
+If ``copy = True``, returns a :class:`typing.NamedTuple`:
+
+    - `'means'` - :class:`pandas.DataFrame` containing the mean expression.
+    - `'pvalues'` - :class:`pandas.DataFrame` containing the possibly corrected p-values.
+    - `'metadata'` - :class:`pandas.DataFrame` containing interaction metadata.
+
+Otherwise, modifies the ``adata`` object with the following key:
+
+    - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - the above mentioned triple.
+
+`NaN` p-values mark combinations for which the mean expression of one of the interacting components was 0
+or it didn't pass the ``threshold`` percentage of cells being expressed within a given cluster."""
+_corr_method = """\
+corr_method
+    Correction method for multiple testing. See :func:`statsmodels.stats.multitest.multipletests`
+    for valid options."""
+
 
 d = DocstringProcessor(
     adata=_adata,
@@ -111,6 +140,7 @@ d = DocstringProcessor(
     copy_cont=_copy_cont,
     numba_parallel=_numba_parallel,
     seed=_seed,
+    n_perms=_n_perms,
     img_hr=_img_hr,
     img_id=_img_id,
     feature_name=_feature_name,
@@ -122,8 +152,12 @@ d = DocstringProcessor(
     conn_key=_conn_key,
     crop_extra=_crop_extra,
     plotting=_plotting,
+    cat_plotting=_cat_plotting,
     plotting_returns=_plotting_returns,
     parallelize=_parallelize,
     channels=_channels,
     segment_kwargs=_segment_kwargs,
+    ligrec_test_returns=_ligrec_test_returns,
+    corr_method=_corr_method,
+    heatmap_plotting=_heatmap_plotting,
 )
