@@ -1,3 +1,4 @@
+from copy import copy
 from typing import Any, List, Tuple, Union, Callable, Optional, Sequence, TYPE_CHECKING
 from pathlib import Path
 from functools import wraps
@@ -469,7 +470,7 @@ def _heatmap(
 
     minn, maxx = np.nanmin(adata.X), np.nanmax(adata.X)
     norm = mpl.colors.Normalize(vmin=minn, vmax=maxx)
-    cont_cmap = plt.get_cmap(cont_cmap)
+    cont_cmap = copy(plt.get_cmap(cont_cmap))
     cont_cmap.set_bad(color="grey")
 
     im = ax.imshow(adata.X[:, ::-1], cmap=cont_cmap, norm=norm)
