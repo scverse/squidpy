@@ -119,7 +119,6 @@ def centrality_scores(
     palette = adata.uns.get(f"{cluster_key}_colors", None)
     if palette is not None:
         palette = {k: v for k, v in zip(clusters, palette)}
-    print(score)
     fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
     for g, ax in zip(score, axs):
