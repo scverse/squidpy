@@ -70,7 +70,7 @@ def calculate_image_features(
     """
     if isinstance(features, (str, ImageFeature)):
         features = [features]
-    features = [ImageFeature(f) for f in features]
+    features = [ImageFeature(f) for f in features]  # type: ignore[misc]
 
     n_jobs = _get_n_cores(n_jobs)
     logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
