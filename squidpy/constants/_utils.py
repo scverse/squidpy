@@ -35,7 +35,7 @@ class ErrorFormatterABC(ABC):
         )
 
 
-class PrettyEnum(str, Enum):
+class PrettyEnum(Enum):
     """Enum with a pretty __str__ and __repr__."""
 
     def __repr__(self) -> str:

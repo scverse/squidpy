@@ -36,8 +36,6 @@ class Interactive:
 
         self._controller = ImageController(adata, img, **kwargs)
 
-    @d.get_full_description(base="cont_show")
-    @d.get_sections(base="cont_show", sections=["Parameters", "Returns"])
     def show(self, restore: bool = False) -> "Interactive":
         """
         Launch the :class:`napari.Viewer`.
