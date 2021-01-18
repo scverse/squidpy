@@ -139,19 +139,19 @@ class ImageController:
             self._save_shapes(layer, key=key)
             self._update_obs_items(key)
 
-    @d.dedent
     def show(self, restore: bool = False) -> None:
         """
-        %(cont_show.full_desc)s
+        Launch the :class:`napari.Viewer`.
 
         Parameters
         ----------
-        %(cont_show.parameters)s
+        restore
+            Whether to reinitialize the GUI after it has been destroyed.
 
         Returns
         -------
-        %(cont_show.returns)s
-        """  # noqa: D400
+        Nothing, just launches the viewer.
+        """
         try:
             self.view.viewer.show()
         except RuntimeError:
