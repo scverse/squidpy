@@ -12,7 +12,7 @@ import pandas as pd
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
 from squidpy.im.object import ImageContainer
-from squidpy.constants._constants import ImageFeature
+from squidpy._constants._constants import ImageFeature
 
 
 @d.dedent

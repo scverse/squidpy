@@ -131,6 +131,17 @@ _corr_method = """\
 corr_method
     Correction method for multiple testing. See :func:`statsmodels.stats.multitest.multipletests`
     for valid options."""
+_download = """\
+Parameters
+----------
+path
+    Path where to save the dataset. If `None`, it will be saved under `~/.cache/squidpy/`.
+kwargs
+    Keyword arguments for :func:`scanpy.read`.
+
+Returns
+-------
+The dataset."""
 
 
 d = DocstringProcessor(
@@ -160,4 +171,5 @@ d = DocstringProcessor(
     ligrec_test_returns=_ligrec_test_returns,
     corr_method=_corr_method,
     heatmap_plotting=_heatmap_plotting,
+    download=_download,
 )

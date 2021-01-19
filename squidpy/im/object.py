@@ -20,7 +20,7 @@ from squidpy._docs import d
 from squidpy._utils import _unique_order_preserving
 from squidpy.im._utils import _num_pages, CropCoords, _scale_xarray
 from squidpy.im.feature_mixin import FeatureMixin
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
 Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependecies

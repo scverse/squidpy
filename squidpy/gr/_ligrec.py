@@ -26,8 +26,8 @@ from squidpy.gr._utils import (
     _check_tuple_needles,
     _assert_categorical_obs,
 )
-from squidpy.constants._constants import FdrAxis, ComplexPolicy
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._constants import FdrAxis, ComplexPolicy
+from squidpy._constants._pkg_constants import Key
 
 StrSeq = Sequence[str]
 SeqTuple = Sequence[Tuple[str, str]]

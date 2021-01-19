@@ -12,7 +12,7 @@ import pandas as pd
 
 from squidpy.gr import ligrec
 from squidpy.gr._ligrec import LigrecResult, PermutationTest
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 
 _CK = "leiden"
 Interactions_t = Tuple[Sequence[str], Sequence[str]]
