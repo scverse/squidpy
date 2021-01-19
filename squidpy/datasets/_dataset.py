@@ -65,38 +65,74 @@ class Metadata:
 
 _four_i = Metadata(
     name="four_i",
-    doc_header="This is a simple header, only supports 1 line.",
+    doc_header="Pre-processed subset 4i dataset from Gut et al. \
+    https://doi.org/10.1126/science.aar7042 .",
+    shape=(270938, 43),
     url="https://ndownloader.figshare.com/files/26098409?private_link=1d883cf23fda2e9d932c",
 )
-_imc = Metadata(name="imc", url="https://ndownloader.figshare.com/files/26098406?private_link=91bb0e13dffde129b10d")
+_imc = Metadata(
+    name="imc",
+    doc_header="Pre-processed subset IMC dataset from Jackson et al. \
+    https://www.nature.com/articles/s41586-019-1876-x .",
+    shape=(4668, 34),
+    url="https://ndownloader.figshare.com/files/26098406?private_link=91bb0e13dffde129b10d",
+)
 _seqfish = Metadata(
-    name="seqfish", url="https://ndownloader.figshare.com/files/26098403?private_link=4d4cbc43b4a74c52ce9d"
+    name="seqfish",
+    doc_header="Pre-processed subset seqFISH dataset from Lohoff et al. \
+    https://www.biorxiv.org/content/10.1101/2020.11.20.391896v1 .",
+    shape=(19416, 351),
+    url="https://ndownloader.figshare.com/files/26098403?private_link=4d4cbc43b4a74c52ce9d",
 )
 _visium_hne_adata = Metadata(
-    name="visium_hne_adata", url="https://ndownloader.figshare.com/files/26098397?private_link=d7e9f517da588e6bd5dc"
+    name="visium_hne_adata",
+    doc_header="Pre-processed 10x Genomics Visium HnE dataset from \
+    https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain .",
+    shape=(2688, 18078),
+    url="https://ndownloader.figshare.com/files/26098397?private_link=d7e9f517da588e6bd5dc",
 )
 _visium_fluo_adata = Metadata(
-    name="visium_fluo_adata", url="https://ndownloader.figshare.com/files/26098391?private_link=f11ceaac4f55a6ceb817"
+    name="visium_fluo_adata",
+    doc_header="Pre-processed 10x Genomics Visium Fluorecent dataset from \
+    https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2 .",
+    shape=(2800, 16562),
+    url="https://ndownloader.figshare.com/files/26098391?private_link=f11ceaac4f55a6ceb817",
 )
 _visium_hne_adata_crop = Metadata(
     name="visium_hne_adata_crop",
+    doc_header="Pre-processed subset 10x Genomics Visium HnE dataset from \
+    https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain .",
+    shape=(684, 18078),
     url="https://ndownloader.figshare.com/files/26098382?private_link=564b10d7fa56c2370daf",
 )
 _visium_fluo_adata_crop = Metadata(
     name="visium_fluo_adata_crop",
+    doc_header="Pre-processed subset 10x Genomics Visium Fluorescent dataset from \
+    https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2 .",
+    shape=(704, 16562),
     url="https://ndownloader.figshare.com/files/26098376?private_link=96018cd91855fa6b32dc",
 )
 # TODO: create Metadate for images
 _visium_fluo_image_crop = Metadata(
     name="visium_fluo_image_crop",
+    doc_header="Cropped Fluorescent image 10x Genomics Visium dataset from \
+    https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2 .",
+    shape=(7272, 7272),
     url="https://ndownloader.figshare.com/files/26098364?private_link=4b3abee143a3852b9040",
 )
 _visium_hne_image_crop = Metadata(
     name="visium_hne_image_crop",
+    doc_header="Cropped HnE image 10x Genomics Visium dataset from \
+    https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain .",
+    shape=(3527, 3527),
     url="https://ndownloader.figshare.com/files/26098328?private_link=33ef1d60cfcadb91518c",
 )
 _visium_hne_image = Metadata(
-    name="visium_hne_image", url="https://ndownloader.figshare.com/files/26098124?private_link=9339d85896f60e41bf19"
+    name="visium_hne_image",
+    doc_header="HnE image 10x Genomics Visium dataset from \
+    https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain .",
+    shape=(11757, 11291),
+    url="https://ndownloader.figshare.com/files/26098124?private_link=9339d85896f60e41bf19",
 )
 
 
