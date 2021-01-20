@@ -18,7 +18,7 @@ import skimage
 
 from squidpy._docs import d
 from squidpy._utils import _unique_order_preserving
-from squidpy.im._utils import _num_pages, CropCoords, _scale_xarray
+from squidpy.im._utils import _num_pages, CropCoords, _scale_xarray, _open_rasterio
 from squidpy.im.feature_mixin import FeatureMixin
 from squidpy._constants._pkg_constants import Key
 
@@ -206,7 +206,7 @@ class ImageContainer(FeatureMixin):
                 # read all pages using rasterio
                 xr_img_byband = []
                 for i in range(1, num_pages + 1):
-                    data = xr.open_rasterio(f"GTIFF_DIR:{i}:{img}", chunks=chunks, parse_coordinates=False)
+                    data = _open_rasterio(f"GTIFF_DIR:{i}:{img}", chunks=chunks, parse_coordinates=False)
                     data = data.rename({"band": channel_id})
                     xr_img_byband.append(data)
                 xr_img = xr.concat(xr_img_byband, dim=channel_id)

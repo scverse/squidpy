@@ -66,9 +66,9 @@ Datasets
     datasets.imc
     datasets.seqfish
     datasets.visium_hne_adata
-    datasets.visium_fluo_adata
     datasets.visium_hne_adata_crop
+    datasets.visium_fluo_adata
     datasets.visium_fluo_adata_crop
-    datasets.visium_fluo_image_crop
-    datasets.visium_hne_image_crop
     datasets.visium_hne_image
+    datasets.visium_hne_image_crop
+    datasets.visium_fluo_image_crop

@@ -6,7 +6,7 @@ _vfic = ImgMetadata(
     name="visium_fluo_image_crop",
     doc_header="Cropped Fluorescent image from `10x Genomics Visium dataset "
     "<https://support.10xgenomics.com/spatial-gene-expression/datasets"
-    "/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2>`_.",
+    "/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2>`__.",
     shape=(7272, 7272),
     url="https://ndownloader.figshare.com/files/26098364?private_link=4b3abee143a3852b9040",
 )
