@@ -8,7 +8,7 @@ import numpy as np
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy.im._utils import CropCoords
 from squidpy.pl._utils import ALayer
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 
 
 @dataclass

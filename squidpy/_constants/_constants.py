@@ -1,7 +1,7 @@
 """Constants that can exposed to the user."""
 from enum import unique
 
-from squidpy.constants._utils import ModeEnum
+from squidpy._constants._utils import ModeEnum
 
 
 # an example, can even document the values using enum_tools:

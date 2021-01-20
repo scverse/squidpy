@@ -11,7 +11,7 @@ import skimage
 
 from squidpy._docs import d, inject_docs
 from squidpy.im.object import ImageContainer
-from squidpy.constants._constants import SegmentationBackend
+from squidpy._constants._constants import SegmentationBackend
 
 
 # TODO: dead code?

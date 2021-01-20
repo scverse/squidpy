@@ -9,7 +9,7 @@ import rasterio.errors
 
 from squidpy.im._utils import CropCoords
 from squidpy.im.object import ImageContainer
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 
 
 @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1), (10, 100, 200, 1)])
