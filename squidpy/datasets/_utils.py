@@ -86,6 +86,9 @@ class AMetadata(Metadata):
     _EXT = ".h5ad"
 
     def _create_function(self, name: str, glob_ns: Dict[str, Any]) -> None:
+        if name in globals():
+            raise KeyError(f"Function name `{name}` is already present in `{sorted(globals().keys())}`.")
+
         sig = signature(lambda _: _)
         sig = sig.replace(
             parameters=[
@@ -95,6 +98,8 @@ class AMetadata(Metadata):
             return_annotation=anndata.AnnData,
         )
         globals()["NoneType"] = type(None)  # __post_init__ return annotation
+        # TODO: rather than checking for this, globals() in exec should be remove and swapped with glob_ns
+        # but there are some missing imports, so this is more convenient, albeit bad design
         globals()[name] = self
 
         exec(
@@ -133,6 +138,9 @@ class ImgMetadata(Metadata):
     _EXT = ".netcdf"
 
     def _create_function(self, name: str, glob_ns: Dict[str, Any]) -> None:
+        if name in globals():
+            raise KeyError(f"Function name `{name}` is already present in `{sorted(globals().keys())}`.")
+
         sig = signature(lambda _: _)
         sig = sig.replace(
             parameters=[
