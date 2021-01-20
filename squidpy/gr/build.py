@@ -12,8 +12,8 @@ import numpy as np
 
 from squidpy._docs import d, inject_docs
 from squidpy.gr._utils import _save_data, _assert_positive, _assert_spatial_basis
-from squidpy.constants._constants import CoordType, Transform
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._constants import CoordType, Transform
+from squidpy._constants._pkg_constants import Key
 
 
 @d.dedent
