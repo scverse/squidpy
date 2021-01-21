@@ -481,7 +481,6 @@ def _heatmap(
 
     if dendrogram:
         row_order, col_order, row_link, col_link = _dendrogram(adata.X, method)
-        print(row_order)
     else:
         row_order = col_order = np.arange(len(adata.uns[Key.uns.colors(key)]))
 
