@@ -183,7 +183,8 @@ def interaction_matrix(
         title = "Interaction matrix"
     fig = _heatmap(
         ad,
-        title="Interaction matrix",
+        title=title,
+        dendrogram=dendrogram,
         cont_cmap=cmap,
         annotate=annotate,
         figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,

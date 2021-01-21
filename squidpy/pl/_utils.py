@@ -439,22 +439,30 @@ def _annotate_heatmap(
 def _get_cmap_norm(
     adata: AnnData,
     key: str,
-    order: Optional[Union[List[int], None]] = None,
+    order: Optional[Union[Tuple[List[int], List[int]], None]] = None,
     *,
     invert: bool = False,
-) -> Tuple[mcolors.ListedColormap, mcolors.BoundaryNorm, int]:
+) -> Tuple[mcolors.ListedColormap, mcolors.ListedColormap, mcolors.BoundaryNorm, mcolors.BoundaryNorm, int]:
     n_cls = adata.obs[key].nunique()
 
     colors = adata.uns[Key.uns.colors(key)]
+
     if order is not None:
-        colors = colors[order]
+        row_order, col_order = order
+        row_colors = [colors[i] for i in row_order]
+        col_colors = [colors[i] for i in col_order]
+    else:
+        row_colors = col_colors = colors
     if invert:
-        colors = colors[::-1]
+        row_colors = row_colors[::-1]
+        # col_colors = col_colors[::-1]
 
-    cmap = mcolors.ListedColormap(colors)
-    norm = mcolors.BoundaryNorm(np.arange(n_cls + 1), cmap.N)
+    row_cmap = mcolors.ListedColormap(row_colors)
+    col_cmap = mcolors.ListedColormap(col_colors)
+    row_norm = mcolors.BoundaryNorm(np.arange(n_cls + 1), row_cmap.N)
+    col_norm = mcolors.BoundaryNorm(np.arange(n_cls + 1), col_cmap.N)
 
-    return cmap, norm, n_cls
+    return row_cmap, col_cmap, row_norm, col_norm, n_cls
 
 
 def _heatmap(
@@ -472,39 +480,44 @@ def _heatmap(
     fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
 
     if dendrogram:
-        row_order, col_order, col_link = _dendrogram(adata.X, method)
-        labels = adata.obs[key][col_order]
-        data = adata[row_order, col_order].X
-        cmap, norm, n_cls = _get_cmap_norm(adata, key, order=col_order, invert=True)
+        row_order, col_order, row_link, col_link = _dendrogram(adata.X, method)
+        print(row_order)
     else:
-        data = adata.X
-        labels = adata.obs[key]
-        cmap, norm, n_cls = _get_cmap_norm(adata, key, invert=True)
+        row_order = col_order = np.arange(len(adata.uns[Key.uns.colors(key)]))
 
-    sm = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)
+    row_labels = adata.obs[key][row_order]
+
+    data = adata[row_order, col_order].X
+    row_cmap, col_cmap, row_norm, col_norm, n_cls = _get_cmap_norm(
+        adata, key, order=(row_order, col_order), invert=True
+    )
+
+    row_sm = mpl.cm.ScalarMappable(cmap=row_cmap, norm=row_norm)
+    col_sm = mpl.cm.ScalarMappable(cmap=col_cmap, norm=col_norm)
 
     minn, maxx = np.nanmin(data), np.nanmax(data)
     norm = mpl.colors.Normalize(vmin=minn, vmax=maxx)
     cont_cmap = copy(plt.get_cmap(cont_cmap))
     cont_cmap.set_bad(color="grey")
 
-    im = ax.imshow(data[:, ::-1], cmap=cont_cmap, norm=norm)
+    im = ax.imshow(data, cmap=cont_cmap, norm=norm)
 
     ax.grid(False)
     ax.tick_params(top=False, bottom=False, labeltop=False, labelbottom=False)
     ax.set_xticks([])
     ax.set_yticks(np.arange(n_cls))
-    ax.set_yticklabels(labels)
+    ax.set_yticklabels(row_labels)
     ax.set_ylabel(key)
+    ax.tick_params(axis="y", pad=15)  # hardcoded, not nice
 
     if annotate:
         _annotate_heatmap(im, cmap=cont_cmap, **kwargs)
 
     divider = make_axes_locatable(ax)
-    row_cats = divider.append_axes("right", size="2%", pad=0)
+    row_cats = divider.append_axes("left", size="2%", pad=0)
     col_cats = divider.append_axes("top", size="2%", pad=0)
-    cax = divider.append_axes("right", size="1%", pad=0.2)
-    if dendrogram:
+    cax = divider.append_axes("right", size="1%", pad=0.1)
+    if dendrogram:  # cluster rows but don't plot dendrogram
         col_ax = divider.append_axes("top", size="5%")
         hierarchy.dendrogram(col_link, no_labels=True, ax=col_ax, color_threshold=0, above_threshold_color="black")
         col_ax.axis("off")
@@ -517,17 +530,19 @@ def _heatmap(
         orientation="vertical",
         format="%0.2f",
     )
-    c = fig.colorbar(sm, cax=col_cats, orientation="horizontal")
+    c = fig.colorbar(col_sm, cax=col_cats, orientation="horizontal")
     c.set_ticks([])
-    c = fig.colorbar(sm, cax=row_cats, orientation="vertical")
+    c = fig.colorbar(row_sm, cax=row_cats, orientation="vertical")
     c.set_ticks([])
-
-    col_cats.set_title(title)
+    if dendrogram:
+        col_ax.set_title(title)
+    else:
+        col_cats.set_title(title)
 
     return fig
 
 
-def _dendrogram(data: np.array, method: str) -> Tuple[List[int], List[int], List[int]]:
+def _dendrogram(data: np.array, method: str) -> Tuple[List[int], List[int], List[int], List[int]]:
 
     # Row-cluster
     row_link = hierarchy.linkage(data, method=method)
@@ -539,4 +554,9 @@ def _dendrogram(data: np.array, method: str) -> Tuple[List[int], List[int], List
     col_dendro = hierarchy.dendrogram(col_link, no_plot=True)
     col_order = col_dendro["leaves"]
 
-    return row_order, col_order, col_link
+    if col_order != row_order:
+        print("different")
+        print(row_order)
+        print(col_order)
+
+    return row_order, col_order, row_link, col_link
