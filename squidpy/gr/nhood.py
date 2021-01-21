@@ -21,8 +21,8 @@ from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
 )
-from squidpy.constants._constants import Centrality
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._constants import Centrality
+from squidpy._constants._pkg_constants import Key
 
 dt = nt.uint32  # data type aliases (both for numpy and numba should match)
 ndt = np.uint32

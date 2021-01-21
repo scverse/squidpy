@@ -17,7 +17,7 @@ from squidpy._docs import d
 from squidpy._utils import verbosity, _unique_order_preserving
 from squidpy.pl._utils import save_fig
 from squidpy.gr._ligrec import LigrecResult
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 
 _SEP = " | "
 

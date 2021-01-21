@@ -3,7 +3,7 @@ from anndata import AnnData
 import numpy as np
 
 from squidpy.gr import spatial_neighbors
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 
 
 # todo add edge cases

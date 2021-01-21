@@ -1,4 +1,6 @@
+from typing import Any
 from dataclasses import dataclass
+import warnings
 
 import numpy as np
 import xarray as xr
@@ -29,6 +31,14 @@ def _scale_xarray(arr: xr.DataArray, scale: float) -> xr.DataArray:
     # recreate DataArray
     arr = xr.DataArray(arr, dims=dims)
     return arr
+
+
+def _open_rasterio(path: str, **kwargs: Any) -> xr.DataArray:
+    from rasterio.errors import NotGeoreferencedWarning
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", NotGeoreferencedWarning)
+        return xr.open_rasterio(path, **kwargs)
 
 
 @dataclass(frozen=True)

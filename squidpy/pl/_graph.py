@@ -28,7 +28,7 @@ from squidpy.gr._utils import (
     _assert_non_empty_sequence,
 )
 from squidpy.pl._utils import _heatmap, save_fig
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 
 Palette_t = Optional[Union[str, mcolors.ListedColormap]]
 

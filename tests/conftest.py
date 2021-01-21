@@ -19,7 +19,7 @@ import matplotlib as mpl
 
 from squidpy.im.object import ImageContainer
 from squidpy.gr._ligrec import LigrecResult
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 import squidpy as sp
 
 mpl.use("agg")

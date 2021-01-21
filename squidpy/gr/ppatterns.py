@@ -32,7 +32,7 @@ import numba.types as nt
 
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 
 try:
     with warnings.catch_warnings():

@@ -28,7 +28,7 @@ from matplotlib.figure import Figure
 import matplotlib as mpl
 
 from squidpy._docs import d
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 
 Vector_name_t = Tuple[Optional[Union[pd.Series, np.ndarray]], Optional[str]]
 
