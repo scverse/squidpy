@@ -554,9 +554,4 @@ def _dendrogram(data: np.array, method: str) -> Tuple[List[int], List[int], List
     col_dendro = hierarchy.dendrogram(col_link, no_plot=True)
     col_order = col_dendro["leaves"]
 
-    if col_order != row_order:
-        print("different")
-        print(row_order)
-        print(col_order)
-
     return row_order, col_order, row_link, col_link
