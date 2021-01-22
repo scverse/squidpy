@@ -76,6 +76,6 @@ class Centrality(ModeEnum):  # noqa: D101
 
 @unique
 class DendrogramAxis(ModeEnum):  # noqa: D101
-    INTERACTING_PAIRS = "interacting_pairs"
+    INTERACTING_MOLS = "interacting_molecules"
     INTERACTING_CLUSTERS = "interacting_clusters"
     BOTH = "both"

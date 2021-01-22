@@ -136,8 +136,8 @@ def ligrec(
         How to cluster based on the p-values. Valid options are:
 
             -  `None` - do not perform clustering.
-            - `'interacting_pairs'` - cluster the interacting pairs.
-            - `'interacting_clusters'` - cluster the cluster combinations.
+            - `'interacting_molecules'` - cluster the interacting molecules.
+            - `'interacting_clusters'` - cluster the interacting clusters.
             - `'both'` - cluster both rows and columns. Note that in this case, the dendrogram is not shown.
 
     swap_axes
@@ -318,7 +318,7 @@ def ligrec(
             **_filter_kwargs(sc.pl.DotPlot.legend, kwargs),
         )
     )
-    if dendrogram in (DendrogramAxis.INTERACTING_PAIRS, DendrogramAxis.INTERACTING_CLUSTERS):
+    if dendrogram in (DendrogramAxis.INTERACTING_MOLS, DendrogramAxis.INTERACTING_CLUSTERS):
         # ignore the warning about mismatching groups
         with verbosity(0):
             dp.add_dendrogram(size=1.6, dendrogram_key="dendrogram")

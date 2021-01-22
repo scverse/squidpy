@@ -114,7 +114,7 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
             pl.ligrec(ligrec_result, means_range=[0, 1, 2])
 
     def test_invalid_clusters(self, ligrec_result: LigrecResult):
-        with pytest.raises(ValueError, match=r"No clusters have been selected."):
+        with pytest.raises(ValueError, match=r"No valid clusters have been selected."):
             pl.ligrec(ligrec_result, source_groups="foo", target_groups="bar")
 
     def test_all_interactions_empty(self, ligrec_result: LigrecResult):
@@ -145,7 +145,7 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
 
     def test_plot_dendrogram_pairs(self, ligrec_result: LigrecResult):
         np.random.seed(42)
-        pl.ligrec(ligrec_result, dendrogram="interacting_pairs")
+        pl.ligrec(ligrec_result, dendrogram="interacting_molecules")
 
     def test_plot_dendrogram_clusters(self, ligrec_result: LigrecResult):
         # this currently "fails" (i.e. no dendrogram)
@@ -160,7 +160,7 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
         pl.ligrec(ligrec_result, swap_axes=True)
 
     def test_plot_swap_axes_dedrogram(self, ligrec_result: LigrecResult):
-        pl.ligrec(ligrec_result, swap_axes=True, dendrogram=True)
+        pl.ligrec(ligrec_result, swap_axes=True, dendrogram="interacting_molecules")
 
     def test_plot_alpha(self, ligrec_result: LigrecResult):
         pl.ligrec(ligrec_result, alpha=1)
