@@ -32,6 +32,12 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
 
         pl.interaction_matrix(adata, cluster_key=C_KEY)
 
+    def test_plot_interaction_dendro(self, adata: AnnData):
+        gr.spatial_neighbors(adata)
+        gr.interaction_matrix(adata, cluster_key=C_KEY)
+
+        pl.interaction_matrix(adata, cluster_key=C_KEY, method="single")
+
     def test_plot_centrality_scores(self, adata: AnnData):
         gr.spatial_neighbors(adata)
         gr.centrality_scores(adata, cluster_key=C_KEY)
@@ -50,6 +56,13 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
         gr.nhood_enrichment(adata, cluster_key=C_KEY)
 
         pl.nhood_enrichment(adata, cluster_key=C_KEY)
+
+    def test_plot_nhood_enrichment_dendro(self, adata: AnnData):
+        gr.spatial_neighbors(adata)
+        gr.nhood_enrichment(adata, cluster_key=C_KEY)
+
+        # use count to avoid nan for scipy.cluster.hierarchy
+        pl.nhood_enrichment(adata, cluster_key=C_KEY, mode="count", method="single")
 
     def test_plot_ripley_k(self, adata: AnnData):
         gr.spatial_neighbors(adata)
