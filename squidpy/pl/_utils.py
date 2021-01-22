@@ -489,7 +489,7 @@ def _heatmap(
     fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
 
     if method is not None:
-        row_order, col_order, row_link, col_link = _dendrogram(adata.X, method)
+        row_order, col_order, row_link, col_link = _dendrogram(adata.X, method, optimal_ordering=adata.n_obs <= 1500)
     else:
         row_order = col_order = np.arange(len(adata.uns[Key.uns.colors(key)]))
 
