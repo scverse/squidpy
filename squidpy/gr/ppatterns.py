@@ -379,7 +379,7 @@ def co_occurrence(
     labs_split = np.array_split(labs, n_splits, axis=0)
     # create idx array including unique combinations and self-comparison
     idx_splits = list(combinations(np.arange(n_splits), 2))
-    idx_splits.extend([(i, j) for i, j in zip(np.arange(n_splits), np.arange(n_splits))])
+    idx_splits.extend([(i, i) for i in np.arange(n_splits)])
 
     n_jobs = _get_n_cores(n_jobs)
 
