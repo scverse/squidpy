@@ -17,6 +17,7 @@ except ImportError:
     from typing_extensions import Literal
 
 from typing import Tuple, Union, Iterable, Optional, Sequence
+from itertools import combinations
 import warnings
 
 from scanpy import logging as logg
@@ -33,7 +34,6 @@ import numba.types as nt
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
 from squidpy._constants._pkg_constants import Key
-from itertools import combinations
 
 try:
     with warnings.catch_warnings():
@@ -390,34 +390,21 @@ def co_occurrence(
             using `{n_jobs}` core(s)"
     )
 
-    temp = []
+    out_lst = []
     for t in idx_splits:
+        print(t)
         idx_x, idx_y = t
         labs_x = labs_split[idx_x]
         labs_y = labs_split[idx_y]
-        dist = pairwise_distances(spatial_splits[idx_x],spatial_splits[idx_y]).astype(fp)
+        dist = pairwise_distances(spatial_splits[idx_x], spatial_splits[idx_y]).astype(fp)
 
         out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
         for i in range(interval.shape[0] - 1):
             cond_prob = _occur_count((labs_x, labs_y), dist, (interval[i], interval[i + 1]), labs_unique)
             out[:, :, i] = cond_prob
-        temp.append(out)
+        out_lst.append(out)
 
-    print(len(temp))
-    out = sum(temp)
-    print(out.shape)
-    # out = np.apply_over_axes(np.sum, out, [2]) # np.sum(out, axis=-1) #
-    out = out / n_splits
-
-    # df = parallelize(
-    #     _co_occurrence_helper,
-    #     collection=splits,
-    #     extractor=pd.concat,
-    #     use_ixs=True,
-    #     n_jobs=n_jobs,
-    #     backend=backend,
-    #     show_progress_bar=show_progress_bar,
-    # )(adata=adata, weights=w, transformation=transformation, permutations=n_perms, layer=layer, seed=seed)
+    out = sum(out_lst) / len(idx_splits)
 
     if copy:
         logg.info("Finish", time=start)
@@ -428,29 +415,29 @@ def co_occurrence(
     )
 
 
-def _co_occurrence_helper(
-    splits: Iterable,
-    gen: Iterable[str],
-    adata: AnnData,
-    interval: Iterable[float],
-    n_cls: int,
-    layer: Optional[str] = None,
-    queue: Optional[SigQueue] = None,
-) -> pd.DataFrame:
+# def _co_occurrence_helper(
+#     splits: Iterable,
+#     gen: Iterable[str],
+#     adata: AnnData,
+#     interval: Iterable[float],
+#     n_cls: int,
+#     layer: Optional[str] = None,
+#     queue: Optional[SigQueue] = None,
+# ) -> pd.DataFrame:
 
-    for s in splits:
-        # TODO: parallelize (i.e. what's the interval length?)
-        dist = pairwise_distances(s).astype(fp)
-        out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
+#     for s in splits:
+#         # TODO: parallelize (i.e. what's the interval length?)
+#         dist = pairwise_distances(s).astype(fp)
+#         out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
 
-        for i in range(interval.shape[0] - 1):
-            cond_prob = _occur_count(labs, dist, (interval[i], interval[i + 1]), labs_unique)
-            out[:, :, i] = cond_prob
+#         for i in range(interval.shape[0] - 1):
+#             cond_prob = _occur_count(labs, dist, (interval[i], interval[i + 1]), labs_unique)
+#             out[:, :, i] = cond_prob
 
-        if queue is not None:
-            queue.put(Signal.UPDATE)
+#         if queue is not None:
+#             queue.put(Signal.UPDATE)
 
-    if queue is not None:
-        queue.put(Signal.FINISH)
+#     if queue is not None:
+#         queue.put(Signal.FINISH)
 
-    return pd.DataFrame(moran_list, columns=["I", "pval_sim", "VI_sim"], index=gen)
+#     return
