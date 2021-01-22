@@ -1,5 +1,17 @@
 from copy import copy
-from typing import Any, List, Tuple, Union, Callable, Optional, Sequence, TYPE_CHECKING
+from typing import (
+    Any,
+    Dict,
+    List,
+    Tuple,
+    Union,
+    Mapping,
+    Callable,
+    Optional,
+    Sequence,
+    TYPE_CHECKING,
+)
+from inspect import signature
 from pathlib import Path
 from functools import wraps
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -10,7 +22,7 @@ from anndata import AnnData
 
 from numba import njit, prange
 from scipy.sparse import issparse, spmatrix
-from scipy.cluster import hierarchy
+from scipy.cluster import hierarchy as sch
 from pandas._libs.lib import infer_dtype
 from pandas.core.dtypes.common import (
     is_bool_dtype,
@@ -511,7 +523,7 @@ def _heatmap(
     cax = divider.append_axes("right", size="1%", pad=0.1)
     if method is not None:  # cluster rows but don't plot dendrogram
         col_ax = divider.append_axes("top", size="5%")
-        hierarchy.dendrogram(col_link, no_labels=True, ax=col_ax, color_threshold=0, above_threshold_color="black")
+        sch.dendrogram(col_link, no_labels=True, ax=col_ax, color_threshold=0, above_threshold_color="black")
         col_ax.axis("off")
 
     _ = mpl.colorbar.ColorbarBase(
@@ -537,16 +549,23 @@ def _heatmap(
     return fig
 
 
-def _dendrogram(data: np.array, method: str) -> Tuple[List[int], List[int], List[int], List[int]]:
+def _filter_kwargs(func: Callable[..., Any], kwargs: Mapping[str, Any]) -> Dict[str, Any]:
+    style_args = {k for k in signature(func).parameters.keys()}  # noqa: C416
+    return {k: v for k, v in kwargs.items() if k in style_args}
+
+
+def _dendrogram(data: np.array, method: str, **kwargs: Any) -> Tuple[List[int], List[int], List[int], List[int]]:
+    link_kwargs = _filter_kwargs(sch.linkage, kwargs)
+    dendro_kwargs = _filter_kwargs(sch.dendrogram, kwargs)
 
     # Row-cluster
-    row_link = hierarchy.linkage(data, method=method)
-    row_dendro = hierarchy.dendrogram(row_link, no_plot=True)
+    row_link = sch.linkage(data, method=method, **link_kwargs)
+    row_dendro = sch.dendrogram(row_link, no_plot=True, **dendro_kwargs)
     row_order = row_dendro["leaves"]
 
     # Column-cluster
-    col_link = hierarchy.linkage(data.T, method=method)
-    col_dendro = hierarchy.dendrogram(col_link, no_plot=True)
+    col_link = sch.linkage(data.T, method=method, **link_kwargs)
+    col_dendro = sch.dendrogram(col_link, no_plot=True, **dendro_kwargs)
     col_order = col_dendro["leaves"]
 
     return row_order, col_order, row_link, col_link

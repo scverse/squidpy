@@ -1,11 +1,11 @@
-from typing import Any, Tuple, Union, Optional, Sequence
+from typing import Any, Tuple, Union, Mapping, Optional, Sequence
 from pathlib import Path
-import inspect
 
 from scanpy import logging as logg
 from anndata import AnnData
 import scanpy as sc
 
+from scipy.cluster import hierarchy as sch
 import numpy as np
 import pandas as pd
 
@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 from squidpy._docs import d
 from squidpy._utils import verbosity, _unique_order_preserving
-from squidpy.pl._utils import save_fig
+from squidpy.pl._utils import save_fig, _filter_kwargs
 from squidpy.gr._ligrec import LigrecResult
 from squidpy._constants._pkg_constants import Key
 
@@ -147,6 +147,27 @@ def ligrec(
     -------
     %(plotting_returns)s
     """
+
+    def get_dendrogram(adata: AnnData, linkage: str = "complete") -> Mapping[str, Any]:
+        z_var = sch.linkage(
+            sc.pp.pca(adata.X),
+            metric="correlation",
+            method=linkage,
+            optimal_ordering=adata.n_obs <= 1500,  # matplotlib will most likely give up first
+        )
+        dendro_info = sch.dendrogram(z_var, labels=adata.obs_names.values, no_plot=True)
+        # this is what the DotPlot requires
+        return {
+            "linkage": z_var,
+            "groupby": ["groups"],
+            "cor_method": "pearson",
+            "use_rep": None,
+            "linkage_method": linkage,
+            "categories_ordered": dendro_info["ivl"],
+            "categories_idx_ordered": dendro_info["leaves"],
+            "dendrogram_info": dendro_info,
+        }
+
     if isinstance(adata, AnnData):
         if cluster_key is None:
             raise ValueError("Please provide `cluster_key` when supplying an `AnnData` object.")
@@ -228,24 +249,22 @@ def ligrec(
     var.set_index((var.columns[0]), inplace=True)
 
     adata = AnnData(pvals.values, obs={"groups": pd.Categorical(pvals.index, pvals.index)}, var=var)
+    adata.obs_names = pvals.index
     minn = np.nanmin(adata.X)
     delta = np.nanmax(adata.X) - minn
     adata.X = (adata.X - minn) / delta
 
     if dendrogram:
-        sc.pp.pca(adata)
-        sc.tl.dendrogram(adata, groupby="groups", key_added="dendrogram")
+        try:
+            adata.uns["dendrogram"] = get_dendrogram(adata)
+        except Exception as e:
+            logg.warning(f"Unable to create a dendrogram. Reason: `{e}`")
+            dendrogram = False
 
     kwargs["dot_edge_lw"] = 0
     kwargs.setdefault("cmap", "viridis")
     kwargs.setdefault("grid", True)
     kwargs.pop("color_on", None)  # interferes with tori
-
-    style_args = {k for k in inspect.signature(sc.pl.DotPlot.style).parameters.keys()}  # noqa: C416
-    style_dict = {k: v for k, v in kwargs.items() if k in style_args}
-
-    legend_args = {k for k in inspect.signature(sc.pl.DotPlot.legend).parameters.keys()}  # noqa: C416
-    legend_dict = {k: v for k, v in kwargs.items() if k in legend_args}
 
     dp = (
         CustomDotplot(
@@ -263,12 +282,12 @@ def ligrec(
             figsize=figsize,
         )
         .style(
-            **style_dict,
+            **_filter_kwargs(sc.pl.DotPlot.style, kwargs),
         )
         .legend(
             size_title=r"$-\log_{10} ~ P$",
             colorbar_title=r"$log_2(\frac{molecule_1 + molecule_2}{2} + 1)$",
-            **legend_dict,
+            **_filter_kwargs(sc.pl.DotPlot.legend, kwargs),
         )
     )
     if dendrogram:
