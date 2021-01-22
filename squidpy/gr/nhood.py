@@ -294,7 +294,7 @@ def interaction_matrix(
     adata: AnnData,
     cluster_key: str,
     connectivity_key: Optional[str] = None,
-    normalized: bool = True,
+    normalized: bool = False,
     copy: bool = False,
 ) -> Optional[np.ndarray]:
     """

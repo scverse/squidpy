@@ -1,5 +1,6 @@
 from typing import Any, Tuple, Union, Optional, Sequence
 from pathlib import Path
+import inspect
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -104,6 +105,7 @@ def ligrec(
     dendrogram: bool = False,
     alpha: Optional[float] = 0.001,
     swap_axes: bool = False,
+    title: Optional[str] = None,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
@@ -133,11 +135,13 @@ def ligrec(
         Whether to show dendrogram.
     swap_axes
         Whether to show the cluster combinations as rows and the interacting pairs as columns.
+    title
+        Title of the plot.
     alpha
         Significance threshold. All elements with p-values <= ``alpha`` will be marked by tori instead of dots.
     %(plotting)s
     kwargs
-        Keyword arguments for :meth:`scanpy.pl.DotPlot.style`.
+        Keyword arguments for :meth:`scanpy.pl.DotPlot.style` or :meth:`scanpy.pl.DotPlot.legend`.
 
     Returns
     -------
@@ -173,6 +177,8 @@ def ligrec(
         target_groups = adata.pvalues.columns.get_level_values(1)
     if isinstance(target_groups, str):
         target_groups = (target_groups,)
+    if title is None:
+        title = "Receptor-ligand test"
 
     source_groups, _ = _unique_order_preserving(source_groups)  # type: ignore[no-redef,assignment]
     target_groups, _ = _unique_order_preserving(target_groups)  # type: ignore[no-redef,assignment]
@@ -235,6 +241,12 @@ def ligrec(
     kwargs.setdefault("grid", True)
     kwargs.pop("color_on", None)  # interferes with tori
 
+    style_args = [k for k, v in inspect.signature(sc.pl.DotPlot.style).parameters.items()]
+    style_dict = {k: kwargs.pop(k) for k in dict(kwargs) if k in style_args}
+
+    legend_args = [k for k, v in inspect.signature(sc.pl.DotPlot.legend).parameters.items()]
+    legend_dict = {k: kwargs.pop(k) for k in dict(kwargs) if k in legend_args}
+
     dp = (
         CustomDotplot(
             delta=delta,
@@ -244,16 +256,20 @@ def ligrec(
             groupby="groups",
             dot_color_df=means,
             dot_size_df=pvals,
-            title="Receptor-ligand test",
+            title=title,
             var_group_labels=list(label_ranges.keys()),
             var_group_positions=list(label_ranges.values()),
             standard_scale=None,
             figsize=figsize,
         )
         .style(
-            **kwargs,
+            **style_dict,
         )
-        .legend(size_title=r"$-\log_{10} ~ P$", colorbar_title=r"$log_2(\frac{molecule_1 + molecule_2}{2} + 1)$")
+        .legend(
+            size_title=r"$-\log_{10} ~ P$",
+            colorbar_title=r"$log_2(\frac{molecule_1 + molecule_2}{2} + 1)$",
+            **legend_dict,
+        )
     )
     if dendrogram:
         # ignore the warning about mismatching groups
