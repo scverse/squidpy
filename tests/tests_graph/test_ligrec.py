@@ -27,7 +27,7 @@ class TestInvalidBehavior:
     def test_adata_no_raw(self, adata: AnnData):
         del adata.raw
         with pytest.raises(AttributeError, match=r"No `.raw` attribute"):
-            ligrec(adata, _CK)
+            ligrec(adata, _CK, use_raw=True)
 
     def test_raw_has_different_n_obs(self, adata: AnnData):
         adata.raw = blobs(n_observations=adata.n_obs + 1)
@@ -99,6 +99,11 @@ class TestInvalidBehavior:
 
 
 class TestValidBehavior:
+    def test_do_not_use_raw(self, adata: AnnData, interactions: Interactions_t):
+        del adata.raw
+
+        _ = PermutationTest(adata, use_raw=False)
+
     def test_all_genes_capitalized(self, adata: AnnData, interactions: Interactions_t):
         pt = PermutationTest(adata).prepare(interactions=interactions)
         genes = pd.Series([g for gs in pt.interactions[["source", "target"]].values for g in gs], dtype="string")
