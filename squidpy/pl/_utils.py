@@ -28,6 +28,7 @@ from matplotlib.figure import Figure
 import matplotlib as mpl
 
 from squidpy._docs import d
+from squidpy.gr._utils import _assert_categorical_obs
 from squidpy._constants._pkg_constants import Key
 
 Vector_name_t = Tuple[Optional[Union[pd.Series, np.ndarray]], Optional[str]]
@@ -440,8 +441,6 @@ def _get_cmap_norm(
     adata: AnnData,
     key: str,
     order: Optional[Union[Tuple[List[int], List[int]], None]] = None,
-    *,
-    invert: bool = False,
 ) -> Tuple[mcolors.ListedColormap, mcolors.ListedColormap, mcolors.BoundaryNorm, mcolors.BoundaryNorm, int]:
     n_cls = adata.obs[key].nunique()
 
@@ -453,9 +452,6 @@ def _get_cmap_norm(
         col_colors = [colors[i] for i in col_order]
     else:
         row_colors = col_colors = colors
-    if invert:
-        row_colors = row_colors[::-1]
-        # col_colors = col_colors[::-1]
 
     row_cmap = mcolors.ListedColormap(row_colors)
     col_cmap = mcolors.ListedColormap(col_colors)
@@ -467,29 +463,29 @@ def _get_cmap_norm(
 
 def _heatmap(
     adata: AnnData,
+    key: str,
     title: str = "",
-    dendrogram: bool = False,
-    method: str = "ward",
+    method: Optional[str] = None,
     cont_cmap: Union[str, mcolors.Colormap] = "viridis",
     annotate: bool = True,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     **kwargs: Any,
 ) -> mpl.figure.Figure:
-    key = list(adata.obs.keys())[0]
+
+    _assert_categorical_obs(adata, key=key)
     fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
 
-    if dendrogram:
+    if method is not None:
         row_order, col_order, row_link, col_link = _dendrogram(adata.X, method)
     else:
         row_order = col_order = np.arange(len(adata.uns[Key.uns.colors(key)]))
 
+    row_order = row_order[::-1]
     row_labels = adata.obs[key][row_order]
 
     data = adata[row_order, col_order].X
-    row_cmap, col_cmap, row_norm, col_norm, n_cls = _get_cmap_norm(
-        adata, key, order=(row_order, col_order), invert=True
-    )
+    row_cmap, col_cmap, row_norm, col_norm, n_cls = _get_cmap_norm(adata, key, order=(row_order, col_order))
 
     row_sm = mpl.cm.ScalarMappable(cmap=row_cmap, norm=row_norm)
     col_sm = mpl.cm.ScalarMappable(cmap=col_cmap, norm=col_norm)
@@ -499,15 +495,12 @@ def _heatmap(
     cont_cmap = copy(plt.get_cmap(cont_cmap))
     cont_cmap.set_bad(color="grey")
 
-    im = ax.imshow(data, cmap=cont_cmap, norm=norm)
+    im = ax.imshow(data[::-1], cmap=cont_cmap, norm=norm)
 
     ax.grid(False)
     ax.tick_params(top=False, bottom=False, labeltop=False, labelbottom=False)
     ax.set_xticks([])
-    ax.set_yticks(np.arange(n_cls))
-    ax.set_yticklabels(row_labels)
-    ax.set_ylabel(key)
-    ax.tick_params(axis="y", pad=15)  # hardcoded, not nice
+    ax.set_yticks([])
 
     if annotate:
         _annotate_heatmap(im, cmap=cont_cmap, **kwargs)
@@ -516,7 +509,7 @@ def _heatmap(
     row_cats = divider.append_axes("left", size="2%", pad=0)
     col_cats = divider.append_axes("top", size="2%", pad=0)
     cax = divider.append_axes("right", size="1%", pad=0.1)
-    if dendrogram:  # cluster rows but don't plot dendrogram
+    if method is not None:  # cluster rows but don't plot dendrogram
         col_ax = divider.append_axes("top", size="5%")
         hierarchy.dendrogram(col_link, no_labels=True, ax=col_ax, color_threshold=0, above_threshold_color="black")
         col_ax.axis("off")
@@ -531,9 +524,12 @@ def _heatmap(
     )
     c = fig.colorbar(col_sm, cax=col_cats, orientation="horizontal")
     c.set_ticks([])
-    c = fig.colorbar(row_sm, cax=row_cats, orientation="vertical")
-    c.set_ticks([])
-    if dendrogram:
+    c = fig.colorbar(row_sm, cax=row_cats, orientation="vertical", ticklocation="left")
+    c.set_ticks(np.arange(n_cls) + 0.5)
+    c.set_ticklabels(row_labels)
+    c.set_label(key)
+
+    if method is not None:
         col_ax.set_title(title)
     else:
         col_cats.set_title(title)

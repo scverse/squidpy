@@ -94,6 +94,13 @@ palette
     If `None`, use :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``, if available.
 {_plotting}"""
 _heatmap_plotting = f"""\
+annotate
+    Annotate the cells of the heatmap
+method
+    The linkage method to be used for dendrogram/clustering.\
+    From `scipy.cluster.hierarchy.linkage`.
+title
+    The title of the plot.
 cmap
     Continuous colormap to use.
 {_cat_plotting}"""

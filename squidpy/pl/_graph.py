@@ -146,12 +146,11 @@ def centrality_scores(
 def interaction_matrix(
     adata: AnnData,
     cluster_key: str,
-    palette: Palette_t = None,
     annotate: bool = False,
-    dendrogram: bool = False,
-    method: str = "ward",
+    method: Optional[str] = None,
     title: Optional[str] = None,
     cmap: str = "viridis",
+    palette: Palette_t = None,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
@@ -183,8 +182,9 @@ def interaction_matrix(
         title = "Interaction matrix"
     fig = _heatmap(
         ad,
+        key=cluster_key,
         title=title,
-        dendrogram=dendrogram,
+        method=method,
         cont_cmap=cmap,
         annotate=annotate,
         figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
@@ -202,8 +202,7 @@ def nhood_enrichment(
     cluster_key: str,
     mode: Literal["zscore", "count"] = "zscore",  # type: ignore[name-defined]
     annotate: bool = False,
-    dendrogram: bool = False,
-    method: str = "ward",
+    method: Optional[str] = None,
     title: Optional[str] = None,
     cmap: str = "viridis",
     palette: Palette_t = None,
@@ -245,8 +244,8 @@ def nhood_enrichment(
         title = "Neighborhood enrichment"
     fig = _heatmap(
         ad,
+        key=cluster_key,
         title=title,
-        dendrogram=dendrogram,
         method=method,
         cont_cmap=cmap,
         annotate=annotate,
