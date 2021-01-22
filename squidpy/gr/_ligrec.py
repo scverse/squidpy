@@ -170,25 +170,30 @@ class PermutationTestABC(ABC):
     Parameters
     ----------
     %(adata)s
-        Must contain :attr:`anndata.AnnData.raw` attribute.
+    %(use_raw)s
+    use_raw
+        Whether to access :attr:`anndata.AnnData.raw`.
     """
 
-    def __init__(self, adata: AnnData):
+    def __init__(self, adata: AnnData, use_raw: bool = True):
         if not isinstance(adata, AnnData):
             raise TypeError(f"Expected `adata` to be of type `anndata.AnnData`, found `{type(adata).__name__}`.")
         if not adata.n_obs:
             raise ValueError("No cells are in `adata.obs_names`.")
         if not adata.n_vars:
             raise ValueError("No genes are in `adata.var_names`.")
-        if adata.raw is None:
-            raise AttributeError("No `.raw` attribute found.")
-        if adata.raw.n_obs != adata.n_obs:
-            raise ValueError(f"Expected `{adata.n_obs}` cells in `.raw` object, found `{adata.raw.n_obs}`.")
+
+        self._adata = adata
+        if use_raw:
+            if adata.raw is None:
+                raise AttributeError("No `.raw` attribute found. Try specifying `use_raw=False`.")
+            if adata.raw.n_obs != adata.n_obs:
+                raise ValueError(f"Expected `{adata.n_obs}` cells in `.raw` object, found `{adata.raw.n_obs}`.")
+            adata = adata.raw
 
         self._data = pd.DataFrame.sparse.from_spmatrix(
-            csc_matrix(adata.raw.X), index=adata.raw.obs_names, columns=adata.raw.var_names
+            csc_matrix(adata.X), index=adata.obs_names, columns=adata.var_names
         )
-        self._adata = adata
 
         self._interactions: Optional[pd.DataFrame] = None
         self._filtered_data: Optional[pd.DataFrame] = None
@@ -607,6 +612,7 @@ def ligrec(
     threshold: float = 0.01,
     corr_method: Optional[str] = None,
     fdr_axis: str = FdrAxis.CLUSTERS.v,
+    use_raw: bool = True,
     copy: bool = False,
     key_added: Optional[str] = None,
     **kwargs: Any,
@@ -625,7 +631,7 @@ def ligrec(
     %(ligrec_test_returns)s
     """  # noqa: D400
     return (  # type: ignore[no-any-return]
-        PermutationTest(adata)
+        PermutationTest(adata, use_raw=use_raw)
         .prepare(interactions, complex_policy=complex_policy, **kwargs)
         .test(
             cluster_key=cluster_key,
