@@ -33,6 +33,7 @@ import numba.types as nt
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
 from squidpy._constants._pkg_constants import Key
+from itertools import combinations
 
 try:
     with warnings.catch_warnings():
@@ -140,7 +141,7 @@ def moran(
     adata: AnnData,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: Optional[Union[str, Sequence[str]]] = None,
-    transformation: Literal["r", "B", "D", "U", "V"] = "B",  # type: ignore[name-defined]
+    transformation: Literal["r", "B", "D", "U", "V"] = "r",  # type: ignore[name-defined]
     n_perms: int = 1000,
     corr_method: Optional[str] = "fdr_bh",
     layer: Optional[str] = None,
@@ -164,7 +165,7 @@ def moran(
         If `None`, it's computed for `'highly_variable'` in :attr:`anndata.AnnData.var`, if present.
         Otherwise, it's computed for all genes.
     transformation
-        Transformation to be used, as reported in :class:`esda.Moran`. Default is `"B"`, binary.
+        Transformation to be used, as reported in :class:`esda.Moran`. Default is `"r"`, row-standardized.
     %(n_perms)s
     %(corr_method)s
     layer
@@ -310,6 +311,10 @@ def co_occurrence(
     spatial_key: str = Key.obsm.spatial,
     n_steps: int = 50,
     copy: bool = False,
+    n_splits: Optional[int] = None,
+    n_jobs: Optional[int] = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
     Compute co-occurrence probability of clusters across `n_steps` distance thresholds in spatial dimensions.
@@ -340,12 +345,23 @@ def co_occurrence(
 
     spatial = adata.obsm[spatial_key]
     original_clust = adata.obs[cluster_key]
-    dist = pairwise_distances(spatial).astype(fp)
 
-    thres_max = dist.max() / 2.0
-    thres_min = np.amin(np.array(dist)[dist != np.amin(dist)]).astype(fp)
+    # find minimum, second minimum and maximum for thresholding
+    coord_sum = np.sum(spatial, axis=1)
+    min_idx = np.argmin(coord_sum)
+    min2_idx = np.argmin(np.array(coord_sum)[coord_sum != np.amin(coord_sum)])
+    max_idx = np.argmax(coord_sum)
+    thres_max = (
+        pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[max_idx, :].reshape(1, -1),)[
+            0
+        ][0]
+        / 2.0
+    ).astype(fp)
+    thres_min = pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[min2_idx, :].reshape(1, -1),)[0][
+        0
+    ].astype(fp)
+
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
-
     labs = np.array([clust_map[c] for c in original_clust], dtype=ip)
 
     labs_unique = np.array(list(clust_map.values()), dtype=ip)
@@ -353,13 +369,30 @@ def co_occurrence(
 
     interval = np.linspace(thres_min, thres_max, num=n_steps, dtype=fp)
 
-    out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
-    start = logg.info("Calculating co-occurrence probabilities")
+    if n_splits is None:
+        n_splits = 1
 
-    # TODO: parallelize (i.e. what's the interval length?)
-    for i in range(interval.shape[0] - 1):
-        cond_prob = _occur_count(labs, dist, (interval[i], interval[i + 1]), labs_unique)
-        out[:, :, i] = cond_prob
+    spatial_splits = np.array_split(spatial, n_splits, axis=0)
+    n_jobs = _get_n_cores(n_jobs)
+
+    start = logg.info(
+        f"Calculating co-occurrence probabilities for \
+            `{len(interval)}` intervals \
+            `{splits}` split combinations \
+            using `{n_jobs}` core(s)"
+    )
+
+    splits_iter = combinations(splits, 2)
+
+    df = parallelize(
+        _co_occurrence_helper,
+        collection=splits,
+        extractor=pd.concat,
+        use_ixs=True,
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
+    )(adata=adata, weights=w, transformation=transformation, permutations=n_perms, layer=layer, seed=seed)
 
     if copy:
         logg.info("Finish", time=start)
@@ -368,3 +401,31 @@ def co_occurrence(
     _save_data(
         adata, attr="uns", key=Key.uns.co_occurrence(cluster_key), data={"occ": out, "interval": interval}, time=start
     )
+
+
+def _co_occurrence_helper(
+    splits: Iterable,
+    gen: Iterable[str],
+    adata: AnnData,
+    interval: Iterable[float],
+    n_cls: int,
+    layer: Optional[str] = None,
+    queue: Optional[SigQueue] = None,
+) -> pd.DataFrame:
+
+    for s in splits:
+        # TODO: parallelize (i.e. what's the interval length?)
+        dist = pairwise_distances(s).astype(fp)
+        out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
+
+        for i in range(interval.shape[0] - 1):
+            cond_prob = _occur_count(labs, dist, (interval[i], interval[i + 1]), labs_unique)
+            out[:, :, i] = cond_prob
+        
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return pd.DataFrame(moran_list, columns=["I", "pval_sim", "VI_sim"], index=gen)
