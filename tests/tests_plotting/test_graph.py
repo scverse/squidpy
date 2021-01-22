@@ -143,8 +143,18 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_means_range(self, ligrec_result: LigrecResult):
         pl.ligrec(ligrec_result, means_range=(0.5, 1))
 
-    def test_plot_dendrogram(self, ligrec_result: LigrecResult):
-        pl.ligrec(ligrec_result, dendrogram=True)
+    def test_plot_dendrogram_pairs(self, ligrec_result: LigrecResult):
+        np.random.seed(42)
+        pl.ligrec(ligrec_result, dendrogram="interacting_pairs")
+
+    def test_plot_dendrogram_clusters(self, ligrec_result: LigrecResult):
+        # this currently "fails" (i.e. no dendrogram)
+        np.random.seed(42)
+        pl.ligrec(ligrec_result, dendrogram="interacting_clusters")
+
+    def test_plot_dendrogram_both(self, ligrec_result: LigrecResult):
+        np.random.seed(42)
+        pl.ligrec(ligrec_result, dendrogram="both")
 
     def test_plot_swap_axes(self, ligrec_result: LigrecResult):
         pl.ligrec(ligrec_result, swap_axes=True)
