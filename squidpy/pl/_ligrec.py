@@ -241,11 +241,11 @@ def ligrec(
     kwargs.setdefault("grid", True)
     kwargs.pop("color_on", None)  # interferes with tori
 
-    style_args = [k for k, v in inspect.signature(sc.pl.DotPlot.style).parameters.items()]
-    style_dict = {k: kwargs.pop(k) for k in dict(kwargs) if k in style_args}
+    style_args = {k for k in inspect.signature(sc.pl.DotPlot.style).parameters.keys()}  # noqa: C416
+    style_dict = {k: v for k, v in kwargs.items() if k in style_args}
 
-    legend_args = [k for k, v in inspect.signature(sc.pl.DotPlot.legend).parameters.items()]
-    legend_dict = {k: kwargs.pop(k) for k in dict(kwargs) if k in legend_args}
+    legend_args = {k for k in inspect.signature(sc.pl.DotPlot.legend).parameters.keys()}  # noqa: C416
+    legend_dict = {k: v for k, v in kwargs.items() if k in legend_args}
 
     dp = (
         CustomDotplot(
