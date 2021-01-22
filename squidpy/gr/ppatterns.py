@@ -272,25 +272,27 @@ def _set_weight_class(adata: AnnData, key: str) -> W:
 
 
 @njit(
-    ft[:, :](it[:], ft[:, :], tt(ft, 2), it[:]),
+    ft[:, :](tt(it[:], 2), ft[:, :], tt(ft, 2), it[:]),
     parallel=False,
     fastmath=True,
 )
 def _occur_count(
-    clust: np.ndarray[np.int32],
+    clust: Tuple[np.ndarray[np.int32], np.ndarray[np.int32]],
     pw_dist: np.ndarray[np.float32],
     thres: Tuple[np.float32, np.float32],
     labs_unique: np.ndarray[np.int32],
 ) -> np.ndarray[np.float32]:
+
     num = labs_unique.shape[0]
     co_occur = np.zeros((num, num), dtype=ft)
     probs_con = np.zeros((num, num), dtype=ft)
 
     thres_min, thres_max = thres
+    clust_x, clust_y = clust
 
     idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > thres_min))
-    x = clust[idx_x]
-    y = clust[idx_y]
+    x = clust_x[idx_x]
+    y = clust_y[idx_y]
     for i, j in zip(x, y):
         co_occur[i, j] += 1
 
@@ -372,30 +374,50 @@ def co_occurrence(
     if n_splits is None:
         n_splits = 1
 
-    #split array
+    # split array and labels
     spatial_splits = np.array_split(spatial, n_splits, axis=0)
-    idx_splits = set(combinations(np.arange(n_splits), 2))
+    labs_split = np.array_split(labs, n_splits, axis=0)
+    # create idx array including unique combinations and self-comparison
+    idx_splits = list(combinations(np.arange(n_splits), 2))
+    idx_splits.extend([(i, j) for i, j in zip(np.arange(n_splits), np.arange(n_splits))])
 
     n_jobs = _get_n_cores(n_jobs)
 
     start = logg.info(
         f"Calculating co-occurrence probabilities for \
             `{len(interval)}` intervals \
-            `{splits}` split combinations \
+            `{len(idx_splits)}` split combinations \
             using `{n_jobs}` core(s)"
     )
 
-    splits_iter = combinations(splits, 2)
+    temp = []
+    for t in idx_splits:
+        idx_x, idx_y = t
+        labs_x = labs_split[idx_x]
+        labs_y = labs_split[idx_y]
+        dist = pairwise_distances(spatial_splits[idx_x],spatial_splits[idx_y]).astype(fp)
 
-    df = parallelize(
-        _co_occurrence_helper,
-        collection=splits,
-        extractor=pd.concat,
-        use_ixs=True,
-        n_jobs=n_jobs,
-        backend=backend,
-        show_progress_bar=show_progress_bar,
-    )(adata=adata, weights=w, transformation=transformation, permutations=n_perms, layer=layer, seed=seed)
+        out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
+        for i in range(interval.shape[0] - 1):
+            cond_prob = _occur_count((labs_x, labs_y), dist, (interval[i], interval[i + 1]), labs_unique)
+            out[:, :, i] = cond_prob
+        temp.append(out)
+
+    print(len(temp))
+    out = sum(temp)
+    print(out.shape)
+    # out = np.apply_over_axes(np.sum, out, [2]) # np.sum(out, axis=-1) #
+    out = out / n_splits
+
+    # df = parallelize(
+    #     _co_occurrence_helper,
+    #     collection=splits,
+    #     extractor=pd.concat,
+    #     use_ixs=True,
+    #     n_jobs=n_jobs,
+    #     backend=backend,
+    #     show_progress_bar=show_progress_bar,
+    # )(adata=adata, weights=w, transformation=transformation, permutations=n_perms, layer=layer, seed=seed)
 
     if copy:
         logg.info("Finish", time=start)
@@ -424,7 +446,7 @@ def _co_occurrence_helper(
         for i in range(interval.shape[0] - 1):
             cond_prob = _occur_count(labs, dist, (interval[i], interval[i + 1]), labs_unique)
             out[:, :, i] = cond_prob
-        
+
         if queue is not None:
             queue.put(Signal.UPDATE)
 
