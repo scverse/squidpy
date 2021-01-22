@@ -375,7 +375,7 @@ class PermutationTestABC(ABC):
         clusters_flat = list({c for cs in clusters for c in cs})
 
         data = self._filtered_data.loc[np.isin(self._filtered_data["clusters"], clusters_flat), :]
-        data["clusters"].cat.remove_unused_categories(inplace=True)
+        data["clusters"] = data["clusters"].cat.remove_unused_categories()
         cat = data["clusters"].cat
 
         cluster_mapper = dict(zip(cat.categories, range(len(cat.categories))))
