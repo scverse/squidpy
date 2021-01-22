@@ -1,11 +1,11 @@
-from typing import Any, Tuple, Union, Optional, Sequence
+from typing import Any, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
 from pathlib import Path
-import inspect
 
 from scanpy import logging as logg
 from anndata import AnnData
 import scanpy as sc
 
+from scipy.cluster import hierarchy as sch
 import numpy as np
 import pandas as pd
 
@@ -15,8 +15,9 @@ import matplotlib.pyplot as plt
 
 from squidpy._docs import d
 from squidpy._utils import verbosity, _unique_order_preserving
-from squidpy.pl._utils import save_fig
+from squidpy.pl._utils import save_fig, _dendrogram, _filter_kwargs
 from squidpy.gr._ligrec import LigrecResult
+from squidpy._constants._constants import DendrogramAxis
 from squidpy._constants._pkg_constants import Key
 
 _SEP = " | "
@@ -102,7 +103,7 @@ def ligrec(
     means_range: Tuple[float, float] = (-np.inf, np.inf),
     pvalue_threshold: float = 1.0,
     remove_empty_interactions: bool = True,
-    dendrogram: bool = False,
+    dendrogram: Optional[str] = None,
     alpha: Optional[float] = 0.001,
     swap_axes: bool = False,
     title: Optional[str] = None,
@@ -132,7 +133,13 @@ def ligrec(
     pvalue_threshold
         Only show interactions with p-value <= ``pvalue_threshold``.
     dendrogram
-        Whether to show dendrogram.
+        How to cluster based on the p-values. Valid options are:
+
+            -  `None` - do not perform clustering.
+            - `'interacting_molecules'` - cluster the interacting molecules.
+            - `'interacting_clusters'` - cluster the interacting clusters.
+            - `'both'` - cluster both rows and columns. Note that in this case, the dendrogram is not shown.
+
     swap_axes
         Whether to show the cluster combinations as rows and the interacting pairs as columns.
     title
@@ -147,6 +154,32 @@ def ligrec(
     -------
     %(plotting_returns)s
     """
+
+    def get_dendrogram(adata: AnnData, linkage: str = "complete") -> Mapping[str, Any]:
+        z_var = sch.linkage(
+            adata.X,
+            metric="correlation",
+            method=linkage,
+            optimal_ordering=adata.n_obs <= 1500,  # matplotlib will most likely give up first
+        )
+        dendro_info = sch.dendrogram(z_var, labels=adata.obs_names.values, no_plot=True)
+        # this is what the DotPlot requires
+        return {
+            "linkage": z_var,
+            "groupby": ["groups"],
+            "cor_method": "pearson",
+            "use_rep": None,
+            "linkage_method": linkage,
+            "categories_ordered": dendro_info["ivl"],
+            "categories_idx_ordered": dendro_info["leaves"],
+            "dendrogram_info": dendro_info,
+        }
+
+    if dendrogram is not None:
+        dendrogram = DendrogramAxis(dendrogram)  # type: ignore[assignment]
+        if TYPE_CHECKING:
+            assert isinstance(dendrogram, DendrogramAxis)
+
     if isinstance(adata, AnnData):
         if cluster_key is None:
             raise ValueError("Please provide `cluster_key` when supplying an `AnnData` object.")
@@ -187,7 +220,7 @@ def ligrec(
     means: pd.DataFrame = adata.means.loc[:, (source_groups, target_groups)]
 
     if pvals.empty:
-        raise ValueError("No clusters have been selected.")
+        raise ValueError("No valid clusters have been selected.")
 
     means = means[(means >= means_range[0]) & (means <= means_range[1])]
     pvals = pvals[pvals <= pvalue_threshold]
@@ -209,6 +242,12 @@ def ligrec(
             raise ValueError("After removing columns with only NaN interactions, none remain.")
 
     start, label_ranges = 0, {}
+
+    if dendrogram == DendrogramAxis.INTERACTING_CLUSTERS:
+        # rows are now cluster combinations, not interacting pairs
+        pvals = pvals.T
+        means = means.T
+
     for cls, size in (pvals.groupby(level=0, axis=1)).size().to_dict().items():
         label_ranges[cls] = (start, start + size - 1)
         start += size
@@ -227,25 +266,33 @@ def ligrec(
     var = pd.DataFrame(pvals.columns)
     var.set_index((var.columns[0]), inplace=True)
 
-    adata = AnnData(pvals.values, obs={"groups": pd.Categorical(pvals.index, pvals.index)}, var=var)
+    adata = AnnData(pvals.values, obs={"groups": pd.Categorical(pvals.index)}, var=var)
+    adata.obs_names = pvals.index
     minn = np.nanmin(adata.X)
     delta = np.nanmax(adata.X) - minn
     adata.X = (adata.X - minn) / delta
 
-    if dendrogram:
-        sc.pp.pca(adata)
-        sc.tl.dendrogram(adata, groupby="groups", key_added="dendrogram")
+    try:
+        if dendrogram == DendrogramAxis.BOTH:
+            row_order, col_order, _, _ = _dendrogram(
+                adata.X, method="complete", metric="correlation", optimal_ordering=adata.n_obs <= 1500
+            )
+            adata = adata[row_order, :][:, col_order]
+            pvals = pvals.iloc[row_order, :].iloc[:, col_order]
+            means = means.iloc[row_order, :].iloc[:, col_order]
+        elif dendrogram is not None:
+            adata.uns["dendrogram"] = get_dendrogram(adata)
+    except IndexError:
+        # just in case pandas indexing fails
+        raise
+    except Exception as e:
+        logg.warning(f"Unable to create a dendrogram. Reason: `{e}`")
+        dendrogram = None
 
     kwargs["dot_edge_lw"] = 0
     kwargs.setdefault("cmap", "viridis")
     kwargs.setdefault("grid", True)
     kwargs.pop("color_on", None)  # interferes with tori
-
-    style_args = {k for k in inspect.signature(sc.pl.DotPlot.style).parameters.keys()}  # noqa: C416
-    style_dict = {k: v for k, v in kwargs.items() if k in style_args}
-
-    legend_args = {k for k in inspect.signature(sc.pl.DotPlot.legend).parameters.keys()}  # noqa: C416
-    legend_dict = {k: v for k, v in kwargs.items() if k in legend_args}
 
     dp = (
         CustomDotplot(
@@ -257,21 +304,21 @@ def ligrec(
             dot_color_df=means,
             dot_size_df=pvals,
             title=title,
-            var_group_labels=list(label_ranges.keys()),
-            var_group_positions=list(label_ranges.values()),
+            var_group_labels=None if dendrogram == DendrogramAxis.BOTH else list(label_ranges.keys()),
+            var_group_positions=None if dendrogram == DendrogramAxis.BOTH else list(label_ranges.values()),
             standard_scale=None,
             figsize=figsize,
         )
         .style(
-            **style_dict,
+            **_filter_kwargs(sc.pl.DotPlot.style, kwargs),
         )
         .legend(
             size_title=r"$-\log_{10} ~ P$",
             colorbar_title=r"$log_2(\frac{molecule_1 + molecule_2}{2} + 1)$",
-            **legend_dict,
+            **_filter_kwargs(sc.pl.DotPlot.legend, kwargs),
         )
     )
-    if dendrogram:
+    if dendrogram in (DendrogramAxis.INTERACTING_MOLS, DendrogramAxis.INTERACTING_CLUSTERS):
         # ignore the warning about mismatching groups
         with verbosity(0):
             dp.add_dendrogram(size=1.6, dendrogram_key="dendrogram")
@@ -280,19 +327,24 @@ def ligrec(
 
     dp.make_figure()
 
-    labs = dp.ax_dict["mainplot_ax"].get_yticklabels() if swap_axes else dp.ax_dict["mainplot_ax"].get_xticklabels()
-    for text in labs:
-        text.set_text(text.get_text().split(_SEP)[1])
-    if swap_axes:
-        dp.ax_dict["mainplot_ax"].set_yticklabels(labs)
-    else:
-        dp.ax_dict["mainplot_ax"].set_xticklabels(labs)
+    if dendrogram != DendrogramAxis.BOTH:
+        # remove the target part in: source | target
+        labs = dp.ax_dict["mainplot_ax"].get_yticklabels() if swap_axes else dp.ax_dict["mainplot_ax"].get_xticklabels()
+        for text in labs:
+            text.set_text(text.get_text().split(_SEP)[1])
+        if swap_axes:
+            dp.ax_dict["mainplot_ax"].set_yticklabels(labs)
+        else:
+            dp.ax_dict["mainplot_ax"].set_xticklabels(labs)
 
     if alpha is not None:
         yy, xx = np.where(pvals.values >= -np.log10(alpha))
         if len(xx) and len(yy):
+            # for dendrogram='both', they are already re-ordered
             mapper = (
-                np.argsort(adata.uns["dendrogram"]["categories_idx_ordered"]) if dendrogram else np.arange(len(pvals))
+                np.argsort(adata.uns["dendrogram"]["categories_idx_ordered"])
+                if "dendrogram" in adata.uns
+                else np.arange(len(pvals))
             )
             logg.info(f"Found `{len(yy)}` significant interactions at level `{alpha}`")
             ss = 0.33 * (adata.X[yy, xx] * (dp.largest_dot - dp.smallest_dot) + dp.smallest_dot)

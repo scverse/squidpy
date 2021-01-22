@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from abc import ABC
 from types import MappingProxyType
-from typing import Any, List, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import (
+    Any,
+    List,
+    Tuple,
+    Union,
+    Mapping,
+    Iterable,
+    Optional,
+    Sequence,
+    TYPE_CHECKING,
+)
 from functools import partial
 from itertools import product
 from collections import namedtuple
@@ -233,7 +243,18 @@ class PermutationTestABC(ABC):
         """
         complex_policy = ComplexPolicy(complex_policy)
 
-        if isinstance(interactions, Sequence):
+        if isinstance(interactions, Mapping):
+            interactions = pd.DataFrame(interactions)
+
+        if isinstance(interactions, pd.DataFrame):
+            if SOURCE not in interactions.columns:
+                raise KeyError(f"Column `{SOURCE!r}` is not in `interactions`.")
+            if TARGET not in interactions.columns:
+                raise KeyError(f"Column `{TARGET!r}` is not in `interactions`.")
+
+            self._interactions = interactions.copy()
+        elif isinstance(interactions, Iterable):
+            interactions = tuple(interactions)
             if not len(interactions):
                 raise ValueError("No interactions were specified.")
 
@@ -245,20 +266,10 @@ class PermutationTestABC(ABC):
             if not all(len(i) == 2 for i in interactions):
                 raise ValueError("Not all interactions are of length `2`.")
 
-            interactions = pd.DataFrame(interactions, columns=[SOURCE, TARGET])
-        elif isinstance(interactions, Mapping):
-            interactions = pd.DataFrame(interactions)
-
-        if isinstance(interactions, pd.DataFrame):
-            if SOURCE not in interactions.columns:
-                raise KeyError(f"Column `{SOURCE!r}` is not in `interactions`.")
-            if TARGET not in interactions.columns:
-                raise KeyError(f"Column `{TARGET!r}` is not in `interactions`.")
-            self._interactions = interactions.copy()
+            self._interactions = pd.DataFrame(interactions, columns=[SOURCE, TARGET])
         else:
             raise TypeError(
-                f"Expected either a `pandas.DataFrame`, `dict`, `tuple`, `list` or `str`, "
-                f"found `{type(interactions).__name__}`"
+                f"Expected either a `pandas.DataFrame`, `dict` or `iterable`, found `{type(interactions).__name__}`"
             )
         if TYPE_CHECKING:
             assert isinstance(self.interactions, pd.DataFrame)
