@@ -27,7 +27,7 @@ def _cleanup(fn: Callable[..., Tuple[bool, Any]]) -> Callable[..., Tuple[bool, A
     def decorator(*args: Any, **kwargs: Any) -> Tuple[bool, Any]:
         try:
             ok, resp = fn(*args, **kwargs)
-        except Exception as e:  # noqa: B902
+        except Exception as e:
             ok, resp = False, e
 
         if not ok:

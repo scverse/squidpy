@@ -146,9 +146,11 @@ def centrality_scores(
 def interaction_matrix(
     adata: AnnData,
     cluster_key: str,
-    palette: Palette_t = None,
     annotate: bool = False,
+    method: Optional[str] = None,
+    title: Optional[str] = None,
     cmap: str = "viridis",
+    palette: Palette_t = None,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
@@ -176,10 +178,13 @@ def interaction_matrix(
 
     ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
     _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
-
+    if title is None:
+        title = "Interaction matrix"
     fig = _heatmap(
         ad,
-        title="Interaction matrix",
+        key=cluster_key,
+        title=title,
+        method=method,
         cont_cmap=cmap,
         annotate=annotate,
         figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
@@ -197,6 +202,8 @@ def nhood_enrichment(
     cluster_key: str,
     mode: Literal["zscore", "count"] = "zscore",  # type: ignore[name-defined]
     annotate: bool = False,
+    method: Optional[str] = None,
+    title: Optional[str] = None,
     cmap: str = "viridis",
     palette: Palette_t = None,
     figsize: Optional[Tuple[float, float]] = None,
@@ -233,10 +240,13 @@ def nhood_enrichment(
 
     ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
     _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
-
+    if title is None:
+        title = "Neighborhood enrichment"
     fig = _heatmap(
         ad,
-        title="Neighborhood enrichment",
+        key=cluster_key,
+        title=title,
+        method=method,
         cont_cmap=cmap,
         annotate=annotate,
         figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
