@@ -141,7 +141,7 @@ def ligrec(
         Significance threshold. All elements with p-values <= ``alpha`` will be marked by tori instead of dots.
     %(plotting)s
     kwargs
-        Keyword arguments for :meth:`scanpy.pl.DotPlot.style` or `scanpy.pl.DotPlot.legend`.
+        Keyword arguments for :meth:`scanpy.pl.DotPlot.style` or :meth:`scanpy.pl.DotPlot.legend`.
 
     Returns
     -------
