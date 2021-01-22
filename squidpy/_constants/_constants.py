@@ -17,7 +17,7 @@ class ImageFeature(ModeEnum):  # noqa: D101
 
 # _ligrec.py
 @unique
-class FdrAxis(ModeEnum):  # noqa: D101
+class CorrAxis(ModeEnum):  # noqa: D101
     INTERACTIONS = "interactions"
     CLUSTERS = "clusters"
 
