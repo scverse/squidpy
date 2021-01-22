@@ -72,3 +72,10 @@ class Centrality(ModeEnum):  # noqa: D101
     DEGREE = "degree_centrality"
     CLUSTERING = "average_clustering"
     CLOSENESS = "closeness_centrality"
+
+
+@unique
+class DendrogramAxis(ModeEnum):  # noqa: D101
+    INTERACTING_MOLS = "interacting_molecules"
+    INTERACTING_CLUSTERS = "interacting_clusters"
+    BOTH = "both"
