@@ -372,7 +372,10 @@ def co_occurrence(
     if n_splits is None:
         n_splits = 1
 
+    #split array
     spatial_splits = np.array_split(spatial, n_splits, axis=0)
+    idx_splits = set(combinations(np.arange(n_splits), 2))
+
     n_jobs = _get_n_cores(n_jobs)
 
     start = logg.info(
