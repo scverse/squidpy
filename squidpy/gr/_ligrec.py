@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from abc import ABC
 from types import MappingProxyType
-from typing import Any, List, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import (
+    Any,
+    List,
+    Tuple,
+    Union,
+    Mapping,
+    Iterable,
+    Optional,
+    Sequence,
+    TYPE_CHECKING,
+)
 from functools import partial
 from itertools import product
 from collections import namedtuple
@@ -26,7 +36,7 @@ from squidpy.gr._utils import (
     _check_tuple_needles,
     _assert_categorical_obs,
 )
-from squidpy._constants._constants import FdrAxis, ComplexPolicy
+from squidpy._constants._constants import CorrAxis, ComplexPolicy
 from squidpy._constants._pkg_constants import Key
 
 StrSeq = Sequence[str]
@@ -124,7 +134,7 @@ def _create_template(n_cls: int, return_means: bool = False, parallel: bool = Tr
 
 
 def _fdr_correct(
-    pvals: pd.DataFrame, corr_method: str, fdr_axis: Union[str, FdrAxis], alpha: float = 0.05
+    pvals: pd.DataFrame, corr_method: str, corr_axis: Union[str, CorrAxis], alpha: float = 0.05
 ) -> pd.DataFrame:
     """Correct p-values for FDR along specific axis in ``pvals``."""
     from pandas.core.arrays.sparse import SparseArray
@@ -142,15 +152,15 @@ def _fdr_correct(
 
         return SparseArray(qvals, dtype=qvals.dtype, fill_value=np.nan)
 
-    fdr_axis = FdrAxis(fdr_axis)
+    corr_axis = CorrAxis(corr_axis)
 
-    if fdr_axis == FdrAxis.CLUSTERS:
+    if corr_axis == CorrAxis.CLUSTERS:
         # clusters are in columns
         pvals = pvals.apply(fdr)
-    elif fdr_axis == FdrAxis.INTERACTIONS:
+    elif corr_axis == CorrAxis.INTERACTIONS:
         pvals = pvals.T.apply(fdr).T
     else:
-        raise NotImplementedError(f"FDR correction for `{fdr_axis}` is not implemented.")
+        raise NotImplementedError(f"FDR correction for `{corr_axis}` is not implemented.")
 
     return pvals
 
@@ -170,7 +180,6 @@ class PermutationTestABC(ABC):
     Parameters
     ----------
     %(adata)s
-    %(use_raw)s
     use_raw
         Whether to access :attr:`anndata.AnnData.raw`.
     """
@@ -234,7 +243,18 @@ class PermutationTestABC(ABC):
         """
         complex_policy = ComplexPolicy(complex_policy)
 
-        if isinstance(interactions, Sequence):
+        if isinstance(interactions, Mapping):
+            interactions = pd.DataFrame(interactions)
+
+        if isinstance(interactions, pd.DataFrame):
+            if SOURCE not in interactions.columns:
+                raise KeyError(f"Column `{SOURCE!r}` is not in `interactions`.")
+            if TARGET not in interactions.columns:
+                raise KeyError(f"Column `{TARGET!r}` is not in `interactions`.")
+
+            self._interactions = interactions.copy()
+        elif isinstance(interactions, Iterable):
+            interactions = tuple(interactions)
             if not len(interactions):
                 raise ValueError("No interactions were specified.")
 
@@ -246,20 +266,10 @@ class PermutationTestABC(ABC):
             if not all(len(i) == 2 for i in interactions):
                 raise ValueError("Not all interactions are of length `2`.")
 
-            interactions = pd.DataFrame(interactions, columns=[SOURCE, TARGET])
-        elif isinstance(interactions, Mapping):
-            interactions = pd.DataFrame(interactions)
-
-        if isinstance(interactions, pd.DataFrame):
-            if SOURCE not in interactions.columns:
-                raise KeyError(f"Column `{SOURCE!r}` is not in `interactions`.")
-            if TARGET not in interactions.columns:
-                raise KeyError(f"Column `{TARGET!r}` is not in `interactions`.")
-            self._interactions = interactions.copy()
+            self._interactions = pd.DataFrame(interactions, columns=[SOURCE, TARGET])
         else:
             raise TypeError(
-                f"Expected either a `pandas.DataFrame`, `dict`, `tuple`, `list` or `str`, "
-                f"found `{type(interactions).__name__}`"
+                f"Expected either a `pandas.DataFrame`, `dict` or `iterable`, found `{type(interactions).__name__}`"
             )
         if TYPE_CHECKING:
             assert isinstance(self.interactions, pd.DataFrame)
@@ -293,7 +303,7 @@ class PermutationTestABC(ABC):
     @d.get_full_description(base="PT_test")
     @d.get_sections(base="PT_test", sections=["Parameters"])
     @d.dedent
-    @inject_docs(src=SOURCE, tgt=TARGET, fa=FdrAxis)
+    @inject_docs(src=SOURCE, tgt=TARGET, fa=CorrAxis)
     def test(
         self,
         cluster_key: str,
@@ -302,7 +312,7 @@ class PermutationTestABC(ABC):
         threshold: float = 0.01,
         seed: Optional[int] = None,
         corr_method: Optional[str] = None,
-        fdr_axis: Union[str, FdrAxis] = FdrAxis.INTERACTIONS.v,
+        corr_axis: Union[str, CorrAxis] = CorrAxis.INTERACTIONS.v,
         alpha: float = 0.05,
         copy: bool = False,
         key_added: Optional[str] = None,
@@ -324,7 +334,7 @@ class PermutationTestABC(ABC):
             in less than ``threshold`` percent of cells within a given cluster.
         %(seed)s
         %(corr_method)s
-        fdr_axis
+        corr_axis
             Axis over which to perform the FDR correction. Only used when ``corr_method != None``. Valid options are:
 
                 - `{fa.INTERACTIONS.s!r}` - correct interactions by performing FDR correction across the clusters.
@@ -346,9 +356,9 @@ class PermutationTestABC(ABC):
         _assert_categorical_obs(self._adata, key=cluster_key)
 
         if corr_method is not None:
-            fdr_axis = FdrAxis(fdr_axis)
+            corr_axis = CorrAxis(corr_axis)
         if TYPE_CHECKING:
-            assert isinstance(fdr_axis, FdrAxis)
+            assert isinstance(corr_axis, CorrAxis)
 
         if len(self._adata.obs[cluster_key].cat.categories) <= 1:
             raise ValueError(
@@ -376,7 +386,7 @@ class PermutationTestABC(ABC):
         clusters_flat = list({c for cs in clusters for c in cs})
 
         data = self._filtered_data.loc[np.isin(self._filtered_data["clusters"], clusters_flat), :]
-        data["clusters"].cat.remove_unused_categories(inplace=True)
+        data["clusters"] = data["clusters"].cat.remove_unused_categories()
         cat = data["clusters"].cat
 
         cluster_mapper = dict(zip(cat.categories, range(len(cat.categories))))
@@ -425,12 +435,12 @@ class PermutationTestABC(ABC):
 
         if corr_method is not None:
             logg.info(
-                f"Performing FDR correction across the `{fdr_axis.v}` "
+                f"Performing FDR correction across the `{corr_axis.v}` "
                 f"using method `{corr_method}` at level `{alpha}`"
             )
             res = LigrecResult(
                 means=res.means,
-                pvalues=_fdr_correct(res.pvalues, corr_method, fdr_axis, alpha=alpha),
+                pvalues=_fdr_correct(res.pvalues, corr_method, corr_axis, alpha=alpha),
                 metadata=res.metadata.set_index(res.means.index),
             )
 
@@ -611,7 +621,7 @@ def ligrec(
     complex_policy: str = ComplexPolicy.MIN.v,
     threshold: float = 0.01,
     corr_method: Optional[str] = None,
-    fdr_axis: str = FdrAxis.CLUSTERS.v,
+    corr_axis: str = CorrAxis.CLUSTERS.v,
     use_raw: bool = True,
     copy: bool = False,
     key_added: Optional[str] = None,
@@ -637,7 +647,7 @@ def ligrec(
             cluster_key=cluster_key,
             threshold=threshold,
             corr_method=corr_method,
-            fdr_axis=fdr_axis,
+            corr_axis=corr_axis,
             copy=copy,
             key_added=key_added,
             **kwargs,

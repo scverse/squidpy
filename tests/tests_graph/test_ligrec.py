@@ -54,8 +54,8 @@ class TestInvalidBehavior:
             ligrec(adata, _CK, interactions=interactions, complex_policy="foobar")
 
     def test_invalid_fdr_axis(self, adata: AnnData, interactions: Interactions_t):
-        with pytest.raises(ValueError, match=r"Invalid option `'foobar'` for `FdrAxis`."):
-            ligrec(adata, _CK, interactions=interactions, fdr_axis="foobar", corr_method="fdr_bh")
+        with pytest.raises(ValueError, match=r"Invalid option `'foobar'` for `CorrAxis`."):
+            ligrec(adata, _CK, interactions=interactions, corr_axis="foobar", corr_method="fdr_bh")
 
     def test_too_few_permutations(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(ValueError, match=r"Expected `n_perms` to be positive"):
@@ -157,7 +157,7 @@ class TestValidBehavior:
             _CK,
             interactions=interactions,
             n_perms=5,
-            fdr_axis="clusters",
+            corr_axis="clusters",
             seed=42,
             n_jobs=1,
             show_progress_bar=False,
@@ -168,7 +168,7 @@ class TestValidBehavior:
             _CK,
             interactions=interactions,
             n_perms=5,
-            fdr_axis="interactions",
+            corr_axis="interactions",
             n_jobs=1,
             show_progress_bar=False,
             seed=42,

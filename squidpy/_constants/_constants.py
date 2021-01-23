@@ -17,7 +17,7 @@ class ImageFeature(ModeEnum):  # noqa: D101
 
 # _ligrec.py
 @unique
-class FdrAxis(ModeEnum):  # noqa: D101
+class CorrAxis(ModeEnum):  # noqa: D101
     INTERACTIONS = "interactions"
     CLUSTERS = "clusters"
 
@@ -72,3 +72,10 @@ class Centrality(ModeEnum):  # noqa: D101
     DEGREE = "degree_centrality"
     CLUSTERING = "average_clustering"
     CLOSENESS = "closeness_centrality"
+
+
+@unique
+class DendrogramAxis(ModeEnum):  # noqa: D101
+    INTERACTING_MOLS = "interacting_molecules"
+    INTERACTING_CLUSTERS = "interacting_clusters"
+    BOTH = "both"
