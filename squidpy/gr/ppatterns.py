@@ -312,7 +312,9 @@ def co_occurrence(
     copy: bool = False,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
-    Compute co-occurrence probability of clusters across `n_steps` distance thresholds in spatial dimensions.
+    Compute co-occurrence probability of clusters.
+
+    The co-occurrence is computed across ``n_steps`` distance thresholds in spatial dimensions.
 
     Parameters
     ----------

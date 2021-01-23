@@ -136,14 +136,9 @@ class ImageContainer(FeatureMixin):
         chunks: Optional[int] = None,
     ) -> None:
         """
-        Add layer from in memory `np.ndarray`/`xr.DataArray` or on-disk tiff/jpg image.
+        Add layer from in memory :class:`np.ndarray`/:class:`xr.DataArray` or on-disk tiff/jpg image.
 
         For :mod:`numpy` arrays, we assume that dims are: `(y, x, channel_id)`.
-
-        NOTE: lazy loading via :mod:`dask` is not supported for on-disk jpg files.
-        They will be loaded in memory.
-
-        NOTE: multi-page tiffs will be loaded in one DataArray, with the concatenated channel dimensions.
 
         Parameters
         ----------
@@ -166,6 +161,11 @@ class ImageContainer(FeatureMixin):
         ------
         ValueError
             If ``img`` is a :class:`np.ndarray` and has more than 3 dimensions.
+
+        Notes
+        -----
+        Lazy loading via :mod:`dask` is not supported for on-disk jpg files. They will be loaded in memory.
+        Multi-page tiffs will be loaded in one :class:`xarray.DataArray`, with the concatenated channel dimensions.
         """
         img = self._load_img(img=img, channel_id=channel_id, chunks=chunks)
         # add to data

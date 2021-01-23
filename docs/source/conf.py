@@ -63,7 +63,7 @@ intersphinx_mapping = dict(  # noqa: C408
     matplotlib=("https://matplotlib.org/", None),
     seaborn=("https://seaborn.pydata.org/", None),
     joblib=("https://joblib.readthedocs.io/en/latest/", None),
-    networkx=("https://networkx.github.io/documentation/stable/", None),
+    networkx=("https://networkx.org/documentation/stable/", None),
     astropy=("https://docs.astropy.org/en/stable/", None),
     esda=("https://pysal.org/esda/", None),
     dask=("https://docs.dask.org/en/latest/", None),
@@ -85,9 +85,7 @@ pygments_style = "sphinx"
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ["**.ipynb", "**.md5", "**.py", "**.ipynb_checkpoints"]  # ignore anything that isn't .rst
-# because squidpy_notebooks doesn't commit the .py files (and we don't allow downloading them by hiding the html)
 suppress_warnings = ["download.not_readable"]
-
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -98,7 +96,6 @@ autosummary_generate = True
 autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
 autodoc_docstring_signature = True
-autodoc_follow_wrapped = False
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
@@ -114,7 +111,8 @@ linkcheck_ignore = ["https://doi.org/10.2307/2332142"]
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
-html_theme_options = dict(navigation_depth=4, logo_only=True)  # noqa: C408
+html_logo = "_static/img/logo.png"
+html_theme_options = {"navigation_depth": 4, "logo_only": True}
 html_show_sphinx = False
 
 
@@ -123,7 +121,10 @@ def setup(app: Sphinx) -> None:
     DEFAULT_GALLERY_CONF["download_all_examples"] = False
     DEFAULT_GALLERY_CONF["show_signature"] = False
     DEFAULT_GALLERY_CONF["log_level"] = {"backreference_missing": "info"}
+    DEFAULT_GALLERY_CONF["gallery_dirs"] = (["auto_examples", "auto_tutorials"],)
 
     app.add_config_value("sphinx_gallery_conf", DEFAULT_GALLERY_CONF, "html")
     app.add_directive("minigallery", MaybeMiniGallery)
     app.add_css_file("css/custom.css")
+    app.add_css_file("css/sphinx_gallery.css")
+    app.add_css_file("css/dataframe.css")  # had to add this manually
