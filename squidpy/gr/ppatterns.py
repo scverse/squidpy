@@ -372,8 +372,7 @@ def co_occurrence(
             while 30_000 < (n_obs / s):
                 s += 1
                 if s > 30:
-                    logg.error(f"optimal n_split: {s}. Value too large, consider subsampling the data")
-                    break
+                    raise ValueError(f"optimal n_split: {s}. Value too large, consider subsampling the data")
             n_splits = s
             logg.warning(
                 f"A NxN with N={n_obs} distance matrix will be created, you might encounter an out-of-memory error\n"
