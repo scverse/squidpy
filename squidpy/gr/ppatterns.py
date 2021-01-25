@@ -330,6 +330,8 @@ def co_occurrence(
         Number of distance thresholds at which co-occurrence is computed.
 
     %(copy)s
+    n_splits
+        Number of splits in which to divide `adata.obsm[<spatial_key>]` (the spatial coordinate array).
     %(parallelize)s
 
     Returns
@@ -386,6 +388,12 @@ def co_occurrence(
 
     n_jobs = _get_n_cores(n_jobs)
 
+    # print warning for distance matrix too big
+    n_obs = spatial.shape[0]
+    if (n_obs / n_splits) > 50_000:
+        logg.warning(
+            f"A NxN with N={n_obs} distance matrix will be created, you might encounter an out-of-memory error"
+        )
     start = logg.info(
         f"Calculating co-occurrence probabilities for\
             `{len(interval)}` intervals\
