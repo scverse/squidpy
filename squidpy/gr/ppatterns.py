@@ -369,7 +369,7 @@ def co_occurrence(
         size_arr = (n_obs ** 2 * 4) / 1024 / 1024  # calc expected mem usage
         if size_arr > 2_000:
             s = 1
-            while 50_000 < (n_obs / s):
+            while 30_000 < (n_obs / s):
                 s += 1
                 if s > 30:
                     logg.error(f"optimal n_split: {s}. Value too large, consider subsampling the data")
@@ -379,8 +379,10 @@ def co_occurrence(
                 f"A NxN with N={n_obs} distance matrix will be created, you might encounter an out-of-memory error\n"
                 f"n_splits will be set to: {n_splits}"
             )
+        else:
+            n_splits = 1
 
-    n_splits = np.max(np.min(n_splits, n_obs), 1)
+    n_splits = max(min(n_splits, n_obs), 1)
 
     # split array and labels
     spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))
@@ -390,9 +392,6 @@ def co_occurrence(
     idx_splits = [(i, j) for i, j in zip(x, y)]
 
     n_jobs = _get_n_cores(n_jobs)
-
-    # print warning for distance matrix too big
-
     start = logg.info(
         f"Calculating co-occurrence probabilities for\
             `{len(interval)}` intervals\
