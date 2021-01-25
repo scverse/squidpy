@@ -467,7 +467,9 @@ class ImageContainer(FeatureMixin):
                 crop = crop.data.to_array().values
                 if crop.shape[0] == 1:
                     crop = crop.squeeze(0)
-            yield crop, obs_id  # type: ignore[misc]
+                yield crop
+            else:
+                yield crop, obs_id  # type: ignore[misc]
 
     @classmethod
     @d.get_sections(base="uncrop_img", sections=["Parameters", "Returns"])
