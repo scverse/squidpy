@@ -171,8 +171,7 @@ class ImageContainer(FeatureMixin):
         # add to data
         logg.info(f"Adding `{img_id}` into object")
         self.data[img_id] = img
-        # TODO: is this correct?
-        if lazy:
+        if not lazy:
             # load in memory
             self.data.load()
 
