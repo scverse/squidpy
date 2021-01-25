@@ -369,9 +369,9 @@ def co_occurrence(
         size_arr = (n_obs ** 2 * 4) / 1024 / 1024  # calc expected mem usage
         if size_arr > 2_000:
             s = 1
-            while 20_000 < (n_obs ** 2 / s):
+            while 50_000 < (n_obs / s):
                 s += 1
-                if s > 50:
+                if s > 30:
                     logg.error(f"optimal n_split: {s}. Value too large, consider subsampling the data")
                     break
             n_splits = s
@@ -464,7 +464,7 @@ def _co_occurrence_helper(
 def _find_min_max(spatial: np.ndarray) -> Tuple[float, float]:
 
     coord_sum = np.sum(spatial, axis=1)
-    min_idx, min_idx2 = np.argpartition(spatial, 2)[0:2]
+    min_idx, min_idx2 = np.argpartition(coord_sum, 2)[0:2]
     max_idx = np.argmax(coord_sum)
     thres_max = (
         pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[max_idx, :].reshape(1, -1),)[
