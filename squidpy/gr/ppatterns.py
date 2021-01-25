@@ -17,7 +17,7 @@ except ImportError:
     from typing_extensions import Literal
 
 from typing import Tuple, Union, Iterable, Optional, Sequence
-from itertools import chain, combinations
+from itertools import chain
 import warnings
 
 from scanpy import logging as logg
@@ -331,7 +331,7 @@ def co_occurrence(
 
     %(copy)s
     n_splits
-        Number of splits in which to divide `adata.obsm[<spatial_key>]` (the spatial coordinate array).
+        Number of splits in which to divide the spatial coordinates in :attr:`anndata.AnnData.obsm` `['{spatial_key}']`.
     %(parallelize)s
 
     Returns
@@ -352,19 +352,7 @@ def co_occurrence(
     original_clust = adata.obs[cluster_key]
 
     # find minimum, second minimum and maximum for thresholding
-    coord_sum = np.sum(spatial, axis=1)
-    min_idx = np.argmin(coord_sum)
-    min2_idx = np.argmin(np.array(coord_sum)[coord_sum != np.amin(coord_sum)])
-    max_idx = np.argmax(coord_sum)
-    thres_max = (
-        pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[max_idx, :].reshape(1, -1),)[
-            0
-        ][0]
-        / 2.0
-    ).astype(fp)
-    thres_min = pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[min2_idx, :].reshape(1, -1),)[0][
-        0
-    ].astype(fp)
+    thres_min, thres_max = _find_min_max(spatial)
 
     # annotate cluster idx
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
@@ -376,24 +364,29 @@ def co_occurrence(
     # create intervals thresholds
     interval = np.linspace(thres_min, thres_max, num=n_steps, dtype=fp)
 
+    n_obs = spatial.shape[0]
     if n_splits is None:
-        n_splits = 1
+        size_arr = (n_obs * n_obs * 4) / 1024 / 1024  # calc expected mem usage
+        if size_arr > 2_000:
+            n_splits = 4  # should work in most cases
+            logg.warning(
+                f"A NxN with N={n_obs} distance matrix will be created, you might encounter an out-of-memory error\n"
+                f"n_splits will be set to {n_splits}"
+            )
+
+    n_splits = np.max(np.min(n_splits, n_obs), 1)
 
     # split array and labels
-    spatial_splits = np.array_split(spatial, n_splits, axis=0)
-    labs_splits = np.array_split(labs, n_splits, axis=0)
+    spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))
+    labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))
     # create idx array including unique combinations and self-comparison
-    idx_splits = list(combinations(np.arange(n_splits), 2))
-    idx_splits.extend([(i, i) for i in np.arange(n_splits)])
+    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))
+    idx_splits = [(i, j) for i, j in zip(x, y)]
 
     n_jobs = _get_n_cores(n_jobs)
 
     # print warning for distance matrix too big
-    n_obs = spatial.shape[0]
-    if (n_obs / n_splits) > 50_000:
-        logg.warning(
-            f"A NxN with N={n_obs} distance matrix will be created, you might encounter an out-of-memory error"
-        )
+
     start = logg.info(
         f"Calculating co-occurrence probabilities for\
             `{len(interval)}` intervals\
@@ -460,3 +453,21 @@ def _co_occurrence_helper(
         queue.put(Signal.FINISH)
 
     return out_lst
+
+
+def _find_min_max(spatial: np.ndarray) -> Tuple[float, float]:
+
+    coord_sum = np.sum(spatial, axis=1)
+    min_idx, min_idx2 = np.argpartition(spatial, 2)[0:2]
+    max_idx = np.argmax(coord_sum)
+    thres_max = (
+        pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[max_idx, :].reshape(1, -1),)[
+            0
+        ][0]
+        / 2.0
+    ).astype(fp)
+    thres_min = pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[min_idx2, :].reshape(1, -1),)[0][
+        0
+    ].astype(fp)
+
+    return thres_min, thres_max
