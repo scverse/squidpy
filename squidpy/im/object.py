@@ -419,6 +419,7 @@ class ImageContainer(FeatureMixin):
         dataset_name: Optional[str] = None,
         size: float = 1.0,
         obs_ids: Optional[Iterable[Any]] = None,
+        as_array: bool = False,
         **kwargs: Any,
     ) -> Iterator[Tuple["ImageContainer", Union[int, str]]]:
         """
@@ -435,6 +436,8 @@ class ImageContainer(FeatureMixin):
             Amount of context (1.0 means size of spot, larger -> more context).
         obs_ids
             Observations from :attr:`adata.obs_names` for which to generate the crops.
+        as_array
+            Whether to return an iterator of :class:`numpy.ndarray` or :class:`squidpy.im.ImageContainer`.
         kwargs
             Keyword arguments for :meth:`crop_center`.
 
@@ -460,6 +463,10 @@ class ImageContainer(FeatureMixin):
 
         for i, obs_id in zip(indices, obs_ids):
             crop = self.crop_center(x=xcoord[i], y=ycoord[i], xr=r, yr=r, **kwargs)
+            if as_array:
+                crop = crop.data.to_array().values
+                if crop.shape[0] == 1:
+                    crop = crop.squeeze(0)
             yield crop, obs_id  # type: ignore[misc]
 
     @classmethod
