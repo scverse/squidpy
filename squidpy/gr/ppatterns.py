@@ -366,12 +366,18 @@ def co_occurrence(
 
     n_obs = spatial.shape[0]
     if n_splits is None:
-        size_arr = (n_obs * n_obs * 4) / 1024 / 1024  # calc expected mem usage
+        size_arr = (n_obs ** 2 * 4) / 1024 / 1024  # calc expected mem usage
         if size_arr > 2_000:
-            n_splits = 4  # should work in most cases
+            s = 1
+            while 20_000 < (n_obs ** 2 / s):
+                s += 1
+                if s > 50:
+                    logg.error(f"optimal n_split: {s}. Value too large, consider subsampling the data")
+                    break
+            n_splits = s
             logg.warning(
                 f"A NxN with N={n_obs} distance matrix will be created, you might encounter an out-of-memory error\n"
-                f"n_splits will be set to {n_splits}"
+                f"n_splits will be set to: {n_splits}"
             )
 
     n_splits = np.max(np.min(n_splits, n_obs), 1)
