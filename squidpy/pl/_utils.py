@@ -534,7 +534,6 @@ def _heatmap(
         ticks=np.linspace(norm.vmin, norm.vmax, 10),
         orientation="vertical",
         format="%0.2f",
-        label="xxx",
         **cbar_kwargs,
     )
 
