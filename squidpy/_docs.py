@@ -102,6 +102,8 @@ title
     The title of the plot.
 cmap
     Continuous colormap to use.
+cbar_kwargs
+    Keyword arguments for :meth:`matplotlib.figure.Figure.colorbar`.
 {_cat_plotting}"""
 _plotting_returns = """\
 Nothing, just plots the and optionally saves the plot.

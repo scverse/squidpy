@@ -1,4 +1,5 @@
 from copy import copy
+from types import MappingProxyType
 from typing import (
     Any,
     Dict,
@@ -482,10 +483,12 @@ def _heatmap(
     annotate: bool = True,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
+    cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> mpl.figure.Figure:
-
     _assert_categorical_obs(adata, key=key)
+
+    cbar_kwargs = dict(cbar_kwargs)
     fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
 
     if method is not None:
@@ -495,15 +498,14 @@ def _heatmap(
 
     row_order = row_order[::-1]
     row_labels = adata.obs[key][row_order]
-
     data = adata[row_order, col_order].X
+
     row_cmap, col_cmap, row_norm, col_norm, n_cls = _get_cmap_norm(adata, key, order=(row_order, col_order))
 
     row_sm = mpl.cm.ScalarMappable(cmap=row_cmap, norm=row_norm)
     col_sm = mpl.cm.ScalarMappable(cmap=col_cmap, norm=col_norm)
 
-    minn, maxx = np.nanmin(data), np.nanmax(data)
-    norm = mpl.colors.Normalize(vmin=minn, vmax=maxx)
+    norm = mpl.colors.Normalize(vmin=kwargs.pop("vmin", np.nanmin(data)), vmax=kwargs.pop("vmax", np.nanmax(data)))
     cont_cmap = copy(plt.get_cmap(cont_cmap))
     cont_cmap.set_bad(color="grey")
 
@@ -526,25 +528,26 @@ def _heatmap(
         sch.dendrogram(col_link, no_labels=True, ax=col_ax, color_threshold=0, above_threshold_color="black")
         col_ax.axis("off")
 
-    _ = mpl.colorbar.ColorbarBase(
-        cax,
-        cmap=cont_cmap,
-        norm=norm,
-        ticks=np.linspace(np.nanmin(data), np.nanmax(data), 10),
+    _ = fig.colorbar(
+        im,
+        cax=cax,
+        ticks=np.linspace(norm.vmin, norm.vmax, 10),
         orientation="vertical",
         format="%0.2f",
+        label="xxx",
+        **cbar_kwargs,
     )
+
+    # column labels colorbar
     c = fig.colorbar(col_sm, cax=col_cats, orientation="horizontal")
     c.set_ticks([])
+    (col_cats if method is None else col_ax).set_title(title)
+
+    # row labels colorbar
     c = fig.colorbar(row_sm, cax=row_cats, orientation="vertical", ticklocation="left")
     c.set_ticks(np.arange(n_cls) + 0.5)
     c.set_ticklabels(row_labels)
     c.set_label(key)
-
-    if method is not None:
-        col_ax.set_title(title)
-    else:
-        col_cats.set_title(title)
 
     return fig
 
