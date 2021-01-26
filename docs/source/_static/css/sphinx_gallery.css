@@ -94,7 +94,8 @@ span[id^="sphx-glr-auto-"] {
     display: block !important;
 }
 
-/* remove Jupyter notebook: from download button */
-.xref.download.docutils.literal.notranslate span:nth-child(2), span:nth-child(3) {
+/* remove `Jupyter notebook: <name>` from `Download Jupyter notebook: <name>`*/
+div.sphx-glr-download-jupyter code.xref.download.docutils.literal.notranslate > span:nth-child(2),
+div.sphx-glr-download-jupyter code.xref.download.docutils.literal.notranslate > span:nth-child(3) {
     display: none!important;
 }
