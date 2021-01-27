@@ -277,6 +277,7 @@ class FeatureMixin:
 
         return features
 
+    @d.dedent
     def get_custom_features(
         self: HasGetItemProtocol,
         img_id: str,
