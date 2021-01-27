@@ -13,6 +13,7 @@ class ImageFeature(ModeEnum):  # noqa: D101
     SUMMARY = "summary"
     COLOR_HIST = "histogram"
     SEGMENTATION = "segmentation"
+    CUSTOM = "custom"
 
 
 # _ligrec.py
