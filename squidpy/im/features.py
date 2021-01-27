@@ -49,6 +49,8 @@ def calculate_image_features(
           :meth:`squidpy.im.ImageContainer.get_histogram_features()`.
         - `{f.SEGMENTATION.s!r}`: stats of a cell segmentation mask \
           :meth:`squidpy.im.ImageContainer.get_segmentation_features()`.
+        - `{f.CUSTOM.s!r}`: extract features using a custom function \
+          :meth:`squidpy.im.ImageContainer.get_custom_features()`.
 
     features_kwargs
         Keyword arguments for the different features that should be generated.
@@ -122,6 +124,8 @@ def _calculate_image_features_helper(
                 res = crop.get_summary_features(img_id=img_id, **feature_kwargs)
             elif feature == ImageFeature.SEGMENTATION:
                 res = crop.get_segmentation_features(img_id=img_id, **feature_kwargs)
+            elif feature == ImageFeature.CUSTOM:
+                res = crop.get_custom_features(img_id=img_id, **feature_kwargs)
             else:
                 raise NotImplementedError(feature)
 
