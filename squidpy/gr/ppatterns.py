@@ -286,12 +286,12 @@ def _occur_count(
     num = labs_unique.shape[0]
     out = np.zeros((num, num, interval.shape[0] - 1), dtype=ft)
 
-    for i in range(interval.shape[0] - 1):
+    for idx in range(interval.shape[0] - 1):
         co_occur = np.zeros((num, num), dtype=ft)
         probs_con = np.zeros((num, num), dtype=ft)
 
-        thres_min = interval[i]
-        thres_max = interval[i + 1]
+        thres_min = interval[idx]
+        thres_max = interval[idx + 1]
         clust_x, clust_y = clust
 
         idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > thres_min))
@@ -307,7 +307,7 @@ def _occur_count(
             probs_conditional = co_occur[c] / np.sum(co_occur[c])
             probs_con[c, :] = probs_conditional / probs
 
-        out[:, :, i] = probs_con
+        out[:, :, idx] = probs_con
 
     return out
 
