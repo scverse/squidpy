@@ -272,38 +272,75 @@ def _set_weight_class(adata: AnnData, key: str) -> W:
 
 
 @njit(
-    ft[:, :](tt(it[:], 2), ft[:, :], tt(ft, 2), it[:]),
+    ft[:, :, :](tt(it[:], 2), ft[:, :], it[:], ft[:]),
     parallel=False,
     fastmath=True,
 )
 def _occur_count(
     clust: Tuple[np.ndarray[np.int32], np.ndarray[np.int32]],
     pw_dist: np.ndarray[np.float32],
-    thres: Tuple[np.float32, np.float32],
     labs_unique: np.ndarray[np.int32],
+    interval: np.ndarray[np.float32],
 ) -> np.ndarray[np.float32]:
 
     num = labs_unique.shape[0]
-    co_occur = np.zeros((num, num), dtype=ft)
-    probs_con = np.zeros((num, num), dtype=ft)
+    out = np.zeros((num, num, interval.shape[0] - 1), dtype=ft)
 
-    thres_min, thres_max = thres
-    clust_x, clust_y = clust
+    for i in range(interval.shape[0] - 1):
+        co_occur = np.zeros((num, num), dtype=ft)
+        probs_con = np.zeros((num, num), dtype=ft)
 
-    idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > thres_min))
-    x = clust_x[idx_x]
-    y = clust_y[idx_y]
-    for i, j in zip(x, y):
-        co_occur[i, j] += 1
+        thres_min = interval[i]
+        thres_max = interval[i + 1]
+        clust_x, clust_y = clust
 
-    probs_matrix = co_occur / np.sum(co_occur)
-    probs = np.sum(probs_matrix, axis=1)
+        idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > thres_min))
+        x = clust_x[idx_x]
+        y = clust_y[idx_y]
+        for i, j in zip(x, y):
+            co_occur[i, j] += 1
 
-    for c in labs_unique:
-        probs_conditional = co_occur[c] / np.sum(co_occur[c])
-        probs_con[c, :] = probs_conditional / probs
+        probs_matrix = co_occur / np.sum(co_occur)
+        probs = np.sum(probs_matrix, axis=1)
 
-    return probs_con
+        for c in labs_unique:
+            probs_conditional = co_occur[c] / np.sum(co_occur[c])
+            probs_con[c, :] = probs_conditional / probs
+
+        out[:, :, i] = probs_con
+
+    return out
+
+
+def _co_occurrence_helper(
+    idx_splits: Iterable[Tuple[int, int]],
+    spatial_splits: Sequence[np.ndarray],
+    labs_splits: Sequence[np.ndarray],
+    labs_unique: np.ndarray,
+    interval: np.ndarray,
+    queue: Optional[SigQueue] = None,
+) -> pd.DataFrame:
+
+    out_lst = []
+    for t in idx_splits:
+        idx_x, idx_y = t
+        labs_x = labs_splits[idx_x]
+        labs_y = labs_splits[idx_y]
+        dist = pairwise_distances(spatial_splits[idx_x], spatial_splits[idx_y]).astype(fp)
+
+        out = _occur_count((labs_x, labs_y), dist, labs_unique, interval)
+        # for i in range(interval.shape[0] - 1):
+        #     cond_prob =
+        #     out[:, :, i] = cond_prob
+        out_lst.append(out)
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return out_lst
 
 
 @d.dedent
@@ -359,7 +396,6 @@ def co_occurrence(
     labs = np.array([clust_map[c] for c in original_clust], dtype=ip)
 
     labs_unique = np.array(list(clust_map.values()), dtype=ip)
-    n_cls = labs_unique.shape[0]
 
     # create intervals thresholds
     interval = np.linspace(thres_min, thres_max, num=n_steps, dtype=fp)
@@ -408,9 +444,8 @@ def co_occurrence(
     )(
         spatial_splits=spatial_splits,
         labs_splits=labs_splits,
-        interval=interval,
-        n_cls=n_cls,
         labs_unique=labs_unique,
+        interval=interval,
     )
 
     if len(idx_splits) == 1:
@@ -425,38 +460,6 @@ def co_occurrence(
     _save_data(
         adata, attr="uns", key=Key.uns.co_occurrence(cluster_key), data={"occ": out, "interval": interval}, time=start
     )
-
-
-def _co_occurrence_helper(
-    idx_splits: Iterable[Tuple[int, int]],
-    spatial_splits: Sequence[np.ndarray],
-    labs_splits: Sequence[np.ndarray],
-    interval: np.ndarray,
-    n_cls: int,
-    labs_unique: np.ndarray,
-    queue: Optional[SigQueue] = None,
-) -> pd.DataFrame:
-
-    out_lst = []
-    for t in idx_splits:
-        idx_x, idx_y = t
-        labs_x = labs_splits[idx_x]
-        labs_y = labs_splits[idx_y]
-        dist = pairwise_distances(spatial_splits[idx_x], spatial_splits[idx_y]).astype(fp)
-
-        out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
-        for i in range(interval.shape[0] - 1):
-            cond_prob = _occur_count((labs_x, labs_y), dist, (interval[i], interval[i + 1]), labs_unique)
-            out[:, :, i] = cond_prob
-        out_lst.append(out)
-
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    return out_lst
 
 
 def _find_min_max(spatial: np.ndarray) -> Tuple[float, float]:
