@@ -11,6 +11,9 @@ from typing import (
     Iterator,
     Optional,
 )
+from tqdm.auto import tqdm
+
+from skimage.transform import rescale
 
 from squidpy.gr._utils import (
     _assert_in_range,
@@ -35,7 +38,7 @@ import xarray as xr
 from imageio import imread
 
 from squidpy._docs import d
-from squidpy.im._utils import _num_pages, CropCoords, _scale_xarray, _open_rasterio
+from squidpy.im._utils import _num_pages, CropCoords, _NULL_PADDING, _open_rasterio
 from squidpy.im.feature_mixin import FeatureMixin
 from squidpy._constants._pkg_constants import Key
 
@@ -73,7 +76,9 @@ class ImageContainer(FeatureMixin):
         **kwargs: Any,
     ):
         self._data: xr.Dataset = xr.Dataset()
-        self._data.attrs["crop"] = None
+        self._data.attrs["coords"] = None
+        self._data.attrs["padding"] = None
+        self._data.attrs["scale"] = 1
 
         chunks = kwargs.pop("chunks", None)
         if img is not None:
@@ -264,16 +269,22 @@ class ImageContainer(FeatureMixin):
             raise ValueError("Width is empty.")
 
         crop = self.data.isel(x=slice(coords.x0, coords.x1), y=slice(coords.y0, coords.y1)).copy(deep=False)
+        crop.attrs["orig"] = orig
+        crop.attrs["coords"] = coords
 
         if orig != coords:
-            diff = orig - coords
-            # TODO: does not update crop metadata (crop), should it?
+            padding = orig - coords
             crop = crop.pad(
-                y=(abs(diff.y0), abs(diff.y1)), x=(abs(diff.x0), abs(diff.x1)), mode="constant", constant_values=cval
+                y=(padding.y_pre, padding.y_post),
+                x=(padding.x_pre, padding.x_post),
+                mode="constant",
+                constant_values=cval,
             )
+            crop.attrs["padding"] = padding
+        else:
+            crop.attrs["padding"] = _NULL_PADDING
 
         crop = self._post_process(data=crop, scale=scale, cval=cval, mask_circle=mask_circle)
-        crop.attrs["crop"] = coords
 
         return self.from_array(crop)
 
@@ -287,7 +298,14 @@ class ImageContainer(FeatureMixin):
     ) -> xr.Dataset:
         _assert_positive(scale, name="scale")
         if scale != 1:
-            data = data.map(_scale_xarray, scale=scale)
+            attrs = data.attrs
+            data = data.map(
+                lambda arr: xr.DataArray(
+                    rescale(arr, scale=scale, preserve_range=True, order=1, multichannel=True).astype(arr.dtype),
+                    dims=arr.dims,
+                )
+            )
+            data.attrs = {**attrs, "scale": scale}
 
         # TODO: does not update crop metadata (scale), should it?
         if mask_circle:
@@ -457,6 +475,7 @@ class ImageContainer(FeatureMixin):
 
         for i in range(adata.n_obs):
             crop = self.crop_center(spatial[i], ryrx=radius, **kwargs)
+            crop.data.attrs["obs"] = adata.obs_names[i]
             if as_array:
                 crop = crop.data.to_array().values
             yield (crop, adata.obs_names[i]) if return_obs else crop
@@ -494,27 +513,25 @@ class ImageContainer(FeatureMixin):
         """
         if not len(crops):
             raise ValueError("TODO: no crops supplied.")
-        if len(crops) == 1:
-            return crops[0].copy(deep=True)
 
         keys = set(crops[0].data.keys())
-        dy, dx = -np.inf, -np.inf
+        dy, dx = -1, -1
+
         for crop in crops:
             if set(crop.data.keys()) != keys:
                 raise KeyError("TODO: invalid keys")
-            if crop.data.attrs.get("crop", None) is None:
+            if crop.data.attrs.get("coords", None) is None:
                 raise ValueError()
-            coords = crop.data.attrs["crop"]
-            dy, dx = max(dy, coords.y0 + coords.dy), max(dx, coords.x0 + coords.dx)
-            # TODO: detect overlapping crops?
+            coord = crop.data.attrs["coords"]  # the unpadded coordinates
+            dy, dx = max(dy, coord.y0 + coord.dy), max(dx, coord.x0 + coord.dx)
 
         if shape is None:
             shape = (dy, dx)
         if shape < (dy, dx):
             raise ValueError("TODO: insufficient shape...")
+        shape = tuple(shape)  # type: ignore[assignment]
         if len(shape) != 2:
             raise ValueError()
-        shape = tuple(shape)  # type: ignore[assignment]
 
         # create resulting dataset
         data = xr.Dataset()
@@ -524,16 +541,11 @@ class ImageContainer(FeatureMixin):
             data[key] = xr.DataArray(np.zeros(shape + tuple(img.shape[2:]), dtype=img.dtype), dims=img.dims)
 
         # fill data with crops
-        for crop in crops:
-            coords = crop.data.attrs["crop"]
-            x0, x1, y0, y1 = coords.x0, coords.x1, coords.y0, coords.y1
-            # TODO: rewrite asserts
-            assert x0 >= 0, f"x ({x0}) is outside of image range (0)"
-            assert y0 >= 0, f"x ({y0}) is outside of image range (0)"
-            assert x1 <= shape[1], f"x ({x1}) is outside of image range ({shape[1]})"
-            assert y1 <= shape[0], f"y ({y1}) is outside of image range ({shape[0]})"
+        for crop in tqdm(crops, unit="crop"):
             for key in keys:
-                data[key][y0:y1, x0:x1] = crop[key]
+                coord = crop.data.attrs["coords"]
+                padding = crop.data.attrs["padding"]
+                data[key][coord.slice] = crop[key][coord.to_image_coordinates(padding=padding).slice]
 
         return cls.from_array(data)
 
