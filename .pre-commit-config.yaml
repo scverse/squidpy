@@ -70,9 +70,9 @@ repos:
     -   id: script-must-have-extension
         name: Check executable files use .sh extension
         types: [shell, executable]
-    -   id: shellcheck
+# -   id: shellcheck  # TODO: The hook `shellcheck` specifies `additional_dependencies` but is using language `script` which does not install an environment.  Perhaps you meant to use a specific language?
 -   repo: https://github.com/myint/rstcheck
-    rev: master
+    rev: 3f92957478422df87bd730abde66f089cc1ee19b
     hooks:
     -   id: rstcheck
 -   repo: https://github.com/asottile/blacken-docs
