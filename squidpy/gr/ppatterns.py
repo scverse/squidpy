@@ -329,9 +329,6 @@ def _co_occurrence_helper(
         dist = pairwise_distances(spatial_splits[idx_x], spatial_splits[idx_y]).astype(fp)
 
         out = _occur_count((labs_x, labs_y), dist, labs_unique, interval)
-        # for i in range(interval.shape[0] - 1):
-        #     cond_prob =
-        #     out[:, :, i] = cond_prob
         out_lst.append(out)
 
         if queue is not None:
