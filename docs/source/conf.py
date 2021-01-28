@@ -49,6 +49,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_last_updated_by_git",
     "sphinx_gallery.load_style",
+    "sphinxcontrib.bibtex",
     "edit_on_github",
     "typed_returns",
 ]
@@ -63,7 +64,7 @@ intersphinx_mapping = dict(  # noqa: C408
     matplotlib=("https://matplotlib.org/", None),
     seaborn=("https://seaborn.pydata.org/", None),
     joblib=("https://joblib.readthedocs.io/en/latest/", None),
-    networkx=("https://networkx.github.io/documentation/stable/", None),
+    networkx=("https://networkx.org/documentation/stable", None),
     astropy=("https://docs.astropy.org/en/stable/", None),
     esda=("https://pysal.org/esda/", None),
     dask=("https://docs.dask.org/en/latest/", None),
@@ -108,6 +109,10 @@ napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
 # 403 Client Error: Forbidden for url: https://www.jstor.org/stable/2332142?origin=crossref
 linkcheck_ignore = ["https://doi.org/10.2307/2332142"]
+
+bibtex_bibfiles = ["references.bib"]
+bibtex_reference_style = ["author_year"]
+bibtex_default_style = "alpha"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
