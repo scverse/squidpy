@@ -38,13 +38,13 @@ def spatial_neighbors(
     coord_type
         Type of coordinate system. Can be one of the following:
 
-            - `{c.VISIUM!r}`: [Visium]_ coordinates.
+            - `{c.VISIUM!r}`: Visium coordinates.
             - `{c.GENERIC!r}`: generic coordinates.
 
         If `None`, use `{c.VISIUM!r}` if ``spatial_key`` is present in :attr:`anndata.AnnData.obsm`,
         otherwise use `{c.GENERIC!r}`.
     n_rings
-        Number of rings of neighbors for [Visium]_ data.
+        Number of rings of neighbors for Visium data.
     n_neigh
         Number of neighborhoods to consider for non-Visium data.
     radius
