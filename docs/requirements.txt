@@ -6,3 +6,4 @@ sphinx-autodoc-typehints>=1.10.3
 sphinx_gallery
 sphinx_last_updated_by_git
 sphinx_rtd_theme
+sphinxcontrib-bibtex>=2.1.0

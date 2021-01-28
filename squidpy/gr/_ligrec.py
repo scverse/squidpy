@@ -231,8 +231,8 @@ class PermutationTestABC(ABC):
         complex_policy
             Policy on how to handle complexes. Valid options are:
 
-                - `{cp.MIN.s!r}` - select gene with the minimum average expression.
-                  This is the same as in [CellPhoneDB20]_.
+                - `{cp.MIN.s!r}` - select gene with the minimum average expression. This is the same as in
+                  :cite:`cellphonedb`.
                 - `{cp.ALL.s!r}` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
 
         Returns
@@ -320,7 +320,7 @@ class PermutationTestABC(ABC):
         **kwargs: Any,
     ) -> Optional[LigrecResult]:
         """
-        Perform the permutation test as described in [CellPhoneDB20]_.
+        Perform the permutation test as described in :cite:`cellphonedb`.
 
         Parameters
         ----------
@@ -483,7 +483,7 @@ class PermutationTestABC(ABC):
             Policy on how to handle complexes. Valid options are:
 
                 - `{cp.MIN.s!r}` - select gene with the minimum average expression. This is the same as in
-                  [CellPhoneDB20]_.
+                  :cite:`cellphonedb`.
                 - `{cp.ALL.s!r}` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
 
         Returns
@@ -571,7 +571,8 @@ class PermutationTest(PermutationTestABC):
         %(PT_prepare.parameters)s
         interactions_params
             Keyword arguments for :func:`omnipath.interactions.import_intercell_network` defining the interactions.
-            These datasets from [OmniPath16]_ are default: `omnipath`, `pathwayextra`, `kinaseextra`, `ligrecextra`.
+            These datasets from :cite:`omnipath` are used by default: `omnipath`, `pathwayextra`, `kinaseextra` and
+            `ligrecextra`.
         transmitter_params
             Keyword arguments for :func:`omnipath.interactions.import_intercell_network` defining the transmitter
             side of intercellular connections.
@@ -668,7 +669,7 @@ def _analysis(
     **kwargs: Any,
 ) -> TempResult:
     """
-    Run the analysis as described in [CellPhoneDB20]_.
+    Run the analysis as described in :cite:`cellphonedb`.
 
     This function runs the mean, percent and shuffled analysis.
 

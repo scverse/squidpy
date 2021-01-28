@@ -29,7 +29,6 @@ Squidpy
 
    auto_examples/index.rst
 
-
 .. |PyPI| image:: https://img.shields.io/pypi/v/squidpy.svg
     :target: https://img.shields.io/pypi/v/squidpy.svg
     :alt: PyPI
