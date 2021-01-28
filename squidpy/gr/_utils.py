@@ -153,9 +153,14 @@ def _get_valid_values(needle: Sequence[Any], haystack: Sequence[Any]) -> Sequenc
     return res
 
 
-def _assert_positive(value: int, *, name: str) -> None:
+def _assert_positive(value: float, *, name: str) -> None:
     if value <= 0:
         raise ValueError(f"Expected `{name}` to be positive, found `{value}`.")
+
+
+def _assert_in_range(value: float, minn: float, maxx: float, *, name: str) -> None:
+    if not (minn <= value <= maxx):
+        raise ValueError(f"Expected `{name}` to be in interval [{minn}, {maxx}], found `{value}`.")
 
 
 def _save_data(

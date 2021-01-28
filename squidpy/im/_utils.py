@@ -29,6 +29,7 @@ def _scale_xarray(arr: xr.DataArray, scale: float) -> xr.DataArray:
     arr = rescale(arr, scales, preserve_range=True, order=1)
     arr = arr.astype(dtype)
     # recreate DataArray
+    # TODO: does not preserve medatada (or update it)
     arr = xr.DataArray(arr, dims=dims)
     return arr
 
@@ -64,7 +65,7 @@ class CropCoords:
     @property
     def dy(self) -> float:
         """Width."""
-        return self.x1 - self.x0
+        return self.y1 - self.y0
 
     @property
     def center_x(self) -> float:
@@ -75,3 +76,9 @@ class CropCoords:
     def center_y(self) -> float:
         """Width of height."""
         return self.x0 + self.dy / 2.0
+
+    def __sub__(self, other: "CropCoords") -> "CropCoords":
+        if not isinstance(other, CropCoords):
+            return NotImplemented  # type: ignore[unreachable]
+
+        return CropCoords(x0=self.x0 - other.x0, y0=self.y0 - other.y0, x1=self.x1 - other.x1, y1=self.y1 - other.y1)

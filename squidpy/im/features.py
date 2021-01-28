@@ -107,7 +107,7 @@ def _calculate_image_features_helper(
     if img_id is None:
         img_id = list(img.data.keys())[0]
 
-    for crop, _ in img.generate_spot_crops(adata, obs_ids=obs_ids, **kwargs):
+    for crop, _ in img.generate_spot_crops(adata, obs_names=obs_ids, **kwargs):
         # get features for this crop
         # TODO: valuedispatch would be cleaner
         # TODO could the values ImageFeature.TEXTURE etc be functions?

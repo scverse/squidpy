@@ -1,4 +1,23 @@
-from typing import Any, List, Tuple, Union, TypeVar, Iterable, Iterator, Optional
+from copy import copy, deepcopy
+from types import MappingProxyType
+from typing import (
+    Any,
+    List,
+    Tuple,
+    Union,
+    Mapping,
+    TypeVar,
+    Iterable,
+    Iterator,
+    Optional,
+)
+
+from squidpy.gr._utils import (
+    _assert_in_range,
+    _assert_positive,
+    _assert_spatial_basis,
+    _assert_non_empty_sequence,
+)
 
 try:
     from typing import Literal  # type: ignore[attr-defined]
@@ -14,10 +33,8 @@ import numpy as np
 import xarray as xr
 
 from imageio import imread
-import skimage
 
 from squidpy._docs import d
-from squidpy._utils import _unique_order_preserving
 from squidpy.im._utils import _num_pages, CropCoords, _scale_xarray, _open_rasterio
 from squidpy.im.feature_mixin import FeatureMixin
 from squidpy._constants._pkg_constants import Key
@@ -63,33 +80,6 @@ class ImageContainer(FeatureMixin):
             if chunks is not None:
                 chunks = {"x": chunks, "y": chunks}
             self.add_img(img, img_id=img_id, chunks=chunks, **kwargs)
-
-    def __repr__(self) -> str:
-        s = f"{self.__class__.__name__} object with {len(self.data.keys())} layer(s)\n"
-        for layer in self.data.keys():
-            s += f"    {layer}: "
-            s += ", ".join(f"{dim} ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape))
-            s += "\n"
-        return s
-
-    def __getitem__(self, key: str) -> xr.DataArray:
-        return self.data[key]
-
-    @property
-    def data(self) -> xr.Dataset:
-        """Underlying data container."""
-        return self._data
-
-    @property
-    def shape(self) -> Tuple[int, int]:
-        """Image shape `(y, x)`."""
-        return self.data.dims["y"], self.data.dims["x"]  # TODO changed shape, need to catch all calls to img.shape
-
-    @property
-    def nchannels(self) -> int:
-        """Number of channels."""  # noqa: D401
-        # TODO this might fail, if we name channels sth else than "channels"
-        return self.data.dims["channels"]  # type: ignore[no-any-return]
 
     @classmethod
     def open(cls, fname: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":  # noqa: A003
@@ -226,15 +216,11 @@ class ImageContainer(FeatureMixin):
     @d.dedent
     def crop_corner(
         self,
-        x: int,
-        y: int,
-        xs: int,
-        ys: int,
+        yx: Tuple[int, int],
+        dydx: Tuple[int, int],
         scale: float = 1.0,
+        cval: Union[int, float] = 0,
         mask_circle: bool = False,
-        cval: float = 0,
-        dtype: Optional[str] = None,
-        preserve_dtype: bool = True,
     ) -> "ImageContainer":
         """
         Extract a crop from upper left corner coordinates ``x`` and ``y``.
@@ -243,113 +229,98 @@ class ImageContainer(FeatureMixin):
 
         Parameters
         ----------
-        %(xy_coord)s
-        %(width_height)s
+        TODO
+            rename me.
+        TODO
+            rename me.
         scale
             Resolution of the crop (smaller -> smaller image).
             Rescaling is done using :func:`skimage.transform.rescale`.
-        mask_circle
-            Mask crop to a circle.
         cval
             The value outside image boundaries or the mask.
-        dtype
-            Type to which the output should be (safely) cast. If `None`, don't recast.
-            Currently supported dtypes: 'uint8'.
-        preserve_dtype
-            Make sure that dtype of all layers of the crop stays the same.
-            Depending on type of ``cval``, types might be promoted to :class:`float` otherwise.
+        mask_circle
+            Mask crop to a circle.
 
         Returns
         -------
         Cropped image.
         """
-        # get conversion function
-        if dtype is not None:
-            if dtype == "uint8":
-                convert = skimage.util.img_as_ubyte
-            else:
-                raise NotImplementedError(dtype)
+        self._assert_not_empty()
 
-        # TODO: rewrite assertions to "normal" errors so they can be more easily tested against
-        assert y < self.data.y.shape[0], f"y ({y}) is outside of image range ({self.data.y.shape[0]})"
-        assert x < self.data.x.shape[0], f"x ({x}) is outside of image range ({self.data.x.shape[0]})"
+        (y, x), (ys, xs) = yx, dydx
+        _assert_positive(ys, name="height")
+        _assert_positive(xs, name="width")
 
-        assert xs > 0, "im size cannot be 0"
-        assert ys > 0, "im size cannot be 0"
+        orig = CropCoords(x0=x, y0=y, x1=x + xs, y1=y + ys)
 
-        # get dtypes before cropping
-        if preserve_dtype and dtype is None:
-            orig_dtypes = {key: arr.dtype for key, arr in self.data.items()}
+        ymin, xmin = self.data.dims["y"], self.data.dims["x"]
+        coords = CropCoords(
+            x0=min(max(x, 0), xmin), y0=min(max(y, 0), ymin), x1=min(x + xs, xmin), y1=min(y + ys, ymin)
+        )
 
-        # get crop coords
-        x0 = x
-        x1 = x + xs
-        y0 = y
-        y1 = y + ys
+        if not coords.dy:
+            raise ValueError("Height is empty.")
+        if not coords.dx:
+            raise ValueError("Width is empty.")
 
-        # make coords fit the image
-        crop_x0 = max(x0, 0)
-        crop_y0 = max(y0, 0)
-        crop_x1 = min(self.data.x.shape[0], x1)
-        crop_y1 = min(self.data.y.shape[0], y1)
+        crop = self.data.isel(x=slice(coords.x0, coords.x1), y=slice(coords.y0, coords.y1)).copy(deep=False)
 
-        # create cropped xr.Dataset
-        crop = self.data.isel(x=slice(crop_x0, crop_x1), y=slice(crop_y0, crop_y1)).copy(deep=False)
-        crop.attrs["crop"] = CropCoords(crop_x0, crop_y0, crop_x1, crop_y1)
-
-        # pad crop if necessary
-        if [x0, x1, y0, y1] != [crop_x0, crop_x1, crop_y0, crop_y1]:
+        if orig != coords:
+            diff = orig - coords
+            # TODO: does not update crop metadata (crop), should it?
             crop = crop.pad(
-                x=(abs(x0 - crop_x0), abs(x1 - crop_x1)),
-                y=(abs(y0 - crop_y0), abs(y1 - crop_y1)),
-                mode="constant",
-                constant_values=cval,
+                y=(abs(diff.y0), abs(diff.y1)), x=(abs(diff.x0), abs(diff.x1)), mode="constant", constant_values=cval
             )
 
-        # scale crop
+        crop = self._post_process(data=crop, scale=scale, cval=cval, mask_circle=mask_circle)
+        crop.attrs["crop"] = coords
+
+        return self.from_array(crop)
+
+    def _post_process(
+        self,
+        data: xr.Dataset,
+        scale: Union[int, float] = 1,
+        cval: Union[int, float] = 1,
+        mask_circle: bool = False,
+        **_: Any,
+    ) -> xr.Dataset:
+        _assert_positive(scale, name="scale")
         if scale != 1:
-            crop = crop.map(_scale_xarray, scale=scale)
+            data = data.map(_scale_xarray, scale=scale)
 
-        # mask crop
+        # TODO: does not update crop metadata (scale), should it?
         if mask_circle:
-            assert xs == ys, "Crop has to be square to use mask_circle."
-            c = crop.x.shape[0] // 2
-            crop = crop.where((crop.x - c) ** 2 + (crop.y - c) ** 2 <= c ** 2, other=cval)
+            # TODO: ignore/raise/ellipse?
+            if data.dims["y"] != data.dims["x"]:
+                logg.warning("Crops is not square TODO")
+                # assert xs == ys, "Crop has to be square to use mask_circle."
+            c = min(data.x.shape[0], data.y.shape[0]) // 2
+            data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c ** 2, other=cval)
 
-        # convert dtypes
-        if preserve_dtype and dtype is None:
-            for key in orig_dtypes.keys():
-                crop[key] = crop[key].astype(orig_dtypes[key])
-        elif dtype is not None:
-            crop = crop.map(convert)
+            for key, arr in self.data.items():
+                data[key] = data[key].astype(arr.dtype, copy=False)
 
-        # return crop as ImageContainer
-        # TODO: add class method from_xarray?
-        crop_cont = ImageContainer()
-        crop_cont._data = crop
-        return crop_cont
+        return data
 
     @d.dedent
     def crop_center(
         self,
-        x: int,
-        y: int,
-        xr: int,
-        yr: int,
+        yx: Tuple[int, int],
+        ryrx: Union[int, Tuple[int, int]],
         **kwargs: Any,
     ) -> "ImageContainer":
         """
-        Extract a crop based on coordinates ``x`` and ``y``.
+        TODO. Extract a crop based on coordinates ``x`` and ``y``.
 
         The extracted crop will be centered on ``x``, ``y``, and have shape ``(yr * 2 + 1, xr * 2 + 1)``.
 
         Parameters
         ----------
-        %(xy_coord)s
-        xr
-            Radius of the crop in pixels.
-        yr
-            Radius of the crop in pixels.
+        yx
+            TODO.
+        ryrx
+            TODO.
         kwargs
             Keyword arguments are passed to :meth:`crop_corner`.
 
@@ -357,29 +328,35 @@ class ImageContainer(FeatureMixin):
         -------
         %(crop_corner.returns)s
         """
-        # move from center to corner
-        x = x - xr
-        y = y - yr
+        if not isinstance(ryrx, tuple):
+            ryrx = (ryrx, ryrx)
 
-        # calculate size
-        xs = xr * 2 + 1
-        ys = yr * 2 + 1
+        (y, x), (yr, xr) = yx, ryrx
+        _assert_in_range(y, 0, self.data.dims["y"], name="center height")
+        _assert_in_range(x, 0, self.data.dims["x"], name="center width")
+        _assert_positive(yr, name="radius height")
+        _assert_positive(xr, name="radius width")
 
-        return self.crop_corner(x=x, y=y, xs=xs, ys=ys, **kwargs)  # type: ignore[no-any-return]
+        return self.crop_corner(  # type: ignore[no-any-return]
+            yx=(x - xr, y - yr), dydx=(xr * 2 + 1, yr * 2 + 1), **kwargs
+        )
 
     @d.dedent
     def generate_equal_crops(
         self,
-        xs: Optional[int] = None,
-        ys: Optional[int] = None,
+        yx: Optional[Union[int, Tuple[Optional[int], Optional[int]]]] = None,
+        as_array: bool = False,
         **kwargs: Any,
-    ) -> Iterator[Tuple["ImageContainer", int, int]]:
+    ) -> Iterator["ImageContainer"]:
         """
         Decompose an image into equally sized crops.
 
         Parameters
         ----------
-        %(width_height)s
+        yx
+            TODO - rename.
+        as_array
+            TODO.
         kwargs
             Keyword arguments for :meth:`squidpy.im.ImageContainer.crop_corner`.
 
@@ -391,33 +368,49 @@ class ImageContainer(FeatureMixin):
             - x-position of the crop.
             - y-position of the crop.
         """
-        if xs is None:
-            xs = self.data.x.shape[0]
+        self._assert_not_empty()
+
+        ys, xs = yx if isinstance(yx, tuple) else (yx, yx)
         if ys is None:
-            ys = self.data.y.shape[0]
+            ys = self.data.dims["y"]
+        if xs is None:
+            xs = self.data.dims["x"]
 
-        # TODO: if equal length of self, generate copy
+        if ys == self.data.dims["y"] and xs == self.data.dims["x"]:
+            res = self.copy(deep=True)
+            res._data = self._post_process(data=res.data, **kwargs)
+            yield res
+        else:
+            _assert_in_range(ys, 0, self.data.dims["y"], name="ys")
+            _assert_in_range(xs, 0, self.data.dims["x"], name="xs")
 
-        # TODO: selecting coords like this means that we will have a small border at the right and bottom
-        # where pixels are not selected. Depending on the crops size, this can be a substantial amount
-        # of the image. Should use stop=(self.data.dims["x"] // xs) * (xs + 1) - 1
-        # need to implement partial assembly of crops in uncrop_img to make it work.
-        unique_xcoord = np.arange(start=0, stop=(self.data.dims["x"] // xs) * xs, step=xs)
-        unique_ycoord = np.arange(start=0, stop=(self.data.dims["y"] // ys) * ys, step=ys)
+            # selecting coords like this means that we will have a small border at the right and bottom
+            # where pixels are not selected. Depending on the crops size, this can be a substantial amount
+            # of the image. Should use stop=(self.data.dims["x"] // xs) * (xs + 1) - 1
+            # need to implement partial assembly of crops in uncrop_img to make it work.
+            unique_xcoord = np.arange(start=0, stop=(self.data.dims["x"] // xs) * xs, step=xs)
+            unique_ycoord = np.arange(start=0, stop=(self.data.dims["y"] // ys) * ys, step=ys)
 
-        xcoords = np.repeat(unique_xcoord, len(unique_ycoord))
-        ycoords = np.tile(unique_ycoord, len(unique_xcoord))
+            ycoords = np.repeat(unique_ycoord, len(unique_xcoord))
+            xcoords = np.tile(unique_xcoord, len(unique_ycoord))
 
-        for x, y in zip(xcoords, ycoords):
-            yield self.crop_corner(x=x, y=y, xs=xs, ys=ys, **kwargs), x, y
+            # TODO: go in C order, not F order
+            for y, x in zip(ycoords, xcoords):
+                crop = self.crop_corner(yx=(y, x), dydx=(ys, xs), **kwargs)
+                if as_array:
+                    crop = crop.data.to_array().values
+                yield crop
 
     @d.dedent
     def generate_spot_crops(
         self,
         adata: AnnData,
-        dataset_name: Optional[str] = None,
+        library_id: str,
+        spatial_key: str = Key.obsm.spatial,
         size: float = 1.0,
-        obs_ids: Optional[Iterable[Any]] = None,
+        obs_names: Optional[Iterable[Any]] = None,
+        as_array: bool = False,
+        return_obs: bool = False,
         **kwargs: Any,
     ) -> Iterator[Tuple["ImageContainer", Union[int, str]]]:
         """
@@ -428,12 +421,17 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         %(adata)s
-        dataset_name
-            Name of the spatial data in ``adata`` (if not specified, take first one).
+        library_id
+            Key in :attr:`anndata.AnnData.uns` ``[spatial_key]`` from where to get the spot diameter.
+        %(spatial_key)s
         size
             Amount of context (1.0 means size of spot, larger -> more context).
-        obs_ids
+        obs_names
             Observations from :attr:`adata.obs_names` for which to generate the crops.
+        as_array
+            TODO.
+        return_obs
+            TODO.
         kwargs
             Keyword arguments for :meth:`crop_center`.
 
@@ -444,31 +442,39 @@ class ImageContainer(FeatureMixin):
             - crop of size ``(ys, xs)``.
             - obs_id of spot from ``adata``.
         """
-        # TODO: I'd just require to supply dataset name
-        if dataset_name is None:
-            dataset_name = list(adata.uns[Key.uns.spatial].keys())[0]
+        self._assert_not_empty()
+        _assert_spatial_basis(adata, spatial_key)
 
-        # TODO: expose key?
-        xcoord = adata.obsm[Key.obsm.spatial][:, 0]
-        ycoord = adata.obsm[Key.obsm.spatial][:, 1]
-        spot_diameter = adata.uns[Key.uns.spatial][dataset_name]["scalefactors"]["spot_diameter_fullres"]
-        r = int(round(spot_diameter * size // 2))
+        if obs_names is None:
+            obs_names = adata.obs_names
+        obs_names = _assert_non_empty_sequence(obs_names)
 
-        obs_ids, seen = _unique_order_preserving(adata.obs.index if obs_ids is None else obs_ids)
-        indices = [i for i, obs in enumerate(adata.obs.index) if obs in seen]
+        adata = adata[obs_names, :]
+        spatial = adata.obsm[spatial_key][:, :2]
 
-        for i, obs_id in zip(indices, obs_ids):
-            crop = self.crop_center(x=xcoord[i], y=ycoord[i], xr=r, yr=r, **kwargs)
-            yield crop, obs_id  # type: ignore[misc]
+        diameter = adata.uns[Key.uns.spatial][library_id]["scalefactors"]["spot_diameter_fullres"]
+        radius = int(round(diameter // 2 * size))
+
+        for i in range(adata.n_obs):
+            crop = self.crop_center(spatial[i], ryrx=radius, **kwargs)
+            if as_array:
+                crop = crop.data.to_array().values
+            yield (crop, adata.obs_names[i]) if return_obs else crop
+
+    @classmethod
+    def from_array(cls, arr: Union[np.ndarray, xr.Dataset], channel_id: str = "channels") -> "ImageContainer":
+        """TODO."""
+        # TODO: should also copy
+        res = cls()
+        res._data = arr
+        return res
 
     @classmethod
     @d.get_sections(base="uncrop_img", sections=["Parameters", "Returns"])
     def uncrop_img(
         cls,
         crops: List["ImageContainer"],
-        x: np.ndarray,
-        y: np.ndarray,
-        shape: Tuple[int, int],
+        shape: Optional[Tuple[int, int]] = None,
     ) -> "ImageContainer":
         """
         Re-assemble image from crops and their positions.
@@ -479,10 +485,6 @@ class ImageContainer(FeatureMixin):
         ----------
         crops
             List of image crops.
-        x
-            X coord of crop in pixel space.
-        y
-            Y coord of crop in pixel space.
         shape
             Shape of full image ``(y, x)``.
 
@@ -490,45 +492,67 @@ class ImageContainer(FeatureMixin):
         -------
         Assembled image with shape ``(y, x)``.
         """
-        # TODO: maybe more descriptive names (y==height, x==width)? + extract to constants...
-        # TODO: rewrite asserts
-        # TODO: expose remaining positions default value
-        assert np.max(y) < shape[0], f"y ({y}) is outside of image range ({shape[0]})"
-        assert np.max(x) < shape[1], f"x ({x}) is outside of image range ({shape[1]})"
-
-        # check if can trivially return crop
+        if not len(crops):
+            raise ValueError("TODO: no crops supplied.")
         if len(crops) == 1:
-            if crops[0].shape[:2] == shape:
-                # have only one crop with already correct shape
-                return crops[0]
+            return crops[0].copy(deep=True)
+
+        keys = set(crops[0].data.keys())
+        dy, dx = -np.inf, -np.inf
+        for crop in crops:
+            if set(crop.data.keys()) != keys:
+                raise KeyError("TODO: invalid keys")
+            if crop.data.attrs.get("crop", None) is None:
+                raise ValueError()
+            coords = crop.data.attrs["crop"]
+            dy, dx = max(dy, coords.y0 + coords.dy), max(dx, coords.x0 + coords.dx)
+            # TODO: detect overlapping crops?
+
+        if shape is None:
+            shape = (dy, dx)
+        if shape < (dy, dx):
+            raise ValueError("TODO: insufficient shape...")
+        if len(shape) != 2:
+            raise ValueError()
+        shape = tuple(shape)  # type: ignore[assignment]
 
         # create resulting dataset
-        img_ids = crops[0].data.keys()
         data = xr.Dataset()
-        for image_id in img_ids:
-            orig_img = crops[0].data[image_id]
+        for key in keys:
+            img = crops[0].data[key]
             # get shape for this DataArray
-            cur_shape = [shape[0], shape[1]] + list(orig_img.shape[2:])
-            data[image_id] = xr.DataArray(np.zeros(cur_shape, dtype=orig_img.dtype), dims=orig_img.dims)
+            data[key] = xr.DataArray(np.zeros(shape + tuple(img.shape[2:]), dtype=img.dtype), dims=img.dims)
 
         # fill data with crops
-        for c, x, y in zip(crops, x, y):
-            x0 = x
-            x1 = x + c.data[list(img_ids)[0]].x.shape[0]
-            y0 = y
-            y1 = y + c.data[list(img_ids)[0]].y.shape[0]
+        for crop in crops:
+            coords = crop.data.attrs["crop"]
+            x0, x1, y0, y1 = coords.x0, coords.x1, coords.y0, coords.y1
             # TODO: rewrite asserts
             assert x0 >= 0, f"x ({x0}) is outside of image range (0)"
             assert y0 >= 0, f"x ({y0}) is outside of image range (0)"
             assert x1 <= shape[1], f"x ({x1}) is outside of image range ({shape[1]})"
             assert y1 <= shape[0], f"y ({y1}) is outside of image range ({shape[0]})"
-            for image_id in img_ids:
-                data[image_id][y0:y1, x0:x1] = c[image_id]
+            for key in keys:
+                data[key][y0:y1, x0:x1] = crop[key]
 
-        self = cls()
-        self._data = data
+        return cls.from_array(data)
 
-        return self
+    def show(self, key: Optional[str] = None) -> None:
+        """TODO."""
+        self._assert_not_empty()
+
+        if key is None:
+            if len(self) > 1:
+                raise ValueError()
+            key = list(self.data.keys())[0]
+        if key not in self.data.keys():
+            raise KeyError()
+
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots()
+
+        ax.imshow(self.data[key])
 
     @d.get_sections(base="_interactive", sections=["Parameters"])
     @d.dedent
@@ -585,3 +609,54 @@ class ImageContainer(FeatureMixin):
             blending=blending,
             key_added=key_added,
         ).show()
+
+    @property
+    def data(self) -> xr.Dataset:
+        """Underlying :class:`xarray.Dataset`."""
+        return self._data
+
+    @property
+    def shape(self) -> Tuple[int, int]:
+        """Image shape `(y, x)`."""
+        return self.data.dims["y"], self.data.dims["x"]  # TODO changed shape, need to catch all calls to img.shape
+
+    @property
+    def nchannels(self) -> int:
+        """Number of channels."""  # noqa: D401
+        # TODO this might fail, if we name channels sth else than "channels"
+        return self.data.dims["channels"]  # type: ignore[no-any-return]
+
+    def copy(self, deep: bool = False) -> "ImageContainer":
+        """TODO."""
+        return deepcopy(self) if deep else copy(self)
+
+    def _assert_not_empty(self) -> None:
+        if not len(self):
+            raise ValueError("No image has been added.")
+
+    def __iter__(self) -> Iterator[str]:
+        # TODO: determine what we want (keys, values), DataArray returns keys
+        yield from self.data.values()
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, key: str) -> xr.DataArray:
+        return self.data[key]
+
+    def __copy__(self) -> "ImageContainer":
+        return type(self).from_array(self.data.copy(deep=False))
+
+    def __deepcopy__(self, memodict: Mapping[str, Any] = MappingProxyType({})) -> "ImageContainer":
+        return type(self).from_array(self.data.copy(deep=True))
+
+    def __repr__(self) -> str:
+        s = f"{self.__class__.__name__} object with {len(self.data.keys())} layer(s)\n"
+        for layer in self.data.keys():
+            s += f"    {layer}: "
+            s += ", ".join(f"{dim} ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape))
+            s += "\n"
+        return s
+
+    def __str__(self) -> str:
+        return repr(self)
