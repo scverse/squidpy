@@ -1,7 +1,7 @@
 # TODO: disable data-science-types because below does not generate types in shpinx + create an issue
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple, Union, Iterable, Optional, Sequence
+from typing import Any, Dict, Tuple, Union, Callable, Iterable, Optional, Sequence
 from typing_extensions import Protocol
 
 import numpy as np
@@ -274,5 +274,52 @@ class FeatureMixin:
                     features[f"{feature_name}_{p}_ch{c}_mean"] = np.mean(tmp_features[p])
                 if std:
                     features[f"{feature_name}_{p}_ch{c}_std"] = np.std(tmp_features[p])
+
+        return features
+
+    @d.dedent
+    def get_custom_features(
+        self: HasGetItemProtocol,
+        img_id: str,
+        feature_name: str = "custom",
+        channels: Optional[Channel_t] = None,
+        feature_fn: Optional[Callable] = None,  # type: ignore [type-arg]
+        **kwargs: Any,
+    ) -> Feature_t:
+        """
+        Calculate custom features using ``feature_fn``.
+
+        The custom feature extractor, ``feature_fn``, needs to take as input the image to extract features from
+        and optional ``kwargs``.
+        The image will be a ``np.ndarray`` with shape ``(y,x,channels)``.
+        The output of the function is expected to be an iterable of floats
+        (in the case of several features that are computed)
+        or a float (in the case of one feature being computed).
+
+        An example for ``feature_fn`` is a simple mean extractor:
+        ``def feature_fn(arr: np.ndarray, **kwargs) -> float: return np.mean(arr)``
+
+        Parameters
+        ----------
+        %(img_id)s
+        %(feature_name)s
+        %(channels)s
+        feature_fn
+            Feature extraction function.
+        kwargs
+            Keyword arguments for ``feature_fn``.
+
+        Returns
+        -------
+        %(feature_ret)s
+        """
+        assert feature_fn is not None, "calculation of custom features requires a `feature_fn`"
+        channels = _get_channels(self[img_id], channels)
+
+        # calculate features by calling feature_fn
+        res = feature_fn(self[img_id].values[:, :, channels], **kwargs)
+        if not isinstance(res, Iterable):
+            res = [res]
+        features = {f"{feature_name}_{i}": f for i, f in enumerate(res)}
 
         return features
