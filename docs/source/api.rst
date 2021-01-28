@@ -48,7 +48,6 @@ Plotting
     pl.nhood_enrichment
     pl.centrality_scores
     pl.interaction_matrix
-    pl.plot_segmentation
     pl.ligrec
     pl.ripley_k
     pl.co_occurrence

@@ -336,9 +336,9 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         yx
-            TODO.
+            TODO - rename.
         ryrx
-            TODO.
+            TODO - rename.
         kwargs
             Keyword arguments are passed to :meth:`crop_corner`.
 
@@ -374,7 +374,7 @@ class ImageContainer(FeatureMixin):
         yx
             TODO - rename.
         as_array
-            TODO.
+            TODO - docrep.
         kwargs
             Keyword arguments for :meth:`squidpy.im.ImageContainer.crop_corner`.
 
@@ -622,6 +622,8 @@ class ImageContainer(FeatureMixin):
             key_added=key_added,
         ).show()
 
+    # TODO: apply style fn
+
     @property
     def data(self) -> xr.Dataset:
         """Underlying :class:`xarray.Dataset`."""
@@ -631,12 +633,6 @@ class ImageContainer(FeatureMixin):
     def shape(self) -> Tuple[int, int]:
         """Image shape `(y, x)`."""
         return self.data.dims["y"], self.data.dims["x"]  # TODO changed shape, need to catch all calls to img.shape
-
-    @property
-    def nchannels(self) -> int:
-        """Number of channels."""  # noqa: D401
-        # TODO this might fail, if we name channels sth else than "channels"
-        return self.data.dims["channels"]  # type: ignore[no-any-return]
 
     def copy(self, deep: bool = False) -> "ImageContainer":
         """TODO."""

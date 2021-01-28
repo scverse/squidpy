@@ -1,6 +1,7 @@
 """Functions exposed: process_img()."""
 
 from typing import Any, Union, Optional
+from astroid import Tuple
 
 import skimage
 import skimage.filters
@@ -16,8 +17,8 @@ def process_img(
     img: ImageContainer,
     img_id: str,
     processing: Union[str, Processing],
-    xs: Optional[int] = None,
-    ys: Optional[int] = None,
+    # TODO: should not have default,
+    yx: Optional[Union[int, Tuple[Optional[int], Optional[int]]]] = None,
     key_added: Optional[str] = None,
     channel_id: Optional[str] = None,
     copy: bool = False,
@@ -34,10 +35,10 @@ def process_img(
     %(img_container)s
     %(img_id)s
     processing
-        Name of processing method to use. Valid options are are:
+        Name of processing method to use. Valid options are:
 
-            - `{p.SMOOTH.s!r}`: :func:`skimage.filters.gaussian`.
-            - `{p.GRAY.s!r}`: :func:`skimage.color.rgb2gray`.
+            - `{p.SMOOTH.s!r}` - :func:`skimage.filters.gaussian`.
+            - `{p.GRAY.s!r}` - :func:`skimage.color.rgb2gray`.
 
     %(width_height)s
     key_added
@@ -64,29 +65,29 @@ def process_img(
     img_id_new = img_id + "_" + str(processing) if key_added is None else key_added
 
     # process crops
-    xcoord, ycoord, crops = [], [], []
-    for crop, x, y in img.generate_equal_crops(xs=xs, ys=ys):
-        xcoord.append(x)
-        ycoord.append(y)
+    crops = []
+    for crop in img.generate_equal_crops(yx=yx):
+        # TODO: custom processing
         if processing == Processing.SMOOTH:
-            crops.append(
-                ImageContainer(
-                    skimage.filters.gaussian(crop[img_id], **kwargs),
-                    img_id=img_id_new,
-                    channel_id=channel_id,
-                )
+            crop = ImageContainer(
+                skimage.filters.gaussian(crop[img_id], **kwargs),
+                img_id=img_id_new,
+                channel_id=channel_id,
             )
         elif processing == Processing.GRAY:
-            crops.append(
-                ImageContainer(skimage.color.rgb2gray(crop[img_id], **kwargs), img_id=img_id_new, channel_id=channel_id)
+            crop = ImageContainer(
+                skimage.color.rgb2gray(crop[img_id], **kwargs), img_id=img_id_new, channel_id=channel_id
             )
         else:
             raise NotImplementedError(processing)
 
+        crops.append(crop)
+
     # Reassemble image:
-    img_proc = ImageContainer.uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape)
+    img_proc = ImageContainer.uncrop_img(crops=crops)
 
     if copy:
         return img_proc  # type: ignore[no-any-return]
 
+    # TODO: function to add ImageContainer
     img.add_img(img=img_proc[img_id_new], img_id=img_id_new)

@@ -1,4 +1,4 @@
-# TODO: disable data-science-types because below does not generate types in shpinx + create an issue
+# TODO: disable data-science-types because below does not generate types in sphinx + create an issue
 from __future__ import annotations
 
 from types import MappingProxyType
@@ -39,18 +39,18 @@ def calculate_image_features(
     %(img_container)s
     %(img_id)s
     features
-        Features to be calculated. Available features:
+        Features to be calculated. Valid options are:
 
-        - `{f.TEXTURE.s!r}`: summary stats based on repeating patterns \
-          :meth:`squidpy.im.ImageContainer.get_texture_features()`.
-        - `{f.SUMMARY.s!r}`: summary stats of each image channel \
-          :meth:`squidpy.im.ImageContainer.get_summary_features()`.
-        - `{f.COLOR_HIST.s!r}`: counts in bins of image channel's histogram \
-          :meth:`squidpy.im.ImageContainer.get_histogram_features()`.
-        - `{f.SEGMENTATION.s!r}`: stats of a cell segmentation mask \
-          :meth:`squidpy.im.ImageContainer.get_segmentation_features()`.
-        - `{f.CUSTOM.s!r}`: extract features using a custom function \
-          :meth:`squidpy.im.ImageContainer.get_custom_features()`.
+        - `{f.TEXTURE.s!r}`: summary stats based on repeating patterns
+          :meth:`squidpy.im.ImageContainer.get_texture_features`.
+        - `{f.SUMMARY.s!r}`: summary stats of each image channel
+          :meth:`squidpy.im.ImageContainer.get_summary_features`.
+        - `{f.COLOR_HIST.s!r}`: counts in bins of image channel's histogram
+          :meth:`squidpy.im.ImageContainer.get_histogram_features`.
+        - `{f.SEGMENTATION.s!r}`: stats of a cell segmentation mask
+          :meth:`squidpy.im.ImageContainer.get_segmentation_features`.
+        - `{f.CUSTOM.s!r}`: extract features using a custom function
+          :meth:`squidpy.im.ImageContainer.get_custom_features`.
 
     features_kwargs
         Keyword arguments for the different features that should be generated.
@@ -75,6 +75,7 @@ def calculate_image_features(
     features = [ImageFeature(f) for f in features]  # type: ignore[misc]
 
     n_jobs = _get_n_cores(n_jobs)
+    # TODO: time
     logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
 
     res = parallelize(
@@ -89,6 +90,7 @@ def calculate_image_features(
     if copy:
         return res
 
+    # TODO: use saver
     adata.obsm[key_added] = res
 
 
@@ -107,10 +109,9 @@ def _calculate_image_features_helper(
     if img_id is None:
         img_id = list(img.data.keys())[0]
 
-    for crop, _ in img.generate_spot_crops(adata, obs_names=obs_ids, **kwargs):
+    for crop in img.generate_spot_crops(adata, obs_names=obs_ids, **kwargs):
         # get features for this crop
         # TODO: valuedispatch would be cleaner
-        # TODO could the values ImageFeature.TEXTURE etc be functions?
         features_dict = {}
         for feature in features:
             feature = ImageFeature(feature)

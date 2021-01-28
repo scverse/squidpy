@@ -6,7 +6,6 @@ from squidpy.pl._graph import (
     centrality_scores,
     interaction_matrix,
 )
-from squidpy.pl._image import plot_segmentation
 from squidpy.pl._utils import extract
 from squidpy.pl._ligrec import ligrec
 from squidpy.pl._interactive import Interactive  # type: ignore[attr-defined]

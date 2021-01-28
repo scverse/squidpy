@@ -98,7 +98,7 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
 
         viewer = napari_cont.interactive(adata)
         cnt = viewer._controller
-        img = np.zeros((*napari_cont.shape, napari_cont.nchannels), dtype=np.float32)
+        img = np.zeros((*napari_cont.shape, 3), dtype=np.float32)
         img[..., 0] = 1.0  # all red image
 
         napari_cont.add_img(img, img_id="foobar")

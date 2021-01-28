@@ -1,6 +1,6 @@
 """Functions exposed: segment(), evaluate_nuclei_segmentation()."""
 
-from typing import Any, List, Union, Optional
+from typing import Any, Union, Optional
 import abc
 
 from anndata import AnnData
@@ -268,38 +268,3 @@ def segment_img(
 
     # add segmented image to img
     img.add_img(img=img_segmented[img_id_new], img_id=img_id_new)
-
-
-# TODO dead code?
-@d.dedent
-def segment_crops(
-    img: ImageContainer,
-    img_id: str,
-    segmented_img_id: str,
-    xs: Optional[int] = None,
-    ys: Optional[int] = None,
-) -> List[ImageContainer]:
-    """
-    %(segment.full_desc)s
-
-    Parameters
-    ----------
-    %(img_container)s
-    img_id
-        Key of image object to take crops from.
-    segmented_img_id
-        Key of image object that contains segments.
-    %(width_height)s # TODO: add support as soon as crop supports this
-
-    Returns
-    -------
-    Crops centred on segments.
-    """  # noqa: D400
-    segment_centres = [
-        (
-            np.mean(np.where(img.data[segmented_img_id] == i)[0]),
-            np.mean(np.where(img.data[segmented_img_id] == i)[1]),
-        )
-        for i in np.sort(list(set(np.unique(img.data[segmented_img_id])) - {0}))
-    ]
-    return [img.crop_center(x=int(xi), y=int(yi), xs=xs, ys=ys, img_id=img_id) for xi, yi in segment_centres]
