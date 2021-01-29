@@ -12,6 +12,7 @@ from typing import (
     Iterable,
     Iterator,
     Optional,
+    TYPE_CHECKING,
 )
 from tqdm.auto import tqdm
 
@@ -43,11 +44,21 @@ import xarray as xr
 from imageio import imread
 
 from squidpy._docs import d
-from squidpy.im._utils import _num_pages, CropCoords, _NULL_PADDING, _open_rasterio
+from squidpy.im._utils import (
+    _num_pages,
+    CropCoords,
+    CropPadding,
+    _NULL_COORDS,
+    _NULL_PADDING,
+    _open_rasterio,
+    TupleSerializer,
+)
 from squidpy.im.feature_mixin import FeatureMixin
 from squidpy._constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
+Arraylike_t = Union[np.ndarray, xr.DataArray]
+Input_t = Union[Pathlike_t, Arraylike_t]
 Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependecies
 
 
@@ -76,13 +87,13 @@ class ImageContainer(FeatureMixin):
 
     def __init__(
         self,
-        img: Optional[Union[Pathlike_t, np.ndarray]] = None,
+        img: Optional[Input_t] = None,
         img_id: str = "image",
         **kwargs: Any,
     ):
         self._data: xr.Dataset = xr.Dataset()
-        self._data.attrs["coords"] = None
-        self._data.attrs["padding"] = None
+        self._data.attrs["coords"] = _NULL_COORDS  # can't save None to NetCDF
+        self._data.attrs["padding"] = _NULL_PADDING
         self._data.attrs["scale"] = 1
 
         chunks = kwargs.pop("chunks", None)
@@ -92,44 +103,53 @@ class ImageContainer(FeatureMixin):
             self.add_img(img, img_id=img_id, chunks=chunks, **kwargs)
 
     @classmethod
-    def open(cls, fname: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":  # noqa: A003
+    def load(cls, fname: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":
         """
-        Initialize using a previously saved netcdf file.
+        Load an NetCDF file.
 
         Parameters
         ----------
         fname
-            Path to the saved .nc file.
+            Path to NetCDF file.
         lazy
             Use :mod:`dask` to lazily load image.
         chunks
             Chunk size for :mod:`dask`.
         """
-        self = cls()
-        self._data = xr.open_dataset(fname, chunks=chunks)
-        if not lazy:
-            self.data.load()
-        return self
+        res = cls()
+        res.add_img(fname, chunks=chunks, lazy=lazy)
+        return res
 
-    def save(self, fname: Pathlike_t) -> None:
+    def save(self, fname: Pathlike_t, **kwargs: Any) -> None:
         """
-        Save dataset as netcdf file.
+        Save dataset as NetCDF file.
 
         Parameters
         ----------
         fname
-            Path to the saved .nc file.
+            Path where to save the NetCDF file.
 
         Returns
         -------
         Nothing, just saves the data to ``fname``.
         """
-        self.data.to_netcdf(fname, mode="a")
+        fname = str(fname)
+        if not (fname.endswith(".nc") or fname.endswith(".cdf")):
+            fname += ".nc"
+
+        try:
+            attrs = self.data.attrs
+            self.data.attrs = {
+                k: (v.to_tuple() if isinstance(v, TupleSerializer) else v) for k, v in self.data.attrs.items()
+            }
+            self.data.to_netcdf(fname, mode="w", **kwargs)
+        finally:
+            self.data.attrs = attrs
 
     @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
     def add_img(
         self,
-        img: Union[Pathlike_t, np.ndarray, xr.DataArray],
+        img: Input_t,
         img_id: str = "image",
         channel_id: str = "channels",
         lazy: bool = True,
@@ -165,19 +185,22 @@ class ImageContainer(FeatureMixin):
         Raises
         ------
         ValueError
-            If ``img`` is a :class:`np.ndarray` and has more than 3 dimensions.
+            TODO.
         """
         img = self._load_img(img, chunks=chunks)
-        img = img.rename({img.dims[-1]: channel_id})
-        logg.info(f"Adding `{img_id}` into object")
+        if img is not None:  # not reading .nc file
+            if TYPE_CHECKING:
+                assert isinstance(img, xr.DataArray)
+            img = img.rename({img.dims[-1]: channel_id})
+            logg.info(f"Adding `{img_id}` into object")
 
-        self.data[img_id] = img
+            self.data[img_id] = img
         if not lazy:
             # load in memory
             self.data.load()
 
     @singledispatchmethod
-    def _load_img(self, img: Union[Pathlike_t, np.ndarray], chunks: Optional[int] = None) -> xr.DataArray:
+    def _load_img(self, img: Union[Pathlike_t, np.ndarray], chunks: Optional[int] = None) -> Optional[xr.DataArray]:
         """
         Load an image.
 
@@ -186,15 +209,24 @@ class ImageContainer(FeatureMixin):
 
     @_load_img.register(str)
     @_load_img.register(Path)
-    def _(self, img: Pathlike_t, chunks: Optional[int] = None, **_: Any) -> xr.DataArray:
+    def _(self, img: Pathlike_t, chunks: Optional[int] = None, **_: Any) -> Optional[xr.DataArray]:
         img = Path(img)
         if not img.is_file():
             raise OSError("TODO.")
 
-        if img.suffix.lower() in (".jpg", ".jpeg"):
-            return self._load_img(imread(str(img)))
+        suffix = img.suffix.lower()
 
-        if img.suffix.lower() in (".tif", ".tiff"):
+        if suffix in (".jpg", ".jpeg"):
+            return self._load_img(imread(str(img)))
+        if suffix in (".nc", ".cdf"):
+            if len(self._data):
+                raise ValueError("TODO.")
+
+            self._data = xr.open_dataset(img, chunks=chunks)
+            self.data.attrs["coords"] = CropCoords.from_tuple(self.data.attrs["coords"])
+            self.data.attrs["padding"] = CropPadding.from_tuple(self.data.attrs["padding"])
+            return None
+        if suffix in (".tif", ".tiff"):
             # calling _load_img ensures we can safely do the transpose
             return self._load_img(
                 xr.concat(
@@ -681,13 +713,17 @@ class ImageContainer(FeatureMixin):
     def __deepcopy__(self, memodict: Mapping[str, Any] = MappingProxyType({})) -> "ImageContainer":
         return type(self).from_array(self.data.copy(deep=True))
 
-    def __repr__(self) -> str:
+    # TODO: fix this
+    def _repr_html_(self) -> str:
         s = f"{self.__class__.__name__} object with {len(self.data.keys())} layer(s)\n"
         for layer in self.data.keys():
             s += f"    {layer}: "
             s += ", ".join(f"{dim} ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape))
             s += "\n"
         return s
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}[TODO]"
 
     def __str__(self) -> str:
         return repr(self)

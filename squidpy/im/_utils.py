@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Any, Tuple
 from dataclasses import dataclass
 import warnings
@@ -24,8 +25,19 @@ def _open_rasterio(path: str, **kwargs: Any) -> xr.DataArray:
         return xr.open_rasterio(path, **kwargs)
 
 
-@dataclass(frozen=False)
-class CropCoords:
+class TupleSerializer(ABC):  # noqa: D101
+    @abstractmethod
+    def to_tuple(self) -> Tuple[float, float, float, float]:
+        """Return self as a :class:`tuple`."""
+
+    @classmethod
+    def from_tuple(cls, value: Tuple[float, float, float, float]) -> "TupleSerializer":
+        """Create self from a :class:`tuple`."""
+        return cls(*value)  # type: ignore[call-arg]
+
+
+@dataclass(frozen=True)
+class CropCoords(TupleSerializer):
     """Top-left and bottom right-corners of a crop."""
 
     x0: float
@@ -80,6 +92,10 @@ class CropCoords:
         """Return the ``(height, width)`` slice."""
         return slice(self.y0, self.y1), slice(self.x0, self.x1)
 
+    def to_tuple(self) -> Tuple[float, float, float, float]:
+        """Return self as a :class:`tuple`."""
+        return self.x0, self.y0, self.x1, self.y1
+
     def __add__(self, other: "CropPadding") -> "CropCoords":
         # if not isinstance(other, CropPadding):
         #    return NotImplemented  # type: ignore[unreachable]
@@ -100,8 +116,8 @@ class CropCoords:
         )
 
 
-@dataclass(frozen=False)
-class CropPadding:
+@dataclass(frozen=True)
+class CropPadding(TupleSerializer):
     """Padding of a crop."""
 
     x_pre: float
@@ -115,5 +131,10 @@ class CropPadding:
         _assert_non_negative(self.x_post, name="x_post")
         _assert_non_negative(self.y_post, name="y_post")
 
+    def to_tuple(self) -> Tuple[float, float, float, float]:
+        """Return self as a :class:`tuple`."""
+        return self.x_pre, self.x_post, self.y_pre, self.y_post
 
+
+_NULL_COORDS = CropCoords(0, 0, 0, 0)
 _NULL_PADDING = CropPadding(0, 0, 0, 0)
