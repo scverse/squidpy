@@ -2,19 +2,24 @@ from copy import copy, deepcopy
 from types import MappingProxyType
 from typing import (
     Any,
+    Dict,
     List,
     Tuple,
     Union,
     Mapping,
     TypeVar,
+    Hashable,
     Iterable,
     Iterator,
     Optional,
 )
 from tqdm.auto import tqdm
 
+from scipy.sparse import spmatrix
+
 from skimage.transform import rescale
 
+from squidpy._utils import singledispatchmethod
 from squidpy.gr._utils import (
     _assert_in_range,
     _assert_positive,
@@ -143,7 +148,7 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         img
-            :mod:`numpy` array or path to image file.
+            An array or a path to JPEG or TIFF file.
         img_id
             Key (name) to be used for img.
         channel_id
@@ -151,7 +156,7 @@ class ImageContainer(FeatureMixin):
         lazy
             Use :mod:`rasterio` or :mod:`dask` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`, used in call to :func:`xarray.open_rasterio` for tiff images.
+            Chunk size for :mod:`dask`, used in call to :func:`xarray.open_rasterio` for TIFF images.
 
         Returns
         -------
@@ -162,60 +167,78 @@ class ImageContainer(FeatureMixin):
         ValueError
             If ``img`` is a :class:`np.ndarray` and has more than 3 dimensions.
         """
-        img = self._load_img(img=img, channel_id=channel_id, chunks=chunks)
-        # add to data
+        img = self._load_img(img, chunks=chunks)
+        img = img.rename({img.dims[-1]: channel_id})
         logg.info(f"Adding `{img_id}` into object")
+
         self.data[img_id] = img
         if not lazy:
             # load in memory
             self.data.load()
 
-    def _load_img(
-        self, img: Union[Pathlike_t, np.ndarray], channel_id: str = "channels", chunks: Optional[int] = None
-    ) -> xr.DataArray:
+    @singledispatchmethod
+    def _load_img(self, img: Union[Pathlike_t, np.ndarray], chunks: Optional[int] = None) -> xr.DataArray:
         """
-        Load image as :mod:`xarray`.
+        Load an image.
 
         See :meth:`add_img` for more details.
         """
-        # TODO: singlemethoddispatch
-        if isinstance(img, np.ndarray):
-            if len(img.shape) > 3:
-                raise ValueError(f"Img has more than 3 dimensions. img.shape is `{img.shape}`.")
-            dims = ["y", "x", channel_id]
-            if len(img.shape) == 2:
-                # add channel dimension
-                img = img[:, :, np.newaxis]
-            xr_img = xr.DataArray(img, dims=dims)
-        elif isinstance(img, xr.DataArray):
-            assert "x" in img.dims
-            assert "y" in img.dims
-            xr_img = img
-        elif isinstance(img, (str, Path)):
-            img = str(img)
-            ext = img.split(".")[-1]
-            if ext in ("tif", "tiff"):  # TODO: constants
-                # get the number of pages in the file
-                num_pages = _num_pages(img)
-                # read all pages using rasterio
-                xr_img_byband = []
-                for i in range(1, num_pages + 1):
-                    data = _open_rasterio(f"GTIFF_DIR:{i}:{img}", chunks=chunks, parse_coordinates=False)
-                    data = data.rename({"band": channel_id})
-                    xr_img_byband.append(data)
-                xr_img = xr.concat(xr_img_byband, dim=channel_id)
-                xr_img = xr_img.transpose("y", "x", ...)
-                # TODO transpose xr_img to have channels as last dim
-            elif ext in ("jpg", "jpeg"):  # TODO: constants
-                img = imread(img)
-                dims = ["y", "x", channel_id]
-                xr_img = xr.DataArray(img, dims=dims)
-            else:
-                raise ValueError(f"Files with extension `{ext}`.")
-        else:
-            raise TypeError(img)
 
-        return xr_img
+    @_load_img.register(str)
+    @_load_img.register(Path)
+    def _(self, img: Pathlike_t, chunks: Optional[int] = None, **_: Any) -> xr.DataArray:
+        img = Path(img)
+        if not img.is_file():
+            raise OSError("TODO.")
+
+        if img.suffix.lower() in (".jpg", ".jpeg"):
+            return self._load_img(imread(str(img)))
+
+        if img.suffix.lower() in (".tif", ".tiff"):
+            # calling _load_img ensures we can safely do the transpose
+            return self._load_img(
+                xr.concat(
+                    [
+                        _open_rasterio(f"GTIFF_DIR:{i}:{img}", chunks=chunks, parse_coordinates=False)
+                        for i in range(1, _num_pages(img) + 1)
+                    ],
+                    dim="band",
+                ),
+                copy=False,
+            ).transpose("y", "x", ...)
+
+        raise ValueError(f"Unknown suffix `{img.suffix}`.")
+
+    @_load_img.register(spmatrix)  # type: ignore[no-redef]
+    def _(self, img: spmatrix) -> xr.DataArray:
+        return self._load_img(img.A)
+
+    @_load_img.register(np.ndarray)  # type: ignore[no-redef]
+    def _(self, img: np.ndarray, **_: Any) -> xr.DataArray:
+        if img.ndim == 2:
+            img = img[:, :, np.newaxis]
+        if img.ndim != 3:
+            raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
+
+        return xr.DataArray(img, dims=["y", "x", "channels"])
+
+    @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
+    def _(self, img: xr.DataArray, copy: bool = True, **_: Any) -> xr.DataArray:
+        if img.ndim == 2:
+            img = img.expand_dims("channels", -1)
+        if img.ndim != 3:
+            raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
+
+        mapping: Dict[Hashable, str] = {}
+        if "y" not in img.dims:
+            logg.warning(f"Dimension `y` not found in the data. Assuming it's `{img.dims[0]}`")
+            mapping[img.dims[0]] = "y"
+        if "x" not in img.dims:
+            logg.warning(f"Dimension `x` not found in the data. Assuming it's `{img.dims[1]}`")
+            mapping[img.dims[1]] = "x"
+
+        img = img.rename(mapping)  # this will fail if trying to map to the same names
+        return img.copy() if copy else img
 
     @d.get_sections(base="crop_corner", sections=["Parameters", "Returns"])
     @d.dedent

@@ -1,7 +1,6 @@
 """Functions exposed: process_img()."""
 
-from typing import Any, Union, Optional
-from astroid import Tuple
+from typing import Any, Tuple, Union, Optional
 
 import skimage
 import skimage.filters
@@ -17,8 +16,7 @@ def process_img(
     img: ImageContainer,
     img_id: str,
     processing: Union[str, Processing],
-    # TODO: should not have default,
-    yx: Optional[Union[int, Tuple[Optional[int], Optional[int]]]] = None,
+    yx: Optional[Tuple[int, int]] = None,
     key_added: Optional[str] = None,
     channel_id: Optional[str] = None,
     copy: bool = False,
@@ -40,7 +38,8 @@ def process_img(
             - `{p.SMOOTH.s!r}` - :func:`skimage.filters.gaussian`.
             - `{p.GRAY.s!r}` - :func:`skimage.color.rgb2gray`.
 
-    %(width_height)s
+    yx
+        TODO.
     key_added
         Key of new image layer to add into ``img`` object. If `None`, use ``{{img_id}}_{{processing}}``.
     channel_id

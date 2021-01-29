@@ -24,6 +24,9 @@ from multiprocessing import Manager, cpu_count
 
 import numpy as np
 
+__all__ = ["singledispatchmethod"]
+
+
 try:
     from functools import singledispatchmethod  # type: ignore[attr-defined]
 except ImportError:

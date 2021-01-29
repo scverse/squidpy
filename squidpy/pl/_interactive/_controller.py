@@ -15,7 +15,7 @@ from napari.layers import Points, Shapes
 
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
-from squidpy._utils import singledispatchmethod  # type: ignore[attr-defined]
+from squidpy._utils import singledispatchmethod
 from squidpy.pl._utils import _points_inside_triangles
 from squidpy.pl._interactive._view import ImageView
 from squidpy.pl._interactive._model import ImageModel
