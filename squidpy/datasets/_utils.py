@@ -166,7 +166,7 @@ class ImgMetadata(Metadata):
         check_presence_download(Path(fpath), backup_url)
 
         img = ImageContainer()
-        img.add_img(fpath, **kwargs)
+        img.add_img(fpath, img_id="image", **kwargs)
 
         return img
 

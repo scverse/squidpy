@@ -14,7 +14,9 @@ from typing import (
     Optional,
     TYPE_CHECKING,
 )
+from itertools import chain
 from tqdm.auto import tqdm
+import re
 
 from scipy.sparse import spmatrix
 
@@ -117,7 +119,7 @@ class ImageContainer(FeatureMixin):
             Chunk size for :mod:`dask`.
         """
         res = cls()
-        res.add_img(fname, chunks=chunks, lazy=lazy)
+        res.add_img(fname, img_id="image", chunks=chunks, lazy=lazy)
         return res
 
     def save(self, fname: Pathlike_t, **kwargs: Any) -> None:
@@ -148,11 +150,16 @@ class ImageContainer(FeatureMixin):
         finally:
             self.data.attrs = attrs
 
+    def _get_image_id(self, img_id: str) -> str:
+        pat = re.compile(rf"^{img_id}_(\d+)$")
+        iterator = chain.from_iterable(pat.finditer(k) for k in self.data.keys())
+        return f"{img_id}_{(max(map(lambda m: int(m.groups()[0][0]), iterator), default=-1) + 1)}"
+
     @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
     def add_img(
         self,
         img: Input_t,
-        img_id: str = "image",
+        img_id: Optional[str] = None,
         channel_id: str = "channels",
         lazy: bool = True,
         chunks: Optional[int] = None,
@@ -194,8 +201,9 @@ class ImageContainer(FeatureMixin):
             if TYPE_CHECKING:
                 assert isinstance(img, xr.DataArray)
             img = img.rename({img.dims[-1]: channel_id})
-            logg.info(f"Adding `{img_id}` into object")
+            img_id = self._get_image_id("image") if img_id is None else img_id
 
+            logg.info(f"Adding `{img_id}` into object")
             self.data[img_id] = img
         if not lazy:
             # load in memory
