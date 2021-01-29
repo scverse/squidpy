@@ -87,3 +87,14 @@ def test_co_occurrence(adata: AnnData):
     assert arr.ndim == 3
     assert arr.shape[2] == 49
     assert arr.shape[1] == arr.shape[0] == adata.obs["leiden"].unique().shape[0]
+
+
+# @pytest.mark.parametrize(("ys", "xs"), [(10, 10), (None, None), (10, 20)])
+@pytest.mark.parametrize(("n_jobs", "n_splits"), [(1, 2), (2, 2)])
+def test_co_occurrence_reproducibility(adata: AnnData, n_jobs: int, n_splits: int):
+    """Check co_occurrence reproducibility results."""
+    arr_1, interval_1 = co_occurrence(adata, cluster_key="leiden", copy=True, n_jobs=n_jobs, n_splits=n_splits)
+    arr_2, interval_2 = co_occurrence(adata, cluster_key="leiden", copy=True, n_jobs=n_jobs, n_splits=n_splits)
+
+    np.testing.assert_array_equal(sorted(interval_1), sorted(interval_2))
+    np.testing.assert_allclose(arr_1, arr_2)

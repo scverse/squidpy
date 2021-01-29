@@ -17,6 +17,7 @@ except ImportError:
     from typing_extensions import Literal
 
 from typing import Tuple, Union, Iterable, Optional, Sequence
+from itertools import chain
 import warnings
 
 from scanpy import logging as logg
@@ -140,7 +141,7 @@ def moran(
     adata: AnnData,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: Optional[Union[str, Sequence[str]]] = None,
-    transformation: Literal["r", "B", "D", "U", "V"] = "B",  # type: ignore[name-defined]
+    transformation: Literal["r", "B", "D", "U", "V"] = "r",  # type: ignore[name-defined]
     n_perms: int = 1000,
     corr_method: Optional[str] = "fdr_bh",
     layer: Optional[str] = None,
@@ -164,7 +165,7 @@ def moran(
         If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present. Otherwise,
         it's computed for all genes.
     transformation
-        Transformation to be used, as reported in :class:`esda.Moran`. Default is `"B"`, binary.
+        Transformation to be used, as reported in :class:`esda.Moran`. Default is `"r"`, row-standardized.
     %(n_perms)s
     %(corr_method)s
     layer
@@ -271,36 +272,72 @@ def _set_weight_class(adata: AnnData, key: str) -> W:
 
 
 @njit(
-    ft[:, :](it[:], ft[:, :], tt(ft, 2), it[:]),
+    ft[:, :, :](tt(it[:], 2), ft[:, :], it[:], ft[:]),
     parallel=False,
     fastmath=True,
 )
 def _occur_count(
-    clust: np.ndarray[np.int32],
+    clust: Tuple[np.ndarray[np.int32], np.ndarray[np.int32]],
     pw_dist: np.ndarray[np.float32],
-    thres: Tuple[np.float32, np.float32],
     labs_unique: np.ndarray[np.int32],
+    interval: np.ndarray[np.float32],
 ) -> np.ndarray[np.float32]:
+
     num = labs_unique.shape[0]
-    co_occur = np.zeros((num, num), dtype=ft)
-    probs_con = np.zeros((num, num), dtype=ft)
+    out = np.zeros((num, num, interval.shape[0] - 1), dtype=ft)
 
-    thres_min, thres_max = thres
+    for idx in range(interval.shape[0] - 1):
+        co_occur = np.zeros((num, num), dtype=ft)
+        probs_con = np.zeros((num, num), dtype=ft)
 
-    idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > thres_min))
-    x = clust[idx_x]
-    y = clust[idx_y]
-    for i, j in zip(x, y):
-        co_occur[i, j] += 1
+        thres_min = interval[idx]
+        thres_max = interval[idx + 1]
+        clust_x, clust_y = clust
 
-    probs_matrix = co_occur / np.sum(co_occur)
-    probs = np.sum(probs_matrix, axis=1)
+        idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > thres_min))
+        x = clust_x[idx_x]
+        y = clust_y[idx_y]
+        for i, j in zip(x, y):
+            co_occur[i, j] += 1
 
-    for c in labs_unique:
-        probs_conditional = co_occur[c] / np.sum(co_occur[c])
-        probs_con[c, :] = probs_conditional / probs
+        probs_matrix = co_occur / np.sum(co_occur)
+        probs = np.sum(probs_matrix, axis=1)
 
-    return probs_con
+        for c in labs_unique:
+            probs_conditional = co_occur[c] / np.sum(co_occur[c])
+            probs_con[c, :] = probs_conditional / probs
+
+        out[:, :, idx] = probs_con
+
+    return out
+
+
+def _co_occurrence_helper(
+    idx_splits: Iterable[Tuple[int, int]],
+    spatial_splits: Sequence[np.ndarray],
+    labs_splits: Sequence[np.ndarray],
+    labs_unique: np.ndarray,
+    interval: np.ndarray,
+    queue: Optional[SigQueue] = None,
+) -> pd.DataFrame:
+
+    out_lst = []
+    for t in idx_splits:
+        idx_x, idx_y = t
+        labs_x = labs_splits[idx_x]
+        labs_y = labs_splits[idx_y]
+        dist = pairwise_distances(spatial_splits[idx_x], spatial_splits[idx_y])
+
+        out = _occur_count((labs_x, labs_y), dist, labs_unique, interval)
+        out_lst.append(out)
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return out_lst
 
 
 @d.dedent
@@ -310,6 +347,10 @@ def co_occurrence(
     spatial_key: str = Key.obsm.spatial,
     n_steps: int = 50,
     copy: bool = False,
+    n_splits: Optional[int] = None,
+    n_jobs: Optional[int] = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
     Compute co-occurrence probability of clusters across `n_steps` distance thresholds in spatial dimensions.
@@ -323,6 +364,9 @@ def co_occurrence(
         Number of distance thresholds at which co-occurrence is computed.
 
     %(copy)s
+    n_splits
+        Number of splits in which to divide the spatial coordinates in :attr:`anndata.AnnData.obsm` `['{spatial_key}']`.
+    %(parallelize)s
 
     Returns
     -------
@@ -338,28 +382,71 @@ def co_occurrence(
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
 
-    spatial = adata.obsm[spatial_key]
+    spatial = adata.obsm[spatial_key].astype(fp)
     original_clust = adata.obs[cluster_key]
-    dist = pairwise_distances(spatial).astype(fp)
 
-    thres_max = dist.max() / 2.0
-    thres_min = np.amin(np.array(dist)[dist != np.amin(dist)]).astype(fp)
+    # find minimum, second minimum and maximum for thresholding
+    thres_min, thres_max = _find_min_max(spatial)
+
+    # annotate cluster idx
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
-
     labs = np.array([clust_map[c] for c in original_clust], dtype=ip)
 
     labs_unique = np.array(list(clust_map.values()), dtype=ip)
-    n_cls = labs_unique.shape[0]
 
+    # create intervals thresholds
     interval = np.linspace(thres_min, thres_max, num=n_steps, dtype=fp)
 
-    out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
-    start = logg.info("Calculating co-occurrence probabilities")
+    n_obs = spatial.shape[0]
+    if n_splits is None:
+        size_arr = (n_obs ** 2 * 4) / 1024 / 1024  # calc expected mem usage
+        if size_arr > 2_000:
+            s = 1
+            while 2_048 < (n_obs / s):
+                s += 1
+            n_splits = s
+            logg.warning(
+                f"`n_splits` was automatically set to: {n_splits}\n"
+                f"preventing a NxN with N={n_obs} distance matrix to be created"
+            )
+        else:
+            n_splits = 1
 
-    # TODO: parallelize (i.e. what's the interval length?)
-    for i in range(interval.shape[0] - 1):
-        cond_prob = _occur_count(labs, dist, (interval[i], interval[i + 1]), labs_unique)
-        out[:, :, i] = cond_prob
+    n_splits = max(min(n_splits, n_obs), 1)
+
+    # split array and labels
+    spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))
+    labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))
+    # create idx array including unique combinations and self-comparison
+    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))
+    idx_splits = [(i, j) for i, j in zip(x, y)]
+
+    n_jobs = _get_n_cores(n_jobs)
+    start = logg.info(
+        f"Calculating co-occurrence probabilities for\
+            `{len(interval)}` intervals\
+            `{len(idx_splits)}` split combinations\
+            using `{n_jobs}` core(s)"
+    )
+
+    out_lst = parallelize(
+        _co_occurrence_helper,
+        collection=idx_splits,
+        extractor=chain.from_iterable,
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
+    )(
+        spatial_splits=spatial_splits,
+        labs_splits=labs_splits,
+        labs_unique=labs_unique,
+        interval=interval,
+    )
+
+    if len(idx_splits) == 1:
+        out = list(out_lst)[0]
+    else:
+        out = sum(list(out_lst)) / len(idx_splits)
 
     if copy:
         logg.info("Finish", time=start)
@@ -368,3 +455,21 @@ def co_occurrence(
     _save_data(
         adata, attr="uns", key=Key.uns.co_occurrence(cluster_key), data={"occ": out, "interval": interval}, time=start
     )
+
+
+def _find_min_max(spatial: np.ndarray) -> Tuple[float, float]:
+
+    coord_sum = np.sum(spatial, axis=1)
+    min_idx, min_idx2 = np.argpartition(coord_sum, 2)[0:2]
+    max_idx = np.argmax(coord_sum)
+    thres_max = (
+        pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[max_idx, :].reshape(1, -1),)[
+            0
+        ][0]
+        / 2.0
+    ).astype(fp)
+    thres_min = pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[min_idx2, :].reshape(1, -1),)[0][
+        0
+    ].astype(fp)
+
+    return thres_min, thres_max
