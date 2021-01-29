@@ -139,6 +139,8 @@ class ImageContainer(FeatureMixin):
 
         try:
             attrs = self.data.attrs
+            # TODO: https://github.com/pydata/xarray/issues/4790
+            # scipy engine won't work: ValueError: could not safely cast array from dtype uint8 to int8
             self.data.attrs = {
                 k: (v.to_tuple() if isinstance(v, TupleSerializer) else v) for k, v in self.data.attrs.items()
             }
@@ -341,7 +343,7 @@ class ImageContainer(FeatureMixin):
 
         crop = self._post_process(data=crop, scale=scale, cval=cval, mask_circle=mask_circle)
 
-        return self.from_array(crop)
+        return self._from_dataset(crop)
 
     def _post_process(
         self,
@@ -536,11 +538,10 @@ class ImageContainer(FeatureMixin):
             yield (crop, adata.obs_names[i]) if return_obs else crop
 
     @classmethod
-    def from_array(cls, arr: Union[np.ndarray, xr.Dataset], channel_id: str = "channels") -> "ImageContainer":
+    def _from_dataset(cls, data: xr.Dataset, deep: Optional[bool] = None) -> "ImageContainer":
         """TODO."""
-        # TODO: should also copy
         res = cls()
-        res._data = arr
+        res._data = data if deep is None else data.copy(deep=deep)
         return res
 
     @classmethod
@@ -602,7 +603,7 @@ class ImageContainer(FeatureMixin):
                 padding = crop.data.attrs["padding"]
                 data[key][coord.slice] = crop[key][coord.to_image_coordinates(padding=padding).slice]
 
-        return cls.from_array(data)
+        return cls._from_dataset(data)
 
     def show(self, key: Optional[str] = None) -> None:
         """TODO."""
@@ -708,10 +709,10 @@ class ImageContainer(FeatureMixin):
         return self.data[key]
 
     def __copy__(self) -> "ImageContainer":
-        return type(self).from_array(self.data.copy(deep=False))
+        return type(self)._from_dataset(self.data, deep=False)
 
     def __deepcopy__(self, memodict: Mapping[str, Any] = MappingProxyType({})) -> "ImageContainer":
-        return type(self).from_array(self.data.copy(deep=True))
+        return type(self)._from_dataset(self.data, deep=True)
 
     # TODO: fix this
     def _repr_html_(self) -> str:
