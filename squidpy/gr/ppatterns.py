@@ -326,7 +326,7 @@ def _co_occurrence_helper(
         idx_x, idx_y = t
         labs_x = labs_splits[idx_x]
         labs_y = labs_splits[idx_y]
-        dist = pairwise_distances(spatial_splits[idx_x], spatial_splits[idx_y]).astype(fp)
+        dist = pairwise_distances(spatial_splits[idx_x], spatial_splits[idx_y])
 
         out = _occur_count((labs_x, labs_y), dist, labs_unique, interval)
         out_lst.append(out)
@@ -382,7 +382,7 @@ def co_occurrence(
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
 
-    spatial = adata.obsm[spatial_key]
+    spatial = adata.obsm[spatial_key].astype(fp)
     original_clust = adata.obs[cluster_key]
 
     # find minimum, second minimum and maximum for thresholding
@@ -402,14 +402,12 @@ def co_occurrence(
         size_arr = (n_obs ** 2 * 4) / 1024 / 1024  # calc expected mem usage
         if size_arr > 2_000:
             s = 1
-            while 30_000 < (n_obs / s):
+            while 2_048 < (n_obs / s):
                 s += 1
-                if s > 30:
-                    raise ValueError(f"optimal n_split: {s}. Value too large, consider subsampling the data")
             n_splits = s
             logg.warning(
-                f"A NxN with N={n_obs} distance matrix will be created, you might encounter an out-of-memory error\n"
-                f"n_splits will be set to: {n_splits}"
+                f"`n_splits` was automatically set to: {n_splits}\n"
+                f"preventing a NxN with N={n_obs} distance matrix to be created"
             )
         else:
             n_splits = 1
