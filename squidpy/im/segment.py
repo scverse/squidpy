@@ -1,7 +1,11 @@
 """Functions exposed: segment(), evaluate_nuclei_segmentation()."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Tuple, Union, Callable, Optional, TYPE_CHECKING
+from typing import Any, List, Tuple, Union, Callable, Optional, Sequence, TYPE_CHECKING
+from itertools import chain
+from multiprocessing import Manager
+
+from scanpy import logging as logg
 
 from scipy import ndimage as ndi
 import numpy as np
@@ -13,11 +17,46 @@ from skimage.segmentation import watershed
 import skimage
 
 from squidpy._docs import d, inject_docs
-from squidpy._utils import singledispatchmethod
+from squidpy._utils import (
+    Signal,
+    SigQueue,
+    parallelize,
+    _get_n_cores,
+    singledispatchmethod,
+)
 from squidpy.gr._utils import _assert_in_range, _assert_non_negative
 from squidpy.im.object import ImageContainer
 from squidpy._constants._constants import SegmentationBackend
 from squidpy._constants._pkg_constants import Key
+
+
+class Counter:
+    """Atomic counter to work with :mod:`joblib`."""
+
+    def __init__(self, value: int = 0):
+        manager = Manager()
+        self._value = manager.Value("i", value)
+        self._lock = manager.Lock()
+
+    def __iadd__(self, other: int) -> "Counter":
+        if not isinstance(other, int):
+            return NotImplemented  # type: ignore[unreachable]
+        with self._lock:
+            self._value.value += other
+
+        return self
+
+    @property
+    def value(self) -> int:
+        """Return the value."""
+        with self._lock:
+            return self._value.value
+
+    def __repr__(self) -> str:
+        return str(self.value)
+
+    def __str__(self) -> str:
+        return repr(self)
 
 
 class SegmentationModel(ABC):
@@ -78,6 +117,7 @@ class SegmentationModel(ABC):
         if arr.ndim == 2:
             arr = arr[:, :, np.newaxis]
 
+        # TODO: only for watershed?
         if increment > 0:
             arr[arr > 0] = arr[arr > 0] + increment
 
@@ -91,7 +131,7 @@ class SegmentationModel(ABC):
         arr = arr[{channel_id: channel}].values  # channel name is last dimension of img
         arr = self.segment(arr, **kwargs)
 
-        return ImageContainer(arr, img_id=img_id, channel_id=f"segmented_{channel_id}")
+        return ImageContainer(arr, img_id=img_id, channel_id=f"segmented_{channel_id}_{channel}")
 
     @abstractmethod
     def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
@@ -244,11 +284,14 @@ class SegmentationBlob(SegmentationGeneric):
 def segment_img(
     img: ImageContainer,
     img_id: str,
-    model: Union[str, Callable[..., np.ndarray]],
+    model: Union[str, Callable[..., np.ndarray]] = "watershed",
     channel: int = 0,
     yx: Optional[Union[int, Tuple[Optional[int], Optional[int]]]] = None,
     key_added: Optional[str] = None,
     copy: bool = False,
+    show_progress_bar: bool = True,
+    n_jobs: Optional[int] = None,
+    backend: str = "loky",
     **kwargs: Any,
 ) -> Optional[ImageContainer]:
     """
@@ -267,7 +310,7 @@ def segment_img(
 
             - `{m.LOG.s!r}`: Blob extraction with :mod:`skimage`. Blobs are assumed to be light on dark.
             - `{m.DOG.s!r}`: Blob extraction with :mod:`skimage`. Blobs are assumed to be light on dark.
-            - `{m.DOG.s!r}`: Blob extraction with :mod:`skimage`. Blobs can be light on dark or vice versa
+            - `{m.DOG.s!r}`: Blob extraction with :mod:`skimage`. Blobs can be light on dark or vice versa.
             - `{m.WATERSHED.s!r}`: :func:`skimage.segmentation.watershed`.
 
         Alternatively, any :func:`callable` object can be passed as long as TODO.
@@ -276,17 +319,22 @@ def segment_img(
     yx
         TODO.
     key_added
-        Key of new image sized array to add into img object. If `None`, use ``segmented_{{model}}``.
+        Key of new image sized array to add into img object. If `None`, use ``'segmented_{{model}}'``.
     %(copy_cont)s
     %(segment_kwargs)s
+    %(parallel)s
 
     Returns
     -------
-    If ``copy = True``, returns segmented image as :class:`squidpy.im.ImageContainer` with name based on ``key_added``.
+    If ``copy = True``, returns segmented image as :class:`squidpy.im.ImageContainer` with a key based on ``key_added``.
 
-    Otherwise, it adds the segmented image to ``img`` with name based on ``key_added``.
+    Otherwise, it modifies the ``img`` with the following key:
+
+        - :class:`squidpy.im.ImageContainer` ``['{{key_added}}']`` - the segmented image.
     """  # noqa: D400
     kind = SegmentationBackend.GENERIC if callable(model) else SegmentationBackend(model)
+    img_id_new = Key.img.segment(kind, key_added=key_added)
+
     if kind in (SegmentationBackend.LOG, SegmentationBackend.DOG, SegmentationBackend.DOH):
         segmentation_model: SegmentationModel = SegmentationBlob(kind=kind)
     elif kind == SegmentationBackend.WATERSHED:
@@ -298,22 +346,56 @@ def segment_img(
     else:
         raise NotImplementedError(f"Model `{kind}` is not yet implemented.")
 
-    img_id_new = Key.img.segment(kind, key_added=key_added)
-    crops, counter = [], 0
+    counter, n_jobs = Counter(), _get_n_cores(n_jobs)
+    crops = list(img.generate_equal_crops(yx=yx, as_array=False))
 
-    # By convention, segments are numbered from 1..number of segments within each crop.
-    # Next, we have to account for that before merging the crops so that segments are not confused.
-    # TODO use overlapping crops to not create confusion at boundaries
-    # TODO: parallelize
-    for crop in img.generate_equal_crops(yx=yx, as_array=False):
-        segmented = segmentation_model.segment(crop, img_id=img_id, channel=channel, increment=counter, **kwargs)
-        segmented._data = segmented.data.rename({img_id: img_id_new})
+    start = logg.info(f"Segmenting `{len(crops)}` crops using `{segmentation_model}` on `{n_jobs}` core(s)")
+    res: ImageContainer = ImageContainer.uncrop_img(
+        parallelize(
+            _segment,
+            collection=crops,
+            unit="crop",
+            extractor=lambda res: list(chain.from_iterable(res)),
+            n_jobs=n_jobs,
+            backend=backend,
+            show_progress_bar=show_progress_bar,
+        )(model=segmentation_model, img_id=img_id, img_id_new=img_id_new, counter=counter, channel=channel, **kwargs),
+        shape=img.shape,
+    )
+    logg.info("Finish", time=start)
 
-        counter += np.max(segmented[img_id_new].values)
-        crops.append(crop)
-
-    res: ImageContainer = ImageContainer.uncrop_img(crops=crops, shape=img.shape)
     if copy:
         return res
 
     img.add_img(res, img_id=img_id_new, copy=False)
+
+
+def _segment(
+    crops: Sequence[ImageContainer],
+    model: SegmentationModel,
+    img_id: str,
+    img_id_new: str,
+    channel: int,
+    counter: Counter,
+    queue: Optional[SigQueue] = None,
+    **kwargs: Any,
+) -> List[ImageContainer]:
+    segmented_crops = []
+
+    # By convention, segments are numbered from 1..number of segments within each crop.
+    # Next, we have to account for that before merging the crops so that segments are not confused.
+    # TODO use overlapping crops to not create confusion at boundaries
+    for crop in crops:
+        crop = model.segment(crop, img_id=img_id, channel=channel, increment=counter.value, **kwargs)
+        crop._data = crop.data.rename({img_id: img_id_new})
+
+        counter += int(np.max(crop[img_id_new].values))
+        segmented_crops.append(crop)
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return segmented_crops

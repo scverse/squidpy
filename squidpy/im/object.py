@@ -15,7 +15,6 @@ from typing import (
     TYPE_CHECKING,
 )
 from itertools import chain
-from tqdm.auto import tqdm
 import re
 
 from scipy.sparse import spmatrix
@@ -487,9 +486,7 @@ class ImageContainer(FeatureMixin):
             ycoords = np.repeat(unique_ycoord, len(unique_xcoord))
             xcoords = np.tile(unique_xcoord, len(unique_ycoord))
 
-            # TODO: go in C order, not F order
-            # TODO: remove tqdm?
-            for y, x in tqdm(zip(ycoords, xcoords), total=len(xcoords), unit="crop"):
+            for y, x in zip(ycoords, xcoords):
                 crop = self.crop_corner(yx=(y, x), dydx=(ys, xs), **kwargs)
                 if as_array:
                     crop = crop.data.to_array().values
@@ -616,8 +613,7 @@ class ImageContainer(FeatureMixin):
             data[key] = xr.DataArray(np.zeros(shape + tuple(img.shape[2:]), dtype=img.dtype), dims=img.dims)
 
         # fill data with crops
-        # TODO: remove tqdm?
-        for crop in tqdm(crops, unit="crop"):
+        for crop in crops:
             for key in keys:
                 coord = crop.data.attrs["coords"]
                 padding = crop.data.attrs["padding"]

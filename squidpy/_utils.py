@@ -24,7 +24,7 @@ from multiprocessing import Manager, cpu_count
 
 import numpy as np
 
-__all__ = ["singledispatchmethod"]
+__all__ = ["singledispatchmethod", "Signal", "SigQueue"]
 
 
 try:
@@ -191,7 +191,8 @@ def parallelize(
         collections = collection
     else:
         col_len = len(collection)
-        collections = list(filter(len, np.array_split(collection, n_split)))
+        step = int(np.ceil(len(collection) / n_split))
+        collections = list(filter(len, (collection[i * step : (i + 1) * step] for i in range(col_len))))
 
     if use_runner:
         use_ixs = False
