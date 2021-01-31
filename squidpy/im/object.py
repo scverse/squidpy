@@ -139,17 +139,17 @@ class ImageContainer(FeatureMixin):
         Nothing, just saves the data to ``fname``.
         """
         fname = str(fname)
-        if not (fname.endswith(".nc") or fname.endswith(".cdf")):
+        if not fname.endswith(".nc") and not fname.endswith(".cdf"):
             fname += ".nc"
 
+        attrs = self.data.attrs
         try:
-            attrs = self.data.attrs
-            # TODO: https://github.com/pydata/xarray/issues/4790
-            # scipy engine won't work: ValueError: could not safely cast array from dtype uint8 to int8
             self.data.attrs = {
                 k: (v.to_tuple() if isinstance(v, TupleSerializer) else v) for k, v in self.data.attrs.items()
             }
-            self.data.to_netcdf(fname, mode="w", **kwargs)
+            self.data.to_netcdf(fname, mode="w", engine="netcdf4", **kwargs)
+        except PermissionError as e:
+            raise RuntimeError(f"It seems like another object is using `{fname}`.") from e
         finally:
             self.data.attrs = attrs
 
@@ -238,14 +238,14 @@ class ImageContainer(FeatureMixin):
             if img_id not in img:
                 raise KeyError(f"Image id `{img_id}` not found in `{img}`.")
             return self._load_img(img[img_id], **kwargs)
-        raise NotImplementedError(f"Loader of `{type(img).__name__}` is not yet implemented.")
+        raise NotImplementedError(f"Loader for class `{type(img).__name__}` is not yet implemented.")
 
     @_load_img.register(str)
     @_load_img.register(Path)
     def _(self, img: Pathlike_t, chunks: Optional[int] = None, **_: Any) -> Optional[xr.DataArray]:
         img = Path(img)
         if not img.is_file():
-            raise OSError(f"Path `{img}` does not exist.")
+            raise OSError(f"File `{img}` does not exist.")
 
         suffix = img.suffix.lower()
 
@@ -255,7 +255,7 @@ class ImageContainer(FeatureMixin):
             if len(self._data):
                 raise ValueError("Loading data from NetCDF is disallow if the container is not empty.")
 
-            self._data = xr.open_dataset(img, chunks=chunks)
+            self._data = xr.open_dataset(img, engine="netcdf4", chunks=chunks)
             self.data.attrs["coords"] = CropCoords.from_tuple(self.data.attrs["coords"])
             self.data.attrs["padding"] = CropPadding.from_tuple(self.data.attrs["padding"])
             return None
@@ -346,6 +346,7 @@ class ImageContainer(FeatureMixin):
         _assert_positive(xs, name="width")
 
         orig = CropCoords(x0=x, y0=y, x1=x + xs, y1=y + ys)
+        orig_dtypes = {key: arr.dtype for key, arr in self.data.items()}
 
         ymin, xmin = self.data.dims["y"], self.data.dims["x"]
         coords = CropCoords(
@@ -370,6 +371,8 @@ class ImageContainer(FeatureMixin):
                 constant_values=cval,
             )
             crop.attrs["padding"] = padding
+            for key in orig_dtypes.keys():
+                crop[key] = crop[key].astype(orig_dtypes[key])
         else:
             crop.attrs["padding"] = _NULL_PADDING
 
