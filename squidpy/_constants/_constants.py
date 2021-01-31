@@ -1,7 +1,7 @@
 """Constants that can exposed to the user."""
 from enum import unique
 
-from squidpy.constants._utils import ModeEnum
+from squidpy._constants._utils import ModeEnum
 
 
 # an example, can even document the values using enum_tools:
@@ -9,15 +9,16 @@ from squidpy.constants._utils import ModeEnum
 # @document_enum
 @unique
 class ImageFeature(ModeEnum):  # noqa: D101
-    HOG = "hog"  # doc: This would be a docstring.
-    TEXTURE = "texture"
+    TEXTURE = "texture"  # doc: This would be a docstring.
     SUMMARY = "summary"
-    COLOR_HIST = "color_hist"
+    COLOR_HIST = "histogram"
+    SEGMENTATION = "segmentation"
+    CUSTOM = "custom"
 
 
 # _ligrec.py
 @unique
-class FdrAxis(ModeEnum):  # noqa: D101
+class CorrAxis(ModeEnum):  # noqa: D101
     INTERACTIONS = "interactions"
     CLUSTERS = "clusters"
 
@@ -38,12 +39,13 @@ class Transform(ModeEnum):  # noqa: D101
 @unique
 class CoordType(ModeEnum):  # noqa: D101
     VISIUM = "visium"
-    NONE = None
+    GENERIC = "generic"
 
 
 @unique
 class Processing(ModeEnum):  # noqa: D101
     SMOOTH = "smooth"
+    GRAY = "gray"
 
 
 @unique
@@ -64,3 +66,17 @@ class BlobModel(ModeEnum):  # noqa: D101
 class Dataset(ModeEnum):  # noqa: D101
     OB = "ob"
     SVZ = "svz"
+
+
+@unique
+class Centrality(ModeEnum):  # noqa: D101
+    DEGREE = "degree_centrality"
+    CLUSTERING = "average_clustering"
+    CLOSENESS = "closeness_centrality"
+
+
+@unique
+class DendrogramAxis(ModeEnum):  # noqa: D101
+    INTERACTING_MOLS = "interacting_molecules"
+    INTERACTING_CLUSTERS = "interacting_clusters"
+    BOTH = "both"

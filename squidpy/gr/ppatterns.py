@@ -1,22 +1,39 @@
 """Functions for point patterns spatial statistics."""
 from __future__ import annotations
 
-from typing import Tuple, Union, Iterable, Optional
+from squidpy.gr._utils import (
+    _save_data,
+    _assert_positive,
+    _assert_spatial_basis,
+    _assert_categorical_obs,
+    _assert_connectivity_key,
+    _assert_non_empty_sequence,
+)
+
+try:
+    # [ py<3.8 ]
+    from typing import Literal  # type: ignore[attr-defined]
+except ImportError:
+    from typing_extensions import Literal
+
+from typing import Tuple, Union, Iterable, Optional, Sequence
+from itertools import chain
 import warnings
 
+from scanpy import logging as logg
 from anndata import AnnData
 
 from numba import njit
-from scipy.sparse import issparse
+from scipy.sparse import isspmatrix_lil
 from sklearn.metrics import pairwise_distances
-from pandas.api.types import infer_dtype, is_categorical_dtype
 from statsmodels.stats.multitest import multipletests
 import numpy as np
 import pandas as pd
 import numba.types as nt
 
 from squidpy._docs import d, inject_docs
-from squidpy.constants._pkg_constants import Key
+from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
+from squidpy._constants._pkg_constants import Key
 
 try:
     with warnings.catch_warnings():
@@ -30,39 +47,49 @@ except ImportError:
     W = None
 
 
+it = nt.int32
+ft = nt.float32
+tt = nt.UniTuple
+ip = np.int32
+fp = np.float32
+
+
 @d.dedent
 @inject_docs(key=Key.obsm.spatial)
 def ripley_k(
     adata: AnnData,
     cluster_key: str,
+    spatial_key: str = Key.obsm.spatial,
     mode: str = "ripley",
     support: int = 100,
-    copy: Optional[bool] = False,
-) -> Union[AnnData, pd.DataFrame]:
+    copy: bool = False,
+) -> Optional[pd.DataFrame]:
     r"""
     Calculate Ripley's K statistics for each cluster in the tissue coordinates.
 
     Parameters
     ----------
     %(adata)s
-        The function will use coordinates in ``adata.obsm[{key!r}]``.
-        TODO: expose key.
-    cluster_key
-        Key of cluster labels saved in :attr:`anndata.AnnData.obs`.
-        TODO: docrep.
+    %(cluster_key)s
+    %(spatial_key)s
     mode
-        Keyword which indicates the method for edge effects correction, as reported in
-        :class:`astropy.stats.RipleysKEstimator`.
+        Keyword which indicates the method for edge effects correction.
+        See :class:`astropy.stats.RipleysKEstimator` for valid options.
     support
         Number of points where Ripley's K is evaluated between a fixed radii with :math:`min=0`,
         :math:`max=\sqrt{{area \over 2}}`.
-    copy
-        If an :class:`anndata.AnnData` is passed, determines whether a copy is returned.
+    %(copy)s
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`pandas.DataFrame`. Otherwise, it modifies ``adata`` and store Ripley's K stat
-    for each cluster in ``adata.uns['ripley_k_{{cluster_key}}']``.
+    If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
+
+        - `'ripley_k'` - the Ripley's K statistic.
+        - `'distance'` - set of distances where the estimator was evaluated.
+
+    Otherwise, modifies the ``adata`` with the following key:
+
+        - :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_ripley_k']`` - the above mentioned dataframe.
     """
     try:
         # from pointpats import ripley, hull
@@ -70,7 +97,9 @@ def ripley_k(
     except ImportError:
         raise ImportError("Please install `astropy` as `pip install astropy`.") from None
 
-    coord = adata.obsm[Key.obsm.spatial]
+    _assert_spatial_basis(adata, key=spatial_key)
+    coord = adata.obsm[spatial_key]
+
     # set coordinates
     y_min = int(coord[:, 1].min())
     y_max = int(coord[:, 1].max())
@@ -82,6 +111,9 @@ def ripley_k(
     # set estimator
     Kest = RipleysKEstimator(area=area, x_max=x_max, y_max=y_max, x_min=x_min, y_min=y_min)
     df_lst = []
+
+    # TODO: how long does this take (i.e. does it make sense to measure the elapse time?)
+    logg.info("Calculating Ripley's K")
     for c in adata.obs[cluster_key].unique():
         idx = adata.obs[cluster_key].values == c
         coord_sub = coord[idx, :]
@@ -100,73 +132,127 @@ def ripley_k(
         return df
 
     adata.uns[f"ripley_k_{cluster_key}"] = df
+    _save_data(adata, attr="uns", key=Key.uns.ripley_k(cluster_key), data=df)
 
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
 def moran(
     adata: AnnData,
-    gene_names: Optional[Iterable[str]] = None,
-    transformation: str = "r",
-    permutations: int = 1000,
+    connectivity_key: str = Key.obsp.spatial_conn(),
+    genes: Optional[Union[str, Sequence[str]]] = None,
+    transformation: Literal["r", "B", "D", "U", "V"] = "r",  # type: ignore[name-defined]
+    n_perms: int = 1000,
     corr_method: Optional[str] = "fdr_bh",
-    copy: Optional[bool] = False,
+    layer: Optional[str] = None,
+    seed: Optional[int] = None,
+    copy: bool = False,
+    n_jobs: Optional[int] = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
 ) -> Optional[pd.DataFrame]:
     """
     Calculate Moran’s I Global Autocorrelation Statistic.
 
     Parameters
     ----------
-    adata
-        The function will use connectivities in ``adata.obsp[{key!r}]``. TODO: expose key
-    gene_names
+    %(adata)s
+    %(conn_key)s
+    genes
         List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute Moran's I statistics
-        [Moran50]_. If None, it's computed for all genes.
+        :cite:`pysal`.
+
+        If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present. Otherwise,
+        it's computed for all genes.
     transformation
-        Keyword which indicates the transformation to be used, as reported in :class:`esda.Moran`.
-    permutations
-        Keyword which indicates the number of permutations to be performed, as reported in :class:`esda.Moran`.
-    corr_method
-        Correction method for multiple testing. See :func:`statsmodels.stats.multitest.multipletests` for available
-        methods.
+        Transformation to be used, as reported in :class:`esda.Moran`. Default is `"r"`, row-standardized.
+    %(n_perms)s
+    %(corr_method)s
+    layer
+        Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
+    %(seed)s
     %(copy)s
+    %(parallelize)s
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`pandas.DataFrame`. Otherwise, it modifies ``adata`` in place and stores
-    Global Moran's I stats in :attr:`anndata.AnnData.var`.
+    If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
+
+        - `'I'` - Moran's I statistic.
+        - `'pval_sim'` - p-value based on permutations.
+        - `'VI_sim'` - variance of `'I'` from permutations.
+        - `'pval_sim_{{corr_method}}'` - the corrected p-values if ``corr_method != None`` .
+
+    Otherwise, modifies the ``adata`` with the following key:
+
+        - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe.
     """
     if esda is None or libpysal is None:
         raise ImportError("Please install `esda` and `libpysal` as `pip install esda libpysal`.")
 
-    # TODO: use_raw?
-    # init weights
-    w = _set_weight_class(adata)
+    _assert_positive(n_perms, name="n_perms")
+    _assert_connectivity_key(adata, connectivity_key)
 
-    lst_mi = []
+    if genes is None:
+        if "highly_variable" in adata.var.columns:
+            genes = adata[:, adata.var.highly_variable.values].var_names.values
+        else:
+            genes = adata.var_names.values
+    genes = _assert_non_empty_sequence(genes)  # type: ignore[assignment]
 
-    if gene_names is None:
-        gene_names = adata.var_names
-    if not isinstance(gene_names, Iterable):
-        raise TypeError(f"Expected `gene_names` to be `Iterable`, found `{type(gene_names).__name__}`.")
+    n_jobs = _get_n_cores(n_jobs)
+    start = logg.info(f"Calculating for `{len(genes)}` genes using `{n_jobs}` core(s)")
 
-    sparse = issparse(adata.X)
-
-    for v in gene_names:
-        y = adata[:, v].X.todense() if sparse else adata[:, v].X
-        mi = _compute_moran(y, w, transformation, permutations)
-        lst_mi.append(mi)
-
-    df = pd.DataFrame(lst_mi, index=gene_names, columns=["I", "pval_sim", "VI_sim"])
+    w = _set_weight_class(adata, key=connectivity_key)  # init weights
+    df = parallelize(
+        _moran_helper,
+        collection=genes,
+        extractor=pd.concat,
+        use_ixs=True,
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
+    )(adata=adata, weights=w, transformation=transformation, permutations=n_perms, layer=layer, seed=seed)
 
     if corr_method is not None:
         _, pvals_adj, _, _ = multipletests(df["pval_sim"].values, alpha=0.05, method=corr_method)
         df[f"pval_sim_{corr_method}"] = pvals_adj
 
+    df.sort_values(by="I", ascending=False, inplace=True)
+
     if copy:
+        logg.info("Finish", time=start)
         return df
 
-    adata.var = adata.var.join(df, how="left")
+    _save_data(adata, attr="uns", key="moranI", data=df, time=start)
+
+
+def _moran_helper(
+    ix: int,
+    gen: Iterable[str],
+    adata: AnnData,
+    weights: W,
+    transformation: Literal["r", "B", "D", "U", "V"] = "B",  # type: ignore[name-defined]
+    permutations: int = 1000,
+    layer: Optional[str] = None,
+    seed: Optional[int] = None,
+    queue: Optional[SigQueue] = None,
+) -> pd.DataFrame:
+    if seed is not None:
+        np.random.seed(seed + ix)
+
+    moran_list = []
+    for g in gen:
+        mi = _compute_moran(adata.obs_vector(g, layer=layer), weights, transformation, permutations)
+        moran_list.append(mi)
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return pd.DataFrame(moran_list, columns=["I", "pval_sim", "VI_sim"], index=gen)
 
 
 def _compute_moran(y: np.ndarray, w: W, transformation: str, permutations: int) -> Tuple[float, float, float]:
@@ -174,123 +260,216 @@ def _compute_moran(y: np.ndarray, w: W, transformation: str, permutations: int) 
     return mi.I, mi.p_z_sim, mi.VI_sim
 
 
-# TODO: expose the key?
-# TODO: is return type correct?
-def _set_weight_class(adata: AnnData) -> W:
+def _set_weight_class(adata: AnnData, key: str) -> W:
+    X = adata.obsp[key]
+    if not isspmatrix_lil(X):
+        X = X.tolil()
 
-    try:
-        a = adata.obsp[Key.obsp.spatial_conn()].tolil()
-    except KeyError:
-        raise KeyError(
-            f"`adata.obsp[{Key.obsp.spatial_conn()!r}]` is empty, run `squidpy.graph.spatial_connectivity()` first."
-        ) from None
-
-    neighbors = dict(enumerate(a.rows))
-    weights = dict(enumerate(a.data))
+    neighbors = dict(enumerate(X.rows))
+    weights = dict(enumerate(X.data))
 
     return libpysal.weights.W(neighbors, weights, ids=adata.obs.index.values)
 
 
-it = nt.int32
-ft = nt.float32
-tt = nt.UniTuple
-
-
 @njit(
-    ft[:, :](it[:], ft[:, :], tt(ft, 2), it[:]),
+    ft[:, :, :](tt(it[:], 2), ft[:, :], it[:], ft[:]),
     parallel=False,
     fastmath=True,
 )
 def _occur_count(
-    clust: np.ndarray[np.int32],
+    clust: Tuple[np.ndarray[np.int32], np.ndarray[np.int32]],
     pw_dist: np.ndarray[np.float32],
-    thres: Tuple[np.float32, np.float32],
     labs_unique: np.ndarray[np.int32],
+    interval: np.ndarray[np.float32],
 ) -> np.ndarray[np.float32]:
 
     num = labs_unique.shape[0]
-    co_occur = np.zeros((num, num), dtype=ft)
-    probs_con = np.zeros((num, num), dtype=ft)
+    out = np.zeros((num, num, interval.shape[0] - 1), dtype=ft)
 
-    thres_min, thres_max = thres
+    for idx in range(interval.shape[0] - 1):
+        co_occur = np.zeros((num, num), dtype=ft)
+        probs_con = np.zeros((num, num), dtype=ft)
 
-    idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > thres_min))
-    x = clust[idx_x]
-    y = clust[idx_y]
-    for i, j in zip(x, y):
-        co_occur[i, j] += 1
+        thres_min = interval[idx]
+        thres_max = interval[idx + 1]
+        clust_x, clust_y = clust
 
-    probs_matrix = co_occur / np.sum(co_occur)
-    probs = np.sum(probs_matrix, axis=1)
+        idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > thres_min))
+        x = clust_x[idx_x]
+        y = clust_y[idx_y]
+        for i, j in zip(x, y):
+            co_occur[i, j] += 1
 
-    for c in labs_unique:
-        probs_conditional = co_occur[c] / np.sum(co_occur[c])
-        probs_con[c, :] = probs_conditional / probs
+        probs_matrix = co_occur / np.sum(co_occur)
+        probs = np.sum(probs_matrix, axis=1)
 
-    return probs_con
+        for c in labs_unique:
+            probs_conditional = co_occur[c] / np.sum(co_occur[c])
+            probs_con[c, :] = probs_conditional / probs
+
+        out[:, :, idx] = probs_con
+
+    return out
+
+
+def _co_occurrence_helper(
+    idx_splits: Iterable[Tuple[int, int]],
+    spatial_splits: Sequence[np.ndarray],
+    labs_splits: Sequence[np.ndarray],
+    labs_unique: np.ndarray,
+    interval: np.ndarray,
+    queue: Optional[SigQueue] = None,
+) -> pd.DataFrame:
+
+    out_lst = []
+    for t in idx_splits:
+        idx_x, idx_y = t
+        labs_x = labs_splits[idx_x]
+        labs_y = labs_splits[idx_y]
+        dist = pairwise_distances(spatial_splits[idx_x], spatial_splits[idx_y])
+
+        out = _occur_count((labs_x, labs_y), dist, labs_unique, interval)
+        out_lst.append(out)
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return out_lst
 
 
 @d.dedent
 def co_occurrence(
     adata: AnnData,
     cluster_key: str,
-    spatial_key: Optional[str] = Key.obsm.spatial,
-    steps: int = 50,
+    spatial_key: str = Key.obsm.spatial,
+    n_steps: int = 50,
     copy: bool = False,
+    n_splits: Optional[int] = None,
+    n_jobs: Optional[int] = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
-    Compute co-occurrence probability of clusters across spatial dimensions.
+    Compute co-occurrence probability of clusters across `n_steps` distance thresholds in spatial dimensions.
 
     Parameters
     ----------
     %(adata)s
     %(cluster_key)s
-    spatial_key
-        Spatial key in :attr:`anndata.AnnData.obsm`.
-    steps
-        Number of step to compute radius for co-occurrence.
+    %(spatial_key)s
+    n_steps
+        Number of distance thresholds at which co-occurrence is computed.
+
     %(copy)s
+    n_splits
+        Number of splits in which to divide the spatial coordinates in :attr:`anndata.AnnData.obsm` `['{spatial_key}']`.
+    %(parallelize)s
 
     Returns
     -------
-    If ``copy = True`` returns two :class:`numpy.array`. Otherwise, it modifies the ``adata`` object with the
-    following keys:
+    If ``copy = True``, returns the co-occurence probability and the distance thresholds intervals.
 
-        - :attr:`anndata.AnnData.uns` ``[{cluster_key}_co_occurrence]`` - the centrality scores.
+    Otherwise, modifies the ``adata`` with the following keys:
+
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['occ']`` - the co-occurrence probabilities
+          across interval thresholds.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
+          computed at ``n_steps``.
     """
-    ip = np.int32
-    fp = np.float32
-    if cluster_key not in adata.obs.keys():
-        raise KeyError(f"Cluster key `{cluster_key}` not found in `adata.obs`.")
-    if not is_categorical_dtype(adata.obs[cluster_key]):
-        raise TypeError(
-            f"Expected `adata.obs[{cluster_key}]` to be `categorical`, "
-            f"found `{infer_dtype(adata.obs[cluster_key])}`."
-        )
-    if spatial_key not in adata.obsm:
-        raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.obsm`.")
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_spatial_basis(adata, key=spatial_key)
 
-    spatial = adata.obsm[spatial_key]
+    spatial = adata.obsm[spatial_key].astype(fp)
     original_clust = adata.obs[cluster_key]
-    dist = pairwise_distances(spatial).astype(fp)
 
-    thres_max = dist.max() / 2.0
-    thres_min = np.amin(np.array(dist)[dist != np.amin(dist)]).astype(fp)
+    # find minimum, second minimum and maximum for thresholding
+    thres_min, thres_max = _find_min_max(spatial)
+
+    # annotate cluster idx
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
-
     labs = np.array([clust_map[c] for c in original_clust], dtype=ip)
 
     labs_unique = np.array(list(clust_map.values()), dtype=ip)
-    n_cls = labs_unique.shape[0]
 
-    interval = np.linspace(thres_min, thres_max, num=steps, dtype=fp)
+    # create intervals thresholds
+    interval = np.linspace(thres_min, thres_max, num=n_steps, dtype=fp)
 
-    out = np.empty((n_cls, n_cls, interval.shape[0] - 1))
-    for i in range(interval.shape[0] - 1):
-        cond_prob = _occur_count(labs, dist, (interval[i], interval[i + 1]), labs_unique)
-        out[:, :, i] = cond_prob
+    n_obs = spatial.shape[0]
+    if n_splits is None:
+        size_arr = (n_obs ** 2 * 4) / 1024 / 1024  # calc expected mem usage
+        if size_arr > 2_000:
+            s = 1
+            while 2_048 < (n_obs / s):
+                s += 1
+            n_splits = s
+            logg.warning(
+                f"`n_splits` was automatically set to: {n_splits}\n"
+                f"preventing a NxN with N={n_obs} distance matrix to be created"
+            )
+        else:
+            n_splits = 1
+
+    n_splits = max(min(n_splits, n_obs), 1)
+
+    # split array and labels
+    spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))
+    labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))
+    # create idx array including unique combinations and self-comparison
+    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))
+    idx_splits = [(i, j) for i, j in zip(x, y)]
+
+    n_jobs = _get_n_cores(n_jobs)
+    start = logg.info(
+        f"Calculating co-occurrence probabilities for\
+            `{len(interval)}` intervals\
+            `{len(idx_splits)}` split combinations\
+            using `{n_jobs}` core(s)"
+    )
+
+    out_lst = parallelize(
+        _co_occurrence_helper,
+        collection=idx_splits,
+        extractor=chain.from_iterable,
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
+    )(
+        spatial_splits=spatial_splits,
+        labs_splits=labs_splits,
+        labs_unique=labs_unique,
+        interval=interval,
+    )
+
+    if len(idx_splits) == 1:
+        out = list(out_lst)[0]
+    else:
+        out = sum(list(out_lst)) / len(idx_splits)
 
     if copy:
+        logg.info("Finish", time=start)
         return out, interval
 
-    adata.uns[f"{cluster_key}_co_occurrence"] = {"occ": out, "interval": interval}
+    _save_data(
+        adata, attr="uns", key=Key.uns.co_occurrence(cluster_key), data={"occ": out, "interval": interval}, time=start
+    )
+
+
+def _find_min_max(spatial: np.ndarray) -> Tuple[float, float]:
+
+    coord_sum = np.sum(spatial, axis=1)
+    min_idx, min_idx2 = np.argpartition(coord_sum, 2)[0:2]
+    max_idx = np.argmax(coord_sum)
+    thres_max = (
+        pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[max_idx, :].reshape(1, -1),)[
+            0
+        ][0]
+        / 2.0
+    ).astype(fp)
+    thres_min = pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[min_idx2, :].reshape(1, -1),)[0][
+        0
+    ].astype(fp)
+
+    return thres_min, thres_max

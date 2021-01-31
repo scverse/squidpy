@@ -12,7 +12,7 @@ import pandas as pd
 
 from squidpy.gr import ligrec
 from squidpy.gr._ligrec import LigrecResult, PermutationTest
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 
 _CK = "leiden"
 Interactions_t = Tuple[Sequence[str], Sequence[str]]
@@ -27,7 +27,7 @@ class TestInvalidBehavior:
     def test_adata_no_raw(self, adata: AnnData):
         del adata.raw
         with pytest.raises(AttributeError, match=r"No `.raw` attribute"):
-            ligrec(adata, _CK)
+            ligrec(adata, _CK, use_raw=True)
 
     def test_raw_has_different_n_obs(self, adata: AnnData):
         adata.raw = blobs(n_observations=adata.n_obs + 1)
@@ -35,7 +35,7 @@ class TestInvalidBehavior:
             ligrec(adata, _CK)
 
     def test_invalid_cluster_key(self, adata: AnnData, interactions: Interactions_t):
-        with pytest.raises(KeyError, match=r"Cluster key `'foobar'` not found"):
+        with pytest.raises(KeyError, match=r"Cluster key `foobar` not found"):
             ligrec(adata, cluster_key="foobar", interactions=interactions)
 
     def test_cluster_key_is_not_categorical(self, adata: AnnData, interactions: Interactions_t):
@@ -54,8 +54,8 @@ class TestInvalidBehavior:
             ligrec(adata, _CK, interactions=interactions, complex_policy="foobar")
 
     def test_invalid_fdr_axis(self, adata: AnnData, interactions: Interactions_t):
-        with pytest.raises(ValueError, match=r"Invalid option `'foobar'` for `FdrAxis`."):
-            ligrec(adata, _CK, interactions=interactions, fdr_axis="foobar", fdr_method="fdr_bh")
+        with pytest.raises(ValueError, match=r"Invalid option `'foobar'` for `CorrAxis`."):
+            ligrec(adata, _CK, interactions=interactions, corr_axis="foobar", corr_method="fdr_bh")
 
     def test_too_few_permutations(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(ValueError, match=r"Expected `n_perms` to be positive"):
@@ -96,6 +96,13 @@ class TestInvalidBehavior:
     def test_invalid_clusters_mix(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(ValueError, match=r"Expected a `tuple` of length `2`, found `3`."):
             ligrec(adata, _CK, interactions=interactions, clusters=["foo", ("bar", "baz")])
+
+
+class TestValidBehavior:
+    def test_do_not_use_raw(self, adata: AnnData, interactions: Interactions_t):
+        del adata.raw
+
+        _ = PermutationTest(adata, use_raw=False)
 
     def test_all_genes_capitalized(self, adata: AnnData, interactions: Interactions_t):
         pt = PermutationTest(adata).prepare(interactions=interactions)
@@ -150,7 +157,7 @@ class TestInvalidBehavior:
             _CK,
             interactions=interactions,
             n_perms=5,
-            fdr_axis="clusters",
+            corr_axis="clusters",
             seed=42,
             n_jobs=1,
             show_progress_bar=False,
@@ -161,7 +168,7 @@ class TestInvalidBehavior:
             _CK,
             interactions=interactions,
             n_perms=5,
-            fdr_axis="interactions",
+            corr_axis="interactions",
             n_jobs=1,
             show_progress_bar=False,
             seed=42,
@@ -221,7 +228,7 @@ class TestInvalidBehavior:
             n_perms=5,
             copy=True,
             show_progress_bar=False,
-            fdr_method=fdr_method,
+            corr_method=fdr_method,
             threshold=0,
         )
 
@@ -336,7 +343,7 @@ class TestInvalidBehavior:
             paul15,
             "paul15_clusters",
             interactions=list(paul15_means.index.to_list()),
-            fdr_method=None,
+            corr_method=None,
             copy=True,
             show_progress_bar=False,
             threshold=0.01,

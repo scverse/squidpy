@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from abc import ABC
 from types import MappingProxyType
-from typing import Any, List, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import (
+    Any,
+    List,
+    Tuple,
+    Union,
+    Mapping,
+    Iterable,
+    Optional,
+    Sequence,
+    TYPE_CHECKING,
+)
 from functools import partial
 from itertools import product
 from collections import namedtuple
@@ -14,15 +24,20 @@ from anndata import AnnData
 
 from numba import njit, prange  # noqa: F401
 from scipy.sparse import csc_matrix
-from pandas.api.types import infer_dtype, is_categorical_dtype
 import numpy as np
 import pandas as pd
 
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
-from squidpy.gr._utils import _create_sparse_df, _check_tuple_needles
-from squidpy.constants._constants import FdrAxis, ComplexPolicy
-from squidpy.constants._pkg_constants import Key
+from squidpy.gr._utils import (
+    _save_data,
+    _assert_positive,
+    _create_sparse_df,
+    _check_tuple_needles,
+    _assert_categorical_obs,
+)
+from squidpy._constants._constants import CorrAxis, ComplexPolicy
+from squidpy._constants._pkg_constants import Key
 
 StrSeq = Sequence[str]
 SeqTuple = Sequence[Tuple[str, str]]
@@ -119,7 +134,7 @@ def _create_template(n_cls: int, return_means: bool = False, parallel: bool = Tr
 
 
 def _fdr_correct(
-    pvals: pd.DataFrame, fdr_method: str, fdr_axis: Union[str, FdrAxis], alpha: float = 0.05
+    pvals: pd.DataFrame, corr_method: str, corr_axis: Union[str, CorrAxis], alpha: float = 0.05
 ) -> pd.DataFrame:
     """Correct p-values for FDR along specific axis in ``pvals``."""
     from pandas.core.arrays.sparse import SparseArray
@@ -128,7 +143,7 @@ def _fdr_correct(
     def fdr(pvals: pd.Series[np.float64]) -> SparseArray[np.float64]:
         _, qvals, _, _ = multipletests(
             np.nan_to_num(pvals.values, copy=True, nan=1.0),
-            method=fdr_method,
+            method=corr_method,
             alpha=alpha,
             is_sorted=False,
             returnsorted=False,
@@ -137,15 +152,15 @@ def _fdr_correct(
 
         return SparseArray(qvals, dtype=qvals.dtype, fill_value=np.nan)
 
-    fdr_axis = FdrAxis(fdr_axis)
+    corr_axis = CorrAxis(corr_axis)
 
-    if fdr_axis == FdrAxis.CLUSTERS:
+    if corr_axis == CorrAxis.CLUSTERS:
         # clusters are in columns
         pvals = pvals.apply(fdr)
-    elif fdr_axis == FdrAxis.INTERACTIONS:
+    elif corr_axis == CorrAxis.INTERACTIONS:
         pvals = pvals.T.apply(fdr).T
     else:
-        raise NotImplementedError(f"FDR correction for `{fdr_axis.value}` is not implemented.")
+        raise NotImplementedError(f"FDR correction for `{corr_axis}` is not implemented.")
 
     return pvals
 
@@ -165,25 +180,29 @@ class PermutationTestABC(ABC):
     Parameters
     ----------
     %(adata)s
-        Must contain :attr:`anndata.AnnData.raw` attribute.
+    use_raw
+        Whether to access :attr:`anndata.AnnData.raw`.
     """
 
-    def __init__(self, adata: AnnData):
+    def __init__(self, adata: AnnData, use_raw: bool = True):
         if not isinstance(adata, AnnData):
             raise TypeError(f"Expected `adata` to be of type `anndata.AnnData`, found `{type(adata).__name__}`.")
         if not adata.n_obs:
             raise ValueError("No cells are in `adata.obs_names`.")
         if not adata.n_vars:
             raise ValueError("No genes are in `adata.var_names`.")
-        if adata.raw is None:
-            raise AttributeError("No `.raw` attribute found.")
-        if adata.raw.n_obs != adata.n_obs:
-            raise ValueError(f"Expected `{adata.n_obs}` cells in `.raw` object, found `{adata.raw.n_obs}`.")
+
+        self._adata = adata
+        if use_raw:
+            if adata.raw is None:
+                raise AttributeError("No `.raw` attribute found. Try specifying `use_raw=False`.")
+            if adata.raw.n_obs != adata.n_obs:
+                raise ValueError(f"Expected `{adata.n_obs}` cells in `.raw` object, found `{adata.raw.n_obs}`.")
+            adata = adata.raw
 
         self._data = pd.DataFrame.sparse.from_spmatrix(
-            csc_matrix(adata.raw.X), index=adata.raw.obs_names, columns=adata.raw.var_names
+            csc_matrix(adata.X), index=adata.obs_names, columns=adata.var_names
         )
-        self._adata = adata
 
         self._interactions: Optional[pd.DataFrame] = None
         self._filtered_data: Optional[pd.DataFrame] = None
@@ -192,7 +211,7 @@ class PermutationTestABC(ABC):
     @d.get_sections(base="PT_prepare", sections=["Parameters", "Returns"])
     @inject_docs(src=SOURCE, tgt=TARGET, cp=ComplexPolicy)
     def prepare(
-        self, interactions: Interaction_t, complex_policy: str = ComplexPolicy.MIN.value
+        self, interactions: Interaction_t, complex_policy: Union[str, ComplexPolicy] = ComplexPolicy.MIN.v
     ) -> "PermutationTestABC":
         """
         Prepare self for running the permutation test.
@@ -208,13 +227,13 @@ class PermutationTestABC(ABC):
                   produced, or a sequence of :class:`tuple` of 2 :class:`str` or a :class:`tuple` of 2 sequences.
 
             If `None`, the interactions are extracted from :mod:`omnipath`. Protein complexes can be specified by
-            delimiting the components using `_`, such as `'alpha_beta_gamma'`.
+            delimiting the components with `'_'`, such as `'alpha_beta_gamma'`.
         complex_policy
-            Policy on how to handle complexes. Can be one of:
+            Policy on how to handle complexes. Valid options are:
 
-                - `{cp.MIN.value!r}` - select gene with the minimum average expression.
-                  This is the same as in [CellPhoneDB20]_.
-                - `{cp.ALL.value!r}` - select all possible combinations between complexes `{src!r}` and `{tgt!r}`.
+                - `{cp.MIN.s!r}` - select gene with the minimum average expression. This is the same as in
+                  :cite:`cellphonedb`.
+                - `{cp.ALL.s!r}` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
 
         Returns
         -------
@@ -222,9 +241,20 @@ class PermutationTestABC(ABC):
 
             - :attr:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
         """
-        complex_policy = ComplexPolicy(complex_policy)  # type: ignore[no-redef,assignment]
+        complex_policy = ComplexPolicy(complex_policy)
 
-        if isinstance(interactions, Sequence):
+        if isinstance(interactions, Mapping):
+            interactions = pd.DataFrame(interactions)
+
+        if isinstance(interactions, pd.DataFrame):
+            if SOURCE not in interactions.columns:
+                raise KeyError(f"Column `{SOURCE!r}` is not in `interactions`.")
+            if TARGET not in interactions.columns:
+                raise KeyError(f"Column `{TARGET!r}` is not in `interactions`.")
+
+            self._interactions = interactions.copy()
+        elif isinstance(interactions, Iterable):
+            interactions = tuple(interactions)
             if not len(interactions):
                 raise ValueError("No interactions were specified.")
 
@@ -236,20 +266,10 @@ class PermutationTestABC(ABC):
             if not all(len(i) == 2 for i in interactions):
                 raise ValueError("Not all interactions are of length `2`.")
 
-            interactions = pd.DataFrame(interactions, columns=[SOURCE, TARGET])
-        elif isinstance(interactions, Mapping):
-            interactions = pd.DataFrame(interactions)
-
-        if isinstance(interactions, pd.DataFrame):
-            if SOURCE not in interactions.columns:
-                raise KeyError(f"Column `{SOURCE!r}` is not in `interactions`.")
-            if TARGET not in interactions.columns:
-                raise KeyError(f"Column `{TARGET!r}` is not in `interactions`.")
-            self._interactions = interactions.copy()
+            self._interactions = pd.DataFrame(interactions, columns=[SOURCE, TARGET])
         else:
             raise TypeError(
-                f"Expected either a `pandas.DataFrame`, `dict`, `tuple`, `list` or `str`, "
-                f"found `{type(interactions).__name__}`"
+                f"Expected either a `pandas.DataFrame`, `dict` or `iterable`, found `{type(interactions).__name__}`"
             )
         if TYPE_CHECKING:
             assert isinstance(self.interactions, pd.DataFrame)
@@ -281,9 +301,9 @@ class PermutationTestABC(ABC):
         return self
 
     @d.get_full_description(base="PT_test")
-    @d.get_sections(base="PT_test", sections=["Parameters", "Returns"])
+    @d.get_sections(base="PT_test", sections=["Parameters"])
     @d.dedent
-    @inject_docs(src=SOURCE, tgt=TARGET, fa=FdrAxis)
+    @inject_docs(src=SOURCE, tgt=TARGET, fa=CorrAxis)
     def test(
         self,
         cluster_key: str,
@@ -291,8 +311,8 @@ class PermutationTestABC(ABC):
         n_perms: int = 1000,
         threshold: float = 0.01,
         seed: Optional[int] = None,
-        fdr_method: Optional[str] = None,
-        fdr_axis: Union[str, FdrAxis] = FdrAxis.INTERACTIONS.value,
+        corr_method: Optional[str] = None,
+        corr_axis: Union[str, CorrAxis] = CorrAxis.INTERACTIONS.v,
         alpha: float = 0.05,
         copy: bool = False,
         key_added: Optional[str] = None,
@@ -300,66 +320,46 @@ class PermutationTestABC(ABC):
         **kwargs: Any,
     ) -> Optional[LigrecResult]:
         """
-        Perform the permutation test as described in [CellPhoneDB20]_.
+        Perform the permutation test as described in :cite:`cellphonedb`.
 
         Parameters
         ----------
-        cluster_key
-            Key in :attr:`anndata.AnnData.obs` where clusters are stored.
+        %(cluster_key)s
         clusters
-            Clusters from :attr:`anndata.AnnData.obs` ``[{{cluster_key}}]``. Can be specified either as a sequence
-            of :class:`tuple` or just a sequence of cluster names, in which case all combinations are created.
-        n_perms
-            Number of permutations for the permutation test.
+            Clusters from :attr:`anndata.AnnData.obs` ``['{{cluster_key}}']``. Can be specified either as a sequence
+            of :class:`tuple` or just a sequence of cluster names, in which case all combinations considered.
+        %(n_perms)s
         threshold
             Do not perform permutation test if any of the interacting components is being expressed
             in less than ``threshold`` percent of cells within a given cluster.
         %(seed)s
-        fdr_method
-            Method for false discovery rate correction. If `None`, don't perform FDR correction.
-        fdr_axis
-            Axis over which to perform the FDR correction. Only used when ``fdr_method != None``. Can be one of:
+        %(corr_method)s
+        corr_axis
+            Axis over which to perform the FDR correction. Only used when ``corr_method != None``. Valid options are:
 
-                - `{fa.INTERACTIONS.value!r}` - correct interactions by performing FDR correction across the clusters.
-                - `{fa.CLUSTERS.value!r}` - correct clusters by performing FDR correction across the interactions.
-
+                - `{fa.INTERACTIONS.s!r}` - correct interactions by performing FDR correction across the clusters.
+                - `{fa.CLUSTERS.s!r}` - correct clusters by performing FDR correction across the interactions.
         alpha
-            Significance level for FDR correction. Only used when ``fdr_method != None``.
+            Significance level for FDR correction. Only used when ``corr_method != None``.
         %(copy)s
         key_added
             Key in :attr:`anndata.AnnData.uns` where the result is stored if ``copy = False``.
-            If `None`, it will be saved under ``'{{cluster_key}}_ligrec'``.
+            If `None`, ``'{{cluster_key}}_ligrec'`` will be used.
         %(numba_parallel)s
         %(parallelize)s
 
         Returns
         -------
-        If ``copy = False``, updates ``adata.uns[{{key_added}}]`` with the following triple:
-
-            - `means` - :class:`pandas.DataFrame` containing the mean expression.
-            - `pvalues` - :class:`pandas.DataFrame` containing the possibly corrected p-values.
-            - `metadata` - :class:`pandas.DataFrame` containing interaction metadata.
-
-        Otherwise, just returns the result.
-
-        `NaN` p-values mark combinations for which the mean expression of one of the interacting components was `0`
-        or it didn't pass the `threshold`` percentage of cells being expressed within a given cluster.
+        %(ligrec_test_returns)s
         """
-        if n_perms <= 0:
-            raise ValueError(f"Expected `n_perms` to be positive, found `{n_perms}`.")
+        _assert_positive(n_perms, name="n_perms")
+        _assert_categorical_obs(self._adata, key=cluster_key)
 
-        if fdr_method is not None:
-            fdr_axis = FdrAxis(fdr_axis)
+        if corr_method is not None:
+            corr_axis = CorrAxis(corr_axis)
         if TYPE_CHECKING:
-            assert isinstance(fdr_axis, FdrAxis)
+            assert isinstance(corr_axis, CorrAxis)
 
-        if cluster_key not in self._adata.obs:
-            raise KeyError(f"Cluster key `{cluster_key!r}` not found in `adata.obs`.")
-        if not is_categorical_dtype(self._adata.obs[cluster_key]):
-            raise TypeError(
-                f"Expected `adata.obs[{cluster_key!r}]` to be `categorical`, "
-                f"found `{infer_dtype(self._adata.obs[cluster_key])}`."
-            )
         if len(self._adata.obs[cluster_key].cat.categories) <= 1:
             raise ValueError(
                 f"Expected at least `2` clusters, found `{len(self._adata.obs[cluster_key].cat.categories)}`."
@@ -386,7 +386,7 @@ class PermutationTestABC(ABC):
         clusters_flat = list({c for cs in clusters for c in cs})
 
         data = self._filtered_data.loc[np.isin(self._filtered_data["clusters"], clusters_flat), :]
-        data["clusters"].cat.remove_unused_categories(inplace=True)
+        data["clusters"] = data["clusters"].cat.remove_unused_categories()
         cat = data["clusters"].cat
 
         cluster_mapper = dict(zip(cat.categories, range(len(cat.categories))))
@@ -433,14 +433,14 @@ class PermutationTestABC(ABC):
         )
         res.metadata.index = res.means.index.copy()
 
-        if fdr_method is not None:
+        if corr_method is not None:
             logg.info(
-                f"Performing FDR correction across the `{fdr_axis.v}` "
-                f"using method `{fdr_method}` at level `{alpha}`"
+                f"Performing FDR correction across the `{corr_axis.v}` "
+                f"using method `{corr_method}` at level `{alpha}`"
             )
             res = LigrecResult(
                 means=res.means,
-                pvalues=_fdr_correct(res.pvalues, fdr_method, fdr_axis, alpha=alpha),
+                pvalues=_fdr_correct(res.pvalues, corr_method, corr_axis, alpha=alpha),
                 metadata=res.metadata.set_index(res.means.index),
             )
 
@@ -448,9 +448,7 @@ class PermutationTestABC(ABC):
             logg.info("Finish", time=start)
             return res
 
-        key_added = Key.uns.ligrec(cluster_key, key_added)
-        logg.info(f"Adding `adata.uns[{key_added!r}]`\n    Finish", time=start)
-        self._adata.uns[key_added] = res
+        _save_data(self._adata, attr="uns", key=Key.uns.ligrec(cluster_key, key_added), data=res, time=start)
 
     def _trim_data(self) -> None:
         """Subset genes :attr:`_data` to those present in interactions."""
@@ -482,11 +480,11 @@ class PermutationTestABC(ABC):
         Parameters
         ----------
         complex_policy
-            Policy on how to handle complexes. Can be one of:
+            Policy on how to handle complexes. Valid options are:
 
-                - `{cp.MIN.value!r}` - select gene with the minimum average expression. This is the same as in
-                  [CellPhoneDB20]_.
-                - `{cp.ALL.value!r}` - select all possible combinations between complexes `{src!r}` and `{tgt!r}`.
+                - `{cp.MIN.s!r}` - select gene with the minimum average expression. This is the same as in
+                  :cite:`cellphonedb`.
+                - `{cp.ALL.s!r}` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
 
         Returns
         -------
@@ -494,7 +492,7 @@ class PermutationTestABC(ABC):
 
             - :attr:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
 
-        Note that for ``complex_policy={cp.ALL.value!r}``, all pairwise comparison within complex are created,
+        Note that for ``complex_policy={cp.ALL.s!r}``, all pairwise comparisons within a complex are created,
         but no filtering happens at this stage - genes not present in the data are filtered at a later stage.
         """
 
@@ -527,7 +525,7 @@ class PermutationTestABC(ABC):
             self._interactions = pd.merge(self.interactions, src, how="left", left_index=True, right_index=True)
             self._interactions = pd.merge(self.interactions, tgt, how="left", left_index=True, right_index=True)
         else:
-            raise NotImplementedError(f"{type(complex_policy).__name__} {complex_policy.value!r} is not implemented.")
+            raise NotImplementedError(f"Complex policy {complex_policy!r} is not implemented.")
 
     @property
     def interactions(self) -> Optional[pd.DataFrame]:
@@ -559,7 +557,7 @@ class PermutationTest(PermutationTestABC):
     def prepare(
         self,
         interactions: Optional[Interaction_t] = None,
-        complex_policy: str = ComplexPolicy.MIN.value,
+        complex_policy: str = ComplexPolicy.MIN.v,
         interactions_params: Mapping[str, Any] = MappingProxyType({}),
         transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
         receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
@@ -573,7 +571,8 @@ class PermutationTest(PermutationTestABC):
         %(PT_prepare.parameters)s
         interactions_params
             Keyword arguments for :func:`omnipath.interactions.import_intercell_network` defining the interactions.
-            These datasets from are used by default: `omnipath`, `pathwayextra` `kinaseextra`, `ligrecextra`.
+            These datasets from :cite:`omnipath` are used by default: `omnipath`, `pathwayextra`, `kinaseextra` and
+            `ligrecextra`.
         transmitter_params
             Keyword arguments for :func:`omnipath.interactions.import_intercell_network` defining the transmitter
             side of intercellular connections.
@@ -620,10 +619,11 @@ def ligrec(
     adata: AnnData,
     cluster_key: str,
     interactions: Optional[Interaction_t] = None,
-    complex_policy: str = ComplexPolicy.MIN.value,
+    complex_policy: str = ComplexPolicy.MIN.v,
     threshold: float = 0.01,
-    fdr_method: Optional[str] = None,
-    fdr_axis: str = FdrAxis.CLUSTERS.value,
+    corr_method: Optional[str] = None,
+    corr_axis: str = CorrAxis.CLUSTERS.v,
+    use_raw: bool = True,
     copy: bool = False,
     key_added: Optional[str] = None,
     **kwargs: Any,
@@ -639,16 +639,16 @@ def ligrec(
 
     Returns
     -------
-    %(PT_test.returns)s
+    %(ligrec_test_returns)s
     """  # noqa: D400
     return (  # type: ignore[no-any-return]
-        PermutationTest(adata)
+        PermutationTest(adata, use_raw=use_raw)
         .prepare(interactions, complex_policy=complex_policy, **kwargs)
         .test(
             cluster_key=cluster_key,
             threshold=threshold,
-            fdr_method=fdr_method,
-            fdr_axis=fdr_axis,
+            corr_method=corr_method,
+            corr_axis=corr_axis,
             copy=copy,
             key_added=key_added,
             **kwargs,
@@ -656,6 +656,7 @@ def ligrec(
     )
 
 
+@d.dedent
 def _analysis(
     data: pd.DataFrame,
     interactions: np.ndarray[np.uint32],
@@ -668,7 +669,7 @@ def _analysis(
     **kwargs: Any,
 ) -> TempResult:
     """
-    Run the analysis as described in [CellPhoneDB20]_.
+    Run the analysis as described in :cite:`cellphonedb`.
 
     This function runs the mean, percent and shuffled analysis.
 
@@ -682,10 +683,8 @@ def _analysis(
         Array of shape `(n_interaction_clusters, 2)`.
     threshold
         Percentage threshold for removing lowly expressed genes in clusters.
-    n_perms
-        Number of permutations to perform.
-    seed
-        Random seed.
+    %(n_perms)s
+    %(seed)s
     n_jobs
         Number of parallel jobs to launch.
     numba_parallel
@@ -697,8 +696,8 @@ def _analysis(
     -------
     Tuple of the following format:
 
-        - `means` - array of shape `(n_interactions, n_interaction_clusters)` containing the means.
-        - `pvalues` - array of shape `(n_interactions, n_interaction_clusters)` containing the p-values.
+        - `'means'` - array of shape `(n_interactions, n_interaction_clusters)` containing the means.
+        - `'pvalues'` - array of shape `(n_interactions, n_interaction_clusters)` containing the p-values.
     """
 
     def extractor(res: Sequence[TempResult]) -> TempResult:
@@ -786,9 +785,9 @@ def _analysis_helper(
     -------
     Tuple of the following format:
 
-        - `means` - array of shape `(n_interactions, n_interaction_clusters)` containing the true test
+        - `'means'` - array of shape `(n_interactions, n_interaction_clusters)` containing the true test
           statistic. It is `None` if ``min(perms)!=0`` so that only 1 worker calculates it.
-        - `pvalues` - array of shape `(n_interactions, n_interaction_clusters)`  containing `np.sum(T0 > T)`
+        - `'pvalues'` - array of shape `(n_interactions, n_interaction_clusters)`  containing `np.sum(T0 > T)`
           where `T0` is the test statistic under null hypothesis and `T` is the true test statistic.
     """
     rs = np.random.RandomState(None if seed is None else perms[0] + seed)

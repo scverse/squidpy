@@ -49,6 +49,8 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_last_updated_by_git",
     "sphinx_gallery.load_style",
+    "nbsphinx",
+    "sphinxcontrib.bibtex",
     "edit_on_github",
     "typed_returns",
 ]
@@ -63,7 +65,7 @@ intersphinx_mapping = dict(  # noqa: C408
     matplotlib=("https://matplotlib.org/", None),
     seaborn=("https://seaborn.pydata.org/", None),
     joblib=("https://joblib.readthedocs.io/en/latest/", None),
-    networkx=("https://networkx.github.io/documentation/stable/", None),
+    networkx=("https://networkx.org/documentation/stable", None),
     astropy=("https://docs.astropy.org/en/stable/", None),
     esda=("https://pysal.org/esda/", None),
     dask=("https://docs.dask.org/en/latest/", None),
@@ -84,10 +86,14 @@ pygments_style = "sphinx"
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ["**.ipynb", "**.md5", "**.py", "**.ipynb_checkpoints"]  # ignore anything that isn't .rst
+exclude_patterns = [
+    "auto_*/**.ipynb",
+    "auto_*/**.md5",
+    "auto_*/**.py",
+    "**.ipynb_checkpoints",
+]  # ignore anything that isn't .rst
 # because squidpy_notebooks doesn't commit the .py files (and we don't allow downloading them by hiding the html)
 suppress_warnings = ["download.not_readable"]
-
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -95,7 +101,7 @@ suppress_warnings = ["download.not_readable"]
 # a list of builtin themes.
 #
 autosummary_generate = True
-autodoc_member_order = "alphabetical"
+autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
 autodoc_docstring_signature = True
 autodoc_follow_wrapped = False
@@ -106,8 +112,21 @@ napoleon_use_rtype = True
 napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
-# 403 Client Error: Forbidden for url: https://www.jstor.org/stable/2332142?origin=crossref
-linkcheck_ignore = ["https://doi.org/10.2307/2332142"]
+
+# bibliograph
+bibtex_bibfiles = ["references.bib"]
+bibtex_reference_style = ["author_year"]
+bibtex_default_style = "alpha"
+
+# spelling
+spelling_lang = "en_US"
+spelling_warning = True
+spelling_word_list_filename = "spelling_wordlist.txt"
+spelling_add_pypi_package_names = True
+spelling_show_suggestions = True
+spelling_exclude_patterns = ["references.rst"]
+# see: https://pyenchant.github.io/pyenchant/api/enchant.tokenize.html
+spelling_filters = ["enchant.tokenize.URLFilter", "enchant.tokenize.EmailFilter"]
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

@@ -1,11 +1,11 @@
-from typing import Any, Tuple, Union, Optional, Sequence
+from typing import Any, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
 from pathlib import Path
-from functools import partial
 
 from scanpy import logging as logg
 from anndata import AnnData
 import scanpy as sc
 
+from scipy.cluster import hierarchy as sch
 import numpy as np
 import pandas as pd
 
@@ -14,9 +14,11 @@ from matplotlib.colorbar import ColorbarBase
 import matplotlib.pyplot as plt
 
 from squidpy._docs import d
-from squidpy._utils import _unique_order_preserving
-from squidpy.pl._utils import save_fig, _get_black_or_white
+from squidpy._utils import verbosity, _unique_order_preserving
+from squidpy.pl._utils import save_fig, _dendrogram, _filter_kwargs
 from squidpy.gr._ligrec import LigrecResult
+from squidpy._constants._constants import DendrogramAxis
+from squidpy._constants._pkg_constants import Key
 
 _SEP = " | "
 
@@ -95,13 +97,16 @@ class CustomDotplot(sc.pl.DotPlot):  # noqa: D101
 @d.dedent
 def ligrec(
     adata: Union[AnnData, LigrecResult],
-    key: Optional[str] = None,
+    cluster_key: Optional[str] = None,
     source_groups: Optional[Union[str, Sequence[str]]] = None,
     target_groups: Optional[Union[str, Sequence[str]]] = None,
+    means_range: Tuple[float, float] = (-np.inf, np.inf),
+    pvalue_threshold: float = 1.0,
     remove_empty_interactions: bool = True,
-    dendrogram: bool = False,
+    dendrogram: Optional[str] = None,
     alpha: Optional[float] = 0.001,
     swap_axes: bool = False,
+    title: Optional[str] = None,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
@@ -117,39 +122,81 @@ def ligrec(
     ----------
     %(adata)s
         It can also be a :class:`LigrecResult` as returned by :func:`squidpy.gr.ligrec`.
-    key
-        Key in :attr:`anndata.AnnData.uns`. Only used when ``adata`` is of type :class:`AnnData`.
+    %(cluster_key)s
+        Only used when ``adata`` is of type :class:`AnnData`.
     source_groups
         Source interaction clusters. If `None`, select all clusters.
     target_groups
         Target interaction clusters. If `None`, select all clusters.
-    remove_empty_interactions
-        Whether to remove interactions which have `NaN` values in all cluster combinations.
+    means_range
+        Only show interactions whose means are within this **closed** interval.
+    pvalue_threshold
+        Only show interactions with p-value <= ``pvalue_threshold``.
     dendrogram
-        Whether to show dendrogram.
+        How to cluster based on the p-values. Valid options are:
+
+            -  `None` - do not perform clustering.
+            - `'interacting_molecules'` - cluster the interacting molecules.
+            - `'interacting_clusters'` - cluster the interacting clusters.
+            - `'both'` - cluster both rows and columns. Note that in this case, the dendrogram is not shown.
+
     swap_axes
         Whether to show the cluster combinations as rows and the interacting pairs as columns.
+    title
+        Title of the plot.
     alpha
-        Significance threshold. All elements with p-values less or equal to ``alpha`` will be marked by tori
-        instead of dots.
+        Significance threshold. All elements with p-values <= ``alpha`` will be marked by tori instead of dots.
     %(plotting)s
     kwargs
-        Keyword arguments for :meth:`scanpy.pl.DotPlot.style`.
+        Keyword arguments for :meth:`scanpy.pl.DotPlot.style` or :meth:`scanpy.pl.DotPlot.legend`.
 
     Returns
     -------
     %(plotting_returns)s
     """
+
+    def get_dendrogram(adata: AnnData, linkage: str = "complete") -> Mapping[str, Any]:
+        z_var = sch.linkage(
+            adata.X,
+            metric="correlation",
+            method=linkage,
+            optimal_ordering=adata.n_obs <= 1500,  # matplotlib will most likely give up first
+        )
+        dendro_info = sch.dendrogram(z_var, labels=adata.obs_names.values, no_plot=True)
+        # this is what the DotPlot requires
+        return {
+            "linkage": z_var,
+            "groupby": ["groups"],
+            "cor_method": "pearson",
+            "use_rep": None,
+            "linkage_method": linkage,
+            "categories_ordered": dendro_info["ivl"],
+            "categories_idx_ordered": dendro_info["leaves"],
+            "dendrogram_info": dendro_info,
+        }
+
+    if dendrogram is not None:
+        dendrogram = DendrogramAxis(dendrogram)  # type: ignore[assignment]
+        if TYPE_CHECKING:
+            assert isinstance(dendrogram, DendrogramAxis)
+
     if isinstance(adata, AnnData):
-        if key not in adata.uns_keys():
-            raise KeyError(f"Key `{key}` not found in `adata.uns`.")
-        adata = adata.uns[key]
+        if cluster_key is None:
+            raise ValueError("Please provide `cluster_key` when supplying an `AnnData` object.")
+
+        cluster_key = Key.uns.ligrec(cluster_key)
+        if cluster_key not in adata.uns_keys():
+            raise KeyError(f"Key `{cluster_key}` not found in `adata.uns`.")
+        adata = adata.uns[cluster_key]
 
     if not isinstance(adata, LigrecResult):
         raise TypeError(
             f"Expected `adata` to be either of type `anndata.AnnData` or `LigrecResult`, "
             f"found `{type(adata).__name__}`."
         )
+    if len(means_range) != 2:
+        raise ValueError(f"Expected `means_range` to be a sequence of size `2`, found `{len(means_range)}`.")
+    means_range = tuple(sorted(means_range))  # type: ignore[assignment]
 
     if alpha is not None and not (0 <= alpha <= 1):
         raise ValueError(f"Expected `alpha` to be in range `[0, 1]`, found `{alpha}`.")
@@ -157,31 +204,50 @@ def ligrec(
     if source_groups is None:
         source_groups = adata.pvalues.columns.get_level_values(0)
     elif isinstance(source_groups, str):
-        source_groups = [source_groups]
+        source_groups = (source_groups,)
 
     if target_groups is None:
         target_groups = adata.pvalues.columns.get_level_values(1)
     if isinstance(target_groups, str):
-        target_groups = [target_groups]
+        target_groups = (target_groups,)
+    if title is None:
+        title = "Receptor-ligand test"
 
     source_groups, _ = _unique_order_preserving(source_groups)  # type: ignore[no-redef,assignment]
     target_groups, _ = _unique_order_preserving(target_groups)  # type: ignore[no-redef,assignment]
 
-    pvals = adata.pvalues.loc[:, (source_groups, target_groups)]
-    means = adata.means.loc[:, (source_groups, target_groups)]
+    pvals: pd.DataFrame = adata.pvalues.loc[:, (source_groups, target_groups)]
+    means: pd.DataFrame = adata.means.loc[:, (source_groups, target_groups)]
 
     if pvals.empty:
-        raise ValueError("No clusters have been selected.")
+        raise ValueError("No valid clusters have been selected.")
+
+    means = means[(means >= means_range[0]) & (means <= means_range[1])]
+    pvals = pvals[pvals <= pvalue_threshold]
 
     if remove_empty_interactions:
-        mask = ~adata.pvalues.isnull().all(axis=1)
-        pvals = pvals.loc[mask]
-        means = means.loc[mask]
+        mask = ~(pd.isnull(means) | pd.isnull(pvals))
+        mask_rows = mask.any(axis=1)
+        pvals = pvals.loc[mask_rows]
+        means = means.loc[mask_rows]
 
         if pvals.empty:
-            raise ValueError("After removing NaN interactions, none remain.")
+            raise ValueError("After removing rows with only NaN interactions, none remain.")
+
+        mask_cols = mask.any(axis=0)
+        pvals = pvals.loc[:, mask_cols]
+        means = means.loc[:, mask_cols]
+
+        if pvals.empty:
+            raise ValueError("After removing columns with only NaN interactions, none remain.")
 
     start, label_ranges = 0, {}
+
+    if dendrogram == DendrogramAxis.INTERACTING_CLUSTERS:
+        # rows are now cluster combinations, not interacting pairs
+        pvals = pvals.T
+        means = means.T
+
     for cls, size in (pvals.groupby(level=0, axis=1)).size().to_dict().items():
         label_ranges[cls] = (start, start + size - 1)
         start += size
@@ -192,27 +258,41 @@ def ligrec(
     pvals.columns = map(_SEP.join, pvals.columns.to_flat_index())
     pvals.index = map(_SEP.join, pvals.index.to_flat_index())
 
-    means = means[label_ranges.keys()]
+    means = means[label_ranges.keys()].fillna(0)
     means.columns = map(_SEP.join, means.columns.to_flat_index())
     means.index = map(_SEP.join, means.index.to_flat_index())
     means = np.log2(means + 1)
 
     var = pd.DataFrame(pvals.columns)
-    var.set_index((var.columns[0]), inplace=True)
+    var = var.set_index(var.columns[0])
 
-    adata = AnnData(pvals.values, obs={"groups": pd.Categorical(pvals.index, pvals.index)}, var=var)
+    adata = AnnData(pvals.values, obs={"groups": pd.Categorical(pvals.index)}, var=var)
+    adata.obs_names = pvals.index
     minn = np.nanmin(adata.X)
     delta = np.nanmax(adata.X) - minn
     adata.X = (adata.X - minn) / delta
 
-    if dendrogram:
-        sc.pp.pca(adata)
-        sc.tl.dendrogram(adata, groupby="groups", key_added="dendrogram")
+    try:
+        if dendrogram == DendrogramAxis.BOTH:
+            row_order, col_order, _, _ = _dendrogram(
+                adata.X, method="complete", metric="correlation", optimal_ordering=adata.n_obs <= 1500
+            )
+            adata = adata[row_order, :][:, col_order]
+            pvals = pvals.iloc[row_order, :].iloc[:, col_order]
+            means = means.iloc[row_order, :].iloc[:, col_order]
+        elif dendrogram is not None:
+            adata.uns["dendrogram"] = get_dendrogram(adata)
+    except IndexError:
+        # just in case pandas indexing fails
+        raise
+    except Exception as e:
+        logg.warning(f"Unable to create a dendrogram. Reason: `{e}`")
+        dendrogram = None
 
+    kwargs["dot_edge_lw"] = 0
     kwargs.setdefault("cmap", "viridis")
     kwargs.setdefault("grid", True)
     kwargs.pop("color_on", None)  # interferes with tori
-    cmap = plt.get_cmap(kwargs["cmap"])
 
     dp = (
         CustomDotplot(
@@ -223,48 +303,57 @@ def ligrec(
             groupby="groups",
             dot_color_df=means,
             dot_size_df=pvals,
-            title="Receptor-ligand test",
-            var_group_labels=tuple(label_ranges.keys()),
-            var_group_positions=tuple(label_ranges.values()),
+            title=title,
+            var_group_labels=None if dendrogram == DendrogramAxis.BOTH else list(label_ranges.keys()),
+            var_group_positions=None if dendrogram == DendrogramAxis.BOTH else list(label_ranges.values()),
             standard_scale=None,
             figsize=figsize,
         )
         .style(
-            **kwargs,
+            **_filter_kwargs(sc.pl.DotPlot.style, kwargs),
         )
-        .legend(size_title=r"$-\log_{10} ~ P$", colorbar_title=r"$log_2(\frac{molecule_1 + molecule_2}{2} + 1)$")
+        .legend(
+            size_title=r"$-\log_{10} ~ P$",
+            colorbar_title=r"$log_2(\frac{molecule_1 + molecule_2}{2} + 1)$",
+            **_filter_kwargs(sc.pl.DotPlot.legend, kwargs),
+        )
     )
-    if dendrogram:
-        dp.add_dendrogram(size=1.6)
+    if dendrogram in (DendrogramAxis.INTERACTING_MOLS, DendrogramAxis.INTERACTING_CLUSTERS):
+        # ignore the warning about mismatching groups
+        with verbosity(0):
+            dp.add_dendrogram(size=1.6, dendrogram_key="dendrogram")
     if swap_axes:
         dp.swap_axes()
+
     dp.make_figure()
 
-    labs = dp.ax_dict["mainplot_ax"].get_yticklabels() if swap_axes else dp.ax_dict["mainplot_ax"].get_xticklabels()
-    for text in labs:
-        text.set_text(text.get_text().split(_SEP)[1])
-    if swap_axes:
-        dp.ax_dict["mainplot_ax"].set_yticklabels(labs)
-    else:
-        dp.ax_dict["mainplot_ax"].set_xticklabels(labs)
+    if dendrogram != DendrogramAxis.BOTH:
+        # remove the target part in: source | target
+        labs = dp.ax_dict["mainplot_ax"].get_yticklabels() if swap_axes else dp.ax_dict["mainplot_ax"].get_xticklabels()
+        for text in labs:
+            text.set_text(text.get_text().split(_SEP)[1])
+        if swap_axes:
+            dp.ax_dict["mainplot_ax"].set_yticklabels(labs)
+        else:
+            dp.ax_dict["mainplot_ax"].set_xticklabels(labs)
 
     if alpha is not None:
-        mapper = np.argsort(adata.uns["dendrogram"]["categories_idx_ordered"]) if dendrogram else np.arange(len(pvals))
-        mean_min, mean_max = np.nanmin(means), np.nanmax(means)
-        mean_delta = mean_max - mean_min
-
         yy, xx = np.where(pvals.values >= -np.log10(alpha))
         if len(xx) and len(yy):
+            # for dendrogram='both', they are already re-ordered
+            mapper = (
+                np.argsort(adata.uns["dendrogram"]["categories_idx_ordered"])
+                if "dendrogram" in adata.uns
+                else np.arange(len(pvals))
+            )
             logg.info(f"Found `{len(yy)}` significant interactions at level `{alpha}`")
             ss = 0.33 * (adata.X[yy, xx] * (dp.largest_dot - dp.smallest_dot) + dp.smallest_dot)
-            # just a precaution to
-            cc = np.vectorize(partial(_get_black_or_white, cmap=cmap))((means.values[yy, xx] - mean_min) / mean_delta)
 
             # must be after ss = ..., cc = ...
             yy = np.array([mapper[y] for y in yy])
             if swap_axes:
                 xx, yy = yy, xx
-            dp.ax_dict["mainplot_ax"].scatter(xx + 0.5, yy + 0.5, color=cc, s=ss, lw=0)
+            dp.ax_dict["mainplot_ax"].scatter(xx + 0.5, yy + 0.5, color="white", s=ss, lw=0)
 
     if dpi is not None:
         dp.fig.set_dpi(dpi)

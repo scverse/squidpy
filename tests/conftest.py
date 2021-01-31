@@ -19,7 +19,7 @@ import matplotlib as mpl
 
 from squidpy.im.object import ImageContainer
 from squidpy.gr._ligrec import LigrecResult
-from squidpy.constants._pkg_constants import Key
+from squidpy._constants._pkg_constants import Key
 import squidpy as sp
 
 mpl.use("agg")
@@ -30,6 +30,7 @@ ACTUAL = HERE / "figures"
 TOL = 50
 DPI = 40
 
+C_KEY_PALETTE = "leiden"
 
 _adata = sc.read("tests/_data/test_data.h5ad")
 _adata.raw = _adata.copy()
@@ -41,11 +42,22 @@ def adata() -> AnnData:
 
 
 @pytest.fixture()
+def adata_palette() -> AnnData:
+    from matplotlib.cm import get_cmap
+
+    cmap = get_cmap("Set1")
+
+    adata_palette = _adata.copy()
+    adata_palette.uns[f"{C_KEY_PALETTE}_colors"] = cmap(range(adata_palette.obs[C_KEY_PALETTE].unique().shape[0]))
+    return adata_palette.copy()
+
+
+@pytest.fixture()
 def nhood_data(adata: AnnData) -> AnnData:
     sc.pp.pca(adata)
     sc.pp.neighbors(adata)
     sc.tl.leiden(adata, key_added="leiden")
-    sp.gr.spatial_connectivity(adata)
+    sp.gr.spatial_neighbors(adata)
 
     return adata
 
@@ -56,7 +68,7 @@ def dummy_adata() -> AnnData:
     adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
 
     adata.obsm[Key.obsm.spatial] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
-    sp.gr.spatial_connectivity(adata, obsm=Key.obsm.spatial, n_rings=2)
+    sp.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
 
     return adata
 
@@ -80,6 +92,11 @@ def paul15_means() -> pd.DataFrame:
 @pytest.fixture()
 def cont() -> ImageContainer:
     return ImageContainer("tests/_data/test_img.jpg")
+
+
+@pytest.fixture()
+def napari_cont() -> ImageContainer:
+    return ImageContainer("tests/_data/test_img.jpg", img_id="V1_Adult_Mouse_Brain")
 
 
 @pytest.fixture()
@@ -111,7 +128,7 @@ def ligrec_result() -> LigrecResult:
     adata = _adata.copy()
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
     return sp.gr.ligrec(
-        adata, "leiden", interactions=interactions, n_perms=25, n_jobs=1, show_progress_bar=False, copy=True
+        adata, "leiden", interactions=interactions, n_perms=25, n_jobs=1, show_progress_bar=False, copy=True, seed=0
     )
 
 
@@ -169,6 +186,7 @@ def visium_adata():
     )
     adata = AnnData(X=np.ones((visium_coords.shape[0], 3)))
     adata.obsm[Key.obsm.spatial] = visium_coords
+    adata.uns[Key.uns.spatial] = {}
     return adata
 
 
@@ -221,3 +239,21 @@ class PlotTester(ABC):
         res = compare_images(str(EXPECTED / f"{basename}.png"), str(out_path), TOL if tolerance is None else tolerance)
 
         assert res is None, res
+
+
+def pytest_addoption(parser):
+    parser.addoption("--test-napari", action="store_true", help="Test interactive image view")
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--test-napari"):
+        return
+    skip_slow = pytest.mark.skip(reason="Need --test-napari option to test interactive image view")
+    for item in items:
+        if "qt" in item.keywords:
+            item.add_marker(skip_slow)
+
+
+@pytest.fixture(scope="session")
+def _test_napari(pytestconfig):
+    _ = pytestconfig.getoption("--test-napari", skip=True)

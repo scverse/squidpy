@@ -1,19 +1,28 @@
-"""Functions for neighborhood enrichment analysis (permutation test, assortativity measures etc.)."""
+"""Functions for neighborhood enrichment analysis (permutation test, centralities measures etc.)."""
 
-from typing import Tuple, Callable, Optional
+from typing import Any, Tuple, Union, Callable, Iterable, Optional, Sequence
+from functools import partial
 
+from scanpy import logging as logg
 from anndata import AnnData
 
 from numba import njit, prange  # noqa: F401
-from pandas.api.types import infer_dtype, is_categorical_dtype
 import numpy as np
 import pandas as pd
 import numba.types as nt
 
 import networkx as nx
 
-from squidpy._docs import d
-from squidpy.constants._pkg_constants import Key
+from squidpy._docs import d, inject_docs
+from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
+from squidpy.gr._utils import (
+    _save_data,
+    _assert_positive,
+    _assert_categorical_obs,
+    _assert_connectivity_key,
+)
+from squidpy._constants._constants import Centrality
+from squidpy._constants._pkg_constants import Key
 
 dt = nt.uint32  # data type aliases (both for numpy and numba should match)
 ndt = np.uint32
@@ -107,7 +116,7 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[np.ndarray
 def nhood_enrichment(
     adata: AnnData,
     cluster_key: str,
-    connectivity_key: Optional[str] = Key.obsp.spatial_conn(),
+    connectivity_key: Optional[str] = None,
     n_perms: int = 1000,
     numba_parallel: bool = False,
     seed: Optional[int] = None,
@@ -118,43 +127,31 @@ def nhood_enrichment(
 
     Parameters
     ----------
-    cluster_key
-        Cluster key in :attr:`anndata.AnnData.obs`.
-    connectivity_key
-        Connectivity matrix key in :attr:`anndata.AnnData.obsp`.
-    n_perms
-        Number of permutations.
+    %(adata)s
+    %(cluster_key)s
+    %(conn_key)s
+    %(n_perms)s
     %(numba_parallel)s
-    seed
-        Random seed.
+    %(seed)s
     %(copy)s
 
     Returns
     -------
-    If ``copy = True``, returns the z-score and the enrichment count. Otherwise, it modifies the ``adata`` with the
-    following keys:
+    If ``copy = True``, returns a :class:`tuple` with the z-score and the enrichment count.
 
-        - TODO: add more info
+    Otherwise, modifies the ``adata`` with the following keys:
+
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - the enrichment z-score.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
     """
-    if cluster_key not in adata.obs.keys():
-        raise KeyError(f"Cluster key `{cluster_key}` not found in `adata.obs`.")
-    if not is_categorical_dtype(adata.obs[cluster_key]):
-        raise TypeError(
-            f"Expected `adata.obs[{cluster_key}]` to be `categorical`, "
-            f"found `{infer_dtype(adata.obs[cluster_key])}`."
-        )
+    connectivity_key = Key.obsp.spatial_conn(connectivity_key)
+    _assert_categorical_obs(adata, cluster_key)
+    _assert_connectivity_key(adata, connectivity_key)
+    _assert_positive(n_perms, name="n_perms")
 
-    if connectivity_key not in adata.obsp:
-        raise KeyError(
-            f"{connectivity_key} not present in `adata.obs`"
-            "Choose a different connectivity_key or run first "
-            "build.spatial_connectivity(adata) on the AnnData object."
-        )
     adj = adata.obsp[connectivity_key]
-
     original_clust = adata.obs[cluster_key]
-    # map categories
-    clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
+    clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}  # map categories
     int_clust = np.array([clust_map[c] for c in original_clust], dtype=ndt)
 
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
@@ -165,111 +162,139 @@ def nhood_enrichment(
     perms = np.zeros((n_cls, n_cls, n_perms), dtype=ndt)
     count = _test(indices, indptr, int_clust)
 
-    np.random.seed(seed)  # better way is to use random state (however, it can't be used in the numba function)
+    rs = np.random.RandomState(seed=seed)
+    # TODO: parallelize? alternatively incremental mean/std so that we don't need to save all the perms?
     for perm in range(n_perms):
-        np.random.shuffle(int_clust)
+        rs.shuffle(int_clust)
         perms[:, :, perm] = _test(indices, indptr, int_clust)
 
     zscore = (count - perms.mean(axis=-1)) / perms.std(axis=-1)
 
     if copy:
         return zscore, count
-
-    adata.uns[f"{cluster_key}_nhood_enrichment"] = {"zscore": zscore, "count": count}
-
-
-# TODO:
-# d.keep_params("nhood_ench.parameters", "cluster_key", "connectivity_key")
-# https://github.com/Chilipp/docrep/issues/21
+    _save_data(adata, attr="uns", key=Key.uns.nhood_enrichment(cluster_key), data={"zscore": zscore, "count": count})
 
 
 @d.dedent
+@inject_docs(c=Centrality)
 def centrality_scores(
     adata: AnnData,
     cluster_key: str,
-    connectivity_key: Optional[str] = Key.obsp.spatial_conn(),
+    score: Optional[Union[str, Iterable[str]]] = None,
+    connectivity_key: Optional[str] = None,
     copy: bool = False,
+    n_jobs: Optional[int] = None,
+    backend: str = "loky",
+    show_progress_bar: bool = False,
 ) -> Optional[pd.DataFrame]:
     """
     Compute centrality scores per cluster or cell type.
 
-    Based among others on methods used for Gene Regulatory Networks (GRNs) in [CellOracle20]_.
+    Inspired by usage in  Gene Regulatory Networks (GRNs) in :cite:`celloracle`.
 
     Parameters
     ----------
     %(adata)s
-    cluster_key
-        Cluster key in :attr:`anndata.AnnData.obs`.
-    connectivity_key
-        Connectivity matrix key in :attr:`anndata.AnnData.obsp`.
+    %(cluster_key)s
+    score
+        Centrality measures as described in :class:`networkx.algorithms.centrality` :cite:`networkx`.
+        If `None`, use all the options below. Valid options are:
+
+            - `{c.CLOSENESS.s!r}` - measure of how close the group is to other nodes.
+            - `{c.CLUSTERING.s!r}` - measure of the degree to which nodes cluster together.
+            - `{c.DEGREE.s!r}` - fraction of non-group members connected to group members.
+
+    %(conn_key)s
     %(copy)s
+    %(parallelize)s
 
     Returns
     -------
-    If ``copy = True`` returns a :class:`pandas.DataFrame`. Otherwise, it modifies the ``adata`` object with the
-    following keys:
+    If ``copy = True``, returns a :class:`pandas.DataFrame`.
+    Otherwise, modifies the ``adata`` with the following key:
 
-        - :attr:`anndata.AnnData.uns` ``[{cluster_key}_centrality_scores]`` - the centrality scores.
+        - :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_centrality_scores']`` - the centrality scores,
+          as mentioned above.
     """
-    if cluster_key not in adata.obs_keys():
-        raise ValueError(
-            f"`cluster_key` {cluster_key!r} not recognized. Choose a different key referring to a cluster in .obs."
-        )
-    # TODO: check for categorical dtype
+    connectivity_key = Key.obsp.spatial_conn(connectivity_key)
+    _assert_categorical_obs(adata, cluster_key)
+    _assert_connectivity_key(adata, connectivity_key)
 
-    # TODO: unify error messages
-    if connectivity_key not in adata.obsp:
-        raise KeyError("Choose a different `connectivity_key` or run first `squidpy.gr.spatial_connectivity()`.")
+    if isinstance(score, (str, Centrality)):
+        centrality = [score]
+    elif score is None:
+        centrality = [c.s for c in Centrality]
+
+    centralities = [Centrality(c) for c in centrality]
+
     graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
 
-    clusters = adata.obs[cluster_key].unique().tolist()
+    cat = adata.obs[cluster_key].cat.categories.values
+    clusters = adata.obs[cluster_key].values
 
-    degree_centrality = []
-    clustering_coefficient = []
-    betweenness_centrality = []
-    closeness_centrality = []
+    fun_dict = {}
+    for c in centralities:
+        if c == Centrality.CLOSENESS:
+            fun_dict[c.s] = partial(nx.algorithms.centrality.group_closeness_centrality, graph)
+        elif c == Centrality.DEGREE:
+            fun_dict[c.s] = partial(nx.algorithms.centrality.group_degree_centrality, graph)
+        elif c == Centrality.CLUSTERING:
+            fun_dict[c.s] = partial(nx.algorithms.cluster.average_clustering, graph)
+        else:
+            raise NotImplementedError(f"Centrality `{c}` is not yet implemented.")
 
-    for c in clusters:
-        cluster_node_idx = adata[adata.obs[cluster_key] == c].obs.index.tolist()
-        # ensuring that cluster_node_idx are List[int]
-        cluster_node_idx = [i for i, x in enumerate(cluster_node_idx)]
-        subgraph = graph.subgraph(cluster_node_idx)
+    n_jobs = _get_n_cores(n_jobs)
+    logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` core(s)")
 
-        centrality = nx.algorithms.centrality.group_degree_centrality(graph, cluster_node_idx)
-        degree_centrality.append(centrality)
+    res_list = []
+    for k, v in fun_dict.items():
+        df = parallelize(
+            _centrality_scores_helper,
+            collection=cat,
+            extractor=pd.concat,
+            use_ixs=False,
+            n_jobs=n_jobs,
+            backend=backend,
+            show_progress_bar=show_progress_bar,
+        )(clusters=clusters, fun=v, method=k)
+        res_list.append(df)
 
-        clustering = nx.algorithms.cluster.average_clustering(graph, cluster_node_idx)
-        clustering_coefficient.append(clustering)
-
-        closeness = nx.algorithms.centrality.group_closeness_centrality(graph, cluster_node_idx)
-        closeness_centrality.append(closeness)
-
-        betweenness = nx.betweenness_centrality(subgraph)
-        betweenness_centrality.append(sum(betweenness.values()))
-
-    df = pd.DataFrame(
-        list(zip(clusters, degree_centrality, clustering_coefficient, closeness_centrality, betweenness_centrality)),
-        columns=[
-            "cluster_key",
-            "degree_centrality",
-            "clustering_coefficient",
-            "closeness_centrality",
-            "betweenness_centrality",
-        ],
-    )
+    df = pd.concat(res_list, axis=1)
 
     if copy:
         return df
+    _save_data(adata, attr="uns", key=Key.uns.centrality_scores(cluster_key), data=df)
 
-    adata.uns[f"{cluster_key}_centrality_scores"] = df
+
+def _centrality_scores_helper(
+    cat: Iterable[Any],
+    clusters: Sequence[str],
+    fun: Callable[..., float],
+    method: str,
+    queue: Optional[SigQueue] = None,
+) -> pd.DataFrame:
+
+    res_list = []
+    for c in cat:
+        idx = np.where(clusters == c)[0]
+        res = fun(idx)
+        res_list.append(res)
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return pd.DataFrame(res_list, columns=[method], index=cat)
 
 
 @d.dedent
 def interaction_matrix(
     adata: AnnData,
     cluster_key: str,
-    connectivity_key: Optional[str] = Key.obsp.spatial_conn(),
-    normalized: bool = True,
+    connectivity_key: Optional[str] = None,
+    normalized: bool = False,
     copy: bool = False,
 ) -> Optional[np.ndarray]:
     """
@@ -278,39 +303,34 @@ def interaction_matrix(
     Parameters
     ----------
     %(adata)s
-    cluster_key
-        Cluster key in :attr:`anndata.AnnData.obs`.
-    connectivity_key
-        Connectivity matrix key in :attr:`anndata.AnnData.obsp`.
+    %(cluster_key)s
+    %(conn_key)s
     normalized
-        If `True`, then each row is normalized by the sum of its values.
+        If `True`, each row is normalized to sum to 1.
     %(copy)s
 
     Returns
     -------
-    If ``copy = True`` returns a :class:`numpy.ndarray`. Otherwise, it modifies the ``adata`` object with the
-    following keys:
+    If ``copy = True``, returns the interaction matrix.
 
-        - :attr:`anndata.AnnData.uns` ``[{cluster_key}_interactions]`` - the interaction matrix.
+    Otherwise, modifies the ``adata`` with the following key:
+
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_interactions']`` - the interaction matrix.
     """
-    if cluster_key not in adata.obs_keys():
-        raise ValueError(
-            f"`cluster_key` {cluster_key!r} not recognized. Choose a different key referring to a cluster in .obs."
-        )
+    connectivity_key = Key.obsp.spatial_conn(connectivity_key)
+    _assert_categorical_obs(adata, cluster_key)
+    _assert_connectivity_key(adata, connectivity_key)
 
-    if connectivity_key not in adata.obsp:
-        raise KeyError("Choose a different `connectivity_key` or run first `squidpy.build.spatial_connectivity()`.")
     graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
+    cluster = {i: {cluster_key: x} for i, x in enumerate(adata.obs[cluster_key])}
 
-    cluster = {i: {cluster_key: x} for i, x in enumerate(adata.obs[cluster_key].tolist())}
-    # TODO: convert to np.ndarray?
     nx.set_node_attributes(graph, cluster)
-    int_mat = nx.attr_matrix(
-        graph, node_attr=cluster_key, normalized=normalized, rc_order=adata.obs[cluster_key].cat.categories
+    int_mat = np.asarray(
+        nx.attr_matrix(
+            graph, node_attr=cluster_key, normalized=normalized, rc_order=adata.obs[cluster_key].cat.categories
+        )
     )
-    int_mat = np.asarray(int_mat)
 
     if copy:
         return int_mat
-
-    adata.uns[f"{cluster_key}_interactions"] = int_mat
+    _save_data(adata, attr="uns", key=Key.uns.interaction_matrix(cluster_key), data=int_mat)

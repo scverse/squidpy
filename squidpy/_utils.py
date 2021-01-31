@@ -15,12 +15,31 @@ from typing import (
     Iterable,
     Optional,
     Sequence,
+    Generator,
     TYPE_CHECKING,
 )
 from threading import Thread
+from contextlib import contextmanager
 from multiprocessing import Manager, cpu_count
 
 import numpy as np
+
+try:
+    from functools import singledispatchmethod  # type: ignore[attr-defined]
+except ImportError:
+    from functools import singledispatch, update_wrapper
+
+    def singledispatchmethod(func: Callable[..., Any]) -> Callable[..., Any]:
+        """Backport of `singledispatchmethod` for < Python 3.8."""
+        dispatcher = singledispatch(func)
+
+        def wrapper(*args: Any, **kw: Any) -> Any:
+            return dispatcher.dispatch(args[1].__class__)(*args, **kw)
+
+        wrapper.register = dispatcher.register  # type: ignore[attr-defined]
+        update_wrapper(wrapper, func)
+
+        return wrapper
 
 
 class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
@@ -202,3 +221,27 @@ def _get_n_cores(n_cores: Optional[int]) -> int:
         return cpu_count() + 1 + n_cores
 
     return n_cores
+
+
+@contextmanager
+def verbosity(level: int) -> Generator[None, None, None]:
+    """
+    Temporarily set the verbosity level of :mod:`scanpy`.
+
+    Parameters
+    ----------
+    level
+        The new verbosity leve.
+
+    Returns
+    -------
+    Nothing.
+    """
+    import scanpy as sc
+
+    verbosity = sc.settings.verbosity
+    sc.settings.verbosity = level
+    try:
+        yield
+    finally:
+        sc.settings.verbosity = verbosity

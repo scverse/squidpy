@@ -28,17 +28,41 @@ class Key:  # noqa: D101
 
         @classmethod
         def spatial_neighs(cls, value: Optional[str] = None) -> str:
-            return Key.uns.spatial if value is None else value
+            return f"{Key.obsm.spatial}_neighbors" if value is None else f"{value}_neighbors"
 
         @classmethod
         def ligrec(cls, cluster: str, value: Optional[str] = None) -> str:
             return f"{cluster}_ligrec" if value is None else value
 
+        @classmethod
+        def nhood_enrichment(cls, cluster: str) -> str:
+            return f"{cluster}_nhood_enrichment"
+
+        @classmethod
+        def centrality_scores(cls, cluster: str) -> str:
+            return f"{cluster}_centrality_scores"
+
+        @classmethod
+        def interaction_matrix(cls, cluster: str) -> str:
+            return f"{cluster}_interactions"
+
+        @classmethod
+        def co_occurrence(cls, cluster: str) -> str:
+            return f"{cluster}_co_occurrence"
+
+        @classmethod
+        def ripley_k(cls, cluster: str) -> str:
+            return f"{cluster}_ripley_k"
+
+        @classmethod
+        def colors(cls, cluster: str) -> str:
+            return f"{cluster}_colors"
+
     class obsp:  # noqa: D106
         @classmethod
         def spatial_dist(cls, value: Optional[str] = None) -> str:
-            return f"{Key.uns.spatial_neighs(value)}_distances"
+            return f"{Key.obsm.spatial}_distances" if value is None else f"{value}_distances"
 
         @classmethod
         def spatial_conn(cls, value: Optional[str] = None) -> str:
-            return f"{Key.uns.spatial_neighs(value)}_connectivities"
+            return f"{Key.obsm.spatial}_connectivities" if value is None else f"{value}_connectivities"
