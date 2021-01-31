@@ -283,7 +283,7 @@ class SegmentationBlob(SegmentationGeneric):
 @inject_docs(m=SegmentationBackend)
 def segment_img(
     img: ImageContainer,
-    img_id: str,
+    img_id: Optional[str] = None,
     model: Union[str, Callable[..., np.ndarray]] = "watershed",
     channel: int = 0,
     yx: Optional[Union[int, Tuple[Optional[int], Optional[int]]]] = None,
@@ -326,12 +326,13 @@ def segment_img(
 
     Returns
     -------
-    If ``copy = True``, returns segmented image as :class:`squidpy.im.ImageContainer` with a key based on ``key_added``.
+    If ``copy = True``, returns the segmented image with a key `'{{key_added}}'`.
 
     Otherwise, it modifies the ``img`` with the following key:
 
         - :class:`squidpy.im.ImageContainer` ``['{{key_added}}']`` - the segmented image.
     """  # noqa: D400
+    img_id = img._singleton_id(img_id)
     kind = SegmentationBackend.GENERIC if callable(model) else SegmentationBackend(model)
     img_id_new = Key.img.segment(kind, key_added=key_added)
 

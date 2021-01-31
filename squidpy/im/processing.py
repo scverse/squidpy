@@ -1,6 +1,9 @@
 """Functions exposed: process_img()."""
 
-from typing import Any, Tuple, Union, Optional
+from typing import Any, Tuple, Union, Callable, Optional
+from functools import partial
+
+import numpy as np
 
 import skimage
 import skimage.filters
@@ -14,8 +17,8 @@ from squidpy._constants._constants import Processing
 @inject_docs(p=Processing)
 def process_img(
     img: ImageContainer,
-    img_id: str,
-    processing: Union[str, Processing],
+    img_id: Optional[str] = None,
+    processing: Union[str, Callable[..., np.ndarray]] = "gray",  # TODO: is this a good default?
     yx: Optional[Tuple[int, int]] = None,
     key_added: Optional[str] = None,
     channel_id: Optional[str] = None,
@@ -25,19 +28,21 @@ def process_img(
     """
     Process an image.
 
+    TODO.
     Note that crop-wise processing can save memory but may change behaviour of cropping if global statistics are used.
     Leave ``xs`` and ``ys`` as `None` in order to process the full image in one go.
 
     Parameters
     ----------
     %(img_container)s
-    %(img_id)s
     processing
         Name of processing method to use. Valid options are:
 
             - `{p.SMOOTH.s!r}` - :func:`skimage.filters.gaussian`.
             - `{p.GRAY.s!r}` - :func:`skimage.color.rgb2gray`.
 
+        Alternatively, any :func:`callable` object can be passed as long as TODO.
+    %(img_id)s
     yx
         TODO.
     key_added
@@ -53,40 +58,48 @@ def process_img(
 
     Returns
     -------
-    Nothing, just updates ``img`` with the processed image in layer ``key_added``.
-    If ``copy = True``, returns the processed image.
+    If ``copy = True``, returns the processed image with a key `'{{key_added}}'`.
+
+    Otherwise, it modifies the ``img`` with the following key:
+
+        - :class:`squidpy.im.ImageContainer` ``['{{key_added}}']`` - the processed image.
+
+    Raises
+    ------
+    NotImplementedError
+        TODO.
     """
-    processing = Processing(processing)
+    img_id = img._singleton_id(img_id)
+    processing = (
+        Processing(processing) if isinstance(processing, (str, Processing)) else processing  # type: ignore[assignment]
+    )
+
     if channel_id is None:
         channel_id = img[img_id].dims[-1]
-        if processing == Processing.GRAY:
-            channel_id = f"{channel_id}_{processing}"
-    img_id_new = img_id + "_" + str(processing) if key_added is None else key_added
+    img_id_new = f"{img_id}_{processing}"
+
+    if callable(processing):
+        callback = processing
+        img_id_new = f"{img_id}_{getattr(callback, '__name__', 'custom')}"  # get the function name
+    elif processing == Processing.SMOOTH:  # type: ignore[comparison-overlap]
+        callback = partial(skimage.filters.gaussian, multichannel=True)
+    elif processing == Processing.GRAY:  # type: ignore[comparison-overlap]
+        callback = skimage.color.rgb2gray
+        channel_id = f"{channel_id}_{processing}"
+    else:
+        raise NotImplementedError(f"Processing `{processing}` is not yet implemented.")
+
+    if key_added is not None:
+        img_id_new = key_added
 
     # process crops
-    crops = []
-    for crop in img.generate_equal_crops(yx=yx):
-        # TODO: custom processing
-        if processing == Processing.SMOOTH:
-            crop = ImageContainer(
-                skimage.filters.gaussian(crop[img_id], **kwargs),
-                img_id=img_id_new,
-                channel_id=channel_id,
-            )
-        elif processing == Processing.GRAY:
-            crop = ImageContainer(
-                skimage.color.rgb2gray(crop[img_id], **kwargs), img_id=img_id_new, channel_id=channel_id
-            )
-        else:
-            raise NotImplementedError(processing)
-
-        crops.append(crop)
-
-    # Reassemble image:
-    img_proc = ImageContainer.uncrop_img(crops=crops)
+    crops = [
+        crop.apply(callback, img_id=img_id, channel_id=channel_id, **kwargs) for crop in img.generate_equal_crops(yx=yx)
+    ]
+    # reassemble image
+    img_proc: ImageContainer = ImageContainer.uncrop_img(crops=crops, shape=img.shape)
 
     if copy:
-        return img_proc  # type: ignore[no-any-return]
+        return img_proc
 
-    # TODO: function to add ImageContainer
-    img.add_img(img=img_proc[img_id_new], img_id=img_id_new)
+    img.add_img(img=img_proc, img_id=img_id_new)

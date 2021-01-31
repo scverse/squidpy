@@ -8,6 +8,7 @@ from typing import (
     Union,
     Mapping,
     TypeVar,
+    Callable,
     Hashable,
     Iterable,
     Iterator,
@@ -501,7 +502,7 @@ class ImageContainer(FeatureMixin):
     def generate_spot_crops(
         self,
         adata: AnnData,
-        library_id: str,
+        library_id: str,  # TODO: default if only 1 is present
         spatial_key: str = Key.obsm.spatial,
         size: float = 1.0,
         obs_names: Optional[Iterable[Any]] = None,
@@ -600,6 +601,8 @@ class ImageContainer(FeatureMixin):
             if crop.data.attrs.get("coords", None) is None:
                 raise ValueError("Crop does not have coordinate metadata.")
             coord = crop.data.attrs["coords"]  # the unpadded coordinates
+            if coord == _NULL_COORDS:
+                raise ValueError(f"Null coordinate detected: `{coord}`.")
             dy, dx = max(dy, coord.y0 + coord.dy), max(dx, coord.x0 + coord.dx)
 
         if shape is None:
@@ -655,16 +658,7 @@ class ImageContainer(FeatureMixin):
         """
         from squidpy.pl._utils import save_fig
 
-        self._assert_not_empty()
-
-        if img_id is None:
-            if len(self) > 1:
-                raise ValueError(f"Please supply `img_id=...` from: `{sorted(self.data.keys())}`.")
-            img_id = list(self.data.keys())[0]
-        if img_id not in self.data.keys():
-            raise KeyError(f"Image id not found in `{sorted(self.data.keys())}`.")
-
-        arr = self.data[img_id]
+        arr = self.data[self._singleton_id(img_id)]
         if channel is not None:
             arr = arr[{arr.dims[-1]: channel}]
 
@@ -732,6 +726,24 @@ class ImageContainer(FeatureMixin):
             key_added=key_added,
         ).show()
 
+    def apply(
+        self,
+        func: Callable[..., np.ndarray],
+        img_id: Optional[str] = None,
+        channel_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> "ImageContainer":
+        """TODO."""
+        img_id = self._singleton_id(img_id)
+        arr = self[img_id]
+        if channel_id is not None:
+            channel_id = arr.dims[-1]
+
+        res = ImageContainer(func(arr.values, **kwargs), img_id=img_id, channel_id=channel_id)
+        res.data.attrs = copy(self.data.attrs)
+
+        return res
+
     @property
     def data(self) -> xr.Dataset:
         """Underlying :class:`xarray.Dataset`."""
@@ -745,6 +757,18 @@ class ImageContainer(FeatureMixin):
     def copy(self, deep: bool = False) -> "ImageContainer":
         """TODO."""
         return deepcopy(self) if deep else copy(self)
+
+    def _singleton_id(self, img_id: Optional[str]) -> str:
+        self._assert_not_empty()
+
+        if img_id is None:
+            if len(self) > 1:
+                raise ValueError(f"Please supply `img_id=...` from: `{sorted(self.data.keys())}`.")
+            img_id = list(self.data.keys())[0]
+        if img_id not in self.data.keys():
+            raise KeyError(f"Image id not found in `{sorted(self.data.keys())}`.")
+
+        return img_id
 
     def _assert_not_empty(self) -> None:
         if not len(self):
@@ -774,7 +798,7 @@ class ImageContainer(FeatureMixin):
         return s
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}[size={len(self)}, ids={sorted(self.data.keys())}]"
+        return f"{self.__class__.__name__}[shape={self.shape}, ids={sorted(self.data.keys())}]"
 
     def __str__(self) -> str:
         return repr(self)

@@ -49,7 +49,7 @@ img_id
     Key of image layer in ``img`` that should be processed."""
 _feature_name = """\
 feature_name
-    Base name of feature in resulting feature values dict."""
+    Base name of feature in resulting feature values :class:`dict`."""
 _feature_ret = """\
     Dictionary of feature values."""
 _xy_coord = """\

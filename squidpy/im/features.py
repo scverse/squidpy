@@ -23,7 +23,7 @@ def calculate_image_features(
     img: ImageContainer,
     img_id: Optional[str] = None,
     features: Union[str, Iterable[str]] = ImageFeature.SUMMARY.s,
-    features_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    features_kwargs: Mapping[str, Mapping[str, Any]] = MappingProxyType({}),
     key_added: str = "img_features",
     copy: bool = False,
     n_jobs: Optional[int] = None,
@@ -54,26 +54,34 @@ def calculate_image_features(
           :meth:`squidpy.im.ImageContainer.get_custom_features`.
 
     features_kwargs
-        Keyword arguments for the different features that should be generated.
+        Keyword arguments for the different features that should be generated, such as
+        ``{{ {f.TEXTURE.s!r}: {{ ... }}, ... }}``.
     key_added
         Key in :attr:`anndata.AnnData.obsm` where to store the calculated features.
     %(copy)s
     %(parallelize)s
     kwargs
-        Keyword arguments for :meth:`squidpy.im.ImageContainer.crop_spot_generator`.
+        Keyword arguments for :meth:`squidpy.im.ImageContainer.generate_spot_crops`.
 
     Returns
     -------
-    `None` if ``copy = False``, otherwise the :class:`pandas.DataFrame`.
+    If ``copy = True``, returns a :class:`panda.DataFrame` where each column corresponds to the calculated features.
+
+    Otherwise, modifies the ``adata`` object with the following key:
+
+        - :attr:`anndata.AnnData.uns` ``['{{key_added}}']`` - the above mentioned dataframe.
 
     Raises
     ------
-    NotImplementedError
+    ValueError
         If a feature is not known.
+    NotImplementedError
+        TODO.
     """
+    img_id = img._singleton_id(img_id)
     if isinstance(features, (str, ImageFeature)):
         features = [features]
-    features = [ImageFeature(f) for f in features]  # type: ignore[misc]
+    features = sorted({ImageFeature(f) for f in features})  # type: ignore[misc]
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
@@ -98,21 +106,14 @@ def _calculate_image_features_helper(
     obs_ids: Iterable[Any],
     adata: AnnData,
     img: ImageContainer,
-    img_id: Optional[str],
+    img_id: str,
     features: List[ImageFeature],
     features_kwargs: Mapping[str, Any],
     queue: Optional[SigQueue] = None,
     **kwargs: Any,
 ) -> pd.DataFrame:
     features_list = []
-
-    # TODO: only use default if there's just 1 image
-    if img_id is None:
-        img_id = list(img.data.keys())[0]
-
     for crop in img.generate_spot_crops(adata, obs_names=obs_ids, **kwargs):
-        # get features for this crop
-        # TODO: valuedispatch would be cleaner
         features_dict = {}
         for feature in features:
             feature = ImageFeature(feature)
@@ -131,6 +132,7 @@ def _calculate_image_features_helper(
             else:
                 raise NotImplementedError(f"Feature `{feature}` is not yet implemented.")
 
+            # TODO: overwrites check/logging?
             features_dict.update(res)
         features_list.append(features_dict)
 
