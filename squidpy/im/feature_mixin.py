@@ -1,4 +1,3 @@
-# TODO: disable data-science-types because below does not generate types in shpinx + create an issue
 from __future__ import annotations
 
 from typing import Any, Dict, Tuple, Union, Callable, Iterable, Optional, Sequence
@@ -277,48 +276,47 @@ class FeatureMixin:
 
         return features
 
-    # TODO: clean the FN + docs
     @d.dedent
     def get_custom_features(
         self: HasGetItemProtocol,
         img_id: str,
-        feature_name: str = "custom",
+        func: Callable[[np.ndarray], Any],
         channels: Optional[Channel_t] = None,
-        feature_fn: Optional[Callable] = None,  # type: ignore [type-arg]
+        feature_name: Optional[str] = None,
         **kwargs: Any,
     ) -> Feature_t:
         """
-        Calculate custom features using ``feature_fn``.
+        Calculate custom features using ``func``.
 
-        The custom feature extractor, ``feature_fn``, needs to take as input the image to extract features from
-        and optional ``kwargs``.
-        The image will be a ``np.ndarray`` with shape ``(y,x,channels)``.
-        The output of the function is expected to be an iterable of floats
-        (in the case of several features that are computed)
-        or a float (in the case of one feature being computed).
-
-        An example for ``feature_fn`` is a simple mean extractor:
-        ``def feature_fn(arr: np.ndarray, **kwargs) -> float: return np.mean(arr)``
+        The feature extractor ``func`` takes as an input :class:`numpy.ndarray` of shape ``(y, x, channels)`` and
+        optional ``kwargs`` and needs to return one or more of :class:`float`.
 
         Parameters
         ----------
         %(img_id)s
-        %(feature_name)s
-        %(channels)s
-        feature_fn
+        func
             Feature extraction function.
+        %(channels)s
+        %(feature_name)s
         kwargs
-            Keyword arguments for ``feature_fn``.
+            Keyword arguments for ``func``.
 
         Returns
         -------
         %(feature_ret)s
+
+        Examples
+        --------
+        To calculate a mean, one can do::
+
+            img = squidpy.im.ImageContainer(...)
+            img.get_custom_features(imd_id=..., func=numpy.mean)
         """
-        assert feature_fn is not None, "calculation of custom features requires a `feature_fn`"
         channels = _get_channels(self[img_id], channels)
+        feature_name = getattr(func, "__name__", "custom") if feature_name is None else feature_name
 
         # calculate features by calling feature_fn
-        res = feature_fn(self[img_id].values[:, :, channels], **kwargs)
+        res = func(self[img_id].values[:, :, channels], **kwargs)  # type: ignore[call-arg]
         if not isinstance(res, Iterable):
             res = [res]
         features = {f"{feature_name}_{i}": f for i, f in enumerate(res)}

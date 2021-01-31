@@ -322,7 +322,7 @@ def segment_img(
         Key of new image sized array to add into img object. If `None`, use ``'segmented_{{model}}'``.
     %(copy_cont)s
     %(segment_kwargs)s
-    %(parallel)s
+    %(parallelize)s
 
     Returns
     -------

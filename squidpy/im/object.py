@@ -31,7 +31,6 @@ from squidpy.gr._utils import (
     _assert_spatial_basis,
     _assert_non_empty_sequence,
 )
-from squidpy.pl._utils import save_fig
 
 try:
     from typing import Literal  # type: ignore[attr-defined]
@@ -653,6 +652,8 @@ class ImageContainer(FeatureMixin):
         -------
         %(plotting_returns)s
         """
+        from squidpy.pl._utils import save_fig
+
         self._assert_not_empty()
 
         if img_id is None:
