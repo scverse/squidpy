@@ -19,6 +19,9 @@ import re
 
 from scipy.sparse import spmatrix
 
+import matplotlib.pyplot as plt
+
+from skimage.util import img_as_float
 from skimage.transform import rescale
 
 from squidpy._utils import singledispatchmethod
@@ -28,6 +31,7 @@ from squidpy.gr._utils import (
     _assert_spatial_basis,
     _assert_non_empty_sequence,
 )
+from squidpy.pl._utils import save_fig
 
 try:
     from typing import Literal  # type: ignore[attr-defined]
@@ -200,12 +204,13 @@ class ImageContainer(FeatureMixin):
         NotImplementedError
             TODO.
         """
+        img_id = self._get_image_id("image") if img_id is None else img_id
         img = self._load_img(img, chunks=chunks, img_id=img_id, **kwargs)
+
         if img is not None:  # not reading .nc file
             if TYPE_CHECKING:
                 assert isinstance(img, xr.DataArray)
             img = img.rename({img.dims[-1]: channel_id})
-            img_id = self._get_image_id("image") if img_id is None else img_id
 
             logg.info(f"Adding `{img_id}` into object")
             self.data[img_id] = img
@@ -223,6 +228,8 @@ class ImageContainer(FeatureMixin):
         See :meth:`add_img` for more details.
         """
         if isinstance(img, ImageContainer):
+            if img_id not in img:
+                raise KeyError(f"Image id `{img_id}` not found in `{img}`.")
             return self._load_img(img[img_id], **kwargs)
         raise NotImplementedError(type(img))
 
@@ -231,7 +238,7 @@ class ImageContainer(FeatureMixin):
     def _(self, img: Pathlike_t, chunks: Optional[int] = None, **_: Any) -> Optional[xr.DataArray]:
         img = Path(img)
         if not img.is_file():
-            raise OSError("TODO.")
+            raise OSError(f"Path `{img}` does not exist.")
 
         suffix = img.suffix.lower()
 
@@ -239,7 +246,7 @@ class ImageContainer(FeatureMixin):
             return self._load_img(imread(str(img)))
         if suffix in (".nc", ".cdf"):
             if len(self._data):
-                raise ValueError("TODO.")
+                raise ValueError("Loading data from NetCDF is disallow if the container is not empty.")
 
             self._data = xr.open_dataset(img, chunks=chunks)
             self.data.attrs["coords"] = CropCoords.from_tuple(self.data.attrs["coords"])
@@ -309,9 +316,9 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         TODO
-            rename me.
+            rename me?
         TODO
-            rename me.
+            rename me?
         scale
             Resolution of the crop (smaller -> smaller image).
             Rescaling is done using :func:`skimage.transform.rescale`.
@@ -381,11 +388,10 @@ class ImageContainer(FeatureMixin):
             )
             data.attrs = {**attrs, "scale": scale}
 
-        # TODO: does not update crop metadata (scale), should it?
         if mask_circle:
             # TODO: ignore/raise/ellipse?
             if data.dims["y"] != data.dims["x"]:
-                logg.warning("Crops is not square TODO")
+                logg.warning("TODO")
                 # assert xs == ys, "Crop has to be square to use mask_circle."
             c = min(data.x.shape[0], data.y.shape[0]) // 2
             data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c ** 2, other=cval)
@@ -410,9 +416,9 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         yx
-            TODO - rename.
+            TODO - rename?
         ryrx
-            TODO - rename.
+            TODO - rename?
         kwargs
             Keyword arguments are passed to :meth:`crop_corner`.
 
@@ -584,26 +590,26 @@ class ImageContainer(FeatureMixin):
         Assembled image with shape ``(y, x)``.
         """
         if not len(crops):
-            raise ValueError("TODO: no crops supplied.")
+            raise ValueError("No crops were supplied.")
 
         keys = set(crops[0].data.keys())
         dy, dx = -1, -1
 
         for crop in crops:
             if set(crop.data.keys()) != keys:
-                raise KeyError("TODO: invalid keys")
+                raise KeyError(f"Expected to find `{sorted(keys)}` keys, found `{sorted(crop.data.keys())}`.")
             if crop.data.attrs.get("coords", None) is None:
-                raise ValueError()
+                raise ValueError("Crop does not have coordinate metadata.")
             coord = crop.data.attrs["coords"]  # the unpadded coordinates
             dy, dx = max(dy, coord.y0 + coord.dy), max(dx, coord.x0 + coord.dx)
 
         if shape is None:
             shape = (dy, dx)
-        if shape < (dy, dx):
-            raise ValueError("TODO: insufficient shape...")
         shape = tuple(shape)  # type: ignore[assignment]
         if len(shape) != 2:
-            raise ValueError()
+            raise ValueError(f"Expected `shape` to be of length `2`, found `{len(shape)}`.")
+        if shape < (dy, dx):
+            raise ValueError(f"Requested image of shape `{shape}`, but minimal shape must be `({dy}, {dx})`.")
 
         # create resulting dataset
         data = xr.Dataset()
@@ -621,22 +627,52 @@ class ImageContainer(FeatureMixin):
 
         return cls._from_dataset(data)
 
-    def show(self, key: Optional[str] = None) -> None:
-        """TODO."""
+    def show(
+        self,
+        img_id: Optional[str] = None,
+        channel: Optional[int] = None,
+        figsize: Optional[Tuple[float, float]] = None,
+        dpi: Optional[int] = None,
+        save: Optional[Pathlike_t] = None,
+        **kwargs: Any,
+    ) -> None:
+        """
+        TODO.
+
+        Parameters
+        ----------
+        img_id
+            TODO.
+        channel
+            TODO.
+        %(plotting)s
+        kwargs
+            Keyword arguments for :meth:`matplotlib.axes.Axes.imshow`.
+
+        Returns
+        -------
+        %(plotting_returns)s
+        """
         self._assert_not_empty()
 
-        if key is None:
+        if img_id is None:
             if len(self) > 1:
-                raise ValueError()
-            key = list(self.data.keys())[0]
-        if key not in self.data.keys():
-            raise KeyError()
+                raise ValueError(f"Please supply `img_id=...` from: `{sorted(self.data.keys())}`.")
+            img_id = list(self.data.keys())[0]
+        if img_id not in self.data.keys():
+            raise KeyError(f"Image id not found in `{sorted(self.data.keys())}`.")
 
-        import matplotlib.pyplot as plt
+        arr = self.data[img_id]
+        if channel is not None:
+            arr = arr[{arr.dims[-1]: channel}]
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(8, 8) if figsize is None else figsize, dpi=dpi)
+        ax.set_axis_off()
 
-        ax.imshow(self.data[key])
+        ax.imshow(img_as_float(arr.values, force_copy=False), **kwargs)
+
+        if save:
+            save_fig(fig, save)
 
     @d.get_sections(base="_interactive", sections=["Parameters"])
     @d.dedent
@@ -694,8 +730,6 @@ class ImageContainer(FeatureMixin):
             key_added=key_added,
         ).show()
 
-    # TODO: apply style fn
-
     @property
     def data(self) -> xr.Dataset:
         """Underlying :class:`xarray.Dataset`."""
@@ -704,7 +738,7 @@ class ImageContainer(FeatureMixin):
     @property
     def shape(self) -> Tuple[int, int]:
         """Image shape `(y, x)`."""
-        return self.data.dims["y"], self.data.dims["x"]  # TODO changed shape, need to catch all calls to img.shape
+        return self.data.dims["y"], self.data.dims["x"]
 
     def copy(self, deep: bool = False) -> "ImageContainer":
         """TODO."""
@@ -715,8 +749,7 @@ class ImageContainer(FeatureMixin):
             raise ValueError("No image has been added.")
 
     def __iter__(self) -> Iterator[str]:
-        # TODO: determine what we want (keys, values), DataArray returns keys
-        yield from self.data.values()
+        yield from self.data.keys()
 
     def __len__(self) -> int:
         return len(self.data)
@@ -730,17 +763,16 @@ class ImageContainer(FeatureMixin):
     def __deepcopy__(self, memodict: Mapping[str, Any] = MappingProxyType({})) -> "ImageContainer":
         return type(self)._from_dataset(self.data, deep=True)
 
-    # TODO: fix this
     def _repr_html_(self) -> str:
-        s = f"{self.__class__.__name__} object with {len(self.data.keys())} layer(s)\n"
+        s = f"{self.__class__.__name__} object with {len(self.data.keys())} layer(s):"
         for layer in self.data.keys():
-            s += f"    {layer}: "
+            s += f"<p style='text-indent: 25px;'>{layer}: "
             s += ", ".join(f"{dim} ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape))
-            s += "\n"
+            s += "</p>"
         return s
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}[{self.data.dims}]"
+        return f"{self.__class__.__name__}[size={len(self)}, ids={sorted(self.data.keys())}]"
 
     def __str__(self) -> str:
         return repr(self)

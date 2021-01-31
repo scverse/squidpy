@@ -308,10 +308,10 @@ def segment_img(
         TODO.
         Segmentation method to use. Available are:
 
-            - `{m.LOG.s!r}`: Blob extraction with :mod:`skimage`. Blobs are assumed to be light on dark.
-            - `{m.DOG.s!r}`: Blob extraction with :mod:`skimage`. Blobs are assumed to be light on dark.
-            - `{m.DOG.s!r}`: Blob extraction with :mod:`skimage`. Blobs can be light on dark or vice versa.
-            - `{m.WATERSHED.s!r}`: :func:`skimage.segmentation.watershed`.
+            - `{m.LOG.s!r}` - blob extraction with :mod:`skimage`. Blobs are assumed to be light on dark.
+            - `{m.DOG.s!r}` - blob extraction with :mod:`skimage`. Blobs are assumed to be light on dark.
+            - `{m.DOG.s!r}` - blob extraction with :mod:`skimage`. Blobs can be light on dark or vice versa.
+            - `{m.WATERSHED.s!r}` - :func:`skimage.segmentation.watershed`.
 
         Alternatively, any :func:`callable` object can be passed as long as TODO.
     channel
