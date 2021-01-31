@@ -626,6 +626,7 @@ class ImageContainer(FeatureMixin):
 
         return cls._from_dataset(data)
 
+    @d.dedent
     def show(
         self,
         img_id: Optional[str] = None,

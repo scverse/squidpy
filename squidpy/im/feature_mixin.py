@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple, Union, Callable, Iterable, Optional, Sequence
+from typing import Any, Dict, List, Tuple, Union, Callable, Iterable, Optional, Sequence
 from typing_extensions import Protocol
 
 import numpy as np
 import xarray as xr
 
+from skimage.util import img_as_ubyte
 from skimage.feature import greycoprops, greycomatrix
 import skimage.measure
 
@@ -15,15 +16,15 @@ Feature_t = Dict[str, Any]
 Channel_t = Union[int, Sequence[int]]
 
 
-def _get_channels(xr_img: xr.DataArray, channels: Optional[Channel_t]) -> Tuple[int, ...]:
+def _get_channels(xr_img: xr.DataArray, channels: Optional[Channel_t]) -> List[int]:
     """Get correct channel ranges for feature calculation."""
     # if channels is None, compute features for all channels
     if channels is None:
-        channels = range(xr_img.shape[-1])
-    elif isinstance(channels, int):
-        channels = (channels,)
+        return list(range(xr_img.shape[-1]))
+    if isinstance(channels, int):
+        return [channels]
 
-    return tuple(channels)
+    return list(channels)
 
 
 # define protocol to get rid of mypy indexing errors
@@ -35,11 +36,7 @@ class HasGetItemProtocol(Protocol):
 
 
 class FeatureMixin:
-    """
-    Mixin Class for ImageContainer.
-
-    Implementing feature extraction functions.
-    """
+    """Mixin class for ImageContainer implementing feature extraction functions."""
 
     @d.dedent
     def get_summary_features(
@@ -48,6 +45,7 @@ class FeatureMixin:
         feature_name: str = "summary",
         channels: Optional[Channel_t] = None,
         quantiles: Sequence[float] = (0.9, 0.5, 0.1),
+        # TODO: mean/std argument not really necessary?
         mean: bool = False,
         std: bool = False,
     ) -> Feature_t:
@@ -68,18 +66,22 @@ class FeatureMixin:
 
         Returns
         -------
-        %(feature_ret)s
+        Returns features with the following keys for each channel `c` in ``channels``:
+
+            - `'{feature_name}_ch-{c}_quantile-{q}'` - the quantile features for each quantile `q` in ``quantiles``.
+            - `'{feature_name}_ch-{c}_mean'` - the mean.
+            - `'{feature_name}_ch-{c}_std'` - the standard deviation.
         """
         channels = _get_channels(self[img_id], channels)
 
         features = {}
         for c in channels:
             for q in quantiles:
-                features[f"{feature_name}_quantile_{q}_ch_{c}"] = np.quantile(self[img_id][:, :, c], q)
+                features[f"{feature_name}_ch-{c}_quantile-{q}"] = np.quantile(self[img_id][:, :, c], q)
             if mean:
-                features[f"{feature_name}_mean_ch_{c}"] = np.mean(self[img_id][:, :, c].values)
+                features[f"{feature_name}_ch-{c}_mean"] = np.mean(self[img_id][:, :, c].values)
             if std:
-                features[f"{feature_name}_std_ch_{c}"] = np.std(self[img_id][:, :, c].values)
+                features[f"{feature_name}_ch-{c}_std"] = np.std(self[img_id][:, :, c].values)
 
         return features
 
@@ -109,7 +111,9 @@ class FeatureMixin:
 
         Returns
         -------
-        %(feature_ret)s
+        Returns features with the following keys for each channel `c` in ``channels``:
+
+            - `'{feature_name}_ch-{c}_bin-{i}'` - the histogram counts for each bin `i` in ``bins``.
         """
         channels = _get_channels(self[img_id], channels)
         # if v_range is None, use whole-image range
@@ -118,9 +122,9 @@ class FeatureMixin:
 
         features = {}
         for c in channels:
-            hist = np.histogram(self[img_id][:, :, c], bins=bins, range=v_range, weights=None, density=False)
-            for i, count in enumerate(hist[0]):
-                features[f"{feature_name}_ch_{c}_bin_{i}"] = count
+            hist, _ = np.histogram(self[img_id][:, :, c], bins=bins, range=v_range, weights=None, density=False)
+            for i, count in enumerate(hist):
+                features[f"{feature_name}_ch-{c}_bin-{i}"] = count
 
         return features
 
@@ -150,38 +154,38 @@ class FeatureMixin:
         %(feature_name)s
         %(channels)s
         props
-            Texture features that are calculated. See the `prop` argument in :func:`skimage.feature.greycoprops`.
+            Texture features that are calculated, see the `prop` argument in :func:`skimage.feature.greycoprops`.
         distances
-            See the `distances` argument in :func:`skimage.feature.greycomatrix`.
+            The `distances` argument in :func:`skimage.feature.greycomatrix`.
         angles
-            See the `angles` argument in :func:`skimage.feature.greycomatrix`.
+            The `angles` argument in :func:`skimage.feature.greycomatrix`.
 
         Returns
         -------
-        %(feature_ret)s
+        Returns features with the following keys for each channel `c` in ``channels``:
 
-        Raises
-        ------
-        ValueError
-            If image has values > 255, which is not supported by :func:`skimage.feature.greycomatrix`.
+            - `'{feature_name}_ch-{c}_{p}_dist-{dist}_angle-{a}'` - the GLCM properties, for each `p` in ``props``,
+              `d` in ``distances`` and `a` in ``angles``.
+
+        Notes
+        -----
+        If the image is not of type :class:`numpy.uint8`, it will be converted.
         """
-        # check that image has values < 256
-        if np.max(self[img_id].values) > 255:
-            raise ValueError(
-                f'self["{img_id}"] has a maximum value of {np.max(self[img_id].values)}. \
-                This is not supported, please cast your image to `uint8` before calling this function. \
-                You might be able to use `sq.im.calculate_image_features(..., dtype="uint8")'
-            )
         channels = _get_channels(self[img_id], channels)
+        arr = self[img_id][..., channels].values
+
+        # check that image has values < 256
+        if not np.issubdtype(arr.dtype, np.uint8):
+            arr = img_as_ubyte(arr, force_copy=False)
 
         features = {}
         for c in channels:
-            comatrix = greycomatrix(self[img_id][:, :, c], distances=distances, angles=angles, levels=256)
+            comatrix = greycomatrix(arr[..., c], distances=distances, angles=angles, levels=256)
             for p in props:
                 tmp_features = greycoprops(comatrix, prop=p)
                 for d_idx, dist in enumerate(distances):
                     for a_idx, a in enumerate(angles):
-                        features[f"{feature_name}_{p}_ch_{c}_dist_{dist}_angle_{a:.2f}"] = tmp_features[d_idx, a_idx]
+                        features[f"{feature_name}_ch-{c}_{p}_dist-{dist}_angle-{a:.2f}"] = tmp_features[d_idx, a_idx]
         return features
 
     @d.dedent
@@ -192,6 +196,7 @@ class FeatureMixin:
         feature_name: str = "segmentation",
         channels: Optional[Channel_t] = None,
         props: Iterable[str] = ("label", "area", "mean_intensity"),
+        # TODO: mean/std argument not really necessary?
         mean: bool = True,
         std: bool = False,
     ) -> Feature_t:
@@ -202,7 +207,7 @@ class FeatureMixin:
         (e.g. resulting from calling :func:`squidpy.im.segment_img`).
 
         Depending on the specified parameters, mean and std of the requested props are returned.
-        For the 'label' feature, the number of labels is returned, i.e. the number of cells in this img.
+        For the `'label'` feature, the number of labels is returned, i.e. the number of cells in this img.
 
         Parameters
         ----------
@@ -213,27 +218,27 @@ class FeatureMixin:
             Only relevant for features that use the intensity image ``img_id``.
         props
             Segmentation features that are calculated. See `properties` in :func:`skimage.measure.regionprops_table`.
-            Supported props:
+            Valid options are:
 
-            - area
-            - bbox_area
-            - convex_area
-            - eccentricity
-            - equivalent_diameter
-            - euler_number
-            - extent
-            - feret_diameter_max
-            - filled_area
-            - label
-            - major_axis_length
-            - max_intensity (uses intensity image ``img_id``)
-            - mean_intensity (uses intensity image ``img_id``)
-            - min_intensity (uses intensity image ``img_id``)
-            - minor_axis_length
-            - orientation
-            - perimeter
-            - perimeter_crofton
-            - solidity
+                - `'area'`
+                - `'bbox_area'`
+                - `'convex_area'`
+                - `'eccentricity'`
+                - `'equivalent_diameter'`
+                - `'euler_number'`
+                - `'extent'`
+                - `'feret_diameter_max'`
+                - `'filled_area'`
+                - `'label'`
+                - `'major_axis_length'`
+                - `'max_intensity'` - uses intensity image ``img_id``.
+                - `'mean_intensity'` - uses intensity image ``img_id``.
+                - `'min_intensity'` - uses intensity image ``img_id``.
+                - `'minor_axis_length'`
+                - `'orientation'`
+                - `'perimeter'`
+                - `'perimeter_crofton'`
+                - `'solidity'`
 
         mean
             Return mean feature values.
@@ -242,7 +247,15 @@ class FeatureMixin:
 
         Returns
         -------
-        %(feature_ret)s
+        Returns features with the following keys:
+
+            - `'{feature_name}_label'` - if `'label`` was in ``props``.
+            - `'{feature_name}_{p}_mean'` - mean for each non-intensity property `p` in ``props``.
+            - `'{feature_name}_{p}_std'` - standard deviation for each non-intensity property `p` in ``props``.
+            - `'{feature_name}_ch-{c}_{p}_mean'` - mean for each intensity property `p` in ``props`` and channel `c` in
+              ``channels``.
+            - `'{feature_name}_ch-{c}_{p}_std'` - standard deviation for each intensity property `p` in ``props`` and
+              channel `c` in ``channels``.
         """
         # TODO check that passed a valid prop
         channels = _get_channels(self[img_id], channels)
@@ -270,9 +283,9 @@ class FeatureMixin:
             )
             for p in intensity_props:
                 if mean:
-                    features[f"{feature_name}_{p}_ch{c}_mean"] = np.mean(tmp_features[p])
+                    features[f"{feature_name}_ch-{c}_{p}_mean"] = np.mean(tmp_features[p])
                 if std:
-                    features[f"{feature_name}_{p}_ch{c}_std"] = np.std(tmp_features[p])
+                    features[f"{feature_name}_ch-{c}_{p}_std"] = np.std(tmp_features[p])
 
         return features
 
@@ -303,14 +316,18 @@ class FeatureMixin:
 
         Returns
         -------
-        %(feature_ret)s
+        Returns features with the following keys:
+
+            - `'{feature_name}_{i}'` - i-th feature value.
 
         Examples
         --------
-        To calculate a mean, one can do::
+        Simple example would be to calculate the mean of a specified channel::
 
             img = squidpy.im.ImageContainer(...)
-            img.get_custom_features(imd_id=..., func=numpy.mean)
+            img.get_custom_features(imd_id=..., func=numpy.mean, channels=0)
+
+        This can also be done by passing ``mean = True`` to :meth:`squidpy.im.ImageContainer.get_summary_features`.
         """
         channels = _get_channels(self[img_id], channels)
         feature_name = getattr(func, "__name__", "custom") if feature_name is None else feature_name
