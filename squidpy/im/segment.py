@@ -349,7 +349,7 @@ def segment_img(
     counter, n_jobs = Counter(), _get_n_cores(n_jobs)
     crops = list(img.generate_equal_crops(yx=yx, as_array=False))
 
-    start = logg.info(f"Segmenting `{len(crops)}` crops using `{segmentation_model}` on `{n_jobs}` core(s)")
+    start = logg.info(f"Segmenting `{len(crops)}` crops using `{segmentation_model}` and `{n_jobs}` core(s)")
     res: ImageContainer = ImageContainer.uncrop_img(
         parallelize(
             _segment,

@@ -11,6 +11,7 @@ import pandas as pd
 
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
+from squidpy.gr._utils import _save_data
 from squidpy.im.object import ImageContainer
 from squidpy._constants._constants import ImageFeature
 
@@ -41,21 +42,21 @@ def calculate_image_features(
     features
         Features to be calculated. Valid options are:
 
-        - `{f.TEXTURE.s!r}`: summary stats based on repeating patterns
+        - `{f.TEXTURE.s!r}` - summary stats based on repeating patterns
           :meth:`squidpy.im.ImageContainer.get_texture_features`.
-        - `{f.SUMMARY.s!r}`: summary stats of each image channel
+        - `{f.SUMMARY.s!r}` - summary stats of each image channel
           :meth:`squidpy.im.ImageContainer.get_summary_features`.
-        - `{f.COLOR_HIST.s!r}`: counts in bins of image channel's histogram
+        - `{f.COLOR_HIST.s!r}` - counts in bins of image channel's histogram
           :meth:`squidpy.im.ImageContainer.get_histogram_features`.
-        - `{f.SEGMENTATION.s!r}`: stats of a cell segmentation mask
+        - `{f.SEGMENTATION.s!r}` - stats of a cell segmentation mask
           :meth:`squidpy.im.ImageContainer.get_segmentation_features`.
-        - `{f.CUSTOM.s!r}`: extract features using a custom function
+        - `{f.CUSTOM.s!r}` - extract features using a custom function
           :meth:`squidpy.im.ImageContainer.get_custom_features`.
 
     features_kwargs
         Keyword arguments for the different features that should be generated.
     key_added
-        Key to use for saving calculated table in :attr:`anndata.AnnData.obsm`.
+        Key in :attr:`anndata.AnnData.obsm` where to store the calculated features.
     %(copy)s
     %(parallelize)s
     kwargs
@@ -75,8 +76,7 @@ def calculate_image_features(
     features = [ImageFeature(f) for f in features]  # type: ignore[misc]
 
     n_jobs = _get_n_cores(n_jobs)
-    # TODO: time
-    logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
+    start = logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
 
     res = parallelize(
         _calculate_image_features_helper,
@@ -88,10 +88,10 @@ def calculate_image_features(
     )(adata, img, img_id=img_id, features=features, features_kwargs=features_kwargs, **kwargs)
 
     if copy:
+        logg.info("Finish", time=start)
         return res
 
-    # TODO: use saver
-    adata.obsm[key_added] = res
+    _save_data(adata, attr="uns", key=key_added, data=res, time=start)
 
 
 def _calculate_image_features_helper(
@@ -106,6 +106,7 @@ def _calculate_image_features_helper(
 ) -> pd.DataFrame:
     features_list = []
 
+    # TODO: only use default if there's just 1 image
     if img_id is None:
         img_id = list(img.data.keys())[0]
 
@@ -128,7 +129,7 @@ def _calculate_image_features_helper(
             elif feature == ImageFeature.CUSTOM:
                 res = crop.get_custom_features(img_id=img_id, **feature_kwargs)
             else:
-                raise NotImplementedError(feature)
+                raise NotImplementedError(f"Feature `{feature}` is not yet implemented.")
 
             features_dict.update(res)
         features_list.append(features_dict)
