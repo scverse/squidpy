@@ -474,20 +474,18 @@ class ImageContainer(FeatureMixin):
         if xs is None:
             xs = self.data.dims["x"]
 
-        if ys == self.data.dims["y"] and xs == self.data.dims["x"]:
+        y, x = self.data.dims["y"], self.data.dims["x"]
+
+        if ys == y and xs == x:
             res = self.copy(deep=True)
             res._data = self._post_process(data=res.data, **kwargs)
             yield res
         else:
-            _assert_in_range(ys, 0, self.data.dims["y"], name="ys")
-            _assert_in_range(xs, 0, self.data.dims["x"], name="xs")
+            _assert_in_range(ys, 0, y, name="ys")
+            _assert_in_range(xs, 0, x, name="xs")
 
-            # selecting coords like this means that we will have a small border at the right and bottom
-            # where pixels are not selected. Depending on the crops size, this can be a substantial amount
-            # of the image. Should use stop=(self.data.dims["x"] // xs) * (xs + 1) - 1
-            # need to implement partial assembly of crops in uncrop_img to make it work.
-            unique_xcoord = np.arange(start=0, stop=(self.data.dims["x"] // xs) * xs, step=xs)
-            unique_ycoord = np.arange(start=0, stop=(self.data.dims["y"] // ys) * ys, step=ys)
+            unique_ycoord = np.arange(start=0, stop=(y // ys + (y % ys != 0)) * ys, step=ys)
+            unique_xcoord = np.arange(start=0, stop=(x // xs + (x % xs != 0)) * xs, step=xs)
 
             ycoords = np.repeat(unique_ycoord, len(unique_xcoord))
             xcoords = np.tile(unique_xcoord, len(unique_ycoord))
@@ -600,9 +598,11 @@ class ImageContainer(FeatureMixin):
                 raise KeyError(f"Expected to find `{sorted(keys)}` keys, found `{sorted(crop.data.keys())}`.")
             if crop.data.attrs.get("coords", None) is None:
                 raise ValueError("Crop does not have coordinate metadata.")
+
             coord = crop.data.attrs["coords"]  # the unpadded coordinates
             if coord == _NULL_COORDS:
                 raise ValueError(f"Null coordinate detected: `{coord}`.")
+
             dy, dx = max(dy, coord.y0 + coord.dy), max(dx, coord.x0 + coord.dx)
 
         if shape is None:
