@@ -1,9 +1,14 @@
 |PyPI| |CI| |Notebooks| |Docs| |Coverage|
 
-Squidpy: Scanpy meets Spatial Molecular Data
-_____________________________________________
+Squidpy: Spatial Molecular Data meets Scanpy
+____________________________________________
 
 Visit the documentation [TODO] for docs, tutorials and examples.
+
+Contributing to SquidPy
+-----------------------
+If you wish to contribute to ``SquidPy``, please make sure you're familiar with our
+`Contributing guide <CONTRIBUTING.rst>`_.
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/squidpy.svg
     :target: https://img.shields.io/pypi/v/squidpy.svg
