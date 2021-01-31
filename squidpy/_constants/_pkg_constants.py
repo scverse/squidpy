@@ -1,6 +1,8 @@
 """Internal constants not exposed to the user."""
 from typing import Any, Callable, Optional
 
+from squidpy._constants._constants import SegmentationBackend
+
 _SEP = "_"
 
 
@@ -13,6 +15,11 @@ class cprop:  # noqa: D101
 
 
 class Key:  # noqa: D101
+    class img:  # noqa: D106
+        @classmethod
+        def segment(cls, backend: SegmentationBackend, key_added: Optional[str] = None) -> str:
+            return f"segmented_{backend.s}" if key_added is None else key_added
+
     class obs:  # noqa: D106
         pass
 

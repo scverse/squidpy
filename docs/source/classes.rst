@@ -1,9 +1,6 @@
 Classes
 =======
 
-Image
-~~~~~
-
 ImageContainer
 --------------
 .. autoclass:: squidpy.im.ImageContainer
@@ -16,22 +13,22 @@ InteractiveViewer
     :members:
     :inherited-members:
 
-SegmentationModelPretrainedTensorflow
--------------------------------------
-.. autoclass:: squidpy.im.SegmentationModelPretrainedTensorflow
+SegmentationGeneric
+-------------------
+.. autoclass:: squidpy.im.SegmentationGeneric
     :members:
     :inherited-members:
 
 
 SegmentationModelWatershed
 --------------------------
-.. autoclass:: squidpy.im.SegmentationModelWatershed
+.. autoclass:: squidpy.im.SegmentationWatershed
     :members:
     :inherited-members:
 
 
 SegmentationModelBlob
 ---------------------
-.. autoclass:: squidpy.im.SegmentationModelBlob
+.. autoclass:: squidpy.im.SegmentationBlob
     :members:
     :inherited-members:

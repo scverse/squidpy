@@ -1,34 +1,26 @@
 """Functions exposed: segment(), evaluate_nuclei_segmentation()."""
 
-from typing import Any, Union, Optional
-import abc
+from abc import ABC, abstractmethod
+from typing import Any, Tuple, Union, Callable, Optional, TYPE_CHECKING
 
-from anndata import AnnData
-
+from scipy import ndimage as ndi
 import numpy as np
 
+from skimage.util import invert as invert_arr, img_as_float
+from skimage.feature import peak_local_max
+from skimage.filters import threshold_otsu
+from skimage.segmentation import watershed
 import skimage
 
 from squidpy._docs import d, inject_docs
+from squidpy._utils import singledispatchmethod
+from squidpy.gr._utils import _assert_in_range, _assert_non_negative
 from squidpy.im.object import ImageContainer
 from squidpy._constants._constants import SegmentationBackend
+from squidpy._constants._pkg_constants import Key
 
 
-# TODO: dead code?
-def evaluate_nuclei_segmentation(adata: AnnData, copy: bool = False, **kwargs: Any) -> Optional[AnnData]:
-    """
-    Perform basic nuclei segmentation evaluation.
-
-    Metrics on H&E signal in segments vs outside.
-
-    Attrs:
-        adata:
-        copy:
-        kwargs:
-    """
-
-
-class SegmentationModel:
+class SegmentationModel(ABC):
     """
     Base class for segmentation models.
 
@@ -47,67 +39,79 @@ class SegmentationModel:
         self,
         model: Any,
     ):
-        self.model = model
+        self._model = model
 
+    @singledispatchmethod
     @d.get_full_description(base="segment")
     @d.get_sections(base="segment", sections=["Parameters", "Returns"])
     @d.dedent
-    def segment(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
+    def segment(self, img: Union[np.ndarray, ImageContainer], **_kwargs: Any) -> Union[np.ndarray, ImageContainer]:
         """
         Segment an image.
 
         Parameters
         ----------
         %(img_hr)s
+        increment
+            By default, segments are numbered from `1`. TODO better name.
+        img_id
+            Only used when ``image`` is :class:`squidpy.im.ImageContainer`.
 
         Returns
         -------
         Segmentation mask for the high-resolution image of shape `(x, y, 1)`.
         """
-        # TODO: make sure that the dtype is correct
-        return self._segment(img, **kwargs)
+        raise NotImplementedError(type(img))
 
-    # TODO: I'd rather make the public method abstract, so that its docs are seen for general user
-    @abc.abstractmethod
+    @segment.register(np.ndarray)
+    def _(self, img: np.ndarray, increment: int = 0, **kwargs: Any) -> np.ndarray:
+        _assert_non_negative(increment, name="start")
+        if img.ndim == 2:
+            img = img[:, :, np.newaxis]
+        if img.ndim != 3:
+            raise ValueError(f"Expected `3` dimensions, found `{img.ndim}`.")
+        if img.shape[-1] != 1:
+            raise ValueError(f"Expected only `1` channel, found `{img.shape[-1]}`.")
+
+        arr = self._segment(img, **kwargs)
+
+        if arr.ndim == 2:
+            arr = arr[:, :, np.newaxis]
+
+        if increment > 0:
+            arr[arr > 0] = arr[arr > 0] + increment
+
+        return arr
+
+    @segment.register(ImageContainer)  # type: ignore[no-redef]
+    def _(self, img: ImageContainer, img_id: str, channel: int = 0, **kwargs: Any) -> ImageContainer:
+        arr = img[img_id]
+        channel_id = arr.dims[-1]
+
+        arr = arr[{channel_id: channel}].values  # channel name is last dimension of img
+        arr = self.segment(arr, **kwargs)
+
+        return ImageContainer(arr, img_id=img_id, channel_id=f"segmented_{channel_id}")
+
+    @abstractmethod
     def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
         pass
 
+    def __repr__(self) -> str:
+        return self.__class__.__name__
 
-class SegmentationModelBlob(SegmentationModel):
-    """Segmentation model based on :mod:`skimage` blob detection."""
-
-    @d.dedent
-    def _segment(self, img: np.ndarray, invert: bool = True, **kwargs: Any) -> np.ndarray:
-        """
-        %(segment.full_desc)s
-
-        Parameters
-        ----------
-        %(segment.parameters)s
-        %(segment_kwargs)s
-
-        Returns
-        -------
-        %(segment.returns)s
-        """  # noqa: D400
-        if invert:
-            img = 0.0 - img
-
-        if self.model == "log":
-            return skimage.feature.blob_log(image=img, **kwargs)
-        if self.model == "dog":
-            return skimage.feature.blob_dog(image=img, **kwargs)
-        if self.model == "doh":
-            return skimage.feature.blob_doh(image=img, **kwargs)
-
-        raise NotImplementedError(f"Unknown blob model `{self.model}`.")
+    def __str__(self) -> str:
+        return repr(self)
 
 
-class SegmentationModelWatershed(SegmentationModel):
+class SegmentationWatershed(SegmentationModel):
     """Segmentation model based on :mod:`skimage` watershed segmentation."""
 
+    def __init__(self) -> None:
+        super().__init__(model=None)
+
     @d.dedent
-    def _segment(self, arr: np.ndarray, thresh: float = 0.5, geq: bool = True, **kwargs: Any) -> np.ndarray:
+    def _segment(self, arr: np.ndarray, thresh: Optional[float] = None, geq: bool = True, **kwargs: Any) -> np.ndarray:
         """
         %(segment.full_desc)s
 
@@ -118,7 +122,7 @@ class SegmentationModelWatershed(SegmentationModel):
              Threshold for creation of masked image. The areas to segment should be contained in this mask.
         geq
             Treat ``thresh`` as upper or lower (greater-equal = geq) bound for defining areas to segment.
-            If ``geq=True``, mask is defined as ``mask = arr >= thresh``, meaning high values in ``arr``
+            If ``geq = True``, mask is defined as ``mask = arr >= thresh``, meaning high values in ``arr``
             denote areas to segment.
         %(segment_kwargs)s
 
@@ -126,39 +130,44 @@ class SegmentationModelWatershed(SegmentationModel):
         -------
         %(segment.returns)s
         """  # noqa: D400
-        from scipy import ndimage as ndi
+        arr = arr.squeeze(-1)
+        # TODO: should we do this?
+        if not np.issubdtype(arr.dtype, np.floating):
+            arr = img_as_float(arr, force_copy=False)
 
-        from skimage.util import invert
-        from skimage.feature import peak_local_max
-        from skimage.segmentation import watershed
+        if thresh is None:
+            thresh = threshold_otsu(arr)
+        else:
+            _assert_in_range(thresh, 0, 1, name="thresh")
 
-        # TODO check if threshold is in [0, 1]. - no threshold does not need to be in [0, 1]
-        # TODO check image dtype/ranges
         # get binarized image
         if geq:
             mask = arr >= thresh
-            arr = invert(arr)
+            arr = invert_arr(arr)
         else:
             mask = arr < thresh
 
-        # calculate markers as maximal distanced points from background (locally)
         distance = ndi.distance_transform_edt(mask)
         local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((5, 5)), labels=mask)
-        markers = ndi.label(local_maxi)[0]
+        markers, _ = ndi.label(local_maxi)
 
         return watershed(arr, markers, mask=mask)
 
 
-# TODO: too long of a name
-class SegmentationModelPretrainedTensorflow(SegmentationModel):
-    """Segmentation model using :mod:`tensorflow` model."""
+class SegmentationGeneric(SegmentationModel):
+    """
+    TODO.
 
-    def __init__(self, model, **_: Any):  # type: ignore[no-untyped-def]
-        import tensorflow as tf
+    Parameters
+    ----------
+    func
+        Function which takes a :class:`numpy.ndarray` of shape TODO.
+    """
 
-        # TODO: maybe just check it's callable?
-        assert isinstance(model, tf.keras.model.Model), "Model should be a `tensorflow.keras.model` instance."
-        super().__init__(model=model)
+    def __init__(self, func: Callable[..., np.ndarray]):
+        if not callable(func):
+            raise TypeError()
+        super().__init__(model=func)
 
     @d.dedent
     def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
@@ -174,8 +183,60 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
         -------
         %(segment.returns)s
         """  # noqa: D400
-        # Uses callable tensorflow keras model.
-        return self.model(arr, **kwargs)
+        return self._model(arr, **kwargs)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}[function={getattr(self._model, '__name__', None)}]"
+
+    def __str__(self) -> str:
+        return repr(self)
+
+
+class SegmentationBlob(SegmentationGeneric):
+    """
+    Segmentation model based on :mod:`skimage` blob detection.
+
+    Parameters
+    ----------
+    kind
+        TODO.
+    """
+
+    def __init__(self, kind: SegmentationBackend):
+        kind = SegmentationBackend(kind)
+        if kind == SegmentationBackend.LOG:
+            func = skimage.feature.blob_log
+        elif kind == SegmentationBackend.DOG:
+            func = skimage.feature.blob_dog
+        elif kind == SegmentationBackend.DOH:
+            func = skimage.feature.blob_doh
+        else:
+            raise NotImplementedError(f"Unknown blob model `{kind}`.")
+
+        super().__init__(func=func)
+
+    def _segment(self, arr: np.ndarray, invert: bool = False, **kwargs: Any) -> np.ndarray:
+        def circular_mask(arr: np.ndarray, y: int, x: int, radius: float) -> np.ndarray:
+            Y, X = np.ogrid[: arr.shape[0], : arr.shape[1]]
+
+            return ((Y - y) ** 2 + (X - x) ** 2) <= radius ** 2
+
+        arr = arr.squeeze(-1)
+        if not np.issubdtype(arr.dtype, np.floating):
+            arr = img_as_float(arr, force_copy=False)
+        if invert:
+            arr = invert_arr(arr)
+
+        blob_mask = np.zeros_like(arr, dtype=np.bool_)
+        # invalid value encountered in double_scalar
+        # invalid value encountered in subtract
+        with np.errstate(divide="ignore", invalid="ignore"):
+            blobs = self._model(arr, **kwargs)
+
+        for blob in blobs:
+            blob_mask[circular_mask(blob_mask, *blob)] = True
+
+        return blob_mask
 
 
 @d.dedent
@@ -183,88 +244,76 @@ class SegmentationModelPretrainedTensorflow(SegmentationModel):
 def segment_img(
     img: ImageContainer,
     img_id: str,
-    model_group: Union[str, SegmentationBackend],
-    model_instance: Optional[Union[str, SegmentationModel]] = None,
-    channel_idx: Optional[int] = 0,
-    xs: Optional[int] = None,
-    ys: Optional[int] = None,
+    model: Union[str, Callable[..., np.ndarray]],
+    channel: int = 0,
+    yx: Optional[Union[int, Tuple[Optional[int], Optional[int]]]] = None,
     key_added: Optional[str] = None,
     copy: bool = False,
     **kwargs: Any,
-) -> Union[None, ImageContainer]:
+) -> Optional[ImageContainer]:
     """
     %(segment.full_desc)s
 
-    If ``xs`` and ``ys`` are defined, iterate over crops of size ``(xs, ys)`` and segment those.
+    If ``xs`` and ``ys`` are defined, iterate over crops of size ``(xs, ys)`` and segment those. TODO.
     Recommended for large images.
 
     Parameters
     ----------
     %(img_container)s
     %(img_id)s
-    model_group
+    model
+        TODO.
         Segmentation method to use. Available are:
 
-            - `{m.BLOB.s!r}`: Blob extraction with :mod:`skimage`.
+            - `{m.LOG.s!r}`: Blob extraction with :mod:`skimage`. Blobs are assumed to be light on dark.
+            - `{m.DOG.s!r}`: Blob extraction with :mod:`skimage`. Blobs are assumed to be light on dark.
+            - `{m.DOG.s!r}`: Blob extraction with :mod:`skimage`. Blobs can be light on dark or vice versa
             - `{m.WATERSHED.s!r}`: :func:`skimage.segmentation.watershed`.
-            - `{m.TENSORFLOW.s!r}`: :mod:`tensorflow` executable model.
 
-    model_instance
-        TODO: refactore me!
-
-        Instance of executable segmentation model or name of specific method within ``model_group``.
-    channel_idx
+        Alternatively, any :func:`callable` object can be passed as long as TODO.
+    channel
         Channel index to use for segmentation.
-    %(width_height)s
+    yx
+        TODO.
     key_added
-        Key of new image sized array to add into img object. If `None`, use ``segmented_{{model_group}}``.
+        Key of new image sized array to add into img object. If `None`, use ``segmented_{{model}}``.
     %(copy_cont)s
     %(segment_kwargs)s
 
     Returns
     -------
-    Nothing, just updates ``img`` with the segmented image in layer ``key_added``.
-    If ``copy = True``, returns the segmented image.
+    If ``copy = True``, returns segmented image as :class:`squidpy.im.ImageContainer` with name based on ``key_added``.
+
+    Otherwise, it adds the segmented image to ``img`` with name based on ``key_added``.
     """  # noqa: D400
-    # channel name is last dimension of img
-    channel_id = img[img_id].dims[-1]
-    channel_id_new = f"segmented_{channel_id}"  # TODO could make this a parameter
-    model_group = SegmentationBackend(model_group)
-
-    if model_group == SegmentationBackend.BLOB:
-        segmentation_model: SegmentationModel = SegmentationModelBlob(model=model_instance)
-    elif model_group == SegmentationBackend.WATERSHED:
-        segmentation_model = SegmentationModelWatershed(model=model_instance)
-    elif model_group == SegmentationBackend.TENSORFLOW:
-        segmentation_model = SegmentationModelPretrainedTensorflow(model=model_instance)
+    kind = SegmentationBackend.GENERIC if callable(model) else SegmentationBackend(model)
+    if kind in (SegmentationBackend.LOG, SegmentationBackend.DOG, SegmentationBackend.DOH):
+        segmentation_model: SegmentationModel = SegmentationBlob(kind=kind)
+    elif kind == SegmentationBackend.WATERSHED:
+        segmentation_model = SegmentationWatershed()
+    elif kind == SegmentationBackend.GENERIC:
+        if TYPE_CHECKING:
+            assert callable(model)
+        segmentation_model = SegmentationGeneric(func=model)
     else:
-        raise NotImplementedError(model_group)
+        raise NotImplementedError(f"Model `{kind}` is not yet implemented.")
 
-    img_id_new = "segmented_" + model_group.s if key_added is None else key_added
-
-    # segment crops
-    xcoord = []
-    ycoord = []
-    crops = []  # segmented crops will be numpy arrays
-    for crop, x, y in img.generate_equal_crops(xs=xs, ys=ys):
-        xcoord.append(x)
-        ycoord.append(y)
-        crops.append(segmentation_model.segment(crop[img_id][{channel_id: channel_idx}].values, **kwargs))
+    img_id_new = Key.img.segment(kind, key_added=key_added)
+    crops, counter = [], 0
 
     # By convention, segments are numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
     # TODO use overlapping crops to not create confusion at boundaries
-    counter = 0
-    for i, x in enumerate(crops):
-        crop_new = x
-        num_segments = np.max(x)
-        crop_new[crop_new > 0] = crop_new[crop_new > 0] + counter
-        counter += num_segments
-        crops[i] = ImageContainer(crop_new, img_id=img_id_new, channel_id=channel_id_new)
+    # TODO: parallelize
+    for crop in img.generate_equal_crops(yx=yx, as_array=False):
+        segmented = segmentation_model.segment(crop, img_id=img_id, channel=channel, increment=counter, **kwargs)
+        segmented._data = segmented.data.rename({img_id: img_id_new})
 
-    img_segmented = ImageContainer.uncrop_img(crops=crops, x=xcoord, y=ycoord, shape=img.shape)
+        counter += np.max(segmented[img_id_new].values)
+        crops.append(crop)
+
+    res: ImageContainer = ImageContainer.uncrop_img(crops=crops, shape=img.shape)
     if copy:
-        return img_segmented  # type: ignore[no-any-return]
+        return res
 
-    # add segmented image to img
-    img.add_img(img=img_segmented[img_id_new], img_id=img_id_new)
+    img.add_img(res, img_id=img_id_new, copy=False)

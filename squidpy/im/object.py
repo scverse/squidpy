@@ -60,7 +60,7 @@ from squidpy._constants._pkg_constants import Key
 
 Pathlike_t = Union[str, Path]
 Arraylike_t = Union[np.ndarray, xr.DataArray]
-Input_t = Union[Pathlike_t, Arraylike_t]
+Input_t = Union[Pathlike_t, Arraylike_t, "ImageContainer"]
 Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependecies
 
 
@@ -163,6 +163,7 @@ class ImageContainer(FeatureMixin):
         channel_id: str = "channels",
         lazy: bool = True,
         chunks: Optional[int] = None,
+        **kwargs: Any,
     ) -> None:
         """
         Add layer from in memory `np.ndarray`/`xr.DataArray` or on-disk tiff/jpg image.
@@ -186,6 +187,8 @@ class ImageContainer(FeatureMixin):
             Use :mod:`rasterio` or :mod:`dask` to lazily load image.
         chunks
             Chunk size for :mod:`dask`, used in call to :func:`xarray.open_rasterio` for TIFF images.
+        kwargs
+            TODO.
 
         Returns
         -------
@@ -195,8 +198,10 @@ class ImageContainer(FeatureMixin):
         ------
         ValueError
             TODO.
+        NotImplementedError
+            TODO.
         """
-        img = self._load_img(img, chunks=chunks)
+        img = self._load_img(img, chunks=chunks, img_id=img_id, **kwargs)
         if img is not None:  # not reading .nc file
             if TYPE_CHECKING:
                 assert isinstance(img, xr.DataArray)
@@ -210,12 +215,17 @@ class ImageContainer(FeatureMixin):
             self.data.load()
 
     @singledispatchmethod
-    def _load_img(self, img: Union[Pathlike_t, np.ndarray], chunks: Optional[int] = None) -> Optional[xr.DataArray]:
+    def _load_img(
+        self, img: Union[Pathlike_t, Input_t, "ImageContainer"], img_id: str, **kwargs: Any
+    ) -> Optional[xr.DataArray]:
         """
         Load an image.
 
         See :meth:`add_img` for more details.
         """
+        if isinstance(img, ImageContainer):
+            return self._load_img(img[img_id], **kwargs)
+        raise NotImplementedError(type(img))
 
     @_load_img.register(str)
     @_load_img.register(Path)
@@ -252,7 +262,7 @@ class ImageContainer(FeatureMixin):
         raise ValueError(f"Unknown suffix `{img.suffix}`.")
 
     @_load_img.register(spmatrix)  # type: ignore[no-redef]
-    def _(self, img: spmatrix) -> xr.DataArray:
+    def _(self, img: spmatrix, **_: Any) -> xr.DataArray:
         return self._load_img(img.A)
 
     @_load_img.register(np.ndarray)  # type: ignore[no-redef]
@@ -478,7 +488,8 @@ class ImageContainer(FeatureMixin):
             xcoords = np.tile(unique_xcoord, len(unique_ycoord))
 
             # TODO: go in C order, not F order
-            for y, x in zip(ycoords, xcoords):
+            # TODO: remove tqdm?
+            for y, x in tqdm(zip(ycoords, xcoords), total=len(xcoords), unit="crop"):
                 crop = self.crop_corner(yx=(y, x), dydx=(ys, xs), **kwargs)
                 if as_array:
                     crop = crop.data.to_array().values
@@ -605,6 +616,7 @@ class ImageContainer(FeatureMixin):
             data[key] = xr.DataArray(np.zeros(shape + tuple(img.shape[2:]), dtype=img.dtype), dims=img.dims)
 
         # fill data with crops
+        # TODO: remove tqdm?
         for crop in tqdm(crops, unit="crop"):
             for key in keys:
                 coord = crop.data.attrs["coords"]
@@ -732,7 +744,7 @@ class ImageContainer(FeatureMixin):
         return s
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}[TODO]"
+        return f"{self.__class__.__name__}[{self.data.dims}]"
 
     def __str__(self) -> str:
         return repr(self)
