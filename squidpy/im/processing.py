@@ -84,6 +84,8 @@ def process_img(
     elif processing == Processing.SMOOTH:  # type: ignore[comparison-overlap]
         callback = partial(skimage.filters.gaussian, multichannel=True)
     elif processing == Processing.GRAY:  # type: ignore[comparison-overlap]
+        if img[img_id].shape[-1] != 3:
+            raise ValueError(f"Expected channel dimension to be `3`, found `{img[img_id].shape[-1]}`.")
         callback = skimage.color.rgb2gray
         channel_id = f"{channel_id}_{processing}"
     else:
@@ -93,13 +95,13 @@ def process_img(
         img_id_new = key_added
 
     # process crops
-    crops = [
-        crop.apply(callback, img_id=img_id, channel_id=channel_id, **kwargs) for crop in img.generate_equal_crops(yx=yx)
-    ]
+    crops = [crop.apply(callback, img_id=img_id, **kwargs) for crop in img.generate_equal_crops(yx=yx)]
     # reassemble image
     img_proc: ImageContainer = ImageContainer.uncrop_img(crops=crops, shape=img.shape)
+    img_proc._data = img_proc.data.rename({img_proc[img_id].dims[-1]: channel_id}).rename_vars({img_id: img_id_new})
 
+    print(img)
     if copy:
         return img_proc
 
-    img.add_img(img=img_proc, img_id=img_id_new)
+    img.add_img(img=img_proc, img_id=img_id_new, channel_id=channel_id)

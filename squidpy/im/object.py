@@ -207,12 +207,19 @@ class ImageContainer(FeatureMixin):
         img_id = self._get_image_id("image") if img_id is None else img_id
         img = self._load_img(img, chunks=chunks, img_id=img_id, **kwargs)
 
-        if img is not None:  # not reading .nc file
+        if img is not None:  # not reading a .nc file
             if TYPE_CHECKING:
                 assert isinstance(img, xr.DataArray)
             img = img.rename({img.dims[-1]: channel_id})
 
             logg.info(f"Adding `{img_id}` into object")
+            # TODO log if overwriting
+
+            # TODO: ValueError: cannot reindex or align along dimension 'channels'
+            #       because the index has duplicate values
+            #       happens when e.g.: sq.im.process_img(im, img_id='image', copy=False, processing="smooth", yx=500)
+            #       and the channels have the same name
+
             self.data[img_id] = img
         if not lazy:
             # load in memory
@@ -231,7 +238,7 @@ class ImageContainer(FeatureMixin):
             if img_id not in img:
                 raise KeyError(f"Image id `{img_id}` not found in `{img}`.")
             return self._load_img(img[img_id], **kwargs)
-        raise NotImplementedError(type(img))
+        raise NotImplementedError(f"Loader of `{type(img).__name__}` is not yet implemented.")
 
     @_load_img.register(str)
     @_load_img.register(Path)
@@ -265,10 +272,11 @@ class ImageContainer(FeatureMixin):
                 copy=False,
             ).transpose("y", "x", ...)
 
-        raise ValueError(f"Unknown suffix `{img.suffix}`.")
+        raise ValueError(f"Unknown suffix: `{img.suffix}`.")
 
     @_load_img.register(spmatrix)  # type: ignore[no-redef]
     def _(self, img: spmatrix, **_: Any) -> xr.DataArray:
+        # most likely will never be used
         return self._load_img(img.A)
 
     @_load_img.register(np.ndarray)  # type: ignore[no-redef]
@@ -469,32 +477,25 @@ class ImageContainer(FeatureMixin):
         self._assert_not_empty()
 
         ys, xs = yx if isinstance(yx, tuple) else (yx, yx)
-        if ys is None:
-            ys = self.data.dims["y"]
-        if xs is None:
-            xs = self.data.dims["x"]
-
         y, x = self.data.dims["y"], self.data.dims["x"]
 
-        if ys == y and xs == x:
-            res = self.copy(deep=True)
-            res._data = self._post_process(data=res.data, **kwargs)
-            yield res
-        else:
-            _assert_in_range(ys, 0, y, name="ys")
-            _assert_in_range(xs, 0, x, name="xs")
+        ys = y if ys is None else ys
+        xs = x if xs is None else xs
 
-            unique_ycoord = np.arange(start=0, stop=(y // ys + (y % ys != 0)) * ys, step=ys)
-            unique_xcoord = np.arange(start=0, stop=(x // xs + (x % xs != 0)) * xs, step=xs)
+        _assert_in_range(ys, 0, y, name="ys")
+        _assert_in_range(xs, 0, x, name="xs")
 
-            ycoords = np.repeat(unique_ycoord, len(unique_xcoord))
-            xcoords = np.tile(unique_xcoord, len(unique_ycoord))
+        unique_ycoord = np.arange(start=0, stop=(y // ys + (y % ys != 0)) * ys, step=ys)
+        unique_xcoord = np.arange(start=0, stop=(x // xs + (x % xs != 0)) * xs, step=xs)
 
-            for y, x in zip(ycoords, xcoords):
-                crop = self.crop_corner(yx=(y, x), dydx=(ys, xs), **kwargs)
-                if as_array:
-                    crop = crop.data.to_array().values
-                yield crop
+        ycoords = np.repeat(unique_ycoord, len(unique_xcoord))
+        xcoords = np.tile(unique_xcoord, len(unique_ycoord))
+
+        for y, x in zip(ycoords, xcoords):
+            crop = self.crop_corner(yx=(y, x), dydx=(ys, xs), **kwargs)
+            if as_array:
+                crop = crop.data.to_array().values
+            yield crop
 
     @d.dedent
     def generate_spot_crops(
@@ -730,14 +731,16 @@ class ImageContainer(FeatureMixin):
         self,
         func: Callable[..., np.ndarray],
         img_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
+        channel: Optional[int] = None,
         **kwargs: Any,
     ) -> "ImageContainer":
         """TODO."""
         img_id = self._singleton_id(img_id)
         arr = self[img_id]
-        if channel_id is not None:
-            channel_id = arr.dims[-1]
+        channel_id = arr.dims[-1]
+
+        if channel is not None:
+            arr = arr[{channel_id: channel}]
 
         res = ImageContainer(func(arr.values, **kwargs), img_id=img_id, channel_id=channel_id)
         res.data.attrs = copy(self.data.attrs)
@@ -792,8 +795,10 @@ class ImageContainer(FeatureMixin):
     def _repr_html_(self) -> str:
         s = f"{self.__class__.__name__} object with {len(self.data.keys())} layer(s):"
         for layer in self.data.keys():
-            s += f"<p style='text-indent: 25px;'>{layer}: "
-            s += ", ".join(f"{dim} ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape))
+            s += f"<p style='text-indent: 25px; margin-top: 0px;'><strong>{layer}</strong>: "
+            s += ", ".join(
+                f"<em>{dim}</em> ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape)
+            )
             s += "</p>"
         return s
 

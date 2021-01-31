@@ -92,7 +92,7 @@ class SegmentationModel(ABC):
         ----------
         %(img_hr)s
         increment
-            By default, segments are numbered from `1`. TODO better name.
+            By default, segments are numbered from `1`. TODO better name - only for watershed?
         img_id
             Only used when ``image`` is :class:`squidpy.im.ImageContainer`.
 
@@ -100,7 +100,7 @@ class SegmentationModel(ABC):
         -------
         Segmentation mask for the high-resolution image of shape `(x, y, 1)`.
         """
-        raise NotImplementedError(type(img))
+        raise NotImplementedError(f"Segmenting `{type(img).__name__}` is not yet implemented.")
 
     @segment.register(np.ndarray)
     def _(self, img: np.ndarray, increment: int = 0, **kwargs: Any) -> np.ndarray:
@@ -125,13 +125,8 @@ class SegmentationModel(ABC):
 
     @segment.register(ImageContainer)  # type: ignore[no-redef]
     def _(self, img: ImageContainer, img_id: str, channel: int = 0, **kwargs: Any) -> ImageContainer:
-        arr = img[img_id]
-        channel_id = arr.dims[-1]
-
-        arr = arr[{channel_id: channel}].values  # channel name is last dimension of img
-        arr = self.segment(arr, **kwargs)
-
-        return ImageContainer(arr, img_id=img_id, channel_id=f"segmented_{channel_id}_{channel}")
+        # simple inversion of control, we rename the channel dim later
+        return img.apply(self.segment, img_id=img_id, channel=channel, **kwargs)
 
     @abstractmethod
     def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
@@ -333,6 +328,8 @@ def segment_img(
         - :class:`squidpy.im.ImageContainer` ``['{{key_added}}']`` - the segmented image.
     """  # noqa: D400
     img_id = img._singleton_id(img_id)
+    channel_id = img[img_id].dims[-1]
+
     kind = SegmentationBackend.GENERIC if callable(model) else SegmentationBackend(model)
     img_id_new = Key.img.segment(kind, key_added=key_added)
 
@@ -363,12 +360,14 @@ def segment_img(
         )(model=segmentation_model, img_id=img_id, img_id_new=img_id_new, counter=counter, channel=channel, **kwargs),
         shape=img.shape,
     )
+    # this silently assumes segmentation does not change channel id (as it should)
+    res._data = res.data.rename({channel_id: f"{channel_id}:{channel}"})
     logg.info("Finish", time=start)
 
     if copy:
         return res
 
-    img.add_img(res, img_id=img_id_new, copy=False)
+    img.add_img(res, img_id=img_id_new, copy=False, channel_id=res[img_id_new].dims[-1])
 
 
 def _segment(
