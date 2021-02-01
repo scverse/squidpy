@@ -100,7 +100,6 @@ def process_img(
     img_proc: ImageContainer = ImageContainer.uncrop_img(crops=crops, shape=img.shape)
     img_proc._data = img_proc.data.rename({img_proc[img_id].dims[-1]: channel_id}).rename_vars({img_id: img_id_new})
 
-    print(img)
     if copy:
         return img_proc
 

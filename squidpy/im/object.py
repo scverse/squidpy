@@ -18,8 +18,6 @@ from typing import (
 from itertools import chain
 import re
 
-from scipy.sparse import spmatrix
-
 import matplotlib.pyplot as plt
 
 from skimage.util import img_as_float
@@ -273,11 +271,6 @@ class ImageContainer(FeatureMixin):
             ).transpose("y", "x", ...)
 
         raise ValueError(f"Unknown suffix: `{img.suffix}`.")
-
-    @_load_img.register(spmatrix)  # type: ignore[no-redef]
-    def _(self, img: spmatrix, **_: Any) -> xr.DataArray:
-        # most likely will never be used
-        return self._load_img(img.A)
 
     @_load_img.register(np.ndarray)  # type: ignore[no-redef]
     def _(self, img: np.ndarray, **_: Any) -> xr.DataArray:
