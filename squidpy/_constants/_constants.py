@@ -54,7 +54,7 @@ class SegmentationBackend(ModeEnum):  # noqa: D101
     DOG = "dog"
     DOH = "doh"
     WATERSHED = "watershed"
-    GENERIC = "generic"  # callable function
+    CUSTOM = "custom"  # callable function
 
 
 @unique

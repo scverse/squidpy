@@ -189,7 +189,7 @@ class SegmentationWatershed(SegmentationModel):
         return watershed(arr, markers, mask=mask)
 
 
-class SegmentationGeneric(SegmentationModel):
+class SegmentationCustom(SegmentationModel):
     """
     TODO.
 
@@ -227,7 +227,7 @@ class SegmentationGeneric(SegmentationModel):
         return repr(self)
 
 
-class SegmentationBlob(SegmentationGeneric):
+class SegmentationBlob(SegmentationCustom):
     """
     Segmentation model based on :mod:`skimage` blob detection.
 
@@ -330,17 +330,17 @@ def segment_img(
     img_id = img._singleton_id(img_id)
     channel_id = img[img_id].dims[-1]
 
-    kind = SegmentationBackend.GENERIC if callable(model) else SegmentationBackend(model)
+    kind = SegmentationBackend.CUSTOM if callable(model) else SegmentationBackend(model)
     img_id_new = Key.img.segment(kind, key_added=key_added)
 
     if kind in (SegmentationBackend.LOG, SegmentationBackend.DOG, SegmentationBackend.DOH):
         segmentation_model: SegmentationModel = SegmentationBlob(kind=kind)
     elif kind == SegmentationBackend.WATERSHED:
         segmentation_model = SegmentationWatershed()
-    elif kind == SegmentationBackend.GENERIC:
+    elif kind == SegmentationBackend.CUSTOM:
         if TYPE_CHECKING:
             assert callable(model)
-        segmentation_model = SegmentationGeneric(func=model)
+        segmentation_model = SegmentationCustom(func=model)
     else:
         raise NotImplementedError(f"Model `{kind}` is not yet implemented.")
 

@@ -4,7 +4,7 @@ from squidpy.im.segment import (
     segment_img,
     SegmentationBlob,
     SegmentationModel,
-    SegmentationGeneric,
+    SegmentationCustom,
     SegmentationWatershed,
 )
 from squidpy.im.features import calculate_image_features
