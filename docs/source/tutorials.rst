@@ -1,18 +1,22 @@
 Tutorials
 =========
 
-Here you can find a series of tutorials for the analysis of spatial molecular data with squidpy
+This section contains various tutorials showcasing spatial molecular data analysis with squidpy.
+
+Core tutorials
+--------------
+This section contains tutorials showcasing core squidpy functionalities.
 
 .. nbgallery::
-    :caption: Graph
     :glob:
 
-    auto_tutorials/graph/tutorial_*
-    external_tutorials/graph/tutorial_*
+    auto_tutorials/tutorial_*
+
+External tutorials
+------------------
+This section contains tutorials showcasing how squidpy can interface with external libraries.
 
 .. nbgallery::
-    :caption: Image
     :glob:
 
-    auto_tutorials/image/tutorial_*
-    external_tutorials/image/tutorial_*
+    tutorials_external/tutorial_*

@@ -1,16 +1,20 @@
 Examples
 ========
 
-Here you can find a series of examples of the :mod:`squidpy.im` module.
-It contains various methods to analyze and visualize large images acquired
-in spatial molecular technologies.
+This section contains various short examples showcasing core squidpy functionalities.
+
+Graph
+-----
+This section contains various examples for the :mod:`squidpy.gr` module.
 
 .. nbgallery::
-    :caption: Graph
     :glob:
 
     auto_examples/graph/compute_*
 
+Image
+-----
+This section contains various examples for the :mod:`squidpy.im` module.
 
 .. nbgallery::
     :caption: Image
