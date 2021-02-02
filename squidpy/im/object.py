@@ -106,48 +106,44 @@ class ImageContainer(FeatureMixin):
             self.add_img(img, img_id=img_id, chunks=chunks, **kwargs)
 
     @classmethod
-    def load(cls, fname: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":
+    def load(cls, path: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":
         """
-        Load an NetCDF file.
+        Load data from a `Zarr` store.
 
         Parameters
         ----------
-        fname
-            Path to NetCDF file.
+        path
+            Path to `Zarr` store.
         lazy
             Use :mod:`dask` to lazily load image.
         chunks
             Chunk size for :mod:`dask`.
         """
         res = cls()
-        res.add_img(fname, img_id="image", chunks=chunks, lazy=lazy)
+        res.add_img(path, img_id="image", chunks=chunks, lazy=lazy)
+
         return res
 
-    def save(self, fname: Pathlike_t, **kwargs: Any) -> None:
+    def save(self, path: Pathlike_t, **kwargs: Any) -> None:
         """
-        Save dataset as NetCDF file.
+        Save self to `Zarr` store.
 
         Parameters
         ----------
-        fname
-            Path where to save the NetCDF file.
+        path
+            Path to `Zarr` store.
 
         Returns
         -------
-        Nothing, just saves the data to ``fname``.
+        Nothing, just saves the data to ``path``.
         """
-        fname = str(fname)
-        if not fname.endswith(".nc") and not fname.endswith(".cdf"):
-            fname += ".nc"
-
         attrs = self.data.attrs
         try:
+            self._data = self.data.load()  # TODO: explain why this has to be done
             self.data.attrs = {
                 k: (v.to_tuple() if isinstance(v, TupleSerializer) else v) for k, v in self.data.attrs.items()
             }
-            self.data.to_netcdf(fname, mode="w", engine="netcdf4", **kwargs)
-        except PermissionError as e:
-            raise RuntimeError(f"It seems like another object is using `{fname}`.") from e
+            self.data.to_zarr(path, mode="w", **kwargs, **kwargs)
         finally:
             self.data.attrs = attrs
 
@@ -164,17 +160,12 @@ class ImageContainer(FeatureMixin):
         channel_id: str = "channels",
         lazy: bool = True,
         chunks: Optional[int] = None,
-        **kwargs: Any,
+        **kwargs: Any,  # TODO: update docstring
     ) -> None:
         """
         Add layer from in memory `np.ndarray`/`xr.DataArray` or on-disk tiff/jpg image.
 
-        For :mod:`numpy` arrays, we assume that dims are: `(y, x, channel_id)`.
-
-        NOTE: lazy loading via :mod:`dask` is not supported for on-disk jpg files.
-        They will be loaded in memory.
-
-        NOTE: multi-page tiffs will be loaded in one DataArray, with the concatenated channel dimensions.
+        For :mod:`numpy` arrays, we assume that dims are ``(y, x, channel_id)``.
 
         Parameters
         ----------
@@ -194,6 +185,11 @@ class ImageContainer(FeatureMixin):
         Returns
         -------
         Nothing, just adds loaded img to ``data`` with key ``img_id``.
+
+        Notes
+        -----
+        Lazy loading via :mod:`dask` is not supported for on-disk jpg files. They will be loaded in memory.
+        Multi-page tiffs will be loaded in one :class:`xarray.DataArray`, with the concatenated channel dimensions.
 
         Raises
         ------
@@ -242,21 +238,33 @@ class ImageContainer(FeatureMixin):
     @_load_img.register(Path)
     def _(self, img: Pathlike_t, chunks: Optional[int] = None, **_: Any) -> Optional[xr.DataArray]:
         img = Path(img)
-        if not img.is_file():
-            raise OSError(f"File `{img}` does not exist.")
-
         suffix = img.suffix.lower()
 
         if suffix in (".jpg", ".jpeg"):
             return self._load_img(imread(str(img)))
+
+        if img.is_dir():
+            if len(self._data):
+                raise ValueError("Loading data from `Zarr` is disallowed if the container is not empty.")
+
+            self._data = xr.open_zarr(str(img), chunks=chunks)
+            self.data.attrs["coords"] = CropCoords.from_tuple(self.data.attrs.get("coords", _NULL_COORDS.to_tuple()))
+            self.data.attrs["padding"] = CropPadding.from_tuple(
+                self.data.attrs.get("padding", _NULL_PADDING.to_tuple())
+            )
+            return None
+
         if suffix in (".nc", ".cdf"):
             if len(self._data):
-                raise ValueError("Loading data from NetCDF is disallow if the container is not empty.")
+                raise ValueError("Loading data from `NetCDF` is disallowed if the container is not empty.")
 
-            self._data = xr.open_dataset(img, engine="netcdf4", chunks=chunks)
-            self.data.attrs["coords"] = CropCoords.from_tuple(self.data.attrs["coords"])
-            self.data.attrs["padding"] = CropPadding.from_tuple(self.data.attrs["padding"])
+            self._data = xr.open_dataset(img, chunks=chunks)
+            self.data.attrs["coords"] = CropCoords.from_tuple(self.data.attrs.get("coords", _NULL_COORDS.to_tuple()))
+            self.data.attrs["padding"] = CropPadding.from_tuple(
+                self.data.attrs.get("padding", _NULL_PADDING.to_tuple())
+            )
             return None
+
         if suffix in (".tif", ".tiff"):
             # calling _load_img ensures we can safely do the transpose
             return self._load_img(
@@ -270,7 +278,7 @@ class ImageContainer(FeatureMixin):
                 copy=False,
             ).transpose("y", "x", ...)
 
-        raise ValueError(f"Unknown suffix: `{img.suffix}`.")
+        raise ValueError(f"Unknown suffix `{img.suffix}`.")
 
     @_load_img.register(np.ndarray)  # type: ignore[no-redef]
     def _(self, img: np.ndarray, **_: Any) -> xr.DataArray:
