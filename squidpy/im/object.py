@@ -513,7 +513,7 @@ class ImageContainer(FeatureMixin):
         adata: AnnData,
         library_id: Optional[str] = None,
         spatial_key: str = Key.obsm.spatial,
-        scale: float = 1.0,
+        spot_scale: float = 1.0,
         obs_names: Optional[Iterable[Any]] = None,
         as_array: bool = False,
         return_obs: bool = False,
@@ -530,7 +530,7 @@ class ImageContainer(FeatureMixin):
         library_id
             Key in :attr:`anndata.AnnData.uns` ['{spatial_key}'] used to get the spot diameter.
         %(spatial_key)s
-        scale
+        spot_scale
             Scaling factor for the spot diameter. Larger values mean more context.
         obs_names
             Observations from :attr:`adata.obs_names` for which to generate the crops. If `None`, all names are used.
@@ -547,7 +547,7 @@ class ImageContainer(FeatureMixin):
         If ``as_array = True``, crop will be a :class:`numpy.array`.
         """
         self._assert_not_empty()
-        _assert_positive(scale, name="scale")
+        _assert_positive(spot_scale, name="scale")
         _assert_spatial_basis(adata, spatial_key)
         library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=library_id)
 
@@ -559,7 +559,7 @@ class ImageContainer(FeatureMixin):
         spatial = adata.obsm[spatial_key][:, :2]
 
         diameter = adata.uns[spatial_key][library_id]["scalefactors"]["spot_diameter_fullres"]
-        radius = int(round(diameter // 2 * scale))
+        radius = int(round(diameter // 2 * spot_scale))
 
         for i in range(adata.n_obs):
             crop = self.crop_center(spatial[i], radius=radius, **kwargs)
