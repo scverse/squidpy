@@ -287,7 +287,7 @@ class ImageContainer(FeatureMixin):
         if img.ndim != 3:
             raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
 
-        return xr.DataArray(img, dims=["y", "x", "channels"])
+        return xr.DataArray(img, dims=["y", "x", "channels"], coords={"channels": [1, 1, 1]})
 
     @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
     def _(self, img: xr.DataArray, copy: bool = True, **_: Any) -> xr.DataArray:
@@ -639,20 +639,20 @@ class ImageContainer(FeatureMixin):
             raise ValueError(f"Requested image of shape `{shape}`, but minimal shape must be `({dy}, {dx})`.")
 
         # create resulting dataset
-        data = xr.Dataset()
+        dataset = xr.Dataset()
         for key in keys:
-            img = crops[0].data[key]
+            img = crop.data[key]
             # get shape for this DataArray
-            data[key] = xr.DataArray(np.zeros(shape + tuple(img.shape[2:]), dtype=img.dtype), dims=img.dims)
-
-        # fill data with crops
-        for crop in crops:
-            for key in keys:
+            dataset[key] = xr.DataArray(
+                np.zeros(shape + tuple(img.shape[2:]), dtype=img.dtype), dims=img.dims, coords=img.coords
+            )
+            # fill data with crops
+            for crop in crops:
                 coord = crop.data.attrs["coords"]
                 padding = crop.data.attrs["padding"]
-                data[key][coord.slice] = crop[key][coord.to_image_coordinates(padding=padding).slice]
+                dataset[key][coord.slice] = crop[key][coord.to_image_coordinates(padding=padding).slice]
 
-        return cls._from_dataset(data)
+        return cls._from_dataset(dataset)
 
     @d.dedent
     def show(
