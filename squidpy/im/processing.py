@@ -95,9 +95,9 @@ def process_img(
         img_id_new = key_added
 
     # process crops
-    crops = [crop.apply(callback, img_id=img_id, **kwargs) for crop in img.generate_equal_crops(yx=yx)]
+    crops = [crop.apply(callback, img_id=img_id, **kwargs) for crop in img.generate_equal_crops(size=yx)]
     # reassemble image
-    img_proc: ImageContainer = ImageContainer.uncrop_img(crops=crops, shape=img.shape)
+    img_proc: ImageContainer = ImageContainer.uncrop(crops=crops, shape=img.shape)
     img_proc._data = img_proc.data.rename({img_proc[img_id].dims[-1]: channel_id}).rename_vars({img_id: img_id_new})
 
     if copy:

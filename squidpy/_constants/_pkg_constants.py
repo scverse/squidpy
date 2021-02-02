@@ -1,6 +1,8 @@
 """Internal constants not exposed to the user."""
 from typing import Any, Callable, Optional
 
+from anndata import AnnData
+
 from squidpy._constants._constants import SegmentationBackend
 
 _SEP = "_"
@@ -64,6 +66,21 @@ class Key:  # noqa: D101
         @classmethod
         def colors(cls, cluster: str) -> str:
             return f"{cluster}_colors"
+
+        @classmethod
+        def library_id(cls, adata: AnnData, spatial_key: str, library_id: Optional[str] = None) -> str:
+            if spatial_key not in adata.uns:
+                raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.uns`.")
+            haystack = list(adata.uns[spatial_key].keys())
+            if library_id is None:
+                if len(haystack) > 1:
+                    raise ValueError(f"Unable to select `library_id`. Please specify one from: `{sorted(haystack)}`.")
+                library_id = haystack[0]
+
+            if library_id not in haystack:
+                raise KeyError()
+
+            return library_id
 
     class obsp:  # noqa: D106
         @classmethod

@@ -345,10 +345,10 @@ def segment_img(
         raise NotImplementedError(f"Model `{kind}` is not yet implemented.")
 
     counter, n_jobs = Counter(), _get_n_cores(n_jobs)
-    crops = list(img.generate_equal_crops(yx=yx, as_array=False))
+    crops = list(img.generate_equal_crops(size=yx, as_array=False))
 
     start = logg.info(f"Segmenting `{len(crops)}` crops using `{segmentation_model}` and `{n_jobs}` core(s)")
-    res: ImageContainer = ImageContainer.uncrop_img(
+    res: ImageContainer = ImageContainer.uncrop(
         parallelize(
             _segment,
             collection=crops,

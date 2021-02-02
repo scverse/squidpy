@@ -217,7 +217,7 @@ def test_uncrop_img(tmpdir):
         crops.append(crop)
         xcoords.append(x)
         ycoords.append(y)
-    a = ImageContainer.uncrop_img(crops, xcoords, ycoords, shape=cont.shape)
+    a = ImageContainer.uncrop(crops, xcoords, ycoords, shape=cont.shape)
 
     # check that has cropped correct image
     assert np.max(np.abs(a.data["image_0"] - cont.data["image_0"])) == 0.0
@@ -242,7 +242,7 @@ def test_single_uncrop_img(tmpdir):
         crops.append(crop)
         xcoords.append(x)
         ycoords.append(y)
-    a = ImageContainer.uncrop_img(crops, xcoords, ycoords, shape=cont.shape)
+    a = ImageContainer.uncrop(crops, xcoords, ycoords, shape=cont.shape)
 
     # check that has cropped correct image
     assert np.max(np.abs(a.data["image_0"] - cont.data["image_0"])) == 0.0
