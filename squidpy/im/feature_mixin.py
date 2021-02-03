@@ -44,7 +44,7 @@ class FeatureMixin:
     """Mixin class for ImageContainer implementing feature extraction functions."""
 
     @d.dedent
-    def get_summary_features(
+    def features_summary(
         self: HasGetItemProtocol,
         img_id: str,
         feature_name: str = "summary",
@@ -82,7 +82,7 @@ class FeatureMixin:
         return features
 
     @d.dedent
-    def get_histogram_features(
+    def features_histogram(
         self: HasGetItemProtocol,
         img_id: str,
         feature_name: str = "histogram",
@@ -125,7 +125,7 @@ class FeatureMixin:
         return features
 
     @d.dedent
-    def get_texture_features(
+    def features_texture(
         self: HasGetItemProtocol,
         img_id: str,
         feature_name: str = "texture",
@@ -185,7 +185,7 @@ class FeatureMixin:
         return features
 
     @d.dedent
-    def get_segmentation_features(
+    def features_segmentation(
         self: HasGetItemProtocol,
         img_id: str,
         label_img_id: str,
@@ -215,6 +215,7 @@ class FeatureMixin:
 
                 - `'area'`
                 - `'bbox_area'`
+                - `'centroids'`
                 - `'convex_area'`
                 - `'eccentricity'`
                 - `'equivalent_diameter'`
@@ -307,7 +308,7 @@ class FeatureMixin:
         return features
 
     @d.dedent
-    def get_custom_features(
+    def features_custom(
         self: HasGetItemProtocol,
         img_id: str,
         func: Callable[[np.ndarray], Any],
@@ -342,9 +343,9 @@ class FeatureMixin:
         Simple example would be to calculate the mean of a specified channel::
 
             img = squidpy.im.ImageContainer(...)
-            img.get_custom_features(imd_id=..., func=numpy.mean, channels=0)
+            img.features_custom(imd_id=..., func=numpy.mean, channels=0)
 
-        This can also be done by passing ``mean = True`` to :meth:`squidpy.im.ImageContainer.get_summary_features`.
+        This can also be done by passing ``mean = True`` to :meth:`squidpy.im.ImageContainer.features_summary`.
         """
         channels = _get_channels(self[img_id], channels)
         feature_name = getattr(func, "__name__", "custom") if feature_name is None else feature_name

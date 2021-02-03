@@ -1,8 +1,7 @@
-# TODO: disable data-science-types because below does not generate types in sphinx + create an issue
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, List, Union, Mapping, Iterable, Optional
+from typing import Any, List, Union, Mapping, Iterable, Optional, TYPE_CHECKING
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -43,15 +42,15 @@ def calculate_image_features(
         Features to be calculated. Valid options are:
 
         - `{f.TEXTURE.s!r}` - summary stats based on repeating patterns
-          :meth:`squidpy.im.ImageContainer.get_texture_features`.
+          :meth:`squidpy.im.ImageContainer.features_texture`.
         - `{f.SUMMARY.s!r}` - summary stats of each image channel
-          :meth:`squidpy.im.ImageContainer.get_summary_features`.
+          :meth:`squidpy.im.ImageContainer.features_summary`.
         - `{f.COLOR_HIST.s!r}` - counts in bins of image channel's histogram
-          :meth:`squidpy.im.ImageContainer.get_histogram_features`.
+          :meth:`squidpy.im.ImageContainer.features_histogram`.
         - `{f.SEGMENTATION.s!r}` - stats of a cell segmentation mask
-          :meth:`squidpy.im.ImageContainer.get_segmentation_features`.
+          :meth:`squidpy.im.ImageContainer.features_segmentation`.
         - `{f.CUSTOM.s!r}` - extract features using a custom function
-          :meth:`squidpy.im.ImageContainer.get_custom_features`.
+          :meth:`squidpy.im.ImageContainer.features_custom`.
 
     features_kwargs
         Keyword arguments for the different features that should be generated, such as
@@ -75,8 +74,6 @@ def calculate_image_features(
     ------
     ValueError
         If a feature is not known.
-    NotImplementedError
-        TODO.
     """
     img_id = img._singleton_id(img_id)
     if isinstance(features, (str, ImageFeature)):
@@ -99,7 +96,7 @@ def calculate_image_features(
         logg.info("Finish", time=start)
         return res
 
-    _save_data(adata, attr="uns", key=key_added, data=res, time=start)
+    _save_data(adata, attr="obsm", key=key_added, data=res, time=start)
 
 
 def _calculate_image_features_helper(
@@ -114,6 +111,8 @@ def _calculate_image_features_helper(
 ) -> pd.DataFrame:
     features_list = []
     for crop in img.generate_spot_crops(adata, obs_names=obs_ids, **kwargs):
+        if TYPE_CHECKING:
+            assert isinstance(crop, ImageContainer)
         features_dict = {}
         for feature in features:
             feature = ImageFeature(feature)
@@ -121,19 +120,19 @@ def _calculate_image_features_helper(
             print(features_kwargs, feature.s)
 
             if feature == ImageFeature.TEXTURE:
-                res = crop.get_texture_features(img_id=img_id, **feature_kwargs)
+                res = crop.features_texture(img_id=img_id, **feature_kwargs)
             elif feature == ImageFeature.COLOR_HIST:
-                res = crop.get_histogram_features(img_id=img_id, **feature_kwargs)
+                res = crop.features_histogram(img_id=img_id, **feature_kwargs)
             elif feature == ImageFeature.SUMMARY:
-                res = crop.get_summary_features(img_id=img_id, **feature_kwargs)
+                res = crop.features_summary(img_id=img_id, **feature_kwargs)
             elif feature == ImageFeature.SEGMENTATION:
-                res = crop.get_segmentation_features(img_id=img_id, **feature_kwargs)
+                res = crop.features_segmentation(img_id=img_id, **feature_kwargs)
             elif feature == ImageFeature.CUSTOM:
-                res = crop.get_custom_features(img_id=img_id, **feature_kwargs)
+                res = crop.features_custom(img_id=img_id, **feature_kwargs)
             else:
+                # should never get here
                 raise NotImplementedError(f"Feature `{feature}` is not yet implemented.")
 
-            # TODO: overwrites check/logging?
             features_dict.update(res)
         features_list.append(features_dict)
 

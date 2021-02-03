@@ -24,7 +24,7 @@ def test_calculate_image_features(adata: AnnData, cont: ImageContainer, n_jobs: 
 def test_get_summary_features():
     img = ImageContainer(np.random.randint(low=0, high=255, size=(100, 100, 3), dtype=np.uint8), img_id="image")
     feature = "test_summary_stats"
-    stats = img.get_summary_features(
+    stats = img.features_summary(
         img_id="image", feature_name=feature, quantiles=[0.9, 0.5, 0.1], mean=True, std=True, channels=[0, 1, 2]
     )
 
@@ -45,7 +45,7 @@ def test_get_segmentation_features():
 
     props = ["area", "label", "mean_intensity"]
     feature_name = "segmentation"
-    stats = img.get_segmentation_features(
+    stats = img.features_segmentation(
         img_id="image", feature_name=feature_name, props=props, label_img_id="segmented", mean=True, std=True
     )
 
@@ -65,10 +65,8 @@ def test_get_custom_features():
         return np.mean(x)
 
     # calculate custom features
-    custom_features = img.get_custom_features(
-        img_id="image", feature_name="custom", feature_fn=feature_fn, channels=[0]
-    )
-    summary_features = img.get_summary_features(img_id="image", feature_name="summary", mean=True, channels=[0])
+    custom_features = img.features_custom(img_id="image", feature_name="custom", feature_fn=feature_fn, channels=[0])
+    summary_features = img.features_summary(img_id="image", feature_name="summary", mean=True, channels=[0])
 
     assert isinstance(custom_features, dict)
     assert custom_features.get("custom_0", None) is not None, "custom features were not calculated"
