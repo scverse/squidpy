@@ -27,6 +27,7 @@ from squidpy._utils import singledispatchmethod
 from squidpy.gr._utils import (
     _assert_in_range,
     _assert_positive,
+    _assert_non_negative,
     _assert_spatial_basis,
     _assert_non_empty_sequence,
 )
@@ -355,7 +356,6 @@ class ImageContainer(FeatureMixin):
         ys, xs = size
         _assert_positive(ys, name="height")
         _assert_positive(xs, name="width")
-        ys, xs = np.clip(ys, 0, self.data.dims["y"]), np.clip(xs, 0, self.data.dims["x"])
 
         orig = CropCoords(x0=x, y0=y, x1=x + xs, y1=y + ys)
         orig_dtypes = {key: arr.dtype for key, arr in self.data.items()}
@@ -388,9 +388,7 @@ class ImageContainer(FeatureMixin):
         else:
             crop.attrs["padding"] = _NULL_PADDING
 
-        crop = self._post_process(data=crop, scale=scale, cval=cval, mask_circle=mask_circle)
-
-        return self._from_dataset(crop)
+        return self._from_dataset(self._post_process(data=crop, scale=scale, cval=cval, mask_circle=mask_circle))
 
     def _post_process(
         self,
@@ -459,9 +457,8 @@ class ImageContainer(FeatureMixin):
             radius = (radius, radius)
 
         (yr, xr) = self._convert_to_pixel_space(radius)
-        _assert_positive(yr, name="radius height")
-        _assert_positive(xr, name="radius width")
-        yr, xr = np.clip(yr, 0, self.data.dims["y"] // 2), np.clip(xr, 0, self.data.dims["x"] // 2)
+        _assert_non_negative(yr, name="radius height")
+        _assert_non_negative(xr, name="radius width")
 
         return self.crop_corner(  # type: ignore[no-any-return]
             y=y - yr, x=x - xr, size=(yr * 2 + 1, xr * 2 + 1), **kwargs
@@ -503,7 +500,6 @@ class ImageContainer(FeatureMixin):
         ys, xs = size
         _assert_in_range(ys, 0, y, name="height")
         _assert_in_range(xs, 0, x, name="width")
-        ys, xs = np.clip(ys, 0, self.data.dims["y"]), np.clip(xs, 0, self.data.dims["x"])
 
         unique_ycoord = np.arange(start=0, stop=(y // ys + (y % ys != 0)) * ys, step=ys)
         unique_xcoord = np.arange(start=0, stop=(x // xs + (x % xs != 0)) * xs, step=xs)

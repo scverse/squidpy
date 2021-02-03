@@ -1,13 +1,12 @@
 import pytest
-import warnings
 
 from anndata import AnnData
 
 import numpy as np
 
-import rasterio.errors
+import tifffile
 
-from squidpy.im._utils import CropCoords
+from squidpy.im._utils import CropCoords, _NULL_COORDS
 from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
 
@@ -17,10 +16,6 @@ def test_image_loading(shape, tmpdir):
     """Initialize ImageObject with tiff / multipagetiff / numpy array and check that loaded data \
     fits the expected shape + content.
     """
-    import tifffile
-
-    # ignore NotGeoreferencedWarning here
-    warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
     img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
 
     # load as np arrray
@@ -34,8 +29,6 @@ def test_image_loading(shape, tmpdir):
     fname = tmpdir.mkdir("data").join("img.tif")
     tifffile.imsave(fname, img_orig)
     cont = ImageContainer(str(fname))
-    print(cont.data)
-    print(cont.data["image"])
 
     if len(shape) > 3:
         # multi-channel tiff
@@ -67,6 +60,7 @@ def test_add_img(shape1, shape2):
     assert "img_orig" in cont.data
     assert "img_new" in cont.data
     assert (np.squeeze(cont.data["img_new"]) == np.squeeze(img_new)).all()
+    np.testing.assert_array_equal(np.squeeze(cont.data["img_new"]), np.squeeze(img_new))
 
 
 def test_crop(tmpdir):
@@ -75,7 +69,6 @@ def test_crop(tmpdir):
     check that returned crops have correct shape.
     """
     # ignore NotGeoreferencedWarning here
-    warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
     # create ImageContainer
     xdim = 100
     ydim = 200
@@ -86,10 +79,9 @@ def test_crop(tmpdir):
 
     # crop big crop
     crop = cont.crop_center(
-        x=50,
-        y=20,
-        xr=150,
-        yr=150,
+        y=50,
+        x=20,
+        radius=150,
         cval=5,
     )
     assert type(crop) == ImageContainer
@@ -101,15 +93,14 @@ def test_crop(tmpdir):
     assert crop.data["image_0"].dtype == np.uint8
 
     # compare with crop_corner
-    crop2 = cont.crop_corner(x=-100, y=-130, xs=301, ys=301, cval=5)
-    assert (crop2.data["image_0"] == crop.data["image_0"]).all()
+    crop2 = cont.crop_corner(y=-100, x=-130, size=301, cval=5)
+    np.testing.assert_array_equal(crop2.data["image_0"], crop.data["image_0"])
 
     # crop small crop
     crop = cont.crop_center(
         x=50,
         y=20,
-        xr=0,
-        yr=0,
+        radius=0,
         cval=5,
     )
     assert type(crop) == ImageContainer
@@ -120,17 +111,16 @@ def test_crop(tmpdir):
 
     # crop with mask_circle
     crop = cont.crop_center(
-        x=50,
         y=20,
-        xr=5,
-        yr=5,
+        x=50,
+        radius=5,
         cval=5,
         mask_circle=True,
     )
-    assert (crop.data["image_0"][1, 0, :] == 5).all()
-    assert (crop.data["image_0"][2, 2, :] == 0).all()
-    assert (crop.data["image_0"][7, 7, :] == 0).all()
-    assert (crop.data["image_0"][9, 9, :] == 5).all()
+    np.testing.assert_array_equal(crop.data["image_0"][1, 0, :], 5)
+    np.testing.assert_array_equal(crop.data["image_0"][2, 2, :], 0)
+    np.testing.assert_array_equal(crop.data["image_0"][7, 7, :], 0)
+    np.testing.assert_array_equal(crop.data["image_0"][9, 9, :], 5)
 
     assert type(crop) == ImageContainer
 
@@ -138,10 +128,9 @@ def test_crop(tmpdir):
     mask = np.random.randint(low=0, high=10, size=(xdim, ydim))
     cont.add_img(mask, img_id="image_1", channel_dim="mask")
     crop = cont.crop_center(
-        x=50,
-        y=20,
-        xr=0,
-        yr=0,
+        y=50,
+        x=20,
+        radius=0,
         cval=5,
     )
     assert "image_1" in crop.data.keys()
@@ -150,18 +139,11 @@ def test_crop(tmpdir):
     assert crop.data["image_0"].shape == (1, 1, 10)
 
     # crop with scaling
-    crop = cont.crop_center(x=50, y=20, xr=10, yr=10, cval=5, scale=0.5)
+    crop = cont.crop_center(y=50, x=20, radius=10, cval=5, scale=0.5)
     assert "image_1" in crop.data.keys()
     assert "image_0" in crop.data.keys()
     assert crop.data["image_1"].shape == (21 // 2, 21 // 2, 1)
     assert crop.data["image_0"].shape == (21 // 2, 21 // 2, 10)
-
-    # crop casting to dtype
-    img_orig = np.zeros((xdim, ydim, 10), dtype=np.uint16)
-    cont = ImageContainer(img_orig, img_id="image_0")
-    crop = cont.crop_center(x=50, y=20, xr=150, yr=150, cval=5, dtype="uint8")
-    assert type(crop) == ImageContainer
-    assert crop.data["image_0"].dtype == np.uint8
 
 
 def test_generate_spot_crops(adata: AnnData, cont: ImageContainer):
@@ -172,7 +154,7 @@ def test_generate_spot_crops(adata: AnnData, cont: ImageContainer):
     """
     i = 0
     expected_size = adata.uns["spatial"]["V1_Adult_Mouse_Brain"]["scalefactors"]["spot_diameter_fullres"] // 2 * 2 + 1
-    for crop, obs_id in cont.generate_spot_crops(adata):
+    for crop, obs_id in cont.generate_spot_crops(adata, return_obs=True):
         # crops have expected size?
         assert crop.shape[0] == expected_size
         assert crop.shape[1] == expected_size
@@ -193,7 +175,7 @@ def test_generate_equal_crops(ys, xs):
     if ys is None or xs is None:
         expected_size = (200, 500)
 
-    for crop, _x, _y in img.generate_equal_crops(xs=xs, ys=ys):
+    for crop in img.generate_equal_crops(size=(ys, xs)):
         assert crop.shape[0] == expected_size[0]
         assert crop.shape[1] == expected_size[1]
 
@@ -210,46 +192,38 @@ def test_uncrop_img(tmpdir):
     cont = ImageContainer(img_orig, img_id="image_0")
 
     # crop small crop
-    xcoords = []
-    ycoords = []
     crops = []
-    for crop, x, y in cont.generate_equal_crops(xs=5, ys=5):
+    for crop in cont.generate_equal_crops(size=5):
         crops.append(crop)
-        xcoords.append(x)
-        ycoords.append(y)
-    a = ImageContainer.uncrop(crops, xcoords, ycoords, shape=cont.shape)
+    a = ImageContainer.uncrop(crops)
 
     # check that has cropped correct image
-    assert np.max(np.abs(a.data["image_0"] - cont.data["image_0"])) == 0.0
+    np.testing.assert_array_equal(a["image_0"], cont["image_0"])
 
 
 def test_single_uncrop_img(tmpdir):
     """Crop image into one crop and uncrop again and check equality."""
     # create ImageContainer
-    xdim = 100
     ydim = 100
+    xdim = 100
     # create ImageContainer
-    img_orig = np.zeros((xdim, ydim, 10), dtype=np.uint8)
+    img_orig = np.zeros((ydim, xdim, 10), dtype=np.uint8)
     # put a dot at y 20, x 50
     img_orig[20, 50, :] = range(10, 20)
     cont = ImageContainer(img_orig, img_id="image_0")
 
     # crop small crop
-    xcoords = []
-    ycoords = []
     crops = []
-    for crop, x, y in cont.generate_equal_crops(xs=xdim, ys=ydim):
+    for crop in cont.generate_equal_crops(size=(ydim, xdim)):
         crops.append(crop)
-        xcoords.append(x)
-        ycoords.append(y)
-    a = ImageContainer.uncrop(crops, xcoords, ycoords, shape=cont.shape)
+    a = ImageContainer.uncrop(crops)
 
     # check that has cropped correct image
-    assert np.max(np.abs(a.data["image_0"] - cont.data["image_0"])) == 0.0
+    np.testing.assert_array_equal(a["image_0"], cont["image_0"])
 
 
 def test_crop_metadata(cont: ImageContainer) -> None:
-    crop = cont.crop_corner(0, 0, 50, 50)
+    crop = cont.crop_corner(0, 0, 50)
 
-    assert cont.data.attrs["crop"] is None
-    assert crop.data.attrs["crop"] == CropCoords(0, 0, 50, 50)
+    assert cont.data.attrs["coords"] is _NULL_COORDS
+    assert crop.data.attrs["coords"] == CropCoords(0, 0, 50, 50)
