@@ -11,6 +11,7 @@ from skimage.feature import greycoprops, greycomatrix
 import skimage.measure
 
 from squidpy._docs import d
+from squidpy.im._utils import _NULL_COORDS, _NULL_PADDING
 
 Feature_t = Dict[str, Any]
 Channel_t = Union[int, Sequence[int]]
@@ -34,6 +35,10 @@ class HasGetItemProtocol(Protocol):
     def __getitem__(self, key: str) -> xr.DataArray:
         ...
 
+    @property
+    def data(self) -> xr.Dataset:  # noqa: D102
+        ...
+
 
 class FeatureMixin:
     """Mixin class for ImageContainer implementing feature extraction functions."""
@@ -45,9 +50,6 @@ class FeatureMixin:
         feature_name: str = "summary",
         channels: Optional[Channel_t] = None,
         quantiles: Sequence[float] = (0.9, 0.5, 0.1),
-        # TODO: mean/std argument not really necessary?
-        mean: bool = False,
-        std: bool = False,
     ) -> Feature_t:
         """
         Calculate summary statistics of image channels.
@@ -59,10 +61,6 @@ class FeatureMixin:
         %(channels)s
         quantiles
             Quantiles that are computed.
-        mean
-            Compute mean.
-        std
-            Compute std deviation.
 
         Returns
         -------
@@ -78,9 +76,7 @@ class FeatureMixin:
         for c in channels:
             for q in quantiles:
                 features[f"{feature_name}_ch-{c}_quantile-{q}"] = np.quantile(self[img_id][:, :, c], q)
-            if mean:
                 features[f"{feature_name}_ch-{c}_mean"] = np.mean(self[img_id][:, :, c].values)
-            if std:
                 features[f"{feature_name}_ch-{c}_std"] = np.std(self[img_id][:, :, c].values)
 
         return features
@@ -196,9 +192,6 @@ class FeatureMixin:
         feature_name: str = "segmentation",
         channels: Optional[Channel_t] = None,
         props: Iterable[str] = ("label", "area", "mean_intensity"),
-        # TODO: mean/std argument not really necessary?
-        mean: bool = True,
-        std: bool = False,
     ) -> Feature_t:
         """
         Calculate segmentation features using :func:`skimage.measure.regionprops`.
@@ -240,11 +233,6 @@ class FeatureMixin:
                 - `'perimeter_crofton'`
                 - `'solidity'`
 
-        mean
-            Return mean feature values.
-        std
-            Return std feature values.
-
         Returns
         -------
         Returns features with the following keys:
@@ -257,6 +245,35 @@ class FeatureMixin:
             - `'{feature_name}_ch-{c}_{p}_std'` - standard deviation for each intensity property `p` in ``props`` and
               channel `c` in ``channels``.
         """
+
+        def convert_to_full_image_coordinates(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+            if not len(y):
+                return np.array([[]], dtype=np.float64)
+
+            if self.data.attrs.get("mask_circle", False):
+                if self.data.dims["y"] != self.data.dims["y"]:
+                    raise ValueError(f"Crop is not a square: `{self.data.dims}`.")
+                c = self.data.dims["x"] // 2  # center
+                mask = (x - c) ** 2 + (y - c) ** 2 <= c ** 2
+                y = y[mask]
+                x = x[mask]
+
+            if not len(y):
+                return np.array([[]], dtype=np.float64)  # because masking; should not happen
+
+            coord, padding = self.data.attrs.get("coords", _NULL_COORDS), self.data.attrs.get("padding", _NULL_PADDING)
+            y_slc, x_slc = coord.to_image_coordinates(padding).slice
+
+            # relative coordinates
+            y = (y - np.min(y)) / (np.max(y) - np.min(y))
+            x = (x - np.min(x)) / (np.max(x) - np.min(x))
+
+            # coordinates in the uncropped image
+            y = coord.slice[0].start + (y_slc.stop - y_slc.start) * y
+            x = coord.slice[1].start + (x_slc.stop - x_slc.start) * x
+
+            return np.c_[x, y]
+
         # TODO check that passed a valid prop
         channels = _get_channels(self[img_id], channels)
 
@@ -269,11 +286,13 @@ class FeatureMixin:
         for p in no_intensity_props:
             if p == "label":
                 features[f"{feature_name}_{p}"] = len(tmp_features["label"])
+            elif p == "centroid":
+                features[f"{feature_name}_centroid"] = convert_to_full_image_coordinates(
+                    tmp_features["centroid-0"], tmp_features["centroid-1"]
+                )
             else:
-                if mean:
-                    features[f"{feature_name}_{p}_mean"] = np.mean(tmp_features[p])
-                if std:
-                    features[f"{feature_name}_{p}_std"] = np.std(tmp_features[p])
+                features[f"{feature_name}_{p}_mean"] = np.mean(tmp_features[p])
+                features[f"{feature_name}_{p}_std"] = np.std(tmp_features[p])
 
         # calculate features that depend on the intensity image
         intensity_props = [p for p in props if "intensity" in p]
@@ -282,10 +301,8 @@ class FeatureMixin:
                 self[label_img_id].values[:, :, 0], intensity_image=self[img_id].values[:, :, c], properties=props
             )
             for p in intensity_props:
-                if mean:
-                    features[f"{feature_name}_ch-{c}_{p}_mean"] = np.mean(tmp_features[p])
-                if std:
-                    features[f"{feature_name}_ch-{c}_{p}_std"] = np.std(tmp_features[p])
+                features[f"{feature_name}_ch-{c}_{p}_mean"] = np.mean(tmp_features[p])
+                features[f"{feature_name}_ch-{c}_{p}_std"] = np.std(tmp_features[p])
 
         return features
 

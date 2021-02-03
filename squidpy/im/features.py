@@ -28,7 +28,7 @@ def calculate_image_features(
     copy: bool = False,
     n_jobs: Optional[int] = None,
     backend: str = "loky",
-    show_progress_bar: bool = False,
+    show_progress_bar: bool = True,
     **kwargs: Any,
 ) -> Optional[pd.DataFrame]:
     """
@@ -88,7 +88,7 @@ def calculate_image_features(
 
     res = parallelize(
         _calculate_image_features_helper,
-        collection=adata.obs.index,
+        collection=adata.obs_names,
         extractor=pd.concat,
         n_jobs=n_jobs,
         backend=backend,
@@ -118,6 +118,7 @@ def _calculate_image_features_helper(
         for feature in features:
             feature = ImageFeature(feature)
             feature_kwargs = features_kwargs.get(feature.s, {})
+            print(features_kwargs, feature.s)
 
             if feature == ImageFeature.TEXTURE:
                 res = crop.get_texture_features(img_id=img_id, **feature_kwargs)

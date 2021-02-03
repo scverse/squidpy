@@ -98,6 +98,7 @@ class ImageContainer(FeatureMixin):
         self._data.attrs["coords"] = _NULL_COORDS  # can't save None to NetCDF
         self._data.attrs["padding"] = _NULL_PADDING
         self._data.attrs["scale"] = 1
+        self._data.attrs["mask_circle"] = False
 
         chunks = kwargs.pop("chunks", None)
         if img is not None:
@@ -287,7 +288,7 @@ class ImageContainer(FeatureMixin):
         if img.ndim != 3:
             raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
 
-        return xr.DataArray(img, dims=["y", "x", "channels"], coords={"channels": [1, 1, 1]})
+        return xr.DataArray(img, dims=["y", "x", "channels"], coords={"channels": [1] * img.shape[-1]})
 
     @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
     def _(self, img: xr.DataArray, copy: bool = True, **_: Any) -> xr.DataArray:
@@ -414,6 +415,7 @@ class ImageContainer(FeatureMixin):
                 )
             c = data.x.shape[0] // 2
             data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c ** 2, other=cval)
+            data.attrs["masc_circle"] = True
 
             for key, arr in self.data.items():
                 data[key] = data[key].astype(arr.dtype, copy=False)

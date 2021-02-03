@@ -35,22 +35,26 @@ class Counter:
 
     def __init__(self, value: int = 0):
         manager = Manager()
-        self._value = manager.Value("i", value)
+        self._value = manager.Value("l", value)
         self._lock = manager.Lock()
 
     def __iadd__(self, other: int) -> "Counter":
         if not isinstance(other, int):
             return NotImplemented  # type: ignore[unreachable]
-        with self._lock:
-            self._value.value += other
+        self._value.value = other
 
         return self
+
+    def __enter__(self) -> None:
+        self._lock.acquire()
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # type: ignore[no-untyped-def]
+        self._lock.release()
 
     @property
     def value(self) -> int:
         """Return the value."""
-        with self._lock:
-            return self._value.value
+        return self._value.value
 
     def __repr__(self) -> str:
         return str(self.value)
@@ -188,6 +192,7 @@ class SegmentationWatershed(SegmentationModel):
         arr = watershed(arr, markers, mask=mask)
 
         if increment > 0:
+            arr = arr.astype(np.uint64)
             arr[arr > 0] = arr[arr > 0] + increment
 
         return arr
@@ -388,17 +393,15 @@ def _segment(
     # By convention, segments are numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
     # TODO use overlapping crops to not create confusion at boundaries
-    if isinstance(model, SegmentationWatershed):
-        kwargs["increment"] = counter.value
-
     for crop in crops:
-        crop = model.segment(crop, img_id=img_id, channel=channel, **kwargs)
-        crop._data = crop.data.rename({img_id: img_id_new})
-
         if isinstance(model, SegmentationWatershed):
-            counter += int(np.max(crop[img_id_new].values))
-            kwargs["increment"] = counter.value
+            with counter:
+                crop = model.segment(crop, img_id=img_id, channel=channel, increment=counter.value, **kwargs)
+                counter += int(np.max(crop[img_id].values))
+        else:
+            crop = model.segment(crop, img_id=img_id, channel=channel, **kwargs)
 
+        crop._data = crop.data.rename({img_id: img_id_new})
         segmented_crops.append(crop)
 
         if queue is not None:
