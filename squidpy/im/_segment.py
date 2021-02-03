@@ -175,7 +175,7 @@ class SegmentationWatershed(SegmentationModel):
         %(segment.returns)s
         """  # noqa: D400
         _assert_non_negative(increment, name="increment")
-        arr = arr.squeeze(-1)
+        arr = arr.squeeze(-1)  # we always pass 3D image
 
         if not np.issubdtype(arr.dtype, np.floating):
             arr = img_as_float(arr, force_copy=False)
