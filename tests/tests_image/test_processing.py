@@ -2,8 +2,8 @@ import pytest
 
 import numpy as np
 
-from squidpy.im.object import ImageContainer
-from squidpy.im.processing import process_img
+from squidpy.im._process import process
+from squidpy.im._container import ImageContainer
 
 
 @pytest.mark.parametrize(("xs", "ys"), [(None, None), (40, 40)])
@@ -13,7 +13,7 @@ def test_img_processing(xs, ys, processing):
     img_orig = np.zeros((100, 100, 3), dtype=np.uint8)
 
     cont = ImageContainer(img_orig, img_id="image_0")
-    process_img(
+    process(
         img=cont,
         processing=processing,
         img_id="image_0",

@@ -3,11 +3,18 @@ from typing import Any, Tuple
 from dataclasses import dataclass
 import warnings
 
+import numpy as np
 import xarray as xr
 
 import tifffile
 
 from squidpy.gr._utils import _assert_non_negative
+
+
+def _circular_mask(arr: np.ndarray, y: int, x: int, radius: float) -> np.ndarray:
+    Y, X = np.ogrid[: arr.shape[0], : arr.shape[1]]
+
+    return ((Y - y) ** 2 + (X - x) ** 2) <= radius ** 2
 
 
 def _num_pages(fname: str) -> int:
@@ -53,12 +60,12 @@ class CropCoords(TupleSerializer):
 
     @property
     def dx(self) -> float:
-        """Height."""
+        """Width."""
         return self.x1 - self.x0
 
     @property
     def dy(self) -> float:
-        """Width."""
+        """Height."""
         return self.y1 - self.y0
 
     @property
@@ -78,7 +85,7 @@ class CropCoords(TupleSerializer):
         Parameters
         ----------
         padding
-            Padding for which to adjust
+            Padding for which to adjust.
 
         Returns
         -------
@@ -97,16 +104,16 @@ class CropCoords(TupleSerializer):
         return self.x0, self.y0, self.x1, self.y1
 
     def __add__(self, other: "CropPadding") -> "CropCoords":
-        # if not isinstance(other, CropPadding):
-        #    return NotImplemented  # type: ignore[unreachable]
+        if not isinstance(other, CropPadding):
+            return NotImplemented  # type: ignore[unreachable]
 
         return CropCoords(
             x0=self.x0 - other.x_pre, y0=self.y0 - other.y_pre, x1=self.x1 + other.x_post, y1=self.y1 + other.y_post
         )
 
     def __sub__(self, other: "CropCoords") -> "CropPadding":
-        # if not isinstance(other, CropCoords):
-        #    return NotImplemented  # type: ignore[unreachable]
+        if not isinstance(other, CropCoords):
+            return NotImplemented  # type: ignore[unreachable]
 
         return CropPadding(
             x_pre=abs(self.x0 - other.x0),

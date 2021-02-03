@@ -17,8 +17,8 @@ from matplotlib import pyplot
 from matplotlib.testing.compare import compare_images
 import matplotlib as mpl
 
-from squidpy.im.object import ImageContainer
 from squidpy.gr._ligrec import LigrecResult
+from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
 import squidpy as sp
 

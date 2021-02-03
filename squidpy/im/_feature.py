@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from types import MappingProxyType
 from typing import Any, List, Union, Mapping, Iterable, Optional, TYPE_CHECKING
 
@@ -11,8 +9,10 @@ import pandas as pd
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
 from squidpy.gr._utils import _save_data
-from squidpy.im.object import ImageContainer
+from squidpy.im._container import ImageContainer
 from squidpy._constants._constants import ImageFeature
+
+__all__ = ["calculate_image_features"]
 
 
 @d.dedent
@@ -117,7 +117,6 @@ def _calculate_image_features_helper(
         for feature in features:
             feature = ImageFeature(feature)
             feature_kwargs = features_kwargs.get(feature.s, {})
-            print(features_kwargs, feature.s)
 
             if feature == ImageFeature.TEXTURE:
                 res = crop.features_texture(img_id=img_id, **feature_kwargs)

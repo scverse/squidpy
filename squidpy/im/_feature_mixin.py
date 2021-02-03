@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any, Dict, List, Tuple, Union, Callable, Iterable, Optional, Sequence
 from typing_extensions import Protocol
 
@@ -197,7 +195,7 @@ class FeatureMixin:
         Calculate segmentation features using :func:`skimage.measure.regionprops`.
 
         Features are calculated using ``label_img_id``, a cell segmentation of ``img_id``
-        (e.g. resulting from calling :func:`squidpy.im.segment_img`).
+        (e.g. resulting from calling :func:`squidpy.im.segment`).
 
         Depending on the specified parameters, mean and std of the requested props are returned.
         For the `'label'` feature, the number of labels is returned, i.e. the number of cells in this img.
@@ -317,10 +315,10 @@ class FeatureMixin:
         **kwargs: Any,
     ) -> Feature_t:
         """
-        Calculate custom features using ``func``.
+        Calculate features using a custom function.
 
-        The feature extractor ``func`` takes as an input :class:`numpy.ndarray` of shape ``(y, x, channels)`` and
-        optional ``kwargs`` and needs to return one or more of :class:`float`.
+        The feature extractor ``func`` can be any :func:`callable`, as long as it has the following signature:
+        :class:`numpy.ndarray` ``(height, width, channels)`` -> :class:`float`.
 
         Parameters
         ----------
@@ -340,12 +338,11 @@ class FeatureMixin:
 
         Examples
         --------
-        Simple example would be to calculate the mean of a specified channel::
+        Simple example would be to calculate the mean of a specified channel, as already done in
+        :meth:`squidpy.im.ImageContainer.features_summary`::
 
             img = squidpy.im.ImageContainer(...)
             img.features_custom(imd_id=..., func=numpy.mean, channels=0)
-
-        This can also be done by passing ``mean = True`` to :meth:`squidpy.im.ImageContainer.features_summary`.
         """
         channels = _get_channels(self[img_id], channels)
         feature_name = getattr(func, "__name__", "custom") if feature_name is None else feature_name

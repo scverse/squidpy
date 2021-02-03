@@ -5,8 +5,8 @@ from anndata import AnnData
 import numpy as np
 import pandas as pd
 
-from squidpy.im.object import ImageContainer
-from squidpy.im.features import calculate_image_features
+from squidpy.im._feature import calculate_image_features
+from squidpy.im._container import ImageContainer
 
 
 @pytest.mark.parametrize("n_jobs", [1, 2])
@@ -41,7 +41,7 @@ def test_get_segmentation_features():
     mask = np.zeros((100, 100), dtype="uint8")
     mask[20:30, 10:20] = 1
     mask[50:60, 30:40] = 2
-    img.add_img(mask, img_id="segmented", channel_id="mask")
+    img.add_img(mask, img_id="segmented", channel_dim="mask")
 
     props = ["area", "label", "mean_intensity"]
     feature_name = "segmentation"

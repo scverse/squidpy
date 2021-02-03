@@ -1,5 +1,3 @@
-"""Functions exposed: process_img()."""
-
 from typing import Any, Tuple, Union, Callable, Optional
 from functools import partial
 
@@ -9,28 +7,29 @@ import skimage
 import skimage.filters
 
 from squidpy._docs import d, inject_docs
-from squidpy.im.object import ImageContainer
+from squidpy.im._container import ImageContainer
 from squidpy._constants._constants import Processing
+
+__all__ = ["process"]
 
 
 @d.dedent
 @inject_docs(p=Processing)
-def process_img(
+def process(
     img: ImageContainer,
     img_id: Optional[str] = None,
-    processing: Union[str, Callable[..., np.ndarray]] = "gray",  # TODO: is this a good default?
-    yx: Optional[Tuple[int, int]] = None,
+    processing: Union[str, Callable[..., np.ndarray]] = "smooth",
+    size: Optional[Tuple[int, int]] = None,
     key_added: Optional[str] = None,
     channel_id: Optional[str] = None,
     copy: bool = False,
     **kwargs: Any,
 ) -> Optional[ImageContainer]:
     """
-    Process an image.
+    Process an image by applying a transformation.
 
-    TODO.
     Note that crop-wise processing can save memory but may change behaviour of cropping if global statistics are used.
-    Leave ``xs`` and ``ys`` as `None` in order to process the full image in one go.
+    Leave ``size = None`` in order to process the full image in one go.
 
     Parameters
     ----------
@@ -41,24 +40,24 @@ def process_img(
             - `{p.SMOOTH.s!r}` - :func:`skimage.filters.gaussian`.
             - `{p.GRAY.s!r}` - :func:`skimage.color.rgb2gray`.
 
-        Alternatively, any :func:`callable` object can be passed as long as TODO.
+        %(custom_fn)s
     %(img_id)s
-    yx
-        TODO.
+    size
+        Size of the crop as ``(height, width)``. If `None`, use the full size.
     key_added
-        Key of new image layer to add into ``img`` object. If `None`, use ``{{img_id}}_{{processing}}``.
+        Key of new image layer to add into ``img`` object. If `None`, use ``'{{img_id}}_{{processing}}'``.
     channel_id
         Name of the channel dimension of the new image layer.
 
-        Default is the same as the input image if the processing function does not change the number
-        of channels, and ``{{channel}}_{{processing}}`` if it does.
+        Default is the same as the input image's, if the processing function does not change the number
+        of channels, and ``'{{channel}}_{{processing}}'``, if it does.
     %(copy_cont)s
     kwargs
-        Keyword arguments to processing method specified by ``processing``.
+        Keyword arguments for ``processing`` function.
 
     Returns
     -------
-    If ``copy = True``, returns the processed image with a key `'{{key_added}}'`.
+    If ``copy = True``, returns the processed image with a new key `'{{key_added}}'`.
 
     Otherwise, it modifies the ``img`` with the following key:
 
@@ -67,7 +66,7 @@ def process_img(
     Raises
     ------
     NotImplementedError
-        TODO.
+        If a ``processing`` has not been implemented.
     """
     img_id = img._singleton_id(img_id)
     processing = (
@@ -95,7 +94,7 @@ def process_img(
         img_id_new = key_added
 
     # process crops
-    crops = [crop.apply(callback, img_id=img_id, **kwargs) for crop in img.generate_equal_crops(size=yx)]
+    crops = [crop.apply(callback, img_id=img_id, **kwargs) for crop in img.generate_equal_crops(size=size)]
     # reassemble image
     img_proc: ImageContainer = ImageContainer.uncrop(crops=crops, shape=img.shape)
     img_proc._data = img_proc.data.rename({img_proc[img_id].dims[-1]: channel_id}).rename_vars({img_id: img_id_new})
@@ -103,4 +102,4 @@ def process_img(
     if copy:
         return img_proc
 
-    img.add_img(img=img_proc, img_id=img_id_new, channel_id=channel_id)
+    img.add_img(img=img_proc, img_id=img_id_new, channel_dim=channel_id)

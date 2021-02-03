@@ -56,28 +56,30 @@ from squidpy.im._utils import (
     _open_rasterio,
     TupleSerializer,
 )
-from squidpy.im.feature_mixin import FeatureMixin
+from squidpy.im._feature_mixin import FeatureMixin
 from squidpy._constants._pkg_constants import Key
 
+FoI_t = Union[int, float]
 Pathlike_t = Union[str, Path]
 Arraylike_t = Union[np.ndarray, xr.DataArray]
 Input_t = Union[Pathlike_t, Arraylike_t, "ImageContainer"]
 Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependecies
 
 
+__all__ = ["ImageContainer"]
+
+
 @d.dedent  # trick to overcome not top-down order
 @d.dedent
 class ImageContainer(FeatureMixin):
     """
-    Container for in memory `np.ndarray`/`xr.DataArray` or on-disk tiff/jpg images.
+    Container for in memory :class:`numpy.ndarray`/:class:`xarray.DataArray` or on-disk *TIFF*/*JPEG* images.
 
     Wraps :class:`xarray.Dataset` to store several image layers with the same x and y dimensions in one object.
-    Dimensions of stored images are `(y, x, <channel_dimension>, ...)`.
-    The channel dimension may vary between image layers.
+    Dimensions of stored images are ``(y, x, channels)``. The channel dimension may vary between image layers.
 
-    Allows for lazy and chunked reading via :mod:`rasterio` and :mod:`dask` if the input is a tiff image).
-    An instance of this class is given to all image processing functions, along with an :mod:`anndata` instance,
-    if necessary.
+    Allows for lazy and chunked reading via :mod:`rasterio` and :mod:`dask`, if the input is a TIFF image.
+    This class is given to all image processing functions, along with an :mod:`anndata` instance, if necessary.
 
     Parameters
     ----------
@@ -109,16 +111,19 @@ class ImageContainer(FeatureMixin):
     @classmethod
     def load(cls, path: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":
         """
-        Load data from a `Zarr` store.
+        Load data from a *Zarr* store.
 
         Parameters
         ----------
         path
-            Path to `Zarr` store.
+            Path to *Zarr* store.
         lazy
             Use :mod:`dask` to lazily load image.
         chunks
             Chunk size for :mod:`dask`.
+
+        Returns
+        The loaded container.
         """
         res = cls()
         res.add_img(path, img_id="image", chunks=chunks, lazy=lazy)
@@ -127,12 +132,12 @@ class ImageContainer(FeatureMixin):
 
     def save(self, path: Pathlike_t, **kwargs: Any) -> None:
         """
-        Save self to `Zarr` store.
+        Save the container into  *Zarr* store.
 
         Parameters
         ----------
         path
-            Path to `Zarr` store.
+            Path to a *Zarr* store.
 
         Returns
         -------
@@ -148,7 +153,7 @@ class ImageContainer(FeatureMixin):
         finally:
             self.data.attrs = attrs
 
-    def _get_image_id(self, img_id: str) -> str:
+    def _get_next_image_id(self, img_id: str) -> str:
         pat = re.compile(rf"^{img_id}_(\d+)$")
         iterator = chain.from_iterable(pat.finditer(k) for k in self.data.keys())
         return f"{img_id}_{(max(map(lambda m: int(m.groups()[0][0]), iterator), default=-1) + 1)}"
@@ -158,30 +163,28 @@ class ImageContainer(FeatureMixin):
         self,
         img: Input_t,
         img_id: Optional[str] = None,
-        channel_id: str = "channels",
+        channel_dim: str = "channels",
         lazy: bool = True,
         chunks: Optional[int] = None,
-        **kwargs: Any,  # TODO: update docstring
+        **kwargs: Any,
     ) -> None:
         """
-        Add layer from in memory `np.ndarray`/`xr.DataArray` or on-disk tiff/jpg image.
+        Add a new image to the container.
 
-        For :mod:`numpy` arrays, we assume that dims are ``(y, x, channel_id)``.
+        The image can be in memory :class:`numpy.ndarray`/:class:`xarray.DataArray` or on-disk TIFF/JPEG image.
 
         Parameters
         ----------
         img
-            An array or a path to JPEG or TIFF file.
+            An array or a path to TIFF/JPEG file.
         img_id
-            Key (name) to be used for img.
-        channel_id
+            Layer name for ``img``.
+        channel_dim
             Name of the channel dimension.
         lazy
-            Use :mod:`rasterio` or :mod:`dask` to lazily load image.
+            Whether to use :mod:`rasterio` or :mod:`dask` to lazily load image.
         chunks
             Chunk size for :mod:`dask`, used in call to :func:`xarray.open_rasterio` for TIFF images.
-        kwargs
-            Keyword arguments
 
         Returns
         -------
@@ -189,32 +192,25 @@ class ImageContainer(FeatureMixin):
 
         Notes
         -----
-        Lazy loading via :mod:`dask` is not supported for on-disk jpg files. They will be loaded in memory.
-        Multi-page tiffs will be loaded in one :class:`xarray.DataArray`, with the concatenated channel dimensions.
+        Lazy loading via :mod:`dask` is not supported for on-disk jpg files, they will be loaded in memory.
+        Multi-page TIFFs will be loaded in one :class:`xarray.DataArray`, with concatenated channel dimensions.
 
         Raises
         ------
         ValueError
-            If loading from a file and an extension was not understood.
+            If loading from a file/store with an unknown format.
         NotImplementedError
-            If loading for a specific data type has not been implemented.
+            If loading a specific data type has not been implemented.
         """
-        img_id = self._get_image_id("image") if img_id is None else img_id
+        img_id = self._get_next_image_id("image") if img_id is None else img_id
         img = self._load_img(img, chunks=chunks, img_id=img_id, **kwargs)
 
         if img is not None:  # not reading a .nc file
             if TYPE_CHECKING:
                 assert isinstance(img, xr.DataArray)
-            img = img.rename({img.dims[-1]: channel_id})
+            img = img.rename({img.dims[-1]: channel_dim})
 
-            logg.info(f"Adding `{img_id}` into object")
-            # TODO log if overwriting
-
-            # TODO: ValueError: cannot reindex or align along dimension 'channels'
-            #       because the index has duplicate values
-            #       happens when e.g.: sq.im.process_img(im, img_id='image', copy=False, processing="smooth", yx=500)
-            #       and the channels have the same name
-
+            logg.info(f"{'Overwriting' if img_id in self else 'Adding'} layer `{img_id}` in `{self}`")
             self.data[img_id] = img
         if not lazy:
             # load in memory
@@ -231,7 +227,7 @@ class ImageContainer(FeatureMixin):
         """
         if isinstance(img, ImageContainer):
             if img_id not in img:
-                raise KeyError(f"Image id `{img_id}` not found in `{img}`.")
+                raise KeyError(f"Image identifier `{img_id}` not found in `{img}`.")
             return self._load_img(img[img_id], **kwargs)
         raise NotImplementedError(f"Loader for class `{type(img).__name__}` is not yet implemented.")
 
@@ -239,6 +235,8 @@ class ImageContainer(FeatureMixin):
     @_load_img.register(Path)
     def _(self, img: Pathlike_t, chunks: Optional[int] = None, **_: Any) -> Optional[xr.DataArray]:
         img = Path(img)
+        logg.debug(f"Loading data from `{img}`")
+
         suffix = img.suffix.lower()
 
         if suffix in (".jpg", ".jpeg"):
@@ -246,7 +244,7 @@ class ImageContainer(FeatureMixin):
 
         if img.is_dir():
             if len(self._data):
-                raise ValueError("Loading data from `Zarr` is disallowed if the container is not empty.")
+                raise ValueError("Loading data from `Zarr` store is disallowed if the container is not empty.")
 
             self._data = xr.open_zarr(str(img), chunks=chunks)
             self.data.attrs["coords"] = CropCoords.from_tuple(self.data.attrs.get("coords", _NULL_COORDS.to_tuple()))
@@ -283,6 +281,8 @@ class ImageContainer(FeatureMixin):
 
     @_load_img.register(np.ndarray)  # type: ignore[no-redef]
     def _(self, img: np.ndarray, **_: Any) -> xr.DataArray:
+        logg.debug(f"Loading data `numpy.array` of shape `{img.shape}`")
+
         if img.ndim == 2:
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
@@ -292,6 +292,8 @@ class ImageContainer(FeatureMixin):
 
     @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
     def _(self, img: xr.DataArray, copy: bool = True, **_: Any) -> xr.DataArray:
+        logg.debug(f"Loading data `xarray.DataArray` of shape `{img.shape}`")
+
         if img.ndim == 2:
             img = img.expand_dims("channels", -1)
         if img.ndim != 3:
@@ -312,46 +314,48 @@ class ImageContainer(FeatureMixin):
     @d.dedent
     def crop_corner(
         self,
-        yx: Tuple[int, int],
-        size: Union[int, Tuple[int, int]],  # TODO: defaults
+        y: FoI_t,
+        x: FoI_t,
+        size: Optional[Union[FoI_t, Tuple[FoI_t, FoI_t]]] = None,
         scale: float = 1.0,
         cval: Union[int, float] = 0,
         mask_circle: bool = False,
     ) -> "ImageContainer":
         """
-        Extract a crop from upper-left corner coordinates ``yx``.
+        Extract a crop from the upper-left corner.
 
         Parameters
         ----------
-        yx
-            Coordinates of the upper-left corner as ``(height, width)``.
-        size
-            Size of the crop in ``(height, width)``. If a :class:`int`, the crop will be square.
+        %(yx)s
+        %(size)s
         scale
-            Resolution of the crop (smaller -> smaller image).
-            Rescaling is done using :func:`skimage.transform.rescale`.
+            Rescale the crop using :func:`skimage.transform.rescale`.
         cval
-            Fill value to use if ``mask_circle = True`` or parts of the crop are out of the image boundary.
+            Fill value to use if ``mask_circle = True`` or if crop goes out of the image boundary.
         mask_circle
-            Whether to set values, which are not within a circle bounded by the ``size``, to ``cval``.
+            Whether to mask out values that are not within a circle defined by this crop.
             Only available if ``size`` defines a square.
 
         Returns
         -------
-        Cropped image.
+        The cropped image of size ``size * scale``.
 
         Raises
         ------
         ValueError
-            If ``mask_circle = True`` and ``size`` does not define a square.
+            If the crop would completely lie outside of the image or if ``mask_circle = True`` and
+            ``size`` does not define a square.
         """
         self._assert_not_empty()
-        if not isinstance(size, Iterable):
-            size = (size, size)
+        y, x = self._convert_to_pixel_space((y, x))
 
-        (y, x), (ys, xs) = yx, size
+        size = self._get_size(size)
+        size = self._convert_to_pixel_space(size)
+
+        ys, xs = size
         _assert_positive(ys, name="height")
         _assert_positive(xs, name="width")
+        ys, xs = np.clip(ys, 0, self.data.dims["y"]), np.clip(xs, 0, self.data.dims["x"])
 
         orig = CropCoords(x0=x, y0=y, x1=x + xs, y1=y + ys)
         orig_dtypes = {key: arr.dtype for key, arr in self.data.items()}
@@ -362,9 +366,9 @@ class ImageContainer(FeatureMixin):
         )
 
         if not coords.dy:
-            raise ValueError("Height is empty.")
+            raise ValueError("Height of the crop is empty.")
         if not coords.dx:
-            raise ValueError("Width is empty.")
+            raise ValueError("Width of the crop is empty.")
 
         crop = self.data.isel(x=slice(coords.x0, coords.x1), y=slice(coords.y0, coords.y1)).copy(deep=False)
         crop.attrs["orig"] = orig
@@ -391,8 +395,8 @@ class ImageContainer(FeatureMixin):
     def _post_process(
         self,
         data: xr.Dataset,
-        scale: Union[int, float] = 1,
-        cval: Union[int, float] = 1,
+        scale: FoI_t = 1,
+        cval: FoI_t = 1,
         mask_circle: bool = False,
         **_: Any,
     ) -> xr.Dataset:
@@ -425,21 +429,21 @@ class ImageContainer(FeatureMixin):
     @d.dedent
     def crop_center(
         self,
-        center: Tuple[int, int],
-        radius: Union[int, Tuple[int, int]],
+        y: FoI_t,
+        x: FoI_t,
+        radius: Union[FoI_t, Tuple[FoI_t, FoI_t]],
         **kwargs: Any,
     ) -> "ImageContainer":
         """
-        Extract a circular crop based on ``center``.
+        Extract a circular crop.
 
         The extracted crop will have shape ``(radius[0] * 2 + 1, radius[1] * 2 + 1)``.
 
         Parameters
         ----------
-        center
-            Center in the from of ``(height, width)``.
+        %(yx)s
         radius
-            Radius along the height and width, respectively. If a :class:`int`, the crop will be square.
+            Radius along the ``height`` and ``width`` dimensions, respectively.
         kwargs
             Keyword arguments for :meth:`crop_corner`.
 
@@ -447,23 +451,26 @@ class ImageContainer(FeatureMixin):
         -------
         %(crop_corner.returns)s
         """
+        y, x = self._convert_to_pixel_space((y, x))
+        _assert_in_range(y, 0, self.data.dims["y"], name="height")
+        _assert_in_range(x, 0, self.data.dims["x"], name="width")
+
         if not isinstance(radius, Iterable):
             radius = (radius, radius)
 
-        (y, x), (yr, xr) = center, radius
-        _assert_in_range(y, 0, self.data.dims["y"], name="center height")
-        _assert_in_range(x, 0, self.data.dims["x"], name="center width")
+        (yr, xr) = self._convert_to_pixel_space(radius)
         _assert_positive(yr, name="radius height")
         _assert_positive(xr, name="radius width")
+        yr, xr = np.clip(yr, 0, self.data.dims["y"] // 2), np.clip(xr, 0, self.data.dims["x"] // 2)
 
         return self.crop_corner(  # type: ignore[no-any-return]
-            yx=(x - xr, y - yr), size=(xr * 2 + 1, yr * 2 + 1), **kwargs
+            y=y - yr, x=x - xr, size=(yr * 2 + 1, xr * 2 + 1), **kwargs
         )
 
     @d.dedent
     def generate_equal_crops(
         self,
-        size: Union[int, Tuple[int, int]],  # TODO: default, e.g. ~10%
+        size: Optional[Union[FoI_t, Tuple[FoI_t, FoI_t]]] = None,
         as_array: bool = False,
         **kwargs: Any,
     ) -> Iterator["ImageContainer"]:
@@ -472,8 +479,7 @@ class ImageContainer(FeatureMixin):
 
         Parameters
         ----------
-        size
-            Height and width of the crop, respectively. If a :class:`int`, the crops will be square.
+        %(size)s
         as_array
             Whether to yield :class:`numpy.ndarray` or :class:`squidpy.im.ImageContainer`.
         kwargs
@@ -486,15 +492,18 @@ class ImageContainer(FeatureMixin):
 
         Notes
         -----
-        Crops which would go out of the image boundary are padded with ``cval`` to fit the ``size``.
+        Crops going outside out of the image boundary are padded with ``cval``.
         """
         self._assert_not_empty()
 
-        ys, xs = size if isinstance(size, Iterable) else (size, size)
-        y, x = self.data.dims["y"], self.data.dims["x"]
+        size = self._get_size(size)
+        size = self._convert_to_pixel_space(size)
 
-        _assert_in_range(ys, 0, y, name="ys")
-        _assert_in_range(xs, 0, x, name="xs")
+        y, x = self.data.dims["y"], self.data.dims["x"]
+        ys, xs = size
+        _assert_in_range(ys, 0, y, name="height")
+        _assert_in_range(xs, 0, x, name="width")
+        ys, xs = np.clip(ys, 0, self.data.dims["y"]), np.clip(xs, 0, self.data.dims["x"])
 
         unique_ycoord = np.arange(start=0, stop=(y // ys + (y % ys != 0)) * ys, step=ys)
         unique_xcoord = np.arange(start=0, stop=(x // xs + (x % xs != 0)) * xs, step=xs)
@@ -503,7 +512,7 @@ class ImageContainer(FeatureMixin):
         xcoords = np.tile(unique_xcoord, len(unique_ycoord))
 
         for y, x in zip(ycoords, xcoords):
-            crop = self.crop_corner(yx=(y, x), size=(ys, xs), **kwargs)
+            crop = self.crop_corner(y=y, x=x, size=(ys, xs), **kwargs)
             if as_array:
                 crop = crop.data.to_array().values
 
@@ -537,7 +546,7 @@ class ImageContainer(FeatureMixin):
         obs_names
             Observations from :attr:`adata.obs_names` for which to generate the crops. If `None`, all names are used.
         as_array
-            Whether to yield the crop as a :class:`numpy.ndarray` or :class:`squidpy.im.ImageContainer`.
+            Whether to yield the crops as a :class:`numpy.ndarray` or :class:`squidpy.im.ImageContainer`.
         return_obs
             Whether to also yield names from ``obs_names``.
         kwargs
@@ -545,8 +554,8 @@ class ImageContainer(FeatureMixin):
 
         Yields
         ------
-        If ``return_obs = True``, yields a :class:`tuple` ``(crop, obs_name)``. Otherwise, yields just the ``crop``.
-        If ``as_array = True``, crop will be a :class:`numpy.array`.
+        If ``return_obs = True``, yields a :class:`tuple` ``(crop, obs_name)``. Otherwise, yields just the crops.
+        If ``as_array = True``, the crops will be a :class:`numpy.array`.
         """
         self._assert_not_empty()
         _assert_positive(spot_scale, name="scale")
@@ -581,7 +590,7 @@ class ImageContainer(FeatureMixin):
         data
             The :class:`xarray.Dataset` to use.
         deep
-            If `None`, don't copy the ``data``. If `True`, deep-copy the data, otherwise, make a shallow copy.
+            If `None`, don't copy the ``data``. If `True`, make a deep copy of the data, otherwise, make a shallow copy.
 
         Returns
         -------
@@ -613,6 +622,11 @@ class ImageContainer(FeatureMixin):
         Returns
         -------
         Re-assembled image from ``crops``.
+
+        Raises
+        ------
+        ValueError
+            If crop metadata was not found or if the requested ``shape`` is smaller than required by the ``crops``.
         """
         if not len(crops):
             raise ValueError("No crops were supplied.")
@@ -830,6 +844,32 @@ class ImageContainer(FeatureMixin):
         if not len(self):
             raise ValueError("No image has been added.")
 
+    def _get_size(self, size: Optional[Union[FoI_t, Tuple[Optional[FoI_t], Optional[FoI_t]]]]) -> Tuple[FoI_t, FoI_t]:
+        if size is None:
+            size = (None, None)
+        if not isinstance(size, Iterable):
+            size = (size, size)
+
+        res = list(size)
+        if size[0] is None:
+            res[0] = int(self.data.dims["y"])  # type: ignore[unreachable]
+
+        if size[1] is None:
+            res[1] = int(self.data.dims["x"])  # type: ignore[unreachable]
+
+        return tuple(res)  # type: ignore[return-value]
+
+    def _convert_to_pixel_space(self, size: Tuple[FoI_t, FoI_t]) -> Tuple[int, int]:
+        y, x = size
+        if isinstance(y, float):
+            _assert_in_range(y, 0, 1, name="y")
+            y = int(self.data.dims["y"] * y)
+        if isinstance(x, float):
+            _assert_in_range(x, 0, 1, name="x")
+            x = int(self.data.dims["x"] * x)
+
+        return y, x
+
     def __iter__(self) -> Iterator[str]:
         yield from self.data.keys()
 
@@ -856,7 +896,8 @@ class ImageContainer(FeatureMixin):
         return s
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}[shape={self.shape}, ids={sorted(self.data.keys())}]"
+        shape = self.shape if len(self) else None
+        return f"{self.__class__.__name__}[shape={shape}, ids={sorted(self.data.keys())}]"
 
     def __str__(self) -> str:
         return repr(self)

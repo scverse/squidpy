@@ -5,8 +5,8 @@ import numpy as np
 
 import rasterio.errors
 
-from squidpy.im.object import ImageContainer
-from squidpy.im.segment import segment_img
+from squidpy.im._segment import segment
+from squidpy.im._container import ImageContainer
 
 # TODO test_segmentation_blob
 
@@ -22,7 +22,7 @@ def test_segmentation_watershed(shape):
     img_orig[30:34, 10:16] = 1.0
 
     cont = ImageContainer(img_orig, img_id="image_0")
-    segment_img(
+    segment(
         img=cont,
         model_group="watershed",
         img_id="image_0",
@@ -34,7 +34,7 @@ def test_segmentation_watershed(shape):
 
     # test segmentation with crops
     # TODO test fails with xs=ys=10 due to border effects!
-    segment_img(
+    segment(
         img=cont,
         model_group="watershed",
         img_id="image_0",
@@ -48,7 +48,7 @@ def test_segmentation_watershed(shape):
     assert np.mean(cont.data["segment_crops"].values[img_orig[:, :, 0] > 0] > 0) > 0.5
 
     # test copy flag
-    seg_img = segment_img(
+    seg_img = segment(
         img=cont,
         model_group="watershed",
         img_id="image_0",

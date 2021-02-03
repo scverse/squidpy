@@ -13,13 +13,6 @@ InteractiveViewer
     :members:
     :inherited-members:
 
-SegmentationGeneric
--------------------
-.. autoclass:: squidpy.im.SegmentationGeneric
-    :members:
-    :inherited-members:
-
-
 SegmentationModelWatershed
 --------------------------
 .. autoclass:: squidpy.im.SegmentationWatershed
@@ -30,5 +23,11 @@ SegmentationModelWatershed
 SegmentationModelBlob
 ---------------------
 .. autoclass:: squidpy.im.SegmentationBlob
+    :members:
+    :inherited-members:
+
+SegmentationCustom
+-------------------
+.. autoclass:: squidpy.im.SegmentationCustom
     :members:
     :inherited-members:

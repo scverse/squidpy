@@ -8,7 +8,7 @@ import numpy as np
 import rasterio.errors
 
 from squidpy.im._utils import CropCoords
-from squidpy.im.object import ImageContainer
+from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
 
 
@@ -62,7 +62,7 @@ def test_add_img(shape1, shape2):
 
     # add im
     img_new = np.random.randint(low=0, high=255, size=shape2, dtype=np.uint8)
-    cont.add_img(img_new, img_id="img_new", channel_id="mask")
+    cont.add_img(img_new, img_id="img_new", channel_dim="mask")
 
     assert "img_orig" in cont.data
     assert "img_new" in cont.data
@@ -136,7 +136,7 @@ def test_crop(tmpdir):
 
     # crop image with several layers
     mask = np.random.randint(low=0, high=10, size=(xdim, ydim))
-    cont.add_img(mask, img_id="image_1", channel_id="mask")
+    cont.add_img(mask, img_id="image_1", channel_dim="mask")
     crop = cont.crop_center(
         x=50,
         y=20,

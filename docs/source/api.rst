@@ -32,9 +32,9 @@ Image
 .. autosummary::
     :toctree: api
 
+    im.process
+    im.segment
     im.calculate_image_features
-    im.process_img
-    im.segment_img
 
 Plotting
 ~~~~~~~~

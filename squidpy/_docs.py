@@ -52,16 +52,17 @@ feature_name
     Base name of feature in resulting feature values :class:`dict`."""
 _feature_ret = """\
     Dictionary of feature values."""
-_xy_coord = """\
-x
-    X coord of crop (in pixel space).
+_yx = """\
 y
-    Y coord of crop (in pixel space)."""
-_width_height = """\
-xs
-    Width of the crops in pixels.
-ys
-    Height of the crops in pixels."""
+    Coordinates of the crop along the ``height`` dimension in the pixel space.
+    If a :class:`float`, it must be in `[0, 1]` and specifies the relative position.
+x
+    Coordinates of the crop along the ``width`` dimension in the pixel space.
+    If a :class:`float`, it must be in `[0, 1]` and specifies the relative position."""
+_size = """\
+size
+    Size of the crop as ``(height, width)``. If a :class:`int`, the crop will be a square.
+    If a :class:`float`, it must be in `[0, 1]` and specifies the relative size."""
 _cluster_key = """\
 cluster_key
     Key in :attr:`anndata.AnnData.obs` where clustering is stored."""
@@ -139,6 +140,9 @@ _corr_method = """\
 corr_method
     Correction method for multiple testing. See :func:`statsmodels.stats.multitest.multipletests`
     for valid options."""
+_custom_fn = """\
+Alternatively, any :func:`callable` can be passed as long as it has the following signature:
+    :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`numpy.ndarray` ``(height, width[, channels])``."""  # noqa: E501
 
 
 d = DocstringProcessor(
@@ -152,9 +156,9 @@ d = DocstringProcessor(
     img_hr=_img_hr,
     img_id=_img_id,
     feature_name=_feature_name,
-    xy_coord=_xy_coord,
+    yx=_yx,
     feature_ret=_feature_ret,
-    width_height=_width_height,
+    size=_size,
     cluster_key=_cluster_key,
     spatial_key=_spatial_key,
     conn_key=_conn_key,
@@ -168,4 +172,5 @@ d = DocstringProcessor(
     ligrec_test_returns=_ligrec_test_returns,
     corr_method=_corr_method,
     heatmap_plotting=_heatmap_plotting,
+    custom_fn=_custom_fn,
 )
