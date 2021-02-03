@@ -573,7 +573,7 @@ class ImageContainer(FeatureMixin):
         radius = int(round(diameter // 2 * spot_scale))
 
         for i in range(adata.n_obs):
-            crop = self.crop_center(spatial[i], radius=radius, **kwargs)
+            crop = self.crop_center(y=spatial[i][1], x=spatial[i][0], radius=radius, **kwargs)
             crop.data.attrs["obs"] = adata.obs_names[i]
             if as_array:
                 crop = crop.data.to_array().values

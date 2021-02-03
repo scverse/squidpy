@@ -78,7 +78,7 @@ def calculate_image_features(
     img_id = img._singleton_id(img_id)
     if isinstance(features, (str, ImageFeature)):
         features = [features]
-    features = sorted({ImageFeature(f) for f in features})  # type: ignore[misc]
+    features = sorted({ImageFeature(f).s for f in features})
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
