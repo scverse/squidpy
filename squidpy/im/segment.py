@@ -91,8 +91,6 @@ class SegmentationModel(ABC):
         Parameters
         ----------
         %(img_hr)s
-        increment
-            By default, segments are numbered from `1`. TODO better name - only for watershed?
         img_id
             Only used when ``image`` is :class:`squidpy.im.ImageContainer`.
 
@@ -103,8 +101,7 @@ class SegmentationModel(ABC):
         raise NotImplementedError(f"Segmenting `{type(img).__name__}` is not yet implemented.")
 
     @segment.register(np.ndarray)
-    def _(self, img: np.ndarray, increment: int = 0, **kwargs: Any) -> np.ndarray:
-        _assert_non_negative(increment, name="start")
+    def _(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
         if img.ndim == 2:
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
@@ -115,11 +112,7 @@ class SegmentationModel(ABC):
         arr = self._segment(img, **kwargs)
 
         if arr.ndim == 2:
-            arr = arr[:, :, np.newaxis]
-
-        # TODO: only for watershed?
-        if increment > 0:
-            arr[arr > 0] = arr[arr > 0] + increment
+            arr = arr[..., np.newaxis]
 
         return arr
 
@@ -146,7 +139,9 @@ class SegmentationWatershed(SegmentationModel):
         super().__init__(model=None)
 
     @d.dedent
-    def _segment(self, arr: np.ndarray, thresh: Optional[float] = None, geq: bool = True, **kwargs: Any) -> np.ndarray:
+    def _segment(
+        self, arr: np.ndarray, thresh: Optional[float] = None, geq: bool = True, increment: int = 0, **kwargs: Any
+    ) -> np.ndarray:
         """
         %(segment.full_desc)s
 
@@ -165,8 +160,9 @@ class SegmentationWatershed(SegmentationModel):
         -------
         %(segment.returns)s
         """  # noqa: D400
+        _assert_non_negative(increment, name="increment")
         arr = arr.squeeze(-1)
-        # TODO: should we do this?
+
         if not np.issubdtype(arr.dtype, np.floating):
             arr = img_as_float(arr, force_copy=False)
 
@@ -183,10 +179,18 @@ class SegmentationWatershed(SegmentationModel):
             mask = arr < thresh
 
         distance = ndi.distance_transform_edt(mask)
-        local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((5, 5)), labels=mask)
+        coords = peak_local_max(distance, footprint=np.ones((5, 5)), labels=mask)
+        local_maxi = np.zeros(distance.shape, dtype=np.bool_)
+        local_maxi[tuple(coords.T)] = True
+
         markers, _ = ndi.label(local_maxi)
 
-        return watershed(arr, markers, mask=mask)
+        arr = watershed(arr, markers, mask=mask)
+
+        if increment > 0:
+            arr[arr > 0] = arr[arr > 0] + increment
+
+        return arr
 
 
 class SegmentationCustom(SegmentationModel):
@@ -263,8 +267,7 @@ class SegmentationBlob(SegmentationCustom):
             arr = invert_arr(arr)
 
         blob_mask = np.zeros_like(arr, dtype=np.bool_)
-        # invalid value encountered in double_scalar
-        # invalid value encountered in subtract
+        # invalid value encountered in double_scalar, invalid value encountered in subtract
         with np.errstate(divide="ignore", invalid="ignore"):
             blobs = self._model(arr, **kwargs)
 
@@ -385,11 +388,17 @@ def _segment(
     # By convention, segments are numbered from 1..number of segments within each crop.
     # Next, we have to account for that before merging the crops so that segments are not confused.
     # TODO use overlapping crops to not create confusion at boundaries
+    if isinstance(model, SegmentationWatershed):
+        kwargs["increment"] = counter.value
+
     for crop in crops:
-        crop = model.segment(crop, img_id=img_id, channel=channel, increment=counter.value, **kwargs)
+        crop = model.segment(crop, img_id=img_id, channel=channel, **kwargs)
         crop._data = crop.data.rename({img_id: img_id_new})
 
-        counter += int(np.max(crop[img_id_new].values))
+        if isinstance(model, SegmentationWatershed):
+            counter += int(np.max(crop[img_id_new].values))
+            kwargs["increment"] = counter.value
+
         segmented_crops.append(crop)
 
         if queue is not None:
