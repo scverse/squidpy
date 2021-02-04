@@ -174,9 +174,6 @@ class TestContainerUtils:
     def test_to_pixel_space(self):
         pass
 
-    def test_iterate(self):
-        pass
-
     def test_apply_channel(self):
         pass
 
@@ -194,7 +191,7 @@ class TestContainerUtils:
 
 
 class TestContainerShow:
-    def test_channel(self):
+    def test_channel(self):  # TODO: @hspitzer asked for some axis info
         pass
 
     def test_as_mask(self):

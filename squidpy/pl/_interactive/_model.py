@@ -6,7 +6,7 @@ from anndata import AnnData
 import numpy as np
 
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
-from squidpy.im._utils import CropCoords
+from squidpy.im._utils import CropCoords, _NULL_COORDS
 from squidpy.pl._utils import ALayer
 from squidpy._constants._pkg_constants import Key
 
@@ -31,7 +31,7 @@ class ImageModel:
     def __post_init__(self) -> None:
         self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1]
 
-        if self.container.data.attrs.get("coords", None) is not None:
+        if self.container.data.attrs.get("coords", _NULL_COORDS) != _NULL_COORDS:
             c: CropCoords = self.container.data.attrs["coords"]
 
             mask = (
