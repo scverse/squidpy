@@ -1,6 +1,6 @@
 |PyPI| |CI| |Notebooks| |Docs| |Coverage|
 
-squidpy: a tool for spatial molecular data analysis
+squidpy: spatial molecular data analysis in python
 ===================================================
 
 .. image:: <>
@@ -13,24 +13,16 @@ It provides analysis tools that leverages the spatial coordinates of the data, a
 microscopy images if available.
 Visit the documentation [TODO] for docs, tutorials and examples.
 
-Installation
-------------
-Install squidpy by running::
-
-        pip install squidpy
-        # or with extra libraries for interactive visualization
-        pip install 'squidpy[all]'
+Manuscript
+----------
+Please see our `preprint`_ on **bioRxiv** to learn more.
 
 squidpy's key applications
 --------------------------
 - Build and analyze the neighborhood graph from spatial coordinates.
 - Compute spatial statistics for cell-types and genes.
 - Efficiently store, analyze and visualize large microscopy images.
-- Interface spatial datasets in anndata format to `napari`_.
-
-Manuscript
-----------
-Please see our `preprint`_ on **bioRxiv** to learn more.
+- Explore `anndata`_ and the large microscopy image in `napari`_.
 
 Contributing to squidpy
 -----------------------
