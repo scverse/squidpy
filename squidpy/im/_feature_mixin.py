@@ -213,7 +213,7 @@ class FeatureMixin:
 
                 - `'area'`
                 - `'bbox_area'`
-                - `'centroids'`
+                - `'centroid'`
                 - `'convex_area'`
                 - `'eccentricity'`
                 - `'equivalent_diameter'`
@@ -236,7 +236,8 @@ class FeatureMixin:
         -------
         Returns features with the following keys:
 
-            - `'{feature_name}_label'` - if `'label`` was in ``props``.
+            - `'{feature_name}_label'` - if `'label`` is in ``props``.
+            - `'{feature_name}_centroid'` - if `'centroid`` is in ``props``.
             - `'{feature_name}_{p}_mean'` - mean for each non-intensity property `p` in ``props``.
             - `'{feature_name}_{p}_std'` - standard deviation for each non-intensity property `p` in ``props``.
             - `'{feature_name}_ch-{c}_{p}_mean'` - mean for each intensity property `p` in ``props`` and channel `c` in

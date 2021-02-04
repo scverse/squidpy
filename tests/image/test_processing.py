@@ -16,7 +16,7 @@ def test_img_processing(size, processing):
     process(
         img=cont,
         size=size,
-        processing=processing,
+        method=processing,
         img_id="image_0",
         key_added="processed",
     )

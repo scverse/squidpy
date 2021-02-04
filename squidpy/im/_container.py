@@ -674,6 +674,7 @@ class ImageContainer(FeatureMixin):
         figsize: Optional[Tuple[float, float]] = None,
         dpi: Optional[int] = None,
         save: Optional[Pathlike_t] = None,
+        as_mask: bool = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -686,18 +687,31 @@ class ImageContainer(FeatureMixin):
         channel
             Channel to plot. If `None`, use all channels for plotting.
         %(plotting)s
+        as_mask
+            Whether to show the image as a binary mask. Only available if the plotted image has 1 channel.
         kwargs
             Keyword arguments for :meth:`matplotlib.axes.Axes.imshow`.
 
         Returns
         -------
         %(plotting_returns)s
+
+        Raises
+        ------
+        ValueError
+            If  ``as_mask = True`` and the image has more than 1 channel.
         """
         from squidpy.pl._utils import save_fig
 
         arr = self.data[self._singleton_id(img_id)]
         if channel is not None:
             arr = arr[{arr.dims[-1]: channel}]
+            if as_mask:
+                arr = arr > 0
+        elif as_mask:
+            if len(arr.dims[-1]) != 1:
+                raise ValueError()
+            arr = arr > 0
 
         fig, ax = plt.subplots(figsize=(8, 8) if figsize is None else figsize, dpi=dpi)
         ax.set_axis_off()
@@ -789,12 +803,12 @@ class ImageContainer(FeatureMixin):
         """
         img_id = self._singleton_id(img_id)
         arr = self[img_id]
-        channel_id = arr.dims[-1]
+        channel_dim = arr.dims[-1]
 
         if channel is not None:
-            arr = arr[{channel_id: channel}]
+            arr = arr[{channel_dim: channel}]
 
-        res = ImageContainer(func(arr.values, **kwargs), img_id=img_id, channel_id=channel_id)
+        res = ImageContainer(func(arr.values, **kwargs), img_id=img_id, channel_dim=channel_dim)
         res.data.attrs = copy(self.data.attrs)
 
         return res

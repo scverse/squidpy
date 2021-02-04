@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple, Union, Callable, Optional, Sequence, TYPE_CHECKING
 from itertools import chain
-from multiprocessing import Manager
 
 from scanpy import logging as logg
 
@@ -22,46 +21,13 @@ from squidpy._utils import (
     _get_n_cores,
     singledispatchmethod,
 )
-from squidpy.gr._utils import _assert_in_range, _assert_non_negative
+from squidpy.gr._utils import _assert_in_range
 from squidpy.im._utils import _circular_mask
 from squidpy.im._container import ImageContainer
 from squidpy._constants._constants import SegmentationBackend
 from squidpy._constants._pkg_constants import Key
 
 __all__ = ["SegmentationModel", "SegmentationWatershed", "SegmentationBlob", "SegmentationCustom"]
-
-
-class Counter:
-    """Atomic counter to work with :mod:`joblib`."""
-
-    def __init__(self, value: int = 0):
-        manager = Manager()
-        self._value = manager.Value("l", value)
-        self._lock = manager.Lock()
-
-    def __iadd__(self, other: int) -> "Counter":
-        if not isinstance(other, int):
-            return NotImplemented  # type: ignore[unreachable]
-        self._value.value = other
-
-        return self
-
-    def __enter__(self) -> None:
-        self._lock.acquire()
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # type: ignore[no-untyped-def]
-        self._lock.release()
-
-    @property
-    def value(self) -> int:
-        """Return the value."""
-        return self._value.value
-
-    def __repr__(self) -> str:
-        return str(self.value)
-
-    def __str__(self) -> str:
-        return repr(self)
 
 
 class SegmentationModel(ABC):
@@ -152,29 +118,7 @@ class SegmentationWatershed(SegmentationModel):
     def __init__(self) -> None:
         super().__init__(model=None)
 
-    @d.dedent
-    def _segment(
-        self, arr: np.ndarray, thresh: Optional[float] = None, geq: bool = True, increment: int = 0, **kwargs: Any
-    ) -> np.ndarray:
-        """
-        %(segment.full_desc)s
-
-        Parameters
-        ----------
-        %(segment.parameters)s
-        thresh
-            Threshold for creation of masked image. The areas to segment should be contained in this mask.
-            If `None`, it is determined automatically.
-        geq
-            Treat ``thresh`` as upper or lower bound for defining areas to segment. If ``geq = True``, mask is defined
-            as ``mask = arr >= thresh``, meaning high values in ``arr`` denote areas to segment.
-        %(segment_kwargs)s
-
-        Returns
-        -------
-        %(segment.returns)s
-        """  # noqa: D400
-        _assert_non_negative(increment, name="increment")
+    def _segment(self, arr: np.ndarray, thresh: Optional[float] = None, geq: bool = True, **kwargs: Any) -> np.ndarray:
         arr = arr.squeeze(-1)  # we always pass 3D image
 
         if not np.issubdtype(arr.dtype, np.floating):
@@ -199,13 +143,7 @@ class SegmentationWatershed(SegmentationModel):
 
         markers, _ = ndi.label(local_maxi)
 
-        arr = watershed(arr, markers, mask=mask)
-
-        if increment > 0:
-            arr = arr.astype(np.uint64)
-            arr[arr > 0] = arr[arr > 0] + increment
-
-        return arr
+        return watershed(arr, markers, mask=mask)
 
 
 class SegmentationCustom(SegmentationModel):
@@ -224,20 +162,7 @@ class SegmentationCustom(SegmentationModel):
             raise TypeError()
         super().__init__(model=func)
 
-    @d.dedent
     def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
-        """
-        %(segment.full_desc)s
-
-        Parameters
-        -----------
-        %(segment.parameters)s
-        %(segment_kwargs)s
-
-        Returns
-        -------
-        %(segment.returns)s
-        """  # noqa: D400
         return self._model(arr, **kwargs)
 
     def __repr__(self) -> str:
@@ -277,20 +202,6 @@ class SegmentationBlob(SegmentationCustom):
         super().__init__(func=func)
 
     def _segment(self, arr: np.ndarray, invert: bool = False, **kwargs: Any) -> np.ndarray:
-        """
-        %(segment.full_desc)s
-
-        Parameters
-        ----------
-        %(segment.parameters)s
-        invert
-            Whether to segment an inverted array.
-        %(segment_kwargs)s
-
-        Returns
-        -------
-        %(segment.returns)s
-        """  # noqa: D400
         arr = arr.squeeze(-1)
         if not np.issubdtype(arr.dtype, np.floating):
             arr = img_as_float(arr, force_copy=False)
@@ -339,9 +250,20 @@ def segment(
     %(size)s
     key_added
         Key of new image sized array to add into img object. If `None`, use ``'segmented_{{model}}'``.
+    thresh
+        Threshold for creation of masked image. The areas to segment should be contained in this mask.
+        If `None`, it is determined by `Otsu's method <https://en.wikipedia.org/wiki/Otsu%27s_method>`_.
+        Only used if ``method = {m.WATERSHED.s!r}``.
+    geq
+        Treat ``thresh`` as upper or lower bound for defining areas to segment. If ``geq = True``, mask is defined
+        as ``mask = arr >= thresh``, meaning high values in ``arr`` denote areas to segment.
+    invert
+        Whether to segment an inverted array. Only used if ``method`` is one of :mod:`skimage` blob methods.
     %(copy_cont)s
     %(segment_kwargs)s
     %(parallelize)s
+    kwargs
+        Keyword arguments for ``method``.
 
     Returns
     -------
@@ -368,23 +290,30 @@ def segment(
     else:
         raise NotImplementedError(f"Model `{kind}` is not yet implemented.")
 
-    counter, n_jobs = Counter(), _get_n_cores(n_jobs)
-    crops = list(img.generate_equal_crops(size=size, as_array=False))
-
+    n_jobs = _get_n_cores(n_jobs)
+    crops: List[ImageContainer] = list(img.generate_equal_crops(size=size, as_array=False))
     start = logg.info(f"Segmenting `{len(crops)}` crops using `{segmentation_model}` and `{n_jobs}` core(s)")
-    res: ImageContainer = ImageContainer.uncrop(
-        parallelize(
-            _segment,
-            collection=crops,
-            unit="crop",
-            extractor=lambda res: list(chain.from_iterable(res)),
-            n_jobs=n_jobs,
-            backend=backend,
-            show_progress_bar=show_progress_bar,
-        )(model=segmentation_model, img_id=img_id, img_id_new=img_id_new, counter=counter, channel=channel, **kwargs),
-        shape=img.shape,
-    )
+
+    crops: List[ImageContainer] = parallelize(  # type: ignore[no-redef]
+        _segment,
+        collection=crops,
+        unit="crop",
+        extractor=lambda res: list(chain.from_iterable(res)),
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar and len(crops) > 1,
+    )(model=segmentation_model, img_id=img_id, img_id_new=img_id_new, channel=channel, **kwargs)
+    # By convention, segments are numbered from 1..number of segments within each crop.
+    # Next, we have to account for that before merging the crops so that segments are not confused.
+    # TODO use overlapping crops to not create confusion at boundaries
+    counter = 0
+    for crop in crops:
+        data = crop[img_id_new].data
+        data[data > 0] += counter
+        counter += np.max(crop[img_id_new].data)
+
     # this silently assumes segmentation does not change channel id (as it should)
+    res: ImageContainer = ImageContainer.uncrop(crops, shape=img.shape)
     res._data = res.data.rename({channel_id: f"{channel_id}:{channel}"})
     logg.info("Finish", time=start)
 
@@ -400,22 +329,12 @@ def _segment(
     img_id: str,
     img_id_new: str,
     channel: int,
-    counter: Counter,
     queue: Optional[SigQueue] = None,
     **kwargs: Any,
 ) -> List[ImageContainer]:
     segmented_crops = []
     for crop in crops:
-        # By convention, segments are numbered from 1..number of segments within each crop.
-        # Next, we have to account for that before merging the crops so that segments are not confused.
-        # TODO use overlapping crops to not create confusion at boundaries
-        if isinstance(model, SegmentationWatershed):
-            with counter:
-                crop = model.segment(crop, img_id=img_id, channel=channel, increment=counter.value, **kwargs)
-                counter += int(np.max(crop[img_id].values))
-        else:
-            crop = model.segment(crop, img_id=img_id, channel=channel, **kwargs)
-
+        crop = model.segment(crop, img_id=img_id, channel=channel, **kwargs)
         crop._data = crop.data.rename({img_id: img_id_new})
         segmented_crops.append(crop)
 
