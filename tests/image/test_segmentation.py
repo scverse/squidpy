@@ -13,6 +13,7 @@ from squidpy.im import (
     SegmentationCustom,
     SegmentationWatershed,
 )
+from squidpy._constants._constants import SegmentationBackend
 from squidpy._constants._pkg_constants import Key
 
 
@@ -115,14 +116,28 @@ class TestHighLevel:
         with pytest.raises(KeyError, match=r"Image `foobar` not found in"):
             segment(small_cont, img_id="foobar")
 
-    @pytest.mark.parametrize("method", ["watershed", "log", "dog", "doh", lambda arr: ...])
-    def test_method(self, method: Union[str, Callable]):
-        pass
+    @pytest.mark.parametrize("method", ["watershed", "log", "dog", "doh", dummy_segment])
+    def test_method(self, small_cont: ImageContainer, method: Union[str, Callable]):
+        res = segment(small_cont, method=method, copy=True)
 
-    @pytest.mark.parametrize("dy", [10, 0.5, None])
+        assert isinstance(res, ImageContainer)
+        assert res.shape == small_cont.shape
+
+        if callable(method):
+            method = SegmentationBackend.CUSTOM.s
+
+        assert Key.img.segment(method) in res
+
+        if method in ("log", "dog", "dog"):
+            assert res[Key.img.segment(method)].values.max() <= 1
+
+    @pytest.mark.parametrize("dy", [11, 0.5, None])
     @pytest.mark.parametrize("dx", [15, 0.1, None])
-    def test_size(self, dy: Optional[Union[int, float]], dx: Optional[Union[int, float]]):
-        pass
+    def test_size(self, small_cont: ImageContainer, dy: Optional[Union[int, float]], dx: Optional[Union[int, float]]):
+        res = segment(small_cont, size=(dy, dx), copy=True)
+
+        assert isinstance(res, ImageContainer)
+        assert res.shape == small_cont.shape
 
     @pytest.mark.parametrize("channel", [0, 1, 2])
     def test_channel(self, small_cont: ImageContainer, channel: int):
