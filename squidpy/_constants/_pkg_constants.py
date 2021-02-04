@@ -3,7 +3,7 @@ from typing import Any, Union, Callable, Optional
 
 from anndata import AnnData
 
-from squidpy._constants._constants import SegmentationBackend
+from squidpy._constants._constants import Processing, SegmentationBackend
 
 _SEP = "_"
 
@@ -21,6 +21,19 @@ class Key:  # noqa: D101
         @classmethod
         def segment(cls, backend: Union[str, SegmentationBackend], key_added: Optional[str] = None) -> str:
             return f"segmented_{SegmentationBackend(backend).s}" if key_added is None else key_added
+
+        @classmethod
+        def process(
+            cls, method: Union[str, Processing, Callable[[Any], Any]], img_id: str, key_added: Optional[str] = None
+        ) -> str:
+            if key_added is not None:
+                return key_added
+            if isinstance(method, Processing):
+                method = method.s
+            elif callable(method):
+                method = getattr(method, "__name__", "custom")
+
+            return f"{img_id}_{method}"
 
         @cprop
         def coords(cls) -> str:

@@ -11,6 +11,7 @@ import skimage.filters
 from squidpy._docs import d, inject_docs
 from squidpy.im._container import ImageContainer
 from squidpy._constants._constants import Processing
+from squidpy._constants._pkg_constants import Key
 
 __all__ = ["process"]
 
@@ -71,25 +72,21 @@ def process(
     """
     img_id = img._singleton_id(img_id)
     method = Processing(method) if isinstance(method, (str, Processing)) else method  # type: ignore[assignment]
+
     if channel_dim is None:
         channel_dim = img[img_id].dims[-1]
+    img_id_new = Key.img.process(method, img_id, key_added=key_added)
 
     if callable(method):
         callback = method
-        img_id_new = f"{img_id}_{getattr(callback, '__name__', 'custom')}"  # get the function name
     elif method == Processing.SMOOTH:  # type: ignore[comparison-overlap]
         callback = partial(skimage.filters.gaussian, multichannel=True)
-        img_id_new = f"{img_id}_{method}"
     elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
         if img[img_id].shape[-1] != 3:
             raise ValueError(f"Expected channel dimension to be `3`, found `{img[img_id].shape[-1]}`.")
         callback = skimage.color.rgb2gray
-        img_id_new = f"{img_id}_{method}"
     else:
         raise NotImplementedError(f"Method `{method}` is not yet implemented.")
-
-    if key_added is not None:
-        img_id_new = key_added
 
     start = logg.info(f"Processing image using `{method}` method")
 
@@ -98,7 +95,7 @@ def process(
 
     # if the method changes the number of channels
     if res[img_id].shape[-1] != img[img_id].shape[-1]:
-        modifier = "_".join(img_id_new.split("_")[1:])  # can have multiple `_`
+        modifier = "_".join(img_id_new.split("_")[1:]) if key_added is None else key_added
         channel_dim = f"{channel_dim}_{modifier}"
 
     res._data = res.data.rename({res[img_id].dims[-1]: channel_dim}).rename_vars({img_id: img_id_new})
