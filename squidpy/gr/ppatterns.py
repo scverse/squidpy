@@ -198,7 +198,7 @@ def moran(
             genes = adata[:, adata.var.highly_variable.values].var_names.values
         else:
             genes = adata.var_names.values
-    genes = _assert_non_empty_sequence(genes)  # type: ignore[assignment]
+    genes = _assert_non_empty_sequence(genes, name="genes")
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating for `{len(genes)}` genes using `{n_jobs}` core(s)")

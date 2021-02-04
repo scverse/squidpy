@@ -229,8 +229,6 @@ def test_crop(tmpdir):
     padding, masking, scaling, changing dtype,
     check that returned crops have correct shape.
     """
-    # ignore NotGeoreferencedWarning here
-    # create ImageContainer
     xdim = 100
     ydim = 200
     img_orig = np.zeros((xdim, ydim, 10), dtype=np.uint8)

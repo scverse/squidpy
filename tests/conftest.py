@@ -97,7 +97,19 @@ def cont() -> ImageContainer:
 @pytest.fixture()
 def small_cont() -> ImageContainer:
     np.random.seed(42)
-    return ImageContainer(np.random.normal(size=(100, 100, 3)), img_id="image")
+    return ImageContainer(np.random.uniform(size=(100, 100, 3), low=0, high=1), img_id="image")
+
+
+@pytest.fixture()
+def small_cont_seg() -> ImageContainer:
+    np.random.seed(42)
+    img = ImageContainer(np.random.randint(low=0, high=255, size=(100, 100, 3), dtype=np.uint8), img_id="image")
+    mask = np.zeros((100, 100), dtype="uint8")
+    mask[20:30, 10:20] = 1
+    mask[50:60, 30:40] = 2
+    img.add_img(mask, img_id="segmented", channel_dim="mask")
+
+    return img
 
 
 @pytest.fixture()

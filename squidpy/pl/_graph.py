@@ -113,7 +113,7 @@ def centrality_scores(
     palette = _get_palette(adata, cluster_key=cluster_key, categories=clusters) if palette is None else palette
 
     score = scores if score is None else score
-    score = _assert_non_empty_sequence(score)  # type: ignore[assignment]
+    score = _assert_non_empty_sequence(score, name="centrality scores")
     score = sorted(_get_valid_values(score, scores))
 
     palette = adata.uns.get(f"{cluster_key}_colors", None)
@@ -364,7 +364,7 @@ def co_occurrence(
     categories = adata.obs[cluster_key].cat.categories
 
     clusters = categories if clusters is None else clusters
-    clusters = _assert_non_empty_sequence(clusters)  # type: ignore[assignment]
+    clusters = _assert_non_empty_sequence(clusters, name="clusters")
     clusters = sorted(_get_valid_values(clusters, categories))
 
     palette = _get_palette(adata, cluster_key=cluster_key, categories=categories) if palette is None else palette

@@ -1,4 +1,15 @@
-from typing import Any, Dict, List, Tuple, Union, Callable, Iterable, Optional, Sequence
+from typing import (
+    Any,
+    Dict,
+    List,
+    Tuple,
+    Union,
+    Callable,
+    Iterable,
+    Optional,
+    Sequence,
+    TYPE_CHECKING,
+)
 from typing_extensions import Protocol
 
 import numpy as np
@@ -9,6 +20,7 @@ from skimage.feature import greycoprops, greycomatrix
 import skimage.measure
 
 from squidpy._docs import d
+from squidpy.gr._utils import _assert_non_empty_sequence
 from squidpy.im._utils import CropCoords, _NULL_PADDING
 from squidpy._constants._pkg_constants import Key
 
@@ -33,6 +45,32 @@ def _get_channels(xr_img: xr.DataArray, channels: Optional[Channel_t]) -> List[i
     return list(channels)
 
 
+_valid_seg_prop = sorted(
+    {
+        "area",
+        "bbox_area",
+        "centroid",
+        "convex_area",
+        "eccentricity",
+        "equivalent_diameter",
+        "euler_number",
+        "extent",
+        "feret_diameter_max",
+        "filled_area",
+        "label",
+        "major_axis_length",
+        "max_intensity",
+        "mean_intensity",
+        "min_intensity",
+        "minor_axis_length",
+        "orientation",
+        "perimeter",
+        "perimeter_crofton",
+        "solidity",
+    }
+)
+
+
 # define protocol to get rid of mypy indexing errors
 class HasGetItemProtocol(Protocol):
     """Protocol for FeatureMixin to have correct definition of ImageContainer."""
@@ -42,6 +80,9 @@ class HasGetItemProtocol(Protocol):
 
     @property
     def data(self) -> xr.Dataset:  # noqa: D102
+        ...
+
+    def _singleton_id(self, img_id: Optional[str]) -> str:
         ...
 
 
@@ -75,7 +116,10 @@ class FeatureMixin:
             - `'{feature_name}_ch-{c}_mean'` - the mean.
             - `'{feature_name}_ch-{c}_std'` - the standard deviation.
         """
+        img_id = self._singleton_id(img_id)
+        quantiles = _assert_non_empty_sequence(quantiles, name="quantiles")
         channels = _get_channels(self[img_id], channels)
+        channels = _assert_non_empty_sequence(channels, name="channels")
 
         features = {}
         for c in channels:
@@ -116,7 +160,10 @@ class FeatureMixin:
 
             - `'{feature_name}_ch-{c}_bin-{i}'` - the histogram counts for each bin `i` in ``bins``.
         """
+        img_id = self._singleton_id(img_id)
         channels = _get_channels(self[img_id], channels)
+        channels = _assert_non_empty_sequence(channels, name="channels")
+
         # if v_range is None, use whole-image range
         if v_range is None:
             v_range = np.min(self[img_id].values), np.max(self[img_id].values)
@@ -172,15 +219,18 @@ class FeatureMixin:
         -----
         If the image is not of type :class:`numpy.uint8`, it will be converted.
         """
-        if not len(props):
-            raise ValueError("No texture properties have been selected.")
+        img_id = self._singleton_id(img_id)
+
+        props = _assert_non_empty_sequence(props, name="properties")
+        angles = _assert_non_empty_sequence(angles, name="angles")
+        distances = _assert_non_empty_sequence(distances, name="distances")
 
         channels = _get_channels(self[img_id], channels)
-        arr = self[img_id][..., channels].values
+        channels = _assert_non_empty_sequence(channels, name="channels")
 
-        # check that image has values < 256
+        arr = self[img_id][..., channels].values
         if not np.issubdtype(arr.dtype, np.uint8):
-            arr = img_as_ubyte(arr, force_copy=False)
+            arr = img_as_ubyte(arr, force_copy=False)  # values must be in [0, 255]
 
         features = {}
         for c in channels:
@@ -195,8 +245,8 @@ class FeatureMixin:
     @d.dedent
     def features_segmentation(
         self: HasGetItemProtocol,
-        img_id: str,
         label_img_id: str,
+        intensity_img_id: Optional[str] = None,
         feature_name: str = "segmentation",
         channels: Optional[Channel_t] = None,
         props: Sequence[str] = ("label", "area", "mean_intensity"),
@@ -212,8 +262,10 @@ class FeatureMixin:
 
         Parameters
         ----------
-        %(img_container)s
-        %(img_id)s
+        label_img_id
+            TODO.
+        intensity_img_id
+            TODO.
         %(feature_name)s
         %(channels)s
             Only relevant for features that use the intensity image ``img_id``.
@@ -287,12 +339,25 @@ class FeatureMixin:
 
             return np.c_[x, y]
 
-        # TODO check that passed a valid prop
-        channels = _get_channels(self[img_id], channels)
+        label_img_id = self._singleton_id(label_img_id)
+
+        props = _assert_non_empty_sequence(props, name="properties")
+        for prop in props:
+            if prop not in _valid_seg_prop:
+                raise ValueError(f"Invalid property `{prop}`. Valid properties are `{_valid_seg_prop}`.")
+        no_intensity_props = [p for p in props if "intensity" not in p]
+        intensity_props = [p for p in props if "intensity" in p]
+
+        if len(intensity_props):
+            if intensity_img_id is None:
+                raise ValueError("Please specify `intensity_img_id` if using intensity properties.")
+            channels = _get_channels(self[intensity_img_id], channels)
+            channels = _assert_non_empty_sequence(channels, name="channels")
+        else:
+            channels = ()
 
         features = {}
         # calculate features that do not depend on the intensity image
-        no_intensity_props = [p for p in props if "intensity" not in p]
         tmp_features = skimage.measure.regionprops_table(
             self[label_img_id].values[:, :, 0], properties=no_intensity_props
         )
@@ -308,10 +373,13 @@ class FeatureMixin:
                 features[f"{feature_name}_{p}_std"] = np.std(tmp_features[p])
 
         # calculate features that depend on the intensity image
-        intensity_props = [p for p in props if "intensity" in p]
         for c in channels:
+            if TYPE_CHECKING:
+                assert isinstance(intensity_img_id, str)
             tmp_features = skimage.measure.regionprops_table(
-                self[label_img_id].values[:, :, 0], intensity_image=self[img_id].values[:, :, c], properties=props
+                self[label_img_id].values[:, :, 0],
+                intensity_image=self[intensity_img_id].values[:, :, c],
+                properties=props,
             )
             for p in intensity_props:
                 features[f"{feature_name}_ch-{c}_{p}_mean"] = np.mean(tmp_features[p])
@@ -322,7 +390,7 @@ class FeatureMixin:
     @d.dedent
     def features_custom(
         self: HasGetItemProtocol,
-        img_id: str,
+        img_id: Optional[str],
         func: Callable[[np.ndarray], Any],
         channels: Optional[Channel_t] = None,
         feature_name: Optional[str] = None,
@@ -358,6 +426,7 @@ class FeatureMixin:
             img = squidpy.im.ImageContainer(...)
             img.features_custom(imd_id=..., func=numpy.mean, channels=0)
         """
+        img_id = self._singleton_id(img_id)
         channels = _get_channels(self[img_id], channels)
         feature_name = getattr(func, "__name__", "custom") if feature_name is None else feature_name
 

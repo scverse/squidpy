@@ -575,7 +575,7 @@ class ImageContainer(FeatureMixin):
 
         if obs_names is None:
             obs_names = adata.obs_names
-        obs_names = _assert_non_empty_sequence(obs_names)
+        obs_names = _assert_non_empty_sequence(obs_names, name="observations")
 
         adata = adata[obs_names, :]
         spatial = adata.obsm[spatial_key][:, :2]
@@ -877,7 +877,7 @@ class ImageContainer(FeatureMixin):
 
     def _assert_not_empty(self) -> None:
         if not len(self):
-            raise ValueError("No image has been added.")
+            raise ValueError("The container is empty.")
 
     def _get_size(self, size: Optional[Union[FoI_t, Tuple[Optional[FoI_t], Optional[FoI_t]]]]) -> Tuple[FoI_t, FoI_t]:
         if size is None:

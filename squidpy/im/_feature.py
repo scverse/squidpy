@@ -110,7 +110,7 @@ def _calculate_image_features_helper(
     **kwargs: Any,
 ) -> pd.DataFrame:
     features_list = []
-    for crop in img.generate_spot_crops(adata, obs_names=obs_ids, as_array=False, **kwargs):
+    for crop in img.generate_spot_crops(adata, obs_names=obs_ids, return_obs=False, as_array=False, **kwargs):
         if TYPE_CHECKING:
             assert isinstance(crop, ImageContainer)
         features_dict = {}
@@ -125,7 +125,7 @@ def _calculate_image_features_helper(
             elif feature == ImageFeature.SUMMARY:
                 res = crop.features_summary(img_id=img_id, **feature_kwargs)
             elif feature == ImageFeature.SEGMENTATION:
-                res = crop.features_segmentation(img_id=img_id, **feature_kwargs)
+                res = crop.features_segmentation(intensity_img_id=img_id, **feature_kwargs)
             elif feature == ImageFeature.CUSTOM:
                 res = crop.features_custom(img_id=img_id, **feature_kwargs)
             else:
