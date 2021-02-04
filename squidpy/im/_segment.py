@@ -274,7 +274,7 @@ def segment(
         - :class:`squidpy.im.ImageContainer` ``['{{key_added}}']`` - the segmented image.
     """
     img_id = img._singleton_id(img_id)
-    channel_id = img[img_id].dims[-1]
+    channel_dim = img[img_id].dims[-1]
 
     kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
     img_id_new = Key.img.segment(kind, key_added=key_added)
@@ -315,7 +315,7 @@ def segment(
             counter += np.max(crop[img_id_new].data)
 
     res: ImageContainer = ImageContainer.uncrop(crops, shape=img.shape)
-    res._data = res.data.rename({channel_id: f"{channel_id}:{channel}"})
+    res._data = res.data.rename({channel_dim: f"{channel_dim}:{channel}"})
 
     logg.info("Finish", time=start)
 

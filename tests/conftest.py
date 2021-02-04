@@ -95,6 +95,12 @@ def cont() -> ImageContainer:
 
 
 @pytest.fixture()
+def small_cont() -> ImageContainer:
+    np.random.seed(42)
+    return ImageContainer(np.random.normal(size=(100, 100, 3)), img_id="image")
+
+
+@pytest.fixture()
 def napari_cont() -> ImageContainer:
     return ImageContainer("tests/_data/test_img.jpg", img_id="V1_Adult_Mouse_Brain")
 

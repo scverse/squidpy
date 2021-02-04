@@ -869,9 +869,9 @@ class ImageContainer(FeatureMixin):
                 raise ValueError(
                     f"Unable to determine which `img_id` to use. " f"Please supply from: `{sorted(self.data.keys())}`."
                 )
-            img_id = list(self.data.keys())[0]
-        if img_id not in self.data.keys():
-            raise KeyError(f"Image id not found in `{sorted(self.data.keys())}`.")
+            img_id = list(self)[0]
+        if img_id not in self:
+            raise KeyError(f"Image `{img_id}` not found in `{sorted(self)}`")
 
         return img_id
 

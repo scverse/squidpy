@@ -1,5 +1,5 @@
 """Internal constants not exposed to the user."""
-from typing import Any, Callable, Optional
+from typing import Any, Union, Callable, Optional
 
 from anndata import AnnData
 
@@ -19,8 +19,8 @@ class cprop:  # noqa: D101
 class Key:  # noqa: D101
     class img:  # noqa: D106
         @classmethod
-        def segment(cls, backend: SegmentationBackend, key_added: Optional[str] = None) -> str:
-            return f"segmented_{backend.s}" if key_added is None else key_added
+        def segment(cls, backend: Union[str, SegmentationBackend], key_added: Optional[str] = None) -> str:
+            return f"segmented_{SegmentationBackend(backend).s}" if key_added is None else key_added
 
         @cprop
         def coords(cls) -> str:
