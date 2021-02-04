@@ -17,7 +17,7 @@ class TestProcess:
         pass
 
     @pytest.mark.parametrize("method", ["smooth", "gray", lambda arr: ...])
-    def test_method(self, method: Union[str, Callable[[np.ndarray, ...], np.ndarray]]):
+    def test_method(self, method: Union[str, Callable[[np.ndarray], np.ndarray]]):
         pass
 
     def test_channel_dim(self):
