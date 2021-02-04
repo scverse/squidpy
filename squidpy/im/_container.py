@@ -146,7 +146,7 @@ class ImageContainer(FeatureMixin):
         """
         attrs = self.data.attrs
         try:
-            self._data = self.data.load()  # TODO: explain why this has to be done
+            self._data = self.data.load()  # if we're loading lazily and immediately saving
             self.data.attrs = {
                 k: (v.to_tuple() if isinstance(v, TupleSerializer) else v) for k, v in self.data.attrs.items()
             }
@@ -237,6 +237,9 @@ class ImageContainer(FeatureMixin):
     def _(self, img: Pathlike_t, chunks: Optional[int] = None, **_: Any) -> Optional[xr.DataArray]:
         img = Path(img)
         logg.debug(f"Loading data from `{img}`")
+
+        if not img.exists():
+            raise OSError(f"Path `{img}` does not exist.")
 
         suffix = img.suffix.lower()
 
@@ -577,26 +580,6 @@ class ImageContainer(FeatureMixin):
             yield (crop, adata.obs_names[i]) if return_obs else crop
 
     @classmethod
-    def _from_dataset(cls, data: xr.Dataset, deep: Optional[bool] = None) -> "ImageContainer":
-        """
-        Utility function used for initialization.
-
-        Parameters
-        ----------
-        data
-            The :class:`xarray.Dataset` to use.
-        deep
-            If `None`, don't copy the ``data``. If `True`, make a deep copy of the data, otherwise, make a shallow copy.
-
-        Returns
-        -------
-        The newly created container.
-        """  # noqa: D401
-        res = cls()
-        res._data = data if deep is None else data.copy(deep=deep)
-        return res
-
-    @classmethod
     @d.get_sections(base="uncrop", sections=["Parameters", "Returns"])
     def uncrop(
         cls,
@@ -782,8 +765,9 @@ class ImageContainer(FeatureMixin):
         func: Callable[..., np.ndarray],
         img_id: Optional[str] = None,
         channel: Optional[int] = None,
+        copy: bool = True,
         **kwargs: Any,
-    ) -> "ImageContainer":
+    ) -> Optional["ImageContainer"]:
         """
         Apply a function to an image within this container.
 
@@ -794,12 +778,15 @@ class ImageContainer(FeatureMixin):
         %(img_id)
         channel
             Apply ``func`` only over a specific ``channel``. If `None`, apply over the full image.
+        copy
+            Whether to return a copy or modify this container.
         kwargs
             Keyword arguments for ``func``.
 
         Returns
         -------
-        New container with `1` image saved under ``img_id``.
+        If ``copy = True``, returns a ew container with 1 image saved as ``img_id``.
+        Otherwise, overwrites the ``img_id`` in this container.
         """
         img_id = self._singleton_id(img_id)
         arr = self[img_id]
@@ -807,11 +794,15 @@ class ImageContainer(FeatureMixin):
 
         if channel is not None:
             arr = arr[{channel_dim: channel}]
+        arr = func(arr.values, **kwargs)
 
-        res = ImageContainer(func(arr.values, **kwargs), img_id=img_id, channel_dim=channel_dim)
-        res.data.attrs = copy(self.data.attrs)
+        if copy:
+            res = ImageContainer(arr, img_id=img_id, channel_dim=channel_dim)
+            res.data.attrs = self.data.attrs.copy()
 
-        return res
+            return res
+
+        self.add_img(arr, img_id=img_id, channel_dim=channel_dim)
 
     @property
     def data(self) -> xr.Dataset:
@@ -837,6 +828,26 @@ class ImageContainer(FeatureMixin):
         Copy of self.
         """
         return deepcopy(self) if deep else copy(self)
+
+    @classmethod
+    def _from_dataset(cls, data: xr.Dataset, deep: Optional[bool] = None) -> "ImageContainer":
+        """
+        Utility function used for initialization.
+
+        Parameters
+        ----------
+        data
+            The :class:`xarray.Dataset` to use.
+        deep
+            If `None`, don't copy the ``data``. If `True`, make a deep copy of the data, otherwise, make a shallow copy.
+
+        Returns
+        -------
+        The newly created container.
+        """  # noqa: D401
+        res = cls()
+        res._data = data if deep is None else data.copy(deep=deep)
+        return res
 
     def _singleton_id(self, img_id: Optional[str]) -> str:
         self._assert_not_empty()

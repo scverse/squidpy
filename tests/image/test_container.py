@@ -1,14 +1,175 @@
+from typing import Tuple, Union, Optional, Sequence
 import pytest
 
 from anndata import AnnData
 
 import numpy as np
+import xarray as xr
 
 import tifffile
 
 from squidpy.im._utils import CropCoords, _NULL_COORDS
 from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
+
+
+class TestContainerIO:
+    def test_empty_initialization(self):
+        pass
+
+    def test_initialize_from_dataset(self):
+        pass
+
+    def test_lazy(self):
+        pass
+
+    def test_load_in_chunks(self):
+        pass
+
+    def test_load_from_zarr(self):
+        pass
+
+    def test_save_to_zarr(self):
+        pass
+
+    def test_load_zarr_2_objects_can_overwrite_store(self):
+        pass
+
+    def test_load_from_netcdf(self):
+        pass
+
+    # TODO: add here: numpy.aray, xarray.array, invalid type,
+    #  path to an existing file with known/unknown extension (JPEG and TIFF), path to a non-existent file
+    @pytest.mark.parametrize("img", [])
+    def test_add_img_types(self, img: Union[np.ndarray, xr.DataArray, str]):
+        pass
+
+    @pytest.mark.parametrize("array", [])
+    def test_load_2D_array(self, array: Union[np.ndarray, xr.DataArray]):
+        pass
+
+    def test_add_img_invalid_yx(self):
+        pass
+
+    def test_xarray_remapping_spatial_dims(self):
+        pass
+
+    @pytest.mark.parametrize("n_channels", [2, 3, 11])
+    def test_add_img_number_of_channels(self, n_channels: int):
+        pass
+
+    @pytest.mark.parametrize("channel_dim", ["present", "absent"])
+    def test_add_img_channel_dim(self, channel_dim: str):
+        pass
+
+
+class TestContainerCroppping:
+    def test_padding_top_left(self):
+        pass
+
+    def test_padding_top_right(self):
+        pass
+
+    def test_padding_bottom_left(self):
+        pass
+
+    def test_padding_bottom_right(self):
+        pass
+
+    def test_padding_left_right(self):
+        pass
+
+    def test_padding_top_bottom(self):
+        pass
+
+    def test_padding_all(self):
+        pass
+
+    @pytest.mark.parametrize("dy", [25, 0.3, None])
+    @pytest.mark.parametrize("dx", [30, 0.5, None])
+    def test_crop_corner_size(self, dy: Optional[Union[int, float]], dx: Optional[Union[int, float]]):
+        pass
+
+    @pytest.mark.parametrize("scale", [0.5, 1.0, 2.0])
+    def test_crop_corner_scale(self, scale: float):
+        pass
+
+    @pytest.mark.parametrize("scale", [0.5, 1.0, 2.0])
+    def test_test_crop_corner_cval(self, scale: float):
+        pass
+
+    @pytest.mark.parametrize("size", [(50, 50), (50, 49)])
+    def test_crop_corner_mask_circle(self, size: Tuple[int, int]):
+        pass
+
+    @pytest.mark.parametrize("ry", [25, 0.3, None])
+    @pytest.mark.parametrize("rx", [30, 0.5, None])
+    def test_crop_center_radius(self, ry: Optional[Union[int, float]], rx: Optional[Union[int, float]]):
+        pass
+
+    @pytest.mark.parametrize("as_array", [False, True])
+    def test_equal_crops_as_array(self, as_array: bool):
+        pass
+
+    @pytest.mark.parametrize("scale", [1, 0.5, 2])
+    def test_spot_crops_spot_scale(self, scale: float):
+        pass
+
+    @pytest.mark.parametrize("obs_names", [None, ...])
+    def test_spot_crops_obs_names(self, obs_names: Optional[Sequence[str]]):
+        pass
+
+    @pytest.mark.parametrize("return_obs", [False, True])
+    @pytest.mark.parametrize("as_array", [False, True])
+    def test_spot_crops_as_array_return_obs(self, as_array: bool, return_obs: bool):
+        pass
+
+    def test_spot_crops_mask_circle(self):
+        pass
+
+    def test_uncrop_preserves_shape(self):
+        pass
+
+    def test_uncrop_too_small_requested_shape(self):
+        pass
+
+
+class TestContainerUtils:
+    @pytest.mark.parametrize("deep", [False, True])
+    def test_copy(self, deep: bool):
+        pass
+
+    def test_get_default_size(self):
+        pass
+
+    def test_to_pixel_space(self):
+        pass
+
+    def test_iterate(self):
+        pass
+
+    def test_apply_channel(self):
+        pass
+
+    def test_apply_inplace(self):
+        pass
+
+    def test_image_autoincrement(self):
+        pass
+
+    def test_repr_html(self):
+        pass
+
+    def test_repr(self):
+        pass
+
+
+class TestContainerShow:
+    def test_channel(self):
+        pass
+
+    def test_as_mask(self):
+        pass
 
 
 @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1), (10, 100, 200, 1)])
