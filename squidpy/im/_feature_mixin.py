@@ -18,10 +18,16 @@ Channel_t = Union[int, Sequence[int]]
 def _get_channels(xr_img: xr.DataArray, channels: Optional[Channel_t]) -> List[int]:
     """Get correct channel ranges for feature calculation."""
     # if channels is None, compute features for all channels
+    all_channels = list(range(xr_img.shape[-1]))
+
     if channels is None:
-        return list(range(xr_img.shape[-1]))
+        channels = all_channels
     if isinstance(channels, int):
-        return [channels]
+        channels = [channels]
+
+    for c in channels:
+        if c not in all_channels:
+            raise ValueError(f"Channel `{c}` is not in `{all_channels}`.")
 
     return list(channels)
 
@@ -128,9 +134,9 @@ class FeatureMixin:
         img_id: str,
         feature_name: str = "texture",
         channels: Optional[Channel_t] = None,
-        props: Iterable[str] = ("contrast", "dissimilarity", "homogeneity", "correlation", "ASM"),
-        distances: Iterable[int] = (1,),
-        angles: Iterable[float] = (0, np.pi / 4, np.pi / 2, 3 * np.pi / 4),
+        props: Sequence[str] = ("contrast", "dissimilarity", "homogeneity", "correlation", "ASM"),
+        distances: Sequence[int] = (1,),
+        angles: Sequence[float] = (0, np.pi / 4, np.pi / 2, 3 * np.pi / 4),
     ) -> Feature_t:
         """
         Calculate texture features.
@@ -165,6 +171,9 @@ class FeatureMixin:
         -----
         If the image is not of type :class:`numpy.uint8`, it will be converted.
         """
+        if not len(props):
+            raise ValueError("No texture properties have been selected.")
+
         channels = _get_channels(self[img_id], channels)
         arr = self[img_id][..., channels].values
 
@@ -189,7 +198,7 @@ class FeatureMixin:
         label_img_id: str,
         feature_name: str = "segmentation",
         channels: Optional[Channel_t] = None,
-        props: Iterable[str] = ("label", "area", "mean_intensity"),
+        props: Sequence[str] = ("label", "area", "mean_intensity"),
     ) -> Feature_t:
         """
         Calculate segmentation features using :func:`skimage.measure.regionprops`.
@@ -259,7 +268,7 @@ class FeatureMixin:
                 x = x[mask]
 
             if not len(y):
-                return np.array([[]], dtype=np.float64)  # because masking; should not happen
+                return np.array([[]], dtype=np.float64)  # because of masking, should not happen
 
             coord, padding = self.data.attrs.get("coords", _NULL_COORDS), self.data.attrs.get("padding", _NULL_PADDING)
             y_slc, x_slc = coord.to_image_coordinates(padding).slice
