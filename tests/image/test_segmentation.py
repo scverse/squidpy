@@ -45,7 +45,7 @@ class TestHighLevel:
 
     @pytest.mark.parametrize("dy", [0, 0.5, None])
     @pytest.mark.parametrize("dx", [0, 0.5, None])
-    def test_size(self, dy: Union[int, float], dx: Union[int, float]):
+    def test_size(self, dy: Optional[Union[int, float]], dx: Optional[Union[int, float]]):
         pass
 
     @pytest.mark.parametrize("channel", [0, 1, 2])
@@ -55,11 +55,18 @@ class TestHighLevel:
     def test_image_id(self):
         pass
 
+    @pytest.mark.parametrize("key_added", [None, "foo"])
+    def test_key_added(self, key_added: Optional[str]):
+        pass
+
+    def test_passing_kwargs(self):
+        pass
+
     def test_copy(self):
         pass
 
     @pytest.mark.parametrize("n_jobs", [1, 2])
-    def test_parallelize(self, n_job: int):
+    def test_parallelize(self, n_jobs: int):
         pass
 
     # TODO: split this test
