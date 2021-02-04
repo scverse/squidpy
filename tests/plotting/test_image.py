@@ -16,15 +16,15 @@ def test_extract(adata: AnnData, cont: ImageContainer, caplog):
     extr_adata = sq.pl.extract(adata)
     # Test that expected columns exist
     for col in [
-        "summary_quantile_0.9_ch_0",
-        "summary_quantile_0.5_ch_0",
-        "summary_quantile_0.1_ch_0",
-        "summary_quantile_0.9_ch_1",
-        "summary_quantile_0.5_ch_1",
-        "summary_quantile_0.1_ch_1",
-        "summary_quantile_0.9_ch_2",
-        "summary_quantile_0.5_ch_2",
-        "summary_quantile_0.1_ch_2",
+        "summary_ch-0_quantile-0.9",
+        "summary_ch-0_quantile-0.5",
+        "summary_ch-0_quantile-0.1",
+        "summary_ch-1_quantile-0.9",
+        "summary_ch-1_quantile-0.5",
+        "summary_ch-1_quantile-0.1",
+        "summary_ch-2_quantile-0.9",
+        "summary_ch-2_quantile-0.5",
+        "summary_ch-2_quantile-0.1",
     ]:
         assert col in extr_adata.obs.columns
 
@@ -40,15 +40,15 @@ def test_extract(adata: AnnData, cont: ImageContainer, caplog):
     extr_adata = sq.pl.extract(adata, obsm_key=["img_features", "pca_features"])
     # Test that expected columns exist
     for col in [
-        "summary_quantile_0.9_ch_0",
-        "summary_quantile_0.5_ch_0",
-        "summary_quantile_0.1_ch_0",
-        "summary_quantile_0.9_ch_1",
-        "summary_quantile_0.5_ch_1",
-        "summary_quantile_0.1_ch_1",
-        "summary_quantile_0.9_ch_2",
-        "summary_quantile_0.5_ch_2",
-        "summary_quantile_0.1_ch_2",
+        "summary_ch-0_quantile-0.9",
+        "summary_ch-0_quantile-0.5",
+        "summary_ch-0_quantile-0.1",
+        "summary_ch-1_quantile-0.9",
+        "summary_ch-1_quantile-0.5",
+        "summary_ch-1_quantile-0.1",
+        "summary_ch-2_quantile-0.9",
+        "summary_ch-2_quantile-0.5",
+        "summary_ch-2_quantile-0.1",
         "0",
         "1",
         "2",
