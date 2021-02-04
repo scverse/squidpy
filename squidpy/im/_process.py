@@ -52,7 +52,7 @@ def process(
         of channels, and ``'{{channel}}_{{processing}}'``, if it does.
     %(copy_cont)s
     kwargs
-        Keyword arguments for the ``method``.
+        Keyword arguments for ``method``.
 
     Returns
     -------

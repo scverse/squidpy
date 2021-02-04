@@ -39,12 +39,15 @@ class TestBlob:
 
 
 class TestHighLevel:
+    def test_invalid_img_id(self):
+        pass
+
     @pytest.mark.parametrize("method", ["watershed", "log", "dog", "doh", lambda arr: ...])
     def test_method(self, method: Union[str, Callable]):
         pass
 
-    @pytest.mark.parametrize("dy", [0, 0.5, None])
-    @pytest.mark.parametrize("dx", [0, 0.5, None])
+    @pytest.mark.parametrize("dy", [10, 0.5, None])
+    @pytest.mark.parametrize("dx", [15, 0.1, None])
     def test_size(self, dy: Optional[Union[int, float]], dx: Optional[Union[int, float]]):
         pass
 

@@ -1,4 +1,4 @@
-from typing import Tuple, Sequence
+from typing import Tuple, Optional, Sequence
 import pytest
 
 from anndata import AnnData
@@ -58,6 +58,31 @@ class TestFeatureMixin:
         pass
 
     def test_custom_returns_iterable(self):
+        pass
+
+
+class TestHighLevel:
+    def test_invalid_img_id(self):
+        pass
+
+    def test_invalid_feature(self):
+        pass
+
+    def test_passing_spot_crops_kwargs(self):
+        pass
+
+    def test_passing_feature_kwargs(self):
+        pass
+
+    @pytest.mark.parametrize("key_added", [None, "foo"])
+    def test_key_added(self, key_added: Optional[str]):
+        pass
+
+    def test_copy(self):
+        pass
+
+    @pytest.mark.parametrize("n_jobs", [1, 2])
+    def test_parallelize(self, n_jobs: int):
         pass
 
 

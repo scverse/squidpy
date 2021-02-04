@@ -8,8 +8,11 @@ from squidpy.im._container import ImageContainer
 
 
 class TestProcess:
-    @pytest.mark.parametrize("dy", [0, 0.5, None])
-    @pytest.mark.parametrize("dx", [0, 0.5, None])
+    def test_invalid_img_id(self):
+        pass
+
+    @pytest.mark.parametrize("dy", [25, 0.3, None])
+    @pytest.mark.parametrize("dx", [30, 0.5, None])
     def test_size(self, dy: Optional[Union[int, float]], dx: Optional[Union[int, float]]):
         pass
 

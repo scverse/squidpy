@@ -110,7 +110,7 @@ def _calculate_image_features_helper(
     **kwargs: Any,
 ) -> pd.DataFrame:
     features_list = []
-    for crop in img.generate_spot_crops(adata, obs_names=obs_ids, **kwargs):
+    for crop in img.generate_spot_crops(adata, obs_names=obs_ids, as_array=False, **kwargs):
         if TYPE_CHECKING:
             assert isinstance(crop, ImageContainer)
         features_dict = {}
