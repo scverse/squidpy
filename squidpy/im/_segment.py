@@ -303,14 +303,16 @@ def segment(
         backend=backend,
         show_progress_bar=show_progress_bar and len(crops) > 1,
     )(model=segmentation_model, img_id=img_id, img_id_new=img_id_new, channel=channel, **kwargs)
-    # By convention, segments are numbered from 1..number of segments within each crop.
-    # Next, we have to account for that before merging the crops so that segments are not confused.
-    # TODO use overlapping crops to not create confusion at boundaries
-    counter = 0
-    for crop in crops:
-        data = crop[img_id_new].data
-        data[data > 0] += counter
-        counter += np.max(crop[img_id_new].data)
+
+    if isinstance(segmentation_model, SegmentationWatershed):
+        # By convention, segments are numbered from 1..number of segments within each crop.
+        # Next, we have to account for that before merging the crops so that segments are not confused.
+        # TODO use overlapping crops to not create confusion at boundaries
+        counter = 0
+        for crop in crops:
+            data = crop[img_id_new].data
+            data[data > 0] += counter
+            counter += np.max(crop[img_id_new].data)
 
     # this silently assumes segmentation does not change channel id (as it should)
     res: ImageContainer = ImageContainer.uncrop(crops, shape=img.shape)
