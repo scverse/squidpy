@@ -33,7 +33,7 @@ copy
     If `True`, return the result, otherwise save it to the image container."""
 _numba_parallel = """\
 numba_parallel
-    Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
+    Whether to use :class:`numba.prange` or not. If `None`, it is determined automatically.
     For small datasets or small number of interactions, it's recommended to set this to `False`."""
 _seed = """\
 seed
@@ -46,7 +46,7 @@ img
     High-resolution image."""
 _img_id = """\
 img_id
-    Key of image layer in ``img`` that should be processed."""
+    Image layer in ``img`` that should be processed."""
 _feature_name = """\
 feature_name
     Base name of feature in resulting feature values :class:`dict`."""
@@ -54,15 +54,15 @@ _feature_ret = """\
     Dictionary of feature values."""
 _yx = """\
 y
-    Coordinates of the crop along the ``height`` dimension in the pixel space.
-    If a :class:`float`, it must be in `[0, 1]` and specifies the relative position.
+    Coordinate of the crop along the ``height`` dimension in the pixel space.
+    If of type :class:`float`, it specifies the relative position and must be in `[0, 1]`.
 x
-    Coordinates of the crop along the ``width`` dimension in the pixel space.
-    If a :class:`float`, it must be in `[0, 1]` and specifies the relative position."""
+    Coordinate of the crop along the ``width`` dimension in the pixel space.
+    If of type :class:`float`, it specifies the relative position and must be in `[0, 1]`."""
 _size = """\
 size
-    Size of the crop as ``(height, width)``. If a :class:`int`, the crop will be a square.
-    If a :class:`float`, it must be in `[0, 1]` and specifies the relative size."""
+    Size of the crop as ``(height, width)``. If a single :class:`int`, the crop will be a square.
+    If of type :class:`float`, it specifies the relative size and must be in `[0, 1]`."""
 _cluster_key = """\
 cluster_key
     Key in :attr:`anndata.AnnData.obs` where clustering is stored."""
@@ -72,16 +72,6 @@ spatial_key
 _conn_key = """\
 conn_key
     Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored."""
-_crop_extra = """\
-scale
-    Resolution of the crop (smaller -> smaller image).
-mask_circle
-    Mask crop to a circle.
-cval
-    The value outside image boundaries or the mask.
-dtype
-    Type to which the output should be (safely) cast. If `None`, don't recast.
-    Currently supported dtypes: 'uint8'. TODO: pass actualy types instead of strings."""
 _plotting = """\
 figsize
     Size of the figure in inches.
@@ -162,7 +152,6 @@ d = DocstringProcessor(
     cluster_key=_cluster_key,
     spatial_key=_spatial_key,
     conn_key=_conn_key,
-    crop_extra=_crop_extra,
     plotting=_plotting,
     cat_plotting=_cat_plotting,
     plotting_returns=_plotting_returns,

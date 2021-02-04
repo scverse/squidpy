@@ -74,11 +74,14 @@ class Key:  # noqa: D101
             haystack = list(adata.uns[spatial_key].keys())
             if library_id is None:
                 if len(haystack) > 1:
-                    raise ValueError(f"Unable to select `library_id`. Please specify one from: `{sorted(haystack)}`.")
+                    raise ValueError(
+                        f"Unable to determine which `library_id` to use. "
+                        f"Please specify one from: `{sorted(haystack)}`."
+                    )
                 library_id = haystack[0]
 
             if library_id not in haystack:
-                raise KeyError()
+                raise KeyError(f"Library id `{library_id}` not found in `{sorted(haystack)}`.")
 
             return library_id
 
