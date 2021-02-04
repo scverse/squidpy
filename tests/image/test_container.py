@@ -1,4 +1,5 @@
 from typing import Tuple, Union, Optional, Sequence
+from pathlib import Path
 import pytest
 
 from anndata import AnnData
@@ -8,35 +9,63 @@ import xarray as xr
 
 import tifffile
 
+from squidpy.im import ImageContainer
 from squidpy.im._utils import CropCoords, _NULL_COORDS
-from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
 
 
 class TestContainerIO:
     def test_empty_initialization(self):
-        pass
+        img = ImageContainer()
 
-    def test_initialize_from_dataset(self):
-        pass
+        assert not len(img)
+        assert img.shape == (0, 0)
+        assert str(img)
+        assert repr(img)
 
-    def test_lazy(self):
-        pass
+    def _test_initialize_from_dataset(self):
+        dataset = xr.Dataset({"foo": xr.DataArray(np.zeros((100, 100, 3)))}, attrs={"foo": "bar"})
+        img = ImageContainer._from_dataset(data=dataset)
 
-    def test_load_in_chunks(self):
-        pass
+        assert img.data is not dataset
+        assert "foo" in img
+        assert img.shape == (100, 100)
+        np.testing.assert_array_equal(img.data.values(), dataset.values)
+        assert img.data.attrs == dataset.attrs
 
-    def test_load_from_zarr(self):
-        pass
+    def test_save_load_zarr(self, tmpdir):
+        img = ImageContainer(np.random.normal(size=(100, 100, 1)))
+        img.data.attrs["scale"] = 42
 
-    def test_save_to_zarr(self):
-        pass
+        img.save(Path(tmpdir) / "foo")
 
-    def test_load_zarr_2_objects_can_overwrite_store(self):
-        pass
+        img2 = ImageContainer.load(Path(tmpdir) / "foo")
 
-    def test_load_from_netcdf(self):
-        pass
+        np.testing.assert_array_equal(img["image"].values, img2["image"].values)
+        np.testing.assert_array_equal(img.data.dims, img2.data.dims)
+        np.testing.assert_array_equal(sorted(img.data.attrs.keys()), sorted(img2.data.attrs.keys()))
+        for k, v in img.data.attrs.items():
+            assert type(v) == type(img2.data.attrs[k])  # noqa: E721
+            assert v == img2.data.attrs[k]
+
+    def test_load_zarr_2_objects_can_overwrite_store(self, tmpdir):
+        img = ImageContainer(np.random.normal(size=(100, 100, 1)))
+        img.data.attrs["scale"] = 42
+
+        img.save(Path(tmpdir) / "foo")
+
+        img2 = ImageContainer.load(Path(tmpdir) / "foo")
+        img2.data.attrs["sentinel"] = "foobar"
+        img2["image"].values += 42
+        img2.save(Path(tmpdir) / "foo")
+
+        img3 = ImageContainer.load(Path(tmpdir) / "foo")
+
+        assert "sentinel" in img3.data.attrs
+        assert img3.data.attrs["sentinel"] == "foobar"
+
+        np.testing.assert_array_equal(img3["image"].values, img2["image"].values)
+        np.testing.assert_allclose(img3["image"].values - 42, img["image"].values)
 
     # TODO: add here: numpy.aray, xarray.array, invalid type,
     #  path to an existing file with known/unknown extension (JPEG and TIFF), path to a non-existent file

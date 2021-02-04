@@ -150,7 +150,7 @@ class ImageContainer(FeatureMixin):
             self.data.attrs = {
                 k: (v.to_tuple() if isinstance(v, TupleSerializer) else v) for k, v in self.data.attrs.items()
             }
-            self.data.to_zarr(path, mode="w", **kwargs, **kwargs)
+            self.data.to_zarr(str(path), mode="w", **kwargs, **kwargs)
         finally:
             self.data.attrs = attrs
 
@@ -824,6 +824,8 @@ class ImageContainer(FeatureMixin):
     @property
     def shape(self) -> Tuple[int, int]:
         """Image shape ``(y, x)``."""
+        if not len(self):
+            return 0, 0
         return self.data.dims["y"], self.data.dims["x"]
 
     def copy(self, deep: bool = False) -> "ImageContainer":
