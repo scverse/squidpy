@@ -13,6 +13,8 @@ from PyQt5.QtWidgets import QLabel, QGridLayout
 from napari import Viewer
 from napari.layers import Points, Shapes
 
+from skimage import img_as_float
+
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
 from squidpy._utils import singledispatchmethod
@@ -49,27 +51,32 @@ class ImageController:
 
         self.view._init_UI()
 
-    def add_image(self, library_id: str) -> bool:
+    def add_image(self, img_id: str) -> bool:
         """
         Add a new :mod:`napari` image layer.
 
         Parameters
         ----------
-        library_id
+        img_id
             Key in the underlying's :class:`ImageContainer` which contains the image.
 
         Returns
         -------
         `True` if the layer has been added, otherwise `False`.
         """
-        if library_id in self.view.layernames:
-            self._handle_already_present(library_id)
+        if img_id in self.view.layernames:
+            self._handle_already_present(img_id)
             return False
 
-        logg.info(f"Creating image `{library_id}` layer")
+        img: np.ndarray = self.model.container.data[img_id].transpose("y", "x", ...).values
+        if img.shape[-1] > 4:
+            logg.warning(f"Unable to show image of shape `{img.shape}`")
+            return False
+
+        logg.info(f"Creating image `{img_id}` layer")
         self.view.viewer.add_image(
-            self.model.container.data[library_id].transpose("y", "x", ...).values,
-            name=library_id,
+            img_as_float(img),
+            name=img_id,
             rgb=True,
             colormap=self.model.cmap,
             blending=self.model.blending,

@@ -98,10 +98,10 @@ class ImageContainer(FeatureMixin):
         **kwargs: Any,
     ):
         self._data: xr.Dataset = xr.Dataset()
-        self._data.attrs["coords"] = _NULL_COORDS  # can't save None to NetCDF
-        self._data.attrs["padding"] = _NULL_PADDING
-        self._data.attrs["scale"] = 1
-        self._data.attrs["mask_circle"] = False
+        self._data.attrs[Key.img.coords] = _NULL_COORDS  # can't save None to NetCDF
+        self._data.attrs[Key.img.padding] = _NULL_PADDING
+        self._data.attrs[Key.img.scale] = 1
+        self._data.attrs[Key.img.mask_circle] = False
 
         chunks = kwargs.pop("chunks", None)
         if img is not None:
@@ -155,9 +155,9 @@ class ImageContainer(FeatureMixin):
             self.data.attrs = attrs
 
     def _get_next_image_id(self, img_id: str) -> str:
-        pat = re.compile(rf"^{img_id}_(\d+)$")
+        pat = re.compile(rf"^{img_id}_(\d*)$")
         iterator = chain.from_iterable(pat.finditer(k) for k in self.data.keys())
-        return f"{img_id}_{(max(map(lambda m: int(m.groups()[0][0]), iterator), default=-1) + 1)}"
+        return f"{img_id}_{(max(map(lambda m: int(m.groups()[0]), iterator), default=-1) + 1)}"
 
     @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
     def add_img(
@@ -213,6 +213,7 @@ class ImageContainer(FeatureMixin):
 
             logg.info(f"{'Overwriting' if img_id in self else 'Adding'} layer `{img_id}` in `{self}`")
             self.data[img_id] = img
+
         if not lazy:
             # load in memory
             self.data.load()
@@ -235,6 +236,19 @@ class ImageContainer(FeatureMixin):
     @_load_img.register(str)
     @_load_img.register(Path)
     def _(self, img: Pathlike_t, chunks: Optional[int] = None, **_: Any) -> Optional[xr.DataArray]:
+        def transform_metadata(data: xr.Dataset) -> xr.DataArray:
+            data.attrs[Key.img.coords] = CropCoords.from_tuple(data.attrs.get(Key.img.coords, _NULL_COORDS.to_tuple()))
+            data.attrs[Key.img.padding] = CropPadding.from_tuple(
+                data.attrs.get(Key.img.padding, _NULL_PADDING.to_tuple())
+            )
+            if Key.img.mask_circle not in data.attrs:
+                data.attrs[Key.img.mask_circle] = False
+
+            if Key.img.scale not in data.attrs:
+                data.attrs[Key.img.scale] = 1
+
+            return data
+
         img = Path(img)
         logg.debug(f"Loading data from `{img}`")
 
@@ -250,22 +264,14 @@ class ImageContainer(FeatureMixin):
             if len(self._data):
                 raise ValueError("Loading data from `Zarr` store is disallowed if the container is not empty.")
 
-            self._data = xr.open_zarr(str(img), chunks=chunks)
-            self.data.attrs["coords"] = CropCoords.from_tuple(self.data.attrs.get("coords", _NULL_COORDS.to_tuple()))
-            self.data.attrs["padding"] = CropPadding.from_tuple(
-                self.data.attrs.get("padding", _NULL_PADDING.to_tuple())
-            )
+            self._data = transform_metadata(xr.open_zarr(str(img), chunks=chunks))
             return None
 
         if suffix in (".nc", ".cdf"):
             if len(self._data):
                 raise ValueError("Loading data from `NetCDF` is disallowed if the container is not empty.")
 
-            self._data = xr.open_dataset(img, chunks=chunks)
-            self.data.attrs["coords"] = CropCoords.from_tuple(self.data.attrs.get("coords", _NULL_COORDS.to_tuple()))
-            self.data.attrs["padding"] = CropPadding.from_tuple(
-                self.data.attrs.get("padding", _NULL_PADDING.to_tuple())
-            )
+            self._data = transform_metadata(xr.open_dataset(img, chunks=chunks))
             return None
 
         if suffix in (".tif", ".tiff"):
@@ -292,7 +298,7 @@ class ImageContainer(FeatureMixin):
         if img.ndim != 3:
             raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
 
-        return xr.DataArray(img, dims=["y", "x", "channels"], coords={"channels": [1] * img.shape[-1]})
+        return xr.DataArray(img, dims=["y", "x", "channels"])
 
     @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
     def _(self, img: xr.DataArray, copy: bool = True, **_: Any) -> xr.DataArray:
@@ -311,7 +317,14 @@ class ImageContainer(FeatureMixin):
             logg.warning(f"Dimension `x` not found in the data. Assuming it's `{img.dims[1]}`")
             mapping[img.dims[1]] = "x"
 
-        img = img.rename(mapping)  # this will fail if trying to map to the same names
+        img = img.rename(mapping)
+        channel_dim = [d for d in img.dims if d not in ("y", "x")][0]
+        try:
+            img = img.reset_index(dims_or_levels=channel_dim, drop=True)
+        except KeyError:
+            # might not be present, ignore
+            pass
+
         return img.copy() if copy else img
 
     @d.get_sections(base="crop_corner", sections=["Parameters", "Returns"])
@@ -374,8 +387,7 @@ class ImageContainer(FeatureMixin):
             raise ValueError("Width of the crop is empty.")
 
         crop = self.data.isel(x=slice(coords.x0, coords.x1), y=slice(coords.y0, coords.y1)).copy(deep=False)
-        crop.attrs["orig"] = orig
-        crop.attrs["coords"] = coords
+        crop.attrs[Key.img.coords] = coords
 
         if orig != coords:
             padding = orig - coords
@@ -410,7 +422,7 @@ class ImageContainer(FeatureMixin):
                     dims=arr.dims,
                 )
             )
-            data.attrs = {**attrs, "scale": scale}
+            data.attrs = {**attrs, Key.img.scale: scale}
 
         if mask_circle:
             if data.dims["y"] != data.dims["x"]:
@@ -420,7 +432,7 @@ class ImageContainer(FeatureMixin):
                 )
             c = data.x.shape[0] // 2
             data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c ** 2, other=cval)
-            data.attrs["masc_circle"] = True
+            data.attrs[Key.img.mask_circle] = True
 
             for key, arr in self.data.items():
                 data[key] = data[key].astype(arr.dtype, copy=False)
@@ -616,12 +628,12 @@ class ImageContainer(FeatureMixin):
         for crop in crops:
             if set(crop.data.keys()) != keys:
                 raise KeyError(f"Expected to find `{sorted(keys)}` keys, found `{sorted(crop.data.keys())}`.")
-            if crop.data.attrs.get("coords", None) is None:
+            if crop.data.attrs.get(Key.img.coords, None) is None:
                 raise ValueError("Crop does not have coordinate metadata.")
 
-            coord = crop.data.attrs["coords"]  # the unpadded coordinates
+            coord = crop.data.attrs[Key.img.coords]  # the unpadded coordinates
             if coord == _NULL_COORDS:
-                raise ValueError(f"Null coordinate detected: `{coord}`.")
+                raise ValueError(f"Null coordinates detected `{coord}`.")
 
             dy, dx = max(dy, coord.y0 + coord.dy), max(dx, coord.x0 + coord.dx)
 
@@ -643,8 +655,8 @@ class ImageContainer(FeatureMixin):
             )
             # fill data with crops
             for crop in crops:
-                coord = crop.data.attrs["coords"]
-                padding = crop.data.attrs["padding"]
+                coord = crop.data.attrs[Key.img.coords]
+                padding = crop.data.attrs.get(Key.img.padding, _NULL_PADDING)  # maybe warn
                 dataset[key][coord.slice] = crop[key][coord.to_image_coordinates(padding=padding).slice]
 
         return cls._from_dataset(dataset)
@@ -910,12 +922,15 @@ class ImageContainer(FeatureMixin):
 
     def _repr_html_(self) -> str:
         s = f"{self.__class__.__name__} object with {len(self.data.keys())} layer(s):"
-        for layer in self.data.keys():
+        for i, layer in enumerate(self.data.keys()):
             s += f"<p style='text-indent: 25px; margin-top: 0px;'><strong>{layer}</strong>: "
             s += ", ".join(
                 f"<em>{dim}</em> ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape)
             )
             s += "</p>"
+            if i == 12 and i < len(self):
+                s += f"<p style='text-indent: 25px; margin-top: 0px;'>and {len(self) - i} more...</p>"
+                break
         return s
 
     def __repr__(self) -> str:

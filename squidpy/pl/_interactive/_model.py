@@ -31,8 +31,8 @@ class ImageModel:
     def __post_init__(self) -> None:
         self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1]
 
-        if self.container.data.attrs.get("crop", None) is not None:
-            c: CropCoords = self.container.data.attrs["crop"]
+        if self.container.data.attrs.get("coords", None) is not None:
+            c: CropCoords = self.container.data.attrs["coords"]
 
             mask = (
                 (self.coordinates[:, 0] >= c.x0)
@@ -48,22 +48,5 @@ class ImageModel:
             self.coordinates[:, 1] -= c.y0
 
         self.alayer = ALayer(self.adata, is_raw=False, palette=self.palette)
-
-        if self.library_id is None:
-            haystack = list(self.adata.uns[self.spatial_key].keys())
-            if not len(haystack):
-                raise ValueError()
-            if len(haystack) > 1:
-                raise ValueError()
-
-            self.library_id = haystack[0]
-
-        try:
-            self.spot_diameter = float(
-                self.adata.uns[self.spatial_key][self.library_id]["scalefactors"]["spot_diameter_fullres"]
-            )
-        except KeyError:
-            raise KeyError(
-                f"Unable to get the spot diameter from "
-                f"`adata.uns[{self.spatial_key!r}][{self.library_id!r}]['scalefactors'['spot_diameter_fullres']]`"
-            ) from None
+        self.library_id = Key.uns.library_id(self.adata, self.spatial_key, self.library_id)
+        self.spot_diameter = Key.uns.spot_diameter(self.adata, self.spatial_key, self.library_id)

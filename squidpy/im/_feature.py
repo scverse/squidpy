@@ -1,5 +1,5 @@
 from types import MappingProxyType
-from typing import Any, List, Union, Mapping, Iterable, Optional, TYPE_CHECKING
+from typing import Any, List, Union, Mapping, Optional, Sequence, TYPE_CHECKING
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -21,7 +21,7 @@ def calculate_image_features(
     adata: AnnData,
     img: ImageContainer,
     img_id: Optional[str] = None,
-    features: Union[str, Iterable[str]] = ImageFeature.SUMMARY.s,
+    features: Union[str, Sequence[str]] = ImageFeature.SUMMARY.s,
     features_kwargs: Mapping[str, Mapping[str, Any]] = MappingProxyType({}),
     key_added: str = "img_features",
     copy: bool = False,
@@ -100,7 +100,7 @@ def calculate_image_features(
 
 
 def _calculate_image_features_helper(
-    obs_ids: Iterable[Any],
+    obs_ids: Sequence[str],
     adata: AnnData,
     img: ImageContainer,
     img_id: str,

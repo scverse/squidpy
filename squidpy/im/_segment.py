@@ -314,9 +314,9 @@ def segment(
             data[data > 0] += counter
             counter += np.max(crop[img_id_new].data)
 
-    # this silently assumes segmentation does not change channel id (as it should)
     res: ImageContainer = ImageContainer.uncrop(crops, shape=img.shape)
     res._data = res.data.rename({channel_id: f"{channel_id}:{channel}"})
+
     logg.info("Finish", time=start)
 
     if copy:

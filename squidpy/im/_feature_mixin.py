@@ -9,7 +9,8 @@ from skimage.feature import greycoprops, greycomatrix
 import skimage.measure
 
 from squidpy._docs import d
-from squidpy.im._utils import _NULL_COORDS, _NULL_PADDING
+from squidpy.im._utils import CropCoords, _NULL_PADDING
+from squidpy._constants._pkg_constants import Key
 
 Feature_t = Dict[str, Any]
 Channel_t = Union[int, Sequence[int]]
@@ -260,7 +261,7 @@ class FeatureMixin:
                 return np.array([[]], dtype=np.float64)
 
             if self.data.attrs.get("mask_circle", False):
-                if self.data.dims["y"] != self.data.dims["y"]:
+                if self.data.dims["y"] != self.data.dims["x"]:
                     raise ValueError(f"Crop is not a square: `{self.data.dims}`.")
                 c = self.data.dims["x"] // 2  # center
                 mask = (x - c) ** 2 + (y - c) ** 2 <= c ** 2
@@ -270,7 +271,10 @@ class FeatureMixin:
             if not len(y):
                 return np.array([[]], dtype=np.float64)  # because of masking, should not happen
 
-            coord, padding = self.data.attrs.get("coords", _NULL_COORDS), self.data.attrs.get("padding", _NULL_PADDING)
+            coord = self.data.attrs.get(
+                Key.img.coords, CropCoords(x0=0, y0=0, x1=self.data.dims["x"], y1=self.data.dims["y"])
+            )  # fall back to default (i.e no crop) coordinates
+            padding = self.data.attrs.get(Key.img.padding, _NULL_PADDING)  # fallback to no padding
             y_slc, x_slc = coord.to_image_coordinates(padding).slice
 
             # relative coordinates

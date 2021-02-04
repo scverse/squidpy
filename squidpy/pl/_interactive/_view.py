@@ -40,7 +40,7 @@ class ImageView:
         image_lab.setToolTip("Keys in `ImageContainer`' containing the image data for this library.")
         image_widget = LibraryListWidget(self.controller, multiselect=False, unique=True)
         image_widget.setMaximumHeight(100)
-        image_widget.addItems(self.model.container.data.keys())
+        image_widget.addItems(tuple(self.model.container))
         image_widget.setCurrentItem(image_widget.item(0))
 
         # gene

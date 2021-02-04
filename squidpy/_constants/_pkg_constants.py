@@ -22,6 +22,22 @@ class Key:  # noqa: D101
         def segment(cls, backend: SegmentationBackend, key_added: Optional[str] = None) -> str:
             return f"segmented_{backend.s}" if key_added is None else key_added
 
+        @cprop
+        def coords(cls) -> str:
+            return "coords"
+
+        @cprop
+        def padding(cls) -> str:
+            return "padding"
+
+        @cprop
+        def scale(self) -> str:
+            return "scale"
+
+        @cprop
+        def mask_circle(cls) -> str:
+            return "mask_circle"
+
     class obs:  # noqa: D106
         pass
 
@@ -84,6 +100,16 @@ class Key:  # noqa: D101
                 raise KeyError(f"Library id `{library_id}` not found in `{sorted(haystack)}`.")
 
             return library_id
+
+        @classmethod
+        def spot_diameter(cls, adata: AnnData, spatial_key: str, library_id: Optional[str] = None) -> float:
+            try:
+                return float(adata.uns[spatial_key][library_id]["scalefactors"]["spot_diameter_fullres"])
+            except KeyError:
+                raise KeyError(
+                    f"Unable to get the spot diameter from "
+                    f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors'['spot_diameter_fullres']]`"
+                ) from None
 
     class obsp:  # noqa: D106
         @classmethod
