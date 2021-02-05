@@ -103,26 +103,54 @@ class TestContainerIO:
 
 
 class TestContainerCroppping:
-    def test_padding_top_left(self):
-        pass
+    def test_padding_top_left(self, small_cont_1c: ImageContainer):
+        crop = small_cont_1c.crop_center(0, 0, 10)
+        data = crop["image"].data
+        assert (data[:10, :10] == 0).all()
+        assert data[10:, 10:].all()
 
-    def test_padding_top_right(self):
-        pass
+    def test_padding_top_right(self, small_cont_1c: ImageContainer):
+        crop = small_cont_1c.crop_center(0, small_cont_1c.shape[1], 10)
+        data = crop["image"].data
+        assert (data[:10, 10:] == 0).all()
+        assert data[10:, :10].all()
 
-    def test_padding_bottom_left(self):
-        pass
+    def test_padding_bottom_left(self, small_cont_1c: ImageContainer):
+        crop = small_cont_1c.crop_center(small_cont_1c.shape[1], 0, 10)
+        data = crop["image"].data
+        assert (data[10:, :10] == 0).all()
+        assert data[:10, 10:].any()
 
-    def test_padding_bottom_right(self):
-        pass
+    def test_padding_bottom_right(self, small_cont_1c: ImageContainer):
+        crop = small_cont_1c.crop_center(small_cont_1c.shape[1], small_cont_1c.shape[1], 10)
+        data = crop["image"].data
+        assert (data[10:, 10:] == 0).all()
+        assert data[:10, :10].any()
 
-    def test_padding_left_right(self):
-        pass
+    def test_padding_left_right(self, small_cont_1c: ImageContainer):
+        dim1, dim2, _ = small_cont_1c["image"].data.shape
+        crop = small_cont_1c.crop_center(dim1 // 2, 0, dim1 // 2)
+        data = crop["image"].data
+        assert (data[:, : dim2 // 2] == 0).all()
+        crop = small_cont_1c.crop_center(dim1 // 2, dim2, dim1 // 2)
+        data = crop["image"].data
+        assert (data[:, dim2 // 2 :] == 0).all()
 
-    def test_padding_top_bottom(self):
-        pass
+    def test_padding_top_bottom(self, small_cont_1c: ImageContainer):
+        dim1, dim2, _ = small_cont_1c["image"].data.shape
+        crop = small_cont_1c.crop_center(dim1, dim2 // 2, dim1 // 2)
+        data = crop["image"].data
+        assert (data[dim1 // 2 :, :] == 0).all()
+        crop = small_cont_1c.crop_center(0, dim2 // 2, dim1 // 2)
+        data = crop["image"].data
+        assert (data[: dim2 // 2, :] == 0).all()
 
-    def test_padding_all(self):
-        pass
+    def test_padding_all(self, small_cont_1c: ImageContainer):
+        dim1, dim2, _ = small_cont_1c["image"].data.shape
+        crop = small_cont_1c.crop_center(dim1 // 2, dim2 // 2, dim1)
+        data = crop["image"].data
+        assert (data[:, : dim2 // 2] == 0).all()
+        assert (data[: dim2 // 2, :] == 0).all()
 
     @pytest.mark.parametrize("dy", [25, 0.3, None])
     @pytest.mark.parametrize("dx", [30, 0.5, None])
