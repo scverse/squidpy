@@ -73,9 +73,16 @@ class TestContainerIO:
     def test_add_img_types(self, img: Union[np.ndarray, xr.DataArray, str]):
         pass
 
-    @pytest.mark.parametrize("array", [])
+    @pytest.mark.parametrize("array", [np.zeros((10, 10), dtype=np.uint8), np.random.rand(10, 10).astype(np.float32)])
     def test_load_2D_array(self, array: Union[np.ndarray, xr.DataArray]):
-        pass
+        img = ImageContainer(array)
+        assert (img["image"].data == array).all()
+        assert img["image"].data.dtype == array.dtype
+
+        xarr = xr.DataArray(array)
+        img = ImageContainer(xarr)
+        assert (img["image"].data == array).all()
+        assert img["image"].data.dtype == array.dtype
 
     def test_add_img_invalid_yx(self):
         pass
@@ -85,7 +92,10 @@ class TestContainerIO:
 
     @pytest.mark.parametrize("n_channels", [2, 3, 11])
     def test_add_img_number_of_channels(self, n_channels: int):
-        pass
+        img = ImageContainer()
+        arr = np.random.rand(10, 10, n_channels)
+        img.add_img(arr)
+        assert img["image_0"].channels.shape == (n_channels,)
 
     @pytest.mark.parametrize("channel_dim", ["present", "absent"])
     def test_add_img_channel_dim(self, channel_dim: str):

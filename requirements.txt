@@ -16,3 +16,4 @@ tifffile
 tqdm>=4.50.2  # progress bar
 typing_extensions  # Literal
 xarray
+zarr
