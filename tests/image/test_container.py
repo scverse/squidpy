@@ -1,6 +1,5 @@
 from typing import Tuple, Union, Optional, Sequence
 from pathlib import Path
-import re
 import pytest
 
 from anndata import AnnData
@@ -166,17 +165,16 @@ class TestContainerCroppping:
             crop = img.crop_corner(dy, dx)
             assert crop.shape == shape_img
 
-    @pytest.mark.parametrize("scale", [0.5, 1.0, 2.0])
+    @pytest.mark.parametrize("scale", [0, 0.5, 1.0, 1.5, 2.0])
     def test_crop_corner_scale(self, scale: float):
         shape_img = (50, 50)
         img = ImageContainer(np.zeros(shape_img))
-        if scale > 1.0:
-            with pytest.raises(ValueError, match=re.escape(f"Expected `y` to be in interval [0, 1], found `{scale}`.")):
-                # catch error with 2.0
-                crop = img.crop_corner(10, 10, scale)
+        if scale <= 0:
+            with pytest.raises(ValueError, match=r"Expected `scale` to be positive, found `0`."):
+                img.crop_corner(10, 10, size=20, scale=scale)
         else:
-            crop = img.crop_corner(10, 10, scale)
-            assert crop.shape == tuple(i * scale for i in shape_img)
+            crop = img.crop_corner(10, 10, size=20, scale=scale)
+            assert crop.shape == tuple(int(i * scale) for i in (20, 20))
 
     @pytest.mark.parametrize("cval", [0.5, 1.0, 2.0])
     def test_test_crop_corner_cval(self, cval: float):

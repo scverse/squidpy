@@ -372,6 +372,7 @@ class ImageContainer(FeatureMixin):
         ys, xs = size
         _assert_positive(ys, name="height")
         _assert_positive(xs, name="width")
+        _assert_positive(scale, name="scale")
 
         orig = CropCoords(x0=x, y0=y, x1=x + xs, y1=y + ys)
         orig_dtypes = {key: arr.dtype for key, arr in self.data.items()}
@@ -413,7 +414,6 @@ class ImageContainer(FeatureMixin):
         mask_circle: bool = False,
         **_: Any,
     ) -> xr.Dataset:
-        _assert_positive(scale, name="scale")
         if scale != 1:
             attrs = data.attrs
             data = data.map(
