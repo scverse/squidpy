@@ -385,7 +385,7 @@ class ImageContainer(FeatureMixin):
 
         orig = CropCoords(x0=x, y0=y, x1=x + xs, y1=y + ys)
 
-        ymin, xmin = self.data.dims["y"], self.data.dims["x"]
+        ymin, xmin = self.shape
         coords = CropCoords(
             x0=min(max(x, 0), xmin), y0=min(max(y, 0), ymin), x1=min(x + xs, xmin), y1=min(y + ys, ymin)
         )
@@ -486,8 +486,8 @@ class ImageContainer(FeatureMixin):
         %(crop_corner.returns)s
         """
         y, x = self._convert_to_pixel_space((y, x))
-        _assert_in_range(y, 0, self.data.dims["y"], name="height")
-        _assert_in_range(x, 0, self.data.dims["x"], name="width")
+        _assert_in_range(y, 0, self.shape[0], name="height")
+        _assert_in_range(x, 0, self.shape[1], name="width")
 
         if not isinstance(radius, Iterable):
             radius = (radius, radius)
@@ -499,17 +499,6 @@ class ImageContainer(FeatureMixin):
         return self.crop_corner(  # type: ignore[no-any-return]
             y=y - yr, x=x - xr, size=(yr * 2 + 1, xr * 2 + 1), **kwargs
         )
-
-    def _maybe_as_array(
-        self, as_array: Union[str, bool] = False
-    ) -> Union["ImageContainer", Dict[str, np.ndarray], np.ndarray]:
-        res = self
-        if as_array:
-            res = {key: res[key].values for key in res}  # type: ignore[assignment]
-        if isinstance(as_array, str):
-            res = res[as_array]
-
-        return res
 
     @d.dedent
     def generate_equal_crops(
@@ -541,7 +530,7 @@ class ImageContainer(FeatureMixin):
         size = self._get_size(size)
         size = self._convert_to_pixel_space(size)
 
-        y, x = self.data.dims["y"], self.data.dims["x"]
+        y, x = self.shape
         ys, xs = size
         _assert_in_range(ys, 0, y, name="height")
         _assert_in_range(xs, 0, x, name="width")
@@ -811,7 +800,7 @@ class ImageContainer(FeatureMixin):
         **kwargs: Any,
     ) -> Optional["ImageContainer"]:
         """
-        Apply a function to an image within this container.
+        Apply a function to a layer within this container.
 
         Parameters
         ----------
@@ -836,15 +825,22 @@ class ImageContainer(FeatureMixin):
 
         if channel is not None:
             arr = arr[{channel_dim: channel}]
-        arr = func(arr.values, **kwargs)
+
+        res = func(arr.values, **kwargs)
+        if res.ndim == 2:
+            res = res[..., np.newaxis]
 
         if copy:
-            res = ImageContainer(arr, img_id=img_id, channel_dim=channel_dim)
+            res = ImageContainer(res, img_id=img_id, channel_dim=channel_dim)
             res.data.attrs = self.data.attrs.copy()
 
-            return res
+            return res  # type: ignore[no-any-return]
 
-        self.add_img(arr, img_id=img_id, channel_dim=channel_dim)
+        self.add_img(
+            res,
+            img_id=img_id,
+            channel_dim=f"{channel_dim}:{res.shape[-1]}" if arr.shape[-1] != res.shape[-1] else channel_dim,
+        )
 
     @property
     def data(self) -> xr.Dataset:
@@ -893,6 +889,18 @@ class ImageContainer(FeatureMixin):
         res._data = data if deep is None else data.copy(deep=deep)
         return res
 
+    def _maybe_as_array(
+        self, as_array: Union[str, bool] = False
+    ) -> Union["ImageContainer", Dict[str, np.ndarray], np.ndarray]:
+        res = self
+        if as_array:
+            res = {key: res[key].values for key in res}  # type: ignore[assignment]
+        # this is just for convenience for DL iterators
+        if isinstance(as_array, str):
+            res = res[as_array]
+
+        return res
+
     def _singleton_id(self, img_id: Optional[str]) -> str:
         self._assert_not_empty()
 
@@ -919,10 +927,10 @@ class ImageContainer(FeatureMixin):
 
         res = list(size)
         if size[0] is None:
-            res[0] = int(self.data.dims["y"])  # type: ignore[unreachable]
+            res[0] = self.shape[0]  # type: ignore[unreachable]
 
         if size[1] is None:
-            res[1] = int(self.data.dims["x"])  # type: ignore[unreachable]
+            res[1] = self.shape[1]  # type: ignore[unreachable]
 
         return tuple(res)  # type: ignore[return-value]
 
@@ -930,10 +938,10 @@ class ImageContainer(FeatureMixin):
         y, x = size
         if isinstance(y, float):
             _assert_in_range(y, 0, 1, name="y")
-            y = int(self.data.dims["y"] * y)
+            y = int(self.shape[0] * y)
         if isinstance(x, float):
             _assert_in_range(x, 0, 1, name="x")
-            x = int(self.data.dims["x"] * x)
+            x = int(self.shape[1] * x)
 
         return y, x
 
@@ -953,21 +961,25 @@ class ImageContainer(FeatureMixin):
         return type(self)._from_dataset(self.data, deep=True)
 
     def _repr_html_(self) -> str:
-        s = f"{self.__class__.__name__} object with {len(self.data.keys())} layer(s):"
+        if not len(self):
+            return f"{self.__class__.__name__} object with 0 layers"
+
+        inflection = "" if len(self) <= 1 else "s"
+        s = f"{self.__class__.__name__} object with {len(self.data.keys())} layer{inflection}:"
         for i, layer in enumerate(self.data.keys()):
             s += f"<p style='text-indent: 25px; margin-top: 0px;'><strong>{layer}</strong>: "
             s += ", ".join(
                 f"<em>{dim}</em> ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape)
             )
             s += "</p>"
-            if i == 12 and i < len(self):
-                s += f"<p style='text-indent: 25px; margin-top: 0px;'>and {len(self) - i} more...</p>"
+            if i == 9 and i < len(self) - 1:  # show only first 10 layers
+                s += f"<p style='text-indent: 25px; margin-top: 0px;'>and {len(self) - i  - 1} more...</p>"
                 break
+
         return s
 
     def __repr__(self) -> str:
-        shape = self.shape if len(self) else None
-        return f"{self.__class__.__name__}[shape={shape}, ids={sorted(self.data.keys())}]"
+        return f"{self.__class__.__name__}[shape={self.shape}, layers={sorted(self.data.keys())}]"
 
     def __str__(self) -> str:
         return repr(self)

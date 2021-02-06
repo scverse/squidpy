@@ -167,7 +167,7 @@ def _assert_non_negative(value: float, *, name: str) -> None:
 
 def _assert_in_range(value: float, minn: float, maxx: float, *, name: str) -> None:
     if not (minn <= value <= maxx):
-        raise ValueError(f"Expected `{name}` to be in interval [{minn}, {maxx}], found `{value}`.")
+        raise ValueError(f"Expected `{name}` to be in interval `[{minn}, {maxx}]`, found `{value}`.")
 
 
 def _save_data(

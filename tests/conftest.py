@@ -119,6 +119,14 @@ def small_cont_1c() -> ImageContainer:
 
 
 @pytest.fixture()
+def cont_dot() -> ImageContainer:
+    ys, xs = 100, 200
+    img_orig = np.zeros((ys, xs, 10), dtype=np.uint8)
+    img_orig[20, 50, :] = range(10, 20)  # put a dot at y 20, x 50
+    return ImageContainer(img_orig, img_id="image_0")
+
+
+@pytest.fixture()
 def napari_cont() -> ImageContainer:
     return ImageContainer("tests/_data/test_img.jpg", img_id="V1_Adult_Mouse_Brain")
 

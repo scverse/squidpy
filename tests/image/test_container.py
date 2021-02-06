@@ -1,5 +1,7 @@
-from typing import Tuple, Union, Optional
+from typing import Any, Set, Tuple, Union, Optional
 from pathlib import Path
+from collections import defaultdict
+from html.parser import HTMLParser
 import pytest
 
 from anndata import AnnData
@@ -7,6 +9,7 @@ from anndata import AnnData
 import numpy as np
 import xarray as xr
 
+from imageio import imread, imsave
 import tifffile
 
 from squidpy.im import ImageContainer
@@ -14,11 +17,35 @@ from squidpy.im._utils import CropCoords, CropPadding, _NULL_COORDS
 from squidpy._constants._pkg_constants import Key
 
 
+class SimpleHTMLValidator(HTMLParser):  # modified from CellRank
+    def __init__(self, n_expected_rows: int, expected_tags: Set[str], **kwargs: Any):
+        super().__init__(**kwargs)
+        self._cnt = defaultdict(int)
+        self._n_rows = 0
+
+        self._n_expected_rows = n_expected_rows
+        self._expected_tags = expected_tags
+
+    def handle_starttag(self, tag: str, attrs: Any) -> None:
+        self._cnt[tag] += 1
+        self._n_rows += tag == "strong"
+
+    def handle_endtag(self, tag: str) -> None:
+        self._cnt[tag] -= 1
+
+    def validate(self) -> None:
+        assert self._n_rows == self._n_expected_rows
+        assert set(self._cnt.keys()) == self._expected_tags
+        if len(self._cnt):
+            assert set(self._cnt.values()) == {0}
+
+
 class TestContainerIO:
     def test_empty_initialization(self):
         img = ImageContainer()
 
         assert not len(img)
+        assert isinstance(img.data, xr.Dataset)
         assert img.shape == (0, 0)
         assert str(img)
         assert repr(img)
@@ -67,28 +94,84 @@ class TestContainerIO:
         np.testing.assert_array_equal(img3["image"].values, img2["image"].values)
         np.testing.assert_allclose(img3["image"].values - 42, img["image"].values)
 
-    # TODO: add here: numpy.aray, xarray.array, invalid type,
-    #  path to an existing file with known/unknown extension (JPEG and TIFF), path to a non-existent file
-    @pytest.mark.parametrize("img", [])
-    def test_add_img_types(self, img: Union[np.ndarray, xr.DataArray, str]):
-        pass
+    @pytest.mark.parametrize(
+        ("shape1", "shape2"),
+        [
+            ((100, 200, 3), (100, 200, 1)),
+            ((100, 200, 3), (100, 200)),
+        ],
+    )
+    def test_add_img(self, shape1: Tuple[int, ...], shape2: Tuple[int, ...]):
+        img_orig = np.random.randint(low=0, high=255, size=shape1, dtype=np.uint8)
+        cont = ImageContainer(img_orig, img_id="img_orig")
 
-    @pytest.mark.parametrize("array", [np.zeros((10, 10), dtype=np.uint8), np.random.rand(10, 10).astype(np.float32)])
-    def test_load_2D_array(self, array: Union[np.ndarray, xr.DataArray]):
+        img_new = np.random.randint(low=0, high=255, size=shape2, dtype=np.uint8)
+        cont.add_img(img_new, img_id="img_new", channel_dim="mask")
+
+        assert "img_orig" in cont
+        assert "img_new" in cont
+        np.testing.assert_array_equal(np.squeeze(cont.data["img_new"]), np.squeeze(img_new))
+
+    @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1)])
+    def test_load_jpeg(self, shape: Tuple[int, ...], tmpdir):
+        img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
+        fname = tmpdir / "tmp.jpeg"
+        imsave(str(fname), img_orig)
+
+        gt = imread(str(fname))  # because of compression, we load again
+        cont = ImageContainer(str(fname))
+
+        np.testing.assert_array_equal(cont["image"].values.squeeze(), gt.squeeze())
+
+    @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1), (10, 100, 200, 1)])
+    def test_load_tiff(self, shape: Tuple[int, ...], tmpdir):
+        img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
+        fname = tmpdir / "tmp.tiff"
+        tifffile.imsave(fname, img_orig)
+
+        cont = ImageContainer(str(fname))
+
+        if len(shape) > 3:  # multi-channel tiff
+            np.testing.assert_array_equal(cont["image"], img_orig[..., 0].transpose(1, 2, 0))
+        else:
+            np.testing.assert_array_equal(cont["image"], img_orig)
+
+    def test_load_netcdf(self, tmpdir):
+        arr = np.random.normal(size=(100, 10, 4))
+        ds = xr.Dataset({"quux": xr.DataArray(arr, dims=["foo", "bar", "baz"])})
+        fname = tmpdir / "tmp.nc"
+        ds.to_netcdf(str(fname))
+
+        cont = ImageContainer(str(fname))
+
+        assert len(cont) == 1
+        assert "quux" in cont
+        np.testing.assert_array_equal(cont["quux"], ds["quux"])
+
+    @pytest.mark.parametrize(
+        "array", [np.zeros((10, 10, 3), dtype=np.uint8), np.random.rand(10, 10, 1).astype(np.float32)]
+    )
+    def test_array_dtypes(self, array: Union[np.ndarray, xr.DataArray]):
         img = ImageContainer(array)
-        assert (img["image"].data == array).all()
+        np.testing.assert_array_equal(img["image"].data, array)
         assert img["image"].data.dtype == array.dtype
 
-        xarr = xr.DataArray(array)
-        img = ImageContainer(xarr)
-        assert (img["image"].data == array).all()
+        img = ImageContainer(xr.DataArray(array))
+        np.testing.assert_array_equal(img["image"].data, array)
         assert img["image"].data.dtype == array.dtype
 
-    def test_add_img_invalid_yx(self):
-        pass
+    def test_add_img_invalid_yx(self, small_cont_1c: ImageContainer):
+        arr = xr.DataArray(np.empty((small_cont_1c.shape[0] - 1, small_cont_1c.shape[1])), dims=["y", "x"])
+        with pytest.raises(ValueError, match=r".*be aligned because they have different dimension sizes"):
+            small_cont_1c.add_img(arr)
 
     def test_xarray_remapping_spatial_dims(self):
-        pass
+        cont = ImageContainer(np.empty((100, 10)))
+        cont.add_img(xr.DataArray(np.empty((100, 10)), dims=["foo", "bar"]), img_id="baz")
+
+        assert "baz" in cont
+        assert len(cont) == 2
+        assert cont["baz"].dims == ("y", "x", "channels")
 
     @pytest.mark.parametrize("n_channels", [2, 3, 11])
     def test_add_img_number_of_channels(self, n_channels: int):
@@ -97,9 +180,20 @@ class TestContainerIO:
         img.add_img(arr)
         assert img["image_0"].channels.shape == (n_channels,)
 
-    @pytest.mark.parametrize("channel_dim", ["present", "absent"])
-    def test_add_img_channel_dim(self, channel_dim: str):
-        pass
+    @pytest.mark.parametrize("n_channels", [1, 3])
+    @pytest.mark.parametrize("channel_dim", ["channels", "foo"])
+    def test_add_img_channel_dim(self, small_cont_1c: ImageContainer, channel_dim: str, n_channels: int):
+        arr = np.random.normal(size=(*small_cont_1c.shape, n_channels))
+        if channel_dim == "channels" and n_channels == 3:
+            with pytest.raises(ValueError, match=r".*be aligned because they have different dimension sizes"):
+                small_cont_1c.add_img(arr, channel_dim=channel_dim)
+        else:
+            small_cont_1c.add_img(arr, channel_dim=channel_dim, img_id="bar")
+            assert len(small_cont_1c) == 2
+            assert "bar" in small_cont_1c
+            assert small_cont_1c["bar"].dims == ("y", "x", channel_dim)
+
+            np.testing.assert_array_equal(small_cont_1c["bar"], arr)
 
 
 class TestContainerCropping:
@@ -217,10 +311,16 @@ class TestContainerCropping:
             assert crop.shape == (20, 20)
             np.testing.assert_array_equal(crop["image"].values[..., 0][~mask.values], np.nan)
 
-    @pytest.mark.parametrize("ry", [-10, 25, 0.3])
-    @pytest.mark.parametrize("rx", [-10, 30, 0.5])
-    def test_crop_center_radius(self, ry: Optional[Union[int, float]], rx: Optional[Union[int, float]]):
-        pass
+    @pytest.mark.parametrize("ry", [23, 1.0])
+    @pytest.mark.parametrize("rx", [30, 0.5])
+    def test_crop_center_radius(
+        self, small_cont_1c: ImageContainer, ry: Optional[Union[int, float]], rx: Optional[Union[int, float]]
+    ):
+        crop = small_cont_1c.crop_center(0, 0, radius=(ry, rx))
+        sy = int(ry * small_cont_1c.shape[0]) if isinstance(ry, float) else ry
+        sx = int(rx * small_cont_1c.shape[1]) if isinstance(rx, float) else rx
+
+        assert crop.shape == (2 * sy + 1, 2 * sx + 1)
 
     @pytest.mark.parametrize("as_array", [False, True, "image"])
     def test_equal_crops_as_array(self, small_cont: ImageContainer, as_array: bool):
@@ -272,12 +372,12 @@ class TestContainerCropping:
 
     @pytest.mark.parametrize("n_names", [None, 4])
     def test_spot_crops_obs_names(self, adata: AnnData, cont: ImageContainer, n_names: Optional[int]):
-        crops = list(cont.generate_spot_crops(adata, obs_names=None if n_names is None else adata.obs_names[:n_names]))
+        obs = adata.obs_names[:n_names] if isinstance(n_names, int) else adata.obs_names
+        crops = list(cont.generate_spot_crops(adata, obs_names=obs))
 
-        if n_names is None:
-            assert len(crops) == adata.n_obs
-        else:
-            assert len(crops) == n_names
+        assert len(crops) == len(obs)
+        for crop, o in zip(crops, obs):
+            assert crop.data.attrs[Key.img.obs] == o
 
     @pytest.mark.parametrize("spot_scale", [1, 0.5, 2])
     @pytest.mark.parametrize("scale", [1, 0.5, 2])
@@ -337,194 +437,179 @@ class TestContainerCropping:
 
 
 class TestContainerUtils:
+    def test_iter(self, small_cont_1c: ImageContainer):
+        expected = list(small_cont_1c.data.keys())
+        actual = list(small_cont_1c)
+
+        np.testing.assert_array_equal(actual, expected)
+
     @pytest.mark.parametrize("deep", [False, True])
     def test_copy(self, deep: bool):
-        pass
+        cont = ImageContainer(np.random.normal(size=(10, 10)))
+        sentinel = object()
+        cont.data.attrs["sentinel"] = sentinel
 
-    def test_get_default_size(self):
-        pass
+        copy = cont.copy(deep=deep)
 
-    def test_to_pixel_space(self):
-        pass
+        if deep:
+            assert not np.shares_memory(copy["image"].values, cont["image"].values)
+            assert copy.data.attrs["sentinel"] is not sentinel
+        else:
+            assert np.shares_memory(copy["image"].values, cont["image"].values)
+            assert copy.data.attrs["sentinel"] is sentinel
 
-    def test_apply_channel(self):
-        pass
+    def test_get_size(self):
+        cont = ImageContainer(np.empty((10, 10)))
 
-    def test_apply_inplace(self):
-        pass
+        ry, rx = cont._get_size(None)
+        assert (ry, rx) == cont.shape
 
-    def test_image_autoincrement(self):
-        pass
+        ry, rx = cont._get_size((None, 1))
+        assert (ry, rx) == (cont.shape[0], 1)
 
-    def test_repr_html(self):
-        pass
+        ry, rx = cont._get_size((-1, None))
+        assert (ry, rx) == (-1, cont.shape[1])
+
+    @pytest.mark.parametrize("sx", [-1, -1.0, 0.5, 10])
+    @pytest.mark.parametrize("sy", [-1, -1.0, 0.5, 10])
+    def test_to_pixel_space(self, sy: Union[int, float], sx: Union[int, float]):
+        cont = ImageContainer(np.empty((10, 10)))
+
+        if (isinstance(sy, float) and sy < 0) or (isinstance(sx, float) and sx < 0):
+            with pytest.raises(ValueError, match=r"Expected .* to be in interval `\[0, 1\]`.*"):
+                cont._convert_to_pixel_space((sy, sx))
+        else:
+            ry, rx = cont._convert_to_pixel_space((sy, sx))
+            if isinstance(sy, int):
+                assert ry == sy
+            else:
+                assert ry == int(cont.shape[0] * sy)
+
+            if isinstance(sx, int):
+                assert rx == sx
+            else:
+                assert rx == int(cont.shape[1] * sx)
+
+    @pytest.mark.parametrize("channel", [None, 0])
+    @pytest.mark.parametrize("copy", [False, True])
+    def test_apply(self, copy: bool, channel: Optional[int]):
+        cont = ImageContainer(np.random.normal(size=(100, 100, 3)))
+        orig = cont.copy()
+
+        res = cont.apply(lambda arr: arr + 42, channel=channel, copy=copy)
+
+        if copy:
+            assert isinstance(res, ImageContainer)
+            data = res["image"]
+        else:
+            assert res is None
+            assert len(cont) == 1
+            data = cont["image"]
+
+        if channel is None:
+            np.testing.assert_allclose(data.values, orig["image"].values + 42)
+        else:
+            np.testing.assert_allclose(data.values[..., 0], orig["image"].values[..., channel] + 42)
+
+    def test_image_autoincrement(self, small_cont_1c: ImageContainer):
+        assert len(small_cont_1c) == 1
+        for _ in range(20):
+            small_cont_1c.add_img(np.empty(small_cont_1c.shape))
+
+        assert len(small_cont_1c) == 21
+        for i in range(20):
+            assert f"image_{i}" in small_cont_1c
+
+    @pytest.mark.parametrize("size", [0, 10, 20])
+    def test_repr_html(self, size: int):
+        cont = ImageContainer()
+        for _ in range(size):
+            cont.add_img(np.empty((10, 10)))
+
+        validator = SimpleHTMLValidator(
+            n_expected_rows=min(size, 10), expected_tags=set() if not size else {"p", "em", "strong"}
+        )
+        validator.feed(cont._repr_html_())
+        validator.validate()
 
     def test_repr(self):
-        pass
+        cont = ImageContainer()
+
+        assert "shape=(0, 0)" in repr(cont)
+        assert "layers=[]" in repr(cont)
+        assert repr(cont) == str(cont)
 
 
-@pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1), (10, 100, 200, 1)])
-def test_image_loading(shape, tmpdir):
-    """Initialize ImageObject with tiff / multipagetiff / numpy array and check that loaded data \
-    fits the expected shape + content.
-    """
-    img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
+class TestCroppingExtra:
+    def test_big_crop(self, cont_dot: ImageContainer):
+        crop = cont_dot.crop_center(
+            y=50,
+            x=20,
+            radius=150,
+            cval=5,
+        )
 
-    # load as np arrray
-    if len(shape) <= 3:
-        # load as np array
-        cont = ImageContainer(img_orig)
-        # check that contains same information
-        assert (cont["image"] == img_orig).all()
+        np.testing.assert_array_equal(crop.data["image_0"].shape, (301, 301, 10))
+        # check that values outside of img are padded with 5
+        np.testing.assert_array_equal(crop.data["image_0"][0, 0, 0], 5)
+        np.testing.assert_array_equal(crop.data["image_0"][-1, -1, 0], 5)
+        assert crop.data["image_0"].dtype == np.uint8
 
-    # save & load as tiff
-    fname = tmpdir.mkdir("data").join("img.tif")
-    tifffile.imsave(fname, img_orig)
-    cont = ImageContainer(str(fname))
+        # compare with crop_corner
+        crop2 = cont_dot.crop_corner(y=-100, x=-130, size=301, cval=5)
+        np.testing.assert_array_equal(crop2.data["image_0"], crop.data["image_0"])
 
-    if len(shape) > 3:
-        # multi-channel tiff
-        # check for existance of each im in multi-channel tiff
-        # check that contains correct information
-        assert (cont["image"] == img_orig[:, :, :, 0].transpose(1, 2, 0)).all()
-    else:
-        # check that contains same information
-        assert (cont["image"] == img_orig).all()
+    def test_crop_smapp(self, cont_dot: ImageContainer):
+        crop = cont_dot.crop_center(
+            x=50,
+            y=20,
+            radius=0,
+            cval=5,
+        )
 
+        np.testing.assert_array_equal(crop.data["image_0"].shape, (1, 1, 10))
+        np.testing.assert_array_equal(crop.data["image_0"][0, 0, :3], [10, 11, 12])
+        assert crop.data["image_0"].dtype == np.uint8
 
-@pytest.mark.parametrize(
-    ("shape1", "shape2"),
-    [
-        ((100, 200, 3), (100, 200, 1)),
-        ((100, 200, 3), (100, 200)),
-    ],
-)
-def test_add_img(shape1, shape2):
-    """Add image to existing ImageObject and check result."""
-    # create ImageContainer
-    img_orig = np.random.randint(low=0, high=255, size=shape1, dtype=np.uint8)
-    cont = ImageContainer(img_orig, img_id="img_orig")
+    def test_crop_mask_circle(self, cont_dot: ImageContainer):
+        # crop with mask_circle
+        crop = cont_dot.crop_center(
+            y=20,
+            x=50,
+            radius=5,
+            cval=5,
+            mask_circle=True,
+        )
 
-    # add im
-    img_new = np.random.randint(low=0, high=255, size=shape2, dtype=np.uint8)
-    cont.add_img(img_new, img_id="img_new", channel_dim="mask")
+        np.testing.assert_array_equal(crop.data["image_0"][1, 0, :], 5)
+        np.testing.assert_array_equal(crop.data["image_0"][2, 2, :], 0)
+        np.testing.assert_array_equal(crop.data["image_0"][7, 7, :], 0)
+        np.testing.assert_array_equal(crop.data["image_0"][9, 9, :], 5)
 
-    assert "img_orig" in cont.data
-    assert "img_new" in cont.data
-    assert (np.squeeze(cont.data["img_new"]) == np.squeeze(img_new)).all()
-    np.testing.assert_array_equal(np.squeeze(cont.data["img_new"]), np.squeeze(img_new))
+    def test_crop_multiple_images(self, cont_dot: ImageContainer):
+        mask = np.random.randint(low=0, high=10, size=cont_dot.shape)
+        cont_dot.add_img(mask, img_id="image_1", channel_dim="mask")
 
+        crop = cont_dot.crop_center(
+            y=50,
+            x=20,
+            radius=0,
+            cval=5,
+        )
 
-def test_crop(tmpdir):
-    """Check crop arguments:
-    padding, masking, scaling, changing dtype,
-    check that returned crops have correct shape.
-    """
-    xdim = 100
-    ydim = 200
-    img_orig = np.zeros((xdim, ydim, 10), dtype=np.uint8)
-    # put a dot at y 20, x 50
-    img_orig[20, 50, :] = range(10, 20)
-    cont = ImageContainer(img_orig, img_id="image_0")
+        assert "image_0" in crop
+        assert "image_1" in crop
+        np.testing.assert_array_equal(crop.data["image_0"].shape, (1, 1, 10))
+        np.testing.assert_array_equal(crop.data["image_1"].shape, (1, 1, 1))
 
-    # crop big crop
-    crop = cont.crop_center(
-        y=50,
-        x=20,
-        radius=150,
-        cval=5,
-    )
-    assert type(crop) == ImageContainer
-    # shape is s x s x channels
-    assert crop.data["image_0"].shape == (301, 301, 10)
-    # check that values outside of img are padded with 5
-    assert (crop.data["image_0"][0, 0, 0] == 5).all()
-    assert (crop.data["image_0"][-1, -1, 0] == 5).all()
-    assert crop.data["image_0"].dtype == np.uint8
+    def test_crop_scale(self, cont_dot: ImageContainer):
+        # crop with scaling
+        mask = np.random.randint(low=0, high=10, size=cont_dot.shape)
+        cont_dot.add_img(mask, img_id="image_1", channel_dim="mask")
 
-    # compare with crop_corner
-    crop2 = cont.crop_corner(y=-100, x=-130, size=301, cval=5)
-    np.testing.assert_array_equal(crop2.data["image_0"], crop.data["image_0"])
+        crop = cont_dot.crop_center(y=50, x=20, radius=10, cval=5, scale=0.5)
 
-    # crop small crop
-    crop = cont.crop_center(
-        x=50,
-        y=20,
-        radius=0,
-        cval=5,
-    )
-    assert type(crop) == ImageContainer
-    assert crop.data["image_0"].shape == (1, 1, 10)
-    # check that has cropped correct im
-    assert (crop.data["image_0"][0, 0, :3] == [10, 11, 12]).all()
-    assert crop.data["image_0"].dtype == np.uint8
-
-    # crop with mask_circle
-    crop = cont.crop_center(
-        y=20,
-        x=50,
-        radius=5,
-        cval=5,
-        mask_circle=True,
-    )
-    np.testing.assert_array_equal(crop.data["image_0"][1, 0, :], 5)
-    np.testing.assert_array_equal(crop.data["image_0"][2, 2, :], 0)
-    np.testing.assert_array_equal(crop.data["image_0"][7, 7, :], 0)
-    np.testing.assert_array_equal(crop.data["image_0"][9, 9, :], 5)
-
-    assert type(crop) == ImageContainer
-
-    # crop image with several layers
-    mask = np.random.randint(low=0, high=10, size=(xdim, ydim))
-    cont.add_img(mask, img_id="image_1", channel_dim="mask")
-    crop = cont.crop_center(
-        y=50,
-        x=20,
-        radius=0,
-        cval=5,
-    )
-    assert "image_1" in crop.data.keys()
-    assert "image_0" in crop.data.keys()
-    assert crop.data["image_1"].shape == (1, 1, 1)
-    assert crop.data["image_0"].shape == (1, 1, 10)
-
-    # crop with scaling
-    crop = cont.crop_center(y=50, x=20, radius=10, cval=5, scale=0.5)
-    assert "image_1" in crop.data.keys()
-    assert "image_0" in crop.data.keys()
-    assert crop.data["image_1"].shape == (21 // 2, 21 // 2, 1)
-    assert crop.data["image_0"].shape == (21 // 2, 21 // 2, 10)
-
-
-def test_generate_spot_crops(adata: AnnData, cont: ImageContainer):
-    """
-    for simulated adata + im, generate crops.
-    Make sure that the correct amount of crops are generated
-    and that the crops have the correct content
-    """
-    i = 0
-    expected_size = adata.uns["spatial"]["V1_Adult_Mouse_Brain"]["scalefactors"]["spot_diameter_fullres"] // 2 * 2 + 1
-    for crop, obs_id in cont.generate_spot_crops(adata, return_obs=True):
-        # crops have expected size?
-        assert crop.shape[0] == expected_size
-        assert crop.shape[1] == expected_size
-        assert obs_id == adata.obs.index[i]
-        i += 1
-    # expected number of crops are generated?
-    assert i == adata.obsm[Key.obsm.spatial].shape[0]
-
-
-@pytest.mark.parametrize(("ys", "xs"), [(10, 10), (None, None), (10, 20)])
-def test_generate_equal_crops(ys, xs):
-    """
-    for simulated data, create equally sized crops.
-    Make sure that the resulting crops have correct sizes.
-    """
-    img = ImageContainer(np.random.randint(low=0, high=300, size=(200, 500)), img_id="image")
-    expected_size = [ys, xs]
-    if ys is None or xs is None:
-        expected_size = (200, 500)
-
-    for crop in img.generate_equal_crops(size=(ys, xs)):
-        assert crop.shape[0] == expected_size[0]
-        assert crop.shape[1] == expected_size[1]
+        assert "image_0" in crop
+        assert "image_1" in crop
+        np.testing.assert_array_equal(crop.data["image_0"].shape, (21 // 2, 21 // 2, 10))
+        np.testing.assert_array_equal(crop.data["image_1"].shape, (21 // 2, 21 // 2, 1))
