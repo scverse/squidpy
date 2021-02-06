@@ -174,7 +174,7 @@ class TestHighLevel:
             res1[Key.img.segment("watershed")].values, res2[Key.img.segment("watershed")].values
         )
 
-    @pytest.mark.parametrize("size", [None, 10, 11])
+    @pytest.mark.parametrize("size", [None, 11])
     def test_watershed_works(self, size: Optional[int]):
         img_orig = np.zeros((100, 200, 30), dtype=np.float64)
         img_orig[2:10, 2:10] = 1.0
@@ -190,11 +190,9 @@ class TestHighLevel:
             channel=0,
             thresh=0.5,
         )
-        # Check that blobs are in segments:
-        if size == 10:
-            with pytest.raises(AssertionError, match=r"Fails with `size=10`"):
-                assert (
-                    np.mean(cont.data["segment"].values[img_orig[:, :, 0] > 0] > 0) > 0.5
-                ), "Fails with `size=10` due to border effects"
-        else:
-            assert np.mean(cont.data["segment"].values[img_orig[:, :, 0] > 0] > 0) > 0.5
+        # check that blobs are in segments
+        assert np.mean(cont.data["segment"].values[img_orig[:, :, 0] > 0] > 0) > 0.5
+
+        # for size=10, "fails with `size=10` due to border effects"
+        # the reason why there is no test for it that inside tox, it "works" (i.e. the assertion passes)
+        # but outside, the assertion fails, as it should
