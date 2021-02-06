@@ -205,30 +205,77 @@ class TestContainerCropping:
         crop = img.crop_corner(10, 10, cval=cval)
         np.testing.assert_array_equal(crop["image"].data[-10:, -10:], cval)
 
-    @pytest.mark.parametrize("size", [(50, 50), (50, 49)])
-    def test_crop_corner_mask_circle(self, size: Tuple[int, int]):
-        pass
+    @pytest.mark.parametrize("size", [(10, 10), (10, 11)])
+    def test_crop_corner_mask_circle(self, small_cont_1c: ImageContainer, size: Tuple[int, int]):
+        if size[0] != size[1]:
+            with pytest.raises(ValueError, match=r"Masking circle is only"):
+                small_cont_1c.crop_corner(0, 0, size=size, mask_circle=True, cval=np.nan)
+        else:
+            crop = small_cont_1c.crop_corner(0, 0, size=20, mask_circle=True, cval=np.nan)
+            mask = (crop.data.x - 10) ** 2 + (crop.data.y - 10) ** 2 <= 10 ** 2
 
-    @pytest.mark.parametrize("ry", [25, 0.3, None])
-    @pytest.mark.parametrize("rx", [30, 0.5, None])
+            assert crop.shape == (20, 20)
+            np.testing.assert_array_equal(crop["image"].values[..., 0][~mask.values], np.nan)
+
+    @pytest.mark.parametrize("ry", [-10, 25, 0.3])
+    @pytest.mark.parametrize("rx", [-10, 30, 0.5])
     def test_crop_center_radius(self, ry: Optional[Union[int, float]], rx: Optional[Union[int, float]]):
         pass
 
-    @pytest.mark.parametrize("as_array", [False, True])
-    def test_equal_crops_as_array(self, as_array: bool):
-        pass
+    @pytest.mark.parametrize("as_array", [False, True, "image"])
+    def test_equal_crops_as_array(self, small_cont: ImageContainer, as_array: bool):
+        small_cont.add_img(np.random.normal(size=(small_cont.shape + (1,))), channel_dim="foobar")
+        for crop in small_cont.generate_equal_crops(size=11, as_array=as_array):
+            if as_array:
+                if isinstance(as_array, bool):
+                    assert isinstance(crop, dict)
+                    for key in small_cont:
+                        assert key in crop
+                        assert crop[key].shape == (11, 11, small_cont[key].data.shape[-1])
+                else:
+                    assert isinstance(crop, np.ndarray)
+                    assert crop.shape == (11, 11, small_cont[as_array].data.shape[-1])
+            else:
+                assert isinstance(crop, ImageContainer)
+                for key in (Key.img.coords, Key.img.padding, Key.img.scale, Key.img.mask_circle):
+                    assert key in crop.data.attrs, key
+                assert crop.shape == (11, 11)
 
-    @pytest.mark.parametrize("scale", [1, 0.5, 2])
-    def test_spot_crops_spot_scale(self, scale: float):
-        pass
+    @pytest.mark.parametrize("return_obs", [False, True])
+    @pytest.mark.parametrize("as_array", [False, True, "baz"])
+    def test_spot_crops_as_array_return_obs(
+        self, adata: AnnData, cont: ImageContainer, as_array: bool, return_obs: bool
+    ):
+        cont.add_img(np.random.normal(size=(cont.shape + (4,))), channel_dim="foobar", img_id="baz")
+        diameter = adata.uns["spatial"][Key.uns.library_id(adata, "spatial")]["scalefactors"]["spot_diameter_fullres"]
+        radius = int(round(diameter // 2))
+        size = (2 * radius + 1, 2 * radius + 1)
+
+        for crop in cont.generate_spot_crops(adata, as_array=as_array, return_obs=return_obs, spatial_key="spatial"):
+            crop, obs = crop if return_obs else (crop, None)
+            if obs is not None:
+                assert obs in adata.obs_names
+                if not as_array:
+                    assert Key.img.obs in crop.data.attrs
+
+            if as_array is True:
+                assert isinstance(crop, dict), type(crop)
+                for key in cont:
+                    assert key in crop
+                    assert crop[key].shape == (*size, cont[key].data.shape[-1])
+            elif isinstance(as_array, str):
+                assert isinstance(crop, np.ndarray)
+                assert crop.shape == (*size, cont[as_array].data.shape[-1])
+            else:
+                assert isinstance(crop, ImageContainer)
+                assert crop.shape == size
 
     @pytest.mark.parametrize("obs_names", [None, ...])
     def test_spot_crops_obs_names(self, obs_names: Optional[Sequence[str]]):
         pass
 
-    @pytest.mark.parametrize("return_obs", [False, True])
-    @pytest.mark.parametrize("as_array", [False, True])
-    def test_spot_crops_as_array_return_obs(self, as_array: bool, return_obs: bool):
+    @pytest.mark.parametrize("scale", [1, 0.5, 2])
+    def test_spot_crops_spot_scale(self, scale: float):
         pass
 
     def test_spot_crops_mask_circle(self):

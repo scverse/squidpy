@@ -51,6 +51,10 @@ class Key:  # noqa: D101
         def mask_circle(cls) -> str:
             return "mask_circle"
 
+        @cprop
+        def obs(cls) -> str:
+            return "cell"
+
     class obs:  # noqa: D106
         pass
 

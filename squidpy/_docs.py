@@ -133,6 +133,11 @@ corr_method
 _custom_fn = """\
 Alternatively, any :func:`callable` can be passed as long as it has the following signature:
     :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`numpy.ndarray` ``(height, width[, channels])``."""  # noqa: E501
+_as_array = """
+as_array
+    If `True`, yield a :class:`dict` where keys are layers and values are :class:`numpy.ndarray`.
+    If a :class:`str`, yield a :class:`numpy.ndarray` whose layer name is ``as_array``.
+    Otherwise, yield :class:`squidpy.im.ImageContainer.`"""
 
 
 d = DocstringProcessor(
@@ -162,4 +167,5 @@ d = DocstringProcessor(
     corr_method=_corr_method,
     heatmap_plotting=_heatmap_plotting,
     custom_fn=_custom_fn,
+    as_array=_as_array,
 )

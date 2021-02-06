@@ -236,7 +236,7 @@ class ImageContainer(FeatureMixin):
     @_load_img.register(str)
     @_load_img.register(Path)
     def _(self, img: Pathlike_t, chunks: Optional[int] = None, **_: Any) -> Optional[xr.DataArray]:
-        def transform_metadata(data: xr.Dataset) -> xr.DataArray:
+        def transform_metadata(data: xr.Dataset) -> xr.Dataset:
             data.attrs[Key.img.coords] = CropCoords.from_tuple(data.attrs.get(Key.img.coords, _NULL_COORDS.to_tuple()))
             data.attrs[Key.img.padding] = CropPadding.from_tuple(
                 data.attrs.get(Key.img.padding, _NULL_PADDING.to_tuple())
@@ -427,7 +427,7 @@ class ImageContainer(FeatureMixin):
         if mask_circle:
             if data.dims["y"] != data.dims["x"]:
                 raise ValueError(
-                    f"Masking out circle is only available for square crops, "
+                    f"Masking circle is only available for square crops, "
                     f"found crop of shape `{(data.dims['y'], data.dims['x'])}`."
                 )
             c = data.x.shape[0] // 2
@@ -479,21 +479,31 @@ class ImageContainer(FeatureMixin):
             y=y - yr, x=x - xr, size=(yr * 2 + 1, xr * 2 + 1), **kwargs
         )
 
+    def _maybe_as_array(
+        self, as_array: Union[str, bool] = False
+    ) -> Union["ImageContainer", Dict[str, np.ndarray], np.ndarray]:
+        res = self
+        if as_array:
+            res = {key: res[key].values for key in res}  # type: ignore[assignment]
+        if isinstance(as_array, str):
+            res = res[as_array]
+
+        return res
+
     @d.dedent
     def generate_equal_crops(
         self,
         size: Optional[Union[FoI_t, Tuple[FoI_t, FoI_t]]] = None,
-        as_array: bool = False,
+        as_array: Union[str, bool] = False,
         **kwargs: Any,
-    ) -> Iterator["ImageContainer"]:
+    ) -> Union[Iterator["ImageContainer"], Iterator[Dict[str, np.ndarray]]]:
         """
         Decompose image into equally sized crops.
 
         Parameters
         ----------
         %(size)s
-        as_array
-            Whether to yield :class:`numpy.ndarray` or :class:`squidpy.im.ImageContainer`.
+        %(as_array)s
         kwargs
             Keyword arguments for :meth:`crop_corner`.
 
@@ -523,11 +533,7 @@ class ImageContainer(FeatureMixin):
         xcoords = np.tile(unique_xcoord, len(unique_ycoord))
 
         for y, x in zip(ycoords, xcoords):
-            crop = self.crop_corner(y=y, x=x, size=(ys, xs), **kwargs)
-            if as_array:
-                crop = crop.data.to_array().values
-
-            yield crop
+            yield self.crop_corner(y=y, x=x, size=(ys, xs), **kwargs)._maybe_as_array(as_array)
 
     @d.dedent
     def generate_spot_crops(
@@ -537,10 +543,10 @@ class ImageContainer(FeatureMixin):
         spatial_key: str = Key.obsm.spatial,
         spot_scale: float = 1.0,
         obs_names: Optional[Iterable[Any]] = None,
-        as_array: bool = False,
+        as_array: Union[str, bool] = False,
         return_obs: bool = False,
         **kwargs: Any,
-    ) -> Iterator[Tuple["ImageContainer", Union[int, str]]]:
+    ) -> Union[Iterator["ImageContainer"], Iterator[Dict[str, np.ndarray]]]:  # 6 more types are valid
         """
         Iterate over :attr:`adata.obs_names` and extract crops.
 
@@ -556,8 +562,7 @@ class ImageContainer(FeatureMixin):
             Scaling factor for the spot diameter. Larger values mean more context.
         obs_names
             Observations from :attr:`adata.obs_names` for which to generate the crops. If `None`, all names are used.
-        as_array
-            Whether to yield the crops as a :class:`numpy.ndarray` or :class:`squidpy.im.ImageContainer`.
+        %(as_array)s
         return_obs
             Whether to also yield names from ``obs_names``.
         kwargs
@@ -583,13 +588,12 @@ class ImageContainer(FeatureMixin):
         diameter = adata.uns[spatial_key][library_id]["scalefactors"]["spot_diameter_fullres"]
         radius = int(round(diameter // 2 * spot_scale))
 
-        for i in range(adata.n_obs):
+        for i, obs in enumerate(adata.obs_names):
             crop = self.crop_center(y=spatial[i][1], x=spatial[i][0], radius=radius, **kwargs)
-            crop.data.attrs["obs"] = adata.obs_names[i]
-            if as_array:
-                crop = crop.data.to_array().values
+            crop.data.attrs[Key.img.obs] = obs
+            crop = crop._maybe_as_array(as_array)
 
-            yield (crop, adata.obs_names[i]) if return_obs else crop
+            yield (crop, obs) if return_obs else crop
 
     @classmethod
     @d.get_sections(base="uncrop", sections=["Parameters", "Returns"])
