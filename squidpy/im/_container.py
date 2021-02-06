@@ -18,6 +18,7 @@ from typing import (
 from itertools import chain
 import re
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from skimage.util import img_as_float
@@ -337,6 +338,7 @@ class ImageContainer(FeatureMixin):
         scale: float = 1.0,
         cval: Union[int, float] = 0,
         mask_circle: bool = False,
+        preserve_dtypes: bool = True,
     ) -> "ImageContainer":
         """
         Extract a crop from the upper-left corner.
@@ -352,6 +354,9 @@ class ImageContainer(FeatureMixin):
         mask_circle
             Whether to mask out values that are not within a circle defined by this crop.
             Only available if ``size`` defines a square.
+        preserve_dtypes
+            Whether to preserver the data types of underlying :class:`xarray.DataArray`, even if the ``cval``
+            has is of different type.
 
         Returns
         -------
@@ -362,6 +367,10 @@ class ImageContainer(FeatureMixin):
         ValueError
             If the crop would completely lie outside of the image or if ``mask_circle = True`` and
             ``size`` does not define a square.
+
+        Notes
+        -----
+        If ``preserve_dtypes = True`` but ``cval`` cannot be safely cast, ``cval`` will be set to 0.
         """
         self._assert_not_empty()
         y, x = self._convert_to_pixel_space((y, x))
@@ -375,7 +384,6 @@ class ImageContainer(FeatureMixin):
         _assert_positive(scale, name="scale")
 
         orig = CropCoords(x0=x, y0=y, x1=x + xs, y1=y + ys)
-        orig_dtypes = {key: arr.dtype for key, arr in self.data.items()}
 
         ymin, xmin = self.data.dims["y"], self.data.dims["x"]
         coords = CropCoords(
@@ -392,6 +400,15 @@ class ImageContainer(FeatureMixin):
 
         if orig != coords:
             padding = orig - coords
+
+            # because padding does not change dtype by itself
+            for key, arr in crop.items():
+                if preserve_dtypes:
+                    if not np.can_cast(cval, arr.dtype, casting="safe"):
+                        cval = 0
+                else:
+                    crop[key] = crop[key].astype(np.dtype(type(cval)), copy=False)
+
             crop = crop.pad(
                 y=(padding.y_pre, padding.y_post),
                 x=(padding.x_pre, padding.x_post),
@@ -399,12 +416,14 @@ class ImageContainer(FeatureMixin):
                 constant_values=cval,
             )
             crop.attrs["padding"] = padding
-            for key in orig_dtypes.keys():
-                crop[key] = crop[key].astype(orig_dtypes[key])
         else:
             crop.attrs["padding"] = _NULL_PADDING
 
-        return self._from_dataset(self._post_process(data=crop, scale=scale, cval=cval, mask_circle=mask_circle))
+        return self._from_dataset(
+            self._post_process(
+                data=crop, scale=scale, cval=cval, mask_circle=mask_circle, preserve_dtypes=preserve_dtypes
+            )
+        )
 
     def _post_process(
         self,
@@ -412,6 +431,7 @@ class ImageContainer(FeatureMixin):
         scale: FoI_t = 1,
         cval: FoI_t = 1,
         mask_circle: bool = False,
+        preserve_dtypes: bool = True,
         **_: Any,
     ) -> xr.Dataset:
         if scale != 1:
@@ -434,6 +454,7 @@ class ImageContainer(FeatureMixin):
             data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c ** 2, other=cval)
             data.attrs[Key.img.mask_circle] = True
 
+        if preserve_dtypes:
             for key, arr in self.data.items():
                 data[key] = data[key].astype(arr.dtype, copy=False)
 
@@ -509,8 +530,7 @@ class ImageContainer(FeatureMixin):
 
         Yields
         ------
-        If ``as_array = True``, yields :class:`numpy.ndarray` crops. Otherwise, yields
-        :class:`squidpy.im.ImageContainer`.
+        The crops, whose type depends on ``as_array``.
 
         Notes
         -----
@@ -571,7 +591,7 @@ class ImageContainer(FeatureMixin):
         Yields
         ------
         If ``return_obs = True``, yields a :class:`tuple` ``(crop, obs_name)``. Otherwise, yields just the crops.
-        If ``as_array = True``, the crops will be a :class:`numpy.array`.
+        The type of the crops depends on ``as_array``.
         """
         self._assert_not_empty()
         _assert_positive(spot_scale, name="scale")
@@ -612,7 +632,7 @@ class ImageContainer(FeatureMixin):
         crops
             List of image crops.
         shape
-            Requested image shape as ``(height, width)``. If `None`, it is determined automatically from ``crops``.
+            Requested image shape as ``(height, width)``. If `None`, it is automatically determined from ``crops``.
 
         Returns
         -------
@@ -621,7 +641,7 @@ class ImageContainer(FeatureMixin):
         Raises
         ------
         ValueError
-            If crop metadata was not found or if the requested ``shape`` is smaller than required by the ``crops``.
+            If crop metadata was not found or if the requested ``shape`` is smaller than required by ``crops``.
         """
         if not len(crops):
             raise ValueError("No crops were supplied.")
@@ -647,7 +667,7 @@ class ImageContainer(FeatureMixin):
         if len(shape) != 2:
             raise ValueError(f"Expected `shape` to be of length `2`, found `{len(shape)}`.")
         if shape < (dy, dx):
-            raise ValueError(f"Requested image of shape `{shape}`, but minimal shape must be `({dy}, {dx})`.")
+            raise ValueError(f"Requested final image shape `{shape}`, but minimal is `({dy}, {dx})`.")
 
         # create resulting dataset
         dataset = xr.Dataset()
@@ -670,10 +690,11 @@ class ImageContainer(FeatureMixin):
         self,
         img_id: Optional[str] = None,
         channel: Optional[int] = None,
+        as_mask: bool = False,
+        ax: Optional[mpl.axes.Axes] = None,
         figsize: Optional[Tuple[float, float]] = None,
         dpi: Optional[int] = None,
         save: Optional[Pathlike_t] = None,
-        as_mask: bool = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -685,9 +706,12 @@ class ImageContainer(FeatureMixin):
             If `None` and only 1 image is present, use its key.
         channel
             Channel to plot. If `None`, use all channels for plotting.
-        %(plotting)s
         as_mask
             Whether to show the image as a binary mask. Only available if the plotted image has 1 channel.
+        ax
+            Optional :mod:`matplotlib` ax where to plot the image. If not `None`, ``save``, ``figsize`` and
+            ``dpi`` have no effect.
+        %(plotting)s
         kwargs
             Keyword arguments for :meth:`matplotlib.axes.Axes.imshow`.
 
@@ -709,15 +733,17 @@ class ImageContainer(FeatureMixin):
                 arr = arr > 0
         elif as_mask:
             if len(arr.dims[-1]) != 1:
-                raise ValueError()
+                raise ValueError(f"Expected to find only 1 channel dimension, found `{arr.dims[-1]}`.")
             arr = arr > 0
 
-        fig, ax = plt.subplots(figsize=(8, 8) if figsize is None else figsize, dpi=dpi)
-        ax.set_axis_off()
+        fig = None
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 8) if figsize is None else figsize, dpi=dpi)
+            ax.set_axis_off()
 
         ax.imshow(img_as_float(arr.values, force_copy=False), **kwargs)
 
-        if save:
+        if save and fig is not None:
             save_fig(fig, save)
 
     @d.get_sections(base="_interactive", sections=["Parameters"])

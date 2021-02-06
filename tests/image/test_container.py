@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Optional, Sequence
+from typing import Tuple, Union, Optional
 from pathlib import Path
 import pytest
 
@@ -10,7 +10,7 @@ import xarray as xr
 import tifffile
 
 from squidpy.im import ImageContainer
-from squidpy.im._utils import CropCoords, _NULL_COORDS
+from squidpy.im._utils import CropCoords, CropPadding, _NULL_COORDS
 from squidpy._constants._pkg_constants import Key
 
 
@@ -270,22 +270,70 @@ class TestContainerCropping:
                 assert isinstance(crop, ImageContainer)
                 assert crop.shape == size
 
-    @pytest.mark.parametrize("obs_names", [None, ...])
-    def test_spot_crops_obs_names(self, obs_names: Optional[Sequence[str]]):
-        pass
+    @pytest.mark.parametrize("n_names", [None, 4])
+    def test_spot_crops_obs_names(self, adata: AnnData, cont: ImageContainer, n_names: Optional[int]):
+        crops = list(cont.generate_spot_crops(adata, obs_names=None if n_names is None else adata.obs_names[:n_names]))
 
+        if n_names is None:
+            assert len(crops) == adata.n_obs
+        else:
+            assert len(crops) == n_names
+
+    @pytest.mark.parametrize("spot_scale", [1, 0.5, 2])
     @pytest.mark.parametrize("scale", [1, 0.5, 2])
-    def test_spot_crops_spot_scale(self, scale: float):
-        pass
+    def test_spot_crops_spot_scale(self, adata: AnnData, cont: ImageContainer, scale: float, spot_scale: float):
+        diameter = adata.uns["spatial"][Key.uns.library_id(adata, "spatial")]["scalefactors"]["spot_diameter_fullres"]
+        radius = int(round(diameter // 2) * spot_scale)
+        size = int((2 * radius + 1) * scale), int((2 * radius + 1) * scale)
 
-    def test_spot_crops_mask_circle(self):
-        pass
+        for crop in cont.generate_spot_crops(adata, spot_scale=spot_scale, scale=scale):
+            assert crop.shape == size
 
-    def test_uncrop_preserves_shape(self):
-        pass
+    @pytest.mark.parametrize("preserve", [False, True])
+    def test_preserve_dtypes(self, cont: ImageContainer, preserve: bool):
+        assert np.issubdtype(cont["image"].dtype, np.uint8)
 
-    def test_uncrop_too_small_requested_shape(self):
-        pass
+        crop = cont.crop_corner(-10, -10, 20, cval=-5, preserve_dtypes=preserve)
+
+        if preserve:
+            assert np.issubdtype(crop["image"].dtype, np.uint8)
+            # we specifically use 0, otherwise overflow would happend and the value would be 256 - 5
+            np.testing.assert_array_equal(crop["image"][:10, :10], 0)
+        else:
+            assert np.issubdtype(crop["image"].dtype, np.signedinteger)
+            np.testing.assert_array_equal(crop["image"][:10, :10], -5)
+
+    def test_spot_crops_mask_circle(self, adata: AnnData, cont: ImageContainer):
+        for crop in cont.generate_spot_crops(adata, cval=np.nan, mask_circle=True, preserve_dtypes=False):
+            assert crop.shape[0] == crop.shape[1]
+            c = crop.shape[0] // 2
+            mask = (crop.data.x - c) ** 2 + (crop.data.y - c) ** 2 <= c ** 2
+
+            np.testing.assert_array_equal(crop["image"].values[..., 0][~mask.values], np.nan)
+
+    def test_uncrop_preserves_shape(self, small_cont_1c: ImageContainer):
+        small_cont_1c.add_img(np.random.normal(size=(small_cont_1c.shape + (4,))), channel_dim="foobar", img_id="baz")
+        crops = list(small_cont_1c.generate_equal_crops(size=13))
+
+        uncrop = ImageContainer.uncrop(crops)
+
+        np.testing.assert_array_equal(small_cont_1c.shape, uncrop.shape)
+        for key in small_cont_1c:
+            np.testing.assert_array_equal(uncrop[key], small_cont_1c[key])
+
+    def test_uncrop_too_small_requested_shape(self, small_cont_1c: ImageContainer):
+        crops = list(small_cont_1c.generate_equal_crops(size=13))
+        with pytest.raises(ValueError, match=r"Requested final image shape"):
+            ImageContainer.uncrop(crops, shape=(small_cont_1c.shape[0] - 1, small_cont_1c.shape[1] - 1))
+
+    @pytest.mark.parametrize("dy", [-10, 0])
+    def test_crop_metadata(self, small_cont_1c: ImageContainer, dy: int):
+        crop = small_cont_1c.crop_corner(dy, 0, 50, mask_circle=True)
+
+        assert small_cont_1c.data.attrs[Key.img.coords] is _NULL_COORDS
+        assert crop.data.attrs[Key.img.coords] == CropCoords(0, 0, 50, 50 + dy)
+        assert crop.data.attrs[Key.img.padding] == CropPadding(x_pre=0, y_pre=abs(dy), x_post=0, y_post=0)
+        assert crop.data.attrs[Key.img.mask_circle]
 
 
 class TestContainerUtils:
@@ -480,52 +528,3 @@ def test_generate_equal_crops(ys, xs):
     for crop in img.generate_equal_crops(size=(ys, xs)):
         assert crop.shape[0] == expected_size[0]
         assert crop.shape[1] == expected_size[1]
-
-
-def test_uncrop_img(tmpdir):
-    """Crop im and uncrop again and check equality."""
-    # create ImageContainer
-    xdim = 100
-    ydim = 100
-    # create ImageContainer
-    img_orig = np.zeros((xdim, ydim, 10), dtype=np.uint8)
-    # put a dot at y 20, x 50
-    img_orig[20, 50, :] = range(10, 20)
-    cont = ImageContainer(img_orig, img_id="image_0")
-
-    # crop small crop
-    crops = []
-    for crop in cont.generate_equal_crops(size=5):
-        crops.append(crop)
-    a = ImageContainer.uncrop(crops)
-
-    # check that has cropped correct image
-    np.testing.assert_array_equal(a["image_0"], cont["image_0"])
-
-
-def test_single_uncrop_img(tmpdir):
-    """Crop image into one crop and uncrop again and check equality."""
-    # create ImageContainer
-    ydim = 100
-    xdim = 100
-    # create ImageContainer
-    img_orig = np.zeros((ydim, xdim, 10), dtype=np.uint8)
-    # put a dot at y 20, x 50
-    img_orig[20, 50, :] = range(10, 20)
-    cont = ImageContainer(img_orig, img_id="image_0")
-
-    # crop small crop
-    crops = []
-    for crop in cont.generate_equal_crops(size=(ydim, xdim)):
-        crops.append(crop)
-    a = ImageContainer.uncrop(crops)
-
-    # check that has cropped correct image
-    np.testing.assert_array_equal(a["image_0"], cont["image_0"])
-
-
-def test_crop_metadata(cont: ImageContainer) -> None:
-    crop = cont.crop_corner(0, 0, 50)
-
-    assert cont.data.attrs["coords"] is _NULL_COORDS
-    assert crop.data.attrs["coords"] == CropCoords(0, 0, 50, 50)
