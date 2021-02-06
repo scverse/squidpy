@@ -149,21 +149,18 @@ class TestContainerCroppping:
         dim1, dim2, _ = small_cont_1c["image"].data.shape
         crop = small_cont_1c.crop_center(dim1 // 2, dim2 // 2, dim1)
         data = crop["image"].data
-        assert (data[:, : dim2 // 2] == 0).all()
-        assert (data[: dim2 // 2, :] == 0).all()
 
-    @pytest.mark.parametrize("dy", [25, 0.3, None])
-    @pytest.mark.parametrize("dx", [30, 0.5, None])
+        np.testing.assert_array_equal(data[:, : dim2 // 2], 0)
+        np.testing.assert_array_equal(data[: dim2 // 2, :], 0)
+
+    @pytest.mark.parametrize("dy", [-10, 25, 0.3])
+    @pytest.mark.parametrize("dx", [-10, 30, 0.5])
     def test_crop_corner_size(self, dy: Optional[Union[int, float]], dx: Optional[Union[int, float]]):
         shape_img = (50, 50)
         img = ImageContainer(np.zeros(shape_img))
-        if None in (dy, dx):
-            with pytest.raises(TypeError):
-                # catch error with None
-                crop = img.crop_corner(dy, dx)
-        else:
-            crop = img.crop_corner(dy, dx)
-            assert crop.shape == shape_img
+
+        crop = img.crop_corner(dy, dx)
+        assert crop.shape == shape_img
 
     @pytest.mark.parametrize("scale", [0, 0.5, 1.0, 1.5, 2.0])
     def test_crop_corner_scale(self, scale: float):
@@ -181,7 +178,7 @@ class TestContainerCroppping:
         shape_img = (50, 50)
         img = ImageContainer(np.zeros(shape_img))
         crop = img.crop_corner(10, 10, cval=cval)
-        assert (crop["image"].data[-10:, -10:] == cval).all()
+        np.testing.assert_array_equal(crop["image"].data[-10:, -10:], cval)
 
     @pytest.mark.parametrize("size", [(50, 50), (50, 49)])
     def test_crop_corner_mask_circle(self, size: Tuple[int, int]):
