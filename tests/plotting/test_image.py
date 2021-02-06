@@ -1,19 +1,38 @@
+import pytest
+
 from anndata import AnnData
 import scanpy as sc
 
+import numpy as np
+
+import matplotlib.pyplot as plt
+
 from squidpy.im import ImageContainer
+from tests.conftest import DPI, PlotTester, PlotTesterMeta
 import squidpy as sq
 
 
-class TestContainerShow:
-    def axis(self):
-        pass
+class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
+    def test_mask_not_1_channels(self, cont: ImageContainer):
+        with pytest.raises(ValueError, match=r"Expected to find 1 channel, found `3`."):
+            cont.show(channel=None, as_mask=True)
 
-    def test_channel(self):  # TODO: @hspitzer asked for some axis info
-        pass
+    def test_plot_axis(self, cont: ImageContainer):
+        cont.add_img(np.random.RandomState(42).normal(size=(*cont.shape, 3)), img_id="foo")
+        fig, (ax1, ax2) = plt.subplots(ncols=2, dpi=DPI, tight_layout=True)
 
-    def test_as_mask(self):
-        pass
+        cont.show("image", ax=ax1)
+        cont.show("foo", ax=ax2)
+
+    def test_plot_channel(self, cont: ImageContainer):
+        cont.show(channel=1)
+
+    def test_plot_as_mask(self, cont: ImageContainer):
+        cont.add_img(np.random.RandomState(42).normal(size=(*cont.shape, 3)), img_id="foo")
+        cont.show("foo", as_mask=True, channel=1)
+
+    def test_plot_imshow_kwargs(self, cont: ImageContainer):
+        cont.show(channel=2, cmap="inferno")
 
 
 def test_extract(adata: AnnData, cont: ImageContainer, caplog):

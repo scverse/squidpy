@@ -711,7 +711,7 @@ class ImageContainer(FeatureMixin):
         Raises
         ------
         ValueError
-            If  ``as_mask = True`` and the image has more than 1 channel.
+            If  ``as_mask = True`` and the image layer has more than 1 channel.
         """
         from squidpy.pl._utils import save_fig
 
@@ -721,15 +721,15 @@ class ImageContainer(FeatureMixin):
             if as_mask:
                 arr = arr > 0
         elif as_mask:
-            if len(arr.dims[-1]) != 1:
-                raise ValueError(f"Expected to find only 1 channel dimension, found `{arr.dims[-1]}`.")
+            if arr.shape[-1] != 1:
+                raise ValueError(f"Expected to find 1 channel, found `{arr.shape[-1]}`.")
             arr = arr > 0
 
         fig = None
         if ax is None:
-            fig, ax = plt.subplots(figsize=(8, 8) if figsize is None else figsize, dpi=dpi)
-            ax.set_axis_off()
+            fig, ax = plt.subplots(figsize=(8, 8) if figsize is None else figsize, dpi=dpi, tight_layout=True)
 
+        ax.set_axis_off()  # always set it off, even if the user provides the ax
         ax.imshow(img_as_float(arr.values, force_copy=False), **kwargs)
 
         if save and fig is not None:
