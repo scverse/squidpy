@@ -102,48 +102,61 @@ class TestContainerIO:
         pass
 
 
-class TestContainerCroppping:
+class TestContainerCropping:
     def test_padding_top_left(self, small_cont_1c: ImageContainer):
         crop = small_cont_1c.crop_center(0, 0, 10)
+
         data = crop["image"].data
-        assert (data[:10, :10] == 0).all()
-        assert data[10:, 10:].all()
+
+        assert crop.shape == (21, 21)
+        np.testing.assert_array_equal(data[:10, :10], 0)
+        np.testing.assert_array_equal(data[10:, 10:] != 0, True)
 
     def test_padding_top_right(self, small_cont_1c: ImageContainer):
         crop = small_cont_1c.crop_center(0, small_cont_1c.shape[1], 10)
         data = crop["image"].data
-        assert (data[:10, 10:] == 0).all()
-        assert data[10:, :10].all()
+
+        assert crop.shape == (21, 21)
+        np.testing.assert_array_equal(data[:10, 10:], 0)
+        np.testing.assert_array_equal(data[10:, :10] != 0, True)
 
     def test_padding_bottom_left(self, small_cont_1c: ImageContainer):
         crop = small_cont_1c.crop_center(small_cont_1c.shape[1], 0, 10)
         data = crop["image"].data
-        assert (data[10:, :10] == 0).all()
-        assert data[:10, 10:].any()
+
+        assert crop.shape == (21, 21)
+        np.testing.assert_array_equal(data[10:, :10], 0)
+        np.testing.assert_array_equal(data[:10, 10:] != 0, True)
 
     def test_padding_bottom_right(self, small_cont_1c: ImageContainer):
         crop = small_cont_1c.crop_center(small_cont_1c.shape[1], small_cont_1c.shape[1], 10)
         data = crop["image"].data
-        assert (data[10:, 10:] == 0).all()
-        assert data[:10, :10].any()
+
+        assert crop.shape == (21, 21)
+        np.testing.assert_array_equal(data[10:, 10:], 0)
+        np.testing.assert_array_equal(data[:10, :10] != 0, True)
 
     def test_padding_left_right(self, small_cont_1c: ImageContainer):
         dim1, dim2, _ = small_cont_1c["image"].data.shape
+
         crop = small_cont_1c.crop_center(dim1 // 2, 0, dim1 // 2)
         data = crop["image"].data
-        assert (data[:, : dim2 // 2] == 0).all()
+        np.testing.assert_array_equal(data[:, : dim2 // 2], 0)
+
         crop = small_cont_1c.crop_center(dim1 // 2, dim2, dim1 // 2)
         data = crop["image"].data
-        assert (data[:, dim2 // 2 :] == 0).all()
+        np.testing.assert_array_equal(data[:, dim2 // 2 :], 0)
 
     def test_padding_top_bottom(self, small_cont_1c: ImageContainer):
         dim1, dim2, _ = small_cont_1c["image"].data.shape
+
         crop = small_cont_1c.crop_center(dim1, dim2 // 2, dim1 // 2)
         data = crop["image"].data
-        assert (data[dim1 // 2 :, :] == 0).all()
+        np.testing.assert_array_equal(data[dim1 // 2 :, :], 0)
+
         crop = small_cont_1c.crop_center(0, dim2 // 2, dim1 // 2)
         data = crop["image"].data
-        assert (data[: dim2 // 2, :] == 0).all()
+        np.testing.assert_array_equal(data[: dim2 // 2, :], 0)
 
     def test_padding_all(self, small_cont_1c: ImageContainer):
         dim1, dim2, _ = small_cont_1c["image"].data.shape
@@ -155,12 +168,24 @@ class TestContainerCroppping:
 
     @pytest.mark.parametrize("dy", [-10, 25, 0.3])
     @pytest.mark.parametrize("dx", [-10, 30, 0.5])
-    def test_crop_corner_size(self, dy: Optional[Union[int, float]], dx: Optional[Union[int, float]]):
-        shape_img = (50, 50)
-        img = ImageContainer(np.zeros(shape_img))
+    def test_crop_corner_size(
+        self, small_cont_1c: ImageContainer, dy: Optional[Union[int, float]], dx: Optional[Union[int, float]]
+    ):
+        crop = small_cont_1c.crop_corner(dy, dx, size=20)
+        # original coordinates
+        ody, odx = max(dy, 0), max(dx, 0)
+        ody = int(ody * small_cont_1c.shape[0]) if isinstance(ody, float) else ody
+        odx = int(odx * small_cont_1c.shape[1]) if isinstance(odx, float) else odx
 
-        crop = img.crop_corner(dy, dx)
-        assert crop.shape == shape_img
+        # crop coordinates
+        cdy = 0 if isinstance(dy, float) or dy > 0 else dy
+        cdx = 0 if isinstance(dx, float) or dx > 0 else dx
+        cdy, cdx = abs(cdy), abs(cdx)
+
+        assert crop.shape == (20, 20)
+        cdata, odata = crop["image"].data, small_cont_1c["image"].data
+        cdata = cdata[cdy:, cdx:]
+        np.testing.assert_array_equal(cdata, odata[ody : ody + cdata.shape[0], odx : odx + cdata.shape[1]])
 
     @pytest.mark.parametrize("scale", [0, 0.5, 1.0, 1.5, 2.0])
     def test_crop_corner_scale(self, scale: float):
@@ -240,14 +265,6 @@ class TestContainerUtils:
         pass
 
     def test_repr(self):
-        pass
-
-
-class TestContainerShow:
-    def test_channel(self):  # TODO: @hspitzer asked for some axis info
-        pass
-
-    def test_as_mask(self):
         pass
 
 

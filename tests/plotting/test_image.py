@@ -5,6 +5,17 @@ from squidpy.im import ImageContainer
 import squidpy as sq
 
 
+class TestContainerShow:
+    def axis(self):
+        pass
+
+    def test_channel(self):  # TODO: @hspitzer asked for some axis info
+        pass
+
+    def test_as_mask(self):
+        pass
+
+
 def test_extract(adata: AnnData, cont: ImageContainer, caplog):
     """
     Calculate features and extract columns to obs
