@@ -10,6 +10,8 @@ from squidpy.im._utils import CropCoords, _NULL_COORDS
 from squidpy.pl._utils import ALayer
 from squidpy._constants._pkg_constants import Key
 
+__all__ = ["ImageModel"]
+
 
 @dataclass
 class ImageModel:

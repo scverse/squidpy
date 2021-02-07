@@ -47,6 +47,9 @@ except ImportError:
     W = None
 
 
+__all__ = ["ripley_k", "moran", "co_occurrence"]
+
+
 it = nt.int32
 ft = nt.float32
 tt = nt.UniTuple

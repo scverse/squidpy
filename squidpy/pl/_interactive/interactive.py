@@ -19,6 +19,9 @@ else:
     _error = None
 
 
+__all__ = ["Interactive"]
+
+
 @d.dedent
 class Interactive:
     """

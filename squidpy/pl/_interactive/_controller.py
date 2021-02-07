@@ -189,7 +189,7 @@ class ImageController:
         -------
         The screenshot as an RGB array of shape `(height, width, 3)`.
         """
-        return self.view.viewer.screenshot(path, canvas_only=True)
+        return np.asanyarray(self.view.viewer.screenshot(path, canvas_only=True))
 
     def _handle_already_present(self, layer_name: str) -> None:
         logg.warning(f"Layer `{layer_name}` is already loaded")

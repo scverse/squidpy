@@ -15,6 +15,8 @@ from squidpy.gr._utils import _save_data, _assert_positive, _assert_spatial_basi
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 
+__all__ = ["spatial_neighbors"]
+
 
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)

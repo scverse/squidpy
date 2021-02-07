@@ -13,6 +13,8 @@ from squidpy.pl._interactive._widgets import (
     LibraryListWidget,
 )
 
+__all__ = ["ImageView"]
+
 
 class ImageView:
     """
