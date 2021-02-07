@@ -16,19 +16,12 @@ Squidpy
     references
 
 .. toctree::
-   :caption: Tutorials
-   :maxdepth: 2
-   :hidden:
+    :caption: Gallery
+    :maxdepth: 2
+    :hidden:
 
-   auto_tutorials/index.rst
-
-.. toctree::
-   :caption: Gallery
-   :maxdepth: 2
-   :hidden:
-
-   auto_examples/index.rst
-
+    tutorials
+    examples
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/squidpy.svg
     :target: https://img.shields.io/pypi/v/squidpy.svg

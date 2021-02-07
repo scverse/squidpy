@@ -32,8 +32,8 @@ github_repo = "https://github.com/theislab/squidpy"
 _download_notebooks(org="theislab", repo="squidpy_notebooks", raise_exc=False)
 
 # The full version, including alpha/beta/rc tags
-release = f"master ({squidpy.__version__})"
-
+release = "master"
+version = f"{release} ({squidpy.__version__})"
 
 # -- General configuration ---------------------------------------------------
 
@@ -49,6 +49,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_last_updated_by_git",
     "sphinx_gallery.load_style",
+    "nbsphinx",
     "edit_on_github",
     "typed_returns",
 ]
@@ -84,7 +85,12 @@ pygments_style = "sphinx"
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ["**.ipynb", "**.md5", "**.py", "**.ipynb_checkpoints"]  # ignore anything that isn't .rst
+exclude_patterns = [
+    "auto_*/**.ipynb",
+    "auto_*/**.md5",
+    "auto_*/**.py",
+    "**.ipynb_checkpoints",
+]  # ignore anything that isn't .rst or .ipynb
 suppress_warnings = ["download.not_readable"]
 
 # -- Options for HTML output -------------------------------------------------
@@ -111,7 +117,7 @@ linkcheck_ignore = ["https://doi.org/10.2307/2332142"]
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
-html_logo = "_static/img/logo.png"
+html_logo = "_static/img/squidpy_vertical.png"
 html_theme_options = {"navigation_depth": 4, "logo_only": True}
 html_show_sphinx = False
 

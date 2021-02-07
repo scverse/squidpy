@@ -25,3 +25,5 @@ clean:
 	@rm -rf $(SOURCEDIR)/auto_tutorials/
 	@rm -rf $(SOURCEDIR)/auto_examples/
 	@rm -rf $(SOURCEDIR)/gen_modules/
+	@rm -rf $(SOURCEDIR)/backreferences/
+	@rm -rf $(SOURCEDIR)/external_tutorials/

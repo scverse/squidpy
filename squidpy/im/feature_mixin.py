@@ -138,7 +138,7 @@ class FeatureMixin:
         """
         Calculate texture features.
 
-        A grey level co-occurrence matrix (`GLCM <https://en.wikipedia.org/wiki/Co-occurrence_matrix>`__) is computed
+        A grey level co-occurrence matrix (`GLCM <https://en.wikipedia.org/wiki/Co-occurrence_matrix>`_) is computed
         for different combinations of distance and angle.
 
         The distance defines the pixel difference of co-occurrence. The angle define the direction along which
