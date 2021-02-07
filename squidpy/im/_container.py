@@ -13,6 +13,7 @@ from typing import (
     Iterable,
     Iterator,
     Optional,
+    Sequence,
     TYPE_CHECKING,
 )
 from itertools import chain
@@ -549,7 +550,12 @@ class ImageContainer(FeatureMixin):
         as_array: Union[str, bool] = False,
         return_obs: bool = False,
         **kwargs: Any,
-    ) -> Union[Iterator["ImageContainer"], Iterator[Dict[str, np.ndarray]]]:  # 6 more types are valid
+    ) -> Union[
+        Iterator["ImageContainer"],
+        Iterator[np.ndarray],
+        Iterator[Tuple[np.ndarray, ...]],
+        Iterator[Dict[str, np.ndarray]],
+    ]:
         """
         Iterate over :attr:`adata.obs_names` and extract crops.
 
@@ -883,14 +889,16 @@ class ImageContainer(FeatureMixin):
         return res
 
     def _maybe_as_array(
-        self, as_array: Union[str, bool] = False
-    ) -> Union["ImageContainer", Dict[str, np.ndarray], np.ndarray]:
+        self, as_array: Union[str, Sequence[str], bool] = False
+    ) -> Union["ImageContainer", Dict[str, np.ndarray], np.ndarray, Tuple[np.ndarray, ...]]:
         res = self
         if as_array:
             res = {key: res[key].values for key in res}  # type: ignore[assignment]
         # this is just for convenience for DL iterators
         if isinstance(as_array, str):
             res = res[as_array]
+        elif isinstance(as_array, Sequence):
+            res = tuple(res[key] for key in as_array)  # type: ignore[assignment]
 
         return res
 

@@ -132,9 +132,10 @@ Alternatively, any :func:`callable` can be passed as long as it has the followin
     :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`numpy.ndarray` ``(height, width[, channels])``."""  # noqa: E501
 _as_array = """
 as_array
-    - if `True`, yield a :class:`dict` where keys are layers and values are :class:`numpy.ndarray`.
-    - if a :class:`str`, yield only a :class:`numpy.ndarray` which belongs to layer ``as_array``.
-    - otherwise, yield :class:`squidpy.im.ImageContainer`.
+    - if `True`, yields a :class:`dict` where keys are layers and values are :class:`numpy.ndarray`.
+    - if a :class:`str`, yields one :class:`numpy.ndarray` for the specified layer.
+    - if a :class:`typing.Sequence`, yields a :class:`tuple` of :class:`numpy.ndarray` for the specified layers.
+    - otherwise, yields :class:`squidpy.im.ImageContainer`.
 """
 _layer_added = """
 layer_added

@@ -322,9 +322,9 @@ class TestContainerCropping:
 
         assert crop.shape == (2 * sy + 1, 2 * sx + 1)
 
-    @pytest.mark.parametrize("as_array", [False, True, "image"])
+    @pytest.mark.parametrize("as_array", [False, True, "image", ["image", "baz"]])
     def test_equal_crops_as_array(self, small_cont: ImageContainer, as_array: bool):
-        small_cont.add_img(np.random.normal(size=(small_cont.shape + (1,))), channel_dim="foobar")
+        small_cont.add_img(np.random.normal(size=(small_cont.shape + (1,))), channel_dim="foobar", layer="baz")
         for crop in small_cont.generate_equal_crops(size=11, as_array=as_array):
             if as_array:
                 if isinstance(as_array, bool):
@@ -332,9 +332,15 @@ class TestContainerCropping:
                     for key in small_cont:
                         assert key in crop
                         assert crop[key].shape == (11, 11, small_cont[key].data.shape[-1])
-                else:
+                elif isinstance(as_array, str):
                     assert isinstance(crop, np.ndarray)
                     assert crop.shape == (11, 11, small_cont[as_array].data.shape[-1])
+                else:
+                    assert isinstance(crop, tuple)
+                    assert len(crop) == len(as_array)
+                    for key, data in zip(as_array, crop):
+                        assert isinstance(data, np.ndarray)
+                        assert data.shape == (11, 11, small_cont[key].data.shape[-1])
             else:
                 assert isinstance(crop, ImageContainer)
                 for key in (Key.img.coords, Key.img.padding, Key.img.scale, Key.img.mask_circle):
