@@ -80,8 +80,8 @@ class ImageContainer(FeatureMixin):
     Wraps :class:`xarray.Dataset` to store several image layers with the same x and y dimensions in one object.
     Dimensions of stored images are ``(y, x, channels)``. The channel dimension may vary between image layers.
 
-    Allows for lazy and chunked reading via :mod:`rasterio` and :mod:`dask`, if the input is a TIFF image.
-    This class is given to all image processing functions, along with an :mod:`anndata` instance, if necessary.
+    Allows for lazy and chunked reading via :mod:`rasterio` and :mod:`dask`, if the input is a *TIFF* image.
+    This class is given to all image processing functions, along with :class:`anndata.AnnData` instance, if necessary.
 
     Parameters
     ----------
@@ -95,7 +95,7 @@ class ImageContainer(FeatureMixin):
     def __init__(
         self,
         img: Optional[Input_t] = None,
-        img_id: str = "image",
+        layer: str = "image",
         **kwargs: Any,
     ):
         self._data: xr.Dataset = xr.Dataset()
@@ -108,7 +108,7 @@ class ImageContainer(FeatureMixin):
         if img is not None:
             if chunks is not None:
                 chunks = {"x": chunks, "y": chunks}
-            self.add_img(img, img_id=img_id, chunks=chunks, **kwargs)
+            self.add_img(img, layer=layer, chunks=chunks, **kwargs)
 
     @classmethod
     def load(cls, path: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":
@@ -120,21 +120,22 @@ class ImageContainer(FeatureMixin):
         path
             Path to *Zarr* store.
         lazy
-            Use :mod:`dask` to lazily load image.
+            Whether to use :mod:`dask` to lazily load image.
         chunks
             Chunk size for :mod:`dask`.
 
         Returns
+        -------
         The loaded container.
         """
         res = cls()
-        res.add_img(path, img_id="image", chunks=chunks, lazy=lazy)
+        res.add_img(path, layer="image", chunks=chunks, lazy=lazy)
 
         return res
 
     def save(self, path: Pathlike_t, **kwargs: Any) -> None:
         """
-        Save the container into  *Zarr* store.
+        Save the container into a *Zarr* store.
 
         Parameters
         ----------
@@ -143,7 +144,7 @@ class ImageContainer(FeatureMixin):
 
         Returns
         -------
-        Nothing, just saves the data to ``path``.
+        Nothing, just saves the container.
         """
         attrs = self.data.attrs
         try:
@@ -155,16 +156,17 @@ class ImageContainer(FeatureMixin):
         finally:
             self.data.attrs = attrs
 
-    def _get_next_image_id(self, img_id: str) -> str:
-        pat = re.compile(rf"^{img_id}_(\d*)$")
+    def _get_next_image_id(self, layer: str) -> str:
+        pat = re.compile(rf"^{layer}_(\d*)$")
         iterator = chain.from_iterable(pat.finditer(k) for k in self.data.keys())
-        return f"{img_id}_{(max(map(lambda m: int(m.groups()[0]), iterator), default=-1) + 1)}"
+        return f"{layer}_{(max(map(lambda m: int(m.groups()[0]), iterator), default=-1) + 1)}"
 
     @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
+    @d.dedent
     def add_img(
         self,
         img: Input_t,
-        img_id: Optional[str] = None,
+        layer: Optional[str] = None,
         channel_dim: str = "channels",
         lazy: bool = True,
         chunks: Optional[int] = None,
@@ -173,14 +175,11 @@ class ImageContainer(FeatureMixin):
         """
         Add a new image to the container.
 
-        The image can be in memory :class:`numpy.ndarray`/:class:`xarray.DataArray` or on-disk TIFF/JPEG image.
-
         Parameters
         ----------
         img
-            An array or a path to TIFF/JPEG file.
-        img_id
-            Layer name for ``img``.
+            In memory array or path to on-disk *TIFF*/*JPEG* image.
+        %(img_layer)s
         channel_dim
             Name of the channel dimension.
         lazy
@@ -190,12 +189,7 @@ class ImageContainer(FeatureMixin):
 
         Returns
         -------
-        Nothing, just adds loaded img to ``data`` with key ``img_id``.
-
-        Notes
-        -----
-        Lazy loading via :mod:`dask` is not supported for on-disk jpg files, they will be loaded in memory.
-        Multi-page TIFFs will be loaded in one :class:`xarray.DataArray`, with concatenated channel dimensions.
+        Nothing, just adds a new ``layer`` to :attr:`data`.
 
         Raises
         ------
@@ -203,17 +197,22 @@ class ImageContainer(FeatureMixin):
             If loading from a file/store with an unknown format.
         NotImplementedError
             If loading a specific data type has not been implemented.
+
+        Notes
+        -----
+        Lazy loading via :mod:`dask` is not supported for on-disk jpg files, they will be loaded in memory.
+        Multi-page TIFFs will be loaded in one :class:`xarray.DataArray`, with concatenated channel dimensions.
         """
-        img_id = self._get_next_image_id("image") if img_id is None else img_id
-        img = self._load_img(img, chunks=chunks, img_id=img_id, **kwargs)
+        layer = self._get_next_image_id("image") if layer is None else layer
+        img = self._load_img(img, chunks=chunks, layer=layer, **kwargs)
 
         if img is not None:  # not reading a .nc file
             if TYPE_CHECKING:
                 assert isinstance(img, xr.DataArray)
             img = img.rename({img.dims[-1]: channel_dim})
 
-            logg.info(f"{'Overwriting' if img_id in self else 'Adding'} layer `{img_id}` in `{self}`")
-            self.data[img_id] = img
+            logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
+            self.data[layer] = img
 
         if not lazy:
             # load in memory
@@ -221,17 +220,12 @@ class ImageContainer(FeatureMixin):
 
     @singledispatchmethod
     def _load_img(
-        self, img: Union[Pathlike_t, Input_t, "ImageContainer"], img_id: str, **kwargs: Any
+        self, img: Union[Pathlike_t, Input_t, "ImageContainer"], layer: str, **kwargs: Any
     ) -> Optional[xr.DataArray]:
-        """
-        Load an image.
-
-        See :meth:`add_img` for more details.
-        """
         if isinstance(img, ImageContainer):
-            if img_id not in img:
-                raise KeyError(f"Image identifier `{img_id}` not found in `{img}`.")
-            return self._load_img(img[img_id], **kwargs)
+            if layer not in img:
+                raise KeyError(f"Image identifier `{layer}` not found in `{img}`.")
+            return self._load_img(img[layer], **kwargs)
         raise NotImplementedError(f"Loader for class `{type(img).__name__}` is not yet implemented.")
 
     @_load_img.register(str)
@@ -355,8 +349,8 @@ class ImageContainer(FeatureMixin):
             Whether to mask out values that are not within a circle defined by this crop.
             Only available if ``size`` defines a square.
         preserve_dtypes
-            Whether to preserver the data types of underlying :class:`xarray.DataArray`, even if the ``cval``
-            has is of different type.
+            Whether to preserver the data types of underlying :class:`xarray.DataArray`, even if ``cval``
+            is of different type.
 
         Returns
         -------
@@ -565,7 +559,7 @@ class ImageContainer(FeatureMixin):
         ----------
         %(adata)s
         library_id
-            Key in :attr:`anndata.AnnData.uns` ['{spatial_key}'] used to get the spot diameter.
+            Key in :attr:`anndata.AnnData.uns` ``['{spatial_key}']`` used to get the spot diameter.
         %(spatial_key)s
         spot_scale
             Scaling factor for the spot diameter. Larger values mean more context.
@@ -677,7 +671,7 @@ class ImageContainer(FeatureMixin):
     @d.dedent
     def show(
         self,
-        img_id: Optional[str] = None,
+        layer: Optional[str] = None,
         channel: Optional[int] = None,
         as_mask: bool = False,
         ax: Optional[mpl.axes.Axes] = None,
@@ -691,8 +685,7 @@ class ImageContainer(FeatureMixin):
 
         Parameters
         ----------
-        %(img_id)s
-            If `None` and only 1 image is present, use its key.
+        %(img_layer)s
         channel
             Channel to plot. If `None`, use all channels for plotting.
         as_mask
@@ -715,7 +708,7 @@ class ImageContainer(FeatureMixin):
         """
         from squidpy.pl._utils import save_fig
 
-        arr = self.data[self._singleton_id(img_id)]
+        arr = self.data[self._get_layer(layer)]
         if channel is not None:
             arr = arr[{arr.dims[-1]: channel}]
             if as_mask:
@@ -791,10 +784,11 @@ class ImageContainer(FeatureMixin):
             key_added=key_added,
         ).show()
 
+    @d.dedent
     def apply(
         self,
         func: Callable[..., np.ndarray],
-        img_id: Optional[str] = None,
+        layer: Optional[str] = None,
         channel: Optional[int] = None,
         copy: bool = True,
         **kwargs: Any,
@@ -805,22 +799,21 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         func
-            Function which takes a :class:`numpy.ndarray` as input and produces an image-like output.
-        %(img_id)
+            A function which takes a :class:`numpy.ndarray` as input and produces an image-like output.
+        %(img_layer)s
         channel
-            Apply ``func`` only over a specific ``channel``. If `None`, apply over the full image.
-        copy
-            Whether to return a copy or modify this container.
+            Apply ``func`` only over a specific ``channel``. If `None`, use all channels.
+        %(copy_cont)s
         kwargs
             Keyword arguments for ``func``.
 
         Returns
         -------
-        If ``copy = True``, returns a ew container with 1 image saved as ``img_id``.
-        Otherwise, overwrites the ``img_id`` in this container.
+        If ``copy = True``, returns a new container with ``layer``.
+        Otherwise, overwrites the ``layer`` in this container.
         """
-        img_id = self._singleton_id(img_id)
-        arr = self[img_id]
+        layer = self._get_layer(layer)
+        arr = self[layer]
         channel_dim = arr.dims[-1]
 
         if channel is not None:
@@ -831,14 +824,14 @@ class ImageContainer(FeatureMixin):
             res = res[..., np.newaxis]
 
         if copy:
-            res = ImageContainer(res, img_id=img_id, channel_dim=channel_dim)
+            res = ImageContainer(res, layer=layer, channel_dim=channel_dim)
             res.data.attrs = self.data.attrs.copy()
 
             return res  # type: ignore[no-any-return]
 
         self.add_img(
             res,
-            img_id=img_id,
+            layer=layer,
             channel_dim=f"{channel_dim}:{res.shape[-1]}" if arr.shape[-1] != res.shape[-1] else channel_dim,
         )
 
@@ -901,19 +894,20 @@ class ImageContainer(FeatureMixin):
 
         return res
 
-    def _singleton_id(self, img_id: Optional[str]) -> str:
+    def _get_layer(self, layer: Optional[str]) -> str:
         self._assert_not_empty()
 
-        if img_id is None:
+        if layer is None:
             if len(self) > 1:
                 raise ValueError(
-                    f"Unable to determine which `img_id` to use. " f"Please supply from: `{sorted(self.data.keys())}`."
+                    f"Unable to determine which `layer` to use. "
+                    f"Please supply one from `{sorted(self.data.keys())}`."
                 )
-            img_id = list(self)[0]
-        if img_id not in self:
-            raise KeyError(f"Image `{img_id}` not found in `{sorted(self)}`")
+            layer = list(self)[0]
+        if layer not in self:
+            raise KeyError(f"Image layer `{layer}` not found in `{sorted(self)}`")
 
-        return img_id
+        return layer
 
     def _assert_not_empty(self) -> None:
         if not len(self):

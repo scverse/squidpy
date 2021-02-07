@@ -18,8 +18,8 @@ class TestFeatureMixin:
         with pytest.raises(ValueError, match=r"The container is empty."):
             cont.features_summary("image")
 
-    def test_invalid_img_id(self, small_cont: ImageContainer):
-        with pytest.raises(KeyError, match=r"Image `foobar` not found in"):
+    def test_invalid_layer(self, small_cont: ImageContainer):
+        with pytest.raises(KeyError, match=r"Image layer `foobar` not found in"):
             small_cont.features_summary("foobar")
 
     def test_invalid_channels(self, small_cont: ImageContainer):
@@ -102,7 +102,7 @@ class TestFeatureMixin:
 
     def test_segmentation_centroid(self, small_cont_seg: ImageContainer):
         features = small_cont_seg.features_segmentation(
-            label_img_id="segmented", intensity_img_id=None, feature_name="foo", props=["centroid"]
+            label_layer="segmented", intensity_layer=None, feature_name="foo", props=["centroid"]
         )
 
         assert isinstance(features, dict)
@@ -115,11 +115,11 @@ class TestFeatureMixin:
         if not len(props):
             with pytest.raises(ValueError, match=r"No properties have been selected."):
                 small_cont_seg.features_segmentation(
-                    label_img_id="segmented", intensity_img_id="image", feature_name="foo", props=props
+                    label_layer="segmented", intensity_layer="image", feature_name="foo", props=props
                 )
         else:
             features = small_cont_seg.features_segmentation(
-                label_img_id="segmented", intensity_img_id="image", feature_name="foo", props=props, channels=[0]
+                label_layer="segmented", intensity_layer="image", feature_name="foo", props=props, channels=[0]
             )
             haystack = features.keys()
 
@@ -135,7 +135,7 @@ class TestFeatureMixin:
                 assert any(f"ch-0_{p}_std" in h for h in haystack), haystack
 
     def test_custom_default_name(self, small_cont: ImageContainer):
-        custom_features = small_cont.features_custom("image", np.mean, channels=[0])
+        custom_features = small_cont.features_custom(np.mean, layer="image", channels=[0])
         summary_features = small_cont.features_summary("image", feature_name="summary", channels=[0])
 
         assert len(custom_features) == 1
@@ -146,7 +146,7 @@ class TestFeatureMixin:
         def dummy(_: np.ndarray) -> Tuple[int, int]:
             return 0, 1
 
-        features = small_cont.features_custom("image", func=dummy, feature_name="foo")
+        features = small_cont.features_custom(dummy, layer="image", feature_name="foo")
 
         assert len(features) == 2
         assert features["foo_0"] == 0
@@ -154,9 +154,9 @@ class TestFeatureMixin:
 
 
 class TestHighLevel:
-    def test_invalid_img_id(self, adata: AnnData, cont: ImageContainer):
-        with pytest.raises(KeyError, match=r"Image `foo` not found"):
-            calculate_image_features(adata, cont, img_id="foo")
+    def test_invalid_layer(self, adata: AnnData, cont: ImageContainer):
+        with pytest.raises(KeyError, match=r"Image layer `foo` not found"):
+            calculate_image_features(adata, cont, layer="foo")
 
     def test_invalid_feature(self, adata: AnnData, cont: ImageContainer):
         with pytest.raises(ValueError, match=r"Invalid option `foo` for `ImageFeature`"):

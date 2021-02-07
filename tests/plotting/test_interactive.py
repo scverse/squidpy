@@ -101,7 +101,7 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         img = np.zeros((*napari_cont.shape, 3), dtype=np.float32)
         img[..., 0] = 1.0  # all red image
 
-        napari_cont.add_img(img, img_id="foobar")
+        napari_cont.add_img(img, layer="foobar")
         cnt.add_image("foobar")
 
         assert viewer._controller.view.layernames == {"V1_Adult_Mouse_Brain", "foobar"}

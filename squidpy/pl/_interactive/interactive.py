@@ -68,11 +68,11 @@ class Interactive:
         save
             Whether to save the plot.
         kwargs
-            Keyword arguments for :func:`matplotlib.pyplot.imshow`.
+            Keyword arguments for :meth:`matplotlib.axes.Axes.imshow`.
 
         Returns
         -------
-        None if ``return_result = False``, otherwise the image array.
+        Nothing, if ``return_result = False``, otherwise the image array.
         """
         try:
             arr = self._controller.screenshot(path=None)
@@ -97,7 +97,7 @@ class Interactive:
 
     @property
     def adata(self) -> AnnData:
-        """Annodated data object."""
+        """Annotated data object."""
         return self._controller.model.adata
 
     def __repr__(self) -> str:

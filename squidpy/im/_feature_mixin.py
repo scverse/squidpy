@@ -82,7 +82,7 @@ class HasGetItemProtocol(Protocol):
     def data(self) -> xr.Dataset:  # noqa: D102
         ...
 
-    def _singleton_id(self, img_id: Optional[str]) -> str:
+    def _get_layer(self, layer: Optional[str]) -> str:
         ...
 
 
@@ -92,7 +92,7 @@ class FeatureMixin:
     @d.dedent
     def features_summary(
         self: HasGetItemProtocol,
-        img_id: str,
+        layer: str,
         feature_name: str = "summary",
         channels: Optional[Channel_t] = None,
         quantiles: Sequence[float] = (0.9, 0.5, 0.1),
@@ -102,7 +102,7 @@ class FeatureMixin:
 
         Parameters
         ----------
-        %(img_id)s
+        %(img_layer)s
         %(feature_name)s
         %(channels)s
         quantiles
@@ -116,24 +116,24 @@ class FeatureMixin:
             - `'{feature_name}_ch-{c}_mean'` - the mean.
             - `'{feature_name}_ch-{c}_std'` - the standard deviation.
         """
-        img_id = self._singleton_id(img_id)
+        layer = self._get_layer(layer)
         quantiles = _assert_non_empty_sequence(quantiles, name="quantiles")
-        channels = _get_channels(self[img_id], channels)
+        channels = _get_channels(self[layer], channels)
         channels = _assert_non_empty_sequence(channels, name="channels")
 
         features = {}
         for c in channels:
             for q in quantiles:
-                features[f"{feature_name}_ch-{c}_quantile-{q}"] = np.quantile(self[img_id][:, :, c], q)
-                features[f"{feature_name}_ch-{c}_mean"] = np.mean(self[img_id][:, :, c].values)
-                features[f"{feature_name}_ch-{c}_std"] = np.std(self[img_id][:, :, c].values)
+                features[f"{feature_name}_ch-{c}_quantile-{q}"] = np.quantile(self[layer][:, :, c], q)
+                features[f"{feature_name}_ch-{c}_mean"] = np.mean(self[layer][:, :, c].values)
+                features[f"{feature_name}_ch-{c}_std"] = np.std(self[layer][:, :, c].values)
 
         return features
 
     @d.dedent
     def features_histogram(
         self: HasGetItemProtocol,
-        img_id: str,
+        layer: str,
         feature_name: str = "histogram",
         channels: Optional[Channel_t] = None,
         bins: int = 10,
@@ -146,7 +146,7 @@ class FeatureMixin:
 
         Parameters
         ----------
-        %(img_id)s
+        %(img_layer)s
         %(feature_name)s
         %(channels)s
         bins
@@ -158,19 +158,19 @@ class FeatureMixin:
         -------
         Returns features with the following keys for each channel `c` in ``channels``:
 
-            - `'{feature_name}_ch-{c}_bin-{i}'` - the histogram counts for each bin `i` in ``bins``.
+            - ``'{feature_name}_ch-{c}_bin-{i}'`` - the histogram counts for each bin `i` in ``bins``.
         """
-        img_id = self._singleton_id(img_id)
-        channels = _get_channels(self[img_id], channels)
+        layer = self._get_layer(layer)
+        channels = _get_channels(self[layer], channels)
         channels = _assert_non_empty_sequence(channels, name="channels")
 
         # if v_range is None, use whole-image range
         if v_range is None:
-            v_range = np.min(self[img_id].values), np.max(self[img_id].values)
+            v_range = np.min(self[layer].values), np.max(self[layer].values)
 
         features = {}
         for c in channels:
-            hist, _ = np.histogram(self[img_id][:, :, c], bins=bins, range=v_range, weights=None, density=False)
+            hist, _ = np.histogram(self[layer][:, :, c], bins=bins, range=v_range, weights=None, density=False)
             for i, count in enumerate(hist):
                 features[f"{feature_name}_ch-{c}_bin-{i}"] = count
 
@@ -179,7 +179,7 @@ class FeatureMixin:
     @d.dedent
     def features_texture(
         self: HasGetItemProtocol,
-        img_id: str,
+        layer: str,
         feature_name: str = "texture",
         channels: Optional[Channel_t] = None,
         props: Sequence[str] = ("contrast", "dissimilarity", "homogeneity", "correlation", "ASM"),
@@ -198,7 +198,7 @@ class FeatureMixin:
 
         Parameters
         ----------
-        %(img_id)s
+        %(img_layer)s
         %(feature_name)s
         %(channels)s
         props
@@ -212,23 +212,23 @@ class FeatureMixin:
         -------
         Returns features with the following keys for each channel `c` in ``channels``:
 
-            - `'{feature_name}_ch-{c}_{p}_dist-{dist}_angle-{a}'` - the GLCM properties, for each `p` in ``props``,
+            - ``'{feature_name}_ch-{c}_{p}_dist-{dist}_angle-{a}'`` - the GLCM properties, for each `p` in ``props``,
               `d` in ``distances`` and `a` in ``angles``.
 
         Notes
         -----
         If the image is not of type :class:`numpy.uint8`, it will be converted.
         """
-        img_id = self._singleton_id(img_id)
+        layer = self._get_layer(layer)
 
         props = _assert_non_empty_sequence(props, name="properties")
         angles = _assert_non_empty_sequence(angles, name="angles")
         distances = _assert_non_empty_sequence(distances, name="distances")
 
-        channels = _get_channels(self[img_id], channels)
+        channels = _get_channels(self[layer], channels)
         channels = _assert_non_empty_sequence(channels, name="channels")
 
-        arr = self[img_id][..., channels].values
+        arr = self[layer][..., channels].values
         if not np.issubdtype(arr.dtype, np.uint8):
             arr = img_as_ubyte(arr, force_copy=False)  # values must be in [0, 255]
 
@@ -245,8 +245,8 @@ class FeatureMixin:
     @d.dedent
     def features_segmentation(
         self: HasGetItemProtocol,
-        label_img_id: str,
-        intensity_img_id: Optional[str] = None,
+        label_layer: str,
+        intensity_layer: Optional[str] = None,
         feature_name: str = "segmentation",
         channels: Optional[Channel_t] = None,
         props: Sequence[str] = ("label", "area", "mean_intensity"),
@@ -254,21 +254,21 @@ class FeatureMixin:
         """
         Calculate segmentation features using :func:`skimage.measure.regionprops`.
 
-        Features are calculated using ``label_img_id``, a cell segmentation of ``img_id``
-        (e.g. resulting from calling :func:`squidpy.im.segment`).
+        Features are calculated using ``label_layer``, a cell segmentation of ``intensity_layer``, resulting from
+        from calling e.g. :func:`squidpy.im.segment`.
 
         Depending on the specified parameters, mean and std of the requested props are returned.
-        For the `'label'` feature, the number of labels is returned, i.e. the number of cells in this img.
+        For the `'label'` feature, the number of labels is returned, i.e. the number of cells in this image.
 
         Parameters
         ----------
-        label_img_id
-            TODO.
-        intensity_img_id
-            TODO.
+        label_layer
+            Name of the image layer used to calculate the non-intensity properties.
+        intensity_layer
+            Name of the image layer used to calculate the intensity properties.
         %(feature_name)s
         %(channels)s
-            Only relevant for features that use the intensity image ``img_id``.
+            Only relevant for features that use the ``intensity_layer``.
         props
             Segmentation features that are calculated. See `properties` in :func:`skimage.measure.regionprops_table`.
             Valid options are:
@@ -285,9 +285,9 @@ class FeatureMixin:
                 - `'filled_area'`
                 - `'label'`
                 - `'major_axis_length'`
-                - `'max_intensity'` - uses intensity image ``img_id``.
-                - `'mean_intensity'` - uses intensity image ``img_id``.
-                - `'min_intensity'` - uses intensity image ``img_id``.
+                - `'max_intensity'` - uses ``intensity_layer``.
+                - `'mean_intensity'` - uses ``intensity_layer``.
+                - `'min_intensity'` - uses ``intensity_layer``.
                 - `'minor_axis_length'`
                 - `'orientation'`
                 - `'perimeter'`
@@ -298,13 +298,13 @@ class FeatureMixin:
         -------
         Returns features with the following keys:
 
-            - `'{feature_name}_label'` - if `'label`` is in ``props``.
-            - `'{feature_name}_centroid'` - if `'centroid`` is in ``props``.
-            - `'{feature_name}_{p}_mean'` - mean for each non-intensity property `p` in ``props``.
-            - `'{feature_name}_{p}_std'` - standard deviation for each non-intensity property `p` in ``props``.
-            - `'{feature_name}_ch-{c}_{p}_mean'` - mean for each intensity property `p` in ``props`` and channel `c` in
-              ``channels``.
-            - `'{feature_name}_ch-{c}_{p}_std'` - standard deviation for each intensity property `p` in ``props`` and
+            - ``'{feature_name}_label'`` - if `'label`` is in ``props``.
+            - ``'{feature_name}_centroid'`` - if `'centroid`` is in ``props``.
+            - ``'{feature_name}_{p}_mean'`` - mean for each non-intensity property `p` in ``props``.
+            - ``'{feature_name}_{p}_std'`` - standard deviation for each non-intensity property `p` in ``props``.
+            - ``'{feature_name}_ch-{c}_{p}_mean'`` - mean for each intensity property `p` in ``props`` and
+              channel `c` in ``channels``.
+            - ``'{feature_name}_ch-{c}_{p}_std'`` - standard deviation for each intensity property `p` in ``props`` and
               channel `c` in ``channels``.
         """
 
@@ -339,7 +339,7 @@ class FeatureMixin:
 
             return np.c_[x, y]
 
-        label_img_id = self._singleton_id(label_img_id)
+        label_layer = self._get_layer(label_layer)
 
         props = _assert_non_empty_sequence(props, name="properties")
         for prop in props:
@@ -349,9 +349,9 @@ class FeatureMixin:
         intensity_props = [p for p in props if "intensity" in p]
 
         if len(intensity_props):
-            if intensity_img_id is None:
-                raise ValueError("Please specify `intensity_img_id` if using intensity properties.")
-            channels = _get_channels(self[intensity_img_id], channels)
+            if intensity_layer is None:
+                raise ValueError("Please specify `intensity_layer` if using intensity properties.")
+            channels = _get_channels(self[intensity_layer], channels)
             channels = _assert_non_empty_sequence(channels, name="channels")
         else:
             channels = ()
@@ -359,7 +359,7 @@ class FeatureMixin:
         features = {}
         # calculate features that do not depend on the intensity image
         tmp_features = skimage.measure.regionprops_table(
-            self[label_img_id].values[:, :, 0], properties=no_intensity_props
+            self[label_layer].values[:, :, 0], properties=no_intensity_props
         )
         for p in no_intensity_props:
             if p == "label":
@@ -375,10 +375,10 @@ class FeatureMixin:
         # calculate features that depend on the intensity image
         for c in channels:
             if TYPE_CHECKING:
-                assert isinstance(intensity_img_id, str)
+                assert isinstance(intensity_layer, str)
             tmp_features = skimage.measure.regionprops_table(
-                self[label_img_id].values[:, :, 0],
-                intensity_image=self[intensity_img_id].values[:, :, c],
+                self[label_layer].values[:, :, 0],
+                intensity_image=self[intensity_layer].values[:, :, c],
                 properties=props,
             )
             for p in intensity_props:
@@ -390,8 +390,8 @@ class FeatureMixin:
     @d.dedent
     def features_custom(
         self: HasGetItemProtocol,
-        img_id: Optional[str],
         func: Callable[[np.ndarray], Any],
+        layer: Optional[str],
         channels: Optional[Channel_t] = None,
         feature_name: Optional[str] = None,
         **kwargs: Any,
@@ -400,13 +400,13 @@ class FeatureMixin:
         Calculate features using a custom function.
 
         The feature extractor ``func`` can be any :func:`callable`, as long as it has the following signature:
-        :class:`numpy.ndarray` ``(height, width, channels)`` -> :class:`float`.
+        :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`float`/:class:`Sequence`.
 
         Parameters
         ----------
-        %(img_id)s
         func
             Feature extraction function.
+        %(img_layer)s
         %(channels)s
         %(feature_name)s
         kwargs
@@ -416,7 +416,7 @@ class FeatureMixin:
         -------
         Returns features with the following keys:
 
-            - `'{feature_name}_{i}'` - i-th feature value.
+            - ``'{feature_name}_{i}'`` - i-th feature value.
 
         Examples
         --------
@@ -426,12 +426,12 @@ class FeatureMixin:
             img = squidpy.im.ImageContainer(...)
             img.features_custom(imd_id=..., func=numpy.mean, channels=0)
         """
-        img_id = self._singleton_id(img_id)
-        channels = _get_channels(self[img_id], channels)
+        layer = self._get_layer(layer)
+        channels = _get_channels(self[layer], channels)
         feature_name = getattr(func, "__name__", "custom") if feature_name is None else feature_name
 
         # calculate features by calling feature_fn
-        res = func(self[img_id].values[:, :, channels], **kwargs)  # type: ignore[call-arg]
+        res = func(self[layer].values[:, :, channels], **kwargs)  # type: ignore[call-arg]
         if not isinstance(res, Iterable):
             res = [res]
         features = {f"{feature_name}_{i}": f for i, f in enumerate(res)}

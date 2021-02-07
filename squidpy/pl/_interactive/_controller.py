@@ -51,32 +51,32 @@ class ImageController:
 
         self.view._init_UI()
 
-    def add_image(self, img_id: str) -> bool:
+    def add_image(self, layer: str) -> bool:
         """
         Add a new :mod:`napari` image layer.
 
         Parameters
         ----------
-        img_id
-            Key in the underlying's :class:`ImageContainer` which contains the image.
+        layer
+            Layer in the underlying's :class:`ImageContainer` which contains the image.
 
         Returns
         -------
         `True` if the layer has been added, otherwise `False`.
         """
-        if img_id in self.view.layernames:
-            self._handle_already_present(img_id)
+        if layer in self.view.layernames:
+            self._handle_already_present(layer)
             return False
 
-        img: np.ndarray = self.model.container.data[img_id].transpose("y", "x", ...).values
+        img: np.ndarray = self.model.container.data[layer].transpose("y", "x", ...).values
         if img.shape[-1] > 4:
             logg.warning(f"Unable to show image of shape `{img.shape}`")
             return False
 
-        logg.info(f"Creating image `{img_id}` layer")
+        logg.info(f"Creating image `{layer}` layer")
         self.view.viewer.add_image(
             img_as_float(img),
-            name=img_id,
+            name=layer,
             rgb=True,
             colormap=self.model.cmap,
             blending=self.model.blending,

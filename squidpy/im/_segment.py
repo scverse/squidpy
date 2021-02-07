@@ -59,8 +59,8 @@ class SegmentationModel(ABC):
 
         Parameters
         ----------
-        %(img_hr)s
-        %(img_id)s
+        %(img_container)s
+        %(img_layer)s
             Only used when ``img`` is :class:`squidpy.im.ImageContainer`.
         kwargs
             Keyword arguments for the underlying ``model``.
@@ -72,7 +72,7 @@ class SegmentationModel(ABC):
         Raises
         ------
         ValueError
-            If the number of dimensions is not 2 or 3, or if the last dimension has more than 1 value.
+            If the number of dimensions is neither 2 nor 3 or if there are more than 1 channels.
         NotImplementedError
             If trying to segment a type for which the segmentation has not been registered.
         """
@@ -97,9 +97,9 @@ class SegmentationModel(ABC):
         return arr
 
     @segment.register(ImageContainer)  # type: ignore[no-redef]
-    def _(self, img: ImageContainer, img_id: str, channel: int = 0, **kwargs: Any) -> ImageContainer:
+    def _(self, img: ImageContainer, layer: str, channel: int = 0, **kwargs: Any) -> ImageContainer:
         # simple inversion of control, we rename the channel dim later
-        return img.apply(self.segment, img_id=img_id, channel=channel, **kwargs)
+        return img.apply(self.segment, layer=layer, channel=channel, **kwargs)
 
     @abstractmethod
     def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
@@ -153,9 +153,9 @@ class SegmentationCustom(SegmentationModel):
     Parameters
     ----------
     func
-        Segmentation function with the following signature:
-        :class`numpy.ndarray` ``(height, width, channels)`` -> :class:`numpy.ndarray` ``(height, width [,channels])``.
-    """
+        Segmentation function to use. Can be any :func:`callable`, as long as it has the following signature:
+        :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`numpy.ndarray` ``(height, width[, channels])``.
+    """  # noqa: E501
 
     def __init__(self, func: Callable[..., np.ndarray]):
         if not callable(func):
@@ -223,11 +223,11 @@ class SegmentationBlob(SegmentationCustom):
 @inject_docs(m=SegmentationBackend)
 def segment(
     img: ImageContainer,
-    img_id: Optional[str] = None,
+    layer: Optional[str] = None,
     method: Union[str, Callable[..., np.ndarray]] = "watershed",
     channel: int = 0,
     size: Optional[Union[int, Tuple[int, int]]] = None,
-    key_added: Optional[str] = None,
+    layer_added: Optional[str] = None,
     copy: bool = False,
     show_progress_bar: bool = True,
     n_jobs: Optional[int] = None,
@@ -235,12 +235,14 @@ def segment(
     **kwargs: Any,
 ) -> Optional[ImageContainer]:
     """
-    Segment an image into equally sized crops.
+    Segment an image.
+
+    If ``size`` is defined, iterate over crops of that size and segment those. Recommended for large images.
 
     Parameters
     ----------
     %(img_container)s
-    %(img_id)s
+    %(img_layer)s
     %(seg_blob.parameters)s
             - `{m.WATERSHED.s!r}` - :func:`skimage.segmentation.watershed`.
 
@@ -248,8 +250,8 @@ def segment(
     channel
         Channel index to use for segmentation.
     %(size)s
-    key_added
-        Key of new image sized array to add into img object. If `None`, use ``'segmented_{{model}}'``.
+    %(layer_added)s
+        If `None`, use ``'segmented_{{model}}'``.
     thresh
         Threshold for creation of masked image. The areas to segment should be contained in this mask.
         If `None`, it is determined by `Otsu's method <https://en.wikipedia.org/wiki/Otsu%27s_method>`_.
@@ -267,17 +269,17 @@ def segment(
 
     Returns
     -------
-    If ``copy = True``, returns the segmented image with a new key `'{{key_added}}'`.
+    If ``copy = True``, returns a new container with the segmented image in ``'{{layer_added}}'``.
 
-    Otherwise, it modifies the ``img`` with the following key:
+    Otherwise, modifies the ``img`` with the following key:
 
-        - :class:`squidpy.im.ImageContainer` ``['{{key_added}}']`` - the segmented image.
+        - :class:`squidpy.im.ImageContainer` ``['{{layer_added}}']`` - the segmented image.
     """
-    img_id = img._singleton_id(img_id)
-    channel_dim = img[img_id].dims[-1]
+    layer = img._get_layer(layer)
+    channel_dim = img[layer].dims[-1]
 
     kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
-    img_id_new = Key.img.segment(kind, key_added=key_added)
+    layer_new = Key.img.segment(kind, layer_added=layer_added)
 
     if kind in (SegmentationBackend.LOG, SegmentationBackend.DOG, SegmentationBackend.DOH):
         segmentation_model: SegmentationModel = SegmentationBlob(model=kind)
@@ -302,7 +304,7 @@ def segment(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar and len(crops) > 1,
-    )(model=segmentation_model, img_id=img_id, img_id_new=img_id_new, channel=channel, **kwargs)
+    )(model=segmentation_model, layer=layer, layer_new=layer_new, channel=channel, **kwargs)
 
     if isinstance(segmentation_model, SegmentationWatershed):
         # By convention, segments are numbered from 1..number of segments within each crop.
@@ -310,9 +312,9 @@ def segment(
         # TODO use overlapping crops to not create confusion at boundaries
         counter = 0
         for crop in crops:
-            data = crop[img_id_new].data
+            data = crop[layer_new].data
             data[data > 0] += counter
-            counter += np.max(crop[img_id_new].data)
+            counter += np.max(crop[layer_new].data)
 
     res: ImageContainer = ImageContainer.uncrop(crops, shape=img.shape)
     res._data = res.data.rename({channel_dim: f"{channel_dim}:{channel}"})
@@ -322,22 +324,22 @@ def segment(
     if copy:
         return res
 
-    img.add_img(res, img_id=img_id_new, copy=False, channel_dim=res[img_id_new].dims[-1])
+    img.add_img(res, layer=layer_new, copy=False, channel_dim=res[layer_new].dims[-1])
 
 
 def _segment(
     crops: Sequence[ImageContainer],
     model: SegmentationModel,
-    img_id: str,
-    img_id_new: str,
+    layer: str,
+    layer_new: str,
     channel: int,
     queue: Optional[SigQueue] = None,
     **kwargs: Any,
 ) -> List[ImageContainer]:
     segmented_crops = []
     for crop in crops:
-        crop = model.segment(crop, img_id=img_id, channel=channel, **kwargs)
-        crop._data = crop.data.rename({img_id: img_id_new})
+        crop = model.segment(crop, layer=layer, channel=channel, **kwargs)
+        crop._data = crop.data.rename({layer: layer_new})
         segmented_crops.append(crop)
 
         if queue is not None:

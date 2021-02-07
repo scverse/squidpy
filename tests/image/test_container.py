@@ -103,10 +103,10 @@ class TestContainerIO:
     )
     def test_add_img(self, shape1: Tuple[int, ...], shape2: Tuple[int, ...]):
         img_orig = np.random.randint(low=0, high=255, size=shape1, dtype=np.uint8)
-        cont = ImageContainer(img_orig, img_id="img_orig")
+        cont = ImageContainer(img_orig, layer="img_orig")
 
         img_new = np.random.randint(low=0, high=255, size=shape2, dtype=np.uint8)
-        cont.add_img(img_new, img_id="img_new", channel_dim="mask")
+        cont.add_img(img_new, layer="img_new", channel_dim="mask")
 
         assert "img_orig" in cont
         assert "img_new" in cont
@@ -167,7 +167,7 @@ class TestContainerIO:
 
     def test_xarray_remapping_spatial_dims(self):
         cont = ImageContainer(np.empty((100, 10)))
-        cont.add_img(xr.DataArray(np.empty((100, 10)), dims=["foo", "bar"]), img_id="baz")
+        cont.add_img(xr.DataArray(np.empty((100, 10)), dims=["foo", "bar"]), layer="baz")
 
         assert "baz" in cont
         assert len(cont) == 2
@@ -188,7 +188,7 @@ class TestContainerIO:
             with pytest.raises(ValueError, match=r".*be aligned because they have different dimension sizes"):
                 small_cont_1c.add_img(arr, channel_dim=channel_dim)
         else:
-            small_cont_1c.add_img(arr, channel_dim=channel_dim, img_id="bar")
+            small_cont_1c.add_img(arr, channel_dim=channel_dim, layer="bar")
             assert len(small_cont_1c) == 2
             assert "bar" in small_cont_1c
             assert small_cont_1c["bar"].dims == ("y", "x", channel_dim)
@@ -346,7 +346,7 @@ class TestContainerCropping:
     def test_spot_crops_as_array_return_obs(
         self, adata: AnnData, cont: ImageContainer, as_array: bool, return_obs: bool
     ):
-        cont.add_img(np.random.normal(size=(cont.shape + (4,))), channel_dim="foobar", img_id="baz")
+        cont.add_img(np.random.normal(size=(cont.shape + (4,))), channel_dim="foobar", layer="baz")
         diameter = adata.uns["spatial"][Key.uns.library_id(adata, "spatial")]["scalefactors"]["spot_diameter_fullres"]
         radius = int(round(diameter // 2))
         size = (2 * radius + 1, 2 * radius + 1)
@@ -412,7 +412,7 @@ class TestContainerCropping:
             np.testing.assert_array_equal(crop["image"].values[..., 0][~mask.values], np.nan)
 
     def test_uncrop_preserves_shape(self, small_cont_1c: ImageContainer):
-        small_cont_1c.add_img(np.random.normal(size=(small_cont_1c.shape + (4,))), channel_dim="foobar", img_id="baz")
+        small_cont_1c.add_img(np.random.normal(size=(small_cont_1c.shape + (4,))), channel_dim="foobar", layer="baz")
         crops = list(small_cont_1c.generate_equal_crops(size=13))
 
         uncrop = ImageContainer.uncrop(crops)
@@ -588,7 +588,7 @@ class TestCroppingExtra:
 
     def test_crop_multiple_images(self, cont_dot: ImageContainer):
         mask = np.random.randint(low=0, high=10, size=cont_dot.shape)
-        cont_dot.add_img(mask, img_id="image_1", channel_dim="mask")
+        cont_dot.add_img(mask, layer="image_1", channel_dim="mask")
 
         crop = cont_dot.crop_center(
             y=50,
@@ -605,7 +605,7 @@ class TestCroppingExtra:
     def test_crop_scale(self, cont_dot: ImageContainer):
         # crop with scaling
         mask = np.random.randint(low=0, high=10, size=cont_dot.shape)
-        cont_dot.add_img(mask, img_id="image_1", channel_dim="mask")
+        cont_dot.add_img(mask, layer="image_1", channel_dim="mask")
 
         crop = cont_dot.crop_center(y=50, x=20, radius=10, cval=5, scale=0.5)
 

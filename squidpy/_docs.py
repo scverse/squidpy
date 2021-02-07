@@ -41,12 +41,9 @@ seed
 _n_perms = """\
 n_perms
     Number of permutations for the permutation test."""
-_img_hr = """\
-img
-    High-resolution image."""
-_img_id = """\
-img_id
-    Image layer in ``img`` that should be processed."""
+_img_layer = """\
+layer
+    Image layer in ``img`` that should be processed. If `None` and only 1 layer is present, it will be selected."""
 _feature_name = """\
 feature_name
     Base name of feature in resulting feature values :class:`dict`."""
@@ -55,14 +52,14 @@ _feature_ret = """\
 _yx = """\
 y
     Coordinate of the crop along the ``height`` dimension in the pixel space.
-    If of type :class:`float`, it specifies the relative position and must be in `[0, 1]`.
+    If a :class:`float`, it specifies the relative position and must be in `[0, 1]`.
 x
     Coordinate of the crop along the ``width`` dimension in the pixel space.
-    If of type :class:`float`, it specifies the relative position and must be in `[0, 1]`."""
+    If a :class:`float`, it specifies the relative position and must be in `[0, 1]`."""
 _size = """\
 size
     Size of the crop as ``(height, width)``. If a single :class:`int`, the crop will be a square.
-    If of type :class:`float`, it specifies the relative size and must be in `[0, 1]`."""
+    If a :class:`float`, it specifies the relative size and must be in `[0, 1]`."""
 _cluster_key = """\
 cluster_key
     Key in :attr:`anndata.AnnData.obs` where clustering is stored."""
@@ -135,9 +132,13 @@ Alternatively, any :func:`callable` can be passed as long as it has the followin
     :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`numpy.ndarray` ``(height, width[, channels])``."""  # noqa: E501
 _as_array = """
 as_array
-    If `True`, yield a :class:`dict` where keys are layers and values are :class:`numpy.ndarray`.
-    If a :class:`str`, yield a :class:`numpy.ndarray` whose layer name is ``as_array``.
-    Otherwise, yield :class:`squidpy.im.ImageContainer.`"""
+    - if `True`, yield a :class:`dict` where keys are layers and values are :class:`numpy.ndarray`.
+    - if a :class:`str`, yield only a :class:`numpy.ndarray` which belongs to layer ``as_array``.
+    - otherwise, yield :class:`squidpy.im.ImageContainer`.
+"""
+_layer_added = """
+layer_added
+    Layer of new image layer to add into ``img`` object."""
 
 
 d = DocstringProcessor(
@@ -148,8 +149,7 @@ d = DocstringProcessor(
     numba_parallel=_numba_parallel,
     seed=_seed,
     n_perms=_n_perms,
-    img_hr=_img_hr,
-    img_id=_img_id,
+    img_layer=_img_layer,
     feature_name=_feature_name,
     yx=_yx,
     feature_ret=_feature_ret,
@@ -168,4 +168,5 @@ d = DocstringProcessor(
     heatmap_plotting=_heatmap_plotting,
     custom_fn=_custom_fn,
     as_array=_as_array,
+    layer_added=_layer_added,
 )

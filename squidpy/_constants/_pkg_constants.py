@@ -19,15 +19,15 @@ class cprop:  # noqa: D101
 class Key:  # noqa: D101
     class img:  # noqa: D106
         @classmethod
-        def segment(cls, backend: Union[str, SegmentationBackend], key_added: Optional[str] = None) -> str:
-            return f"segmented_{SegmentationBackend(backend).s}" if key_added is None else key_added
+        def segment(cls, backend: Union[str, SegmentationBackend], layer_added: Optional[str] = None) -> str:
+            return f"segmented_{SegmentationBackend(backend).s}" if layer_added is None else layer_added
 
         @classmethod
         def process(
-            cls, method: Union[str, Processing, Callable[[Any], Any]], img_id: str, key_added: Optional[str] = None
+            cls, method: Union[str, Processing, Callable[[Any], Any]], img_id: str, layer_added: Optional[str] = None
         ) -> str:
-            if key_added is not None:
-                return key_added
+            if layer_added is not None:
+                return layer_added
             if isinstance(method, Processing):
                 method = method.s
             elif callable(method):

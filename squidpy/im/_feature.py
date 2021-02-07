@@ -20,7 +20,7 @@ __all__ = ["calculate_image_features"]
 def calculate_image_features(
     adata: AnnData,
     img: ImageContainer,
-    img_id: Optional[str] = None,
+    layer: Optional[str] = None,
     features: Union[str, Sequence[str]] = ImageFeature.SUMMARY.s,
     features_kwargs: Mapping[str, Mapping[str, Any]] = MappingProxyType({}),
     key_added: str = "img_features",
@@ -37,7 +37,7 @@ def calculate_image_features(
     ----------
     %(adata)s
     %(img_container)s
-    %(img_id)s
+    %(img_layer)s
     features
         Features to be calculated. Valid options are:
 
@@ -64,7 +64,7 @@ def calculate_image_features(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`panda.DataFrame` where each column corresponds to the calculated features.
+    If ``copy = True``, returns a :class:`panda.DataFrame` where columns correspond to the calculated features.
 
     Otherwise, modifies the ``adata`` object with the following key:
 
@@ -75,7 +75,7 @@ def calculate_image_features(
     ValueError
         If a feature is not known.
     """
-    img_id = img._singleton_id(img_id)
+    layer = img._get_layer(layer)
     if isinstance(features, (str, ImageFeature)):
         features = [features]
     features = sorted({ImageFeature(f).s for f in features})
@@ -90,7 +90,7 @@ def calculate_image_features(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(adata, img, img_id=img_id, features=features, features_kwargs=features_kwargs, **kwargs)
+    )(adata, img, layer=layer, features=features, features_kwargs=features_kwargs, **kwargs)
 
     if copy:
         logg.info("Finish", time=start)
@@ -103,7 +103,7 @@ def _calculate_image_features_helper(
     obs_ids: Sequence[str],
     adata: AnnData,
     img: ImageContainer,
-    img_id: str,
+    layer: str,
     features: List[ImageFeature],
     features_kwargs: Mapping[str, Any],
     queue: Optional[SigQueue] = None,
@@ -119,15 +119,15 @@ def _calculate_image_features_helper(
             feature_kwargs = features_kwargs.get(feature.s, {})
 
             if feature == ImageFeature.TEXTURE:
-                res = crop.features_texture(img_id=img_id, **feature_kwargs)
+                res = crop.features_texture(layer=layer, **feature_kwargs)
             elif feature == ImageFeature.COLOR_HIST:
-                res = crop.features_histogram(img_id=img_id, **feature_kwargs)
+                res = crop.features_histogram(layer=layer, **feature_kwargs)
             elif feature == ImageFeature.SUMMARY:
-                res = crop.features_summary(img_id=img_id, **feature_kwargs)
+                res = crop.features_summary(layer=layer, **feature_kwargs)
             elif feature == ImageFeature.SEGMENTATION:
-                res = crop.features_segmentation(intensity_img_id=img_id, **feature_kwargs)
+                res = crop.features_segmentation(intensity_layer=layer, **feature_kwargs)
             elif feature == ImageFeature.CUSTOM:
-                res = crop.features_custom(img_id=img_id, **feature_kwargs)
+                res = crop.features_custom(layer=layer, **feature_kwargs)
             else:
                 # should never get here
                 raise NotImplementedError(f"Feature `{feature}` is not yet implemented.")

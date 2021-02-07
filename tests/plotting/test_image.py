@@ -18,7 +18,7 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
             cont.show(channel=None, as_mask=True)
 
     def test_plot_axis(self, cont: ImageContainer):
-        cont.add_img(np.random.RandomState(42).normal(size=(*cont.shape, 3)), img_id="foo")
+        cont.add_img(np.random.RandomState(42).normal(size=(*cont.shape, 3)), layer="foo")
         fig, (ax1, ax2) = plt.subplots(ncols=2, dpi=DPI, tight_layout=True)
 
         cont.show("image", ax=ax1)
@@ -28,7 +28,7 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
         cont.show(channel=1)
 
     def test_plot_as_mask(self, cont: ImageContainer):
-        cont.add_img(np.random.RandomState(42).normal(size=(*cont.shape, 3)), img_id="foo")
+        cont.add_img(np.random.RandomState(42).normal(size=(*cont.shape, 3)), layer="foo")
         cont.show("foo", as_mask=True, channel=1)
 
     def test_plot_imshow_kwargs(self, cont: ImageContainer):

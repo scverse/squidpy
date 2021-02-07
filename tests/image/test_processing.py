@@ -8,9 +8,9 @@ from squidpy._constants._pkg_constants import Key
 
 
 class TestProcess:
-    def test_invalid_img_id(self, small_cont: ImageContainer):
-        with pytest.raises(KeyError, match=r"Image `foobar` not found in"):
-            process(small_cont, img_id="foobar")
+    def test_invalid_layer(self, small_cont: ImageContainer):
+        with pytest.raises(KeyError, match=r"Image layer `foobar` not found in"):
+            process(small_cont, layer="foobar")
 
     @pytest.mark.parametrize("dy", [25, 0.3, None])
     @pytest.mark.parametrize("dx", [30, 0.5, None])
@@ -52,10 +52,10 @@ class TestProcess:
 
     @pytest.mark.parametrize("key_added", [None, "foo"])
     def test_key_added(self, small_cont: ImageContainer, key_added: Optional[str]):
-        res = process(small_cont, method="smooth", copy=False, key_added=key_added, img_id="image")
+        res = process(small_cont, method="smooth", copy=False, layer_added=key_added, layer="image")
 
         assert res is None
-        assert Key.img.process("smooth", "image", key_added=key_added)
+        assert Key.img.process("smooth", "image", layer_added=key_added)
 
     def test_passing_kwargs(self, small_cont: ImageContainer):
         def dummy(arr: np.ndarray, sentinel: bool = False) -> np.ndarray:

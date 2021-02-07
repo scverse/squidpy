@@ -48,10 +48,10 @@ class TestGeneral:
             sc.segment(img)
 
     def test_segment_container(self):
-        img = ImageContainer(np.zeros(shape=(10, 10, 1)), img_id="image")
+        img = ImageContainer(np.zeros(shape=(10, 10, 1)), layer="image")
         sc = SegmentationCustom(dummy_segment)
 
-        res = sc.segment(img, img_id="image")
+        res = sc.segment(img, layer="image")
 
         assert isinstance(res, ImageContainer)
         assert res.shape == img.shape
@@ -65,12 +65,12 @@ class TestWatershed:
         img = np.zeros((100, 200), dtype=np.float64)
         img[2:10, 2:10] = 1.0
         img[30:34, 10:16] = 1.0
-        img = ImageContainer(img, img_id="image")
+        img = ImageContainer(img, layer="image")
 
         sw = SegmentationWatershed()
         spy = mocker.spy(sw, "_segment")
 
-        res = sw.segment(img, img_id="image", thresh=thresh)
+        res = sw.segment(img, layer="image", thresh=thresh)
 
         assert isinstance(res, ImageContainer)
         spy.assert_called_once()
@@ -112,9 +112,9 @@ class TestBlob:
 
 
 class TestHighLevel:
-    def test_invalid_img_id(self, small_cont: ImageContainer):
-        with pytest.raises(KeyError, match=r"Image `foobar` not found in"):
-            segment(small_cont, img_id="foobar")
+    def test_invalid_layer(self, small_cont: ImageContainer):
+        with pytest.raises(KeyError, match=r"Image layer `foobar` not found in"):
+            segment(small_cont, layer="foobar")
 
     @pytest.mark.parametrize("method", ["watershed", "log", "dog", "doh", dummy_segment])
     def test_method(self, small_cont: ImageContainer, method: Union[str, Callable]):
@@ -141,7 +141,7 @@ class TestHighLevel:
 
     @pytest.mark.parametrize("channel", [0, 1, 2])
     def test_channel(self, small_cont: ImageContainer, channel: int):
-        segment(small_cont, copy=False, img_id="image", channel=channel)
+        segment(small_cont, copy=False, layer="image", channel=channel)
 
         assert Key.img.segment("watershed") in small_cont
         np.testing.assert_array_equal(
@@ -150,25 +150,25 @@ class TestHighLevel:
 
     @pytest.mark.parametrize("key_added", [None, "foo"])
     def test_key_added(self, small_cont: ImageContainer, key_added: Optional[str]):
-        res = segment(small_cont, copy=False, img_id="image", key_added=key_added)
+        res = segment(small_cont, copy=False, layer="image", layer_added=key_added)
 
         assert res is None
-        assert Key.img.segment("watershed", key_added=key_added) in small_cont
+        assert Key.img.segment("watershed", layer_added=key_added) in small_cont
 
     def test_passing_kwargs(self):
         pass
 
     def test_copy(self, small_cont: ImageContainer):
         prev_keys = set(small_cont)
-        res = segment(small_cont, copy=True, img_id="image")
+        res = segment(small_cont, copy=True, layer="image")
 
         assert isinstance(res, ImageContainer)
         assert set(small_cont) == prev_keys
         assert Key.img.segment("watershed") in res
 
     def test_parallelize(self, small_cont: ImageContainer):
-        res1 = segment(small_cont, img_id="image", n_jobs=1, copy=True)
-        res2 = segment(small_cont, img_id="image", n_jobs=2, copy=True)
+        res1 = segment(small_cont, layer="image", n_jobs=1, copy=True)
+        res2 = segment(small_cont, layer="image", n_jobs=2, copy=True)
 
         np.testing.assert_array_equal(
             res1[Key.img.segment("watershed")].values, res2[Key.img.segment("watershed")].values
@@ -180,12 +180,12 @@ class TestHighLevel:
         img_orig[2:10, 2:10] = 1.0
         img_orig[30:34, 10:16] = 1.0
 
-        cont = ImageContainer(img_orig, img_id="image_0")
+        cont = ImageContainer(img_orig, layer="image_0")
         segment(
             img=cont,
             method="watershed",
-            img_id="image_0",
-            key_added="segment",
+            layer="image_0",
+            layer_added="segment",
             size=size,
             channel=0,
             thresh=0.5,
