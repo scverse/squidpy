@@ -147,6 +147,7 @@ docs/source/api/*rst
 docs/source/spelling_wordlist.txt
 docs/source/auto_*
 docs/source/gen_modules
+docs/source/external_tutorials
 
 # Vim .swp
 *.swp

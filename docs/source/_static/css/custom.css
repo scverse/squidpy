@@ -94,3 +94,15 @@ code.docutils.literal.notranslate > span[class="pre"] {
 .rst-content table.docutils:not(.field-list) tr:nth-child(2n-1) td {
     background-color: #f6f6f3;
 }
+
+.rst-content div[class^="highlight"] pre {
+    padding: 8px;
+}
+
+.rst-content .seealso {
+    background: #fafae2!important;
+}
+
+.rst-content .seealso .admonition-title {
+    background: #7013e1d9!important;
+}
