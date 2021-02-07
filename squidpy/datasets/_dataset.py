@@ -5,8 +5,8 @@ from squidpy.datasets._utils import AMetadata
 _4i = AMetadata(
     name="four_i",
     doc_header="Pre-processed subset 4i dataset from `Gut et al <https://doi.org/10.1126/science.aar7042>`_.",
-    shape=(270938, 43),
-    url="https://ndownloader.figshare.com/files/26098409?private_link=1d883cf23fda2e9d932c",
+    shape=(270876, 43),
+    url="https://ndownloader.figshare.com/files/26253835?private_link=1d883cf23fda2e9d932c",
 )
 _imc = AMetadata(
     name="imc",
@@ -52,6 +52,12 @@ _vfac = AMetadata(
     shape=(704, 16562),
     url="https://ndownloader.figshare.com/files/26098376?private_link=96018cd91855fa6b32dc",
 )
+_smc = AMetadata(
+    name="sc_mouse_cortex",
+    doc_header="Pre-processed `scRNA-seq mouse cortex " "<https://doi.org/10.1038/s41586-018-0654-5>`_.",
+    shape=(21697, 36826),
+    url="https://ndownloader.figshare.com/files/26252815?private_link=48187a0cb0c4186a6508",
+)
 
 for name, var in copy(locals()).items():
     if isinstance(var, AMetadata):
@@ -66,4 +72,5 @@ __all__ = [  # noqa: F822
     "visium_hne_adata_crop",
     "visium_fluo_adata",
     "visium_fluo_adata_crop",
+    "sc_mouse_cortex",
 ]

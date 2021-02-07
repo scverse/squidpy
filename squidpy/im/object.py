@@ -574,7 +574,7 @@ class ImageContainer(FeatureMixin):
         Interactive view of this container. Screenshot of the canvas can be taken by
         :meth:`squidpy.pl.Interactive.screenshot`.
         """
-        from squidpy.pl import Interactive
+        from squidpy.pl import Interactive  # type: ignore[attr-defined]
 
         return Interactive(  # type: ignore[no-any-return]
             img=self,

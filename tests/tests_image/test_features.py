@@ -56,3 +56,20 @@ def test_get_segmentation_features():
 
     # counted correct number of segments?
     assert stats["segmentation_label"] == 2
+
+
+def test_get_custom_features():
+    img = ImageContainer(np.random.randint(low=0, high=255, size=(100, 100, 3), dtype=np.uint8), img_id="image")
+
+    def feature_fn(x):
+        return np.mean(x)
+
+    # calculate custom features
+    custom_features = img.get_custom_features(
+        img_id="image", feature_name="custom", feature_fn=feature_fn, channels=[0]
+    )
+    summary_features = img.get_summary_features(img_id="image", feature_name="summary", mean=True, channels=[0])
+
+    assert isinstance(custom_features, dict)
+    assert custom_features.get("custom_0", None) is not None, "custom features were not calculated"
+    assert custom_features["custom_0"] == summary_features["summary_mean_ch_0"], "custom and summary are not the same"

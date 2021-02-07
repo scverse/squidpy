@@ -190,14 +190,14 @@ def centrality_scores(
     """
     Compute centrality scores per cluster or cell type.
 
-    Inspired by usage in  Gene Regulatory Networks (GRNs) in [CellOracle20]_.
+    Inspired by usage in  Gene Regulatory Networks (GRNs) in :cite:`celloracle`.
 
     Parameters
     ----------
     %(adata)s
     %(cluster_key)s
     score
-        Centrality measures as described in :class:`networkx.algorithms.centrality` [NetworkX08]_.
+        Centrality measures as described in :class:`networkx.algorithms.centrality` :cite:`networkx`.
         If `None`, use all the options below. Valid options are:
 
             - `{c.CLOSENESS.s!r}` - measure of how close the group is to other nodes.

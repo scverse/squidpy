@@ -3,7 +3,7 @@ Examples
 
 Graph
 -----
-In the main repo, add something nice here.
+In the main repository, add something nice here.
 
 .. nbgallery::
     :glob:
@@ -12,7 +12,7 @@ In the main repo, add something nice here.
 
 Image
 -----
-In the main repo, add something nice here.
+In the main repository, add something nice here.
 
 .. nbgallery::
     :glob:

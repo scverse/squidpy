@@ -91,6 +91,20 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
         self.compare("Graph_co_occurrence_palette", tolerance=70)
 
 
+class TestHeatmap(PlotTester, metaclass=PlotTesterMeta):
+    def test_plot_cbar_vmin_vmax(self, adata: AnnData):
+        gr.spatial_neighbors(adata)
+        gr.nhood_enrichment(adata, cluster_key=C_KEY)
+
+        pl.nhood_enrichment(adata, cluster_key=C_KEY, vmin=10, vmax=20)
+
+    def test_plot_cbar_kwargs(self, adata: AnnData):
+        gr.spatial_neighbors(adata)
+        gr.nhood_enrichment(adata, cluster_key=C_KEY)
+
+        pl.nhood_enrichment(adata, cluster_key=C_KEY, cbar_kwargs={"label": "FOOBARBAZQUUX", "filled": False})
+
+
 class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
     def test_invalid_type(self):
         with pytest.raises(TypeError, match=r"Expected `adata` .+ found `int`."):

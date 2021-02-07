@@ -50,6 +50,7 @@ extensions = [
     "sphinx_last_updated_by_git",
     "sphinx_gallery.load_style",
     "nbsphinx",
+    "sphinxcontrib.bibtex",
     "edit_on_github",
     "typed_returns",
 ]
@@ -90,7 +91,8 @@ exclude_patterns = [
     "auto_*/**.md5",
     "auto_*/**.py",
     "**.ipynb_checkpoints",
-]  # ignore anything that isn't .rst or .ipynb
+]
+# because squidpy_notebooks doesn't commit the .py files (and we don't allow downloading them by hiding the html)
 suppress_warnings = ["download.not_readable"]
 
 # -- Options for HTML output -------------------------------------------------
@@ -109,8 +111,21 @@ napoleon_use_rtype = True
 napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
-# 403 Client Error: Forbidden for url: https://www.jstor.org/stable/2332142?origin=crossref
-linkcheck_ignore = ["https://doi.org/10.2307/2332142"]
+
+# bibliograph
+bibtex_bibfiles = ["references.bib"]
+bibtex_reference_style = ["author_year"]
+bibtex_default_style = "alpha"
+
+# spelling
+spelling_lang = "en_US"
+spelling_warning = True
+spelling_word_list_filename = "spelling_wordlist.txt"
+spelling_add_pypi_package_names = True
+spelling_show_suggestions = True
+spelling_exclude_patterns = ["references.rst"]
+# see: https://pyenchant.github.io/pyenchant/api/enchant.tokenize.html
+spelling_filters = ["enchant.tokenize.URLFilter", "enchant.tokenize.EmailFilter"]
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

@@ -264,7 +264,7 @@ def ligrec(
     means = np.log2(means + 1)
 
     var = pd.DataFrame(pvals.columns)
-    var.set_index((var.columns[0]), inplace=True)
+    var = var.set_index(var.columns[0])
 
     adata = AnnData(pvals.values, obs={"groups": pd.Categorical(pvals.index)}, var=var)
     adata.obs_names = pvals.index
