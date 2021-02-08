@@ -39,6 +39,8 @@ from squidpy.gr._utils import (
 from squidpy._constants._constants import CorrAxis, ComplexPolicy
 from squidpy._constants._pkg_constants import Key
 
+__all__ = ["ligrec", "PermutationTest"]
+
 StrSeq = Sequence[str]
 SeqTuple = Sequence[Tuple[str, str]]
 Interaction_t = Union[pd.DataFrame, Mapping[str, StrSeq], StrSeq, Tuple[StrSeq, StrSeq], SeqTuple]

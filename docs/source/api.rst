@@ -32,9 +32,9 @@ Image
 .. autosummary::
     :toctree: api
 
+    im.process
+    im.segment
     im.calculate_image_features
-    im.process_img
-    im.segment_img
 
 Plotting
 ~~~~~~~~
@@ -48,7 +48,6 @@ Plotting
     pl.nhood_enrichment
     pl.centrality_scores
     pl.interaction_matrix
-    pl.plot_segmentation
     pl.ligrec
     pl.ripley_k
     pl.co_occurrence

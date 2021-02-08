@@ -17,8 +17,8 @@ from matplotlib import pyplot
 from matplotlib.testing.compare import compare_images
 import matplotlib as mpl
 
-from squidpy.im.object import ImageContainer
 from squidpy.gr._ligrec import LigrecResult
+from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
 import squidpy as sp
 
@@ -95,8 +95,40 @@ def cont() -> ImageContainer:
 
 
 @pytest.fixture()
+def small_cont() -> ImageContainer:
+    np.random.seed(42)
+    return ImageContainer(np.random.uniform(size=(100, 100, 3), low=0, high=1), layer="image")
+
+
+@pytest.fixture()
+def small_cont_seg() -> ImageContainer:
+    np.random.seed(42)
+    img = ImageContainer(np.random.randint(low=0, high=255, size=(100, 100, 3), dtype=np.uint8), layer="image")
+    mask = np.zeros((100, 100), dtype="uint8")
+    mask[20:30, 10:20] = 1
+    mask[50:60, 30:40] = 2
+    img.add_img(mask, layer="segmented", channel_dim="mask")
+
+    return img
+
+
+@pytest.fixture()
+def small_cont_1c() -> ImageContainer:
+    np.random.seed(42)
+    return ImageContainer(np.random.normal(size=(100, 100, 1)) + 1, layer="image")
+
+
+@pytest.fixture()
+def cont_dot() -> ImageContainer:
+    ys, xs = 100, 200
+    img_orig = np.zeros((ys, xs, 10), dtype=np.uint8)
+    img_orig[20, 50, :] = range(10, 20)  # put a dot at y 20, x 50
+    return ImageContainer(img_orig, layer="image_0")
+
+
+@pytest.fixture()
 def napari_cont() -> ImageContainer:
-    return ImageContainer("tests/_data/test_img.jpg", img_id="V1_Adult_Mouse_Brain")
+    return ImageContainer("tests/_data/test_img.jpg", layer="V1_Adult_Mouse_Brain")
 
 
 @pytest.fixture()

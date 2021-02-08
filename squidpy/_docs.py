@@ -33,7 +33,7 @@ copy
     If `True`, return the result, otherwise save it to the image container."""
 _numba_parallel = """\
 numba_parallel
-    Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
+    Whether to use :class:`numba.prange` or not. If `None`, it is determined automatically.
     For small datasets or small number of interactions, it's recommended to set this to `False`."""
 _seed = """\
 seed
@@ -41,27 +41,25 @@ seed
 _n_perms = """\
 n_perms
     Number of permutations for the permutation test."""
-_img_hr = """\
-img
-    High-resolution image."""
-_img_id = """\
-img_id
-    Key of image layer in ``img`` that should be processed."""
+_img_layer = """\
+layer
+    Image layer in ``img`` that should be processed. If `None` and only 1 layer is present, it will be selected."""
 _feature_name = """\
 feature_name
-    Base name of feature in resulting feature values dict."""
+    Base name of feature in resulting feature values :class:`dict`."""
 _feature_ret = """\
     Dictionary of feature values."""
-_xy_coord = """\
-x
-    X coord of crop (in pixel space).
+_yx = """\
 y
-    Y coord of crop (in pixel space)."""
-_width_height = """\
-xs
-    Width of the crops in pixels.
-ys
-    Height of the crops in pixels."""
+    Coordinate of the crop along the ``height`` dimension in the pixel space.
+    If a :class:`float`, it specifies the relative position and must be in `[0, 1]`.
+x
+    Coordinate of the crop along the ``width`` dimension in the pixel space.
+    If a :class:`float`, it specifies the relative position and must be in `[0, 1]`."""
+_size = """\
+size
+    Size of the crop as ``(height, width)``. If a single :class:`int`, the crop will be a square.
+    If a :class:`float`, it specifies the relative size and must be in `[0, 1]`."""
 _cluster_key = """\
 cluster_key
     Key in :attr:`anndata.AnnData.obs` where clustering is stored."""
@@ -71,16 +69,6 @@ spatial_key
 _conn_key = """\
 conn_key
     Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored."""
-_crop_extra = """\
-scale
-    Resolution of the crop (smaller -> smaller image).
-mask_circle
-    Mask crop to a circle.
-cval
-    The value outside image boundaries or the mask.
-dtype
-    Type to which the output should be (safely) cast. If `None`, don't recast.
-    Currently supported dtypes: 'uint8'. TODO: pass actualy types instead of strings."""
 _plotting = """\
 figsize
     Size of the figure in inches.
@@ -139,6 +127,19 @@ _corr_method = """\
 corr_method
     Correction method for multiple testing. See :func:`statsmodels.stats.multitest.multipletests`
     for valid options."""
+_custom_fn = """\
+Alternatively, any :func:`callable` can be passed as long as it has the following signature:
+    :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`numpy.ndarray` ``(height, width[, channels])``."""  # noqa: E501
+_as_array = """
+as_array
+    - if `True`, yields a :class:`dict` where keys are layers and values are :class:`numpy.ndarray`.
+    - if a :class:`str`, yields one :class:`numpy.ndarray` for the specified layer.
+    - if a :class:`typing.Sequence`, yields a :class:`tuple` of :class:`numpy.ndarray` for the specified layers.
+    - otherwise, yields :class:`squidpy.im.ImageContainer`.
+"""
+_layer_added = """
+layer_added
+    Layer of new image layer to add into ``img`` object."""
 
 
 d = DocstringProcessor(
@@ -149,16 +150,14 @@ d = DocstringProcessor(
     numba_parallel=_numba_parallel,
     seed=_seed,
     n_perms=_n_perms,
-    img_hr=_img_hr,
-    img_id=_img_id,
+    img_layer=_img_layer,
     feature_name=_feature_name,
-    xy_coord=_xy_coord,
+    yx=_yx,
     feature_ret=_feature_ret,
-    width_height=_width_height,
+    size=_size,
     cluster_key=_cluster_key,
     spatial_key=_spatial_key,
     conn_key=_conn_key,
-    crop_extra=_crop_extra,
     plotting=_plotting,
     cat_plotting=_cat_plotting,
     plotting_returns=_plotting_returns,
@@ -168,4 +167,7 @@ d = DocstringProcessor(
     ligrec_test_returns=_ligrec_test_returns,
     corr_method=_corr_method,
     heatmap_plotting=_heatmap_plotting,
+    custom_fn=_custom_fn,
+    as_array=_as_array,
+    layer_added=_layer_added,
 )
