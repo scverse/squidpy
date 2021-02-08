@@ -33,7 +33,7 @@ setup(
     install_requires=[l.strip() for l in Path("requirements.txt").read_text("utf-8").splitlines()],
     extras_require=dict(
         dev=["pre-commit>=2.9.0"],
-        test=["tox>=3.20.1"],
+        test=["tox>=3.20.1", "pytest-mock"],
         docs=[
             l.strip()
             for l in (Path("docs") / "requirements.txt").read_text("utf-8").splitlines()

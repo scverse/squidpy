@@ -133,15 +133,17 @@ def _assert_spatial_basis(adata: AnnData, key: str) -> None:
         raise KeyError(f"Spatial basis `{key}` not found in `adata.obsm`.")
 
 
-def _assert_non_empty_sequence(seq: Union[Hashable, Iterable[Hashable]], convert_scalar: bool = True) -> List[Hashable]:
+def _assert_non_empty_sequence(
+    seq: Union[Hashable, Iterable[Hashable]], *, name: str, convert_scalar: bool = True
+) -> List[Any]:
     if isinstance(seq, str) or not isinstance(seq, Iterable):
         if not convert_scalar:
-            raise TypeError("TODO")
+            raise TypeError(f"Expected a sequence, found `{type(seq)}`.")
         seq = (seq,)
 
     res, _ = _unique_order_preserving(seq)
     if not len(res):
-        raise ValueError("TODO")
+        raise ValueError(f"No {name} have been selected.")
 
     return res
 
@@ -153,9 +155,19 @@ def _get_valid_values(needle: Sequence[Any], haystack: Sequence[Any]) -> Sequenc
     return res
 
 
-def _assert_positive(value: int, *, name: str) -> None:
+def _assert_positive(value: float, *, name: str) -> None:
     if value <= 0:
         raise ValueError(f"Expected `{name}` to be positive, found `{value}`.")
+
+
+def _assert_non_negative(value: float, *, name: str) -> None:
+    if value < 0:
+        raise ValueError(f"Expected `{name}` to be non-negative, found `{value}`.")
+
+
+def _assert_in_range(value: float, minn: float, maxx: float, *, name: str) -> None:
+    if not (minn <= value <= maxx):
+        raise ValueError(f"Expected `{name}` to be in interval `[{minn}, {maxx}]`, found `{value}`.")
 
 
 def _save_data(
