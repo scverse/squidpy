@@ -24,6 +24,8 @@ from squidpy.gr._utils import (
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 
+__all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
+
 dt = nt.uint32  # data type aliases (both for numpy and numba should match)
 ndt = np.uint32
 _template = """

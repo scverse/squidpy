@@ -50,9 +50,11 @@ class Processing(ModeEnum):  # noqa: D101
 
 @unique
 class SegmentationBackend(ModeEnum):  # noqa: D101
-    BLOB = "blob"
+    LOG = "log"
+    DOG = "dog"
+    DOH = "doh"
     WATERSHED = "watershed"
-    TENSORFLOW = "tensorflow"
+    CUSTOM = "custom"  # callable function
 
 
 @unique

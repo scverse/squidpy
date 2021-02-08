@@ -13,8 +13,10 @@ from napari._qt.widgets.qt_range_slider import QHRangeSlider
 
 from squidpy.pl._utils import ALayer
 
+__all__ = ["TwoStateCheckBox", "AListWidget", "CBarWidget", "RangeSlider"]
 
-# TODO: should ingerit from ABC, but MC conflict (need to see how it's done for Qt)
+
+# TODO: should inherit from ABC, but MC conflict (need to see how it's done for Qt)
 class ListWidget(QtWidgets.QListWidget):
     indexChanged = QtCore.pyqtSignal(object)
     enterPressed = QtCore.pyqtSignal(object)

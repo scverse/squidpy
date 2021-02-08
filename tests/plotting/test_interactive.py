@@ -98,10 +98,10 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
 
         viewer = napari_cont.interactive(adata)
         cnt = viewer._controller
-        img = np.zeros((*napari_cont.shape, napari_cont.nchannels), dtype=np.float32)
+        img = np.zeros((*napari_cont.shape, 3), dtype=np.float32)
         img[..., 0] = 1.0  # all red image
 
-        napari_cont.add_img(img, img_id="foobar")
+        napari_cont.add_img(img, layer="foobar")
         cnt.add_image("foobar")
 
         assert viewer._controller.view.layernames == {"V1_Adult_Mouse_Brain", "foobar"}
@@ -110,21 +110,19 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         viewer.screenshot(dpi=DPI)
 
     def test_plot_crop_center(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
-        viewer = napari_cont.crop_corner(0, 0, 500, 500).interactive(adata)
+        viewer = napari_cont.crop_corner(0, 0, size=500).interactive(adata)
         bdata = viewer.adata
         cnt = viewer._controller
 
         cnt.add_points(bdata.obs_vector(bdata.var_names[42]), layer_name="foo")
 
-        assert bdata.n_obs < adata.n_obs
         viewer.screenshot(dpi=DPI)
 
     def test_plot_crop_corner(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
-        viewer = napari_cont.crop_center(500, 500, 250, 250).interactive(adata)
+        viewer = napari_cont.crop_center(500, 500, radius=250).interactive(adata)
         bdata = viewer.adata
         cnt = viewer._controller
 
         cnt.add_points(bdata.obs_vector(bdata.var_names[42]), layer_name="foo")
 
-        assert bdata.n_obs < adata.n_obs
         viewer.screenshot(dpi=DPI)

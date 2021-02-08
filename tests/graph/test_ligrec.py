@@ -50,11 +50,11 @@ class TestInvalidBehavior:
             ligrec(adata, "foo", interactions=interactions)
 
     def test_invalid_complex_policy(self, adata: AnnData, interactions: Interactions_t):
-        with pytest.raises(ValueError, match=r"Invalid option `'foobar'` for `ComplexPolicy`."):
+        with pytest.raises(ValueError, match=r"Invalid option `foobar` for `ComplexPolicy`."):
             ligrec(adata, _CK, interactions=interactions, complex_policy="foobar")
 
     def test_invalid_fdr_axis(self, adata: AnnData, interactions: Interactions_t):
-        with pytest.raises(ValueError, match=r"Invalid option `'foobar'` for `CorrAxis`."):
+        with pytest.raises(ValueError, match=r"Invalid option `foobar` for `CorrAxis`."):
             ligrec(adata, _CK, interactions=interactions, corr_axis="foobar", corr_method="fdr_bh")
 
     def test_too_few_permutations(self, adata: AnnData, interactions: Interactions_t):

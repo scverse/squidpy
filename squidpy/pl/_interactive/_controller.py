@@ -13,9 +13,11 @@ from PyQt5.QtWidgets import QLabel, QGridLayout
 from napari import Viewer
 from napari.layers import Points, Shapes
 
+from skimage import img_as_float
+
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
-from squidpy._utils import singledispatchmethod  # type: ignore[attr-defined]
+from squidpy._utils import singledispatchmethod
 from squidpy.pl._utils import _points_inside_triangles
 from squidpy.pl._interactive._view import ImageView
 from squidpy.pl._interactive._model import ImageModel
@@ -49,27 +51,32 @@ class ImageController:
 
         self.view._init_UI()
 
-    def add_image(self, library_id: str) -> bool:
+    def add_image(self, layer: str) -> bool:
         """
         Add a new :mod:`napari` image layer.
 
         Parameters
         ----------
-        library_id
-            Key in the underlying's :class:`ImageContainer` which contains the image.
+        layer
+            Layer in the underlying's :class:`ImageContainer` which contains the image.
 
         Returns
         -------
         `True` if the layer has been added, otherwise `False`.
         """
-        if library_id in self.view.layernames:
-            self._handle_already_present(library_id)
+        if layer in self.view.layernames:
+            self._handle_already_present(layer)
             return False
 
-        logg.info(f"Creating image `{library_id}` layer")
+        img: np.ndarray = self.model.container.data[layer].transpose("y", "x", ...).values
+        if img.shape[-1] > 4:
+            logg.warning(f"Unable to show image of shape `{img.shape}`")
+            return False
+
+        logg.info(f"Creating image `{layer}` layer")
         self.view.viewer.add_image(
-            self.model.container.data[library_id].transpose("y", "x", ...).values,
-            name=library_id,
+            img_as_float(img),
+            name=layer,
             rgb=True,
             colormap=self.model.cmap,
             blending=self.model.blending,
@@ -182,7 +189,7 @@ class ImageController:
         -------
         The screenshot as an RGB array of shape `(height, width, 3)`.
         """
-        return self.view.viewer.screenshot(path, canvas_only=True)
+        return np.asanyarray(self.view.viewer.screenshot(path, canvas_only=True))
 
     def _handle_already_present(self, layer_name: str) -> None:
         logg.warning(f"Layer `{layer_name}` is already loaded")
