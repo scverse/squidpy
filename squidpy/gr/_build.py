@@ -15,6 +15,8 @@ from squidpy.gr._utils import _save_data, _assert_positive, _assert_spatial_basi
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 
+__all__ = ["spatial_neighbors"]
+
 
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)
@@ -125,12 +127,12 @@ def spatial_neighbors(
     neighbors_dict = {
         "connectivities_key": conns_key,
         "params": {"n_neighbors": n_neigh, "coord_type": coord_type.v, "radius": radius, "transform": transform.v},
+        "distances_key": dists_key,
     }
 
     _save_data(adata, attr="obsp", key=conns_key, data=Adj)
     if Dst is not None:
         _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
-        neighbors_dict["distances_key"] = dists_key
 
     _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
 

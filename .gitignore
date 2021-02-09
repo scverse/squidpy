@@ -55,6 +55,7 @@ coverage.xml
 .pytest_cache/
 data/
 tests/figures/
+tests/_images/*-failed-diff.png
 
 # Translations
 *.mo
