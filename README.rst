@@ -1,4 +1,4 @@
-|PyPI| |CI| |Notebooks| |Docs| |Coverage|
+|PyPI| |Downloads| |CI| |Notebooks| |Docs| |Coverage|
 
 squidpy: spatial molecular data analysis in python
 ===================================================
@@ -21,7 +21,7 @@ squidpy's key applications
 --------------------------
 - Build and analyze the neighborhood graph from spatial coordinates.
 - Compute spatial statistics for cell-types and genes.
-- Efficiently store, analyze and visualize large microscopy images.
+- Efficiently store, analyze and visualize large microscopy images, leveraging `skimage`_.
 - Explore `anndata`_ and the large microscopy image in `napari`_.
 
 Contributing to squidpy
@@ -49,7 +49,12 @@ If you wish to contribute to ``squidpy``, please make sure you're familiar with 
     :target: https://codecov.io/gh/theislab/squidpy
     :alt: Coverage
 
+.. |Downloads| image:: https://pepy.tech/badge/squidpy
+    :target: https://pepy.tech/project/squidpy
+    :alt: Downloads
+
 .. _preprint: VERY SOON
 .. _scanpy: https://scanpy.readthedocs.io/en/latest/
 .. _anndata: https://anndata.readthedocs.io/en/latest/
 .. _napari: https://napari.org/
+.. _skimage: https://scikit-image.org/
