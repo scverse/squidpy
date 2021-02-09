@@ -20,10 +20,12 @@ from squidpy.gr._ligrec import LigrecResult
 from squidpy._constants._constants import DendrogramAxis
 from squidpy._constants._pkg_constants import Key
 
+__all__ = ["ligrec"]
+
 _SEP = " | "
 
 
-class CustomDotplot(sc.pl.DotPlot):  # noqa: D101
+class CustomDotplot(sc.pl.DotPlot):
 
     BASE = 10
 

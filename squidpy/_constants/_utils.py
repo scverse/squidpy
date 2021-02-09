@@ -26,7 +26,7 @@ def _pretty_raise_enum(cls: Type["ModeEnum"], fun: Callable[..., Any]) -> Callab
 class ErrorFormatterABC(ABC):
     """Mixin class that formats invalid value when constructing an enum."""
 
-    __error_format__ = "Invalid option `{0!r}` for `{1}`. Valid options are: `{2}`."
+    __error_format__ = "Invalid option `{0}` for `{1}`. Valid options are: `{2}`."
 
     @classmethod
     def _format(cls, value: Enum) -> str:
