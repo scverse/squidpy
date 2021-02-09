@@ -56,7 +56,7 @@ _smc = AMetadata(
     name="sc_mouse_cortex",
     doc_header="Pre-processed `scRNA-seq mouse cortex " "<https://doi.org/10.1038/s41586-018-0654-5>`_.",
     shape=(21697, 36826),
-    url="https://ndownloader.figshare.com/files/26252815?private_link=48187a0cb0c4186a6508",
+    url="https://ndownloader.figshare.com/files/26404781?private_link=48187a0cb0c4186a6508",
 )
 
 for name, var in copy(locals()).items():
