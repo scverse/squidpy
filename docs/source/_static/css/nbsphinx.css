@@ -16,3 +16,9 @@ div.nboutput.container div.output_area div[class*="highlight"] > pre {
 div.nboutput.container div.output_area > div[class^="highlight"] {
     background-color: #fafae2!important;
 }
+
+.rst-content .output_area img {
+    max-width: unset;
+    width: 100% !important;
+    height: auto !important;
+}
