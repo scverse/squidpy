@@ -125,7 +125,12 @@ spelling_add_pypi_package_names = True
 spelling_show_suggestions = True
 spelling_exclude_patterns = ["references.rst"]
 # see: https://pyenchant.github.io/pyenchant/api/enchant.tokenize.html
-spelling_filters = ["enchant.tokenize.URLFilter", "enchant.tokenize.EmailFilter"]
+spelling_filters = [
+    "enchant.tokenize.URLFilter",
+    "enchant.tokenize.EmailFilter",
+    "docs.source.utils.ModnameFilter",
+    "docs.source.utils.SignatureFilter",
+]
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

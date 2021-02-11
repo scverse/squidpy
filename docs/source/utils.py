@@ -2,8 +2,10 @@ from typing import Any, List, Tuple, Union, Callable, Optional
 from logging import info, warning
 from pathlib import Path
 from urllib.parse import urljoin
+from enchant.tokenize import Filter
 from sphinx_gallery.directives import MiniGallery
 import os
+import re
 import requests
 
 HERE = Path(__file__).parent
@@ -129,3 +131,25 @@ class MaybeMiniGallery(MiniGallery):
         except UnboundLocalError:
             # no gallery files
             return []
+
+
+class ModnameFilter(Filter):
+    """
+    Ignore module names.
+    """
+
+    _pat = re.compile(r"squidpy\.(im|gr|pl|datasets)\..+")
+
+    def _skip(self, word: str) -> bool:
+        return self._pat.match(word) is not None
+
+
+class SignatureFilter(Filter):
+    """
+    Ignore function signature artifacts.
+    """
+
+    _pat = re.compile(r"\([^,]+?(\[?, [^,]*)*\)")
+
+    def _skip(self, word: str) -> bool:
+        return word == "img[" or word == "adata,"

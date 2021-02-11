@@ -201,8 +201,8 @@ class ImageContainer(FeatureMixin):
 
         Notes
         -----
-        Lazy loading via :mod:`dask` is not supported for on-disk jpg files, they will be loaded in memory.
-        Multi-page TIFFs will be loaded in one :class:`xarray.DataArray`, with concatenated channel dimensions.
+        Lazy loading via :mod:`dask` is not supported for on-disk *JPEG* files, they will be loaded in memory.
+        Multi-page *TIFFs* will be loaded in one :class:`xarray.DataArray`, with concatenated channel dimensions.
         """
         layer = self._get_next_image_id("image") if layer is None else layer
         img = self._load_img(img, chunks=chunks, layer=layer, **kwargs)
@@ -743,7 +743,7 @@ class ImageContainer(FeatureMixin):
         library_id: Optional[str] = None,
         cmap: str = "viridis",
         palette: Optional[str] = None,
-        blending: Literal["opaque", "translucent", "adidtive"] = "opaque",
+        blending: Literal["opaque", "translucent", "additive"] = "opaque",
         key_added: str = "shapes",
     ) -> Interactive:
         """

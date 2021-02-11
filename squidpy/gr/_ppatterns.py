@@ -375,7 +375,7 @@ def co_occurrence(
 
     Returns
     -------
-    If ``copy = True``, returns the co-occurence probability and the distance thresholds intervals.
+    If ``copy = True``, returns the co-occurrence probability and the distance thresholds intervals.
 
     Otherwise, modifies the ``adata`` with the following keys:
 

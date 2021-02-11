@@ -1,9 +1,11 @@
 Examples
 ========
 
+This section contains various short examples showcasing core :mod:`squidpy` functionalities.
+
 Graph
 -----
-In the main repository, add something nice here.
+This section contains various examples for the :mod:`squidpy.gr` module.
 
 .. nbgallery::
     :glob:
@@ -12,9 +14,10 @@ In the main repository, add something nice here.
 
 Image
 -----
-In the main repository, add something nice here.
+This section contains various examples for the :mod:`squidpy.im` module.
 
 .. nbgallery::
+    :caption: Image
     :glob:
 
     auto_examples/image/compute_*

@@ -101,10 +101,8 @@ def extract(
     """
     Create a temporary :class:`anndata.AnnData` object for plotting.
 
-    Move columns from entry `obsm` in `adata.obsm` to `adata.obs` to enable the use of `scanpy.plotting` functions.
-    If `prefix` is specified, columns are moved to `<prefix>_<column-name>`. Otherwise, column name is kept.
-
-    Warning: If `adata.obs["<column-name>"]` already exists, it will be overwritten.
+    Move columns from :attr:`anndata.AnnData.obsm` ``['{obsm_key}']`` to :attr:`anndata.AnnData.obs` to enable
+    the use of :mod:`scanpy.plotting` functions.
 
     Parameters
     ----------
@@ -113,6 +111,7 @@ def extract(
         Entries in :attr:`anndata.AnnData.obsm` that should be moved to :attr:`anndata.AnnData.obs`.
     prefix
         Prefix to prepend to each column name. Should be a :class;`list` if ``obsm_key`` is a :class:`list`.
+        If `None`, use the original column names.
 
     Returns
     -------
@@ -122,11 +121,15 @@ def extract(
     ------
     ValueError
         If number of ``prefixes`` does not fit to number of ``obsm_keys``.
+
+    Notes
+    -----
+    If :attr:`anndata.AnnData.obs` ``['{column}']`` already exists, it will be overwritten and a warning will be issued.
     """
     # TODO: move to utils?
     def _warn_if_exists_obs(adata: AnnData, obs_key: str) -> None:
         if obs_key in adata.obs.columns:
-            logg.warning(f"{obs_key} in adata.obs will be overwritten by extract.")
+            logg.warning(f"Overwriting `adata.obs[{obs_key!r}]`")
 
     # make obsm list
     if isinstance(obsm_key, str):

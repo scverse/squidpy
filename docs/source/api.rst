@@ -51,6 +51,7 @@ Plotting
     pl.ligrec
     pl.ripley_k
     pl.co_occurrence
+    pl.extract
 
 Datasets
 ~~~~~~~~

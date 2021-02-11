@@ -22,7 +22,7 @@ from squidpy._constants._pkg_constants import Key
 
 __all__ = ["ligrec"]
 
-_SEP = " | "
+_SEP = " | "  # cluster separator
 
 
 class CustomDotplot(sc.pl.DotPlot):
@@ -115,7 +115,9 @@ def ligrec(
     **kwargs: Any,
 ) -> None:
     """
-    Plot the result of receptor-ligand permutation test.
+    Plot the result of a receptor-ligand permutation test.
+
+    The result was computed by :func:`squidpy.gr.ligrec`.
 
     :math:`molecule_1` belongs to the source clusters displayed on the top (or on the right, if ``swap_axes = True``,
     whereas :math:`molecule_2` belongs to the target clusters.
