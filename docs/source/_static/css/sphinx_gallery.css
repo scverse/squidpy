@@ -1,4 +1,4 @@
-#tutorials, #plot, #gallery {
+#graph, #image, #core-tutorials, #external-tutorials {
     margin-bottom: 1em;
 }
 
@@ -98,4 +98,8 @@ span[id^="sphx-glr-auto-"] {
 div.sphx-glr-download-jupyter code.xref.download.docutils.literal.notranslate > span:nth-child(2),
 div.sphx-glr-download-jupyter code.xref.download.docutils.literal.notranslate > span:nth-child(3) {
     display: none!important;
+}
+
+.sphx-glr-thumbcontainer a.internal {
+    padding: 140px 10px 0!important;
 }

@@ -1,4 +1,4 @@
-from typing import Any, List, Tuple, Union, Callable, Optional
+from typing import Any, Dict, List, Tuple, Union, Callable, Optional
 from logging import info, warning
 from pathlib import Path
 from urllib.parse import urljoin
@@ -131,6 +131,22 @@ class MaybeMiniGallery(MiniGallery):
         except UnboundLocalError:
             # no gallery files
             return []
+
+
+def _get_thumbnails(root: Union[str, Path]) -> Dict[str, str]:
+    res = {}
+    root = Path(root)
+    thumb_path = Path(__file__).parent.parent.parent / "docs" / "source"
+
+    for fname in root.glob("**/*.py"):
+        path, name = os.path.split(str(fname)[:-3])
+        thumb_fname = f"sphx_glr_{name}_thumb.png"
+        if (thumb_path / path / "images" / "thumb" / thumb_fname).is_file():
+            res[str(fname)[:-3]] = f"_images/{thumb_fname}"
+        else:
+            res[str(fname)[:-3]] = "_static/img/squidpy_vertical.png"
+
+    return res
 
 
 class ModnameFilter(Filter):

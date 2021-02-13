@@ -17,7 +17,11 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
 sys.path.insert(0, os.path.abspath("_ext"))
 
-from docs.source.utils import MaybeMiniGallery, _download_notebooks  # noqa: E402
+from docs.source.utils import (  # noqa: E402
+    _get_thumbnails,
+    MaybeMiniGallery,
+    _download_notebooks,
+)
 import squidpy  # noqa: E402
 
 needs_sphinx = "3.0"
@@ -92,14 +96,12 @@ exclude_patterns = [
     "auto_*/**.py",
     "**.ipynb_checkpoints",
 ]
-# because squidpy_notebooks doesn't commit the .py files (and we don't allow downloading them by hiding the html)
 suppress_warnings = ["download.not_readable"]
 
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-#
 autosummary_generate = True
 autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
@@ -112,7 +114,7 @@ napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
 
-# bibliograph
+# bibliography
 bibtex_bibfiles = ["references.bib"]
 bibtex_reference_style = ["author_year"]
 bibtex_default_style = "alpha"
@@ -141,6 +143,8 @@ html_logo = "_static/img/squidpy_horizontal.png"
 html_theme_options = {"navigation_depth": 4, "logo_only": True}
 html_show_sphinx = False
 
+nbsphinx_thumbnails = {**_get_thumbnails("auto_tutorials"), **_get_thumbnails("auto_examples")}
+
 
 def setup(app: Sphinx) -> None:
     DEFAULT_GALLERY_CONF["backreferences_dir"] = "gen_modules/backreferences"
@@ -148,6 +152,7 @@ def setup(app: Sphinx) -> None:
     DEFAULT_GALLERY_CONF["show_signature"] = False
     DEFAULT_GALLERY_CONF["log_level"] = {"backreference_missing": "info"}
     DEFAULT_GALLERY_CONF["gallery_dirs"] = (["auto_examples", "auto_tutorials"],)
+    DEFAULT_GALLERY_CONF["default_thumb_file"] = "docs/source/_static/img/squidpy_vertical.png"
 
     app.add_config_value("sphinx_gallery_conf", DEFAULT_GALLERY_CONF, "html")
     app.add_directive("minigallery", MaybeMiniGallery)
