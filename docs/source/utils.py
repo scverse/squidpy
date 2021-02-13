@@ -21,7 +21,7 @@ CHUNK_SIZE = 4 * 1024
 DEPTH = 5
 
 # nbsphinx
-FIXED_TUTORIALS_DIR = "tutorials"
+FIXED_TUTORIALS_DIR = "external_tutorials"
 # sphinx-gallery
 EXAMPLES_DIR = "auto_examples"
 TUTORIALS_DIR = "auto_tutorials"

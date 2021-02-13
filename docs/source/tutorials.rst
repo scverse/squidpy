@@ -19,4 +19,4 @@ This section contains tutorials showcasing how :mod:`squidpy` can be interfaced 
 .. nbgallery::
     :glob:
 
-    tutorials_external/tutorial_*
+    external_tutorials/tutorial_*

@@ -41,6 +41,7 @@ If you wish to contribute to ``Squidpy``, please make sure you're familiar with 
     installation
     api
     classes
+    release_notes
     references
 
 .. toctree::

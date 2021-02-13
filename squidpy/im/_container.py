@@ -186,7 +186,7 @@ class ImageContainer(FeatureMixin):
         lazy
             Whether to use :mod:`rasterio` or :mod:`dask` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`, used in call to :func:`xarray.open_rasterio` for TIFF images.
+            Chunk size for :mod:`dask`, used in call to :func:`xarray.open_rasterio` for *TIFF* images.
 
         Returns
         -------
