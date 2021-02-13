@@ -3,7 +3,7 @@
 Squidpy - Spatial Molecular Data Analysis in Python
 ===================================================
 
-.. image:: <>
+.. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png
    :width: 400px
    :align: center
 
