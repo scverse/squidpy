@@ -59,6 +59,14 @@ setup(
         "Topic :: Scientific/Engineering :: Bio-Informatics",
         "Topic :: Scientific/Engineering :: Visualization",
     ],
-    # TODO: populate me
-    keywords=sorted({}),
+    keywords=sorted(
+        [
+            "single-cell",
+            "bio-informatics",
+            "spatial transcriptomics",
+            "spatial data analysis",
+            "image analysis",
+            "spatial data analysis",
+        ]
+    ),
 )

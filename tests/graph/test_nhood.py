@@ -11,36 +11,66 @@ from squidpy.gr import (
     spatial_neighbors,
     interaction_matrix,
 )
+from squidpy._constants._pkg_constants import Key
+
+_CK = "leiden"
 
 
-def test_nhood_enrichment(adata: AnnData):
+class TestNhoodEnrichment:
+    def _assert_common(self, adata: AnnData):
+        key = Key.uns.nhood_enrichment(_CK)
+        assert adata.uns[key]["zscore"].dtype == np.dtype("float64")
+        assert adata.uns[key]["count"].dtype == np.dtype("uint32")
+        assert adata.uns[key]["zscore"].shape[0] == adata.obs.leiden.cat.categories.shape[0]
+        assert adata.uns[key]["count"].shape[0] == adata.obs.leiden.cat.categories.shape[0]
 
-    ckey = "leiden"
-    spatial_neighbors(adata)
-    nhood_enrichment(adata, cluster_key=ckey)
+    def test_nhood_enrichment(self, adata: AnnData):
+        spatial_neighbors(adata)
+        nhood_enrichment(adata, cluster_key=_CK)
 
-    assert adata.uns[f"{ckey}_nhood_enrichment"]["zscore"].dtype == np.dtype("float64")
-    assert adata.uns[f"{ckey}_nhood_enrichment"]["count"].dtype == np.dtype("uint32")
-    assert adata.uns[f"{ckey}_nhood_enrichment"]["zscore"].shape[0] == adata.obs.leiden.cat.categories.shape[0]
-    assert adata.uns[f"{ckey}_nhood_enrichment"]["count"].shape[0] == adata.obs.leiden.cat.categories.shape[0]
+        self._assert_common(adata)
+
+    @pytest.mark.parametrize("backend", ["threading", "multiprocessing", "loky"])
+    def test_parallel_works(self, adata: AnnData, backend: str):
+        spatial_neighbors(adata)
+
+        nhood_enrichment(adata, cluster_key=_CK, n_jobs=2, n_perms=20, backend=backend)
+
+        self._assert_common(adata)
+
+    @pytest.mark.parametrize("n_jobs", [1, 2])
+    def test_reproducibility(self, adata: AnnData, n_jobs: int):
+        spatial_neighbors(adata)
+
+        res1 = nhood_enrichment(adata, cluster_key=_CK, seed=42, n_jobs=n_jobs, n_perms=20, copy=True)
+        res2 = nhood_enrichment(adata, cluster_key=_CK, seed=42, n_jobs=n_jobs, n_perms=20, copy=True)
+        res3 = nhood_enrichment(adata, cluster_key=_CK, seed=43, n_jobs=n_jobs, n_perms=20, copy=True)
+
+        assert len(res1) == len(res2)
+        assert len(res2) == len(res3)
+
+        for key in range(len(res1)):
+            np.testing.assert_array_equal(res2[key], res1[key])
+            if key == 0:  # z-score
+                with pytest.raises(AssertionError):
+                    np.testing.assert_array_equal(res3[key], res2[key])
+            else:  # counts
+                np.testing.assert_array_equal(res3[key], res2[key])
 
 
 def test_centrality_scores(nhood_data: AnnData):
-    """
-    check that scores fit the expected shape + content
-    """
     adata = nhood_data
     centrality_scores(
         adata=adata,
-        cluster_key="leiden",
+        cluster_key=_CK,
         connectivity_key="spatial",
     )
-    # assert saving in .uns
-    key = "leiden_centrality_scores"
+
+    key = Key.uns.centrality_scores(_CK)
+
     assert key in adata.uns_keys()
-    # assert centrality scores are computed for each cluster
     assert isinstance(adata.uns[key], pd.DataFrame)
-    assert len(adata.obs["leiden"].unique()) == adata.uns[key].shape[0]
+    assert len(adata.obs[_CK].unique()) == adata.uns[key].shape[0]
     assert adata.uns[key]["degree_centrality"].dtype == np.dtype("float64")
     assert adata.uns[key]["average_clustering"].dtype == np.dtype("float64")
     assert adata.uns[key]["closeness_centrality"].dtype == np.dtype("float64")
@@ -48,19 +78,16 @@ def test_centrality_scores(nhood_data: AnnData):
 
 @pytest.mark.parametrize("copy", [True, False])
 def test_interaction_matrix_copy(nhood_data: AnnData, copy: bool):
-    """
-    check that interaction matrix fits the expected shape
-    """
     adata = nhood_data
     res = interaction_matrix(
         adata=adata,
-        cluster_key="leiden",
+        cluster_key=_CK,
         connectivity_key="spatial",
         copy=copy,
     )
-    # assert saving in .uns
-    key = "leiden_interactions"
-    n_cls = adata.obs["leiden"].nunique()
+
+    key = Key.uns.interaction_matrix(_CK)
+    n_cls = adata.obs[_CK].nunique()
 
     if not copy:
         assert res is None
@@ -75,13 +102,10 @@ def test_interaction_matrix_copy(nhood_data: AnnData, copy: bool):
 
 @pytest.mark.parametrize("normalized", [True, False])
 def test_interaction_matrix_normalize(nhood_data: AnnData, normalized: bool):
-    """
-    check that interaction matrix fits the expected shape
-    """
     adata = nhood_data
     res = interaction_matrix(
         adata=adata,
-        cluster_key="leiden",
+        cluster_key=_CK,
         connectivity_key="spatial",
         copy=True,
         normalized=normalized,
