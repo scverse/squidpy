@@ -42,7 +42,7 @@ setup(
         interactive=["PyQt5>=5.15.0", "napari>=0.4.2"],
     ),
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Science/Research",
         "Natural Language :: English",
         "License :: OSI Approved :: MIT License",
