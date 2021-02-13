@@ -111,7 +111,7 @@ kwargs
     Keyword arguments for the underlying model."""
 
 _ligrec_test_returns = """\
-If ``copy = True``, returns a :class:`typing.NamedTuple`:
+If ``copy = True``, returns a :class:`dict` with following keys:
 
     - `'means'` - :class:`pandas.DataFrame` containing the mean expression.
     - `'pvalues'` - :class:`pandas.DataFrame` containing the possibly corrected p-values.

@@ -286,7 +286,6 @@ def _occur_count(
     labs_unique: np.ndarray[np.int32],
     interval: np.ndarray[np.float32],
 ) -> np.ndarray[np.float32]:
-
     num = labs_unique.shape[0]
     out = np.zeros((num, num, interval.shape[0] - 1), dtype=ft)
 
