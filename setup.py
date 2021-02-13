@@ -4,8 +4,13 @@ from setuptools import setup, find_packages
 try:
     from squidpy import __email__, __author__, __version__, __maintainer__
 except ImportError:
-    __author__ = __maintainer__ = ""
-    __email__ = ""
+    __author__ = __maintainer__ = "Theislab"
+    __email__ = ", ".join(
+        [
+            "giovanni.palla@helmholtz-muenchen.de",
+            "hannah.spitzer@helmholtz-muenchen.de",
+        ]
+    )
     __version__ = "0.0.0"
 
 setup(
