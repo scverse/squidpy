@@ -7,7 +7,7 @@ assignees: ""
 ---
 
 ### Type of the feature
-<!-- What kind of feature would you like to be added? -->
+<!-- What kind of feature would you like to be added? Put an `x` in all applicable boxes: -->
 - [ ] New function in `sqduipy.im`?
 - [ ] New function in `squidpy.gr`?
 - [ ] New function in `squidpy.pl`?

@@ -7,7 +7,7 @@ assignees: "michalk8"
 ---
 
 ### Description
-<!-- Please give a clear and concise description of the bug: -->
+<!-- Give a clear and concise description of the bug: -->
 ...
 
 ### Minimal reproducible example
@@ -17,7 +17,7 @@ assignees: "michalk8"
 ```
 
 ### Traceback
-<!-- If applicable, replace *...* with an error traceback below: -->
+<!-- If applicable, replace `...` with an error traceback below: -->
 
 <details>
 

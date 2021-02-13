@@ -6,5 +6,5 @@ labels: question
 assignees: "giovp"
 ---
 
-<!-- Please put your question regarding Squidpy below: -->
+<!-- Put your question regarding Squidpy below: -->
 ...
