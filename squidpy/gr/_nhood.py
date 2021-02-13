@@ -123,6 +123,9 @@ def nhood_enrichment(
     numba_parallel: bool = False,
     seed: Optional[int] = None,
     copy: bool = False,
+    n_jobs: Optional[int] = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
     Compute neighborhood enrichment by permutation test.
@@ -136,6 +139,7 @@ def nhood_enrichment(
     %(numba_parallel)s
     %(seed)s
     %(copy)s
+    %(parallelize)s
 
     Returns
     -------
@@ -160,21 +164,32 @@ def nhood_enrichment(
     n_cls = len(clust_map)
 
     _test = _create_function(n_cls, parallel=numba_parallel)
-
-    perms = np.zeros((n_cls, n_cls, n_perms), dtype=ndt)
     count = _test(indices, indptr, int_clust)
 
-    rs = np.random.RandomState(seed=seed)
-    # TODO: parallelize? alternatively incremental mean/std so that we don't need to save all the perms?
-    for perm in range(n_perms):
-        rs.shuffle(int_clust)
-        perms[:, :, perm] = _test(indices, indptr, int_clust)
+    n_jobs = _get_n_cores(n_jobs)
+    start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
 
-    zscore = (count - perms.mean(axis=-1)) / perms.std(axis=-1)
+    perms = parallelize(
+        _nhood_enrichment_helper,
+        collection=np.arange(n_perms),
+        extractor=np.vstack,
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
+        seed=seed,
+    )(callback=_test, indices=indices, indptr=indptr, int_clust=int_clust, n_cls=n_cls)
+    zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
     if copy:
         return zscore, count
-    _save_data(adata, attr="uns", key=Key.uns.nhood_enrichment(cluster_key), data={"zscore": zscore, "count": count})
+
+    _save_data(
+        adata,
+        attr="uns",
+        key=Key.uns.nhood_enrichment(cluster_key),
+        data={"zscore": zscore, "count": count},
+        time=start,
+    )
 
 
 @d.dedent
@@ -192,7 +207,7 @@ def centrality_scores(
     """
     Compute centrality scores per cluster or cell type.
 
-    Inspired by usage in  Gene Regulatory Networks (GRNs) in :cite:`celloracle`.
+    Inspired by usage in Gene Regulatory Networks (GRNs) in :cite:`celloracle`.
 
     Parameters
     ----------
@@ -212,8 +227,7 @@ def centrality_scores(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`pandas.DataFrame`.
-    Otherwise, modifies the ``adata`` with the following key:
+    If ``copy = True``, returns a :class:`pandas.DataFrame`. Otherwise, modifies the ``adata`` with the following key:
 
         - :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_centrality_scores']`` - the centrality scores,
           as mentioned above.
@@ -246,7 +260,7 @@ def centrality_scores(
             raise NotImplementedError(f"Centrality `{c}` is not yet implemented.")
 
     n_jobs = _get_n_cores(n_jobs)
-    logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` core(s)")
+    start = logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` core(s)")
 
     res_list = []
     for k, v in fun_dict.items():
@@ -254,7 +268,6 @@ def centrality_scores(
             _centrality_scores_helper,
             collection=cat,
             extractor=pd.concat,
-            use_ixs=False,
             n_jobs=n_jobs,
             backend=backend,
             show_progress_bar=show_progress_bar,
@@ -265,30 +278,7 @@ def centrality_scores(
 
     if copy:
         return df
-    _save_data(adata, attr="uns", key=Key.uns.centrality_scores(cluster_key), data=df)
-
-
-def _centrality_scores_helper(
-    cat: Iterable[Any],
-    clusters: Sequence[str],
-    fun: Callable[..., float],
-    method: str,
-    queue: Optional[SigQueue] = None,
-) -> pd.DataFrame:
-
-    res_list = []
-    for c in cat:
-        idx = np.where(clusters == c)[0]
-        res = fun(idx)
-        res_list.append(res)
-
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    return pd.DataFrame(res_list, columns=[method], index=cat)
+    _save_data(adata, attr="uns", key=Key.uns.centrality_scores(cluster_key), data=df, time=start)
 
 
 @d.dedent
@@ -336,3 +326,51 @@ def interaction_matrix(
     if copy:
         return int_mat
     _save_data(adata, attr="uns", key=Key.uns.interaction_matrix(cluster_key), data=int_mat)
+
+
+def _centrality_scores_helper(
+    cat: Iterable[Any],
+    clusters: Sequence[str],
+    fun: Callable[..., float],
+    method: str,
+    queue: Optional[SigQueue] = None,
+) -> pd.DataFrame:
+    res_list = []
+    for c in cat:
+        idx = np.where(clusters == c)[0]
+        res = fun(idx)
+        res_list.append(res)
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return pd.DataFrame(res_list, columns=[method], index=cat)
+
+
+def _nhood_enrichment_helper(
+    ixs: np.ndarray,
+    callback: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray],
+    indices: np.ndarray,
+    indptr: np.ndarray,
+    int_clust: np.ndarray,
+    n_cls: int,
+    seed: Optional[int] = None,
+    queue: Optional[SigQueue] = None,
+) -> np.ndarray:
+    perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
+    rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])
+
+    for i in range(len(ixs)):
+        rs.shuffle(int_clust)
+        perms[i, ...] = callback(indices, indptr, int_clust)
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return perms
