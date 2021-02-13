@@ -186,7 +186,7 @@ class ImageContainer(FeatureMixin):
         lazy
             Whether to use :mod:`rasterio` or :mod:`dask` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`, used in call to :func:`xarray.open_rasterio` for TIFF images.
+            Chunk size for :mod:`dask`, used in call to :func:`xarray.open_rasterio` for *TIFF* images.
 
         Returns
         -------
@@ -201,8 +201,8 @@ class ImageContainer(FeatureMixin):
 
         Notes
         -----
-        Lazy loading via :mod:`dask` is not supported for on-disk jpg files, they will be loaded in memory.
-        Multi-page TIFFs will be loaded in one :class:`xarray.DataArray`, with concatenated channel dimensions.
+        Lazy loading via :mod:`dask` is not supported for on-disk *JPEG* files, they will be loaded in memory.
+        Multi-page *TIFFs* will be loaded in one :class:`xarray.DataArray`, with concatenated channel dimensions.
         """
         layer = self._get_next_image_id("image") if layer is None else layer
         img = self._load_img(img, chunks=chunks, layer=layer, **kwargs)
@@ -743,7 +743,7 @@ class ImageContainer(FeatureMixin):
         library_id: Optional[str] = None,
         cmap: str = "viridis",
         palette: Optional[str] = None,
-        blending: Literal["opaque", "translucent", "adidtive"] = "opaque",
+        blending: Literal["opaque", "translucent", "additive"] = "opaque",
         key_added: str = "shapes",
     ) -> Interactive:
         """
@@ -968,14 +968,16 @@ class ImageContainer(FeatureMixin):
 
         inflection = "" if len(self) <= 1 else "s"
         s = f"{self.__class__.__name__} object with {len(self.data.keys())} layer{inflection}:"
+        style = "text-indent: 25px; margin-top: 0px; margin-bottom: 0px;"
+
         for i, layer in enumerate(self.data.keys()):
-            s += f"<p style='text-indent: 25px; margin-top: 0px;'><strong>{layer}</strong>: "
+            s += f"<p style={style!r}><strong>{layer}</strong>: "
             s += ", ".join(
                 f"<em>{dim}</em> ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape)
             )
             s += "</p>"
             if i == 9 and i < len(self) - 1:  # show only first 10 layers
-                s += f"<p style='text-indent: 25px; margin-top: 0px;'>and {len(self) - i  - 1} more...</p>"
+                s += f"<p style={style!r}>and {len(self) - i  - 1} more...</p>"
                 break
 
         return s

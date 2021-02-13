@@ -24,7 +24,7 @@ _seqfish = AMetadata(
 )
 _vha = AMetadata(
     name="visium_hne_adata",
-    doc_header="Pre-processed `10x Genomics Visium HnE dataset "
+    doc_header="Pre-processed `10x Genomics Visium H&E dataset "
     "<https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`_.",
     shape=(2688, 18078),
     url="https://ndownloader.figshare.com/files/26098397?private_link=d7e9f517da588e6bd5dc",
@@ -39,7 +39,7 @@ _vfa = AMetadata(
 )
 _vhac = AMetadata(
     name="visium_hne_adata_crop",
-    doc_header="Pre-processed subset `10x Genomics Visium HnE dataset "
+    doc_header="Pre-processed subset `10x Genomics Visium H&E dataset "
     "<https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`_.",
     shape=(684, 18078),
     url="https://ndownloader.figshare.com/files/26098382?private_link=564b10d7fa56c2370daf",

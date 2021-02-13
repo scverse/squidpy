@@ -1,9 +1,11 @@
-from typing import Any, List, Tuple, Union, Callable, Optional
+from typing import Any, Dict, List, Tuple, Union, Callable, Optional
 from logging import info, warning
 from pathlib import Path
 from urllib.parse import urljoin
+from enchant.tokenize import Filter
 from sphinx_gallery.directives import MiniGallery
 import os
+import re
 import requests
 
 HERE = Path(__file__).parent
@@ -19,7 +21,7 @@ CHUNK_SIZE = 4 * 1024
 DEPTH = 5
 
 # nbsphinx
-FIXED_TUTORIALS_DIR = "tutorials"
+FIXED_TUTORIALS_DIR = "external_tutorials"
 # sphinx-gallery
 EXAMPLES_DIR = "auto_examples"
 TUTORIALS_DIR = "auto_tutorials"
@@ -129,3 +131,41 @@ class MaybeMiniGallery(MiniGallery):
         except UnboundLocalError:
             # no gallery files
             return []
+
+
+def _get_thumbnails(root: Union[str, Path]) -> Dict[str, str]:
+    res = {}
+    root = Path(root)
+    thumb_path = Path(__file__).parent.parent.parent / "docs" / "source"
+
+    for fname in root.glob("**/*.py"):
+        path, name = os.path.split(str(fname)[:-3])
+        thumb_fname = f"sphx_glr_{name}_thumb.png"
+        if (thumb_path / path / "images" / "thumb" / thumb_fname).is_file():
+            res[str(fname)[:-3]] = f"_images/{thumb_fname}"
+        else:
+            res[str(fname)[:-3]] = "_static/img/squidpy_vertical.png"
+
+    return res
+
+
+class ModnameFilter(Filter):
+    """
+    Ignore module names.
+    """
+
+    _pat = re.compile(r"squidpy\.(im|gr|pl|datasets)\..+")
+
+    def _skip(self, word: str) -> bool:
+        return self._pat.match(word) is not None
+
+
+class SignatureFilter(Filter):
+    """
+    Ignore function signature artifacts.
+    """
+
+    _pat = re.compile(r"\([^,]+?(\[?, [^,]*)*\)")
+
+    def _skip(self, word: str) -> bool:
+        return word == "img[" or word == "adata,"

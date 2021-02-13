@@ -31,7 +31,7 @@ def process(
     """
     Process an image by applying a transformation.
 
-    Note that crop-wise processing can save memory but may change behaviour of cropping if global statistics are used.
+    Note that crop-wise processing can save memory but may change behavior of cropping if global statistics are used.
     Leave ``size = None`` in order to process the full image in one go.
 
     Parameters

@@ -1,4 +1,4 @@
-__author__ = __maintainer__ = ", ".join(["theislab"])
+__author__ = __maintainer__ = ", ".join(["Theislab"])
 __email__ = ", ".join(
     [
         "giovanni.palla@helmholtz-muenchen.de",

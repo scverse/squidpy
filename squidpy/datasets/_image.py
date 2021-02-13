@@ -12,14 +12,14 @@ _vfic = ImgMetadata(
 )
 _vhic = ImgMetadata(
     name="visium_hne_image_crop",
-    doc_header="Cropped HnE image from `10x Genomics Visium dataset "
+    doc_header="Cropped H&E image from `10x Genomics Visium dataset "
     "<https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`_.",
     shape=(3527, 3527),
     url="https://ndownloader.figshare.com/files/26098328?private_link=33ef1d60cfcadb91518c",
 )
 _vhn = ImgMetadata(
     name="visium_hne_image",
-    doc_header="HnE image from `10x Genomics Visium dataset "
+    doc_header="H&E image from `10x Genomics Visium dataset "
     "<https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`_.",
     shape=(11757, 11291),
     url="https://ndownloader.figshare.com/files/26098124?private_link=9339d85896f60e41bf19",

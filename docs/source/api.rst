@@ -3,7 +3,7 @@ API
 
 Import Squidpy as::
 
-    import squidpy as sp
+    import squidpy as sq
 
 Graph
 ~~~~~
@@ -51,6 +51,7 @@ Plotting
     pl.ligrec
     pl.ripley_k
     pl.co_occurrence
+    pl.extract
 
 Datasets
 ~~~~~~~~

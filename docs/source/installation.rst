@@ -1,6 +1,6 @@
 Installation
 ============
-Spatial-tools requires Python version >= 3.7 to run.
+Squidpy requires Python version >= 3.7 to run.
 
 PyPI
 ----
