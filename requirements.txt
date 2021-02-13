@@ -1,19 +1,17 @@
-# TODO: pin the versions (at least min)
 anndata>=0.7.4
-dask
-data-science-types  # array typehints
+dask>=2.30
+data-science-types>=0.2.20  # array typehints
 docrep>=0.3.1
 ipywidgets>=7.5.1  # progress bar
-leidenalg  # TODO: do we actually use it? if so, I'd rather use scanpy with extra args
-netcdf4
+netcdf4 # where do we use it ?
 omnipath>=1.0.4
-pandas
-rasterio
-scanpy>=1.6.0
+pandas>=1.1.4
+rasterio>=1.1.8
+scanpy[leiden]>=1.7.0
 scikit-image>=0.17.1
 statsmodels>=0.12.0
-tifffile
+tifffile>=2020.10.1
 tqdm>=4.50.2  # progress bar
 typing_extensions  # Literal
-xarray
-zarr
+xarray>=0.16.1
+zarr>=2.6.1
