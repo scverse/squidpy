@@ -1,17 +1,19 @@
 from time import time
-from typing import Tuple, Optional, Sequence, TYPE_CHECKING
+from typing import Tuple, Mapping, Optional, Sequence, TYPE_CHECKING
 import sys
 import pytest
 
 from scanpy import settings as s
 from anndata import AnnData
 from scanpy.datasets import blobs
+import scanpy as sc
 
+from pandas.testing import assert_frame_equal
 import numpy as np
 import pandas as pd
 
 from squidpy.gr import ligrec
-from squidpy.gr._ligrec import LigrecResult, PermutationTest
+from squidpy.gr._ligrec import PermutationTest
 from squidpy._constants._pkg_constants import Key
 
 _CK = "leiden"
@@ -175,10 +177,10 @@ class TestValidBehavior:
             copy=True,
         )
 
-        np.testing.assert_array_equal(np.where(np.isnan(rc.pvalues)), np.where(np.isnan(ri.pvalues)))
-        mask = np.isnan(rc.pvalues)
+        np.testing.assert_array_equal(np.where(np.isnan(rc["pvalues"])), np.where(np.isnan(ri["pvalues"])))
+        mask = np.isnan(rc["pvalues"])
 
-        assert not np.allclose(rc.pvalues.values[mask], ri.pvalues.values[mask])
+        assert not np.allclose(rc["pvalues"].values[mask], ri["pvalues"].values[mask])
 
     def test_inplace_default_key(self, adata: AnnData, interactions: Interactions_t):
         key = Key.uns.ligrec(_CK)
@@ -186,12 +188,12 @@ class TestValidBehavior:
         res = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=False, show_progress_bar=False)
 
         assert res is None
-        assert isinstance(adata.uns[key], LigrecResult)
+        assert isinstance(adata.uns[key], dict)
         r = adata.uns[key]
         assert len(r) == 3
-        assert isinstance(r.means, pd.DataFrame)
-        assert isinstance(r.pvalues, pd.DataFrame)
-        assert isinstance(r.metadata, pd.DataFrame)
+        assert isinstance(r["means"], pd.DataFrame)
+        assert isinstance(r["pvalues"], pd.DataFrame)
+        assert isinstance(r["metadata"], pd.DataFrame)
 
     def test_inplace_key_added(self, adata: AnnData, interactions: Interactions_t):
         assert "foobar" not in adata.uns
@@ -200,12 +202,12 @@ class TestValidBehavior:
         )
 
         assert res is None
-        assert isinstance(adata.uns["foobar"], LigrecResult)
+        assert isinstance(adata.uns["foobar"], dict)
         r = adata.uns["foobar"]
         assert len(r) == 3
-        assert isinstance(r.means, pd.DataFrame)
-        assert isinstance(r.pvalues, pd.DataFrame)
-        assert isinstance(r.metadata, pd.DataFrame)
+        assert isinstance(r["means"], pd.DataFrame)
+        assert isinstance(r["pvalues"], pd.DataFrame)
+        assert isinstance(r["metadata"], pd.DataFrame)
 
     def test_return_no_write(self, adata: AnnData, interactions: Interactions_t):
         assert "foobar" not in adata.uns
@@ -215,9 +217,9 @@ class TestValidBehavior:
 
         assert "foobar" not in adata.uns
         assert len(r) == 3
-        assert isinstance(r.means, pd.DataFrame)
-        assert isinstance(r.pvalues, pd.DataFrame)
-        assert isinstance(r.metadata, pd.DataFrame)
+        assert isinstance(r["means"], pd.DataFrame)
+        assert isinstance(r["pvalues"], pd.DataFrame)
+        assert isinstance(r["metadata"], pd.DataFrame)
 
     @pytest.mark.parametrize("fdr_method", [None, "fdr_bh"])
     def test_pvals_in_correct_range(self, adata: AnnData, interactions: Interactions_t, fdr_method: Optional[str]):
@@ -232,21 +234,21 @@ class TestValidBehavior:
             threshold=0,
         )
 
-        if np.sum(np.isnan(r.pvalues.values)) == np.prod(r.pvalues.shape):
+        if np.sum(np.isnan(r["pvalues"].values)) == np.prod(r["pvalues"].shape):
             assert fdr_method == "fdr_bh"
         else:
-            assert np.nanmax(r.pvalues.values) <= 1.0, np.nanmax(r.pvalues.values)
-            assert np.nanmin(r.pvalues.values) >= 0, np.nanmin(r.pvalues.values)
+            assert np.nanmax(r["pvalues"].values) <= 1.0, np.nanmax(r["pvalues"].values)
+            assert np.nanmin(r["pvalues"].values) >= 0, np.nanmin(r["pvalues"].values)
 
     def test_result_correct_index(self, adata: AnnData, interactions: Interactions_t):
         r = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=True, show_progress_bar=False)
 
-        np.testing.assert_array_equal(r.means.index, r.pvalues.index)
-        np.testing.assert_array_equal(r.pvalues.index, r.metadata.index)
+        np.testing.assert_array_equal(r["means"].index, r["pvalues"].index)
+        np.testing.assert_array_equal(r["pvalues"].index, r["metadata"].index)
 
-        np.testing.assert_array_equal(r.means.columns, r.pvalues.columns)
-        assert not np.array_equal(r.means.columns, r.metadata.columns)
-        assert not np.array_equal(r.pvalues.columns, r.metadata.columns)
+        np.testing.assert_array_equal(r["means"].columns, r["pvalues"].columns)
+        assert not np.array_equal(r["means"].columns, r["metadata"].columns)
+        assert not np.array_equal(r["pvalues"].columns, r["metadata"].columns)
 
     def test_result_is_sparse(self, adata: AnnData, interactions: Interactions_t):
         interactions = pd.DataFrame(interactions, columns=["source", "target"])
@@ -255,14 +257,14 @@ class TestValidBehavior:
         interactions["metadata"] = "foo"
         r = ligrec(adata, _CK, interactions=interactions, n_perms=5, seed=2, copy=True, show_progress_bar=False)
 
-        assert r.means.sparse.density <= 0.15
-        assert r.pvalues.sparse.density <= 0.95
+        assert r["means"].sparse.density <= 0.15
+        assert r["pvalues"].sparse.density <= 0.95
 
         with pytest.raises(AttributeError, match=r"Can only use the '.sparse' accessor with Sparse data."):
-            _ = r.metadata.sparse
+            _ = r["metadata"].sparse
 
-        np.testing.assert_array_equal(r.metadata.columns, ["metadata"])
-        np.testing.assert_array_equal(r.metadata["metadata"], interactions["metadata"])
+        np.testing.assert_array_equal(r["metadata"].columns, ["metadata"])
+        np.testing.assert_array_equal(r["metadata"]["metadata"], interactions["metadata"])
 
     @pytest.mark.parametrize("n_jobs", [1, 2])
     def test_reproducibility_cores(self, adata: AnnData, interactions: Interactions_t, n_jobs: int):
@@ -298,12 +300,12 @@ class TestValidBehavior:
         )
 
         assert r1 is not r2
-        np.testing.assert_allclose(r1.means, r2.means)
-        np.testing.assert_allclose(r2.means, r3.means)
-        np.testing.assert_allclose(r1.pvalues, r2.pvalues)
+        np.testing.assert_allclose(r1["means"], r2["means"])
+        np.testing.assert_allclose(r2["means"], r3["means"])
+        np.testing.assert_allclose(r1["pvalues"], r2["pvalues"])
 
-        assert not np.allclose(r3.pvalues, r1.pvalues)
-        assert not np.allclose(r3.pvalues, r2.pvalues)
+        assert not np.allclose(r3["pvalues"], r1["pvalues"])
+        assert not np.allclose(r3["pvalues"], r2["pvalues"])
 
     def test_reproducibility_numba_parallel_off(self, adata: AnnData, interactions: Interactions_t):
         t1 = time()
@@ -335,8 +337,8 @@ class TestValidBehavior:
         assert r1 is not r2
         # for such a small data, overhead from parallelization is too high
         assert t1 <= t2, (t1, t2)
-        np.testing.assert_allclose(r1.means, r2.means)
-        np.testing.assert_allclose(r1.pvalues, r2.pvalues)
+        np.testing.assert_allclose(r1["means"], r2["means"])
+        np.testing.assert_allclose(r1["pvalues"], r2["pvalues"])
 
     def test_paul15_correct_means(self, paul15: AnnData, paul15_means: pd.DataFrame):
         res = ligrec(
@@ -352,24 +354,24 @@ class TestValidBehavior:
             n_jobs=1,
         )
 
-        np.testing.assert_array_equal(res.means.index, paul15_means.index)
-        np.testing.assert_array_equal(res.means.columns, paul15_means.columns)
-        np.testing.assert_allclose(res.means.values, paul15_means.values)
+        np.testing.assert_array_equal(res["means"].index, paul15_means.index)
+        np.testing.assert_array_equal(res["means"].columns, paul15_means.columns)
+        np.testing.assert_allclose(res["means"].values, paul15_means.values)
 
     def test_reproducibility_numba_off(
-        self, adata: AnnData, interactions: Interactions_t, ligrec_no_numba: LigrecResult
+        self, adata: AnnData, interactions: Interactions_t, ligrec_no_numba: Mapping[str, pd.DataFrame]
     ):
         r = ligrec(
             adata, _CK, interactions=interactions, n_perms=5, copy=True, show_progress_bar=False, seed=42, n_jobs=1
         )
-        np.testing.assert_array_equal(r.means.index, ligrec_no_numba.means.index)
-        np.testing.assert_array_equal(r.means.columns, ligrec_no_numba.means.columns)
-        np.testing.assert_array_equal(r.pvalues.index, ligrec_no_numba.pvalues.index)
-        np.testing.assert_array_equal(r.pvalues.columns, ligrec_no_numba.pvalues.columns)
+        np.testing.assert_array_equal(r["means"].index, ligrec_no_numba["means"].index)
+        np.testing.assert_array_equal(r["means"].columns, ligrec_no_numba["means"].columns)
+        np.testing.assert_array_equal(r["pvalues"].index, ligrec_no_numba["pvalues"].index)
+        np.testing.assert_array_equal(r["pvalues"].columns, ligrec_no_numba["pvalues"].columns)
 
-        np.testing.assert_allclose(r.means, ligrec_no_numba.means)
-        np.testing.assert_allclose(r.pvalues, ligrec_no_numba.pvalues)
-        np.testing.assert_array_equal(np.where(np.isnan(r.pvalues)), np.where(np.isnan(ligrec_no_numba.pvalues)))
+        np.testing.assert_allclose(r["means"], ligrec_no_numba["means"])
+        np.testing.assert_allclose(r["pvalues"], ligrec_no_numba["pvalues"])
+        np.testing.assert_array_equal(np.where(np.isnan(r["pvalues"])), np.where(np.isnan(ligrec_no_numba["pvalues"])))
 
     def test_logging(self, adata: AnnData, interactions: Interactions_t, capsys):
         s.logfile = sys.stderr
@@ -415,5 +417,16 @@ class TestValidBehavior:
             numba_parallel=False,
         )
 
-        assert len(res.pvalues) == len(expected)
-        assert set(res.pvalues.index.to_list()) == expected
+        assert len(res["pvalues"]) == len(expected)
+        assert set(res["pvalues"].index.to_list()) == expected
+
+    @pytest.mark.xfail(reason="AnnData cannot handle writing MultiIndex")
+    def test_writeable(self, adata: AnnData, interactions: Interactions_t, tmpdir):
+        ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=False, show_progress_bar=False, key_added="foo")
+        res = adata.uns["foo"]
+
+        sc.write(tmpdir / "ligrec.h5ad", adata)
+        bdata = sc.read(tmpdir / "ligrec.h5ad")
+
+        for key in ["means", "pvalues", "metadata"]:
+            assert_frame_equal(res[key], bdata.uns["foo"][key])

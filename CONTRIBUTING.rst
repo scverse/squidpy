@@ -29,7 +29,8 @@ Optionally install pre-commit. This will ensure that the pushed code passes the 
     pre-commit install
 
 Although the last step is not necessary, it is highly recommended, since it will help you to pass the linting step
-(see `Code style guide`_).
+(see `Code style guide`_). If you did install ``pre-commit`` but are unable in deciphering some flags, you can
+still commit using the ``--no-verify``.
 
 Codebase structure
 ------------------
@@ -38,7 +39,7 @@ The SquidPy project:
 - `squidpy <squidpy>`_: the root of the package.
 
   - `squidpy/gr <squidpy/gr>`__: the graph module, which deals with building a spatial graph,
-    running statistical tests on graphs, etc.
+    running statistical tests on graphs and features etc.
   - `squidpy/im <squidpy/im>`__: the image module, which deals with image feature calculation, cropping, etc.
   - `squidpy/pl <squidpy/pl>`__: the plotting module, which contains all the plotting functions
     from the graph and image modules.
@@ -67,7 +68,7 @@ Furthermore, we also require that:
 - functions are fully type-annotated.
 - exceptions messages are capitalized and end with ``.``.
 - warning messages are capitalized and do not end with ``.``.
-- when referring to variable inside a message, enclose its name in \`.
+- when referring to variable inside a message, enclose its name in \``.
 
 
 Testing
@@ -85,6 +86,9 @@ To run only a subset of tests, run::
     tox -e <environment> -- <name>
 
 where ``<name>`` can be a path to a file/directory or a name of a test function/class.
+For example, to run only the tests in the ``nhood`` module, use::
+
+    tox -e py38-linux -- tests/tests_graph/test_nhood.py
 
 If needed, a specific ``tox`` environment can be recreated as::
 
@@ -97,7 +101,7 @@ We use ``numpy``-style docstrings for the documentation with the following addit
 - no type hints in the docstring (applies also for the return statement) are allowed,
   since all functions are required to have the type hints in their signatures.
 - when referring to some argument within the same docstring, enclose that reference in \`\`.
-- prefer putting references in the ``references.rst`` instead under the ``References`` sections of the docstring.
+- prefer putting references in the ``references.bib`` instead under the ``References`` sections of the docstring.
 - use ``docrep`` for repeating documentation
 
 In order to build the documentation, run::
@@ -121,6 +125,18 @@ Tutorials and examples are hosted on a separate repository called `squidpy_noteb
 <https://github.com/theislab/squidpy_notebooks>`__.
 Please refer to this `guide <https://github.com/theislab/squidpy_notebooks/CONTRIBUTING.rst>`__ for more information.
 
+Submitting a PR
+---------------
+Before submitting a new pull request, please make sure you followed these instructions:
+
+- make sure that your code follows the above specified conventions
+  (see `Code style guide`_ and `Writing documentation`_).
+- if applicable, make sure you've added/modified at least 1 test to account for the changes you've made
+- make sure that all tests pass locally (see `Testing`_).
+- if there is no issue which this PR solves, create a new `one <https://github.com/theislab/squidpy/issues/new>`__
+  briefly explaining what the problem is.
+
+
 Creating a new release
 ----------------------
 If you are a core developer and you want to create a new release, you need to install ``bump2version`` first as::
@@ -131,23 +147,13 @@ Depending on what part of the release you want to update, you can run::
 
     bump2version {major,minor,patch}
 
-By default, this will create a new tag and automatically update the ``__version__`` whereever necessary, commit the
+By default, this will create a new tag and automatically update the ``__version__`` wherever necessary, commit the
 changes and create a new tag. If you have uncommited files in the tree, you can use ``--allow-dirty`` flag to include
 them in the commit -
 
 After the version has been bumped, make sure to push the commit **AND** the newly create tag to the upstream. This
 can be done by e.g. setting ``push.followtags=true`` in your git config or use ``git push --atomic <branch> <tag>``.
 
-Submitting a PR
----------------
-Before submitting a new pull request, please make sure you followed these instructions:
-
-- make sure that your code follows the above specified conventions
-  (see `Code style guide`_ and `Writing documentation`_).
-- if applicable, make sure you've added/modified at least 1 test to account for the changes you've made
-- make sure that all tests pass locally (see `Testing`_).
-- if there is no issue which this PR solves, create a new `one <https://github.com/theislab/squidpy/issues/new>`__
-  briefly explaining problem is
 
 Troubleshooting
 ---------------
