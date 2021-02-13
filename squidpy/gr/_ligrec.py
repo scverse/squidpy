@@ -50,7 +50,6 @@ SOURCE = "source"
 TARGET = "target"
 
 TempResult = namedtuple("TempResult", ["means", "pvalues"])
-LigrecResult = namedtuple("LigrecResult", ["means", "pvalues", "metadata"])
 
 _template = """
 @njit(parallel={parallel}, cache=False, fastmath=False)
@@ -320,7 +319,7 @@ class PermutationTestABC(ABC):
         key_added: Optional[str] = None,
         numba_parallel: Optional[bool] = None,
         **kwargs: Any,
-    ) -> Optional[LigrecResult]:
+    ) -> Optional[Mapping[str, pd.DataFrame]]:
         """
         Perform the permutation test as described in :cite:`cellphonedb`.
 
@@ -406,7 +405,7 @@ class PermutationTestABC(ABC):
             f"Running `{n_perms}` permutations on `{len(interactions)}` interactions "
             f"and `{len(clusters)}` cluster combinations using `{n_jobs}` core(s)"
         )
-        res: Union[TempResult, LigrecResult] = _analysis(
+        res = _analysis(
             data,
             interactions_,
             clusters_,
@@ -418,33 +417,32 @@ class PermutationTestABC(ABC):
             **kwargs,
         )
 
-        res = LigrecResult(
-            means=_create_sparse_df(
+        res = {
+            "means": _create_sparse_df(
                 res.means,
                 index=pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET]),
                 columns=pd.MultiIndex.from_tuples(clusters, names=["cluster_1", "cluster_2"]),
                 fill_value=0,
             ),
-            pvalues=_create_sparse_df(
+            "pvalues": _create_sparse_df(
                 res.pvalues,
                 index=pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET]),
                 columns=pd.MultiIndex.from_tuples(clusters, names=["cluster_1", "cluster_2"]),
                 fill_value=np.nan,
             ),
-            metadata=self.interactions[self.interactions.columns.difference([SOURCE, TARGET])],
-        )
-        res.metadata.index = res.means.index.copy()
+            "metadata": self.interactions[self.interactions.columns.difference([SOURCE, TARGET])],
+        }
+        res["metadata"].index = res["means"].index.copy()
+
+        if TYPE_CHECKING:
+            assert isinstance(res, dict)
 
         if corr_method is not None:
             logg.info(
                 f"Performing FDR correction across the `{corr_axis.v}` "
                 f"using method `{corr_method}` at level `{alpha}`"
             )
-            res = LigrecResult(
-                means=res.means,
-                pvalues=_fdr_correct(res.pvalues, corr_method, corr_axis, alpha=alpha),
-                metadata=res.metadata.set_index(res.means.index),
-            )
+            res["pvalues"] = _fdr_correct(res["pvalues"], corr_method, corr_axis, alpha=alpha)
 
         if copy:
             logg.info("Finish", time=start)
@@ -629,7 +627,7 @@ def ligrec(
     copy: bool = False,
     key_added: Optional[str] = None,
     **kwargs: Any,
-) -> Optional[LigrecResult]:
+) -> Optional[Mapping[str, pd.DataFrame]]:
     """
     %(PT_test.full_desc)s
 
