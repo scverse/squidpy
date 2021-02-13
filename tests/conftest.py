@@ -1,5 +1,5 @@
 from abc import ABC, ABCMeta
-from typing import Tuple, Callable, Optional, Sequence
+from typing import Tuple, Mapping, Callable, Optional, Sequence
 from pathlib import Path
 from functools import wraps
 from itertools import product
@@ -17,7 +17,6 @@ from matplotlib import pyplot
 from matplotlib.testing.compare import compare_images
 import matplotlib as mpl
 
-from squidpy.gr._ligrec import LigrecResult
 from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
 import squidpy as sp
@@ -149,14 +148,14 @@ def complexes(adata: AnnData) -> Sequence[Tuple[str, str]]:
 
 
 @pytest.fixture(scope="session")
-def ligrec_no_numba() -> LigrecResult:
+def ligrec_no_numba() -> Mapping[str, pd.DataFrame]:
     with open("tests/_data/ligrec_no_numba.pickle", "rb") as fin:
-        data = pickle.load(fin)  # saved as tuple in case of renaming LigrecResult
-        return LigrecResult(means=data[0], pvalues=data[1], metadata=data[2])
+        data = pickle.load(fin)
+        return {"means": data[0], "pvalues": data[1], "metadata": data[2]}
 
 
 @pytest.fixture(scope="session")
-def ligrec_result() -> LigrecResult:
+def ligrec_result() -> Mapping[str, pd.DataFrame]:
     adata = _adata.copy()
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
     return sp.gr.ligrec(
