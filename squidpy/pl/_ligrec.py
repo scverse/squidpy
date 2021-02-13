@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 from squidpy._docs import d
 from squidpy._utils import verbosity, _unique_order_preserving
 from squidpy.pl._utils import save_fig, _dendrogram, _filter_kwargs
-from squidpy.gr._ligrec import LigrecResult
 from squidpy._constants._constants import DendrogramAxis
 from squidpy._constants._pkg_constants import Key
 
@@ -98,7 +97,7 @@ class CustomDotplot(sc.pl.DotPlot):
 
 @d.dedent
 def ligrec(
-    adata: Union[AnnData, LigrecResult],
+    adata: Union[AnnData, Mapping[str, pd.DataFrame]],
     cluster_key: Optional[str] = None,
     source_groups: Optional[Union[str, Sequence[str]]] = None,
     target_groups: Optional[Union[str, Sequence[str]]] = None,
@@ -123,7 +122,7 @@ def ligrec(
     Parameters
     ----------
     %(adata)s
-        It can also be a :class:`LigrecResult` as returned by :func:`squidpy.gr.ligrec`.
+        It can also be a :class:`dict`, as returned by :func:`squidpy.gr.ligrec`.
     %(cluster_key)s
         Only used when ``adata`` is of type :class:`AnnData`.
     source_groups
@@ -191,10 +190,9 @@ def ligrec(
             raise KeyError(f"Key `{cluster_key}` not found in `adata.uns`.")
         adata = adata.uns[cluster_key]
 
-    if not isinstance(adata, LigrecResult):
+    if not isinstance(adata, dict):
         raise TypeError(
-            f"Expected `adata` to be either of type `anndata.AnnData` or `LigrecResult`, "
-            f"found `{type(adata).__name__}`."
+            f"Expected `adata` to be either of type `anndata.AnnData` or `dict`, " f"found `{type(adata).__name__}`."
         )
     if len(means_range) != 2:
         raise ValueError(f"Expected `means_range` to be a sequence of size `2`, found `{len(means_range)}`.")
@@ -204,12 +202,12 @@ def ligrec(
         raise ValueError(f"Expected `alpha` to be in range `[0, 1]`, found `{alpha}`.")
 
     if source_groups is None:
-        source_groups = adata.pvalues.columns.get_level_values(0)
+        source_groups = adata["pvalues"].columns.get_level_values(0)
     elif isinstance(source_groups, str):
         source_groups = (source_groups,)
 
     if target_groups is None:
-        target_groups = adata.pvalues.columns.get_level_values(1)
+        target_groups = adata["pvalues"].columns.get_level_values(1)
     if isinstance(target_groups, str):
         target_groups = (target_groups,)
     if title is None:
@@ -218,8 +216,8 @@ def ligrec(
     source_groups, _ = _unique_order_preserving(source_groups)  # type: ignore[no-redef,assignment]
     target_groups, _ = _unique_order_preserving(target_groups)  # type: ignore[no-redef,assignment]
 
-    pvals: pd.DataFrame = adata.pvalues.loc[:, (source_groups, target_groups)]
-    means: pd.DataFrame = adata.means.loc[:, (source_groups, target_groups)]
+    pvals: pd.DataFrame = adata["pvalues"].loc[:, (source_groups, target_groups)]
+    means: pd.DataFrame = adata["means"].loc[:, (source_groups, target_groups)]
 
     if pvals.empty:
         raise ValueError("No valid clusters have been selected.")
