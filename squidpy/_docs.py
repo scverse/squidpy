@@ -67,7 +67,7 @@ _spatial_key = """\
 spatial_key
     Key in :attr:`anndata.AnnData.obsm` where spatial coordinates are stored."""
 _conn_key = """\
-conn_key
+connectivity_key
     Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored."""
 _plotting = """\
 figsize
@@ -119,7 +119,7 @@ If ``copy = True``, returns a :class:`dict` with following keys:
 
 Otherwise, modifies the ``adata`` object with the following key:
 
-    - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - the above mentioned triple.
+    - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - the above mentioned :class:`dict`.
 
 `NaN` p-values mark combinations for which the mean expression of one of the interacting components was 0
 or it didn't pass the ``threshold`` percentage of cells being expressed within a given cluster."""

@@ -112,9 +112,9 @@ class FeatureMixin:
         -------
         Returns features with the following keys for each channel `c` in ``channels``:
 
-            - `'{feature_name}_ch-{c}_quantile-{q}'` - the quantile features for each quantile `q` in ``quantiles``.
-            - `'{feature_name}_ch-{c}_mean'` - the mean.
-            - `'{feature_name}_ch-{c}_std'` - the standard deviation.
+            - ``'{feature_name}_ch-{c}_quantile-{q}'`` - the quantile features for each quantile `q` in ``quantiles``.
+            - ``'{feature_name}_ch-{c}_mean'`` - the mean.
+            - ``'{feature_name}_ch-{c}_std'`` - the standard deviation.
         """
         layer = self._get_layer(layer)
         quantiles = _assert_non_empty_sequence(quantiles, name="quantiles")
