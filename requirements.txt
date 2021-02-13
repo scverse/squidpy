@@ -3,7 +3,6 @@ dask>=2.30
 data-science-types>=0.2.20  # array typehints
 docrep>=0.3.1
 ipywidgets>=7.5.1  # progress bar
-netcdf4 # where do we use it ?
 omnipath>=1.0.4
 pandas>=1.1.4
 rasterio>=1.1.8

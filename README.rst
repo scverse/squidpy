@@ -4,8 +4,9 @@ Squidpy - Spatial Molecular Data Analysis in Python
 ===================================================
 
 .. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png
-   :width: 400px
-   :align: center
+    :alt: Title figure
+    :width: 400px
+    :align: center
 
 **Squidpy** is a tool for the analysis and visualization of spatial molecular data.
 It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity and scalability.
@@ -30,7 +31,6 @@ Installation
 Install Squidpy via PyPI by running::
 
     pip install squidpy
-
 
 Contributing to Squidpy
 -----------------------

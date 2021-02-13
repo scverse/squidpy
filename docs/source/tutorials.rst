@@ -14,7 +14,7 @@ This section contains tutorials showcasing core :mod:`squidpy` functionalities.
 
 External tutorials
 ------------------
-This section contains tutorials showcasing how :mod:`squidpy` can interface with external libraries.
+This section contains tutorials showcasing how :mod:`squidpy` can be interfaced with external libraries.
 
 .. nbgallery::
     :glob:

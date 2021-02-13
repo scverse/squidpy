@@ -3,7 +3,7 @@ API
 
 Import Squidpy as::
 
-    import squidpy as sp
+    import squidpy as sq
 
 Graph
 ~~~~~

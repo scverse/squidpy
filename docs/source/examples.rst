@@ -5,7 +5,7 @@ This section contains various short examples showcasing core :mod:`squidpy` func
 
 Graph
 -----
-This section contains various examples for the :mod:`squidpy.gr` module.
+This section contains various examples from the :mod:`squidpy.gr` module.
 
 .. nbgallery::
     :glob:
@@ -14,10 +14,9 @@ This section contains various examples for the :mod:`squidpy.gr` module.
 
 Image
 -----
-This section contains various examples for the :mod:`squidpy.im` module.
+This section contains various examples from the :mod:`squidpy.im` module.
 
 .. nbgallery::
-    :caption: Image
     :glob:
 
     auto_examples/image/compute_image_container
