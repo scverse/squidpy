@@ -68,7 +68,8 @@ def ripley_k(
     copy: bool = False,
 ) -> Optional[pd.DataFrame]:
     r"""
-    Calculate Ripley's K statistics for each cluster in the tissue coordinates.
+    Calculate `Ripley's K <https://en.wikipedia.org/wiki/Spatial_descriptive_statistics#Ripley's_K_and_L_functions>`_
+    statistics for each cluster in the tissue coordinates.
 
     Parameters
     ----------
@@ -93,7 +94,7 @@ def ripley_k(
     Otherwise, modifies the ``adata`` with the following key:
 
         - :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_ripley_k']`` - the above mentioned dataframe.
-    """
+    """  # noqa: D205, D400
     try:
         # from pointpats import ripley, hull
         from astropy.stats import RipleysKEstimator
@@ -355,7 +356,9 @@ def co_occurrence(
     show_progress_bar: bool = True,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
-    Compute co-occurrence probability of clusters across `n_steps` distance thresholds in spatial dimensions.
+    Compute co-occurrence probability of clusters.
+
+    The co-occurrence is computed across ``n_steps`` distance thresholds in spatial dimensions.
 
     Parameters
     ----------
@@ -367,12 +370,13 @@ def co_occurrence(
 
     %(copy)s
     n_splits
-        Number of splits in which to divide the spatial coordinates in :attr:`anndata.AnnData.obsm` `['{spatial_key}']`.
+        Number of splits in which to divide the spatial coordinates in
+        :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
     %(parallelize)s
 
     Returns
     -------
-    If ``copy = True``, returns the co-occurence probability and the distance thresholds intervals.
+    If ``copy = True``, returns the co-occurrence probability and the distance thresholds intervals.
 
     Otherwise, modifies the ``adata`` with the following keys:
 

@@ -17,7 +17,11 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
 sys.path.insert(0, os.path.abspath("_ext"))
 
-from docs.source.utils import MaybeMiniGallery, _download_notebooks  # noqa: E402
+from docs.source.utils import (  # noqa: E402
+    _get_thumbnails,
+    MaybeMiniGallery,
+    _download_notebooks,
+)
 import squidpy  # noqa: E402
 
 needs_sphinx = "3.0"
@@ -32,8 +36,8 @@ github_repo = "https://github.com/theislab/squidpy"
 _download_notebooks(org="theislab", repo="squidpy_notebooks", raise_exc=False)
 
 # The full version, including alpha/beta/rc tags
-release = f"master ({squidpy.__version__})"
-
+release = "master"
+version = f"{release} ({squidpy.__version__})"
 
 # -- General configuration ---------------------------------------------------
 
@@ -65,7 +69,7 @@ intersphinx_mapping = dict(  # noqa: C408
     matplotlib=("https://matplotlib.org/", None),
     seaborn=("https://seaborn.pydata.org/", None),
     joblib=("https://joblib.readthedocs.io/en/latest/", None),
-    networkx=("https://networkx.org/documentation/stable", None),
+    networkx=("https://networkx.org/documentation/stable/", None),
     astropy=("https://docs.astropy.org/en/stable/", None),
     esda=("https://pysal.org/esda/", None),
     dask=("https://docs.dask.org/en/latest/", None),
@@ -91,20 +95,17 @@ exclude_patterns = [
     "auto_*/**.md5",
     "auto_*/**.py",
     "**.ipynb_checkpoints",
-]  # ignore anything that isn't .rst
-# because squidpy_notebooks doesn't commit the .py files (and we don't allow downloading them by hiding the html)
+]
 suppress_warnings = ["download.not_readable"]
 
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-#
 autosummary_generate = True
 autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
 autodoc_docstring_signature = True
-autodoc_follow_wrapped = False
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
@@ -113,7 +114,7 @@ napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
 
-# bibliograph
+# bibliography
 bibtex_bibfiles = ["references.bib"]
 bibtex_reference_style = ["author_year"]
 bibtex_default_style = "alpha"
@@ -126,15 +127,23 @@ spelling_add_pypi_package_names = True
 spelling_show_suggestions = True
 spelling_exclude_patterns = ["references.rst"]
 # see: https://pyenchant.github.io/pyenchant/api/enchant.tokenize.html
-spelling_filters = ["enchant.tokenize.URLFilter", "enchant.tokenize.EmailFilter"]
+spelling_filters = [
+    "enchant.tokenize.URLFilter",
+    "enchant.tokenize.EmailFilter",
+    "docs.source.utils.ModnameFilter",
+    "docs.source.utils.SignatureFilter",
+]
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
-html_theme_options = dict(navigation_depth=4, logo_only=True)  # noqa: C408
+html_logo = "_static/img/squidpy_horizontal.png"
+html_theme_options = {"navigation_depth": 4, "logo_only": True}
 html_show_sphinx = False
+
+nbsphinx_thumbnails = {**_get_thumbnails("auto_tutorials"), **_get_thumbnails("auto_examples")}
 
 
 def setup(app: Sphinx) -> None:
@@ -142,7 +151,12 @@ def setup(app: Sphinx) -> None:
     DEFAULT_GALLERY_CONF["download_all_examples"] = False
     DEFAULT_GALLERY_CONF["show_signature"] = False
     DEFAULT_GALLERY_CONF["log_level"] = {"backreference_missing": "info"}
+    DEFAULT_GALLERY_CONF["gallery_dirs"] = (["auto_examples", "auto_tutorials"],)
+    DEFAULT_GALLERY_CONF["default_thumb_file"] = "docs/source/_static/img/squidpy_vertical.png"
 
     app.add_config_value("sphinx_gallery_conf", DEFAULT_GALLERY_CONF, "html")
     app.add_directive("minigallery", MaybeMiniGallery)
     app.add_css_file("css/custom.css")
+    app.add_css_file("css/sphinx_gallery.css")
+    app.add_css_file("css/nbsphinx.css")
+    app.add_css_file("css/dataframe.css")  # had to add this manually

@@ -38,10 +38,10 @@ def spatial_neighbors(
     %(adata)s
     %(spatial_key)s
     coord_type
-        Type of coordinate system. Can be one of the following:
+        Type of coordinate system. Valid options are:
 
-            - `{c.VISIUM!r}`: Visium coordinates.
-            - `{c.GENERIC!r}`: generic coordinates.
+            - `{c.VISIUM!r}` - Visium coordinates.
+            - `{c.GENERIC!r}` - generic coordinates.
 
         If `None`, use `{c.VISIUM!r}` if ``spatial_key`` is present in :attr:`anndata.AnnData.obsm`,
         otherwise use `{c.GENERIC!r}`.

@@ -1,11 +1,11 @@
 Tutorials
 =========
 
-This section contains various tutorials showcasing spatial molecular data analysis with squidpy.
+This section contains various tutorials showcasing spatial molecular data analysis with :mod:`squidpy`.
 
 Core tutorials
 --------------
-This section contains tutorials showcasing core squidpy functionalities.
+This section contains tutorials showcasing core :mod:`squidpy` functionalities.
 
 .. nbgallery::
     :glob:
@@ -14,9 +14,9 @@ This section contains tutorials showcasing core squidpy functionalities.
 
 External tutorials
 ------------------
-This section contains tutorials showcasing how squidpy can interface with external libraries.
+This section contains tutorials showcasing how :mod:`squidpy` can be interfaced with external libraries.
 
 .. nbgallery::
     :glob:
 
-    tutorials_external/tutorial_*
+    external_tutorials/tutorial_*

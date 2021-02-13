@@ -1,4 +1,4 @@
-"""Plotting for gr functions."""
+"""Plotting for graph functions."""
 
 from types import MappingProxyType
 from typing import Any, Tuple, Union, Mapping, Optional, Sequence
@@ -40,7 +40,7 @@ def _maybe_set_colors(source: AnnData, target: AnnData, key: str, palette: Optio
     color_key = Key.uns.colors(key)
     try:
         if palette is not None:
-            raise KeyError
+            raise KeyError("Unable to copy the palette when there was other explicitly specified.")
         target.uns[color_key] = source.uns[color_key]
     except KeyError:
         add_colors_for_categorical_sample_annotation(target, key=key, force_update_colors=True, palette=palette)
@@ -119,9 +119,6 @@ def centrality_scores(
     score = _assert_non_empty_sequence(score, name="centrality scores")
     score = sorted(_get_valid_values(score, scores))
 
-    palette = adata.uns.get(f"{cluster_key}_colors", None)
-    if palette is not None:
-        palette = {k: v for k, v in zip(clusters, palette)}
     fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
     for g, ax in zip(score, axs):
@@ -218,7 +215,7 @@ def nhood_enrichment(
     **kwargs: Any,
 ) -> None:
     """
-    Plot neighborhood enrichement.
+    Plot neighborhood enrichment.
 
     The enrichment is computed by :func:`squidpy.gr.nhood_enrichment`.
 
@@ -227,8 +224,7 @@ def nhood_enrichment(
     %(adata)s
     %(cluster_key)s
     mode
-        Which :func:`squidpy.gr.nhood_enrichment` result to plot. \
-            Valid options are:
+        Which :func:`squidpy.gr.nhood_enrichment` result to plot. Valid options are:
 
             - `'zscore'` - z-score values of enrichment statistic.
             - `'count'` - enrichment count.
@@ -279,6 +275,8 @@ def ripley_k(
     """
     Plot Ripley K estimate for each cluster.
 
+    The estimate is computed by :func:`squidpy.gr.ripley_k`.
+
     Parameters
     ----------
     %(adata)s
@@ -287,7 +285,7 @@ def ripley_k(
     legend_kwargs
         Keyword arguments for :func:`matplotlib.pyplot.legend`.
     kwargs
-        Keyword arguments to :func:`seaborn.lineplot`.
+        Keyword arguments for :func:`seaborn.lineplot`.
 
     Returns
     -------
@@ -338,17 +336,19 @@ def co_occurrence(
     """
     Plot co-occurrence probability ratio for each cluster.
 
+    The co-occurrence is computed by :func:`squidpy.gr.co_occurrence`.
+
     Parameters
     ----------
     %(adata)s
     %(cluster_key)s
     clusters
-        Cluster instance to plot conditional probability.
+        Cluster instances for which to plot conditional probability.
     %(cat_plotting)s
     legend_kwargs
         Keyword arguments for :func:`matplotlib.pyplot.legend`.
     kwargs
-        Keyword arguments to :func:`seaborn.lineplot`.
+        Keyword arguments for :func:`seaborn.lineplot`.
 
     Returns
     -------

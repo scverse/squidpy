@@ -27,7 +27,7 @@ SegmentationModelBlob
     :inherited-members:
 
 SegmentationCustom
--------------------
+------------------
 .. autoclass:: squidpy.im.SegmentationCustom
     :members:
     :inherited-members:
