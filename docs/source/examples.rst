@@ -17,7 +17,6 @@ Image
 This section contains various examples from the :mod:`squidpy.im` module.
 
 .. nbgallery::
-    :glob:
 
     auto_examples/image/compute_image_container
     auto_examples/image/compute_crops
