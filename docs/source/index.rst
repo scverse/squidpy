@@ -1,9 +1,36 @@
-|PyPI| |CI| |Notebooks| |Docs| |Coverage|
+|PyPI| |Downloads| |CI| |Notebooks| |Docs| |Coverage|
 
-.. TODO: add nice title, description badges
+Squidpy - Spatial Molecular Data Analysis in Python
+===================================================
 
-Squidpy
-=======
+.. image:: <>
+   :width: 400px
+   :align: center
+
+**Squidpy** is a tool for the analysis and visualization of spatial molecular data.
+It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity and scalability.
+It provides analysis tools that leverages the spatial coordinates of the data, as well as
+microscopy images if available.
+
+Manuscript
+----------
+Please see our `preprint`_ on **bioRxiv** to learn more.
+
+Latest additions
+----------------
+.. include:: latest_additions.rst
+
+Squidpy's key applications
+--------------------------
+- Build and analyze the neighborhood graph from spatial coordinates.
+- Compute spatial statistics for cell-types and genes.
+- Efficiently store, analyze and visualize large microscopy images, leveraging `skimage`_.
+- Explore `anndata`_ and the large microscopy image in `napari`_.
+
+Contributing to Squidpy
+-----------------------
+If you wish to contribute to ``Squidpy``, please make sure you're familiar with our
+`Contributing guide <CONTRIBUTING.rst>`_.
 
 .. toctree::
     :caption: General
@@ -36,9 +63,19 @@ Squidpy
     :alt: Notebooks CI
 
 .. |Docs| image:: https://img.shields.io/readthedocs/squidpy
-    :target: https://img.shields.io/readthedocs/squidpy
+    :target: https://squidpy.readthedocs.io/en/latest/
     :alt: Documentation
 
 .. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/master/graph/badge.svg?token=***REMOVED***
     :target: https://codecov.io/gh/theislab/squidpy
     :alt: Coverage
+
+.. |Downloads| image:: https://pepy.tech/badge/squidpy
+    :target: https://pepy.tech/project/squidpy
+    :alt: Downloads
+
+.. _preprint: VERY SOON
+.. _scanpy: https://scanpy.readthedocs.io/en/latest/
+.. _anndata: https://anndata.readthedocs.io/en/latest/
+.. _napari: https://napari.org/
+.. _skimage: https://scikit-image.org/
