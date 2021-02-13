@@ -176,8 +176,7 @@ def nhood_enrichment(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-        seed=seed,
-    )(callback=_test, indices=indices, indptr=indptr, int_clust=int_clust, n_cls=n_cls)
+    )(callback=_test, indices=indices, indptr=indptr, int_clust=int_clust, n_cls=n_cls, seed=seed)
     zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
     if copy:
@@ -361,6 +360,7 @@ def _nhood_enrichment_helper(
     queue: Optional[SigQueue] = None,
 ) -> np.ndarray:
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
+    int_clust = int_clust.copy()  # threading
     rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])
 
     for i in range(len(ixs)):
