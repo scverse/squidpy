@@ -12,11 +12,7 @@ HERE = Path(__file__).parent
 ENDPOINT_FMT = "https://api.github.com/repos/{org}/{repo}/contents/docs/source/"
 REF = "master"
 
-# TODO: once the repo is public, token will not be needed
-HEADERS = {
-    "accept": "application/vnd.github.v3+json",
-    "Authorization": "token {}".format(os.environ.get("SQUIDPY_NOTEBOOKS_TOKEN", None)),
-}
+HEADERS = {"accept": "application/vnd.github.v3+json"}
 CHUNK_SIZE = 4 * 1024
 DEPTH = 5
 
@@ -97,11 +93,6 @@ def _download_dir(url: str, *, path: Union[str, Path], depth: int) -> Tuple[bool
 
 
 def _download_notebooks(org: str, repo: str, raise_exc: bool = False) -> None:
-    token = os.environ.get(f"{repo.upper()}_TOKEN", None)
-    if token is None:
-        info("No token information in the environment found. Not processing examples")
-        return
-
     ep = ENDPOINT_FMT.format(org=org, repo=repo)
     for path in [FIXED_TUTORIALS_DIR, TUTORIALS_DIR, EXAMPLES_DIR, GENMOD_DIR]:
         ok, reason = _download_dir(urljoin(ep, path), path=path, depth=DEPTH)

@@ -53,7 +53,7 @@ If you wish to contribute to ``Squidpy``, please make sure you're familiar with 
     :target: https://squidpy.readthedocs.io/en/latest/
     :alt: Documentation
 
-.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/master/graph/badge.svg?token=***REMOVED***
+.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/theislab/squidpy
     :alt: Coverage
 

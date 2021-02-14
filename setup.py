@@ -4,8 +4,13 @@ from setuptools import setup, find_packages
 try:
     from squidpy import __email__, __author__, __version__, __maintainer__
 except ImportError:
-    __author__ = __maintainer__ = ""
-    __email__ = ""
+    __author__ = __maintainer__ = "Theislab"
+    __email__ = ", ".join(
+        [
+            "giovanni.palla@helmholtz-muenchen.de",
+            "hannah.spitzer@helmholtz-muenchen.de",
+        ]
+    )
     __version__ = "0.0.0"
 
 setup(
@@ -40,9 +45,10 @@ setup(
             if not l.startswith("-r")
         ],
         interactive=["PyQt5>=5.15.0", "napari>=0.4.2"],
+        all=["PyQt5>=5.15.0", "napari>=0.4.2", "esda>=2.3.1", "libpysal>=4.3.0", "astropy>=4.1"],
     ),
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Science/Research",
         "Natural Language :: English",
         "License :: OSI Approved :: MIT License",
