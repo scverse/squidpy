@@ -89,11 +89,6 @@ div[class="rendered_html"] + br {
     display: none!important;
 }
 
-span[id^="sphx-glr-auto-"] {
-    min-height: 24px !important;
-    display: block !important;
-}
-
 /* remove `Jupyter notebook: <name>` from `Download Jupyter notebook: <name>`*/
 div.sphx-glr-download-jupyter code.xref.download.docutils.literal.notranslate > span:nth-child(2),
 div.sphx-glr-download-jupyter code.xref.download.docutils.literal.notranslate > span:nth-child(3) {
@@ -102,4 +97,8 @@ div.sphx-glr-download-jupyter code.xref.download.docutils.literal.notranslate > 
 
 .sphx-glr-thumbcontainer a.internal {
     padding: 140px 10px 0!important;
+}
+
+div.binder-badge img {
+    width: 120px;
 }

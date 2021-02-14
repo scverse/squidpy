@@ -144,6 +144,21 @@ html_theme_options = {"navigation_depth": 4, "logo_only": True}
 html_show_sphinx = False
 
 nbsphinx_thumbnails = {**_get_thumbnails("auto_tutorials"), **_get_thumbnails("auto_examples")}
+nbsphinx_execute_arguments = [
+    "--InlineBackend.figure_formats={'png', 'pdf'}",  # correct figure resize
+    "--InlineBackend.rc={'figure.dpi': 96}",
+]
+nbsphinx_prolog = r"""
+{% set docname = 'docs/source/' + env.doc2path(env.docname, base=None) %}
+.. raw:: html
+
+    <div class="binder-badge docutils container">
+        <a class="reference external image-reference"
+           href="https://mybinder.org/v2/gh/theislab/squidpy_notebooks/{{ env.config.release|e }}?filepath={{ docname|e }}">
+        <img alt="Launch binder" src="https://mybinder.org/badge_logo.svg" width="150px">
+        </a>
+    </div>
+"""  # noqa: E501
 
 
 def setup(app: Sphinx) -> None:
@@ -151,7 +166,7 @@ def setup(app: Sphinx) -> None:
     DEFAULT_GALLERY_CONF["download_all_examples"] = False
     DEFAULT_GALLERY_CONF["show_signature"] = False
     DEFAULT_GALLERY_CONF["log_level"] = {"backreference_missing": "info"}
-    DEFAULT_GALLERY_CONF["gallery_dirs"] = (["auto_examples", "auto_tutorials"],)
+    DEFAULT_GALLERY_CONF["gallery_dirs"] = ["auto_examples", "auto_tutorials"]
     DEFAULT_GALLERY_CONF["default_thumb_file"] = "docs/source/_static/img/squidpy_vertical.png"
 
     app.add_config_value("sphinx_gallery_conf", DEFAULT_GALLERY_CONF, "html")
