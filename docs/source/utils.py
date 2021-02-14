@@ -12,11 +12,7 @@ HERE = Path(__file__).parent
 ENDPOINT_FMT = "https://api.github.com/repos/{org}/{repo}/contents/docs/source/"
 REF = "master"
 
-# TODO: once the repo is public, token will not be needed
-HEADERS = {
-    "accept": "application/vnd.github.v3+json",
-    "Authorization": "token {}".format(os.environ.get("SQUIDPY_NOTEBOOKS_TOKEN", None)),
-}
+HEADERS = {"accept": "application/vnd.github.v3+json"}
 CHUNK_SIZE = 4 * 1024
 DEPTH = 5
 
