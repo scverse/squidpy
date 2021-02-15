@@ -659,8 +659,8 @@ def ligrec(
 @d.dedent
 def _analysis(
     data: pd.DataFrame,
-    interactions: np.ndarray[np.uint32],
-    interaction_clusters: np.ndarray[np.uint32],
+    interactions: np.ndarray,
+    interaction_clusters: np.ndarray,
     threshold: float = 0.1,
     n_perms: int = 1000,
     seed: Optional[int] = None,
@@ -743,13 +743,13 @@ def _analysis(
 
 
 def _analysis_helper(
-    perms: np.ndarray[np.uint32],
-    data: np.ndarray[np.float64],
-    mean: np.ndarray[np.float64],
-    mask: np.ndarray[np.bool_],
-    interactions: np.ndarray[np.uint32],
-    interaction_clusters: np.ndarray[np.uint32],
-    clustering: np.ndarray[np.uint32],
+    perms: np.ndarray,
+    data: np.ndarray,
+    mean: np.ndarray,
+    mask: np.ndarray,
+    interactions: np.ndarray,
+    interaction_clusters: np.ndarray,
+    clustering: np.ndarray,
     seed: Optional[int] = None,
     numba_parallel: Optional[bool] = None,
     queue: Optional[SigQueue] = None,

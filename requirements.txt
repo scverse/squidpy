@@ -1,6 +1,5 @@
 anndata>=0.7.4
 dask>=2.30
-data-science-types>=0.2.20  # array typehints
 docrep>=0.3.1
 ipywidgets>=7.5.1  # progress bar
 omnipath>=1.0.4

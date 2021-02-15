@@ -1,6 +1,4 @@
 """Functions for point patterns spatial statistics."""
-from __future__ import annotations
-
 from typing import Tuple, Union, Iterable, Optional, Sequence
 from itertools import chain
 from typing_extensions import Literal  # < 3.8
@@ -275,11 +273,11 @@ def _set_weight_class(adata: AnnData, key: str) -> W:
     fastmath=True,
 )
 def _occur_count(
-    clust: Tuple[np.ndarray[np.int32], np.ndarray[np.int32]],
-    pw_dist: np.ndarray[np.float32],
-    labs_unique: np.ndarray[np.int32],
-    interval: np.ndarray[np.float32],
-) -> np.ndarray[np.float32]:
+    clust: Tuple[np.ndarray, np.ndarray],
+    pw_dist: np.ndarray,
+    labs_unique: np.ndarray,
+    interval: np.ndarray,
+) -> np.ndarray:
     num = labs_unique.shape[0]
     out = np.zeros((num, num, interval.shape[0] - 1), dtype=ft)
 
