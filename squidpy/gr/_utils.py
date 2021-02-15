@@ -81,7 +81,6 @@ def _create_sparse_df(
     -------
     Each column of the DataFrame is stored as a :class:`arrays.SparseArray`.
     """
-    from pandas import DataFrame
     from pandas._libs.sparse import IntIndex
     from pandas.core.arrays.sparse.accessor import (
         SparseArray,
@@ -120,7 +119,7 @@ def _create_sparse_df(
         arr = SparseArray._simple_new(array_data[sl], idx, dtype)
         arrays.append(arr)
 
-    return DataFrame._from_arrays(arrays, columns=columns, index=index, verify_integrity=False)
+    return pd.DataFrame._from_arrays(arrays, columns=columns, index=index, verify_integrity=False)
 
 
 def _assert_categorical_obs(adata: AnnData, key: str) -> None:

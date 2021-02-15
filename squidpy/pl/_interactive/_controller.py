@@ -187,7 +187,7 @@ class ImageController:
 
         Returns
         -------
-        The screenshot as an RGB array of shape `(height, width, 3)`.
+        Screenshot as an RGB array of shape ``(height, width, 3)``.
         """
         return np.asarray(self.view.viewer.screenshot(path, canvas_only=True))
 

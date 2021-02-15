@@ -12,6 +12,8 @@ import pandas as pd
 
 from matplotlib.colors import to_rgb
 
+from squidpy._constants._pkg_constants import Key
+
 
 def _get_categorical(
     adata: AnnData,
@@ -30,7 +32,7 @@ def _get_categorical(
     add_colors_for_categorical_sample_annotation(
         adata, key=key, force_update_colors=palette is not None, palette=palette
     )
-    col_dict = dict(zip(adata.obs[key].cat.categories, [to_rgb(i) for i in adata.uns[f"{key}_colors"]]))
+    col_dict = dict(zip(adata.obs[key].cat.categories, [to_rgb(i) for i in adata.uns[Key.uns.colors(key)]]))
 
     return np.array([col_dict[v] for v in adata.obs[key]])
 
@@ -42,7 +44,7 @@ def _position_cluster_labels(coords: np.ndarray, clusters: pd.Series, colors: np
     df = pd.DataFrame(coords)
     df["clusters"] = clusters.values
     df = df.groupby("clusters")[[0, 1]].apply(lambda g: list(np.median(g.values, axis=0)))
-    df = pd.DataFrame((r for r in df), index=df.index)
+    df = pd.DataFrame(list(df), index=df.index)
 
     kdtree = KDTree(coords)
     clusters = np.full(len(coords), fill_value="", dtype=object)
