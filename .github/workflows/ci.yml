@@ -60,7 +60,7 @@ jobs:
     test:
         needs: init
         if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
-        timeout-minutes: 10
+        timeout-minutes: 20
         runs-on: ${{ matrix.os }}
         strategy:
             fail-fast: false

@@ -13,8 +13,7 @@ from squidpy.gr._utils import _assert_non_negative
 
 def _circular_mask(arr: np.ndarray, y: int, x: int, radius: float) -> np.ndarray:
     Y, X = np.ogrid[: arr.shape[0], : arr.shape[1]]
-
-    return ((Y - y) ** 2 + (X - x) ** 2) <= radius ** 2
+    return np.asarray(((Y - y) ** 2 + (X - x) ** 2) <= radius ** 2)
 
 
 def _num_pages(fname: str) -> int:

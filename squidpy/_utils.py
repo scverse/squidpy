@@ -28,11 +28,11 @@ __all__ = ["singledispatchmethod", "Signal", "SigQueue"]
 
 
 try:
-    from functools import singledispatchmethod  # type: ignore[attr-defined]
+    from functools import singledispatchmethod
 except ImportError:
     from functools import singledispatch, update_wrapper
 
-    def singledispatchmethod(func: Callable[..., Any]) -> Callable[..., Any]:
+    def singledispatchmethod(func: Callable[..., Any]) -> Callable[..., Any]:  # type: ignore[no-redef]
         """Backport of `singledispatchmethod` for < Python 3.8."""
         dispatcher = singledispatch(func)
 
