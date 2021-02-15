@@ -1,23 +1,9 @@
 """Functions for point patterns spatial statistics."""
 from __future__ import annotations
 
-from squidpy.gr._utils import (
-    _save_data,
-    _assert_positive,
-    _assert_spatial_basis,
-    _assert_categorical_obs,
-    _assert_connectivity_key,
-    _assert_non_empty_sequence,
-)
-
-try:
-    # [ py<3.8 ]
-    from typing import Literal  # type: ignore[attr-defined]
-except ImportError:
-    from typing_extensions import Literal
-
 from typing import Tuple, Union, Iterable, Optional, Sequence
 from itertools import chain
+from typing_extensions import Literal  # < 3.8
 import warnings
 
 from scanpy import logging as logg
@@ -33,6 +19,14 @@ import numba.types as nt
 
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
+from squidpy.gr._utils import (
+    _save_data,
+    _assert_positive,
+    _assert_spatial_basis,
+    _assert_categorical_obs,
+    _assert_connectivity_key,
+    _assert_non_empty_sequence,
+)
 from squidpy._constants._pkg_constants import Key
 
 try:
@@ -145,7 +139,7 @@ def moran(
     adata: AnnData,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: Optional[Union[str, Sequence[str]]] = None,
-    transformation: Literal["r", "B", "D", "U", "V"] = "r",  # type: ignore[name-defined]
+    transformation: Literal["r", "B", "D", "U", "V"] = "r",
     n_perms: int = 1000,
     corr_method: Optional[str] = "fdr_bh",
     layer: Optional[str] = None,
@@ -236,7 +230,7 @@ def _moran_helper(
     gen: Iterable[str],
     adata: AnnData,
     weights: W,
-    transformation: Literal["r", "B", "D", "U", "V"] = "B",  # type: ignore[name-defined]
+    transformation: Literal["r", "B", "D", "U", "V"] = "r",
     permutations: int = 1000,
     layer: Optional[str] = None,
     seed: Optional[int] = None,

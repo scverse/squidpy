@@ -143,7 +143,7 @@ class SegmentationWatershed(SegmentationModel):
 
         markers, _ = ndi.label(local_maxi)
 
-        return watershed(arr, markers, mask=mask)
+        return np.asarray(watershed(arr, markers, mask=mask))
 
 
 class SegmentationCustom(SegmentationModel):
@@ -163,7 +163,7 @@ class SegmentationCustom(SegmentationModel):
         super().__init__(model=func)
 
     def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
-        return self._model(arr, **kwargs)
+        return np.asarray(self._model(arr, **kwargs))
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}[function={getattr(self._model, '__name__', None)}]"

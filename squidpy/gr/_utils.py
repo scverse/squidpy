@@ -1,5 +1,15 @@
 """Graph utilities."""
-from typing import Any, List, Tuple, Union, Hashable, Iterable, Optional, Sequence
+from typing import (
+    Any,
+    List,
+    Tuple,
+    Union,
+    Hashable,
+    Iterable,
+    Optional,
+    Sequence,
+    TYPE_CHECKING,
+)
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -83,6 +93,8 @@ def _create_sparse_df(
         data = csc_matrix(data)
         sort_indices = False
     else:
+        if TYPE_CHECKING:
+            assert isinstance(data, spmatrix)
         data = data.tocsc()
         sort_indices = True
 
