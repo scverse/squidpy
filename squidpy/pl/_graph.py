@@ -267,7 +267,7 @@ def ripley_k(
     **kwargs: Any,
 ) -> None:
     """
-    Plot Ripley K estimate for each cluster.
+    Plot Ripley's K estimate for each cluster.
 
     The estimate is computed by :func:`squidpy.gr.ripley_k`.
 
