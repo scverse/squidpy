@@ -271,7 +271,7 @@ class FeatureMixin:
             Only relevant for features that use the ``intensity_layer``.
         props
             Segmentation features that are calculated. See `properties` in :func:`skimage.measure.regionprops_table`.
-            Each feature is calculated for each segment (e.g. nucleous) and mean and std values are returned, except
+            Each feature is calculated for each segment (e.g., nucleous) and mean and std values are returned, except
             for `'centroid'` and `'label'` (see Returns).
             Valid options are:
 
@@ -285,7 +285,7 @@ class FeatureMixin:
                 - `'extent'`: ratio of pixels in segment to its bounding box
                 - `'feret_diameter_max'`: longest distance between points around convex hull of segment
                 - `'filled_area'`: number of pixels of segment with all holes filled in
-                - `'label'`: number of nuclei
+                - `'label'`: number of segments
                 - `'major_axis_length'`: length of major axis of ellipse with same second moments as segment
                 - `'max_intensity'`: maximum intensity of ``intensity_layer`` in segment
                 - `'mean_intensity'`: mean intensity of ``intensity_layer`` in segment
