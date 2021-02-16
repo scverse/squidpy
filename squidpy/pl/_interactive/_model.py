@@ -8,6 +8,7 @@ import numpy as np
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy.im._utils import CropCoords, _NULL_COORDS
 from squidpy.pl._utils import ALayer
+from squidpy._constants._constants import Symbol
 from squidpy._constants._pkg_constants import Key
 
 __all__ = ["ImageModel"]
@@ -29,8 +30,10 @@ class ImageModel:
     cmap: str = field(default="viridis", repr=False)
     blending: str = field(default="opaque", repr=False)
     key_added: str = "shapes"
+    symbol: Symbol = Symbol.DISC
 
     def __post_init__(self) -> None:
+        self.symbol = Symbol(self.symbol)
         self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1]
 
         if self.container.data.attrs.get("coords", _NULL_COORDS) != _NULL_COORDS:

@@ -46,6 +46,13 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
 
         viewer.screenshot(dpi=DPI)
 
+    def test_plot_symbol(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
+        viewer = napari_cont.interactive(adata, symbol="square")
+        cnt = viewer._controller
+
+        cnt.add_points(adata.obs_vector(adata.var_names[42]), layer_name="foo")
+        viewer.screenshot(dpi=DPI)
+
     def test_plot_gene_X(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
         viewer = napari_cont.interactive(adata)
         cnt = viewer._controller
