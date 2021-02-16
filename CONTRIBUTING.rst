@@ -11,6 +11,7 @@ Table of Contents
 - `Writing tutorials/examples`_
 - `Creating a new release`_
 - `Submitting a PR`_
+- `Troubleshooting`_
 
 Contributing to Squidpy
 -----------------------
@@ -151,3 +152,10 @@ them in the commit.
 
 After the version has been bumped, make sure to push the commit **AND** the newly create tag to the upstream. This
 can be done by e.g. setting ``push.followtags=true`` in your git config or use ``git push --atomic <branch> <tag>``.
+
+Troubleshooting
+---------------
+- **The enchant C library was not found**
+  This can happen during the documentation build and because of a missing dependency for spell checker.
+  The installation instructions for the dependency can be found
+  `here <https://pyenchant.github.io/pyenchant/install.html#installing-the-enchant-c-library>`_.

@@ -737,6 +737,7 @@ class ImageContainer(FeatureMixin):
         cmap: str = "viridis",
         palette: Optional[str] = None,
         blending: Literal["opaque", "translucent", "additive"] = "opaque",
+        symbol: Literal["disc", "square"] = "disc",
         key_added: str = "shapes",
     ) -> Interactive:
         """
@@ -754,6 +755,12 @@ class ImageContainer(FeatureMixin):
             Colormap for categorical variables in :attr:`anndata.AnnData.obs`. If `None`, use :mod:`scanpy`'s default.
         blending
             Method which determines how RGB and alpha values of :class:`napari.layers.Shapes` are mixed.
+        symbol
+            Symbol to use for the spots. Valid options are:
+
+                - `'disc'` - circle.
+                - `'square'`  - square.
+
         key_added
             Key where to store :class:`napari.layers.Shapes` which can be exported by pressing `SHIFT-E`:
 
@@ -781,6 +788,7 @@ class ImageContainer(FeatureMixin):
             palette=palette,
             blending=blending,
             key_added=key_added,
+            symbol=symbol,
         ).show()
 
     @d.dedent

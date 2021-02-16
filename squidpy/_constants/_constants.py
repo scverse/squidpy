@@ -82,3 +82,9 @@ class DendrogramAxis(ModeEnum):  # noqa: D101
     INTERACTING_MOLS = "interacting_molecules"
     INTERACTING_CLUSTERS = "interacting_clusters"
     BOTH = "both"
+
+
+@unique
+class Symbol(ModeEnum):  # noqa: D101
+    DISC = "disc"
+    SQUARE = "square"
