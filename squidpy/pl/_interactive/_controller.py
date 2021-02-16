@@ -117,6 +117,7 @@ class ImageController:
             blending=self.model.blending,
             face_colormap=self.model.cmap,
             edge_colormap=self.model.cmap,
+            symbol=self.model.symbol.v,
             **properties,
         )
         # https://github.com/napari/napari/issues/2019
