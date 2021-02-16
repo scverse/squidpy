@@ -8,7 +8,6 @@ __email__ = ", ".join(
 __version__ = "0.0.0"
 
 from squidpy import datasets
-from squidpy._io import read_visium_data
 import squidpy.gr
 import squidpy.im
 import squidpy.pl

@@ -271,28 +271,30 @@ class FeatureMixin:
             Only relevant for features that use the ``intensity_layer``.
         props
             Segmentation features that are calculated. See `properties` in :func:`skimage.measure.regionprops_table`.
+            Each feature is calculated for each segment (e.g., nucleous) and mean and std values are returned, except
+            for `'centroid'` and `'label'` (see :ref:`Returns`).
             Valid options are:
 
-                - `'area'`
-                - `'bbox_area'`
-                - `'centroid'`
-                - `'convex_area'`
-                - `'eccentricity'`
-                - `'equivalent_diameter'`
-                - `'euler_number'`
-                - `'extent'`
-                - `'feret_diameter_max'`
-                - `'filled_area'`
-                - `'label'`
-                - `'major_axis_length'`
-                - `'max_intensity'` - uses ``intensity_layer``.
-                - `'mean_intensity'` - uses ``intensity_layer``.
-                - `'min_intensity'` - uses ``intensity_layer``.
-                - `'minor_axis_length'`
-                - `'orientation'`
-                - `'perimeter'`
-                - `'perimeter_crofton'`
-                - `'solidity'`
+                - `'area'` - number of pixels of segment.
+                - `'bbox_area'` - number of pixels of bounding box area of segment.
+                - `'centroid'` - centroid coordinates of segment.
+                - `'convex_area'` - number of pixels in convex hull of segment.
+                - `'eccentricity'` - eccentricity of ellipse with same second moments as segment.
+                - `'equivalent_diameter'` - diameter of circles with same area as segment.
+                - `'euler_number'` - euler characteristic of segment.
+                - `'extent'` - ratio of pixels in segment to its bounding box.
+                - `'feret_diameter_max'` - longest distance between points around convex hull of segment.
+                - `'filled_area'` - number of pixels of segment with all holes filled in.
+                - `'label'` - number of segments.
+                - `'major_axis_length'` - length of major axis of ellipse with same second moments as segment.
+                - `'max_intensity'` - maximum intensity of ``intensity_layer`` in segment.
+                - `'mean_intensity'` - mean intensity of ``intensity_layer`` in segment.
+                - `'min_intensity'` - min intensity of ``intensity_layer`` in segment.
+                - `'minor_axis_length'` - length of minor axis of ellipse with same second moments as segment.
+                - `'orientation'` - angle of major axis of ellipse with same second moments as segment.
+                - `'perimeter'` - perimeter of segment using 4-connectivity.
+                - `'perimeter_crofton'` - perimeter of segmeent approximated by the Crofton formula.
+                - `'solidity'` - ratio of pixels in the segment to the convex hull of the segment.
 
         Returns
         -------
