@@ -659,8 +659,8 @@ def ligrec(
 @d.dedent
 def _analysis(
     data: pd.DataFrame,
-    interactions: np.ndarray[np.uint32],
-    interaction_clusters: np.ndarray[np.uint32],
+    interactions: np.ndarray,
+    interaction_clusters: np.ndarray,
     threshold: float = 0.1,
     n_perms: int = 1000,
     seed: Optional[int] = None,
@@ -703,13 +703,13 @@ def _analysis(
     def extractor(res: Sequence[TempResult]) -> TempResult:
         assert len(res) == n_jobs, f"Expected to find `{n_jobs}` results, found `{len(res)}`."
 
-        means: List[np.ndarray] = [r.means for r in res if r.means is not None]
-        assert len(means) == 1, f"Only `1` job should've calculated the means, but found `{len(means)}`."
-        means = means[0]
+        meanss: List[np.ndarray] = [r.means for r in res if r.means is not None]
+        assert len(meanss) == 1, f"Only `1` job should've calculated the means, but found `{len(meanss)}`."
+        means = meanss[0]
         if TYPE_CHECKING:
             assert isinstance(means, np.ndarray)
 
-        pvalues: np.ndarray = np.sum([r.pvalues for r in res if r.pvalues is not None], axis=0) / float(n_perms)
+        pvalues = np.sum([r.pvalues for r in res if r.pvalues is not None], axis=0) / float(n_perms)
         assert means.shape == pvalues.shape, f"Means and p-values differ in shape: `{means.shape}`, `{pvalues.shape}`."
 
         return TempResult(means=means, pvalues=pvalues)
@@ -743,13 +743,13 @@ def _analysis(
 
 
 def _analysis_helper(
-    perms: np.ndarray[np.uint32],
-    data: np.ndarray[np.float64],
-    mean: np.ndarray[np.float64],
-    mask: np.ndarray[np.bool_],
-    interactions: np.ndarray[np.uint32],
-    interaction_clusters: np.ndarray[np.uint32],
-    clustering: np.ndarray[np.uint32],
+    perms: np.ndarray,
+    data: np.ndarray,
+    mean: np.ndarray,
+    mask: np.ndarray,
+    interactions: np.ndarray,
+    interaction_clusters: np.ndarray,
+    clustering: np.ndarray,
     seed: Optional[int] = None,
     numba_parallel: Optional[bool] = None,
     queue: Optional[SigQueue] = None,
@@ -811,7 +811,7 @@ def _analysis_helper(
     _test = globals()[fn_key]
 
     if return_means:
-        res_means = np.zeros((len(interactions), len(interaction_clusters)), dtype=np.float64)
+        res_means: Optional[np.ndarray] = np.zeros((len(interactions), len(interaction_clusters)), dtype=np.float64)
         test = partial(_test, res_means=res_means)
     else:
         res_means = None

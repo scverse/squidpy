@@ -5,7 +5,8 @@ import warnings
 from scanpy import logging as logg
 from anndata import AnnData
 
-from scipy.sparse import spmatrix, csr_matrix, SparseEfficiencyWarning
+from numba import njit
+from scipy.sparse import spmatrix, csr_matrix, isspmatrix_csr, SparseEfficiencyWarning
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
@@ -114,11 +115,12 @@ def spatial_neighbors(
     if transform == Transform.SPECTRAL:
         Adj = _transform_a_spectral(Adj)
     elif transform == Transform.COSINE:
+        print("foo")
         Adj = _transform_a_cosine(Adj)
     elif transform == Transform.NONE:
         pass
     else:
-        raise NotImplementedError(transform)
+        raise NotImplementedError(f"Transform `{transform}` is not yet implemented.")
 
     neighs_key = Key.uns.spatial_neighs(key_added)
     conns_key = Key.obsp.spatial_conn(key_added)
@@ -181,10 +183,28 @@ def _build_connectivity(
     return (conns_m, dists_m) if return_distance else conns_m
 
 
-def _transform_a_spectral(a: Union[csr_matrix, np.ndarray]) -> np.ndarray:
+@njit
+def outer(indices: np.ndarray, indptr: np.ndarray, degrees: np.ndarray) -> np.ndarray:
+    res = np.empty_like(indices, dtype=np.float64)
+    start = 0
+    for i in range(len(indptr) - 1):
+        ixs = indices[indptr[i] : indptr[i + 1]]
+        res[start : start + len(ixs)] = degrees[i] * degrees[ixs]
+        start += len(ixs)
+
+    return res
+
+
+def _transform_a_spectral(a: spmatrix) -> spmatrix:
+    if not isspmatrix_csr(a):
+        a = a.tocsr()
     degrees = np.squeeze(np.array(np.sqrt(1.0 / a.sum(axis=0))))
-    return a.multiply(np.outer(degrees, degrees))
+
+    a = a.multiply(outer(a.indices, a.indptr, degrees))
+    a.eliminate_zeros()
+
+    return a
 
 
-def _transform_a_cosine(a: Union[spmatrix, np.ndarray]) -> Union[np.ndarray, spmatrix]:
+def _transform_a_cosine(a: spmatrix) -> spmatrix:
     return cosine_similarity(a, dense_output=False)

@@ -202,14 +202,18 @@ def _points_inside_triangles(points: np.ndarray, triangles: np.ndarray) -> np.nd
 
 def _min_max_norm(vec: Union[spmatrix, np.ndarray]) -> np.ndarray:
     if issparse(vec):
-        vec = vec.A.squeeze()
+        if TYPE_CHECKING:
+            assert isinstance(vec, spmatrix)
+        vec = vec.toarray().squeeze()
     vec = np.asarray(vec, dtype=np.float64)
     if vec.ndim != 1:
         raise ValueError(f"Expected `1` dimension, found `{vec.ndim}`.")
 
     maxx, minn = np.nanmax(vec), np.nanmin(vec)
 
-    return np.ones_like(vec) if np.isclose(minn, maxx) else ((vec - minn) / (maxx - minn))
+    return (  # type: ignore[no-any-return]
+        np.ones_like(vec) if np.isclose(minn, maxx) else ((vec - minn) / (maxx - minn))
+    )
 
 
 def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vector_name_t]:
@@ -236,6 +240,8 @@ def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vect
                 raise TypeError(f"Unable to process `pandas.Series` of type `{infer_dtype(res)}`.")
             res = res.to_numpy()
         elif issparse(res):
+            if TYPE_CHECKING:
+                assert isinstance(res, spmatrix)
             res = res.toarray()
         elif not isinstance(res, (np.ndarray, Sequence)):
             raise TypeError(f"Unable to process result of type `{type(res).__name__}`.")
@@ -559,7 +565,7 @@ def _filter_kwargs(func: Callable[..., Any], kwargs: Mapping[str, Any]) -> Dict[
     return {k: v for k, v in kwargs.items() if k in style_args}
 
 
-def _dendrogram(data: np.array, method: str, **kwargs: Any) -> Tuple[List[int], List[int], List[int], List[int]]:
+def _dendrogram(data: np.ndarray, method: str, **kwargs: Any) -> Tuple[List[int], List[int], List[int], List[int]]:
     link_kwargs = _filter_kwargs(sch.linkage, kwargs)
     dendro_kwargs = _filter_kwargs(sch.dendrogram, kwargs)
 

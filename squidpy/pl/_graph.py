@@ -2,17 +2,11 @@
 
 from types import MappingProxyType
 from typing import Any, Tuple, Union, Mapping, Optional, Sequence
-
-from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
-
-try:
-    from typing import Literal  # type: ignore[attr-defined]
-except ImportError:
-    from typing_extensions import Literal
-
 from pathlib import Path
+from typing_extensions import Literal
 
 from anndata import AnnData
+from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
 import numpy as np
 import pandas as pd
@@ -202,7 +196,7 @@ def interaction_matrix(
 def nhood_enrichment(
     adata: AnnData,
     cluster_key: str,
-    mode: Literal["zscore", "count"] = "zscore",  # type: ignore[name-defined]
+    mode: Literal["zscore", "count"] = "zscore",
     annotate: bool = False,
     method: Optional[str] = None,
     title: Optional[str] = None,
@@ -273,7 +267,7 @@ def ripley_k(
     **kwargs: Any,
 ) -> None:
     """
-    Plot Ripley K estimate for each cluster.
+    Plot Ripley's K estimate for each cluster.
 
     The estimate is computed by :func:`squidpy.gr.ripley_k`.
 

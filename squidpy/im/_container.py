@@ -16,15 +16,25 @@ from typing import (
     Sequence,
     TYPE_CHECKING,
 )
+from pathlib import Path
 from itertools import chain
+from typing_extensions import Literal
 import re
+
+from scanpy import logging as logg
+from anndata import AnnData
+
+import numpy as np
+import xarray as xr
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
+from imageio import imread
 from skimage.util import img_as_float
 from skimage.transform import rescale
 
+from squidpy._docs import d
 from squidpy._utils import singledispatchmethod
 from squidpy.gr._utils import (
     _assert_in_range,
@@ -33,23 +43,6 @@ from squidpy.gr._utils import (
     _assert_spatial_basis,
     _assert_non_empty_sequence,
 )
-
-try:
-    from typing import Literal  # type: ignore[attr-defined]
-except ImportError:
-    from typing_extensions import Literal
-
-from pathlib import Path
-
-from scanpy import logging as logg
-from anndata import AnnData
-
-import numpy as np
-import xarray as xr
-
-from imageio import imread
-
-from squidpy._docs import d
 from squidpy.im._utils import (
     _num_pages,
     CropCoords,
@@ -830,10 +823,10 @@ class ImageContainer(FeatureMixin):
             res = res[..., np.newaxis]
 
         if copy:
-            res = ImageContainer(res, layer=layer, channel_dim=channel_dim)
-            res.data.attrs = self.data.attrs.copy()
+            cont = ImageContainer(res, layer=layer, channel_dim=channel_dim)
+            cont.data.attrs = self.data.attrs.copy()
 
-            return res  # type: ignore[no-any-return]
+            return cont
 
         self.add_img(
             res,

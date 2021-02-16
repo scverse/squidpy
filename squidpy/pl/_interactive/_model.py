@@ -15,7 +15,7 @@ __all__ = ["ImageModel"]
 
 @dataclass
 class ImageModel:
-    """Model which holds the data for _interactive visualization."""
+    """Model which holds the data for interactive visualization."""
 
     adata: AnnData
     container: ImageContainer

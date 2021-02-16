@@ -339,7 +339,7 @@ class FeatureMixin:
             y = coord.slice[0].start + (y_slc.stop - y_slc.start) * y
             x = coord.slice[1].start + (x_slc.stop - x_slc.start) * x
 
-            return np.c_[x, y]
+            return np.c_[x, y]  # type: ignore[no-any-return]
 
         label_layer = self._get_layer(label_layer)
 
@@ -358,7 +358,7 @@ class FeatureMixin:
         else:
             channels = ()
 
-        features = {}
+        features: Dict[str, Any] = {}
         # calculate features that do not depend on the intensity image
         tmp_features = skimage.measure.regionprops_table(
             self[label_layer].values[:, :, 0], properties=no_intensity_props
