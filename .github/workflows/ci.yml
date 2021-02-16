@@ -136,6 +136,7 @@ jobs:
             uses: peter-evans/repository-dispatch@v1
             with:
                 repository: theislab/squidpy_notebooks
+                token: ${{ secrets.NOTEBOOKS_ACCESS_TOKEN }}
                 event-type: rebuild
                 client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
