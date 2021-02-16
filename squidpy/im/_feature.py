@@ -113,6 +113,9 @@ def _calculate_image_features_helper(
     for crop in img.generate_spot_crops(adata, obs_names=obs_ids, return_obs=False, as_array=False, **kwargs):
         if TYPE_CHECKING:
             assert isinstance(crop, ImageContainer)
+        # load crop in memory to enable faster processing
+        crop._data = crop.data.load()
+
         features_dict = {}
         for feature in features:
             feature = ImageFeature(feature)
