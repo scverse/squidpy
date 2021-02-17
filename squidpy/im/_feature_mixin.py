@@ -125,8 +125,8 @@ class FeatureMixin:
         for c in channels:
             for q in quantiles:
                 features[f"{feature_name}_ch-{c}_quantile-{q}"] = np.quantile(self[layer][:, :, c], q)
-                features[f"{feature_name}_ch-{c}_mean"] = np.mean(self[layer][:, :, c].values)
-                features[f"{feature_name}_ch-{c}_std"] = np.std(self[layer][:, :, c].values)
+            features[f"{feature_name}_ch-{c}_mean"] = np.mean(self[layer][:, :, c].values)
+            features[f"{feature_name}_ch-{c}_std"] = np.std(self[layer][:, :, c].values)
 
         return features
 
