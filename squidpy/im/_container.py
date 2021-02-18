@@ -948,6 +948,9 @@ class ImageContainer(FeatureMixin):
 
         return y, x
 
+    def __delitem__(self, key: str) -> None:
+        del self.data[key]
+
     def __iter__(self) -> Iterator[str]:
         yield from self.data.keys()
 
