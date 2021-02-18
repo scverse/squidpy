@@ -195,6 +195,15 @@ class TestContainerIO:
 
             np.testing.assert_array_equal(small_cont_1c["bar"], arr)
 
+    def test_delete(self, small_cont_1c: ImageContainer):
+        assert len(small_cont_1c) == 1
+        del small_cont_1c["image"]
+
+        assert len(small_cont_1c) == 0
+
+        with pytest.raises(KeyError, match=r"'image'"):
+            del small_cont_1c["image"]
+
 
 class TestContainerCropping:
     def test_padding_top_left(self, small_cont_1c: ImageContainer):
