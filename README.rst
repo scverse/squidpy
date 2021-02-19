@@ -34,7 +34,7 @@ Install Squidpy via PyPI by running::
 
 Contributing to Squidpy
 -----------------------
-We are happy about any contributions! Before you start, check out our `Contributing guide <CONTRIBUTING.rst>`_.
+We are happy about any contributions! Before you start, check out our `contributing guide <CONTRIBUTING.rst>`_.
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/squidpy.svg
     :target: https://img.shields.io/pypi/v/squidpy.svg

@@ -28,7 +28,7 @@ Squidpy's key applications
 
 Contributing to Squidpy
 -----------------------
-We are happy about any contributions! Before you start, check out our `Contributing guide <CONTRIBUTING.rst>`_.
+We are happy about any contributions! Before you start, check out our `contributing guide`_.
 
 .. toctree::
     :caption: General
@@ -78,3 +78,4 @@ We are happy about any contributions! Before you start, check out our `Contribut
 .. _anndata: https://anndata.readthedocs.io/en/latest/
 .. _napari: https://napari.org/
 .. _skimage: https://scikit-image.org/
+.. _contributing guide: https://github.com/theislab/squidpy/blob/master/CONTRIBUTING.rst
