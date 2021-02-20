@@ -4,7 +4,7 @@ Squidpy - Spatial Single Cell Analysis in Python
 ================================================
 
 .. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png
-    :alt: Title figure
+    :alt: Logo
     :width: 400px
     :align: center
 
@@ -14,9 +14,10 @@ It provides analysis tools that leverages the spatial coordinates of the data, a
 tissue images if available.
 
 .. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png
-    :alt: Figure
+    :alt: Title figure
     :width: 400px
     :align: center
+    :target: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v1
 
 Visit our `documentation`_ for installation, tutorials, examples and more.
 
