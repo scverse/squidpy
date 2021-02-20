@@ -13,6 +13,11 @@ It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity 
 It provides analysis tools that leverages the spatial coordinates of the data, as well as
 tissue images if available.
 
+.. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png
+    :alt: Figure
+    :width: 400px
+    :align: center
+
 Manuscript
 ----------
 Please see our `preprint`_ on **bioRxiv** to learn more.
