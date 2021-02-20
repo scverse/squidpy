@@ -13,6 +13,11 @@ It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity 
 It provides analysis tools that leverages the spatial coordinates of the data, as well as
 tissue images if available.
 
+.. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png
+    :alt: Figure
+    :width: 400px
+    :align: center
+
 Visit our `documentation`_ for installation, tutorials, examples and more.
 
 Manuscript
@@ -60,7 +65,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pepy.tech/project/squidpy
     :alt: Downloads
 
-.. _preprint: VERY SOON
+.. _preprint: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v1
 .. _scanpy: https://scanpy.readthedocs.io/en/latest/
 .. _anndata: https://anndata.readthedocs.io/en/latest/
 .. _napari: https://napari.org/
