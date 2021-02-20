@@ -1,10 +1,10 @@
 |PyPI| |Downloads| |CI| |Notebooks| |Docs| |Coverage|
 
-Squidpy - Spatial Molecular Data Analysis in Python
-===================================================
+Squidpy - Spatial Single Cell Analysis in Python
+================================================
 
 .. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png
-    :alt: Title figure
+    :alt: Logo
     :width: 400px
     :align: center
 
@@ -12,6 +12,12 @@ Squidpy - Spatial Molecular Data Analysis in Python
 It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity and scalability.
 It provides analysis tools that leverages the spatial coordinates of the data, as well as
 tissue images if available.
+
+.. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png
+    :alt: Title figure
+    :width: 400px
+    :align: center
+    :target: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v1
 
 Visit our `documentation`_ for installation, tutorials, examples and more.
 
@@ -60,7 +66,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pepy.tech/project/squidpy
     :alt: Downloads
 
-.. _preprint: VERY SOON
+.. _preprint: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v1
 .. _scanpy: https://scanpy.readthedocs.io/en/latest/
 .. _anndata: https://anndata.readthedocs.io/en/latest/
 .. _napari: https://napari.org/
