@@ -1,6 +1,6 @@
 |PyPI| |Downloads| |CI| |Notebooks| |Docs| |Coverage|
 
-Squidpy - Spatial Molecular Data Analysis in Python
+Squidpy - Spatial Single Cell Analysis in Python
 ===================================================
 
 .. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png
