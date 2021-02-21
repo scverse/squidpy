@@ -37,6 +37,8 @@ Installation
 Install Squidpy via PyPI by running::
 
     pip install squidpy
+    # or with napari included
+    pip install 'squidpy[all]'
 
 Contributing to Squidpy
 -----------------------
