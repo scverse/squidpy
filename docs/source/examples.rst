@@ -1,6 +1,5 @@
 Examples
 ========
-
 This section contains various short examples showcasing core :mod:`squidpy` functionalities.
 
 Graph
