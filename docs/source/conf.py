@@ -33,7 +33,8 @@ author = squidpy.__author__
 copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
 
 github_repo = "squidpy"
-_download_notebooks(org="theislab", repo="squidpy_notebooks", raise_exc=True)
+github_nb_repo = "squidpy_notebooks"
+_download_notebooks(org="theislab", repo=github_nb_repo, raise_exc=True)
 
 # The full version, including alpha/beta/rc tags
 release = "master"
