@@ -32,6 +32,7 @@ project = "squidpy"
 author = squidpy.__author__
 copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
 
+github_repo = "squidpy"
 _download_notebooks(org="theislab", repo="squidpy_notebooks", raise_exc=True)
 
 # The full version, including alpha/beta/rc tags
