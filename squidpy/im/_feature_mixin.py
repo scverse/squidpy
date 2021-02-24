@@ -272,8 +272,7 @@ class FeatureMixin:
         props
             Segmentation features that are calculated. See `properties` in :func:`skimage.measure.regionprops_table`.
             Each feature is calculated for each segment (e.g., nucleous) and mean and std values are returned, except
-            for `'centroid'` and `'label'` (see :ref:`Returns`).
-            Valid options are:
+            for `'centroid'` and `'label'`. Valid options are:
 
                 - `'area'` - number of pixels of segment.
                 - `'bbox_area'` - number of pixels of bounding box area of segment.
