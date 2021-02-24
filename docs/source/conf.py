@@ -31,7 +31,6 @@ needs_sphinx = "3.0"
 project = "squidpy"
 author = squidpy.__author__
 copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
-github_repo = "https://github.com/theislab/squidpy"
 
 _download_notebooks(org="theislab", repo="squidpy_notebooks", raise_exc=True)
 
