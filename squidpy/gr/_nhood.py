@@ -287,6 +287,7 @@ def interaction_matrix(
     connectivity_key: Optional[str] = None,
     normalized: bool = False,
     copy: bool = False,
+    weights: bool = False,
 ) -> Optional[np.ndarray]:
     """
     Compute interaction matrix for clusters.
@@ -299,6 +300,8 @@ def interaction_matrix(
     normalized
         If `True`, each row is normalized to sum to 1.
     %(copy)s
+    weights
+        Whether to use edge weights or binarize.
 
     Returns
     -------
@@ -312,19 +315,44 @@ def interaction_matrix(
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
 
-    graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
-    cluster = {i: {cluster_key: x} for i, x in enumerate(adata.obs[cluster_key])}
+    g = adata.obsp[connectivity_key]
+    cats = adata.obs[cluster_key]
+    n_cats = len(cats.cat.categories)
 
-    nx.set_node_attributes(graph, cluster)
-    int_mat = np.asarray(
-        nx.attr_matrix(
-            graph, node_attr=cluster_key, normalized=normalized, rc_order=adata.obs[cluster_key].cat.categories
-        )
-    )
+    if weights:
+        g_data = g.data
+    else:
+        g_data = np.broadcast_to(1, shape=len(g.data))
+    if pd.api.types.is_bool_dtype(g.dtype) or pd.api.types.is_integer_dtype(g.dtype):
+        dtype = np.intp
+    else:
+        dtype = np.float_
+    output = np.zeros((n_cats, n_cats), dtype=dtype)
+
+    _interaction_matrix(g_data, g.indices, g.indptr, cats.cat.codes.to_numpy(), output)
+
+    if normalized:
+        output = output / output.sum(axis=1).reshape((-1, 1))
 
     if copy:
-        return int_mat
-    _save_data(adata, attr="uns", key=Key.uns.interaction_matrix(cluster_key), data=int_mat)
+        return output
+    _save_data(adata, attr="uns", key=Key.uns.interaction_matrix(cluster_key), data=output)
+
+
+@njit
+def _interaction_matrix(
+    data: np.ndarray, indices: np.ndarray, indptr: np.ndarray, cats: np.ndarray, output: np.ndarray
+) -> np.ndarray:
+    indices_list = np.split(indices, indptr[1:-1])
+    data_list = np.split(data, indptr[1:-1])
+    for i in range(len(data_list)):
+        cur_row = cats[i]
+        cur_indices = indices_list[i]
+        cur_data = data_list[i]
+        for j, val in zip(cur_indices, cur_data):
+            cur_col = cats[j]
+            output[cur_row, cur_col] += val
+    return output
 
 
 def _centrality_scores_helper(

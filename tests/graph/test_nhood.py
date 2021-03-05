@@ -2,6 +2,7 @@ import pytest
 
 from anndata import AnnData
 
+from scipy import sparse
 import numpy as np
 import pandas as pd
 
@@ -118,4 +119,42 @@ def test_interaction_matrix_normalize(nhood_data: AnnData, normalized: bool):
     if normalized:
         np.testing.assert_allclose(res.sum(1), 1.0), res.sum(1)
     else:
-        assert not np.allclose(res.sum(1), 1.0), res.sum(1)
+        assert len(adata.obsp["spatial_connectivities"].data) == res.sum()
+
+
+def test_interaction_matrix_values():
+    graph = sparse.csr_matrix(
+        np.array(
+            [
+                [0, 1, 1, 0, 0],
+                [0, 0, 0, 0, 1],
+                [1, 2, 0, 0, 0],
+                [0, 1, 0, 0, 1],
+                [0, 0, 1, 2, 0],
+            ]
+        )
+    )
+    adata = AnnData(
+        np.zeros((5, 5)),
+        obs={"cat": pd.Categorical.from_codes([0, 0, 0, 1, 1], ("a", "b"))},
+        obsp={"spatial_connectivities": graph},
+    )
+
+    result_weighted = interaction_matrix(adata, "cat", weights=True, copy=True)
+    result_unweighted = interaction_matrix(adata, "cat", weights=False, copy=True)
+
+    expected_weighted = np.array(
+        [
+            [5, 1],
+            [2, 3],
+        ]
+    )
+    expected_unweighted = np.array(
+        [
+            [4, 1],
+            [2, 2],
+        ]
+    )
+
+    np.testing.assert_array_equal(expected_weighted, result_weighted)
+    np.testing.assert_array_equal(expected_unweighted, result_unweighted)
