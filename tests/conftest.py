@@ -10,6 +10,7 @@ import pytest
 from anndata import AnnData
 import scanpy as sc
 
+from scipy.sparse import csr_matrix
 import numpy as np
 import pandas as pd
 
@@ -70,6 +71,26 @@ def dummy_adata() -> AnnData:
     sp.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
 
     return adata
+
+
+@pytest.fixture()
+def adata_intmat() -> AnnData:
+    graph = csr_matrix(
+        np.array(
+            [
+                [0, 1, 1, 0, 0],
+                [0, 0, 0, 0, 1],
+                [1, 2, 0, 0, 0],
+                [0, 1, 0, 0, 1],
+                [0, 0, 1, 2, 0],
+            ]
+        )
+    )
+    return AnnData(
+        np.zeros((5, 5)),
+        obs={"cat": pd.Categorical.from_codes([0, 0, 0, 1, 1], ("a", "b"))},
+        obsp={"spatial_connectivities": graph},
+    )
 
 
 @pytest.fixture(scope="session")

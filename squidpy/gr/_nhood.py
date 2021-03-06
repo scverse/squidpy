@@ -315,8 +315,14 @@ def interaction_matrix(
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
 
-    g = adata.obsp[connectivity_key]
     cats = adata.obs[cluster_key]
+    mask = ~pd.isnull(cats).values
+    cats = cats.loc[mask]
+    if not len(cats):
+        raise RuntimeError(f"After removing NaNs in `adata.obs[{cluster_key!r}]`, none remain.")
+
+    g = adata.obsp[connectivity_key]
+    g = g[mask, :][:, mask]
     n_cats = len(cats.cat.categories)
 
     if weights:
