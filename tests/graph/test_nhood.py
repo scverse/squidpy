@@ -118,4 +118,47 @@ def test_interaction_matrix_normalize(nhood_data: AnnData, normalized: bool):
     if normalized:
         np.testing.assert_allclose(res.sum(1), 1.0), res.sum(1)
     else:
-        assert not np.allclose(res.sum(1), 1.0), res.sum(1)
+        assert len(adata.obsp["spatial_connectivities"].data) == res.sum()
+
+
+def test_interaction_matrix_values(adata_intmat: AnnData):
+    result_weighted = interaction_matrix(adata_intmat, "cat", weights=True, copy=True)
+    result_unweighted = interaction_matrix(adata_intmat, "cat", weights=False, copy=True)
+
+    expected_weighted = np.array(
+        [
+            [5, 1],
+            [2, 3],
+        ]
+    )
+    expected_unweighted = np.array(
+        [
+            [4, 1],
+            [2, 2],
+        ]
+    )
+
+    np.testing.assert_array_equal(expected_weighted, result_weighted)
+    np.testing.assert_array_equal(expected_unweighted, result_unweighted)
+
+
+def test_interaction_matrix_nan_values(adata_intmat: AnnData):
+    adata_intmat.obs["cat"].iloc[0] = np.nan
+    result_weighted = interaction_matrix(adata_intmat, "cat", weights=True, copy=True)
+    result_unweighted = interaction_matrix(adata_intmat, "cat", weights=False, copy=True)
+
+    expected_weighted = np.array(
+        [
+            [2, 1],
+            [2, 3],
+        ]
+    )
+    expected_unweighted = np.array(
+        [
+            [1, 1],
+            [2, 2],
+        ]
+    )
+
+    np.testing.assert_array_equal(expected_weighted, result_weighted)
+    np.testing.assert_array_equal(expected_unweighted, result_unweighted)

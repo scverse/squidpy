@@ -10,12 +10,13 @@ import pytest
 from anndata import AnnData
 import scanpy as sc
 
+from scipy.sparse import csr_matrix
 import numpy as np
 import pandas as pd
 
-from matplotlib import pyplot
 from matplotlib.testing.compare import compare_images
 import matplotlib as mpl
+import matplotlib.pyplot as plt
 
 from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
@@ -70,6 +71,26 @@ def dummy_adata() -> AnnData:
     sp.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
 
     return adata
+
+
+@pytest.fixture()
+def adata_intmat() -> AnnData:
+    graph = csr_matrix(
+        np.array(
+            [
+                [0, 1, 1, 0, 0],
+                [0, 0, 0, 0, 1],
+                [1, 2, 0, 0, 0],
+                [0, 1, 0, 0, 1],
+                [0, 0, 1, 2, 0],
+            ]
+        )
+    )
+    return AnnData(
+        np.zeros((5, 5)),
+        obs={"cat": pd.Categorical.from_codes([0, 0, 0, 1, 1], ("a", "b"))},
+        obsp={"spatial_connectivities": graph},
+    )
 
 
 @pytest.fixture(scope="session")
@@ -264,10 +285,14 @@ class PlotTester(ABC):
         ACTUAL.mkdir(parents=True, exist_ok=True)
         out_path = ACTUAL / f"{basename}.png"
 
-        pyplot.savefig(out_path, dpi=DPI)
-        pyplot.close()
+        plt.savefig(out_path, dpi=DPI)
+        plt.close()
 
-        res = compare_images(str(EXPECTED / f"{basename}.png"), str(out_path), TOL if tolerance is None else tolerance)
+        if tolerance is None:
+            # see https://github.com/theislab/squidpy/pull/302
+            tolerance = 2 * TOL if "Napari" in str(basename) else TOL
+
+        res = compare_images(str(EXPECTED / f"{basename}.png"), str(out_path), tolerance)
 
         assert res is None, res
 
