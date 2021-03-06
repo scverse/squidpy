@@ -8,5 +8,5 @@ sphinx-autodoc-typehints>=1.10.3
 sphinx_gallery>=0.8.2
 sphinx_last_updated_by_git
 sphinx_rtd_theme
-sphinxcontrib-bibtex>=2.1.0
+sphinxcontrib-bibtex>=2.2.0
 sphinxcontrib-spelling
