@@ -117,7 +117,7 @@ todo_include_todos = False
 
 # bibliography
 bibtex_bibfiles = ["references.bib"]
-bibtex_reference_style = ["author_year"]
+bibtex_reference_style = "author_year"
 bibtex_default_style = "alpha"
 
 # spelling
