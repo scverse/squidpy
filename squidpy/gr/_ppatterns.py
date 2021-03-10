@@ -1,7 +1,6 @@
 """Functions for point patterns spatial statistics."""
 from typing import Any, Tuple, Union, Iterable, Optional, Sequence
 from itertools import chain
-import warnings
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -25,18 +24,6 @@ from squidpy.gr._utils import (
     _assert_non_empty_sequence,
 )
 from squidpy._constants._pkg_constants import Key
-
-try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        from libpysal.weights import W
-        import esda
-        import libpysal
-except ImportError:
-    esda = None
-    libpysal = None
-    W = None
-
 
 __all__ = ["ripley_k", "moran", "co_occurrence"]
 
