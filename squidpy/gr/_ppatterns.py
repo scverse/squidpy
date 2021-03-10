@@ -230,12 +230,16 @@ def _moran_helper(
         np.random.seed(seed + ix)
 
     moran_list = []
-    weights = adj.data.astype(fp)
-    arr_i, arr_j = adj.nonzero()
-
     for g in gen:
-        counts = adata.obs_vector(g, layer=layer).astype(fp)
-        mi = _moran_score_perms(arr_i, arr_j, weights, counts, counts.mean(), permutations)
+        mi = np.empty(3)
+        perms = np.empty(permutations)
+        counts = adata.obs_vector(g, layer=layer).copy()
+        mi[0] = _compute_moran(counts, adj)
+        for p in range(len(perms)):
+            np.random.shuffle(counts)
+            perms[p] = _compute_moran(counts, adj)
+        mi[1] = (np.sum(perms > mi[0]) + 1) / (permutations + 1)
+        mi[2] = np.var(perms)
         moran_list.append(mi)
 
         if queue is not None:
@@ -247,52 +251,16 @@ def _moran_helper(
     return pd.DataFrame(moran_list, columns=["I", "pval_sim", "VI_sim"], index=gen)
 
 
-@njit(
-    ft(ft[:], ft[:], ft[:], ft[:], ft),
-    parallel=False,
-    fastmath=True,
-)
 def _compute_moran(
-    counts_i: np.ndarray,
-    counts_j: np.ndarray,
     counts: np.ndarray,
-    weights: np.ndarray,
-    mean: fp,
+    adj: spmatrix,
 ) -> Any:
 
-    num = len(counts)
-    score = (weights * (counts_i - mean) * (counts_j - mean)).sum()
-    norm = np.sum((counts - mean) ** 2)
-    scale = num / weights.sum()
-    out = scale * (score / norm)
-    return out
-
-
-@njit(
-    ft[:](it[:], it[:], ft[:], ft[:], ft, it),
-    parallel=False,
-    fastmath=True,
-)
-def _moran_score_perms(
-    arr_i: np.ndarray,
-    arr_j: np.ndarray,
-    weights: np.ndarray,
-    counts: np.ndarray,
-    mean: fp,
-    n_perms: ip,
-) -> np.ndarray:
-
-    perms = np.empty(n_perms, dtype=ft)
-    res = np.empty(3, dtype=ft)
-    res[0] = _compute_moran(counts[arr_i], counts[arr_j], counts, weights, mean)
-
-    for p in range(len(perms)):
-        np.random.shuffle(arr_i)
-        np.random.shuffle(arr_j)
-        perms[p] = _compute_moran(counts[arr_i], counts[arr_j], counts, weights, mean)
-    res[1] = (np.sum(perms > res[0]) + 1) / (n_perms + 1)
-    res[2] = np.var(perms)
-    return res
+    z = counts - counts.mean()
+    zl = adj * z
+    inum = (z * zl).sum()
+    z2ss = (z * z).sum()
+    return len(counts) / adj.sum() * inum / z2ss
 
 
 @njit(
