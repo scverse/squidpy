@@ -218,15 +218,11 @@ def _moran_helper(
 
     moran_list = []
     for g in gen:
-        mi = np.empty(3)
-        perms = np.empty(permutations)
-        counts = adata.obs_vector(g, layer=layer).copy()
-        mi[0] = _compute_moran(counts, adj)
-        for p in range(len(perms)):
-            np.random.shuffle(counts)
-            perms[p] = _compute_moran(counts, adj)
-        mi[1] = (np.sum(perms > mi[0]) + 1) / (permutations + 1)
-        mi[2] = np.var(perms)
+        counts = adata.obs_vector(g, layer=layer).copy().astype(fp)
+        indptr = adj.indptr.astype(ip)
+        indices = adj.indices.astype(ip)
+        data = adj.data.astype(fp)
+        mi = _moran_score_perms(counts, indptr, indices, data, permutations)
         moran_list.append(mi)
 
         if queue is not None:
@@ -238,16 +234,55 @@ def _moran_helper(
     return pd.DataFrame(moran_list, columns=["I", "pval_sim", "VI_sim"], index=gen)
 
 
+@njit(
+    ft(ft[:], it[:], it[:], ft[:]),
+    parallel=False,
+    fastmath=True,
+)
 def _compute_moran(
     counts: np.ndarray,
-    adj: spmatrix,
+    indptr: np.ndarray,
+    indices: np.ndarray,
+    data: np.ndarray,
 ) -> Any:
 
     z = counts - counts.mean()
-    zl = adj * z
+    zl = np.empty(len(z))
+    N = len(indptr) - 1
+    for i in range(N):
+        s = slice(indptr[i], indptr[i + 1])
+        i_indices = indices[s]
+        i_data = data[s]
+        zl[i] = np.sum(i_data * z[i_indices])
+    # zl = adj * z
     inum = (z * zl).sum()
     z2ss = (z * z).sum()
-    return len(counts) / adj.sum() * inum / z2ss
+    return len(counts) / data.sum() * inum / z2ss
+
+
+@njit(
+    ft[:](ft[:], it[:], it[:], ft[:], it),
+    parallel=False,
+    fastmath=True,
+)
+def _moran_score_perms(
+    counts: np.ndarray,
+    indptr: np.ndarray,
+    indices: np.ndarray,
+    data: np.ndarray,
+    n_perms: ip,
+) -> np.ndarray:
+
+    perms = np.empty(n_perms, dtype=ft)
+    res = np.empty(3, dtype=ft)
+    res[0] = _compute_moran(counts, indptr, indices, data)
+
+    for p in range(len(perms)):
+        np.random.shuffle(counts)
+        perms[p] = _compute_moran(counts, indptr, indices, data)
+    res[1] = (np.sum(perms > res[0]) + 1) / (n_perms + 1)
+    res[2] = np.var(perms)
+    return res
 
 
 @njit(
