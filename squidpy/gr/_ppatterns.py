@@ -254,7 +254,6 @@ def _compute_moran(
         i_indices = indices[s]
         i_data = data[s]
         zl[i] = np.sum(i_data * z[i_indices])
-    # zl = adj * z
     inum = (z * zl).sum()
     z2ss = (z * z).sum()
     return len(counts) / data.sum() * inum / z2ss
