@@ -218,7 +218,7 @@ def _moran_helper(
 
     moran_list = []
     for g in gen:
-        counts = adata.obs_vector(g, layer=layer).copy().astype(fp)
+        counts = adata.obs_vector(g, layer=layer).astype(fp, copy=True)
         indptr = adj.indptr.astype(ip)
         indices = adj.indices.astype(ip)
         data = adj.data.astype(fp)
