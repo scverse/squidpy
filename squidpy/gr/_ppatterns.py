@@ -28,11 +28,11 @@ from squidpy._constants._pkg_constants import Key
 __all__ = ["ripley_k", "moran", "co_occurrence"]
 
 
-it = nt.int32
-ft = nt.float32
+it = nt.int64
+ft = nt.float64
 tt = nt.UniTuple
-ip = np.int32
-fp = np.float32
+ip = np.int64
+fp = np.float64
 
 
 @d.dedent
@@ -235,7 +235,7 @@ def _moran_helper(
 
 
 @njit(
-    ft(ft[:], it[:], it[:], ft[:]),
+    ft(ft[:], it[:], it[:], ft[:], ft[:], ft, ft),
     parallel=False,
     fastmath=True,
 )
@@ -244,9 +244,11 @@ def _compute_moran(
     indptr: np.ndarray,
     indices: np.ndarray,
     data: np.ndarray,
+    z: np.ndarray,
+    data_sum: fp,
+    z2ss: fp,
 ) -> Any:
 
-    z = counts - counts.mean()
     zl = np.empty(len(z))
     N = len(indptr) - 1
     for i in range(N):
@@ -255,8 +257,8 @@ def _compute_moran(
         i_data = data[s]
         zl[i] = np.sum(i_data * z[i_indices])
     inum = (z * zl).sum()
-    z2ss = (z * z).sum()
-    return len(counts) / data.sum() * inum / z2ss
+
+    return len(counts) / data_sum * inum / z2ss
 
 
 @njit(
@@ -274,11 +276,16 @@ def _moran_score_perms(
 
     perms = np.empty(n_perms, dtype=ft)
     res = np.empty(3, dtype=ft)
-    res[0] = _compute_moran(counts, indptr, indices, data)
+
+    z = counts - counts.mean()
+    data_sum = data.sum()
+    z2ss = (z * z).sum()
+
+    res[0] = _compute_moran(counts, indptr, indices, data, z, data_sum, z2ss)
 
     for p in range(len(perms)):
         np.random.shuffle(counts)
-        perms[p] = _compute_moran(counts, indptr, indices, data)
+        perms[p] = _compute_moran(counts, indptr, indices, data, z, data_sum, z2ss)
     res[1] = (np.sum(perms > res[0]) + 1) / (n_perms + 1)
     res[2] = np.var(perms)
     return res
