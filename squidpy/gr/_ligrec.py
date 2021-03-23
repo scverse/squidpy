@@ -497,6 +497,8 @@ class PermutationTestABC(ABC):
         """
 
         def find_min_gene_in_complex(_complex: str) -> Optional[str]:
+            if "_" not in _complex:
+                return _complex
             complexes = [c for c in _complex.split("_") if c in self._data.columns]
             if not len(complexes):
                 return None
@@ -505,7 +507,7 @@ class PermutationTestABC(ABC):
 
             df = self._data[complexes].mean()
 
-            return df.index[df.argmin()]  # type: ignore[no-any-return]
+            return str(df.index[df.argmin()])
 
         if TYPE_CHECKING:
             assert isinstance(self._interactions, pd.DataFrame)
@@ -607,8 +609,8 @@ class PermutationTest(PermutationTestABC):
                 columns={"genesymbol_intercell_source": SOURCE, "genesymbol_intercell_target": TARGET}, inplace=True
             )
 
-            interactions[SOURCE] = interactions[SOURCE].str.lstrip("COMPLEX:")
-            interactions[TARGET] = interactions[TARGET].str.lstrip("COMPLEX:")
+            interactions[SOURCE] = interactions[SOURCE].str.replace("^COMPLEX:", "")
+            interactions[TARGET] = interactions[TARGET].str.replace("^COMPLEX:", "")
 
         _ = super().prepare(interactions, complex_policy=complex_policy)
         return self
