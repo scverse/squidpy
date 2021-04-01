@@ -609,8 +609,8 @@ class PermutationTest(PermutationTestABC):
                 columns={"genesymbol_intercell_source": SOURCE, "genesymbol_intercell_target": TARGET}, inplace=True
             )
 
-            interactions[SOURCE] = interactions[SOURCE].str.replace("^COMPLEX:", "")
-            interactions[TARGET] = interactions[TARGET].str.replace("^COMPLEX:", "")
+            interactions[SOURCE] = interactions[SOURCE].str.replace("^COMPLEX:", "", regex=True)
+            interactions[TARGET] = interactions[TARGET].str.replace("^COMPLEX:", "", regex=True)
 
         _ = super().prepare(interactions, complex_policy=complex_policy)
         return self
