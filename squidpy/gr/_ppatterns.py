@@ -190,6 +190,7 @@ def moran(
 
     res = np.empty((vals.shape[0], 3), dtype=np.float32) * np.nan
 
+    start = logg.info(f"Calculating for `{n_perms}` permutations using `{n_jobs}` core(s)")
     moran = _morans_i(
         g,
         vals,
@@ -198,8 +199,6 @@ def moran(
     if n_perms is not None:
         _assert_positive(n_perms, name="n_perms")
         perms = np.arange(n_perms)
-
-        start = logg.info(f"Calculating for `{n_perms}` permutations using `{n_jobs}` core(s)")
 
         moran_perms = parallelize(
             _moran_helper,
@@ -211,10 +210,11 @@ def moran(
             show_progress_bar=show_progress_bar,
         )(g=g, vals=vals, seed=seed)
 
-        res[:, 1] = (np.sum(np.abs(moran_perms) > np.abs(moran), axis=0) + 1) / (n_perms + 1)
-        res[:, 2] = np.var(moran_perms, axis=0)
+        large_perm = (moran_perms >= moran).sum(axis=0)
+        large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
 
-        logg.info("Finish", time=start)
+        res[:, 1] = (large_perm + 1) / (n_perms + 1)
+        res[:, 2] = np.var(moran_perms, axis=0)
 
     res[:, 0] = moran
     df = pd.DataFrame(res, columns=["I", "pval_sim", "VI_sim"], index=genes)
@@ -226,6 +226,7 @@ def moran(
     df.sort_values(by="I", ascending=False, inplace=True)
 
     if copy:
+        logg.info("Finish", time=start)
         return df
 
     _save_data(adata, attr="uns", key="moranI", data=df, time=start)
@@ -244,8 +245,8 @@ def _moran_helper(
     if seed is not None:
         ix += seed
     rng = default_rng(ix)
+    idx_shuffle = np.arange(g.shape[0])
     for i, _ in enumerate(perms):
-        idx_shuffle = np.arange(g.shape[0])
         rng.shuffle(idx_shuffle)
         moran_perms[i, :] = _morans_i(
             g[idx_shuffle, :],
