@@ -9,6 +9,7 @@ from scanpy.get import _get_obs_rep
 from scanpy.metrics._morans_i import _morans_i
 
 from numba import njit
+from scipy import stats
 from numpy.random import default_rng
 from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
@@ -166,9 +167,10 @@ def moran(
     If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
 
         - `'I'` - Moran's I statistic.
+        - `'pval_z_sim'` - p-value based on standard normal approximation from permutations.
         - `'pval_sim'` - p-value based on permutations.
         - `'VI_sim'` - variance of `'I'` from permutations.
-        - `'pval_sim_{{corr_method}}'` - the corrected p-values if ``corr_method != None`` .
+        - `'{{p_val}}_{{corr_method}}'` - the corrected p-values if ``corr_method != None`` .
 
     Otherwise, modifies the ``adata`` with the following key:
 
@@ -188,7 +190,7 @@ def moran(
     vals = _get_obs_rep(adata[:, genes], use_raw=use_raw, layer=layer).T
     g = adata.obsp[connectivity_key]
 
-    res = np.empty((vals.shape[0], 3), dtype=np.float32) * np.nan
+    res = np.empty((vals.shape[0], 4), dtype=np.float32) * np.nan
 
     start = logg.info(f"Calculating for `{n_perms}` permutations using `{n_jobs}` core(s)")
     moran = _morans_i(
@@ -210,18 +212,19 @@ def moran(
             show_progress_bar=show_progress_bar,
         )(g=g, vals=vals, seed=seed)
 
-        large_perm = (moran_perms >= moran).sum(axis=0)
-        large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
+        p_sim, p_z_sim = _p_value_calc(moran, moran_perms)
 
-        res[:, 1] = (large_perm + 1) / (n_perms + 1)
-        res[:, 2] = np.var(moran_perms, axis=0)
+        res[:, 1] = p_z_sim
+        res[:, 2] = p_sim
+        res[:, 3] = np.var(moran_perms, axis=0)
 
     res[:, 0] = moran
-    df = pd.DataFrame(res, columns=["I", "pval_sim", "VI_sim"], index=genes)
+    df = pd.DataFrame(res, columns=["I", "pval_z_sim", "pval_sim", "VI_sim"], index=genes)
 
     if corr_method is not None:
-        _, pvals_adj, _, _ = multipletests(df["pval_sim"].values, alpha=0.05, method=corr_method)
-        df[f"pval_sim_{corr_method}"] = pvals_adj
+        for pv in ["pval_z_sim", "pval_sim"]:
+            _, pvals_adj, _, _ = multipletests(df[pv].values, alpha=0.05, method=corr_method)
+            df[f"{pv}_{corr_method}"] = pvals_adj
 
     df.sort_values(by="I", ascending=False, inplace=True)
 
@@ -466,3 +469,42 @@ def _find_min_max(spatial: np.ndarray) -> Tuple[float, float]:
     ].astype(fp)
 
     return thres_min, thres_max
+
+
+def _p_value_calc(score: np.ndarray, sims: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Handle simulation-based pvalues calculation.
+
+    Parameters
+    ----------
+    score
+        (n_features,)
+    sims
+        (n_simulations, n_features)
+
+    Returns
+    -------
+    pval_sim
+        p-values based on permutations
+    pval_z_sim
+        p-values based on standard normal approximation from permutations
+
+
+    """
+    n_perms = sims.shape[0]
+    large_perm = (sims >= score).sum(axis=0)
+    # subtract total perm for negative values
+    if np.any(score < 0):
+        large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
+    # get p-value based on permutation
+    p_sim = (large_perm + 1) / (n_perms + 1)
+
+    # get p-value based on standard normal approximation from permutations
+    EI_sim = sims.sum(axis=0) / n_perms
+    seI_sim = sims.std(axis=0)
+    z_sim = (score - EI_sim) / seI_sim
+    p_z_sim = np.empty(z_sim.shape)
+    p_z_sim[z_sim > 0] = 1 - stats.norm.cdf(z_sim[z_sim > 0])
+    p_z_sim[z_sim <= 0] = stats.norm.cdf(z_sim[z_sim <= 0])
+
+    return p_sim, p_z_sim
