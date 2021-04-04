@@ -2,13 +2,15 @@
 from typing import Tuple, Union, Iterable, Optional, Sequence
 from itertools import chain
 from typing_extensions import Literal  # < 3.8
-import warnings
 
 from scanpy import logging as logg
 from anndata import AnnData
+from scanpy.get import _get_obs_rep
+from scanpy.metrics._morans_i import _morans_i
 
 from numba import njit
-from scipy.sparse import isspmatrix_lil
+from numpy.random import default_rng
+from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
 from statsmodels.stats.multitest import multipletests
 import numpy as np
@@ -26,18 +28,6 @@ from squidpy.gr._utils import (
     _assert_non_empty_sequence,
 )
 from squidpy._constants._pkg_constants import Key
-
-try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        from libpysal.weights import W
-        import esda
-        import libpysal
-except ImportError:
-    esda = None
-    libpysal = None
-    W = None
-
 
 __all__ = ["ripley_k", "moran", "co_occurrence"]
 
@@ -138,10 +128,11 @@ def moran(
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: Optional[Union[str, Sequence[str]]] = None,
     transformation: Literal["r", "B", "D", "U", "V"] = "r",
-    n_perms: int = 1000,
+    n_perms: Optional[int] = None,
     corr_method: Optional[str] = "fdr_bh",
     layer: Optional[str] = None,
     seed: Optional[int] = None,
+    use_raw: bool = False,
     copy: bool = False,
     n_jobs: Optional[int] = None,
     backend: str = "loky",
@@ -183,10 +174,6 @@ def moran(
 
         - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe.
     """
-    if esda is None or libpysal is None:
-        raise ImportError("Please install `esda` and `libpysal` as `pip install esda libpysal`.")
-
-    _assert_positive(n_perms, name="n_perms")
     _assert_connectivity_key(adata, connectivity_key)
 
     if genes is None:
@@ -197,18 +184,40 @@ def moran(
     genes = _assert_non_empty_sequence(genes, name="genes")
 
     n_jobs = _get_n_cores(n_jobs)
-    start = logg.info(f"Calculating for `{len(genes)}` genes using `{n_jobs}` core(s)")
 
-    w = _set_weight_class(adata, key=connectivity_key)  # init weights
-    df = parallelize(
-        _moran_helper,
-        collection=genes,
-        extractor=pd.concat,
-        use_ixs=True,
-        n_jobs=n_jobs,
-        backend=backend,
-        show_progress_bar=show_progress_bar,
-    )(adata=adata, weights=w, transformation=transformation, permutations=n_perms, layer=layer, seed=seed)
+    vals = _get_obs_rep(adata[:, genes], use_raw=use_raw, layer=layer).T
+    g = adata.obsp[connectivity_key]
+
+    res = np.empty((vals.shape[0], 3), dtype=np.float32) * np.nan
+
+    moran = _morans_i(
+        g,
+        vals,
+    )
+
+    if n_perms is not None:
+        _assert_positive(n_perms, name="n_perms")
+        perms = np.arange(n_perms)
+
+        start = logg.info(f"Calculating for `{n_perms}` permutations using `{n_jobs}` core(s)")
+
+        moran_perms = parallelize(
+            _moran_helper,
+            collection=perms,
+            extractor=np.concatenate,
+            use_ixs=False,
+            n_jobs=n_jobs,
+            backend=backend,
+            show_progress_bar=show_progress_bar,
+        )(g=g, vals=vals, seed=seed)
+
+        res[:, 1] = (np.sum(moran_perms > moran, axis=0) + 1) / (n_perms + 1)
+        res[:, 2] = np.var(moran_perms, axis=0)
+
+        logg.info("Finish", time=start)
+
+    res[:, 0] = moran
+    df = pd.DataFrame(res, columns=["I", "pval_sim", "VI_sim"], index=genes)
 
     if corr_method is not None:
         _, pvals_adj, _, _ = multipletests(df["pval_sim"].values, alpha=0.05, method=corr_method)
@@ -217,30 +226,30 @@ def moran(
     df.sort_values(by="I", ascending=False, inplace=True)
 
     if copy:
-        logg.info("Finish", time=start)
         return df
 
     _save_data(adata, attr="uns", key="moranI", data=df, time=start)
 
 
 def _moran_helper(
-    ix: int,
-    gen: Iterable[str],
-    adata: AnnData,
-    weights: W,
-    transformation: Literal["r", "B", "D", "U", "V"] = "r",
-    permutations: int = 1000,
-    layer: Optional[str] = None,
+    perms: Sequence[int],
+    g: spmatrix,
+    vals: np.ndarray,
     seed: Optional[int] = None,
     queue: Optional[SigQueue] = None,
 ) -> pd.DataFrame:
-    if seed is not None:
-        np.random.seed(seed + ix)
 
-    moran_list = []
-    for g in gen:
-        mi = _compute_moran(adata.obs_vector(g, layer=layer), weights, transformation, permutations)
-        moran_list.append(mi)
+    moran_perms = np.empty((len(perms), vals.shape[0]))
+    for i, p in enumerate(perms):
+        if seed is not None:
+            p += seed
+        rng = default_rng(p)
+        idx_shuffle = np.arange(g.shape[0])
+        rng.shuffle(idx_shuffle)
+        moran_perms[i, :] = _morans_i(
+            g[idx_shuffle, :],
+            vals,
+        )
 
         if queue is not None:
             queue.put(Signal.UPDATE)
@@ -248,23 +257,7 @@ def _moran_helper(
     if queue is not None:
         queue.put(Signal.FINISH)
 
-    return pd.DataFrame(moran_list, columns=["I", "pval_sim", "VI_sim"], index=gen)
-
-
-def _compute_moran(y: np.ndarray, w: W, transformation: str, permutations: int) -> Tuple[float, float, float]:
-    mi = esda.moran.Moran(y, w, transformation=transformation, permutations=permutations)
-    return mi.I, mi.p_z_sim, mi.VI_sim
-
-
-def _set_weight_class(adata: AnnData, key: str) -> W:
-    X = adata.obsp[key]
-    if not isspmatrix_lil(X):
-        X = X.tolil()
-
-    neighbors = dict(enumerate(X.rows))
-    weights = dict(enumerate(X.data))
-
-    return libpysal.weights.W(neighbors, weights, ids=adata.obs.index.values)
+    return moran_perms
 
 
 @njit(
