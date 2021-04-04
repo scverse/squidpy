@@ -205,13 +205,13 @@ def moran(
             _moran_helper,
             collection=perms,
             extractor=np.concatenate,
-            use_ixs=False,
+            use_ixs=True,
             n_jobs=n_jobs,
             backend=backend,
             show_progress_bar=show_progress_bar,
         )(g=g, vals=vals, seed=seed)
 
-        res[:, 1] = (np.sum(moran_perms > moran, axis=0) + 1) / (n_perms + 1)
+        res[:, 1] = (np.sum(np.abs(moran_perms) > np.abs(moran), axis=0) + 1) / (n_perms + 1)
         res[:, 2] = np.var(moran_perms, axis=0)
 
         logg.info("Finish", time=start)
@@ -232,6 +232,7 @@ def moran(
 
 
 def _moran_helper(
+    ix: int,
     perms: Sequence[int],
     g: spmatrix,
     vals: np.ndarray,
@@ -240,10 +241,10 @@ def _moran_helper(
 ) -> pd.DataFrame:
 
     moran_perms = np.empty((len(perms), vals.shape[0]))
-    for i, p in enumerate(perms):
-        if seed is not None:
-            p += seed
-        rng = default_rng(p)
+    if seed is not None:
+        ix += seed
+    rng = default_rng(ix)
+    for i, _ in enumerate(perms):
         idx_shuffle = np.arange(g.shape[0])
         rng.shuffle(idx_shuffle)
         moran_perms[i, :] = _morans_i(
