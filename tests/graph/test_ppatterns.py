@@ -34,14 +34,14 @@ def test_moran_seq_par(dummy_adata: AnnData):
 
     assert MORAN_K in dummy_adata.uns.keys()
     assert "pval_sim_fdr_bh" in dummy_adata.uns[MORAN_K]
-    assert dummy_adata.uns[MORAN_K].columns.shape == (4,)
+    assert dummy_adata.uns[MORAN_K].columns.shape == (6,)
     # test highly variable
     assert dummy_adata.uns[MORAN_K].shape != df.shape
     # assert idx are sorted and contain same elements
     assert not np.array_equal(idx_df, idx_adata)
     np.testing.assert_array_equal(sorted(idx_df), sorted(idx_adata))
     # check parallel gives same results
-    with pytest.raises(AssertionError, match=r'.*\(column name="pval_sim"\) are different.*'):
+    with pytest.raises(AssertionError, match=r'.*\(column name="pval_z_sim"\) are different.*'):
         # because the seeds will be different, we don't expect the pval_sim values to be the same
         assert_frame_equal(df, df_parallel)
 
@@ -61,7 +61,7 @@ def test_moran_reproducibility(dummy_adata: AnnData, n_jobs: int):
     assert MORAN_K in dummy_adata.uns.keys()
     # assert fdr correction in adata.uns
     assert "pval_sim_fdr_bh" in dummy_adata.uns[MORAN_K]
-    assert dummy_adata.uns[MORAN_K].columns.shape == (4,)
+    assert dummy_adata.uns[MORAN_K].columns.shape == (6,)
     # test highly variable
     assert dummy_adata.uns[MORAN_K].shape != df_1.shape
     # assert idx are sorted and contain same elements
