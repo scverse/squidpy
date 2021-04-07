@@ -1,11 +1,12 @@
 """Functions for point patterns spatial statistics."""
-from typing import Tuple, Union, Iterable, Optional, Sequence
+from typing import Tuple, Union, Callable, Iterable, Optional, Sequence
 from itertools import chain
 from typing_extensions import Literal  # < 3.8
 
 from scanpy import logging as logg
 from anndata import AnnData
 from scanpy.get import _get_obs_rep
+from scanpy.metrics._gearys_c import _gearys_c
 from scanpy.metrics._morans_i import _morans_i
 
 from numba import njit
@@ -30,7 +31,7 @@ from squidpy.gr._utils import (
 )
 from squidpy._constants._pkg_constants import Key
 
-__all__ = ["ripley_k", "moran", "co_occurrence"]
+__all__ = ["ripley_k", "spatial_autocorr", "co_occurrence"]
 
 
 it = nt.int32
@@ -124,11 +125,11 @@ def ripley_k(
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
-def moran(
+def spatial_autocorr(
     adata: AnnData,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: Optional[Union[str, Sequence[str]]] = None,
-    transformation: Literal["r", "B", "D", "U", "V"] = "r",
+    mode: Literal["moran", "geary"] = "moran",
     n_perms: Optional[int] = None,
     corr_method: Optional[str] = "fdr_bh",
     layer: Optional[str] = None,
@@ -140,20 +141,20 @@ def moran(
     show_progress_bar: bool = True,
 ) -> Optional[pd.DataFrame]:
     """
-    Calculate Moran’s I Global Autocorrelation Statistic.
+    Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
 
     Parameters
     ----------
     %(adata)s
     %(conn_key)s
     genes
-        List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute Moran's I statistics
-        :cite:`pysal`.
+        List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute global
+        spatial autocorrelation statistic.
 
         If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present. Otherwise,
         it's computed for all genes.
-    transformation
-        Transformation to be used, as reported in :class:`esda.Moran`. Default is `"r"`, row-standardized.
+    mode
+        Mode of score calculation: Moran's I or Geary's C.
     %(n_perms)s
     %(corr_method)s
     layer
@@ -166,7 +167,7 @@ def moran(
     -------
     If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
 
-        - `'I'` - Moran's I statistic.
+        - `'I' or 'C'` - Moran's I or Geary's C statistic.
         - `'pval_z_sim'` - p-value based on standard normal approximation from permutations.
         - `'pval_sim'` - p-value based on permutations.
         - `'VI_sim'` - variance of `'I'` from permutations.
@@ -185,6 +186,15 @@ def moran(
             genes = adata.var_names.values
     genes = _assert_non_empty_sequence(genes, name="genes")
 
+    if mode == "moran":
+        func = _morans_i
+        stats = "I"
+    elif mode == "geary":
+        func = _gearys_c
+        stats = "C"
+    else:
+        raise NotImplementedError(f"mode: `{mode}` not available.")
+
     n_jobs = _get_n_cores(n_jobs)
 
     vals = _get_obs_rep(adata[:, genes], use_raw=use_raw, layer=layer).T
@@ -193,7 +203,7 @@ def moran(
     res = np.empty((vals.shape[0], 4), dtype=np.float32) * np.nan
 
     start = logg.info(f"Calculating for `{n_perms}` permutations using `{n_jobs}` core(s)")
-    moran = _morans_i(
+    score = func(
         g,
         vals,
     )
@@ -202,56 +212,57 @@ def moran(
         _assert_positive(n_perms, name="n_perms")
         perms = np.arange(n_perms)
 
-        moran_perms = parallelize(
-            _moran_helper,
+        score_perms = parallelize(
+            _score_helper,
             collection=perms,
             extractor=np.concatenate,
             use_ixs=True,
             n_jobs=n_jobs,
             backend=backend,
             show_progress_bar=show_progress_bar,
-        )(g=g, vals=vals, seed=seed)
+        )(func=func, g=g, vals=vals, seed=seed)
 
-        p_sim, p_z_sim = _p_value_calc(moran, moran_perms)
+        p_sim, p_z_sim = _p_value_calc(score, score_perms)
 
         res[:, 1] = p_z_sim
         res[:, 2] = p_sim
-        res[:, 3] = np.var(moran_perms, axis=0)
+        res[:, 3] = np.var(score_perms, axis=0)
 
-    res[:, 0] = moran
-    df = pd.DataFrame(res, columns=["I", "pval_z_sim", "pval_sim", "VI_sim"], index=genes)
+    res[:, 0] = score
+    df = pd.DataFrame(res, columns=[stats, "pval_z_sim", "pval_sim", "VI_sim"], index=genes)  # fix names
 
     if corr_method is not None:
         for pv in ["pval_z_sim", "pval_sim"]:
             _, pvals_adj, _, _ = multipletests(df[pv].values, alpha=0.05, method=corr_method)
             df[f"{pv}_{corr_method}"] = pvals_adj
 
-    df.sort_values(by="I", ascending=False, inplace=True)
+    df.sort_values(by=stats, ascending=False, inplace=True)
 
     if copy:
         logg.info("Finish", time=start)
         return df
 
-    _save_data(adata, attr="uns", key="moranI", data=df, time=start)
+    _save_data(adata, attr="uns", key=mode + stats, data=df, time=start)
 
 
-def _moran_helper(
+def _score_helper(
     ix: int,
     perms: Sequence[int],
+    func: Callable[..., np.ndarray],
     g: spmatrix,
     vals: np.ndarray,
     seed: Optional[int] = None,
     queue: Optional[SigQueue] = None,
 ) -> pd.DataFrame:
 
-    moran_perms = np.empty((len(perms), vals.shape[0]))
+    score_perms = np.empty((len(perms), vals.shape[0]))
     if seed is not None:
         ix += seed
     rng = default_rng(ix)
     idx_shuffle = np.arange(g.shape[0])
     for i, _ in enumerate(perms):
         rng.shuffle(idx_shuffle)
-        moran_perms[i, :] = _morans_i(
+        score_perms[i, :] = func(
             g[idx_shuffle, :],
             vals,
         )
@@ -262,7 +273,7 @@ def _moran_helper(
     if queue is not None:
         queue.put(Signal.FINISH)
 
-    return moran_perms
+    return score_perms
 
 
 @njit(
