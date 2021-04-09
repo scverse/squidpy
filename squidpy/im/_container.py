@@ -930,10 +930,10 @@ class ImageContainer(FeatureMixin):
 
         res = list(size)
         if size[0] is None:
-            res[0] = self.shape[0]  # type: ignore[unreachable]
+            res[0] = self.shape[0]
 
         if size[1] is None:
-            res[1] = self.shape[1]  # type: ignore[unreachable]
+            res[1] = self.shape[1]
 
         return tuple(res)  # type: ignore[return-value]
 

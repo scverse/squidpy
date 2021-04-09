@@ -19,7 +19,7 @@ Graph
     gr.centrality_scores
     gr.interaction_matrix
     gr.ligrec
-    gr.moran
+    gr.spatial_autocorr
     gr.ripley_k
     gr.co_occurrence
 

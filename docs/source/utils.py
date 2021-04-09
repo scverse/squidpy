@@ -93,6 +93,10 @@ def _download_dir(url: str, *, path: Union[str, Path], depth: int) -> Tuple[bool
 
 
 def _download_notebooks(org: str, repo: str, raise_exc: bool = False) -> None:
+    if not int(os.environ.get("SQUIDPY_DOWNLOAD_NOTEBOOKS", 1)):
+        info("Not downloading notebooks because a flag is set")
+        return
+
     ep = ENDPOINT_FMT.format(org=org, repo=repo)
     for path in [FIXED_TUTORIALS_DIR, TUTORIALS_DIR, EXAMPLES_DIR, GENMOD_DIR]:
         ok, reason = _download_dir(urljoin(ep, path), path=path, depth=DEPTH)

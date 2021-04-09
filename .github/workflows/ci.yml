@@ -112,14 +112,12 @@ jobs:
             with:
                 path: .tox
                 key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/tox.ini') }}
-                restore-keys: |
-                    tox-${{ runner.os }}-${{ env.pythonLocation }}-
-                    tox-${{ runner.os }}-
 
         -   name: Testing
             run: |
                 tox -vv
             env:
+                MPLBACKEND: agg
                 PLATFORM: ${{ matrix.os }}
                 DISPLAY: :42
 
