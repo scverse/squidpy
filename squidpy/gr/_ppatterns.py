@@ -30,6 +30,7 @@ from squidpy.gr._utils import (
     _assert_connectivity_key,
     _assert_non_empty_sequence,
 )
+from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 
 __all__ = ["ripley_k", "spatial_autocorr", "co_occurrence"]
@@ -125,12 +126,12 @@ def ripley_k(
 
 
 @d.dedent
-@inject_docs(key=Key.obsp.spatial_conn())
+@inject_docs(key=Key.obsp.spatial_conn(), a=SpatialAutocorr)
 def spatial_autocorr(
     adata: AnnData,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: Optional[Union[str, Sequence[str]]] = None,
-    mode: Literal["moran", "geary"] = "moran",
+    mode: Literal[SpatialAutocorr.MORAN, SpatialAutocorr.GEARY] = SpatialAutocorr.MORAN,
     transformation: bool = True,
     n_perms: Optional[int] = None,
     two_tailed: bool = False,
@@ -160,15 +161,15 @@ def spatial_autocorr(
         it's computed for all genes.
     mode
         Mode of score calculation:
-        - `'moran'` - `Moran's I autocorrelation <https://en.wikipedia.org/wiki/Moran%27s_I>`_ .
-        - `'geary'` - `Geary's C autocorrelation <https://en.wikipedia.org/wiki/Geary%27s_C>`_ .
+        - `{a.MORAN.s!r}` - `Moran's I autocorrelation <https://en.wikipedia.org/wiki/Moran%27s_I>`_ .
+        - `{a.GEARY.s!r}` - `Geary's C autocorrelation <https://en.wikipedia.org/wiki/Geary%27s_C>`_ .
     transformation
         If `True`, weights in :attr:`anndata.AnnData.obsp` ``['{connectivity_key}']`` are row-normalized,
         advised for analytic p-value calculation.
     %(n_perms)s
          If `None`, only p-values under normality assumption are computed.
     two_tailed
-        If true, pval_norm is two-tailed, otherwise it is one-tailed.
+        If true, p-values are two-tailed, otherwise they are one-tailed.
     %(corr_method)s
     layer
         Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
@@ -203,11 +204,11 @@ def spatial_autocorr(
 
     params: Dict[str, Any] = {"mode": mode, "transformation": transformation, "two_tailed": two_tailed}
 
-    if params["mode"] == "moran":
+    if params["mode"] == SpatialAutocorr.MORAN:
         params["func"] = _morans_i
         params["stat"] = "I"
         params["expected"] = -1.0 / (adata.shape[0] - 1)  # expected score
-    elif params["mode"] == "geary":
+    elif params["mode"] == SpatialAutocorr.GEARY:
         params["func"] = _gearys_c
         params["stat"] = "C"
         params["expected"] = 1.0
@@ -229,7 +230,7 @@ def spatial_autocorr(
         vals,
     )
 
-    start = logg.info(f"Calculating for `{n_perms}` permutations using `{n_jobs}` core(s)")
+    start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
         _assert_positive(n_perms, name="n_perms")
         perms = np.arange(n_perms)
@@ -246,7 +247,8 @@ def spatial_autocorr(
     else:
         score_perms = None
 
-    p_norm, var_norm, p_sim, p_z_sim, var_sim = _p_value_calc(score, score_perms, g, params)
+    with np.errstate(divide="warn"):
+        p_norm, var_norm, p_sim, p_z_sim, var_sim = _p_value_calc(score, score_perms, g, params)
 
     res[:, 1] = p_norm
     res[:, 2] = var_norm
