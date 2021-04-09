@@ -1,5 +1,5 @@
 """Functions for point patterns spatial statistics."""
-from typing import Any, Dict, Tuple, Union, Iterable, Optional, Sequence
+from typing import Any, Dict, Tuple, Union, Iterable, Optional, Sequence, TYPE_CHECKING
 from itertools import chain
 from typing_extensions import Literal  # < 3.8
 
@@ -131,7 +131,7 @@ def spatial_autocorr(
     adata: AnnData,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: Optional[Union[str, Sequence[str]]] = None,
-    mode: Literal[SpatialAutocorr.MORAN.s, SpatialAutocorr.GEARY.s] = SpatialAutocorr.MORAN.s,  # type: ignore
+    mode: Literal["moran", "geary"] = SpatialAutocorr.MORAN.s,  # type: ignore[assignment]
     transformation: bool = True,
     n_perms: Optional[int] = None,
     two_tailed: bool = False,
@@ -161,13 +161,15 @@ def spatial_autocorr(
         it's computed for all genes.
     mode
         Mode of score calculation:
-        - `{sp.MORAN.s!r}` - `Moran's I autocorrelation <https://en.wikipedia.org/wiki/Moran%27s_I>`_ .
-        - `{sp.GEARY.s!r}` - `Geary's C autocorrelation <https://en.wikipedia.org/wiki/Geary%27s_C>`_ .
+
+            - `{sp.MORAN.s!r}` - `Moran's I autocorrelation <https://en.wikipedia.org/wiki/Moran%27s_I>`_.
+            - `{sp.GEARY.s!r}` - `Geary's C autocorrelation <https://en.wikipedia.org/wiki/Geary%27s_C>`_.
+
     transformation
         If `True`, weights in :attr:`anndata.AnnData.obsp` ``['{key}']`` are row-normalized,
         advised for analytic p-value calculation.
     %(n_perms)s
-         If `None`, only p-values under normality assumption are computed.
+        If `None`, only p-values under normality assumption are computed.
     two_tailed
         If `True`, p-values are two-tailed, otherwise they are one-tailed.
     %(corr_method)s
@@ -186,14 +188,16 @@ def spatial_autocorr(
         - `'var_norm'` - variance of `'score'` under normality assumption.
         - `'{{p_val}}_{{corr_method}}'` - the corrected p-values if ``corr_method != None`` .
 
-        If ``n_perms != None`` is not None, additionally returns the following columns:
+    If ``n_perms != None`` is not None, additionally returns the following columns:
+
         - `'pval_z_sim'` - p-value based on standard normal approximation from permutations.
         - `'pval_sim'` - p-value based on permutations.
         - `'var_sim'` - variance of `'score'` from permutations.
 
     Otherwise, modifies the ``adata`` with the following key:
 
-        - :attr:`anndata.AnnData.uns` ``['score_statistic']`` - the above mentioned dataframe.
+        - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe, if ``mode = {sp.MORAN.s!r}``.
+        - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
     _assert_connectivity_key(adata, connectivity_key)
 
@@ -204,18 +208,23 @@ def spatial_autocorr(
             genes = adata.var_names.values
     genes = _assert_non_empty_sequence(genes, name="genes")
 
-    params: Dict[str, Any] = {"mode": mode, "transformation": transformation, "two_tailed": two_tailed}
+    mode = SpatialAutocorr(mode)  # type: ignore[assignment]
+    if TYPE_CHECKING:
+        assert isinstance(mode, SpatialAutocorr)
+    params = {"mode": mode.s, "transformation": transformation, "two_tailed": two_tailed}
 
-    if params["mode"] == SpatialAutocorr.MORAN.s:
+    if mode == SpatialAutocorr.MORAN:
         params["func"] = _morans_i
         params["stat"] = "I"
         params["expected"] = -1.0 / (adata.shape[0] - 1)  # expected score
-    elif params["mode"] == SpatialAutocorr.GEARY.s:
+        params["ascending"] = False
+    elif mode == SpatialAutocorr.GEARY:
         params["func"] = _gearys_c
         params["stat"] = "C"
         params["expected"] = 1.0
+        params["ascending"] = True
     else:
-        raise NotImplementedError(f"mode: `{mode}` is not available.")
+        raise NotImplementedError(f"Mode `{mode}` is not yet implemented.")
 
     n_jobs = _get_n_cores(n_jobs)
 
@@ -225,10 +234,7 @@ def spatial_autocorr(
     if transformation:
         normalize(g, norm="l1", axis=1, copy=False)
 
-    score = params["func"](
-        g,
-        vals,
-    )
+    score = params["func"](g, vals)
 
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
@@ -260,10 +266,7 @@ def spatial_autocorr(
             _, pvals_adj, _, _ = multipletests(df[pv].values, alpha=0.05, method=corr_method)
             df[f"{pv}_{corr_method}"] = pvals_adj
 
-    if params["mode"] == "moran":
-        df.sort_values(by=params["stat"], ascending=False, inplace=True)
-    elif params["mode"] == "geary":
-        df.sort_values(by=params["stat"], ascending=True, inplace=True)
+    df.sort_values(by=params["stat"], ascending=params["ascending"], inplace=True)
 
     if copy:
         logg.info("Finish", time=start)
@@ -275,7 +278,7 @@ def spatial_autocorr(
 def _score_helper(
     ix: int,
     perms: Sequence[int],
-    mode: str,
+    mode: SpatialAutocorr,
     g: spmatrix,
     vals: np.ndarray,
     seed: Optional[int] = None,
@@ -283,14 +286,11 @@ def _score_helper(
 ) -> pd.DataFrame:
     score_perms = np.empty((len(perms), vals.shape[0]))
     rng = default_rng(None if seed is None else ix + seed)
-    func = _morans_i if mode == "moran" else _gearys_c
+    func = _morans_i if mode == SpatialAutocorr.MORAN else _gearys_c
 
     for i in range(len(perms)):
         idx_shuffle = rng.permutation(g.shape[0])
-        score_perms[i, :] = func(
-            g[idx_shuffle, :],
-            vals,
-        )
+        score_perms[i, :] = func(g[idx_shuffle, :], vals)
 
         if queue is not None:
             queue.put(Signal.UPDATE)
@@ -509,7 +509,7 @@ def _find_min_max(spatial: np.ndarray) -> Tuple[float, float]:
 
 def _p_value_calc(
     score: np.ndarray,
-    sims: Union[np.ndarray, None],
+    sims: Optional[np.ndarray],
     weights: Union[spmatrix, np.ndarray],
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -533,37 +533,34 @@ def _p_value_calc(
         p-values based on permutations
     pval_z_sim
         p-values based on standard normal approximation from permutations
-
     """
-    if sims is not None:
-        n_perms = sims.shape[0]
-        large_perm = (sims >= score).sum(axis=0)
-        # subtract total perm for negative values
-        large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
-        # get p-value based on permutation
-        p_sim: np.ndarray = (large_perm + 1) / (n_perms + 1)
-
-        # get p-value based on standard normal approximation from permutations
-        e_score_sim = sims.sum(axis=0) / n_perms
-        se_score_sim = sims.std(axis=0)
-        z_sim = (score - e_score_sim) / se_score_sim
-        p_z_sim = np.empty(z_sim.shape)
-
-        p_z_sim[z_sim > 0] = 1 - stats.norm.cdf(z_sim[z_sim > 0])
-        p_z_sim[z_sim <= 0] = stats.norm.cdf(z_sim[z_sim <= 0])
-
-        var_sim = np.var(sims, axis=0)
-    else:
-        p_sim = p_z_sim = var_sim = None  # type: ignore
-
     p_norm, var_norm = _analytic_pval(score, weights, params)
+    results = {"pval_norm": p_norm, "var_norm": var_norm}
 
-    results = {}
-    for k, v in zip(
-        ["pval_norm", "var_norm", "pval_z_sim", "pval_sim", "var_sim"], [p_norm, var_norm, p_z_sim, p_sim, var_sim]
-    ):
-        if v is not None:
-            results[k] = v
+    if sims is None:
+        return results
+
+    n_perms = sims.shape[0]
+    large_perm = (sims >= score).sum(axis=0)
+    # subtract total perm for negative values
+    large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
+    # get p-value based on permutation
+    p_sim: np.ndarray = (large_perm + 1) / (n_perms + 1)
+
+    # get p-value based on standard normal approximation from permutations
+    e_score_sim = sims.sum(axis=0) / n_perms
+    se_score_sim = sims.std(axis=0)
+    z_sim = (score - e_score_sim) / se_score_sim
+    p_z_sim = np.empty(z_sim.shape)
+
+    p_z_sim[z_sim > 0] = 1 - stats.norm.cdf(z_sim[z_sim > 0])
+    p_z_sim[z_sim <= 0] = stats.norm.cdf(z_sim[z_sim <= 0])
+
+    var_sim = np.var(sims, axis=0)
+
+    results["pval_z_sim"] = p_z_sim
+    results["pval_sim"] = p_sim
+    results["var_sim"] = var_sim
 
     return results
 
@@ -572,11 +569,10 @@ def _analytic_pval(
     score: np.ndarray, g: Union[spmatrix, np.ndarray], params: Dict[str, Any]
 ) -> Tuple[np.ndarray, float]:
     """
-    Analytic pvalue computation.
+    Analytic p-value computation.
 
-    See `Moran's I <https://pysal.org/esda/_modules/esda/moran.html#Moran>`_
-    and `Geary's C <https://pysal.org/esda/_modules/esda/geary.html#Geary>`_
-    implementation.
+    See `Moran's I <https://pysal.org/esda/_modules/esda/moran.html#Moran>`_ and
+    `Geary's C <https://pysal.org/esda/_modules/esda/geary.html#Geary>`_ implementation.
     """
     s0, s1, s2 = _g_moments(g)
     n = g.shape[0]
@@ -603,7 +599,7 @@ def _g_moments(w: Union[spmatrix, np.ndarray]) -> Tuple[np.float_, np.float_, np
     """
     Compute moments of adjacency matrix for analytic p-value calculation.
 
-    see `Pysal <https://pysal.org/libpysal/_modules/libpysal/weights/weights.html#W>`_ implementation.
+    See `pysal <https://pysal.org/libpysal/_modules/libpysal/weights/weights.html#W>`_ implementation.
     """
     # s0
     s0 = w.sum()
