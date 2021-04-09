@@ -39,9 +39,10 @@ def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
     elif mode == "geary":
         UNS_KEY = GEARY_C
     assert UNS_KEY in dummy_adata.uns.keys()
-    assert "pval_sim_fdr_bh" in dummy_adata.uns[UNS_KEY]
+    assert "pval_sim_fdr_bh" in df
     assert "pval_norm_fdr_bh" in dummy_adata.uns[UNS_KEY]
-    assert dummy_adata.uns[UNS_KEY].columns.shape == (9,)
+    assert dummy_adata.uns[UNS_KEY].columns.shape == (4,)
+    assert df.columns.shape == (9,)
     # test pval_norm same
     np.testing.assert_array_equal(df["pval_norm"].values, df["pval_norm"].values)
     # test highly variable
@@ -57,7 +58,7 @@ def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 @pytest.mark.parametrize("n_jobs", [1, 2])
-def test_moran_reproducibility(dummy_adata: AnnData, n_jobs: int, mode: str):
+def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mode: str):
     """Check spatial autocorr reproducibility results."""
     spatial_autocorr(dummy_adata, mode=mode)
     dummy_adata.var["highly_variable"] = np.random.choice([True, False], size=dummy_adata.var_names.shape)
@@ -74,12 +75,13 @@ def test_moran_reproducibility(dummy_adata: AnnData, n_jobs: int, mode: str):
         UNS_KEY = GEARY_C
     assert UNS_KEY in dummy_adata.uns.keys()
     # assert fdr correction in adata.uns
-    assert "pval_sim_fdr_bh" in dummy_adata.uns[UNS_KEY]
+    assert "pval_sim_fdr_bh" in df_1
     assert "pval_norm_fdr_bh" in dummy_adata.uns[UNS_KEY]
     # test pval_norm same
     np.testing.assert_array_equal(df_1["pval_norm"].values, df_2["pval_norm"].values)
     np.testing.assert_array_equal(df_1["var_norm"].values, df_2["var_norm"].values)
-    assert dummy_adata.uns[UNS_KEY].columns.shape == (9,)
+    assert dummy_adata.uns[UNS_KEY].columns.shape == (4,)
+    assert df_2.columns.shape == (9,)
     # test highly variable
     assert dummy_adata.uns[UNS_KEY].shape != df_1.shape
     # assert idx are sorted and contain same elements
