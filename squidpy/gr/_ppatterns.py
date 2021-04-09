@@ -159,11 +159,14 @@ def spatial_autocorr(
         If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present. Otherwise,
         it's computed for all genes.
     mode
-        Mode of score calculation: Moran's I or Geary's C.
+        Mode of score calculation:
+        - `'moran'` - `Moran's I autocorrelation <https://en.wikipedia.org/wiki/Moran%27s_I>`_ .
+        - `'geary'` - `Geary's C autocorrelation <https://en.wikipedia.org/wiki/Geary%27s_C>`_ .
     transformation
-        If True, weights in `adata.obsp[connectivity_key]` are row-normalized,
+        If `True`, weights in :attr:`anndata.AnnData.obsp` ``['{connectivity_key}']`` are row-normalized,
         advised for analytic p-value calculation.
     %(n_perms)s
+         If `None`, only p-values under normality assumption are computed.
     two_tailed
         If true, pval_norm is two-tailed, otherwise it is one-tailed.
     %(corr_method)s
@@ -266,8 +269,8 @@ def spatial_autocorr(
     elif params["mode"] == "geary":
         df.sort_values(by=params["stat"], ascending=True, inplace=True)
 
-    logg.info("Finish", time=start)
     if copy:
+        logg.info("Finish", time=start)
         return df
 
     _save_data(adata, attr="uns", key=params["mode"] + params["stat"], data=df, time=start)
