@@ -287,10 +287,8 @@ def _score_helper(
 ) -> pd.DataFrame:
 
     score_perms = np.empty((len(perms), vals.shape[0]))
-    if seed is not None:
-        ix += seed
-    rng = default_rng(ix)
-    for i, _ in enumerate(perms):
+    rng = default_rng(None if seed is None else ix + seed)
+    for i in range(len(perms)):
         idx_shuffle = rng.permutation(g.shape[0])
         score_perms[i, :] = func(
             g[idx_shuffle, :],
