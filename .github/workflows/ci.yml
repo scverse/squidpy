@@ -57,32 +57,6 @@ jobs:
             run: |
                 tox -e lint
 
-    lint-docs:
-        # this always succeeds because we don't download the notebooks + warnings are not error in tox
-        needs: init
-        if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
-        runs-on: ubuntu-latest
-        steps:
-        -   uses: actions/checkout@v2
-            with:
-                fetch-depth: 0
-        -   name: Set up Python
-            uses: actions/setup-python@v2
-            with:
-                python-version: 3.8
-
-        -   name: Install dependencies
-            run: |
-                python -m pip install --upgrade pip
-                pip install tox
-                # sudo apt install pandoc  # uncomment if downloading notebooks
-
-        -   name: Linting
-            run: |
-                tox -e check-docs
-            env:
-                SQUIDPY_DOWNLOAD_NOTEBOOKS: 0
-
     test:
         needs: init
         if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
@@ -155,7 +129,7 @@ jobs:
                 codecov --no-color --required --flags unittests
 
     rebuild-notebooks:
-        needs: [lint, lint-docs, test]
+        needs: [lint, test]
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         runs-on: ubuntu-latest
         steps:
@@ -168,7 +142,7 @@ jobs:
                 client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
     deploy:
-        needs: [lint, lint-docs, test]
+        needs: [lint, test]
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
         runs-on: ubuntu-latest
         steps:
