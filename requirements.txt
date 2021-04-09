@@ -2,7 +2,7 @@ anndata>=0.7.4
 dask>=2.30
 docrep>=0.3.1
 ipywidgets>=7.5.1  # progress bar
-leidenalg
+leidenalg>=0.8.2
 omnipath>=1.0.4
 pandas>=1.2.0
 rasterio>=1.1.8
