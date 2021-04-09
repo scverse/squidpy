@@ -75,6 +75,7 @@ jobs:
             run: |
                 python -m pip install --upgrade pip
                 pip install tox
+                # sudo apt install pandoc  # uncomment if downloading notebooks
 
         -   name: Linting
             run: |
@@ -137,9 +138,6 @@ jobs:
             with:
                 path: .tox
                 key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/tox.ini') }}
-                restore-keys: |
-                    tox-${{ runner.os }}-${{ env.pythonLocation }}-
-                    tox-${{ runner.os }}-
 
         -   name: Testing
             run: |
