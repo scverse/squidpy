@@ -15,14 +15,12 @@ import numpy as np
 import pandas as pd
 
 from matplotlib.testing.compare import compare_images
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
 import squidpy as sp
 
-mpl.use("agg")
 HERE: Path = Path(__file__).parent
 
 EXPECTED = HERE / "_images"
