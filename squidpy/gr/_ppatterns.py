@@ -126,12 +126,12 @@ def ripley_k(
 
 
 @d.dedent
-@inject_docs(key=Key.obsp.spatial_conn(), a=SpatialAutocorr)
+@inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
 def spatial_autocorr(
     adata: AnnData,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: Optional[Union[str, Sequence[str]]] = None,
-    mode: Literal[SpatialAutocorr.MORAN, SpatialAutocorr.GEARY] = SpatialAutocorr.MORAN,
+    mode: Literal[SpatialAutocorr.MORAN.s, SpatialAutocorr.GEARY.s] = SpatialAutocorr.MORAN.s,  # type: ignore
     transformation: bool = True,
     n_perms: Optional[int] = None,
     two_tailed: bool = False,
@@ -161,10 +161,10 @@ def spatial_autocorr(
         it's computed for all genes.
     mode
         Mode of score calculation:
-        - `{a.MORAN.s!r}` - `Moran's I autocorrelation <https://en.wikipedia.org/wiki/Moran%27s_I>`_ .
-        - `{a.GEARY.s!r}` - `Geary's C autocorrelation <https://en.wikipedia.org/wiki/Geary%27s_C>`_ .
+        - `{sp.MORAN.s!r}` - `Moran's I autocorrelation <https://en.wikipedia.org/wiki/Moran%27s_I>`_ .
+        - `{sp.GEARY.s!r}` - `Geary's C autocorrelation <https://en.wikipedia.org/wiki/Geary%27s_C>`_ .
     transformation
-        If `True`, weights in :attr:`anndata.AnnData.obsp` ``['{connectivity_key}']`` are row-normalized,
+        If `True`, weights in :attr:`anndata.AnnData.obsp` ``['{key}']`` are row-normalized,
         advised for analytic p-value calculation.
     %(n_perms)s
          If `None`, only p-values under normality assumption are computed.
@@ -184,10 +184,12 @@ def spatial_autocorr(
         - `'I' or 'C'` - Moran's I or Geary's C statistic.
         - `'pval_norm'` - p-value under normality assumption.
         - `'var_norm'` - variance of `'score'` under normality assumption.
+        - `'{{p_val}}_{{corr_method}}'` - the corrected p-values if ``corr_method != None`` .
+
+        If ``n_perms != None`` is not None, additionally returns the following columns:
         - `'pval_z_sim'` - p-value based on standard normal approximation from permutations.
         - `'pval_sim'` - p-value based on permutations.
         - `'var_sim'` - variance of `'score'` from permutations.
-        - `'{{p_val}}_{{corr_method}}'` - the corrected p-values if ``corr_method != None`` .
 
     Otherwise, modifies the ``adata`` with the following key:
 
@@ -204,11 +206,11 @@ def spatial_autocorr(
 
     params: Dict[str, Any] = {"mode": mode, "transformation": transformation, "two_tailed": two_tailed}
 
-    if params["mode"] == SpatialAutocorr.MORAN:
+    if params["mode"] == SpatialAutocorr.MORAN.s:
         params["func"] = _morans_i
         params["stat"] = "I"
         params["expected"] = -1.0 / (adata.shape[0] - 1)  # expected score
-    elif params["mode"] == SpatialAutocorr.GEARY:
+    elif params["mode"] == SpatialAutocorr.GEARY.s:
         params["func"] = _gearys_c
         params["stat"] = "C"
         params["expected"] = 1.0
@@ -222,8 +224,6 @@ def spatial_autocorr(
     # row-normalize
     if transformation:
         normalize(g, norm="l1", axis=1, copy=False)
-
-    res = np.empty((vals.shape[0], 6), dtype=np.float32) * np.nan
 
     score = params["func"](
         g,
@@ -247,19 +247,13 @@ def spatial_autocorr(
     else:
         score_perms = None
 
-    with np.errstate(divide="warn"):
-        p_norm, var_norm, p_sim, p_z_sim, var_sim = _p_value_calc(score, score_perms, g, params)
+    with np.errstate(divide="ignore"):
+        pval_results = _p_value_calc(score, score_perms, g, params)
 
-    res[:, 1] = p_norm
-    res[:, 2] = var_norm
-    res[:, 3] = p_z_sim
-    res[:, 4] = p_sim
-    res[:, 5] = var_sim
+    results = {params["stat"]: score}
+    results.update(pval_results)
 
-    res[:, 0] = score
-    df = pd.DataFrame(
-        res, columns=[params["stat"], "pval_norm", "var_norm", "pval_z_sim", "pval_sim", "var_sim"], index=genes
-    )  # fix names
+    df = pd.DataFrame(results, index=genes)
 
     if corr_method is not None:
         for pv in filter(lambda x: "pval" in x, df.columns):
@@ -518,7 +512,7 @@ def _p_value_calc(
     sims: Union[np.ndarray, None],
     weights: Union[spmatrix, np.ndarray],
     params: Dict[str, Any],
-) -> Tuple[np.ndarray, float, np.ndarray, np.ndarray, Union[Any, np.ndarray]]:
+) -> Dict[str, Any]:
     """
     Handle p-value calculation for spatial autocorrelation function.
 
@@ -560,11 +554,18 @@ def _p_value_calc(
 
         var_sim = np.var(sims, axis=0)
     else:
-        p_sim = p_z_sim = var_sim = np.empty(score.shape[0]) * np.nan
+        p_sim = p_z_sim = var_sim = None  # type: ignore
 
     p_norm, var_norm = _analytic_pval(score, weights, params)
 
-    return p_norm, var_norm, p_sim, p_z_sim, var_sim
+    results = {}
+    for k, v in zip(
+        ["pval_norm", "var_norm", "pval_z_sim", "pval_sim", "var_sim"], [p_norm, var_norm, p_z_sim, p_sim, var_sim]
+    ):
+        if v is not None:
+            results[k] = v
+
+    return results
 
 
 def _analytic_pval(
