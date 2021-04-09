@@ -1,5 +1,5 @@
 """Functions for point patterns spatial statistics."""
-from typing import Any, Dict, Tuple, Union, Callable, Iterable, Optional, Sequence
+from typing import Any, Dict, Tuple, Union, Iterable, Optional, Sequence
 from itertools import chain
 from typing_extensions import Literal  # < 3.8
 
@@ -239,7 +239,7 @@ def spatial_autocorr(
             n_jobs=n_jobs,
             backend=backend,
             show_progress_bar=show_progress_bar,
-        )(func=params["func"], g=g, vals=vals, seed=seed)
+        )(mode=mode, g=g, vals=vals, seed=seed)
     else:
         score_perms = None
 
@@ -276,15 +276,16 @@ def spatial_autocorr(
 def _score_helper(
     ix: int,
     perms: Sequence[int],
-    func: Callable[..., np.ndarray],
+    mode: str,
     g: spmatrix,
     vals: np.ndarray,
     seed: Optional[int] = None,
     queue: Optional[SigQueue] = None,
 ) -> pd.DataFrame:
-
     score_perms = np.empty((len(perms), vals.shape[0]))
     rng = default_rng(None if seed is None else ix + seed)
+    func = _morans_i if mode == "moran" else _gearys_c
+
     for i in range(len(perms)):
         idx_shuffle = rng.permutation(g.shape[0])
         score_perms[i, :] = func(
