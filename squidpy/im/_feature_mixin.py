@@ -271,7 +271,7 @@ class FeatureMixin:
             Only relevant for features that use the ``intensity_layer``.
         props
             Segmentation features that are calculated. See `properties` in :func:`skimage.measure.regionprops_table`.
-            Each feature is calculated for each segment (e.g., nucleous) and mean and std values are returned, except
+            Each feature is calculated for each segment (e.g., nucleus) and mean and std values are returned, except
             for `'centroid'` and `'label'`. Valid options are:
 
                 - `'area'` - number of pixels of segment.
@@ -280,7 +280,7 @@ class FeatureMixin:
                 - `'convex_area'` - number of pixels in convex hull of segment.
                 - `'eccentricity'` - eccentricity of ellipse with same second moments as segment.
                 - `'equivalent_diameter'` - diameter of circles with same area as segment.
-                - `'euler_number'` - euler characteristic of segment.
+                - `'euler_number'` - Euler characteristic of segment.
                 - `'extent'` - ratio of pixels in segment to its bounding box.
                 - `'feret_diameter_max'` - longest distance between points around convex hull of segment.
                 - `'filled_area'` - number of pixels of segment with all holes filled in.
@@ -292,7 +292,7 @@ class FeatureMixin:
                 - `'minor_axis_length'` - length of minor axis of ellipse with same second moments as segment.
                 - `'orientation'` - angle of major axis of ellipse with same second moments as segment.
                 - `'perimeter'` - perimeter of segment using 4-connectivity.
-                - `'perimeter_crofton'` - perimeter of segmeent approximated by the Crofton formula.
+                - `'perimeter_crofton'` - perimeter of segment approximated by the Crofton formula.
                 - `'solidity'` - ratio of pixels in the segment to the convex hull of the segment.
 
         Returns

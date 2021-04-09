@@ -165,7 +165,7 @@ def spatial_autocorr(
         advised for analytic p-value calculation.
     %(n_perms)s
     two_tailed
-        If true, pval_norm is two-tailed, otherwise it is one-tailed.
+        If true, `'pval_norm'` is two-tailed, otherwise it is one-tailed.
     %(corr_method)s
     layer
         Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.

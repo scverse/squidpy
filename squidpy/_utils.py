@@ -57,7 +57,7 @@ def _unique_order_preserving(iterable: Iterable[Hashable]) -> Tuple[List[Hashabl
 
 
 class Signal(Enum):
-    """Signalling values when informing parallelizer."""
+    """Signaling values when informing parallelizer."""
 
     NONE = 0
     UPDATE = 1
