@@ -5,9 +5,10 @@ from anndata import AnnData
 from pandas.testing import assert_frame_equal
 import numpy as np
 
-from squidpy.gr import moran, ripley_k, co_occurrence
+from squidpy.gr import ripley_k, co_occurrence, spatial_autocorr
 
 MORAN_K = "moranI"
+GEARY_C = "gearyC"
 
 
 def test_ripley_k(adata: AnnData):
@@ -22,21 +23,29 @@ def test_ripley_k(adata: AnnData):
     assert cat_ripley.isdisjoint(cat_adata) is False
 
 
-def test_moran_seq_par(dummy_adata: AnnData):
-    """Check whether moran results are the same for seq. and parallel computation."""
-    moran(dummy_adata)
+@pytest.mark.parametrize("mode", ["moran", "geary"])
+def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
+    """Check whether spatial autocorr results are the same for seq. and parallel computation."""
+    spatial_autocorr(dummy_adata, mode=mode)
     dummy_adata.var["highly_variable"] = np.random.choice([True, False], size=dummy_adata.var_names.shape)
-    df = moran(dummy_adata, copy=True, n_jobs=1, seed=42, n_perms=50)
-    df_parallel = moran(dummy_adata, copy=True, n_jobs=2, seed=42, n_perms=50)
+    df = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=1, seed=42, n_perms=50)
+    df_parallel = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=2, seed=42, n_perms=50)
 
     idx_df = df.index.values
     idx_adata = dummy_adata[:, dummy_adata.var.highly_variable.values].var_names.values
 
-    assert MORAN_K in dummy_adata.uns.keys()
-    assert "pval_sim_fdr_bh" in dummy_adata.uns[MORAN_K]
-    assert dummy_adata.uns[MORAN_K].columns.shape == (6,)
+    if mode == "moran":
+        UNS_KEY = MORAN_K
+    elif mode == "geary":
+        UNS_KEY = GEARY_C
+    assert UNS_KEY in dummy_adata.uns.keys()
+    assert "pval_sim_fdr_bh" in dummy_adata.uns[UNS_KEY]
+    assert "pval_norm_fdr_bh" in dummy_adata.uns[UNS_KEY]
+    assert dummy_adata.uns[UNS_KEY].columns.shape == (9,)
+    # test pval_norm same
+    np.testing.assert_array_equal(df["pval_norm"].values, df["pval_norm"].values)
     # test highly variable
-    assert dummy_adata.uns[MORAN_K].shape != df.shape
+    assert dummy_adata.uns[UNS_KEY].shape != df.shape
     # assert idx are sorted and contain same elements
     assert not np.array_equal(idx_df, idx_adata)
     np.testing.assert_array_equal(sorted(idx_df), sorted(idx_adata))
@@ -46,24 +55,33 @@ def test_moran_seq_par(dummy_adata: AnnData):
         assert_frame_equal(df, df_parallel)
 
 
+@pytest.mark.parametrize("mode", ["moran", "geary"])
 @pytest.mark.parametrize("n_jobs", [1, 2])
-def test_moran_reproducibility(dummy_adata: AnnData, n_jobs: int):
-    """Check moran reproducibility results."""
-    moran(dummy_adata)
+def test_moran_reproducibility(dummy_adata: AnnData, n_jobs: int, mode: str):
+    """Check spatial autocorr reproducibility results."""
+    spatial_autocorr(dummy_adata, mode=mode)
     dummy_adata.var["highly_variable"] = np.random.choice([True, False], size=dummy_adata.var_names.shape)
     # seed will work only when multiprocessing/loky
-    df_1 = moran(dummy_adata, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
-    df_2 = moran(dummy_adata, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
+    df_1 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
+    df_2 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
 
     idx_df = df_1.index.values
     idx_adata = dummy_adata[:, dummy_adata.var.highly_variable.values].var_names.values
 
-    assert MORAN_K in dummy_adata.uns.keys()
+    if mode == "moran":
+        UNS_KEY = MORAN_K
+    elif mode == "geary":
+        UNS_KEY = GEARY_C
+    assert UNS_KEY in dummy_adata.uns.keys()
     # assert fdr correction in adata.uns
-    assert "pval_sim_fdr_bh" in dummy_adata.uns[MORAN_K]
-    assert dummy_adata.uns[MORAN_K].columns.shape == (6,)
+    assert "pval_sim_fdr_bh" in dummy_adata.uns[UNS_KEY]
+    assert "pval_norm_fdr_bh" in dummy_adata.uns[UNS_KEY]
+    # test pval_norm same
+    np.testing.assert_array_equal(df_1["pval_norm"].values, df_2["pval_norm"].values)
+    np.testing.assert_array_equal(df_1["var_norm"].values, df_2["var_norm"].values)
+    assert dummy_adata.uns[UNS_KEY].columns.shape == (9,)
     # test highly variable
-    assert dummy_adata.uns[MORAN_K].shape != df_1.shape
+    assert dummy_adata.uns[UNS_KEY].shape != df_1.shape
     # assert idx are sorted and contain same elements
     assert not np.array_equal(idx_df, idx_adata)
     np.testing.assert_array_equal(sorted(idx_df), sorted(idx_adata))
