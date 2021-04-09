@@ -1,5 +1,5 @@
 """Functions for point patterns spatial statistics."""
-from typing import Tuple, Union, Callable, Iterable, Optional, Sequence
+from typing import Any, Dict, Tuple, Union, Callable, Iterable, Optional, Sequence
 from itertools import chain
 from typing_extensions import Literal  # < 3.8
 
@@ -14,6 +14,7 @@ from scipy import stats
 from numpy.random import default_rng
 from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
+from sklearn.preprocessing import normalize
 from statsmodels.stats.multitest import multipletests
 import numpy as np
 import pandas as pd
@@ -130,7 +131,9 @@ def spatial_autocorr(
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: Optional[Union[str, Sequence[str]]] = None,
     mode: Literal["moran", "geary"] = "moran",
+    transformation: bool = True,
     n_perms: Optional[int] = None,
+    two_tailed: bool = False,
     corr_method: Optional[str] = "fdr_bh",
     layer: Optional[str] = None,
     seed: Optional[int] = None,
@@ -155,7 +158,12 @@ def spatial_autocorr(
         it's computed for all genes.
     mode
         Mode of score calculation: Moran's I or Geary's C.
+    transformation
+        If True, weights in `adata.obsp[connectivity_key]` are row-normalized,
+        advised for analytic p-value calculation.
     %(n_perms)s
+    two_tailed
+        If true, pval_norm is two-tailed, otherwise it is one-tailed.
     %(corr_method)s
     layer
         Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
@@ -168,14 +176,16 @@ def spatial_autocorr(
     If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
 
         - `'I' or 'C'` - Moran's I or Geary's C statistic.
+        - `'pval_norm'` - p-value under normality assumption.
+        - `'var_norm'` - variance of `'score'` under normality assumption.
         - `'pval_z_sim'` - p-value based on standard normal approximation from permutations.
         - `'pval_sim'` - p-value based on permutations.
-        - `'VI_sim'` - variance of `'I'` from permutations.
+        - `'var_sim'` - variance of `'score'` from permutations.
         - `'{{p_val}}_{{corr_method}}'` - the corrected p-values if ``corr_method != None`` .
 
     Otherwise, modifies the ``adata`` with the following key:
 
-        - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe.
+        - :attr:`anndata.AnnData.uns` ``['score_statistic']`` - the above mentioned dataframe.
     """
     _assert_connectivity_key(adata, connectivity_key)
 
@@ -186,28 +196,35 @@ def spatial_autocorr(
             genes = adata.var_names.values
     genes = _assert_non_empty_sequence(genes, name="genes")
 
-    if mode == "moran":
-        func = _morans_i
-        stats = "I"
-    elif mode == "geary":
-        func = _gearys_c
-        stats = "C"
+    params: Dict[str, Any] = {"mode": mode, "transformation": transformation, "two_tailed": two_tailed}
+
+    if params["mode"] == "moran":
+        params["func"] = _morans_i
+        params["stat"] = "I"
+        params["expected"] = -1.0 / (adata.shape[0] - 1)  # expected score
+    elif params["mode"] == "geary":
+        params["func"] = _gearys_c
+        params["stat"] = "C"
+        params["expected"] = 1.0
     else:
-        raise NotImplementedError(f"mode: `{mode}` not available.")
+        raise NotImplementedError(f"mode: `{mode}` is not available.")
 
     n_jobs = _get_n_cores(n_jobs)
 
     vals = _get_obs_rep(adata[:, genes], use_raw=use_raw, layer=layer).T
-    g = adata.obsp[connectivity_key]
+    g = adata.obsp[connectivity_key].copy()
+    # row-normalize
+    if transformation:
+        normalize(g, norm="l1", axis=1, copy=False)
 
-    res = np.empty((vals.shape[0], 4), dtype=np.float32) * np.nan
+    res = np.empty((vals.shape[0], 6), dtype=np.float32) * np.nan
 
-    start = logg.info(f"Calculating for `{n_perms}` permutations using `{n_jobs}` core(s)")
-    score = func(
+    score = params["func"](
         g,
         vals,
     )
 
+    start = logg.info(f"Calculating for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
         _assert_positive(n_perms, name="n_perms")
         perms = np.arange(n_perms)
@@ -220,29 +237,38 @@ def spatial_autocorr(
             n_jobs=n_jobs,
             backend=backend,
             show_progress_bar=show_progress_bar,
-        )(func=func, g=g, vals=vals, seed=seed)
+        )(func=params["func"], g=g, vals=vals, seed=seed)
+    else:
+        score_perms = None
 
-        p_sim, p_z_sim = _p_value_calc(score, score_perms)
+    p_norm, var_norm, p_sim, p_z_sim, var_sim = _p_value_calc(score, score_perms, g, params)
 
-        res[:, 1] = p_z_sim
-        res[:, 2] = p_sim
-        res[:, 3] = np.var(score_perms, axis=0)
+    res[:, 1] = p_norm
+    res[:, 2] = var_norm
+    res[:, 3] = p_z_sim
+    res[:, 4] = p_sim
+    res[:, 5] = var_sim
 
     res[:, 0] = score
-    df = pd.DataFrame(res, columns=[stats, "pval_z_sim", "pval_sim", "VI_sim"], index=genes)  # fix names
+    df = pd.DataFrame(
+        res, columns=[params["stat"], "pval_norm", "var_norm", "pval_z_sim", "pval_sim", "var_sim"], index=genes
+    )  # fix names
 
     if corr_method is not None:
-        for pv in ["pval_z_sim", "pval_sim"]:
+        for pv in filter(lambda x: "pval" in x, df.columns):
             _, pvals_adj, _, _ = multipletests(df[pv].values, alpha=0.05, method=corr_method)
             df[f"{pv}_{corr_method}"] = pvals_adj
 
-    df.sort_values(by=stats, ascending=False, inplace=True)
+    if params["mode"] == "moran":
+        df.sort_values(by=params["stat"], ascending=False, inplace=True)
+    elif params["mode"] == "geary":
+        df.sort_values(by=params["stat"], ascending=True, inplace=True)
 
+    logg.info("Finish", time=start)
     if copy:
-        logg.info("Finish", time=start)
         return df
 
-    _save_data(adata, attr="uns", key=mode + stats, data=df, time=start)
+    _save_data(adata, attr="uns", key=params["mode"] + params["stat"], data=df, time=start)
 
 
 def _score_helper(
@@ -259,9 +285,8 @@ def _score_helper(
     if seed is not None:
         ix += seed
     rng = default_rng(ix)
-    idx_shuffle = np.arange(g.shape[0])
     for i, _ in enumerate(perms):
-        rng.shuffle(idx_shuffle)
+        idx_shuffle = rng.permutation(g.shape[0])
         score_perms[i, :] = func(
             g[idx_shuffle, :],
             vals,
@@ -482,40 +507,107 @@ def _find_min_max(spatial: np.ndarray) -> Tuple[float, float]:
     return thres_min, thres_max
 
 
-def _p_value_calc(score: np.ndarray, sims: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _p_value_calc(
+    score: np.ndarray,
+    sims: Union[np.ndarray, None],
+    weights: Union[spmatrix, np.ndarray],
+    params: Dict[str, Any],
+) -> Tuple[np.ndarray, float, np.ndarray, np.ndarray, Union[Any, np.ndarray]]:
     """
-    Handle simulation-based pvalues calculation.
+    Handle p-value calculation for spatial autocorrelation function.
 
     Parameters
     ----------
     score
-        (n_features,)
+        (n_features,).
     sims
-        (n_simulations, n_features)
+        (n_simulations, n_features).
+    params
+        Object to store relevant function parameters.
 
     Returns
     -------
+    pval_norm
+        p-value under normality assumption
     pval_sim
         p-values based on permutations
     pval_z_sim
         p-values based on standard normal approximation from permutations
 
-
     """
-    n_perms = sims.shape[0]
-    large_perm = (sims >= score).sum(axis=0)
-    # subtract total perm for negative values
-    if np.any(score < 0):
+    if sims is not None:
+        n_perms = sims.shape[0]
+        large_perm = (sims >= score).sum(axis=0)
+        # subtract total perm for negative values
         large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
-    # get p-value based on permutation
-    p_sim = (large_perm + 1) / (n_perms + 1)
+        # get p-value based on permutation
+        p_sim: np.ndarray = (large_perm + 1) / (n_perms + 1)
 
-    # get p-value based on standard normal approximation from permutations
-    EI_sim = sims.sum(axis=0) / n_perms
-    seI_sim = sims.std(axis=0)
-    z_sim = (score - EI_sim) / seI_sim
-    p_z_sim = np.empty(z_sim.shape)
-    p_z_sim[z_sim > 0] = 1 - stats.norm.cdf(z_sim[z_sim > 0])
-    p_z_sim[z_sim <= 0] = stats.norm.cdf(z_sim[z_sim <= 0])
+        # get p-value based on standard normal approximation from permutations
+        e_score_sim = sims.sum(axis=0) / n_perms
+        se_score_sim = sims.std(axis=0)
+        z_sim = (score - e_score_sim) / se_score_sim
+        p_z_sim = np.empty(z_sim.shape)
 
-    return p_sim, p_z_sim
+        p_z_sim[z_sim > 0] = 1 - stats.norm.cdf(z_sim[z_sim > 0])
+        p_z_sim[z_sim <= 0] = stats.norm.cdf(z_sim[z_sim <= 0])
+
+        var_sim = np.var(sims, axis=0)
+    else:
+        p_sim = p_z_sim = var_sim = np.empty(score.shape[0]) * np.nan
+
+    p_norm, var_norm = _analytic_pval(score, weights, params)
+
+    return p_norm, var_norm, p_sim, p_z_sim, var_sim
+
+
+def _analytic_pval(
+    score: np.ndarray, g: Union[spmatrix, np.ndarray], params: Dict[str, Any]
+) -> Tuple[np.ndarray, float]:
+    """
+    Analytic pvalue computation.
+
+    See `Moran's I <https://pysal.org/esda/_modules/esda/moran.html#Moran>`_
+    and `Geary's C <https://pysal.org/esda/_modules/esda/geary.html#Geary>`_
+    implementation.
+    """
+    s0, s1, s2 = _g_moments(g)
+    n = g.shape[0]
+    s02 = s0 * s0
+    n2 = n * n
+    v_num = n2 * s1 - n * s2 + 3 * s02
+    v_den = (n - 1) * (n + 1) * s02
+
+    Vscore_norm = v_num / v_den - (1.0 / (n - 1)) ** 2
+    seScore_norm = Vscore_norm ** (1 / 2.0)
+
+    z_norm = (score - params["expected"]) / seScore_norm
+    p_norm = np.empty(score.shape)
+    p_norm[z_norm > 0] = 1 - stats.norm.cdf(z_norm[z_norm > 0])
+    p_norm[z_norm <= 0] = stats.norm.cdf(z_norm[z_norm <= 0])
+
+    if params["two_tailed"]:
+        p_norm *= 2.0
+
+    return p_norm, Vscore_norm
+
+
+def _g_moments(w: Union[spmatrix, np.ndarray]) -> Tuple[np.float_, np.float_, np.float_]:
+    """
+    Compute moments of adjacency matrix for analytic p-value calculation.
+
+    see `Pysal <https://pysal.org/libpysal/_modules/libpysal/weights/weights.html#W>`_ implementation.
+    """
+    # s0
+    s0 = w.sum()
+
+    # s1
+    t = w.transpose() + w
+    t2 = t.multiply(t)
+    s1 = t2.sum() / 2.0
+
+    # s2
+    s2array = np.array(w.sum(1) + w.sum(0).transpose()) ** 2
+    s2 = s2array.sum()
+
+    return s0, s1, s2
