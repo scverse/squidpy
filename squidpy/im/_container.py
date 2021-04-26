@@ -80,6 +80,9 @@ class ImageContainer(FeatureMixin):
     Parameters
     ----------
     %(add_img.parameters)s
+    scale
+        Scalefactor of the image with respect to the spatial coords saved in
+        the accompanying :class:`ad.AnnData`.
 
     Raises
     ------
@@ -90,12 +93,13 @@ class ImageContainer(FeatureMixin):
         self,
         img: Optional[Input_t] = None,
         layer: str = "image",
+        scale: float = 1.0,
         **kwargs: Any,
     ):
         self._data: xr.Dataset = xr.Dataset()
         self._data.attrs[Key.img.coords] = _NULL_COORDS  # can't save None to NetCDF
         self._data.attrs[Key.img.padding] = _NULL_PADDING
-        self._data.attrs[Key.img.scale] = 1
+        self._data.attrs[Key.img.scale] = scale
         self._data.attrs[Key.img.mask_circle] = False
 
         chunks = kwargs.pop("chunks", None)
@@ -246,7 +250,7 @@ class ImageContainer(FeatureMixin):
 
         suffix = img.suffix.lower()
 
-        if suffix in (".jpg", ".jpeg"):
+        if suffix in (".jpg", ".jpeg", ".png"):
             return self._load_img(imread(str(img)))
 
         if img.is_dir():
