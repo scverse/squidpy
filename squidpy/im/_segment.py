@@ -22,7 +22,7 @@ from squidpy._utils import (
     singledispatchmethod,
 )
 from squidpy.gr._utils import _assert_in_range
-from squidpy.im._utils import _circular_mask
+from squidpy.im._coords import _circular_mask
 from squidpy.im._container import ImageContainer
 from squidpy._constants._constants import SegmentationBackend
 from squidpy._constants._pkg_constants import Key

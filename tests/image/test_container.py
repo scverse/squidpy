@@ -13,7 +13,7 @@ from imageio import imread, imsave
 import tifffile
 
 from squidpy.im import ImageContainer
-from squidpy.im._utils import CropCoords, CropPadding, _NULL_COORDS
+from squidpy.im._coords import CropCoords, CropPadding, _NULL_COORDS
 from squidpy._constants._pkg_constants import Key
 
 
