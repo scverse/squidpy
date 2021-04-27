@@ -245,7 +245,6 @@ class ImageContainer(FeatureMixin):
         suffix = img.suffix.lower()
 
         if suffix in (".jpg", ".jpeg", ".png", ".tif", ".tiff"):
-            # TODO: call self._load_img for safety?
             return _lazy_load_image(img, chunks=None)
 
         if img.is_dir():

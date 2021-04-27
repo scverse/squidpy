@@ -1,6 +1,8 @@
 from typing import List, Tuple, Union, Optional
 from pathlib import Path
 
+from scanpy import logging as logg
+
 import numpy as np
 import xarray as xr
 
@@ -23,15 +25,20 @@ def _get_shape_pages(fname: str) -> Tuple[List[int], Optional[int], Optional[int
     elif ndim == 4:
         fst, lst = shape[0], shape[-1]
         if fst == 1:
+            # channels last, can be 1
             c_dim, z_dim = 3, 0
         elif lst == 1:
+            # channels first, cannot be 1
             c_dim, z_dim = 0, 3
         else:
-            # TODO: warn + channels first?
-            raise RuntimeError("TODO.")
-    # TODO: 5D, iff shape[0] == 1
+            # assume z-dim is saved as e.g. TIFF stacks
+            c_dim, z_dim = 3, 0
+            logg.warning(
+                f"Setting channel dimension to `{c_dim}` "
+                f"and z-dimension to `{z_dim}` for an image of shape `{shape}`"
+            )
     else:
-        raise ValueError("TODO.")
+        raise ValueError(f"Expected number of dimensions to be either `2`, `3`, or `4`, found `{ndim}`.")
 
     return shape, c_dim, z_dim, dtype
 
@@ -47,7 +54,7 @@ def _determine_dimensions(
 
     if ndim == 3:
         if c_dim not in (0, 2):
-            raise ValueError("TODO.")
+            raise ValueError(f"Expected channel dimension to be either `0` or `2`, found `{c_dim}`.")
         delta = c_dim == 0
         dims[c_dim] = "channels"
 
@@ -60,11 +67,11 @@ def _determine_dimensions(
 
     if ndim == 4:
         if c_dim not in (0, 3):
-            raise ValueError("TODO.")
+            raise ValueError(f"Expected channel dimension to be either `0` or `3`, found `{c_dim}`.")
         if z_dim not in (0, 3):
-            raise ValueError("TODO.")
+            raise ValueError(f"Expected z-dimension to be either `0` or `3`, found `{z_dim}`.")
         if c_dim == z_dim:
-            raise ValueError("TODO.")
+            raise ValueError(f"Expected z-dimension and channel dimension to be different, found `{c_dim}`.")
 
         dims[1] = "y"
         dims[2] = "x"
@@ -88,5 +95,5 @@ def _lazy_load_image(fname: Union[str, Path], chunks: Optional[str] = None) -> x
     if chunks is not None:
         darr = darr.rechunk(chunks)
 
-    # TODO: subsetting for bwd compat
+    # subsetting for bwd compatibility, will be removed once Z-dim is implemented
     return xr.DataArray(darr, dims=dims).transpose("y", "x", "z", "channels")[:, :, 0, :]
