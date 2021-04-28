@@ -90,7 +90,9 @@ def spatial_neighbors(
     coords = adata.obsm[spatial_key]
     if coord_type == CoordType.VISIUM:
         if n_rings > 1:
-            Adj: csr_matrix = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True, return_distance=False)
+            Adj: csr_matrix = _build_connectivity(
+                coords, 6, neigh_correct=True, set_diag=True, delaunay=delaunay, return_distance=False
+            )
             Res = Adj
             Walk = Adj
             for i in range(n_rings - 1):
