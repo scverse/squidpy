@@ -157,16 +157,7 @@ def _build_connectivity(
 
     dists_m = None
 
-    tree = NearestNeighbors(n_neighbors=n_neigh or 6, radius=radius or 1, metric="euclidean")
-    tree.fit(coords)
-
-    if radius is not None:
-        results = tree.radius_neighbors()
-        dists = np.concatenate(results[0])
-        row_indices = np.concatenate(results[1])
-        lengths = [len(x) for x in results[1]]
-        col_indices = np.repeat(np.arange(N), lengths)
-    elif delaunay is True:
+    if delaunay:
         tri = Delaunay(coords)
         col_lst = []
         row_lst = []
@@ -187,15 +178,25 @@ def _build_connectivity(
         row_indices = np.array(list(chain(*row_lst)))
         dists = np.array(list(chain(*dists_lst))).squeeze()
 
-    elif radius is None and delaunay is False:
-        results = tree.kneighbors()
-        dists, row_indices = (result.reshape(-1) for result in results)
-        col_indices = np.repeat(np.arange(N), n_neigh or 6)
-        if neigh_correct:
-            dist_cutoff = np.median(dists) * 1.3  # There's a small amount of sway
-            mask = dists < dist_cutoff
-            row_indices, col_indices = row_indices[mask], col_indices[mask]
-            dists = dists[mask]
+    else:
+        tree = NearestNeighbors(n_neighbors=n_neigh or 6, radius=radius or 1, metric="euclidean")
+        tree.fit(coords)
+        if radius is not None:
+            results = tree.radius_neighbors()
+            dists = np.concatenate(results[0])
+            row_indices = np.concatenate(results[1])
+            lengths = [len(x) for x in results[1]]
+            col_indices = np.repeat(np.arange(N), lengths)
+
+        else:
+            results = tree.kneighbors()
+            dists, row_indices = (result.reshape(-1) for result in results)
+            col_indices = np.repeat(np.arange(N), n_neigh or 6)
+            if neigh_correct:
+                dist_cutoff = np.median(dists) * 1.3  # There's a small amount of sway
+                mask = dists < dist_cutoff
+                row_indices, col_indices = row_indices[mask], col_indices[mask]
+                dists = dists[mask]
 
     if return_distance:
         dists_m = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
