@@ -53,6 +53,8 @@ def spatial_neighbors(
         Number of rings of neighbors for Visium data.
     n_neigh
         Number of neighborhoods to consider for non-Visium data.
+    delaunay
+        Whether to compute the graph from Delaunay triangulation.
     radius
         Radius of neighbors for non-Visium data.
     transform
