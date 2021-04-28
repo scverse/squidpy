@@ -26,6 +26,7 @@ from anndata import AnnData
 
 import numpy as np
 import xarray as xr
+import dask.array as da
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -96,11 +97,8 @@ class ImageContainer(FeatureMixin):
         self._data.attrs[Key.img.scale] = 1
         self._data.attrs[Key.img.mask_circle] = False
 
-        chunks = kwargs.pop("chunks", None)
         if img is not None:
-            if chunks is not None:
-                chunks = {"x": chunks, "y": chunks}
-            self.add_img(img, layer=layer, chunks=chunks, **kwargs)
+            self.add_img(img, layer=layer, **kwargs)
 
     @classmethod
     def load(cls, path: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":
@@ -161,7 +159,7 @@ class ImageContainer(FeatureMixin):
         layer: Optional[str] = None,
         channel_dim: str = "channels",
         lazy: bool = True,
-        chunks: Optional[int] = None,
+        chunks: Optional[Union[str, Tuple[int, ...]]] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -170,14 +168,14 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         img
-            In memory array or path to on-disk *TIFF*/*JPEG* image.
+            In memory array or a path to an on-disk image.
         %(img_layer)s
         channel_dim
             Name of the channel dimension.
         lazy
-            Whether to use :mod:`rasterio` or :mod:`dask` to lazily load image.
+            Whether to use :mod:`dask` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`, used in call to :func:`xarray.open_rasterio` for *TIFF* images.
+            Chunk size for :mod:`dask`.
 
         Returns
         -------
@@ -207,7 +205,6 @@ class ImageContainer(FeatureMixin):
             self.data[layer] = img
 
         if not lazy:
-            # load in memory
             self.data.load()
 
     @singledispatchmethod
@@ -245,7 +242,7 @@ class ImageContainer(FeatureMixin):
         suffix = img.suffix.lower()
 
         if suffix in (".jpg", ".jpeg", ".png", ".tif", ".tiff"):
-            return _lazy_load_image(img, chunks=None)
+            return _lazy_load_image(img, chunks=chunks)
 
         if img.is_dir():
             if len(self._data):
@@ -263,7 +260,8 @@ class ImageContainer(FeatureMixin):
 
         raise ValueError(f"Unknown suffix `{img.suffix}`.")
 
-    @_load_img.register(np.ndarray)  # type: ignore[no-redef]
+    @_load_img.register(da.Array)  # type: ignore[no-redef]
+    @_load_img.register(np.ndarray)
     def _(self, img: np.ndarray, **_: Any) -> xr.DataArray:
         logg.debug(f"Loading data `numpy.array` of shape `{img.shape}`")
 
@@ -272,6 +270,7 @@ class ImageContainer(FeatureMixin):
         if img.ndim != 3:
             raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
 
+        # not lazy loading of arrays is handled in `add_img`
         return xr.DataArray(img, dims=["y", "x", "channels"])
 
     @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
@@ -782,7 +781,9 @@ class ImageContainer(FeatureMixin):
         func: Callable[..., np.ndarray],
         layer: Optional[str] = None,
         channel: Optional[int] = None,
+        chunks: Optional[Union[str]] = None,
         copy: bool = True,
+        map_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
     ) -> Optional["ImageContainer"]:
         """
@@ -795,7 +796,12 @@ class ImageContainer(FeatureMixin):
         %(img_layer)s
         channel
             Apply ``func`` only over a specific ``channel``. If `None`, use all channels.
+        chunks
+            Chunk size for :mod:`dask`. If `None`, don't use :mod:`dask`.
         %(copy_cont)s
+        map_kwargs
+            Keyword arguments for :meth:`dask.Array.map_blocks` or :meth:`dask.Array.map_overlap`, depending whether
+            ``'depth'`` is present in ``map_kwargs``. Only used when ``chunks != None``.
         kwargs
             Keyword arguments for ``func``.
 
@@ -811,7 +817,17 @@ class ImageContainer(FeatureMixin):
         if channel is not None:
             arr = arr[{channel_dim: channel}]
 
-        res = func(arr.values, **kwargs)
+        if chunks is not None:
+            arr = da.from_array(arr.values, chunks=chunks)
+            # TODO: allow lazy?
+            res = (
+                arr.map_overlap(func, **map_kwargs, **kwargs)
+                if "depth" in map_kwargs
+                else arr.map_blocks(func, **map_kwargs, **kwargs)
+            ).compute()
+        else:
+            res = func(arr.values, **kwargs)
+
         if res.ndim == 2:
             res = res[..., np.newaxis]
 
