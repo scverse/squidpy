@@ -43,6 +43,10 @@ def test_spatial_neighbors_non_visium(non_visium_adata: AnnData):
         ]
     )
 
+    correct_delaunay_graph = np.array(
+        [[0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0], [1.0, 1.0, 1.0, 0.0]]
+    )
+
     spatial_neighbors(non_visium_adata, n_neigh=3, coord_type=None)
     spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
     assert np.array_equal(spatial_graph, correct_knn_graph)
@@ -50,3 +54,7 @@ def test_spatial_neighbors_non_visium(non_visium_adata: AnnData):
     spatial_neighbors(non_visium_adata, radius=5.0, coord_type=None)
     spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
     assert np.array_equal(spatial_graph, correct_radius_graph)
+
+    spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None)
+    spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
+    assert np.array_equal(spatial_graph, correct_delaunay_graph)
