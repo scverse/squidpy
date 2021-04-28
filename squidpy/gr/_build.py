@@ -1,5 +1,6 @@
 """Functions for building gr from spatial coordinates."""
 from typing import Tuple, Union, Optional
+from itertools import chain
 import warnings
 
 from scanpy import logging as logg
@@ -17,7 +18,7 @@ from squidpy.gr._utils import _save_data, _assert_positive, _assert_spatial_basi
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 
-__all__ = ["spatial_neighbors", "delaunay"]
+__all__ = ["spatial_neighbors"]
 
 
 @d.dedent
@@ -28,6 +29,7 @@ def spatial_neighbors(
     coord_type: Optional[Union[str, CoordType]] = None,
     n_rings: int = 1,
     n_neigh: int = 6,
+    delaunay: bool = False,
     radius: Optional[float] = None,
     transform: Optional[Union[str, Transform]] = None,
     key_added: Optional[str] = None,
@@ -104,7 +106,7 @@ def spatial_neighbors(
             Dst = Adj.copy()
             Adj.data[:] = 1.0
         else:
-            Adj = _build_connectivity(coords, 6, neigh_correct=True)
+            Adj = _build_connectivity(coords, 6, neigh_correct=True, delaunay=delaunay)
             Dst = None
 
     elif coord_type == CoordType.GENERIC:
@@ -116,7 +118,6 @@ def spatial_neighbors(
     if transform == Transform.SPECTRAL:
         Adj = _transform_a_spectral(Adj)
     elif transform == Transform.COSINE:
-        print("foo")
         Adj = _transform_a_cosine(Adj)
     elif transform == Transform.NONE:
         pass
@@ -144,6 +145,7 @@ def _build_connectivity(
     coords: np.ndarray,
     n_neigh: int,
     radius: Optional[float] = None,
+    delaunay: bool = False,
     neigh_correct: bool = False,
     set_diag: bool = False,
     return_distance: bool = False,
@@ -162,6 +164,19 @@ def _build_connectivity(
         row_indices = np.concatenate(results[1])
         lengths = [len(x) for x in results[1]]
         col_indices = np.repeat(np.arange(N), lengths)
+    elif delaunay is True:
+        tri = Delaunay(coords)
+        col_lst = []
+        row_lst = []
+        for i in np.arange(N + 1):
+            idx = np.argwhere(i == tri.simplices)[:, 0]
+            idx_col = np.unique(np.setdiff1d(tri.simplices[idx.squeeze(), ...], i)).tolist()
+            col_lst.append(idx_col)
+            row_lst.append(np.repeat(i, len(idx_col)))
+
+        col_indices = np.array(list(chain(*col_lst)))
+        row_indices = np.array(list(chain(*row_lst)))
+
     else:
         results = tree.kneighbors()
         dists, row_indices = (result.reshape(-1) for result in results)
@@ -182,125 +197,6 @@ def _build_connectivity(
     conns_m = csr_matrix((np.ones(len(row_indices)), (row_indices, col_indices)), shape=(N, N))
 
     return (conns_m, dists_m) if return_distance else conns_m
-
-
-@d.dedent
-@inject_docs(t=Transform, c=CoordType)
-def delaunay(
-    adata: AnnData,
-    spatial_key: str = Key.obsm.spatial,
-    coord_type: Optional[Union[str, CoordType]] = None,
-    transform: Optional[Union[str, Transform]] = None,
-    key_added: Optional[str] = None,
-) -> None:
-    """
-    Create a graph from spatial coordinates.
-
-    Parameters
-    ----------
-    %(adata)s
-    %(spatial_key)s
-    coord_type
-        Type of coordinate system. Valid options are:
-
-            - `{c.VISIUM!r}` - Visium coordinates.
-            - `{c.GENERIC!r}` - generic coordinates.
-
-        If `None`, use `{c.VISIUM!r}` if ``spatial_key`` is present in :attr:`anndata.AnnData.obsm`,
-        otherwise use `{c.GENERIC!r}`.
-    transform
-        Type of adjacency matrix transform. Valid options are:
-
-            - `{t.SPECTRAL.s!r}` - spectral transformation of the adjacency matrix.
-            - `{t.COSINE.s!r}` - cosine transformation of the adjacency matrix.
-            - `{t.NONE.v}` - no transformation of the adjacency matrix.
-
-    key_added
-        Key which controls where the results are saved.
-
-    Returns
-    -------
-    Modifies the ``adata`` with the following keys:
-
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_connectivities']`` - spatial connectivity matrix.
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - spatial distances matrix.
-        - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - spatial neighbors dictionary.
-    """
-    _assert_spatial_basis(adata, spatial_key)
-
-    transform = Transform.NONE if transform is None else Transform(transform)
-    if coord_type is None:
-        coord_type = CoordType.VISIUM if Key.uns.spatial in adata.uns else CoordType.GENERIC
-    else:
-        coord_type = CoordType(coord_type)
-
-    start = logg.info(f"Creating graph using `{coord_type}` coordinates and `{transform}` transform")
-
-    coords = adata.obsm[spatial_key]
-    if coord_type == CoordType.VISIUM:
-        Adj = _build_delauny(coords, set_diag=False)
-        Dst = None
-
-    # elif coord_type == CoordType.GENERIC:
-    #     Adj, Dst = _build_connectivity(coords, set_diag=False)
-    else:
-        raise NotImplementedError(coord_type)
-
-    # check transform
-    if transform == Transform.SPECTRAL:
-        Adj = _transform_a_spectral(Adj)
-    elif transform == Transform.COSINE:
-        print("foo")
-        Adj = _transform_a_cosine(Adj)
-    elif transform == Transform.NONE:
-        pass
-    else:
-        raise NotImplementedError(f"Transform `{transform}` is not yet implemented.")
-
-    neighs_key = Key.uns.spatial_neighs(key_added)
-    conns_key = Key.obsp.spatial_conn(key_added)
-    dists_key = Key.obsp.spatial_dist(key_added)
-
-    neighbors_dict = {
-        "connectivities_key": conns_key,
-        "params": {"coord_type": coord_type.v, "transform": transform.v},
-        "distances_key": dists_key,
-    }
-
-    _save_data(adata, attr="obsp", key=conns_key, data=Adj)
-    if Dst is not None:
-        _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
-
-    _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
-
-
-def _build_delauny(
-    coords: np.ndarray,
-    set_diag: bool = False,
-) -> csr_matrix:
-    """Build delaunay connectivity matrix from spatial coordinates."""
-    N = coords.shape[0]
-
-    tri = Delaunay(coords)
-    adj_indices = []
-    for sim in tri.simplices:
-        for i in range(3):
-            row = sim[i]
-            col = sim[(i + 1) % 3]
-            adj_indices.append([row, col]) if not [row, col] in adj_indices else None
-            col = sim[(i + 2) % 3]
-            adj_indices.append([row, col]) if not [row, col] in adj_indices else None
-    adj_indices = np.array(adj_indices)
-    row_indices = adj_indices[:, 0]
-    col_indices = adj_indices[:, 1]
-
-    if set_diag:
-        row_indices = np.concatenate((row_indices, np.arange(N)))
-        col_indices = np.concatenate((col_indices, np.arange(N)))
-
-    conns_m = csr_matrix((np.ones(len(row_indices)), (row_indices, col_indices)), shape=(N, N))
-
-    return conns_m
 
 
 @njit
