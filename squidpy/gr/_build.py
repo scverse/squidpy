@@ -10,7 +10,7 @@ from numba import njit
 from scipy.sparse import spmatrix, csr_matrix, isspmatrix_csr, SparseEfficiencyWarning
 from scipy.spatial import Delaunay
 from sklearn.neighbors import NearestNeighbors
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import numpy as np
 
 from squidpy._docs import d, inject_docs
@@ -110,7 +110,7 @@ def spatial_neighbors(
             Dst = None
 
     elif coord_type == CoordType.GENERIC:
-        Adj, Dst = _build_connectivity(coords, n_neigh, radius, return_distance=True)
+        Adj, Dst = _build_connectivity(coords, n_neigh, radius, delaunay=delaunay, return_distance=True)
     else:
         raise NotImplementedError(coord_type)
 
@@ -168,16 +168,24 @@ def _build_connectivity(
         tri = Delaunay(coords)
         col_lst = []
         row_lst = []
-        for i in np.arange(N + 1):
+        dists_lst = []
+        for i in np.arange(N):
             idx = np.argwhere(i == tri.simplices)[:, 0]
             idx_col = np.unique(np.setdiff1d(tri.simplices[idx.squeeze(), ...], i)).tolist()
             col_lst.append(idx_col)
             row_lst.append(np.repeat(i, len(idx_col)))
+            dists_lst.append(
+                euclidean_distances(
+                    coords[idx_col, :],
+                    coords[np.newaxis, i, :],
+                )
+            )
 
         col_indices = np.array(list(chain(*col_lst)))
         row_indices = np.array(list(chain(*row_lst)))
+        dists = np.array(list(chain(*dists_lst))).squeeze()
 
-    else:
+    elif radius is None and delaunay is False:
         results = tree.kneighbors()
         dists, row_indices = (result.reshape(-1) for result in results)
         col_indices = np.repeat(np.arange(N), n_neigh or 6)
