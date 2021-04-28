@@ -67,7 +67,7 @@ intersphinx_mapping = dict(  # noqa: C408
     pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),
     anndata=("https://anndata.readthedocs.io/en/stable/", None),
     scanpy=("https://scanpy.readthedocs.io/en/stable/", None),
-    matplotlib=("https://matplotlib.org/", None),
+    matplotlib=("https://matplotlib.org/stable/", None),
     seaborn=("https://seaborn.pydata.org/", None),
     joblib=("https://joblib.readthedocs.io/en/latest/", None),
     networkx=("https://networkx.org/documentation/stable/", None),
@@ -163,6 +163,7 @@ nbsphinx_prolog = r"""
 
 
 def setup(app: Sphinx) -> None:
+    DEFAULT_GALLERY_CONF["src_dir"] = str(HERE)
     DEFAULT_GALLERY_CONF["backreferences_dir"] = "gen_modules/backreferences"
     DEFAULT_GALLERY_CONF["download_all_examples"] = False
     DEFAULT_GALLERY_CONF["show_signature"] = False

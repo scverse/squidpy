@@ -11,7 +11,7 @@ from squidpy.im import ImageContainer
 from tests.conftest import DPI, PlotTester, PlotTesterMeta
 
 
-@pytest.mark.qt
+@pytest.mark.qt()
 class TestNapari(PlotTester, metaclass=PlotTesterMeta):
     def test_add_same_layer(self, qtbot, adata: AnnData, napari_cont: ImageContainer, capsys):
         from napari.layers import Points

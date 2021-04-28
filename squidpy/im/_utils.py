@@ -104,7 +104,7 @@ class CropCoords(TupleSerializer):
 
     def __add__(self, other: "CropPadding") -> "CropCoords":
         if not isinstance(other, CropPadding):
-            return NotImplemented  # type: ignore[unreachable]
+            return NotImplemented
 
         return CropCoords(
             x0=self.x0 - other.x_pre, y0=self.y0 - other.y_pre, x1=self.x1 + other.x_post, y1=self.y1 + other.y_post
@@ -112,7 +112,7 @@ class CropCoords(TupleSerializer):
 
     def __sub__(self, other: "CropCoords") -> "CropPadding":
         if not isinstance(other, CropCoords):
-            return NotImplemented  # type: ignore[unreachable]
+            return NotImplemented
 
         return CropPadding(
             x_pre=abs(self.x0 - other.x0),

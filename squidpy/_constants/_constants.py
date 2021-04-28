@@ -88,3 +88,9 @@ class DendrogramAxis(ModeEnum):  # noqa: D101
 class Symbol(ModeEnum):  # noqa: D101
     DISC = "disc"
     SQUARE = "square"
+
+
+@unique
+class SpatialAutocorr(ModeEnum):  # noqa: D101
+    MORAN = "moran"
+    GEARY = "geary"
