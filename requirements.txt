@@ -1,5 +1,5 @@
 anndata>=0.7.4
-dask-image>=1.0.0
+dask-image>=0.5.0
 dask[array]>=2021.02.0
 docrep>=0.3.1
 ipywidgets>=7.5.1  # progress bar

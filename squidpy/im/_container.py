@@ -813,20 +813,26 @@ class ImageContainer(FeatureMixin):
         layer = self._get_layer(layer)
         arr = self[layer]
         channel_dim = arr.dims[-1]
+        is_delayed = kwargs.pop("_is_delayed", False)
 
         if channel is not None:
             arr = arr[{channel_dim: channel}]
 
-        if chunks is not None:
+        if is_delayed:
+            arr = da.from_array(arr.values, chunks="auto" if chunks is None else chunks)
+            res = func(arr, **kwargs)
+        elif chunks is not None:
             arr = da.from_array(arr.values, chunks=chunks)
-            # TODO: allow lazy?
             res = (
                 arr.map_overlap(func, **map_kwargs, **kwargs)
-                if "depth" in map_kwargs
-                else arr.map_blocks(func, **map_kwargs, **kwargs)
-            ).compute()
+                if "depth" in map_kwargs and True
+                else arr.map_blocks(func, **map_kwargs, **kwargs, dtype=arr.dtype)
+            )
         else:
             res = func(arr.values, **kwargs)
+
+        if isinstance(res, da.Array):
+            res = res.compute()
 
         if res.ndim == 2:
             res = res[..., np.newaxis]
