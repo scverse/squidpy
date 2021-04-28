@@ -30,12 +30,12 @@ import xarray as xr
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from imageio import imread
 from skimage.util import img_as_float
 from skimage.transform import rescale
 
 from squidpy._docs import d
 from squidpy._utils import singledispatchmethod
+from squidpy.im._io import _lazy_load_image
 from squidpy.gr._utils import (
     _assert_in_range,
     _assert_positive,
@@ -43,13 +43,11 @@ from squidpy.gr._utils import (
     _assert_spatial_basis,
     _assert_non_empty_sequence,
 )
-from squidpy.im._utils import (
-    _num_pages,
+from squidpy.im._coords import (
     CropCoords,
     CropPadding,
     _NULL_COORDS,
     _NULL_PADDING,
-    _open_rasterio,
     TupleSerializer,
 )
 from squidpy.im._feature_mixin import FeatureMixin
@@ -250,8 +248,8 @@ class ImageContainer(FeatureMixin):
 
         suffix = img.suffix.lower()
 
-        if suffix in (".jpg", ".jpeg", ".png"):
-            return self._load_img(imread(str(img)))
+        if suffix in (".jpg", ".jpeg", ".png", ".tif", ".tiff"):
+            return _lazy_load_image(img, chunks=None)
 
         if img.is_dir():
             if len(self._data):
@@ -266,19 +264,6 @@ class ImageContainer(FeatureMixin):
 
             self._data = transform_metadata(xr.open_dataset(img, chunks=chunks))
             return None
-
-        if suffix in (".tif", ".tiff"):
-            # calling _load_img ensures we can safely do the transpose
-            return self._load_img(
-                xr.concat(
-                    [
-                        _open_rasterio(f"GTIFF_DIR:{i}:{img}", chunks=chunks, parse_coordinates=False)
-                        for i in range(1, _num_pages(img) + 1)
-                    ],
-                    dim="band",
-                ),
-                copy=False,
-            ).transpose("y", "x", ...)
 
         raise ValueError(f"Unknown suffix `{img.suffix}`.")
 

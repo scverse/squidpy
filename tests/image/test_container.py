@@ -13,7 +13,7 @@ from imageio import imread, imsave
 import tifffile
 
 from squidpy.im import ImageContainer
-from squidpy.im._utils import CropCoords, CropPadding, _NULL_COORDS
+from squidpy.im._coords import CropCoords, CropPadding, _NULL_COORDS
 from squidpy._constants._pkg_constants import Key
 
 
@@ -112,10 +112,11 @@ class TestContainerIO:
         assert "img_new" in cont
         np.testing.assert_array_equal(np.squeeze(cont.data["img_new"]), np.squeeze(img_new))
 
+    @pytest.mark.parametrize("ext", ["jpg", "png"])
     @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1)])
-    def test_load_jpeg(self, shape: Tuple[int, ...], tmpdir):
+    def test_load_ext(self, shape: Tuple[int, ...], ext: str, tmpdir):
         img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
-        fname = tmpdir / "tmp.jpeg"
+        fname = tmpdir / f"tmp.{ext}"
         imsave(str(fname), img_orig)
 
         gt = imread(str(fname))  # because of compression, we load again

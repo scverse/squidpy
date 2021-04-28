@@ -1,12 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, Tuple
+from typing import Tuple
 from dataclasses import dataclass
-import warnings
 
 import numpy as np
-import xarray as xr
-
-import tifffile
 
 from squidpy.gr._utils import _assert_non_negative
 
@@ -14,21 +10,6 @@ from squidpy.gr._utils import _assert_non_negative
 def _circular_mask(arr: np.ndarray, y: int, x: int, radius: float) -> np.ndarray:
     Y, X = np.ogrid[: arr.shape[0], : arr.shape[1]]
     return np.asarray(((Y - y) ** 2 + (X - x) ** 2) <= radius ** 2)
-
-
-def _num_pages(fname: str) -> int:
-    """Use tifffile to get the number of pages in the tif."""
-    with tifffile.TiffFile(fname) as img:
-        num_pages = len(img.pages)
-    return num_pages
-
-
-def _open_rasterio(path: str, **kwargs: Any) -> xr.DataArray:
-    from rasterio.errors import NotGeoreferencedWarning
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", NotGeoreferencedWarning)
-        return xr.open_rasterio(path, **kwargs)
 
 
 class TupleSerializer(ABC):  # noqa: D101
