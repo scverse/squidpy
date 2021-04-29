@@ -1,11 +1,22 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Tuple, Union, Callable, Optional, Sequence, TYPE_CHECKING
-from itertools import chain
+from types import MappingProxyType
+from typing import (
+    Any,
+    List,
+    Tuple,
+    Union,
+    Mapping,
+    Callable,
+    Optional,
+    Sequence,
+    TYPE_CHECKING,
+)
+from dask_image.ndmeasure import label
 
-from scanpy import logging as logg
-
+from dask import delayed
 from scipy import ndimage as ndi
 import numpy as np
+import dask.array as da
 
 from skimage.util import invert as invert_arr, img_as_float
 from skimage.feature import peak_local_max
@@ -14,18 +25,10 @@ from skimage.segmentation import watershed
 import skimage
 
 from squidpy._docs import d, inject_docs
-from squidpy._utils import (
-    Signal,
-    SigQueue,
-    parallelize,
-    _get_n_cores,
-    singledispatchmethod,
-)
-from squidpy.gr._utils import _assert_in_range
+from squidpy._utils import Signal, SigQueue, singledispatchmethod
 from squidpy.im._coords import _circular_mask
 from squidpy.im._container import ImageContainer
 from squidpy._constants._constants import SegmentationBackend
-from squidpy._constants._pkg_constants import Key
 
 __all__ = ["SegmentationModel", "SegmentationWatershed", "SegmentationBlob", "SegmentationCustom"]
 
@@ -34,7 +37,7 @@ class SegmentationModel(ABC):
     """
     Base class for all segmentation models.
 
-    Contains core shared functions related contained to cell and nuclei segmentation.
+    Contains core shared functions related to cell and nuclei segmentation.
     Specific segmentation models can be implemented by inheriting from this class.
 
     Parameters
@@ -78,28 +81,43 @@ class SegmentationModel(ABC):
         """
         raise NotImplementedError(f"Segmentation of `{type(img).__name__}` is not yet implemented.")
 
-    @segment.register(np.ndarray)
-    def _(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
+    @staticmethod
+    def _precondition(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array]:
         if img.ndim == 2:
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
             raise ValueError(f"Expected `3` dimensions, found `{img.ndim}`.")
         if img.shape[-1] != 1:
             raise ValueError(f"Expected only `1` channel, found `{img.shape[-1]}`.")
+        return img
 
-        arr = self._segment(img, **kwargs)
+    @staticmethod
+    def _postcondition(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array]:
+        if img.ndim == 2:
+            img = img[..., np.newaxis]
+        if img.ndim != 3:
+            raise ValueError(f"Expected segmentation to return `3` dimensional array, found `{img.ndim}`.")
 
-        if arr.ndim == 2:
-            arr = arr[..., np.newaxis]
-        if arr.ndim != 3:
-            raise ValueError(f"Expected segmentation to return `3` dimensional array, found `{arr.ndim}`.")
+        return img
 
-        return arr
+    @segment.register(da.Array)
+    @segment.register(np.ndarray)
+    def _(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
+        img = SegmentationModel._precondition(img)
+        img = self._segment(img, **kwargs)
+        return SegmentationModel._postcondition(img)
 
     @segment.register(ImageContainer)  # type: ignore[no-redef]
-    def _(self, img: ImageContainer, layer: str, channel: int = 0, **kwargs: Any) -> ImageContainer:
+    def _(
+        self,
+        img: ImageContainer,
+        layer: str,
+        channel: int = 0,
+        fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
+        **kwargs: Any,
+    ) -> ImageContainer:
         # simple inversion of control, we rename the channel dim later
-        return img.apply(self.segment, layer=layer, channel=channel, **kwargs)
+        return img.apply(self.segment, layer=layer, channel=channel, fn_kwargs=fn_kwargs, **kwargs)
 
     @abstractmethod
     def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
@@ -118,23 +136,54 @@ class SegmentationWatershed(SegmentationModel):
     def __init__(self) -> None:
         super().__init__(model=None)
 
-    def _segment(self, arr: np.ndarray, thresh: Optional[float] = None, geq: bool = True, **kwargs: Any) -> np.ndarray:
+    def _segment_dask(
+        self,
+        arr: da.Array,
+        thresh: Optional[float] = None,
+        geq: bool = True,
+        chunks: Union[int, str, Tuple[int, ...]] = "auto",
+        **_: Any,
+    ) -> da.Array:
+        def _local_maxi(mask: np.ndarray, distance: np.ndarray) -> np.ndarray:
+            coords = peak_local_max(distance, footprint=np.ones((5, 5)), labels=mask)
+            local_maxi = np.zeros(distance.shape, dtype=np.bool_)
+            local_maxi[tuple(coords.T)] = True
+
+            return local_maxi
+
+        def _distance(mask: np.ndarray) -> np.ndarray:
+            return ndi.distance_transform_edt(mask)  # type: ignore[no-any-return]
+
+        def _watershed(img: np.ndarray, markers: np.ndarray, mask: np.ndarray) -> np.ndarray:
+            return watershed(img, markers, mask=mask)  # type: ignore[no-any-return]
+
+        arr = arr.rechunk(chunks).squeeze(-1)  # we always pass 3D image
+        if thresh is None:
+            thresh = da.from_delayed(delayed(threshold_otsu)(arr), shape=(), dtype=arr.dtype)
+        mask = (arr >= thresh) if geq else (arr < thresh)
+
+        distance = mask.map_blocks(_distance)
+        local_maxi = da.map_blocks(_local_maxi, mask, distance, dtype=bool)
+        markers, _ = label(local_maxi)
+
+        return da.map_overlap(_watershed, -distance, markers, mask, depth=10, dtype=int)
+
+    def _segment(
+        self,
+        arr: np.ndarray,
+        thresh: Optional[float] = None,
+        geq: bool = True,
+        chunks: Optional[Union[int, str, Tuple[int, ...]]] = None,
+        **kwargs: Any,
+    ) -> Union[np.ndarray, da.Array]:
+        # TODO: better approach?
+        if chunks is not None:
+            return self._segment_dask(arr, thresh=thresh, geq=geq, chunks=chunks, **kwargs)
+
         arr = arr.squeeze(-1)  # we always pass 3D image
-
-        if not np.issubdtype(arr.dtype, np.floating):
-            arr = img_as_float(arr, force_copy=False)
-
         if thresh is None:
             thresh = threshold_otsu(arr)
-        else:
-            _assert_in_range(thresh, 0, 1, name="thresh")
-
-        # get binarized image
-        if geq:
-            mask = arr >= thresh
-            arr = invert_arr(arr)
-        else:
-            mask = arr < thresh
+        mask = (arr >= thresh) if geq else (arr < thresh)
 
         distance = ndi.distance_transform_edt(mask)
         coords = peak_local_max(distance, footprint=np.ones((5, 5)), labels=mask)
@@ -143,7 +192,7 @@ class SegmentationWatershed(SegmentationModel):
 
         markers, _ = ndi.label(local_maxi)
 
-        return np.asarray(watershed(arr, markers, mask=mask))
+        return np.asarray(watershed(-distance, markers, mask=mask))
 
 
 class SegmentationCustom(SegmentationModel):
@@ -226,7 +275,7 @@ def segment(
     layer: Optional[str] = None,
     method: Union[str, Callable[..., np.ndarray]] = "watershed",
     channel: int = 0,
-    size: Optional[Union[int, Tuple[int, int]]] = None,
+    size: Optional[Union[str, int, Tuple[int, int]]] = None,
     layer_added: Optional[str] = None,
     copy: bool = False,
     show_progress_bar: bool = True,
@@ -276,10 +325,10 @@ def segment(
         - :class:`squidpy.im.ImageContainer` ``['{{layer_added}}']`` - the segmented image.
     """
     layer = img._get_layer(layer)
-    channel_dim = img[layer].dims[-1]
+    img[layer].dims[-1]
 
     kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
-    layer_new = Key.img.segment(kind, layer_added=layer_added)
+    # layer_new = Key.img.segment(kind, layer_added=layer_added)
 
     if kind in (SegmentationBackend.LOG, SegmentationBackend.DOG, SegmentationBackend.DOH):
         segmentation_model: SegmentationModel = SegmentationBlob(model=kind)
@@ -292,6 +341,17 @@ def segment(
     else:
         raise NotImplementedError(f"Model `{kind}` is not yet implemented.")
 
+    # TODO: see TODOs in ImageContainer.apply (_is_delayed)
+    res: ImageContainer = segmentation_model.segment(
+        img, layer=layer, channel=channel, fn_kwargs=kwargs, _is_delayed=True
+    )
+    for k in res:
+        res[k].attrs["segmentation"] = True
+
+    return res
+    # TODO: handle the stuff below (most likely remove the par. part, not needed)
+
+    """
     n_jobs = _get_n_cores(n_jobs)
     crops: List[ImageContainer] = list(img.generate_equal_crops(size=size, as_array=False))
     start = logg.info(f"Segmenting `{len(crops)}` crops using `{segmentation_model}` and `{n_jobs}` core(s)")
@@ -306,16 +366,6 @@ def segment(
         show_progress_bar=show_progress_bar and len(crops) > 1,
     )(model=segmentation_model, layer=layer, layer_new=layer_new, channel=channel, **kwargs)
 
-    if isinstance(segmentation_model, SegmentationWatershed):
-        # By convention, segments are numbered from 1..number of segments within each crop.
-        # Next, we have to account for that before merging the crops so that segments are not confused.
-        # TODO use overlapping crops to not create confusion at boundaries
-        counter = 0
-        for crop in crops:
-            data = crop[layer_new].data
-            data[data > 0] += counter
-            counter += np.max(crop[layer_new].data)
-
     res: ImageContainer = ImageContainer.uncrop(crops, shape=img.shape)
     res._data = res.data.rename({channel_dim: f"{channel_dim}:{channel}"})
     for k in res:
@@ -327,6 +377,7 @@ def segment(
         return res
 
     img.add_img(res, layer=layer_new, copy=False, channel_dim=res[layer_new].dims[-1])
+    """
 
 
 def _segment(

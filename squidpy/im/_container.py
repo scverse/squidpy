@@ -783,7 +783,7 @@ class ImageContainer(FeatureMixin):
         channel: Optional[int] = None,
         chunks: Optional[Union[str]] = None,
         copy: bool = True,
-        map_kwargs: Mapping[str, Any] = MappingProxyType({}),
+        fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
     ) -> Optional["ImageContainer"]:
         """
@@ -799,11 +799,11 @@ class ImageContainer(FeatureMixin):
         chunks
             Chunk size for :mod:`dask`. If `None`, don't use :mod:`dask`.
         %(copy_cont)s
-        map_kwargs
+        fn_kwargs
+            Keyword arguments for ``func``.
+        kwargs
             Keyword arguments for :meth:`dask.Array.map_blocks` or :meth:`dask.Array.map_overlap`, depending whether
             ``'depth'`` is present in ``map_kwargs``. Only used when ``chunks != None``.
-        kwargs
-            Keyword arguments for ``func``.
 
         Returns
         -------
@@ -813,25 +813,28 @@ class ImageContainer(FeatureMixin):
         layer = self._get_layer(layer)
         arr = self[layer]
         channel_dim = arr.dims[-1]
+        # TODO: better approach (another fn, e.g. apply_delayed)?
         is_delayed = kwargs.pop("_is_delayed", False)
 
         if channel is not None:
             arr = arr[{channel_dim: channel}]
 
         if is_delayed:
-            arr = da.from_array(arr.values, chunks="auto" if chunks is None else chunks)
-            res = func(arr, **kwargs)
+            # TODO: better design
+            arr = da.from_array(arr.values)
+            res = func(arr, **fn_kwargs)
         elif chunks is not None:
             arr = da.from_array(arr.values, chunks=chunks)
             res = (
-                arr.map_overlap(func, **map_kwargs, **kwargs)
-                if "depth" in map_kwargs and True
-                else arr.map_blocks(func, **map_kwargs, **kwargs, dtype=arr.dtype)
+                arr.map_overlap(func, **fn_kwargs, **kwargs)
+                if "depth" in kwargs and True
+                else arr.map_blocks(func, **fn_kwargs, **kwargs, dtype=arr.dtype)
             )
         else:
-            res = func(arr.values, **kwargs)
+            res = func(arr.values, **fn_kwargs)
 
         if isinstance(res, da.Array):
+            # TODO: allow lazy? see above TODO
             res = res.compute()
 
         if res.ndim == 2:

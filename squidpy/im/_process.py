@@ -94,6 +94,7 @@ def process(
     if channel_dim is None:
         channel_dim = img[layer].dims[-1]
     layer_new = Key.img.process(method, layer, layer_added=layer_added)
+    map_kwargs = dict(map_kwargs)
 
     if callable(method):
         callback = method
@@ -101,17 +102,17 @@ def process(
         kwargs.setdefault("sigma", [1, 1, 0])
         if chunks is not None:
             callback = dask_gf
-            kwargs["_is_delayed"] = True
+            map_kwargs["_is_delayed"] = True
         else:
             callback = scipy_gf
     elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
         callback = to_grayscale
-        kwargs["_is_delayed"] = chunks is not None
+        map_kwargs["_is_delayed"] = chunks is not None
     else:
         raise NotImplementedError(f"Method `{method}` is not yet implemented.")
 
     start = logg.info(f"Processing image using `{method}` method")
-    res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, map_kwargs=map_kwargs, **kwargs)
+    res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **map_kwargs)
 
     # if the method changes the number of channels
     if res[layer].shape[-1] != img[layer].shape[-1]:
