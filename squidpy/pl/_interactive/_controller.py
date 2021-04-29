@@ -13,8 +13,6 @@ from PyQt5.QtWidgets import QLabel, QGridLayout
 from napari import Viewer
 from napari.layers import Points, Shapes
 
-from skimage import img_as_float
-
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
 from squidpy._utils import singledispatchmethod
@@ -75,11 +73,13 @@ class ImageController:
 
         logg.info(f"Creating image `{layer}` layer")
         self.view.viewer.add_image(
-            img_as_float(img),
+            img,
+            # TODO: img_as_float(img),
             name=layer,
             rgb=True,
             colormap=self.model.cmap,
             blending=self.model.blending,
+            multiscale=np.prod(img.shape[:2]) > (2 ** 16) ** 2,
         )
 
         return True
