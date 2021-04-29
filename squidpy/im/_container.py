@@ -618,10 +618,10 @@ class ImageContainer(FeatureMixin):
         for crop in crops:
             if set(crop.data.keys()) != keys:
                 raise KeyError(f"Expected to find `{sorted(keys)}` keys, found `{sorted(crop.data.keys())}`.")
-            if crop.data.attrs.get(Key.img.coords, None) is None:
-                raise ValueError("Crop does not have coordinate metadata.")
 
-            coord = crop.data.attrs[Key.img.coords]  # the unpadded coordinates
+            coord = crop.data.attrs.get(Key.img.coords, None)
+            if coord is None:
+                raise ValueError("Crop does not have coordinate metadata.")
             if coord == _NULL_COORDS:
                 raise ValueError(f"Null coordinates detected `{coord}`.")
 
