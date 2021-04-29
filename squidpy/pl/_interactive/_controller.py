@@ -20,7 +20,11 @@ from squidpy._utils import singledispatchmethod
 from squidpy.pl._utils import _points_inside_triangles
 from squidpy.pl._interactive._view import ImageView
 from squidpy.pl._interactive._model import ImageModel
-from squidpy.pl._interactive._utils import _get_categorical, _position_cluster_labels
+from squidpy.pl._interactive._utils import (
+    _is_luminance,
+    _get_categorical,
+    _position_cluster_labels,
+)
 from squidpy.pl._interactive._widgets import RangeSlider
 
 # label string: attribute name
@@ -77,7 +81,10 @@ class ImageController:
             logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
             return False
 
-        luminance = img.attrs.get("luminance", False)
+        luminance = img.attrs.get("luminance", None)
+        if luminance is None:
+            logg.debug("Automatically determining whether image is a luminance")
+            luminance = _is_luminance(img.values)
         if luminance:
             img = img.transpose(..., "y", "x")  # channels first
 
