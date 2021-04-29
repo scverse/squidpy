@@ -318,6 +318,8 @@ def segment(
 
     res: ImageContainer = ImageContainer.uncrop(crops, shape=img.shape)
     res._data = res.data.rename({channel_dim: f"{channel_dim}:{channel}"})
+    for k in res:
+        res[k].attrs["segmentation"] = True
 
     logg.info("Finish", time=start)
 
