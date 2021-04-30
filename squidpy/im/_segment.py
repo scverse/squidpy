@@ -87,8 +87,6 @@ class SegmentationModel(ABC):
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
             raise ValueError(f"Expected `3` dimensions, found `{img.ndim}`.")
-        if img.shape[-1] != 1:
-            raise ValueError(f"Expected only `1` channel, found `{img.shape[-1]}`.")
         return img
 
     @staticmethod
@@ -112,7 +110,7 @@ class SegmentationModel(ABC):
         self,
         img: ImageContainer,
         layer: str,
-        channel: int = 0,
+        channel: Optional[int] = None,
         fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
     ) -> ImageContainer:
@@ -274,7 +272,7 @@ def segment(
     img: ImageContainer,
     layer: Optional[str] = None,
     method: Union[str, Callable[..., np.ndarray]] = "watershed",
-    channel: int = 0,
+    channel: Optional[int] = 0,
     size: Optional[Union[str, int, Tuple[int, int]]] = None,
     layer_added: Optional[str] = None,
     copy: bool = False,
@@ -297,7 +295,7 @@ def segment(
 
         %(custom_fn)s
     channel
-        Channel index to use for segmentation.
+        Channel index to use for segmentation. If `None`, pass all channels.
     %(size)s
     %(layer_added)s
         If `None`, use ``'segmented_{{model}}'``.
