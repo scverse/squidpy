@@ -39,10 +39,10 @@ def _diffusion(
         # set values below zero to 0
         conc[conc < 0] = 0
         # compute entropy
-        ent[i + 1] = _entropy(conc[sat]) / sat_shape  # TODO: use numpy and normalize outside
-        entropy_arr[i] = np.abs(ent[i + 1] - ent[i])  # est entropy difference
+        ent[i + 1] = _entropy(conc[sat]) / sat_shape
+        entropy_arr[i] = np.abs(ent[i + 1] - ent[i])  # estimate entropy difference
 
-    return np.argwhere(entropy_arr <= thrs).flatten()  # removed the check conc[cd.saturated].sum() > 0 , needed ?
+    return np.argwhere(entropy_arr <= thrs).flatten()
 
 
 # taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
@@ -136,7 +136,7 @@ def _get_nhood_idx(
         s = slice(g_indptr[i], g_indptr[i + 1])
         unsat_neigh = g_indices[s]
         for u in unsat_neigh:
-            if u in sat:  # take the first saturated nhood, but does it matter which?
+            if u in sat:  # take the first saturated nhood
                 nearest_sat[idx] = u
                 break
 
