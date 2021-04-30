@@ -19,7 +19,8 @@ def _diffusion(
     dt: float = 0.001,
     D: float = 1.0,
     thrs: float = 1e-8,
-):
+) -> np.ndarray:
+    """Simulate diffusion process on a regular graph."""
     entropy_arr = np.zeros(n_iter)
     ent = np.ones(n_iter + 1)
 
@@ -44,17 +45,30 @@ def _diffusion(
     return np.argwhere(entropy_arr <= thrs).flatten()  # removed the check conc[cd.saturated].sum() > 0 , needed ?
 
 
-# taken from https://github.com/almaan/sepal
+# taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
 @njit(parallel=False)
 def _laplacian_rect(
     centers: np.ndarray,
     nbrs: np.ndarray,
-    h: float,
-) -> np.ndarray:
+    h: np.float_,
+) -> np.float_:
     """Laplacian approx rectilinear grid."""
-
     d2f = nbrs - 4 * centers
     d2f = d2f / h ** 2
+
+    return d2f
+
+
+# taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
+@njit(parallel=False)
+def laplacian_hex(
+    centers: np.ndarray,
+    nbrs: np.ndarray,
+    h: np.float_,
+) -> np.float_:
+    """Laplacian approx hexagonal grid."""
+    d2f = nbrs - 6 * centers
+    d2f = d2f / h ** 2 * 2 / 3
 
     return d2f
 
@@ -63,23 +77,8 @@ def _laplacian_rect(
 @njit(parallel=False)
 def _entropy(
     xx: np.ndarray,
-) -> float:
-    """Entropy of array
-    Elements in the array are
-    normalized to represent
-    probability values. Then
-    Entropy are computed according
-    to the definitionby Shannon
-    S = -sum_i p_*log(p_i)
-    Parameters:
-    ----------
-    xx : np.ndarray
-        array for which entropy should
-        be calculated
-    Returns:
-    -------
-    Entropy of array
-    """
+) -> np.float_:
+    """Entropy of array."""
     xnz = xx[xx > 0]
     xs = np.sum(xnz)
     xn = xnz / xs
@@ -87,9 +86,10 @@ def _entropy(
     return (-xl * xn).sum()
 
 
-def compute_idxs(g: spmatrix, spatial: np.ndarray, sat_thres: int, metric: str = "l1"):
-    """ Get saturated and unsaturated nodes and nhood indexes. """
-
+def compute_idxs(
+    g: spmatrix, spatial: np.ndarray, sat_thres: int, metric: str = "l1"
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Get saturated and unsaturated nodes and nhood indexes."""
     sat, unsat = _get_sat_unsat_idx(g.indptr, g.indices, g.shape[0], sat_thres)
 
     sat_idx, nearest_sat, un_unsat = _get_nhood_idx(
@@ -108,16 +108,9 @@ def compute_idxs(g: spmatrix, spatial: np.ndarray, sat_thres: int, metric: str =
 
 
 @njit(parallel=False)
-def _get_sat_unsat_idx(
-    g_indptr: np.ndarray, g_indices: np.ndarray, g_shape: int, sat_thres: int
-) -> Tuple[np.ndarray, np.ndarray]:
-    """ Get saturated and unsaturated nodes based on thres. """
-
-    n_indices = np.zeros(g_shape)
-    for i in np.arange(g_shape):
-        s = slice(g_indptr[i], g_indptr[i + 1])
-        n_indices[i] = g_indices[s].shape[0]
-
+def _get_sat_unsat_idx(g_indptr: np.ndarray, g_shape: int, sat_thres: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Get saturated and unsaturated nodes based on thres."""
+    n_indices = np.diff(g_indptr)
     unsat = np.arange(g_shape)[n_indices < sat_thres]
     sat = np.arange(g_shape)[n_indices == sat_thres]
 
@@ -128,8 +121,7 @@ def _get_sat_unsat_idx(
 def _get_nhood_idx(
     sat: np.ndarray, unsat: np.ndarray, g_indptr: np.ndarray, g_indices: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """ Get saturated and unsaturated nhood indexes. """
-
+    """Get saturated and unsaturated nhood indexes."""
     # get saturated nhood indices
     sat_idx = np.zeros((sat.shape[0], 4))
     for idx in np.arange(sat.shape[0]):
