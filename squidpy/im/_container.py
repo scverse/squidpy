@@ -970,6 +970,29 @@ class ImageContainer(FeatureMixin):
     def __getitem__(self, key: str) -> xr.DataArray:
         return self.data[key]
 
+    def __setitem__(
+        self, key: Union[str, Tuple[str, Union[str, bool]], Tuple[str, str, bool]], value: "ImageContainer"
+    ) -> None:
+        if not isinstance(value, ImageContainer):
+            return NotImplemented
+        if isinstance(key, str):
+            self.add_img(value, layer=key, channel_dim=str(value[key].dims[-1]))
+        elif isinstance(key, tuple):
+            if len(key) == 2:
+                # key[0] is source, key[1] is target
+                if isinstance(key[1], str):
+                    self.add_img(value[key[1]], layer=key[0], channel_dim=str(value[key[1]].dims[-1]), copy=True)
+                elif isinstance(key[1], bool):
+                    self.add_img(value, layer=key[0], channel_dim=str(value[key[0]].dims[-1]), copy=key[1])
+                else:
+                    raise TypeError("TODO")
+            elif len(key) == 3:
+                self.add_img(value[key[1]], layer=key[0], channel_dim=str(value[key[1]].dims[-1]), copy=bool(key[2]))  # type: ignore[misc,index]  # noqa: E501
+            else:
+                raise ValueError("TODO")
+        else:
+            return NotImplemented
+
     def __copy__(self) -> "ImageContainer":
         return type(self)._from_dataset(self.data, deep=False)
 

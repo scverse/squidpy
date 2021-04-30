@@ -1,17 +1,9 @@
 from abc import ABC, abstractmethod
 from types import MappingProxyType
-from typing import (
-    Any,
-    List,
-    Tuple,
-    Union,
-    Mapping,
-    Callable,
-    Optional,
-    Sequence,
-    TYPE_CHECKING,
-)
+from typing import Any, Tuple, Union, Mapping, Callable, Optional, TYPE_CHECKING
 from dask_image.ndmeasure import label
+
+from scanpy import logging as logg
 
 from dask import delayed
 from scipy import ndimage as ndi
@@ -23,9 +15,10 @@ from skimage.filters import threshold_otsu
 from skimage.segmentation import watershed
 
 from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, SigQueue, singledispatchmethod
+from squidpy._utils import singledispatchmethod
 from squidpy.im._container import ImageContainer
 from squidpy._constants._constants import SegmentationBackend
+from squidpy._constants._pkg_constants import Key
 
 __all__ = ["SegmentationModel", "SegmentationWatershed", "SegmentationCustom"]
 
@@ -111,8 +104,13 @@ class SegmentationModel(ABC):
         fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
     ) -> ImageContainer:
-        # simple inversion of control, we rename the channel dim later
-        return img.apply(self.segment, layer=layer, channel=channel, fn_kwargs=fn_kwargs, **kwargs)
+        channel_dim = img[layer].dims[-1]
+        res = img.apply(self.segment, layer=layer, channel=channel, fn_kwargs=fn_kwargs, **kwargs)
+        res._data = res.data.rename({channel_dim: f"{channel_dim}:{channel if channel is not None else 'all'}"})
+        for k in res:
+            res[k].attrs["segmentation"] = True
+
+        return res
 
     @abstractmethod
     def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
@@ -223,25 +221,26 @@ def segment(
     layer: Optional[str] = None,
     method: Union[str, SegmentationModel, Callable[..., np.ndarray]] = "watershed",
     channel: Optional[int] = 0,
-    size: Optional[Union[str, int, Tuple[int, int]]] = None,
+    chunks: Optional[Union[str, int, Tuple[int, int]]] = None,
     layer_added: Optional[str] = None,
     copy: bool = False,
-    show_progress_bar: bool = True,
-    n_jobs: Optional[int] = None,
-    backend: str = "loky",
     **kwargs: Any,
 ) -> Optional[ImageContainer]:
     """
     Segment an image.
 
-    If ``size`` is defined, iterate over crops of that size and segment those. Recommended for large images.
+    TODO: update
+    If ``chunks != None``, use :mod:`dask` to iterate over chunks and segment those.
 
     Parameters
     ----------
     %(img_container)s
     %(img_layer)s
-    %(seg_blob.parameters)s
+    method
+        Segmentation method to use. Valid options are:
+
             - `{m.WATERSHED.s!r}` - :func:`skimage.segmentation.watershed`.
+            - :func:`callable` - any function with TODO.
 
         %(custom_fn)s
     channel
@@ -256,11 +255,8 @@ def segment(
     geq
         Treat ``thresh`` as upper or lower bound for defining areas to segment. If ``geq = True``, mask is defined
         as ``mask = arr >= thresh``, meaning high values in ``arr`` denote areas to segment.
-    invert
-        Whether to segment an inverted array. Only used if ``method`` is one of :mod:`skimage` blob methods.
     %(copy_cont)s
     %(segment_kwargs)s
-    %(parallelize)s
     kwargs
         Keyword arguments for ``method``.
 
@@ -273,12 +269,10 @@ def segment(
         - :class:`squidpy.im.ImageContainer` ``['{{layer_added}}']`` - the segmented image.
     """
     layer = img._get_layer(layer)
-    img[layer].dims[-1]
-
-    # layer_new = Key.img.segment(kind, layer_added=layer_added)
+    kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
+    layer_new = Key.img.segment(kind, layer_added=layer_added)
 
     if not isinstance(method, SegmentationModel):
-        kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
         if kind == SegmentationBackend.WATERSHED:
             method: SegmentationModel = SegmentationWatershed()  # type: ignore[no-redef]
         elif kind == SegmentationBackend.CUSTOM:
@@ -291,62 +285,15 @@ def segment(
     if TYPE_CHECKING:
         assert isinstance(method, SegmentationModel)
 
+    start = logg.info(f"Segmenting an image of shape `{img[layer].shape}` using `{method}`")
     # TODO: see TODOs in ImageContainer.apply (_is_delayed)
-    res: ImageContainer = method.segment(img, layer=layer, channel=channel, fn_kwargs=kwargs, _is_delayed=True)
-    for k in res:
-        res[k].attrs["segmentation"] = True
-
-    return res
-    # TODO: handle the stuff below (most likely remove the par. part, not needed)
-
-    """
-    n_jobs = _get_n_cores(n_jobs)
-    crops: List[ImageContainer] = list(img.generate_equal_crops(size=size, as_array=False))
-    start = logg.info(f"Segmenting `{len(crops)}` crops using `{segmentation_model}` and `{n_jobs}` core(s)")
-
-    crops: List[ImageContainer] = parallelize(  # type: ignore[no-redef]
-        _segment,
-        collection=crops,
-        unit="crop",
-        extractor=lambda res: list(chain.from_iterable(res)),
-        n_jobs=n_jobs,
-        backend=backend,
-        show_progress_bar=show_progress_bar and len(crops) > 1,
-    )(model=segmentation_model, layer=layer, layer_new=layer_new, channel=channel, **kwargs)
-
-    res: ImageContainer = ImageContainer.uncrop(crops, shape=img.shape)
-    res._data = res.data.rename({channel_dim: f"{channel_dim}:{channel}"})
-    for k in res:
-        res[k].attrs["segmentation"] = True
-
+    kwargs["chunks"] = chunks
+    res: ImageContainer = method.segment(
+        img, layer=layer, channel=channel, fn_kwargs=kwargs, _is_delayed=chunks is not None, chunks=chunks
+    )
     logg.info("Finish", time=start)
 
     if copy:
         return res
 
-    img.add_img(res, layer=layer_new, copy=False, channel_dim=res[layer_new].dims[-1])
-    """
-
-
-def _segment(
-    crops: Sequence[ImageContainer],
-    model: SegmentationModel,
-    layer: str,
-    layer_new: str,
-    channel: int,
-    queue: Optional[SigQueue] = None,
-    **kwargs: Any,
-) -> List[ImageContainer]:
-    segmented_crops = []
-    for crop in crops:
-        crop = model.segment(crop, layer=layer, channel=channel, **kwargs)
-        crop._data = crop.data.rename({layer: layer_new})
-        segmented_crops.append(crop)
-
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    return segmented_crops
+    img[layer_new, layer, False] = res  # do not copy
