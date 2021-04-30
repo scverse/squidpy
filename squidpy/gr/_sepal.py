@@ -1,9 +1,157 @@
-from typing import Tuple
+from typing import Tuple, Union, Optional, Sequence
+from functools import singledispatch
+
+from scanpy import logging as logg
+from anndata import AnnData
+from scanpy.get import _get_obs_rep
 
 from numba import njit
-from scipy.sparse import spmatrix
+from scipy.sparse import spmatrix, csr_matrix
 from sklearn.metrics import pairwise_distances
 import numpy as np
+import pandas as pd
+
+from squidpy._docs import d, inject_docs
+from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
+from squidpy.gr._utils import (
+    _save_data,
+    _assert_spatial_basis,
+    _assert_connectivity_key,
+    _assert_non_empty_sequence,
+)
+from squidpy._constants._pkg_constants import Key
+
+
+@d.dedent
+@inject_docs(key=Key.obsp.spatial_conn())
+def sepal(
+    adata: AnnData,
+    genes: Optional[Union[str, Sequence[str]]] = None,
+    max_nbrs: int = 6,
+    n_iter: Optional[int] = 2000,
+    connectivity_key: str = Key.obsp.spatial_conn(),
+    spatial_key: str = Key.obsm.spatial,
+    layer: Optional[str] = None,
+    seed: Optional[int] = None,
+    use_raw: bool = False,
+    copy: bool = False,
+    n_jobs: Optional[int] = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
+) -> Optional[pd.DataFrame]:
+    """
+    Identify spatially variable genes with Sepal.
+
+    Sepal is a method that simulate a diffusion process to quantify spatial structure in tissue.
+    See  :cite:`Sepal` for reference.
+
+    Parameters
+    ----------
+    %(adata)s
+    genes
+        List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute global
+        spatial autocorrelation statistic.
+
+        If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present. Otherwise,
+        it's computed for all genes.
+    max_nbrs
+        Maximum number of neighbors of a node in the graph.
+    n_iter
+        Maximum number of iterations for the diffusion simulation.
+    %(conn_key)s
+    %(spatial_key)s
+    layer
+        Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
+    %(seed)s
+    %(copy)s
+    %(parallelize)s
+
+    Returns
+    -------
+    If ``copy = True``, returns a :class:`numpy.ndarray` with the sepal scores.
+
+    Otherwise, adds to ``adata.obs`` the following key:
+
+        - :attr:`anndata.AnnData.obs` ``['sepal']`` - sepal score.
+    """
+    _assert_connectivity_key(adata, connectivity_key)
+    _assert_spatial_basis(adata, key=spatial_key)
+
+    spatial = adata.obsm[spatial_key].astype(np.float_)
+
+    if genes is None:
+        if "highly_variable" in adata.var.columns:
+            genes = adata[:, adata.var.highly_variable.values].var_names.values
+        else:
+            genes = adata.var_names.values
+    genes = _assert_non_empty_sequence(genes, name="genes")
+
+    n_jobs = _get_n_cores(n_jobs)
+
+    vals = _get_obs_rep(adata[:, genes], use_raw=use_raw, layer=layer)
+    vals = _resolve_vals(vals)
+    g = adata.obsp[connectivity_key].copy()
+
+    if np.diff(g.indptr).max() != max_nbrs:
+        raise ValueError(f"Found node with `max_nbrs` > {max_nbrs}.")
+
+    # get saturated/unsaturated nodes
+    sat, sat_idx, unsat, unsat_idx = _compute_idxs(g, spatial, max_nbrs, "l1")
+
+    start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` core(s)")
+
+    sepal_score = parallelize(
+        _score_helper,
+        collection=np.arange(len(genes)),
+        extractor=np.stack,
+        use_ixs=False,
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
+    )(vals=vals, n_iter=n_iter, sat=sat, sat_idx=sat_idx, unsat=unsat, unsat_idx=unsat_idx)
+
+    if copy:
+        logg.info("Finish", time=start)
+        return sepal_score
+
+    _save_data(adata, attr="obs", key="sepal", data=sepal_score, time=start)
+
+
+def _score_helper(
+    ixs: Sequence[int],
+    vals: Union[spmatrix, np.ndarray],
+    n_iter: int,
+    sat: np.ndarray,
+    sat_idx: np.ndarray,
+    unsat: np.ndarray,
+    unsat_idx: np.ndarray,
+    queue: Optional[SigQueue] = None,
+) -> np.float_:
+
+    for i in ixs:
+        conc = vals[:, i]
+        time_iter = _diffusion(
+            conc,
+            n_iter,
+            sat,
+            sat_idx,
+            sat.shape[0],
+            unsat,
+            unsat_idx,
+            conc.shape[0],
+        )
+        if time_iter.shape[0] != 0:
+            score = 0.001 * time_iter[0]
+        else:
+            score = 0
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return score
 
 
 @njit(parallel=False)
@@ -86,7 +234,7 @@ def _entropy(
     return (-xl * xn).sum()
 
 
-def compute_idxs(
+def _compute_idxs(
     g: spmatrix, spatial: np.ndarray, sat_thres: int, metric: str = "l1"
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Get saturated and unsaturated nodes and nhood indexes."""
@@ -145,3 +293,20 @@ def _get_nhood_idx(
     un_unsat = unsat[np.isnan(nearest_sat)]
 
     return sat_idx.astype(np.int32), nearest_sat, un_unsat
+
+
+# interface, taken from: https://github.com/theislab/scanpy/blob/master/scanpy/metrics/_gearys_c.py
+@singledispatch
+def _resolve_vals(val) -> np.ndarray:  # type: ignore[no-untyped-def]
+    return np.asarray(val)
+
+
+@_resolve_vals.register(np.ndarray)
+@_resolve_vals.register(csr_matrix)
+def _(val) -> Union[spmatrix, np.ndarray]:
+    return val
+
+
+@_resolve_vals.register(spmatrix)  # type: ignore[no-redef]
+def _(val) -> spmatrix:
+    return csr_matrix(val)
