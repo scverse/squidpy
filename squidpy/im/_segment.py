@@ -18,19 +18,16 @@ from scipy import ndimage as ndi
 import numpy as np
 import dask.array as da
 
-from skimage.util import invert as invert_arr, img_as_float
 from skimage.feature import peak_local_max
 from skimage.filters import threshold_otsu
 from skimage.segmentation import watershed
-import skimage
 
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, singledispatchmethod
-from squidpy.im._coords import _circular_mask
 from squidpy.im._container import ImageContainer
 from squidpy._constants._constants import SegmentationBackend
 
-__all__ = ["SegmentationModel", "SegmentationWatershed", "SegmentationBlob", "SegmentationCustom"]
+__all__ = ["SegmentationModel", "SegmentationWatershed", "SegmentationCustom"]
 
 
 class SegmentationModel(ABC):
@@ -219,59 +216,12 @@ class SegmentationCustom(SegmentationModel):
         return repr(self)
 
 
-@d.get_sections(base="seg_blob", sections=["Parameters"])
-@inject_docs(m=SegmentationBackend)
-class SegmentationBlob(SegmentationCustom):
-    """
-    Segmentation model based on :mod:`skimage` blob detection.
-
-    Parameters
-    ----------
-    model
-        Segmentation method to use. Valid options are:
-
-            - `{m.LOG.s!r}` - :func:`skimage.feature.blob_log`. Blobs are assumed to be light on dark.
-            - `{m.DOG.s!r}` - :mod:`skimage.feature.blob_dog`. Blobs are assumed to be light on dark.
-            - `{m.DOH.s!r}` - :mod:`skimage.feature.blob_doh`. Blobs can be light on dark or vice versa.
-    """
-
-    def __init__(self, model: SegmentationBackend):
-        model = SegmentationBackend(model)
-        if model == SegmentationBackend.LOG:
-            func = skimage.feature.blob_log
-        elif model == SegmentationBackend.DOG:
-            func = skimage.feature.blob_dog
-        elif model == SegmentationBackend.DOH:
-            func = skimage.feature.blob_doh
-        else:
-            raise NotImplementedError(f"Unknown blob model `{model}`.")
-
-        super().__init__(func=func)
-
-    def _segment(self, arr: np.ndarray, invert: bool = False, **kwargs: Any) -> np.ndarray:
-        arr = arr.squeeze(-1)
-        if not np.issubdtype(arr.dtype, np.floating):
-            arr = img_as_float(arr, force_copy=False)
-        if invert:
-            arr = invert_arr(arr)
-
-        blob_mask = np.zeros_like(arr, dtype=np.bool_)
-        # invalid value encountered in double_scalar, invalid value encountered in subtract
-        with np.errstate(divide="ignore", invalid="ignore"):
-            blobs = self._model(arr, **kwargs)
-
-        for blob in blobs:
-            blob_mask[_circular_mask(blob_mask, *blob)] = True
-
-        return blob_mask
-
-
 @d.dedent
 @inject_docs(m=SegmentationBackend)
 def segment(
     img: ImageContainer,
     layer: Optional[str] = None,
-    method: Union[str, Callable[..., np.ndarray]] = "watershed",
+    method: Union[str, SegmentationModel, Callable[..., np.ndarray]] = "watershed",
     channel: Optional[int] = 0,
     size: Optional[Union[str, int, Tuple[int, int]]] = None,
     layer_added: Optional[str] = None,
@@ -325,24 +275,24 @@ def segment(
     layer = img._get_layer(layer)
     img[layer].dims[-1]
 
-    kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
     # layer_new = Key.img.segment(kind, layer_added=layer_added)
 
-    if kind in (SegmentationBackend.LOG, SegmentationBackend.DOG, SegmentationBackend.DOH):
-        segmentation_model: SegmentationModel = SegmentationBlob(model=kind)
-    elif kind == SegmentationBackend.WATERSHED:
-        segmentation_model = SegmentationWatershed()
-    elif kind == SegmentationBackend.CUSTOM:
-        if TYPE_CHECKING:
-            assert callable(method)
-        segmentation_model = SegmentationCustom(func=method)
-    else:
-        raise NotImplementedError(f"Model `{kind}` is not yet implemented.")
+    if not isinstance(method, SegmentationModel):
+        kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
+        if kind == SegmentationBackend.WATERSHED:
+            method: SegmentationModel = SegmentationWatershed()  # type: ignore[no-redef]
+        elif kind == SegmentationBackend.CUSTOM:
+            if not callable(method):
+                raise TypeError(f"Expected `method` to be a callable, found `{type(method)}`.")
+            method = SegmentationCustom(func=method)
+        else:
+            raise NotImplementedError(f"Model `{kind}` is not yet implemented.")
+
+    if TYPE_CHECKING:
+        assert isinstance(method, SegmentationModel)
 
     # TODO: see TODOs in ImageContainer.apply (_is_delayed)
-    res: ImageContainer = segmentation_model.segment(
-        img, layer=layer, channel=channel, fn_kwargs=kwargs, _is_delayed=True
-    )
+    res: ImageContainer = method.segment(img, layer=layer, channel=channel, fn_kwargs=kwargs, _is_delayed=True)
     for k in res:
         res[k].attrs["segmentation"] = True
 
