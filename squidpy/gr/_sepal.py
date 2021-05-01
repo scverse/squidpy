@@ -31,7 +31,7 @@ def sepal(
     adata: AnnData,
     genes: Optional[Union[str, Sequence[str]]] = None,
     max_nbrs: Literal[4, 6] = 6,
-    n_iter: Optional[int] = 2000,
+    n_iter: Optional[int] = 10000,
     dt: float = 0.001,
     thres: float = 1e-8,
     connectivity_key: str = Key.obsp.spatial_conn(),
