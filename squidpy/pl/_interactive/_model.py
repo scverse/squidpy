@@ -57,7 +57,7 @@ class ImageModel:
         if self.container.data.attrs.get("scale", 1) != 1:
             s = self.container.data.attrs["scale"]
             # update coordinates with image scale
-            self.coordinates = self.coordinates.copy() * s
-            self.spot_diameter = Key.uns.spot_diameter(self.adata, self.spatial_key, self.library_id) * s
+            self.coordinates = self.coordinates * s
+            self.spot_diameter *= s
 
         self.alayer = ALayer(self.adata, is_raw=False, palette=self.palette)
