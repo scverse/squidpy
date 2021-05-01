@@ -30,7 +30,7 @@ def sepal(
     genes: Optional[Union[str, Sequence[str]]] = None,
     max_nbrs: Literal[4, 6] = 6,
     n_iter: Optional[int] = 1000,
-    dt: float = 0.01,
+    dt: float = 0.001,
     thres: float = 1e-8,
     connectivity_key: str = Key.obsp.spatial_conn(),
     spatial_key: str = Key.obsm.spatial,
@@ -62,9 +62,9 @@ def sepal(
     n_iter
         Maximum number of iterations for the diffusion simulation.
     dt
-        Time step added in diffusion process.
+        Time step added in diffusion simulation.
     thres
-        Threshold for convergence of diffusion process.
+        Threshold for convergence of diffusion simulation.
     %(conn_key)s
     %(spatial_key)s
     layer
@@ -185,7 +185,7 @@ def _diffusion(
     conc_shape: int,
     dt: float = 0.001,
     D: float = 1.0,
-    thrs: float = 1e-8,
+    thres: float = 1e-8,
 ) -> np.ndarray:
     """Simulate diffusion process on a regular graph."""
     entropy_arr = np.zeros(n_iter)
@@ -209,7 +209,7 @@ def _diffusion(
         ent[i + 1] = _entropy(conc[sat]) / sat_shape
         entropy_arr[i] = np.abs(ent[i + 1] - ent[i])  # estimate entropy difference
 
-    return np.nonzero(entropy_arr <= thrs)[0]
+    return np.nonzero(entropy_arr <= thres)[0]
 
 
 # taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
