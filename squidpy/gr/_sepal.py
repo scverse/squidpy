@@ -106,13 +106,6 @@ def sepal(
     if max_n != max_nbrs:
         raise ValueError(f"Found node with # neighbors == {max_n}, bu expected `max_nbrs` == {max_nbrs}.")
 
-    if max_n == 4:
-        fun = _laplacian_rect
-    elif max_n == 6:
-        fun = _laplacian_hex
-    else:
-        NotImplementedError("Laplacian for `max_nbrs`= {max_n} is not yet implemented.")
-
     # get saturated/unsaturated nodes
     sat, sat_idx, unsat, unsat_idx = _compute_idxs(g, spatial, max_nbrs, "l1")
 
@@ -126,7 +119,17 @@ def sepal(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(vals=vals, fun=fun, n_iter=n_iter, sat=sat, sat_idx=sat_idx, unsat=unsat, unsat_idx=unsat_idx, dt=dt, thres=thres)
+    )(
+        vals=vals,
+        max_n=max_n,
+        n_iter=n_iter,
+        sat=sat,
+        sat_idx=sat_idx,
+        unsat=unsat,
+        unsat_idx=unsat_idx,
+        dt=dt,
+        thres=thres,
+    )
 
     sepal_score = pd.DataFrame(score, index=genes, columns=["sepal_score"])
     if sepal_score["sepal_score"].isna().any():
@@ -143,7 +146,7 @@ def sepal(
 def _score_helper(
     ixs: Sequence[int],
     vals: Union[spmatrix, np.ndarray],
-    fun: Callable[..., np.float_],
+    max_n: int,
     n_iter: int,
     sat: np.ndarray,
     sat_idx: np.ndarray,
@@ -155,8 +158,14 @@ def _score_helper(
 ) -> np.ndarray:
 
     score = []
+    if max_n == 4:
+        fun = _laplacian_rect
+    elif max_n == 6:
+        fun = _laplacian_hex
+    else:
+        NotImplementedError("Laplacian for `max_nbrs`= {max_n} is not yet implemented.")
     for i in ixs:
-        conc = vals[:, i]
+        conc = vals[:, i].copy()
         time_iter = _diffusion(
             conc, fun, n_iter, sat, sat_idx, sat.shape[0], unsat, unsat_idx, conc.shape[0], dt=dt, thres=thres
         )
@@ -221,7 +230,7 @@ def _diffusion(
 def _laplacian_rect(
     centers: np.ndarray,
     nbrs: np.ndarray,
-    h: np.float_,
+    h: np.ndarray,
 ) -> np.float_:
     """Laplacian approx rectilinear grid."""
     d2f = nbrs - 4 * centers
@@ -235,11 +244,12 @@ def _laplacian_rect(
 def _laplacian_hex(
     centers: np.ndarray,
     nbrs: np.ndarray,
-    h: np.float_,
+    h: np.ndarray,
 ) -> np.float_:
     """Laplacian approx hexagonal grid."""
     d2f = nbrs - 6 * centers
-    d2f = d2f / h ** 2 * 2 / 3
+    d2f = d2f / h ** 2
+    d2f = (d2f * 2) / 3
 
     return d2f
 
