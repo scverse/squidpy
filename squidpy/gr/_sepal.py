@@ -263,12 +263,7 @@ def _compute_idxs(
     """Get saturated and unsaturated nodes and nhood indexes."""
     sat, unsat = _get_sat_unsat_idx(g.indptr, g.shape[0], sat_thres)
 
-    sat_idx, nearest_sat, un_unsat = _get_nhood_idx(
-        sat,
-        unsat,
-        g.indptr,
-        g.indices,
-    )
+    sat_idx, nearest_sat, un_unsat = _get_nhood_idx(sat, unsat, g.indptr, g.indices, sat_thres)
 
     # compute dist btwn remaining unsat and all sat
     dist = pairwise_distances(spatial[un_unsat], spatial[sat], metric=metric)
@@ -290,11 +285,11 @@ def _get_sat_unsat_idx(g_indptr: np.ndarray, g_shape: int, sat_thres: int) -> Tu
 
 @njit(parallel=False)
 def _get_nhood_idx(
-    sat: np.ndarray, unsat: np.ndarray, g_indptr: np.ndarray, g_indices: np.ndarray
+    sat: np.ndarray, unsat: np.ndarray, g_indptr: np.ndarray, g_indices: np.ndarray, sat_thres: int
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Get saturated and unsaturated nhood indexes."""
     # get saturated nhood indices
-    sat_idx = np.zeros((sat.shape[0], 4))
+    sat_idx = np.zeros((sat.shape[0], sat_thres))
     for idx in np.arange(sat.shape[0]):
         i = sat[idx]
         s = slice(g_indptr[i], g_indptr[i + 1])
