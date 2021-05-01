@@ -802,7 +802,7 @@ class ImageContainer(FeatureMixin):
         fn_kwargs
             Keyword arguments for ``func``.
         kwargs
-            Keyword arguments for :meth:`dask.Array.map_blocks` or :meth:`dask.Array.map_overlap`, depending whether
+            Keyword arguments for :func:`dask.array.map_blocks` or :func:`dask.array.map_overlap`, depending whether
             ``'depth'`` is present in ``map_kwargs``. Only used when ``chunks != None``.
 
         Returns
@@ -826,9 +826,9 @@ class ImageContainer(FeatureMixin):
         elif chunks is not None:
             arr = da.from_array(arr.values, chunks=chunks)
             res = (
-                arr.map_overlap(func, **fn_kwargs, **kwargs)
+                da.map_overlap(func, arr, **fn_kwargs, **kwargs)
                 if "depth" in kwargs and True
-                else arr.map_blocks(func, **fn_kwargs, **kwargs, dtype=arr.dtype)
+                else da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
             )
         else:
             res = func(arr.values, **fn_kwargs)

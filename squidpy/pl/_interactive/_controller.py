@@ -83,7 +83,7 @@ class ImageController:
 
         luminance = img.attrs.get("luminance", None)
         if luminance is None:
-            logg.debug("Automatically determining whether image is a luminance")
+            logg.debug("Automatically determining whether image is a luminance image")
             luminance = _is_luminance(img.values)
         if luminance:
             img = img.transpose(..., "y", "x")  # channels first
@@ -250,7 +250,7 @@ class ImageController:
         return np.asarray(self.view.viewer.screenshot(path, canvas_only=True))
 
     def _handle_already_present(self, layer_name: str) -> None:
-        logg.warning(f"Layer `{layer_name}` is already loaded")
+        logg.debug(f"Layer `{layer_name}` is already loaded")
         self.view.layers.unselect_all()
         self.view.layers[layer_name].selected = True
 

@@ -1,11 +1,9 @@
 from abc import ABC, abstractmethod
 from types import MappingProxyType
 from typing import Any, Tuple, Union, Mapping, Callable, Optional, TYPE_CHECKING
-from dask_image.ndmeasure import label
 
 from scanpy import logging as logg
 
-from dask import delayed
 from scipy import ndimage as ndi
 import numpy as np
 import dask.array as da
@@ -21,6 +19,8 @@ from squidpy._constants._constants import SegmentationBackend
 from squidpy._constants._pkg_constants import Key
 
 __all__ = ["SegmentationModel", "SegmentationWatershed", "SegmentationCustom"]
+_SEG_DTYPE = np.uint32
+_SEG_DTYPE_N_BITS = _SEG_DTYPE(0).nbytes * 8
 
 
 class SegmentationModel(ABC):
@@ -65,7 +65,7 @@ class SegmentationModel(ABC):
         Raises
         ------
         ValueError
-            If the number of dimensions is neither 2 nor 3 or if there are more than 1 channels.
+            If the number of dimensions is neither 2 nor 3.
         NotImplementedError
             If trying to segment a type for which the segmentation has not been registered.
         """
@@ -73,6 +73,7 @@ class SegmentationModel(ABC):
 
     @staticmethod
     def _precondition(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array]:
+        # TODO: account for Z-dim
         if img.ndim == 2:
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
@@ -81,19 +82,48 @@ class SegmentationModel(ABC):
 
     @staticmethod
     def _postcondition(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array]:
+        # TODO: account for Z-dim
         if img.ndim == 2:
             img = img[..., np.newaxis]
         if img.ndim != 3:
             raise ValueError(f"Expected segmentation to return `3` dimensional array, found `{img.ndim}`.")
-
         return img
 
-    @segment.register(da.Array)
     @segment.register(np.ndarray)
     def _(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
         img = SegmentationModel._precondition(img)
         img = self._segment(img, **kwargs)
         return SegmentationModel._postcondition(img)
+
+    @segment.register(da.Array)  # type: ignore[no-redef]
+    def _(self, img: da.Array, **kwargs: Any) -> np.ndarray:
+        img = SegmentationModel._precondition(img).rechunk(1000)
+        shift = int(np.prod(img.numblocks)).bit_length()
+        # TODO:
+        _ = kwargs.pop("chunks", None)
+
+        img = da.map_blocks(
+            self._segment_chunk,
+            img,
+            dtype=_SEG_DTYPE,
+            num_blocks=img.numblocks,
+            shift=shift,
+            drop_axis=img.ndim - 1,  # y, x, z, c; -1 is bugged
+            **kwargs,
+        )
+        from dask_image.ndmeasure._utils._label import (
+            relabel_blocks,
+            label_adjacency_graph,
+            connected_components_delayed,
+        )
+
+        # return SegmentationModel._postcondition(img)
+        # max because labels are not continuous and won't be continuous
+        label_groups = label_adjacency_graph(img, None, img.max())
+        new_labeling = connected_components_delayed(label_groups)
+        relabeled = relabel_blocks(img, new_labeling)
+
+        return SegmentationModel._postcondition(relabeled)
 
     @segment.register(ImageContainer)  # type: ignore[no-redef]
     def _(
@@ -105,6 +135,7 @@ class SegmentationModel(ABC):
         **kwargs: Any,
     ) -> ImageContainer:
         channel_dim = img[layer].dims[-1]
+
         res = img.apply(self.segment, layer=layer, channel=channel, fn_kwargs=fn_kwargs, **kwargs)
         res._data = res.data.rename({channel_dim: f"{channel_dim}:{channel if channel is not None else 'all'}"})
         for k in res:
@@ -115,6 +146,31 @@ class SegmentationModel(ABC):
     @abstractmethod
     def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
         pass
+
+    def _segment_chunk(
+        self,
+        block: np.ndarray,
+        block_id: Tuple[int, ...],
+        num_blocks: Tuple[int, ...],
+        shift: int,
+        **kwargs: Any,
+    ) -> np.ndarray:
+        if len(num_blocks) == 2:
+            block_num = block_id[0] * num_blocks[1] + block_id[1]
+        elif len(num_blocks) == 3:
+            block_num = block_id[0] * (num_blocks[1] * num_blocks[2]) + block_id[1] * num_blocks[2]
+        elif len(num_blocks) == 4:
+            if num_blocks[-1] != 1:
+                raise ValueError("TODO.")
+            block_num = block_id[0] * (num_blocks[1] * num_blocks[2]) + block_id[1] * num_blocks[2]
+        else:
+            raise ValueError("TODO.")
+
+        labels = self._segment(block, **kwargs).astype(_SEG_DTYPE)
+        mask = labels > 0
+        labels[mask] = (labels[mask] << shift) | block_num
+
+        return labels
 
     def __repr__(self) -> str:
         return self.__class__.__name__
@@ -129,50 +185,13 @@ class SegmentationWatershed(SegmentationModel):
     def __init__(self) -> None:
         super().__init__(model=None)
 
-    def _segment_dask(
-        self,
-        arr: da.Array,
-        thresh: Optional[float] = None,
-        geq: bool = True,
-        chunks: Union[int, str, Tuple[int, ...]] = "auto",
-        **_: Any,
-    ) -> da.Array:
-        def _local_maxi(mask: np.ndarray, distance: np.ndarray) -> np.ndarray:
-            coords = peak_local_max(distance, footprint=np.ones((5, 5)), labels=mask)
-            local_maxi = np.zeros(distance.shape, dtype=np.bool_)
-            local_maxi[tuple(coords.T)] = True
-
-            return local_maxi
-
-        def _distance(mask: np.ndarray) -> np.ndarray:
-            return ndi.distance_transform_edt(mask)  # type: ignore[no-any-return]
-
-        def _watershed(img: np.ndarray, markers: np.ndarray, mask: np.ndarray) -> np.ndarray:
-            return watershed(img, markers, mask=mask)  # type: ignore[no-any-return]
-
-        arr = arr.rechunk(chunks).squeeze(-1)  # we always pass 3D image
-        if thresh is None:
-            thresh = da.from_delayed(delayed(threshold_otsu)(arr), shape=(), dtype=arr.dtype)
-        mask = (arr >= thresh) if geq else (arr < thresh)
-
-        distance = mask.map_blocks(_distance)
-        local_maxi = da.map_blocks(_local_maxi, mask, distance, dtype=bool)
-        markers, _ = label(local_maxi)
-
-        return da.map_overlap(_watershed, -distance, markers, mask, depth=10, dtype=int)
-
     def _segment(
         self,
         arr: np.ndarray,
         thresh: Optional[float] = None,
         geq: bool = True,
-        chunks: Optional[Union[int, str, Tuple[int, ...]]] = None,
         **kwargs: Any,
     ) -> Union[np.ndarray, da.Array]:
-        # TODO: better approach?
-        if chunks is not None:
-            return self._segment_dask(arr, thresh=thresh, geq=geq, chunks=chunks, **kwargs)
-
         arr = arr.squeeze(-1)  # we always pass 3D image
         if thresh is None:
             thresh = threshold_otsu(arr)
@@ -294,6 +313,7 @@ def segment(
     logg.info("Finish", time=start)
 
     if copy:
+        # TODO: still has the old layer name
         return res
 
     img[layer_new, layer, False] = res  # do not copy
