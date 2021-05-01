@@ -31,7 +31,7 @@ def sepal(
     adata: AnnData,
     genes: Optional[Union[str, Sequence[str]]] = None,
     max_nbrs: Literal[4, 6] = 6,
-    n_iter: Optional[int] = 1000,
+    n_iter: Optional[int] = 2000,
     dt: float = 0.001,
     thres: float = 1e-8,
     connectivity_key: str = Key.obsp.spatial_conn(),
@@ -210,6 +210,8 @@ def _diffusion(
         # compute entropy
         ent[i + 1] = _entropy(conc[sat]) / sat_shape
         entropy_arr[i] = np.abs(ent[i + 1] - ent[i])  # estimate entropy difference
+        if entropy_arr[i] <= thres:
+            break
 
     return np.nonzero(entropy_arr <= thres)[0]
 
