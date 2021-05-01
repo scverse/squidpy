@@ -1,12 +1,13 @@
-from typing import Tuple, Union, Optional, Sequence
+from typing import Tuple, Union, Callable, Optional, Sequence
 from functools import singledispatch
+from typing_extensions import Literal  # < 3.8
 
 from scanpy import logging as logg
 from anndata import AnnData
 from scanpy.get import _get_obs_rep
 
 from numba import njit
-from scipy.sparse import spmatrix, csr_matrix
+from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
 import numpy as np
 import pandas as pd
@@ -27,8 +28,8 @@ from squidpy._constants._pkg_constants import Key
 def sepal(
     adata: AnnData,
     genes: Optional[Union[str, Sequence[str]]] = None,
-    max_nbrs: int = 6,
-    n_iter: Optional[int] = 2000,
+    max_nbrs: Literal[4, 6] = 6,
+    n_iter: Optional[int] = 1000,
     connectivity_key: str = Key.obsp.spatial_conn(),
     spatial_key: str = Key.obsm.spatial,
     layer: Optional[str] = None,
@@ -43,7 +44,7 @@ def sepal(
     Identify spatially variable genes with Sepal.
 
     Sepal is a method that simulate a diffusion process to quantify spatial structure in tissue.
-    See  :cite:`Sepal` for reference.
+    See  :cite:`andersson2021` for reference.
 
     Parameters
     ----------
@@ -55,7 +56,7 @@ def sepal(
         If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present. Otherwise,
         it's computed for all genes.
     max_nbrs
-        Maximum number of neighbors of a node in the graph.
+        Maximum number of neighbors of a node in the graph, either 4 for a square-grid or 6 for a hexagonal-grid.
     n_iter
         Maximum number of iterations for the diffusion simulation.
     %(conn_key)s
@@ -90,48 +91,65 @@ def sepal(
 
     vals = _get_obs_rep(adata[:, genes], use_raw=use_raw, layer=layer)
     vals = _resolve_vals(vals)
+
     g = adata.obsp[connectivity_key].copy()
 
-    if np.diff(g.indptr).max() != max_nbrs:
-        raise ValueError(f"Found node with `max_nbrs` > {max_nbrs}.")
+    max_n = np.diff(g.indptr).max()
+    if max_n != max_nbrs:
+        raise ValueError(f"Found node with # neighbors == {max_n}, bu expected `max_nbrs` == {max_nbrs}.")
+
+    if max_n == 4:
+        fun = _laplacian_rect
+    elif max_n == 6:
+        fun = _laplacian_hex
+    else:
+        NotImplementedError("Laplacian for `max_nbrs`= {max_n} is not yet implemented.")
 
     # get saturated/unsaturated nodes
     sat, sat_idx, unsat, unsat_idx = _compute_idxs(g, spatial, max_nbrs, "l1")
 
     start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` core(s)")
 
-    sepal_score = parallelize(
+    score = parallelize(
         _score_helper,
         collection=np.arange(len(genes)),
-        extractor=np.stack,
+        extractor=np.hstack,
         use_ixs=False,
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(vals=vals, n_iter=n_iter, sat=sat, sat_idx=sat_idx, unsat=unsat, unsat_idx=unsat_idx)
+    )(vals=vals, fun=fun, n_iter=n_iter, sat=sat, sat_idx=sat_idx, unsat=unsat, unsat_idx=unsat_idx)
+
+    sepal_score = pd.DataFrame(score, index=genes, columns=["sepal_score"])
+    if sepal_score["sepal_score"].isna().any():
+        logg.info("Found NaN in sepal scores, consider increase `n_iter` to a higher value.")
+    sepal_score.sort_values(by="sepal_score", ascending=False, inplace=True)
 
     if copy:
         logg.info("Finish", time=start)
         return sepal_score
 
-    _save_data(adata, attr="obs", key="sepal", data=sepal_score, time=start)
+    _save_data(adata, attr="uns", key="sepal_score", data=sepal_score, time=start)
 
 
 def _score_helper(
     ixs: Sequence[int],
     vals: Union[spmatrix, np.ndarray],
+    fun: Callable[..., np.float_],
     n_iter: int,
     sat: np.ndarray,
     sat_idx: np.ndarray,
     unsat: np.ndarray,
     unsat_idx: np.ndarray,
     queue: Optional[SigQueue] = None,
-) -> np.float_:
+) -> np.ndarray:
 
+    score = []
     for i in ixs:
         conc = vals[:, i]
         time_iter = _diffusion(
             conc,
+            fun,
             n_iter,
             sat,
             sat_idx,
@@ -141,9 +159,9 @@ def _score_helper(
             conc.shape[0],
         )
         if time_iter.shape[0] != 0:
-            score = 0.001 * time_iter[0]
+            score.append(0.001 * time_iter[0])
         else:
-            score = 0
+            score.append(np.nan)
 
         if queue is not None:
             queue.put(Signal.UPDATE)
@@ -151,12 +169,13 @@ def _score_helper(
     if queue is not None:
         queue.put(Signal.FINISH)
 
-    return score
+    return np.array(score)
 
 
-@njit(parallel=False)
+@njit(parallel=False, fastmath=True)
 def _diffusion(
     conc: np.ndarray,
+    laplacian: Callable[..., np.float_],
     n_iter: int,
     sat: np.ndarray,
     sat_idx: np.ndarray,
@@ -178,7 +197,7 @@ def _diffusion(
     for i in range(n_iter):
         for j in range(sat_shape):
             nhood[j] = np.sum(conc[sat_idx[j]])
-        d2 = _laplacian_rect(conc[sat], nhood, weights)
+        d2 = laplacian(conc[sat], nhood, weights)
 
         dcdt = np.zeros(conc_shape)
         dcdt[sat] = D * d2
@@ -190,11 +209,11 @@ def _diffusion(
         ent[i + 1] = _entropy(conc[sat]) / sat_shape
         entropy_arr[i] = np.abs(ent[i + 1] - ent[i])  # estimate entropy difference
 
-    return np.argwhere(entropy_arr <= thrs).flatten()
+    return np.nonzero(entropy_arr <= thrs)[0]
 
 
 # taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
-@njit(parallel=False)
+@njit(parallel=False, fastmath=True)
 def _laplacian_rect(
     centers: np.ndarray,
     nbrs: np.ndarray,
@@ -208,8 +227,8 @@ def _laplacian_rect(
 
 
 # taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
-@njit(parallel=False)
-def laplacian_hex(
+@njit(parallel=False, fastmath=True)
+def _laplacian_hex(
     centers: np.ndarray,
     nbrs: np.ndarray,
     h: np.float_,
@@ -221,8 +240,8 @@ def laplacian_hex(
     return d2f
 
 
-# taken from https://github.com/almaan/sepal
-@njit(parallel=False)
+# taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
+@njit(parallel=False, fastmath=True)
 def _entropy(
     xx: np.ndarray,
 ) -> np.float_:
@@ -238,7 +257,7 @@ def _compute_idxs(
     g: spmatrix, spatial: np.ndarray, sat_thres: int, metric: str = "l1"
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Get saturated and unsaturated nodes and nhood indexes."""
-    sat, unsat = _get_sat_unsat_idx(g.indptr, g.indices, g.shape[0], sat_thres)
+    sat, unsat = _get_sat_unsat_idx(g.indptr, g.shape[0], sat_thres)
 
     sat_idx, nearest_sat, un_unsat = _get_nhood_idx(
         sat,
@@ -297,16 +316,10 @@ def _get_nhood_idx(
 
 # interface, taken from: https://github.com/theislab/scanpy/blob/master/scanpy/metrics/_gearys_c.py
 @singledispatch
-def _resolve_vals(val) -> np.ndarray:  # type: ignore[no-untyped-def]
-    return np.asarray(val)
-
-
-@_resolve_vals.register(np.ndarray)
-@_resolve_vals.register(csr_matrix)
-def _(val) -> Union[spmatrix, np.ndarray]:
+def _resolve_vals(val: np.ndarray) -> np.ndarray:
     return val
 
 
-@_resolve_vals.register(spmatrix)  # type: ignore[no-redef]
-def _(val) -> spmatrix:
-    return csr_matrix(val)
+@_resolve_vals.register(spmatrix)
+def _(val: spmatrix) -> np.ndarray:
+    return val.toarray()  # type: ignore[no-any-return]
