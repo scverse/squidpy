@@ -30,6 +30,8 @@ def sepal(
     genes: Optional[Union[str, Sequence[str]]] = None,
     max_nbrs: Literal[4, 6] = 6,
     n_iter: Optional[int] = 1000,
+    dt: float = 0.01,
+    thres: float = 1e-8,
     connectivity_key: str = Key.obsp.spatial_conn(),
     spatial_key: str = Key.obsm.spatial,
     layer: Optional[str] = None,
@@ -59,6 +61,10 @@ def sepal(
         Maximum number of neighbors of a node in the graph, either 4 for a square-grid or 6 for a hexagonal-grid.
     n_iter
         Maximum number of iterations for the diffusion simulation.
+    dt
+        Time step added in diffusion process.
+    thres
+        Threshold for convergence of diffusion process.
     %(conn_key)s
     %(spatial_key)s
     layer
@@ -118,7 +124,7 @@ def sepal(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(vals=vals, fun=fun, n_iter=n_iter, sat=sat, sat_idx=sat_idx, unsat=unsat, unsat_idx=unsat_idx)
+    )(vals=vals, fun=fun, n_iter=n_iter, sat=sat, sat_idx=sat_idx, unsat=unsat, unsat_idx=unsat_idx, dt=dt, thres=thres)
 
     sepal_score = pd.DataFrame(score, index=genes, columns=["sepal_score"])
     if sepal_score["sepal_score"].isna().any():
@@ -141,6 +147,8 @@ def _score_helper(
     sat_idx: np.ndarray,
     unsat: np.ndarray,
     unsat_idx: np.ndarray,
+    dt: np.float_,
+    thres: np.float_,
     queue: Optional[SigQueue] = None,
 ) -> np.ndarray:
 
@@ -148,15 +156,7 @@ def _score_helper(
     for i in ixs:
         conc = vals[:, i]
         time_iter = _diffusion(
-            conc,
-            fun,
-            n_iter,
-            sat,
-            sat_idx,
-            sat.shape[0],
-            unsat,
-            unsat_idx,
-            conc.shape[0],
+            conc, fun, n_iter, sat, sat_idx, sat.shape[0], unsat, unsat_idx, conc.shape[0], dt=dt, thres=thres
         )
         if time_iter.shape[0] != 0:
             score.append(0.001 * time_iter[0])
