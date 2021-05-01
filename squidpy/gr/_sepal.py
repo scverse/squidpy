@@ -66,7 +66,7 @@ def sepal(
     dt
         Time step added in diffusion simulation.
     thres
-        Threshold for convergence of diffusion simulation.
+        Entropy threshold for convergence of diffusion simulation.
     %(conn_key)s
     %(spatial_key)s
     layer
