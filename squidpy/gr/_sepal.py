@@ -22,6 +22,8 @@ from squidpy.gr._utils import (
 )
 from squidpy._constants._pkg_constants import Key
 
+__all__ = ["sepal"]
+
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
