@@ -313,7 +313,6 @@ def segment(
     logg.info("Finish", time=start)
 
     if copy:
-        # TODO: still has the old layer name
-        return res
+        return res.rename(layer, layer_new)
 
-    img[layer_new, layer, False] = res  # do not copy
+    img.add_img(res[layer], layer_added=layer_new, channel_dim=str(res[layer].dims[-1]), copy=False)

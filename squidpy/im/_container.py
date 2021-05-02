@@ -151,13 +151,18 @@ class ImageContainer(FeatureMixin):
         iterator = chain.from_iterable(pat.finditer(k) for k in self.data.keys())
         return f"{layer}_{(max(map(lambda m: int(m.groups()[0]), iterator), default=-1) + 1)}"
 
+    def _get_next_channel_id(self, channel: str) -> str:
+        pat = re.compile(rf"^{channel}_(\d*)$")
+        iterator = chain.from_iterable(pat.finditer(v.dims[-1]) for v in self.data.values())
+        return f"{channel}_{(max(map(lambda m: int(m.groups()[0]), iterator), default=-1) + 1)}"
+
     @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
     @d.dedent
     def add_img(
         self,
         img: Input_t,
         layer: Optional[str] = None,
-        channel_dim: str = "channels",
+        channel_dim: Optional[str] = None,
         lazy: bool = True,
         chunks: Optional[Union[str, Tuple[int, ...]]] = None,
         **kwargs: Any,
@@ -199,10 +204,20 @@ class ImageContainer(FeatureMixin):
         if img is not None:  # not reading a .nc file
             if TYPE_CHECKING:
                 assert isinstance(img, xr.DataArray)
-            img = img.rename({img.dims[-1]: channel_dim})
+            img = img.rename({img.dims[-1]: "channels" if channel_dim is None else str(channel_dim)})
 
             logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
-            self.data[layer] = img
+            try:
+                self.data[layer] = img
+            except ValueError as e:
+                if "cannot be aligned" not in str(e) or channel_dim is not None:
+                    raise
+                channel_dim = self._get_next_channel_id("channels")
+                logg.warning(f"TODO: {channel_dim}")
+
+                if TYPE_CHECKING:
+                    assert isinstance(img, xr.DataArray)
+                self.data[layer] = img.rename({img.dims[-1]: channel_dim})
 
         if not lazy:
             self.data.load()
@@ -852,6 +867,11 @@ class ImageContainer(FeatureMixin):
             channel_dim=f"{channel_dim}:{res.shape[-1]}" if arr.shape[-1] != res.shape[-1] else channel_dim,
         )
 
+    def rename(self, old_name: str, new_name: str) -> "ImageContainer":
+        """TODO."""
+        self._data = self.data.rename_vars({old_name: new_name})
+        return self
+
     @property
     def data(self) -> xr.Dataset:
         """Underlying :class:`xarray.Dataset`."""
@@ -969,29 +989,6 @@ class ImageContainer(FeatureMixin):
 
     def __getitem__(self, key: str) -> xr.DataArray:
         return self.data[key]
-
-    def __setitem__(
-        self, key: Union[str, Tuple[str, Union[str, bool]], Tuple[str, str, bool]], value: "ImageContainer"
-    ) -> None:
-        if not isinstance(value, ImageContainer):
-            return NotImplemented
-        if isinstance(key, str):
-            self.add_img(value, layer=key, channel_dim=str(value[key].dims[-1]))
-        elif isinstance(key, tuple):
-            if len(key) == 2:
-                # key[0] is source, key[1] is target
-                if isinstance(key[1], str):
-                    self.add_img(value[key[1]], layer=key[0], channel_dim=str(value[key[1]].dims[-1]), copy=True)
-                elif isinstance(key[1], bool):
-                    self.add_img(value, layer=key[0], channel_dim=str(value[key[0]].dims[-1]), copy=key[1])
-                else:
-                    raise TypeError("TODO")
-            elif len(key) == 3:
-                self.add_img(value[key[1]], layer=key[0], channel_dim=str(value[key[1]].dims[-1]), copy=bool(key[2]))  # type: ignore[misc,index]  # noqa: E501
-            else:
-                raise ValueError("TODO")
-        else:
-            return NotImplemented
 
     def __copy__(self) -> "ImageContainer":
         return type(self)._from_dataset(self.data, deep=False)
