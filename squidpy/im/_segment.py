@@ -91,16 +91,19 @@ class SegmentationModel(ABC):
 
     @segment.register(np.ndarray)
     def _(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
+        chunks = kwargs.pop("chunks", None)
+        if chunks is not None:
+            return self.segment(da.from_array(img, chunks=chunks))
+
         img = SegmentationModel._precondition(img)
         img = self._segment(img, **kwargs)
+
         return SegmentationModel._postcondition(img)
 
     @segment.register(da.Array)  # type: ignore[no-redef]
     def _(self, img: da.Array, **kwargs: Any) -> np.ndarray:
         img = SegmentationModel._precondition(img).rechunk(1000)
         shift = int(np.prod(img.numblocks)).bit_length()
-        # TODO:
-        _ = kwargs.pop("chunks", None)
 
         img = da.map_blocks(
             self._segment_chunk,
@@ -138,6 +141,7 @@ class SegmentationModel(ABC):
 
         res = img.apply(self.segment, layer=layer, channel=channel, fn_kwargs=fn_kwargs, **kwargs)
         res._data = res.data.rename({channel_dim: f"{channel_dim}:{channel if channel is not None else 'all'}"})
+
         for k in res:
             res[k].attrs["segmentation"] = True
 
@@ -290,6 +294,7 @@ def segment(
     layer = img._get_layer(layer)
     kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
     layer_new = Key.img.segment(kind, layer_added=layer_added)
+    kwargs["chunks"] = chunks
 
     if not isinstance(method, SegmentationModel):
         if kind == SegmentationBackend.WATERSHED:
@@ -305,14 +310,10 @@ def segment(
         assert isinstance(method, SegmentationModel)
 
     start = logg.info(f"Segmenting an image of shape `{img[layer].shape}` using `{method}`")
-    # TODO: see TODOs in ImageContainer.apply (_is_delayed)
-    kwargs["chunks"] = chunks
-    res: ImageContainer = method.segment(
-        img, layer=layer, channel=channel, fn_kwargs=kwargs, _is_delayed=chunks is not None, chunks=chunks
-    )
+    res: ImageContainer = method.segment(img, layer=layer, channel=channel, fn_kwargs=kwargs, chunks=None)
     logg.info("Finish", time=start)
 
     if copy:
         return res.rename(layer, layer_new)
 
-    img.add_img(res[layer], layer_added=layer_new, channel_dim=str(res[layer].dims[-1]), copy=False)
+    img.add_img(res[layer], layer=layer_new, channel_dim=str(res[layer].dims[-1]), copy=False)

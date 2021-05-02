@@ -671,6 +671,7 @@ class ImageContainer(FeatureMixin):
         self,
         layer: Optional[str] = None,
         channel: Optional[int] = None,
+        channelwise: bool = False,
         as_mask: bool = False,
         ax: Optional[mpl.axes.Axes] = None,
         figsize: Optional[Tuple[float, float]] = None,
@@ -686,6 +687,8 @@ class ImageContainer(FeatureMixin):
         %(img_layer)s
         channel
             Channel to plot. If `None`, use all channels for plotting.
+        channelwise
+            Whether to plot each channel separately or not.
         as_mask
             Whether to show the image as a binary mask. Only available if the plotted image has 1 channel.
         ax
@@ -706,22 +709,40 @@ class ImageContainer(FeatureMixin):
         """
         from squidpy.pl._utils import save_fig
 
-        arr = self.data[self._get_layer(layer)]
+        layer = self._get_layer(layer)
+        arr = self.data[layer]
+        n_channels = arr.shape[-1]
+        if channelwise and n_channels == 1:
+            channelwise = False
+
         if channel is not None:
             arr = arr[{arr.dims[-1]: channel}]
             if as_mask:
                 arr = arr > 0
         elif as_mask:
-            if arr.shape[-1] != 1:
+            if not channelwise and n_channels != 1:
                 raise ValueError(f"Expected to find 1 channel, found `{arr.shape[-1]}`.")
             arr = arr > 0
 
         fig = None
         if ax is None:
-            fig, ax = plt.subplots(figsize=(8, 8) if figsize is None else figsize, dpi=dpi, tight_layout=True)
+            fig, ax = plt.subplots(
+                ncols=n_channels, figsize=(8, 8) if figsize is None else figsize, dpi=dpi, tight_layout=True
+            )
 
-        ax.set_axis_off()  # always set it off, even if the user provides the ax
-        ax.imshow(img_as_float(arr.values, force_copy=False), **kwargs)
+        ax = tuple(np.ravel([ax]))
+        if channelwise and len(ax) != n_channels:
+            raise ValueError("TODO.")
+
+        for c, a in enumerate(ax):
+            if channelwise:
+                img, title = arr[..., c], f"{layer}:{c}"
+            else:
+                img, title = arr, layer
+
+            a.imshow(img_as_float(img.values, force_copy=False), **kwargs)
+            a.set_title(title)
+            a.set_axis_off()
 
         if save and fig is not None:
             save_fig(fig, save)
@@ -796,6 +817,7 @@ class ImageContainer(FeatureMixin):
         func: Callable[..., np.ndarray],
         layer: Optional[str] = None,
         channel: Optional[int] = None,
+        lazy: bool = False,
         chunks: Optional[Union[str]] = None,
         copy: bool = True,
         fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -824,39 +846,40 @@ class ImageContainer(FeatureMixin):
         -------
         If ``copy = True``, returns a new container with ``layer``.
         Otherwise, overwrites the ``layer`` in this container.
+
+        Raises
+        ------
+        ValueError
+            TODO.
         """
         layer = self._get_layer(layer)
         arr = self[layer]
         channel_dim = arr.dims[-1]
-        # TODO: better approach (another fn, e.g. apply_delayed)?
-        is_delayed = kwargs.pop("_is_delayed", False)
 
         if channel is not None:
             arr = arr[{channel_dim: channel}]
 
-        if is_delayed:
-            # TODO: better design
-            arr = da.from_array(arr.values)
-            res = func(arr, **fn_kwargs)
-        elif chunks is not None:
-            arr = da.from_array(arr.values, chunks=chunks)
+        if chunks is not None:
+            arr = da.asarray(arr.values).rechunk(chunks)
             res = (
                 da.map_overlap(func, arr, **fn_kwargs, **kwargs)
-                if "depth" in kwargs and True
+                if "depth" in kwargs
                 else da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
             )
         else:
             res = func(arr.values, **fn_kwargs)
 
-        if isinstance(res, da.Array):
-            # TODO: allow lazy? see above TODO
+        if not lazy and isinstance(res, da.Array):
             res = res.compute()
 
-        if res.ndim == 2:
+        if res.ndim == 1:
+            raise ValueError("TODO.")
+        elif res.ndim == 2:
             res = res[..., np.newaxis]
+        # TODO: handle z-dimm
 
         if copy:
-            cont = ImageContainer(res, layer=layer, channel_dim=channel_dim)
+            cont = ImageContainer(res, layer=layer, channel_dim=channel_dim, copy=True)
             cont.data.attrs = self.data.attrs.copy()
 
             return cont
@@ -989,6 +1012,11 @@ class ImageContainer(FeatureMixin):
 
     def __getitem__(self, key: str) -> xr.DataArray:
         return self.data[key]
+
+    def __setitem__(self, key: str, value: Union[np.ndarray, xr.DataArray, da.Array]) -> None:
+        if not isinstance(value, (np.ndarray, xr.DataArray, da.Array)):
+            raise NotImplementedError(f"Adding `{type(value).__name__}` is not yet implemented.")
+        self.add_img(value, layer=key, channel_dim=None, copy=True)
 
     def __copy__(self) -> "ImageContainer":
         return type(self)._from_dataset(self.data, deep=False)

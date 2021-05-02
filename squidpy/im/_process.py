@@ -99,15 +99,16 @@ def process(
     if callable(method):
         callback = method
     elif method == Processing.SMOOTH:  # type: ignore[comparison-overlap]
-        kwargs.setdefault("sigma", [1, 1, 0])
+        # TODO: handle Z-dim
+        kwargs.setdefault("sigma", [1, 1, 0])  # TODO: Z-dim, allow for ints, replicate over spatial dims
         if chunks is not None:
-            callback = dask_gf
-            map_kwargs["_is_delayed"] = True
+            chunks_, chunks = chunks, None
+            callback = lambda arr, **kwargs: dask_gf(da.from_array(arr, chunks=chunks_), **kwargs)  # noqa: E731
         else:
             callback = scipy_gf
     elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
+        map_kwargs["drop_axis"] = 2  # TODO: Z-dim
         callback = to_grayscale
-        map_kwargs["_is_delayed"] = chunks is not None
     else:
         raise NotImplementedError(f"Method `{method}` is not yet implemented.")
 
