@@ -1018,6 +1018,9 @@ class ImageContainer(FeatureMixin):
             raise NotImplementedError(f"Adding `{type(value).__name__}` is not yet implemented.")
         self.add_img(value, layer=key, channel_dim=None, copy=True)
 
+    def _ipython_key_completions_(self) -> Iterable[str]:
+        return sorted(map(str, self.data.keys()))
+
     def __copy__(self) -> "ImageContainer":
         return type(self)._from_dataset(self.data, deep=False)
 

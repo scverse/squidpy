@@ -120,7 +120,6 @@ class SegmentationModel(ABC):
             connected_components_delayed,
         )
 
-        # return SegmentationModel._postcondition(img)
         # max because labels are not continuous and won't be continuous
         label_groups = label_adjacency_graph(img, None, img.max())
         new_labeling = connected_components_delayed(label_groups)
@@ -245,6 +244,7 @@ def segment(
     method: Union[str, SegmentationModel, Callable[..., np.ndarray]] = "watershed",
     channel: Optional[int] = 0,
     chunks: Optional[Union[str, int, Tuple[int, int]]] = None,
+    lazy: bool = False,
     layer_added: Optional[str] = None,
     copy: bool = False,
     **kwargs: Any,
@@ -310,7 +310,7 @@ def segment(
         assert isinstance(method, SegmentationModel)
 
     start = logg.info(f"Segmenting an image of shape `{img[layer].shape}` using `{method}`")
-    res: ImageContainer = method.segment(img, layer=layer, channel=channel, fn_kwargs=kwargs, chunks=None)
+    res: ImageContainer = method.segment(img, layer=layer, channel=channel, fn_kwargs=kwargs, chunks=None, lazy=lazy)
     logg.info("Finish", time=start)
 
     if copy:

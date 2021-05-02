@@ -1,5 +1,4 @@
-from types import MappingProxyType
-from typing import Any, Union, Mapping, Callable, Optional
+from typing import Any, Dict, Union, Callable, Optional
 from dask_image.ndfilters import gaussian_filter as dask_gf
 
 from scanpy import logging as logg
@@ -40,10 +39,10 @@ def process(
     layer: Optional[str] = None,
     method: Union[str, Callable[..., np.ndarray]] = "smooth",
     chunks: Optional[int] = None,
+    lazy: bool = False,
     layer_added: Optional[str] = None,
     channel_dim: Optional[str] = None,
     copy: bool = False,
-    map_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> Optional[ImageContainer]:
     """
@@ -64,14 +63,15 @@ def process(
 
         %(custom_fn)s
     chunks
+        TODO.
+    lazy
+        TODO.
     %(layer_added)s
         If `None`, use ``'{{layer}}_{{method}}'``.
     channel_dim
         Name of the channel dimension of the new image layer. Default is the same as the original, if the
         processing function does not change the number of channels, and ``'{{channel}}_{{processing}}'`` otherwise.
     %(copy_cont)s
-    map_kwargs
-        TODO.
     kwargs
         Keyword arguments for ``method``.
 
@@ -94,7 +94,7 @@ def process(
     if channel_dim is None:
         channel_dim = img[layer].dims[-1]
     layer_new = Key.img.process(method, layer, layer_added=layer_added)
-    map_kwargs = dict(map_kwargs)
+    map_kwargs: Dict[str, Any] = {"lazy": lazy}
 
     if callable(method):
         callback = method
