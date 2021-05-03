@@ -435,7 +435,12 @@ class ImageContainer(FeatureMixin):
                 )
             )
             old_scale = attrs[Key.img.scale]
-            data.attrs = {**attrs, Key.img.scale: scale * old_scale}
+            data.attrs = {
+                **attrs,
+                Key.img.scale: scale * old_scale,
+                "padding": attrs["padding"] * scale,
+                "coords": attrs["coords"] * scale,
+            }
 
         if mask_circle:
             if data.dims["y"] != data.dims["x"]:
@@ -642,6 +647,7 @@ class ImageContainer(FeatureMixin):
             raise ValueError("No crops were supplied.")
 
         keys = set(crops[0].data.keys())
+        scales = set()
         dy, dx = -1, -1
 
         for crop in crops:
@@ -654,11 +660,18 @@ class ImageContainer(FeatureMixin):
             if coord == _NULL_COORDS:
                 raise ValueError(f"Null coordinates detected `{coord}`.")
 
+            scales.add(crop.data.attrs.get("scale", None))
             dy, dx = max(dy, coord.y0 + coord.dy), max(dx, coord.x0 + coord.dx)
+
+        scales.discard(None)
+        if len(scales) != 1:
+            raise ValueError(f"Unable to uncrop images of different scales: `{sorted((scales))}`.")
+        scale, *_ = scales
 
         if shape is None:
             shape = (dy, dx)
-        shape = tuple(shape)  # type: ignore[assignment]
+        # can be float because coords can be scaled
+        shape = tuple(map(int, shape))  # type: ignore[assignment]
         if len(shape) != 2:
             raise ValueError(f"Expected `shape` to be of length `2`, found `{len(shape)}`.")
         if shape < (dy, dx):
@@ -666,6 +679,8 @@ class ImageContainer(FeatureMixin):
 
         # create resulting dataset
         dataset = xr.Dataset()
+        dataset.attrs["scale"] = scale
+
         for key in keys:
             img = crop.data[key]
             # get shape for this DataArray
@@ -900,6 +915,10 @@ class ImageContainer(FeatureMixin):
         """  # noqa: D401
         res = cls()
         res._data = data if deep is None else data.copy(deep=deep)
+        res._data.attrs.setdefault(Key.img.coords, _NULL_COORDS)  # can't save None to NetCDF
+        res._data.attrs.setdefault(Key.img.padding, _NULL_PADDING)
+        res._data.attrs.setdefault(Key.img.scale, 1.0)
+        res._data.attrs.setdefault(Key.img.mask_circle, False)
         return res
 
     def _maybe_as_array(

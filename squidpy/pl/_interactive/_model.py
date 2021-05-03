@@ -6,7 +6,7 @@ from anndata import AnnData
 import numpy as np
 
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
-from squidpy.im._utils import CropCoords, _NULL_COORDS
+from squidpy.im._utils import CropCoords, CropPadding, _NULL_COORDS, _NULL_PADDING
 from squidpy.pl._utils import ALayer
 from squidpy._constants._constants import Symbol
 from squidpy._constants._pkg_constants import Key
@@ -38,26 +38,26 @@ class ImageModel:
         self.library_id = Key.uns.library_id(self.adata, self.spatial_key, self.library_id)
         self.spot_diameter = Key.uns.spot_diameter(self.adata, self.spatial_key, self.library_id)
 
-        if self.container.data.attrs.get("scale", 1) != 1:
-            s = self.container.data.attrs["scale"]
+        s = self.container.data.attrs.get("scale", 1)
+        if s != 1:
             # update coordinates with image scale
             self.coordinates = self.coordinates * s
             self.spot_diameter *= s
 
-        if self.container.data.attrs.get("coords", _NULL_COORDS) != _NULL_COORDS:
-            c: CropCoords = self.container.data.attrs["coords"]
-            print(c)
+        c: CropCoords = self.container.data.attrs.get("coords", _NULL_COORDS)
+        p: CropPadding = self.container.data.attrs.get("padding", _NULL_PADDING)
+        if c != _NULL_COORDS:
             mask = (
-                (self.coordinates[:, 0] >= c.x0)
-                & (self.coordinates[:, 0] <= c.x1)
-                & (self.coordinates[:, 1] >= c.y0)
-                & (self.coordinates[:, 1] <= c.y1)
+                (self.coordinates[:, 0] >= c.y0)
+                & (self.coordinates[:, 0] <= c.y1)
+                & (self.coordinates[:, 1] >= c.x0)
+                & (self.coordinates[:, 1] <= c.x1)
             )
 
             self.adata = self.adata[mask, :].copy()
             self.coordinates = self.coordinates[mask]
             # shift appropriately
-            self.coordinates[:, 0] -= c.x0
-            self.coordinates[:, 1] -= c.y0
+            self.coordinates[:, 0] -= c.y0 - p.y_pre
+            self.coordinates[:, 1] -= c.x0 - p.x_pre
 
         self.alayer = ALayer(self.adata, is_raw=False, palette=self.palette)

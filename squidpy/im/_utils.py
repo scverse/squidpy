@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Tuple
+from typing import Any, Tuple, Union
 from dataclasses import dataclass
 import warnings
 
@@ -40,6 +40,17 @@ class TupleSerializer(ABC):  # noqa: D101
     def from_tuple(cls, value: Tuple[float, float, float, float]) -> "TupleSerializer":
         """Create self from a :class:`tuple`."""
         return cls(*value)  # type: ignore[call-arg]
+
+    def __mul__(self, other: Union[int, float]) -> "TupleSerializer":
+        if not isinstance(other, (int, float)):
+            return NotImplemented
+
+        a, b, c, d = self.to_tuple()
+        res = type(self)(a * other, b * other, c * other, d * other)  # type: ignore[call-arg]
+        return res
+
+    def __rmul__(self, other: Union[int, float]) -> "TupleSerializer":
+        return self * other
 
 
 @dataclass(frozen=True)
@@ -95,8 +106,9 @@ class CropCoords(TupleSerializer):
 
     @property
     def slice(self) -> Tuple[slice, slice]:  # noqa: A003
-        """Return the ``(height, width)`` slice."""
-        return slice(self.y0, self.y1), slice(self.x0, self.x1)
+        """Return the ``(height, width)`` int slice."""
+        # has to convert to int, because of scaling, coords can also be floats
+        return slice(int(self.y0), int(self.y1)), slice(int(self.x0), int(self.x1))
 
     def to_tuple(self) -> Tuple[float, float, float, float]:
         """Return self as a :class:`tuple`."""
@@ -127,8 +139,8 @@ class CropPadding(TupleSerializer):
     """Padding of a crop."""
 
     x_pre: float
-    y_pre: float
     x_post: float
+    y_pre: float
     y_post: float
 
     def __post_init__(self) -> None:
