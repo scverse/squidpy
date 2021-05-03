@@ -1,3 +1,4 @@
+from typing import Tuple
 import sys
 import pytest
 
@@ -7,8 +8,10 @@ from anndata import AnnData
 from scipy.sparse import issparse
 import numpy as np
 
+from matplotlib.testing.compare import compare_images
+
 from squidpy.im import ImageContainer
-from tests.conftest import DPI, PlotTester, PlotTesterMeta
+from tests.conftest import DPI, TOL, ACTUAL, EXPECTED, PlotTester, PlotTesterMeta
 from squidpy._constants._pkg_constants import Key
 
 
@@ -150,3 +153,22 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         assert Key.uns.spot_diameter(adata, "spatial", "V1_Adult_Mouse_Brain") * scale == model.spot_diameter
 
         viewer.screenshot(dpi=DPI)
+
+    @pytest.mark.parametrize("size", [(800, 600), (600, 800), (800, 800)])
+    @pytest.mark.parametrize("x", [-200, 200])
+    @pytest.mark.parametrize("y", [-200, 200])
+    def test_corner_corner_cases(
+        self, qtbot, adata: AnnData, napari_cont: ImageContainer, y: int, x: int, size: Tuple[int, int]
+    ):
+        viewer = napari_cont.crop_corner(y, x, size=size).interactive(adata)
+        bdata = viewer.adata
+        cnt = viewer._controller
+
+        cnt.add_points(bdata.obs_vector(bdata.var_names[42]), layer_name="foo")
+
+        basename = f"{self.__class__.__name__[4:]}_corner_case_{y}_{x}_{'_'.join(map(str, size))}.png"
+        viewer.screenshot(dpi=DPI, save=ACTUAL / basename)
+
+        res = compare_images(str(EXPECTED / basename), str(ACTUAL / basename), TOL)
+
+        assert res is None, res

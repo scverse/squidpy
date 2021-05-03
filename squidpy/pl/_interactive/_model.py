@@ -60,4 +60,7 @@ class ImageModel:
             self.coordinates[:, 0] -= c.y0 - p.y_pre
             self.coordinates[:, 1] -= c.x0 - p.x_pre
 
+        if not self.adata.n_obs:
+            raise ValueError("No spots were selected. Please ensure that the image contains at least 1 spot.")
+
         self.alayer = ALayer(self.adata, is_raw=False, palette=self.palette)
