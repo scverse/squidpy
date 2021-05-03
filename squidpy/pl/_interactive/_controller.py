@@ -7,13 +7,12 @@ from anndata import AnnData
 from pandas.core.dtypes.common import is_categorical_dtype
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 from PyQt5.QtWidgets import QLabel, QGridLayout
 
 from napari import Viewer
 from napari.layers import Points, Shapes
-
-from skimage import img_as_float
 
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
@@ -21,7 +20,11 @@ from squidpy._utils import singledispatchmethod
 from squidpy.pl._utils import _points_inside_triangles
 from squidpy.pl._interactive._view import ImageView
 from squidpy.pl._interactive._model import ImageModel
-from squidpy.pl._interactive._utils import _get_categorical, _position_cluster_labels
+from squidpy.pl._interactive._utils import (
+    _is_luminance,
+    _get_categorical,
+    _position_cluster_labels,
+)
 from squidpy.pl._interactive._widgets import RangeSlider
 
 # label string: attribute name
@@ -68,18 +71,72 @@ class ImageController:
             self._handle_already_present(layer)
             return False
 
-        img: np.ndarray = self.model.container.data[layer].transpose("y", "x", ...).values
+        if self.model.container.data[layer].attrs.get("segmentation", False):
+            return self.add_labels(layer)
+
+        img: xr.DataArray = self.model.container.data[layer].transpose("y", "x", ...)
+        # TODO: uncomment me once z-axis is available
+        # img: np.ndarray = self.model.container.data[layer].transpose("z", "y", "x", ....).values
         if img.shape[-1] > 4:
-            logg.warning(f"Unable to show image of shape `{img.shape}`")
+            logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
             return False
+
+        luminance = img.attrs.get("luminance", None)
+        if luminance is None:
+            logg.debug("Automatically determining whether image is a luminance image")
+            luminance = _is_luminance(img.values)
+        if luminance:
+            img = img.transpose(..., "y", "x")  # channels first
 
         logg.info(f"Creating image `{layer}` layer")
         self.view.viewer.add_image(
-            img_as_float(img),
+            img.values,
             name=layer,
-            rgb=True,
-            colormap=self.model.cmap,
+            rgb=not luminance,
+            colormap=self.model.cmap if luminance or (img.shape[2] > 1) else "gray",
             blending=self.model.blending,
+            multiscale=np.prod(img.shape[:2]) > (2 ** 16) ** 2,
+        )
+
+        return True
+
+    def add_labels(self, layer: str) -> bool:
+        """
+        Add a new :mod:`napari` labels layer.
+
+        Parameters
+        ----------
+        layer
+            Layer in the underlying's :class:`ImageContainer` which contains the labels image.
+
+        Returns
+        -------
+        `True` if the layer has been added, otherwise `False`.
+        """
+        img: np.ndarray = self.model.container.data[layer].transpose(..., "y", "x").values
+        if img.ndim > 4:
+            logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
+            return False
+
+        if img.ndim == 4 and img.shape[0] > 1 and img.shape[1] > 1:
+            # multiple stacks and multiple channels is not allowed
+            logg.warning(
+                f"Unable to create labels layer of shape `{img.shape}`, " f"both z- and channel-dimension are too large"
+            )
+            return False
+
+        if not np.issubdtype(img.dtype, np.integer):
+            # could also return to `add_images` and render it as image
+            logg.warning(f"Expected label image to be a subtype of `numpy.integer`, " f"found `{img.dtype}`")
+            return False
+
+        img = np.squeeze(img)
+
+        logg.info(f"Creating label `{layer}` layer")
+        self.view.viewer.add_labels(
+            img,
+            name=layer,
+            multiscale=np.prod(img.shape[:2]) > (2 ** 16) ** 2,
         )
 
         return True
@@ -193,7 +250,7 @@ class ImageController:
         return np.asarray(self.view.viewer.screenshot(path, canvas_only=True))
 
     def _handle_already_present(self, layer_name: str) -> None:
-        logg.warning(f"Layer `{layer_name}` is already loaded")
+        logg.debug(f"Layer `{layer_name}` is already loaded")
         self.view.layers.unselect_all()
         self.view.layers[layer_name].selected = True
 

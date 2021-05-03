@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union, Optional
+from typing import List, Tuple, Union, Mapping, Optional
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -83,9 +83,14 @@ def _determine_dimensions(
     raise ValueError()
 
 
-def _lazy_load_image(fname: Union[str, Path], chunks: Optional[str] = None) -> xr.DataArray:
+def _lazy_load_image(
+    fname: Union[str, Path], chunks: Optional[Union[int, str, Tuple[int, ...], Mapping[str, int]]] = None
+) -> xr.DataArray:
     from dask import delayed
     import dask.array as da
+
+    if isinstance(chunks, dict):
+        chunks = tuple(chunks.values())
 
     fname = str(fname)
     shape, c_dim, z_dim, dtype = _get_shape_pages(fname)

@@ -26,6 +26,7 @@ from anndata import AnnData
 
 import numpy as np
 import xarray as xr
+import dask.array as da
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -100,11 +101,8 @@ class ImageContainer(FeatureMixin):
         self._data.attrs[Key.img.scale] = scale
         self._data.attrs[Key.img.mask_circle] = False
 
-        chunks = kwargs.pop("chunks", None)
         if img is not None:
-            if chunks is not None:
-                chunks = {"x": chunks, "y": chunks}
-            self.add_img(img, layer=layer, chunks=chunks, **kwargs)
+            self.add_img(img, layer=layer, **kwargs)
 
     @classmethod
     def load(cls, path: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":
@@ -157,15 +155,20 @@ class ImageContainer(FeatureMixin):
         iterator = chain.from_iterable(pat.finditer(k) for k in self.data.keys())
         return f"{layer}_{(max(map(lambda m: int(m.groups()[0]), iterator), default=-1) + 1)}"
 
+    def _get_next_channel_id(self, channel: str) -> str:
+        pat = re.compile(rf"^{channel}_(\d*)$")
+        iterator = chain.from_iterable(pat.finditer(v.dims[-1]) for v in self.data.values())
+        return f"{channel}_{(max(map(lambda m: int(m.groups()[0]), iterator), default=-1) + 1)}"
+
     @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
     @d.dedent
     def add_img(
         self,
         img: Input_t,
         layer: Optional[str] = None,
-        channel_dim: str = "channels",
+        channel_dim: Optional[str] = None,
         lazy: bool = True,
-        chunks: Optional[int] = None,
+        chunks: Optional[Union[str, Tuple[int, ...]]] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -174,14 +177,14 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         img
-            In memory array or path to on-disk *TIFF*/*JPEG* image.
+            In memory array or a path to an on-disk image.
         %(img_layer)s
         channel_dim
             Name of the channel dimension.
         lazy
-            Whether to use :mod:`rasterio` or :mod:`dask` to lazily load image.
+            Whether to use :mod:`dask` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`, used in call to :func:`xarray.open_rasterio` for *TIFF* images.
+            Chunk size for :mod:`dask`.
 
         Returns
         -------
@@ -205,13 +208,22 @@ class ImageContainer(FeatureMixin):
         if img is not None:  # not reading a .nc file
             if TYPE_CHECKING:
                 assert isinstance(img, xr.DataArray)
-            img = img.rename({img.dims[-1]: channel_dim})
+            img = img.rename({img.dims[-1]: "channels" if channel_dim is None else str(channel_dim)})
 
             logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
-            self.data[layer] = img
+            try:
+                self.data[layer] = img
+            except ValueError as e:
+                if "cannot be aligned" not in str(e) or channel_dim is not None:
+                    raise
+                channel_dim = self._get_next_channel_id("channels")
+                logg.warning(f"TODO: {channel_dim}")
+
+                if TYPE_CHECKING:
+                    assert isinstance(img, xr.DataArray)
+                self.data[layer] = img.rename({img.dims[-1]: channel_dim})
 
         if not lazy:
-            # load in memory
             self.data.load()
 
     @singledispatchmethod
@@ -249,7 +261,7 @@ class ImageContainer(FeatureMixin):
         suffix = img.suffix.lower()
 
         if suffix in (".jpg", ".jpeg", ".png", ".tif", ".tiff"):
-            return _lazy_load_image(img, chunks=None)
+            return _lazy_load_image(img, chunks=chunks)
 
         if img.is_dir():
             if len(self._data):
@@ -267,7 +279,8 @@ class ImageContainer(FeatureMixin):
 
         raise ValueError(f"Unknown suffix `{img.suffix}`.")
 
-    @_load_img.register(np.ndarray)  # type: ignore[no-redef]
+    @_load_img.register(da.Array)  # type: ignore[no-redef]
+    @_load_img.register(np.ndarray)
     def _(self, img: np.ndarray, **_: Any) -> xr.DataArray:
         logg.debug(f"Loading data `numpy.array` of shape `{img.shape}`")
 
@@ -276,6 +289,7 @@ class ImageContainer(FeatureMixin):
         if img.ndim != 3:
             raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
 
+        # not lazy loading of arrays is handled in `add_img`
         return xr.DataArray(img, dims=["y", "x", "channels"])
 
     @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
@@ -644,10 +658,10 @@ class ImageContainer(FeatureMixin):
         for crop in crops:
             if set(crop.data.keys()) != keys:
                 raise KeyError(f"Expected to find `{sorted(keys)}` keys, found `{sorted(crop.data.keys())}`.")
-            if crop.data.attrs.get(Key.img.coords, None) is None:
-                raise ValueError("Crop does not have coordinate metadata.")
 
-            coord = crop.data.attrs[Key.img.coords]  # the unpadded coordinates
+            coord = crop.data.attrs.get(Key.img.coords, None)
+            if coord is None:
+                raise ValueError("Crop does not have coordinate metadata.")
             if coord == _NULL_COORDS:
                 raise ValueError(f"Null coordinates detected `{coord}`.")
 
@@ -682,6 +696,7 @@ class ImageContainer(FeatureMixin):
         self,
         layer: Optional[str] = None,
         channel: Optional[int] = None,
+        channelwise: bool = False,
         as_mask: bool = False,
         ax: Optional[mpl.axes.Axes] = None,
         figsize: Optional[Tuple[float, float]] = None,
@@ -697,6 +712,8 @@ class ImageContainer(FeatureMixin):
         %(img_layer)s
         channel
             Channel to plot. If `None`, use all channels for plotting.
+        channelwise
+            Whether to plot each channel separately or not.
         as_mask
             Whether to show the image as a binary mask. Only available if the plotted image has 1 channel.
         ax
@@ -717,22 +734,40 @@ class ImageContainer(FeatureMixin):
         """
         from squidpy.pl._utils import save_fig
 
-        arr = self.data[self._get_layer(layer)]
+        layer = self._get_layer(layer)
+        arr = self.data[layer]
+        n_channels = arr.shape[-1]
+        if channelwise and n_channels == 1:
+            channelwise = False
+
         if channel is not None:
             arr = arr[{arr.dims[-1]: channel}]
             if as_mask:
                 arr = arr > 0
         elif as_mask:
-            if arr.shape[-1] != 1:
+            if not channelwise and n_channels != 1:
                 raise ValueError(f"Expected to find 1 channel, found `{arr.shape[-1]}`.")
             arr = arr > 0
 
         fig = None
         if ax is None:
-            fig, ax = plt.subplots(figsize=(8, 8) if figsize is None else figsize, dpi=dpi, tight_layout=True)
+            fig, ax = plt.subplots(
+                ncols=n_channels, figsize=(8, 8) if figsize is None else figsize, dpi=dpi, tight_layout=True
+            )
 
-        ax.set_axis_off()  # always set it off, even if the user provides the ax
-        ax.imshow(img_as_float(arr.values, force_copy=False), **kwargs)
+        ax = tuple(np.ravel([ax]))
+        if channelwise and len(ax) != n_channels:
+            raise ValueError("TODO.")
+
+        for c, a in enumerate(ax):
+            if channelwise:
+                img, title = arr[..., c], f"{layer}:{c}"
+            else:
+                img, title = arr, layer
+
+            a.imshow(img_as_float(img.values, force_copy=False), **kwargs)
+            a.set_title(title)
+            a.set_axis_off()
 
         if save and fig is not None:
             save_fig(fig, save)
@@ -807,7 +842,10 @@ class ImageContainer(FeatureMixin):
         func: Callable[..., np.ndarray],
         layer: Optional[str] = None,
         channel: Optional[int] = None,
+        lazy: bool = False,
+        chunks: Optional[Union[str]] = None,
         copy: bool = True,
+        fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
     ) -> Optional["ImageContainer"]:
         """
@@ -820,14 +858,24 @@ class ImageContainer(FeatureMixin):
         %(img_layer)s
         channel
             Apply ``func`` only over a specific ``channel``. If `None`, use all channels.
+        chunks
+            Chunk size for :mod:`dask`. If `None`, don't use :mod:`dask`.
         %(copy_cont)s
-        kwargs
+        fn_kwargs
             Keyword arguments for ``func``.
+        kwargs
+            Keyword arguments for :func:`dask.array.map_blocks` or :func:`dask.array.map_overlap`, depending whether
+            ``'depth'`` is present in ``map_kwargs``. Only used when ``chunks != None``.
 
         Returns
         -------
         If ``copy = True``, returns a new container with ``layer``.
         Otherwise, overwrites the ``layer`` in this container.
+
+        Raises
+        ------
+        ValueError
+            TODO.
         """
         layer = self._get_layer(layer)
         arr = self[layer]
@@ -836,12 +884,27 @@ class ImageContainer(FeatureMixin):
         if channel is not None:
             arr = arr[{channel_dim: channel}]
 
-        res = func(arr.values, **kwargs)
-        if res.ndim == 2:
+        if chunks is not None:
+            arr = da.asarray(arr.values).rechunk(chunks)
+            res = (
+                da.map_overlap(func, arr, **fn_kwargs, **kwargs)
+                if "depth" in kwargs
+                else da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
+            )
+        else:
+            res = func(arr.values, **fn_kwargs)
+
+        if not lazy and isinstance(res, da.Array):
+            res = res.compute()
+
+        if res.ndim == 1:
+            raise ValueError("TODO.")
+        elif res.ndim == 2:
             res = res[..., np.newaxis]
+        # TODO: handle z-dimm
 
         if copy:
-            cont = ImageContainer(res, layer=layer, channel_dim=channel_dim)
+            cont = ImageContainer(res, layer=layer, channel_dim=channel_dim, copy=True)
             cont.data.attrs = self.data.attrs.copy()
 
             return cont
@@ -851,6 +914,11 @@ class ImageContainer(FeatureMixin):
             layer=layer,
             channel_dim=f"{channel_dim}:{res.shape[-1]}" if arr.shape[-1] != res.shape[-1] else channel_dim,
         )
+
+    def rename(self, old_name: str, new_name: str) -> "ImageContainer":
+        """TODO."""
+        self._data = self.data.rename_vars({old_name: new_name})
+        return self
 
     @property
     def data(self) -> xr.Dataset:
@@ -969,6 +1037,14 @@ class ImageContainer(FeatureMixin):
 
     def __getitem__(self, key: str) -> xr.DataArray:
         return self.data[key]
+
+    def __setitem__(self, key: str, value: Union[np.ndarray, xr.DataArray, da.Array]) -> None:
+        if not isinstance(value, (np.ndarray, xr.DataArray, da.Array)):
+            raise NotImplementedError(f"Adding `{type(value).__name__}` is not yet implemented.")
+        self.add_img(value, layer=key, channel_dim=None, copy=True)
+
+    def _ipython_key_completions_(self) -> Iterable[str]:
+        return sorted(map(str, self.data.keys()))
 
     def __copy__(self) -> "ImageContainer":
         return type(self)._from_dataset(self.data, deep=False)

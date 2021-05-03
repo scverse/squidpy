@@ -19,13 +19,6 @@ SegmentationModelWatershed
     :members:
     :inherited-members:
 
-
-SegmentationModelBlob
----------------------
-.. autoclass:: squidpy.im.SegmentationBlob
-    :members:
-    :inherited-members:
-
 SegmentationCustom
 ------------------
 .. autoclass:: squidpy.im.SegmentationCustom
