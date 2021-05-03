@@ -124,9 +124,9 @@ class FeatureMixin:
         features = {}
         for c in channels:
             for q in quantiles:
-                features[f"{feature_name}_ch-{c}_quantile-{q}"] = np.quantile(self[layer][:, :, c], q)
-            features[f"{feature_name}_ch-{c}_mean"] = np.mean(self[layer][:, :, c].values)
-            features[f"{feature_name}_ch-{c}_std"] = np.std(self[layer][:, :, c].values)
+                features[f"{feature_name}_ch-{c}_quantile-{q}"] = np.quantile(self[layer][..., c], q)
+            features[f"{feature_name}_ch-{c}_mean"] = np.mean(self[layer][..., c].values)
+            features[f"{feature_name}_ch-{c}_std"] = np.std(self[layer][..., c].values)
 
         return features
 
@@ -170,7 +170,7 @@ class FeatureMixin:
 
         features = {}
         for c in channels:
-            hist, _ = np.histogram(self[layer][:, :, c], bins=bins, range=v_range, weights=None, density=False)
+            hist, _ = np.histogram(self[layer][..., c], bins=bins, range=v_range, weights=None, density=False)
             for i, count in enumerate(hist):
                 features[f"{feature_name}_ch-{c}_bin-{i}"] = count
 
@@ -340,6 +340,7 @@ class FeatureMixin:
 
             return np.c_[x, y]  # type: ignore[no-any-return]
 
+        # TODO raise error/warning if calling on image with more than 1 z (selecting z 0 atm)
         label_layer = self._get_layer(label_layer)
 
         props = _assert_non_empty_sequence(props, name="properties")
@@ -360,7 +361,7 @@ class FeatureMixin:
         features: Dict[str, Any] = {}
         # calculate features that do not depend on the intensity image
         tmp_features = skimage.measure.regionprops_table(
-            self[label_layer].values[:, :, 0], properties=no_intensity_props
+            self[label_layer].values[:, :, 0, 0], properties=no_intensity_props
         )
         for p in no_intensity_props:
             if p == "label":
@@ -378,8 +379,8 @@ class FeatureMixin:
             if TYPE_CHECKING:
                 assert isinstance(intensity_layer, str)
             tmp_features = skimage.measure.regionprops_table(
-                self[label_layer].values[:, :, 0],
-                intensity_image=self[intensity_layer].values[:, :, c],
+                self[label_layer].values[:, :, 0, 0],
+                intensity_image=self[intensity_layer].values[:, :, 0, c],
                 properties=props,
             )
             for p in intensity_props:

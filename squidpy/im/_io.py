@@ -95,5 +95,4 @@ def _lazy_load_image(fname: Union[str, Path], chunks: Optional[str] = None) -> x
     if chunks is not None:
         darr = darr.rechunk(chunks)
 
-    # subsetting for bwd compatibility, will be removed once Z-dim is implemented
-    return xr.DataArray(darr, dims=dims).transpose("y", "x", "z", "channels")[:, :, 0, :]
+    return xr.DataArray(darr, dims=dims).transpose("y", "x", "z", "channels")
