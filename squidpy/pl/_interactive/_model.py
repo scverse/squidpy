@@ -55,7 +55,7 @@ class ImageModel:
             )
 
             self.adata = self.adata[mask, :].copy()
-            self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1]
+            self.coordinates = self.coordinates[mask]
             # shift appropriately
             self.coordinates[:, 0] -= c.x0
             self.coordinates[:, 1] -= c.y0
