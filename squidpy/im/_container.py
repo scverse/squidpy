@@ -81,8 +81,8 @@ class ImageContainer(FeatureMixin):
     ----------
     %(add_img.parameters)s
     scale
-        Scalefactor of the image with respect to the spatial coords saved in
-        the accompanying :class:`ad.AnnData`.
+        Scaling factor of the image with respect to the spatial coordinates
+        saved in the accompanying :class:`anndata.AnnData`.
 
     Raises
     ------

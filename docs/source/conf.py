@@ -163,6 +163,7 @@ nbsphinx_prolog = r"""
 
 
 def setup(app: Sphinx) -> None:
+    DEFAULT_GALLERY_CONF["src_dir"] = str(HERE)
     DEFAULT_GALLERY_CONF["backreferences_dir"] = "gen_modules/backreferences"
     DEFAULT_GALLERY_CONF["download_all_examples"] = False
     DEFAULT_GALLERY_CONF["show_signature"] = False

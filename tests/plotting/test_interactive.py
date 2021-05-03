@@ -9,6 +9,7 @@ import numpy as np
 
 from squidpy.im import ImageContainer
 from tests.conftest import DPI, PlotTester, PlotTesterMeta
+from squidpy._constants._pkg_constants import Key
 
 
 @pytest.mark.qt()
@@ -131,5 +132,21 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         cnt = viewer._controller
 
         cnt.add_points(bdata.obs_vector(bdata.var_names[42]), layer_name="foo")
+
+        viewer.screenshot(dpi=DPI)
+
+    def test_plot_scalefactor(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
+        scale = 2
+        napari_cont.data.attrs["scale"] = scale
+
+        viewer = napari_cont.interactive(adata)
+        cnt = viewer._controller
+        model = cnt._model
+
+        data = np.random.normal(size=adata.n_obs)
+        cnt.add_points(data, layer_name="layer1")
+
+        np.testing.assert_allclose(adata.obsm["spatial"][:, ::-1] * scale, model.coordinates)
+        assert Key.uns.spot_diameter(adata, "spatial", "V1_Adult_Mouse_Brain") * scale == model.spot_diameter
 
         viewer.screenshot(dpi=DPI)
