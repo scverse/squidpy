@@ -434,7 +434,8 @@ class ImageContainer(FeatureMixin):
                     dims=arr.dims,
                 )
             )
-            data.attrs = {**attrs, Key.img.scale: scale}
+            old_scale = attrs[Key.img.scale]
+            data.attrs = {**attrs, Key.img.scale: scale * old_scale}
 
         if mask_circle:
             if data.dims["y"] != data.dims["x"]:
@@ -595,7 +596,15 @@ class ImageContainer(FeatureMixin):
         radius = int(round(diameter // 2 * spot_scale))
 
         for i, obs in enumerate(adata.obs_names):
-            crop = self.crop_center(y=spatial[i][1], x=spatial[i][0], radius=radius, **kwargs)
+            # get coords in image pixel space from original space
+            y = int(spatial[i][1] * self.data.attrs["scale"])
+            x = int(spatial[i][0] * self.data.attrs["scale"])
+            diameter = (
+                adata.uns[spatial_key][library_id]["scalefactors"]["spot_diameter_fullres"] * self.data.attrs["scale"]
+            )
+            radius = int(round(diameter // 2 * spot_scale))
+
+            crop = self.crop_center(y=y, x=x, radius=radius, **kwargs)
             crop.data.attrs[Key.img.obs] = obs
             crop = crop._maybe_as_array(as_array)
 
