@@ -1,5 +1,6 @@
 """Functions for building gr from spatial coordinates."""
 from typing import Tuple, Union, Optional
+from itertools import chain
 import warnings
 
 from scanpy import logging as logg
@@ -7,8 +8,9 @@ from anndata import AnnData
 
 from numba import njit
 from scipy.sparse import spmatrix, csr_matrix, isspmatrix_csr, SparseEfficiencyWarning
+from scipy.spatial import Delaunay
 from sklearn.neighbors import NearestNeighbors
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import numpy as np
 
 from squidpy._docs import d, inject_docs
@@ -27,6 +29,7 @@ def spatial_neighbors(
     coord_type: Optional[Union[str, CoordType]] = None,
     n_rings: int = 1,
     n_neigh: int = 6,
+    delaunay: bool = False,
     radius: Optional[float] = None,
     transform: Optional[Union[str, Transform]] = None,
     key_added: Optional[str] = None,
@@ -50,6 +53,8 @@ def spatial_neighbors(
         Number of rings of neighbors for Visium data.
     n_neigh
         Number of neighborhoods to consider for non-Visium data.
+    delaunay
+        Whether to compute the graph from Delaunay triangulation.
     radius
         Radius of neighbors for non-Visium data.
     transform
@@ -85,7 +90,9 @@ def spatial_neighbors(
     coords = adata.obsm[spatial_key]
     if coord_type == CoordType.VISIUM:
         if n_rings > 1:
-            Adj: csr_matrix = _build_connectivity(coords, 6, neigh_correct=True, set_diag=True, return_distance=False)
+            Adj: csr_matrix = _build_connectivity(
+                coords, 6, neigh_correct=True, set_diag=True, delaunay=delaunay, return_distance=False
+            )
             Res = Adj
             Walk = Adj
             for i in range(n_rings - 1):
@@ -103,11 +110,11 @@ def spatial_neighbors(
             Dst = Adj.copy()
             Adj.data[:] = 1.0
         else:
-            Adj = _build_connectivity(coords, 6, neigh_correct=True)
+            Adj = _build_connectivity(coords, 6, neigh_correct=True, delaunay=delaunay)
             Dst = None
 
     elif coord_type == CoordType.GENERIC:
-        Adj, Dst = _build_connectivity(coords, n_neigh, radius, return_distance=True)
+        Adj, Dst = _build_connectivity(coords, n_neigh, radius, delaunay=delaunay, return_distance=True)
     else:
         raise NotImplementedError(coord_type)
 
@@ -115,7 +122,6 @@ def spatial_neighbors(
     if transform == Transform.SPECTRAL:
         Adj = _transform_a_spectral(Adj)
     elif transform == Transform.COSINE:
-        print("foo")
         Adj = _transform_a_cosine(Adj)
     elif transform == Transform.NONE:
         pass
@@ -143,6 +149,7 @@ def _build_connectivity(
     coords: np.ndarray,
     n_neigh: int,
     radius: Optional[float] = None,
+    delaunay: bool = False,
     neigh_correct: bool = False,
     set_diag: bool = False,
     return_distance: bool = False,
@@ -152,24 +159,46 @@ def _build_connectivity(
 
     dists_m = None
 
-    tree = NearestNeighbors(n_neighbors=n_neigh or 6, radius=radius or 1, metric="euclidean")
-    tree.fit(coords)
+    if delaunay:
+        tri = Delaunay(coords)
+        col_lst = []
+        row_lst = []
+        dists_lst = []
+        for i in np.arange(N):
+            idx = np.argwhere(i == tri.simplices)[:, 0]
+            idx_col = np.unique(np.setdiff1d(tri.simplices[idx.squeeze(), ...], i)).tolist()
+            col_lst.append(idx_col)
+            row_lst.append(np.repeat(i, len(idx_col)))
+            dists_lst.append(
+                euclidean_distances(
+                    coords[idx_col, :],
+                    coords[np.newaxis, i, :],
+                )
+            )
 
-    if radius is not None:
-        results = tree.radius_neighbors()
-        dists = np.concatenate(results[0])
-        row_indices = np.concatenate(results[1])
-        lengths = [len(x) for x in results[1]]
-        col_indices = np.repeat(np.arange(N), lengths)
+        col_indices = np.array(list(chain(*col_lst)))
+        row_indices = np.array(list(chain(*row_lst)))
+        dists = np.array(list(chain(*dists_lst))).squeeze()
+
     else:
-        results = tree.kneighbors()
-        dists, row_indices = (result.reshape(-1) for result in results)
-        col_indices = np.repeat(np.arange(N), n_neigh or 6)
-        if neigh_correct:
-            dist_cutoff = np.median(dists) * 1.3  # There's a small amount of sway
-            mask = dists < dist_cutoff
-            row_indices, col_indices = row_indices[mask], col_indices[mask]
-            dists = dists[mask]
+        tree = NearestNeighbors(n_neighbors=n_neigh or 6, radius=radius or 1, metric="euclidean")
+        tree.fit(coords)
+        if radius is not None:
+            results = tree.radius_neighbors()
+            dists = np.concatenate(results[0])
+            row_indices = np.concatenate(results[1])
+            lengths = [len(x) for x in results[1]]
+            col_indices = np.repeat(np.arange(N), lengths)
+
+        else:
+            results = tree.kneighbors()
+            dists, row_indices = (result.reshape(-1) for result in results)
+            col_indices = np.repeat(np.arange(N), n_neigh or 6)
+            if neigh_correct:
+                dist_cutoff = np.median(dists) * 1.3  # There's a small amount of sway
+                mask = dists < dist_cutoff
+                row_indices, col_indices = row_indices[mask], col_indices[mask]
+                dists = dists[mask]
 
     if return_distance:
         dists_m = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
