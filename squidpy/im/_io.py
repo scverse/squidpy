@@ -1,5 +1,6 @@
 from typing import List, Tuple, Union, Mapping, Optional
 from pathlib import Path
+import warnings
 
 from scanpy import logging as logg
 
@@ -9,14 +10,46 @@ import xarray as xr
 from skimage.io import imread
 
 
-def _get_shape_pages(fname: str) -> Tuple[List[int], Optional[int], Optional[int], np.dtype]:  # type: ignore[type-arg]
+def _read_metadata(fname: str) -> Tuple[List[int], np.dtype]:  # type: ignore[type-arg]
     import pims
 
-    with pims.open(fname) as img:
-        shape = [len(img)] + list(img.frame_shape)
-        dtype = np.dtype(img.pixel_type)
+    def read() -> Tuple[List[int], np.dtype]:  # type: ignore[type-arg]
+        with warnings.catch_warnings():
+            # the error message is also contained in the exception
+            warnings.filterwarnings("ignore", message=r".*errored: .*", category=UserWarning)
+            with pims.open(fname) as img:
+                shape = [len(img)] + list(img.frame_shape)
+                dtype = np.dtype(img.pixel_type)
 
+                return shape, dtype
+
+    try:
+        return read()
+    except pims.UnknownFormatError as e:
+        if "exceeds limit" not in str(e):
+            raise
+        from PIL import Image
+
+        old_max_image_pixels = Image.MAX_IMAGE_PIXELS
+        try:
+            limit = (2 ** 14) ** 2
+            Image.MAX_IMAGE_PIXELS = limit
+            return read()
+        except pims.UnknownFormatError as e:
+            if "exceeds limit" in str(e):
+                raise RuntimeError(
+                    f"Unable to open `{fname}` because it exceeds the default limit of `{limit}` pixels. "
+                    f"To increase the limit, run `import PIL; PIL.Image.MAX_IMAGE_PIXELS = ...`."
+                ) from e
+            raise
+        finally:
+            Image.MAX_IMAGE_PIXELS = old_max_image_pixels
+
+
+def _get_shape_pages(fname: str) -> Tuple[List[int], Optional[int], Optional[int], np.dtype]:  # type: ignore[type-arg]
+    shape, dtype = _read_metadata(fname)
     ndim = len(shape)
+
     if ndim == 2:
         z_dim = c_dim = None
     elif ndim == 3:
