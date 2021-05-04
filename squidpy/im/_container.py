@@ -713,22 +713,24 @@ class ImageContainer(FeatureMixin):
         layer = self._get_layer(layer)
         arr = self.data[layer]
         n_channels = arr.shape[-1]
-        if channelwise and n_channels == 1:
-            channelwise = False
+        channelwise = channelwise and n_channels > 1
 
         if channel is not None:
             arr = arr[{arr.dims[-1]: channel}]
             if as_mask:
                 arr = arr > 0
         elif as_mask:
-            if not channelwise and n_channels != 1:
-                raise ValueError(f"Expected to find 1 channel, found `{arr.shape[-1]}`.")
+            if not channelwise and n_channels > 1:
+                raise ValueError(f"Expected to find 1 channel, found `{n_channels}`.")
             arr = arr > 0
 
         fig = None
         if ax is None:
             fig, ax = plt.subplots(
-                ncols=n_channels, figsize=(8, 8) if figsize is None else figsize, dpi=dpi, tight_layout=True
+                ncols=n_channels if channelwise else 1,
+                figsize=(8, 8) if figsize is None else figsize,
+                dpi=dpi,
+                tight_layout=True,
             )
 
         ax = tuple(np.ravel([ax]))

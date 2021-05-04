@@ -4,12 +4,9 @@ import pytest
 
 import numpy as np
 
-import skimage
-
 from squidpy.im import (
     segment,
     ImageContainer,
-    SegmentationBlob,
     SegmentationCustom,
     SegmentationWatershed,
 )
@@ -41,10 +38,10 @@ class TestGeneral:
             assert res.shape == img.shape
 
     def test_segment_invalid_shape(self):
-        img = np.zeros(shape=(10, 10, 2))
+        img = np.zeros(shape=(1, 10, 10, 2))
         sc = SegmentationCustom(dummy_segment)
 
-        with pytest.raises(ValueError, match=r"Expected only `1` channel, found `2`."):
+        with pytest.raises(ValueError, match=r"Expected 2 or 3 dimensions"):
             sc.segment(img)
 
     def test_segment_container(self):
@@ -56,7 +53,7 @@ class TestGeneral:
         assert isinstance(res, ImageContainer)
         assert res.shape == img.shape
         assert "image" in res
-        assert res["image"].dims == img["image"].dims
+        assert res["image"].dims == tuple(img["image"].dims[:2]) + ("channels:all",)
 
 
 class TestWatershed:
@@ -70,7 +67,7 @@ class TestWatershed:
         sw = SegmentationWatershed()
         spy = mocker.spy(sw, "_segment")
 
-        res = sw.segment(img, layer="image", thresh=thresh)
+        res = sw.segment(img, layer="image", fn_kwargs={"thresh": thresh})
 
         assert isinstance(res, ImageContainer)
         spy.assert_called_once()
@@ -79,44 +76,12 @@ class TestWatershed:
         assert call[1]["thresh"] == thresh
 
 
-class TestBlob:
-    @pytest.mark.parametrize("model", ["log", "dog", "doh", "watershed", "foo"])
-    def test_model(self, model: str, mocker: MockerFixture):
-        if model == "foo":
-            with pytest.raises(ValueError, match=r"Invalid option `foo`"):
-                SegmentationBlob(model)
-        elif model == "watershed":
-            with pytest.raises(NotImplementedError, match=r"Unknown blob model `watershed`."):
-                SegmentationBlob(model)
-        else:
-            sb = SegmentationBlob(model)
-            img = np.zeros((100, 200), dtype=np.float64)
-
-            res = sb.segment(img)
-
-            assert isinstance(res, np.ndarray)
-            assert sb._model == getattr(skimage.feature, f"blob_{model}")
-
-    def test_invert(self, mocker: MockerFixture):
-        sb = SegmentationBlob("log")
-        img = np.zeros((100, 200), dtype=np.float64)
-        spy = mocker.spy(sb, "_model")
-
-        res = sb.segment(img, invert=True)
-
-        assert isinstance(res, np.ndarray)
-
-        call = spy.call_args_list[0]
-
-        np.testing.assert_array_equal(call[0][0], np.ones_like(img))
-
-
 class TestHighLevel:
     def test_invalid_layer(self, small_cont: ImageContainer):
         with pytest.raises(KeyError, match=r"Image layer `foobar` not found in"):
             segment(small_cont, layer="foobar")
 
-    @pytest.mark.parametrize("method", ["watershed", "log", "dog", "doh", dummy_segment])
+    @pytest.mark.parametrize("method", ["watershed", dummy_segment])
     def test_method(self, small_cont: ImageContainer, method: Union[str, Callable]):
         res = segment(small_cont, method=method, copy=True)
 
