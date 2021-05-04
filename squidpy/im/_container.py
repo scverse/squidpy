@@ -189,7 +189,7 @@ class ImageContainer(FeatureMixin):
         Raises
         ------
         ValueError
-            If loading from a file/store with an unknown format.
+            If loading from a file/store with an unknown format or if a supplied channel dimension cannot be aligned.
         NotImplementedError
             If loading a specific data type has not been implemented.
 
@@ -213,7 +213,7 @@ class ImageContainer(FeatureMixin):
                 if "cannot be aligned" not in str(e) or channel_dim is not None:
                     raise
                 channel_dim = self._get_next_channel_id("channels")
-                logg.warning(f"TODO: {channel_dim}")
+                logg.warning(f"Channel dimension cannot be aligned with an existing one, using `{channel_dim}`")
 
                 if TYPE_CHECKING:
                     assert isinstance(img, xr.DataArray)
@@ -705,7 +705,8 @@ class ImageContainer(FeatureMixin):
         Raises
         ------
         ValueError
-            If  ``as_mask = True`` and the image layer has more than 1 channel.
+            If  ``as_mask = True`` and the image layer has more than 1 channel and ``channelwise = False`` or
+            if number fo supplied axes is different than the number of channels if ``channelwise = True``.
         """
         from squidpy.pl._utils import save_fig
 
@@ -732,7 +733,7 @@ class ImageContainer(FeatureMixin):
 
         ax = tuple(np.ravel([ax]))
         if channelwise and len(ax) != n_channels:
-            raise ValueError("TODO.")
+            raise ValueError(f"Expected `{n_channels}` axes, found `{len(ax)}`.")
 
         for c, a in enumerate(ax):
             if channelwise:
@@ -850,7 +851,7 @@ class ImageContainer(FeatureMixin):
         Raises
         ------
         ValueError
-            TODO.
+            If the ``func`` returns 0 or 1 dimensional array.
         """
         layer = self._get_layer(layer)
         arr = self[layer]
@@ -872,8 +873,8 @@ class ImageContainer(FeatureMixin):
         if not lazy and isinstance(res, da.Array):
             res = res.compute()
 
-        if res.ndim == 1:
-            raise ValueError("TODO.")
+        if res.ndim in (0, 1):
+            raise ValueError(f"Expected at least 2D array, found `{res.ndim}`.")
         elif res.ndim == 2:
             res = res[..., np.newaxis]
         # TODO: handle z-dimm
@@ -890,9 +891,22 @@ class ImageContainer(FeatureMixin):
             channel_dim=f"{channel_dim}:{res.shape[-1]}" if arr.shape[-1] != res.shape[-1] else channel_dim,
         )
 
-    def rename(self, old_name: str, new_name: str) -> "ImageContainer":
-        """TODO."""
-        self._data = self.data.rename_vars({old_name: new_name})
+    def rename(self, old: str, new: str) -> "ImageContainer":
+        """
+        Rename a layer.
+
+        Parameters
+        ----------
+        old
+            Name of the layer to rename.
+        new
+            New name.
+
+        Returns
+        -------
+        Modifies and returns self.
+        """
+        self._data = self.data.rename_vars({old: new})
         return self
 
     @property
