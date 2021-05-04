@@ -874,10 +874,11 @@ class ImageContainer(FeatureMixin):
             res = res.compute()
 
         if res.ndim in (0, 1):
-            raise ValueError(f"Expected at least 2D array, found `{res.ndim}`.")
+            # TODO: allow volumetric segmentation?
+            raise ValueError(f"Expected 2 or 3 dimensional array, found `{res.ndim}`.")
         elif res.ndim == 2:
             res = res[..., np.newaxis]
-        # TODO: handle z-dimm
+        # TODO: handle z-dim
 
         if copy:
             cont = ImageContainer(res, layer=layer, channel_dim=channel_dim, copy=True)

@@ -77,7 +77,7 @@ class SegmentationModel(ABC):
         if img.ndim == 2:
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
-            raise ValueError(f"Expected `3` dimensions, found `{img.ndim}`.")
+            raise ValueError(f"Expected 2 or 3 dimensions, found `{img.ndim}`.")
         return img
 
     @staticmethod
@@ -86,7 +86,7 @@ class SegmentationModel(ABC):
         if img.ndim == 2:
             img = img[..., np.newaxis]
         if img.ndim != 3:
-            raise ValueError(f"Expected segmentation to return `3` dimensional array, found `{img.ndim}`.")
+            raise ValueError(f"Expected segmentation to return 2 or 3 dimensional array, found `{img.ndim}`.")
         return img
 
     @segment.register(np.ndarray)
@@ -164,10 +164,10 @@ class SegmentationModel(ABC):
             block_num = block_id[0] * (num_blocks[1] * num_blocks[2]) + block_id[1] * num_blocks[2]
         elif len(num_blocks) == 4:
             if num_blocks[-1] != 1:
-                raise ValueError("TODO.")
+                raise ValueError(f"Expected the number of blocks in the Z-dimension to be 1, found `{num_blocks[-1]}`.")
             block_num = block_id[0] * (num_blocks[1] * num_blocks[2]) + block_id[1] * num_blocks[2]
         else:
-            raise ValueError("TODO.")
+            raise ValueError(f"Expected either 2, 3 or 4 dimensional chunks, found `{len(num_blocks)}`.")
 
         labels = self._segment(block, **kwargs).astype(_SEG_DTYPE)
         mask = labels > 0
@@ -252,9 +252,6 @@ def segment(
     """
     Segment an image.
 
-    TODO: update
-    If ``chunks != None``, use :mod:`dask` to iterate over chunks and segment those.
-
     Parameters
     ----------
     %(img_container)s
@@ -263,14 +260,12 @@ def segment(
         Segmentation method to use. Valid options are:
 
             - `{m.WATERSHED.s!r}` - :func:`skimage.segmentation.watershed`.
-            - :func:`callable` - any function with TODO.
 
         %(custom_fn)s
     channel
         Channel index to use for segmentation. If `None`, pass all channels.
-    %(size)s
-    %(layer_added)s
-        If `None`, use ``'segmented_{{model}}'``.
+    %(chunks_lazy)s
+    %(layer_added)s If `None`, use ``'segmented_{{model}}'``.
     thresh
         Threshold for creation of masked image. The areas to segment should be contained in this mask.
         If `None`, it is determined by `Otsu's method <https://en.wikipedia.org/wiki/Otsu%27s_method>`_.
@@ -278,10 +273,9 @@ def segment(
     geq
         Treat ``thresh`` as upper or lower bound for defining areas to segment. If ``geq = True``, mask is defined
         as ``mask = arr >= thresh``, meaning high values in ``arr`` denote areas to segment.
+        Only used if ``method = {m.WATERSHED.s!r}``.
     %(copy_cont)s
     %(segment_kwargs)s
-    kwargs
-        Keyword arguments for ``method``.
 
     Returns
     -------

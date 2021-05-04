@@ -62,12 +62,8 @@ def process(
             - `{p.GRAY.s!r}` - :func:`skimage.color.rgb2gray`.
 
         %(custom_fn)s
-    chunks
-        TODO.
-    lazy
-        TODO.
-    %(layer_added)s
-        If `None`, use ``'{{layer}}_{{method}}'``.
+    %(chunks_lazy)s
+    %(layer_added)s If `None`, use ``'{{layer}}_{{method}}'``.
     channel_dim
         Name of the channel dimension of the new image layer. Default is the same as the original, if the
         processing function does not change the number of channels, and ``'{{channel}}_{{processing}}'`` otherwise.

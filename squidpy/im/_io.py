@@ -113,7 +113,7 @@ def _determine_dimensions(
 
         return dims, shape
 
-    raise ValueError()
+    raise ValueError(f"Expected the image to be either 2, 3 or 4 dimensional, found `{ndim}`.")
 
 
 def _lazy_load_image(
