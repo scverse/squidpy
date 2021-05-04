@@ -76,8 +76,8 @@ def _is_luminance(arr: Union[np.ndarray, da.Array]) -> bool:
     n_channels: int = arr.shape[-1]
     if n_channels not in (3, 4):
         return n_channels != 1
-    if np.issubdtype(arr.dtype, np.unsignedinteger):
-        return True
+    if np.issubdtype(arr.dtype, np.uint8):
+        return False  # assume RGB(A)
     if not np.issubdtype(arr.dtype, np.floating):
         return True
 
