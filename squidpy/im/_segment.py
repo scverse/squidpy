@@ -93,7 +93,7 @@ class SegmentationModel(ABC):
     def _(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
         chunks = kwargs.pop("chunks", None)
         if chunks is not None:
-            return self.segment(da.from_array(img, chunks=chunks), **kwargs)
+            return self.segment(da.asarray(img).rechunk(chunks), **kwargs)
 
         img = SegmentationModel._precondition(img)
         img = self._segment(img, **kwargs)
@@ -101,11 +101,13 @@ class SegmentationModel(ABC):
         return SegmentationModel._postcondition(img)
 
     @segment.register(da.Array)  # type: ignore[no-redef]
-    def _(self, img: da.Array, **kwargs: Any) -> np.ndarray:
+    def _(self, img: da.Array, chunks: Optional[Union[str, int, Tuple[int, ...]]] = None, **kwargs: Any) -> np.ndarray:
         img = SegmentationModel._precondition(img)
 
         shift = int(np.prod(img.numblocks)).bit_length()
         kwargs.setdefault("depth", {0: 30, 1: 30})
+        if chunks is not None:
+            img = img.rechunk(chunks)
 
         img = da.map_overlap(
             self._segment_chunk,
@@ -144,6 +146,7 @@ class SegmentationModel(ABC):
         else:
             new_channel_dim = f"{channel_dim}:{'all' if channel is None else channel}"
 
+        kwargs.pop("copy", None)
         res = img.apply(self.segment, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)
         res._data = res.data.rename({channel_dim: new_channel_dim})
 
@@ -310,7 +313,9 @@ def segment(
         assert isinstance(method, SegmentationModel)
 
     start = logg.info(f"Segmenting an image of shape `{img[layer].shape}` using `{method}`")
-    res: ImageContainer = method.segment(img, layer=layer, channel=channel, fn_kwargs=kwargs, chunks=None, lazy=lazy)
+    res: ImageContainer = method.segment(
+        img, layer=layer, channel=channel, chunks=None, fn_kwargs=kwargs, copy=True, lazy=lazy
+    )
     logg.info("Finish", time=start)
 
     if copy:

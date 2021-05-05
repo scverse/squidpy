@@ -68,13 +68,12 @@ class TestProcess:
         assert res is None
         np.testing.assert_array_equal(small_cont[key].values, small_cont["image"].values)
 
-    @pytest.mark.parametrize("dask_input", [False, True])
     @pytest.mark.parametrize("chunks", [100, (50, 50), "auto"])
     @pytest.mark.parametrize("lazy", [False, True])
     def test_dask(
         self, small_cont: ImageContainer, dask_input: bool, chunks: Union[int, Tuple[int, ...], str], lazy: bool
     ):
-        pass
+        """TODO."""
 
     def test_copy(self, small_cont: ImageContainer):
         orig_keys = set(small_cont)

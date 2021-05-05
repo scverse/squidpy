@@ -99,7 +99,7 @@ def process(
         kwargs.setdefault("sigma", [1, 1, 0])  # TODO: Z-dim, allow for ints, replicate over spatial dims
         if chunks is not None:
             chunks_, chunks = chunks, None
-            callback = lambda arr, **kwargs: dask_gf(da.from_array(arr, chunks=chunks_), **kwargs)  # noqa: E731
+            callback = lambda arr, **kwargs: dask_gf(da.asarray(arr).rechunk(chunks_), **kwargs)  # noqa: E731
         else:
             callback = scipy_gf
     elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
@@ -123,4 +123,4 @@ def process(
     if copy:
         return res
 
-    img.add_img(img=res, layer=layer_new, channel_dim=channel_dim)
+    img.add_img(img=res, layer=layer_new, channel_dim=channel_dim, copy=False, lazy=lazy)

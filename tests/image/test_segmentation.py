@@ -1,4 +1,4 @@
-from typing import Union, Callable, Optional
+from typing import Tuple, Union, Callable, Optional
 from pytest_mock import MockerFixture
 import pytest
 
@@ -121,7 +121,14 @@ class TestHighLevel:
         assert Key.img.segment("watershed", layer_added=key_added) in small_cont
 
     def test_passing_kwargs(self):
-        pass
+        """TODO."""
+
+    @pytest.mark.parametrize("chunks", [100, (50, 50), "auto"])
+    @pytest.mark.parametrize("lazy", [False, True])
+    def test_dask(
+        self, small_cont: ImageContainer, dask_input: bool, chunks: Union[int, Tuple[int, ...], str], lazy: bool
+    ):
+        """TODO."""
 
     def test_copy(self, small_cont: ImageContainer):
         prev_keys = set(small_cont)

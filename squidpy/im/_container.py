@@ -89,6 +89,7 @@ class ImageContainer(FeatureMixin):
         self,
         img: Optional[Input_t] = None,
         layer: str = "image",
+        lazy: bool = True,
         **kwargs: Any,
     ):
         self._data: xr.Dataset = xr.Dataset()
@@ -99,6 +100,8 @@ class ImageContainer(FeatureMixin):
 
         if img is not None:
             self.add_img(img, layer=layer, **kwargs)
+            if not lazy:
+                self.compute()
 
     @classmethod
     def load(cls, path: Pathlike_t, lazy: bool = True, chunks: Optional[int] = None) -> "ImageContainer":
@@ -165,6 +168,7 @@ class ImageContainer(FeatureMixin):
         channel_dim: Optional[str] = None,
         lazy: bool = True,
         chunks: Optional[Union[str, Tuple[int, ...]]] = None,
+        copy: bool = True,
         **kwargs: Any,
     ) -> None:
         """
@@ -181,6 +185,8 @@ class ImageContainer(FeatureMixin):
             Whether to use :mod:`dask` to lazily load image.
         chunks
             Chunk size for :mod:`dask`.
+        copy
+            Whether to copy the underlying data of ``img``.
 
         Returns
         -------
@@ -195,11 +201,10 @@ class ImageContainer(FeatureMixin):
 
         Notes
         -----
-        Lazy loading via :mod:`dask` is not supported for on-disk *JPEG* files, they will be loaded in memory.
         Multi-page *TIFFs* will be loaded in one :class:`xarray.DataArray`, with concatenated channel dimensions.
         """
         layer = self._get_next_image_id("image") if layer is None else layer
-        img = self._load_img(img, chunks=chunks, layer=layer, **kwargs)
+        img = self._load_img(img, chunks=chunks, layer=layer, copy=copy, **kwargs)
 
         if img is not None:  # not reading a .nc file
             if TYPE_CHECKING:
@@ -219,8 +224,8 @@ class ImageContainer(FeatureMixin):
                     assert isinstance(img, xr.DataArray)
                 self.data[layer] = img.rename({img.dims[-1]: channel_dim})
 
-        if not lazy:
-            self.data.load()
+            if not lazy:
+                self.data[layer].load()
 
     @singledispatchmethod
     def _load_img(
@@ -229,7 +234,9 @@ class ImageContainer(FeatureMixin):
         if isinstance(img, ImageContainer):
             if layer not in img:
                 raise KeyError(f"Image identifier `{layer}` not found in `{img}`.")
+
             return self._load_img(img[layer], **kwargs)
+
         raise NotImplementedError(f"Loading `{type(img).__name__}` is not yet implemented.")
 
     @_load_img.register(str)
@@ -277,13 +284,15 @@ class ImageContainer(FeatureMixin):
 
     @_load_img.register(da.Array)  # type: ignore[no-redef]
     @_load_img.register(np.ndarray)
-    def _(self, img: np.ndarray, **_: Any) -> xr.DataArray:
+    def _(self, img: np.ndarray, copy: bool = True, **_: Any) -> xr.DataArray:
         logg.debug(f"Loading data `numpy.array` of shape `{img.shape}`")
 
         if img.ndim == 2:
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
             raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
+        if copy:
+            img = img.copy()
         # TODO: handle Z-dim
 
         # not lazy loading of arrays is handled in `add_img`
@@ -307,7 +316,7 @@ class ImageContainer(FeatureMixin):
             mapping[img.dims[1]] = "x"
 
         img = img.rename(mapping)
-        channel_dim = [d for d in img.dims if d not in ("y", "x")][0]
+        channel_dim = [dim for dim in img.dims if dim not in ("y", "x")][0]
         try:
             img = img.reset_index(dims_or_levels=channel_dim, drop=True)
         except KeyError:
@@ -820,6 +829,7 @@ class ImageContainer(FeatureMixin):
         self,
         func: Callable[..., np.ndarray],
         layer: Optional[str] = None,
+        new_layer: Optional[str] = None,
         channel: Optional[int] = None,
         lazy: bool = False,
         chunks: Optional[Union[str]] = None,
@@ -835,6 +845,8 @@ class ImageContainer(FeatureMixin):
         func
             A function which takes a :class:`numpy.ndarray` as input and produces an image-like output.
         %(img_layer)s
+        new_layer
+            Name of the new layer. If `None` and ``copy = False``, overwrites the data in ``layer``.
         channel
             Apply ``func`` only over a specific ``channel``. If `None`, use all channels.
         chunks
@@ -849,7 +861,6 @@ class ImageContainer(FeatureMixin):
         Returns
         -------
         If ``copy = True``, returns a new container with ``layer``.
-        Otherwise, overwrites the ``layer`` in this container.
 
         Raises
         ------
@@ -857,6 +868,8 @@ class ImageContainer(FeatureMixin):
             If the ``func`` returns 0 or 1 dimensional array.
         """
         layer = self._get_layer(layer)
+        if new_layer is None:
+            new_layer = layer
         arr = self[layer]
         channel_dim = arr.dims[-1]
 
@@ -864,17 +877,14 @@ class ImageContainer(FeatureMixin):
             arr = arr[{channel_dim: channel}]
 
         if chunks is not None:
-            arr = da.asarray(arr.values).rechunk(chunks)
+            arr = da.asarray(arr.data).rechunk(chunks)
             res = (
                 da.map_overlap(func, arr, **fn_kwargs, **kwargs)
                 if "depth" in kwargs
                 else da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
             )
         else:
-            res = func(arr.values, **fn_kwargs)
-
-        if not lazy and isinstance(res, da.Array):
-            res = res.compute()
+            res = func(arr.data, **fn_kwargs)
 
         if res.ndim in (0, 1):
             # TODO: allow volumetric segmentation?
@@ -884,14 +894,16 @@ class ImageContainer(FeatureMixin):
         # TODO: handle z-dim
 
         if copy:
-            cont = ImageContainer(res, layer=layer, channel_dim=channel_dim, copy=True)
+            cont = ImageContainer(res, layer=new_layer, channel_dim=channel_dim, copy=True, lazy=lazy)
             cont.data.attrs = self.data.attrs.copy()
 
             return cont
 
         self.add_img(
             res,
-            layer=layer,
+            layer=new_layer,
+            lazy=lazy,
+            copy=new_layer != layer,
             channel_dim=f"{channel_dim}:{res.shape[-1]}" if arr.shape[-1] != res.shape[-1] else channel_dim,
         )
 
@@ -911,6 +923,11 @@ class ImageContainer(FeatureMixin):
         Modifies and returns self.
         """
         self._data = self.data.rename_vars({old: new})
+        return self
+
+    def compute(self) -> "ImageContainer":
+        """Trigger all lazy computation inplace."""
+        self.data.load()
         return self
 
     @property
