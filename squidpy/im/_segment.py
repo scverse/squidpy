@@ -78,6 +78,7 @@ class SegmentationModel(ABC):
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
             raise ValueError(f"Expected 2 or 3 dimensions, found `{img.ndim}`.")
+
         return img
 
     @staticmethod
@@ -87,7 +88,8 @@ class SegmentationModel(ABC):
             img = img[..., np.newaxis]
         if img.ndim != 3:
             raise ValueError(f"Expected segmentation to return 2 or 3 dimensional array, found `{img.ndim}`.")
-        return img
+
+        return img.astype(_SEG_DTYPE)  # assuming unsigned int for labels
 
     @segment.register(np.ndarray)
     def _(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
@@ -103,11 +105,11 @@ class SegmentationModel(ABC):
     @segment.register(da.Array)  # type: ignore[no-redef]
     def _(self, img: da.Array, chunks: Optional[Union[str, int, Tuple[int, ...]]] = None, **kwargs: Any) -> np.ndarray:
         img = SegmentationModel._precondition(img)
-
-        shift = int(np.prod(img.numblocks)).bit_length()
-        kwargs.setdefault("depth", {0: 30, 1: 30})
         if chunks is not None:
             img = img.rechunk(chunks)
+
+        shift = int(np.prod(img.numblocks) - 1).bit_length()
+        kwargs.setdefault("depth", {0: 30, 1: 30})
 
         img = da.map_overlap(
             self._segment_chunk,

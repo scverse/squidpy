@@ -3,6 +3,7 @@ from pytest_mock import MockerFixture
 import pytest
 
 import numpy as np
+import dask.array as da
 
 from squidpy.im import (
     segment,
@@ -10,6 +11,7 @@ from squidpy.im import (
     SegmentationCustom,
     SegmentationWatershed,
 )
+from squidpy.im._segment import _SEG_DTYPE
 from squidpy._constants._constants import SegmentationBackend
 from squidpy._constants._pkg_constants import Key
 
@@ -120,15 +122,48 @@ class TestHighLevel:
         assert res is None
         assert Key.img.segment("watershed", layer_added=key_added) in small_cont
 
-    def test_passing_kwargs(self):
-        """TODO."""
+    def test_passing_kwargs(self, small_cont: ImageContainer):
+        def func(chunk: np.ndarray, sentinel: bool = False):
+            assert sentinel, "Sentinel not set."
+            return np.zeros(chunk[..., 0].shape, dtype=_SEG_DTYPE)
 
-    @pytest.mark.parametrize("chunks", [100, (50, 50), "auto"])
+        segment(
+            small_cont, method=func, layer="image", layer_added="bar", chunks=25, lazy=False, depth=None, sentinel=True
+        )
+        assert small_cont["bar"].values.dtype == _SEG_DTYPE
+        np.testing.assert_array_equal(small_cont["bar"].values, 0)
+
+    @pytest.mark.parametrize("dask_input", [False, True])
+    @pytest.mark.parametrize("chunks", [25, (50, 50, 1), "auto"])
     @pytest.mark.parametrize("lazy", [False, True])
-    def test_dask(
+    def test_dask_segment(
         self, small_cont: ImageContainer, dask_input: bool, chunks: Union[int, Tuple[int, ...], str], lazy: bool
     ):
-        """TODO."""
+        def func(chunk: np.ndarray):
+            if isinstance(chunks, tuple):
+                np.testing.assert_array_equal(chunk.shape, [chunks[0] + 2 * d, chunks[1] + 2 * d, 1])
+            elif isinstance(chunks, int):
+                np.testing.assert_array_equal(chunk.shape, [chunks + 2 * d, chunks + 2 * d, 1])
+
+            return np.zeros(chunk[..., 0].shape, dtype=_SEG_DTYPE)
+
+        small_cont["foo"] = da.asarray(small_cont["image"].data) if dask_input else small_cont["image"].values
+        d = 10  # overlap depth
+        assert isinstance(small_cont["foo"].data, da.Array if dask_input else np.ndarray)
+
+        segment(small_cont, method=func, layer="foo", layer_added="bar", chunks=chunks, lazy=lazy, depth={0: d, 1: d})
+
+        if lazy:
+            assert isinstance(small_cont["bar"].data, da.Array)
+            small_cont.compute()
+            assert isinstance(small_cont["foo"].data, np.ndarray)
+        else:
+            # make sure we didn't accidentally trigger foo's computation
+            assert isinstance(small_cont["foo"].data, da.Array if dask_input else np.ndarray)
+
+        assert isinstance(small_cont["bar"].data, np.ndarray)
+        assert small_cont["bar"].values.dtype == _SEG_DTYPE
+        np.testing.assert_array_equal(small_cont["bar"].values, 0)
 
     def test_copy(self, small_cont: ImageContainer):
         prev_keys = set(small_cont)
@@ -145,6 +180,29 @@ class TestHighLevel:
         np.testing.assert_array_equal(
             res1[Key.img.segment("watershed")].values, res2[Key.img.segment("watershed")].values
         )
+
+    @pytest.mark.parametrize("chunks", [25, 50])
+    def test_blocking(self, small_cont: ImageContainer, chunks: int):
+        def func(chunk: np.ndarray):
+            labels = np.zeros(chunk[..., 0].shape, dtype=np.uint32)
+            labels[0, 0] = 1
+            return labels
+
+        segment(small_cont, method=func, layer="image", layer_added="bar", chunks=chunks, lazy=False, depth=None)
+        # blocks are label from top-left to bottom-right in an ascending order [0, num_blocks - 1]
+        # lowest n bits are allocated for block, rest is for the label (i.e. for blocksize=25, we need 16 blocks ids
+        # from [0, 15], which can be stored in 4 bits, then we just prepend 1 bit (see the above `func`, resulting
+        # in unique 16 labels [10000, 11111]
+
+        expected = np.zeros_like(small_cont["bar"].values)
+        start = 16 if chunks == 25 else 4
+        for i in range(0, 100, chunks):
+            for j in range(0, 100, chunks):
+                expected[i, j] = start
+                start += 1
+
+        assert small_cont["bar"].values.dtype == _SEG_DTYPE
+        np.testing.assert_array_equal(small_cont["bar"].values, expected)
 
     @pytest.mark.parametrize("size", [None, 11])
     def test_watershed_works(self, size: Optional[int]):
