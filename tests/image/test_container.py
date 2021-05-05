@@ -594,11 +594,10 @@ class TestContainerUtils:
         self, small_cont: ImageContainer, copy: bool, chunks: Union[int, Tuple[int, ...], str], lazy: bool
     ):
         def func(chunk: np.ndarray) -> np.ndarray:
-            if chunks != "auto":
-                if isinstance(chunks, tuple):
-                    np.testing.assert_array_equal(chunk.shape, chunks)
-                else:
-                    np.testing.assert_array_equal(chunk.shape, [chunks, chunks, 3])
+            if isinstance(chunks, tuple):
+                np.testing.assert_array_equal(chunk.shape, chunks)
+            elif isinstance(chunks, int):
+                np.testing.assert_array_equal(chunk.shape, [chunks, chunks, 3])
             return chunk
 
         cont = small_cont.apply(func, chunks=chunks, lazy=lazy, copy=copy, layer="image", new_layer="foo")

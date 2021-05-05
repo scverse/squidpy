@@ -2,6 +2,7 @@ from typing import Tuple, Union, Callable, Optional
 import pytest
 
 import numpy as np
+import dask.array as da
 
 from squidpy.im import process, ImageContainer
 from squidpy._constants._pkg_constants import Key
@@ -58,22 +59,44 @@ class TestProcess:
         assert Key.img.process("smooth", "image", layer_added=key_added)
 
     def test_passing_kwargs(self, small_cont: ImageContainer):
-        def dummy(arr: np.ndarray, sentinel: bool = False) -> np.ndarray:
+        def func(arr: np.ndarray, sentinel: bool = False) -> np.ndarray:
             assert sentinel, "Sentinel not set."
             return arr
 
-        res = process(small_cont, method=dummy, sentinel=True)
-        key = Key.img.process(dummy, "image")
+        res = process(small_cont, method=func, sentinel=True)
+        key = Key.img.process(func, "image")
 
         assert res is None
         np.testing.assert_array_equal(small_cont[key].values, small_cont["image"].values)
 
-    @pytest.mark.parametrize("chunks", [100, (50, 50), "auto"])
+    @pytest.mark.parametrize("dask_input", [False, True])
+    @pytest.mark.parametrize("chunks", [25, (50, 50, 3), "auto"])
     @pytest.mark.parametrize("lazy", [False, True])
-    def test_dask(
+    def test_dask_processing(
         self, small_cont: ImageContainer, dask_input: bool, chunks: Union[int, Tuple[int, ...], str], lazy: bool
     ):
-        """TODO."""
+        def func(chunk: np.ndarray):
+            if isinstance(chunks, tuple):
+                np.testing.assert_array_equal(chunk.shape, chunks)
+            elif isinstance(chunks, int):
+                np.testing.assert_array_equal(chunk.shape, [chunks, chunks, 3])
+
+            return chunk
+
+        small_cont["foo"] = da.asarray(small_cont["image"].data) if dask_input else small_cont["image"].values
+        assert isinstance(small_cont["foo"].data, da.Array if dask_input else np.ndarray)
+
+        process(small_cont, method=func, layer="foo", layer_added="bar", chunks=chunks, lazy=lazy)
+
+        if lazy:
+            assert isinstance(small_cont["bar"].data, da.Array)
+            small_cont.compute()
+            assert isinstance(small_cont["foo"].data, np.ndarray)
+        else:
+            # make sure we didn't accidentally trigger foo's computation
+            assert isinstance(small_cont["foo"].data, da.Array if dask_input else np.ndarray)
+
+        assert isinstance(small_cont["bar"].data, np.ndarray)
 
     def test_copy(self, small_cont: ImageContainer):
         orig_keys = set(small_cont)
