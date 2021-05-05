@@ -1,4 +1,5 @@
 from typing import Any, Set, Tuple, Union, Optional
+from imageio import imread, imsave
 from pathlib import Path
 from collections import defaultdict
 from html.parser import HTMLParser
@@ -9,7 +10,6 @@ from anndata import AnnData
 import numpy as np
 import xarray as xr
 
-from imageio import imread, imsave
 import tifffile
 
 from squidpy.im import ImageContainer
@@ -650,3 +650,9 @@ class TestCroppingExtra:
         assert "image_1" in crop
         np.testing.assert_array_equal(crop.data["image_0"].shape, (21 // 2, 21 // 2, 10))
         np.testing.assert_array_equal(crop.data["image_1"].shape, (21 // 2, 21 // 2, 1))
+
+
+class TestPileLine:
+    @pytest.mark.parametrize("lazy", [False, True])
+    def test_default_pipeline(self, lazy: bool):
+        """TODO."""

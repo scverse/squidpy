@@ -1,9 +1,9 @@
 from typing import Any, Dict, Union, Callable, Optional
-from dask_image.ndfilters import gaussian_filter as dask_gf
 
 from scanpy import logging as logg
 
 from dask import delayed
+from dask_image.ndfilters import gaussian_filter as dask_gf
 from scipy.ndimage.filters import gaussian_filter as scipy_gf
 import numpy as np
 import dask.array as da

@@ -8,33 +8,33 @@ import numpy as np
 import xarray as xr
 
 from skimage.io import imread
+import pims
+
+
+def _read_helper(fname: str) -> Tuple[List[int], np.dtype]:  # type: ignore[type-arg]
+    with warnings.catch_warnings():
+        # the error message is also contained in the exception
+        warnings.filterwarnings("ignore", message=r".*errored: .*", category=UserWarning)
+        with pims.open(fname) as img:
+            shape = [len(img)] + list(img.frame_shape)
+            dtype = np.dtype(img.pixel_type)
+
+            return shape, dtype
 
 
 def _read_metadata(fname: str) -> Tuple[List[int], np.dtype]:  # type: ignore[type-arg]
-    import pims
-
-    def read() -> Tuple[List[int], np.dtype]:  # type: ignore[type-arg]
-        with warnings.catch_warnings():
-            # the error message is also contained in the exception
-            warnings.filterwarnings("ignore", message=r".*errored: .*", category=UserWarning)
-            with pims.open(fname) as img:
-                shape = [len(img)] + list(img.frame_shape)
-                dtype = np.dtype(img.pixel_type)
-
-                return shape, dtype
-
     try:
-        return read()
+        return _read_helper(fname)
     except pims.UnknownFormatError as e:
         if "exceeds limit" not in str(e):
             raise
         from PIL import Image
 
         old_max_image_pixels = Image.MAX_IMAGE_PIXELS
+        limit = (2 ** 14) ** 2
         try:
-            limit = (2 ** 14) ** 2
             Image.MAX_IMAGE_PIXELS = limit
-            return read()
+            return _read_helper(fname)
         except pims.UnknownFormatError as e:
             if "exceeds limit" in str(e):
                 raise RuntimeError(
@@ -56,6 +56,7 @@ def _get_shape_pages(fname: str) -> Tuple[List[int], Optional[int], Optional[int
         c_dim = 0
         z_dim = None
     elif ndim == 4:
+        # TODO: this might change when Z-dim is implemented
         fst, lst = shape[0], shape[-1]
         if fst == 1:
             # channels last, can be 1
@@ -89,7 +90,6 @@ def _determine_dimensions(
         if c_dim not in (0, 2):
             raise ValueError(f"Expected channel dimension to be either `0` or `2`, found `{c_dim}`.")
         delta = c_dim == 0
-        dims[c_dim] = "channels"
 
         dims[delta] = "y"
         dims[delta + 1] = "x"
@@ -117,17 +117,16 @@ def _determine_dimensions(
 
 
 def _lazy_load_image(
-    fname: Union[str, Path], chunks: Optional[Union[int, str, Tuple[int, ...], Mapping[str, int]]] = None
+    fname: Union[str, Path], chunks: Optional[Union[int, str, Tuple[int, ...], Mapping[str, Union[int, str]]]] = None
 ) -> xr.DataArray:
     from dask import delayed
     import dask.array as da
 
-    if isinstance(chunks, dict):
-        chunks = tuple(chunks.values())
-
     fname = str(fname)
     shape, c_dim, z_dim, dtype = _get_shape_pages(fname)
     dims, shape = _determine_dimensions(shape, c_dim, z_dim)
+    if isinstance(chunks, dict):
+        chunks = tuple(chunks.get(d, "auto") for d in dims)
 
     darr = da.from_delayed(delayed(imread)(fname).reshape(shape), shape=shape, dtype=dtype)
     if chunks is not None:

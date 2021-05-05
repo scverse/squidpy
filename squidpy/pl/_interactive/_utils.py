@@ -73,6 +73,7 @@ def _not_in_01(arr: Union[np.ndarray, da.Array]) -> bool:
 
 
 def _is_luminance(arr: Union[np.ndarray, da.Array]) -> bool:
+    # TODO: maybe do only for images with multiple Z-dim?
     n_channels: int = arr.shape[-1]
     if n_channels not in (3, 4):
         return n_channels != 1
