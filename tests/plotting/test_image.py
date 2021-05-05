@@ -18,7 +18,9 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
             cont.show(channel=None, as_mask=True)
 
     def test_channelwise_wrong_number_of_axes(self, cont: ImageContainer):
-        """TODO."""
+        fig, ax = plt.subplots(dpi=DPI, tight_layout=True)
+        with pytest.raises(ValueError, match=r"Expected `3` axes, found `1`."):
+            cont.show(ax=ax, channelwise=True)
 
     def test_plot_axis(self, cont: ImageContainer):
         cont.add_img(np.random.RandomState(42).normal(size=(*cont.shape, 3)), layer="foo")
@@ -38,7 +40,10 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
         cont.show(channel=2, cmap="inferno", dpi=DPI)
 
     def test_plot_channelwise(self, cont: ImageContainer):
-        """TODO."""
+        cont.show(channelwise=True, dpi=DPI)
+
+    def test_plot_channelwise_as_mask(self, cont: ImageContainer):
+        cont.show(channelwise=True, as_mask=True, dpi=DPI)
 
 
 def test_extract(adata: AnnData, cont: ImageContainer, caplog):
