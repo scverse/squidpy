@@ -50,6 +50,9 @@ class TestContainerIO:
         assert str(img)
         assert repr(img)
 
+    def test_lazy_load(self):
+        """TODO."""
+
     def _test_initialize_from_dataset(self):
         dataset = xr.Dataset({"foo": xr.DataArray(np.zeros((100, 100, 3)))}, attrs={"foo": "bar"})
         img = ImageContainer._from_dataset(data=dataset)
@@ -527,6 +530,18 @@ class TestContainerUtils:
         else:
             np.testing.assert_allclose(data.values[..., 0], orig["image"].values[..., channel] + 42)
 
+    def test_apply_wrong_number_of_dim(self):
+        """TODO."""
+
+    def test_key_completions(self):
+        """TODO."""
+
+    @pytest.mark.parametrize("dask_input", [False, True])
+    @pytest.mark.parametrize("chunks", [100, (50, 50), "auto"])
+    @pytest.mark.parametrize("lazy", [False, True])
+    def test_apply_dask(self, dask_input: bool, chunks: Union[int, Tuple[int, ...], str], lazy: bool):
+        """TODO."""
+
     def test_image_autoincrement(self, small_cont_1c: ImageContainer):
         assert len(small_cont_1c) == 1
         for _ in range(20):
@@ -535,6 +550,12 @@ class TestContainerUtils:
         assert len(small_cont_1c) == 21
         for i in range(20):
             assert f"image_{i}" in small_cont_1c
+
+    def test_channel_autodetection(self, small_cont_1c: ImageContainer):
+        """TODO."""
+
+    def test_rename(self, small_cont_1c: ImageContainer):
+        """TODO."""
 
     @pytest.mark.parametrize("size", [0, 10, 20])
     def test_repr_html(self, size: int):

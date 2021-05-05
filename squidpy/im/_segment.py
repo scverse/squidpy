@@ -93,7 +93,7 @@ class SegmentationModel(ABC):
     def _(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
         chunks = kwargs.pop("chunks", None)
         if chunks is not None:
-            return self.segment(da.from_array(img, chunks=chunks))
+            return self.segment(da.from_array(img, chunks=chunks), **kwargs)
 
         img = SegmentationModel._precondition(img)
         img = self._segment(img, **kwargs)
@@ -102,10 +102,12 @@ class SegmentationModel(ABC):
 
     @segment.register(da.Array)  # type: ignore[no-redef]
     def _(self, img: da.Array, **kwargs: Any) -> np.ndarray:
-        img = SegmentationModel._precondition(img).rechunk(1000)
-        shift = int(np.prod(img.numblocks)).bit_length()
+        img = SegmentationModel._precondition(img)
 
-        img = da.map_blocks(
+        shift = int(np.prod(img.numblocks)).bit_length()
+        kwargs.setdefault("depth", {0: 30, 1: 30})
+
+        img = da.map_overlap(
             self._segment_chunk,
             img,
             dtype=_SEG_DTYPE,
@@ -137,9 +139,13 @@ class SegmentationModel(ABC):
         **kwargs: Any,
     ) -> ImageContainer:
         channel_dim = img[layer].dims[-1]
+        if img[layer].shape[-1] == 1:
+            new_channel_dim = channel_dim
+        else:
+            new_channel_dim = f"{channel_dim}:{'all' if channel is None else channel}"
 
-        res = img.apply(self.segment, layer=layer, channel=channel, fn_kwargs=fn_kwargs, **kwargs)
-        res._data = res.data.rename({channel_dim: f"{channel_dim}:{channel if channel is not None else 'all'}"})
+        res = img.apply(self.segment, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)
+        res._data = res.data.rename({channel_dim: new_channel_dim})
 
         for k in res:
             res[k].attrs["segmentation"] = True
@@ -195,7 +201,7 @@ class SegmentationWatershed(SegmentationModel):
         geq: bool = True,
         **kwargs: Any,
     ) -> Union[np.ndarray, da.Array]:
-        arr = arr.squeeze(-1)  # we always pass 3D image
+        arr = arr.squeeze(-1)  # we always pass a 3D image
         if thresh is None:
             thresh = threshold_otsu(arr)
         mask = (arr >= thresh) if geq else (arr < thresh)

@@ -53,7 +53,7 @@ class TestGeneral:
         assert isinstance(res, ImageContainer)
         assert res.shape == img.shape
         assert "image" in res
-        assert res["image"].dims == tuple(img["image"].dims[:2]) + ("channels:all",)
+        assert res["image"].dims == img["image"].dims
 
 
 class TestWatershed:

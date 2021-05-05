@@ -230,7 +230,7 @@ class ImageContainer(FeatureMixin):
             if layer not in img:
                 raise KeyError(f"Image identifier `{layer}` not found in `{img}`.")
             return self._load_img(img[layer], **kwargs)
-        raise NotImplementedError(f"Loader for class `{type(img).__name__}` is not yet implemented.")
+        raise NotImplementedError(f"Loading `{type(img).__name__}` is not yet implemented.")
 
     @_load_img.register(str)
     @_load_img.register(Path)
@@ -284,6 +284,7 @@ class ImageContainer(FeatureMixin):
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
             raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
+        # TODO: handle Z-dim
 
         # not lazy loading of arrays is handled in `add_img`
         return xr.DataArray(img, dims=["y", "x", "channels"])
@@ -296,7 +297,7 @@ class ImageContainer(FeatureMixin):
             img = img.expand_dims("channels", -1)
         if img.ndim != 3:
             raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
-
+        # TODO: handle Z-dim
         mapping: Dict[Hashable, str] = {}
         if "y" not in img.dims:
             logg.warning(f"Dimension `y` not found in the data. Assuming it's `{img.dims[0]}`")
