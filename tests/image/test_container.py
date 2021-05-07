@@ -453,6 +453,35 @@ class TestContainerCropping:
         for crop in cont.generate_spot_crops(adata, spot_scale=spot_scale, scale=scale):
             assert crop.shape == size
 
+    def test_spot_crops_with_scaled(self, adata: AnnData, cont: ImageContainer):
+        # test generating spot crops with differently scaled images
+        # crop locations should be the same when scaling spot crops or scaling cont beforehand
+        gen1 = cont.generate_spot_crops(adata, scale=0.5)
+        gen2 = cont.crop_corner(100, 100, cont.shape).generate_spot_crops(adata, scale=0.5)
+        gen3 = cont.crop_corner(0, 0, cont.shape, scale=0.5).generate_spot_crops(adata)
+        gen4 = cont.crop_corner(0, 0, cont.shape, scale=0.5).generate_spot_crops(adata, scale=0.5)
+
+        # check that coords of generated crops are the same
+        for c1, c2, c3, c4 in zip(gen1, gen2, gen3, gen4):
+            # upscale c4
+            c4 = c4.crop_corner(0, 0, c4.shape, scale=2)
+            # need int here, because when generating spot crops from scaled images,
+            # we need to center the spot crop on an actual pixel
+            # this results in slighly different crop coords for the scaled cont
+            assert int(c1.data.attrs["coords"].x0) == c3.data.attrs["coords"].x0
+            assert int(c1.data.attrs["coords"].y0) == c3.data.attrs["coords"].y0
+            assert c1.data.attrs["coords"].x0 == c2.data.attrs["coords"].x0
+            assert c1.data.attrs["coords"].y0 == c2.data.attrs["coords"].y0
+            assert c4.data.attrs["coords"].x0 == c3.data.attrs["coords"].x0
+            assert c4.data.attrs["coords"].y0 == c3.data.attrs["coords"].y0
+
+    def test_spot_crops_with_cropped(self, adata: AnnData, cont: ImageContainer):
+        # crops should be the same when cropping from cropped cont or original cont
+        # (as long as cropped cont contains all spots)
+        cont_cropped = cont.crop_corner(100, 100, cont.shape)
+        for c1, c2 in zip(cont.generate_spot_crops(adata), cont_cropped.generate_spot_crops(adata)):
+            assert np.all(c1["image"].data == c2["image"].data)
+
     @pytest.mark.parametrize("preserve", [False, True])
     def test_preserve_dtypes(self, cont: ImageContainer, preserve: bool):
         assert np.issubdtype(cont["image"].dtype, np.uint8)
@@ -498,6 +527,30 @@ class TestContainerCropping:
         assert crop.data.attrs[Key.img.coords] == CropCoords(0, 0, 50, 50 + dy)
         assert crop.data.attrs[Key.img.padding] == CropPadding(x_pre=0, y_pre=abs(dy), x_post=0, y_post=0)
         assert crop.data.attrs[Key.img.mask_circle]
+
+    def test_chain_cropping(self, small_cont_seg: ImageContainer):
+        # first crop
+        c1 = small_cont_seg.crop_corner(10, 0, (60, 60))
+        # test that have 1s and 2s in correct location
+        assert np.all(c1["segmented"][10:20, 10:20] == 1)
+        assert np.all(c1["segmented"][40:50, 30:40] == 2)
+        # crop first crop
+        c2 = c1.crop_corner(10, 10, (60, 60))
+        assert np.all(c2["segmented"][:10, :10] == 1)
+        assert np.all(c2["segmented"][30:40, 20:30] == 2)
+
+        # uncrop c1 and c2 and check that are the same
+        img1 = ImageContainer.uncrop([c1], small_cont_seg.shape)
+        img2 = ImageContainer.uncrop([c2], small_cont_seg.shape)
+        assert np.all(img1["segmented"].data == img2["segmented"].data)
+
+    def test_chain_cropping_with_scale(self, small_cont_seg: ImageContainer):
+        c1 = small_cont_seg.crop_corner(0, 0, (100, 100), scale=0.5)
+        c2 = c1.crop_corner(10, 0, (50, 50), scale=2)
+        img2 = ImageContainer.uncrop([c2], small_cont_seg.shape)
+        # test that the points are in the right place after down + upscaling + cropping
+        assert img2["segmented"][55, 35] == 2
+        assert img2["segmented"][25, 15] == 1
 
 
 class TestContainerUtils:

@@ -50,6 +50,8 @@ from squidpy.im._coords import (
     _NULL_COORDS,
     _NULL_PADDING,
     TupleSerializer,
+    _update_attrs_scale,
+    _update_attrs_coords,
 )
 from squidpy.im._feature_mixin import FeatureMixin
 from squidpy._constants._pkg_constants import Key
@@ -79,6 +81,9 @@ class ImageContainer(FeatureMixin):
     Parameters
     ----------
     %(add_img.parameters)s
+    scale
+        Scaling factor of the image with respect to the spatial coordinates
+        saved in the accompanying :class:`anndata.AnnData`.
 
     Raises
     ------
@@ -90,12 +95,13 @@ class ImageContainer(FeatureMixin):
         img: Optional[Input_t] = None,
         layer: str = "image",
         lazy: bool = True,
+        scale: float = 1.0,
         **kwargs: Any,
     ):
         self._data: xr.Dataset = xr.Dataset()
         self._data.attrs[Key.img.coords] = _NULL_COORDS  # can't save None to NetCDF
         self._data.attrs[Key.img.padding] = _NULL_PADDING
-        self._data.attrs[Key.img.scale] = 1
+        self._data.attrs[Key.img.scale] = scale
         self._data.attrs[Key.img.mask_circle] = False
 
         if img is not None:
@@ -271,14 +277,14 @@ class ImageContainer(FeatureMixin):
                 raise ValueError("Loading data from `Zarr` store is disallowed if the container is not empty.")
 
             self._data = transform_metadata(xr.open_zarr(str(img), chunks=chunks))
-            return None
+            return
 
         if suffix in (".nc", ".cdf"):
             if len(self._data):
                 raise ValueError("Loading data from `NetCDF` is disallowed if the container is not empty.")
 
             self._data = transform_metadata(xr.open_dataset(img, chunks=chunks))
-            return None
+            return
 
         raise ValueError(f"Unknown suffix `{img.suffix}`.")
 
@@ -393,7 +399,7 @@ class ImageContainer(FeatureMixin):
             raise ValueError("Width of the crop is empty.")
 
         crop = self.data.isel(x=slice(coords.x0, coords.x1), y=slice(coords.y0, coords.y1)).copy(deep=False)
-        crop.attrs[Key.img.coords] = coords
+        crop.attrs = _update_attrs_coords(crop.attrs, coords)
 
         if orig != coords:
             padding = orig - coords
@@ -412,10 +418,10 @@ class ImageContainer(FeatureMixin):
                 mode="constant",
                 constant_values=cval,
             )
-            crop.attrs["padding"] = padding
+            # TODO does padding need to be updated as well?
+            crop.attrs[Key.img.padding] = padding
         else:
-            crop.attrs["padding"] = _NULL_PADDING
-
+            crop.attrs[Key.img.padding] = _NULL_PADDING
         return self._from_dataset(
             self._post_process(
                 data=crop, scale=scale, cval=cval, mask_circle=mask_circle, preserve_dtypes=preserve_dtypes
@@ -439,7 +445,7 @@ class ImageContainer(FeatureMixin):
                     dims=arr.dims,
                 )
             )
-            data.attrs = {**attrs, Key.img.scale: scale}
+            data.attrs = _update_attrs_scale(attrs, scale)
 
         if mask_circle:
             if data.dims["y"] != data.dims["x"]:
@@ -596,11 +602,20 @@ class ImageContainer(FeatureMixin):
         adata = adata[obs_names, :]
         spatial = adata.obsm[spatial_key][:, :2]
 
-        diameter = adata.uns[spatial_key][library_id]["scalefactors"]["spot_diameter_fullres"]
+        scale = self.data.attrs.get(Key.img.scale, 1)
+        diameter = Key.uns.spot_diameter(adata, spatial_key=spatial_key, library_id=library_id) * scale
         radius = int(round(diameter // 2 * spot_scale))
 
         for i, obs in enumerate(adata.obs_names):
-            crop = self.crop_center(y=spatial[i][1], x=spatial[i][0], radius=radius, **kwargs)
+            # get coords in image pixel space from original space
+            y = int(spatial[i][1] * scale)
+            x = int(spatial[i][0] * scale)
+
+            # if CropCoords exist, need to offset y and x
+            if self.data.attrs.get(Key.img.coords, _NULL_COORDS) != _NULL_COORDS:
+                y = int(y - self.data.attrs[Key.img.coords].y0)
+                x = int(x - self.data.attrs[Key.img.coords].x0)
+            crop = self.crop_center(y=y, x=x, radius=radius, **kwargs)
             crop.data.attrs[Key.img.obs] = obs
             crop = crop._maybe_as_array(as_array)
 
@@ -638,6 +653,7 @@ class ImageContainer(FeatureMixin):
             raise ValueError("No crops were supplied.")
 
         keys = set(crops[0].data.keys())
+        scales = set()
         dy, dx = -1, -1
 
         for crop in crops:
@@ -650,11 +666,18 @@ class ImageContainer(FeatureMixin):
             if coord == _NULL_COORDS:
                 raise ValueError(f"Null coordinates detected `{coord}`.")
 
+            scales.add(crop.data.attrs.get(Key.img.scale, None))
             dy, dx = max(dy, coord.y0 + coord.dy), max(dx, coord.x0 + coord.dx)
+
+        scales.discard(None)
+        if len(scales) != 1:
+            raise ValueError(f"Unable to uncrop images of different scales: `{sorted((scales))}`.")
+        scale, *_ = scales
 
         if shape is None:
             shape = (dy, dx)
-        shape = tuple(shape)  # type: ignore[assignment]
+        # can be float because coords can be scaled
+        shape = tuple(map(int, shape))  # type: ignore[assignment]
         if len(shape) != 2:
             raise ValueError(f"Expected `shape` to be of length `2`, found `{len(shape)}`.")
         if shape < (dy, dx):
@@ -662,6 +685,8 @@ class ImageContainer(FeatureMixin):
 
         # create resulting dataset
         dataset = xr.Dataset()
+        dataset.attrs[Key.img.scale] = scale
+
         for key in keys:
             img = crop.data[key]
             # get shape for this DataArray
@@ -975,6 +1000,10 @@ class ImageContainer(FeatureMixin):
         """  # noqa: D401
         res = cls()
         res._data = data if deep is None else data.copy(deep=deep)
+        res._data.attrs.setdefault(Key.img.coords, _NULL_COORDS)  # can't save None to NetCDF
+        res._data.attrs.setdefault(Key.img.padding, _NULL_PADDING)
+        res._data.attrs.setdefault(Key.img.scale, 1.0)
+        res._data.attrs.setdefault(Key.img.mask_circle, False)
         return res
 
     def _maybe_as_array(
