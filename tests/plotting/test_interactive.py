@@ -172,6 +172,6 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         plt.savefig(ACTUAL / basename, dpi=DPI)
         plt.close()
 
-        res = compare_images(str(EXPECTED / basename), str(ACTUAL / basename), TOL)
+        res = compare_images(str(EXPECTED / basename), str(ACTUAL / basename), 2 * TOL)
 
         assert res is None, res
