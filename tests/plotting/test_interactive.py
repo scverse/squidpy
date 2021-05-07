@@ -9,6 +9,7 @@ from scipy.sparse import issparse
 import numpy as np
 
 from matplotlib.testing.compare import compare_images
+import matplotlib.pyplot as plt
 
 from squidpy.im import ImageContainer
 from tests.conftest import DPI, TOL, ACTUAL, EXPECTED, PlotTester, PlotTesterMeta
@@ -167,7 +168,9 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         cnt.add_points(bdata.obs_vector(bdata.var_names[42]), layer_name="foo")
 
         basename = f"{self.__class__.__name__[4:]}_corner_case_{y}_{x}_{'_'.join(map(str, size))}.png"
-        viewer.screenshot(dpi=DPI, save=ACTUAL / basename)
+        viewer.screenshot(dpi=DPI)
+        plt.savefig(ACTUAL / basename, dpi=DPI)
+        plt.close()
 
         res = compare_images(str(EXPECTED / basename), str(ACTUAL / basename), TOL)
 
