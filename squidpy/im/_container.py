@@ -51,6 +51,8 @@ from squidpy.im._utils import (
     _NULL_PADDING,
     _open_rasterio,
     TupleSerializer,
+    _update_attrs_scale,
+    _update_attrs_coords,
 )
 from squidpy.im._feature_mixin import FeatureMixin
 from squidpy._constants._pkg_constants import Key
@@ -388,7 +390,7 @@ class ImageContainer(FeatureMixin):
             raise ValueError("Width of the crop is empty.")
 
         crop = self.data.isel(x=slice(coords.x0, coords.x1), y=slice(coords.y0, coords.y1)).copy(deep=False)
-        crop.attrs[Key.img.coords] = coords
+        crop.attrs = _update_attrs_coords(crop.attrs, coords)
 
         if orig != coords:
             padding = orig - coords
@@ -407,10 +409,10 @@ class ImageContainer(FeatureMixin):
                 mode="constant",
                 constant_values=cval,
             )
+            # TODO does padding need to be updated as well?
             crop.attrs["padding"] = padding
         else:
             crop.attrs["padding"] = _NULL_PADDING
-
         return self._from_dataset(
             self._post_process(
                 data=crop, scale=scale, cval=cval, mask_circle=mask_circle, preserve_dtypes=preserve_dtypes
@@ -434,13 +436,7 @@ class ImageContainer(FeatureMixin):
                     dims=arr.dims,
                 )
             )
-            old_scale = attrs[Key.img.scale]
-            data.attrs = {
-                **attrs,
-                Key.img.scale: scale * old_scale,
-                "padding": attrs["padding"] * scale,
-                "coords": attrs["coords"] * scale,
-            }
+            data.attrs = _update_attrs_scale(attrs, scale)
 
         if mask_circle:
             if data.dims["y"] != data.dims["x"]:
@@ -609,6 +605,10 @@ class ImageContainer(FeatureMixin):
             )
             radius = int(round(diameter // 2 * spot_scale))
 
+            # if CropCoords exist, need to offset y and x
+            if self.data.attrs["coords"] != _NULL_COORDS:
+                y = int(y - self.data.attrs["coords"].y0)
+                x = int(x - self.data.attrs["coords"].x0)
             crop = self.crop_center(y=y, x=x, radius=radius, **kwargs)
             crop.data.attrs[Key.img.obs] = obs
             crop = crop._maybe_as_array(as_array)

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 from dataclasses import dataclass
 import warnings
 
@@ -9,6 +9,7 @@ import xarray as xr
 import tifffile
 
 from squidpy.gr._utils import _assert_non_negative
+from squidpy._constants._pkg_constants import Key
 
 
 def _circular_mask(arr: np.ndarray, y: int, x: int, radius: float) -> np.ndarray:
@@ -156,3 +157,27 @@ class CropPadding(TupleSerializer):
 
 _NULL_COORDS = CropCoords(0, 0, 0, 0)
 _NULL_PADDING = CropPadding(0, 0, 0, 0)
+
+
+# functions for updating attributes with new scaling, CropCoors, CropPadding
+def _update_attrs_coords(attrs: Dict[str, Any], coords: CropCoords) -> Dict[str, Any]:
+    old_coords = attrs.get(Key.img.coords, _NULL_COORDS)
+    if old_coords != _NULL_COORDS:
+        new_coords = CropCoords(
+            x0=old_coords.x0 + coords.x0,
+            y0=old_coords.y0 + coords.y0,
+            x1=old_coords.x0 + coords.x1,
+            y1=old_coords.y0 + coords.y1,
+        )
+        attrs[Key.img.coords] = new_coords
+    else:
+        attrs[Key.img.coords] = coords
+    return attrs
+
+
+def _update_attrs_scale(attrs: Dict[str, Any], scale: Union[int, float]) -> Dict[str, Any]:
+    old_scale = attrs[Key.img.scale]
+    attrs[Key.img.scale] = old_scale * scale
+    attrs["padding"] = attrs["padding"] * scale
+    attrs["coords"] = attrs["coords"] * scale
+    return attrs
