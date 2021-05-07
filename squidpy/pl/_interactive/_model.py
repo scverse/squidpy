@@ -38,14 +38,14 @@ class ImageModel:
         self.library_id = Key.uns.library_id(self.adata, self.spatial_key, self.library_id)
         self.spot_diameter = Key.uns.spot_diameter(self.adata, self.spatial_key, self.library_id)
 
-        s = self.container.data.attrs.get("scale", 1)
+        s = self.container.data.attrs.get(Key.img.scale, 1)
         if s != 1:
             # update coordinates with image scale
             self.coordinates = self.coordinates * s
             self.spot_diameter *= s
 
-        c: CropCoords = self.container.data.attrs.get("coords", _NULL_COORDS)
-        p: CropPadding = self.container.data.attrs.get("padding", _NULL_PADDING)
+        c: CropCoords = self.container.data.attrs.get(Key.img.coords, _NULL_COORDS)
+        p: CropPadding = self.container.data.attrs.get(Key.img.padding, _NULL_PADDING)
         if c != _NULL_COORDS:
             mask = (
                 (self.coordinates[:, 0] >= c.y0)

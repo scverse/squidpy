@@ -410,9 +410,9 @@ class ImageContainer(FeatureMixin):
                 constant_values=cval,
             )
             # TODO does padding need to be updated as well?
-            crop.attrs["padding"] = padding
+            crop.attrs[Key.img.padding] = padding
         else:
-            crop.attrs["padding"] = _NULL_PADDING
+            crop.attrs[Key.img.padding] = _NULL_PADDING
         return self._from_dataset(
             self._post_process(
                 data=crop, scale=scale, cval=cval, mask_circle=mask_circle, preserve_dtypes=preserve_dtypes
@@ -593,22 +593,19 @@ class ImageContainer(FeatureMixin):
         adata = adata[obs_names, :]
         spatial = adata.obsm[spatial_key][:, :2]
 
-        diameter = adata.uns[spatial_key][library_id]["scalefactors"]["spot_diameter_fullres"]
+        scale = self.data.attrs.get(Key.img.scale, 1)
+        diameter = Key.uns.spot_diameter(adata, spatial_key=spatial_key, library_id=library_id) * scale
         radius = int(round(diameter // 2 * spot_scale))
 
         for i, obs in enumerate(adata.obs_names):
             # get coords in image pixel space from original space
-            y = int(spatial[i][1] * self.data.attrs["scale"])
-            x = int(spatial[i][0] * self.data.attrs["scale"])
-            diameter = (
-                adata.uns[spatial_key][library_id]["scalefactors"]["spot_diameter_fullres"] * self.data.attrs["scale"]
-            )
-            radius = int(round(diameter // 2 * spot_scale))
+            y = int(spatial[i][1] * scale)
+            x = int(spatial[i][0] * scale)
 
             # if CropCoords exist, need to offset y and x
-            if self.data.attrs["coords"] != _NULL_COORDS:
-                y = int(y - self.data.attrs["coords"].y0)
-                x = int(x - self.data.attrs["coords"].x0)
+            if self.data.attrs.get(Key.img.coords, _NULL_COORDS) != _NULL_COORDS:
+                y = int(y - self.data.attrs[Key.img.coords].y0)
+                x = int(x - self.data.attrs[Key.img.coords].x0)
             crop = self.crop_center(y=y, x=x, radius=radius, **kwargs)
             crop.data.attrs[Key.img.obs] = obs
             crop = crop._maybe_as_array(as_array)
@@ -660,7 +657,7 @@ class ImageContainer(FeatureMixin):
             if coord == _NULL_COORDS:
                 raise ValueError(f"Null coordinates detected `{coord}`.")
 
-            scales.add(crop.data.attrs.get("scale", None))
+            scales.add(crop.data.attrs.get(Key.img.scale, None))
             dy, dx = max(dy, coord.y0 + coord.dy), max(dx, coord.x0 + coord.dx)
 
         scales.discard(None)
@@ -679,7 +676,7 @@ class ImageContainer(FeatureMixin):
 
         # create resulting dataset
         dataset = xr.Dataset()
-        dataset.attrs["scale"] = scale
+        dataset.attrs[Key.img.scale] = scale
 
         for key in keys:
             img = crop.data[key]

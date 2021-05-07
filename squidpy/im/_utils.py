@@ -159,7 +159,7 @@ _NULL_COORDS = CropCoords(0, 0, 0, 0)
 _NULL_PADDING = CropPadding(0, 0, 0, 0)
 
 
-# functions for updating attributes with new scaling, CropCoors, CropPadding
+# functions for updating attributes with new scaling, CropCoords, CropPadding
 def _update_attrs_coords(attrs: Dict[str, Any], coords: CropCoords) -> Dict[str, Any]:
     old_coords = attrs.get(Key.img.coords, _NULL_COORDS)
     if old_coords != _NULL_COORDS:
@@ -178,6 +178,6 @@ def _update_attrs_coords(attrs: Dict[str, Any], coords: CropCoords) -> Dict[str,
 def _update_attrs_scale(attrs: Dict[str, Any], scale: Union[int, float]) -> Dict[str, Any]:
     old_scale = attrs[Key.img.scale]
     attrs[Key.img.scale] = old_scale * scale
-    attrs["padding"] = attrs["padding"] * scale
-    attrs["coords"] = attrs["coords"] * scale
+    attrs[Key.img.padding] = attrs[Key.img.padding] * scale
+    attrs[Key.img.coords] = attrs[Key.img.coords] * scale
     return attrs
