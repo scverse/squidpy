@@ -1,5 +1,4 @@
 from typing import Dict, Tuple, Union, Optional
-from pytest_mock import MockerFixture
 import pytest
 
 import numpy as np
@@ -12,24 +11,12 @@ from squidpy.im._io import _read_metadata, _lazy_load_image, _determine_dimensio
 
 
 class TestIO:
-    """TODO."""
-
     def _create_image(self, path: str, shape: Tuple[int, ...]):
         dtype = np.uint8 if len(shape) <= 3 else np.float32
         img = np.random.randint(0, 255, size=shape).astype(dtype)
         tifffile.imsave(path, img)
 
         return img
-
-    def test_read_metadata_too_large_image(self, tmpdir, mocker: MockerFixture):
-        import pims
-
-        path = str(tmpdir / "img.tiff")
-        mocker.patch("squidpy.im._io._read_helper", side_effect=pims.UnknownFormatError("exceeds limit: 42"))
-        self._create_image(path, (100, 100, 3))
-
-        with pytest.raises(RuntimeError, match="because it exceeds the default limit"):
-            _read_metadata(path)
 
     @pytest.mark.parametrize(
         "shape",
@@ -64,7 +51,7 @@ class TestIO:
         c_dim = len(shape) - 1 if c_dim == -1 else c_dim
         z_dim = len(shape) - 1 if z_dim == -1 else z_dim
 
-        actual_dims, actual_shape = _determine_dimensions(list(shape), c_dim, z_dim)
+        actual_dims, actual_shape = _determine_dimensions(shape, c_dim, z_dim)
 
         if len(shape) == 2:
             np.testing.assert_array_equal(actual_dims, ["y", "x", "z", "channels"])

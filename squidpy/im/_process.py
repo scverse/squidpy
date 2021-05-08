@@ -1,4 +1,5 @@
-from typing import Any, Dict, Union, Callable, Optional
+from types import MappingProxyType
+from typing import Any, Union, Mapping, Callable, Optional
 
 from scanpy import logging as logg
 
@@ -43,6 +44,7 @@ def process(
     layer_added: Optional[str] = None,
     channel_dim: Optional[str] = None,
     copy: bool = False,
+    apply_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> Optional[ImageContainer]:
     """
@@ -68,6 +70,8 @@ def process(
         Name of the channel dimension of the new image layer. Default is the same as the original, if the
         processing function does not change the number of channels, and ``'{{channel}}_{{processing}}'`` otherwise.
     %(copy_cont)s
+    apply_kwargs
+        Keyword arguments for :meth:`squidpy.im.ImageContainer.apply`.
     kwargs
         Keyword arguments for ``method``.
 
@@ -86,11 +90,12 @@ def process(
     """
     layer = img._get_layer(layer)
     method = Processing(method) if isinstance(method, (str, Processing)) else method  # type: ignore[assignment]
+    apply_kwargs = dict(apply_kwargs)
+    apply_kwargs["lazy"] = lazy
 
     if channel_dim is None:
         channel_dim = img[layer].dims[-1]
     layer_new = Key.img.process(method, layer, layer_added=layer_added)
-    map_kwargs: Dict[str, Any] = {"lazy": lazy}
 
     if callable(method):
         callback = method
@@ -98,18 +103,19 @@ def process(
         # TODO: handle Z-dim
         kwargs.setdefault("sigma", [1, 1, 0])  # TODO: Z-dim, allow for ints, replicate over spatial dims
         if chunks is not None:
+            # dask_image already handles map_overlap
             chunks_, chunks = chunks, None
             callback = lambda arr, **kwargs: dask_gf(da.asarray(arr).rechunk(chunks_), **kwargs)  # noqa: E731
         else:
             callback = scipy_gf
     elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
-        map_kwargs["drop_axis"] = 2  # TODO: Z-dim
+        apply_kwargs["drop_axis"] = 2  # TODO: Z-dim
         callback = to_grayscale
     else:
         raise NotImplementedError(f"Method `{method}` is not yet implemented.")
 
     start = logg.info(f"Processing image using `{method}` method")
-    res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **map_kwargs)
+    res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs)
 
     # if the method changes the number of channels
     if res[layer].shape[-1] != img[layer].shape[-1]:

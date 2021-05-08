@@ -1,4 +1,5 @@
 from typing import Tuple, Union, Callable, Optional
+from pytest_mock import MockerFixture
 import pytest
 
 import numpy as np
@@ -68,6 +69,20 @@ class TestProcess:
 
         assert res is None
         np.testing.assert_array_equal(small_cont[key].values, small_cont["image"].values)
+
+    def test_apply_kwargs(self, small_cont: ImageContainer, mocker: MockerFixture):
+        spy = mocker.spy(da, "map_overlap")
+        res = process(
+            small_cont,
+            method=lambda _: _,
+            apply_kwargs={"depth": {0: 10, 1: 10}},
+            layer_added="foo",
+            chunks={0: 10, 1: 10},
+        )
+
+        assert res is None
+        spy.assert_called_once()
+        np.testing.assert_array_equal(small_cont["foo"].values, small_cont["image"].values)
 
     @pytest.mark.parametrize("dask_input", [False, True])
     @pytest.mark.parametrize("chunks", [25, (50, 50, 3), "auto"])

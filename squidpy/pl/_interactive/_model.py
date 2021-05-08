@@ -6,8 +6,8 @@ from anndata import AnnData
 import numpy as np
 
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
-from squidpy.im._utils import CropCoords, CropPadding, _NULL_COORDS, _NULL_PADDING
 from squidpy.pl._utils import ALayer
+from squidpy.im._coords import CropCoords, CropPadding, _NULL_COORDS, _NULL_PADDING
 from squidpy._constants._constants import Symbol
 from squidpy._constants._pkg_constants import Key
 
