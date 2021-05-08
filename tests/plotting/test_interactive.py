@@ -1,3 +1,4 @@
+from typing import Tuple
 import sys
 import pytest
 
@@ -7,8 +8,12 @@ from anndata import AnnData
 from scipy.sparse import issparse
 import numpy as np
 
+from matplotlib.testing.compare import compare_images
+import matplotlib.pyplot as plt
+
 from squidpy.im import ImageContainer
-from tests.conftest import DPI, PlotTester, PlotTesterMeta
+from tests.conftest import DPI, TOL, ACTUAL, EXPECTED, PlotTester, PlotTesterMeta
+from squidpy._constants._pkg_constants import Key
 
 
 @pytest.mark.qt()
@@ -133,3 +138,40 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         cnt.add_points(bdata.obs_vector(bdata.var_names[42]), layer_name="foo")
 
         viewer.screenshot(dpi=DPI)
+
+    def test_plot_scalefactor(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
+        scale = 2
+        napari_cont.data.attrs["scale"] = scale
+
+        viewer = napari_cont.interactive(adata)
+        cnt = viewer._controller
+        model = cnt._model
+
+        data = np.random.normal(size=adata.n_obs)
+        cnt.add_points(data, layer_name="layer1")
+
+        np.testing.assert_allclose(adata.obsm["spatial"][:, ::-1] * scale, model.coordinates)
+        assert Key.uns.spot_diameter(adata, "spatial", "V1_Adult_Mouse_Brain") * scale == model.spot_diameter
+
+        viewer.screenshot(dpi=DPI)
+
+    @pytest.mark.parametrize("size", [(800, 600), (600, 800), (800, 800)])
+    @pytest.mark.parametrize("x", [-200, 200])
+    @pytest.mark.parametrize("y", [-200, 200])
+    def test_corner_corner_cases(
+        self, qtbot, adata: AnnData, napari_cont: ImageContainer, y: int, x: int, size: Tuple[int, int]
+    ):
+        viewer = napari_cont.crop_corner(y, x, size=size).interactive(adata)
+        bdata = viewer.adata
+        cnt = viewer._controller
+
+        cnt.add_points(bdata.obs_vector(bdata.var_names[42]), layer_name="foo")
+
+        basename = f"{self.__class__.__name__[4:]}_corner_case_{y}_{x}_{'_'.join(map(str, size))}.png"
+        viewer.screenshot(dpi=DPI)
+        plt.savefig(ACTUAL / basename, dpi=DPI)
+        plt.close()
+
+        res = compare_images(str(EXPECTED / basename), str(ACTUAL / basename), 2 * TOL)
+
+        assert res is None, res

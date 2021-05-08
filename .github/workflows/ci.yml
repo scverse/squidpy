@@ -111,7 +111,7 @@ jobs:
             uses: actions/cache@v2
             with:
                 path: .tox
-                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/tox.ini') }}
+                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/tox.ini') }}
 
         -   name: Testing
             run: |
