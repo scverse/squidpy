@@ -1,4 +1,4 @@
-eame: CI
+name: CI
 
 on:
     schedule:
@@ -6,11 +6,13 @@ on:
     push:
         branches:
         -   master
+        -   dev
         tags:
         -   v[0-9]+.[0-9]+.[0-9]+
     pull_request:
         branches:
         -   master
+        -   dev
 
 jobs:
     init:
