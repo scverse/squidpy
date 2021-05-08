@@ -11,7 +11,7 @@ import numpy as np
 
 def _ripley(
     coordinates: np.ndarray,
-    mode: Literal["F", "G", "K"],
+    mode: Literal["F", "G", "L"],
     metric: str = "euclidean",
     n_neighbors: int = 2,
     n_simulations: int = 100,
@@ -34,9 +34,9 @@ def _ripley(
     elif mode == "G":
         distances, _ = tree.kneighbors(coordinates, n_neighbors=n_neighbors)
         bins, obs_stats = _f_g_function(distances.squeeze(), support)
-    elif mode == "K":
+    elif mode == "L":
         distances = pdist(coordinates, metric=metric)
-        bins, obs_stats = _k_function(distances, support, N, area)
+        bins, obs_stats = _l_function(distances, support, N, area)
 
     sims = np.empty((len(bins), n_simulations)).T
     pvalues = np.ones_like(support)
@@ -51,9 +51,9 @@ def _ripley(
             tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neighbors).fit(random_i)
             distances_i, _ = tree_i.kneighbors(coordinates, n_neighbors=1)
             _, stats_i = _f_g_function(distances_i.squeeze(), support)
-        elif mode == "K":
+        elif mode == "L":
             distances_i = pdist(random_i, metric=metric)
-            _, stats_i = _k_function(distances_i, support, N, area)
+            _, stats_i = _l_function(distances_i, support, N, area)
 
         pvalues += stats_i >= obs_stats
         sims[i] = stats_i
@@ -72,13 +72,14 @@ def _f_g_function(distances: np.ndarray, support: np.ndarray) -> Tuple[np.ndarra
 
 
 @njit(parallel=True, fastmath=True)
-def _k_function(
+def _l_function(
     distances: np.ndarray, support: np.ndarray, n: np.int_, area: np.float_
 ) -> Tuple[np.ndarray, np.ndarray]:
     n_pairs_less_than_d = (distances < support.reshape(-1, 1)).sum(axis=1)
     intensity = n / area
     k_estimate = ((n_pairs_less_than_d * 2) / n) / intensity
-    return support, k_estimate
+    l_estimate = np.sqrt(k_estimate / np.pi)
+    return support, l_estimate
 
 
 def _ppp(hull: ConvexHull, n_simulations: int, n_observations: int, seed: Optional[int] = None) -> np.ndarray:
@@ -128,6 +129,3 @@ def _build_support(
     max_dist *= scale_max
     support = np.linspace(0, max_dist, num=n_steps)
     return support
-
-
-# alphabet_dict = {"F": _f_g_function, "G": _f_g_function}
