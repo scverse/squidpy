@@ -1,7 +1,6 @@
 """Functions for point patterns spatial statistics."""
 from typing import Tuple, Literal, Optional
 
-from numba import njit
 from numpy.random import default_rng
 from scipy.spatial import Delaunay, ConvexHull
 from sklearn.neighbors import NearestNeighbors
@@ -21,6 +20,7 @@ def _ripley(
     seed: Optional[int] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
 
+    # prepare area
     N = coordinates.shape[0]
     hull = ConvexHull(coordinates)
     area = hull.volume
@@ -64,14 +64,12 @@ def _ripley(
     return bins, obs_stats, pvalues, sims
 
 
-@njit(parallel=True, fastmath=True)
 def _f_g_function(distances: np.ndarray, support: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     counts, bins = np.histogram(distances, bins=support)
     fracs = np.cumsum(counts) / counts.sum()
-    return bins, np.asarray([0, *fracs])
+    return bins, np.concatenate((np.zeros((1,), dtype=np.float_), fracs))
 
 
-@njit(parallel=True, fastmath=True)
 def _l_function(
     distances: np.ndarray, support: np.ndarray, n: np.int_, area: np.float_
 ) -> Tuple[np.ndarray, np.ndarray]:
