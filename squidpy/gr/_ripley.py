@@ -42,19 +42,16 @@ def ripley(
     According to the `'mode'` argument, it calculates either the following Ripley's statistics:
     `{rp.F.s!r}`, `{rp.G.s!r}` or `{rp.L.s!r}` statistics.
 
-    `{rp.F.s!r}`, `{rp.G.s!r}` are defined as:
+    `{rp.F.s!r}`, `{rp.G.s!r}` are defined as: :math:`F(t),G(t)=P( d_{{i,j}} \le t )` .
 
-    .. math::
-        %(ripley_fg)s
-
-    where :math:`d_{i,j}` represents:
+    Where :math:`d_{{i,j}}` represents:
         - distances to a random Spatial Poisson Point Process for `'F'`.
         - distances to any other point of the dataset for `'G'`.
 
-    `{rp.L.s!r}` is defined as:
+    `{rp.L.s!r}` first we need to compute :math:`K(t)`, which is defined as:
+    :math:`K(t) = \frac{{1}}{{\lambda}} \sum_{{i \ne j}} \frac{{I(d_{{i,j}}<t)}}{{n}}`
 
-    ..math:
-        %(ripley_l)s
+    and then apply a variance-stabilizying transformation: :math:`L(t) = (\frac{{K(t)}}{{\pi}})^{{1/2}}`
 
     For reference, check out
     `Ripley's L <https://en.wikipedia.org/wiki/Spatial_descriptive_statistics#Ripley's_K_and_L_functions>`_
@@ -76,7 +73,7 @@ def ripley(
     n_observations
         How many observations to generate for the spatial poisson point process.
     max_dist
-        Maximum distances for the support. If `None`, is :math:`(area / 2)^{1/2}`.
+        Maximum distances for the support. If `None`, is :math:`max_dist=\sqrt{{area \over 2}}`.
     n_steps
         Number of steps for the support.
     %(seed)s
@@ -156,7 +153,7 @@ def ripley(
     obs_df = _reshape_res(obs_arr.T, columns=le.classes_, index=bins, var_name="clusters")
     sims_df = _reshape_res(sims.T, columns=np.arange(n_simulations), index=bins, var_name="simulations")
 
-    res = {f"{mode}_stats": obs_df, "sims_stats": sims_df, "bins": bins, "pvalues": pvalues}
+    res = {f"{mode}_stat": obs_df, "sims_stat": sims_df, "bins": bins, "pvalues": pvalues}
 
     # bins, obs_df, pvalues, sims_df
 
