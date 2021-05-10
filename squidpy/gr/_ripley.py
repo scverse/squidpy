@@ -155,8 +155,6 @@ def ripley(
 
     res = {f"{mode}_stat": obs_df, "sims_stat": sims_df, "bins": bins, "pvalues": pvalues}
 
-    # bins, obs_df, pvalues, sims_df
-
     if TYPE_CHECKING:
         assert isinstance(res, dict)
 
