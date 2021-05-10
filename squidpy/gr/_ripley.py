@@ -17,6 +17,8 @@ from squidpy.gr._utils import _save_data, _assert_spatial_basis, _assert_categor
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 
+__all__ = ["ripley"]
+
 
 @d.dedent
 @inject_docs(key=Key.obsm.spatial, rp=RipleyStat)
