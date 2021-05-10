@@ -19,7 +19,7 @@ def test_ripley_modes(adata_ripley: AnnData, mode: str):
 
     ripley(adata, cluster_key=CLUSTER_KEY, mode=mode)
 
-    UNS_KEY = f"{CLUSTER_KEY}_Ripley_{mode}"
+    UNS_KEY = f"{CLUSTER_KEY}_ripley_{mode}"
 
     # assert uns
     assert UNS_KEY in adata.uns.keys()
@@ -34,17 +34,29 @@ def test_ripley_modes(adata_ripley: AnnData, mode: str):
     pvalues = adata.uns[UNS_KEY]["pvalues"]
 
     # assert shapes
-    assert adata.obs[CLUSTER_KEY].cat.categories == obs_df[CLUSTER_KEY].cat.categories
+    np.testing.assert_array_equal(adata.obs[CLUSTER_KEY].cat.categories, obs_df[CLUSTER_KEY].cat.categories)
     assert obs_df.shape[1] == sims_df.shape[1]
     assert pvalues.shape[0] == adata.obs[CLUSTER_KEY].cat.categories.shape[0]
     assert bins.shape[0] == 50
 
 
 @pytest.mark.parametrize("mode", ["F", "G", "L"])
-@pytest.mark.parametrize("n_simulations", [20, 50])
-@pytest.mark.parametrize("n_observations", [10, 100, 1000])
-@pytest.mark.parametrize("max_dist", [None, 1000])
-@pytest.mark.parametrize("n_steps", [2, 10, 20, 50])
+@pytest.mark.parametrize(
+    "n_simulations",
+    [20, 50],
+)
+@pytest.mark.parametrize(
+    "n_observations",
+    [10, 100],
+)
+@pytest.mark.parametrize(
+    "max_dist",
+    [None, 1000],
+)
+@pytest.mark.parametrize(
+    "n_steps",
+    [2, 50, 100],
+)
 def test_ripley_results(
     adata_ripley: AnnData, mode: str, n_simulations: int, n_observations: int, max_dist: np.float_, n_steps: int
 ):
@@ -68,7 +80,7 @@ def test_ripley_results(
     pvalues = res["pvalues"]
 
     # assert shapes
-    assert obs_df.shape == (n_steps, 3)
+    assert obs_df.shape == (n_steps * n_clusters, 3)
     assert bins.shape == (n_steps,)
     assert sims_df.shape == (n_steps * n_simulations, 3)
     assert pvalues.shape == (n_clusters, n_steps)
@@ -81,5 +93,4 @@ def test_ripley_results(
 
     # assert n_zeros == n_clusters
     idx = np.nonzero(obs_df.bins.values)[0]
-    assert idx.shape[0] == n_simulations - n_clusters
-    assert idx == np.nonzero(sims_df.bins.values)[0].shape[0]
+    assert idx.shape[0] == n_steps * n_clusters - n_clusters
