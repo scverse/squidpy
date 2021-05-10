@@ -1,5 +1,8 @@
 """Functions for point patterns spatial statistics."""
-from typing import List, Tuple, Union, Literal, Optional
+from typing import List, Tuple, Union, Literal, Optional, TYPE_CHECKING
+
+from scanpy import logging as logg
+from anndata import AnnData
 
 from numpy.random import default_rng
 from scipy.spatial import Delaunay, ConvexHull
@@ -9,19 +12,87 @@ from scipy.spatial.distance import pdist
 import numpy as np
 import pandas as pd
 
+from squidpy._docs import d, inject_docs
+from squidpy.gr._utils import _save_data, _assert_spatial_basis, _assert_categorical_obs
+from squidpy._constants._constants import RipleyStat
+from squidpy._constants._pkg_constants import Key
 
-def _ripley(
-    coordinates: np.ndarray,
-    clusters: np.ndarray,
+
+@d.dedent
+@inject_docs(key=Key.obsm.spatial, rp=RipleyStat)
+def ripley(
+    adata: AnnData,
+    cluster_key: str,
     mode: Literal["F", "G", "L"],
+    spatial_key: str = Key.obsm.spatial,
     metric: str = "euclidean",
-    n_neighbors: int = 2,
+    n_neigh: int = 2,
     n_simulations: int = 100,
     n_observations: int = 1000,
     max_dist: np.float_ = None,
     n_steps: int = 50,
     seed: Optional[int] = None,
+    copy: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    r"""
+    Calculate various Ripley's statistics for point processes.
+
+    According to the `'mode'` argument, it calculates either the following Ripley's statistics:
+    `{rp.F.s!r}`, `{rp.G.s!r}` or `{rp.L.s!r}` statistics.
+
+    `{rp.F.s!r}`, `{rp.G.s!r}` are defined as:
+
+    .. math::
+        %(ripley_fg)s
+
+    where :math:`d_{i,j}` represents:
+        - distances to a random Spatial Poisson Point Process for `'F'`.
+        - distances to any other point of the dataset for `'G'`.
+
+    `{rp.L.s!r}` is defined as:
+
+    ..math:
+        %(ripley_l)s
+
+    For reference, check out
+    `Ripley's L <https://en.wikipedia.org/wiki/Spatial_descriptive_statistics#Ripley's_K_and_L_functions>`_
+     or :cite:`Baddeley2015-lm`.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(cluster_key)s
+    mode
+        Which Ripley's statistic to compute.
+    %(spatial_key)s
+    metric
+        Which metric to use for computing distances.
+    n_neigh
+        Number of neighborhoods to consider for the knn graph.
+    n_simulations
+        How many simulations to run for computing pvalues.
+    n_observations
+        How many observations to generate for the spatial poisson point process.
+    max_dist
+        Maximum distances for the support. If `None`, is :math:`(area / 2)^{1/2}`.
+    n_steps
+        Number of steps for the support.
+    %(seed)s
+    %(copy)s
+
+    Returns
+    -------
+    %(ripley_stat_returns)s
+    """
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_spatial_basis(adata, key=spatial_key)
+    coordinates = adata.obsm[spatial_key]
+    clusters = adata.obs[cluster_key].values
+
+    mode = RipleyStat(mode)  # type: ignore[assignment]
+    if TYPE_CHECKING:
+        assert isinstance(mode, RipleyStat)
+    mode = mode.s
 
     # prepare support
     N = coordinates.shape[0]
@@ -36,16 +107,20 @@ def _ripley(
     cluster_idx = le.transform(clusters)
     obs_arr = np.empty((le.classes_.shape[0], n_steps))
 
+    start = logg.info(
+        f"Calculating Ripley's {mode} statistic for `{le.classes_.shape[0]}` clusters and `{n_simulations}` simulations"
+    )
+
     for i in np.arange(np.max(cluster_idx) + 1):
         coord_c = coordinates[cluster_idx == i, :]
         if mode == "F":
             random = _ppp(hull, 1, n_observations, seed=seed)
-            tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neighbors).fit(coord_c)
-            distances, _ = tree_c.kneighbors(random, n_neighbors=n_neighbors)
+            tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(coord_c)
+            distances, _ = tree_c.kneighbors(random, n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
         elif mode == "G":
-            tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neighbors).fit(coord_c)
-            distances, _ = tree_c.kneighbors(coordinates[cluster_idx != i, :], n_neighbors=n_neighbors)
+            tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(coord_c)
+            distances, _ = tree_c.kneighbors(coordinates[cluster_idx != i, :], n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
         elif mode == "L":
             distances = pdist(coord_c, metric=metric)
@@ -58,11 +133,11 @@ def _ripley(
     for i in range(n_simulations):
         random_i = _ppp(hull, 1, n_observations, seed=seed)
         if mode == "F":
-            tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neighbors).fit(random_i)
+            tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(random_i)
             distances_i, _ = tree_i.kneighbors(random, n_neighbors=1)
             _, stats_i = _f_g_function(distances_i.squeeze(), support)
         elif mode == "G":
-            tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neighbors).fit(random_i)
+            tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(random_i)
             distances_i, _ = tree_i.kneighbors(coordinates, n_neighbors=1)
             _, stats_i = _f_g_function(distances_i.squeeze(), support)
         elif mode == "L":
@@ -79,7 +154,18 @@ def _ripley(
     obs_df = _reshape_res(obs_arr.T, columns=le.classes_, index=bins, var_name="clusters")
     sims_df = _reshape_res(sims.T, columns=np.arange(n_simulations), index=bins, var_name="simulations")
 
-    return bins, obs_df, pvalues, sims_df
+    res = {f"{mode}_stats": obs_df, "sims_stats": sims_df, "bins": bins, "pvalues": pvalues}
+
+    # bins, obs_df, pvalues, sims_df
+
+    if TYPE_CHECKING:
+        assert isinstance(res, dict)
+
+    if copy:
+        logg.info("Finish", time=start)
+        return res
+
+    _save_data(adata, attr="uns", key=Key.uns.ripley(cluster_key, mode), data=res)
 
 
 def _reshape_res(

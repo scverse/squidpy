@@ -122,7 +122,7 @@ def ripley_k(
         return df
 
     adata.uns[f"ripley_k_{cluster_key}"] = df
-    _save_data(adata, attr="uns", key=Key.uns.ripley_k(cluster_key), data=df)
+    _save_data(adata, attr="uns", key=Key.uns.ripley(cluster_key, "K"), data=df)
 
 
 @d.dedent

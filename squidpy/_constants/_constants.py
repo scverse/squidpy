@@ -94,3 +94,10 @@ class Symbol(ModeEnum):  # noqa: D101
 class SpatialAutocorr(ModeEnum):  # noqa: D101
     MORAN = "moran"
     GEARY = "geary"
+
+
+@unique
+class RipleyStat(ModeEnum):  # noqa: D101
+    F = "F"
+    G = "G"
+    L = "L"
