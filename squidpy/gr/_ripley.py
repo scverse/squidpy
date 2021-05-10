@@ -1,45 +1,59 @@
 """Functions for point patterns spatial statistics."""
-from typing import Tuple, Literal, Optional
+from typing import List, Tuple, Union, Literal, Optional
 
 from numpy.random import default_rng
 from scipy.spatial import Delaunay, ConvexHull
 from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import LabelEncoder
 from scipy.spatial.distance import pdist
 import numpy as np
+import pandas as pd
 
 
 def _ripley(
     coordinates: np.ndarray,
+    clusters: np.ndarray,
     mode: Literal["F", "G", "L"],
     metric: str = "euclidean",
     n_neighbors: int = 2,
     n_simulations: int = 100,
     n_observations: int = 1000,
-    scale_max: int = 1,
+    max_dist: np.float_ = None,
     n_steps: int = 50,
     seed: Optional[int] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
 
-    # prepare area
+    # prepare support
     N = coordinates.shape[0]
     hull = ConvexHull(coordinates)
     area = hull.volume
-    tree = NearestNeighbors(metric=metric, n_neighbors=n_neighbors).fit(coordinates)
-    support = _build_support(tree, coordinates, n_steps, n_neighbors, scale_max)
+    if max_dist is None:
+        max_dist = (area / 2) ** 0.5
+    support = np.linspace(0, max_dist, n_steps)
 
-    if mode == "F":
-        random = _ppp(hull, 1, n_observations, seed=seed)
-        distances, _ = tree.kneighbors(random, n_neighbors=n_neighbors)
-        bins, obs_stats = _f_g_function(distances.squeeze(), support)
-    elif mode == "G":
-        distances, _ = tree.kneighbors(coordinates, n_neighbors=n_neighbors)
-        bins, obs_stats = _f_g_function(distances.squeeze(), support)
-    elif mode == "L":
-        distances = pdist(coordinates, metric=metric)
-        bins, obs_stats = _l_function(distances, support, N, area)
+    # prepare labels
+    le = LabelEncoder().fit(clusters)
+    cluster_idx = le.transform(clusters)
+    obs_arr = np.empty((le.classes_.shape[0], n_steps))
 
-    sims = np.empty((len(bins), n_simulations)).T
-    pvalues = np.ones_like(support)
+    for i in np.arange(np.max(cluster_idx) + 1):
+        coord_c = coordinates[cluster_idx == i, :]
+        if mode == "F":
+            random = _ppp(hull, 1, n_observations, seed=seed)
+            tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neighbors).fit(coord_c)
+            distances, _ = tree_c.kneighbors(random, n_neighbors=n_neighbors)
+            bins, obs_stats = _f_g_function(distances.squeeze(), support)
+        elif mode == "G":
+            tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neighbors).fit(coord_c)
+            distances, _ = tree_c.kneighbors(coordinates[cluster_idx != i, :], n_neighbors=n_neighbors)
+            bins, obs_stats = _f_g_function(distances.squeeze(), support)
+        elif mode == "L":
+            distances = pdist(coord_c, metric=metric)
+            bins, obs_stats = _l_function(distances, support, N, area)
+        obs_arr[i] = obs_stats
+
+    sims = np.empty((n_simulations, len(bins)))
+    pvalues = np.ones((le.classes_.shape[0], len(bins)))
 
     for i in range(n_simulations):
         random_i = _ppp(hull, 1, n_observations, seed=seed)
@@ -55,13 +69,27 @@ def _ripley(
             distances_i = pdist(random_i, metric=metric)
             _, stats_i = _l_function(distances_i, support, N, area)
 
-        pvalues += stats_i >= obs_stats
+        for j in range(obs_arr.shape[0]):
+            pvalues[j] += stats_i >= obs_arr[j]
         sims[i] = stats_i
 
     pvalues /= n_simulations + 1
     pvalues = np.minimum(pvalues, 1 - pvalues)
 
-    return bins, obs_stats, pvalues, sims
+    obs_df = _reshape_res(obs_arr.T, columns=le.classes_, index=bins, var_name="clusters")
+    sims_df = _reshape_res(sims.T, columns=np.arange(n_simulations), index=bins, var_name="simulations")
+
+    return bins, obs_df, pvalues, sims_df
+
+
+def _reshape_res(
+    results: np.ndarray, columns: Union[np.ndarray, List[str]], index: np.ndarray, var_name: str
+) -> pd.DataFrame:
+    df = pd.DataFrame(results, columns=columns, index=index)
+    df.index.set_names(["bins"], inplace=True)
+    df = df.melt(var_name=var_name, value_name="stats", ignore_index=False)
+    df.reset_index(inplace=True)
+    return df
 
 
 def _f_g_function(distances: np.ndarray, support: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -118,12 +146,3 @@ def _ppp(hull: ConvexHull, n_simulations: int, n_observations: int, seed: Option
                 i_obs += 1
 
     return result.squeeze()
-
-
-def _build_support(
-    tree: NearestNeighbors, coordinates: np.ndarray, n_steps: int, n_neighbors: int, scale_max: int = 1
-) -> np.ndarray:
-    max_dist = tree.kneighbors(coordinates, n_neighbors=n_neighbors)[0].max()
-    max_dist *= scale_max
-    support = np.linspace(0, max_dist, num=n_steps)
-    return support
