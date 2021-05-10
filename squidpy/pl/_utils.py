@@ -383,7 +383,7 @@ class ALayer:
         return tuple(map(str, getattr(adata, attr).index))
 
     @_ensure_dense_vector
-    def get_obsm(self, name: str, index: int = 0) -> Tuple[Optional[np.ndarray], str]:
+    def get_obsm(self, name: str, index: Union[int, str] = 0) -> Tuple[Optional[np.ndarray], str]:
         """
         Return a vector from :attr:`anndata.AnnData.obsm`.
 
@@ -399,14 +399,33 @@ class ALayer:
         The values and the formatted ``name``.
         """
         if name not in self.adata.obsm:
-            raise KeyError(name)
-        if not isinstance(index, int):
-            raise ValueError(index)
+            raise KeyError(f"Unable to find key `{name!r}` in `adata.obsm`.")
         res = self.adata.obsm[name]
+        pretty_name = self._format_key(name, layer_modifier=False, index=index)
 
-        return (res if res.ndim == 1 else res[:, index]), self._format_key(name, layer_modifier=False, index=index)
+        if isinstance(res, pd.DataFrame):
+            try:
+                if isinstance(index, str):
+                    return res[index], pretty_name
+                if isinstance(index, int):
+                    return res.iloc[:, index], self._format_key(name, layer_modifier=False, index=res.columns[index])
+            except KeyError:
+                raise KeyError("FOO") from None
 
-    def _format_key(self, key: Union[str, int], layer_modifier: bool = False, index: Optional[int] = None) -> str:
+        if not isinstance(index, int):
+            try:
+                index = int(index, base=10)
+            except ValueError:
+                raise ValueError(
+                    f"Unable to convert `{index}` to an integer when accessing `adata.obsm[{name!r}]`."
+                ) from None
+        res = np.asarray(res)
+
+        return (res if res.ndim == 1 else res[:, index]), pretty_name
+
+    def _format_key(
+        self, key: Union[str, int], layer_modifier: bool = False, index: Optional[Union[int, str]] = None
+    ) -> str:
         if not layer_modifier:
             return str(key) + (f":{index}" if index is not None else "")
 
