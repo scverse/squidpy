@@ -150,7 +150,7 @@ def ripley(
     pvalues /= n_simulations + 1
     pvalues = np.minimum(pvalues, 1 - pvalues)
 
-    obs_df = _reshape_res(obs_arr.T, columns=le.classes_, index=bins, var_name="clusters")
+    obs_df = _reshape_res(obs_arr.T, columns=le.classes_, index=bins, var_name=cluster_key)
     sims_df = _reshape_res(sims.T, columns=np.arange(n_simulations), index=bins, var_name="simulations")
 
     res = {f"{mode}_stat": obs_df, "sims_stat": sims_df, "bins": bins, "pvalues": pvalues}
@@ -171,6 +171,7 @@ def _reshape_res(
     df = pd.DataFrame(results, columns=columns, index=index)
     df.index.set_names(["bins"], inplace=True)
     df = df.melt(var_name=var_name, value_name="stats", ignore_index=False)
+    df[var_name] = df[var_name].astype("category", copy=True)
     df.reset_index(inplace=True)
     return df
 

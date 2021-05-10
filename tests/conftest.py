@@ -91,6 +91,12 @@ def adata_intmat() -> AnnData:
     )
 
 
+@pytest.fixture()
+def adata_ripley() -> AnnData:
+    adata = _adata[_adata.obs.leiden.isin(["0", "2"])].copy()
+    return adata
+
+
 @pytest.fixture(scope="session")
 def paul15() -> AnnData:
     # session because we don't modify this dataset
