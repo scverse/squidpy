@@ -1,102 +1,161 @@
-from typing import List, Tuple, Union, Mapping, Optional
+from PIL import Image
+from typing import Tuple, Union, Mapping, Optional
 from pathlib import Path
 
 from scanpy import logging as logg
 
+from dask import delayed
 import numpy as np
 import xarray as xr
+import dask.array as da
 
+from tifffile import TiffFile
 from skimage.io import imread
 
+# modification of `skimage`'s `pil_to_ndarray`:
+# https://github.com/scikit-image/scikit-image/blob/main/skimage/io/_plugins/pil_plugin.py#L55
+from squidpy._constants._constants import InferDimensions
 
-def _get_shape_pages(fname: str) -> Tuple[List[int], Optional[int], Optional[int], np.dtype]:  # type: ignore[type-arg]
-    import pims
 
-    with pims.open(fname) as img:
-        shape = [len(img)] + list(img.frame_shape)
-        dtype = np.dtype(img.pixel_type)
+def _infer_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # type: ignore[type-arg]
+    def _palette_is_grayscale(pil_image: Image.Image) -> bool:
+        # get palette as an array with R, G, B columns
+        palette = np.asarray(pil_image.getpalette()).reshape((256, 3))
+        # Not all palette colors are used; unused colors have junk values.
+        start, stop = pil_image.getextrema()
+        valid_palette = palette[start : stop + 1]
+        # Image is grayscale if channel differences (R - G and G - B)
+        # are all zero.
+        return np.allclose(np.diff(valid_palette), 0)
 
-    ndim = len(shape)
-    if ndim == 2:
-        z_dim = c_dim = None
-    elif ndim == 3:
-        c_dim = 0
-        z_dim = None
-    elif ndim == 4:
-        fst, lst = shape[0], shape[-1]
-        if fst == 1:
-            # channels last, can be 1
-            c_dim, z_dim = 3, 0
-        elif lst == 1:
-            # channels first, cannot be 1
-            c_dim, z_dim = 0, 3
-        else:
-            # assume z-dim is saved as e.g. TIFF stacks
-            c_dim, z_dim = 3, 0
-            logg.warning(
-                f"Setting channel dimension to `{c_dim}` "
-                f"and z-dimension to `{z_dim}` for an image of shape `{shape}`"
-            )
+    if fname.endswith(".tif") or fname.endswith(".tiff"):
+        image = TiffFile(fname)
+        return (len(image.pages),) + image.pages[0].shape, np.dtype(image.pages[0].dtype)
+
+    image = Image.open(fname)
+    n_frames = getattr(image, "n_frames", 1)
+    shape: Tuple[int, ...] = (n_frames,) + image.size[::-1]
+
+    if image.mode == "P":
+        if _palette_is_grayscale(image):
+            return shape, np.dtype("uint8")
+
+        if image.format == "PNG" and "transparency" in image.info:
+            return shape + (4,), np.dtype("uint8")  # converted to RGBA
+
+        return shape + (3,), np.dtype("uint8")  # RGB
+    if image.mode in ("1", "L"):
+        return shape, np.dtype("uint8")  # L
+
+    if "A" in image.mode:
+        return shape + (4,), np.dtype("uint8")  # RGBA
+
+    if image.mode == "CMYK":
+        return shape + (3,), np.dtype("uint8")  # RGB
+
+    if image.mode.startswith("I;16"):
+        dtype = ">u2" if image.mode.endswith("B") else "<u2"
+        if "S" in image.mode:
+            dtype = dtype.replace("u", "i")
+
+        return shape, np.dtype(dtype)
+
+    if image.mode in ("RGB", "HSV", "LAB"):
+        return shape + (3,), np.dtype("uint8")
+    if image.mode == "F":
+        return shape, np.dtype("float32")
+    if image.mode == "I":
+        return shape, np.dtype("int32")
+
+    raise ValueError(f"Unable to infer image dtype for image mode `{image.mode}`.")
+
+
+def _get_image_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # type: ignore[type-arg]
+    try:
+        return _infer_shape_dtype(fname)
+    except Image.UnidentifiedImageError as e:
+        logg.warning(e)
+        return _infer_shape_dtype(fname)
+    except Image.DecompressionBombError as e:
+        logg.warning(e)
+        old_max_image_pixels = Image.MAX_IMAGE_PIXELS
+        try:
+            Image.MAX_IMAGE_PIXELS = None
+            return _infer_shape_dtype(fname)
+        finally:
+            Image.MAX_IMAGE_PIXELS = old_max_image_pixels
+
+
+def _infer_dimensions(
+    obj: Union[np.ndarray, xr.DataArray, str],
+    infer_dimensions: InferDimensions = InferDimensions.DEFAULT,
+) -> Tuple[Tuple[int, ...], Tuple[str, ...], np.dtype]:  # type: ignore[type-arg]
+    if isinstance(obj, str):
+        shape, dtype = _get_image_shape_dtype(obj)
     else:
-        raise ValueError(f"Expected number of dimensions to be either `2`, `3`, or `4`, found `{ndim}`.")
+        shape, dtype = obj.shape, obj.dtype
 
-    return shape, c_dim, z_dim, dtype
-
-
-def _determine_dimensions(
-    shape: List[int], c_dim: Optional[int], z_dim: Optional[int] = None
-) -> Tuple[List[str], List[int]]:
     ndim = len(shape)
-    if ndim == 2:
-        return ["y", "x", "z", "channels"], shape + [1, 1]
 
-    dims = [""] * 4
+    if ndim == 2:
+        return shape + (1, 1), ("y", "x", "z", "channels"), dtype
 
     if ndim == 3:
-        if c_dim not in (0, 2):
-            raise ValueError(f"Expected channel dimension to be either `0` or `2`, found `{c_dim}`.")
-        delta = c_dim == 0
-        dims[c_dim] = "channels"
+        if shape[0] < shape[1] and shape[0] < shape[2]:
+            # tiff with pages, but no channels
+            if infer_dimensions == InferDimensions.PREFER_Z:
+                return shape + (1,), ("z", "y", "x", "channels"), dtype
+            return shape + (1,), ("channels", "y", "x", "z"), dtype
 
-        dims[delta] = "y"
-        dims[delta + 1] = "x"
-        dims[c_dim] = "channels"
-        dims[-1] = "z"
+        if infer_dimensions == InferDimensions.PREFER_Z:
+            return shape + (1,), ("y", "x", "z", "channels"), dtype
 
-        return dims, shape + [1]
+        return shape + (1,), ("y", "x", "channels", "z"), dtype
 
     if ndim == 4:
-        if c_dim not in (0, 3):
-            raise ValueError(f"Expected channel dimension to be either `0` or `3`, found `{c_dim}`.")
-        if z_dim not in (0, 3):
-            raise ValueError(f"Expected z-dimension to be either `0` or `3`, found `{z_dim}`.")
-        if c_dim == z_dim:
-            raise ValueError(f"Expected z-dimension and channel dimension to be different, found `{c_dim}`.")
+        if infer_dimensions == InferDimensions.DEFAULT:
+            if shape[0] == 1:
+                return shape, ("z", "y", "x", "channels"), dtype
+            if shape[-1] == 1:
+                return shape, ("channels", "y", "x", "z"), dtype
 
-        dims[1] = "y"
-        dims[2] = "x"
-        dims[c_dim] = "channels"
-        dims[z_dim] = "z"
+            return shape, ("z", "y", "x", "channels"), dtype
 
-        return dims, shape
+        if infer_dimensions == InferDimensions.PREFER_Z:
+            return shape, ("channels", "y", "x", "z"), dtype
 
-    raise ValueError()
+        return shape, ("z", "y", "x", "channels"), dtype
+
+    raise ValueError(f"Expected the image to be either `2`, `3` or `4` dimensional, found `{ndim}`.")
 
 
 def _lazy_load_image(
-    fname: Union[str, Path], chunks: Optional[Union[int, str, Tuple[int, ...], Mapping[str, int]]] = None
+    fname: Union[str, Path],
+    infer_dimensions: InferDimensions = InferDimensions.DEFAULT,
+    chunks: Optional[Union[int, str, Tuple[int, ...], Mapping[str, Union[int, str]]]] = None,
 ) -> xr.DataArray:
-    from dask import delayed
-    import dask.array as da
+    def read_unprotected(fname: str) -> np.ndarray:
+        # not setting MAX_IMAGE_PIXELS caues problems when with processes and dask.distributed
+        old_max_pixels = Image.MAX_IMAGE_PIXELS
+        try:
+            if fname.endswith(".tif") or fname.endswith(".tiff"):
+                return np.reshape(imread(fname, plugin="tifffile"), shape)
 
-    if isinstance(chunks, dict):
-        chunks = tuple(chunks.values())
+            Image.MAX_IMAGE_PIXELS = None
+            return np.reshape(imread(fname, plugin="pil"), shape)
+        except Image.UnidentifiedImageError as e:  # should not happen
+            logg.warning(e)
+            return np.reshape(imread(fname), shape)
+        finally:
+            Image.MAX_IMAGE_PIXELS = old_max_pixels
 
     fname = str(fname)
-    shape, c_dim, z_dim, dtype = _get_shape_pages(fname)
-    dims, shape = _determine_dimensions(shape, c_dim, z_dim)
+    shape, dims, dtype = _infer_dimensions(fname, infer_dimensions)
 
-    darr = da.from_delayed(delayed(imread)(fname).reshape(shape), shape=shape, dtype=dtype)
+    if isinstance(chunks, dict):
+        chunks = tuple(chunks.get(d, "auto") for d in dims)
+
+    darr = da.from_delayed(delayed(read_unprotected)(fname), shape=shape, dtype=dtype)
     if chunks is not None:
         darr = darr.rechunk(chunks)
 

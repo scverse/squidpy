@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Any, Dict, Tuple, Union
 from dataclasses import dataclass
 
 import numpy as np
 
 from squidpy.gr._utils import _assert_non_negative
+from squidpy._constants._pkg_constants import Key
 
 
 def _circular_mask(arr: np.ndarray, y: int, x: int, radius: float) -> np.ndarray:
@@ -21,6 +22,17 @@ class TupleSerializer(ABC):  # noqa: D101
     def from_tuple(cls, value: Tuple[float, float, float, float]) -> "TupleSerializer":
         """Create self from a :class:`tuple`."""
         return cls(*value)  # type: ignore[call-arg]
+
+    def __mul__(self, other: Union[int, float]) -> "TupleSerializer":
+        if not isinstance(other, (int, float)):
+            return NotImplemented
+
+        a, b, c, d = self.to_tuple()
+        res = type(self)(a * other, b * other, c * other, d * other)  # type: ignore[call-arg]
+        return res
+
+    def __rmul__(self, other: Union[int, float]) -> "TupleSerializer":
+        return self * other
 
 
 @dataclass(frozen=True)
@@ -76,8 +88,9 @@ class CropCoords(TupleSerializer):
 
     @property
     def slice(self) -> Tuple[slice, slice]:  # noqa: A003
-        """Return the ``(height, width)`` slice."""
-        return slice(self.y0, self.y1), slice(self.x0, self.x1)
+        """Return the ``(height, width)`` int slice."""
+        # has to convert to int, because of scaling, coords can also be floats
+        return slice(int(self.y0), int(self.y1)), slice(int(self.x0), int(self.x1))
 
     def to_tuple(self) -> Tuple[float, float, float, float]:
         """Return self as a :class:`tuple`."""
@@ -108,8 +121,8 @@ class CropPadding(TupleSerializer):
     """Padding of a crop."""
 
     x_pre: float
-    y_pre: float
     x_post: float
+    y_pre: float
     y_post: float
 
     def __post_init__(self) -> None:
@@ -125,3 +138,27 @@ class CropPadding(TupleSerializer):
 
 _NULL_COORDS = CropCoords(0, 0, 0, 0)
 _NULL_PADDING = CropPadding(0, 0, 0, 0)
+
+
+# functions for updating attributes with new scaling, CropCoords, CropPadding
+def _update_attrs_coords(attrs: Dict[str, Any], coords: CropCoords) -> Dict[str, Any]:
+    old_coords = attrs.get(Key.img.coords, _NULL_COORDS)
+    if old_coords != _NULL_COORDS:
+        new_coords = CropCoords(
+            x0=old_coords.x0 + coords.x0,
+            y0=old_coords.y0 + coords.y0,
+            x1=old_coords.x0 + coords.x1,
+            y1=old_coords.y0 + coords.y1,
+        )
+        attrs[Key.img.coords] = new_coords
+    else:
+        attrs[Key.img.coords] = coords
+    return attrs
+
+
+def _update_attrs_scale(attrs: Dict[str, Any], scale: Union[int, float]) -> Dict[str, Any]:
+    old_scale = attrs[Key.img.scale]
+    attrs[Key.img.scale] = old_scale * scale
+    attrs[Key.img.padding] = attrs[Key.img.padding] * scale
+    attrs[Key.img.coords] = attrs[Key.img.coords] * scale
+    return attrs

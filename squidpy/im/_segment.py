@@ -77,7 +77,8 @@ class SegmentationModel(ABC):
         if img.ndim == 2:
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
-            raise ValueError(f"Expected `3` dimensions, found `{img.ndim}`.")
+            raise ValueError(f"Expected 2 or 3 dimensions, found `{img.ndim}`.")
+
         return img
 
     @staticmethod
@@ -86,14 +87,15 @@ class SegmentationModel(ABC):
         if img.ndim == 2:
             img = img[..., np.newaxis]
         if img.ndim != 3:
-            raise ValueError(f"Expected segmentation to return `3` dimensional array, found `{img.ndim}`.")
-        return img
+            raise ValueError(f"Expected segmentation to return 2 or 3 dimensional array, found `{img.ndim}`.")
+
+        return img.astype(_SEG_DTYPE)  # assuming unsigned int for labels
 
     @segment.register(np.ndarray)
     def _(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
         chunks = kwargs.pop("chunks", None)
         if chunks is not None:
-            return self.segment(da.from_array(img, chunks=chunks))
+            return self.segment(da.asarray(img).rechunk(chunks), **kwargs)
 
         img = SegmentationModel._precondition(img)
         img = self._segment(img, **kwargs)
@@ -101,11 +103,15 @@ class SegmentationModel(ABC):
         return SegmentationModel._postcondition(img)
 
     @segment.register(da.Array)  # type: ignore[no-redef]
-    def _(self, img: da.Array, **kwargs: Any) -> np.ndarray:
-        img = SegmentationModel._precondition(img).rechunk(1000)
-        shift = int(np.prod(img.numblocks)).bit_length()
+    def _(self, img: da.Array, chunks: Optional[Union[str, int, Tuple[int, ...]]] = None, **kwargs: Any) -> np.ndarray:
+        img = SegmentationModel._precondition(img)
+        if chunks is not None:
+            img = img.rechunk(chunks)
 
-        img = da.map_blocks(
+        shift = int(np.prod(img.numblocks) - 1).bit_length()
+        kwargs.setdefault("depth", {0: 30, 1: 30})
+
+        img = da.map_overlap(
             self._segment_chunk,
             img,
             dtype=_SEG_DTYPE,
@@ -137,9 +143,14 @@ class SegmentationModel(ABC):
         **kwargs: Any,
     ) -> ImageContainer:
         channel_dim = img[layer].dims[-1]
+        if img[layer].shape[-1] == 1:
+            new_channel_dim = channel_dim
+        else:
+            new_channel_dim = f"{channel_dim}:{'all' if channel is None else channel}"
 
-        res = img.apply(self.segment, layer=layer, channel=channel, fn_kwargs=fn_kwargs, **kwargs)
-        res._data = res.data.rename({channel_dim: f"{channel_dim}:{channel if channel is not None else 'all'}"})
+        kwargs.pop("copy", None)
+        res = img.apply(self.segment, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)
+        res._data = res.data.rename({channel_dim: new_channel_dim})
 
         for k in res:
             res[k].attrs["segmentation"] = True
@@ -164,10 +175,10 @@ class SegmentationModel(ABC):
             block_num = block_id[0] * (num_blocks[1] * num_blocks[2]) + block_id[1] * num_blocks[2]
         elif len(num_blocks) == 4:
             if num_blocks[-1] != 1:
-                raise ValueError("TODO.")
+                raise ValueError(f"Expected the number of blocks in the Z-dimension to be 1, found `{num_blocks[-1]}`.")
             block_num = block_id[0] * (num_blocks[1] * num_blocks[2]) + block_id[1] * num_blocks[2]
         else:
-            raise ValueError("TODO.")
+            raise ValueError(f"Expected either 2, 3 or 4 dimensional chunks, found `{len(num_blocks)}`.")
 
         labels = self._segment(block, **kwargs).astype(_SEG_DTYPE)
         mask = labels > 0
@@ -195,7 +206,7 @@ class SegmentationWatershed(SegmentationModel):
         geq: bool = True,
         **kwargs: Any,
     ) -> Union[np.ndarray, da.Array]:
-        arr = arr.squeeze(-1)  # we always pass 3D image
+        arr = arr.squeeze(-1)  # we always pass a 3D image
         if thresh is None:
             thresh = threshold_otsu(arr)
         mask = (arr >= thresh) if geq else (arr < thresh)
@@ -252,9 +263,6 @@ def segment(
     """
     Segment an image.
 
-    TODO: update
-    If ``chunks != None``, use :mod:`dask` to iterate over chunks and segment those.
-
     Parameters
     ----------
     %(img_container)s
@@ -263,14 +271,12 @@ def segment(
         Segmentation method to use. Valid options are:
 
             - `{m.WATERSHED.s!r}` - :func:`skimage.segmentation.watershed`.
-            - :func:`callable` - any function with TODO.
 
         %(custom_fn)s
     channel
         Channel index to use for segmentation. If `None`, pass all channels.
-    %(size)s
-    %(layer_added)s
-        If `None`, use ``'segmented_{{model}}'``.
+    %(chunks_lazy)s
+    %(layer_added)s If `None`, use ``'segmented_{{model}}'``.
     thresh
         Threshold for creation of masked image. The areas to segment should be contained in this mask.
         If `None`, it is determined by `Otsu's method <https://en.wikipedia.org/wiki/Otsu%27s_method>`_.
@@ -278,10 +284,9 @@ def segment(
     geq
         Treat ``thresh`` as upper or lower bound for defining areas to segment. If ``geq = True``, mask is defined
         as ``mask = arr >= thresh``, meaning high values in ``arr`` denote areas to segment.
+        Only used if ``method = {m.WATERSHED.s!r}``.
     %(copy_cont)s
     %(segment_kwargs)s
-    kwargs
-        Keyword arguments for ``method``.
 
     Returns
     -------
@@ -310,7 +315,9 @@ def segment(
         assert isinstance(method, SegmentationModel)
 
     start = logg.info(f"Segmenting an image of shape `{img[layer].shape}` using `{method}`")
-    res: ImageContainer = method.segment(img, layer=layer, channel=channel, fn_kwargs=kwargs, chunks=None, lazy=lazy)
+    res: ImageContainer = method.segment(
+        img, layer=layer, channel=channel, chunks=None, fn_kwargs=kwargs, copy=True, lazy=lazy
+    )
     logg.info("Finish", time=start)
 
     if copy:
