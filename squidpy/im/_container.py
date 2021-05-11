@@ -988,6 +988,59 @@ class ImageContainer(FeatureMixin):
             channel_dim=f"{channel_dim}:{res.shape[-1]}" if arr.shape[-1] != res.shape[-1] else channel_dim,
         )
 
+    @d.dedent
+    def subset(self, adata: AnnData, spatial_key: str = "spatial") -> AnnData:
+        """
+        Subset :class:`anndata.AnnData` object based on this image.
+
+        Parameters
+        ----------
+        %(adata)s
+        %(spatial_key)s
+
+        Returns
+        -------
+        The subsetted copy :class:`anndata.AnnData` object.
+        """
+        return self._subset(adata, spatial_key=spatial_key, adjust_interactive=False)
+
+    def _subset(
+        self,
+        adata: AnnData,
+        spatial_key: str = "spatial",
+        adjust_interactive: bool = False,
+    ) -> AnnData:
+        _assert_spatial_basis(adata, spatial_key)
+
+        adata = adata.copy()
+        s = self.data.attrs.get(Key.img.scale, 1)
+        coordinates = adata.obsm[spatial_key]
+
+        if s != 1:
+            # update coordinates with image scale
+            coordinates = coordinates * s
+
+        c: CropCoords = self.data.attrs.get(Key.img.coords, _NULL_COORDS)
+        p: CropPadding = self.data.attrs.get(Key.img.padding, _NULL_PADDING)
+        if c != _NULL_COORDS:
+            mask = (
+                (coordinates[:, 0] >= c.x0)
+                & (coordinates[:, 0] <= c.x1)
+                & (coordinates[:, 1] >= c.y0)
+                & (coordinates[:, 1] <= c.y1)
+            )
+
+            adata = adata[mask, :].copy()
+            # shift and scale appropriately for interactive viewer
+            if adjust_interactive:
+                adata.obsm[spatial_key] = coordinates[mask, :]
+                adata.obsm[spatial_key][:, 0] -= c.x0 - p.x_pre
+                adata.obsm[spatial_key][:, 1] -= c.y0 - p.y_pre
+        elif adjust_interactive and s != 1:
+            adata.obsm[spatial_key] = coordinates
+
+        return adata
+
     def rename(self, old: str, new: str) -> "ImageContainer":
         """
         Rename a layer.
