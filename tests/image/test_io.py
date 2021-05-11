@@ -1,4 +1,5 @@
 from typing import Dict, Tuple, Union, Optional
+from pytest_mock import MockerFixture
 import pytest
 
 import numpy as np
@@ -7,7 +8,8 @@ import dask.array as da
 
 import tifffile
 
-from squidpy.im._io import _read_metadata, _lazy_load_image, _determine_dimensions
+from squidpy.im._io import _lazy_load_image, _infer_dimensions, _get_image_shape_dtype
+from squidpy._constants._constants import InferDimensions
 
 
 class TestIO:
@@ -40,30 +42,43 @@ class TestIO:
         if len(shape) < 4:
             expected_shape = (1,) + expected_shape
 
-        actual_shape, actual_dtype = _read_metadata(path)
+        actual_shape, actual_dtype = _get_image_shape_dtype(path)
         np.testing.assert_array_equal(actual_shape, expected_shape)
         assert actual_dtype == img.dtype
 
-    @pytest.mark.parametrize("c_z_dim", [(0, -1), (-1, 0)])
-    @pytest.mark.parametrize("shape", [(101, 64), (101, 64, 1), (64, 101, 3), (1, 101, 64, 3), (3, 101, 64, 1)])
-    def test_determine_dimensions(self, shape: Tuple[int, ...], c_z_dim: Tuple[int, int]):
-        c_dim, z_dim = c_z_dim
-        c_dim = len(shape) - 1 if c_dim == -1 else c_dim
-        z_dim = len(shape) - 1 if z_dim == -1 else z_dim
-
-        actual_dims, actual_shape = _determine_dimensions(shape, c_dim, z_dim)
+    @pytest.mark.parametrize("infer_dim", ["default", "prefer_z", "prefer_channels"])
+    @pytest.mark.parametrize(
+        "shape", [(101, 64), (101, 64, 1), (3, 64, 101), (1, 101, 64, 3), (1, 101, 64, 1), (3, 101, 64, 1)]
+    )
+    def test_infer_dimensions(self, shape: Tuple[int, ...], infer_dim: str, mocker: MockerFixture):
+        mocker.patch("squidpy.im._io._get_image_shape_dtype", return_value=(shape, np.uint8))
+        infer_dim = InferDimensions(infer_dim)
+        actual_shape, actual_dims, _ = _infer_dimensions("non_existent", infer_dim)
+        print(shape, actual_shape, actual_dims)
 
         if len(shape) == 2:
             np.testing.assert_array_equal(actual_dims, ["y", "x", "z", "channels"])
             np.testing.assert_array_equal(actual_shape, shape + (1, 1))
         elif len(shape) == 3:
-            if c_dim == 0:
-                np.testing.assert_array_equal(actual_dims, ["channels", "y", "x", "z"])
+            if shape[0] <= shape[1] and shape[0] <= shape[2]:
+                if infer_dim == InferDimensions.PREFER_Z:
+                    np.testing.assert_array_equal(actual_dims, ["z", "y", "x", "channels"])
+                else:
+                    np.testing.assert_array_equal(actual_dims, ["channels", "y", "x", "z"])
+            elif infer_dim == InferDimensions.PREFER_Z:
+                np.testing.assert_array_equal(actual_dims, ["y", "x", "z", "channels"])
             else:
                 np.testing.assert_array_equal(actual_dims, ["y", "x", "channels", "z"])
             np.testing.assert_array_equal(actual_shape, shape + (1,))
         elif len(shape) == 4:
-            if c_dim == 0:
+            if infer_dim == InferDimensions.DEFAULT:
+                if shape[0] == 1:
+                    np.testing.assert_array_equal(actual_dims, ["z", "y", "x", "channels"])
+                elif shape[-1] == 1:
+                    np.testing.assert_array_equal(actual_dims, ["channels", "y", "x", "z"])
+                else:
+                    np.testing.assert_array_equal(actual_dims, ["z", "y", "x", "channels"])
+            elif infer_dim == InferDimensions.PREFER_Z:
                 np.testing.assert_array_equal(actual_dims, ["channels", "y", "x", "z"])
             else:
                 np.testing.assert_array_equal(actual_dims, ["z", "y", "x", "channels"])
