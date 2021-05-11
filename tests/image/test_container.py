@@ -323,6 +323,21 @@ class TestContainerCropping:
         np.testing.assert_array_equal(data[:, : dim2 // 2], 0)
         np.testing.assert_array_equal(data[: dim2 // 2, :], 0)
 
+    @pytest.mark.parametrize("as_dask", [False, True])
+    def test_lazy_scale(self, as_dask: bool):
+        arr = np.empty((50, 50))
+        scale = np.pi
+        img = ImageContainer(da.from_array(arr) if as_dask else arr)
+
+        crop = img.crop_corner(0, 0, size=20, scale=scale)
+
+        assert crop.shape == tuple(round(i * scale) for i in (20, 20))
+        if as_dask:
+            assert isinstance(crop["image"].data, da.Array)
+            crop.compute()
+
+        assert isinstance(crop["image"].data, np.ndarray)
+
     @pytest.mark.parametrize("dy", [-10, 25, 0.3])
     @pytest.mark.parametrize("dx", [-10, 30, 0.5])
     def test_crop_corner_size(
@@ -353,7 +368,7 @@ class TestContainerCropping:
                 img.crop_corner(10, 10, size=20, scale=scale)
         else:
             crop = img.crop_corner(10, 10, size=20, scale=scale)
-            assert crop.shape == tuple(int(i * scale) for i in (20, 20))
+            assert crop.shape == tuple(round(i * scale) for i in (20, 20))
 
     @pytest.mark.parametrize("cval", [0.5, 1.0, 2.0])
     def test_test_crop_corner_cval(self, cval: float):
