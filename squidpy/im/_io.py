@@ -87,7 +87,8 @@ def _get_image_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # t
 
 
 def _infer_dimensions(
-    obj: Union[np.ndarray, xr.DataArray, str], infer_dimensions: InferDimensions = InferDimensions.PREFER_CHANNELS
+    obj: Union[np.ndarray, xr.DataArray, str],
+    infer_dimensions: InferDimensions = InferDimensions.DEFAULT,
 ) -> Tuple[Tuple[int, ...], Tuple[str, ...], np.dtype]:  # type: ignore[type-arg]
     if isinstance(obj, str):
         shape, dtype = _get_image_shape_dtype(obj)
@@ -100,7 +101,7 @@ def _infer_dimensions(
         return shape + (1, 1), ("y", "x", "z", "channels"), dtype
 
     if ndim == 3:
-        if shape[0] <= shape[1] and shape[0] < shape[2]:
+        if shape[0] < shape[1] and shape[0] < shape[2]:
             # tiff with pages, but no channels
             if infer_dimensions == InferDimensions.PREFER_Z:
                 return shape + (1,), ("z", "y", "x", "channels"), dtype
@@ -130,7 +131,7 @@ def _infer_dimensions(
 
 def _lazy_load_image(
     fname: Union[str, Path],
-    infer_dimensions: InferDimensions = InferDimensions.PREFER_CHANNELS,
+    infer_dimensions: InferDimensions = InferDimensions.DEFAULT,
     chunks: Optional[Union[int, str, Tuple[int, ...], Mapping[str, Union[int, str]]]] = None,
 ) -> xr.DataArray:
     def read_unprotected(fname: str) -> np.ndarray:

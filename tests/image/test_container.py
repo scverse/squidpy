@@ -156,17 +156,22 @@ class TestContainerIO:
         else:
             np.testing.assert_array_equal(cont["image"], img_orig)
 
-    def test_load_netcdf(self, tmpdir):
+    @pytest.mark.parametrize("dims", [("y", "x", "c"), ("foo", "bar", "baz")])
+    def test_load_netcdf(self, tmpdir, dims: Tuple[str, ...]):
         arr = np.random.normal(size=(100, 10, 4))
-        ds = xr.Dataset({"quux": xr.DataArray(arr, dims=["foo", "bar", "baz"])})
+        ds = xr.Dataset({"quux": xr.DataArray(arr, dims=dims)})
         fname = tmpdir / "tmp.nc"
         ds.to_netcdf(str(fname))
 
-        cont = ImageContainer(str(fname))
+        if "foo" in dims:
+            with pytest.raises(ValueError, match=r"Expected dimension `y` in"):
+                _ = ImageContainer(str(fname))
+        else:
+            cont = ImageContainer(str(fname))
 
-        assert len(cont) == 1
-        assert "quux" in cont
-        np.testing.assert_array_equal(cont["quux"], ds["quux"])
+            assert len(cont) == 1
+            assert "quux" in cont
+            np.testing.assert_array_equal(cont["quux"], ds["quux"])
 
     @pytest.mark.parametrize(
         "array", [np.zeros((10, 10, 3), dtype=np.uint8), np.random.rand(10, 10, 1).astype(np.float32)]

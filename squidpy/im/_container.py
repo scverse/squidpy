@@ -9,7 +9,6 @@ from typing import (
     Mapping,
     TypeVar,
     Callable,
-    Hashable,
     Iterable,
     Iterator,
     Optional,
@@ -34,9 +33,9 @@ import matplotlib.pyplot as plt
 from skimage.util import img_as_float
 from skimage.transform import rescale
 
-from squidpy._docs import d
+from squidpy._docs import d, inject_docs
 from squidpy._utils import singledispatchmethod
-from squidpy.im._io import _lazy_load_image
+from squidpy.im._io import _lazy_load_image, _infer_dimensions
 from squidpy.gr._utils import (
     _assert_in_range,
     _assert_positive,
@@ -54,6 +53,7 @@ from squidpy.im._coords import (
     _update_attrs_coords,
 )
 from squidpy.im._feature_mixin import FeatureMixin
+from squidpy._constants._constants import InferDimensions
 from squidpy._constants._pkg_constants import Key
 
 FoI_t = Union[int, float]
@@ -167,6 +167,7 @@ class ImageContainer(FeatureMixin):
 
     @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
     @d.dedent
+    @inject_docs(id=InferDimensions)
     def add_img(
         self,
         img: Input_t,
@@ -174,6 +175,9 @@ class ImageContainer(FeatureMixin):
         channel_dim: Optional[str] = None,
         lazy: bool = True,
         chunks: Optional[Union[str, Tuple[int, ...]]] = None,
+        infer_dimensions: Literal[
+            "default", "prefer_channels", "prefer_z"
+        ] = InferDimensions.DEFAULT.s,  # type: ignore[assignment]
         copy: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -191,6 +195,14 @@ class ImageContainer(FeatureMixin):
             Whether to use :mod:`dask` to lazily load image.
         chunks
             Chunk size for :mod:`dask`.
+        infer_dimensions
+            Where to save channel dimension when reading from a file or loading an array. Valid options are:
+
+                - `{id.PREFER_CHANNELS.s!r}` - load the last dimension as channels.
+                - `{id.PREFER_Z.s!r}` - load the last dimension as Z-dim.
+                - `{id.DEFAULT.s!r}` - same as `{id.PREFER_CHANNELS.s!r}`, but for 4-dim arrays,
+                  tries to also load the first dimension as channels iff the last dimension is 1.
+
         copy
             Whether to copy the underlying data of ``img``.
 
@@ -210,7 +222,9 @@ class ImageContainer(FeatureMixin):
         Multi-page *TIFFs* will be loaded in one :class:`xarray.DataArray`, with concatenated channel dimensions.
         """
         layer = self._get_next_image_id("image") if layer is None else layer
-        img = self._load_img(img, chunks=chunks, layer=layer, copy=copy, **kwargs)
+        img = self._load_img(
+            img, chunks=chunks, layer=layer, copy=copy, infer_dimensions=InferDimensions(infer_dimensions), **kwargs
+        )
 
         if img is not None:  # not reading a .nc file
             if TYPE_CHECKING:
@@ -241,14 +255,26 @@ class ImageContainer(FeatureMixin):
             if layer not in img:
                 raise KeyError(f"Image identifier `{layer}` not found in `{img}`.")
 
+            _ = kwargs.pop("infer_dimensions", None)
             return self._load_img(img[layer], **kwargs)
 
         raise NotImplementedError(f"Loading `{type(img).__name__}` is not yet implemented.")
 
     @_load_img.register(str)
     @_load_img.register(Path)
-    def _(self, img: Pathlike_t, chunks: Optional[int] = None, **_: Any) -> Optional[xr.DataArray]:
+    def _(
+        self,
+        img: Pathlike_t,
+        chunks: Optional[int] = None,
+        infer_dimensions: InferDimensions = InferDimensions.DEFAULT,
+        **_: Any,
+    ) -> Optional[xr.DataArray]:
         def transform_metadata(data: xr.Dataset) -> xr.Dataset:
+            for layer, img in data.items():
+                for dim in ("y", "x", "z")[:2]:  # TODO: Z-dim
+                    if dim not in img.dims:
+                        raise ValueError(f"Expected dimension `{dim}` in layer `{layer}`, found `{img.dims}`.")
+
             data.attrs[Key.img.coords] = CropCoords.from_tuple(data.attrs.get(Key.img.coords, _NULL_COORDS.to_tuple()))
             data.attrs[Key.img.padding] = CropPadding.from_tuple(
                 data.attrs.get(Key.img.padding, _NULL_PADDING.to_tuple())
@@ -270,18 +296,18 @@ class ImageContainer(FeatureMixin):
         suffix = img.suffix.lower()
 
         if suffix in (".jpg", ".jpeg", ".png", ".tif", ".tiff"):
-            return _lazy_load_image(img, chunks=chunks)
+            return _lazy_load_image(img, infer_dimensions=infer_dimensions, chunks=chunks)
 
         if img.is_dir():
             if len(self._data):
-                raise ValueError("Loading data from `Zarr` store is disallowed if the container is not empty.")
+                raise ValueError("Loading data from `Zarr` store is disallowed when the container is not empty.")
 
             self._data = transform_metadata(xr.open_zarr(str(img), chunks=chunks))
             return
 
         if suffix in (".nc", ".cdf"):
             if len(self._data):
-                raise ValueError("Loading data from `NetCDF` is disallowed if the container is not empty.")
+                raise ValueError("Loading data from `NetCDF` is disallowed when the container is not empty.")
 
             self._data = transform_metadata(xr.open_dataset(img, chunks=chunks))
             return
@@ -290,46 +316,42 @@ class ImageContainer(FeatureMixin):
 
     @_load_img.register(da.Array)  # type: ignore[no-redef]
     @_load_img.register(np.ndarray)
-    def _(self, img: np.ndarray, copy: bool = True, **_: Any) -> xr.DataArray:
+    def _(
+        self, img: np.ndarray, copy: bool = True, infer_dimensions: InferDimensions = InferDimensions.DEFAULT, **_: Any
+    ) -> xr.DataArray:
         logg.debug(f"Loading data `numpy.array` of shape `{img.shape}`")
 
-        if img.ndim == 2:
-            img = img[:, :, np.newaxis]
-        if img.ndim != 3:
-            raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
-        if copy:
-            img = img.copy()
-        # TODO: handle Z-dim
+        img = img.copy() if copy else img
+        shape, dims, _ = _infer_dimensions(img, infer_dimensions=infer_dimensions)
 
-        # not lazy loading of arrays is handled in `add_img`
-        return xr.DataArray(img, dims=["y", "x", "channels"])
+        # TODO: Z-dim
+        return xr.DataArray(img.reshape(shape), dims=dims).transpose("y", "x", "z", "channels")[:, :, 0, :]
 
     @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
-    def _(self, img: xr.DataArray, copy: bool = True, **_: Any) -> xr.DataArray:
+    def _(
+        self,
+        img: xr.DataArray,
+        copy: bool = True,
+        infer_dimensions: InferDimensions = InferDimensions.DEFAULT,
+        **_: Any,
+    ) -> xr.DataArray:
         logg.debug(f"Loading data `xarray.DataArray` of shape `{img.shape}`")
 
-        if img.ndim == 2:
-            img = img.expand_dims("channels", -1)
-        if img.ndim != 3:
-            raise ValueError(f"Expected image to have `3` dimensions, found `{img.ndim}`.")
-        # TODO: handle Z-dim
-        mapping: Dict[Hashable, str] = {}
-        if "y" not in img.dims:
-            logg.warning(f"Dimension `y` not found in the data. Assuming it's `{img.dims[0]}`")
-            mapping[img.dims[0]] = "y"
-        if "x" not in img.dims:
-            logg.warning(f"Dimension `x` not found in the data. Assuming it's `{img.dims[1]}`")
-            mapping[img.dims[1]] = "x"
+        img = img.copy() if copy else img
+        # TODO: Z-dim
+        if not ("y" in img.dims and "x" in img.dims):  # and "z" in img.dims):
+            _, dims, _ = _infer_dimensions(img, infer_dimensions=infer_dimensions)
+            logg.warning(f"Unable to find `y` or `x` dimension in `{img.dims}`. Renaming to `{dims}`")
+            img = img.rename(dict(zip(img.dims, dims)))
+            # TODO: test on Z-dim is done
+            for i, dim in enumerate(dims):
+                if dim not in img.dims:
+                    img = img.expand_dims(dim, i)
 
-        img = img.rename(mapping)
-        channel_dim = [dim for dim in img.dims if dim not in ("y", "x")][0]
-        try:
-            img = img.reset_index(dims_or_levels=channel_dim, drop=True)
-        except KeyError:
-            # might not be present, ignore
-            pass
-
-        return img.copy() if copy else img
+        # TODO: Z-dim
+        if "z" in img.dims:
+            return img.transpose("y", "x", "z", ...)[:, :, 0, :]
+        return img.transpose("y", "x", ...)
 
     @d.get_sections(base="crop_corner", sections=["Parameters", "Returns"])
     @d.dedent
