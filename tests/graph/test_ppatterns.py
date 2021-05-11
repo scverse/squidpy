@@ -81,7 +81,7 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
 
 def test_co_occurrence(adata: AnnData):
     """
-    check ripley score and shape
+    check co_occurrence score and shape
     """
     co_occurrence(adata, cluster_key="leiden")
 

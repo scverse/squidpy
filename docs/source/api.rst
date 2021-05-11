@@ -49,7 +49,7 @@ Plotting
     pl.centrality_scores
     pl.interaction_matrix
     pl.ligrec
-    pl.ripley_k
+    pl.ripley
     pl.co_occurrence
     pl.extract
 

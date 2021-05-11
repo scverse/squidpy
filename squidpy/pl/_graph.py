@@ -24,7 +24,7 @@ from squidpy.gr._utils import (
 from squidpy.pl._utils import _heatmap, save_fig
 from squidpy._constants._pkg_constants import Key
 
-__all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "ripley_k", "co_occurrence"]
+__all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "ripley", "co_occurrence"]
 
 
 Palette_t = Optional[Union[str, mcolors.ListedColormap]]
@@ -40,8 +40,8 @@ def _maybe_set_colors(source: AnnData, target: AnnData, key: str, palette: Optio
         add_colors_for_categorical_sample_annotation(target, key=key, force_update_colors=True, palette=palette)
 
 
-def _get_data(adata: AnnData, cluster_key: str, func_name: str) -> Any:
-    key = getattr(Key.uns, func_name)(cluster_key)
+def _get_data(adata: AnnData, cluster_key: str, func_name: str, **kwargs: Any) -> Any:
+    key = getattr(Key.uns, func_name)(cluster_key, **kwargs)
     try:
         return adata.uns[key]
     except KeyError:
@@ -256,9 +256,11 @@ def nhood_enrichment(
 
 
 @d.dedent
-def ripley_k(
+def ripley(
     adata: AnnData,
     cluster_key: str,
+    mode: Literal["F", "G", "L"],
+    plot_sims: bool = True,
     palette: Palette_t = None,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
@@ -275,6 +277,10 @@ def ripley_k(
     ----------
     %(adata)s
     %(cluster_key)s
+    mode
+        Ripley's statistics to be plotted.
+    plot_sims
+        Whether to overlay simulations in the plot.
     %(cat_plotting)s
     legend_kwargs
         Keyword arguments for :func:`matplotlib.pyplot.legend`.
@@ -286,7 +292,8 @@ def ripley_k(
     %(plotting_returns)s
     """
     _assert_categorical_obs(adata, key=cluster_key)
-    df = _get_data(adata, cluster_key=cluster_key, func_name="ripley_k")
+
+    res = _get_data(adata, cluster_key=cluster_key, func_name="ripley", mode=mode)
 
     legend_kwargs = dict(legend_kwargs)
     if "loc" not in legend_kwargs:
@@ -297,19 +304,12 @@ def ripley_k(
     palette = _get_palette(adata, cluster_key=cluster_key, categories=categories) if palette is None else palette
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-    sns.lineplot(
-        x="distance",
-        y="ripley_k",
-        hue=cluster_key,
-        hue_order=categories,
-        data=df,
-        palette=palette,
-        ax=ax,
-        **kwargs,
-    )
+    sns.lineplot(y="stats", x="bins", hue=cluster_key, data=res[f"{mode}_stat"], ax=ax)
+    if plot_sims:
+        sns.lineplot(y="stats", x="bins", ci="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)
     ax.legend(**legend_kwargs)
     ax.set_ylabel("value")
-    ax.set_title("Ripley's K")
+    ax.set_title(f"Ripley's {mode}")
 
     if save is not None:
         save_fig(fig, path=save)
