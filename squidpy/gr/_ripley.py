@@ -49,10 +49,11 @@ def ripley(
         F(t),G(t)=P( d_{{i,j}} \le t )
 
     Where :math:`d_{{i,j}}` represents:
+
         - distances to a random Spatial Poisson Point Process for `'F'`.
         - distances to any other point of the dataset for `'G'`.
 
-    `{rp.L.s!r}` first we need to compute :math:`K(t)`, which is defined as:
+    `{rp.L.s!r}` we first need to compute :math:`K(t)`, which is defined as:
 
     .. math::
 
@@ -84,7 +85,7 @@ def ripley(
     n_observations
         How many observations to generate for the spatial poisson point process.
     max_dist
-        Maximum distances for the support. If `None`, is :math:`max_dist=\sqrt{{area \over 2}}`.
+        Maximum distances for the support. If `None`, `max_dist=`:math:`\sqrt{{area \over 2}}`.
     n_steps
         Number of steps for the support.
     %(seed)s
