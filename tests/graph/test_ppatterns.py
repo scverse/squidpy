@@ -5,22 +5,10 @@ from anndata import AnnData
 from pandas.testing import assert_frame_equal
 import numpy as np
 
-from squidpy.gr import ripley_k, co_occurrence, spatial_autocorr
+from squidpy.gr import co_occurrence, spatial_autocorr
 
 MORAN_K = "moranI"
 GEARY_C = "gearyC"
-
-
-def test_ripley_k(adata: AnnData):
-    """Check ripley score and shape."""
-    ripley_k(adata, cluster_key="leiden")
-
-    # assert ripley in adata.uns
-    assert "ripley_k_leiden" in adata.uns.keys()
-    # assert clusters intersection
-    cat_ripley = set(adata.uns["ripley_k_leiden"]["leiden"].unique())
-    cat_adata = set(adata.obs["leiden"].cat.categories)
-    assert cat_ripley.isdisjoint(cat_adata) is False
 
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])

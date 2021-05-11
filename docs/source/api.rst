@@ -20,7 +20,7 @@ Graph
     gr.interaction_matrix
     gr.ligrec
     gr.spatial_autocorr
-    gr.ripley_k
+    gr.ripley
     gr.co_occurrence
 
 Image
