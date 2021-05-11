@@ -23,12 +23,14 @@ import re
 
 from scanpy import logging as logg
 from anndata import AnnData
+from scanpy.plotting.palettes import default_102 as default_palette
 
 from dask import delayed
 import numpy as np
 import xarray as xr
 import dask.array as da
 
+from matplotlib.colors import ListedColormap
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
@@ -738,7 +740,7 @@ class ImageContainer(FeatureMixin):
         layer: Optional[str] = None,
         channel: Optional[int] = None,
         channelwise: bool = False,
-        as_mask: bool = False,
+        segmentation_layer: Optional[str] = None,
         ax: Optional[mpl.axes.Axes] = None,
         figsize: Optional[Tuple[float, float]] = None,
         dpi: Optional[int] = None,
@@ -755,8 +757,8 @@ class ImageContainer(FeatureMixin):
             Channel to plot. If `None`, use all channels for plotting.
         channelwise
             Whether to plot each channel separately or not.
-        as_mask
-            Whether to show the image as a binary mask. Only available if the plotted image has 1 channel.
+        segmentation_layer
+            Segmentation layer to plot.
         ax
             Optional :mod:`matplotlib` ax where to plot the image. If not `None`, ``save``, ``figsize`` and
             ``dpi`` have no effect.
@@ -783,12 +785,6 @@ class ImageContainer(FeatureMixin):
 
         if channel is not None:
             arr = arr[{arr.dims[-1]: channel}]
-            if as_mask:
-                arr = arr > 0
-        elif as_mask:
-            if not channelwise and n_channels > 1:
-                raise ValueError(f"Expected to find 1 channel, found `{n_channels}`.")
-            arr = arr > 0
 
         fig = None
         if ax is None:
@@ -803,15 +799,38 @@ class ImageContainer(FeatureMixin):
         if channelwise and len(ax) != n_channels:
             raise ValueError(f"Expected `{n_channels}` axes, found `{len(ax)}`.")
 
-        for c, a in enumerate(ax):
+        if segmentation_layer is not None:
+            seg_arr = self.data[segmentation_layer]
+            if not seg_arr.attrs.get("segmentation", False):
+                raise TypeError(f"Expected layer `{segmentation_layer!r}` to be marked as segmentation layer.")
+            if not np.issubdtype(seg_arr.dtype, np.integer):
+                raise TypeError(f"Expected segmentation to be of integer dtype, found `{seg_arr.dtype}`.")
+
+            seg_arr = seg_arr.values  # force dask computation here
+            seg_cmap = np.array(default_palette)[np.arange(np.max(seg_arr)) % len(default_palette)]
+            seg_cmap[0] = "#00000000"
+            seg_cmap = ListedColormap(seg_cmap)
+        else:
+            seg_arr, seg_cmap = None, None
+
+        for c, ax_ in enumerate(ax):
             if channelwise:
                 img, title = arr[..., c], f"{layer}:{c}"
             else:
-                img, title = arr, layer
+                img, title = arr, (layer if channel is None else f"{layer}:{channel}")
 
-            a.imshow(img_as_float(img.values, force_copy=False), **kwargs)
-            a.set_title(title)
-            a.set_axis_off()
+            ax_.imshow(img_as_float(img.values, force_copy=False), **kwargs)
+            if seg_arr is not None:
+                ax_.imshow(
+                    seg_arr,
+                    cmap=seg_cmap,
+                    interpolation="nearest",
+                    alpha=0.66,
+                    **{k: v for k, v in kwargs.items() if k not in ("cmap", "interpolation")},
+                )
+
+            ax_.set_title(title)
+            ax_.set_axis_off()
 
         if save and fig is not None:
             save_fig(fig, save)
