@@ -4,13 +4,13 @@ from typing import Any, Union, Mapping, Callable, Optional
 from scanpy import logging as logg
 
 from dask import delayed
-from dask_image.ndfilters import gaussian_filter as dask_gf
 from scipy.ndimage.filters import gaussian_filter as scipy_gf
 import numpy as np
 import dask.array as da
 
 from skimage.color import rgb2gray
 from skimage.util.dtype import img_as_float32
+from dask_image.ndfilters import gaussian_filter as dask_gf
 
 from squidpy._docs import d, inject_docs
 from squidpy.im._container import ImageContainer
