@@ -741,6 +741,7 @@ class ImageContainer(FeatureMixin):
         channel: Optional[int] = None,
         channelwise: bool = False,
         segmentation_layer: Optional[str] = None,
+        segmentation_alpha: float = 0.75,
         ax: Optional[mpl.axes.Axes] = None,
         figsize: Optional[Tuple[float, float]] = None,
         dpi: Optional[int] = None,
@@ -759,6 +760,8 @@ class ImageContainer(FeatureMixin):
             Whether to plot each channel separately or not.
         segmentation_layer
             Segmentation layer to plot.
+        segmentation_alpha
+            Alpha value for ``segmentation_layer``.
         ax
             Optional :mod:`matplotlib` ax where to plot the image. If not `None`, ``save``, ``figsize`` and
             ``dpi`` have no effect.
@@ -804,11 +807,14 @@ class ImageContainer(FeatureMixin):
             if not seg_arr.attrs.get("segmentation", False):
                 raise TypeError(f"Expected layer `{segmentation_layer!r}` to be marked as segmentation layer.")
             if not np.issubdtype(seg_arr.dtype, np.integer):
-                raise TypeError(f"Expected segmentation to be of integer dtype, found `{seg_arr.dtype}`.")
+                raise TypeError(
+                    f"Expected segmentation layer `{segmentation_layer!r}` to be of integer type, "
+                    f"found `{seg_arr.dtype}`."
+                )
 
             seg_arr = seg_arr.values  # force dask computation here
-            seg_cmap = np.array(default_palette)[np.arange(np.max(seg_arr)) % len(default_palette)]
-            seg_cmap[0] = "#00000000"
+            seg_cmap = np.array(default_palette, dtype=object)[np.arange(np.max(seg_arr)) % len(default_palette)]
+            seg_cmap[0] = "#00000000"  # don't plot black background
             seg_cmap = ListedColormap(seg_cmap)
         else:
             seg_arr, seg_cmap = None, None
@@ -824,8 +830,8 @@ class ImageContainer(FeatureMixin):
                 ax_.imshow(
                     seg_arr,
                     cmap=seg_cmap,
-                    interpolation="nearest",
-                    alpha=0.66,
+                    interpolation="nearest",  # avoid artefacts
+                    alpha=segmentation_alpha,
                     **{k: v for k, v in kwargs.items() if k not in ("cmap", "interpolation")},
                 )
 
