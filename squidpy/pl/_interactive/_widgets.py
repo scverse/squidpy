@@ -136,7 +136,7 @@ class AListWidget(ListWidget):
             try:
                 vec, name = self._getter(item, index=self.getIndex())
             except Exception as e:  # noqa: B902
-                logg.warning(e)
+                logg.error(e)
                 continue
             self._controller.add_points(vec, key=item, layer_name=name)
 

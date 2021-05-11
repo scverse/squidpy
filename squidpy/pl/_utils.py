@@ -410,7 +410,7 @@ class ALayer:
                 if isinstance(index, int):
                     return res.iloc[:, index], self._format_key(name, layer_modifier=False, index=res.columns[index])
             except KeyError:
-                raise KeyError("FOO") from None
+                raise KeyError(f"Key `{index}` not found in `adata.obsm[{name!r}].`") from None
 
         if not isinstance(index, int):
             try:
