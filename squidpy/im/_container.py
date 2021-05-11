@@ -16,6 +16,7 @@ from typing import (
     TYPE_CHECKING,
 )
 from pathlib import Path
+from functools import partial
 from itertools import chain
 from typing_extensions import Literal
 import re
@@ -23,6 +24,7 @@ import re
 from scanpy import logging as logg
 from anndata import AnnData
 
+from dask import delayed
 import numpy as np
 import xarray as xr
 import dask.array as da
@@ -450,19 +452,30 @@ class ImageContainer(FeatureMixin):
         self,
         data: xr.Dataset,
         scale: FoI_t = 1,
-        cval: FoI_t = 1,
+        cval: FoI_t = 0,
         mask_circle: bool = False,
         preserve_dtypes: bool = True,
         **_: Any,
     ) -> xr.Dataset:
-        if scale != 1:
-            attrs = data.attrs
-            data = data.map(
-                lambda arr: xr.DataArray(
-                    rescale(arr, scale=scale, preserve_range=True, order=1, multichannel=True).astype(arr.dtype),
+        def _rescale(arr: xr.DataArray) -> xr.DataArray:
+            # once skimage==0.19.0, multichannel is deprecated
+            scaling_fn = partial(rescale, scale=scale, preserve_range=True, order=1, multichannel=True, cval=cval)
+            dtype = arr.dtype
+
+            if isinstance(arr.data, da.Array):
+                shape = np.maximum(np.round(scale * np.asarray(arr.shape)), 1)
+                # TODO: Z-dim
+                shape[-1] = arr.shape[-1]
+                return xr.DataArray(
+                    da.from_delayed(delayed(lambda arr: scaling_fn(arr).astype(dtype))(arr), shape=shape, dtype=dtype),
                     dims=arr.dims,
                 )
-            )
+
+            return xr.DataArray(scaling_fn(arr).astype(dtype), dims=arr.dims)
+
+        if scale != 1:
+            attrs = data.attrs
+            data = data.map(_rescale)
             data.attrs = _update_attrs_scale(attrs, scale)
 
         if mask_circle:
