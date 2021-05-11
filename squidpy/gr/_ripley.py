@@ -42,20 +42,32 @@ def ripley(
     According to the `'mode'` argument, it calculates either the following Ripley's statistics:
     `{rp.F.s!r}`, `{rp.G.s!r}` or `{rp.L.s!r}` statistics.
 
-    `{rp.F.s!r}`, `{rp.G.s!r}` are defined as: :math:`F(t),G(t)=P( d_{{i,j}} \le t )` .
+    `{rp.F.s!r}`, `{rp.G.s!r}` are defined as:
+
+    .. math::
+
+        F(t),G(t)=P( d_{{i,j}} \le t )
+
 
     Where :math:`d_{{i,j}}` represents:
         - distances to a random Spatial Poisson Point Process for `'F'`.
         - distances to any other point of the dataset for `'G'`.
 
     `{rp.L.s!r}` first we need to compute :math:`K(t)`, which is defined as:
-    :math:`K(t) = \frac{{1}}{{\lambda}} \sum_{{i \ne j}} \frac{{I(d_{{i,j}}<t)}}{{n}}`
 
-    and then apply a variance-stabilizying transformation: :math:`L(t) = (\frac{{K(t)}}{{\pi}})^{{1/2}}`
+    .. math::
+
+        K(t) = \frac{{1}}{{\lambda}} \sum_{{i \ne j}} \frac{{I(d_{{i,j}}<t)}}{{n}}
+
+    and then we apply a variance-stabilizying transformation:
+
+    .. math::
+
+        L(t) = (\frac{{K(t)}}{{\pi}})^{{1/2}}
 
     For reference, check out
     `Ripley's L <https://en.wikipedia.org/wiki/Spatial_descriptive_statistics#Ripley's_K_and_L_functions>`_
-     or :cite:`Baddeley2015-lm`.
+    or :cite:`Baddeley2015-lm`.
 
     Parameters
     ----------
