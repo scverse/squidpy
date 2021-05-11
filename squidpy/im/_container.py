@@ -60,7 +60,7 @@ FoI_t = Union[int, float]
 Pathlike_t = Union[str, Path]
 Arraylike_t = Union[np.ndarray, xr.DataArray]
 Input_t = Union[Pathlike_t, Arraylike_t, "ImageContainer"]
-Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependecies
+Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependencies
 
 
 __all__ = ["ImageContainer"]
@@ -70,13 +70,13 @@ __all__ = ["ImageContainer"]
 @d.dedent
 class ImageContainer(FeatureMixin):
     """
-    Container for in memory :class:`numpy.ndarray`/:class:`xarray.DataArray` or on-disk *TIFF*/*JPEG* images.
+    Container for in memory :class:`numpy.ndarray`/:class:`xarray.DataArray` or on-disk *TIFF*/*JPEG*/*PNG* images.
 
     Wraps :class:`xarray.Dataset` to store several image layers with the same x and y dimensions in one object.
     Dimensions of stored images are ``(y, x, channels)``. The channel dimension may vary between image layers.
 
-    Allows for lazy and chunked reading via :mod:`rasterio` and :mod:`dask`, if the input is a *TIFF* image.
-    This class is given to all image processing functions, along with :class:`anndata.AnnData` instance, if necessary.
+    This class also llows for lazy loading and processing using :mod:`dask`, and is given to all image
+    processing functions, along with :class:`anndata.AnnData` instance, if necessary.
 
     Parameters
     ----------
@@ -121,7 +121,7 @@ class ImageContainer(FeatureMixin):
         lazy
             Whether to use :mod:`dask` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`.
+            Chunk size for :mod:`dask`. Only used when ``lazy = True``.
 
         Returns
         -------
@@ -194,7 +194,7 @@ class ImageContainer(FeatureMixin):
         lazy
             Whether to use :mod:`dask` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`.
+            Chunk size for :mod:`dask`. Only used when ``lazy = True``.
         infer_dimensions
             Where to save channel dimension when reading from a file or loading an array. Valid options are:
 
@@ -204,7 +204,7 @@ class ImageContainer(FeatureMixin):
                   tries to also load the first dimension as channels iff the last dimension is 1.
 
         copy
-            Whether to copy the underlying data of ``img``.
+            Whether to copy the underlying data if ``img`` is an array.
 
         Returns
         -------
@@ -216,10 +216,6 @@ class ImageContainer(FeatureMixin):
             If loading from a file/store with an unknown format or if a supplied channel dimension cannot be aligned.
         NotImplementedError
             If loading a specific data type has not been implemented.
-
-        Notes
-        -----
-        Multi-page *TIFFs* will be loaded in one :class:`xarray.DataArray`, with concatenated channel dimensions.
         """
         layer = self._get_next_image_id("image") if layer is None else layer
         img = self._load_img(
@@ -343,7 +339,7 @@ class ImageContainer(FeatureMixin):
             _, dims, _ = _infer_dimensions(img, infer_dimensions=infer_dimensions)
             logg.warning(f"Unable to find `y` or `x` dimension in `{img.dims}`. Renaming to `{dims}`")
             img = img.rename(dict(zip(img.dims, dims)))
-            # TODO: test on Z-dim is done
+            # TODO: test when Z-dim is done
             for i, dim in enumerate(dims):
                 if dim not in img.dims:
                     img = img.expand_dims(dim, i)
