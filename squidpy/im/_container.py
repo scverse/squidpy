@@ -1007,7 +1007,7 @@ class ImageContainer(FeatureMixin):
         return self
 
     def compute(self) -> "ImageContainer":
-        """Trigger all lazy computation inplace."""
+        """Trigger lazy computation inplace."""
         self.data.load()
         return self
 
