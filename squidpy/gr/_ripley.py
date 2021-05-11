@@ -48,7 +48,6 @@ def ripley(
 
         F(t),G(t)=P( d_{{i,j}} \le t )
 
-
     Where :math:`d_{{i,j}}` represents:
         - distances to a random Spatial Poisson Point Process for `'F'`.
         - distances to any other point of the dataset for `'G'`.
@@ -66,7 +65,7 @@ def ripley(
         L(t) = (\frac{{K(t)}}{{\pi}})^{{1/2}}
 
     For reference, check out
-    `Ripley's L <https://en.wikipedia.org/wiki/Spatial_descriptive_statistics#Ripley's_K_and_L_functions>`_
+    `Wikipedia <https://en.wikipedia.org/wiki/Spatial_descriptive_statistics#Ripley's_K_and_L_functions>`_
     or :cite:`Baddeley2015-lm`.
 
     Parameters
