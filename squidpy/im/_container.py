@@ -20,6 +20,7 @@ from functools import partial
 from itertools import chain
 from typing_extensions import Literal
 import re
+import collections.abc
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -134,6 +135,62 @@ class ImageContainer(FeatureMixin):
 
         return res
 
+    @classmethod
+    def concat(
+        cls, imgs: Iterable["ImageContainer"], library_ids: Optional[Iterable[Union[str, None]]] = None, **kwargs: Any
+    ) -> "ImageContainer":
+        """
+        Concatenate ``imgs`` in z dimension, returning the concatenated :class:`squidpy.im.ImageContainer`.
+
+        All ``imgs`` need to have the same shape and the same name to be concatenated
+        By default, all ``imgs`` need to have the same scale and crop attributes.
+        Use ``combine_attrs = "override"`` to relax this.
+        Note that this might lead to a mismatch between :class:`ImageContainer`
+        and :class:`anndata.AnnData` coordinates.
+
+        Parameters
+        ----------
+        imgs
+            Images that should be concatenated in z
+        library_ids
+            Name for each image that will be associated to each z dimension.
+            Should match the ``library_id`` in the corresponding :class:`anndata.AnnData` object.
+            If None, the existing name of the z dimension is used.
+        kwargs
+            Keyword arguments for :func:`xarray.concat`
+
+        Returns
+        -------
+        Concatenated :class:`squidpy.img.ImageContainer` with ``imgs`` stackes in z dimension.
+        """
+        # check that imgs are not already 3d
+        for img in imgs:
+            if img.data.dims["z"] > 1:
+                raise ValueError(
+                    f"Found image with {img.data.dims['z']} z dimensions.\
+                    Can only concatenate images with 1 z dimension"
+                )
+
+        # check library_ids
+        if library_ids is None:
+            library_ids = [None] * len(list(imgs))
+        _library_ids = np.concatenate([img._library_id_list(library_id) for img, library_id in zip(imgs, library_ids)])
+        if len(set(_library_ids)) < len(_library_ids):
+            raise ValueError(f"Found non-unique library_ids for z dimensions: {_library_ids}.")
+
+        # add library_id to z dim
+        prep_imgs = []
+        for lid, img in zip(_library_ids, imgs):
+            prep_img = img.copy()
+            prep_img._data = prep_img.data.assign_coords(z=[lid])
+            prep_imgs.append(prep_img)
+
+        # concatenate
+        kwargs.setdefault("combine_attrs", "identical")
+        res = cls()
+        res._data = xr.concat([img.data for img in prep_imgs], dim="z", **kwargs)
+        return res
+
     def save(self, path: Pathlike_t, **kwargs: Any) -> None:
         """
         Save the container into a *Zarr* store.
@@ -167,6 +224,14 @@ class ImageContainer(FeatureMixin):
         iterator = chain.from_iterable(pat.finditer(v.dims[-1]) for v in self.data.values())
         return f"{channel}_{(max(map(lambda m: int(m.groups()[0]), iterator), default=-1) + 1)}"
 
+    def _library_id_list(self, library_id: Optional[Union[Iterable[str], str]] = None) -> List[str]:
+        """Get list of library_ids from input or z coords."""
+        if library_id is None:
+            library_id = self.data.coords["z"].values
+        if isinstance(library_id, str) or not isinstance(library_id, collections.abc.Iterable):
+            library_id = [library_id]
+        return list(library_id)
+
     @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
     @d.dedent
     @inject_docs(id=InferDimensions)
@@ -175,6 +240,7 @@ class ImageContainer(FeatureMixin):
         img: Input_t,
         layer: Optional[str] = None,
         channel_dim: Optional[str] = None,
+        library_id: Optional[Union[str, Iterable[str]]] = None,
         lazy: bool = True,
         chunks: Optional[Union[str, Tuple[int, ...]]] = None,
         infer_dimensions: Literal[
@@ -193,6 +259,9 @@ class ImageContainer(FeatureMixin):
         %(img_layer)s
         channel_dim
             Name of the channel dimension.
+        library_id
+            Name for each Z-dimension of the image. This should correspond to the ``library_id`` in
+            :attr:`anndata.AnnData.uns`.
         lazy
             Whether to use :mod:`dask` to lazily load image.
         chunks
@@ -228,6 +297,16 @@ class ImageContainer(FeatureMixin):
             if TYPE_CHECKING:
                 assert isinstance(img, xr.DataArray)
             img = img.rename({img.dims[-1]: "channels" if channel_dim is None else str(channel_dim)})
+
+            # add z dim label
+            library_id = self._library_id_list("library_id" if library_id is None else library_id)
+            z = img.shape[2]
+            if z > 1 and len(library_id) != z:
+                raise ValueError(
+                    f"img has {z} z dimensions, \
+                please specify a list of {z} names for library_id"
+                )
+            img = img.assign_coords({"z": library_id})
 
             logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
             try:
@@ -269,7 +348,7 @@ class ImageContainer(FeatureMixin):
     ) -> Optional[xr.DataArray]:
         def transform_metadata(data: xr.Dataset) -> xr.Dataset:
             for layer, img in data.items():
-                for dim in ("y", "x", "z")[:2]:  # TODO: Z-dim
+                for dim in ("y", "x", "z"):  # [:2]:  # TODO: Z-dim
                     if dim not in img.dims:
                         raise ValueError(f"Expected dimension `{dim}` in layer `{layer}`, found `{img.dims}`.")
 
@@ -323,7 +402,7 @@ class ImageContainer(FeatureMixin):
         shape, dims, _ = _infer_dimensions(img, infer_dimensions=infer_dimensions)
 
         # TODO: Z-dim
-        return xr.DataArray(img.reshape(shape), dims=dims).transpose("y", "x", "z", "channels")[:, :, 0, :]
+        return xr.DataArray(img.reshape(shape), dims=dims).transpose("y", "x", "z", "channels")  # [:, :, 0, :]
 
     @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
     def _(
@@ -337,7 +416,7 @@ class ImageContainer(FeatureMixin):
 
         img = img.copy() if copy else img
         # TODO: Z-dim
-        if not ("y" in img.dims and "x" in img.dims):  # and "z" in img.dims):
+        if not ("y" in img.dims and "x" in img.dims and "z" in img.dims):
             _, dims, _ = _infer_dimensions(img, infer_dimensions=infer_dimensions)
             logg.warning(f"Unable to find `y` or `x` dimension in `{img.dims}`. Renaming to `{dims}`")
             img = img.rename(dict(zip(img.dims, dims)))
@@ -347,9 +426,9 @@ class ImageContainer(FeatureMixin):
                     img = img.expand_dims(dim, i)
 
         # TODO: Z-dim
-        if "z" in img.dims:
-            return img.transpose("y", "x", "z", ...)[:, :, 0, :]
-        return img.transpose("y", "x", ...)
+        # if "z" in img.dims:
+        #    return img.transpose("y", "x", "z", ...)[:, :, 0, :]
+        return img.transpose("y", "x", "z", ...)
 
     @d.get_sections(base="crop_corner", sections=["Parameters", "Returns"])
     @d.dedent
@@ -357,12 +436,12 @@ class ImageContainer(FeatureMixin):
         self,
         y: FoI_t,
         x: FoI_t,
-        library_id: Optional[str] = None,
         size: Optional[Union[FoI_t, Tuple[FoI_t, FoI_t]]] = None,
         scale: float = 1.0,
         cval: Union[int, float] = 0,
         mask_circle: bool = False,
         preserve_dtypes: bool = True,
+        library_id: Optional[str] = None,
     ) -> "ImageContainer":
         """
         Extract a crop from the upper-left corner.
@@ -422,8 +501,8 @@ class ImageContainer(FeatureMixin):
             raise ValueError("Width of the crop is empty.")
 
         crop = self.data.isel(x=slice(coords.x0, coords.x1), y=slice(coords.y0, coords.y1)).copy(deep=False)
-        if len(crop.z) > 1 and library_id is not None:
-            crop = crop.where(crop.library_id == library_id, drop=True)
+        if len(crop.z) > 1:
+            crop = crop.sel(z=self._library_id_list(library_id))
         crop.attrs = _update_attrs_coords(crop.attrs, coords)
 
         if orig != coords:
@@ -586,7 +665,7 @@ class ImageContainer(FeatureMixin):
     def generate_spot_crops(
         self,
         adata: AnnData,
-        library_id: Optional[str] = None,
+        library_id: Optional[Union[Iterable[str], str]] = None,
         spatial_key: str = Key.obsm.spatial,
         spot_scale: float = 1.0,
         obs_names: Optional[Iterable[Any]] = None,
@@ -603,13 +682,15 @@ class ImageContainer(FeatureMixin):
         Iterate over :attr:`adata.obs_names` and extract crops.
 
         Implemented for 10X spatial datasets.
+        For z-stacks, the specified `library_id` or list of `library_id` s needs to match the name of the z dimension.
+        Always extracts 2D crops from the specified z dimension.
 
         Parameters
         ----------
         %(adata)s
         library_id
             Key in :attr:`anndata.AnnData.uns` ``['{spatial_key}']`` used to get the spot diameter.
-            If none, there should either only exist one entry in  :attr:`anndata.AnnData.uns` ``['{spatial_key}']``,
+            If `None`, there should either only exist one entry in  :attr:`anndata.AnnData.uns` ``['{spatial_key}']``,
             or a column :attr:`anndata.AnnData.obs` ``['library_id']`` containing the mapping from obs to library ids.
         %(spatial_key)s
         spot_scale
@@ -640,22 +721,33 @@ class ImageContainer(FeatureMixin):
         scale = self.data.attrs.get(Key.img.scale, 1)
         spatial = adata.obsm[spatial_key][:, :2]
 
-        # get library_id
+        # get library_id for each obs
         if len(self.data.z) > 1 and library_id is None:
-            # assign from adata TODO raise nicer error message if not exists
-            library_ids = adata.obs["library_id"]
+            # assign from adata
+            # TODO raise nicer error message if not exists
+            if "library_id" not in adata.obs:
+                raise ValueError(
+                    "No 'library_id' column in adata.obs. Pass a list of `library_id`s mapping obs to z dimensions."
+                )
+            obs_library_ids = adata.obs["library_id"]
         else:
             if len(self.data.z) > 1:
                 logg.warning(
-                    f"ImageContainer has {len(self.data.z)} z dimensions, \
-                    will use library_id {library_id} for all of them."
+                    f"ImageContainer has {len(self.data.z)} z dimensions, will use library_id {library_id} for all."
                 )
-            library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=library_id)
-            library_ids = [library_id] * len(adata.obs)
+            if isinstance(library_id, str) or library_id is None:
+                library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=library_id)
+                obs_library_ids = [library_id] * len(adata.obs)
+            else:
+                if len(list(library_id)) != len(adata.obs):
+                    raise ValueError(
+                        f"specified {len(list(library_id))} library_ids but have {len(adata.obs)} entries in adata.obs."
+                    )
+                obs_library_ids = list(library_id)
 
         for i, obs in enumerate(adata.obs_names):
             # get spot diameter of current obs (might be different library ids)
-            diameter = Key.uns.spot_diameter(adata, spatial_key=spatial_key, library_id=library_ids[i]) * scale
+            diameter = Key.uns.spot_diameter(adata, spatial_key=spatial_key, library_id=obs_library_ids[i]) * scale
             radius = int(round(diameter // 2 * spot_scale))
 
             # get coords in image pixel space from original space
@@ -666,7 +758,7 @@ class ImageContainer(FeatureMixin):
             if self.data.attrs.get(Key.img.coords, _NULL_COORDS) != _NULL_COORDS:
                 y = int(y - self.data.attrs[Key.img.coords].y0)
                 x = int(x - self.data.attrs[Key.img.coords].x0)
-            crop = self.crop_center(y=y, x=x, radius=radius, **kwargs)
+            crop = self.crop_center(y=y, x=x, radius=radius, library_id=obs_library_ids[i], **kwargs)
             crop.data.attrs[Key.img.obs] = obs
             crop = crop._maybe_as_array(as_array)
 
@@ -758,6 +850,7 @@ class ImageContainer(FeatureMixin):
         layer: Optional[str] = None,
         channel: Optional[int] = None,
         channelwise: bool = False,
+        library_id: Optional[str] = None,
         as_mask: bool = False,
         ax: Optional[mpl.axes.Axes] = None,
         figsize: Optional[Tuple[float, float]] = None,
@@ -775,6 +868,8 @@ class ImageContainer(FeatureMixin):
             Channel to plot. If `None`, use all channels for plotting.
         channelwise
             Whether to plot each channel separately or not.
+        library_id
+            Name of z dim to plot. In `None`, plot all z dims as separate images.
         as_mask
             Whether to show the image as a binary mask. Only available if the plotted image has 1 channel.
         ax
@@ -800,7 +895,7 @@ class ImageContainer(FeatureMixin):
         arr = self.data[layer]
         n_channels = arr.shape[-1]
         channelwise = channelwise and n_channels > 1
-
+        library_id = self.data.coords["z"].values if library_id is None else [library_id]
         if channel is not None:
             arr = arr[{arr.dims[-1]: channel}]
             if as_mask:
@@ -810,28 +905,33 @@ class ImageContainer(FeatureMixin):
                 raise ValueError(f"Expected to find 1 channel, found `{n_channels}`.")
             arr = arr > 0
 
+        arr = arr.sel(z=library_id)
+
         fig = None
         if ax is None:
             fig, ax = plt.subplots(
                 ncols=n_channels if channelwise else 1,
+                nrows=len(library_id),
                 figsize=(8, 8) if figsize is None else figsize,
                 dpi=dpi,
                 tight_layout=True,
+                squeeze=False,
             )
 
-        ax = tuple(np.ravel([ax]))
+        ax = ax.T
         if channelwise and len(ax) != n_channels:
             raise ValueError(f"Expected `{n_channels}` axes, found `{len(ax)}`.")
 
-        for c, a in enumerate(ax):
-            if channelwise:
-                img, title = arr[..., c], f"{layer}:{c}"
-            else:
-                img, title = arr, layer
+        for c, r in enumerate(ax):
+            for z, a in enumerate(r):
+                if channelwise:
+                    img, title = arr[..., z, c], f"{layer}:{c}, library_id:{library_id[z]}"
+                else:
+                    img, title = arr[:, :, z, ...], f"{layer}, library_id:{library_id[z]}"
 
-            a.imshow(img_as_float(img.values, force_copy=False), **kwargs)
-            a.set_title(title)
-            a.set_axis_off()
+                a.imshow(img_as_float(img.values, force_copy=False), **kwargs)
+                a.set_title(title)
+                a.set_axis_off()
 
         if save and fig is not None:
             save_fig(fig, save)
