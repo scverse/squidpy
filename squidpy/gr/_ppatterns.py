@@ -33,7 +33,7 @@ from squidpy.gr._utils import (
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 
-__all__ = ["ripley_k", "spatial_autocorr", "co_occurrence"]
+__all__ = ["spatial_autocorr", "co_occurrence"]
 
 
 it = nt.int32
@@ -41,88 +41,6 @@ ft = nt.float32
 tt = nt.UniTuple
 ip = np.int32
 fp = np.float32
-
-
-@d.dedent
-@inject_docs(key=Key.obsm.spatial)
-def ripley_k(
-    adata: AnnData,
-    cluster_key: str,
-    spatial_key: str = Key.obsm.spatial,
-    mode: str = "ripley",
-    support: int = 100,
-    copy: bool = False,
-) -> Optional[pd.DataFrame]:
-    r"""
-    Calculate `Ripley's K <https://en.wikipedia.org/wiki/Spatial_descriptive_statistics#Ripley's_K_and_L_functions>`_
-    statistics for each cluster in the tissue coordinates.
-
-    Parameters
-    ----------
-    %(adata)s
-    %(cluster_key)s
-    %(spatial_key)s
-    mode
-        Keyword which indicates the method for edge effects correction.
-        See :class:`astropy.stats.RipleysKEstimator` for valid options.
-    support
-        Number of points where Ripley's K is evaluated between a fixed radii with :math:`min=0`,
-        :math:`max=\sqrt{{area \over 2}}`.
-    %(copy)s
-
-    Returns
-    -------
-    If ``copy = True``, returns a :class:`pandas.DataFrame` with the following keys:
-
-        - `'ripley_k'` - the Ripley's K statistic.
-        - `'distance'` - set of distances where the estimator was evaluated.
-
-    Otherwise, modifies the ``adata`` with the following key:
-
-        - :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_ripley_k']`` - the above mentioned dataframe.
-    """  # noqa: D205, D400
-    try:
-        # from pointpats import ripley, hull
-        from astropy.stats import RipleysKEstimator
-    except ImportError:
-        raise ImportError("Please install `astropy` as `pip install astropy`.") from None
-
-    _assert_spatial_basis(adata, key=spatial_key)
-    coord = adata.obsm[spatial_key]
-
-    # set coordinates
-    y_min = int(coord[:, 1].min())
-    y_max = int(coord[:, 1].max())
-    x_min = int(coord[:, 0].min())
-    x_max = int(coord[:, 0].max())
-    area = int((x_max - x_min) * (y_max - y_min))
-    r = np.linspace(0, (area / 2) ** 0.5, support)
-
-    # set estimator
-    Kest = RipleysKEstimator(area=area, x_max=x_max, y_max=y_max, x_min=x_min, y_min=y_min)
-    df_lst = []
-
-    # TODO: how long does this take (i.e. does it make sense to measure the elapse time?)
-    logg.info("Calculating Ripley's K")
-    for c in adata.obs[cluster_key].unique():
-        idx = adata.obs[cluster_key].values == c
-        coord_sub = coord[idx, :]
-        est = Kest(data=coord_sub, radii=r, mode=mode)
-        df_est = pd.DataFrame(np.stack([est, r], axis=1))
-        df_est.columns = ["ripley_k", "distance"]
-        df_est[cluster_key] = c
-        df_lst.append(df_est)
-
-    df = pd.concat(df_lst, axis=0)
-    # filter by min max dist
-    minmax_dist = df.groupby(cluster_key)["ripley_k"].max().min()
-    df = df[df.ripley_k < minmax_dist].copy()
-
-    if copy:
-        return df
-
-    adata.uns[f"ripley_k_{cluster_key}"] = df
-    _save_data(adata, attr="uns", key=Key.uns.ripley_k(cluster_key), data=df)
 
 
 @d.dedent

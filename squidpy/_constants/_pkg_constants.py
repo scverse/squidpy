@@ -93,8 +93,8 @@ class Key:  # noqa: D101
             return f"{cluster}_co_occurrence"
 
         @classmethod
-        def ripley_k(cls, cluster: str) -> str:
-            return f"{cluster}_ripley_k"
+        def ripley(cls, cluster: str, mode: str) -> str:
+            return f"{cluster}_ripley_{mode}"
 
         @classmethod
         def colors(cls, cluster: str) -> str:

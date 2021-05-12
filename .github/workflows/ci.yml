@@ -1,4 +1,4 @@
-eame: CI
+name: CI
 
 on:
     schedule:
@@ -6,11 +6,13 @@ on:
     push:
         branches:
         -   master
+        -   dev
         tags:
         -   v[0-9]+.[0-9]+.[0-9]+
     pull_request:
         branches:
         -   master
+        -   dev
 
 jobs:
     init:
@@ -111,7 +113,7 @@ jobs:
             uses: actions/cache@v2
             with:
                 path: .tox
-                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/tox.ini') }}
+                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/tox.ini') }}
 
         -   name: Testing
             run: |
