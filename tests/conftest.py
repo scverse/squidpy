@@ -91,6 +91,17 @@ def adata_intmat() -> AnnData:
     )
 
 
+@pytest.fixture()
+def adata_ripley() -> AnnData:
+    from matplotlib.cm import get_cmap
+
+    adata = _adata[_adata.obs.leiden.isin(["0", "2"])].copy()
+    cmap = get_cmap("Set1")
+
+    adata.uns[f"{C_KEY_PALETTE}_colors"] = cmap(range(adata.obs[C_KEY_PALETTE].unique().shape[0]))
+    return adata
+
+
 @pytest.fixture(scope="session")
 def paul15() -> AnnData:
     # session because we don't modify this dataset
