@@ -127,7 +127,7 @@ def ripley(
     for i in np.arange(np.max(cluster_idx) + 1):
         coord_c = coordinates[cluster_idx == i, :]
         if mode == RipleyStat.F:
-            random = _ppp(hull, 1, n_observations, seed=seed)
+            random = _ppp(hull, n_simulations=1, n_observations=n_observations, seed=seed)
             tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(coord_c)
             distances, _ = tree_c.kneighbors(random, n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
@@ -146,7 +146,7 @@ def ripley(
     pvalues = np.ones((le.classes_.shape[0], len(bins)))
 
     for i in range(n_simulations):
-        random_i = _ppp(hull, 1, n_observations, seed=seed)
+        random_i = _ppp(hull, n_simulations=1, n_observations=n_observations, seed=seed)
         if mode == RipleyStat.F:
             tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(random_i)
             distances_i, _ = tree_i.kneighbors(random, n_neighbors=1)
