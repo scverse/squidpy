@@ -75,8 +75,7 @@ def ripley(
     %(spatial_key)s
     metric
         Which metric to use for computing distances.
-        For available metrics, checkout
-        `scikit-learn <https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.NearestNeighbors.html>`_.
+        For available metrics, check out :class:`sklearn.neighbors.DistanceMetric`.
     n_neigh
         Number of neighborhoods to consider for the KNN graph.
     n_simulations
