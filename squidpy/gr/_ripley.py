@@ -1,5 +1,6 @@
 """Functions for point patterns spatial statistics."""
-from typing import List, Tuple, Union, Literal, Optional, TYPE_CHECKING
+from typing import List, Tuple, Union, Optional, TYPE_CHECKING
+from typing_extensions import Literal
 
 from scanpy import logging as logg
 from anndata import AnnData
