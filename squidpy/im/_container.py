@@ -69,6 +69,14 @@ Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependen
 __all__ = ["ImageContainer"]
 
 
+def test(var: Union[Iterable[str], None]) -> None:
+    if var is None:
+        var = ["a", "b", "c"]
+    var = np.zeros((len(list(var)), 10))
+
+    print(var.shape)
+
+
 @d.dedent  # trick to overcome not top-down order
 @d.dedent
 class ImageContainer(FeatureMixin):
@@ -243,8 +251,8 @@ class ImageContainer(FeatureMixin):
         library_id: Optional[Union[str, Iterable[str]]] = None,
         lazy: bool = True,
         chunks: Optional[Union[str, Tuple[int, ...]]] = None,
-        infer_dimensions: Literal[
-            "default", "prefer_channels", "prefer_z"
+        infer_dimensions: Union[
+            Literal["default", "prefer_channels", "prefer_z"], Tuple[str]
         ] = InferDimensions.DEFAULT.s,  # type: ignore[assignment]
         copy: bool = True,
         **kwargs: Any,
@@ -273,6 +281,7 @@ class ImageContainer(FeatureMixin):
                 - `{id.PREFER_Z.s!r}` - load the last dimension as Z-dim.
                 - `{id.DEFAULT.s!r}` - same as `{id.PREFER_CHANNELS.s!r}`, but for 4-dim arrays,
                   tries to also load the first dimension as channels iff the last dimension is 1.
+                - a tuple of dimension names matching the shape of img, e.g. ('y', 'x', 'channels', 'z')
 
         copy
             Whether to copy the underlying data if ``img`` is an array.
@@ -289,9 +298,10 @@ class ImageContainer(FeatureMixin):
             If loading a specific data type has not been implemented.
         """
         layer = self._get_next_image_id("image") if layer is None else layer
-        img = self._load_img(
-            img, chunks=chunks, layer=layer, copy=copy, infer_dimensions=InferDimensions(infer_dimensions), **kwargs
+        infer_dimensions: Union[InferDimensions, Tuple[str]] = (  # type: ignore[no-redef]
+            InferDimensions(infer_dimensions) if not isinstance(infer_dimensions, tuple) else infer_dimensions
         )
+        img: Optional[xr.DataArray] = self._load_img(img, chunks=chunks, layer=layer, copy=copy, infer_dimensions=infer_dimensions, **kwargs)  # type: ignore[no-redef]
 
         if img is not None:  # not reading a .nc file
             if TYPE_CHECKING:
@@ -299,8 +309,9 @@ class ImageContainer(FeatureMixin):
             img = img.rename({img.dims[-1]: "channels" if channel_dim is None else str(channel_dim)})
 
             # add z dim label
-            library_id = self._library_id_list("library_id" if library_id is None else library_id)
             z = img.shape[2]
+            default_library_id = [f"library_id_{i}" for i in range(z)]
+            library_id = self._library_id_list(default_library_id if library_id is None else library_id)
             if z > 1 and len(library_id) != z:
                 raise ValueError(
                     f"img has {z} z dimensions, \
@@ -309,6 +320,10 @@ class ImageContainer(FeatureMixin):
             img = img.assign_coords({"z": library_id})
 
             logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
+            overwrite = False
+            if layer in self:
+                overwrite = True
+                prev_img = self.data[layer]
             try:
                 self.data[layer] = img
             except ValueError as e:
@@ -320,6 +335,13 @@ class ImageContainer(FeatureMixin):
                 if TYPE_CHECKING:
                     assert isinstance(img, xr.DataArray)
                 self.data[layer] = img.rename({img.dims[-1]: channel_dim})
+
+            # when overwriting, might want to fill nans with the previous values
+            # TODO might want to make this optional
+            if overwrite:
+                if self.data[layer].dims == prev_img.dims:
+                    # can only update if dims are the same
+                    self.data[layer] = self.data[layer].fillna(prev_img)
 
             if not lazy:
                 self.data[layer].load()
@@ -449,8 +471,6 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         %(yx)s
-        library_id
-            Name of the z dim that is returned. If None, all z dims are returned
         %(size)s
         scale
             Rescale the crop using :func:`skimage.transform.rescale`.
@@ -462,6 +482,8 @@ class ImageContainer(FeatureMixin):
         preserve_dtypes
             Whether to preserver the data types of underlying :class:`xarray.DataArray`, even if ``cval``
             is of different type.
+        library_id
+            Name of the z dim that is cropped. If None, all z dims are cropped
 
         Returns
         -------
@@ -542,13 +564,16 @@ class ImageContainer(FeatureMixin):
     ) -> xr.Dataset:
         def _rescale(arr: xr.DataArray) -> xr.DataArray:
             # once skimage==0.19.0, multichannel is deprecated
-            scaling_fn = partial(rescale, scale=scale, preserve_range=True, order=1, multichannel=True, cval=cval)
+            scaling_fn = partial(
+                rescale, scale=[scale, scale, 1], preserve_range=True, order=1, multichannel=True, cval=cval
+            )
             dtype = arr.dtype
 
             if isinstance(arr.data, da.Array):
                 shape = np.maximum(np.round(scale * np.asarray(arr.shape)), 1)
                 # TODO: Z-dim
                 shape[-1] = arr.shape[-1]
+                shape[-2] = arr.shape[-2]
                 return xr.DataArray(
                     da.from_delayed(delayed(lambda arr: scaling_fn(arr).astype(dtype))(arr), shape=shape, dtype=dtype),
                     dims=arr.dims,
@@ -895,7 +920,7 @@ class ImageContainer(FeatureMixin):
         arr = self.data[layer]
         n_channels = arr.shape[-1]
         channelwise = channelwise and n_channels > 1
-        library_id = self.data.coords["z"].values if library_id is None else [library_id]
+        library_id: List[str] = list(self.data.coords["z"].values) if library_id is None else [library_id]  # type: ignore[no-redef]
         if channel is not None:
             arr = arr[{arr.dims[-1]: channel}]
             if as_mask:
@@ -1007,6 +1032,7 @@ class ImageContainer(FeatureMixin):
         layer: Optional[str] = None,
         new_layer: Optional[str] = None,
         channel: Optional[int] = None,
+        library_id: Optional[str] = None,
         lazy: bool = False,
         chunks: Optional[Union[str]] = None,
         copy: bool = True,
@@ -1048,9 +1074,13 @@ class ImageContainer(FeatureMixin):
             new_layer = layer
         arr = self[layer]
         channel_dim = arr.dims[-1]
+        dims = arr.dims
 
         if channel is not None:
             arr = arr[{channel_dim: channel}]
+
+        if library_id is not None:
+            arr = arr.sel(z=library_id)
 
         if chunks is not None:
             arr = da.asarray(arr.data).rechunk(chunks)
@@ -1066,11 +1096,27 @@ class ImageContainer(FeatureMixin):
             # TODO: allow volumetric segmentation?
             raise ValueError(f"Expected 2 or 3 dimensional array, found `{res.ndim}`.")
         elif res.ndim == 2:
-            res = res[..., np.newaxis]
+            res = res[..., np.newaxis, np.newaxis]
+        elif res.ndim == 3:  # assume that 3 dims are y, x, channels
+            # is the 3rd dim channel or z?
+            if channel is not None:  # its z, because channel was removed
+                res = res[..., np.newaxis]
+            else:
+                res = res[:, :, np.newaxis, :]
+
         # TODO: handle z-dim
 
+        library_id = library_id if library_id is not None else self[layer].coords["z"].values
         if copy:
-            cont = ImageContainer(res, layer=new_layer, channel_dim=channel_dim, copy=True, lazy=lazy)
+            cont = ImageContainer(
+                res,
+                layer=new_layer,
+                channel_dim=channel_dim,
+                copy=True,
+                lazy=lazy,
+                infer_dimensions=dims,
+                library_id=library_id,
+            )
             cont.data.attrs = self.data.attrs.copy()
 
             return cont
@@ -1080,7 +1126,9 @@ class ImageContainer(FeatureMixin):
             layer=new_layer,
             lazy=lazy,
             copy=new_layer != layer,
-            channel_dim=f"{channel_dim}:{res.shape[-1]}" if arr.shape[-1] != res.shape[-1] else channel_dim,
+            channel_dim=f"{channel_dim}:{res.shape[-1]}" if self[layer].shape[-1] != res.shape[-1] else channel_dim,
+            infer_dimensions=dims,
+            library_id=library_id,
         )
 
     def rename(self, old: str, new: str) -> "ImageContainer":
@@ -1162,7 +1210,10 @@ class ImageContainer(FeatureMixin):
     ) -> Union["ImageContainer", Dict[str, np.ndarray], np.ndarray, Tuple[np.ndarray, ...]]:
         res = self
         if as_array:
-            res = {key: res[key].values for key in res}  # type: ignore[assignment]
+            if len(res.data.z) == 1:  # do not return z dim if have only one
+                res = {key: res[key].isel(z=0).values for key in res}  # type: ignore[assignment]
+            else:
+                res = {key: res[key].values for key in res}  # type: ignore[assignment]
         # this is just for convenience for DL iterators
         if isinstance(as_array, str):
             res = res[as_array]

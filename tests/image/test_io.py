@@ -94,6 +94,6 @@ class TestIO:
         assert isinstance(res, xr.DataArray)
         assert isinstance(res.data, da.Array)
         if chunks not in (None, "auto"):
-            np.testing.assert_array_equal(res.data.chunksize, [100, 100, 3])
+            np.testing.assert_array_equal(res.data.chunksize, [100, 100, 1, 3])
 
-        np.testing.assert_array_equal(img, res.values)
+        np.testing.assert_array_equal(img, np.squeeze(res.values))

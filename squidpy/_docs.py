@@ -135,6 +135,8 @@ as_array
     - if a :class:`str`, yields one :class:`numpy.ndarray` for the specified layer.
     - if a :class:`typing.Sequence`, yields a :class:`tuple` of :class:`numpy.ndarray` for the specified layers.
     - otherwise, yields :class:`squidpy.im.ImageContainer`.
+    If there is only one z dimension, this is squeezed from the output, resulting in arrays of shape ``(y,x,channels)``.
+    Otherwise, the shape is ``(y,x,z,channels)``.
 """
 _layer_added = """\
 layer_added

@@ -43,10 +43,10 @@ class TestProcess:
         assert isinstance(res, ImageContainer)
 
         if method == "smooth":
-            np.testing.assert_array_equal(res[key].dims, ["y", "x", "foo"])
+            np.testing.assert_array_equal(res[key].dims, ["y", "x", "z", "foo"])
         else:
             modifier = "_".join(key.split("_")[1:])  # will be e.g `foo_smooth`
-            np.testing.assert_array_equal(res[key].dims, ["y", "x", f"foo_{modifier}"])
+            np.testing.assert_array_equal(res[key].dims, ["y", "x", "z", f"foo_{modifier}"])
 
     def test_gray_not_rgb(self, small_cont_1c: ImageContainer):
         with pytest.raises(ValueError, match=r"Expected channel dimension to be `3`, found `1`."):
@@ -85,7 +85,7 @@ class TestProcess:
         np.testing.assert_array_equal(small_cont["foo"].values, small_cont["image"].values)
 
     @pytest.mark.parametrize("dask_input", [False, True])
-    @pytest.mark.parametrize("chunks", [25, (50, 50, 3), "auto"])
+    @pytest.mark.parametrize("chunks", [25, (50, 50, 1, 3), "auto"])
     @pytest.mark.parametrize("lazy", [False, True])
     def test_dask_processing(
         self, small_cont: ImageContainer, dask_input: bool, chunks: Union[int, Tuple[int, ...], str], lazy: bool
@@ -98,6 +98,7 @@ class TestProcess:
 
             return chunk
 
+        # TODO assigning directly (small_cont[foo] = ... does not work, because z dim is not correctly parsed
         small_cont["foo"] = da.asarray(small_cont["image"].data) if dask_input else small_cont["image"].values
         assert isinstance(small_cont["foo"].data, da.Array if dask_input else np.ndarray)
 

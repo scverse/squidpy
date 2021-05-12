@@ -88,7 +88,7 @@ def _get_image_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # t
 
 def _infer_dimensions(
     obj: Union[np.ndarray, xr.DataArray, str],
-    infer_dimensions: InferDimensions = InferDimensions.DEFAULT,
+    infer_dimensions: Union[InferDimensions, Tuple[str]] = InferDimensions.DEFAULT,
 ) -> Tuple[Tuple[int, ...], Tuple[str, ...], np.dtype]:  # type: ignore[type-arg]
     if isinstance(obj, str):
         shape, dtype = _get_image_shape_dtype(obj)
@@ -96,6 +96,13 @@ def _infer_dimensions(
         shape, dtype = obj.shape, obj.dtype
 
     ndim = len(shape)
+
+    if not isinstance(infer_dimensions, InferDimensions):
+        # explicitely passed dims as tuple
+        if len(infer_dimensions) != ndim:
+            raise ValueError(f"Image is `{ndim}` dimensional, cannot assign to dims `{infer_dimensions}`.")
+        add_shape = tuple([1] * (4 - ndim))
+        return shape + add_shape, infer_dimensions, dtype
 
     if ndim == 2:
         return shape + (1, 1), ("y", "x", "z", "channels"), dtype

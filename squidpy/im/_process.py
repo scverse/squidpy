@@ -38,6 +38,7 @@ def to_grayscale(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array
 def process(
     img: ImageContainer,
     layer: Optional[str] = None,
+    library_id: Optional[str] = None,
     method: Union[str, Callable[..., np.ndarray]] = "smooth",
     chunks: Optional[int] = None,
     lazy: bool = False,
@@ -57,6 +58,8 @@ def process(
     ----------
     %(img_container)s
     %(img_layer)s
+    library_id
+        Name of the z dim that is processed. If None, all z dims are processed
     method
         Processing method to use. Valid options are:
 
@@ -101,7 +104,7 @@ def process(
         callback = method
     elif method == Processing.SMOOTH:  # type: ignore[comparison-overlap]
         # TODO: handle Z-dim
-        kwargs.setdefault("sigma", [1, 1, 0])  # TODO: Z-dim, allow for ints, replicate over spatial dims
+        kwargs.setdefault("sigma", [1, 1, 0, 0])  # TODO: Z-dim, allow for ints, replicate over spatial dims
         if chunks is not None:
             # dask_image already handles map_overlap
             chunks_, chunks = chunks, None
@@ -116,17 +119,23 @@ def process(
 
     start = logg.info(f"Processing image using `{method}` method")
     res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs)
-
     # if the method changes the number of channels
     if res[layer].shape[-1] != img[layer].shape[-1]:
         modifier = "_".join(layer_new.split("_")[1:]) if layer_added is None else layer_added
         channel_dim = f"{channel_dim}_{modifier}"
 
     res._data = res.data.rename({res[layer].dims[-1]: channel_dim}).rename_vars({layer: layer_new})
-
     logg.info("Finish", time=start)
 
     if copy:
         return res
 
-    img.add_img(img=res, layer=layer_new, channel_dim=channel_dim, copy=False, lazy=lazy)
+    img.add_img(
+        img=res,
+        layer=layer_new,
+        channel_dim=channel_dim,
+        copy=False,
+        lazy=lazy,
+        infer_dimensions=img[layer].dims,
+        library_id=img[layer].coords["z"].values,
+    )
