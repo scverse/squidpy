@@ -60,7 +60,7 @@ def ripley(
 
         K(t) = \frac{{1}}{{\lambda}} \sum_{{i \ne j}} \frac{{I(d_{{i,j}}<t)}}{{n}}
 
-    and then we apply a variance-stabilizying transformation:
+    and then we apply a variance-stabilizing transformation:
 
     .. math::
 
@@ -77,9 +77,9 @@ def ripley(
         Which metric to use for computing distances.
         For available metrics, check out :class:`sklearn.neighbors.DistanceMetric`.
     n_neigh
-        Number of neighborhoods to consider for the KNN graph.
+        Number of neighbors to consider for the KNN graph.
     n_simulations
-        How many simulations to run for computing pvalues.
+        How many simulations to run for computing p-values.
     n_observations
         How many observations to generate for the Spatial Poisson Point Process.
     max_dist

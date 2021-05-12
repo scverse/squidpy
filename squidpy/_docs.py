@@ -147,7 +147,7 @@ If ``copy = True``, returns a :class:`dict` with following keys:
     - `'{mode}_stat'` - :class:`pandas.DataFrame` containing the statistics of choice for the real observations.
     - `'sims_stat'` - :class:`pandas.DataFrame` containing the statistics of choice for the simulations.
     - `'bins'` - :class:`numpy.ndarray` containing the support.
-    - `'pvalues'` - :class:`numpy.ndarray` containing the pvalues for the statistics of interest.
+    - `'pvalues'` - :class:`numpy.ndarray` containing the p-values for the statistics of interest.
 
 Otherwise, modifies the ``adata`` object with the following key:
 
