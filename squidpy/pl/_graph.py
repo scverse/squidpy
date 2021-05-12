@@ -1,7 +1,7 @@
 """Plotting for graph functions."""
 
 from types import MappingProxyType
-from typing import Any, Tuple, Union, Mapping, Optional, Sequence
+from typing import Any, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
 from pathlib import Path
 from typing_extensions import Literal
 
@@ -22,6 +22,7 @@ from squidpy.gr._utils import (
     _assert_non_empty_sequence,
 )
 from squidpy.pl._utils import _heatmap, save_fig
+from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 
 __all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "ripley", "co_occurrence"]
@@ -259,7 +260,7 @@ def nhood_enrichment(
 def ripley(
     adata: AnnData,
     cluster_key: str,
-    mode: Literal["F", "G", "L"],
+    mode: Literal["F", "G", "L"] = "F",
     plot_sims: bool = True,
     palette: Palette_t = None,
     figsize: Optional[Tuple[float, float]] = None,
@@ -295,6 +296,10 @@ def ripley(
 
     res = _get_data(adata, cluster_key=cluster_key, func_name="ripley", mode=mode)
 
+    mode = RipleyStat(mode)  # type: ignore[assignment]
+    if TYPE_CHECKING:
+        assert isinstance(mode, RipleyStat)
+
     legend_kwargs = dict(legend_kwargs)
     if "loc" not in legend_kwargs:
         legend_kwargs["loc"] = "center left"
@@ -304,12 +309,12 @@ def ripley(
     palette = _get_palette(adata, cluster_key=cluster_key, categories=categories) if palette is None else palette
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-    sns.lineplot(y="stats", x="bins", hue=cluster_key, data=res[f"{mode}_stat"], ax=ax)
+    sns.lineplot(y="stats", x="bins", hue=cluster_key, data=res[f"{mode.s}_stat"], ax=ax)
     if plot_sims:
         sns.lineplot(y="stats", x="bins", ci="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)
     ax.legend(**legend_kwargs)
     ax.set_ylabel("value")
-    ax.set_title(f"Ripley's {mode}")
+    ax.set_title(f"Ripley's {mode.s}")
 
     if save is not None:
         save_fig(fig, path=save)

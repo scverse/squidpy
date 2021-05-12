@@ -1,5 +1,5 @@
 """Functions for point patterns spatial statistics."""
-from typing import List, Tuple, Union, Optional, TYPE_CHECKING
+from typing import Dict, List, Tuple, Union, Optional, TYPE_CHECKING
 from typing_extensions import Literal
 
 from scanpy import logging as logg
@@ -26,7 +26,7 @@ __all__ = ["ripley"]
 def ripley(
     adata: AnnData,
     cluster_key: str,
-    mode: Literal["F", "G", "L"],
+    mode: Literal["F", "G", "L"] = "F",
     spatial_key: str = Key.obsm.spatial,
     metric: str = "euclidean",
     n_neigh: int = 2,
@@ -36,11 +36,11 @@ def ripley(
     n_steps: int = 50,
     seed: Optional[int] = None,
     copy: bool = False,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> Dict[str, Union[pd.DataFrame, np.ndarray]]:
     r"""
     Calculate various Ripley's statistics for point processes.
 
-    According to the `'mode'` argument, it calculates either the following Ripley's statistics:
+    According to the `'mode'` argument, it calculates one of the following Ripley's statistics:
     `{rp.F.s!r}`, `{rp.G.s!r}` or `{rp.L.s!r}` statistics.
 
     `{rp.F.s!r}`, `{rp.G.s!r}` are defined as:
@@ -51,8 +51,8 @@ def ripley(
 
     Where :math:`d_{{i,j}}` represents:
 
-        - distances to a random Spatial Poisson Point Process for `'F'`.
-        - distances to any other point of the dataset for `'G'`.
+        - distances to a random Spatial Poisson Point Process for `{rp.F.s!r}`.
+        - distances to any other point of the dataset for `{rp.G.s!r}`.
 
     `{rp.L.s!r}` we first need to compute :math:`K(t)`, which is defined as:
 
@@ -65,10 +65,6 @@ def ripley(
     .. math::
 
         L(t) = (\frac{{K(t)}}{{\pi}})^{{1/2}}
-
-    For reference, check out
-    `Wikipedia <https://en.wikipedia.org/wiki/Spatial_descriptive_statistics#Ripley's_K_and_L_functions>`_
-    or :cite:`Baddeley2015-lm`.
 
     Parameters
     ----------
@@ -95,6 +91,12 @@ def ripley(
     Returns
     -------
     %(ripley_stat_returns)s
+
+    References
+    ----------
+    For reference, check out
+    `Wikipedia <https://en.wikipedia.org/wiki/Spatial_descriptive_statistics#Ripley's_K_and_L_functions>`_
+    or :cite:`Baddeley2015-lm`.
     """
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
@@ -104,7 +106,6 @@ def ripley(
     mode = RipleyStat(mode)  # type: ignore[assignment]
     if TYPE_CHECKING:
         assert isinstance(mode, RipleyStat)
-    mode = mode.s
 
     # prepare support
     N = coordinates.shape[0]
@@ -125,18 +126,20 @@ def ripley(
 
     for i in np.arange(np.max(cluster_idx) + 1):
         coord_c = coordinates[cluster_idx == i, :]
-        if mode == "F":
+        if mode == RipleyStat.F:
             random = _ppp(hull, 1, n_observations, seed=seed)
             tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(coord_c)
             distances, _ = tree_c.kneighbors(random, n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
-        elif mode == "G":
+        elif mode == RipleyStat.G:
             tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(coord_c)
             distances, _ = tree_c.kneighbors(coordinates[cluster_idx != i, :], n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
-        elif mode == "L":
+        elif mode == RipleyStat.L:
             distances = pdist(coord_c, metric=metric)
             bins, obs_stats = _l_function(distances, support, N, area)
+        else:
+            raise NotImplementedError(f"Mode `{mode.s!r}` is not yet implemented.")
         obs_arr[i] = obs_stats
 
     sims = np.empty((n_simulations, len(bins)))
@@ -144,17 +147,19 @@ def ripley(
 
     for i in range(n_simulations):
         random_i = _ppp(hull, 1, n_observations, seed=seed)
-        if mode == "F":
+        if mode == RipleyStat.F:
             tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(random_i)
             distances_i, _ = tree_i.kneighbors(random, n_neighbors=1)
             _, stats_i = _f_g_function(distances_i.squeeze(), support)
-        elif mode == "G":
+        elif mode == RipleyStat.G:
             tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(random_i)
             distances_i, _ = tree_i.kneighbors(coordinates, n_neighbors=1)
             _, stats_i = _f_g_function(distances_i.squeeze(), support)
-        elif mode == "L":
+        elif mode == RipleyStat.L:
             distances_i = pdist(random_i, metric=metric)
             _, stats_i = _l_function(distances_i, support, N, area)
+        else:
+            raise NotImplementedError(f"Mode `{mode.s!r}` is not yet implemented.")
 
         for j in range(obs_arr.shape[0]):
             pvalues[j] += stats_i >= obs_arr[j]

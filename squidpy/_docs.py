@@ -153,7 +153,7 @@ Otherwise, modifies the ``adata`` object with the following key:
 
     - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - the above mentioned :class:`dict`.
 
-Statistics and pvalues are computed for each cluster `'{cluster_key}'` separately."""
+Statistics and pvalues are computed for each cluster :attr:`anndata.AnnData.obs` ``['{cluster_key}']`` separately."""
 
 d = DocstringProcessor(
     adata=_adata,
