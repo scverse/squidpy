@@ -79,6 +79,12 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
         gr.ripley(adata, cluster_key=C_KEY, mode="G")
         pl.ripley(adata, cluster_key=C_KEY, mode="G")
 
+    def test_plot_ripley_f_nopalette(self, adata_ripley: AnnData):
+        adata = adata_ripley
+        adata.uns.pop(f"{C_KEY}_colors")
+        gr.ripley(adata, cluster_key=C_KEY, mode="F")
+        pl.ripley(adata, cluster_key=C_KEY, mode="F")
+
     def test_tol_plot_co_occurrence(self, adata: AnnData):
         gr.co_occurrence(adata, cluster_key=C_KEY)
 
