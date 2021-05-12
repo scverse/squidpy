@@ -75,12 +75,14 @@ def ripley(
     %(spatial_key)s
     metric
         Which metric to use for computing distances.
+        For available metrics, checkout
+        `scikit-learn <https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.NearestNeighbors.html>`_
     n_neigh
-        Number of neighborhoods to consider for the knn graph.
+        Number of neighborhoods to consider for the KNN graph.
     n_simulations
         How many simulations to run for computing pvalues.
     n_observations
-        How many observations to generate for the spatial poisson point process.
+        How many observations to generate for the Spatial Poisson Point Process.
     max_dist
         Maximum distances for the support. If `None`, `max_dist=`:math:`\sqrt{{area \over 2}}`.
     n_steps
@@ -180,7 +182,7 @@ def ripley(
         logg.info("Finish", time=start)
         return res
 
-    _save_data(adata, attr="uns", key=Key.uns.ripley(cluster_key, mode), data=res)
+    _save_data(adata, attr="uns", key=Key.uns.ripley(cluster_key, mode), data=res, time=start)
 
 
 def _reshape_res(
@@ -221,13 +223,13 @@ def _ppp(hull: ConvexHull, n_simulations: int, n_observations: int, seed: Option
     n_simulations
         Number of simulated point processes.
     n_observations
-        Number of observations to sample from each simulation
+        Number of observations to sample from each simulation.
     seed
         Random seed.
 
     Returns
     -------
-        An Array with shape (n_simulation, n_observations, 2).
+    An Array with shape ``(n_simulation, n_observations, 2)``.
     """
     rng = default_rng(None if seed is None else seed)
     vxs = hull.points[hull.vertices]
