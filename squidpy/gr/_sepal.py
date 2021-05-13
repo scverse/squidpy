@@ -29,8 +29,8 @@ __all__ = ["sepal"]
 @inject_docs(key=Key.obsp.spatial_conn())
 def sepal(
     adata: AnnData,
+    max_nbrs: Literal[4, 6],
     genes: Optional[Union[str, Sequence[str]]] = None,
-    max_nbrs: Literal[4, 6] = 6,
     n_iter: Optional[int] = 30000,
     dt: float = 0.001,
     thres: float = 1e-8,
@@ -52,16 +52,16 @@ def sepal(
     Parameters
     ----------
     %(adata)s
-    genes
-        List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute sepal score.
-
-        If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present.
-        Otherwise,it's computed for all genes.
     max_nbrs
         Maximum number of neighbors of a node in the graph, either:
 
             - 4 for a square-grid (ST, Dbit-seq).
             - 6 for a hexagonal-grid (Visium).
+    genes
+        List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute sepal score.
+
+        If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present.
+        Otherwise,it's computed for all genes.
     n_iter
         Maximum number of iterations for the diffusion simulation.
     dt
@@ -111,7 +111,7 @@ def sepal(
 
     max_n = np.diff(g.indptr).max()
     if max_n != max_nbrs:
-        raise ValueError(f"Found node with # neighbors == {max_n}, bu expected `max_nbrs` == {max_nbrs}.")
+        logg.warning(f"Found node with # neighbors == {max_n}, bu expected `max_nbrs` == {max_nbrs}.")
 
     # get saturated/unsaturated nodes
     sat, sat_idx, unsat, unsat_idx = _compute_idxs(g, spatial, max_nbrs, "l1")
@@ -128,7 +128,7 @@ def sepal(
         show_progress_bar=show_progress_bar,
     )(
         vals=vals,
-        max_n=max_n,
+        max_n=max_nbrs,
         n_iter=n_iter,
         sat=sat,
         sat_idx=sat_idx,

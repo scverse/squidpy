@@ -102,6 +102,17 @@ def adata_ripley() -> AnnData:
     return adata
 
 
+@pytest.fixture()
+def adata_squaregrid() -> AnnData:
+    rng = np.random.default_rng(42)
+    coord = rng.integers(0, 10, size=(200, 2))
+    counts = rng.integers(0, 10, size=(200, 100))
+    adata = AnnData(counts)
+    adata.obsm["spatial"] = coord
+    sc.pp.scale(adata)
+    return adata
+
+
 @pytest.fixture(scope="session")
 def paul15() -> AnnData:
     # session because we don't modify this dataset
