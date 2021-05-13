@@ -31,13 +31,12 @@ def sepal(
     adata: AnnData,
     genes: Optional[Union[str, Sequence[str]]] = None,
     max_nbrs: Literal[4, 6] = 6,
-    n_iter: Optional[int] = 10000,
+    n_iter: Optional[int] = 20000,
     dt: float = 0.001,
     thres: float = 1e-8,
     connectivity_key: str = Key.obsp.spatial_conn(),
     spatial_key: str = Key.obsm.spatial,
     layer: Optional[str] = None,
-    seed: Optional[int] = None,
     use_raw: bool = False,
     copy: bool = False,
     n_jobs: Optional[int] = None,
@@ -54,8 +53,7 @@ def sepal(
     ----------
     %(adata)s
     genes
-        List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute global
-        spatial autocorrelation statistic.
+        List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute sepal score.
 
         If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present. Otherwise,
         it's computed for all genes.
@@ -71,7 +69,8 @@ def sepal(
     %(spatial_key)s
     layer
         Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
-    %(seed)s
+    use_raw
+        Whether to access :attr:`anndata.AnnData.raw`.
     %(copy)s
     %(parallelize)s
 
