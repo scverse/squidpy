@@ -31,7 +31,7 @@ def sepal(
     adata: AnnData,
     genes: Optional[Union[str, Sequence[str]]] = None,
     max_nbrs: Literal[4, 6] = 6,
-    n_iter: Optional[int] = 20000,
+    n_iter: Optional[int] = 30000,
     dt: float = 0.001,
     thres: float = 1e-8,
     connectivity_key: str = Key.obsp.spatial_conn(),
@@ -55,10 +55,12 @@ def sepal(
     genes
         List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute sepal score.
 
-        If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present. Otherwise,
-        it's computed for all genes.
+        If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present.
+        Otherwise,it's computed for all genes.
     max_nbrs
-        Maximum number of neighbors of a node in the graph, either 4 for a square-grid or 6 for a hexagonal-grid.
+        Maximum number of neighbors of a node in the graph, either:
+            - 4 for a square-grid (ST, Dbit-seq).
+            - 6 for a hexagonal-grid (Visium).
     n_iter
         Maximum number of iterations for the diffusion simulation.
     dt
@@ -76,11 +78,16 @@ def sepal(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`numpy.ndarray` with the sepal scores.
+    If ``copy = True``, returns a :class:`pandas.DataFrame` with the sepal scores.
 
-    Otherwise, adds to ``adata.obs`` the following key:
+    Otherwise, adds to ``adata.uns`` the following key:
 
-        - :attr:`anndata.AnnData.obs` ``['sepal']`` - sepal score.
+        - :attr:`anndata.AnnData.uns` ``['sepal_score']`` - sepal score.
+
+    Notes
+    -----
+    If some genes in :attr:`anndata.AnnData.uns` ``['sepal_score']`` are `NaN`,
+    consider re-running the function with increased `n_iter`.
     """
     _assert_connectivity_key(adata, connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
