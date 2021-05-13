@@ -13,9 +13,9 @@ def test_sepal_seq_par(adata: AnnData):
     spatial_neighbors(adata, coord_type="visium")
     adata.var["highly_variable"] = np.random.choice([True, False], size=adata.var_names.shape, p=[0.005, 0.995])
 
-    sepal(adata)
-    df = sepal(adata, copy=True, n_jobs=1)
-    df_parallel = sepal(adata, copy=True, n_jobs=2)
+    sepal(adata, max_nbrs=6)
+    df = sepal(adata, max_nbrs=6, copy=True, n_jobs=1)
+    df_parallel = sepal(adata, max_nbrs=6, copy=True, n_jobs=2)
 
     idx_df = df.index.values
     idx_adata = adata[:, adata.var.highly_variable.values].var_names.values
