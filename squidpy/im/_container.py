@@ -322,7 +322,7 @@ class ImageContainer(FeatureMixin):
         logg.debug(f"Loading data `numpy.array` of shape `{img.shape}`")
 
         img = img.copy() if copy else img
-        shape, dims, _ = _infer_dimensions(img, infer_dimensions=infer_dimensions)
+        shape, dims, _, _ = _infer_dimensions(img, infer_dimensions=infer_dimensions)
 
         # TODO: Z-dim
         return xr.DataArray(img.reshape(shape), dims=dims).transpose("y", "x", "z", "channels")[:, :, 0, :]
@@ -340,13 +340,11 @@ class ImageContainer(FeatureMixin):
         img = img.copy() if copy else img
         # TODO: Z-dim
         if not ("y" in img.dims and "x" in img.dims):  # and "z" in img.dims):
-            _, dims, _ = _infer_dimensions(img, infer_dimensions=infer_dimensions)
+            _, dims, _, axes = _infer_dimensions(img, infer_dimensions=infer_dimensions)
+            img = img.expand_dims([f"tmp_{a}" for a in axes], axis=axes)
+
             logg.warning(f"Unable to find `y` or `x` dimension in `{img.dims}`. Renaming to `{dims}`")
             img = img.rename(dict(zip(img.dims, dims)))
-            # TODO: test when Z-dim is done
-            for i, dim in enumerate(dims):
-                if dim not in img.dims:
-                    img = img.expand_dims(dim, i)
 
         # TODO: Z-dim
         if "z" in img.dims:
