@@ -59,6 +59,7 @@ def sepal(
         Otherwise,it's computed for all genes.
     max_nbrs
         Maximum number of neighbors of a node in the graph, either:
+
             - 4 for a square-grid (ST, Dbit-seq).
             - 6 for a hexagonal-grid (Visium).
     n_iter
