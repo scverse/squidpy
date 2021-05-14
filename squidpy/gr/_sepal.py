@@ -63,8 +63,10 @@ def sepal(
         Otherwise, it's computed for all genes.
     n_iter
         Maximum number of iterations for the diffusion simulation.
+        If ``n_iter`` of iterations are reached the simulation will terminate
+        even though convergence has not been achieved.
     dt
-        Time step added in diffusion simulation.
+        Time step in diffusion simulation.
     thresh
         Entropy threshhold for convergence of diffusion simulation.
     %(conn_key)s
@@ -244,7 +246,11 @@ def _laplacian_rect(
     nbrs: np.ndarray,
     h: np.ndarray,
 ) -> np.float_:
-    """Laplacian approx rectilinear grid."""
+    """
+    Five point stencil approximation on rectilinear grid.
+
+    see `Wikipedia <en.wikipedia.org/wiki/Five-point_stencil>`_.
+    """
     d2f = nbrs - 4 * centers
     d2f = d2f / h ** 2
 
@@ -258,7 +264,14 @@ def _laplacian_hex(
     nbrs: np.ndarray,
     h: np.ndarray,
 ) -> np.float_:
-    """Laplacian approx hexagonal grid."""
+    """
+    Seven point stencil approximation on hexagonal grid.
+
+    reference:
+    Approximate Methods of Higher Analysis
+    (Curtis D. Benster, L.V. Kantorovich, V.I. Krylov)
+    ISBN-13: 978-0486821603
+    """
     d2f = nbrs - 6 * centers
     d2f = d2f / h ** 2
     d2f = (d2f * 2) / 3
@@ -282,7 +295,7 @@ def _entropy(
 def _compute_idxs(
     g: spmatrix, spatial: np.ndarray, sat_thresh: int, metric: str = "l1"
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Get saturated and unsaturated nodes and nhood indexes."""
+    """Get saturated and unsaturated nodes and neighborhood indices."""
     sat, unsat = _get_sat_unsat_idx(g.indptr, g.shape[0], sat_thresh)
 
     sat_idx, nearest_sat, un_unsat = _get_nhood_idx(sat, unsat, g.indptr, g.indices, sat_thresh)
@@ -309,7 +322,7 @@ def _get_sat_unsat_idx(g_indptr: np.ndarray, g_shape: int, sat_thresh: int) -> T
 def _get_nhood_idx(
     sat: np.ndarray, unsat: np.ndarray, g_indptr: np.ndarray, g_indices: np.ndarray, sat_thresh: int
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Get saturated and unsaturated nhood indexes."""
+    """Get saturated and unsaturated neighborhood indices."""
     # get saturated nhood indices
     sat_idx = np.zeros((sat.shape[0], sat_thresh))
     for idx in np.arange(sat.shape[0]):
