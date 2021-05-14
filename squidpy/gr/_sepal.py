@@ -3,7 +3,6 @@ from typing_extensions import Literal  # < 3.8
 
 from scanpy import logging as logg
 from anndata import AnnData
-from scanpy.get import _get_obs_rep
 
 from numba import njit
 from scipy.sparse import issparse, spmatrix, csr_matrix, isspmatrix_csr
@@ -15,6 +14,7 @@ from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
 from squidpy.gr._utils import (
     _save_data,
+    _extract_expression,
     _assert_spatial_basis,
     _assert_connectivity_key,
     _assert_non_empty_sequence,
@@ -63,7 +63,7 @@ def sepal(
         Otherwise, it's computed for all genes.
     n_iter
         Maximum number of iterations for the diffusion simulation.
-        If ``n_iter`` of iterations are reached the simulation will terminate
+        If ``n_iter`` iterations are reached, the simulation will terminate
         even though convergence has not been achieved.
     dt
         Time step in diffusion simulation.
@@ -119,7 +119,7 @@ def sepal(
     sat, sat_idx, unsat, unsat_idx = _compute_idxs(g, spatial, max_neighs, "l1")
 
     # get counts
-    vals = _get_obs_rep(adata[:, genes], use_raw=use_raw, layer=layer)
+    vals, genes = _extract_expression(adata, genes=genes, use_raw=use_raw, layer=layer)
     start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` core(s)")
 
     score = parallelize(
