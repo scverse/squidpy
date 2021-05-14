@@ -6,7 +6,7 @@ from anndata import AnnData
 from scanpy.get import _get_obs_rep
 
 from numba import njit
-from scipy.sparse import issparse, spmatrix, csr_matrix
+from scipy.sparse import issparse, spmatrix, csr_matrix, isspmatrix_csr
 from sklearn.metrics import pairwise_distances
 import numpy as np
 import pandas as pd
@@ -43,19 +43,19 @@ def sepal(
     show_progress_bar: bool = True,
 ) -> Optional[pd.DataFrame]:
     """
-    Identify spatially variable genes with Sepal.
+    Identify spatially variable genes with *Sepal*.
 
-    Sepal is a method that simulate a diffusion process to quantify spatial structure in tissue.
-    See  :cite:`andersson2021` for reference.
+    *Sepal* is a method that simulates a diffusion process to quantify spatial structure in tissue.
+    See :cite:`andersson2021` for reference.
 
     Parameters
     ----------
     %(adata)s
     max_neighs
-        Maximum number of neighbors of a node in the graph, either:
+        Maximum number of neighbors of a node in the graph. Valid options are:
 
-            - 4 for a square-grid (ST, Dbit-seq).
-            - 6 for a hexagonal-grid (Visium).
+            - `4` - for a square-grid (ST, Dbit-seq).
+            - `6` - for a hexagonal-grid (Visium).
     genes
         List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute sepal score.
 
@@ -68,7 +68,7 @@ def sepal(
     dt
         Time step in diffusion simulation.
     thresh
-        Entropy threshhold for convergence of diffusion simulation.
+        Entropy threshold for convergence of diffusion simulation.
     %(conn_key)s
     %(spatial_key)s
     layer
@@ -82,9 +82,9 @@ def sepal(
     -------
     If ``copy = True``, returns a :class:`pandas.DataFrame` with the sepal scores.
 
-    Otherwise, adds to ``adata.uns`` the following key:
+    Otherwise, modifies the ``adata`` with the following key:
 
-        - :attr:`anndata.AnnData.uns` ``['sepal_score']`` - sepal score.
+        - :attr:`anndata.AnnData.uns` ``['sepal_score']`` - the sepal scores.
 
     Notes
     -----
@@ -93,36 +93,33 @@ def sepal(
     """
     _assert_connectivity_key(adata, connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
+    if max_neighs not in (4, 6):
+        raise ValueError(f"Expected `max_neighs` to be either `4` or `6`, found `{max_neighs}`.")
 
     spatial = adata.obsm[spatial_key].astype(np.float_)
 
     if genes is None:
+        genes = adata.var_names.values
         if "highly_variable" in adata.var.columns:
-            genes = adata[:, adata.var.highly_variable.values].var_names.values
-        else:
-            genes = adata.var_names.values
+            genes = genes[adata.var["highly_variable"].values]
     genes = _assert_non_empty_sequence(genes, name="genes")
 
     n_jobs = _get_n_cores(n_jobs)
 
     g = adata.obsp[connectivity_key]
-    if not issparse(g):
-        logg.warning(f"Will sparsify the adjacency matrix of shape {g.shape}.")
+    if not isspmatrix_csr(g):
         g = csr_matrix(g)
+    g.eliminate_zeros()
 
     max_n = np.diff(g.indptr).max()
     if max_n != max_neighs:
-        raise ValueError(f"Found node with # neighbors == {max_n}, bu expected `max_neighs` == {max_neighs}.")
+        raise ValueError(f"Expected `max_neighs={max_neighs}`, found node with `{max_n}` neighbors.")
 
     # get saturated/unsaturated nodes
     sat, sat_idx, unsat, unsat_idx = _compute_idxs(g, spatial, max_neighs, "l1")
 
     # get counts
     vals = _get_obs_rep(adata[:, genes], use_raw=use_raw, layer=layer)
-    if issparse(vals):
-        logg.warning(f"Will densify a matrix of shape {vals.shape}. Memory issues could arise.")
-        vals = vals.toarray()
-
     start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` core(s)")
 
     score = parallelize(
@@ -145,16 +142,18 @@ def sepal(
         thresh=thresh,
     )
 
-    sepal_score = pd.DataFrame(score, index=genes, columns=["sepal_score"])
-    if sepal_score["sepal_score"].isna().any():
+    key_added = "sepal_score"
+    sepal_score = pd.DataFrame(score, index=genes, columns=[key_added])
+
+    if sepal_score[key_added].isna().any():
         logg.warning("Found `NaN` in sepal scores, consider increasing `n_iter` to a higher value")
-    sepal_score.sort_values(by="sepal_score", ascending=False, inplace=True)
+    sepal_score.sort_values(by=key_added, ascending=False, inplace=True)
 
     if copy:
         logg.info("Finish", time=start)
         return sepal_score
 
-    _save_data(adata, attr="uns", key="sepal_score", data=sepal_score, time=start)
+    _save_data(adata, attr="uns", key=key_added, data=sepal_score, time=start)
 
 
 def _score_helper(
@@ -170,23 +169,18 @@ def _score_helper(
     thresh: np.float_,
     queue: Optional[SigQueue] = None,
 ) -> np.ndarray:
-
-    score = []
     if max_neighs == 4:
         fun = _laplacian_rect
     elif max_neighs == 6:
         fun = _laplacian_hex
     else:
-        NotImplementedError("Laplacian for `max_neighs`= {max_neighs} is not yet implemented.")
+        raise NotImplementedError(f"Laplacian for `{max_neighs}` neighbors is not yet implemented.")
+
+    score, sparse = [], issparse(vals)
     for i in ixs:
-        conc = vals[:, i]
-        time_iter = _diffusion(
-            conc, fun, n_iter, sat, sat_idx, sat.shape[0], unsat, unsat_idx, conc.shape[0], dt=dt, thresh=thresh
-        )
-        if time_iter.shape[0] != 0:
-            score.append(dt * time_iter[0])
-        else:
-            score.append(np.nan)
+        conc = vals[:, i].A.flatten() if sparse else vals[:, i].copy()
+        time_iter = _diffusion(conc, fun, n_iter, sat, sat_idx, unsat, unsat_idx, dt=dt, thresh=thresh)
+        score.append(dt * time_iter)
 
         if queue is not None:
             queue.put(Signal.UPDATE)
@@ -197,22 +191,21 @@ def _score_helper(
     return np.array(score)
 
 
-@njit(parallel=False, fastmath=True)
+@njit(fastmath=True)
 def _diffusion(
     conc: np.ndarray,
-    laplacian: Callable[..., np.float_],
+    laplacian: Callable[[np.ndarray, np.ndarray, np.ndarray], np.float_],
     n_iter: int,
     sat: np.ndarray,
     sat_idx: np.ndarray,
-    sat_shape: int,
     unsat: np.ndarray,
     unsat_idx: np.ndarray,
-    conc_shape: int,
     dt: float = 0.001,
     D: float = 1.0,
     thresh: float = 1e-8,
-) -> np.ndarray:
+) -> np.float_:
     """Simulate diffusion process on a regular graph."""
+    sat_shape, conc_shape = sat.shape[0], conc.shape[0]
     entropy_arr = np.zeros(n_iter)
     prev_ent = 1.0
     nhood = np.zeros(sat_shape)
@@ -236,7 +229,8 @@ def _diffusion(
         if entropy_arr[i] <= thresh:
             break
 
-    return np.nonzero(entropy_arr <= thresh)[0]
+    tmp = np.nonzero(entropy_arr <= thresh)[0]
+    return tmp[0] if len(tmp) else np.nan
 
 
 # taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
@@ -249,7 +243,7 @@ def _laplacian_rect(
     """
     Five point stencil approximation on rectilinear grid.
 
-    see `Wikipedia <en.wikipedia.org/wiki/Five-point_stencil>`_.
+    See `Wikipedia <https://en.wikipedia.org/wiki/Five-point_stencil>`_ for more information.
     """
     d2f = nbrs - 4 * centers
     d2f = d2f / h ** 2
@@ -258,7 +252,7 @@ def _laplacian_rect(
 
 
 # taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
-@njit(parallel=False, fastmath=True)
+@njit(fastmath=True)
 def _laplacian_hex(
     centers: np.ndarray,
     nbrs: np.ndarray,
@@ -267,10 +261,11 @@ def _laplacian_hex(
     """
     Seven point stencil approximation on hexagonal grid.
 
-    reference:
-    Approximate Methods of Higher Analysis
-    (Curtis D. Benster, L.V. Kantorovich, V.I. Krylov)
-    ISBN-13: 978-0486821603
+    References
+    ----------
+    Approximate Methods of Higher Analysis,
+    Curtis D. Benster, L.V. Kantorovich, V.I. Krylov,
+    ISBN-13: 978-0486821603.
     """
     d2f = nbrs - 6 * centers
     d2f = d2f / h ** 2
@@ -280,11 +275,11 @@ def _laplacian_hex(
 
 
 # taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
-@njit(parallel=False, fastmath=True)
+@njit(fastmath=True)
 def _entropy(
     xx: np.ndarray,
 ) -> np.float_:
-    """Entropy of array."""
+    """Get entropy of an array."""
     xnz = xx[xx > 0]
     xs = np.sum(xnz)
     xn = xnz / xs
@@ -308,7 +303,7 @@ def _compute_idxs(
     return sat, sat_idx, unsat, nearest_sat.astype(np.int32)
 
 
-@njit(parallel=False)
+@njit
 def _get_sat_unsat_idx(g_indptr: np.ndarray, g_shape: int, sat_thresh: int) -> Tuple[np.ndarray, np.ndarray]:
     """Get saturated and unsaturated nodes based on thresh."""
     n_indices = np.diff(g_indptr)
@@ -318,20 +313,20 @@ def _get_sat_unsat_idx(g_indptr: np.ndarray, g_shape: int, sat_thresh: int) -> T
     return sat, unsat
 
 
-@njit(parallel=False)
+@njit
 def _get_nhood_idx(
     sat: np.ndarray, unsat: np.ndarray, g_indptr: np.ndarray, g_indices: np.ndarray, sat_thresh: int
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Get saturated and unsaturated neighborhood indices."""
     # get saturated nhood indices
     sat_idx = np.zeros((sat.shape[0], sat_thresh))
-    for idx in np.arange(sat.shape[0]):
+    for idx in range(sat.shape[0]):
         i = sat[idx]
         sat_idx[idx] = g_indices[g_indptr[i] : g_indptr[i + 1]]
 
     # get closest saturated of unsaturated
     nearest_sat = np.full_like(unsat, fill_value=np.nan, dtype=np.float64)
-    for idx in np.arange(unsat.shape[0]):
+    for idx in range(unsat.shape[0]):
         i = unsat[idx]
         unsat_neigh = g_indices[g_indptr[i] : g_indptr[i + 1]]
         for u in unsat_neigh:
