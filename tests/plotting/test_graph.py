@@ -64,18 +64,26 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
         # use count to avoid nan for scipy.cluster.hierarchy
         pl.nhood_enrichment(adata, cluster_key=C_KEY, mode="count", method="single")
 
-    def test_plot_ripley_k(self, adata: AnnData):
-        gr.spatial_neighbors(adata)
-        gr.ripley_k(adata, cluster_key=C_KEY)
+    def test_plot_ripley_l(self, adata_ripley: AnnData):
+        adata = adata_ripley
+        gr.ripley(adata, cluster_key=C_KEY, mode="L")
+        pl.ripley(adata, cluster_key=C_KEY, mode="L")
 
-        pl.ripley_k(adata, cluster_key=C_KEY)
+    def test_plot_ripley_f(self, adata_ripley: AnnData):
+        adata = adata_ripley
+        gr.ripley(adata, cluster_key=C_KEY, mode="F")
+        pl.ripley(adata, cluster_key=C_KEY, mode="F")
 
-    def test_plot_ripley_k_palette(self, adata_palette: AnnData):
+    def test_plot_ripley_g(self, adata_ripley: AnnData):
+        adata = adata_ripley
+        gr.ripley(adata, cluster_key=C_KEY, mode="G")
+        pl.ripley(adata, cluster_key=C_KEY, mode="G")
 
-        adata = adata_palette
-        gr.spatial_neighbors(adata)
-        gr.ripley_k(adata, cluster_key=C_KEY)
-        pl.ripley_k(adata, cluster_key=C_KEY)
+    def test_plot_ripley_f_nopalette(self, adata_ripley: AnnData):
+        adata = adata_ripley
+        adata.uns.pop(f"{C_KEY}_colors")
+        gr.ripley(adata, cluster_key=C_KEY, mode="F")
+        pl.ripley(adata, cluster_key=C_KEY, mode="F")
 
     def test_tol_plot_co_occurrence(self, adata: AnnData):
         gr.co_occurrence(adata, cluster_key=C_KEY)

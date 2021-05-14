@@ -57,10 +57,10 @@ class ImageView:
 
         # obsm
         obsm_label = QLabel("Obsm:", parent=parent)
-        obsm_label.setToolTip("Keys in `adata.obsm` containing bases information.")
+        obsm_label.setToolTip("Keys in `adata.obsm` containing multidimensional cell information.")
         obsm_widget = AListWidget(self.controller, self.model.alayer, attr="obsm", multiselect=False, parent=parent)
         obsm_index_widget = ObsmIndexWidget(self.model.alayer, parent=parent)
-        obsm_index_widget.setToolTip("Select the baes dimension.")
+        obsm_index_widget.setToolTip("Indices for current key in `adata.obsm`.")
         obsm_index_widget.currentTextChanged.connect(obsm_widget.setIndex)
         obsm_widget.itemClicked.connect(obsm_index_widget.addItems)
 

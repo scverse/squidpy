@@ -101,3 +101,10 @@ class InferDimensions(ModeEnum):
     DEFAULT = "default"
     PREFER_CHANNELS = "prefer_channels"
     PREFER_Z = "prefer_z"
+
+
+@unique
+class RipleyStat(ModeEnum):
+    F = "F"
+    G = "G"
+    L = "L"
