@@ -11,11 +11,12 @@ UNS_KEY = "sepal_score"
 def test_sepal_seq_par(adata: AnnData):
     """Check whether sepal results are the same for seq. and parallel computation."""
     spatial_neighbors(adata, coord_type="visium")
-    adata.var["highly_variable"] = np.random.choice([True, False], size=adata.var_names.shape, p=[0.005, 0.995])
+    rng = np.random.default_rng(42)
+    adata.var["highly_variable"] = rng.choice([True, False], size=adata.var_names.shape, p=[0.005, 0.995])
 
-    sepal(adata, max_nbrs=6)
-    df = sepal(adata, max_nbrs=6, copy=True, n_jobs=1)
-    df_parallel = sepal(adata, max_nbrs=6, copy=True, n_jobs=2)
+    sepal(adata, max_neighs=6)
+    df = sepal(adata, max_neighs=6, copy=True, n_jobs=1)
+    df_parallel = sepal(adata, max_neighs=6, copy=True, n_jobs=2)
 
     idx_df = df.index.values
     idx_adata = adata[:, adata.var.highly_variable.values].var_names.values
@@ -35,10 +36,11 @@ def test_sepal_square_seq_par(adata_squaregrid: AnnData):
     """Test sepal for square grid."""
     adata = adata_squaregrid
     spatial_neighbors(adata, radius=1.0)
-    adata.var["highly_variable"] = np.random.choice([True, False], size=adata.var_names.shape, p=[0.1, 0.9])
+    rng = np.random.default_rng(42)
+    adata.var["highly_variable"] = rng.choice([True, False], size=adata.var_names.shape)
 
-    sepal(adata, max_nbrs=4)
-    df_parallel = sepal(adata, copy=True, n_jobs=2, max_nbrs=4)
+    sepal(adata, max_neighs=4)
+    df_parallel = sepal(adata, copy=True, n_jobs=2, max_neighs=4)
 
     idx_df = df_parallel.index.values
     idx_adata = adata[:, adata.var.highly_variable.values].var_names.values

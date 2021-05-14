@@ -1,5 +1,4 @@
 from typing import Tuple, Union, Callable, Optional, Sequence
-from functools import singledispatch
 from typing_extensions import Literal  # < 3.8
 
 from scanpy import logging as logg
@@ -7,7 +6,7 @@ from anndata import AnnData
 from scanpy.get import _get_obs_rep
 
 from numba import njit
-from scipy.sparse import spmatrix
+from scipy.sparse import issparse, spmatrix, csr_matrix
 from sklearn.metrics import pairwise_distances
 import numpy as np
 import pandas as pd
@@ -29,11 +28,11 @@ __all__ = ["sepal"]
 @inject_docs(key=Key.obsp.spatial_conn())
 def sepal(
     adata: AnnData,
-    max_nbrs: Literal[4, 6],
+    max_neighs: Literal[4, 6],
     genes: Optional[Union[str, Sequence[str]]] = None,
     n_iter: Optional[int] = 30000,
     dt: float = 0.001,
-    thres: float = 1e-8,
+    thresh: float = 1e-8,
     connectivity_key: str = Key.obsp.spatial_conn(),
     spatial_key: str = Key.obsm.spatial,
     layer: Optional[str] = None,
@@ -52,7 +51,7 @@ def sepal(
     Parameters
     ----------
     %(adata)s
-    max_nbrs
+    max_neighs
         Maximum number of neighbors of a node in the graph, either:
 
             - 4 for a square-grid (ST, Dbit-seq).
@@ -61,13 +60,13 @@ def sepal(
         List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute sepal score.
 
         If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present.
-        Otherwise,it's computed for all genes.
+        Otherwise, it's computed for all genes.
     n_iter
         Maximum number of iterations for the diffusion simulation.
     dt
         Time step added in diffusion simulation.
-    thres
-        Entropy threshold for convergence of diffusion simulation.
+    thresh
+        Entropy threshhold for convergence of diffusion simulation.
     %(conn_key)s
     %(spatial_key)s
     layer
@@ -88,7 +87,7 @@ def sepal(
     Notes
     -----
     If some genes in :attr:`anndata.AnnData.uns` ``['sepal_score']`` are `NaN`,
-    consider re-running the function with increased `n_iter`.
+    consider re-running the function with increased ``n_iter``.
     """
     _assert_connectivity_key(adata, connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
@@ -104,17 +103,23 @@ def sepal(
 
     n_jobs = _get_n_cores(n_jobs)
 
-    vals = _get_obs_rep(adata[:, genes], use_raw=use_raw, layer=layer)
-    vals = _resolve_vals(vals)
-
-    g = adata.obsp[connectivity_key].copy()
+    g = adata.obsp[connectivity_key]
+    if not issparse(g):
+        logg.warning(f"Will sparsify the adjacency matrix of shape {g.shape}.")
+        g = csr_matrix(g)
 
     max_n = np.diff(g.indptr).max()
-    if max_n != max_nbrs:
-        logg.warning(f"Found node with # neighbors == {max_n}, bu expected `max_nbrs` == {max_nbrs}.")
+    if max_n != max_neighs:
+        raise ValueError(f"Found node with # neighbors == {max_n}, bu expected `max_neighs` == {max_neighs}.")
 
     # get saturated/unsaturated nodes
-    sat, sat_idx, unsat, unsat_idx = _compute_idxs(g, spatial, max_nbrs, "l1")
+    sat, sat_idx, unsat, unsat_idx = _compute_idxs(g, spatial, max_neighs, "l1")
+
+    # get counts
+    vals = _get_obs_rep(adata[:, genes], use_raw=use_raw, layer=layer)
+    if issparse(vals):
+        logg.warning(f"Will densify a matrix of shape {vals.shape}. Memory issues could arise.")
+        vals = vals.toarray()
 
     start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` core(s)")
 
@@ -128,19 +133,19 @@ def sepal(
         show_progress_bar=show_progress_bar,
     )(
         vals=vals,
-        max_n=max_nbrs,
+        max_neighs=max_neighs,
         n_iter=n_iter,
         sat=sat,
         sat_idx=sat_idx,
         unsat=unsat,
         unsat_idx=unsat_idx,
         dt=dt,
-        thres=thres,
+        thresh=thresh,
     )
 
     sepal_score = pd.DataFrame(score, index=genes, columns=["sepal_score"])
     if sepal_score["sepal_score"].isna().any():
-        logg.info("Found NaN in sepal scores, consider increase `n_iter` to a higher value.")
+        logg.warning("Found `NaN` in sepal scores, consider increasing `n_iter` to a higher value")
     sepal_score.sort_values(by="sepal_score", ascending=False, inplace=True)
 
     if copy:
@@ -153,31 +158,31 @@ def sepal(
 def _score_helper(
     ixs: Sequence[int],
     vals: Union[spmatrix, np.ndarray],
-    max_n: int,
+    max_neighs: int,
     n_iter: int,
     sat: np.ndarray,
     sat_idx: np.ndarray,
     unsat: np.ndarray,
     unsat_idx: np.ndarray,
     dt: np.float_,
-    thres: np.float_,
+    thresh: np.float_,
     queue: Optional[SigQueue] = None,
 ) -> np.ndarray:
 
     score = []
-    if max_n == 4:
+    if max_neighs == 4:
         fun = _laplacian_rect
-    elif max_n == 6:
+    elif max_neighs == 6:
         fun = _laplacian_hex
     else:
-        NotImplementedError("Laplacian for `max_nbrs`= {max_n} is not yet implemented.")
+        NotImplementedError("Laplacian for `max_neighs`= {max_neighs} is not yet implemented.")
     for i in ixs:
-        conc = vals[:, i].copy()
+        conc = vals[:, i]
         time_iter = _diffusion(
-            conc, fun, n_iter, sat, sat_idx, sat.shape[0], unsat, unsat_idx, conc.shape[0], dt=dt, thres=thres
+            conc, fun, n_iter, sat, sat_idx, sat.shape[0], unsat, unsat_idx, conc.shape[0], dt=dt, thresh=thresh
         )
         if time_iter.shape[0] != 0:
-            score.append(0.001 * time_iter[0])
+            score.append(dt * time_iter[0])
         else:
             score.append(np.nan)
 
@@ -203,12 +208,11 @@ def _diffusion(
     conc_shape: int,
     dt: float = 0.001,
     D: float = 1.0,
-    thres: float = 1e-8,
+    thresh: float = 1e-8,
 ) -> np.ndarray:
     """Simulate diffusion process on a regular graph."""
     entropy_arr = np.zeros(n_iter)
-    ent = np.ones(n_iter + 1)
-
+    prev_ent = 1.0
     nhood = np.zeros(sat_shape)
     weights = np.ones(sat_shape)
 
@@ -224,12 +228,13 @@ def _diffusion(
         # set values below zero to 0
         conc[conc < 0] = 0
         # compute entropy
-        ent[i + 1] = _entropy(conc[sat]) / sat_shape
-        entropy_arr[i] = np.abs(ent[i + 1] - ent[i])  # estimate entropy difference
-        if entropy_arr[i] <= thres:
+        ent = _entropy(conc[sat]) / sat_shape
+        entropy_arr[i] = np.abs(ent - prev_ent)  # estimate entropy difference
+        prev_ent = ent
+        if entropy_arr[i] <= thresh:
             break
 
-    return np.nonzero(entropy_arr <= thres)[0]
+    return np.nonzero(entropy_arr <= thresh)[0]
 
 
 # taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
@@ -275,12 +280,12 @@ def _entropy(
 
 
 def _compute_idxs(
-    g: spmatrix, spatial: np.ndarray, sat_thres: int, metric: str = "l1"
+    g: spmatrix, spatial: np.ndarray, sat_thresh: int, metric: str = "l1"
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Get saturated and unsaturated nodes and nhood indexes."""
-    sat, unsat = _get_sat_unsat_idx(g.indptr, g.shape[0], sat_thres)
+    sat, unsat = _get_sat_unsat_idx(g.indptr, g.shape[0], sat_thresh)
 
-    sat_idx, nearest_sat, un_unsat = _get_nhood_idx(sat, unsat, g.indptr, g.indices, sat_thres)
+    sat_idx, nearest_sat, un_unsat = _get_nhood_idx(sat, unsat, g.indptr, g.indices, sat_thresh)
 
     # compute dist btwn remaining unsat and all sat
     dist = pairwise_distances(spatial[un_unsat], spatial[sat], metric=metric)
@@ -291,33 +296,31 @@ def _compute_idxs(
 
 
 @njit(parallel=False)
-def _get_sat_unsat_idx(g_indptr: np.ndarray, g_shape: int, sat_thres: int) -> Tuple[np.ndarray, np.ndarray]:
-    """Get saturated and unsaturated nodes based on thres."""
+def _get_sat_unsat_idx(g_indptr: np.ndarray, g_shape: int, sat_thresh: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Get saturated and unsaturated nodes based on thresh."""
     n_indices = np.diff(g_indptr)
-    unsat = np.arange(g_shape)[n_indices < sat_thres]
-    sat = np.arange(g_shape)[n_indices == sat_thres]
+    unsat = np.arange(g_shape)[n_indices < sat_thresh]
+    sat = np.arange(g_shape)[n_indices == sat_thresh]
 
     return sat, unsat
 
 
 @njit(parallel=False)
 def _get_nhood_idx(
-    sat: np.ndarray, unsat: np.ndarray, g_indptr: np.ndarray, g_indices: np.ndarray, sat_thres: int
+    sat: np.ndarray, unsat: np.ndarray, g_indptr: np.ndarray, g_indices: np.ndarray, sat_thresh: int
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Get saturated and unsaturated nhood indexes."""
     # get saturated nhood indices
-    sat_idx = np.zeros((sat.shape[0], sat_thres))
+    sat_idx = np.zeros((sat.shape[0], sat_thresh))
     for idx in np.arange(sat.shape[0]):
         i = sat[idx]
-        s = slice(g_indptr[i], g_indptr[i + 1])
-        sat_idx[idx] = g_indices[s]
+        sat_idx[idx] = g_indices[g_indptr[i] : g_indptr[i + 1]]
 
     # get closest saturated of unsaturated
-    nearest_sat = np.zeros(unsat.shape) * np.nan
+    nearest_sat = np.full_like(unsat, fill_value=np.nan, dtype=np.float64)
     for idx in np.arange(unsat.shape[0]):
         i = unsat[idx]
-        s = slice(g_indptr[i], g_indptr[i + 1])
-        unsat_neigh = g_indices[s]
+        unsat_neigh = g_indices[g_indptr[i] : g_indptr[i + 1]]
         for u in unsat_neigh:
             if u in sat:  # take the first saturated nhood
                 nearest_sat[idx] = u
@@ -328,14 +331,3 @@ def _get_nhood_idx(
     un_unsat = unsat[np.isnan(nearest_sat)]
 
     return sat_idx.astype(np.int32), nearest_sat, un_unsat
-
-
-# interface, taken from: https://github.com/theislab/scanpy/blob/master/scanpy/metrics/_gearys_c.py
-@singledispatch
-def _resolve_vals(val: np.ndarray) -> np.ndarray:
-    return val
-
-
-@_resolve_vals.register(spmatrix)
-def _(val: spmatrix) -> np.ndarray:
-    return val.toarray()  # type: ignore[no-any-return]
