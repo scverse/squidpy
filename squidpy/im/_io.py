@@ -12,6 +12,8 @@ import dask.array as da
 from tifffile import TiffFile
 from skimage.io import imread
 
+from squidpy._docs import inject_docs
+
 # modification of `skimage`'s `pil_to_ndarray`:
 # https://github.com/scikit-image/scikit-image/blob/main/skimage/io/_plugins/pil_plugin.py#L55
 from squidpy._constants._constants import InferDimensions
@@ -86,10 +88,50 @@ def _get_image_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # t
             Image.MAX_IMAGE_PIXELS = old_max_image_pixels
 
 
+@inject_docs(id=InferDimensions)
 def _infer_dimensions(
     obj: Union[np.ndarray, xr.DataArray, str],
     infer_dimensions: InferDimensions = InferDimensions.DEFAULT,
 ) -> Tuple[Tuple[int, ...], Tuple[str, ...], np.dtype, Tuple[int, ...]]:  # type: ignore[type-arg]
+    """
+    Infer dimension names of an array.
+
+    Parameters
+    ----------
+    obj
+        Path to an image or an array.
+    infer_dimensions
+        Policy that determines how to name the dimensions. Valid options are:
+
+            - `{id.PREFER_CHANNELS.s!r}` - load `channels` dimension as `channels`.
+            - `{id.PREFER_Z.s!r}` - load `z` dimension as `channels`.
+            - `{id.DEFAULT.s!r}` - only matters if the number of dimensions is `3` or `4`.
+              If `z` dimension is `1`, load it as `z`.
+              Otherwise, if `channels` dimension is `1`, load `z` dimension (now larger than `1`) as `channels`.
+              Otherwise, load `z` dimension as `z` and `channels` as `channels`.
+
+        The following assumptions are made when determining the dimension names:
+
+            - two largest dimensions are assumed to be `y` and `x`, in this order.
+            - `z` dimension comes always before `channel` dimension.
+            - for `3` dimensional arrays, the last dimension is `channels`,
+              in other cases, it will dealt with as if it were `z` dimension.
+
+    Returns
+    -------
+    Tuple of the following:
+
+        - :class:`tuple` of 4 :class:`int` describing the shape.
+        - :class:`tuple` of 4 :class:`str` describing the dimensions.
+        - the array :class:`numpy.dtype`.
+        - :class:`tuple` of maximally 2 :class:`ints` which dimensinos to expand.
+
+    Raises
+    ------
+    ValuesError
+        If the array is not `2`, `3,` or `4` dimensional.
+    """
+
     def dims(order: List[int]) -> Tuple[str, ...]:
         return tuple(np.array(["z", "y", "x", "channels"], dtype=object)[np.argsort(order)])
 

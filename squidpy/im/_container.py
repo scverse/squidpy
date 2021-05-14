@@ -79,7 +79,7 @@ class ImageContainer(FeatureMixin):
     Wraps :class:`xarray.Dataset` to store several image layers with the same x and y dimensions in one object.
     Dimensions of stored images are ``(y, x, channels)``. The channel dimension may vary between image layers.
 
-    This class also llows for lazy loading and processing using :mod:`dask`, and is given to all image
+    This class also allows for lazy loading and processing using :mod:`dask`, and is given to all image
     processing functions, along with :class:`anndata.AnnData` instance, if necessary.
 
     Parameters
