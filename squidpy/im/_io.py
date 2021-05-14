@@ -1,5 +1,5 @@
 from PIL import Image
-from typing import Tuple, Union, Mapping, Optional
+from typing import List, Tuple, Union, Mapping, Optional
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -89,7 +89,24 @@ def _get_image_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # t
 def _infer_dimensions(
     obj: Union[np.ndarray, xr.DataArray, str],
     infer_dimensions: Union[InferDimensions, Tuple[str]] = InferDimensions.DEFAULT,
-) -> Tuple[Tuple[int, ...], Tuple[str, ...], np.dtype]:  # type: ignore[type-arg]
+) -> Tuple[Tuple[int, ...], Tuple[str, ...], np.dtype, Tuple[int, ...]]:  # type: ignore[type-arg]
+    def dims(order: List[int]) -> Tuple[str, ...]:
+        return tuple(np.array(["z", "y", "x", "channels"], dtype=object)[np.argsort(order)])
+
+    def infer(y: int, x: int, z: int, c: int) -> Tuple[str, ...]:
+        if infer_dimensions == InferDimensions.DEFAULT:
+            if shape[z] == 1:
+                return dims([z, y, x, c])
+            if shape[c] == 1:
+                return dims([c, y, x, z])
+
+            return dims([z, y, x, c])
+
+        if infer_dimensions == InferDimensions.PREFER_Z:
+            return dims([c, y, x, z])
+
+        return dims([z, y, x, c])
+
     if isinstance(obj, str):
         shape, dtype = _get_image_shape_dtype(obj)
     else:
@@ -102,36 +119,34 @@ def _infer_dimensions(
         if len(infer_dimensions) != ndim:
             raise ValueError(f"Image is `{ndim}` dimensional, cannot assign to dims `{infer_dimensions}`.")
         add_shape = tuple([1] * (4 - ndim))
-        return shape + add_shape, infer_dimensions, dtype
+        return shape + add_shape, infer_dimensions, dtype, tuple(range(4 - ndim, 4))
 
     if ndim == 2:
-        return shape + (1, 1), ("y", "x", "z", "channels"), dtype
+        # assume only spatial dims are present
+        return shape + (1, 1), ("y", "x", "z", "channels"), dtype, (2, 3)
+
+    x, y, *_ = np.argsort(shape)[::-1]
+    if y > x:
+        # assume 1st 2 dimensions are spatial and are y, x
+        y, x = x, y
 
     if ndim == 3:
-        if shape[0] < shape[1] and shape[0] < shape[2]:
-            # tiff with pages, but no channels
-            if infer_dimensions == InferDimensions.PREFER_Z:
-                return shape + (1,), ("z", "y", "x", "channels"), dtype
-            return shape + (1,), ("channels", "y", "x", "z"), dtype
+        c, *_ = {0, 1, 2} - {x, y}
+        if c == 2:
+            z, c, expand_dims = 0, 3, 0
+            x += 1
+            y += 1
+            shape = (1,) + shape
+        else:
+            z, expand_dims = 3, 3
+            shape = shape + (1,)
 
-        if infer_dimensions == InferDimensions.PREFER_Z:
-            return shape + (1,), ("y", "x", "z", "channels"), dtype
-
-        return shape + (1,), ("y", "x", "channels", "z"), dtype
+        return shape, infer(y, x, z, c), dtype, (expand_dims,)
 
     if ndim == 4:
-        if infer_dimensions == InferDimensions.DEFAULT:
-            if shape[0] == 1:
-                return shape, ("z", "y", "x", "channels"), dtype
-            if shape[-1] == 1:
-                return shape, ("channels", "y", "x", "z"), dtype
-
-            return shape, ("z", "y", "x", "channels"), dtype
-
-        if infer_dimensions == InferDimensions.PREFER_Z:
-            return shape, ("channels", "y", "x", "z"), dtype
-
-        return shape, ("z", "y", "x", "channels"), dtype
+        # assume z before c
+        z, c = [i for i in range(ndim) if i not in (y, x)]
+        return shape, infer(y, x, z, c), dtype, ()
 
     raise ValueError(f"Expected the image to be either `2`, `3` or `4` dimensional, found `{ndim}`.")
 
@@ -157,7 +172,7 @@ def _lazy_load_image(
             Image.MAX_IMAGE_PIXELS = old_max_pixels
 
     fname = str(fname)
-    shape, dims, dtype = _infer_dimensions(fname, infer_dimensions)
+    shape, dims, dtype, _ = _infer_dimensions(fname, infer_dimensions)
 
     if isinstance(chunks, dict):
         chunks = tuple(chunks.get(d, "auto") for d in dims)

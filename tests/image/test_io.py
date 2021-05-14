@@ -48,28 +48,29 @@ class TestIO:
 
     @pytest.mark.parametrize("infer_dim", ["default", "prefer_z", "prefer_channels"])
     @pytest.mark.parametrize(
-        "shape", [(101, 64), (101, 64, 1), (3, 64, 101), (1, 101, 64, 3), (1, 101, 64, 1), (3, 101, 64, 1)]
+        "shape", [(101, 64), (101, 64, 3), (3, 64, 101), (1, 101, 64, 3), (1, 101, 64, 1), (3, 101, 64, 1)]
     )
     def test_infer_dimensions(self, shape: Tuple[int, ...], infer_dim: str, mocker: MockerFixture):
         mocker.patch("squidpy.im._io._get_image_shape_dtype", return_value=(shape, np.uint8))
         infer_dim = InferDimensions(infer_dim)
-        actual_shape, actual_dims, _ = _infer_dimensions("non_existent", infer_dim)
-        print(shape, actual_shape, actual_dims)
+        actual_shape, actual_dims, _, _ = _infer_dimensions("non_existent", infer_dim)
 
         if len(shape) == 2:
             np.testing.assert_array_equal(actual_dims, ["y", "x", "z", "channels"])
             np.testing.assert_array_equal(actual_shape, shape + (1, 1))
         elif len(shape) == 3:
-            if shape[0] <= shape[1] and shape[0] <= shape[2]:
+            if shape[-1] == 3:
+                if infer_dim == InferDimensions.PREFER_Z:
+                    np.testing.assert_array_equal(actual_dims, ["channels", "y", "x", "z"])
+                else:
+                    np.testing.assert_array_equal(actual_dims, ["z", "y", "x", "channels"])
+                np.testing.assert_array_equal(actual_shape, (1,) + shape)
+            else:
                 if infer_dim == InferDimensions.PREFER_Z:
                     np.testing.assert_array_equal(actual_dims, ["z", "y", "x", "channels"])
                 else:
                     np.testing.assert_array_equal(actual_dims, ["channels", "y", "x", "z"])
-            elif infer_dim == InferDimensions.PREFER_Z:
-                np.testing.assert_array_equal(actual_dims, ["y", "x", "z", "channels"])
-            else:
-                np.testing.assert_array_equal(actual_dims, ["y", "x", "channels", "z"])
-            np.testing.assert_array_equal(actual_shape, shape + (1,))
+                np.testing.assert_array_equal(actual_shape, shape + (1,))
         elif len(shape) == 4:
             if infer_dim == InferDimensions.DEFAULT:
                 if shape[0] == 1:

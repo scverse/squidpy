@@ -4,7 +4,10 @@ from typing import Any, Tuple, Union, Iterable, Optional
 from vispy.scene.widgets import ColorBarWidget
 from vispy.color.colormap import Colormap, MatplotlibColormap
 
+from scanpy import logging as logg
+
 import numpy as np
+import pandas as pd
 
 from PyQt5 import QtCore, QtWidgets
 
@@ -28,7 +31,7 @@ class ListWidget(QtWidgets.QListWidget):
         else:
             self.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
 
-        self._index = 0
+        self._index: Union[int, str] = 0
         self._unique = unique
         self._controller = controller
 
@@ -37,10 +40,10 @@ class ListWidget(QtWidgets.QListWidget):
         self.indexChanged.connect(self._onAction)
 
     @abstractmethod
-    def setIndex(self, index: int) -> None:
+    def setIndex(self, index: Union[int, str]) -> None:
         pass
 
-    def getIndex(self) -> int:
+    def getIndex(self) -> Union[int, str]:
         return self._index
 
     @abstractmethod
@@ -73,7 +76,7 @@ class LibraryListWidget(ListWidget):
 
         self.currentTextChanged.connect(self._onAction)
 
-    def setIndex(self, index: int) -> None:
+    def setIndex(self, index: Union[int, str]) -> None:
         # not used
         if index == self._index:
             return
@@ -111,7 +114,7 @@ class AListWidget(ListWidget):
 
     def __init__(self, controller: Any, alayer: ALayer, attr: str, **kwargs: Any):
         if attr not in ALayer.VALID_ATTRIBUTES:
-            raise ValueError(f"Invalid attribute `{attr}`. Valid options are: `{list(ALayer.VALID_ATTRIBUTES)}`.")
+            raise ValueError(f"Invalid attribute `{attr}`. Valid options are `{sorted(ALayer.VALID_ATTRIBUTES)}`.")
         super().__init__(controller, **kwargs)
 
         self._adata_layer = alayer
@@ -130,7 +133,11 @@ class AListWidget(ListWidget):
 
     def _onAction(self, items: Iterable[str]) -> None:
         for item in sorted(set(items)):
-            vec, name = self._getter(item, index=self.getIndex())
+            try:
+                vec, name = self._getter(item, index=self.getIndex())
+            except Exception as e:  # noqa: B902
+                logg.error(e)
+                continue
             self._controller.add_points(vec, key=item, layer_name=name)
 
     def setRaw(self, is_raw: bool) -> None:
@@ -145,7 +152,11 @@ class AListWidget(ListWidget):
 
     def setIndex(self, index: Union[str, int]) -> None:
         if isinstance(index, str):
-            index = 0 if index == "" else int(index, base=10)
+            if index == "":
+                index = 0
+            elif self._attr != "obsm":
+                index = int(index, base=10)
+            # for obsm, we convert index to int if needed (if not a DataFrame) in the ALayer
         if index == self._index:
             return
 
@@ -153,7 +164,7 @@ class AListWidget(ListWidget):
         if self._attr == "obsm":
             self.indexChanged.emit(tuple(s.text() for s in self.selectedItems()))
 
-    def getIndex(self) -> int:
+    def getIndex(self) -> Union[int, str]:
         return self._index
 
     def setLayer(self, layer: Optional[str]) -> None:
@@ -181,14 +192,20 @@ class ObsmIndexWidget(QtWidgets.QComboBox):
     def addItems(self, texts: Union[QtWidgets.QListWidgetItem, int, Iterable[str]]) -> None:
         if isinstance(texts, QtWidgets.QListWidgetItem):
             try:
-                texts = self._adata.obsm[texts.text()].shape[1]
+                key = texts.text()
+                if isinstance(self._adata.obsm[key], pd.DataFrame):
+                    texts = sorted(self._adata.obsm[key].select_dtypes(include=[np.number, "category"]).columns)
+                elif hasattr(self._adata.obsm[key], "shape"):
+                    texts = self._adata.obsm[key].shape[1]
+                else:
+                    texts = np.asarray(self._adata.obsm[key]).shape[1]
             except (KeyError, IndexError):
                 texts = 0
         if isinstance(texts, int):
             texts = tuple(str(i) for i in range(texts))
 
         self.clear()
-        super().addItems(texts)
+        super().addItems(tuple(texts))
 
 
 class CBarWidget(QtWidgets.QWidget):

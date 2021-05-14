@@ -13,10 +13,6 @@ import squidpy as sq
 
 
 class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
-    def test_mask_not_1_channels(self, cont: ImageContainer):
-        with pytest.raises(ValueError, match=r"Expected to find 1 channel, found `3`."):
-            cont.show(channel=None, as_mask=True)
-
     def test_channelwise_wrong_number_of_axes(self, cont: ImageContainer):
         fig, ax = plt.subplots(dpi=DPI, tight_layout=True)
         with pytest.raises(ValueError, match=r"Expected `3` axes, found `1`."):
@@ -32,9 +28,13 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_channel(self, cont: ImageContainer):
         cont.show(channel=1, dpi=DPI)
 
-    def test_plot_as_mask(self, cont: ImageContainer):
-        cont.add_img(np.random.RandomState(42).normal(size=(*cont.shape, 3)), layer="foo")
-        cont.show("foo", as_mask=True, channel=1, dpi=DPI)
+    def test_plot_segmentation(self, cont: ImageContainer):
+        seg = np.random.RandomState(43).randint(0, 255, size=(*cont.shape, 1))
+        seg[seg <= 200] = 0
+        cont.add_img(seg, layer="foo")
+        cont["foo"].attrs["segmentation"] = True
+
+        cont.show("image", segmentation_layer="foo", dpi=DPI)
 
     def test_plot_imshow_kwargs(self, cont: ImageContainer):
         cont.show(channel=2, cmap="inferno", dpi=DPI)
@@ -42,8 +42,13 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_channelwise(self, cont: ImageContainer):
         cont.show(channelwise=True, dpi=DPI)
 
-    def test_plot_channelwise_as_mask(self, cont: ImageContainer):
-        cont.show(channelwise=True, as_mask=True, dpi=DPI)
+    def test_plot_channelwise_segmentation(self, cont: ImageContainer):
+        seg = np.random.RandomState(43).randint(0, 255, size=(*cont.shape, 1))
+        seg[seg <= 200] = 0
+        cont.add_img(seg, layer="foo")
+        cont["foo"].attrs["segmentation"] = True
+
+        cont.show("image", channelwise=True, segmentation_layer="foo", dpi=DPI, segmentation_alpha=1)
 
 
 def test_extract(adata: AnnData, cont: ImageContainer, caplog):

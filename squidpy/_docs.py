@@ -147,6 +147,19 @@ chunks
 lazy
     Whether to lazily compute the result or not. Only used when ``chunks != None```."""
 
+_ripley_stat_returns = """\
+If ``copy = True``, returns a :class:`dict` with following keys:
+
+    - `'{mode}_stat'` - :class:`pandas.DataFrame` containing the statistics of choice for the real observations.
+    - `'sims_stat'` - :class:`pandas.DataFrame` containing the statistics of choice for the simulations.
+    - `'bins'` - :class:`numpy.ndarray` containing the support.
+    - `'pvalues'` - :class:`numpy.ndarray` containing the p-values for the statistics of interest.
+
+Otherwise, modifies the ``adata`` object with the following key:
+
+    - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - the above mentioned :class:`dict`.
+
+Statistics and pvalues are computed for each cluster :attr:`anndata.AnnData.obs` ``['{cluster_key}']`` separately."""
 
 d = DocstringProcessor(
     adata=_adata,
@@ -177,4 +190,5 @@ d = DocstringProcessor(
     as_array=_as_array,
     layer_added=_layer_added,
     chunks_lazy=_chunks_lazy,
+    ripley_stat_returns=_ripley_stat_returns,
 )

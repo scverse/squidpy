@@ -74,6 +74,7 @@ intersphinx_mapping = dict(  # noqa: C408
     astropy=("https://docs.astropy.org/en/stable/", None),
     dask=("https://docs.dask.org/en/latest/", None),
     skimage=("https://scikit-image.org/docs/stable/", None),
+    sklearn=("https://scikit-learn.org/stable/", None),
     numba=("https://numba.readthedocs.io/en/stable/", None),
     xarray=("https://xarray.pydata.org/en/stable/", None),
     omnipath=("https://omnipath.readthedocs.io/en/latest", None),
