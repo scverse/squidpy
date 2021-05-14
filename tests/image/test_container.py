@@ -1,20 +1,23 @@
 from typing import Any, Set, Tuple, Union, Optional
+from imageio import imread, imsave
 from pathlib import Path
 from collections import defaultdict
 from html.parser import HTMLParser
+from pytest_mock import MockerFixture
 import pytest
 
 from anndata import AnnData
 
 import numpy as np
 import xarray as xr
+import dask.array as da
 
-from imageio import imread, imsave
 import tifffile
 
 from squidpy.im import ImageContainer
-from squidpy.im._utils import CropCoords, CropPadding, _NULL_COORDS
+from squidpy.im._coords import CropCoords, CropPadding, _NULL_COORDS
 from squidpy._constants._pkg_constants import Key
+import squidpy as sq
 
 
 class SimpleHTMLValidator(HTMLParser):  # modified from CellRank
@@ -49,6 +52,22 @@ class TestContainerIO:
         assert img.shape == (0, 0)
         assert str(img)
         assert repr(img)
+
+    @pytest.mark.parametrize("on_init", [False, True])
+    def test_lazy_load(self, on_init: bool, tmpdir):
+        img_orig = np.random.randint(low=0, high=255, size=(100, 100, 1), dtype=np.uint8)
+        if on_init:
+            fname = str(tmpdir / "tmp.tiff")
+            tifffile.imsave(fname, img_orig)
+            img = ImageContainer(fname, lazy=True)
+        else:
+            img = ImageContainer(da.from_array(img_orig), lazy=True)
+
+        assert len(img) == 1
+        for key in img:
+            value = img[key].data
+            assert isinstance(value, da.Array)
+            np.testing.assert_array_equal(value.compute(), img_orig)
 
     def _test_initialize_from_dataset(self):
         dataset = xr.Dataset({"foo": xr.DataArray(np.zeros((100, 100, 3)))}, attrs={"foo": "bar"})
@@ -112,10 +131,11 @@ class TestContainerIO:
         assert "img_new" in cont
         np.testing.assert_array_equal(np.squeeze(cont.data["img_new"]), np.squeeze(img_new))
 
+    @pytest.mark.parametrize("ext", ["jpg", "png"])
     @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1)])
-    def test_load_jpeg(self, shape: Tuple[int, ...], tmpdir):
+    def test_load_ext(self, shape: Tuple[int, ...], ext: str, tmpdir):
         img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
-        fname = tmpdir / "tmp.jpeg"
+        fname = tmpdir / f"tmp.{ext}"
         imsave(str(fname), img_orig)
 
         gt = imread(str(fname))  # because of compression, we load again
@@ -136,17 +156,22 @@ class TestContainerIO:
         else:
             np.testing.assert_array_equal(cont["image"], img_orig)
 
-    def test_load_netcdf(self, tmpdir):
+    @pytest.mark.parametrize("dims", [("y", "x", "c"), ("foo", "bar", "baz")])
+    def test_load_netcdf(self, tmpdir, dims: Tuple[str, ...]):
         arr = np.random.normal(size=(100, 10, 4))
-        ds = xr.Dataset({"quux": xr.DataArray(arr, dims=["foo", "bar", "baz"])})
+        ds = xr.Dataset({"quux": xr.DataArray(arr, dims=dims)})
         fname = tmpdir / "tmp.nc"
         ds.to_netcdf(str(fname))
 
-        cont = ImageContainer(str(fname))
+        if "foo" in dims:
+            with pytest.raises(ValueError, match=r"Expected dimension `y` in"):
+                _ = ImageContainer(str(fname))
+        else:
+            cont = ImageContainer(str(fname))
 
-        assert len(cont) == 1
-        assert "quux" in cont
-        np.testing.assert_array_equal(cont["quux"], ds["quux"])
+            assert len(cont) == 1
+            assert "quux" in cont
+            np.testing.assert_array_equal(cont["quux"], ds["quux"])
 
     @pytest.mark.parametrize(
         "array", [np.zeros((10, 10, 3), dtype=np.uint8), np.random.rand(10, 10, 1).astype(np.float32)]
@@ -173,10 +198,10 @@ class TestContainerIO:
         assert len(cont) == 2
         assert cont["baz"].dims == ("y", "x", "channels")
 
-    @pytest.mark.parametrize("n_channels", [2, 3, 11])
+    @pytest.mark.parametrize("n_channels", [2, 3, 9])
     def test_add_img_number_of_channels(self, n_channels: int):
         img = ImageContainer()
-        arr = np.random.rand(10, 10, n_channels)
+        arr = np.random.rand(10, 10, n_channels)  # if n_channels >= 10, it would fail
         img.add_img(arr)
         assert img["image_0"].channels.shape == (n_channels,)
 
@@ -194,6 +219,35 @@ class TestContainerIO:
             assert small_cont_1c["bar"].dims == ("y", "x", channel_dim)
 
             np.testing.assert_array_equal(small_cont_1c["bar"], arr)
+
+    def test_add_img_does_not_load_other_lazy_layers(self, small_cont_1c: ImageContainer):
+        img = np.random.normal(size=small_cont_1c.shape + (2,))
+        lazy_img = da.from_array(img)
+
+        for i in range(3):
+            small_cont_1c.add_img(lazy_img, lazy=True, layer=f"lazy_{i}")
+        small_cont_1c.add_img(lazy_img, lazy=False, layer="eager")
+
+        for i in range(3):
+            assert isinstance(small_cont_1c[f"lazy_{i}"].data, da.Array)
+            np.testing.assert_array_equal(small_cont_1c[f"lazy_{i}"].values, img)
+        assert isinstance(small_cont_1c["eager"].data, np.ndarray)
+        np.testing.assert_array_equal(small_cont_1c["eager"].values, img)
+
+    @pytest.mark.parametrize("copy", [False, True])
+    def test_add_img_copy(self, small_cont_1c: ImageContainer, copy: bool):
+        img = np.random.normal(size=small_cont_1c.shape + (1,))
+
+        small_cont_1c.add_img(img, copy=copy, layer="foo")
+        small_cont_1c.add_img(img, copy=copy, layer="bar")
+
+        if copy:
+            assert not np.shares_memory(small_cont_1c["foo"], small_cont_1c["bar"])
+        else:
+            assert np.shares_memory(small_cont_1c["foo"], small_cont_1c["bar"])
+
+        np.testing.assert_array_equal(small_cont_1c["foo"].values, img)
+        np.testing.assert_array_equal(small_cont_1c["bar"].values, img)
 
     def test_delete(self, small_cont_1c: ImageContainer):
         assert len(small_cont_1c) == 1
@@ -269,6 +323,21 @@ class TestContainerCropping:
         np.testing.assert_array_equal(data[:, : dim2 // 2], 0)
         np.testing.assert_array_equal(data[: dim2 // 2, :], 0)
 
+    @pytest.mark.parametrize("as_dask", [False, True])
+    def test_lazy_scale(self, as_dask: bool):
+        arr = np.empty((50, 50))
+        scale = np.pi
+        img = ImageContainer(da.from_array(arr) if as_dask else arr)
+
+        crop = img.crop_corner(0, 0, size=20, scale=scale)
+
+        assert crop.shape == tuple(round(i * scale) for i in (20, 20))
+        if as_dask:
+            assert isinstance(crop["image"].data, da.Array)
+            crop.compute()
+
+        assert isinstance(crop["image"].data, np.ndarray)
+
     @pytest.mark.parametrize("dy", [-10, 25, 0.3])
     @pytest.mark.parametrize("dx", [-10, 30, 0.5])
     def test_crop_corner_size(
@@ -299,7 +368,7 @@ class TestContainerCropping:
                 img.crop_corner(10, 10, size=20, scale=scale)
         else:
             crop = img.crop_corner(10, 10, size=20, scale=scale)
-            assert crop.shape == tuple(int(i * scale) for i in (20, 20))
+            assert crop.shape == tuple(round(i * scale) for i in (20, 20))
 
     @pytest.mark.parametrize("cval", [0.5, 1.0, 2.0])
     def test_test_crop_corner_cval(self, cval: float):
@@ -579,6 +648,82 @@ class TestContainerUtils:
         else:
             np.testing.assert_allclose(data.values[..., 0], orig["image"].values[..., channel] + 42)
 
+    @pytest.mark.parametrize("depth", [None, (30, 30, 0)])
+    def test_apply_overlap(self, small_cont: ImageContainer, mocker: MockerFixture, depth: Optional[Tuple[int, ...]]):
+        if depth is None:
+            kwargs = {}
+            spy = mocker.spy(da, "map_blocks")
+        else:
+            kwargs = {"depth": depth}
+            spy = mocker.spy(da, "map_overlap")
+        _ = small_cont.apply(lambda arr: arr + 1, chunks=15, **kwargs)
+
+        spy.assert_called_once()
+
+    @pytest.mark.parametrize("copy", [False, True])
+    @pytest.mark.parametrize("chunks", [25, (50, 50, 3), "auto"])
+    @pytest.mark.parametrize("lazy", [False, True])
+    def test_apply_dask(
+        self, small_cont: ImageContainer, copy: bool, chunks: Union[int, Tuple[int, ...], str], lazy: bool
+    ):
+        def func(chunk: np.ndarray) -> np.ndarray:
+            if isinstance(chunks, tuple):
+                np.testing.assert_array_equal(chunk.shape, chunks)
+            elif isinstance(chunks, int):
+                np.testing.assert_array_equal(chunk.shape, [chunks, chunks, 3])
+            return chunk
+
+        cont = small_cont.apply(func, chunks=chunks, lazy=lazy, copy=copy, layer="image", new_layer="foo")
+        if copy:
+            assert isinstance(cont, ImageContainer)
+            assert len(cont) == 1
+        else:
+            assert cont is None
+            cont = small_cont
+            assert len(cont) == 2
+
+        if lazy:
+            assert isinstance(cont["foo"].data, da.Array)
+        else:
+            assert isinstance(cont["foo"].data, np.ndarray)
+
+    @pytest.mark.parametrize("as_dask", [False, True])
+    def test_apply_passes_correct_array_type(self, as_dask: bool):
+        def func(arr: Union[np.ndarray, da.Array]):
+            if as_dask:
+                assert isinstance(arr, da.Array)
+            else:
+                assert isinstance(arr, np.ndarray)
+            assert arr.shape == (100, 100, 3)
+            return arr
+
+        img = np.random.normal(size=(100, 100, 3))
+        cont = ImageContainer(da.from_array(img) if as_dask else img)
+
+        res = cont.apply(func, lazy=True, chunks=None, copy=True)
+        if as_dask:
+            assert isinstance(res["image"].data, da.Array)
+        else:
+            assert isinstance(res["image"].data, np.ndarray)
+
+        assert not np.shares_memory(cont["image"].data, res["image"].data)
+
+    def test_apply_wrong_number_of_dim(self):
+        def func(arr: np.ndarray) -> float:
+            assert arr.shape == (100, 100, 3)
+            assert arr.dtype == np.float64
+            return np.sum(arr)
+
+        cont = ImageContainer(np.random.normal(size=(100, 100, 3)).astype(np.float64))
+        with pytest.raises(ValueError, match=r", found `0`."):
+            cont.apply(func)
+
+    def test_key_completions(self):
+        cont = ImageContainer(np.random.normal(size=(100, 100, 3)))
+        cont.add_img(np.random.normal(size=(100, 100, 3)), layer="alpha")
+
+        np.testing.assert_array_equal(cont._ipython_key_completions_(), sorted(cont))
+
     def test_image_autoincrement(self, small_cont_1c: ImageContainer):
         assert len(small_cont_1c) == 1
         for _ in range(20):
@@ -587,6 +732,25 @@ class TestContainerUtils:
         assert len(small_cont_1c) == 21
         for i in range(20):
             assert f"image_{i}" in small_cont_1c
+
+    @pytest.mark.parametrize("channel_dim", [None, "channels"])
+    def test_channel_autodetection(self, small_cont_1c: ImageContainer, channel_dim: Optional[str]):
+        img = np.random.normal(size=small_cont_1c.shape + (2,))
+        if channel_dim is not None:
+            with pytest.raises(ValueError, match=r"cannot be aligned"):
+                small_cont_1c.add_img(img, channel_dim=channel_dim)
+        else:
+            expected_channel_dim = small_cont_1c._get_next_channel_id("channels")
+            small_cont_1c.add_img(img, channel_dim=channel_dim, layer="foo")
+            np.testing.assert_array_equal(small_cont_1c["foo"].dims, ["y", "x", expected_channel_dim])
+
+    def test_rename(self, small_cont_1c: ImageContainer):
+        new_cont = small_cont_1c.rename("image", "foo")
+
+        assert new_cont is small_cont_1c
+        assert len(new_cont) == len(small_cont_1c)
+        assert "foo" in new_cont
+        assert "image" not in new_cont
 
     @pytest.mark.parametrize("size", [0, 10, 20])
     def test_repr_html(self, size: int):
@@ -681,3 +845,71 @@ class TestCroppingExtra:
         assert "image_1" in crop
         np.testing.assert_array_equal(crop.data["image_0"].shape, (21 // 2, 21 // 2, 10))
         np.testing.assert_array_equal(crop.data["image_1"].shape, (21 // 2, 21 // 2, 1))
+
+
+class TestPileLine:
+    @pytest.mark.parametrize("lazy", [False, True])
+    def test_pipeline_inplace(self, small_cont: ImageContainer, lazy: bool):
+        chunks = 25 if lazy else None
+
+        c1 = sq.im.process(small_cont, method="smooth", copy=False, layer_added="foo", chunks=chunks, lazy=lazy)
+        c2 = sq.im.process(
+            small_cont, method="gray", copy=False, layer="foo", layer_added="bar", chunks=chunks, lazy=lazy
+        )
+        c3 = sq.im.segment(
+            small_cont,
+            method="watershed",
+            copy=False,
+            layer="bar",
+            thresh=0.3,
+            layer_added="baz",
+            chunks=chunks,
+            lazy=lazy,
+        )
+
+        assert c1 is None
+        assert c2 is None
+        assert c3 is None
+        np.testing.assert_array_equal(sorted(small_cont), sorted(["image", "foo", "bar", "baz"]))
+        for key in small_cont:
+            if key != "image":
+                if lazy:
+                    assert isinstance(small_cont[key].data, da.Array)
+                else:
+                    assert isinstance(small_cont[key].data, np.ndarray)
+
+        tmp = small_cont.compute()
+        assert tmp is small_cont
+
+        for key in small_cont:
+            assert isinstance(small_cont[key].data, np.ndarray)
+
+    @pytest.mark.parametrize("lazy", [False, True])
+    def test_pipeline_copy(self, small_cont: ImageContainer, lazy: bool):
+        chunks = 13 if lazy else None
+
+        c1 = sq.im.process(small_cont, method="smooth", copy=True, layer_added="foo", chunks=chunks, lazy=lazy)
+        c2 = sq.im.process(c1, method="gray", copy=True, layer="foo", layer_added="bar", chunks=chunks, lazy=lazy)
+        c3 = sq.im.segment(
+            c2,
+            method="watershed",
+            copy=True,
+            layer="bar",
+            thresh=0.3,
+            layer_added="baz",
+            chunks=chunks,
+            lazy=lazy,
+        )
+        assert len(small_cont) == 1
+        assert len(c1) == 1
+        assert len(c2) == 1
+
+        for key, cont in zip(["foo", "bar", "baz"], [c1, c2, c3]):
+            if lazy:
+                assert isinstance(cont[key].data, da.Array)
+            else:
+                assert isinstance(cont[key].data, np.ndarray)
+
+        for key, cont in zip(["foo", "bar", "baz"], [c1, c2, c3]):
+            cont.compute()
+            assert isinstance(cont[key].data, np.ndarray)

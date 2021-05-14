@@ -5,19 +5,16 @@ from anndata import AnnData
 import numpy as np
 
 from squidpy.gr import ripley
-
-RIPLEY_F = "F"
-RIPLEY_G = "G"
-RIPLEY_L = "L"
+from squidpy._constants._constants import RipleyStat
 
 CLUSTER_KEY = "leiden"
 
 
-@pytest.mark.parametrize("mode", ["F", "G", "L"])
-def test_ripley_modes(adata_ripley: AnnData, mode: str):
+@pytest.mark.parametrize("mode", list(RipleyStat))
+def test_ripley_modes(adata_ripley: AnnData, mode: RipleyStat):
     adata = adata_ripley
 
-    ripley(adata, cluster_key=CLUSTER_KEY, mode=mode)
+    ripley(adata, cluster_key=CLUSTER_KEY, mode=mode.s)
 
     UNS_KEY = f"{CLUSTER_KEY}_ripley_{mode}"
 
@@ -40,7 +37,7 @@ def test_ripley_modes(adata_ripley: AnnData, mode: str):
     assert bins.shape[0] == 50
 
 
-@pytest.mark.parametrize("mode", ["F", "G", "L"])
+@pytest.mark.parametrize("mode", list(RipleyStat))
 @pytest.mark.parametrize(
     "n_simulations",
     [20, 50],
@@ -58,7 +55,7 @@ def test_ripley_modes(adata_ripley: AnnData, mode: str):
     [2, 50, 100],
 )
 def test_ripley_results(
-    adata_ripley: AnnData, mode: str, n_simulations: int, n_observations: int, max_dist: np.float_, n_steps: int
+    adata_ripley: AnnData, mode: RipleyStat, n_simulations: int, n_observations: int, max_dist: np.float_, n_steps: int
 ):
     adata = adata_ripley
     n_clusters = adata.obs[CLUSTER_KEY].cat.categories.shape[0]
@@ -66,7 +63,7 @@ def test_ripley_results(
     res = ripley(
         adata,
         cluster_key=CLUSTER_KEY,
-        mode=mode,
+        mode=mode.s,
         n_simulations=n_simulations,
         n_observations=n_observations,
         max_dist=max_dist,
