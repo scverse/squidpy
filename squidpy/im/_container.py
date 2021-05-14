@@ -303,15 +303,15 @@ class ImageContainer(FeatureMixin):
         infer_dimensions: Union[InferDimensions, Tuple[str]] = (  # type: ignore[no-redef]
             InferDimensions(infer_dimensions) if not isinstance(infer_dimensions, tuple) else infer_dimensions
         )
-        img = self._load_img(img, chunks=chunks, layer=layer, copy=copy, infer_dimensions=infer_dimensions, **kwargs)
+        res: Optional[xr.DataArray] = self._load_img(
+            img, chunks=chunks, layer=layer, copy=copy, infer_dimensions=infer_dimensions, **kwargs
+        )
 
-        if img is not None:  # not reading a .nc file
-            if TYPE_CHECKING:
-                assert isinstance(img, xr.DataArray)
-            img = img.rename({img.dims[-1]: "channels" if channel_dim is None else str(channel_dim)})
+        if res is not None:  # not reading a .nc file
+            res = res.rename({res.dims[-1]: "channels" if channel_dim is None else str(channel_dim)})
 
             # add z dim label
-            z = img.shape[2]
+            z = res.shape[2]
             default_library_id = [f"library_id_{i}" for i in range(z)]
             library_id = self._library_id_list(default_library_id if library_id is None else library_id)
             if z > 1 and len(library_id) != z:
@@ -319,7 +319,7 @@ class ImageContainer(FeatureMixin):
                     f"img has {z} z dimensions, \
                 please specify a list of {z} names for library_id"
                 )
-            img = img.assign_coords({"z": library_id})
+            res = res.assign_coords({"z": library_id})
 
             logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
             overwrite = False
@@ -327,7 +327,7 @@ class ImageContainer(FeatureMixin):
                 overwrite = True
                 prev_img = self.data[layer]
             try:
-                self.data[layer] = img
+                self.data[layer] = res
             except ValueError as e:
                 if "cannot be aligned" not in str(e) or channel_dim is not None:
                     raise
@@ -335,8 +335,8 @@ class ImageContainer(FeatureMixin):
                 logg.warning(f"Channel dimension cannot be aligned with an existing one, using `{channel_dim}`")
 
                 if TYPE_CHECKING:
-                    assert isinstance(img, xr.DataArray)
-                self.data[layer] = img.rename({img.dims[-1]: channel_dim})
+                    assert isinstance(res, xr.DataArray)
+                self.data[layer] = res.rename({res.dims[-1]: channel_dim})
 
             # when overwriting, might want to fill nans with the previous values
             # TODO might want to make this optional
@@ -915,22 +915,20 @@ class ImageContainer(FeatureMixin):
         from squidpy.pl._utils import save_fig
 
         layer = self._get_layer(layer)
-        arr = self.data[layer]
+        arr: xr.DataArray = self.data[layer]
         n_channels = arr.shape[-1]
         channelwise = channelwise and n_channels > 1
-        library_id: List[str] = (
-            list(self.data.coords["z"].values) if library_id is None else [library_id]
-        )  # type: ignore[no-redef]
+        library_ids = list(self.data.coords["z"].values) if library_id is None else [library_id]
+
         if channel is not None:
             arr = arr[{arr.dims[-1]: channel}]
-
-        arr = arr.sel(z=library_id)
+        arr = arr.sel(z=library_ids)
 
         fig = None
         if ax is None:
             fig, ax = plt.subplots(
                 ncols=n_channels if channelwise else 1,
-                nrows=len(library_id),
+                nrows=len(library_ids),
                 figsize=(8, 8) if figsize is None else figsize,
                 dpi=dpi,
                 tight_layout=True,
@@ -965,9 +963,9 @@ class ImageContainer(FeatureMixin):
         for c, row in enumerate(ax):
             for z, ax_ in enumerate(row):
                 if channelwise:
-                    img, title = arr[..., z, c], f"{layer}:{c}, library_id:{library_id[z]}"
+                    img, title = arr[..., z, c], f"{layer}:{c}, library_id:{library_ids[z]}"
                 else:
-                    img, title = arr[:, :, z, ...], f"{layer}, library_id:{library_id[z]}"
+                    img, title = arr[:, :, z, ...], f"{layer}, library_id:{library_ids[z]}"
 
                 ax_.imshow(img_as_float(img.values, force_copy=False), **kwargs)
                 if seg_arr is not None:

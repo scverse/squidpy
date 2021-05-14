@@ -132,7 +132,7 @@ def process(
         return res
 
     img.add_img(
-        img=res,
+        res=res,
         layer=layer_new,
         channel_dim=channel_dim,
         copy=False,
