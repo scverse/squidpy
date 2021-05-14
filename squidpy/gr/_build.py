@@ -28,6 +28,7 @@ def spatial_neighbors(
     spatial_key: str = Key.obsm.spatial,
     coord_type: Optional[Union[str, CoordType]] = None,
     n_rings: int = 1,
+    neigh_grid: int = 6,
     n_neigh: int = 6,
     delaunay: bool = False,
     radius: Optional[float] = None,
@@ -44,19 +45,21 @@ def spatial_neighbors(
     coord_type
         Type of coordinate system. Valid options are:
 
-            - `{c.VISIUM!r}` - Visium coordinates.
+            - `{c.GRID!r}` - grid coordinates.
             - `{c.GENERIC!r}` - generic coordinates.
 
-        If `None`, use `{c.VISIUM!r}` if ``spatial_key`` is present in :attr:`anndata.AnnData.obsm`,
+        If `None`, use `{c.GRID!r}` if ``spatial_key`` is present in :attr:`anndata.AnnData.obsm`,
         otherwise use `{c.GENERIC!r}`.
     n_rings
-        Number of rings of neighbors for Visium data.
+        Number of rings of neighbors for grid data.
+    neigh_grid
+        Number of neighboring tiles in a grid.
     n_neigh
-        Number of neighborhoods to consider for non-Visium data.
+        Number of neighborhoods to consider for non-grid data.
     delaunay
         Whether to compute the graph from Delaunay triangulation.
     radius
-        Radius of neighbors for non-Visium data.
+        Radius of neighbors for non-grid data.
     transform
         Type of adjacency matrix transform. Valid options are:
 
@@ -77,21 +80,22 @@ def spatial_neighbors(
     """
     _assert_positive(n_rings, name="n_rings")
     _assert_positive(n_neigh, name="n_neigh")
+    _assert_positive(neigh_grid, name="neigh_grid")
     _assert_spatial_basis(adata, spatial_key)
 
     transform = Transform.NONE if transform is None else Transform(transform)
     if coord_type is None:
-        coord_type = CoordType.VISIUM if Key.uns.spatial in adata.uns else CoordType.GENERIC
+        coord_type = CoordType.GRID if Key.uns.spatial in adata.uns else CoordType.GENERIC
     else:
         coord_type = CoordType(coord_type)
 
     start = logg.info(f"Creating graph using `{coord_type}` coordinates and `{transform}` transform")
 
     coords = adata.obsm[spatial_key]
-    if coord_type == CoordType.VISIUM:
+    if coord_type == CoordType.GRID:
         if n_rings > 1:
             Adj: csr_matrix = _build_connectivity(
-                coords, 6, neigh_correct=True, set_diag=True, delaunay=delaunay, return_distance=False
+                coords, neigh_grid, neigh_correct=True, set_diag=True, delaunay=delaunay, return_distance=False
             )
             Res = Adj
             Walk = Adj
@@ -110,8 +114,8 @@ def spatial_neighbors(
             Dst = Adj.copy()
             Adj.data[:] = 1.0
         else:
-            Adj = _build_connectivity(coords, 6, neigh_correct=True, delaunay=delaunay)
-            Dst = None
+            Adj = _build_connectivity(coords, neigh_grid, neigh_correct=True, delaunay=delaunay)
+            Dst = Adj.copy()
 
     elif coord_type == CoordType.GENERIC:
         Adj, Dst = _build_connectivity(coords, n_neigh, radius, delaunay=delaunay, return_distance=True)
@@ -139,9 +143,7 @@ def spatial_neighbors(
     }
 
     _save_data(adata, attr="obsp", key=conns_key, data=Adj)
-    if Dst is not None:
-        _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
-
+    _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
     _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
 
 

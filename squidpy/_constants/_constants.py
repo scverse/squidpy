@@ -38,7 +38,7 @@ class Transform(ModeEnum):  # noqa: D101
 
 @unique
 class CoordType(ModeEnum):  # noqa: D101
-    VISIUM = "visium"
+    GRID = "grid"
     GENERIC = "generic"
 
 
