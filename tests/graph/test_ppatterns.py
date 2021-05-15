@@ -32,7 +32,7 @@ def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
     assert dummy_adata.uns[UNS_KEY].columns.shape == (4,)
     assert df.columns.shape == (9,)
     # test pval_norm same
-    np.testing.assert_array_equal(df["pval_norm"].values, df["pval_norm"].values)
+    np.testing.assert_array_equal(df["pval_norm"].values, df_parallel["pval_norm"].values)
     # test highly variable
     assert dummy_adata.uns[UNS_KEY].shape != df.shape
     # assert idx are sorted and contain same elements
