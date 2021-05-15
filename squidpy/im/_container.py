@@ -303,9 +303,9 @@ class ImageContainer(FeatureMixin):
         infer_dimensions: Union[InferDimensions, Tuple[str]] = (  # type: ignore[no-redef]
             InferDimensions(infer_dimensions) if not isinstance(infer_dimensions, tuple) else infer_dimensions
         )
-        img: Optional[xr.DataArray] = self._load_img(img, chunks=chunks, layer=layer, copy=copy,
-                                                     infer_dimensions=infer_dimensions, 
-                                                     **kwargs)  # type: ignore[no-redef]
+        img: Optional[xr.DataArray] = self._load_img( # type: ignore[no-redef]
+            img, chunks=chunks, layer=layer, copy=copy, infer_dimensions=infer_dimensions, **kwargs
+        )  
 
         if img is not None:  # not reading a .nc file
             if TYPE_CHECKING:
@@ -924,8 +924,7 @@ class ImageContainer(FeatureMixin):
         arr = self.data[layer]
         n_channels = arr.shape[-1]
         channelwise = channelwise and n_channels > 1
-        library_id: List[str] = list(self.data.coords["z"].values) if library_id is None else [library_id]  \
-            # type: ignore[no-redef]
+        library_id: List[str] = list(self.data.coords["z"].values) if library_id is None else [library_id]  # type: ignore[no-redef]
         if channel is not None:
             arr = arr[{arr.dims[-1]: channel}]
 
@@ -1053,11 +1052,10 @@ class ImageContainer(FeatureMixin):
     @d.dedent
     def apply(
         self,
-        func: Callable[..., np.ndarray],
+        func: Union[Callable[..., np.ndarray], Mapping[str, Callable[..., np.ndarray]]],
         layer: Optional[str] = None,
         new_layer: Optional[str] = None,
         channel: Optional[int] = None,
-        library_id: Optional[str] = None,
         lazy: bool = False,
         chunks: Optional[Union[str]] = None,
         copy: bool = True,
@@ -1067,10 +1065,14 @@ class ImageContainer(FeatureMixin):
         """
         Apply a function to a layer within this container.
 
+        For each ``library_id`` (z dim) a different function can be defined.
+        For not mentioned ``library_id`` the identity function is implied
+
         Parameters
         ----------
         func
-            A function which takes a :class:`numpy.ndarray` as input and produces an image-like output.
+            A function or a mapping of ``{'library_id': function}`` which takes a :class:`numpy.ndarray` as input
+            and produces an image-like output.
         %(img_layer)s
         new_layer
             Name of the new layer. If `None` and ``copy = False``, overwrites the data in ``layer``.
@@ -1094,6 +1096,19 @@ class ImageContainer(FeatureMixin):
         ValueError
             If the ``func`` returns 0 or 1 dimensional array.
         """
+
+        def apply_func(func, arr):
+            if chunks is not None:
+                arr = da.asarray(arr.data).rechunk(chunks)
+                res = (
+                    da.map_overlap(func, arr, **fn_kwargs, **kwargs)
+                    if "depth" in kwargs
+                    else da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
+                )
+            else:
+                res = func(arr.data, **fn_kwargs)
+            return res
+
         layer = self._get_layer(layer)
         if new_layer is None:
             new_layer = layer
@@ -1104,34 +1119,44 @@ class ImageContainer(FeatureMixin):
         if channel is not None:
             arr = arr[{channel_dim: channel}]
 
-        if library_id is not None:
-            arr = arr.sel(z=library_id)
-
-        if chunks is not None:
-            arr = da.asarray(arr.data).rechunk(chunks)
-            res = (
-                da.map_overlap(func, arr, **fn_kwargs, **kwargs)
-                if "depth" in kwargs
-                else da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
-            )
+        if isinstance(func, collections.abc.Callable):
+            res = apply_func(func, arr)
         else:
-            res = func(arr.data, **fn_kwargs)
+            res = []
+            idx_func = []
+            idx_identity = []
+            for i, library_id in enumerate(arr.z.values):
+                if library_id in func.keys():
+                    idx_func.append(i)
+                    res.append(apply_func(func[library_id], arr.sel(z=library_id)))
+                else:
+                    idx_identity.append(i)
+                    res.append(arr.sel(z=library_id))
+            # stack res arrays
+            try:
+                res = da.stack(res, axis=2)
+            except ValueError as e:
+                if "must have the same shape" not in str(e):
+                    raise
+                # func might have changed channel dims, replace idx_identity with 0s
+                logg.warning(
+                    f"function changed number of channels, cannot use identity for library_ids {arr.z.values[idx_identity]}, replacing with 0."
+                )
+                for i in idx_identity:
+                    res[i] = np.zeros_like(res[idx_func[0]])
+                # might raise ValueError again, if trying to apply different functions
+                # TODO catch this and raise more understandable error
+                res = da.stack(res, axis=2)
 
         if res.ndim in (0, 1):
             # TODO: allow volumetric segmentation?
             raise ValueError(f"Expected 2 or 3 dimensional array, found `{res.ndim}`.")
-        elif res.ndim == 2:
+        elif res.ndim == 2:  # assume that dims are y, x
             res = res[..., np.newaxis, np.newaxis]
-        elif res.ndim == 3:  # assume that 3 dims are y, x, channels
-            # is the 3rd dim channel or z?
-            if channel is not None:  # its z, because channel was removed
-                res = res[..., np.newaxis]
-            else:
-                res = res[:, :, np.newaxis, :]
+        elif res.ndim == 3:  # assume dims are y, x, z (changing of z dim is not supported)
+            res = res[..., np.newaxis]
 
-        # TODO: handle z-dim
-
-        library_id = library_id if library_id is not None else self[layer].coords["z"].values
+        # TODO: currently, changing number of z dims is not supported
         if copy:
             cont = ImageContainer(
                 res,
@@ -1140,7 +1165,7 @@ class ImageContainer(FeatureMixin):
                 copy=True,
                 lazy=lazy,
                 infer_dimensions=dims,
-                library_id=library_id,
+                library_id=arr.z.values,
             )
             cont.data.attrs = self.data.attrs.copy()
 
@@ -1153,7 +1178,7 @@ class ImageContainer(FeatureMixin):
             copy=new_layer != layer,
             channel_dim=f"{channel_dim}:{res.shape[-1]}" if self[layer].shape[-1] != res.shape[-1] else channel_dim,
             infer_dimensions=dims,
-            library_id=library_id,
+            library_id=arr.z.values,
         )
 
     @d.dedent

@@ -1,5 +1,5 @@
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Callable, Optional
+from typing import Any, Union, Mapping, Callable, Iterable, Optional
 
 from scanpy import logging as logg
 
@@ -38,7 +38,7 @@ def to_grayscale(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array
 def process(
     img: ImageContainer,
     layer: Optional[str] = None,
-    library_id: Optional[str] = None,
+    library_id: Optional[Union[Iterable[str], str]] = None,
     method: Union[str, Callable[..., np.ndarray]] = "smooth",
     chunks: Optional[int] = None,
     lazy: bool = False,
@@ -59,7 +59,8 @@ def process(
     %(img_container)s
     %(img_layer)s
     library_id
-        Name of the z dim that is processed. If None, all z dims are processed
+        Single or multiple z dims that are processed. For not mentioned z dims, the identity function is implied.
+        None, all z dims are processed.
     method
         Processing method to use. Valid options are:
 
@@ -103,8 +104,11 @@ def process(
     if callable(method):
         callback = method
     elif method == Processing.SMOOTH:  # type: ignore[comparison-overlap]
-        # TODO: handle Z-dim
-        kwargs.setdefault("sigma", [1, 1, 0, 0])  # TODO: Z-dim, allow for ints, replicate over spatial dims
+        # TODO: also check passed sigma if has correct shape
+        kwargs.setdefault(
+            "sigma", [1, 1, 0, 0] if library_id is None else [1, 1, 0]
+        )  # TODO: Z-dim, allow for ints, replicate over spatial dims
+
         if chunks is not None:
             # dask_image already handles map_overlap
             chunks_, chunks = chunks, None
@@ -112,10 +116,14 @@ def process(
         else:
             callback = scipy_gf
     elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
-        apply_kwargs["drop_axis"] = 2  # TODO: Z-dim
+        apply_kwargs["drop_axis"] = 2  # TODO: Z-dim TODO need to change to 3?
         callback = to_grayscale
     else:
         raise NotImplementedError(f"Method `{method}` is not yet implemented.")
+
+    # to which library_ids should this function be applied?
+    if library_id is not None:
+        callback = {lid: callback for lid in img._library_id_list(library_id)}
 
     start = logg.info(f"Processing image using `{method}` method")
     res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs)
