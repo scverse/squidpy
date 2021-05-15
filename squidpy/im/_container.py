@@ -303,9 +303,9 @@ class ImageContainer(FeatureMixin):
         infer_dimensions: Union[InferDimensions, Tuple[str]] = (  # type: ignore[no-redef]
             InferDimensions(infer_dimensions) if not isinstance(infer_dimensions, tuple) else infer_dimensions
         )
-        img: Optional[xr.DataArray] = self._load_img( # type: ignore[no-redef]
+        img: Optional[xr.DataArray] = self._load_img(  # type: ignore[no-redef]
             img, chunks=chunks, layer=layer, copy=copy, infer_dimensions=infer_dimensions, **kwargs
-        )  
+        )
 
         if img is not None:  # not reading a .nc file
             if TYPE_CHECKING:
