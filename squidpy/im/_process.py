@@ -123,10 +123,10 @@ def process(
 
     # to which library_ids should this function be applied?
     if library_id is not None:
-        callback = {lid: callback for lid in img._library_id_list(library_id)}
+        callback_ = {lid: callback for lid in img._library_id_list(library_id)}
 
     start = logg.info(f"Processing image using `{method}` method")
-    res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs)
+    res: ImageContainer = img.apply(callback_, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs)
 
     # if the method changes the number of channels
     if res[layer].shape[-1] != img[layer].shape[-1]:

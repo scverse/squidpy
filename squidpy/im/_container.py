@@ -965,7 +965,7 @@ class ImageContainer(FeatureMixin):
                     img, title = arr[..., z, c], f"{layer}:{c}, library_id:{library_ids[z]}"
                 else:
                     img = arr[:, :, z, ...]
-                    title = (layer if channel is None else f"{layer}:{channel}") + f", library_id:{library_id[z]}"
+                    title = (layer if channel is None else f"{layer}:{channel}") + f", library_id:{library_ids[z]}"
 
                 ax_.imshow(img_as_float(img.values, force_copy=False), **kwargs)
                 if seg_arr is not None:
@@ -1095,7 +1095,7 @@ class ImageContainer(FeatureMixin):
             If the ``func`` returns 0 or 1 dimensional array.
         """
 
-        def apply_func(func, arr):
+        def apply_func(func: Callable[..., np.ndarray], arr: xr.DataArray) -> Any:
             if chunks is not None:
                 arr = da.asarray(arr.data).rechunk(chunks)
                 res = (
@@ -1117,7 +1117,7 @@ class ImageContainer(FeatureMixin):
         if channel is not None:
             arr = arr[{channel_dim: channel}]
 
-        if isinstance(func, collections.abc.Callable):
+        if callable(func):
             res = apply_func(func, arr)
 
         else:
