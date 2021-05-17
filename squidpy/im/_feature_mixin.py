@@ -21,7 +21,7 @@ import skimage.measure
 
 from squidpy._docs import d
 from squidpy.gr._utils import _assert_non_empty_sequence
-from squidpy.im._utils import CropCoords, _NULL_PADDING
+from squidpy.im._coords import CropCoords, _NULL_PADDING
 from squidpy._constants._pkg_constants import Key
 
 Feature_t = Dict[str, Any]

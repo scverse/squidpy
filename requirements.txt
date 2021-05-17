@@ -1,15 +1,14 @@
 anndata>=0.7.4
-dask>=2.30
+dask-image>=0.5.0
+dask[array]>=2021.02.0
 docrep>=0.3.1
 ipywidgets>=7.5.1  # progress bar
 leidenalg>=0.8.2
 omnipath>=1.0.4
 pandas>=1.2.0
-rasterio>=1.1.8
 scanpy @ git+https://github.com/theislab/scanpy@master # scanpy[leiden]>=1.7.0
 scikit-image>=0.17.1
 statsmodels>=0.12.0
-tifffile>=2020.10.1
 tqdm>=4.50.2  # progress bar
 typing_extensions  # Literal
 xarray>=0.16.1

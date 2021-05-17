@@ -13,8 +13,9 @@ from typing import (
 
 from scanpy import logging as logg
 from anndata import AnnData
+from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
 
-from scipy.sparse import issparse, spmatrix, csc_matrix
+from scipy.sparse import issparse, spmatrix, csc_matrix, csr_matrix
 from pandas.api.types import infer_dtype, is_categorical_dtype
 import numpy as np
 import pandas as pd
@@ -193,3 +194,46 @@ def _save_data(
         logg.info(f"       `adata.{attr}[{key!r}]`")
     if time is not None:
         logg.info("Finish", time=time)
+
+
+def _extract_expression(
+    adata: AnnData, genes: Optional[Sequence[str]] = None, use_raw: bool = False, layer: Optional[str] = None
+) -> Tuple[Union[np.ndarray, spmatrix], Sequence[str]]:
+    if use_raw and adata.raw is None:
+        logg.warning("AnnData object has no attribute `raw`. Setting `use_raw=False`")
+        use_raw = False
+
+    if genes is None and "highly_variable" in adata.var:
+        # should we use `adata.raw.var["highly_variable"]` if `use_raw=True`?
+        genes = adata.var_names.values[adata.var["highly_variable"].values]
+
+    if use_raw:
+        genes = list(set(adata.raw.var_names) & set(genes))  # type: ignore[arg-type]
+        genes = _assert_non_empty_sequence(genes, name="genes")
+        res = adata.raw[:, genes].X
+    else:
+        genes = _assert_non_empty_sequence(genes, name="genes")
+
+        if layer is None:
+            res = adata[:, genes].X
+        elif layer not in adata.layers:
+            raise KeyError(f"Layer `{layer}` not found in `adata.layers`.")
+        else:
+            res = adata[:, genes].layers[layer]
+            if isinstance(res, AnnData):
+                res = res.X
+            elif not isinstance(res, (np.ndarray, spmatrix)):
+                raise TypeError(f"Invalid expression type `{type(res).__name__}`.")
+
+    # handle views
+    if isinstance(res, ArrayView):
+        return np.asarray(res), genes
+    if isinstance(res, (SparseCSRView, SparseCSCView)):
+        mro = type(res).mro()
+        if csr_matrix in mro:
+            return csr_matrix(res), genes
+        if csc_matrix in mro:
+            return csc_matrix(res), genes
+        raise TypeError(f"Unable to handle type `{type(res)}`.")
+
+    return res, genes

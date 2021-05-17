@@ -16,12 +16,13 @@ Graph
 
     gr.spatial_neighbors
     gr.nhood_enrichment
+    gr.co_occurrence
     gr.centrality_scores
     gr.interaction_matrix
+    gr.ripley
     gr.ligrec
     gr.spatial_autocorr
-    gr.ripley_k
-    gr.co_occurrence
+    gr.sepal
 
 Image
 ~~~~~
@@ -49,7 +50,7 @@ Plotting
     pl.centrality_scores
     pl.interaction_matrix
     pl.ligrec
-    pl.ripley_k
+    pl.ripley
     pl.co_occurrence
     pl.extract
 
