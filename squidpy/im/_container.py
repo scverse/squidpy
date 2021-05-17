@@ -253,7 +253,7 @@ class ImageContainer(FeatureMixin):
         library_id: Optional[Union[str, Iterable[str]]] = None,
         lazy: bool = True,
         chunks: Optional[Union[str, Tuple[int, ...]]] = None,
-        infer_dimensions: Union[  # TODO: rename(dims)
+        dims: Union[  # TODO: rename(dims)
             Literal["default", "prefer_channels", "prefer_z"], Tuple[str, ...]
         ] = InferDimensions.DEFAULT.s,  # type: ignore[assignment]
         copy: bool = True,
@@ -270,13 +270,13 @@ class ImageContainer(FeatureMixin):
         channel_dim
             Name of the channel dimension.
         library_id
-            Name for each Z-dimension of the image. This should correspond to the ``library_id`` in
+            Name for each Z dimension of the image. This should correspond to the ``library_id`` in
             :attr:`anndata.AnnData.uns`.
         lazy
             Whether to use :mod:`dask` to lazily load image.
         chunks
             Chunk size for :mod:`dask`. Only used when ``lazy = True``.
-        infer_dimensions
+        dims
             Where to save channel dimension when reading from a file or loading an array. Valid options are:
 
                 - `{id.PREFER_CHANNELS.s!r}` - load the last dimension as channels.
@@ -300,12 +300,10 @@ class ImageContainer(FeatureMixin):
             If loading a specific data type has not been implemented.
         """
         layer = self._get_next_image_id("image") if layer is None else layer
-        infer_dimensions: Union[InferDimensions, Tuple[str]] = (  # type: ignore[no-redef]
-            InferDimensions(infer_dimensions) if not isinstance(infer_dimensions, tuple) else infer_dimensions
+        dims: Union[InferDimensions, Tuple[str]] = (  # type: ignore[no-redef]
+            InferDimensions(dims) if not isinstance(dims, tuple) else dims
         )
-        res: Optional[xr.DataArray] = self._load_img(
-            img, chunks=chunks, layer=layer, copy=copy, infer_dimensions=infer_dimensions, **kwargs
-        )
+        res: Optional[xr.DataArray] = self._load_img(img, chunks=chunks, layer=layer, copy=copy, dims=dims, **kwargs)
 
         if res is not None:  # not reading a .nc file
             res = res.rename({res.dims[-1]: "channels" if channel_dim is None else str(channel_dim)})
@@ -322,10 +320,8 @@ class ImageContainer(FeatureMixin):
             res = res.assign_coords({"z": library_id})
 
             logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
-            overwrite = False
             if layer in self:
-                overwrite = True
-                prev_img = self.data[layer]
+                self.data[layer]
             try:
                 self.data[layer] = res
             except ValueError as e:
@@ -338,13 +334,6 @@ class ImageContainer(FeatureMixin):
                     assert isinstance(res, xr.DataArray)
                 self.data[layer] = res.rename({res.dims[-1]: channel_dim})
 
-            # when overwriting, might want to fill nans with the previous values
-            # TODO might want to make this optional
-            if overwrite:
-                if self.data[layer].dims == prev_img.dims:
-                    # can only update if dims are the same
-                    self.data[layer] = self.data[layer].fillna(prev_img)
-
             if not lazy:
                 self.data[layer].load()
 
@@ -356,7 +345,7 @@ class ImageContainer(FeatureMixin):
             if layer not in img:
                 raise KeyError(f"Image identifier `{layer}` not found in `{img}`.")
 
-            _ = kwargs.pop("infer_dimensions", None)
+            _ = kwargs.pop("dims", None)
             return self._load_img(img[layer], **kwargs)
 
         raise NotImplementedError(f"Loading `{type(img).__name__}` is not yet implemented.")
@@ -367,7 +356,7 @@ class ImageContainer(FeatureMixin):
         self,
         img: Pathlike_t,
         chunks: Optional[int] = None,
-        infer_dimensions: InferDimensions = InferDimensions.DEFAULT,  # TODO: type(infer_dims) + rename
+        dims: InferDimensions = InferDimensions.DEFAULT,  # TODO: type(infer_dims)
         **_: Any,
     ) -> Optional[xr.DataArray]:
         def transform_metadata(data: xr.Dataset) -> xr.Dataset:
@@ -397,7 +386,7 @@ class ImageContainer(FeatureMixin):
         suffix = img.suffix.lower()
 
         if suffix in (".jpg", ".jpeg", ".png", ".tif", ".tiff"):
-            return _lazy_load_image(img, infer_dimensions=infer_dimensions, chunks=chunks)
+            return _lazy_load_image(img, dims=dims, chunks=chunks)
 
         if img.is_dir():
             if len(self._data):
@@ -418,28 +407,28 @@ class ImageContainer(FeatureMixin):
     @_load_img.register(da.Array)  # type: ignore[no-redef]
     @_load_img.register(np.ndarray)
     def _(
-        self, img: np.ndarray, copy: bool = True, infer_dimensions: InferDimensions = InferDimensions.DEFAULT, **_: Any
-    ) -> xr.DataArray:  # TODO: type(infer_dims), rename
+        self, img: np.ndarray, copy: bool = True, dims: InferDimensions = InferDimensions.DEFAULT, **_: Any
+    ) -> xr.DataArray:  # TODO: type(infer_dims)
         logg.debug(f"Loading data `numpy.array` of shape `{img.shape}`")
 
         img = img.copy() if copy else img
-        shape, dims, _, _ = _infer_dimensions(img, infer_dimensions=infer_dimensions)
+        shape, dims, _, _ = _infer_dimensions(img, infer_dimensions=dims)
 
-        return xr.DataArray(img.reshape(shape), dims=dims).transpose("y", "x", "z", "channels")
+        return xr.DataArray(img.reshape(shape), dims=dims).transpose("y", "x", "z", ...)
 
     @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
     def _(
         self,
         img: xr.DataArray,
         copy: bool = True,
-        infer_dimensions: InferDimensions = InferDimensions.DEFAULT,  # TODO: type(infer_dims), rename
+        dims: InferDimensions = InferDimensions.DEFAULT,  # TODO: type(infer_dims)
         **_: Any,
     ) -> xr.DataArray:
         logg.debug(f"Loading data `xarray.DataArray` of shape `{img.shape}`")
 
         img = img.copy() if copy else img
         if not ("y" in img.dims and "x" in img.dims and "z" in img.dims):
-            _, dims, _, axes = _infer_dimensions(img, infer_dimensions=infer_dimensions)
+            _, dims, _, axes = _infer_dimensions(img, infer_dimensions=dims)
             img = img.expand_dims([f"tmp_{a}" for a in axes], axis=axes)
             logg.warning(f"Unable to find `y` or `x` dimension in `{img.dims}`. Renaming to `{dims}`")
             img = img.rename(dict(zip(img.dims, dims)))
@@ -565,7 +554,6 @@ class ImageContainer(FeatureMixin):
 
             if isinstance(arr.data, da.Array):
                 shape = np.maximum(np.round(scale * np.asarray(arr.shape)), 1)
-                # TODO: Z-dim
                 shape[-1] = arr.shape[-1]
                 shape[-2] = arr.shape[-2]
                 return xr.DataArray(
@@ -743,7 +731,6 @@ class ImageContainer(FeatureMixin):
         # get library_id for each obs
         if len(self.data.z) > 1 and library_id is None:
             # assign from adata
-            # TODO raise nicer error message if not exists
             if "library_id" not in adata.obs:
                 raise ValueError(
                     "No 'library_id' column in adata.obs. Pass a list of `library_id`s mapping obs to z dimensions."
@@ -970,8 +957,8 @@ class ImageContainer(FeatureMixin):
                 ax_.imshow(img_as_float(img.values, force_copy=False), **kwargs)
                 if seg_arr is not None:
                     ax_.imshow(
-                        seg_arr,
-                        cmap=seg_cmap[:, :, z, ...],
+                        seg_arr[:, :, z, ...],
+                        cmap=seg_cmap,
                         interpolation="nearest",  # avoid artifacts
                         alpha=segmentation_alpha,
                         **{k: v for k, v in kwargs.items() if k not in ("cmap", "interpolation")},
@@ -1063,8 +1050,8 @@ class ImageContainer(FeatureMixin):
         """
         Apply a function to a layer within this container.
 
-        For each ``library_id`` (z dim) a different function can be defined.
-        For not mentioned ``library_id`` the identity function is implied
+        For each Z dimension a different function can be defined, using its ``library_id`` name.
+        For not mentioned ``library_id``'s the identity function is implied.
 
         Parameters
         ----------
@@ -1165,11 +1152,10 @@ class ImageContainer(FeatureMixin):
                 channel_dim=channel_dim,
                 copy=True,
                 lazy=lazy,
-                infer_dimensions=dims,
+                dims=dims,
                 library_id=arr.z.values,
             )
             cont.data.attrs = self.data.attrs.copy()
-
             return cont
 
         self.add_img(
@@ -1178,7 +1164,7 @@ class ImageContainer(FeatureMixin):
             lazy=lazy,
             copy=new_layer != layer,
             channel_dim=f"{channel_dim}:{res.shape[-1]}" if self[layer].shape[-1] != res.shape[-1] else channel_dim,
-            infer_dimensions=dims,
+            dims=dims,
             library_id=arr.z.values,
         )
 

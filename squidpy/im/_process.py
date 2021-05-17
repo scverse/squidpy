@@ -59,8 +59,9 @@ def process(
     %(img_container)s
     %(img_layer)s
     library_id
-        Single or multiple z dims that are processed. For not mentioned z dims, the identity function is implied.
-        None, all z dims are processed.
+        Name of the Z dimension(s) that this function should be applied to.
+        For not specified Z dimensions, the identity function is implied (if possible).
+        If `None`, all Z dimensions are processed at once, treating the image as a 3D volume.
     method
         Processing method to use. Valid options are:
 
@@ -104,10 +105,10 @@ def process(
     if callable(method):
         callback = method
     elif method == Processing.SMOOTH:  # type: ignore[comparison-overlap]
-        # TODO: also check passed sigma if has correct shape
+        # TODO: check passed sigma if has correct shape
         kwargs.setdefault(
             "sigma", [1, 1, 0, 0] if library_id is None else [1, 1, 0]
-        )  # TODO: Z-dim, allow for ints, replicate over spatial dims
+        )  # TODO: allow for ints, replicate over spatial dims
 
         if chunks is not None:
             # dask_image already handles map_overlap
@@ -116,7 +117,7 @@ def process(
         else:
             callback = scipy_gf
     elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
-        apply_kwargs["drop_axis"] = 2  # TODO: Z-dim TODO need to change to 3?
+        apply_kwargs["drop_axis"] = 3  # TODO: Z-dim change to 3 correct?
         callback = to_grayscale
     else:
         raise NotImplementedError(f"Method `{method}` is not yet implemented.")
@@ -141,11 +142,11 @@ def process(
         return res
 
     img.add_img(
-        res=res,
+        img=res,
         layer=layer_new,
         channel_dim=channel_dim,
         copy=False,
         lazy=lazy,
-        infer_dimensions=img[layer].dims,
+        dims=img[layer].dims,
         library_id=img[layer].coords["z"].values,
     )

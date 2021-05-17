@@ -1,6 +1,15 @@
 from abc import ABC, abstractmethod
 from types import MappingProxyType
-from typing import Any, Tuple, Union, Mapping, Callable, Optional, TYPE_CHECKING
+from typing import (
+    Any,
+    Tuple,
+    Union,
+    Mapping,
+    Callable,
+    Iterable,
+    Optional,
+    TYPE_CHECKING,
+)
 
 from scanpy import logging as logg
 
@@ -73,7 +82,6 @@ class SegmentationModel(ABC):
 
     @staticmethod
     def _precondition(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array]:
-        # TODO: account for Z-dim
         if img.ndim == 2:
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
@@ -83,7 +91,6 @@ class SegmentationModel(ABC):
 
     @staticmethod
     def _postcondition(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array]:
-        # TODO: account for Z-dim
         if img.ndim == 2:
             img = img[..., np.newaxis]
         if img.ndim != 3:
@@ -99,7 +106,6 @@ class SegmentationModel(ABC):
 
         img = SegmentationModel._precondition(img)
         img = self._segment(img, **kwargs)
-
         return SegmentationModel._postcondition(img)
 
     @segment.register(da.Array)  # type: ignore[no-redef]
@@ -138,6 +144,7 @@ class SegmentationModel(ABC):
         self,
         img: ImageContainer,
         layer: str,
+        library_ids,
         channel: Optional[int] = None,
         fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
@@ -149,7 +156,8 @@ class SegmentationModel(ABC):
             new_channel_dim = f"{channel_dim}:{'all' if channel is None else channel}"
 
         kwargs.pop("copy", None)
-        res = img.apply(self.segment, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)
+        func = {lid: self.segment for lid in library_ids}
+        res = img.apply(func, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)
         res._data = res.data.rename({channel_dim: new_channel_dim})
 
         for k in res:
@@ -210,7 +218,6 @@ class SegmentationWatershed(SegmentationModel):
         if thresh is None:
             thresh = threshold_otsu(arr)
         mask = (arr >= thresh) if geq else (arr < thresh)
-
         distance = ndi.distance_transform_edt(mask)
         coords = peak_local_max(distance, footprint=np.ones((5, 5)), labels=mask)
         local_maxi = np.zeros(distance.shape, dtype=np.bool_)
@@ -252,6 +259,7 @@ class SegmentationCustom(SegmentationModel):
 def segment(
     img: ImageContainer,
     layer: Optional[str] = None,
+    library_id: Optional[Union[Iterable[str], str]] = None,
     method: Union[str, SegmentationModel, Callable[..., np.ndarray]] = "watershed",
     channel: Optional[int] = 0,
     chunks: Optional[Union[str, int, Tuple[int, int]]] = None,
@@ -267,6 +275,10 @@ def segment(
     ----------
     %(img_container)s
     %(img_layer)s
+    library_id
+        Name of the Z dimension(s) that this function should be applied to.
+        For not specified Z dimensions, the identity function is implied.
+        If `None`, all Z dimensions are segmented.
     method
         Segmentation method to use. Valid options are:
 
@@ -300,6 +312,7 @@ def segment(
     kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
     layer_new = Key.img.segment(kind, layer_added=layer_added)
     kwargs["chunks"] = chunks
+    library_id = img._library_id_list(library_id)
 
     if not isinstance(method, SegmentationModel):
         if kind == SegmentationBackend.WATERSHED:
@@ -316,11 +329,19 @@ def segment(
 
     start = logg.info(f"Segmenting an image of shape `{img[layer].shape}` using `{method}`")
     res: ImageContainer = method.segment(
-        img, layer=layer, channel=channel, chunks=None, fn_kwargs=kwargs, copy=True, lazy=lazy
+        img, layer=layer, channel=channel, library_ids=library_id, chunks=None, fn_kwargs=kwargs, copy=True, lazy=lazy
     )
     logg.info("Finish", time=start)
 
     if copy:
+        # TODO rename z coords
         return res.rename(layer, layer_new)
 
-    img.add_img(res[layer], layer=layer_new, channel_dim=str(res[layer].dims[-1]), copy=False)
+    img.add_img(
+        res[layer],
+        layer=layer_new,
+        channel_dim=str(res[layer].dims[-1]),
+        copy=False,
+        dims=img[layer].dims,
+        library_id=img[layer].coords["z"].values,
+    )

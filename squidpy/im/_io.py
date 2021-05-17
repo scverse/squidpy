@@ -196,7 +196,7 @@ def _infer_dimensions(
 
 def _lazy_load_image(
     fname: Union[str, Path],
-    infer_dimensions: InferDimensions = InferDimensions.DEFAULT,
+    dims: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
     chunks: Optional[Union[int, str, Tuple[int, ...], Mapping[str, Union[int, str]]]] = None,
 ) -> xr.DataArray:
     def read_unprotected(fname: str) -> np.ndarray:
@@ -215,13 +215,13 @@ def _lazy_load_image(
             Image.MAX_IMAGE_PIXELS = old_max_pixels
 
     fname = str(fname)
-    shape, dims, dtype, _ = _infer_dimensions(fname, infer_dimensions)
+    shape, dims_, dtype, _ = _infer_dimensions(fname, dims)
 
     if isinstance(chunks, dict):
-        chunks = tuple(chunks.get(d, "auto") for d in dims)
+        chunks = tuple(chunks.get(d, "auto") for d in dims_)
 
     darr = da.from_delayed(delayed(read_unprotected)(fname), shape=shape, dtype=dtype)
     if chunks is not None:
         darr = darr.rechunk(chunks)
 
-    return xr.DataArray(darr, dims=dims).transpose("y", "x", "z", "channels")
+    return xr.DataArray(darr, dims=dims_).transpose("y", "x", "z", "channels")

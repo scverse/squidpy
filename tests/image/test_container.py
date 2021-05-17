@@ -1,4 +1,4 @@
-from typing import Any, Set, Tuple, Union, Optional
+from typing import Any, Set, List, Tuple, Union, Optional
 from imageio import imread, imsave
 from pathlib import Path
 from collections import defaultdict
@@ -68,7 +68,7 @@ class TestContainerIO:
         for key in img:
             value = img[key].data
             assert isinstance(value, da.Array)
-            np.testing.assert_array_equal(value.compute(), img_orig)
+            np.testing.assert_array_equal(np.squeeze(value.compute()), np.squeeze(img_orig))
 
     def _test_initialize_from_dataset(self):
         dataset = xr.Dataset({"foo": xr.DataArray(np.zeros((100, 100, 3)))}, attrs={"foo": "bar"})
@@ -699,7 +699,7 @@ class TestContainerUtils:
             return arr
 
         img = np.random.normal(size=(100, 100, 1, 3))
-        cont = ImageContainer(da.from_array(img) if as_dask else img, infer_dimensions=("y", "x", "z", "channels"))
+        cont = ImageContainer(da.from_array(img) if as_dask else img, dims=("y", "x", "z", "channels"))
 
         res = cont.apply(func, lazy=True, chunks=None, copy=True)
         if as_dask:
@@ -716,7 +716,7 @@ class TestContainerUtils:
             return np.sum(arr)
 
         cont = ImageContainer(
-            np.random.normal(size=(100, 100, 1, 3)).astype(np.float64), infer_dimensions=("y", "x", "z", "channels")
+            np.random.normal(size=(100, 100, 1, 3)).astype(np.float64), dims=("y", "x", "z", "channels")
         )
         with pytest.raises(ValueError, match=r", found `0`."):
             cont.apply(func)
@@ -783,7 +783,7 @@ class TestZStacks:
         imgs = [ImageContainer(arr, library_id=str(i) if init_lid else None) for i, arr in enumerate(arrs)]
 
         if not init_lid and library_ids is None:
-            with pytest.raises(ValueError, match=r"Found image with*"):
+            with pytest.raises(ValueError, match=r"Found non-unique library_ids for z dimensions"):
                 img = ImageContainer.concat(imgs, library_ids=library_ids)
         else:
             img = ImageContainer.concat(imgs, library_ids=library_ids)
@@ -857,6 +857,49 @@ class TestZStacks:
             assert el.shape == (7, 7)
         res = ImageContainer.uncrop(els)
         assert (res.data["image"].sel(z="2").values == cont_comb.data["image"].sel(z="2").values).all()
+
+    @pytest.mark.parametrize("channel", [None, 0])
+    @pytest.mark.parametrize("copy", [False, True])
+    @pytest.mark.parametrize("library_id", [["l1"], ["l2"], ["l1", "l2", "l3"], None])
+    def test_apply(self, copy: bool, channel: Optional[int], library_id: Optional[Union[List[str], str]]):
+        cont = ImageContainer(
+            np.random.normal(size=(100, 100, 3, 2)), dims=("y", "x", "z", "channels"), library_id=["l1", "l2", "l3"]
+        )
+        orig = cont.copy()
+
+        if library_id is None:
+            library_ids = ["l1", "l2", "l3"]
+            func = lambda arr: arr + 42  # noqa: E731
+        else:
+            library_ids = library_id
+            func = {lid: lambda arr: arr + 42 for lid in library_ids}
+
+        res = cont.apply(func, channel=channel, copy=copy)
+
+        if copy:
+            assert isinstance(res, ImageContainer)
+            data = res["image"]
+        else:
+            assert res is None
+            assert len(cont) == 1
+            data = cont["image"]
+
+        if channel is None:
+            for lid in ["l1", "l2", "l3"]:
+                if lid in library_ids:
+                    np.testing.assert_allclose(data.sel(z=lid).values, orig["image"].sel(z=lid).values + 42)
+                else:
+                    np.testing.assert_allclose(data.sel(z=lid).values, orig["image"].sel(z=lid).values)
+        else:
+            for lid in ["l1", "l2", "l3"]:
+                if lid in library_ids:
+                    np.testing.assert_allclose(
+                        data.sel(z=lid).values[..., 0], orig["image"].sel(z=lid).values[..., channel] + 42
+                    )
+                else:
+                    np.testing.assert_allclose(
+                        data.sel(z=lid).values[..., 0], orig["image"].sel(z=lid).values[..., channel]
+                    )
 
 
 class TestCroppingExtra:
@@ -938,7 +981,8 @@ class TestPileLine:
     @pytest.mark.parametrize("lazy", [False, True])
     def test_pipeline_inplace(self, small_cont: ImageContainer, lazy: bool):
         chunks = 25 if lazy else None
-
+        print(small_cont)
+        print(small_cont.data)
         c1 = sq.im.process(small_cont, method="smooth", copy=False, layer_added="foo", chunks=chunks, lazy=lazy)
         c2 = sq.im.process(
             small_cont, method="gray", copy=False, layer="foo", layer_added="bar", chunks=chunks, lazy=lazy
