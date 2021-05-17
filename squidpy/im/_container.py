@@ -629,6 +629,7 @@ class ImageContainer(FeatureMixin):
         self,
         size: Optional[Union[FoI_t, Tuple[FoI_t, FoI_t]]] = None,
         as_array: Union[str, bool] = False,
+        squeeze: bool = True,
         **kwargs: Any,
     ) -> Union[Iterator["ImageContainer"], Iterator[Dict[str, np.ndarray]]]:
         """
@@ -638,6 +639,8 @@ class ImageContainer(FeatureMixin):
         ----------
         %(size)s
         %(as_array)s
+        squeeze
+            Remove single z dimensions from the results if ``as_array = True``.
         kwargs
             Keyword arguments for :meth:`crop_corner`.
 
@@ -666,7 +669,7 @@ class ImageContainer(FeatureMixin):
         xcoords = np.tile(unique_xcoord, len(unique_ycoord))
 
         for y, x in zip(ycoords, xcoords):
-            yield self.crop_corner(y=y, x=x, size=(ys, xs), **kwargs)._maybe_as_array(as_array)
+            yield self.crop_corner(y=y, x=x, size=(ys, xs), **kwargs)._maybe_as_array(as_array, squeeze=squeeze)
 
     @d.dedent
     def generate_spot_crops(
@@ -677,6 +680,7 @@ class ImageContainer(FeatureMixin):
         spot_scale: float = 1.0,
         obs_names: Optional[Iterable[Any]] = None,
         as_array: Union[str, bool] = False,
+        squeeze: bool = True,
         return_obs: bool = False,
         **kwargs: Any,
     ) -> Union[
@@ -705,6 +709,8 @@ class ImageContainer(FeatureMixin):
         obs_names
             Observations from :attr:`adata.obs_names` for which to generate the crops. If `None`, all names are used.
         %(as_array)s
+        squeeze
+            Remove single z dimensions from the results if ``as_array = True``.
         return_obs
             Whether to also yield names from ``obs_names``.
         kwargs
@@ -766,7 +772,7 @@ class ImageContainer(FeatureMixin):
                 x = int(x - self.data.attrs[Key.img.coords].x0)
             crop = self.crop_center(y=y, x=x, radius=radius, library_id=obs_library_ids[i], **kwargs)
             crop.data.attrs[Key.img.obs] = obs
-            crop = crop._maybe_as_array(as_array)
+            crop = crop._maybe_as_array(as_array, squeeze=squeeze)
 
             yield (crop, obs) if return_obs else crop
 
@@ -948,11 +954,16 @@ class ImageContainer(FeatureMixin):
 
         for c, row in enumerate(ax):
             for z, ax_ in enumerate(row):
+                title = layer
                 if channelwise:
-                    img, title = arr[..., z, c], f"{layer}:{c}, library_id:{library_ids[z]}"
+                    img = arr[..., z, c]
+                    title += f":{c}"
                 else:
                     img = arr[:, :, z, ...]
-                    title = (layer if channel is None else f"{layer}:{channel}") + f", library_id:{library_ids[z]}"
+                    if channel is not None:
+                        title += f":{channel}"
+                if len(self.data.coords["z"]) > 1:
+                    title += f", library_id:{library_ids[z]}"
 
                 ax_.imshow(img_as_float(img.values, force_copy=False), **kwargs)
                 if seg_arr is not None:
@@ -1296,12 +1307,20 @@ class ImageContainer(FeatureMixin):
         return res
 
     def _maybe_as_array(
-        self, as_array: Union[str, Sequence[str], bool] = False
+        self,
+        as_array: Union[str, Sequence[str], bool] = False,
+        squeeze: bool = True,
     ) -> Union["ImageContainer", Dict[str, np.ndarray], np.ndarray, Tuple[np.ndarray, ...]]:
         res = self
         if as_array:
-            if len(res.data.z) == 1:  # do not return z dim if have only one
-                res = {key: res[key].isel(z=0).values for key in res}  # type: ignore[assignment]
+            if squeeze:
+                axis: Union[Tuple[()], Tuple[int, ...]] = ()
+                if len(res.data.z) == 1:
+                    axis += (2,)
+                # TODO for generalisation to channels, need to figure out the channel dim of each layer individually
+                # if len(res.data[res.data.dims[-1]]) == 1:
+                #    axis += (3,)
+                res = {key: res[key].squeeze(axis=axis).values for key in res}  # type: ignore[assignment]
             else:
                 res = {key: res[key].values for key in res}  # type: ignore[assignment]
         # this is just for convenience for DL iterators
