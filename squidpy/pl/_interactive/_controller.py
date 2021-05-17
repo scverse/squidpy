@@ -74,19 +74,18 @@ class ImageController:
         if self.model.container.data[layer].attrs.get("segmentation", False):
             return self.add_labels(layer)
 
-        img: xr.DataArray = self.model.container.data[layer].transpose("y", "x", ...)
-        # TODO: uncomment me once z-axis is available
-        # img: np.ndarray = self.model.container.data[layer].transpose("z", "y", "x", ....)
+        img: xr.DataArray = self.model.container.data[layer].transpose("z", "y", "x", ...)
         if img.shape[-1] > 4:
             logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
             return False
 
+        # TODO: maybe remove
         luminance = img.attrs.get("luminance", None)
         if luminance is None:
             logg.debug("Automatically determining whether image is a luminance image")
             luminance = _is_luminance(img.data)
         if luminance:
-            img = img.transpose(..., "y", "x")  # channels first
+            img = img.transpose(..., "y", "x" "z")  # channels first
 
         logg.info(f"Creating image `{layer}` layer")
         self.view.viewer.add_image(
@@ -95,6 +94,7 @@ class ImageController:
             rgb=not luminance,
             colormap=self.model.cmap if luminance or (img.shape[2] > 1) else "gray",
             blending=self.model.blending,
+            # TODO: fixme (luminance)
             multiscale=np.prod(img.shape[:2]) > (2 ** 16) ** 2,
         )
 
@@ -131,6 +131,7 @@ class ImageController:
             return False
 
         logg.info(f"Creating label `{layer}` layer")
+        # TODO: this needs to be fixed (multiscale) + img.shape
         self.view.viewer.add_labels(
             img.data[..., :, :],
             name=layer,

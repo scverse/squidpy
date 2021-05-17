@@ -127,6 +127,7 @@ def process(
 
     start = logg.info(f"Processing image using `{method}` method")
     res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs)
+
     # if the method changes the number of channels
     if res[layer].shape[-1] != img[layer].shape[-1]:
         modifier = "_".join(layer_new.split("_")[1:]) if layer_added is None else layer_added
@@ -139,7 +140,7 @@ def process(
         return res
 
     img.add_img(
-        img=res,
+        res=res,
         layer=layer_new,
         channel_dim=channel_dim,
         copy=False,

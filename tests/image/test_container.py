@@ -68,7 +68,7 @@ class TestContainerIO:
         for key in img:
             value = img[key].data
             assert isinstance(value, da.Array)
-            np.testing.assert_array_equal(np.squeeze(value.compute()), np.squeeze(img_orig))
+            np.testing.assert_array_equal(value.compute(), img_orig)
 
     def _test_initialize_from_dataset(self):
         dataset = xr.Dataset({"foo": xr.DataArray(np.zeros((100, 100, 3)))}, attrs={"foo": "bar"})
