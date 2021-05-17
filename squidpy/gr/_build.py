@@ -189,7 +189,6 @@ def _build_connectivity(
         dists = np.array(list(chain(*dists_lst))).squeeze()
 
     else:
-        print(n_neighbors)
         tree = NearestNeighbors(n_neighbors=n_neighbors, radius=radius or 1, metric="euclidean")
         tree.fit(coords)
         if radius is not None:
