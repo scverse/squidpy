@@ -95,7 +95,12 @@ def spatial_neighbors(
     if coord_type == CoordType.GRID:
         if n_rings > 1:
             Adj: csr_matrix = _build_connectivity(
-                coords, neigh_grid, neigh_correct=True, set_diag=True, delaunay=delaunay, return_distance=False
+                coords,
+                n_neighbors=neigh_grid,
+                neigh_correct=True,
+                set_diag=True,
+                delaunay=delaunay,
+                return_distance=False,
             )
             Res = Adj
             Walk = Adj
@@ -114,11 +119,13 @@ def spatial_neighbors(
             Dst = Adj.copy()
             Adj.data[:] = 1.0
         else:
-            Adj = _build_connectivity(coords, neigh_grid, neigh_correct=True, delaunay=delaunay)
+            Adj = _build_connectivity(coords, n_neighbors=neigh_grid, neigh_correct=True, delaunay=delaunay)
             Dst = Adj.copy()
 
     elif coord_type == CoordType.GENERIC:
-        Adj, Dst = _build_connectivity(coords, n_neigh, radius, delaunay=delaunay, return_distance=True)
+        Adj, Dst = _build_connectivity(
+            coords, n_neighbors=n_neigh, radius=radius, delaunay=delaunay, return_distance=True
+        )
     else:
         raise NotImplementedError(coord_type)
 
@@ -149,7 +156,7 @@ def spatial_neighbors(
 
 def _build_connectivity(
     coords: np.ndarray,
-    n_neigh: int,
+    n_neighbors: int,
     radius: Optional[float] = None,
     delaunay: bool = False,
     neigh_correct: bool = False,
@@ -160,7 +167,6 @@ def _build_connectivity(
     N = coords.shape[0]
 
     dists_m = None
-
     if delaunay:
         tri = Delaunay(coords)
         col_lst = []
@@ -183,7 +189,7 @@ def _build_connectivity(
         dists = np.array(list(chain(*dists_lst))).squeeze()
 
     else:
-        tree = NearestNeighbors(n_neighbors=n_neigh or 6, radius=radius or 1, metric="euclidean")
+        tree = NearestNeighbors(n_neighbors=n_neighbors or 6, radius=radius or 1, metric="euclidean")
         tree.fit(coords)
         if radius is not None:
             results = tree.radius_neighbors()
@@ -195,9 +201,12 @@ def _build_connectivity(
         else:
             results = tree.kneighbors()
             dists, row_indices = (result.reshape(-1) for result in results)
-            col_indices = np.repeat(np.arange(N), n_neigh or 6)
+            col_indices = np.repeat(np.arange(N), n_neighbors or 6)
             if neigh_correct:
-                dist_cutoff = np.median(dists) * 1.3  # There's a small amount of sway
+                if n_neighbors == 6:
+                    dist_cutoff = np.median(dists) * 1.3  # There's a small amount of sway
+                else:
+                    dist_cutoff = np.median(dists)  # TODO: check that true square-grid is not affected.
                 mask = dists < dist_cutoff
                 row_indices, col_indices = row_indices[mask], col_indices[mask]
                 dists = dists[mask]
