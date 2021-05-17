@@ -189,7 +189,8 @@ def _build_connectivity(
         dists = np.array(list(chain(*dists_lst))).squeeze()
 
     else:
-        tree = NearestNeighbors(n_neighbors=n_neighbors or 6, radius=radius or 1, metric="euclidean")
+        print(n_neighbors)
+        tree = NearestNeighbors(n_neighbors=n_neighbors, radius=radius or 1, metric="euclidean")
         tree.fit(coords)
         if radius is not None:
             results = tree.radius_neighbors()
@@ -203,10 +204,7 @@ def _build_connectivity(
             dists, row_indices = (result.reshape(-1) for result in results)
             col_indices = np.repeat(np.arange(N), n_neighbors or 6)
             if neigh_correct:
-                if n_neighbors == 6:
-                    dist_cutoff = np.median(dists) * 1.3  # There's a small amount of sway
-                else:
-                    dist_cutoff = np.median(dists)  # TODO: check that true square-grid is not affected.
+                dist_cutoff = np.median(dists) * 1.3  # There's a small amount of sway
                 mask = dists < dist_cutoff
                 row_indices, col_indices = row_indices[mask], col_indices[mask]
                 dists = dists[mask]

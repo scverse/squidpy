@@ -14,7 +14,7 @@ def test_spatial_neighbors_visium(visium_adata: AnnData, n_rings: int, n_neigh: 
     """
     check correctness of neighborhoods for visium coordinates
     """
-    spatial_neighbors(visium_adata, n_rings=n_rings)
+    spatial_neighbors(visium_adata, neigh_grid=n_neigh, n_rings=n_rings)
     assert visium_adata.obsp[Key.obsp.spatial_conn()][0].sum() == n_neigh
     assert visium_adata.uns[Key.uns.spatial_neighs()]["distances_key"] == Key.obsp.spatial_dist()
     if n_rings > 1:
