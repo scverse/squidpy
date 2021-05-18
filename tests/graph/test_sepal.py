@@ -10,7 +10,7 @@ UNS_KEY = "sepal_score"
 
 def test_sepal_seq_par(adata: AnnData):
     """Check whether sepal results are the same for seq. and parallel computation."""
-    spatial_neighbors(adata, coord_type="visium")
+    spatial_neighbors(adata, coord_type="grid")
     rng = np.random.default_rng(42)
     adata.var["highly_variable"] = rng.choice([True, False], size=adata.var_names.shape, p=[0.005, 0.995])
 
