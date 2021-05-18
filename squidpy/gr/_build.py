@@ -48,8 +48,8 @@ def spatial_neighbors(
             - `{c.GRID!r}` - grid coordinates.
             - `{c.GENERIC!r}` - generic coordinates.
 
-        If `None`, use `{c.GRID!r}` if ``spatial_key`` is present in :attr:`anndata.AnnData.obsm`,
-        otherwise use `{c.GENERIC!r}`.
+        If `None`, use `{c.GRID!r}` if ``spatial_key`` is present in :attr:`anndata.AnnData.uns`,
+        with `neigh_grid=6` (Visium), otherwise use `{c.GENERIC!r}`.
     n_rings
         Number of rings of neighbors for grid data. The argument is used if `coord_type={c.GRID!r}`.
     neigh_grid
