@@ -51,15 +51,15 @@ def spatial_neighbors(
         If `None`, use `{c.GRID!r}` if ``spatial_key`` is present in :attr:`anndata.AnnData.obsm`,
         otherwise use `{c.GENERIC!r}`.
     n_rings
-        Number of rings of neighbors for grid data.
+        Number of rings of neighbors for grid data. The argument is used if `coord_type={c.GRID!r}`.
     neigh_grid
-        Number of neighboring tiles in a grid.
+        Number of neighboring tiles in a grid. The argument is used if `coord_type={c.GRID!r}`.
     n_neigh
-        Number of neighborhoods to consider for non-grid data.
+        Number of neighborhoods to consider for non-grid data. The argument is used if `coord_type={c.GENERIC!r}`.
     delaunay
-        Whether to compute the graph from Delaunay triangulation.
+        Whether to compute the graph from Delaunay triangulation. The argument is used if `coord_type={c.GENERIC!r}`.
     radius
-        Radius of neighbors for non-grid data.
+        Radius of neighbors for non-grid data. The argument is used if `coord_type={c.GENERIC!r}`.
     transform
         Type of adjacency matrix transform. Valid options are:
 
