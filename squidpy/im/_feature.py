@@ -15,6 +15,7 @@ from squidpy._constants._constants import ImageFeature
 __all__ = ["calculate_image_features"]
 
 
+# TODO: allow lazy?
 @d.dedent
 @inject_docs(f=ImageFeature)
 def calculate_image_features(

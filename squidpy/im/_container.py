@@ -63,6 +63,7 @@ from squidpy._constants._pkg_constants import Key
 FoI_t = Union[int, float]
 Pathlike_t = Union[str, Path]
 Arraylike_t = Union[np.ndarray, xr.DataArray]
+InferDims_t = Union[Literal["default", "prefer_channels", "prefer_z"], Sequence[str]]
 Input_t = Union[Pathlike_t, Arraylike_t, "ImageContainer"]
 Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependencies
 
@@ -244,7 +245,7 @@ class ImageContainer(FeatureMixin):
 
         return library_id
 
-    def _library_id_list(self, library_id: Optional[Union[str, Iterable[str]]] = None) -> List[str]:
+    def _library_id_list(self, library_id: Optional[Union[str, Sequence[str]]] = None) -> List[str]:
         """Get list of library_ids from input or z coords."""
         if library_id is None:
             self._assert_not_empty()
@@ -269,12 +270,10 @@ class ImageContainer(FeatureMixin):
         img: Input_t,
         layer: Optional[str] = None,
         channel_dim: Optional[str] = None,
-        library_id: Optional[Union[str, Iterable[str]]] = None,
+        library_id: Optional[Union[str, Sequence[str]]] = None,
         lazy: bool = True,
         chunks: Optional[Union[str, Tuple[int, ...]]] = None,
-        dims: Union[
-            Literal["default", "prefer_channels", "prefer_z"], Tuple[str, ...]
-        ] = InferDimensions.DEFAULT.s,  # type: ignore[assignment]
+        dims: InferDims_t = InferDimensions.DEFAULT.s,
         copy: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -320,27 +319,25 @@ class ImageContainer(FeatureMixin):
         """
         layer = self._get_next_image_id("image") if layer is None else layer
         dims: Union[InferDimensions, Tuple[str]] = (  # type: ignore[no-redef]
-            InferDimensions(dims) if not isinstance(dims, tuple) else dims
+            InferDimensions(dims) if isinstance(dims, str) else dims
         )
         res: Optional[xr.DataArray] = self._load_img(img, chunks=chunks, layer=layer, copy=copy, dims=dims, **kwargs)
 
         if res is not None:  # not reading a .nc file
+            # if isinstance(dims, InferDimensions):
+            # TODO: remove me?
             res = res.rename({res.dims[-1]: "channels" if channel_dim is None else str(channel_dim)})
 
             # add z dim label
             z = res.shape[2]
+            # TODO: default library id causes the TODO issue below
             default_library_id = [f"library_id_{i}" for i in range(z)]
             library_id = self._library_id_list(default_library_id if library_id is None else library_id)
             if z > 1 and len(library_id) != z:
-                raise ValueError(
-                    f"img has {z} z dimensions, \
-                please specify a list of {z} names for library_id"
-                )
+                raise ValueError(f"Image has `{z}` Z dims, please specify a list of `{z}` names for library id.")
             res = res.assign_coords({"z": library_id})
 
             logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
-            if layer in self:
-                self.data[layer]
             try:
                 self.data[layer] = res
             except ValueError as e:
@@ -352,6 +349,10 @@ class ImageContainer(FeatureMixin):
                 if TYPE_CHECKING:
                     assert isinstance(res, xr.DataArray)
                 self.data[layer] = res.rename({res.dims[-1]: channel_dim})
+                # TODO(find solution + add test): this will be full of NaN + truncated(padded) if all coods
+                # have different names, maybe raise or use above `self.data.z.values`?
+                # lab = np.random.randint(0, 255, size=(*img.shape, 2, 1))
+                # img.add_img(lab, dims=['y', 'x', 'z', 'cseg'], layer='foo')
 
             if not lazy:
                 self.compute(layer)
@@ -375,7 +376,7 @@ class ImageContainer(FeatureMixin):
         self,
         img: Pathlike_t,
         chunks: Optional[int] = None,
-        dims: InferDimensions = InferDimensions.DEFAULT,  # TODO: type(infer_dims)
+        dims: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
         **_: Any,
     ) -> Optional[xr.DataArray]:
         def transform_metadata(data: xr.Dataset) -> xr.Dataset:
@@ -426,8 +427,12 @@ class ImageContainer(FeatureMixin):
     @_load_img.register(da.Array)  # type: ignore[no-redef]
     @_load_img.register(np.ndarray)
     def _(
-        self, img: np.ndarray, copy: bool = True, dims: InferDimensions = InferDimensions.DEFAULT, **_: Any
-    ) -> xr.DataArray:  # TODO: type(infer_dims)
+        self,
+        img: np.ndarray,
+        copy: bool = True,
+        dims: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
+        **_: Any,
+    ) -> xr.DataArray:
         logg.debug(f"Loading data `numpy.array` of shape `{img.shape}`")
 
         img = img.copy() if copy else img
@@ -440,7 +445,7 @@ class ImageContainer(FeatureMixin):
         self,
         img: xr.DataArray,
         copy: bool = True,
-        dims: InferDimensions = InferDimensions.DEFAULT,  # TODO: type(infer_dims)
+        dims: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
         **_: Any,
     ) -> xr.DataArray:
         logg.debug(f"Loading data `xarray.DataArray` of shape `{img.shape}`")
@@ -449,7 +454,7 @@ class ImageContainer(FeatureMixin):
         if not ("y" in img.dims and "x" in img.dims and "z" in img.dims):
             _, dims, _, axes = _infer_dimensions(img, infer_dimensions=dims)
             img = img.expand_dims([f"tmp_{a}" for a in axes], axis=axes)
-            logg.warning(f"Unable to find `y` or `x` dimension in `{img.dims}`. Renaming to `{dims}`")
+            logg.warning(f"Unable to find `y`, `x` or `z` dimension in `{img.dims}`. Renaming to `{dims}`")
             img = img.rename(dict(zip(img.dims, dims)))
 
         return img.transpose("y", "x", "z", ...)
@@ -1158,9 +1163,10 @@ class ImageContainer(FeatureMixin):
                     raise
                 # func might have changed channel dims, replace idx_identity with 0s
                 logg.warning(
-                    "function changed number of channels, cannot use identity for library_ids"
-                    + f"{arr.z.values[idx_identity]}, replacing with 0."
+                    f"Function changed number of channels, cannot use identity for library_ids "
+                    f"`{arr.z.values[idx_identity]}`. Replacing with 0"
                 )
+                # TODO: maybe create new layers (1 for applied, 1 for identity)?
                 for i in idx_identity:
                     res[i] = np.zeros_like(res[idx_func[0]])
                 # might raise ValueError again, if trying to apply different functions

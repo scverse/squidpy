@@ -59,6 +59,7 @@ def process(
     %(img_container)s
     %(img_layer)s
     library_id
+        TODO: docrep
         Name of the Z dimension(s) that this function should be applied to.
         For not specified Z dimensions, the identity function is implied (if possible).
         If `None`, all Z dimensions are processed at once, treating the image as a 3D volume.
@@ -105,10 +106,18 @@ def process(
     if callable(method):
         callback = method
     elif method == Processing.SMOOTH:  # type: ignore[comparison-overlap]
-        # TODO: check passed sigma if has correct shape
-        kwargs.setdefault(
-            "sigma", [1, 1, 0, 0] if library_id is None else [1, 1, 0]
-        )  # TODO: allow for ints, replicate over spatial dims
+        if library_id is None:
+            expected_ndim = 4
+            kwargs.setdefault("sigma", [1, 1, 0, 0])
+        else:
+            expected_ndim = 3
+            kwargs.setdefault("sigma", [1, 1, 0])
+
+        sigma = kwargs["sigma"]
+        if isinstance(sigma, int):
+            kwargs["sigma"] = sigma = [sigma, sigma] + [0] * (4 - expected_ndim)
+        if len(sigma) != expected_ndim:
+            raise ValueError(f"Expected `sigma` to be of length `{expected_ndim}`, found `{len(sigma)}`.")
 
         if chunks is not None:
             # dask_image already handles map_overlap
@@ -117,15 +126,14 @@ def process(
         else:
             callback = scipy_gf
     elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
-        apply_kwargs["drop_axis"] = 3  # TODO: Z-dim change to 3 correct?
+        apply_kwargs["drop_axis"] = 3
         callback = to_grayscale
     else:
         raise NotImplementedError(f"Method `{method}` is not yet implemented.")
 
     # to which library_ids should this function be applied?
     if library_id is not None:
-        _callback = {lid: callback for lid in img._library_id_list(library_id)}
-        callback: Mapping[str, Callable[..., np.ndarray]] = _callback  # type: ignore[no-redef]
+        callback = {lid: callback for lid in img._library_id_list(library_id)}  # type: ignore[assignment]
 
     start = logg.info(f"Processing image using `{method}` method")
     res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs)

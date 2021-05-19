@@ -144,7 +144,7 @@ class SegmentationModel(ABC):
         self,
         img: ImageContainer,
         layer: str,
-        library_id: Optional[Union[Union[str, Sequence[str]]]],
+        library_id: Union[str, Sequence[str]],
         channel: Optional[int] = None,
         fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
@@ -156,16 +156,15 @@ class SegmentationModel(ABC):
             new_channel_dim = f"{channel_dim}:{'all' if channel is None else channel}"
 
         kwargs.pop("copy", None)
-        if library_id is None:  # TODO: allow for volumetric segmentation by changing precondition
-            func = self.segment
-        elif isinstance(library_id, str):
+        # TODO: maybe allow volumetric segmentation? (precondition/postcondition needs change)
+        if isinstance(library_id, str):
             func = {library_id: self.segment}
         elif isinstance(library_id, Sequence):
             func = {lid: self.segment for lid in library_id}
         else:
             raise TypeError(
-                f"Expected `library_id` to be of type `str` or `iterable` "
-                f"or to be `None`, found `{type(library_id)}`."
+                f"Expected `library_id` to be of type `str` or `sequence` or "
+                f"to be `None`, found `{type(library_id)}`."
             )
 
         res = img.apply(func, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)
@@ -347,7 +346,7 @@ def segment(
     logg.info("Finish", time=start)
 
     if copy:
-        # TODO rename z coords
+        res.library_ids = img[layer].coords["z"].values
         return res.rename(layer, layer_new)
 
     img.add_img(
