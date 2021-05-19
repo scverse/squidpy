@@ -29,6 +29,7 @@ def _get_categorical(
         if key in adata.obs:
             logg.debug(f"Overwriting `adata.obs[{key!r}]`")
 
+        # TODO: change me
         adata.obs[key] = vec.values
 
     add_colors_for_categorical_sample_annotation(

@@ -21,6 +21,7 @@ class ImageModel:
     adata: AnnData
     container: ImageContainer
     spatial_key: str = field(default=Key.obsm.spatial, repr=False)
+    library_key: Optional[str] = None
     library_id: Optional[str] = None
     spot_diameter: float = field(default=0, init=False)
     coordinates: np.ndarray = field(init=False, repr=False)
@@ -36,14 +37,25 @@ class ImageModel:
         _assert_spatial_basis(self.adata, self.spatial_key)
 
         self.symbol = Symbol(self.symbol)
-        self.library_id = Key.uns.library_id(self.adata, self.spatial_key, self.library_id)
-        self.spot_diameter = Key.uns.spot_diameter(
-            self.adata, self.spatial_key, self.library_id
-        ) * self.container.data.attrs.get(Key.img.scale, 1)
-
         self.adata = self.container._subset(self.adata, spatial_key=self.spatial_key, adjust_interactive=True)
         if not self.adata.n_obs:
             raise ValueError("No spots were selected. Please ensure that the image contains at least 1 spot.")
 
         self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1][:, :2]
-        self.alayer = ALayer(self.adata, is_raw=False, palette=self.palette)
+        self.alayer = ALayer(
+            self.adata,
+            is_raw=False,
+            palette=self.palette,
+            spatial_key=self.spatial_key,
+            library_key=self.library_key,
+            library_id=self.library_id,
+            scale=self.container.data.attrs.get(Key.img.scale, 1),
+        )
+
+        try:
+            self.container = ImageContainer._from_dataset(self.container.data.sel(z=self.alayer.library_ids), deep=None)
+        except KeyError:
+            raise KeyError(
+                f"Unable to subset the image container with library ids `{self.alayer.library_ids}`. "
+                f"Valid library ids are `{self.container.library_ids}`."
+            ) from None

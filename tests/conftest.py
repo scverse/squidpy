@@ -157,7 +157,7 @@ def cont_dot() -> ImageContainer:
 
 @pytest.fixture()
 def napari_cont() -> ImageContainer:
-    return ImageContainer("tests/_data/test_img.jpg", layer="V1_Adult_Mouse_Brain")
+    return ImageContainer("tests/_data/test_img.jpg", layer="V1_Adult_Mouse_Brain", library_id="V1_Adult_Mouse_Brain")
 
 
 @pytest.fixture()

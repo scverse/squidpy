@@ -1,7 +1,8 @@
-from typing import FrozenSet
+from typing import Any, FrozenSet
 
 from PyQt5.QtWidgets import QLabel, QWidget, QComboBox, QHBoxLayout
 
+from napari.layers import Points
 import napari
 
 from squidpy.pl._interactive._model import ImageModel
@@ -33,6 +34,18 @@ class ImageView:
         self._controller = controller
 
     def _init_UI(self) -> None:
+        def handle_dim_slider_update(event: Any) -> None:
+            z, *_ = event.value
+
+            # any of these correctly set `self.model.alayer.spot_diameter`
+            var_widget.setLibraryId(z)
+            self._obs_widget.setLibraryId(z)
+            obsm_widget.setLibraryId(z)
+
+            for layer in self.viewer.layers:
+                if isinstance(layer, Points):
+                    layer.size = self.model.alayer.spot_diameter
+
         self._viewer = napari.Viewer(title="Squidpy", show=False)
         self.viewer.bind_key("Shift-E", self.controller.export)
         parent = self.viewer.window._qt_window
@@ -105,6 +118,8 @@ class ImageView:
 
         self.viewer.window.add_dock_widget(self._colorbar, area="left", name="percentile")
         self.viewer.window.add_dock_widget(widgets, area="right", name="genes")
+
+        self.viewer.dims.events.current_step.connect(handle_dim_slider_update)
 
     @property
     def layers(self) -> napari.components.layerlist.LayerList:

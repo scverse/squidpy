@@ -70,14 +70,6 @@ Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependen
 __all__ = ["ImageContainer"]
 
 
-def test(var: Union[Iterable[str], None]) -> None:
-    if var is None:
-        var = ["a", "b", "c"]
-    var = np.zeros((len(list(var)), 10))
-
-    print(var.shape)
-
-
 @d.dedent  # trick to overcome not top-down order
 @d.dedent
 class ImageContainer(FeatureMixin):
@@ -188,7 +180,7 @@ class ImageContainer(FeatureMixin):
             raise ValueError(f"Expected library ids to be of length `{len(imgs)}`, found `{len(library_ids)}`.")
 
         _library_ids = np.concatenate([img._library_id_list(library_id) for img, library_id in zip(imgs, library_ids)])
-        if len(set(_library_ids)) < len(_library_ids):
+        if len(set(_library_ids)) != len(_library_ids):
             raise ValueError(f"Found non-unique library_ids for z dimensions `{list(_library_ids)}`.")
 
         # add library_id to z dim
@@ -243,7 +235,7 @@ class ImageContainer(FeatureMixin):
         if library_id is None:
             if len(self.library_ids) > 1:
                 raise ValueError(
-                    f"Unable to determine which library id to use. " f"Please supply one from `{self.library_ids}`."
+                    f"Unable to determine which library id to use. Please supply one from `{self.library_ids}`."
                 )
             library_id = self.library_ids[0]
 
@@ -253,12 +245,7 @@ class ImageContainer(FeatureMixin):
         return library_id
 
     def _library_id_list(self, library_id: Optional[Union[str, Iterable[str]]] = None) -> List[str]:
-        """
-        Get list of library_ids from input or z coords.
-
-        library_id
-            TODO.
-        """
+        """Get list of library_ids from input or z coords."""
         if library_id is None:
             self._assert_not_empty()
             library_id = self.data.coords["z"].values
@@ -1019,6 +1006,7 @@ class ImageContainer(FeatureMixin):
         self,
         adata: AnnData,
         spatial_key: str = Key.obsm.spatial,
+        library_key: Optional[str] = None,
         library_id: Optional[str] = None,
         cmap: str = "viridis",
         palette: Optional[str] = None,
@@ -1034,7 +1022,7 @@ class ImageContainer(FeatureMixin):
         %(adata)s
         %(spatial_key)s
         library_id
-            Key in :attr:`anndata.AnnData.uns` ['spatial'] used to get the spot diameter.
+            TODO.
         cmap
             Colormap for continuous variables.
         palette
@@ -1069,6 +1057,7 @@ class ImageContainer(FeatureMixin):
             img=self,
             adata=adata,
             spatial_key=spatial_key,
+            library_key=library_key,
             library_id=library_id,
             cmap=cmap,
             palette=palette,
@@ -1308,6 +1297,19 @@ class ImageContainer(FeatureMixin):
             return sorted(self.data.coords["z"].values)
         except KeyError:
             return []
+
+    @library_ids.setter
+    def library_ids(self, library_ids: Union[str, Sequence[str], Mapping[str, str]]) -> None:
+        """Set library ids."""
+        if isinstance(library_ids, Mapping):
+            library_ids = [library_ids.get(lid, lid) for lid in self.data.z.values]
+        elif isinstance(library_ids, str):
+            library_ids = (library_ids,)
+
+        library_ids = list(map(str, library_ids))
+        if len(set(library_ids)) != len(library_ids):
+            raise ValueError(f"Remapped library ids must be unique, found `{library_ids}`.")
+        self._data = self.data.assign_coords({"z": library_ids})
 
     @property
     def data(self) -> xr.Dataset:

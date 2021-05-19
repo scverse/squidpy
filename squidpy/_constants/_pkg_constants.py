@@ -108,7 +108,7 @@ class Key:  # noqa: D101
             if library_id is None:
                 if len(haystack) > 1:
                     raise ValueError(
-                        f"Unable to determine which `library_id` to use. "
+                        f"Unable to determine which library id to use. "
                         f"Please specify one from: `{sorted(haystack)}`."
                     )
                 library_id = haystack[0]
@@ -125,7 +125,7 @@ class Key:  # noqa: D101
             except KeyError:
                 raise KeyError(
                     f"Unable to get the spot diameter from "
-                    f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors'['spot_diameter_fullres']]`"
+                    f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors']['spot_diameter_fullres']]`"
                 ) from None
 
     class obsp:  # noqa: D106

@@ -17,7 +17,7 @@ from napari.layers import Points, Shapes
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
 from squidpy._utils import singledispatchmethod
-from squidpy.pl._utils import _points_inside_triangles
+from squidpy.pl._utils import ALayer, _points_inside_triangles
 from squidpy.pl._interactive._view import ImageView
 from squidpy.pl._interactive._model import ImageModel
 from squidpy.pl._interactive._utils import (
@@ -75,6 +75,7 @@ class ImageController:
             return self.add_labels(layer)
 
         img: xr.DataArray = self.model.container.data[layer].transpose("z", "y", "x", ...)
+        multiscale = np.prod(img.shape[1:3]) > (2 ** 16) ** 2
         if img.shape[-1] > 4:
             logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
             return False
@@ -85,7 +86,7 @@ class ImageController:
             logg.debug("Automatically determining whether image is a luminance image")
             luminance = _is_luminance(img.data)
         if luminance:
-            img = img.transpose(..., "y", "x" "z")  # channels first
+            img = img.transpose("z", ..., "y", "x")  # channels first
 
         logg.info(f"Creating image `{layer}` layer")
         self.view.viewer.add_image(
@@ -94,8 +95,7 @@ class ImageController:
             rgb=not luminance,
             colormap=self.model.cmap if luminance or (img.shape[2] > 1) else "gray",
             blending=self.model.blending,
-            # TODO: fixme (luminance)
-            multiscale=np.prod(img.shape[:2]) > (2 ** 16) ** 2,
+            multiscale=multiscale,
         )
 
         return True
@@ -114,6 +114,7 @@ class ImageController:
         `True` if the layer has been added, otherwise `False`.
         """
         img: xr.DataArray = self.model.container.data[layer].transpose(..., "y", "x")
+        multiscale = np.prod(img.shape[-2:]) > (2 ** 16) ** 2
         if img.ndim > 4:
             logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
             return False
@@ -131,11 +132,11 @@ class ImageController:
             return False
 
         logg.info(f"Creating label `{layer}` layer")
-        # TODO: this needs to be fixed (multiscale) + img.shape
+        # TODO: this needs to be fixed + img.shape
         self.view.viewer.add_labels(
             img.data[..., :, :],
             name=layer,
-            multiscale=np.prod(img.shape[:2]) > (2 ** 16) ** 2,
+            multiscale=multiscale,
         )
 
         return True
@@ -167,7 +168,7 @@ class ImageController:
         layer: Points = self.view.viewer.add_points(
             self.model.coordinates,
             name=layer_name,
-            size=self.model.spot_diameter,
+            size=self.alayer.spot_diameter,
             opacity=1,
             edge_width=1,
             blending=self.model.blending,
@@ -269,7 +270,17 @@ class ImageController:
         shape_list = layer._data_view
         triangles = shape_list._mesh.vertices[shape_list._mesh.displayed_triangles]
 
-        self.model.adata.obs[key] = pd.Categorical(_points_inside_triangles(self.model.coordinates, triangles))
+        points_mask = np.zeros(
+            len(
+                self.model.coordinates,
+            ),
+            dtype=np.bool_,
+        )
+        points_mask[self.alayer.spot_indices] = _points_inside_triangles(
+            self.model.coordinates[self.alayer.spot_indices], triangles
+        )
+
+        self.model.adata.obs[key] = pd.Categorical(points_mask)
         self.model.adata.uns[key] = {"meshes": layer.data.copy()}
 
     def _update_obs_items(self, key: str) -> None:
@@ -353,3 +364,8 @@ class ImageController:
     def model(self) -> ImageModel:
         """Model managed by this controller."""
         return self._model
+
+    @property
+    def alayer(self) -> ALayer:
+        """Annotated data layer."""
+        return self.model.alayer

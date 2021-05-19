@@ -111,25 +111,27 @@ class TwoStateCheckBox(QtWidgets.QCheckBox):
 class AListWidget(ListWidget):
     rawChanged = QtCore.pyqtSignal()
     layerChanged = QtCore.pyqtSignal()
+    libraryChanged = QtCore.pyqtSignal()
 
     def __init__(self, controller: Any, alayer: ALayer, attr: str, **kwargs: Any):
         if attr not in ALayer.VALID_ATTRIBUTES:
             raise ValueError(f"Invalid attribute `{attr}`. Valid options are `{sorted(ALayer.VALID_ATTRIBUTES)}`.")
         super().__init__(controller, **kwargs)
 
-        self._adata_layer = alayer
+        self._alayer = alayer
 
         self._attr = attr
-        self._getter = getattr(self._adata_layer, f"get_{attr}")
+        self._getter = getattr(self._alayer, f"get_{attr}")
 
         self.rawChanged.connect(self._onChange)
         self.layerChanged.connect(self._onChange)
+        self.libraryChanged.connect(self._onChange)
 
         self._onChange()
 
     def _onChange(self) -> None:
         self.clear()
-        self.addItems(self._adata_layer.get_items(self._attr))
+        self.addItems(self._alayer.get_items(self._attr))
 
     def _onAction(self, items: Iterable[str]) -> None:
         for item in sorted(set(items)):
@@ -144,11 +146,11 @@ class AListWidget(ListWidget):
         if is_raw == self.getRaw():
             return
 
-        self._adata_layer.raw = is_raw
+        self._alayer.raw = is_raw
         self.rawChanged.emit()
 
     def getRaw(self) -> bool:
-        return self._adata_layer.raw
+        return self._alayer.raw
 
     def setIndex(self, index: Union[str, int]) -> None:
         if isinstance(index, str):
@@ -173,18 +175,28 @@ class AListWidget(ListWidget):
         if layer == self.getLayer():
             return
 
-        self._adata_layer.layer = layer
+        self._alayer.layer = layer
         self.layerChanged.emit()
 
     def getLayer(self) -> Optional[str]:
-        return self._adata_layer.layer
+        return self._alayer.layer
+
+    def setLibraryId(self, library_id: str) -> None:
+        if library_id == self.getLibraryId():
+            return
+
+        self._alayer.library_id = library_id
+        self.libraryChanged.emit()
+
+    def getLibraryId(self) -> str:
+        return self._alayer.library_id
 
 
 class ObsmIndexWidget(QtWidgets.QComboBox):
     def __init__(self, alayer: ALayer, max_visible: int = 6, **kwargs: Any):
         super().__init__(**kwargs)
 
-        self._adata = alayer.adata
+        self._alayer = alayer
         self.view().setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
         self.setMaxVisibleItems(max_visible)
         self.setStyleSheet("combobox-popup: 0;")
@@ -193,12 +205,12 @@ class ObsmIndexWidget(QtWidgets.QComboBox):
         if isinstance(texts, QtWidgets.QListWidgetItem):
             try:
                 key = texts.text()
-                if isinstance(self._adata.obsm[key], pd.DataFrame):
-                    texts = sorted(self._adata.obsm[key].select_dtypes(include=[np.number, "category"]).columns)
-                elif hasattr(self._adata.obsm[key], "shape"):
-                    texts = self._adata.obsm[key].shape[1]
+                if isinstance(self._alayer.adata.obsm[key], pd.DataFrame):
+                    texts = sorted(self._alayer.adata.obsm[key].select_dtypes(include=[np.number, "category"]).columns)
+                elif hasattr(self._alayer.adata.obsm[key], "shape"):
+                    texts = self._alayer.adata.obsm[key].shape[1]
                 else:
-                    texts = np.asarray(self._adata.obsm[key]).shape[1]
+                    texts = np.asarray(self._alayer.adata.obsm[key]).shape[1]
             except (KeyError, IndexError):
                 texts = 0
         if isinstance(texts, int):
