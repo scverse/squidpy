@@ -401,25 +401,34 @@ class TestContainerCropping:
 
         assert crop.shape == (2 * sy + 1, 2 * sx + 1)
 
+    @pytest.mark.parametrize("squeeze", [False, True])
     @pytest.mark.parametrize("as_array", [False, True, "image", ["image", "baz"]])
-    def test_equal_crops_as_array(self, small_cont: ImageContainer, as_array: bool):
-        small_cont.add_img(np.random.normal(size=(small_cont.shape + (1,))), channel_dim="foobar", layer="baz")
-        for crop in small_cont.generate_equal_crops(size=11, as_array=as_array):
+    def test_equal_crops_as_array(self, small_cont: ImageContainer, as_array: bool, squeeze: bool):
+        def assert_shape(expected: xr.DataArray, actual: Union[np.ndarray, xr.DataArray]):
+            expected_shape = list(expected.shape)
+            expected_shape[:2] = [11, 11]  # because crop is 11x11
+            if squeeze:
+                assert actual.shape == np.squeeze(np.empty(expected_shape)).shape
+            else:
+                assert actual.shape == tuple(expected_shape)
+
+        small_cont.add_img(np.random.normal(size=(small_cont.shape + (1, 1))), channel_dim="foobar", layer="baz")
+        for crop in small_cont.generate_equal_crops(size=11, as_array=as_array, squeeze=squeeze):
             if as_array:
                 if isinstance(as_array, bool):
                     assert isinstance(crop, dict)
                     for key in small_cont:
                         assert key in crop
-                        assert crop[key].shape == (11, 11, small_cont[key].data.shape[-1])
+                        assert_shape(small_cont[key].data, crop[key])
                 elif isinstance(as_array, str):
                     assert isinstance(crop, np.ndarray)
-                    assert crop.shape == (11, 11, small_cont[as_array].data.shape[-1])
+                    assert_shape(small_cont[as_array].data, crop)
                 else:
                     assert isinstance(crop, tuple)
                     assert len(crop) == len(as_array)
                     for key, data in zip(as_array, crop):
                         assert isinstance(data, np.ndarray)
-                        assert data.shape == (11, 11, small_cont[key].data.shape[-1])
+                        assert_shape(small_cont[key].data, data)
             else:
                 assert isinstance(crop, ImageContainer)
                 for key in (Key.img.coords, Key.img.padding, Key.img.scale, Key.img.mask_circle):
@@ -981,8 +990,6 @@ class TestPileLine:
     @pytest.mark.parametrize("lazy", [False, True])
     def test_pipeline_inplace(self, small_cont: ImageContainer, lazy: bool):
         chunks = 25 if lazy else None
-        print(small_cont)
-        print(small_cont.data)
         c1 = sq.im.process(small_cont, method="smooth", copy=False, layer_added="foo", chunks=chunks, lazy=lazy)
         c2 = sq.im.process(
             small_cont, method="gray", copy=False, layer="foo", layer_added="bar", chunks=chunks, lazy=lazy

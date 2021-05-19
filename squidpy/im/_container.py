@@ -1367,11 +1367,12 @@ class ImageContainer(FeatureMixin):
     ) -> Union["ImageContainer", Dict[str, np.ndarray], np.ndarray, Tuple[np.ndarray, ...]]:
         res = self
         if as_array:
+            # TODO: dask
             res = {key: res[key].values for key in res}  # type: ignore[assignment]
             if squeeze:
-                axis: Tuple[int, ...] = (2,) if len(res.data.z) == 1 else ()
+                axis: Tuple[int, ...] = (2,) if len(self.data.z) == 1 else ()
                 res = {
-                    k: v.squeeze(axis=axis + ((3,) if v.shape[-1] == 1 else ())).values
+                    k: v.squeeze(axis=axis + ((3,) if v.shape[-1] == 1 else ()))
                     for k, v in res.items()  # type: ignore[assignment,attr-defined]
                 }
         # this is just for convenience for DL iterators
