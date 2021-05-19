@@ -6,8 +6,8 @@ from typing import (
     Union,
     Mapping,
     Callable,
-    Iterable,
     Optional,
+    Sequence,
     TYPE_CHECKING,
 )
 
@@ -144,7 +144,7 @@ class SegmentationModel(ABC):
         self,
         img: ImageContainer,
         layer: str,
-        library_id: Optional[Union[Union[str, Iterable[str]]]],
+        library_id: Optional[Union[Union[str, Sequence[str]]]],
         channel: Optional[int] = None,
         fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
@@ -160,7 +160,7 @@ class SegmentationModel(ABC):
             func = self.segment
         elif isinstance(library_id, str):
             func = {library_id: self.segment}
-        elif isinstance(library_id, Iterable):
+        elif isinstance(library_id, Sequence):
             func = {lid: self.segment for lid in library_id}
         else:
             raise TypeError(
@@ -272,7 +272,7 @@ class SegmentationCustom(SegmentationModel):
 def segment(
     img: ImageContainer,
     layer: Optional[str] = None,
-    library_id: Optional[Union[str, Iterable[str]]] = None,
+    library_id: Optional[Union[str, Sequence[str]]] = None,
     method: Union[str, SegmentationModel, Callable[..., np.ndarray]] = "watershed",
     channel: Optional[int] = 0,
     chunks: Optional[Union[str, int, Tuple[int, int]]] = None,

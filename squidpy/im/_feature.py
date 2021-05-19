@@ -64,7 +64,7 @@ def calculate_image_features(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`panda.DataFrame` where columns correspond to the calculated features.
+    If ``copy = True``, returns a :class:`pandas.DataFrame` where columns correspond to the calculated features.
 
     Otherwise, modifies the ``adata`` object with the following key:
 
@@ -114,7 +114,7 @@ def _calculate_image_features_helper(
         if TYPE_CHECKING:
             assert isinstance(crop, ImageContainer)
         # load crop in memory to enable faster processing
-        crop._data = crop.data.load()
+        crop = crop.compute(layer)
 
         features_dict = {}
         for feature in features:

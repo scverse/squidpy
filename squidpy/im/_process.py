@@ -1,5 +1,5 @@
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Callable, Iterable, Optional
+from typing import Any, Union, Mapping, Callable, Optional, Sequence
 
 from scanpy import logging as logg
 
@@ -38,7 +38,7 @@ def to_grayscale(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array
 def process(
     img: ImageContainer,
     layer: Optional[str] = None,
-    library_id: Optional[Union[Iterable[str], str]] = None,
+    library_id: Optional[Union[str, Sequence[str]]] = None,
     method: Union[str, Callable[..., np.ndarray]] = "smooth",
     chunks: Optional[int] = None,
     lazy: bool = False,

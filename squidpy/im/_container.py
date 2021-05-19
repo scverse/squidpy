@@ -20,7 +20,6 @@ from functools import partial
 from itertools import chain
 from typing_extensions import Literal
 import re
-import collections.abc
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -147,7 +146,7 @@ class ImageContainer(FeatureMixin):
 
     @classmethod
     def concat(
-        cls, imgs: Iterable["ImageContainer"], library_ids: Optional[Iterable[Union[str, None]]] = None, **kwargs: Any
+        cls, imgs: Iterable["ImageContainer"], library_ids: Optional[Sequence[Optional[str]]] = None, **kwargs: Any
     ) -> "ImageContainer":
         """
         Concatenate ``imgs`` in z dimension, returning the concatenated :class:`squidpy.im.ImageContainer`.
@@ -165,28 +164,32 @@ class ImageContainer(FeatureMixin):
         library_ids
             Name for each image that will be associated to each z dimension.
             Should match the ``library_id`` in the corresponding :class:`anndata.AnnData` object.
-            If None, the existing name of the z dimension is used.
+            If `None`, the existing name of the z dimension is used.
         kwargs
-            Keyword arguments for :func:`xarray.concat`
+            Keyword arguments for :func:`xarray.concat`.
 
         Returns
         -------
-        Concatenated :class:`squidpy.img.ImageContainer` with ``imgs`` stackes in z dimension.
+        Concatenated :class:`squidpy.img.ImageContainer` with ``imgs`` stacks in z dimension.
         """
         # check that imgs are not already 3d
+        imgs = list(imgs)
         for img in imgs:
             if img.data.dims["z"] > 1:
                 raise ValueError(
-                    f"Found image with {img.data.dims['z']} z dimensions.\
-                    Can only concatenate images with 1 z dimension"
+                    f"Found image with {img.data.dims['z']} z dimensions. "
+                    f"Can only concatenate images with 1 z dimension."
                 )
 
         # check library_ids
         if library_ids is None:
-            library_ids = [None] * len(list(imgs))
+            library_ids = [None] * len(imgs)
+        if len(library_ids) != len(imgs):
+            raise ValueError(f"Expected library ids to be of length `{len(imgs)}`, found `{len(library_ids)}`.")
+
         _library_ids = np.concatenate([img._library_id_list(library_id) for img, library_id in zip(imgs, library_ids)])
         if len(set(_library_ids)) < len(_library_ids):
-            raise ValueError(f"Found non-unique library_ids for z dimensions: {_library_ids}.")
+            raise ValueError(f"Found non-unique library_ids for z dimensions `{list(_library_ids)}`.")
 
         # add library_id to z dim
         prep_imgs = []
@@ -234,13 +237,42 @@ class ImageContainer(FeatureMixin):
         iterator = chain.from_iterable(pat.finditer(v.dims[-1]) for v in self.data.values())
         return f"{channel}_{(max(map(lambda m: int(m.groups()[0]), iterator), default=-1) + 1)}"
 
-    def _library_id_list(self, library_id: Optional[Union[Iterable[str], str]] = None) -> List[str]:
-        """Get list of library_ids from input or z coords."""
+    def _get_library_id(self, library_id: Optional[str] = None) -> str:
+        self._assert_not_empty()
+
         if library_id is None:
+            if len(self.library_ids) > 1:
+                raise ValueError(
+                    f"Unable to determine which library id to use. " f"Please supply one from `{self.library_ids}`."
+                )
+            library_id = self.library_ids[0]
+
+        if library_id not in self.library_ids:
+            raise KeyError(f"Library id `{library_id}` not found in `{self.library_ids}`.")
+
+        return library_id
+
+    def _library_id_list(self, library_id: Optional[Union[str, Iterable[str]]] = None) -> List[str]:
+        """
+        Get list of library_ids from input or z coords.
+
+        library_id
+            TODO.
+        """
+        if library_id is None:
+            self._assert_not_empty()
             library_id = self.data.coords["z"].values
-        if isinstance(library_id, str) or not isinstance(library_id, collections.abc.Iterable):
+
+        if isinstance(library_id, str):
             library_id = [library_id]
-        return list(library_id)
+        if not isinstance(library_id, Iterable):
+            raise TypeError("TODO.")
+
+        res = list(map(str, library_id))
+        if not len(res):
+            raise ValueError("TODO.")
+
+        return res
 
     @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
     @d.dedent
@@ -253,7 +285,7 @@ class ImageContainer(FeatureMixin):
         library_id: Optional[Union[str, Iterable[str]]] = None,
         lazy: bool = True,
         chunks: Optional[Union[str, Tuple[int, ...]]] = None,
-        dims: Union[  # TODO: rename(dims)
+        dims: Union[
             Literal["default", "prefer_channels", "prefer_z"], Tuple[str, ...]
         ] = InferDimensions.DEFAULT.s,  # type: ignore[assignment]
         copy: bool = True,
@@ -335,7 +367,7 @@ class ImageContainer(FeatureMixin):
                 self.data[layer] = res.rename({res.dims[-1]: channel_dim})
 
             if not lazy:
-                self.data[layer].load()
+                self.compute(layer)
 
     @singledispatchmethod
     def _load_img(
@@ -466,7 +498,7 @@ class ImageContainer(FeatureMixin):
             Whether to preserver the data types of underlying :class:`xarray.DataArray`, even if ``cval``
             is of different type.
         library_id
-            Name of the z dim that is cropped. If None, all z dims are cropped
+            Name of the z dim that is cropped. If None, all z dims are cropped.
 
         Returns
         -------
@@ -675,7 +707,7 @@ class ImageContainer(FeatureMixin):
     def generate_spot_crops(
         self,
         adata: AnnData,
-        library_id: Optional[Union[Iterable[str], str]] = None,
+        library_id: Optional[Union[str, Iterable[str]]] = None,
         spatial_key: str = Key.obsm.spatial,
         spot_scale: float = 1.0,
         obs_names: Optional[Iterable[Any]] = None,
@@ -738,14 +770,14 @@ class ImageContainer(FeatureMixin):
         if len(self.data.z) > 1 and library_id is None:
             # assign from adata
             if "library_id" not in adata.obs:
-                raise ValueError(
-                    "No 'library_id' column in adata.obs. Pass a list of `library_id`s mapping obs to z dimensions."
+                raise KeyError(
+                    "No 'library_id' column in adata.obs. Pass a list of library ids mapping obs to z dimensions."
                 )
             obs_library_ids = adata.obs["library_id"]
         else:
             if len(self.data.z) > 1:
                 logg.warning(
-                    f"ImageContainer has {len(self.data.z)} z dimensions, will use library_id {library_id} for all."
+                    f"ImageContainer has {len(self.data.z)} z dimensions, will use library id `{library_id}` for all"
                 )
             if isinstance(library_id, str) or library_id is None:
                 library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=library_id)
@@ -1250,10 +1282,32 @@ class ImageContainer(FeatureMixin):
         self._data = self.data.rename_vars({old: new})
         return self
 
-    def compute(self) -> "ImageContainer":
-        """Trigger lazy computation inplace."""
-        self.data.load()
+    def compute(self, layer: Optional[str] = None) -> "ImageContainer":
+        """
+        Trigger lazy computation inplace.
+
+        Parameters
+        ----------
+        layer
+            Layer which to compute. If `None`, compute all layers.
+
+        Returns
+        -------
+        Modifies and returns self.
+        """
+        if layer is None:
+            self.data.load()
+        else:
+            self[layer].load()
         return self
+
+    @property
+    def library_ids(self) -> List[str]:
+        """Library ids."""
+        try:
+            return sorted(self.data.coords["z"].values)
+        except KeyError:
+            return []
 
     @property
     def data(self) -> xr.Dataset:
@@ -1334,8 +1388,7 @@ class ImageContainer(FeatureMixin):
         if layer is None:
             if len(self) > 1:
                 raise ValueError(
-                    f"Unable to determine which `layer` to use. "
-                    f"Please supply one from `{sorted(self.data.keys())}`."
+                    f"Unable to determine which layer to use. " f"Please supply one from `{sorted(self.data.keys())}`."
                 )
             layer = list(self)[0]
         if layer not in self:
