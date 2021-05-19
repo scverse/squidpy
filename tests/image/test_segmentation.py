@@ -43,14 +43,14 @@ class TestGeneral:
         img = np.zeros(shape=(1, 10, 10, 2))
         sc = SegmentationCustom(dummy_segment)
 
-        with pytest.raises(ValueError, match=r"Expected 2 or 3 dimensions"):
+        with pytest.raises(ValueError, match=r"Expected `2` or `3` dimensions"):
             sc.segment(img)
 
     def test_segment_container(self):
         img = ImageContainer(np.zeros(shape=(10, 10, 1)), layer="image")
         sc = SegmentationCustom(dummy_segment)
 
-        res = sc.segment(img, layer="image")
+        res = sc.segment(img, layer="image", library_id=img["image"].z.values[0])
 
         assert isinstance(res, ImageContainer)
         assert res.shape == img.shape
@@ -69,7 +69,7 @@ class TestWatershed:
         sw = SegmentationWatershed()
         spy = mocker.spy(sw, "_segment")
 
-        res = sw.segment(img, layer="image", fn_kwargs={"thresh": thresh})
+        res = sw.segment(img, layer="image", library_id=img["image"].z.values[0], fn_kwargs={"thresh": thresh})
 
         assert isinstance(res, ImageContainer)
         spy.assert_called_once()
@@ -112,7 +112,8 @@ class TestHighLevel:
 
         assert Key.img.segment("watershed") in small_cont
         np.testing.assert_array_equal(
-            list(small_cont[Key.img.segment("watershed")].dims), ["y", "x", f"{small_cont['image'].dims[-1]}:{channel}"]
+            list(small_cont[Key.img.segment("watershed")].dims),
+            ["y", "x", "z", f"{small_cont['image'].dims[-1]}:{channel}"],
         )
 
     @pytest.mark.parametrize("key_added", [None, "foo"])

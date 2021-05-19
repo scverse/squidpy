@@ -85,7 +85,7 @@ class SegmentationModel(ABC):
         if img.ndim == 2:
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
-            raise ValueError(f"Expected 2 or 3 dimensions, found `{img.ndim}`.")
+            raise ValueError(f"Expected `2` or `3` dimensions, found `{img.ndim}`.")
 
         return img
 
@@ -94,7 +94,7 @@ class SegmentationModel(ABC):
         if img.ndim == 2:
             img = img[..., np.newaxis]
         if img.ndim != 3:
-            raise ValueError(f"Expected segmentation to return 2 or 3 dimensional array, found `{img.ndim}`.")
+            raise ValueError(f"Expected segmentation to return `2` or `3` dimensional array, found `{img.ndim}`.")
 
         return img.astype(_SEG_DTYPE)  # assuming unsigned int for labels
 
@@ -144,7 +144,7 @@ class SegmentationModel(ABC):
         self,
         img: ImageContainer,
         layer: str,
-        library_ids,
+        library_id: Optional[Union[Union[str, Iterable[str]]]],
         channel: Optional[int] = None,
         fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
@@ -156,7 +156,18 @@ class SegmentationModel(ABC):
             new_channel_dim = f"{channel_dim}:{'all' if channel is None else channel}"
 
         kwargs.pop("copy", None)
-        func = {lid: self.segment for lid in library_ids}
+        if library_id is None:  # TODO: allow for volumetric segmentation by changing precondition
+            func = self.segment
+        elif isinstance(library_id, str):
+            func = {library_id: self.segment}
+        elif isinstance(library_id, Iterable):
+            func = {lid: self.segment for lid in library_id}
+        else:
+            raise TypeError(
+                f"Expected `library_id` to be of type `str` or `iterable` "
+                f"or to be `None`, found `{type(library_id)}`."
+            )
+
         res = img.apply(func, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)
         res._data = res.data.rename({channel_dim: new_channel_dim})
 
@@ -183,10 +194,12 @@ class SegmentationModel(ABC):
             block_num = block_id[0] * (num_blocks[1] * num_blocks[2]) + block_id[1] * num_blocks[2]
         elif len(num_blocks) == 4:
             if num_blocks[-1] != 1:
-                raise ValueError(f"Expected the number of blocks in the Z-dimension to be 1, found `{num_blocks[-1]}`.")
+                raise ValueError(
+                    f"Expected the number of blocks in the Z-dimension to be `1`, found `{num_blocks[-1]}`."
+                )
             block_num = block_id[0] * (num_blocks[1] * num_blocks[2]) + block_id[1] * num_blocks[2]
         else:
-            raise ValueError(f"Expected either 2, 3 or 4 dimensional chunks, found `{len(num_blocks)}`.")
+            raise ValueError(f"Expected either `2`, `3` or `4` dimensional chunks, found `{len(num_blocks)}`.")
 
         labels = self._segment(block, **kwargs).astype(_SEG_DTYPE)
         mask = labels > 0
@@ -259,7 +272,7 @@ class SegmentationCustom(SegmentationModel):
 def segment(
     img: ImageContainer,
     layer: Optional[str] = None,
-    library_id: Optional[Union[Iterable[str], str]] = None,
+    library_id: Optional[Union[str, Iterable[str]]] = None,
     method: Union[str, SegmentationModel, Callable[..., np.ndarray]] = "watershed",
     channel: Optional[int] = 0,
     chunks: Optional[Union[str, int, Tuple[int, int]]] = None,
@@ -329,7 +342,7 @@ def segment(
 
     start = logg.info(f"Segmenting an image of shape `{img[layer].shape}` using `{method}`")
     res: ImageContainer = method.segment(
-        img, layer=layer, channel=channel, library_ids=library_id, chunks=None, fn_kwargs=kwargs, copy=True, lazy=lazy
+        img, layer=layer, channel=channel, library_id=library_id, chunks=None, fn_kwargs=kwargs, copy=True, lazy=lazy
     )
     logg.info("Finish", time=start)
 

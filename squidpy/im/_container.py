@@ -1313,16 +1313,13 @@ class ImageContainer(FeatureMixin):
     ) -> Union["ImageContainer", Dict[str, np.ndarray], np.ndarray, Tuple[np.ndarray, ...]]:
         res = self
         if as_array:
+            res = {key: res[key].values for key in res}  # type: ignore[assignment]
             if squeeze:
-                axis: Union[Tuple[()], Tuple[int, ...]] = ()
-                if len(res.data.z) == 1:
-                    axis += (2,)
-                # TODO for generalisation to channels, need to figure out the channel dim of each layer individually
-                # if len(res.data[res.data.dims[-1]]) == 1:
-                #    axis += (3,)
-                res = {key: res[key].squeeze(axis=axis).values for key in res}  # type: ignore[assignment]
-            else:
-                res = {key: res[key].values for key in res}  # type: ignore[assignment]
+                axis: Tuple[int, ...] = (2,) if len(res.data.z) == 1 else ()
+                res = {
+                    k: v.squeeze(axis=axis + ((3,) if v.shape[-1] == 1 else ())).values
+                    for k, v in res.items()  # type: ignore[assignment,attr-defined]
+                }
         # this is just for convenience for DL iterators
         if isinstance(as_array, str):
             res = res[as_array]
