@@ -94,7 +94,7 @@ class TestProcess:
             if isinstance(chunks, tuple):
                 np.testing.assert_array_equal(chunk.shape, chunks)
             elif isinstance(chunks, int):
-                np.testing.assert_array_equal(chunk.shape, [chunks, chunks, 3])
+                np.testing.assert_array_equal(chunk.shape, [chunks, chunks, 1, 3])
 
             return chunk
 
