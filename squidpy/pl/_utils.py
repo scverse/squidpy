@@ -15,7 +15,6 @@ from typing import (
 from inspect import signature
 from pathlib import Path
 from functools import wraps
-from dataclasses import dataclass
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import os
 
@@ -42,7 +41,6 @@ from matplotlib.figure import Figure
 import matplotlib as mpl
 
 from squidpy._docs import d
-from squidpy._utils import _unique_order_preserving
 from squidpy.gr._utils import _assert_categorical_obs
 from squidpy._constants._pkg_constants import Key
 
@@ -265,14 +263,6 @@ def _only_not_raw(fn: Callable[..., Optional[Any]]) -> Callable[..., Optional[An
     return decorator
 
 
-@dataclass(frozen=True)
-class LibrarySubsetMetadata:
-    """Metadata holder for library ids."""
-
-    spot_indices: np.ndarray  # used to get the mask from `Shapes` layer
-    spot_diameter: Union[float, np.ndarray]  # if an array, 0 marks points not in this library
-
-
 class ALayer:
     """
     Class which helps with :attr:`anndata.AnnData.layers` logic.
@@ -284,108 +274,32 @@ class ALayer:
         Whether we want to access :attr:`anndata.AnnData.raw`.
     palette
         Color palette for categorical variables which don't have colors in :attr:`anndata.AnnData.uns`.
-    spatial_key
-        TODO.
-    library_key
-        TODO.
-    library_id
-        TODO.
     """
 
     VALID_ATTRIBUTES = ("obs", "var", "obsm")
 
-    # TODO: properly type palette
     def __init__(
         self,
         adata: AnnData,
+        library_ids: Sequence[str],
         is_raw: bool = False,
         palette: Optional[str] = None,
-        spatial_key: str = "spatial",
-        library_key: Optional[str] = None,
-        library_id: Optional[str] = None,
-        scale: float = 1.0,
     ):
         if is_raw and adata.raw is None:
             raise AttributeError("Attribute `.raw` is `None`.")
 
         self._adata = adata
+        self._library_id = library_ids[0]
+        self._ix_to_group = dict(zip(range(len(library_ids)), library_ids))
         self._layer: Optional[str] = None
         self._previous_layer: Optional[str] = None
         self._raw = is_raw
         self._palette = palette
 
-        library_id = self._prepare_metadata_subsets(adata, spatial_key, library_key, library_id, scale)
-        # call after above has been set
-        self.library_id = library_id
-
-    def _prepare_metadata_subsets(
-        self,
-        adata: AnnData,
-        spatial_key: str,
-        library_key: Optional[str] = None,
-        library_id: Optional[str] = None,
-        scale: float = 1.0,
-    ) -> str:
-        self._library_groups: Dict[str, LibrarySubsetMetadata] = {}
-        self._ix_to_group: Dict[int, str] = {}
-
-        if library_key is None:
-            library_id = Key.uns.library_id(adata, spatial_key, library_id)
-            self._library_groups[library_id] = LibrarySubsetMetadata(
-                np.arange(adata.n_obs), Key.uns.spot_diameter(adata, spatial_key, library_id) * scale
-            )
-            self._ix_to_group[0] = library_id
-            return library_id
-
-        _assert_categorical_obs(adata, library_key)
-        if isinstance(library_id, str):
-            library_id = [library_id]  # type: ignore[assignment]
-        if library_id is not None:
-            library_id, _ = _unique_order_preserving(library_id)  # type: ignore[assignment]
-
-        indices = pd.Series(np.arange(adata.n_obs), index=adata.obs_names)
-
-        for i, (group, index) in enumerate(adata.obs.groupby(library_key).groups.items()):
-            group = str(group)
-            if library_id is not None and group not in library_id:
-                logg.debug(f"Skipping library id `{group}`")
-                continue
-
-            subset_spot_indices = indices[index].values
-            subset_spot_diameters = np.zeros((adata.n_obs, 2))
-            subset_spot_diameters[subset_spot_indices] += Key.uns.spot_diameter(adata, spatial_key, group) * scale
-
-            self._library_groups[group] = LibrarySubsetMetadata(subset_spot_indices, subset_spot_diameters)
-            self._ix_to_group[i] = group
-
-        if not len(self.library_ids):
-            raise ValueError(
-                f"No valid library ids have been selected. "
-                f"Valid library ids in `adata.obs[{library_key!r}]` "
-                f"are `{list(adata.obs[library_key].cat.categories)}`."
-            )
-
-        return str(self.library_ids[0] if library_id is None else library_id[0])
-
     @property
     def adata(self) -> AnnData:
         """The underlying annotated data object."""  # noqa: D401
         return self._adata
-
-    @property
-    def spot_diameter(self) -> Union[float, np.ndarray]:
-        """Spot diameter for a specific library."""
-        return self._library_groups[self.library_id].spot_diameter
-
-    @property
-    def spot_indices(self) -> np.ndarray:
-        """Spot indices for a specific library."""
-        return self._library_groups[self.library_id].spot_indices
-
-    @property
-    def library_ids(self) -> List[Any]:
-        """Library ids."""
-        return list(self._library_groups.keys())
 
     @property
     def layer(self) -> Optional[str]:
@@ -395,7 +309,7 @@ class ALayer:
     @layer.setter
     def layer(self, layer: Optional[str] = None) -> None:
         if layer not in (None,) + tuple(self.adata.layers.keys()):
-            raise KeyError(f"Invalid layer `{layer}`. Valid options are: `{[None] + list(self.adata.layers.keys())}`.")
+            raise KeyError(f"Invalid layer `{layer}`. Valid options are `{[None] + sorted(self.adata.layers.keys())}`.")
         self._previous_layer = layer
         # handle in raw setter
         self.raw = False
@@ -418,15 +332,13 @@ class ALayer:
 
     @property
     def library_id(self) -> str:
-        """Library id that is selected."""
+        """Library id that is currently selected."""
         return self._library_id
 
     @library_id.setter
     def library_id(self, library_id: Union[str, int]) -> None:
         if isinstance(library_id, int):
             library_id = self._ix_to_group[library_id]
-        if library_id not in self.library_ids:
-            raise KeyError(f"Library id `{library_id}` not found in `{self.library_ids}`.")
         self._library_id = library_id
 
     @_ensure_dense_vector

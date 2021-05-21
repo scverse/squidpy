@@ -17,7 +17,7 @@ from napari.layers import Points, Shapes
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
 from squidpy._utils import singledispatchmethod
-from squidpy.pl._utils import ALayer, _points_inside_triangles
+from squidpy.pl._utils import _points_inside_triangles
 from squidpy.pl._interactive._view import ImageView
 from squidpy.pl._interactive._model import ImageModel
 from squidpy.pl._interactive._utils import (
@@ -80,7 +80,7 @@ class ImageController:
             logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
             return False
 
-        # TODO: maybe remove
+        # TODO: maybe remove or at least rename
         luminance = img.attrs.get("luminance", None)
         if luminance is None:
             logg.debug("Automatically determining whether image is a luminance image")
@@ -168,7 +168,7 @@ class ImageController:
         layer: Points = self.view.viewer.add_points(
             self.model.coordinates,
             name=layer_name,
-            size=self.alayer.spot_diameter,
+            size=self.model.spot_diameter,
             opacity=1,
             edge_width=1,
             blending=self.model.blending,
@@ -183,16 +183,14 @@ class ImageController:
         # layer._text._color = properties["colors"]
         # layer._text.events.color()
         self._hide_points_controls(layer, is_categorical=is_categorical_dtype(vec))
-
         layer.editable = False
-        layer.events.select.connect(self._move_layer_to_front)
 
         return True
 
     def export(self, _: Viewer) -> None:
         """Export shapes into :class:`AnnData` object."""
         for layer in self.view.layers:
-            if not isinstance(layer, Shapes) or not layer.selected:
+            if not isinstance(layer, Shapes) or layer not in self.view.viewer.layers.selection:
                 continue
             if not len(layer.data):
                 logg.warning(f"Shape layer `{layer.name}` has no visible shapes")
@@ -251,34 +249,14 @@ class ImageController:
 
     def _handle_already_present(self, layer_name: str) -> None:
         logg.debug(f"Layer `{layer_name}` is already loaded")
-        self.view.layers.unselect_all()
-        self.view.layers[layer_name].selected = True
-
-    def _move_layer_to_front(self, event: Any) -> None:
-        layer = event.source
-        if not layer.visible:
-            return
-
-        try:
-            index = self.view.layers.index(layer)
-        except ValueError:
-            return
-
-        self.view.layers.move(index, -1)
+        self.view.viewer.layers.selection.select_only(self.view.layers[layer_name])
 
     def _save_shapes(self, layer: Shapes, key: str) -> None:
         shape_list = layer._data_view
         triangles = shape_list._mesh.vertices[shape_list._mesh.displayed_triangles]
 
-        points_mask = np.zeros(
-            len(
-                self.model.coordinates,
-            ),
-            dtype=np.bool_,
-        )
-        points_mask[self.alayer.spot_indices] = _points_inside_triangles(
-            self.model.coordinates[self.alayer.spot_indices], triangles
-        )
+        # TODO: use only current z dim slice?
+        points_mask: np.ndarray = _points_inside_triangles(self.model.coordinates[:, 1:], triangles)
 
         self.model.adata.obs[key] = pd.Categorical(points_mask)
         self.model.adata.uns[key] = {"meshes": layer.data.copy()}
@@ -364,8 +342,3 @@ class ImageController:
     def model(self) -> ImageModel:
         """Model managed by this controller."""
         return self._model
-
-    @property
-    def alayer(self) -> ALayer:
-        """Annotated data layer."""
-        return self.model.alayer

@@ -133,7 +133,8 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         data = np.random.normal(size=adata.n_obs)
         cnt.add_points(data, layer_name="layer1")
 
-        np.testing.assert_allclose(adata.obsm["spatial"][:, ::-1] * scale, model.coordinates)
+        # ignore z-dim
+        np.testing.assert_allclose(adata.obsm["spatial"][:, ::-1] * scale, model.coordinates[:, 1:])
 
         viewer.screenshot(dpi=DPI)
 

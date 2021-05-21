@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Union, Optional, Sequence, TYPE_CHECKING
 from dataclasses import field, dataclass
 
 from anndata import AnnData
@@ -6,7 +6,8 @@ from anndata import AnnData
 import numpy as np
 
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
-from squidpy.gr._utils import _assert_spatial_basis
+from squidpy._utils import _unique_order_preserving
+from squidpy.gr._utils import _assert_spatial_basis, _assert_categorical_obs
 from squidpy.pl._utils import ALayer
 from squidpy._constants._constants import Symbol
 from squidpy._constants._pkg_constants import Key
@@ -22,8 +23,8 @@ class ImageModel:
     container: ImageContainer
     spatial_key: str = field(default=Key.obsm.spatial, repr=False)
     library_key: Optional[str] = None
-    library_id: Optional[str] = None
-    spot_diameter: float = field(default=0, init=False)
+    library_id: Optional[Union[str, Sequence[str]]] = None
+    spot_diameter: Union[np.ndarray, float] = field(default=0, init=False)
     coordinates: np.ndarray = field(init=False, repr=False)
     alayer: ALayer = field(init=False, repr=True)
 
@@ -41,21 +42,51 @@ class ImageModel:
         if not self.adata.n_obs:
             raise ValueError("No spots were selected. Please ensure that the image contains at least 1 spot.")
 
-        self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1][:, :2]
+        self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1][:, :2].copy()
+        self.scale = self.container.data.attrs.get(Key.img.scale, 1)
+        self._update_coords()
+
+        if TYPE_CHECKING:
+            assert isinstance(self.library_id, Sequence)
+
         self.alayer = ALayer(
             self.adata,
+            self.library_id,
             is_raw=False,
             palette=self.palette,
-            spatial_key=self.spatial_key,
-            library_key=self.library_key,
-            library_id=self.library_id,
-            scale=self.container.data.attrs.get(Key.img.scale, 1),
         )
 
         try:
-            self.container = ImageContainer._from_dataset(self.container.data.sel(z=self.alayer.library_ids), deep=None)
+            self.container = ImageContainer._from_dataset(self.container.data.sel(z=self.library_id), deep=None)
         except KeyError:
             raise KeyError(
-                f"Unable to subset the image container with library ids `{self.alayer.library_ids}`. "
+                f"Unable to subset the image container with library ids `{self.library_id}`. "
                 f"Valid library ids are `{self.container.library_ids}`."
             ) from None
+
+    def _update_coords(self) -> None:
+        if self.library_key is None:
+            self.coordinates = np.insert(self.coordinates, 0, values=0, axis=1)
+            self.library_id = [self.container.library_ids[0]]
+            self.spot_diameter = Key.uns.spot_diameter(self.adata, self.spatial_key, self.library_id[0]) * self.scale
+            return
+
+        _assert_categorical_obs(self.adata, self.library_key)
+        if self.library_id is None:
+            self.library_id = self.adata.obs[self.library_key].cat.categories
+        elif isinstance(self.library_id, str):
+            self.library_id = [self.library_id]
+        self.library_id, _ = _unique_order_preserving(self.library_id)  # type: ignore[assignment]
+
+        libraries = self.adata.obs[self.library_key]
+        mask = (
+            libraries.isin(self.library_id) if self.library_id is not None else np.ones_like(libraries, dtype=np.bool_)
+        )
+        self.coordinates = np.c_[libraries[mask].cat.codes.values, self.coordinates[mask]]
+
+        self.spot_diameter = (
+            np.array(
+                [0.0] + [Key.uns.spot_diameter(self.adata, self.spatial_key, lid) for lid in libraries.cat.categories]
+            )
+            * self.scale
+        )

@@ -44,6 +44,7 @@ def _position_cluster_labels(coords: np.ndarray, clusters: pd.Series, colors: np
     if not is_categorical_dtype(clusters):
         raise TypeError(f"Expected `clusters` to be `categorical`, found `{infer_dtype(clusters)}`.")
 
+    coords = coords[:, 1:]  # TODO: z-dim
     df = pd.DataFrame(coords)
     df["clusters"] = clusters.values
     df = df.groupby("clusters")[[0, 1]].apply(lambda g: list(np.median(g.values, axis=0)))
@@ -74,7 +75,7 @@ def _not_in_01(arr: Union[np.ndarray, da.Array]) -> bool:
 
 
 def _is_luminance(arr: Union[np.ndarray, da.Array]) -> bool:
-    # TODO: maybe do only for images with multiple Z-dim?
+    # TODO: logg
     n_channels: int = arr.shape[-1]
     if n_channels not in (3, 4):
         return n_channels != 1

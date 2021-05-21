@@ -1,5 +1,7 @@
 from typing import Any, FrozenSet
 
+import numpy as np
+
 from PyQt5.QtWidgets import QLabel, QWidget, QComboBox, QHBoxLayout
 
 from napari.layers import Points
@@ -34,17 +36,9 @@ class ImageView:
         self._controller = controller
 
     def _init_UI(self) -> None:
-        def handle_dim_slider_update(event: Any) -> None:
-            z, *_ = event.value
-
-            # any of these correctly set `self.model.alayer.spot_diameter`
-            var_widget.setLibraryId(z)
-            self._obs_widget.setLibraryId(z)
-            obsm_widget.setLibraryId(z)
-
-            for layer in self.viewer.layers:
-                if isinstance(layer, Points):
-                    layer.size = self.model.alayer.spot_diameter
+        def update_library(event: Any) -> None:
+            self.model.alayer.library_id = event.value[0]
+            library_id.setText(f"{self.model.alayer.library_id}")
 
         self._viewer = napari.Viewer(title="Squidpy", show=False)
         self.viewer.bind_key("Shift-E", self.controller.export)
@@ -52,7 +46,7 @@ class ImageView:
 
         # image
         image_lab = QLabel("Images:")
-        image_lab.setToolTip("Keys in `ImageContainer`' containing the image data for this library.")
+        image_lab.setToolTip("Keys in `ImageContainer` containing the image data.")
         image_widget = LibraryListWidget(self.controller, multiselect=False, unique=True)
         image_widget.setMaximumHeight(100)
         image_widget.addItems(tuple(self.model.container))
@@ -100,6 +94,9 @@ class ImageView:
         raw_widget = QWidget(parent=parent)
         raw_widget.setLayout(raw_layout)
 
+        library_id = QLabel(f"{self.model.alayer.library_id}")
+        library_id.setToolTip("Currently selected library id.")  # TODO: all
+
         widgets = (
             image_lab,
             image_widget,
@@ -113,13 +110,42 @@ class ImageView:
             obsm_label,
             obsm_widget,
             obsm_index_widget,
+            library_id,
         )
         self._colorbar = CBarWidget(self.model.cmap, parent=parent)
 
         self.viewer.window.add_dock_widget(self._colorbar, area="left", name="percentile")
         self.viewer.window.add_dock_widget(widgets, area="right", name="genes")
+        self.viewer.layers.selection.events.changed.connect(self._move_layer_to_front)
+        self.viewer.layers.selection.events.changed.connect(self._adjust_colorbar)
+        self.viewer.dims.events.current_step.connect(update_library)
 
-        self.viewer.dims.events.current_step.connect(handle_dim_slider_update)
+    def _move_layer_to_front(self, event: Any) -> None:
+        try:
+            layer = next(iter(event.added))
+        except StopIteration:
+            return
+        if not layer.visible:
+            return
+        try:
+            index = self.viewer.layers.index(layer)
+        except ValueError:
+            return
+
+        self.viewer.layers.move(index, -1)
+
+    def _adjust_colorbar(self, event: Any) -> None:
+        try:
+            layer = next(layer for layer in event.added if isinstance(layer, Points))
+        except StopIteration:
+            return
+
+        try:
+            self._colorbar.setOclim(layer.metadata["minmax"])
+            self._colorbar.setClim((np.min(layer.properties["value"]), np.max(layer.properties["value"])))
+            self._colorbar.update_color()
+        except KeyError:  # categorical
+            pass
 
     @property
     def layers(self) -> napari.components.layerlist.LayerList:

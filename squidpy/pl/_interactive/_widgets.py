@@ -349,11 +349,10 @@ class RangeSlider(QHRangeSlider):
         self._layer = layer
         self._colorbar = colorbar
 
-        self._layer.events.select.connect(self._onLayerSelected)
         self.valuesChanged.connect(self._onValueChange)
 
-    # TODO: use constants
     def _onValueChange(self, percentile: Tuple[float, float]) -> None:
+        # TODO: use constants
         v = self._layer.metadata["data"]
         clipped = np.clip(v, *np.percentile(v, percentile))
 
@@ -363,10 +362,6 @@ class RangeSlider(QHRangeSlider):
         self._layer._update_thumbnail()  # can't find another way to force it
         self._layer.refresh_colors()
 
-        self._onLayerSelected()
-
-    def _onLayerSelected(self, _event: Optional[QtCore.QEvent] = None) -> None:
-        source: Points = self._layer
-        self._colorbar.setOclim(source.metadata["minmax"])
-        self._colorbar.setClim((np.min(source.properties["value"]), np.max(source.properties["value"])))
+        self._colorbar.setOclim(self._layer.metadata["minmax"])
+        self._colorbar.setClim((np.min(self._layer.properties["value"]), np.max(self._layer.properties["value"])))
         self._colorbar.update_color()
