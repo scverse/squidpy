@@ -67,7 +67,9 @@ class ImageModel:
     def _update_coords(self) -> None:
         if self.library_key is None:
             self.coordinates = np.insert(self.coordinates, 0, values=0, axis=1)
-            self.library_id = [self.container.library_ids[0]]
+            self.library_id = self.container.library_ids
+            if TYPE_CHECKING:
+                assert isinstance(self.library_id, Sequence)
             self.spot_diameter = Key.uns.spot_diameter(self.adata, self.spatial_key, self.library_id[0]) * self.scale
             return
 
@@ -78,15 +80,19 @@ class ImageModel:
             self.library_id = [self.library_id]
         self.library_id, _ = _unique_order_preserving(self.library_id)  # type: ignore[assignment]
 
+        if not len(self.library_id):
+            raise ValueError("No library ids have been selected.")
+        # invalid library ids from adata are filtered below
+        # invalid library ids from container raise KeyError in __post_init__
+
         libraries = self.adata.obs[self.library_key]
-        mask = (
-            libraries.isin(self.library_id) if self.library_id is not None else np.ones_like(libraries, dtype=np.bool_)
-        )
-        self.coordinates = np.c_[libraries[mask].cat.codes.values, self.coordinates[mask]]
+        mask = libraries.isin(self.library_id)
+        libraries = libraries[mask]
+        self.library_id = list(libraries.cat.categories)
+
+        self.coordinates = np.c_[libraries.cat.codes.values, self.coordinates[mask]]
 
         self.spot_diameter = (
-            np.array(
-                [0.0] + [Key.uns.spot_diameter(self.adata, self.spatial_key, lid) for lid in libraries.cat.categories]
-            )
+            np.array([0.0] + [Key.uns.spot_diameter(self.adata, self.spatial_key, lid) for lid in self.library_id])
             * self.scale
         )

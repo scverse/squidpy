@@ -113,17 +113,13 @@ class ImageController:
         -------
         `True` if the layer has been added, otherwise `False`.
         """
-        img: xr.DataArray = self.model.container.data[layer].transpose(..., "y", "x")
-        multiscale = np.prod(img.shape[-2:]) > (2 ** 16) ** 2
-        if img.ndim > 4:
+        img: xr.DataArray = self.model.container.data[layer].transpose("z", ..., "y", "x")
+        if img.ndim != 4:
             logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
             return False
 
-        if img.ndim == 4 and img.shape[0] > 1 and img.shape[1] > 1:
-            # multiple stacks and multiple channels is not allowed
-            logg.warning(
-                f"Unable to create labels layer of shape `{img.shape}`, " f"both z- and channel-dimension are too large"
-            )
+        if img.shape[1] != 1:
+            logg.warning(f"Unable to create labels layer of shape `{img.shape}`, too many channels `{img.shape[1]}`")
             return False
 
         if not np.issubdtype(img.dtype, np.integer):
@@ -132,11 +128,10 @@ class ImageController:
             return False
 
         logg.info(f"Creating label `{layer}` layer")
-        # TODO: this needs to be fixed + img.shape
         self.view.viewer.add_labels(
-            img.data[..., :, :],
+            img.data,
             name=layer,
-            multiscale=multiscale,
+            multiscale=np.prod(img.shape[-2:]) > (2 ** 16) ** 2,
         )
 
         return True
