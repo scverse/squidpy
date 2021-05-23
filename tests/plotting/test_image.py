@@ -15,7 +15,7 @@ import squidpy as sq
 class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
     def test_channelwise_wrong_number_of_axes(self, cont: ImageContainer):
         fig, ax = plt.subplots(dpi=DPI, tight_layout=True)
-        with pytest.raises(ValueError, match=r"Expected `3` axes, found `1`."):
+        with pytest.raises(ValueError, match=r"Expected `ax` to be of shape `\(1, 3\)`"):
             cont.show(ax=ax, channelwise=True)
 
     def test_plot_axis(self, cont: ImageContainer):

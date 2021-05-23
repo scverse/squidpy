@@ -13,6 +13,7 @@ from typing import (
     Iterator,
     Optional,
     Sequence,
+    TYPE_CHECKING,
 )
 from pathlib import Path
 from functools import partial
@@ -871,11 +872,12 @@ class ImageContainer(FeatureMixin):
     def show(
         self,
         layer: Optional[str] = None,
-        channel: Optional[int] = None,
+        channel: Optional[Union[int, Sequence[int]]] = None,
         channelwise: bool = False,
-        library_id: Optional[str] = None,
+        library_id: Optional[Union[str, Sequence[str]]] = None,
         segmentation_layer: Optional[str] = None,
         segmentation_alpha: float = 0.75,
+        transpose: Optional[bool] = None,
         ax: Optional[mpl.axes.Axes] = None,
         figsize: Optional[Tuple[float, float]] = None,
         dpi: Optional[int] = None,
@@ -889,7 +891,7 @@ class ImageContainer(FeatureMixin):
         ----------
         %(img_layer)s
         channel
-            Channel to plot. If `None`, use all channels for plotting.
+            Channels to plot. If `None`, use all channels for plotting.
         channelwise
             Whether to plot each channel separately or not.
         library_id
@@ -898,8 +900,10 @@ class ImageContainer(FeatureMixin):
             Segmentation layer to plot.
         segmentation_alpha
             Alpha value for ``segmentation_layer``.
+        transpose
+            Whether to plot Z dimensions as columns or as rows. If `None`, it will be set as ``not channelwise``.
         ax
-            Optional :mod:`matplotlib` ax where to plot the image.
+            Optional :mod:`matplotlib` axes where to plot the image.
             If not `None`, ``save``, ``figsize`` and ``dpi`` have no effect.
         %(plotting)s
         kwargs
@@ -912,41 +916,63 @@ class ImageContainer(FeatureMixin):
         Raises
         ------
         ValueError
-            If number fo supplied axes is different than the number of channels if ``channelwise = True``.
+            If number of supplied axes is different than the number of requested z dimensions of channels.
         """
         from squidpy.pl._utils import save_fig
 
         layer = self._get_layer(layer)
-        arr: xr.DataArray = self.data[layer]
-        n_channels = arr.shape[-1]
-        channelwise = channelwise and n_channels > 1
-        library_ids = list(self.data.coords["z"].values) if library_id is None else [library_id]
+        arr: xr.DataArray = self[layer]
 
-        if channel is not None:
-            arr = arr[{arr.dims[-1]: channel}]
-
+        if library_id is None:
+            library_ids = self.library_ids
+        elif isinstance(library_id, str):
+            library_ids = [library_id]
+        else:
+            library_ids = library_id  # type: ignore[assignment]
         arr = arr.sel(z=library_ids)
 
+        if channel is not None:
+            channel = np.asarray([channel]).ravel()  # type: ignore[assignment]
+            if not len(channel):  # type: ignore[arg-type]
+                raise ValueError("No channels have been selected.")
+            arr = arr[{arr.dims[-1]: channel}]
+        else:
+            channel = np.arange(arr.shape[-1])
+        if TYPE_CHECKING:
+            assert isinstance(channel, Sequence)
+
+        n_channels = arr.shape[-1]
+        if n_channels not in (1, 3, 4) and not channelwise:
+            logg.warning(f"Unable to plot image with `{n_channels}`. Setting `channelwise=True`")
+            channelwise = True
+
+        if transpose is None:
+            transpose = not channelwise
+
         fig = None
+        nrows, ncols = len(library_ids), (n_channels if channelwise else 1)
+        if transpose:
+            nrows, ncols = ncols, nrows
         if ax is None:
             fig, ax = plt.subplots(
-                ncols=n_channels if channelwise else 1,
-                nrows=len(library_ids),
+                nrows=nrows,
+                ncols=ncols,
                 figsize=(8, 8) if figsize is None else figsize,
                 dpi=dpi,
                 tight_layout=True,
                 squeeze=False,
             )
-            ax = ax.T
-        else:
-            # TODO: check if already a sequence of axes + maybe reshape
-            ax = np.asarray([[ax]])
+        elif isinstance(ax, mpl.axes.Axes):
+            ax = np.array([ax])
 
-        if channelwise and len(ax) != n_channels:
-            raise ValueError(f"Expected `{n_channels}` axes, found `{len(ax)}`.")
+        ax = np.asarray(ax)
+        try:
+            ax = ax.reshape(nrows, ncols)
+        except ValueError:
+            raise ValueError(f"Expected `ax` to be of shape `{(nrows, ncols)}`, found `{ax.shape}`.") from None
 
         if segmentation_layer is not None:
-            seg_arr = self.data[segmentation_layer]
+            seg_arr = self[segmentation_layer].sel(z=library_ids)
             if not seg_arr.attrs.get("segmentation", False):
                 raise TypeError(f"Expected layer `{segmentation_layer!r}` to be marked as segmentation layer.")
             if not np.issubdtype(seg_arr.dtype, np.integer):
@@ -962,16 +988,17 @@ class ImageContainer(FeatureMixin):
         else:
             seg_arr, seg_cmap = None, None
 
-        for c, row in enumerate(ax):
-            for z, ax_ in enumerate(row):
+        for z, row in enumerate(ax):
+            for c, ax_ in enumerate(row):
+                if transpose:
+                    z, c = c, z
+
                 title = layer
                 if channelwise:
                     img = arr[..., z, c]
-                    title += f":{c}"
+                    title += f":{channel[c]}"
                 else:
-                    img = arr[:, :, z, ...]
-                    if channel is not None:
-                        title += f":{channel}"
+                    img = arr[..., z, :]
                 if len(self.data.coords["z"]) > 1:
                     title += f", library_id:{library_ids[z]}"
 
@@ -1012,6 +1039,8 @@ class ImageContainer(FeatureMixin):
         ----------
         %(adata)s
         %(spatial_key)s
+        library_key
+            TODO.
         library_id
             TODO - unify impl. with `generate_spot_crops` (remove library_key?)
         cmap
