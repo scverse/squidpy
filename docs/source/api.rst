@@ -16,12 +16,13 @@ Graph
 
     gr.spatial_neighbors
     gr.nhood_enrichment
+    gr.co_occurrence
     gr.centrality_scores
     gr.interaction_matrix
+    gr.ripley
     gr.ligrec
     gr.spatial_autocorr
-    gr.ripley
-    gr.co_occurrence
+    gr.sepal
 
 Image
 ~~~~~
