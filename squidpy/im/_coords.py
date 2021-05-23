@@ -23,6 +23,11 @@ class TupleSerializer(ABC):  # noqa: D101
         """Create self from a :class:`tuple`."""
         return cls(*value)  # type: ignore[call-arg]
 
+    @property
+    @abstractmethod
+    def T(self) -> "TupleSerializer":
+        """Transpose self."""  # currently unused
+
     def __mul__(self, other: Union[int, float]) -> "TupleSerializer":
         if not isinstance(other, (int, float)):
             return NotImplemented
@@ -49,6 +54,11 @@ class CropCoords(TupleSerializer):
             raise ValueError(f"Expected `x0` <= `x1`, found `{self.x0}` > `{self.x1}`.")
         if self.y0 > self.y1:
             raise ValueError(f"Expected `y0` <= `y1`, found `{self.y0}` > `{self.y1}`.")
+
+    @property
+    def T(self) -> "CropCoords":
+        """Transpose self."""
+        return CropCoords(x0=self.y0, y0=self.x0, x1=self.y1, y1=self.x1)
 
     @property
     def dx(self) -> float:
@@ -130,6 +140,11 @@ class CropPadding(TupleSerializer):
         _assert_non_negative(self.y_pre, name="y_pre")
         _assert_non_negative(self.x_post, name="x_post")
         _assert_non_negative(self.y_post, name="y_post")
+
+    @property
+    def T(self) -> "CropPadding":
+        """Transpose self."""
+        return CropPadding(x_pre=self.y_pre, y_pre=self.x_pre, x_post=self.y_post, y_post=self.x_post)
 
     def to_tuple(self) -> Tuple[float, float, float, float]:
         """Return self as a :class:`tuple`."""

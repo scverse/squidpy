@@ -287,9 +287,7 @@ def segment(
     ----------
     %(img_container)s
     %(img_layer)s
-    library_id
-        Name of the Z dimension(s) that this function should be applied to.
-        For not specified Z dimensions, the identity function is implied.
+    %(library_id)s
         If `None`, all Z dimensions are segmented.
     method
         Segmentation method to use. Valid options are:
@@ -324,7 +322,7 @@ def segment(
     kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
     layer_new = Key.img.segment(kind, layer_added=layer_added)
     kwargs["chunks"] = chunks
-    library_id = img._library_id_list(library_id)
+    library_id = img._get_library_ids(library_id)
 
     if not isinstance(method, SegmentationModel):
         if kind == SegmentationBackend.WATERSHED:

@@ -165,7 +165,7 @@ class TestContainerIO:
         ds.to_netcdf(str(fname))
 
         if "foo" in dims:
-            with pytest.raises(ValueError, match=r"Expected dimension `y` in"):
+            with pytest.raises(ValueError, match=r"Expected to find"):
                 _ = ImageContainer(str(fname))
         else:
             cont = ImageContainer(str(fname))
@@ -209,17 +209,18 @@ class TestContainerIO:
     @pytest.mark.parametrize("n_channels", [1, 3])
     @pytest.mark.parametrize("channel_dim", ["channels", "foo"])
     def test_add_img_channel_dim(self, small_cont_1c: ImageContainer, channel_dim: str, n_channels: int):
-        arr = np.random.normal(size=(*small_cont_1c.shape, n_channels))
-        if channel_dim == "channels" and n_channels == 3:
-            with pytest.raises(ValueError, match=r".*be aligned because they have different dimension sizes"):
-                small_cont_1c.add_img(arr, channel_dim=channel_dim)
-        else:
-            small_cont_1c.add_img(arr, channel_dim=channel_dim, layer="bar")
-            assert len(small_cont_1c) == 2
-            assert "bar" in small_cont_1c
-            assert small_cont_1c["bar"].dims == ("y", "x", "z", channel_dim)
+        arr = np.random.normal(size=(*small_cont_1c.shape, 1, n_channels))
+        dims = ["y", "x", "z", channel_dim]
+        expected_channel_dim = small_cont_1c._get_next_channel_id("channels")
 
-            np.testing.assert_array_equal(np.squeeze(small_cont_1c["bar"]), np.squeeze(arr))
+        small_cont_1c.add_img(arr, dims=dims, layer="bar")
+        assert len(small_cont_1c) == 2
+        assert "bar" in small_cont_1c
+        if channel_dim == "channels" and n_channels == 3:
+            assert small_cont_1c["bar"].dims == ("y", "x", "z", expected_channel_dim)
+        else:
+            assert small_cont_1c["bar"].dims == ("y", "x", "z", channel_dim)
+        np.testing.assert_array_equal(np.squeeze(small_cont_1c["bar"]), np.squeeze(arr))
 
     def test_add_img_does_not_load_other_lazy_layers(self, small_cont_1c: ImageContainer):
         img = np.random.normal(size=small_cont_1c.shape + (2,))
@@ -745,17 +746,6 @@ class TestContainerUtils:
         for i in range(20):
             assert f"image_{i}" in small_cont_1c
 
-    @pytest.mark.parametrize("channel_dim", [None, "channels"])
-    def test_channel_autodetection(self, small_cont_1c: ImageContainer, channel_dim: Optional[str]):
-        img = np.random.normal(size=small_cont_1c.shape + (2,))
-        if channel_dim is not None:
-            with pytest.raises(ValueError, match=r"cannot be aligned"):
-                small_cont_1c.add_img(img, channel_dim=channel_dim)
-        else:
-            expected_channel_dim = small_cont_1c._get_next_channel_id("channels")
-            small_cont_1c.add_img(img, channel_dim=channel_dim, layer="foo")
-            np.testing.assert_array_equal(small_cont_1c["foo"].dims, ["y", "x", "z", expected_channel_dim])
-
     def test_rename(self, small_cont_1c: ImageContainer):
         new_cont = small_cont_1c.rename("image", "foo")
 
@@ -839,21 +829,21 @@ class TestZStacks:
         cont_comb = ImageContainer.concat([cont1, cont2])
 
         # test that crops from library_id 1 are as expected
-        els = list(cont_comb.generate_spot_crops(adata[adata.obs["library_id"] == "1"]))
+        els = list(cont_comb.generate_spot_crops(adata[adata.obs["library_id"] == "1"], library_id="1"))
         for el in els:
             assert el.shape == (5, 5)
         res = ImageContainer.uncrop(els)
         assert (res.data["image"].sel(z="1").values == cont_comb.data["image"].sel(z="1").values).all()
 
         # test that crops from library_id 2 are as expected
-        els = list(cont_comb.generate_spot_crops(adata[adata.obs["library_id"] == "2"]))
+        els = list(cont_comb.generate_spot_crops(adata[adata.obs["library_id"] == "2"], library_id="2"))
         for el in els:
             assert el.shape == (7, 7)
         res = ImageContainer.uncrop(els)
         assert (res.data["image"].sel(z="2").values == cont_comb.data["image"].sel(z="2").values).all()
 
         # test that cropping from multiple library_ids works
-        els = list(cont_comb.generate_spot_crops(adata))
+        els = list(cont_comb.generate_spot_crops(adata, library_id="library_id"))
         for i, el in enumerate(els):
             if i < 9:
                 assert el.shape == (5, 5)

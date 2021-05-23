@@ -15,13 +15,13 @@ from squidpy._constants._constants import ImageFeature
 __all__ = ["calculate_image_features"]
 
 
-# TODO: allow lazy?
 @d.dedent
 @inject_docs(f=ImageFeature)
 def calculate_image_features(
     adata: AnnData,
     img: ImageContainer,
     layer: Optional[str] = None,
+    library_id: Optional[Union[str, Sequence[str]]] = None,
     features: Union[str, Sequence[str]] = ImageFeature.SUMMARY.s,
     features_kwargs: Mapping[str, Mapping[str, Any]] = MappingProxyType({}),
     key_added: str = "img_features",
@@ -39,6 +39,7 @@ def calculate_image_features(
     %(adata)s
     %(img_container)s
     %(img_layer)s
+    %(img_library_id)s
     features
         Features to be calculated. Valid options are:
 
@@ -91,7 +92,7 @@ def calculate_image_features(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(adata, img, layer=layer, features=features, features_kwargs=features_kwargs, **kwargs)
+    )(adata, img, layer=layer, library_id=library_id, features=features, features_kwargs=features_kwargs, **kwargs)
 
     if copy:
         logg.info("Finish", time=start)
@@ -105,13 +106,16 @@ def _calculate_image_features_helper(
     adata: AnnData,
     img: ImageContainer,
     layer: str,
+    library_id: Optional[Union[str, Sequence[str]]],
     features: List[ImageFeature],
     features_kwargs: Mapping[str, Any],
     queue: Optional[SigQueue] = None,
     **kwargs: Any,
 ) -> pd.DataFrame:
     features_list = []
-    for crop in img.generate_spot_crops(adata, obs_names=obs_ids, return_obs=False, as_array=False, **kwargs):
+    for crop in img.generate_spot_crops(
+        adata, obs_names=obs_ids, library_id=library_id, return_obs=False, as_array=False, **kwargs
+    ):
         if TYPE_CHECKING:
             assert isinstance(crop, ImageContainer)
         # load crop in memory to enable faster processing

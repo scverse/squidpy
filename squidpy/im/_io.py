@@ -13,12 +13,17 @@ from tifffile import TiffFile
 from skimage.io import imread
 
 from squidpy._docs import inject_docs
-
-# modification of `skimage`'s `pil_to_ndarray`:
-# https://github.com/scikit-image/scikit-image/blob/main/skimage/io/_plugins/pil_plugin.py#L55
 from squidpy._constants._constants import InferDimensions
 
 
+def _assert_dims_present(dims: Tuple[str, ...]) -> None:
+    missing_dims = {"y", "x", "z"} - set(dims)
+    if missing_dims:
+        raise ValueError(f"Expected to find `{sorted(missing_dims)}` dimension(s) in `{dims}`.")
+
+
+# modification of `skimage`'s `pil_to_ndarray`:
+# https://github.com/scikit-image/scikit-image/blob/main/skimage/io/_plugins/pil_plugin.py#L55
 def _infer_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # type: ignore[type-arg]
     def _palette_is_grayscale(pil_image: Image.Image) -> bool:
         # get palette as an array with R, G, B columns
@@ -160,6 +165,7 @@ def _infer_dimensions(
         # explicitly passed dims as tuple
         if len(infer_dimensions) != ndim:
             raise ValueError(f"Image is `{ndim}` dimensional, cannot assign to dims `{infer_dimensions}`.")
+        _assert_dims_present(infer_dimensions)
 
         add_shape = tuple([1] * (4 - ndim))
         return shape + add_shape, infer_dimensions, dtype, tuple(ndim + i for i in range(len(add_shape)))

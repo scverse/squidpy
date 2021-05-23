@@ -58,10 +58,7 @@ def process(
     ----------
     %(img_container)s
     %(img_layer)s
-    library_id
-        TODO: docrep
-        Name of the Z dimension(s) that this function should be applied to.
-        For not specified Z dimensions, the identity function is implied (if possible).
+    %(library_id)s
         If `None`, all Z dimensions are processed at once, treating the image as a 3D volume.
     method
         Processing method to use. Valid options are:
@@ -133,7 +130,7 @@ def process(
 
     # to which library_ids should this function be applied?
     if library_id is not None:
-        callback = {lid: callback for lid in img._library_id_list(library_id)}  # type: ignore[assignment]
+        callback = {lid: callback for lid in img._get_library_ids(library_id)}  # type: ignore[assignment]
 
     start = logg.info(f"Processing image using `{method}` method")
     res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs)

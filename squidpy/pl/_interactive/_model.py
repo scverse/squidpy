@@ -70,6 +70,7 @@ class ImageModel:
             self.library_id = self.container.library_ids
             if TYPE_CHECKING:
                 assert isinstance(self.library_id, Sequence)
+            # TODO
             self.spot_diameter = Key.uns.spot_diameter(self.adata, self.spatial_key, self.library_id[0]) * self.scale
             return
 
