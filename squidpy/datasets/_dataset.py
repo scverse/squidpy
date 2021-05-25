@@ -58,6 +58,26 @@ _smc = AMetadata(
     shape=(21697, 36826),
     url="https://ndownloader.figshare.com/files/26404781",
 )
+_mibitof = AMetadata(
+    name="mibitof",
+    doc_header="Pre-processed MIBI-TOF dataset from `Hartmann et al " "<https://doi.org/10.1101/2020.01.17.909796>`_.",
+    shape=(3310, 36),
+    url="https://ndownloader.figshare.com/files/28169526",
+)
+_merfish = AMetadata(
+    name="merfish",
+    doc_header="Pre-processed MERFISH dataset from `Moffitt et al " "<https://doi.org/10.1126/science.aau5324>`_.",
+    shape=(73655, 161),
+    url="https://ndownloader.figshare.com/files/28169379",
+)
+_slideseqv2 = AMetadata(
+    name="slideseqv2",
+    doc_header="Pre-processed SlideseqV2 dataset from `Stickles et al "
+    "<https://doi.org/10.1038/s41587-020-0739-1>`_.",
+    shape=(41786, 17733),
+    url="https://ndownloader.figshare.com/files/28146099",
+)
+
 
 for name, var in copy(locals()).items():
     if isinstance(var, AMetadata):
@@ -73,4 +93,7 @@ __all__ = [  # noqa: F822
     "visium_fluo_adata",
     "visium_fluo_adata_crop",
     "sc_mouse_cortex",
+    "mibitof",
+    "merfish",
+    "slideseqv2",
 ]
