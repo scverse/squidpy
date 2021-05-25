@@ -736,6 +736,22 @@ class TestContainerUtils:
         with pytest.raises(ValueError, match=r", found `0`."):
             cont.apply(func)
 
+    @pytest.mark.parametrize("drop_unselected", [False, True])
+    def test_apply_different_functions(self, cont_4d: ImageContainer, drop_unselected: bool):
+        res = cont_4d.apply({"2": lambda arr: arr + 3, "1": lambda arr: arr + 1}, copy=True, drop=drop_unselected)
+
+        assert len(res) == 1
+        assert res["image"].shape == (*cont_4d.shape, 3 - drop_unselected, cont_4d["image"].shape[-1])
+        if drop_unselected:
+            # original are in order "0", "1", "2"
+            assert res.library_ids == ["1", "2"]
+        else:
+            assert res.library_ids == cont_4d.library_ids
+
+    def test_apply_modifies_channels(self, cont_4d: ImageContainer):
+        with pytest.raises(ValueError, match="Unable to stack an array"):
+            cont_4d.apply({"3": lambda arr: arr, "1": lambda arr: np.ones(arr.shape[:2] + (11,))}, copy=True, drop=True)
+
     def test_key_completions(self):
         cont = ImageContainer(np.random.normal(size=(100, 100, 3)))
         cont.add_img(np.random.normal(size=(100, 100, 3)), layer="alpha")
@@ -810,7 +826,7 @@ class TestZStacks:
             assert (crop["image"].values == img["image"].sel(z=library_id).values).all()
 
     def test_generate_spot_crops(self):
-        # TODO could probaby divide this test in several smaller tests
+        # TODO could probably divide this test in several smaller tests
         # build adata to crop from img
         crop_coords = np.array([[0, 0], [0, 4], [0, 8], [4, 0], [4, 4], [4, 8], [8, 0], [8, 4], [8, 8]])
         # for library_id 1
@@ -878,7 +894,7 @@ class TestZStacks:
             library_ids = library_id
             func = {lid: lambda arr: arr + 42 for lid in library_ids}
 
-        res = cont.apply(func, channel=channel, copy=copy)
+        res = cont.apply(func, channel=channel, copy=copy, drop=False)
 
         if copy:
             assert isinstance(res, ImageContainer)

@@ -114,7 +114,7 @@ class TestProcess:
 
         assert isinstance(small_cont["bar"].data, np.ndarray)
 
-    @pytest.mark.parametrize("library_id", [None, "0", ["1", "2"]])
+    @pytest.mark.parametrize("library_id", [None, "3", ["1", "2"]])
     def test_library_id(self, cont_4d: ImageContainer, library_id: Optional[Union[str, Sequence[str]]]):
         def func(arr: np.ndarray):
             if library_id is None:
@@ -126,6 +126,7 @@ class TestProcess:
         res = process(cont_4d, method=func, layer="image", layer_added="image", library_id=library_id, copy=True)
 
         assert cont_4d["image"].shape == res["image"].shape
+        np.testing.assert_array_equal(cont_4d["image"].coords, res["image"].coords)
 
         if library_id is None:
             np.testing.assert_array_equal(cont_4d["image"] + 1, res["image"])

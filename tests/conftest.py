@@ -156,7 +156,7 @@ def cont_4d() -> ImageContainer:
     arrs[2][2:8, 2:8, 0] = 0.5
     arrs[2][2:8, 2:8, 1] = 0.1
     arrs[2][2:8, 2:8, 2] = 0.9
-    return ImageContainer.concat([ImageContainer(arr) for arr in arrs], library_ids=["0", "1", "2"])
+    return ImageContainer.concat([ImageContainer(arr) for arr in arrs], library_ids=["3", "1", "2"])
 
 
 @pytest.fixture()

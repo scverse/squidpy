@@ -103,10 +103,10 @@ def process(
     elif method == Processing.SMOOTH:  # type: ignore[comparison-overlap]
         if library_id is None:
             expected_ndim = 4
-            kwargs.setdefault("sigma", [1, 1, 0, 0])
+            kwargs.setdefault("sigma", [1, 1, 0, 0])  # y, x, z, c
         else:
             expected_ndim = 3
-            kwargs.setdefault("sigma", [1, 1, 0])
+            kwargs.setdefault("sigma", [1, 1, 0])  # y, x, c
 
         sigma = kwargs["sigma"]
         if isinstance(sigma, int):
@@ -131,25 +131,27 @@ def process(
         callback = {lid: callback for lid in img._get_library_ids(library_id)}  # type: ignore[assignment]
 
     start = logg.info(f"Processing image using `{method}` method")
-    res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs)
+    res: ImageContainer = img.apply(
+        callback, layer=layer, copy=True, drop=False, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs
+    )
 
     # if the method changes the number of channels
     if res[layer].shape[-1] != img[layer].shape[-1]:
         modifier = "_".join(layer_new.split("_")[1:]) if layer_added is None else layer_added
         channel_dim = f"{channel_dim}_{modifier}"
 
-    res._data = res.data.rename({res[layer].dims[-1]: channel_dim}).rename_vars({layer: layer_new})
+    res._data = res.data.rename({res[layer].dims[-1]: channel_dim})
     logg.info("Finish", time=start)
 
     if copy:
-        return res
+        res.library_ids = img[layer].coords["z"].values
+        return res.rename(layer, layer_new)
 
     img.add_img(
-        img=res,
+        img=res[layer],
         layer=layer_new,
-        channel_dim=channel_dim,
         copy=False,
         lazy=lazy,
-        dims=img[layer].dims,
+        dims=res[layer].dims,
         library_id=img[layer].coords["z"].values,
     )

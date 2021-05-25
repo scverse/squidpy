@@ -1059,8 +1059,9 @@ class ImageContainer(FeatureMixin):
         new_layer: Optional[str] = None,
         channel: Optional[int] = None,
         lazy: bool = False,
-        chunks: Optional[Union[str]] = None,
+        chunks: Optional[Union[str, Tuple[int, int]]] = None,
         copy: bool = True,
+        drop: bool = True,
         fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
     ) -> Optional["ImageContainer"]:
@@ -1083,6 +1084,8 @@ class ImageContainer(FeatureMixin):
         chunks
             Chunk size for :mod:`dask`. If `None`, don't use :mod:`dask`.
         %(copy_cont)s
+        drop
+            Whether to drop Z-dimensions that were not selected by ``func``. Only used when ``copy = True``.
         fn_kwargs
             Keyword arguments for ``func``.
         kwargs
@@ -1099,66 +1102,67 @@ class ImageContainer(FeatureMixin):
             If the ``func`` returns 0 or 1 dimensional array.
         """
 
-        def apply_func(func: Callable[..., np.ndarray], arr: xr.DataArray) -> Any:
-            if chunks is not None:
-                arr = da.asarray(arr.data).rechunk(chunks)
-                res = (
-                    da.map_overlap(func, arr, **fn_kwargs, **kwargs)
-                    if "depth" in kwargs
-                    else da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
-                )
-            else:
-                res = func(arr.data, **fn_kwargs)
-            return res
+        def apply_func(func: Callable[..., np.ndarray], arr: xr.DataArray) -> Union[np.ndarray, da.Array]:
+            if chunks is None:
+                return func(arr.data, **fn_kwargs)
+            arr = da.asarray(arr.data).rechunk(chunks)
+            return (
+                da.map_overlap(func, arr, **fn_kwargs, **kwargs)
+                if "depth" in kwargs
+                else da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
+            )
 
         layer = self._get_layer(layer)
         if new_layer is None:
             new_layer = layer
+
         arr = self[layer]
-        channel_dim = arr.dims[-1]
-        dims = arr.dims
+        library_ids = arr.coords["z"].values
+        dims, channel_dim = arr.dims, arr.dims[-1]
 
         if channel is not None:
             arr = arr[{channel_dim: channel}]
 
         if callable(func):
             res = apply_func(func, arr)
-
+            new_library_ids = library_ids
         else:
-            res, idx_func, idx_identity = [], [], []
-            for i, library_id in enumerate(arr.z.values):
-                if library_id in func.keys():
-                    idx_func.append(i)
-                    res.append(apply_func(func[library_id], arr.sel(z=library_id)))
-                else:
-                    idx_identity.append(i)
-                    res.append(arr.sel(z=library_id))
-            # stack res arrays
-            try:
-                res = da.stack(res, axis=2)
-            except ValueError as e:
-                if "must have the same shape" not in str(e):
-                    raise
-                # func might have changed channel dims, replace idx_identity with 0s
-                logg.warning(
-                    f"Function changed the number of channels, cannot use identity for library ids "
-                    f"`{arr.z.values[idx_identity]}`. Replacing with 0"
-                )
-                # TODO: once (or if) Z-dim is not fixed, drop ids
-                for i in idx_identity:
-                    res[i] = np.zeros_like(res[idx_func[0]])
-                # might raise ValueError again, if trying to apply different functions
-                # TODO catch this and raise more understandable error
-                res = da.stack(res, axis=2)
+            res = {}
+            noop_library_ids = [] if copy and drop else list(set(library_ids) - set(func.keys()))
+            for key, fn in func.items():
+                res[key] = apply_func(fn, arr.sel(z=key))
+            for key in noop_library_ids:
+                res[key] = arr.sel(z=key).data
 
-        if res.ndim in (0, 1):
-            raise ValueError(f"Expected `2` or `3` dimensional array, found `{res.ndim}`.")
+            new_library_ids = [lid for lid in library_ids if lid in res]
+            try:
+                res = da.stack([res[lid] for lid in new_library_ids], axis=2)
+            except ValueError as e:
+                if not len(noop_library_ids) or "must have the same shape" not in str(e):
+                    # processing functions returned wrong shape
+                    raise ValueError(
+                        "Unable to stack an array because functions returned arrays of different shapes."
+                    ) from e
+
+                # funcs might have changed channel dims, replace noops with 0
+                logg.warning(
+                    f"Function changed the number of channels, cannot use identity "
+                    f"for library ids `{noop_library_ids}`. Replacing with 0"
+                )
+                # TODO: once (or if) Z-dim is not fixed, always drop ids
+                tmp = next(iter(res.values()))
+                for lid in noop_library_ids:
+                    res[lid] = (np.zeros_like if chunks is None else da.zeros_like)(tmp)
+
+                res = da.stack([res[lid] for lid in new_library_ids], axis=2)
+
         if res.ndim == 2:  # assume that dims are y, x
             res = res[..., np.newaxis]
         if res.ndim == 3:  # assume dims are y, x, z (changing of z dim is not supported)
             res = res[..., np.newaxis]
+        if res.ndim != 4:
+            raise ValueError(f"Expected `2`, `3` or `4` dimensional array, found `{res.ndim}`.")
 
-        # TODO: currently, changing number of z dims is not supported
         if copy:
             cont = ImageContainer(
                 res,
@@ -1166,7 +1170,7 @@ class ImageContainer(FeatureMixin):
                 copy=True,
                 lazy=lazy,
                 dims=dims,
-                library_id=arr.z.values,
+                library_id=new_library_ids,
             )
             cont.data.attrs = self.data.attrs.copy()
             return cont
@@ -1177,7 +1181,7 @@ class ImageContainer(FeatureMixin):
             lazy=lazy,
             copy=new_layer != layer,
             dims=dims,
-            library_id=arr.z.values,
+            library_id=new_library_ids,
         )
 
     @d.dedent

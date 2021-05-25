@@ -69,7 +69,7 @@ class SegmentationModel(ABC):
 
         Returns
         -------
-        Segmentation mask for the high-resolution image of shape ``(height, width, 1)``.
+        Segmentation mask for the high-resolution image of shape ``(height, width, z, 1)``.
 
         Raises
         ------
@@ -95,8 +95,10 @@ class SegmentationModel(ABC):
             img = img[..., np.newaxis]
         if img.ndim != 3:
             raise ValueError(f"Expected segmentation to return `2` or `3` dimensional array, found `{img.ndim}`.")
+        if not np.issubdtype(img.dtype, np.integer):
+            raise TypeError(f"Expected segmentation to be of integer type, found `{img.dtype}`.")
 
-        return img.astype(_SEG_DTYPE)  # assuming unsigned int for labels
+        return img.astype(_SEG_DTYPE)
 
     @segment.register(np.ndarray)
     def _(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
@@ -123,7 +125,7 @@ class SegmentationModel(ABC):
             dtype=_SEG_DTYPE,
             num_blocks=img.numblocks,
             shift=shift,
-            drop_axis=img.ndim - 1,  # y, x, z, c; -1 is bugged
+            drop_axis=img.ndim - 1,  # y, x, z, c; -1 seems to be bugged
             **kwargs,
         )
         from dask_image.ndmeasure._utils._label import (
@@ -132,7 +134,7 @@ class SegmentationModel(ABC):
             connected_components_delayed,
         )
 
-        # max because labels are not continuous and won't be continuous
+        # max because labels are not continuous (and won't be continuous)
         label_groups = label_adjacency_graph(img, None, img.max())
         new_labeling = connected_components_delayed(label_groups)
         relabeled = relabel_blocks(img, new_labeling)
@@ -155,7 +157,7 @@ class SegmentationModel(ABC):
         else:
             new_channel_dim = f"{channel_dim}:{'all' if channel is None else channel}"
 
-        kwargs.pop("copy", None)
+        _ = kwargs.pop("copy", None)
         # TODO: allow volumetric segmentation? (precondition/postcondition needs change)
         if isinstance(library_id, str):
             func = {library_id: self.segment}
@@ -163,7 +165,7 @@ class SegmentationModel(ABC):
             func = {lid: self.segment for lid in library_id}
         else:
             raise TypeError(
-                f"Expected `library_id` to be `None` or of type `str` or `sequence`, found `{type(library_id)}`."
+                f"Expected library id to be `None` or of type `str` or `sequence`, found `{type(library_id).__name__}`."
             )
 
         res = img.apply(func, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)
@@ -247,8 +249,9 @@ class SegmentationCustom(SegmentationModel):
     ----------
     func
         Segmentation function to use. Can be any :func:`callable`, as long as it has the following signature:
-        :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`numpy.ndarray` ``(height, width[, channels])``.
-    """  # noqa: E501
+        :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`numpy.ndarray` ``(height, width[, 1])``.
+        The segmentation must be of :class:`numpy.uint32` type, where 0 marks background.
+    """
 
     def __init__(self, func: Callable[..., np.ndarray]):
         if not callable(func):
@@ -325,6 +328,8 @@ def segment(
 
     if not isinstance(method, SegmentationModel):
         if kind == SegmentationBackend.WATERSHED:
+            if channel is None and img[layer].shape[-1] > 1:
+                raise ValueError("Watershed segmentation does not work with multiple channels.")
             method: SegmentationModel = SegmentationWatershed()  # type: ignore[no-redef]
         elif kind == SegmentationBackend.CUSTOM:
             if not callable(method):
@@ -338,7 +343,15 @@ def segment(
 
     start = logg.info(f"Segmenting an image of shape `{img[layer].shape}` using `{method}`")
     res: ImageContainer = method.segment(
-        img, layer=layer, channel=channel, library_id=library_id, chunks=None, fn_kwargs=kwargs, copy=True, lazy=lazy
+        img,
+        layer=layer,
+        channel=channel,
+        library_id=library_id,
+        chunks=None,
+        fn_kwargs=kwargs,
+        copy=True,
+        drop=False,
+        lazy=lazy,
     )
     logg.info("Finish", time=start)
 
@@ -349,8 +362,8 @@ def segment(
     img.add_img(
         res[layer],
         layer=layer_new,
-        channel_dim=str(res[layer].dims[-1]),
         copy=False,
-        dims=img[layer].dims,
-        library_id=img[layer].coords["z"].values,
+        lazy=lazy,
+        dims=res[layer].dims,
+        library_id=res[layer].coords["z"].values,
     )
