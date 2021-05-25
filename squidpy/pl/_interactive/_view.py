@@ -1,5 +1,7 @@
 from typing import Any, FrozenSet
 
+from scanpy import logging as logg
+
 import numpy as np
 
 from PyQt5.QtWidgets import QLabel, QWidget, QComboBox, QHBoxLayout
@@ -37,7 +39,16 @@ class ImageView:
 
     def _init_UI(self) -> None:
         def update_library(event: Any) -> None:
-            self.model.alayer.library_id = event.value[0]
+            value = tuple(event.value)
+            if len(value) == 3:
+                lid = value[0]
+            elif len(value) == 4:
+                lid = value[1]
+            else:
+                logg.error(f"Unable to set library id from `{value}`")
+                return
+
+            self.model.alayer.library_id = lid
             library_id.setText(f"{self.model.alayer.library_id}")
 
         self._viewer = napari.Viewer(title="Squidpy", show=False)
@@ -95,7 +106,7 @@ class ImageView:
         raw_widget.setLayout(raw_layout)
 
         library_id = QLabel(f"{self.model.alayer.library_id}")
-        library_id.setToolTip("Currently selected library id.")  # TODO: all
+        library_id.setToolTip("Currently selected library id.")
 
         widgets = (
             image_lab,
@@ -119,6 +130,7 @@ class ImageView:
         self.viewer.layers.selection.events.changed.connect(self._move_layer_to_front)
         self.viewer.layers.selection.events.changed.connect(self._adjust_colorbar)
         self.viewer.dims.events.current_step.connect(update_library)
+        # TODO: find callback that that shows all Z-dimensions and change lib. id to 'All'
 
     def _move_layer_to_front(self, event: Any) -> None:
         try:

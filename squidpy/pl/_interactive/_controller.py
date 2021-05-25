@@ -21,8 +21,8 @@ from squidpy.pl._utils import _points_inside_triangles
 from squidpy.pl._interactive._view import ImageView
 from squidpy.pl._interactive._model import ImageModel
 from squidpy.pl._interactive._utils import (
-    _is_luminance,
     _get_categorical,
+    _display_channelwise,
     _position_cluster_labels,
 )
 from squidpy.pl._interactive._widgets import RangeSlider
@@ -76,24 +76,26 @@ class ImageController:
 
         img: xr.DataArray = self.model.container.data[layer].transpose("z", "y", "x", ...)
         multiscale = np.prod(img.shape[1:3]) > (2 ** 16) ** 2
-        if img.shape[-1] > 4:
-            logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
-            return False
+        n_channels = img.shape[-1]
 
-        # TODO: maybe remove or at least rename
-        luminance = img.attrs.get("luminance", None)
-        if luminance is None:
-            logg.debug("Automatically determining whether image is a luminance image")
-            luminance = _is_luminance(img.data)
-        if luminance:
-            img = img.transpose("z", ..., "y", "x")  # channels first
+        rgb = img.attrs.get("rgb", None)
+        if n_channels == 1:
+            rgb, colormap = False, "gray"
+        else:
+            colormap = self.model.cmap
+
+        if rgb is None:
+            logg.debug("Automatically determining whether image is an RGB image")
+            rgb = not _display_channelwise(img.data)
+        if not rgb:
+            img = img.transpose(..., "z", "y", "x")  # channels first
 
         logg.info(f"Creating image `{layer}` layer")
         self.view.viewer.add_image(
             img.data,
             name=layer,
-            rgb=not luminance,
-            colormap=self.model.cmap if luminance or (img.shape[2] > 1) else "gray",
+            rgb=rgb,
+            colormap=colormap,
             blending=self.model.blending,
             multiscale=multiscale,
         )

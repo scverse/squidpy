@@ -289,7 +289,6 @@ class ImageContainer(FeatureMixin):
 
         if res is not None:
             library_id = self._get_library_ids(library_id, res, allow_new=not len(self))
-
             try:
                 res = res.assign_coords({"z": library_id})
             except ValueError as e:
@@ -297,7 +296,7 @@ class ImageContainer(FeatureMixin):
                     raise
                 # at this point, we know the container is not empty
                 raise ValueError(
-                    f"Expected image to have `{len(self.library_ids)}` Z-dimension(s), " f"found `{res.sizes['z']}`."
+                    f"Expected image to have `{len(self.library_ids)}` Z-dimension(s), found `{res.sizes['z']}`."
                 ) from None
 
             logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
@@ -1004,10 +1003,9 @@ class ImageContainer(FeatureMixin):
         %(spatial_key)s
         library_key
             Key in :attr:`adata.AnnData.obs` specifying mapping between observations and library ids.
-            If `None`, assume all observations belong to the same library id.
+            Required if the container has more than 1 Z-dimension.
         library_id
-            Subset of library ids to visualize. Only used if ``library_key`` is not `None`.
-            If `None`, use visualize all library ids.
+            Subset of library ids to visualize. If `None`, visualize all library ids.
         cmap
             Colormap for continuous variables.
         palette
@@ -1426,14 +1424,15 @@ class ImageContainer(FeatureMixin):
         if library_id is None:
             if len(self):
                 library_id = self.library_ids
-            elif arr is not None:
+            elif isinstance(arr, xr.DataArray):
                 try:
                     library_id = arr.coords["z"].values
                 except (KeyError, AttributeError) as e:
                     logg.warning(f"Unable to retrieve library ids, reason `{e}`. Using default names")
-                    library_id = [f"library_{i}" for i in range(arr.sizes["z"])]
+                    # at this point, it should have Z-dim
+                    library_id = [str(i) for i in range(arr.sizes["z"])]
             else:
-                raise ValueError("Please specify the expected number of library ids if the container is empty.")
+                raise ValueError("Please specify the number of library ids if the container is empty.")
 
         if isinstance(library_id, str):
             library_id = [library_id]

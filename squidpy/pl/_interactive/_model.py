@@ -66,6 +66,11 @@ class ImageModel:
 
     def _update_coords(self) -> None:
         if self.library_key is None:
+            if len(self.container.library_ids) > 1:
+                raise KeyError(
+                    f"ImageContainer has `{len(self.container.library_ids)}` Z-dimensions. "
+                    f"Please specify `library_key` that maps observations to library ids."
+                )
             self.coordinates = np.insert(self.coordinates, 0, values=0, axis=1)
             self.library_id = self.container.library_ids
             if TYPE_CHECKING:

@@ -74,8 +74,7 @@ def _not_in_01(arr: Union[np.ndarray, da.Array]) -> bool:
     return bool(_helper_arr(np.asarray(arr)))
 
 
-def _is_luminance(arr: Union[np.ndarray, da.Array]) -> bool:
-    # TODO: logg
+def _display_channelwise(arr: Union[np.ndarray, da.Array]) -> bool:
     n_channels: int = arr.shape[-1]
     if n_channels not in (3, 4):
         return n_channels != 1

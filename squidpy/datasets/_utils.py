@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple, Union, Callable, Optional
+from typing import Any, Dict, Tuple, Union, Callable, Optional, Sequence
 from inspect import Parameter, signature, Signature
 from pathlib import Path
 from dataclasses import field, dataclass
@@ -24,6 +24,7 @@ class Metadata(ABC):
     doc_header: Optional[str] = field(default=None, repr=False)
     path: Optional[PathLike] = field(default=None, repr=False)
     shape: Optional[Tuple[int, int]] = field(default=None, repr=False)
+    library_id: Optional[Union[str, Sequence[str]]] = field(default=None, repr=False)
 
     _DOC_FMT = ""
 
@@ -166,7 +167,7 @@ class ImgMetadata(Metadata):
         check_presence_download(Path(fpath), backup_url)
 
         img = ImageContainer()
-        img.add_img(fpath, layer="image", **kwargs)
+        img.add_img(fpath, layer="image", library_id=self.library_id, **kwargs)
 
         return img
 
