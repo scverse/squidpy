@@ -5,10 +5,11 @@ import scanpy as sc
 
 import numpy as np
 
+from matplotlib.testing.compare import compare_images
 import matplotlib.pyplot as plt
 
 from squidpy.im import ImageContainer
-from tests.conftest import DPI, PlotTester, PlotTesterMeta
+from tests.conftest import DPI, TOL, ACTUAL, EXPECTED, PlotTester, PlotTesterMeta
 import squidpy as sq
 
 
@@ -27,6 +28,9 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
 
     def test_plot_channel(self, cont: ImageContainer):
         cont.show(channel=1, dpi=DPI)
+
+    def test_plot_library_id(self, small_cont_4d: ImageContainer):
+        small_cont_4d.show(library_id=["1"], dpi=DPI)
 
     def test_plot_segmentation(self, cont: ImageContainer):
         seg = np.random.RandomState(43).randint(0, 255, size=(*cont.shape, 1))
@@ -50,8 +54,19 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
 
         cont.show("image", channelwise=True, segmentation_layer="foo", dpi=DPI, segmentation_alpha=1)
 
-    def test_show_scale_mask_circle_crop(self, cont: ImageContainer):
-        cont.crop_corner(0, 0, (200, 200), mask_circle=True, scale=2, dpi=DPI)
+    def test_plot_scale_mask_circle_crop(self, cont: ImageContainer):
+        cont.crop_corner(0, 0, (200, 200), mask_circle=True, scale=2).show(dpi=DPI)
+
+    @pytest.mark.parametrize("channelwise", [False, True])
+    @pytest.mark.parametrize("transpose", [False, True])
+    def test_transpose_channelwise(self, small_cont_4d: ImageContainer, transpose: bool, channelwise: bool):
+        basename = f"{self.__class__.__name__[4:]}_transpose_channelwise_{transpose}_{channelwise}.png"
+        actual = str(ACTUAL / basename)
+        small_cont_4d.show(transpose=transpose, channelwise=channelwise, dpi=DPI, save=actual)
+
+        res = compare_images(str(EXPECTED / basename), actual, 2 * TOL)
+
+        assert res is None, res
 
 
 def test_extract(adata: AnnData, cont: ImageContainer, caplog):

@@ -860,7 +860,7 @@ class ImageContainer(FeatureMixin):
         segmentation_alpha
             Alpha value for ``segmentation_layer``.
         transpose
-            Whether to plot Z-dimensions as columns or as rows. If `None`, it will be set to ``not channelwise``.
+            Whether to plot Z-dimensions in columns or in rows. If `None`, it will be set to ``not channelwise``.
         ax
             Optional :mod:`matplotlib` axes where to plot the image.
             If not `None`, ``save``, ``figsize`` and ``dpi`` have no effect.
