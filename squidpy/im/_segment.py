@@ -156,15 +156,14 @@ class SegmentationModel(ABC):
             new_channel_dim = f"{channel_dim}:{'all' if channel is None else channel}"
 
         kwargs.pop("copy", None)
-        # TODO: maybe allow volumetric segmentation? (precondition/postcondition needs change)
+        # TODO: allow volumetric segmentation? (precondition/postcondition needs change)
         if isinstance(library_id, str):
             func = {library_id: self.segment}
         elif isinstance(library_id, Sequence):
             func = {lid: self.segment for lid in library_id}
         else:
             raise TypeError(
-                f"Expected `library_id` to be of type `str` or `sequence` or "
-                f"to be `None`, found `{type(library_id)}`."
+                f"Expected `library_id` to be `None` or of type `str` or `sequence`, found `{type(library_id)}`."
             )
 
         res = img.apply(func, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)

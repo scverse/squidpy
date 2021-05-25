@@ -115,6 +115,8 @@ def _infer_dimensions(
               Otherwise, if `channels` dimension is `1`, load `z` dimension (now larger than `1`) as `channels`.
               Otherwise, load `z` dimension as `z` and `channels` as `channels`.
 
+        If specified as :class:`tuple`, its length must be the same as the shape of ``obj``.
+
         The following assumptions are made when determining the dimension names:
 
             - two largest dimensions are assumed to be `y` and `x`, in this order.
@@ -129,7 +131,7 @@ def _infer_dimensions(
         - :class:`tuple` of 4 :class:`int` describing the shape.
         - :class:`tuple` of 4 :class:`str` describing the dimensions.
         - the array :class:`numpy.dtype`.
-        - :class:`tuple` of maximally 2 :class:`ints` which dimensinos to expand.
+        - :class:`tuple` of maximally 2 :class:`ints` which dimensions to expand.
 
     Raises
     ------
@@ -230,4 +232,4 @@ def _lazy_load_image(
     if chunks is not None:
         darr = darr.rechunk(chunks)
 
-    return xr.DataArray(darr, dims=dims_).transpose("y", "x", "z", "channels")
+    return xr.DataArray(darr, dims=dims_).transpose("y", "x", "z", ...)

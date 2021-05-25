@@ -107,8 +107,7 @@ class FeatureMixin:
         Parameters
         ----------
         %(img_layer)s
-        library_id
-            TODO.
+        %(library_id_features)s
         %(feature_name)s
         %(channels)s
         quantiles
@@ -132,7 +131,6 @@ class FeatureMixin:
 
         features = {}
         for c in channels:
-            # TODO: dask?
             tmp_arr = arr[..., c].values
             for q in quantiles:
                 features[f"{feature_name}_ch-{c}_quantile-{q}"] = np.quantile(tmp_arr, q)
@@ -159,8 +157,7 @@ class FeatureMixin:
         Parameters
         ----------
         %(img_layer)s
-        library_id
-            TODO.
+        %(library_id_features)s
         %(feature_name)s
         %(channels)s
         bins
@@ -217,8 +214,7 @@ class FeatureMixin:
         Parameters
         ----------
         %(img_layer)s
-        library_id
-            TODO.
+        %(library_id_features)s
         %(feature_name)s
         %(channels)s
         props
@@ -289,8 +285,7 @@ class FeatureMixin:
             Name of the image layer used to calculate the non-intensity properties.
         intensity_layer
             Name of the image layer used to calculate the intensity properties.
-        library_id
-            TODO.
+        %(library_id_features)s
         %(feature_name)s
         %(channels)s
             Only relevant for features that use the ``intensity_layer``.
@@ -386,7 +381,6 @@ class FeatureMixin:
 
         features: Dict[str, Any] = {}
         label_arr = self[label_layer].sel(z=library_id)
-        # TODO: dask?
         label_arr_0 = label_arr[..., 0].values
         # calculate features that do not depend on the intensity image
         tmp_features = skimage.measure.regionprops_table(label_arr_0, properties=no_intensity_props)
@@ -407,7 +401,6 @@ class FeatureMixin:
                 assert isinstance(intensity_layer, str)
             tmp_features = skimage.measure.regionprops_table(
                 label_arr_0,
-                # TODO: dask?
                 intensity_image=self[intensity_layer].sel(z=library_id)[..., c].values,
                 properties=props,
             )
@@ -461,8 +454,7 @@ class FeatureMixin:
         feature_name = getattr(func, "__name__", "custom") if feature_name is None else feature_name
 
         # calculate features by calling feature_fn
-        # TODO: library id for same behavior?
-        # TODO: dask?
+        # TODO: library id for the same behavior?
         res = func(self[layer][..., channels].values, **kwargs)  # type: ignore[call-arg]
         if not isinstance(res, Iterable):
             res = [res]

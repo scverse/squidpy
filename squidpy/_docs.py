@@ -158,6 +158,9 @@ Otherwise, modifies the ``adata`` object with the following key:
     - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - the above mentioned :class:`dict`.
 
 Statistics and pvalues are computed for each cluster :attr:`anndata.AnnData.obs` ``['{cluster_key}']`` separately."""
+_library_id_features = """\
+library_id
+    Name of the Z dimension that this function should be applied to."""
 _library_id = """\
 library_id
     Name of the Z dimension(s) that this function should be applied to.
@@ -200,6 +203,7 @@ d = DocstringProcessor(
     layer_added=_layer_added,
     chunks_lazy=_chunks_lazy,
     ripley_stat_returns=_ripley_stat_returns,
+    library_id_feature=_library_id_features,
     library_id=_library_id,
     img_library_id=_img_library_id,
 )
