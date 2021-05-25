@@ -165,7 +165,9 @@ class ImageContainer(FeatureMixin):
         if len(library_ids) != len(imgs):
             raise ValueError(f"Expected library ids to be of length `{len(imgs)}`, found `{len(library_ids)}`.")
 
-        _library_ids = np.concatenate([img._get_library_ids(library_id) for img, library_id in zip(imgs, library_ids)])
+        _library_ids = np.concatenate(
+            [img._get_library_ids(library_id, allow_new=True) for img, library_id in zip(imgs, library_ids)]
+        )
         if len(set(_library_ids)) != len(_library_ids):
             raise ValueError(f"Found non-unique library ids `{list(_library_ids)}`.")
 
@@ -246,15 +248,15 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         img
-            In memory array or a path to an on-disk image.
+            In-memory 2, 3 or 4-dimensional array or a path to an on-disk image.
         %(img_layer)s
         dims
             Where to save channel dimension when reading from a file or loading an array. Valid options are:
 
-                - `{id.PREFER_CHANNELS.s!r}` - load the last dimension as channels.
-                - `{id.PREFER_Z.s!r}` - load the last dimension as Z-dim.
-                - `{id.DEFAULT.s!r}` - same as `{id.PREFER_CHANNELS.s!r}`, but for 4-dim arrays,
-                  tries to also load the first dimension as channels iff the last dimension is 1.
+                - `{id.CHANNELS_LAST.s!r}` - load the last non-spatial dimension as channels.
+                - `{id.Z_LAST.s!r}` - load the last non-spatial dimension as Z-dimension.
+                - `{id.DEFAULT.s!r}` - same as `{id.CHANNELS_LAST.s!r}`, but for 4-dimensional arrays,
+                  tries to also load the first dimension as channels iff the last non-spatial dimension is 1.
                 - a sequence of dimension names matching the shape of img, e.g. ``('y', 'x', 'z', 'channels')``.
                   `'y'`, `'x'` and `'z'` must always be present.
 
@@ -266,7 +268,7 @@ class ImageContainer(FeatureMixin):
         chunks
             Chunk size for :mod:`dask`. Only used when ``lazy = True``.
         copy
-            Whether to copy the underlying data if ``img`` is an array.
+            Whether to copy the underlying data if ``img`` is an in-memory array.
 
         Returns
         -------
@@ -377,16 +379,14 @@ class ImageContainer(FeatureMixin):
     ) -> xr.DataArray:
         logg.debug(f"Loading data `numpy.array` of shape `{img.shape}`")
 
-        img = img.copy() if copy else img
-        shape, dims, _, _ = _infer_dimensions(img, infer_dimensions=dims)
-
-        return xr.DataArray(img.reshape(shape), dims=dims).transpose("y", "x", "z", ...)
+        return self._load_img(xr.DataArray(img), copy=copy, dims=dims, warn=False)
 
     @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
     def _(
         self,
         img: xr.DataArray,
         copy: bool = True,
+        warn: bool = True,
         dims: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
         **_: Any,
     ) -> xr.DataArray:
@@ -395,8 +395,11 @@ class ImageContainer(FeatureMixin):
         img = img.copy() if copy else img
         if not ("y" in img.dims and "x" in img.dims and "z" in img.dims):
             _, dims, _, axes = _infer_dimensions(img, infer_dimensions=dims)
-            img = img.expand_dims([f"tmp_{a}" for a in axes], axis=axes)
-            logg.warning(f"Unable to find `y`, `x` or `z` dimension in `{img.dims}`. Renaming to `{dims}`")
+            # `axes` is always of length 1 or 2
+            dimnames = ("z", "channels") if len(axes) == 2 else (("channels",) if "z" in dims else ("z",))
+            img = img.expand_dims([d for _, d in zip(axes, dimnames)], axis=axes)
+            if warn:
+                logg.warning(f"Unable to find `y`, `x` or `z` dimension in `{img.dims}`. Renaming to `{dims}`")
             img = img.rename(dict(zip(img.dims, dims)))
 
         return img.transpose("y", "x", "z", ...)
@@ -1264,7 +1267,7 @@ class ImageContainer(FeatureMixin):
     def library_ids(self) -> List[str]:
         """Library ids."""
         try:
-            return sorted(self.data.coords["z"].values)
+            return list(map(str, self.data.coords["z"].values))
         except KeyError:
             return []
 
@@ -1272,7 +1275,7 @@ class ImageContainer(FeatureMixin):
     def library_ids(self, library_ids: Union[str, Sequence[str], Mapping[str, str]]) -> None:
         """Set library ids."""
         if isinstance(library_ids, Mapping):
-            library_ids = [library_ids.get(lid, lid) for lid in self.data.z.values]
+            library_ids = [str(library_ids.get(lid, lid)) for lid in self.library_ids]
         elif isinstance(library_ids, str):
             library_ids = (library_ids,)
 
@@ -1387,9 +1390,28 @@ class ImageContainer(FeatureMixin):
         return library_id
 
     def _get_library_ids(
-        self, library_id: Optional[Union[str, Sequence[str]]] = None, arr: Optional[xr.DataArray] = None
+        self,
+        library_id: Optional[Union[str, Sequence[str]]] = None,
+        arr: Optional[xr.DataArray] = None,
+        allow_new: bool = False,
     ) -> List[str]:
-        """Get library ids."""
+        """
+        Get library ids.
+
+        Parameters
+        ----------
+        library_id
+            Requested library ids.
+        arr
+            If the current container is empty, try getting the library ids from the ``arr``.
+        allow_new
+            If `True`, don't check if the returned library ids are present in the non-empty container.
+            This is set to `True` only in :meth:`concat` to allow for remapping.
+
+        Returns
+        -------
+        The library ids.
+        """
         if library_id is None:
             if len(self):
                 library_id = self.library_ids
@@ -1410,6 +1432,9 @@ class ImageContainer(FeatureMixin):
         res = list(map(str, library_id))
         if not len(res):
             raise ValueError("No library ids have been selected.")
+
+        if not allow_new and len(self) and not (set(res) & set(self.library_ids)):
+            raise ValueError(f"Invalid library ids have been selected `{res}`. Valid options are `{self.library_ids}`.")
 
         return res
 

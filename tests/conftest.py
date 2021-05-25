@@ -142,6 +142,14 @@ def small_cont() -> ImageContainer:
 
 
 @pytest.fixture()
+def small_cont_4d() -> ImageContainer:
+    np.random.seed(42)
+    return ImageContainer(
+        np.random.uniform(size=(100, 50, 2, 3), low=0, high=1), dims=["y", "x", "z", "channels"], layer="image"
+    )
+
+
+@pytest.fixture()
 def small_cont_seg() -> ImageContainer:
     np.random.seed(42)
     img = ImageContainer(np.random.randint(low=0, high=255, size=(100, 100, 3), dtype=np.uint8), layer="image")

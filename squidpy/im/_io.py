@@ -16,8 +16,8 @@ from squidpy._docs import inject_docs
 from squidpy._constants._constants import InferDimensions
 
 
-def _assert_dims_present(dims: Tuple[str, ...]) -> None:
-    missing_dims = {"y", "x", "z"} - set(dims)
+def _assert_dims_present(dims: Tuple[str, ...], include_z: bool = True) -> None:
+    missing_dims = ({"y", "x", "z"} if include_z else {"y", "x"}) - set(dims)
     if missing_dims:
         raise ValueError(f"Expected to find `{sorted(missing_dims)}` dimension(s) in `{dims}`.")
 
@@ -108,8 +108,8 @@ def _infer_dimensions(
     infer_dimensions
         Policy that determines how to name the dimensions. Valid options are:
 
-            - `{id.PREFER_CHANNELS.s!r}` - load `channels` dimension as `channels`.
-            - `{id.PREFER_Z.s!r}` - load `z` dimension as `channels`.
+            - `{id.CHANNELS_LAST.s!r}` - load `channels` dimension as `channels`.
+            - `{id.Z_LAST.s!r}` - load `z` dimension as `channels`.
             - `{id.DEFAULT.s!r}` - only matters if the number of dimensions is `3` or `4`.
               If `z` dimension is `1`, load it as `z`.
               Otherwise, if `channels` dimension is `1`, load `z` dimension (now larger than `1`) as `channels`.
@@ -151,7 +151,7 @@ def _infer_dimensions(
 
             return dims([z, y, x, c])
 
-        if infer_dimensions == InferDimensions.PREFER_Z:
+        if infer_dimensions == InferDimensions.Z_LAST:
             return dims([c, y, x, z])
 
         return dims([z, y, x, c])
@@ -164,10 +164,12 @@ def _infer_dimensions(
     ndim = len(shape)
 
     if not isinstance(infer_dimensions, InferDimensions):
+        if ndim not in (2, 3, 4):
+            raise ValueError(f"Expected the image to be either `2`, `3` or `4` dimensional, found `{ndim}`.")
         # explicitly passed dims as tuple
         if len(infer_dimensions) != ndim:
             raise ValueError(f"Image is `{ndim}` dimensional, cannot assign to dims `{infer_dimensions}`.")
-        _assert_dims_present(infer_dimensions)
+        _assert_dims_present(infer_dimensions, include_z=ndim == 4)
 
         add_shape = tuple([1] * (4 - ndim))
         return shape + add_shape, infer_dimensions, dtype, tuple(ndim + i for i in range(len(add_shape)))

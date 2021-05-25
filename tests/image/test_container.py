@@ -1,6 +1,7 @@
-from typing import Any, Set, List, Tuple, Union, Optional
+from typing import Any, Set, List, Tuple, Union, Optional, Sequence
 from imageio import imread, imsave
 from pathlib import Path
+from itertools import permutations
 from collections import defaultdict
 from html.parser import HTMLParser
 from pytest_mock import MockerFixture
@@ -899,6 +900,134 @@ class TestZStacks:
                     np.testing.assert_allclose(
                         data.sel(z=lid).values[..., 0], orig["image"].sel(z=lid).values[..., channel]
                     )
+
+
+class TestExplicitDims:
+    @pytest.mark.parametrize("dims", list(permutations(["y", "x", "z", "c"])))
+    def test_explicit_dims(self, dims: Tuple[str, str, str, str]):
+        shape = (2, 3, 4, 5)
+        img = ImageContainer(np.random.normal(size=shape), dims=dims)
+
+        for d, s in zip(dims, shape):
+            assert img.data.dims[d] == s
+
+    @pytest.mark.parametrize("missing", ["y", "x", "z"])
+    @pytest.mark.parametrize("ndim", [2, 3, 4])
+    def test_required_dim_missing(self, missing: str, ndim: int):
+        shape = (2, 3)
+        if ndim >= 3:
+            shape += (4,)
+        if ndim >= 4:
+            shape += (5,)
+        dims = (
+            "a" if missing == "y" else "y",
+            "b" if missing == "x" else "x",
+            "c" if missing == "z" else "z",
+            "channels",
+        )
+        dims = dims[:ndim]
+
+        if ndim in (2, 3) and missing == "z":
+            img = ImageContainer(np.random.normal(size=shape), dims=dims)
+            for d, s in zip(dims, shape):
+                assert img.data.dims[d] == s
+            assert img.data.dims["z"] == 1
+        else:
+            with pytest.raises(ValueError, match=rf"Expected to find `\[{missing!r}\]` dimension\(s\)"):
+                _ = ImageContainer(np.random.normal(size=shape), dims=dims)
+
+    @pytest.mark.parametrize("dims", ["z_last", "channels_last", ("x", "y")])
+    def test_2D_array(self, dims: str):
+        shape = (2, 3)
+        img = ImageContainer(np.random.normal(size=shape), dims=dims)
+
+        if isinstance(dims, str):
+            dims = ("channels", "z", "y", "x")
+            shape = (1, 1) + shape
+        for d, s in zip(dims, shape):
+            assert img.data.dims[d] == s
+
+    @pytest.mark.parametrize("dims", ["z_last", "channels_last", ("x", "y", "z"), ("y", "x", "c")])
+    def test_3D_array(self, dims: str):
+        shape = (2, 3, 4)
+        img = ImageContainer(np.random.normal(size=shape), dims=dims)
+
+        if isinstance(dims, str):
+            dims = (("channels", "z") if dims == "z_last" else ("z", "channels")) + ("y", "x")
+            shape = (1,) + shape
+        for d, s in zip(dims, shape):
+            assert img.data.dims[d] == s
+
+    @pytest.mark.parametrize("dims", ["z_last", "channels_last", ("z", "y", "x", "c")])
+    def test_4D_array(self, dims: str):
+        shape = (2, 3, 4, 5)
+        img = ImageContainer(np.random.normal(size=shape), dims=dims)
+
+        if isinstance(dims, str):
+            dims = (("channels", "z") if dims == "z_last" else ("z", "channels")) + ("y", "x")
+        for d, s in zip(dims, shape):
+            assert img.data.dims[d] == s
+
+
+class TestLibraryIds:
+    def test_empty_container(self):
+        img = ImageContainer()
+        np.testing.assert_array_equal(img.library_ids, [])
+
+    def test_default(self):
+        img = ImageContainer(np.random.normal(size=(2, 3, 4, 5)), dims=["z", "y", "x", "c"])
+        np.testing.assert_array_equal(img.library_ids, ["0", "1"])
+
+    @pytest.mark.parametrize("z", [1, 2])
+    def test_explicit(self, z: int):
+        library_id = ["foo", "bar"]
+        if z == 1:
+            library_id = library_id[0]
+
+        img = ImageContainer(np.random.normal(size=(z, 3, 4, 5)), dims=["z", "y", "x", "c"], library_id=library_id)
+        np.testing.assert_array_equal(img.library_ids, np.ravel([library_id]))
+
+    @pytest.mark.parametrize("unique", [False, True])
+    @pytest.mark.parametrize("typ", [list, dict])
+    def test_set(self, typ: type, unique: bool):
+        if unique:
+            new_ids = ["0", "1"] if typ == list else {"a": "0", "b": "1"}
+        else:
+            new_ids = ["0", "0"] if typ == list else {"a": "b"}
+        img = ImageContainer(np.random.normal(size=(2, 3, 4, 5)), dims=["z", "y", "x", "c"], library_id=["a", "b"])
+
+        if not unique:
+            with pytest.raises(ValueError, match=r"Remapped library ids"):
+                img.library_ids = new_ids
+        else:
+            img.library_ids = new_ids
+            np.testing.assert_array_equal(
+                img.library_ids, new_ids if isinstance(new_ids, list) else [new_ids[old] for old in ("a", "b")]
+            )
+
+    def test_get_from_xarray(self):
+        library_id = ["a", "b"]
+        tmp = ImageContainer(np.random.normal(size=(2, 3, 4, 5)), dims=["z", "y", "x", "c"], library_id=library_id)
+        img = ImageContainer(tmp["image"])
+
+        np.testing.assert_array_equal(tmp.library_ids, library_id)
+        np.testing.assert_array_equal(img.library_ids, library_id)
+
+    @pytest.mark.parametrize("library_id", ["a", ["b", "a"], ["c"]])
+    @pytest.mark.parametrize("empty", [False, True])
+    def test_get_library_ids(self, empty: bool, library_id: Union[str, Sequence[str]]):
+        img = ImageContainer()
+        if not empty:
+            img.add_img(np.random.normal(size=(2, 3, 4, 5)), dims=["z", "y", "x", "c"], library_id=["a", "b"])
+
+        if empty:
+            np.testing.assert_array_equal(np.ravel([library_id]), img._get_library_ids(library_id))
+        else:
+            if "c" in library_id:
+                with pytest.raises(ValueError, match=r"Invalid library ids have been selected"):
+                    _ = img._get_library_ids(library_id, allow_new=False)
+            else:
+                np.testing.assert_array_equal(np.ravel([library_id]), img._get_library_ids(library_id))
 
 
 class TestCroppingExtra:
