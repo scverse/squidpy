@@ -61,10 +61,11 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
     @pytest.mark.parametrize("transpose", [False, True])
     def test_transpose_channelwise(self, small_cont_4d: ImageContainer, transpose: bool, channelwise: bool):
         basename = f"{self.__class__.__name__[4:]}_transpose_channelwise_{transpose}_{channelwise}.png"
-        actual = str(ACTUAL / basename)
-        small_cont_4d.show(transpose=transpose, channelwise=channelwise, dpi=DPI, save=actual)
+        small_cont_4d.show(transpose=transpose, channelwise=channelwise, dpi=DPI)
 
-        res = compare_images(str(EXPECTED / basename), actual, 2 * TOL)
+        plt.savefig(ACTUAL / basename, dpi=DPI)
+        plt.close()
+        res = compare_images(str(EXPECTED / basename), ACTUAL / basename, TOL)
 
         assert res is None, res
 

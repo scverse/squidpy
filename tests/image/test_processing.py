@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Callable, Optional
+from typing import Tuple, Union, Callable, Optional, Sequence
 from pytest_mock import MockerFixture
 import pytest
 
@@ -113,6 +113,29 @@ class TestProcess:
             assert isinstance(small_cont["foo"].data, da.Array if dask_input else np.ndarray)
 
         assert isinstance(small_cont["bar"].data, np.ndarray)
+
+    @pytest.mark.parametrize("library_id", [None, "0", ["1", "2"]])
+    def test_library_id(self, cont_4d: ImageContainer, library_id: Optional[Union[str, Sequence[str]]]):
+        def func(arr: np.ndarray):
+            if library_id is None:
+                assert arr.shape == cont_4d["image"].shape
+            else:
+                assert arr.shape == cont_4d["image"][..., 0, :].shape
+            return arr + 1
+
+        res = process(cont_4d, method=func, layer="image", layer_added="image", library_id=library_id, copy=True)
+
+        assert cont_4d["image"].shape == res["image"].shape
+
+        if library_id is None:
+            np.testing.assert_array_equal(cont_4d["image"] + 1, res["image"])
+        else:
+            if isinstance(library_id, str):
+                library_id = [library_id]
+            for lid in library_id:
+                np.testing.assert_array_equal(cont_4d["image"].sel(z=lid) + 1, res["image"].sel(z=lid))
+            for lid in set(cont_4d.library_ids) - set(library_id):
+                np.testing.assert_array_equal(cont_4d["image"].sel(z=lid), res["image"].sel(z=lid))
 
     def test_copy(self, small_cont: ImageContainer):
         orig_keys = set(small_cont)

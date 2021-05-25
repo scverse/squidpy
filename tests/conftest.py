@@ -150,6 +150,16 @@ def small_cont_4d() -> ImageContainer:
 
 
 @pytest.fixture()
+def cont_4d() -> ImageContainer:
+    arrs = [np.linspace(0, 1, 10 * 10 * 3).reshape(10, 10, 3), np.zeros((10, 10, 3)) + 0.5, np.zeros((10, 10, 3))]
+    arrs[1][4:6, 4:6] = 0.8
+    arrs[2][2:8, 2:8, 0] = 0.5
+    arrs[2][2:8, 2:8, 1] = 0.1
+    arrs[2][2:8, 2:8, 2] = 0.9
+    return ImageContainer.concat([ImageContainer(arr) for arr in arrs], library_ids=["0", "1", "2"])
+
+
+@pytest.fixture()
 def small_cont_seg() -> ImageContainer:
     np.random.seed(42)
     img = ImageContainer(np.random.randint(low=0, high=255, size=(100, 100, 3), dtype=np.uint8), layer="image")

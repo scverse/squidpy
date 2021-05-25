@@ -289,7 +289,16 @@ class ImageContainer(FeatureMixin):
 
         if res is not None:
             library_id = self._get_library_ids(library_id, res, allow_new=not len(self))
-            res = res.assign_coords({"z": library_id})
+
+            try:
+                res = res.assign_coords({"z": library_id})
+            except ValueError as e:
+                if "conflicting sizes for dimension 'z'" not in str(e):
+                    raise
+                # at this point, we know the container is not empty
+                raise ValueError(
+                    f"Expected image to have `{len(self.library_ids)}` Z-dimension(s), " f"found `{res.sizes['z']}`."
+                ) from None
 
             logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
             try:
@@ -1507,6 +1516,8 @@ class ImageContainer(FeatureMixin):
         return type(self)._from_dataset(self.data, deep=True)
 
     def _repr_html_(self) -> str:
+        import html
+
         if not len(self):
             return f"{self.__class__.__name__} object with 0 layers"
 
@@ -1515,9 +1526,10 @@ class ImageContainer(FeatureMixin):
         style = "text-indent: 25px; margin-top: 0px; margin-bottom: 0px;"
 
         for i, layer in enumerate(self.data.keys()):
-            s += f"<p style={style!r}><strong>{layer}</strong>: "
+            s += f"<p style={style!r}><strong>{html.escape(str(layer))}</strong>: "
             s += ", ".join(
-                f"<em>{dim}</em> ({shape})" for dim, shape in zip(self.data[layer].dims, self.data[layer].shape)
+                f"<em>{html.escape(str(dim))}</em> ({shape})"
+                for dim, shape in zip(self.data[layer].dims, self.data[layer].shape)
             )
             s += "</p>"
             if i == 9 and i < len(self) - 1:  # show only first 10 layers

@@ -287,7 +287,7 @@ def segment(
     %(img_container)s
     %(img_layer)s
     %(library_id)s
-        If `None`, all Z dimensions are segmented.
+        If `None`, all Z-dimensions are segmented separately.
     method
         Segmentation method to use. Valid options are:
 
@@ -295,7 +295,7 @@ def segment(
 
         %(custom_fn)s
     channel
-        Channel index to use for segmentation. If `None`, pass all channels.
+        Channel index to use for segmentation. If `None`, use all channels.
     %(chunks_lazy)s
     %(layer_added)s If `None`, use ``'segmented_{{model}}'``.
     thresh

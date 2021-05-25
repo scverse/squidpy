@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Callable, Optional
+from typing import Tuple, Union, Callable, Optional, Sequence
 from pytest_mock import MockerFixture
 import pytest
 
@@ -227,3 +227,7 @@ class TestHighLevel:
         # for size=10, "fails with `size=10` due to border effects"
         # the reason why there is no test for it that inside tox, it "works" (i.e. the assertion passes)
         # but outside, the assertion fails, as it should
+
+    @pytest.mark.parametrize("library_id", [None, "0", ["1", "2"]])
+    def test_library_id(self, cont_4d: ImageContainer, library_id: Optional[Union[str, Sequence[str]]]):
+        pass

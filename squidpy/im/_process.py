@@ -51,15 +51,12 @@ def process(
     """
     Process an image by applying a transformation.
 
-    Note that crop-wise processing can save memory but may change behavior of cropping if global statistics are used.
-    Leave ``size = None`` in order to process the full image in one go.
-
     Parameters
     ----------
     %(img_container)s
     %(img_layer)s
     %(library_id)s
-        If `None`, all Z dimensions are processed at once, treating the image as a 3D volume.
+        If `None`, all Z-dimensions are processed at once, treating the image as a 3D volume.
     method
         Processing method to use. Valid options are:
 
@@ -68,7 +65,8 @@ def process(
 
         %(custom_fn)s
     %(chunks_lazy)s
-    %(layer_added)s If `None`, use ``'{{layer}}_{{method}}'``.
+    %(layer_added)s
+        If `None`, use ``'{{layer}}_{{method}}'``.
     channel_dim
         Name of the channel dimension of the new image layer. Default is the same as the original, if the
         processing function does not change the number of channels, and ``'{{channel}}_{{processing}}'`` otherwise.

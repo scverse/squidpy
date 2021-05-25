@@ -133,6 +133,10 @@ class TestContainerIO:
         assert "img_new" in cont
         np.testing.assert_array_equal(np.squeeze(cont.data["img_new"]), np.squeeze(img_new))
 
+    def test_add_img_invalid_zdim(self, cont: ImageContainer):
+        with pytest.raises(ValueError, match=r"Expected image to have `1` Z-dimension\(s\), found `10`."):
+            cont.add_img(np.random.normal(size=(*cont.shape, 10, 3)), dims=["y", "x", "z", "channels"])
+
     @pytest.mark.parametrize("ext", ["jpg", "png"])
     @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1)])
     def test_load_ext(self, shape: Tuple[int, ...], ext: str, tmpdir):
