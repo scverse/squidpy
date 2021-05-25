@@ -50,6 +50,9 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
 
         cont.show("image", channelwise=True, segmentation_layer="foo", dpi=DPI, segmentation_alpha=1)
 
+    def test_show_scale_mask_circle_crop(self, cont: ImageContainer):
+        cont.crop_corner(0, 0, (200, 200), mask_circle=True, scale=2, dpi=DPI)
+
 
 def test_extract(adata: AnnData, cont: ImageContainer, caplog):
     """

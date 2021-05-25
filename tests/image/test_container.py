@@ -1061,7 +1061,8 @@ class TestCroppingExtra:
         np.testing.assert_array_equal(crop.data["image_0"][0, 0, 0, :3], [10, 11, 12])
         assert crop.data["image_0"].dtype == np.uint8
 
-    def test_crop_mask_circle(self, cont_dot: ImageContainer):
+    @pytest.mark.parametrize("s", [1, 2])
+    def test_crop_mask_circle(self, cont_dot: ImageContainer, s: int):
         # crop with mask_circle
         crop = cont_dot.crop_center(
             y=20,
@@ -1069,12 +1070,15 @@ class TestCroppingExtra:
             radius=5,
             cval=5,
             mask_circle=True,
+            scale=s,
         )
 
-        np.testing.assert_array_equal(crop.data["image_0"][1, 0, 0, :], 5)
-        np.testing.assert_array_equal(crop.data["image_0"][2, 2, 0, :], 0)
-        np.testing.assert_array_equal(crop.data["image_0"][7, 7, 0, :], 0)
-        np.testing.assert_array_equal(crop.data["image_0"][9, 9, 0, :], 5)
+        np.testing.assert_array_equal(crop.data["image_0"][1 * s, 0 * s, 0, :], 5)
+        np.testing.assert_array_equal(crop.data["image_0"][2 * s, 2 * s, 0, :], 0)
+        np.testing.assert_array_equal(crop.data["image_0"][7 * s, 7 * s, 0, :], 0)
+        np.testing.assert_array_equal(crop.data["image_0"][9 * s, 9 * s, 0, :], 5 if s == 1 else 0)
+        np.testing.assert_array_equal(np.array([11, 11]) * s, crop.shape)
+        assert crop.data.coords == cont_dot.data.coords
 
     def test_crop_multiple_images(self, cont_dot: ImageContainer):
         mask = np.random.randint(low=0, high=10, size=cont_dot.shape)

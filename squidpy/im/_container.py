@@ -288,7 +288,7 @@ class ImageContainer(FeatureMixin):
         res: Optional[xr.DataArray] = self._load_img(img, chunks=chunks, layer=layer, copy=copy, dims=dims, **kwargs)
 
         if res is not None:
-            library_id = self._get_library_ids(library_id, res)
+            library_id = self._get_library_ids(library_id, res, allow_new=not len(self))
             res = res.assign_coords({"z": library_id})
 
             logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
@@ -543,7 +543,10 @@ class ImageContainer(FeatureMixin):
                     f"found crop of shape `{(data.dims['y'], data.dims['x'])}`."
                 )
             c = data.x.shape[0] // 2
-            data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c ** 2, other=cval)
+            # manually reassign coordinates
+            data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c ** 2, other=cval).assign_coords(
+                {"z": self.library_ids}
+            )
             data.attrs[Key.img.mask_circle] = True
 
         if preserve_dtypes:
@@ -879,12 +882,7 @@ class ImageContainer(FeatureMixin):
         layer = self._get_layer(layer)
         arr: xr.DataArray = self[layer]
 
-        if library_id is None:
-            library_ids = self.library_ids
-        elif isinstance(library_id, str):
-            library_ids = [library_id]
-        else:
-            library_ids = library_id  # type: ignore[assignment]
+        library_ids = self._get_library_ids(library_id)
         arr = arr.sel(z=library_ids)
 
         if channel is not None:
