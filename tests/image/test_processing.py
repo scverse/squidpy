@@ -124,19 +124,21 @@ class TestProcess:
             return arr + 1
 
         res = process(cont_4d, method=func, layer="image", layer_added="image", library_id=library_id, copy=True)
-
-        assert cont_4d["image"].shape == res["image"].shape
-        np.testing.assert_array_equal(cont_4d["image"].coords, res["image"].coords)
+        orig_shape = list(cont_4d["image"].shape)
 
         if library_id is None:
+            np.testing.assert_array_equal(orig_shape, res["image"].shape)
+            np.testing.assert_array_equal(cont_4d["image"].coords, res["image"].coords)
             np.testing.assert_array_equal(cont_4d["image"] + 1, res["image"])
         else:
             if isinstance(library_id, str):
                 library_id = [library_id]
+            orig_shape[2] = len(library_id)
+            np.testing.assert_array_equal(orig_shape, res["image"].shape)
+            np.testing.assert_array_equal(res["image"].coords["z"], library_id)
+
             for lid in library_id:
                 np.testing.assert_array_equal(cont_4d["image"].sel(z=lid) + 1, res["image"].sel(z=lid))
-            for lid in set(cont_4d.library_ids) - set(library_id):
-                np.testing.assert_array_equal(cont_4d["image"].sel(z=lid), res["image"].sel(z=lid))
 
     def test_copy(self, small_cont: ImageContainer):
         orig_keys = set(small_cont)

@@ -350,13 +350,12 @@ def segment(
         chunks=None,
         fn_kwargs=kwargs,
         copy=True,
-        drop=False,
+        drop=copy,
         lazy=lazy,
     )
     logg.info("Finish", time=start)
 
     if copy:
-        res.library_ids = img[layer].coords["z"].values
         return res.rename(layer, layer_new)
 
     img.add_img(

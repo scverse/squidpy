@@ -132,7 +132,7 @@ def process(
 
     start = logg.info(f"Processing image using `{method}` method")
     res: ImageContainer = img.apply(
-        callback, layer=layer, copy=True, drop=False, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs
+        callback, layer=layer, copy=True, drop=copy, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs
     )
 
     # if the method changes the number of channels
@@ -144,7 +144,6 @@ def process(
     logg.info("Finish", time=start)
 
     if copy:
-        res.library_ids = img[layer].coords["z"].values
         return res.rename(layer, layer_new)
 
     img.add_img(
