@@ -160,18 +160,16 @@ Otherwise, modifies the ``adata`` object with the following key:
 Statistics and pvalues are computed for each cluster :attr:`anndata.AnnData.obs` ``['{cluster_key}']`` separately."""
 _library_id_features = """\
 library_id
-    Name of the Z dimension that this function should be applied to."""
+    Name of the Z-dimension that this function should be applied to."""
 _library_id = """\
 library_id
-    Name of the Z dimension(s) that this function should be applied to.
-    For not specified Z dimensions, the identity function is applied."""
+    Name of the Z-dimension(s) that this function should be applied to.
+    For not specified Z-dimensions, the identity function is applied."""
 _img_library_id = """\
 library_id
     - If `None`, there should either only exist one entry in :attr:`anndata.AnnData.uns` ``['{spatial_key}']``.
     - If a :class:`str`, first search :attr:`anndata.AnnData.obs` ``['{library_id}']`` which contains the mapping
-      from obs to library ids, then search :attr:`anndata.AnnData.uns` ``['{spatial_key}']``.
-    - If a :class:`typing.Sequence`, the mapping is specified explicitly and should be of
-      length :attr:`anndata.AnnData.n_obs`."""
+      from observations to library ids, then search :attr:`anndata.AnnData.uns` ``['{spatial_key}']``."""
 
 d = DocstringProcessor(
     adata=_adata,

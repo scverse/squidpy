@@ -454,7 +454,6 @@ class FeatureMixin:
         feature_name = getattr(func, "__name__", "custom") if feature_name is None else feature_name
 
         # calculate features by calling feature_fn
-        # TODO: library id for the same behavior?
         res = func(self[layer][..., channels].values, **kwargs)  # type: ignore[call-arg]
         if not isinstance(res, Iterable):
             res = [res]

@@ -782,8 +782,8 @@ class TestZStacks:
         imgs = [ImageContainer(arr, library_id=str(i) if init_lid else None) for i, arr in enumerate(arrs)]
 
         if not init_lid and library_ids is None:
-            with pytest.raises(ValueError, match=r"Found non-unique library_ids for z dimensions"):
-                img = ImageContainer.concat(imgs, library_ids=library_ids)
+            with pytest.raises(ValueError, match=r"Found non-unique library ids"):
+                _ = ImageContainer.concat(imgs, library_ids=library_ids)
         else:
             img = ImageContainer.concat(imgs, library_ids=library_ids)
             if library_ids is None:
