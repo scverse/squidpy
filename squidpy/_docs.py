@@ -203,7 +203,7 @@ d = DocstringProcessor(
     layer_added=_layer_added,
     chunks_lazy=_chunks_lazy,
     ripley_stat_returns=_ripley_stat_returns,
-    library_id_feature=_library_id_features,
+    library_id_features=_library_id_features,
     library_id=_library_id,
     img_library_id=_img_library_id,
 )
