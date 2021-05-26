@@ -13,7 +13,6 @@ import matplotlib.pyplot as plt
 
 from squidpy.im import ImageContainer
 from tests.conftest import DPI, TOL, ACTUAL, EXPECTED, PlotTester, PlotTesterMeta
-from squidpy._constants._pkg_constants import Key
 
 
 @pytest.mark.qt()
@@ -105,22 +104,6 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
 
         viewer.screenshot(dpi=DPI)
 
-    def test_plot_add_image(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
-        from napari.layers import Image
-
-        viewer = napari_cont.interactive(adata)
-        cnt = viewer._controller
-        img = np.zeros((*napari_cont.shape, 3), dtype=np.float32)
-        img[..., 0] = 1.0  # all red image
-
-        napari_cont.add_img(img, layer="foobar")
-        cnt.add_image("foobar")
-
-        assert viewer._controller.view.layernames == {"V1_Adult_Mouse_Brain", "foobar"}
-        assert isinstance(viewer._controller.view.layers["foobar"], Image)
-
-        viewer.screenshot(dpi=DPI)
-
     def test_plot_crop_center(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
         viewer = napari_cont.crop_corner(0, 0, size=500).interactive(adata)
         bdata = viewer.adata
@@ -150,8 +133,8 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         data = np.random.normal(size=adata.n_obs)
         cnt.add_points(data, layer_name="layer1")
 
-        np.testing.assert_allclose(adata.obsm["spatial"][:, ::-1] * scale, model.coordinates)
-        assert Key.uns.spot_diameter(adata, "spatial", "V1_Adult_Mouse_Brain") * scale == model.spot_diameter
+        # ignore z-dim
+        np.testing.assert_allclose(adata.obsm["spatial"][:, ::-1] * scale, model.coordinates[:, 1:])
 
         viewer.screenshot(dpi=DPI)
 

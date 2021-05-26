@@ -278,12 +278,19 @@ class ALayer:
 
     VALID_ATTRIBUTES = ("obs", "var", "obsm")
 
-    # TODO: properly type palette
-    def __init__(self, adata: AnnData, is_raw: bool = False, palette: Optional[str] = None):
+    def __init__(
+        self,
+        adata: AnnData,
+        library_ids: Sequence[str],
+        is_raw: bool = False,
+        palette: Optional[str] = None,
+    ):
         if is_raw and adata.raw is None:
             raise AttributeError("Attribute `.raw` is `None`.")
 
         self._adata = adata
+        self._library_id = library_ids[0]
+        self._ix_to_group = dict(zip(range(len(library_ids)), library_ids))
         self._layer: Optional[str] = None
         self._previous_layer: Optional[str] = None
         self._raw = is_raw
@@ -302,7 +309,7 @@ class ALayer:
     @layer.setter
     def layer(self, layer: Optional[str] = None) -> None:
         if layer not in (None,) + tuple(self.adata.layers.keys()):
-            raise KeyError(f"Invalid layer `{layer}`. Valid options are: `{[None] + list(self.adata.layers.keys())}`.")
+            raise KeyError(f"Invalid layer `{layer}`. Valid options are `{[None] + sorted(self.adata.layers.keys())}`.")
         self._previous_layer = layer
         # handle in raw setter
         self.raw = False
@@ -322,6 +329,17 @@ class ALayer:
         else:
             self._layer = self._previous_layer
         self._raw = is_raw
+
+    @property
+    def library_id(self) -> str:
+        """Library id that is currently selected."""
+        return self._library_id
+
+    @library_id.setter
+    def library_id(self, library_id: Union[str, int]) -> None:
+        if isinstance(library_id, int):
+            library_id = self._ix_to_group[library_id]
+        self._library_id = library_id
 
     @_ensure_dense_vector
     def get_obs(self, name: str, **_: Any) -> Tuple[Optional[Union[pd.Series, np.ndarray]], str]:

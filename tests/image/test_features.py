@@ -208,7 +208,7 @@ class TestHighLevel:
     @pytest.mark.parametrize("n_jobs", [1, 2])
     def test_parallelize(self, adata: AnnData, cont: ImageContainer, n_jobs: int):
         features = ["texture", "summary", "histogram"]
-        res = calculate_image_features(adata, cont, features=features, copy=True, n_jobs=n_jobs)
+        res = calculate_image_features(adata, cont, library_id=None, features=features, copy=True, n_jobs=n_jobs)
 
         assert isinstance(res, pd.DataFrame)
         np.testing.assert_array_equal(res.index, adata.obs_names)

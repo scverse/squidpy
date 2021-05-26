@@ -66,6 +66,7 @@ Datasets
     datasets.four_i
     datasets.imc
     datasets.seqfish
+    datasets.sc_mouse_cortex
     datasets.visium_hne_adata
     datasets.visium_hne_adata_crop
     datasets.visium_fluo_adata

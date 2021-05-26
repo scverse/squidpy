@@ -21,8 +21,8 @@ from squidpy.pl._utils import _points_inside_triangles
 from squidpy.pl._interactive._view import ImageView
 from squidpy.pl._interactive._model import ImageModel
 from squidpy.pl._interactive._utils import (
-    _is_luminance,
     _get_categorical,
+    _display_channelwise,
     _position_cluster_labels,
 )
 from squidpy.pl._interactive._widgets import RangeSlider
@@ -74,28 +74,30 @@ class ImageController:
         if self.model.container.data[layer].attrs.get("segmentation", False):
             return self.add_labels(layer)
 
-        img: xr.DataArray = self.model.container.data[layer].transpose("y", "x", ...)
-        # TODO: uncomment me once z-axis is available
-        # img: np.ndarray = self.model.container.data[layer].transpose("z", "y", "x", ....)
-        if img.shape[-1] > 4:
-            logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
-            return False
+        img: xr.DataArray = self.model.container.data[layer].transpose("z", "y", "x", ...)
+        multiscale = np.prod(img.shape[1:3]) > (2 ** 16) ** 2
+        n_channels = img.shape[-1]
 
-        luminance = img.attrs.get("luminance", None)
-        if luminance is None:
-            logg.debug("Automatically determining whether image is a luminance image")
-            luminance = _is_luminance(img.data)
-        if luminance:
-            img = img.transpose(..., "y", "x")  # channels first
+        rgb = img.attrs.get("rgb", None)
+        if n_channels == 1:
+            rgb, colormap = False, "gray"
+        else:
+            colormap = self.model.cmap
+
+        if rgb is None:
+            logg.debug("Automatically determining whether image is an RGB image")
+            rgb = not _display_channelwise(img.data)
+        if not rgb:
+            img = img.transpose(..., "z", "y", "x")  # channels first
 
         logg.info(f"Creating image `{layer}` layer")
         self.view.viewer.add_image(
             img.data,
             name=layer,
-            rgb=not luminance,
-            colormap=self.model.cmap if luminance or (img.shape[2] > 1) else "gray",
+            rgb=rgb,
+            colormap=colormap,
             blending=self.model.blending,
-            multiscale=np.prod(img.shape[:2]) > (2 ** 16) ** 2,
+            multiscale=multiscale,
         )
 
         return True
@@ -113,16 +115,13 @@ class ImageController:
         -------
         `True` if the layer has been added, otherwise `False`.
         """
-        img: xr.DataArray = self.model.container.data[layer].transpose(..., "y", "x")
-        if img.ndim > 4:
+        img: xr.DataArray = self.model.container.data[layer].transpose("z", ..., "y", "x")
+        if img.ndim != 4:
             logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
             return False
 
-        if img.ndim == 4 and img.shape[0] > 1 and img.shape[1] > 1:
-            # multiple stacks and multiple channels is not allowed
-            logg.warning(
-                f"Unable to create labels layer of shape `{img.shape}`, " f"both z- and channel-dimension are too large"
-            )
+        if img.shape[1] != 1:
+            logg.warning(f"Unable to create labels layer of shape `{img.shape}`, too many channels `{img.shape[1]}`")
             return False
 
         if not np.issubdtype(img.dtype, np.integer):
@@ -132,9 +131,9 @@ class ImageController:
 
         logg.info(f"Creating label `{layer}` layer")
         self.view.viewer.add_labels(
-            img.data[..., :, :],
+            img.data,
             name=layer,
-            multiscale=np.prod(img.shape[:2]) > (2 ** 16) ** 2,
+            multiscale=np.prod(img.shape[-2:]) > (2 ** 16) ** 2,
         )
 
         return True
@@ -181,16 +180,14 @@ class ImageController:
         # layer._text._color = properties["colors"]
         # layer._text.events.color()
         self._hide_points_controls(layer, is_categorical=is_categorical_dtype(vec))
-
         layer.editable = False
-        layer.events.select.connect(self._move_layer_to_front)
 
         return True
 
     def export(self, _: Viewer) -> None:
         """Export shapes into :class:`AnnData` object."""
         for layer in self.view.layers:
-            if not isinstance(layer, Shapes) or not layer.selected:
+            if not isinstance(layer, Shapes) or layer not in self.view.viewer.layers.selection:
                 continue
             if not len(layer.data):
                 logg.warning(f"Shape layer `{layer.name}` has no visible shapes")
@@ -249,26 +246,16 @@ class ImageController:
 
     def _handle_already_present(self, layer_name: str) -> None:
         logg.debug(f"Layer `{layer_name}` is already loaded")
-        self.view.layers.unselect_all()
-        self.view.layers[layer_name].selected = True
-
-    def _move_layer_to_front(self, event: Any) -> None:
-        layer = event.source
-        if not layer.visible:
-            return
-
-        try:
-            index = self.view.layers.index(layer)
-        except ValueError:
-            return
-
-        self.view.layers.move(index, -1)
+        self.view.viewer.layers.selection.select_only(self.view.layers[layer_name])
 
     def _save_shapes(self, layer: Shapes, key: str) -> None:
         shape_list = layer._data_view
         triangles = shape_list._mesh.vertices[shape_list._mesh.displayed_triangles]
 
-        self.model.adata.obs[key] = pd.Categorical(_points_inside_triangles(self.model.coordinates, triangles))
+        # TODO: use only current z dim slice?
+        points_mask: np.ndarray = _points_inside_triangles(self.model.coordinates[:, 1:], triangles)
+
+        self.model.adata.obs[key] = pd.Categorical(points_mask)
         self.model.adata.uns[key] = {"meshes": layer.data.copy()}
 
     def _update_obs_items(self, key: str) -> None:

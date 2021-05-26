@@ -235,7 +235,7 @@ def verbosity(level: int) -> Generator[None, None, None]:
     Parameters
     ----------
     level
-        The new verbosity leve.
+        The new verbosity level.
 
     Returns
     -------

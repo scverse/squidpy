@@ -46,7 +46,7 @@ class TestIO:
         np.testing.assert_array_equal(actual_shape, expected_shape)
         assert actual_dtype == img.dtype
 
-    @pytest.mark.parametrize("infer_dim", ["default", "prefer_z", "prefer_channels"])
+    @pytest.mark.parametrize("infer_dim", list(InferDimensions))
     @pytest.mark.parametrize(
         "shape", [(101, 64), (101, 64, 3), (3, 64, 101), (1, 101, 64, 3), (1, 101, 64, 1), (3, 101, 64, 1)]
     )
@@ -60,13 +60,13 @@ class TestIO:
             np.testing.assert_array_equal(actual_shape, shape + (1, 1))
         elif len(shape) == 3:
             if shape[-1] == 3:
-                if infer_dim == InferDimensions.PREFER_Z:
+                if infer_dim == InferDimensions.Z_LAST:
                     np.testing.assert_array_equal(actual_dims, ["channels", "y", "x", "z"])
                 else:
                     np.testing.assert_array_equal(actual_dims, ["z", "y", "x", "channels"])
                 np.testing.assert_array_equal(actual_shape, (1,) + shape)
             else:
-                if infer_dim == InferDimensions.PREFER_Z:
+                if infer_dim == InferDimensions.Z_LAST:
                     np.testing.assert_array_equal(actual_dims, ["z", "y", "x", "channels"])
                 else:
                     np.testing.assert_array_equal(actual_dims, ["channels", "y", "x", "z"])
@@ -79,7 +79,7 @@ class TestIO:
                     np.testing.assert_array_equal(actual_dims, ["channels", "y", "x", "z"])
                 else:
                     np.testing.assert_array_equal(actual_dims, ["z", "y", "x", "channels"])
-            elif infer_dim == InferDimensions.PREFER_Z:
+            elif infer_dim == InferDimensions.Z_LAST:
                 np.testing.assert_array_equal(actual_dims, ["channels", "y", "x", "z"])
             else:
                 np.testing.assert_array_equal(actual_dims, ["z", "y", "x", "channels"])
@@ -95,6 +95,6 @@ class TestIO:
         assert isinstance(res, xr.DataArray)
         assert isinstance(res.data, da.Array)
         if chunks not in (None, "auto"):
-            np.testing.assert_array_equal(res.data.chunksize, [100, 100, 3])
+            np.testing.assert_array_equal(res.data.chunksize, [100, 100, 1, 3])
 
-        np.testing.assert_array_equal(img, res.values)
+        np.testing.assert_array_equal(img, np.squeeze(res.values))

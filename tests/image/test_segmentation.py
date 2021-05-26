@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Callable, Optional
+from typing import Tuple, Union, Callable, Optional, Sequence
 from pytest_mock import MockerFixture
 import pytest
 
@@ -19,7 +19,7 @@ from squidpy._constants._pkg_constants import Key
 def dummy_segment(arr: np.ndarray) -> np.ndarray:
     assert isinstance(arr, np.ndarray)
     assert arr.ndim == 3
-    return arr[..., 0]
+    return arr[..., 0].astype(np.uint32)
 
 
 class TestGeneral:
@@ -43,14 +43,14 @@ class TestGeneral:
         img = np.zeros(shape=(1, 10, 10, 2))
         sc = SegmentationCustom(dummy_segment)
 
-        with pytest.raises(ValueError, match=r"Expected 2 or 3 dimensions"):
+        with pytest.raises(ValueError, match=r"Expected `2` or `3` dimensions"):
             sc.segment(img)
 
     def test_segment_container(self):
         img = ImageContainer(np.zeros(shape=(10, 10, 1)), layer="image")
         sc = SegmentationCustom(dummy_segment)
 
-        res = sc.segment(img, layer="image")
+        res = sc.segment(img, layer="image", library_id=img["image"].z.values[0])
 
         assert isinstance(res, ImageContainer)
         assert res.shape == img.shape
@@ -69,7 +69,7 @@ class TestWatershed:
         sw = SegmentationWatershed()
         spy = mocker.spy(sw, "_segment")
 
-        res = sw.segment(img, layer="image", fn_kwargs={"thresh": thresh})
+        res = sw.segment(img, layer="image", library_id=img["image"].z.values[0], fn_kwargs={"thresh": thresh})
 
         assert isinstance(res, ImageContainer)
         spy.assert_called_once()
@@ -112,8 +112,20 @@ class TestHighLevel:
 
         assert Key.img.segment("watershed") in small_cont
         np.testing.assert_array_equal(
-            list(small_cont[Key.img.segment("watershed")].dims), ["y", "x", f"{small_cont['image'].dims[-1]}:{channel}"]
+            list(small_cont[Key.img.segment("watershed")].dims),
+            ["y", "x", "z", f"{small_cont['image'].dims[-1]}:{channel}"],
         )
+
+    def test_all_channels(self, small_cont: ImageContainer):
+        def func(arr: np.ndarray):
+            assert arr.shape == (small_cont.shape + (n_channels,))
+            return np.zeros(arr.shape[:2], dtype=np.uint8)
+
+        n_channels = small_cont["image"].sizes["channels"]
+        segment(small_cont, copy=False, layer="image", channel=None, method=func, layer_added="seg")
+
+        np.testing.assert_array_equal(small_cont["seg"], np.zeros(small_cont.shape + (1, 1)))
+        assert small_cont["seg"].dtype == _SEG_DTYPE
 
     @pytest.mark.parametrize("key_added", [None, "foo"])
     def test_key_added(self, small_cont: ImageContainer, key_added: Optional[str]):
@@ -226,3 +238,23 @@ class TestHighLevel:
         # for size=10, "fails with `size=10` due to border effects"
         # the reason why there is no test for it that inside tox, it "works" (i.e. the assertion passes)
         # but outside, the assertion fails, as it should
+
+    @pytest.mark.parametrize("library_id", [None, "3", ["1", "2"]])
+    def test_library_id(self, cont_4d: ImageContainer, library_id: Optional[Union[str, Sequence[str]]]):
+        def func(arr: np.ndarray):
+            assert arr.shape == cont_4d.shape + (1,)
+            return np.ones(arr[..., 0].shape, dtype=_SEG_DTYPE)
+
+        segment(cont_4d, method=func, layer="image", layer_added="image_seg", library_id=library_id, copy=False)
+
+        np.testing.assert_array_equal(cont_4d["image"].coords, cont_4d["image_seg"].coords)
+        if library_id is None:
+            np.testing.assert_array_equal(1, cont_4d["image_seg"])
+        else:
+            if isinstance(library_id, str):
+                library_id = [library_id]
+            for lid in library_id:
+                np.testing.assert_array_equal(1, cont_4d["image_seg"].sel(z=lid))
+            for lid in set(cont_4d.library_ids) - set(library_id):
+                # channels have been changed, apply sets to 0
+                np.testing.assert_array_equal(0, cont_4d["image_seg"].sel(z=lid))

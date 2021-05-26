@@ -1,5 +1,5 @@
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Callable, Optional
+from typing import Any, Union, Mapping, Callable, Optional, Sequence
 
 from scanpy import logging as logg
 
@@ -38,6 +38,7 @@ def to_grayscale(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array
 def process(
     img: ImageContainer,
     layer: Optional[str] = None,
+    library_id: Optional[Union[str, Sequence[str]]] = None,
     method: Union[str, Callable[..., np.ndarray]] = "smooth",
     chunks: Optional[int] = None,
     lazy: bool = False,
@@ -50,13 +51,12 @@ def process(
     """
     Process an image by applying a transformation.
 
-    Note that crop-wise processing can save memory but may change behavior of cropping if global statistics are used.
-    Leave ``size = None`` in order to process the full image in one go.
-
     Parameters
     ----------
     %(img_container)s
     %(img_layer)s
+    %(library_id)s
+        If `None`, all Z-dimensions are processed at once, treating the image as a 3D volume.
     method
         Processing method to use. Valid options are:
 
@@ -65,7 +65,8 @@ def process(
 
         %(custom_fn)s
     %(chunks_lazy)s
-    %(layer_added)s If `None`, use ``'{{layer}}_{{method}}'``.
+    %(layer_added)s
+        If `None`, use ``'{{layer}}_{{method}}'``.
     channel_dim
         Name of the channel dimension of the new image layer. Default is the same as the original, if the
         processing function does not change the number of channels, and ``'{{channel}}_{{processing}}'`` otherwise.
@@ -100,8 +101,19 @@ def process(
     if callable(method):
         callback = method
     elif method == Processing.SMOOTH:  # type: ignore[comparison-overlap]
-        # TODO: handle Z-dim
-        kwargs.setdefault("sigma", [1, 1, 0])  # TODO: Z-dim, allow for ints, replicate over spatial dims
+        if library_id is None:
+            expected_ndim = 4
+            kwargs.setdefault("sigma", [1, 1, 0, 0])  # y, x, z, c
+        else:
+            expected_ndim = 3
+            kwargs.setdefault("sigma", [1, 1, 0])  # y, x, c
+
+        sigma = kwargs["sigma"]
+        if isinstance(sigma, int):
+            kwargs["sigma"] = sigma = [sigma, sigma] + [0] * (4 - expected_ndim)
+        if len(sigma) != expected_ndim:
+            raise ValueError(f"Expected `sigma` to be of length `{expected_ndim}`, found `{len(sigma)}`.")
+
         if chunks is not None:
             # dask_image already handles map_overlap
             chunks_, chunks = chunks, None
@@ -109,24 +121,36 @@ def process(
         else:
             callback = scipy_gf
     elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
-        apply_kwargs["drop_axis"] = 2  # TODO: Z-dim
+        apply_kwargs["drop_axis"] = 3
         callback = to_grayscale
     else:
         raise NotImplementedError(f"Method `{method}` is not yet implemented.")
 
+    # to which library_ids should this function be applied?
+    if library_id is not None:
+        callback = {lid: callback for lid in img._get_library_ids(library_id)}  # type: ignore[assignment]
+
     start = logg.info(f"Processing image using `{method}` method")
-    res: ImageContainer = img.apply(callback, layer=layer, copy=True, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs)
+    res: ImageContainer = img.apply(
+        callback, layer=layer, copy=True, drop=copy, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs
+    )
 
     # if the method changes the number of channels
     if res[layer].shape[-1] != img[layer].shape[-1]:
         modifier = "_".join(layer_new.split("_")[1:]) if layer_added is None else layer_added
         channel_dim = f"{channel_dim}_{modifier}"
 
-    res._data = res.data.rename({res[layer].dims[-1]: channel_dim}).rename_vars({layer: layer_new})
-
+    res._data = res.data.rename({res[layer].dims[-1]: channel_dim})
     logg.info("Finish", time=start)
 
     if copy:
-        return res
+        return res.rename(layer, layer_new)
 
-    img.add_img(img=res, layer=layer_new, channel_dim=channel_dim, copy=False, lazy=lazy)
+    img.add_img(
+        img=res[layer],
+        layer=layer_new,
+        copy=False,
+        lazy=lazy,
+        dims=res[layer].dims,
+        library_id=img[layer].coords["z"].values,
+    )

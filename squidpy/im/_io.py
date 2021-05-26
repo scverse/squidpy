@@ -13,12 +13,17 @@ from tifffile import TiffFile
 from skimage.io import imread
 
 from squidpy._docs import inject_docs
-
-# modification of `skimage`'s `pil_to_ndarray`:
-# https://github.com/scikit-image/scikit-image/blob/main/skimage/io/_plugins/pil_plugin.py#L55
 from squidpy._constants._constants import InferDimensions
 
 
+def _assert_dims_present(dims: Tuple[str, ...], include_z: bool = True) -> None:
+    missing_dims = ({"y", "x", "z"} if include_z else {"y", "x"}) - set(dims)
+    if missing_dims:
+        raise ValueError(f"Expected to find `{sorted(missing_dims)}` dimension(s) in `{dims}`.")
+
+
+# modification of `skimage`'s `pil_to_ndarray`:
+# https://github.com/scikit-image/scikit-image/blob/main/skimage/io/_plugins/pil_plugin.py#L55
 def _infer_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # type: ignore[type-arg]
     def _palette_is_grayscale(pil_image: Image.Image) -> bool:
         # get palette as an array with R, G, B columns
@@ -91,7 +96,7 @@ def _get_image_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # t
 @inject_docs(id=InferDimensions)
 def _infer_dimensions(
     obj: Union[np.ndarray, xr.DataArray, str],
-    infer_dimensions: InferDimensions = InferDimensions.DEFAULT,
+    infer_dimensions: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
 ) -> Tuple[Tuple[int, ...], Tuple[str, ...], np.dtype, Tuple[int, ...]]:  # type: ignore[type-arg]
     """
     Infer dimension names of an array.
@@ -103,12 +108,14 @@ def _infer_dimensions(
     infer_dimensions
         Policy that determines how to name the dimensions. Valid options are:
 
-            - `{id.PREFER_CHANNELS.s!r}` - load `channels` dimension as `channels`.
-            - `{id.PREFER_Z.s!r}` - load `z` dimension as `channels`.
+            - `{id.CHANNELS_LAST.s!r}` - load `channels` dimension as `channels`.
+            - `{id.Z_LAST.s!r}` - load `z` dimension as `channels`.
             - `{id.DEFAULT.s!r}` - only matters if the number of dimensions is `3` or `4`.
               If `z` dimension is `1`, load it as `z`.
               Otherwise, if `channels` dimension is `1`, load `z` dimension (now larger than `1`) as `channels`.
               Otherwise, load `z` dimension as `z` and `channels` as `channels`.
+
+        If specified as :class:`tuple`, its length must be the same as the shape of ``obj``.
 
         The following assumptions are made when determining the dimension names:
 
@@ -124,7 +131,7 @@ def _infer_dimensions(
         - :class:`tuple` of 4 :class:`int` describing the shape.
         - :class:`tuple` of 4 :class:`str` describing the dimensions.
         - the array :class:`numpy.dtype`.
-        - :class:`tuple` of maximally 2 :class:`ints` which dimensinos to expand.
+        - :class:`tuple` of maximally 2 :class:`ints` which dimensions to expand.
 
     Raises
     ------
@@ -144,7 +151,7 @@ def _infer_dimensions(
 
             return dims([z, y, x, c])
 
-        if infer_dimensions == InferDimensions.PREFER_Z:
+        if infer_dimensions == InferDimensions.Z_LAST:
             return dims([c, y, x, z])
 
         return dims([z, y, x, c])
@@ -155,6 +162,17 @@ def _infer_dimensions(
         shape, dtype = obj.shape, obj.dtype
 
     ndim = len(shape)
+
+    if not isinstance(infer_dimensions, InferDimensions):
+        if ndim not in (2, 3, 4):
+            raise ValueError(f"Expected the image to be either `2`, `3` or `4` dimensional, found `{ndim}`.")
+        # explicitly passed dims as tuple
+        if len(infer_dimensions) != ndim:
+            raise ValueError(f"Image is `{ndim}` dimensional, cannot assign to dims `{infer_dimensions}`.")
+        _assert_dims_present(infer_dimensions, include_z=ndim == 4)
+
+        add_shape = tuple([1] * (4 - ndim))
+        return shape + add_shape, infer_dimensions, dtype, tuple(ndim + i for i in range(len(add_shape)))
 
     if ndim == 2:
         # assume only spatial dims are present
@@ -188,7 +206,7 @@ def _infer_dimensions(
 
 def _lazy_load_image(
     fname: Union[str, Path],
-    infer_dimensions: InferDimensions = InferDimensions.DEFAULT,
+    dims: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
     chunks: Optional[Union[int, str, Tuple[int, ...], Mapping[str, Union[int, str]]]] = None,
 ) -> xr.DataArray:
     def read_unprotected(fname: str) -> np.ndarray:
@@ -207,14 +225,13 @@ def _lazy_load_image(
             Image.MAX_IMAGE_PIXELS = old_max_pixels
 
     fname = str(fname)
-    shape, dims, dtype, _ = _infer_dimensions(fname, infer_dimensions)
+    shape, dims_, dtype, _ = _infer_dimensions(fname, dims)
 
     if isinstance(chunks, dict):
-        chunks = tuple(chunks.get(d, "auto") for d in dims)
+        chunks = tuple(chunks.get(d, "auto") for d in dims_)
 
     darr = da.from_delayed(delayed(read_unprotected)(fname), shape=shape, dtype=dtype)
     if chunks is not None:
         darr = darr.rechunk(chunks)
 
-    # subsetting for bwd compatibility, will be removed once Z-dim is implemented
-    return xr.DataArray(darr, dims=dims).transpose("y", "x", "z", "channels")[:, :, 0, :]
+    return xr.DataArray(darr, dims=dims_).transpose("y", "x", "z", ...)

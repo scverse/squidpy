@@ -99,8 +99,8 @@ class SpatialAutocorr(ModeEnum):
 @unique
 class InferDimensions(ModeEnum):
     DEFAULT = "default"
-    PREFER_CHANNELS = "prefer_channels"
-    PREFER_Z = "prefer_z"
+    CHANNELS_LAST = "channels_last"
+    Z_LAST = "z_last"
 
 
 @unique
