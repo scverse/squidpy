@@ -714,8 +714,17 @@ class ImageContainer(FeatureMixin):
         spatial = adata.obsm[spatial_key][:, :2]
 
         if library_id is None:
-            library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=None)
-            obs_library_ids = [library_id] * adata.n_obs
+            try:
+                library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=None)
+                obs_library_ids = [library_id] * adata.n_obs
+            except ValueError as e:
+                if "Unable to determine which library id to use" in str(e):
+                    raise ValueError(
+                        str(e)
+                        + " Or specify a key in `adata.obs` containing a mapping from observations to library ids."
+                    )
+                else:
+                    raise e
         else:
             try:
                 obs_library_ids = adata.obs[library_id]

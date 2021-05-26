@@ -167,7 +167,7 @@ library_id
     For not specified Z-dimensions, the identity function is applied."""
 _img_library_id = """\
 library_id
-    - If `None`, there should either only exist one entry in :attr:`anndata.AnnData.uns` ``['{spatial_key}']``.
+    - If `None`, there should only exist one entry in :attr:`anndata.AnnData.uns` ``['{spatial_key}']``.
     - If a :class:`str`, first search :attr:`anndata.AnnData.obs` ``['{library_id}']`` which contains the mapping
       from observations to library ids, then search :attr:`anndata.AnnData.uns` ``['{spatial_key}']``."""
 
