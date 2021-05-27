@@ -541,7 +541,8 @@ class ImageContainer(FeatureMixin):
 
         if scale != 1:
             attrs = data.attrs
-            data = data.map(_rescale)
+            library_ids = data.coords["z"]
+            data = data.map(_rescale).assign_coords({"z": library_ids})
             data.attrs = _update_attrs_scale(attrs, scale)
 
         if mask_circle:
