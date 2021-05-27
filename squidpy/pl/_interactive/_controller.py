@@ -115,13 +115,14 @@ class ImageController:
         -------
         `True` if the layer has been added, otherwise `False`.
         """
-        img: xr.DataArray = self.model.container.data[layer].transpose("z", ..., "y", "x")
+        # beware `update_library` in view.py - needs to be in this order
+        img: xr.DataArray = self.model.container.data[layer].transpose(..., "z", "y", "x")
         if img.ndim != 4:
             logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
             return False
 
-        if img.shape[1] != 1:
-            logg.warning(f"Unable to create labels layer of shape `{img.shape}`, too many channels `{img.shape[1]}`")
+        if img.shape[0] != 1:
+            logg.warning(f"Unable to create labels layer of shape `{img.shape}`, too many channels `{img.shape[0]}`")
             return False
 
         if not np.issubdtype(img.dtype, np.integer):
