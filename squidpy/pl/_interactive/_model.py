@@ -41,7 +41,6 @@ class ImageModel:
         self.adata = self.container._subset(self.adata, spatial_key=self.spatial_key, adjust_interactive=True)
         if not self.adata.n_obs:
             raise ValueError("No spots were selected. Please ensure that the image contains at least 1 spot.")
-
         self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1][:, :2].copy()
         self.scale = self.container.data.attrs.get(Key.img.scale, 1)
         self._update_coords()
@@ -97,7 +96,9 @@ class ImageModel:
 
         self.coordinates = np.c_[libraries.cat.codes.values, self.coordinates[mask]]
 
-        self.spot_diameter = (
-            np.array([0.0] + [Key.uns.spot_diameter(self.adata, self.spatial_key, lid) for lid in self.library_id])
-            * self.scale
-        )
+        self.spot_diameter = np.array(
+            [
+                np.array([0.0] + [Key.uns.spot_diameter(self.adata, self.spatial_key, lid)] * 2) * self.scale
+                for lid in libraries
+            ]
+        )  # TODO spot_diameter needs to be 3d, and is potentially different for different library ids
