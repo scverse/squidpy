@@ -309,7 +309,9 @@ def ripley(
     palette = _get_palette(adata, cluster_key=cluster_key, categories=categories) if palette is None else palette
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-    sns.lineplot(y="stats", x="bins", hue=cluster_key, data=res[f"{mode.s}_stat"], ax=ax)
+    sns.lineplot(
+        y="stats", x="bins", hue=cluster_key, data=res[f"{mode.s}_stat"], hue_order=categories, palette=palette, ax=ax
+    )
     if plot_sims:
         sns.lineplot(y="stats", x="bins", ci="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)
     ax.legend(**legend_kwargs)
