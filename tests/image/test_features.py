@@ -152,6 +152,17 @@ class TestFeatureMixin:
         assert features["foo_0"] == 0
         assert features["foo_1"] == 1
 
+    def test_custom_additional_layers(self, small_cont: ImageContainer):
+        # add additional sayer to small_cont
+        small_cont.add_img(small_cont["image"][:, :, :, 0], layer="foo")
+
+        def feature(arr: np.ndarray, foo: np.ndarray):
+            assert (arr == small_cont["image"].values).all()
+            assert (foo == small_cont["foo"].values).all()
+            return 0
+
+        _ = small_cont.features_custom(feature, layer="image", additional_layers=["foo"])
+
 
 class TestHighLevel:
     def test_invalid_layer(self, adata: AnnData, cont: ImageContainer):

@@ -434,6 +434,8 @@ class FeatureMixin:
         %(feature_name)s
         kwargs
             Keyword arguments for ``func``.
+            If `additional_layers` is present, all layers with the specified names will be passed to ``func``.
+            using ``func(..., <layer-name>=<layer-values>)`` for each layer name in `additional_layers`.
 
         Returns
         -------
@@ -453,6 +455,11 @@ class FeatureMixin:
         channels = _get_channels(self[layer], channels)
         feature_name = getattr(func, "__name__", "custom") if feature_name is None else feature_name
 
+        additional_layers = kwargs.pop("additional_layers", None)
+        if additional_layers is not None:
+            for additional_layer in additional_layers:
+                additional_layer = self._get_layer(additional_layer)
+                kwargs[additional_layer] = self[additional_layer].values
         # calculate features by calling feature_fn
         res = func(self[layer][..., channels].values, **kwargs)  # type: ignore[call-arg]
         if not isinstance(res, Iterable):
