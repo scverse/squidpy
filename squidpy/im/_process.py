@@ -110,7 +110,7 @@ def process(
 
         sigma = kwargs["sigma"]
         if isinstance(sigma, int):
-            kwargs["sigma"] = sigma = [sigma, sigma] + [0] * (4 - expected_ndim)
+            kwargs["sigma"] = sigma = [sigma, sigma] + [0] * (expected_ndim - 2)
         if len(sigma) != expected_ndim:
             raise ValueError(f"Expected `sigma` to be of length `{expected_ndim}`, found `{len(sigma)}`.")
 
