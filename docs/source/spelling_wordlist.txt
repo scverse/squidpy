@@ -3,6 +3,7 @@ AnnData
 autocorrelation
 backend
 binarize
+boolean
 Cellpose
 centralities
 centroid
@@ -21,6 +22,7 @@ dataset
 datasets
 Dbit
 deconvolution
+Delaunay
 dendrogram
 Dentate
 DL
@@ -35,12 +37,14 @@ grey
 gyrus
 heatmap
 ImageNet
+intercellular
 interpretable
 KNN
 leiden
 ligand
 ligands
 Linnarson
+modularity
 moran
 Moran's I
 Napari
@@ -55,8 +59,11 @@ pre-trained
 Qt
 quantile
 quantiles
+reproducibility
+Rescale
 ResNet
 sc
+scalability
 Scanpy
 segmentations
 seqFISH
