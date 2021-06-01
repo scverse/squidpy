@@ -4,6 +4,7 @@ Classes
 ImageContainer
 --------------
 .. autoclass:: squidpy.im.ImageContainer
+    :noindex:
     :members:
     :inherited-members:
 

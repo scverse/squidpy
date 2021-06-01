@@ -65,7 +65,7 @@ def spatial_autocorr(
     """
     Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
 
-    See  :cite:`pysal` for reference.
+    See :cite:`pysal` for reference.
 
     Parameters
     ----------

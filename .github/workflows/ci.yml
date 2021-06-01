@@ -57,7 +57,7 @@ jobs:
 
         -   name: Linting
             run: |
-                tox -e lint
+                tox -e lint,check-docs
 
     test:
         needs: init
