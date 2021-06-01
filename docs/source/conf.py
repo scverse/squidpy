@@ -96,6 +96,7 @@ exclude_patterns = [
     "auto_*/**.md5",
     "auto_*/**.py",
     "**.ipynb_checkpoints",
+    "gen_modules/**.examples",
 ]
 suppress_warnings = ["download.not_readable"]
 
@@ -137,7 +138,7 @@ spelling_filters = [
 # problematic entry: andersson2021
 # see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369
 user_agent = "Mozilla/5.0 (X11; Linux x86_64; rv:25.0) Gecko/20100101 Firefox/25.0"
-# TODO: has been fixed on notebooks' dev
+# TODO: has been fixed on notebooks' dev, remove once it's merged in master
 linkcheck_ignore = [r"\.\./\.\./external_tutorials/tutorial_napari.html"]
 
 # Add any paths that contain custom static files (such as style sheets) here,

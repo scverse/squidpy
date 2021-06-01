@@ -32,7 +32,6 @@ Image
 
 .. autosummary::
     :toctree: api
-    :recursive:
 
     im.process
     im.segment
