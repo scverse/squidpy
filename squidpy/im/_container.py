@@ -553,8 +553,9 @@ class ImageContainer(FeatureMixin):
                 )
             c = data.x.shape[0] // 2
             # manually reassign coordinates
+            library_ids = data.coords["z"]
             data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c ** 2, other=cval).assign_coords(
-                {"z": self.library_ids}
+                {"z": library_ids}
             )
             data.attrs[Key.img.mask_circle] = True
 
