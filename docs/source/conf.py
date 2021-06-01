@@ -35,7 +35,7 @@ copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
 github_repo = "squidpy"
 github_nb_repo = "squidpy_notebooks"
 # TODO: modify this to use git
-_download_notebooks(org="theislab", repo=github_nb_repo, raise_exc=True)
+_download_notebooks(org="theislab", repo=github_nb_repo, raise_exc=False)
 
 # The full version, including alpha/beta/rc tags
 release = "master"
@@ -96,7 +96,6 @@ exclude_patterns = [
     "auto_*/**.md5",
     "auto_*/**.py",
     "**.ipynb_checkpoints",
-    "gen_modules/**.examples",
 ]
 suppress_warnings = ["download.not_readable"]
 
@@ -113,7 +112,6 @@ napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
 napoleon_use_rtype = True
 napoleon_use_param = True
-napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
 
 # bibliography
