@@ -32,6 +32,7 @@ def spatial_neighbors(
     delaunay: bool = False,
     radius: Optional[float] = None,
     transform: Optional[Union[str, Transform]] = None,
+    set_diag: bool = False,
     key_added: Optional[str] = None,
 ) -> None:
     """
@@ -63,7 +64,8 @@ def spatial_neighbors(
             - `{t.SPECTRAL.s!r}` - spectral transformation of the adjacency matrix.
             - `{t.COSINE.s!r}` - cosine transformation of the adjacency matrix.
             - `{t.NONE.v}` - no transformation of the adjacency matrix.
-
+    set_diag
+        Whether to set the diagonal to 1.0.
     key_added
         Key which controls where the results are saved.
 
@@ -91,7 +93,7 @@ def spatial_neighbors(
     if coord_type == CoordType.VISIUM:
         if n_rings > 1:
             Adj: csr_matrix = _build_connectivity(
-                coords, 6, neigh_correct=True, set_diag=True, delaunay=delaunay, return_distance=False
+                coords, 6, neigh_correct=True, set_diag=True, delaunay=delaunay, set_diag=set_diag, return_distance=False
             )
             Res = Adj
             Walk = Adj
@@ -110,11 +112,13 @@ def spatial_neighbors(
             Dst = Adj.copy()
             Adj.data[:] = 1.0
         else:
-            Adj = _build_connectivity(coords, 6, neigh_correct=True, delaunay=delaunay)
+            Adj = _build_connectivity(coords, 6, neigh_correct=True, delaunay=delaunay, set_diag=set_diag)
             Dst = None
 
     elif coord_type == CoordType.GENERIC:
-        Adj, Dst = _build_connectivity(coords, n_neigh, radius, delaunay=delaunay, return_distance=True)
+        Adj, Dst = _build_connectivity(
+            coords, n_neigh, radius, delaunay=delaunay, set_diag=set_diag, return_distance=True
+        )
     else:
         raise NotImplementedError(coord_type)
 
