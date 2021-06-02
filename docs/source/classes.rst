@@ -6,6 +6,7 @@ ImageContainer
 .. autoclass:: squidpy.im.ImageContainer
     :members:
     :inherited-members:
+    :noindex:
 
 InteractiveViewer
 -----------------
@@ -13,8 +14,8 @@ InteractiveViewer
     :members:
     :inherited-members:
 
-SegmentationModelWatershed
---------------------------
+SegmentationWatershed
+---------------------
 .. autoclass:: squidpy.im.SegmentationWatershed
     :members:
     :inherited-members:

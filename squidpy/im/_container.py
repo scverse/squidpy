@@ -75,7 +75,7 @@ __all__ = ["ImageContainer"]
 @d.dedent
 class ImageContainer(FeatureMixin):
     """
-    Container for in memory :class:`numpy.ndarray`/:class:`xarray.DataArray` or on-disk *TIFF*/*JPEG*/*PNG* images.
+    Container for in memory arrays or on-disk images.
 
     Wraps :class:`xarray.Dataset` to store several image layers with the same `x`, `y` and `z` dimensions in one object.
     Dimensions of stored images are ``(y, x, z, channels)``. The channel dimension may vary between image layers.
@@ -256,8 +256,8 @@ class ImageContainer(FeatureMixin):
                 - `{id.CHANNELS_LAST.s!r}` - load the last non-spatial dimension as channels.
                 - `{id.Z_LAST.s!r}` - load the last non-spatial dimension as Z-dimension.
                 - `{id.DEFAULT.s!r}` - same as `{id.CHANNELS_LAST.s!r}`, but for 4-dimensional arrays,
-                  tries to also load the first dimension as channels iff the last non-spatial dimension is 1.
-                - a sequence of dimension names matching the shape of img, e.g. ``('y', 'x', 'z', 'channels')``.
+                  tries to also load the first dimension as channels if the last non-spatial dimension is 1.
+                - a sequence of dimension names matching the shape of ``img``, e.g. ``('y', 'x', 'z', 'channels')``.
                   `'y'`, `'x'` and `'z'` must always be present.
 
         library_id
@@ -1098,8 +1098,9 @@ class ImageContainer(FeatureMixin):
         fn_kwargs
             Keyword arguments for ``func``.
         kwargs
-            Keyword arguments for :func:`dask.array.map_blocks` or :func:`dask.array.map_overlap`, depending whether
-            ``'depth'`` is present in ``map_kwargs``. Only used when ``chunks != None``.
+            Keyword arguments for :func:`dask.array.map_overlap` or :func:`dask.array.map_blocks`, depending whether
+            ``depth`` is present in ``fn_kwargs``. Only used when ``chunks != None``.
+            Use ``depth`` to control boundary artifacts if ``func`` requires data from neighboring chunks.
 
         Returns
         -------
@@ -1205,7 +1206,7 @@ class ImageContainer(FeatureMixin):
 
         Returns
         -------
-        The subsetted copy :class:`anndata.AnnData` object.
+        The copied subset of :class:`anndata.AnnData` object.
         """
         return self._subset(adata, spatial_key=spatial_key, adjust_interactive=False)
 
@@ -1266,7 +1267,7 @@ class ImageContainer(FeatureMixin):
 
     def compute(self, layer: Optional[str] = None) -> "ImageContainer":
         """
-        Trigger lazy computation inplace.
+        Trigger lazy computation in-place.
 
         Parameters
         ----------

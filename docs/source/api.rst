@@ -27,7 +27,7 @@ Graph
 Image
 ~~~~~
 
-.. py:module:: squidpy.im
+.. module:: squidpy.im
 .. currentmodule:: squidpy
 
 .. autosummary::
@@ -36,6 +36,7 @@ Image
     im.process
     im.segment
     im.calculate_image_features
+    im.ImageContainer
 
 Plotting
 ~~~~~~~~
@@ -68,8 +69,7 @@ Datasets
     datasets.seqfish
     datasets.merfish
     datasets.mibitof
-    datasets.slidesev2
-    datasets.sc_mouse_cortex
+    datasets.slideseqv2
     datasets.sc_mouse_cortex
     datasets.visium_hne_adata
     datasets.visium_hne_adata_crop

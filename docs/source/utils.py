@@ -145,22 +145,17 @@ def _get_thumbnails(root: Union[str, Path]) -> Dict[str, str]:
 
 
 class ModnameFilter(Filter):
-    """
-    Ignore module names.
-    """
+    """Ignore module names."""
 
-    _pat = re.compile(r"squidpy\.(im|gr|pl|datasets)\..+")
+    _pat = re.compile(r"squidpy\.(im|gr|pl|datasets|ImageContainer).+")
 
     def _skip(self, word: str) -> bool:
         return self._pat.match(word) is not None
 
 
 class SignatureFilter(Filter):
-    """
-    Ignore function signature artifacts.
-    """
-
-    _pat = re.compile(r"\([^,]+?(\[?, [^,]*)*\)")
+    """Ignore function signature artifacts."""
 
     def _skip(self, word: str) -> bool:
-        return word == "img[" or word == "adata,"
+        # TODO: find a better way (img/func is problem)
+        return word in ("img[", "imgs[", "img", "func[", "func", "combine_attrs", "**kwargs", "n_iter")
