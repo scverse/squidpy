@@ -7,10 +7,10 @@ from sphinx_gallery.directives import MiniGallery
 import os
 import re
 import requests
+import subprocess
 
 HERE = Path(__file__).parent
 ENDPOINT_FMT = "https://api.github.com/repos/{org}/{repo}/contents/docs/source/"
-REF = "master"
 
 HEADERS = {"accept": "application/vnd.github.v3+json"}
 CHUNK_SIZE = 4 * 1024
@@ -47,12 +47,12 @@ def _cleanup(fn: Callable[..., Tuple[bool, Any]]) -> Callable[..., Tuple[bool, A
 
 
 @_cleanup
-def _download_file(url: str, path: str) -> Tuple[bool, int]:
+def _download_file(url: str, path: str, ref: str = "master") -> Tuple[bool, int]:
     ix = url.rfind("?")
     if ix != -1:
         url = url[:ix]
 
-    url = f"{url}?ref={REF}"
+    url = f"{url}?ref={ref}"
 
     info(f"Processing URL `{url}`")
     resp = requests.get(url, headers=HEADERS)
@@ -65,7 +65,9 @@ def _download_file(url: str, path: str) -> Tuple[bool, int]:
 
 
 @_cleanup
-def _download_dir(url: str, *, path: Union[str, Path], depth: int) -> Tuple[bool, Optional[Union[Exception, str]]]:
+def _download_dir(
+    url: str, *, ref: str = "master", path: Union[str, Path], depth: int
+) -> Tuple[bool, Optional[Union[Exception, str]]]:
     if depth == 0:
         return False, f"Maximum depth `{DEPTH}` reached."
 
@@ -80,9 +82,9 @@ def _download_dir(url: str, *, path: Union[str, Path], depth: int) -> Tuple[bool
     for item in resp.json():
         dest = path / item["name"]
         if item["type"] == "file":
-            ok, status = _download_file(item["download_url"], path=dest)
+            ok, status = _download_file(item["download_url"], path=dest, ref=ref)
         elif item["type"] == "dir":
-            ok, status = _download_dir(item["url"], path=dest, depth=depth - 1)
+            ok, status = _download_dir(item["url"], path=dest, depth=depth - 1, ref=ref)
         else:
             raise NotImplementedError(f"Invalid type: `{item['type']}`.")
 
@@ -92,14 +94,14 @@ def _download_dir(url: str, *, path: Union[str, Path], depth: int) -> Tuple[bool
     return True, None
 
 
-def _download_notebooks(org: str, repo: str, raise_exc: bool = False) -> None:
+def _download_notebooks(org: str, repo: str, ref: str = "master", raise_exc: bool = False) -> None:
     if not int(os.environ.get("SQUIDPY_DOWNLOAD_NOTEBOOKS", 1)):
         info("Not downloading notebooks because a flag is set")
         return
 
     ep = ENDPOINT_FMT.format(org=org, repo=repo)
     for path in [FIXED_TUTORIALS_DIR, TUTORIALS_DIR, EXAMPLES_DIR, GENMOD_DIR]:
-        ok, reason = _download_dir(urljoin(ep, path), path=path, depth=DEPTH)
+        ok, reason = _download_dir(urljoin(ep, path), ref=ref, path=path, depth=DEPTH)
 
         if not ok:
             if raise_exc:
@@ -142,6 +144,24 @@ def _get_thumbnails(root: Union[str, Path]) -> Dict[str, str]:
             res[str(fname)[:-3]] = "_static/img/squidpy_vertical.png"
 
     return res
+
+
+def _get_ref() -> str:
+    try:
+        r = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True)
+        if r.returncode != 0:
+            raise RuntimeError(f"Subprocess returned return code `{r.returncode}`.")
+
+        ref = r.stdout.decode().strip()
+        if ref not in ("master", "dev"):
+            info(f"Expected ref to be either `master` or `dev`, found, `{ref!r}`. Using `master`")
+            ref = "master"
+
+        return ref
+
+    except Exception as e:
+        warning(f"Unable to fetch ref, reason: `{e}`. Using `master`")
+        return "master"
 
 
 class ModnameFilter(Filter):
