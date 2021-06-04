@@ -133,6 +133,7 @@ jobs:
 
     rebuild-notebooks:
         needs: [lint, test]
+        # TODO: repo dispatch on dev
         if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
         runs-on: ubuntu-latest
         steps:
