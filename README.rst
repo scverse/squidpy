@@ -5,12 +5,12 @@ Squidpy - Spatial Single Cell Analysis in Python
 
 .. raw:: html
 
-    <center>
+    <p align="center">
         <a href="https://squidpy.readthedocs.io/en/latest/">
             <img src="https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png"
              width="400px" align="center" alt="Squidpy logo">
         </a>
-    </center>
+    </p>
 
 
 **Squidpy** is a tool for the analysis and visualization of spatial molecular data.
@@ -20,12 +20,12 @@ tissue images if available.
 
 .. raw:: html
 
-    <center>
+    <p align="center">
         <a href="https://www.biorxiv.org/content/10.1101/2021.02.19.431994v1">
             <img src="https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png"
              width="400px" align="center" alt="Title figure">
         </a>
-    </center>
+    </p>
 
 Visit our `documentation`_ for installation, tutorials, examples and more.
 
