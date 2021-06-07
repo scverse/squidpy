@@ -74,7 +74,6 @@ intersphinx_mapping = dict(  # noqa: C408
     seaborn=("https://seaborn.pydata.org/", None),
     joblib=("https://joblib.readthedocs.io/en/latest/", None),
     networkx=("https://networkx.org/documentation/stable/", None),
-    astropy=("https://docs.astropy.org/en/stable/", None),
     dask=("https://docs.dask.org/en/latest/", None),
     skimage=("https://scikit-image.org/docs/stable/", None),
     sklearn=("https://scikit-learn.org/stable/", None),

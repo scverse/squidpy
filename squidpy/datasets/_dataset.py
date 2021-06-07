@@ -61,7 +61,7 @@ _smc = AMetadata(
 _mibitof = AMetadata(
     name="mibitof",
     doc_header="Pre-processed MIBI-TOF dataset from `Hartmann et al <https://doi.org/10.1101/2020.01.17.909796>`__.",
-    shape=(3309, 36),
+    shape=(3310, 36),
     url="https://ndownloader.figshare.com/files/28241139",
 )
 _merfish = AMetadata(
