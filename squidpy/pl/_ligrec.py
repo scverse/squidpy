@@ -255,8 +255,9 @@ def ligrec(
         start += size
     label_ranges = {k: label_ranges[k] for k in sorted(label_ranges.keys())}
 
-    pvals = -np.log10(pvals).fillna(0)
     pvals = pvals[label_ranges.keys()]
+    pvals = -np.log10(pvals + min(1e-3, alpha if alpha is not None else 1e-3)).fillna(0)
+
     pvals.columns = map(_SEP.join, pvals.columns.to_flat_index())
     pvals.index = map(_SEP.join, pvals.index.to_flat_index())
 

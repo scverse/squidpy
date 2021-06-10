@@ -74,13 +74,19 @@ def _test_{n_cls}_{ret_means}_{parallel}(
             c1, c2 = interaction_clusters[j]
             m1, m2 = mean[rec, c1], mean[lig, c2]
 
+            if np.isnan(res[i, j]):
+                continue
+
             if m1 > 0 and m2 > 0:
                 {set_means}
                 if mask[rec, c1] and mask[lig, c2]:
-                    res[i, j] += (groups[c1, rec] + groups[c2, lig]) > (m1 + m2)  # division by 2 doesn't matter
+                    # both rec, lig are sufficiently expressed in c1, c2
+                    res[i, j] += (groups[c1, rec] + groups[c2, lig]) > (m1 + m2)
+                else:
+                    res[i, j] = np.nan
             else:
-                res[i, j] += np.nan
-                # res_means should be initialized all with 0s
+                # res_means is initialized with 0s
+                res[i, j] = np.nan
 """
 
 
@@ -149,7 +155,7 @@ def _fdr_correct(
             is_sorted=False,
             returnsorted=False,
         )
-        qvals[np.isclose(qvals, 1.0)] = np.nan
+        qvals[np.isnan(pvals.values)] = np.nan
 
         return SparseArray(qvals, dtype=qvals.dtype, fill_value=np.nan)
 
@@ -416,7 +422,6 @@ class PermutationTestABC(ABC):
             numba_parallel=numba_parallel,
             **kwargs,
         )
-
         res = {
             "means": _create_sparse_df(
                 res.means,

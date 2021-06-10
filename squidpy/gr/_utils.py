@@ -90,13 +90,23 @@ def _create_sparse_df(
     )
 
     if not issparse(data):
-        data = csc_matrix(data)
-        sort_indices = False
-    else:
-        if TYPE_CHECKING:
-            assert isinstance(data, spmatrix)
-        data = data.tocsc()
-        sort_indices = True
+        pred = (lambda col: ~np.isnan(col)) if fill_value is np.nan else (lambda col: ~np.isclose(col, fill_value))
+        dtype = SparseDtype(data.dtype, fill_value=fill_value)
+        n_rows, n_cols = data.shape
+        arrays = []
+
+        for i in range(n_cols):
+            mask = pred(data[:, i])  # type: ignore[no-untyped-call]
+            idx = IntIndex(n_rows, np.where(mask)[0], check_integrity=False)
+            arr = SparseArray._simple_new(data[mask, i], idx, dtype)
+            arrays.append(arr)
+
+        return pd.DataFrame._from_arrays(arrays, columns=columns, index=index, verify_integrity=False)
+
+    if TYPE_CHECKING:
+        assert isinstance(data, spmatrix)
+    data = data.tocsc()
+    sort_indices = True
 
     data = data.tocsc()
     index, columns = SparseFrameAccessor._prep_index(data, index, columns)
