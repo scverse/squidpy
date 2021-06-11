@@ -18,7 +18,7 @@ sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to instal
 sys.path.insert(0, os.path.abspath("_ext"))
 
 from docs.source.utils import (  # noqa: E402
-    _get_ref,
+    _is_master,
     _get_thumbnails,
     MaybeMiniGallery,
     _download_notebooks,
@@ -33,11 +33,11 @@ project = "squidpy"
 author = squidpy.__author__
 copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
 
+github_org = "theislab"
 github_repo = "squidpy"
-github_ref = _get_ref()
+github_ref = "master" if _is_master() else "dev"
 github_nb_repo = "squidpy_notebooks"
-# TODO: modify this to use git
-_download_notebooks(org="theislab", repo=github_nb_repo, ref=github_ref, raise_exc=False)
+_download_notebooks(repo_url=f"https://github.com/{github_org}/{github_nb_repo}")
 
 # The full version, including alpha/beta/rc tags
 release = github_ref
