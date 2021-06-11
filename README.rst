@@ -57,7 +57,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :alt: Notebooks CI
 
 .. |Docs| image:: https://img.shields.io/readthedocs/squidpy
-    :target: https://squidpy.readthedocs.io/en/latest/
+    :target: https://squidpy.readthedocs.io/en/stable/
     :alt: Documentation
 
 .. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/master/graph/badge.svg
@@ -69,8 +69,8 @@ We are happy about any contributions! Before you start, check out our `contribut
     :alt: Downloads
 
 .. _preprint: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v1
-.. _scanpy: https://scanpy.readthedocs.io/en/latest/
-.. _anndata: https://anndata.readthedocs.io/en/latest/
+.. _scanpy: https://scanpy.readthedocs.io/en/stable/
+.. _anndata: https://anndata.readthedocs.io/en/stable/
 .. _napari: https://napari.org/
 .. _skimage: https://scikit-image.org/
-.. _documentation: https://squidpy.readthedocs.io/en/latest/
+.. _documentation: https://squidpy.readthedocs.io/en/stable/
