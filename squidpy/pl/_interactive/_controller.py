@@ -230,7 +230,7 @@ class ImageController:
         except RuntimeError:
             pass
 
-    def screenshot(self, path: Optional[Union[str, Path]] = None) -> np.ndarray:
+    def screenshot(self, path: Optional[Union[str, Path]] = None, canvas_only: bool = True) -> np.ndarray:
         """
         Take a screenshot of the viewer's canvas.
 
@@ -238,12 +238,14 @@ class ImageController:
         ----------
         path
             Path where to save the screenshot. If `None`, don't save it.
+        canvas_only
+            Whether to show only the canvas or also the widgets.
 
         Returns
         -------
         Screenshot as an RGB array of shape ``(height, width, 3)``.
         """
-        return np.asarray(self.view.viewer.screenshot(path, canvas_only=True))
+        return np.asarray(self.view.viewer.screenshot(path, canvas_only=canvas_only))
 
     def _handle_already_present(self, layer_name: str) -> None:
         logg.debug(f"Layer `{layer_name}` is already loaded")
