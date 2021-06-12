@@ -6,7 +6,7 @@ This release includes:
 
 .. rubric:: Additions
 
-- Reimplementation of :func:`squidpy.gr.interaction_matrix` `PR 302 <https://github.com/theislab/squidpy/pull/302>`_.
+- Re-implementation of :func:`squidpy.gr.interaction_matrix` `PR 302 <https://github.com/theislab/squidpy/pull/302>`_.
 - Update installation instructions `PR 290 <https://github.com/theislab/squidpy/pull/290>`_.
 
 .. rubric:: Bugfixes
