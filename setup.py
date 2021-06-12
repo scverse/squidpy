@@ -45,7 +45,7 @@ setup(
             if not l.startswith("-r")
         ],
         interactive=["PyQt5>=5.15.0", "napari>=0.4.2"],
-        all=["PyQt5>=5.15.0", "napari>=0.4.2", "esda>=2.3.1", "libpysal>=4.3.0", "astropy>=4.1"],
+        all=["PyQt5>=5.15.0", "napari<0.4.9", "esda>=2.3.1", "libpysal>=4.3.0", "astropy>=4.1"],
     ),
     classifiers=[
         "Development Status :: 5 - Production/Stable",
