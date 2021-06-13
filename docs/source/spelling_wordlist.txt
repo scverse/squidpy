@@ -8,6 +8,7 @@ Cellpose
 centralities
 centroid
 centroids
+colorectal
 colormap
 Colormap
 cond
@@ -44,16 +45,21 @@ leiden
 ligand
 ligands
 Linnarson
+Merfish
+mesenchymal
+Mibitof
 modularity
 moran
 Moran's I
 Napari
 NEUN
 obsm
+omics
 Otsu
 overlayed
 parallelization
 pre
+preoptic
 prepend
 pre-trained
 Qt
@@ -67,9 +73,11 @@ scalability
 Scanpy
 segmentations
 seqFISH
+seqV
 Squidpy
 StarDist
 stromal
+subsetting
 Tangram
 Tensorflow
 th
