@@ -6,6 +6,7 @@ This release includes:
 
 .. rubric:: Additions
 
+- Add many new tutorials and examples
 - Add :func:`squidpy.gr.sepal` :cite:`andersson2021` `PR 313 <https://github.com/theislab/squidpy/pull/313>`_.
 - Replace ``squidpy.gr.moran`` with :func:`squidpy.gr.spatial_autocorr`, which implements both Moran's I and
   Geary's C `PR 317 <https://github.com/theislab/squidpy/pull/317>`_.
@@ -25,7 +26,7 @@ This release includes:
 
 - Enable additional layer specification in :func:`squidpy.im.calculate_image_features`
   `PR 354 <https://github.com/theislab/squidpy/pull/354>`_.
-- Expose ``canvas_only`` in :meth:`squidpy.im.Interactive.screenshot`
+- Expose ``canvas_only`` in :meth:`squidpy.pl.Interactive.screenshot`
   `PR 363 <https://github.com/theislab/squidpy/pull/363>`_.
 - Various minor improvements to the documentation `PR 356 <https://github.com/theislab/squidpy/pull/356>`_,
   `PR 358 <https://github.com/theislab/squidpy/pull/358>`_, `PR 359 <https://github.com/theislab/squidpy/pull/359>`_.
