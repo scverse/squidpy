@@ -31,19 +31,45 @@ def _is_master() -> bool:
         return True
 
 
-def _download_notebooks(repo_url: str) -> None:
-    if not int(os.environ.get("SQUIDPY_DOWNLOAD_NOTEBOOKS", 1)):
-        info("Not downloading notebooks because a flag is set")
-        return
-
-    with TemporaryDirectory() as repo_dir:
-        ref = "master" if _is_master() else "dev"
-        repo = Repo.clone_from(repo_url, repo_dir, depth=1, branch=ref)
-        repo.git.checkout(ref)
+def _fetch_notebooks(repo_url: str) -> None:
+    def copy_files(repo_path: Union[str, Path]) -> None:
+        repo_path = Path(repo_path)
 
         for dirname in ["external_tutorials", "auto_examples", "auto_tutorials", "gen_modules"]:
             rmtree(dirname, ignore_errors=True)  # locally re-cloning
-            copytree(Path(repo_dir) / "docs" / "source" / dirname, dirname)
+            copytree(repo_path / "docs" / "source" / dirname, dirname)
+
+    def fetch_remote(repo_url: str) -> None:
+        info(f"Fetching notebooks from repo `{repo_url}`")
+        with TemporaryDirectory() as repo_dir:
+            ref = "master" if _is_master() else "dev"
+            repo = Repo.clone_from(repo_url, repo_dir, depth=1, branch=ref)
+            repo.git.checkout(ref)
+
+            copy_files(repo_dir)
+
+    def fetch_local(repo_path: Union[str, Path]) -> None:
+        info(f"Fetching notebooks from local path `{repo_path}`")
+        repo_path = Path(repo_path)
+        if not repo_path.is_dir():
+            raise OSError(f"Path `{repo_path}` is not a directory.")
+
+        copy_files(repo_path)
+
+    notebooks_local_path = Path(
+        os.environ.get("SQUIDPY_NOTEBOOKS_PATH", HERE.absolute().parent.parent.parent / "squidpy_notebooks")
+    )
+    try:
+        fetch_local(notebooks_local_path)
+    except Exception as e:
+        warning(f"Unable to fetch notebooks locally from `{notebooks_local_path}`, reason: `{e}`. Trying remote")
+        download = int(os.environ.get("SQUIDPY_DOWNLOAD_NOTEBOOKS", 1))
+        if not download:
+            # use possibly old files, otherwise, bunch of warnings will be shown
+            info(f"Not fetching notebooks from remove because `SQUIDPY_DOWNLOAD_NOTEBOOKS={download}`")
+            return
+
+        fetch_remote(repo_url)
 
 
 class MaybeMiniGallery(MiniGallery):

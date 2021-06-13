@@ -20,8 +20,8 @@ sys.path.insert(0, os.path.abspath("_ext"))
 from docs.source.utils import (  # noqa: E402
     _is_master,
     _get_thumbnails,
+    _fetch_notebooks,
     MaybeMiniGallery,
-    _download_notebooks,
 )
 import squidpy  # noqa: E402
 
@@ -37,7 +37,7 @@ github_org = "theislab"
 github_repo = "squidpy"
 github_ref = "master" if _is_master() else "dev"
 github_nb_repo = "squidpy_notebooks"
-_download_notebooks(repo_url=f"https://github.com/{github_org}/{github_nb_repo}")
+_fetch_notebooks(repo_url=f"https://github.com/{github_org}/{github_nb_repo}")
 
 # The full version, including alpha/beta/rc tags
 release = github_ref
