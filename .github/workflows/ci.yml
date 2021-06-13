@@ -120,6 +120,7 @@ jobs:
             run: |
                 tox -vv
             env:
+                MPLBACKEND: agg
                 PLATFORM: ${{ matrix.os }}
                 DISPLAY: :42
 
