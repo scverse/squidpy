@@ -9,7 +9,7 @@ This release includes:
 - Add :func:`squidpy.gr.sepal` :cite:`andersson2021` `PR 313 <https://github.com/theislab/squidpy/pull/313>`_.
 - Replace ``squidpy.gr.moran`` with :func:`squidpy.gr.spatial_autocorr`, which implements both Moran's I and
   Geary's C `PR 317 <https://github.com/theislab/squidpy/pull/317>`_.
-- Add option to compute graph from Delauney triangulation in :func:`squidpy.gr.spatial_neighbors`
+- Add option to compute graph from Delaunay triangulation in :func:`squidpy.gr.spatial_neighbors`
   `PR 322 <https://github.com/theislab/squidpy/pull/322>`_.
 - Add lazy computation using :mod:`dask` for :mod:`squidpy.im` `PR 324 <https://github.com/theislab/squidpy/pull/324>`_.
 - Allow Z-dimension shared across all layers in :class:`squidpy.im.ImageContainer`
