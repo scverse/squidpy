@@ -111,10 +111,7 @@ jobs:
             uses: actions/cache@v2
             with:
                 path: .tox
-                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/tox.ini') }}
-                restore-keys: |
-                    tox-${{ runner.os }}-${{ env.pythonLocation }}-
-                    tox-${{ runner.os }}-
+                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/tox.ini') }}
 
         -   name: Testing
             run: |
@@ -133,7 +130,7 @@ jobs:
 
     rebuild-notebooks:
         needs: [lint, test]
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
         runs-on: ubuntu-latest
         steps:
         -   name: Rebuild tutorials/examples

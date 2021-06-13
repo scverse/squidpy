@@ -1,6 +1,6 @@
 .. role:: small
 
-1.0.1 :small:`2021-12-06`
+1.0.1 :small:`2021-13-06`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 This release includes:
 
