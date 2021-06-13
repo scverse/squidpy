@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import dask.array as da
 
-from matplotlib.colors import to_rgb
+from matplotlib.colors import to_hex, to_rgb
 
 from squidpy._constants._pkg_constants import Key
 
@@ -54,7 +54,8 @@ def _position_cluster_labels(coords: np.ndarray, clusters: pd.Series, colors: np
     clusters = np.full(len(coords), fill_value="", dtype=object)
     # index consists of the categories that need not be string
     clusters[kdtree.query(df.values)[1]] = df.index.astype(str)
-    colors = np.array([col if cl != "" else (0, 0, 0) for cl, col in zip(clusters, colors)])
+    # napari v0.4.9bug - properties must be 1-D in napari/layers/points/points.py:581
+    colors = np.array([to_hex(col if cl != "" else (0, 0, 0)) for cl, col in zip(clusters, colors)])
 
     return {"clusters": clusters, "colors": colors}
 
