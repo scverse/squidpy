@@ -37,6 +37,7 @@ grayscale
 grey
 gyrus
 heatmap
+hypothalamic
 ImageNet
 intercellular
 interpretable
@@ -68,6 +69,7 @@ quantiles
 reproducibility
 Rescale
 ResNet
+sagittal
 sc
 scalability
 Scanpy
