@@ -133,6 +133,7 @@ spelling_filters = [
     "enchant.tokenize.EmailFilter",
     "docs.source.utils.ModnameFilter",
     "docs.source.utils.SignatureFilter",
+    "enchant.tokenize.MentionFilter",
 ]
 # problematic entry: andersson2021
 # see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369
