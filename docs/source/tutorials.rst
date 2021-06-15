@@ -1,16 +1,13 @@
 Tutorials
 =========
-
 This section contains various tutorials showcasing spatial molecular data analysis with :mod:`squidpy`.
-
 
 Analysis of spatial datasets using :mod:`squidpy`
 -------------------------------------------------
-This section contains tutorials showcasing core squidpy functionalities by applying them
+This section contains tutorials showcasing core Squidpy functionalities by applying them
 to a diverse set of different spatial datasets.
 
 .. nbgallery::
-    :glob:
 
     auto_tutorials/tutorial_imc
     auto_tutorials/tutorial_seqfish
@@ -22,13 +19,13 @@ to a diverse set of different spatial datasets.
 
 Advanced Tutorials
 ------------------
-This section contains tutorials showcasing advanced :mod:`squidpy` functionalities, like:
-- loading spatial data.
-- interactive visualization.
-- working with z-stacks.
+This section contains tutorials showcasing advanced :mod:`squidpy` functionalities, such as:
+
+    - loading spatial data.
+    - interactive visualization.
+    - working with z-stacks.
 
 .. nbgallery::
-    :glob:
 
     auto_tutorials/tutorial_read_spatial
     auto_tutorials/tutorial_image_container
@@ -40,7 +37,6 @@ External tutorials
 This section contains tutorials showcasing how :mod:`squidpy` can interface with external libraries.
 
 .. nbgallery::
-    :glob:
 
     external_tutorials/tutorial_tf
     external_tutorials/tutorial_tangram
