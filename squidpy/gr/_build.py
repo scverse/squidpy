@@ -115,7 +115,7 @@ def spatial_neighbors(
                 Walk.data[:] = i + 2.0
                 Res = Res + Walk
             Adj = Res
-            Adj.setdiag(0.0)
+            Adj.setdiag(float(set_diag))
             Adj.eliminate_zeros()
 
             Dst = Adj.copy()
@@ -125,13 +125,15 @@ def spatial_neighbors(
                 coords, n_neighbors=neigh_grid, neigh_correct=True, delaunay=delaunay, set_diag=set_diag
             )
             Dst = Adj.copy()
-
     elif coord_type == CoordType.GENERIC:
         Adj, Dst = _build_connectivity(
             coords, n_neighbors=n_neigh, radius=radius, delaunay=delaunay, return_distance=True, set_diag=set_diag
         )
     else:
         raise NotImplementedError(coord_type)
+
+    Dst.setdiag(0.0)
+    Dst.eliminate_zeros()
 
     # check transform
     if transform == Transform.SPECTRAL:
