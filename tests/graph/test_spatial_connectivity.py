@@ -1,3 +1,4 @@
+from typing import Tuple
 import pytest
 
 from anndata import AnnData
@@ -30,6 +31,18 @@ def test_spatial_neighbors_squaregrid(adata_squaregrid: AnnData, n_rings: int, n
     spatial_neighbors(adata, neigh_grid=n_neigh, n_rings=n_rings, coord_type="grid")
     assert np.diff(adata.obsp["spatial_connectivities"].indptr).max() == sum_neigh
     assert adata.uns[Key.uns.spatial_neighs()]["distances_key"] == Key.obsp.spatial_dist()
+
+
+@pytest.mark.parametrize("type_rings", [("grid", 1), ("grid", 6), ("generic", 1)])
+@pytest.mark.parametrize("set_diag", [False, True])
+def test_set_diag(adata_squaregrid: AnnData, set_diag: bool, type_rings: Tuple[str, int]):
+    typ, n_rings = type_rings
+    spatial_neighbors(adata_squaregrid, coord_type=typ, set_diag=set_diag, n_rings=n_rings)
+    G = adata_squaregrid.obsp["spatial_connectivities"]
+    D = adata_squaregrid.obsp["spatial_distances"]
+
+    np.testing.assert_array_equal(G.diagonal(), float(set_diag))
+    np.testing.assert_array_equal(D.diagonal(), 0.0)
 
 
 def test_spatial_neighbors_non_visium(non_visium_adata: AnnData):

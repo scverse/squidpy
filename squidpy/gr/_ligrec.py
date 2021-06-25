@@ -1,7 +1,4 @@
 """Permutation test function as described in CellPhoneDB 2.0."""
-# TODO: disable data-science-types because below does not generate types in shpinx + create an issue
-from __future__ import annotations
-
 from abc import ABC
 from types import MappingProxyType
 from typing import (
@@ -54,13 +51,13 @@ TempResult = namedtuple("TempResult", ["means", "pvalues"])
 _template = """
 @njit(parallel={parallel}, cache=False, fastmath=False)
 def _test_{n_cls}_{ret_means}_{parallel}(
-    interactions: np.ndarray[np.uint32],
-    interaction_clusters: np.ndarray[np.uint32],
-    data: np.ndarray[np.float64],
-    clustering: np.ndarray[np.uint32],
-    mean: np.ndarray[np.float64],
-    mask: np.ndarray[np.bool_],
-    res: np.ndarray[np.float64],
+    interactions: np.ndarray,  # [np.uint32],
+    interaction_clusters: np.ndarray,  # [np.uint32],
+    data: np.ndarray,  # [np.float64],
+    clustering: np.ndarray,  # [np.uint32],
+    mean: np.ndarray,  # [np.float64],
+    mask: np.ndarray,  # [np.bool_],
+    res: np.ndarray,  # [np.float64],
     {args}
 ) -> None:
 
@@ -123,7 +120,7 @@ def _create_template(n_cls: int, return_means: bool = False, parallel: bool = Tr
     finalize = f"groups = np.stack(({finalize}))"
 
     if return_means:
-        args = "res_means: np.ndarray[np.float64]"
+        args = "res_means: np.ndarray,  # [np.float64]"
         set_means = "res_means[i, j] = (m1 + m2) / 2.0"
     else:
         args = set_means = ""
@@ -147,7 +144,7 @@ def _fdr_correct(
     from pandas.core.arrays.sparse import SparseArray
     from statsmodels.stats.multitest import multipletests
 
-    def fdr(pvals: pd.Series[np.float64]) -> SparseArray[np.float64]:
+    def fdr(pvals: pd.Series) -> SparseArray:
         _, qvals, _, _ = multipletests(
             np.nan_to_num(pvals.values, copy=True, nan=1.0),
             method=corr_method,

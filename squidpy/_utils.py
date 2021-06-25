@@ -1,6 +1,4 @@
 """Spatial tools general utility functions."""
-from __future__ import annotations
-
 import joblib as jl
 
 from enum import Enum

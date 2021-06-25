@@ -1389,7 +1389,7 @@ class ImageContainer(FeatureMixin):
 
     def _get_next_channel_id(self, channel: Union[str, xr.DataArray]) -> str:
         if isinstance(channel, xr.DataArray):
-            channel, *_ = [dim for dim in channel.dims if dim not in ("y", "x", "z")]
+            channel, *_ = (dim for dim in channel.dims if dim not in ("y", "x", "z"))
 
         pat = re.compile(rf"^{channel}_(\d*)$")
         iterator = chain.from_iterable(pat.finditer(v.dims[-1]) for v in self.data.values())
