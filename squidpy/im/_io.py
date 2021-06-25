@@ -198,7 +198,7 @@ def _infer_dimensions(
 
     if ndim == 4:
         # assume z before c
-        z, c = [i for i in range(ndim) if i not in (y, x)]
+        z, c = (i for i in range(ndim) if i not in (y, x))
         return shape, infer(y, x, z, c), dtype, ()
 
     raise ValueError(f"Expected the image to be either `2`, `3` or `4` dimensional, found `{ndim}`.")

@@ -46,9 +46,6 @@ jobs:
             with:
                 path: ~/.cache/pre-commit
                 key: precommit-${{ env.pythonLocation }}-${{ hashFiles('.pre-commit-config.yaml') }}
-                restore-keys: |
-                    precommit-${{ env.pythonLocation }}-
-                    precommit-
 
         -   name: Install dependencies
             run: |
