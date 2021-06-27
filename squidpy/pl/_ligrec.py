@@ -32,10 +32,11 @@ class CustomDotplot(sc.pl.DotPlot):
     DEFAULT_NUM_COLORBAR_TICKS = 5
     DEFAULT_NUM_LEGEND_DOTS = 5
 
-    def __init__(self, minn: float, delta: float, *args: Any, **kwargs: Any):
+    def __init__(self, minn: float, delta: float, alpha: Optional[float], *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._delta = delta
         self._minn = minn
+        self._alpha = alpha
 
     def _plot_size_legend(self, size_legend_ax: Axes) -> None:
         y = self.BASE ** -((self.dot_max * self._delta) + self._minn)
@@ -46,7 +47,8 @@ class CustomDotplot(sc.pl.DotPlot):
         size_range = size_range[1:]
 
         size = size_range ** self.size_exponent
-        size = size * (self.largest_dot - self.smallest_dot) + self.smallest_dot
+        mult = (self.largest_dot - self.smallest_dot) + self.smallest_dot
+        size = size * mult
 
         # plot size bar
         size_legend_ax.scatter(
@@ -74,6 +76,30 @@ class CustomDotplot(sc.pl.DotPlot):
 
         xmin, xmax = size_legend_ax.get_xlim()
         size_legend_ax.set_xlim(xmin - 0.15, xmax + 0.5)
+
+        if self._alpha is not None:
+            ax = self.fig.add_subplot()
+            ax.scatter(
+                [0.35, 0.65],
+                [0, 0],
+                s=size[-1],
+                color="black",
+                edgecolor="black",
+                linewidth=self.dot_edge_lw,
+                zorder=100,
+            )
+            ax.scatter(
+                [0.65], [0], s=0.33 * mult, color="white", edgecolor="black", linewidth=self.dot_edge_lw, zorder=100
+            )
+            ax.set_xlim([0, 1])
+            ax.set_xticks([0.35, 0.65])
+            ax.set_xticklabels(["false", "true"])
+            ax.set_yticks([])
+            ax.set_title(f"significant\n$p={self._alpha}$", y=ymax + 0.25, size="small")
+            ax.set(frame_on=False)
+
+            l, b, w, h = size_legend_ax.get_position().bounds
+            ax.set_position([l + w, b, w, h])
 
     def _plot_colorbar(self, color_legend_ax: Axes, normalize: bool) -> None:
         cmap = plt.get_cmap(self.cmap)
@@ -314,6 +340,7 @@ def ligrec(
         CustomDotplot(
             delta=delta,
             minn=minn,
+            alpha=alpha,
             adata=adata,
             var_names=adata.var_names,
             groupby="groups",
