@@ -163,7 +163,7 @@ def ligrec(
     pvalue_threshold
         Only show interactions with p-value <= ``pvalue_threshold``.
     remove_empty_interactions
-        Remove rows and columns that only contain interactions with NaN values.
+        Remove rows and columns that only contain interactions with `NaN` values.
     remove_nonsig_interactions
         Remove rows and columns that only contain interactions that are larger than ``alpha``.
     dendrogram
