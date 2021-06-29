@@ -1,12 +1,9 @@
-"""Constants that can exposed to the user."""
+"""Constants that user deals with."""
 from enum import unique
 
 from squidpy._constants._utils import ModeEnum
 
 
-# an example, can even document the values using enum_tools:
-# from enum_tools import document_enum
-# @document_enum
 @unique
 class ImageFeature(ModeEnum):
     TEXTURE = "texture"  # doc: This would be a docstring.
@@ -37,7 +34,7 @@ class Transform(ModeEnum):
 
 
 @unique
-class CoordType(ModeEnum):  # noqa: D101
+class CoordType(ModeEnum):
     GRID = "grid"
     GENERIC = "generic"
 

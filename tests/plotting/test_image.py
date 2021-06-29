@@ -94,7 +94,7 @@ def test_extract(adata: AnnData, cont: ImageContainer, caplog):
         assert col in extr_adata.obs.columns
 
     # get obsm that is a numpy array
-    adata.obsm["pca_features"] = sc.pp.pca(adata.obsm["img_features"], n_comps=3)
+    adata.obsm["pca_features"] = sc.pp.pca(np.asarray(adata.obsm["img_features"]), n_comps=3)
     # extract columns
     extr_adata = sq.pl.extract(adata, obsm_key="pca_features", prefix="pca_features")
     # Test that expected columns exist

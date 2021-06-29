@@ -8,7 +8,7 @@ from squidpy._constants._constants import Processing, SegmentationBackend
 _SEP = "_"
 
 
-class cprop:  # noqa: D101
+class cprop:
     def __init__(self, f: Callable[..., str]):
         self.f = f
 
@@ -16,8 +16,8 @@ class cprop:  # noqa: D101
         return self.f(owner)
 
 
-class Key:  # noqa: D101
-    class img:  # noqa: D106
+class Key:
+    class img:
         @classmethod
         def segment(cls, backend: Union[str, SegmentationBackend], layer_added: Optional[str] = None) -> str:
             return f"segmented_{SegmentationBackend(backend).s}" if layer_added is None else layer_added
@@ -55,15 +55,15 @@ class Key:  # noqa: D101
         def obs(cls) -> str:
             return "cell"
 
-    class obs:  # noqa: D106
+    class obs:
         pass
 
-    class obsm:  # noqa: D106
+    class obsm:
         @cprop
         def spatial(cls) -> str:
             return "spatial"
 
-    class uns:  # noqa: D106
+    class uns:
         @cprop
         def spatial(cls) -> str:
             return Key.obsm.spatial
@@ -128,7 +128,7 @@ class Key:  # noqa: D101
                     f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors']['spot_diameter_fullres']]`"
                 ) from None
 
-    class obsp:  # noqa: D106
+    class obsp:
         @classmethod
         def spatial_dist(cls, value: Optional[str] = None) -> str:
             return f"{Key.obsm.spatial}_distances" if value is None else f"{value}_distances"
