@@ -1,7 +1,7 @@
 .. role:: small
 
-1.1.0 :small:`SOON`
-~~~~~~~~~~~~~~~~~~~
+1.1.0 :small:`2021-07-01`
+~~~~~~~~~~~~~~~~~~~~~~~~~
 This release includes:
 
 .. rubric:: Additions
