@@ -129,7 +129,7 @@ jobs:
 
     rebuild-notebooks:
         needs: [lint, test]
-        if: github.event_name == 'schedule' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev')
+        if: github.event_name == 'schedule' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev'))
         runs-on: ubuntu-latest
         steps:
         -   name: Rebuild tutorials/examples
