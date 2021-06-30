@@ -46,7 +46,6 @@ jobs:
             with:
                 path: ~/.cache/pre-commit
                 key: precommit-${{ env.pythonLocation }}-${{ hashFiles('.pre-commit-config.yaml') }}
-
         -   name: Install dependencies
             run: |
                 sudo apt install pandoc
@@ -130,8 +129,7 @@ jobs:
 
     rebuild-notebooks:
         needs: [lint, test]
-        # TODO: repo dispatch on dev
-        if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+        if: github.event_name == 'schedule' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev')
         runs-on: ubuntu-latest
         steps:
         -   name: Rebuild tutorials/examples
