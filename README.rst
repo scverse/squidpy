@@ -3,14 +3,11 @@
 Squidpy - Spatial Single Cell Analysis in Python
 ================================================
 
-.. raw:: html
-
-    <p align="center">
-        <a href="https://squidpy.readthedocs.io/en/latest/">
-            <img src="https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png"
-             width="400px" alt="Squidpy logo">
-        </a>
-    </p>
+.. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png
+   :target: https://squidpy.readthedocs.io/en/latest/
+   :align: center
+   :alt: Squidpy logo
+   :width: 400px
 
 
 **Squidpy** is a tool for the analysis and visualization of spatial molecular data.
@@ -18,14 +15,12 @@ It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity 
 It provides analysis tools that leverages the spatial coordinates of the data, as well as
 tissue images if available.
 
-.. raw:: html
+.. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png
+   :target: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v2
+   :align: center
+   :alt: Squidpy title figure
+   :width: 400px
 
-    <p align="center">
-        <a href="https://www.biorxiv.org/content/10.1101/2021.02.19.431994v1">
-            <img src="https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png"
-             width="400px" alt="Squidpy title figure">
-        </a>
-    </p>
 
 Visit our `documentation`_ for installation, tutorials, examples and more.
 
