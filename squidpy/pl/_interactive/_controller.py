@@ -271,7 +271,7 @@ class ImageController:
             layer.refresh_colors()
 
     @singledispatchmethod
-    def _get_points_properties(self, vec: Union[np.ndarray, pd.Series]) -> Dict[str, Any]:
+    def _get_points_properties(self, vec: Union[np.ndarray, pd.Series], **_: Any) -> Dict[str, Any]:
         raise NotImplementedError(type(vec))
 
     @_get_points_properties.register(np.ndarray)
