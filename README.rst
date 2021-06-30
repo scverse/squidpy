@@ -7,7 +7,7 @@ Squidpy - Spatial Single Cell Analysis in Python
    :target: https://squidpy.readthedocs.io/en/latest/
    :align: center
    :alt: Squidpy logo
-   :width: 400px
+   :width: 200 px
 
 
 **Squidpy** is a tool for the analysis and visualization of spatial molecular data.
@@ -19,7 +19,7 @@ tissue images if available.
    :target: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v2
    :align: center
    :alt: Squidpy title figure
-   :width: 400px
+   :width: 400 px
 
 
 Visit our `documentation`_ for installation, tutorials, examples and more.
