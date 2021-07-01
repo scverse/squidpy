@@ -264,7 +264,6 @@ class CBarWidget(QtWidgets.QWidget):
             border_color="black",
             padding=(0.33, 0.167),
             axis_ratio=0.05,
-            innterpolation="linear",
         )
 
         self._canvas.central_widget.add_widget(self._colorbar)

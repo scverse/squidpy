@@ -36,7 +36,6 @@ Image
     im.process
     im.segment
     im.calculate_image_features
-    im.ImageContainer
 
 Plotting
 ~~~~~~~~
