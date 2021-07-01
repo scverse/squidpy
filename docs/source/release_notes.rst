@@ -6,7 +6,7 @@ Release Notes
 Version 1.0
 -----------
 
-1.0.1 :small:`2021-12-06`
+1.0.1 :small:`2021-06-12`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 This release includes:
 

@@ -44,7 +44,7 @@ def _fetch_notebooks(repo_url: str) -> None:
         with TemporaryDirectory() as repo_dir:
             ref = "master" if _is_master() else "dev"
             repo = Repo.clone_from(repo_url, repo_dir, depth=1, branch=ref)
-            repo.git.checkout(ref)
+            repo.git.checkout(ref, force=True)
 
             copy_files(repo_dir)
 

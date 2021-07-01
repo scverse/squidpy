@@ -61,6 +61,7 @@ extensions = [
     "sphinxcontrib.bibtex",
     "edit_on_github",
     "typed_returns",
+    "IPython.sphinxext.ipython_console_highlighting",
 ]
 intersphinx_mapping = dict(  # noqa: C408
     python=("https://docs.python.org/3", None),

@@ -11,7 +11,7 @@ except ImportError:
             "hannah.spitzer@helmholtz-muenchen.de",
         ]
     )
-    __version__ = "1.0.0"
+    __version__ = "1.0.1"
 
 setup(
     name="squidpy",
@@ -22,13 +22,13 @@ setup(
     author_email=__email__,
     maintainer=__author__,
     maintainer_email=__email__,
-    description=Path("README.rst").read_text("utf-8").splitlines()[2],
-    long_description=Path("README.rst").read_text("utf-8"),
+    description=Path("README_pypi.rst").read_text("utf-8").splitlines()[2],
+    long_description=Path("README_pypi.rst").read_text("utf-8"),
     long_description_content_type="text/x-rst; charset=UTF-8",
     url="https://github.com/theislab/squidpy",
     download_url="https://pypi.org/project/squidpy/",
     project_urls={
-        "Documentation": "https://squidpy.readthedocs.io/en/latest",
+        "Documentation": "https://squidpy.readthedocs.io/en/stable",
         "Source Code": "https://github.com/theislab/squidpy",
     },
     license="BSD",
