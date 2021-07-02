@@ -5,7 +5,7 @@ __email__ = ", ".join(
         "hannah.spitzer@helmholtz-muenchen.de",
     ]
 )
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 from squidpy import datasets
 import squidpy.gr

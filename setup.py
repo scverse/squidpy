@@ -11,7 +11,7 @@ except ImportError:
             "hannah.spitzer@helmholtz-muenchen.de",
         ]
     )
-    __version__ = "1.0.1"
+    __version__ = "1.1.0"
 
 setup(
     name="squidpy",
