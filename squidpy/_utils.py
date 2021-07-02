@@ -1,6 +1,4 @@
 """Spatial tools general utility functions."""
-from __future__ import annotations
-
 import joblib as jl
 
 from enum import Enum
@@ -57,7 +55,7 @@ def _unique_order_preserving(iterable: Iterable[Hashable]) -> Tuple[List[Hashabl
 
 
 class Signal(Enum):
-    """Signalling values when informing parallelizer."""
+    """Signaling values when informing parallelizer."""
 
     NONE = 0
     UPDATE = 1
@@ -68,7 +66,7 @@ class Signal(Enum):
 def parallelize(
     callback: Callable[..., Any],
     collection: Sequence[Any],
-    n_jobs: int = 1,
+    n_jobs: Optional[int] = 1,
     n_split: Optional[int] = None,
     unit: str = "",
     use_ixs: bool = False,
@@ -113,9 +111,13 @@ def parallelize(
     """
     if show_progress_bar:
         try:
-            from tqdm.notebook import tqdm
+            from tqdm.auto import tqdm
+            import ipywidgets  # noqa: F401
         except ImportError:
-            from tqdm import tqdm_notebook as tqdm
+            try:
+                from tqdm.std import tqdm
+            except ImportError:
+                tqdm = None
     else:
         tqdm = None
 
@@ -178,9 +180,11 @@ def parallelize(
 
         return res if extractor is None else extractor(res)
 
+    if n_jobs is None:
+        n_jobs = 1
     if n_jobs == 0:
         raise ValueError("Number of jobs cannot be `0`.")
-    if n_jobs < 0:
+    elif n_jobs < 0:
         n_jobs = cpu_count() + 1 + n_jobs
 
     if n_split is None:
@@ -192,7 +196,9 @@ def parallelize(
     else:
         col_len = len(collection)
         step = int(np.ceil(len(collection) / n_split))
-        collections = list(filter(len, (collection[i * step : (i + 1) * step] for i in range(col_len))))
+        collections = list(
+            filter(len, (collection[i * step : (i + 1) * step] for i in range(int(np.ceil(col_len / step)))))
+        )
 
     if use_runner:
         use_ixs = False
@@ -235,7 +241,7 @@ def verbosity(level: int) -> Generator[None, None, None]:
     Parameters
     ----------
     level
-        The new verbosity leve.
+        The new verbosity level.
 
     Returns
     -------

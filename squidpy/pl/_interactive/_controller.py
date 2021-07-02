@@ -7,13 +7,12 @@ from anndata import AnnData
 from pandas.core.dtypes.common import is_categorical_dtype
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 from PyQt5.QtWidgets import QLabel, QGridLayout
 
 from napari import Viewer
 from napari.layers import Points, Shapes
-
-from skimage import img_as_float
 
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
@@ -21,7 +20,11 @@ from squidpy._utils import singledispatchmethod
 from squidpy.pl._utils import _points_inside_triangles
 from squidpy.pl._interactive._view import ImageView
 from squidpy.pl._interactive._model import ImageModel
-from squidpy.pl._interactive._utils import _get_categorical, _position_cluster_labels
+from squidpy.pl._interactive._utils import (
+    _get_categorical,
+    _display_channelwise,
+    _position_cluster_labels,
+)
 from squidpy.pl._interactive._widgets import RangeSlider
 
 # label string: attribute name
@@ -68,18 +71,70 @@ class ImageController:
             self._handle_already_present(layer)
             return False
 
-        img: np.ndarray = self.model.container.data[layer].transpose("y", "x", ...).values
-        if img.shape[-1] > 4:
-            logg.warning(f"Unable to show image of shape `{img.shape}`")
-            return False
+        if self.model.container.data[layer].attrs.get("segmentation", False):
+            return self.add_labels(layer)
+
+        img: xr.DataArray = self.model.container.data[layer].transpose("z", "y", "x", ...)
+        multiscale = np.prod(img.shape[1:3]) > (2 ** 16) ** 2
+        n_channels = img.shape[-1]
+
+        rgb = img.attrs.get("rgb", None)
+        if n_channels == 1:
+            rgb, colormap = False, "gray"
+        else:
+            colormap = self.model.cmap
+
+        if rgb is None:
+            logg.debug("Automatically determining whether image is an RGB image")
+            rgb = not _display_channelwise(img.data)
+        if not rgb:
+            img = img.transpose(..., "z", "y", "x")  # channels first
 
         logg.info(f"Creating image `{layer}` layer")
         self.view.viewer.add_image(
-            img_as_float(img),
+            img.data,
             name=layer,
-            rgb=True,
-            colormap=self.model.cmap,
+            rgb=rgb,
+            colormap=colormap,
             blending=self.model.blending,
+            multiscale=multiscale,
+        )
+
+        return True
+
+    def add_labels(self, layer: str) -> bool:
+        """
+        Add a new :mod:`napari` labels layer.
+
+        Parameters
+        ----------
+        layer
+            Layer in the underlying's :class:`ImageContainer` which contains the labels image.
+
+        Returns
+        -------
+        `True` if the layer has been added, otherwise `False`.
+        """
+        # beware `update_library` in view.py - needs to be in this order
+        img: xr.DataArray = self.model.container.data[layer].transpose(..., "z", "y", "x")
+        if img.ndim != 4:
+            logg.warning(f"Unable to show image of shape `{img.shape}`, too many dimensions")
+            return False
+
+        if img.shape[0] != 1:
+            logg.warning(f"Unable to create labels layer of shape `{img.shape}`, too many channels `{img.shape[0]}`")
+            return False
+
+        if not np.issubdtype(img.dtype, np.integer):
+            # could also return to `add_images` and render it as image
+            logg.warning(f"Expected label image to be a subtype of `numpy.integer`, found `{img.dtype}`")
+            return False
+
+        logg.info(f"Creating label `{layer}` layer")
+        self.view.viewer.add_labels(
+            img.data,
+            name=layer,
+            multiscale=np.prod(img.shape[-2:]) > (2 ** 16) ** 2,
         )
 
         return True
@@ -126,16 +181,14 @@ class ImageController:
         # layer._text._color = properties["colors"]
         # layer._text.events.color()
         self._hide_points_controls(layer, is_categorical=is_categorical_dtype(vec))
-
         layer.editable = False
-        layer.events.select.connect(self._move_layer_to_front)
 
         return True
 
     def export(self, _: Viewer) -> None:
         """Export shapes into :class:`AnnData` object."""
         for layer in self.view.layers:
-            if not isinstance(layer, Shapes) or not layer.selected:
+            if not isinstance(layer, Shapes) or layer not in self.view.viewer.layers.selection:
                 continue
             if not len(layer.data):
                 logg.warning(f"Shape layer `{layer.name}` has no visible shapes")
@@ -177,7 +230,7 @@ class ImageController:
         except RuntimeError:
             pass
 
-    def screenshot(self, path: Optional[Union[str, Path]] = None) -> np.ndarray:
+    def screenshot(self, path: Optional[Union[str, Path]] = None, canvas_only: bool = True) -> np.ndarray:
         """
         Take a screenshot of the viewer's canvas.
 
@@ -185,35 +238,27 @@ class ImageController:
         ----------
         path
             Path where to save the screenshot. If `None`, don't save it.
+        canvas_only
+            Whether to show only the canvas or also the widgets.
 
         Returns
         -------
         Screenshot as an RGB array of shape ``(height, width, 3)``.
         """
-        return np.asarray(self.view.viewer.screenshot(path, canvas_only=True))
+        return np.asarray(self.view.viewer.screenshot(path, canvas_only=canvas_only))
 
     def _handle_already_present(self, layer_name: str) -> None:
-        logg.warning(f"Layer `{layer_name}` is already loaded")
-        self.view.layers.unselect_all()
-        self.view.layers[layer_name].selected = True
-
-    def _move_layer_to_front(self, event: Any) -> None:
-        layer = event.source
-        if not layer.visible:
-            return
-
-        try:
-            index = self.view.layers.index(layer)
-        except ValueError:
-            return
-
-        self.view.layers.move(index, -1)
+        logg.debug(f"Layer `{layer_name}` is already loaded")
+        self.view.viewer.layers.selection.select_only(self.view.layers[layer_name])
 
     def _save_shapes(self, layer: Shapes, key: str) -> None:
         shape_list = layer._data_view
         triangles = shape_list._mesh.vertices[shape_list._mesh.displayed_triangles]
 
-        self.model.adata.obs[key] = pd.Categorical(_points_inside_triangles(self.model.coordinates, triangles))
+        # TODO: use only current z dim slice?
+        points_mask: np.ndarray = _points_inside_triangles(self.model.coordinates[:, 1:], triangles)
+
+        self.model.adata.obs[key] = pd.Categorical(points_mask)
         self.model.adata.uns[key] = {"meshes": layer.data.copy()}
 
     def _update_obs_items(self, key: str) -> None:

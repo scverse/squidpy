@@ -1,16 +1,18 @@
-from typing import Dict, Optional
+from typing import Dict, Union, Optional
 
 from scanpy import logging as logg
 from anndata import AnnData
 from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
+from numba import njit
 from scipy.spatial import KDTree
 from pandas._libs.lib import infer_dtype
 from pandas.core.dtypes.common import is_categorical_dtype
 import numpy as np
 import pandas as pd
+import dask.array as da
 
-from matplotlib.colors import to_rgb
+from matplotlib.colors import to_hex, to_rgb
 
 from squidpy._constants._pkg_constants import Key
 
@@ -27,6 +29,7 @@ def _get_categorical(
         if key in adata.obs:
             logg.debug(f"Overwriting `adata.obs[{key!r}]`")
 
+        # TODO: change me
         adata.obs[key] = vec.values
 
     add_colors_for_categorical_sample_annotation(
@@ -41,6 +44,7 @@ def _position_cluster_labels(coords: np.ndarray, clusters: pd.Series, colors: np
     if not is_categorical_dtype(clusters):
         raise TypeError(f"Expected `clusters` to be `categorical`, found `{infer_dtype(clusters)}`.")
 
+    coords = coords[:, 1:]  # TODO: z-dim
     df = pd.DataFrame(coords)
     df["clusters"] = clusters.values
     df = df.groupby("clusters")[[0, 1]].apply(lambda g: list(np.median(g.values, axis=0)))
@@ -50,6 +54,34 @@ def _position_cluster_labels(coords: np.ndarray, clusters: pd.Series, colors: np
     clusters = np.full(len(coords), fill_value="", dtype=object)
     # index consists of the categories that need not be string
     clusters[kdtree.query(df.values)[1]] = df.index.astype(str)
-    colors = np.array([col if cl != "" else (0, 0, 0) for cl, col in zip(clusters, colors)])
+    # napari v0.4.9bug - properties must be 1-D in napari/layers/points/points.py:581
+    colors = np.array([to_hex(col if cl != "" else (0, 0, 0)) for cl, col in zip(clusters, colors)])
 
     return {"clusters": clusters, "colors": colors}
+
+
+def _not_in_01(arr: Union[np.ndarray, da.Array]) -> bool:
+    @njit
+    def _helper_arr(arr: np.ndarray) -> bool:
+        for val in arr.flat:
+            if not (0 <= val <= 1):
+                return True
+
+        return False
+
+    if isinstance(arr, da.Array):
+        return bool(np.min(arr) < 0) or bool(np.max(arr) > 1)
+
+    return bool(_helper_arr(np.asarray(arr)))
+
+
+def _display_channelwise(arr: Union[np.ndarray, da.Array]) -> bool:
+    n_channels: int = arr.shape[-1]
+    if n_channels not in (3, 4):
+        return n_channels != 1
+    if np.issubdtype(arr.dtype, np.uint8):
+        return False  # assume RGB(A)
+    if not np.issubdtype(arr.dtype, np.floating):
+        return True
+
+    return _not_in_01(arr)

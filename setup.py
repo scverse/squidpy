@@ -22,13 +22,13 @@ setup(
     author_email=__email__,
     maintainer=__author__,
     maintainer_email=__email__,
-    description=Path("README.rst").read_text("utf-8").splitlines()[2],
-    long_description=Path("README.rst").read_text("utf-8"),
+    description=Path("README_pypi.rst").read_text("utf-8").splitlines()[2],
+    long_description=Path("README_pypi.rst").read_text("utf-8"),
     long_description_content_type="text/x-rst; charset=UTF-8",
     url="https://github.com/theislab/squidpy",
     download_url="https://pypi.org/project/squidpy/",
     project_urls={
-        "Documentation": "https://squidpy.readthedocs.io/en/latest",
+        "Documentation": "https://squidpy.readthedocs.io/en/stable",
         "Source Code": "https://github.com/theislab/squidpy",
     },
     license="BSD",
@@ -44,8 +44,7 @@ setup(
             for l in (Path("docs") / "requirements.txt").read_text("utf-8").splitlines()
             if not l.startswith("-r")
         ],
-        interactive=["PyQt5>=5.15.0", "napari>=0.4.2"],
-        all=["PyQt5>=5.15.0", "napari<0.4.9", "esda>=2.3.1", "libpysal>=4.3.0", "astropy>=4.1"],
+        interactive=["PyQt5>=5.15.0", "napari>=0.4.8,<0.5"],
     ),
     classifiers=[
         "Development Status :: 5 - Production/Stable",

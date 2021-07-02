@@ -1,8 +1,10 @@
 -r ../requirements.txt
+gitpython
+ipython
 nbsphinx>=0.8.1
 pyenchant>=3.1.1
 requests
-sphinx>=3.3.0
+sphinx>=4
 sphinx-autodoc-annotation
 sphinx-autodoc-typehints>=1.10.3
 sphinx_gallery>=0.8.2

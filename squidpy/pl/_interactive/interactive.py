@@ -57,7 +57,12 @@ class Interactive:
 
     @d.dedent
     def screenshot(
-        self, return_result: bool = False, dpi: Optional[float] = 180, save: Optional[str] = None, **kwargs: Any
+        self,
+        return_result: bool = False,
+        dpi: Optional[float] = 180,
+        save: Optional[str] = None,
+        canvas_only: bool = True,
+        **kwargs: Any,
     ) -> Optional[np.ndarray]:
         """
         Plot a screenshot of the viewer's canvas.
@@ -70,6 +75,8 @@ class Interactive:
             Dots per inch.
         save
             Whether to save the plot.
+        canvas_only
+            Whether to show only the canvas or also the widgets.
         kwargs
             Keyword arguments for :meth:`matplotlib.axes.Axes.imshow`.
 
@@ -78,7 +85,7 @@ class Interactive:
         Nothing, if ``return_result = False``, otherwise the image array.
         """
         try:
-            arr = self._controller.screenshot(path=None)
+            arr = self._controller.screenshot(path=None, canvas_only=canvas_only)
         except RuntimeError as e:
             logg.error(f"Unable to take a screenshot. Reason: {e}")
             return None

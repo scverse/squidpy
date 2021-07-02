@@ -8,20 +8,23 @@ _vfic = ImgMetadata(
     "<https://support.10xgenomics.com/spatial-gene-expression/datasets"
     "/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2>`__.",
     shape=(7272, 7272),
+    library_id="V1_Adult_Mouse_Brain_Coronal_Section_2",
     url="https://ndownloader.figshare.com/files/26098364",
 )
 _vhic = ImgMetadata(
     name="visium_hne_image_crop",
     doc_header="Cropped H&E image from `10x Genomics Visium dataset "
-    "<https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`_.",
+    "<https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`__.",
     shape=(3527, 3527),
+    library_id="V1_Adult_Mouse_Brain",
     url="https://ndownloader.figshare.com/files/26098328",
 )
 _vhn = ImgMetadata(
     name="visium_hne_image",
     doc_header="H&E image from `10x Genomics Visium dataset "
-    "<https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`_.",
+    "<https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`__.",
     shape=(11757, 11291),
+    library_id="V1_Adult_Mouse_Brain",
     url="https://ndownloader.figshare.com/files/26098124",
 )
 

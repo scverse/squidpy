@@ -15,14 +15,12 @@ import numpy as np
 import pandas as pd
 
 from matplotlib.testing.compare import compare_images
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
 import squidpy as sp
 
-mpl.use("agg")
 HERE: Path = Path(__file__).parent
 
 EXPECTED = HERE / "_images"
@@ -93,6 +91,29 @@ def adata_intmat() -> AnnData:
     )
 
 
+@pytest.fixture()
+def adata_ripley() -> AnnData:
+    from matplotlib.cm import get_cmap
+
+    adata = _adata[_adata.obs.leiden.isin(["0", "2"])].copy()
+    cmap = get_cmap("Set1")
+
+    adata.uns[f"{C_KEY_PALETTE}_colors"] = cmap(range(adata.obs[C_KEY_PALETTE].unique().shape[0]))
+    return adata
+
+
+@pytest.fixture()
+def adata_squaregrid() -> AnnData:
+    rng = np.random.default_rng(42)
+    coord = rng.integers(0, 10, size=(400, 2))
+    coord = np.unique(coord, axis=0)
+    counts = rng.integers(0, 10, size=(coord.shape[0], 10))
+    adata = AnnData(counts)
+    adata.obsm["spatial"] = coord
+    sc.pp.scale(adata)
+    return adata
+
+
 @pytest.fixture(scope="session")
 def paul15() -> AnnData:
     # session because we don't modify this dataset
@@ -118,6 +139,24 @@ def cont() -> ImageContainer:
 def small_cont() -> ImageContainer:
     np.random.seed(42)
     return ImageContainer(np.random.uniform(size=(100, 100, 3), low=0, high=1), layer="image")
+
+
+@pytest.fixture()
+def small_cont_4d() -> ImageContainer:
+    np.random.seed(42)
+    return ImageContainer(
+        np.random.uniform(size=(100, 50, 2, 3), low=0, high=1), dims=["y", "x", "z", "channels"], layer="image"
+    )
+
+
+@pytest.fixture()
+def cont_4d() -> ImageContainer:
+    arrs = [np.linspace(0, 1, 10 * 10 * 3).reshape(10, 10, 3), np.zeros((10, 10, 3)) + 0.5, np.zeros((10, 10, 3))]
+    arrs[1][4:6, 4:6] = 0.8
+    arrs[2][2:8, 2:8, 0] = 0.5
+    arrs[2][2:8, 2:8, 1] = 0.1
+    arrs[2][2:8, 2:8, 2] = 0.9
+    return ImageContainer.concat([ImageContainer(arr) for arr in arrs], library_ids=["3", "1", "2"])
 
 
 @pytest.fixture()
@@ -148,7 +187,7 @@ def cont_dot() -> ImageContainer:
 
 @pytest.fixture()
 def napari_cont() -> ImageContainer:
-    return ImageContainer("tests/_data/test_img.jpg", layer="V1_Adult_Mouse_Brain")
+    return ImageContainer("tests/_data/test_img.jpg", layer="V1_Adult_Mouse_Brain", library_id="V1_Adult_Mouse_Brain")
 
 
 @pytest.fixture()

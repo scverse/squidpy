@@ -58,8 +58,7 @@ x
     If a :class:`float`, it specifies the relative position and must be in `[0, 1]`."""
 _size = """\
 size
-    Size of the crop as ``(height, width)``. If a single :class:`int`, the crop will be a square.
-    If a :class:`float`, it specifies the relative size and must be in `[0, 1]`."""
+    Size of the crop as ``(height, width)``. If a single :class:`int`, the crop will be a square."""
 _cluster_key = """\
 cluster_key
     Key in :attr:`anndata.AnnData.obs` where clustering is stored."""
@@ -132,15 +131,45 @@ Alternatively, any :func:`callable` can be passed as long as it has the followin
     :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`numpy.ndarray` ``(height, width[, channels])``."""  # noqa: E501
 _as_array = """
 as_array
-    - if `True`, yields a :class:`dict` where keys are layers and values are :class:`numpy.ndarray`.
-    - if a :class:`str`, yields one :class:`numpy.ndarray` for the specified layer.
-    - if a :class:`typing.Sequence`, yields a :class:`tuple` of :class:`numpy.ndarray` for the specified layers.
-    - otherwise, yields :class:`squidpy.im.ImageContainer`.
+    - If `True`, yields a :class:`dict` where keys are layers and values are :class:`numpy.ndarray`.
+    - If a :class:`str`, yields one :class:`numpy.ndarray` for the specified layer.
+    - If a :class:`typing.Sequence`, yields a :class:`tuple` of :class:`numpy.ndarray` for the specified layers.
+    - Otherwise, yields :class:`squidpy.im.ImageContainer`.
 """
-_layer_added = """
+_layer_added = """\
 layer_added
     Layer of new image layer to add into ``img`` object."""
+_chunks_lazy = """\
+chunks
+    Number of chunks for :mod:`dask`. For automatic chunking, use ``chunks = 'auto'``.
+lazy
+    Whether to lazily compute the result or not. Only used when ``chunks != None```."""
 
+_ripley_stat_returns = """\
+If ``copy = True``, returns a :class:`dict` with following keys:
+
+    - `'{mode}_stat'` - :class:`pandas.DataFrame` containing the statistics of choice for the real observations.
+    - `'sims_stat'` - :class:`pandas.DataFrame` containing the statistics of choice for the simulations.
+    - `'bins'` - :class:`numpy.ndarray` containing the support.
+    - `'pvalues'` - :class:`numpy.ndarray` containing the p-values for the statistics of interest.
+
+Otherwise, modifies the ``adata`` object with the following key:
+
+    - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - the above mentioned :class:`dict`.
+
+Statistics and p-values are computed for each cluster :attr:`anndata.AnnData.obs` ``['{cluster_key}']`` separately."""
+_library_id_features = """\
+library_id
+    Name of the Z-dimension that this function should be applied to."""
+_library_id = """\
+library_id
+    Name of the Z-dimension(s) that this function should be applied to.
+    For not specified Z-dimensions, the identity function is applied."""
+_img_library_id = """\
+library_id
+    - If `None`, there should only exist one entry in :attr:`anndata.AnnData.uns` ``['{spatial_key}']``.
+    - If a :class:`str`, first search :attr:`anndata.AnnData.obs` ``['{library_id}']`` which contains the mapping
+      from observations to library ids, then search :attr:`anndata.AnnData.uns` ``['{spatial_key}']``."""
 
 d = DocstringProcessor(
     adata=_adata,
@@ -170,4 +199,9 @@ d = DocstringProcessor(
     custom_fn=_custom_fn,
     as_array=_as_array,
     layer_added=_layer_added,
+    chunks_lazy=_chunks_lazy,
+    ripley_stat_returns=_ripley_stat_returns,
+    library_id_features=_library_id_features,
+    library_id=_library_id,
+    img_library_id=_img_library_id,
 )

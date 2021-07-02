@@ -10,7 +10,7 @@ Install Squidpy by running::
 
 Alternatively, to include all dependencies, such as interactive image viewer :mod:`napari`, run::
 
-    pip install 'squidpy[all]'
+    pip install 'squidpy[interactive]'
 
 Development version
 -------------------
