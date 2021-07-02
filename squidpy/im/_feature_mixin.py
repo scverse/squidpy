@@ -21,14 +21,14 @@ import skimage.measure
 
 from squidpy._docs import d
 from squidpy.gr._utils import _assert_non_empty_sequence
-from squidpy.im._utils import CropCoords, _NULL_PADDING
+from squidpy.im._coords import CropCoords, _NULL_PADDING
 from squidpy._constants._pkg_constants import Key
 
 Feature_t = Dict[str, Any]
 Channel_t = Union[int, Sequence[int]]
 
 
-def _get_channels(xr_img: xr.DataArray, channels: Optional[Channel_t]) -> List[int]:
+def _get_channels(xr_img: Union[np.ndarray, xr.DataArray], channels: Optional[Channel_t]) -> List[int]:
     """Get correct channel ranges for feature calculation."""
     # if channels is None, compute features for all channels
     all_channels = list(range(xr_img.shape[-1]))
@@ -85,6 +85,9 @@ class HasGetItemProtocol(Protocol):
     def _get_layer(self, layer: Optional[str]) -> str:
         ...
 
+    def _get_library_id(self, library_id: Optional[str]) -> str:
+        ...
+
 
 class FeatureMixin:
     """Mixin class for ImageContainer implementing feature extraction functions."""
@@ -93,6 +96,7 @@ class FeatureMixin:
     def features_summary(
         self: HasGetItemProtocol,
         layer: str,
+        library_id: Optional[str] = None,
         feature_name: str = "summary",
         channels: Optional[Channel_t] = None,
         quantiles: Sequence[float] = (0.9, 0.5, 0.1),
@@ -103,6 +107,7 @@ class FeatureMixin:
         Parameters
         ----------
         %(img_layer)s
+        %(library_id_features)s
         %(feature_name)s
         %(channels)s
         quantiles
@@ -117,16 +122,20 @@ class FeatureMixin:
             - ``'{feature_name}_ch-{c}_std'`` - the standard deviation.
         """
         layer = self._get_layer(layer)
+        library_id = self._get_library_id(library_id)
+        arr = self[layer].sel(z=library_id)
+
         quantiles = _assert_non_empty_sequence(quantiles, name="quantiles")
-        channels = _get_channels(self[layer], channels)
+        channels = _get_channels(arr, channels)
         channels = _assert_non_empty_sequence(channels, name="channels")
 
         features = {}
         for c in channels:
+            tmp_arr = arr[..., c].values
             for q in quantiles:
-                features[f"{feature_name}_ch-{c}_quantile-{q}"] = np.quantile(self[layer][:, :, c], q)
-            features[f"{feature_name}_ch-{c}_mean"] = np.mean(self[layer][:, :, c].values)
-            features[f"{feature_name}_ch-{c}_std"] = np.std(self[layer][:, :, c].values)
+                features[f"{feature_name}_ch-{c}_quantile-{q}"] = np.quantile(tmp_arr, q)
+            features[f"{feature_name}_ch-{c}_mean"] = np.mean(tmp_arr)
+            features[f"{feature_name}_ch-{c}_std"] = np.std(tmp_arr)
 
         return features
 
@@ -134,6 +143,7 @@ class FeatureMixin:
     def features_histogram(
         self: HasGetItemProtocol,
         layer: str,
+        library_id: Optional[str] = None,
         feature_name: str = "histogram",
         channels: Optional[Channel_t] = None,
         bins: int = 10,
@@ -147,6 +157,7 @@ class FeatureMixin:
         Parameters
         ----------
         %(img_layer)s
+        %(library_id_features)s
         %(feature_name)s
         %(channels)s
         bins
@@ -161,16 +172,19 @@ class FeatureMixin:
             - ``'{feature_name}_ch-{c}_bin-{i}'`` - the histogram counts for each bin `i` in ``bins``.
         """
         layer = self._get_layer(layer)
-        channels = _get_channels(self[layer], channels)
+        library_id = self._get_library_id(library_id)
+        arr = self[layer].sel(z=library_id)
+
+        channels = _get_channels(arr, channels)
         channels = _assert_non_empty_sequence(channels, name="channels")
 
         # if v_range is None, use whole-image range
         if v_range is None:
-            v_range = np.min(self[layer].values), np.max(self[layer].values)
+            v_range = np.min(arr.values), np.max(arr.values)
 
         features = {}
         for c in channels:
-            hist, _ = np.histogram(self[layer][:, :, c], bins=bins, range=v_range, weights=None, density=False)
+            hist, _ = np.histogram(arr[..., c].values, bins=bins, range=v_range, weights=None, density=False)
             for i, count in enumerate(hist):
                 features[f"{feature_name}_ch-{c}_bin-{i}"] = count
 
@@ -180,6 +194,7 @@ class FeatureMixin:
     def features_texture(
         self: HasGetItemProtocol,
         layer: str,
+        library_id: Optional[str] = None,
         feature_name: str = "texture",
         channels: Optional[Channel_t] = None,
         props: Sequence[str] = ("contrast", "dissimilarity", "homogeneity", "correlation", "ASM"),
@@ -199,6 +214,7 @@ class FeatureMixin:
         Parameters
         ----------
         %(img_layer)s
+        %(library_id_features)s
         %(feature_name)s
         %(channels)s
         props
@@ -220,6 +236,7 @@ class FeatureMixin:
         If the image is not of type :class:`numpy.uint8`, it will be converted.
         """
         layer = self._get_layer(layer)
+        library_id = self._get_library_id(library_id)
 
         props = _assert_non_empty_sequence(props, name="properties")
         angles = _assert_non_empty_sequence(angles, name="angles")
@@ -228,7 +245,8 @@ class FeatureMixin:
         channels = _get_channels(self[layer], channels)
         channels = _assert_non_empty_sequence(channels, name="channels")
 
-        arr = self[layer][..., channels].values
+        arr = self[layer].sel(z=library_id)[..., channels].values
+
         if not np.issubdtype(arr.dtype, np.uint8):
             arr = img_as_ubyte(arr, force_copy=False)  # values must be in [0, 255]
 
@@ -247,6 +265,7 @@ class FeatureMixin:
         self: HasGetItemProtocol,
         label_layer: str,
         intensity_layer: Optional[str] = None,
+        library_id: Optional[str] = None,
         feature_name: str = "segmentation",
         channels: Optional[Channel_t] = None,
         props: Sequence[str] = ("label", "area", "mean_intensity"),
@@ -266,12 +285,13 @@ class FeatureMixin:
             Name of the image layer used to calculate the non-intensity properties.
         intensity_layer
             Name of the image layer used to calculate the intensity properties.
+        %(library_id_features)s
         %(feature_name)s
         %(channels)s
             Only relevant for features that use the ``intensity_layer``.
         props
             Segmentation features that are calculated. See `properties` in :func:`skimage.measure.regionprops_table`.
-            Each feature is calculated for each segment (e.g., nucleous) and mean and std values are returned, except
+            Each feature is calculated for each segment (e.g., nucleus) and mean and std values are returned, except
             for `'centroid'` and `'label'`. Valid options are:
 
                 - `'area'` - number of pixels of segment.
@@ -280,7 +300,7 @@ class FeatureMixin:
                 - `'convex_area'` - number of pixels in convex hull of segment.
                 - `'eccentricity'` - eccentricity of ellipse with same second moments as segment.
                 - `'equivalent_diameter'` - diameter of circles with same area as segment.
-                - `'euler_number'` - euler characteristic of segment.
+                - `'euler_number'` - Euler characteristic of segment.
                 - `'extent'` - ratio of pixels in segment to its bounding box.
                 - `'feret_diameter_max'` - longest distance between points around convex hull of segment.
                 - `'filled_area'` - number of pixels of segment with all holes filled in.
@@ -292,7 +312,7 @@ class FeatureMixin:
                 - `'minor_axis_length'` - length of minor axis of ellipse with same second moments as segment.
                 - `'orientation'` - angle of major axis of ellipse with same second moments as segment.
                 - `'perimeter'` - perimeter of segment using 4-connectivity.
-                - `'perimeter_crofton'` - perimeter of segmeent approximated by the Crofton formula.
+                - `'perimeter_crofton'` - perimeter of segment approximated by the Crofton formula.
                 - `'solidity'` - ratio of pixels in the segment to the convex hull of the segment.
 
         Returns
@@ -341,11 +361,13 @@ class FeatureMixin:
             return np.c_[x, y]  # type: ignore[no-any-return]
 
         label_layer = self._get_layer(label_layer)
+        library_id = self._get_library_id(library_id)
 
         props = _assert_non_empty_sequence(props, name="properties")
         for prop in props:
             if prop not in _valid_seg_prop:
                 raise ValueError(f"Invalid property `{prop}`. Valid properties are `{_valid_seg_prop}`.")
+
         no_intensity_props = [p for p in props if "intensity" not in p]
         intensity_props = [p for p in props if "intensity" in p]
 
@@ -358,10 +380,10 @@ class FeatureMixin:
             channels = ()
 
         features: Dict[str, Any] = {}
+        label_arr = self[label_layer].sel(z=library_id)
+        label_arr_0 = label_arr[..., 0].values
         # calculate features that do not depend on the intensity image
-        tmp_features = skimage.measure.regionprops_table(
-            self[label_layer].values[:, :, 0], properties=no_intensity_props
-        )
+        tmp_features = skimage.measure.regionprops_table(label_arr_0, properties=no_intensity_props)
         for p in no_intensity_props:
             if p == "label":
                 features[f"{feature_name}_{p}"] = len(tmp_features["label"])
@@ -378,8 +400,8 @@ class FeatureMixin:
             if TYPE_CHECKING:
                 assert isinstance(intensity_layer, str)
             tmp_features = skimage.measure.regionprops_table(
-                self[label_layer].values[:, :, 0],
-                intensity_image=self[intensity_layer].values[:, :, c],
+                label_arr_0,
+                intensity_image=self[intensity_layer].sel(z=library_id)[..., c].values,
                 properties=props,
             )
             for p in intensity_props:
@@ -401,7 +423,7 @@ class FeatureMixin:
         Calculate features using a custom function.
 
         The feature extractor ``func`` can be any :func:`callable`, as long as it has the following signature:
-        :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`float`/:class:`Sequence`.
+        :class:`numpy.ndarray` ``(height, width, z, channels)`` **->** :class:`float`/:class:`Sequence`.
 
         Parameters
         ----------
@@ -412,6 +434,8 @@ class FeatureMixin:
         %(feature_name)s
         kwargs
             Keyword arguments for ``func``.
+            If `additional_layers` is present, all layers with the specified names will be passed to ``func``.
+            using ``func(..., <layer-name>=<layer-values>)`` for each layer name in `additional_layers`.
 
         Returns
         -------
@@ -431,8 +455,13 @@ class FeatureMixin:
         channels = _get_channels(self[layer], channels)
         feature_name = getattr(func, "__name__", "custom") if feature_name is None else feature_name
 
+        additional_layers = kwargs.pop("additional_layers", None)
+        if additional_layers is not None:
+            for additional_layer in additional_layers:
+                additional_layer = self._get_layer(additional_layer)
+                kwargs[additional_layer] = self[additional_layer].values
         # calculate features by calling feature_fn
-        res = func(self[layer].values[:, :, channels], **kwargs)  # type: ignore[call-arg]
+        res = func(self[layer][..., channels].values, **kwargs)  # type: ignore[call-arg]
         if not isinstance(res, Iterable):
             res = [res]
         features = {f"{feature_name}_{i}": f for i, f in enumerate(res)}

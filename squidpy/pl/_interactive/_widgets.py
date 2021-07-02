@@ -4,7 +4,10 @@ from typing import Any, Tuple, Union, Iterable, Optional
 from vispy.scene.widgets import ColorBarWidget
 from vispy.color.colormap import Colormap, MatplotlibColormap
 
+from scanpy import logging as logg
+
 import numpy as np
+import pandas as pd
 
 from PyQt5 import QtCore, QtWidgets
 
@@ -28,7 +31,7 @@ class ListWidget(QtWidgets.QListWidget):
         else:
             self.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
 
-        self._index = 0
+        self._index: Union[int, str] = 0
         self._unique = unique
         self._controller = controller
 
@@ -37,10 +40,10 @@ class ListWidget(QtWidgets.QListWidget):
         self.indexChanged.connect(self._onAction)
 
     @abstractmethod
-    def setIndex(self, index: int) -> None:
+    def setIndex(self, index: Union[int, str]) -> None:
         pass
 
-    def getIndex(self) -> int:
+    def getIndex(self) -> Union[int, str]:
         return self._index
 
     @abstractmethod
@@ -73,7 +76,7 @@ class LibraryListWidget(ListWidget):
 
         self.currentTextChanged.connect(self._onAction)
 
-    def setIndex(self, index: int) -> None:
+    def setIndex(self, index: Union[int, str]) -> None:
         # not used
         if index == self._index:
             return
@@ -108,44 +111,54 @@ class TwoStateCheckBox(QtWidgets.QCheckBox):
 class AListWidget(ListWidget):
     rawChanged = QtCore.pyqtSignal()
     layerChanged = QtCore.pyqtSignal()
+    libraryChanged = QtCore.pyqtSignal()
 
     def __init__(self, controller: Any, alayer: ALayer, attr: str, **kwargs: Any):
         if attr not in ALayer.VALID_ATTRIBUTES:
-            raise ValueError(f"Invalid attribute `{attr}`. Valid options are: `{list(ALayer.VALID_ATTRIBUTES)}`.")
+            raise ValueError(f"Invalid attribute `{attr}`. Valid options are `{sorted(ALayer.VALID_ATTRIBUTES)}`.")
         super().__init__(controller, **kwargs)
 
-        self._adata_layer = alayer
+        self._alayer = alayer
 
         self._attr = attr
-        self._getter = getattr(self._adata_layer, f"get_{attr}")
+        self._getter = getattr(self._alayer, f"get_{attr}")
 
         self.rawChanged.connect(self._onChange)
         self.layerChanged.connect(self._onChange)
+        self.libraryChanged.connect(self._onChange)
 
         self._onChange()
 
     def _onChange(self) -> None:
         self.clear()
-        self.addItems(self._adata_layer.get_items(self._attr))
+        self.addItems(self._alayer.get_items(self._attr))
 
     def _onAction(self, items: Iterable[str]) -> None:
         for item in sorted(set(items)):
-            vec, name = self._getter(item, index=self.getIndex())
+            try:
+                vec, name = self._getter(item, index=self.getIndex())
+            except Exception as e:  # noqa: B902
+                logg.error(e)
+                continue
             self._controller.add_points(vec, key=item, layer_name=name)
 
     def setRaw(self, is_raw: bool) -> None:
         if is_raw == self.getRaw():
             return
 
-        self._adata_layer.raw = is_raw
+        self._alayer.raw = is_raw
         self.rawChanged.emit()
 
     def getRaw(self) -> bool:
-        return self._adata_layer.raw
+        return self._alayer.raw
 
     def setIndex(self, index: Union[str, int]) -> None:
         if isinstance(index, str):
-            index = 0 if index == "" else int(index, base=10)
+            if index == "":
+                index = 0
+            elif self._attr != "obsm":
+                index = int(index, base=10)
+            # for obsm, we convert index to int if needed (if not a DataFrame) in the ALayer
         if index == self._index:
             return
 
@@ -153,7 +166,7 @@ class AListWidget(ListWidget):
         if self._attr == "obsm":
             self.indexChanged.emit(tuple(s.text() for s in self.selectedItems()))
 
-    def getIndex(self) -> int:
+    def getIndex(self) -> Union[int, str]:
         return self._index
 
     def setLayer(self, layer: Optional[str]) -> None:
@@ -162,18 +175,28 @@ class AListWidget(ListWidget):
         if layer == self.getLayer():
             return
 
-        self._adata_layer.layer = layer
+        self._alayer.layer = layer
         self.layerChanged.emit()
 
     def getLayer(self) -> Optional[str]:
-        return self._adata_layer.layer
+        return self._alayer.layer
+
+    def setLibraryId(self, library_id: str) -> None:
+        if library_id == self.getLibraryId():
+            return
+
+        self._alayer.library_id = library_id
+        self.libraryChanged.emit()
+
+    def getLibraryId(self) -> str:
+        return self._alayer.library_id
 
 
 class ObsmIndexWidget(QtWidgets.QComboBox):
     def __init__(self, alayer: ALayer, max_visible: int = 6, **kwargs: Any):
         super().__init__(**kwargs)
 
-        self._adata = alayer.adata
+        self._alayer = alayer
         self.view().setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
         self.setMaxVisibleItems(max_visible)
         self.setStyleSheet("combobox-popup: 0;")
@@ -181,14 +204,20 @@ class ObsmIndexWidget(QtWidgets.QComboBox):
     def addItems(self, texts: Union[QtWidgets.QListWidgetItem, int, Iterable[str]]) -> None:
         if isinstance(texts, QtWidgets.QListWidgetItem):
             try:
-                texts = self._adata.obsm[texts.text()].shape[1]
+                key = texts.text()
+                if isinstance(self._alayer.adata.obsm[key], pd.DataFrame):
+                    texts = sorted(self._alayer.adata.obsm[key].select_dtypes(include=[np.number, "category"]).columns)
+                elif hasattr(self._alayer.adata.obsm[key], "shape"):
+                    texts = self._alayer.adata.obsm[key].shape[1]
+                else:
+                    texts = np.asarray(self._alayer.adata.obsm[key]).shape[1]
             except (KeyError, IndexError):
                 texts = 0
         if isinstance(texts, int):
             texts = tuple(str(i) for i in range(texts))
 
         self.clear()
-        super().addItems(texts)
+        super().addItems(tuple(texts))
 
 
 class CBarWidget(QtWidgets.QWidget):
@@ -235,7 +264,6 @@ class CBarWidget(QtWidgets.QWidget):
             border_color="black",
             padding=(0.33, 0.167),
             axis_ratio=0.05,
-            innterpolation="linear",
         )
 
         self._canvas.central_widget.add_widget(self._colorbar)
@@ -320,11 +348,10 @@ class RangeSlider(QHRangeSlider):
         self._layer = layer
         self._colorbar = colorbar
 
-        self._layer.events.select.connect(self._onLayerSelected)
         self.valuesChanged.connect(self._onValueChange)
 
-    # TODO: use constants
     def _onValueChange(self, percentile: Tuple[float, float]) -> None:
+        # TODO: use constants
         v = self._layer.metadata["data"]
         clipped = np.clip(v, *np.percentile(v, percentile))
 
@@ -334,10 +361,6 @@ class RangeSlider(QHRangeSlider):
         self._layer._update_thumbnail()  # can't find another way to force it
         self._layer.refresh_colors()
 
-        self._onLayerSelected()
-
-    def _onLayerSelected(self, _event: Optional[QtCore.QEvent] = None) -> None:
-        source: Points = self._layer
-        self._colorbar.setOclim(source.metadata["minmax"])
-        self._colorbar.setClim((np.min(source.properties["value"]), np.max(source.properties["value"])))
+        self._colorbar.setOclim(self._layer.metadata["minmax"])
+        self._colorbar.setClim((np.min(self._layer.properties["value"]), np.max(self._layer.properties["value"])))
         self._colorbar.update_color()

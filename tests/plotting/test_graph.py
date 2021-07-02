@@ -64,18 +64,26 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
         # use count to avoid nan for scipy.cluster.hierarchy
         pl.nhood_enrichment(adata, cluster_key=C_KEY, mode="count", method="single")
 
-    def test_plot_ripley_k(self, adata: AnnData):
-        gr.spatial_neighbors(adata)
-        gr.ripley_k(adata, cluster_key=C_KEY)
+    def test_plot_ripley_l(self, adata_ripley: AnnData):
+        adata = adata_ripley
+        gr.ripley(adata, cluster_key=C_KEY, mode="L")
+        pl.ripley(adata, cluster_key=C_KEY, mode="L")
 
-        pl.ripley_k(adata, cluster_key=C_KEY)
+    def test_plot_ripley_f(self, adata_ripley: AnnData):
+        adata = adata_ripley
+        gr.ripley(adata, cluster_key=C_KEY, mode="F")
+        pl.ripley(adata, cluster_key=C_KEY, mode="F")
 
-    def test_plot_ripley_k_palette(self, adata_palette: AnnData):
+    def test_plot_ripley_g(self, adata_ripley: AnnData):
+        adata = adata_ripley
+        gr.ripley(adata, cluster_key=C_KEY, mode="G")
+        pl.ripley(adata, cluster_key=C_KEY, mode="G")
 
-        adata = adata_palette
-        gr.spatial_neighbors(adata)
-        gr.ripley_k(adata, cluster_key=C_KEY)
-        pl.ripley_k(adata, cluster_key=C_KEY)
+    def test_plot_ripley_f_nopalette(self, adata_ripley: AnnData):
+        adata = adata_ripley
+        adata.uns.pop(f"{C_KEY}_colors")
+        gr.ripley(adata, cluster_key=C_KEY, mode="F")
+        pl.ripley(adata, cluster_key=C_KEY, mode="F")
 
     def test_tol_plot_co_occurrence(self, adata: AnnData):
         gr.co_occurrence(adata, cluster_key=C_KEY)
@@ -161,7 +169,6 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
         pl.ligrec(ligrec_result, dendrogram="interacting_molecules")
 
     def test_plot_dendrogram_clusters(self, ligrec_result: Mapping[str, pd.DataFrame]):
-        # this currently "fails" (i.e. no dendrogram)
         np.random.seed(42)
         pl.ligrec(ligrec_result, dendrogram="interacting_clusters")
 
@@ -178,9 +185,15 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_alpha(self, ligrec_result: Mapping[str, pd.DataFrame]):
         pl.ligrec(ligrec_result, alpha=1)
 
+    def test_plot_alpha_none(self, ligrec_result: Mapping[str, pd.DataFrame]):
+        pl.ligrec(ligrec_result, alpha=None)
+
     def test_plot_cmap(self, ligrec_result: Mapping[str, pd.DataFrame]):
         pl.ligrec(ligrec_result, cmap="inferno")
 
     def test_plot_kwargs(self, ligrec_result: Mapping[str, pd.DataFrame]):
         # color_on is intentionally ignored
         pl.ligrec(ligrec_result, grid=False, color_on="square", x_padding=2, y_padding=2)
+
+    def test_plot_remove_nonsig_interactions(self, ligrec_result: Mapping[str, pd.DataFrame]):
+        pl.ligrec(ligrec_result, remove_nonsig_interactions=True, alpha=1e-4)

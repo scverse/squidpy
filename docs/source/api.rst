@@ -16,17 +16,18 @@ Graph
 
     gr.spatial_neighbors
     gr.nhood_enrichment
+    gr.co_occurrence
     gr.centrality_scores
     gr.interaction_matrix
+    gr.ripley
     gr.ligrec
-    gr.moran
-    gr.ripley_k
-    gr.co_occurrence
+    gr.spatial_autocorr
+    gr.sepal
 
 Image
 ~~~~~
 
-.. py:module:: squidpy.im
+.. module:: squidpy.im
 .. currentmodule:: squidpy
 
 .. autosummary::
@@ -49,7 +50,7 @@ Plotting
     pl.centrality_scores
     pl.interaction_matrix
     pl.ligrec
-    pl.ripley_k
+    pl.ripley
     pl.co_occurrence
     pl.extract
 
@@ -65,6 +66,9 @@ Datasets
     datasets.four_i
     datasets.imc
     datasets.seqfish
+    datasets.merfish
+    datasets.mibitof
+    datasets.slideseqv2
     datasets.sc_mouse_cortex
     datasets.visium_hne_adata
     datasets.visium_hne_adata_crop

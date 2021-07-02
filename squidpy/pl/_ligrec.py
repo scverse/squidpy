@@ -32,10 +32,11 @@ class CustomDotplot(sc.pl.DotPlot):
     DEFAULT_NUM_COLORBAR_TICKS = 5
     DEFAULT_NUM_LEGEND_DOTS = 5
 
-    def __init__(self, minn: float, delta: float, *args: Any, **kwargs: Any):
+    def __init__(self, minn: float, delta: float, alpha: Optional[float], *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._delta = delta
         self._minn = minn
+        self._alpha = alpha
 
     def _plot_size_legend(self, size_legend_ax: Axes) -> None:
         y = self.BASE ** -((self.dot_max * self._delta) + self._minn)
@@ -46,7 +47,8 @@ class CustomDotplot(sc.pl.DotPlot):
         size_range = size_range[1:]
 
         size = size_range ** self.size_exponent
-        size = size * (self.largest_dot - self.smallest_dot) + self.smallest_dot
+        mult = (self.largest_dot - self.smallest_dot) + self.smallest_dot
+        size = size * mult
 
         # plot size bar
         size_legend_ax.scatter(
@@ -74,6 +76,30 @@ class CustomDotplot(sc.pl.DotPlot):
 
         xmin, xmax = size_legend_ax.get_xlim()
         size_legend_ax.set_xlim(xmin - 0.15, xmax + 0.5)
+
+        if self._alpha is not None:
+            ax = self.fig.add_subplot()
+            ax.scatter(
+                [0.35, 0.65],
+                [0, 0],
+                s=size[-1],
+                color="black",
+                edgecolor="black",
+                linewidth=self.dot_edge_lw,
+                zorder=100,
+            )
+            ax.scatter(
+                [0.65], [0], s=0.33 * mult, color="white", edgecolor="black", linewidth=self.dot_edge_lw, zorder=100
+            )
+            ax.set_xlim([0, 1])
+            ax.set_xticks([0.35, 0.65])
+            ax.set_xticklabels(["false", "true"])
+            ax.set_yticks([])
+            ax.set_title(f"significant\n$p={self._alpha}$", y=ymax + 0.25, size="small")
+            ax.set(frame_on=False)
+
+            l, b, w, h = size_legend_ax.get_position().bounds
+            ax.set_position([l + w, b, w, h])
 
     def _plot_colorbar(self, color_legend_ax: Axes, normalize: bool) -> None:
         cmap = plt.get_cmap(self.cmap)
@@ -104,6 +130,7 @@ def ligrec(
     means_range: Tuple[float, float] = (-np.inf, np.inf),
     pvalue_threshold: float = 1.0,
     remove_empty_interactions: bool = True,
+    remove_nonsig_interactions: bool = False,
     dendrogram: Optional[str] = None,
     alpha: Optional[float] = 0.001,
     swap_axes: bool = False,
@@ -135,6 +162,10 @@ def ligrec(
         Only show interactions whose means are within this **closed** interval.
     pvalue_threshold
         Only show interactions with p-value <= ``pvalue_threshold``.
+    remove_empty_interactions
+        Remove rows and columns that only contain interactions with `NaN` values.
+    remove_nonsig_interactions
+        Remove rows and columns that only contain interactions that are larger than ``alpha``.
     dendrogram
         How to cluster based on the p-values. Valid options are:
 
@@ -143,12 +174,12 @@ def ligrec(
             - `'interacting_clusters'` - cluster the interacting clusters.
             - `'both'` - cluster both rows and columns. Note that in this case, the dendrogram is not shown.
 
+    alpha
+        Significance threshold. All elements with p-values <= ``alpha`` will be marked by tori instead of dots.
     swap_axes
         Whether to show the cluster combinations as rows and the interacting pairs as columns.
     title
         Title of the plot.
-    alpha
-        Significance threshold. All elements with p-values <= ``alpha`` will be marked by tori instead of dots.
     %(plotting)s
     kwargs
         Keyword arguments for :meth:`scanpy.pl.DotPlot.style` or :meth:`scanpy.pl.DotPlot.legend`.
@@ -157,6 +188,25 @@ def ligrec(
     -------
     %(plotting_returns)s
     """
+
+    def filter_values(
+        pvals: pd.DataFrame, means: pd.DataFrame, *, mask: pd.DataFrame, kind: str
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        mask_rows = mask.any(axis=1)
+        pvals = pvals.loc[mask_rows]
+        means = means.loc[mask_rows]
+
+        if pvals.empty:
+            raise ValueError(f"After removing rows with only {kind} interactions, none remain.")
+
+        mask_cols = mask.any(axis=0)
+        pvals = pvals.loc[:, mask_cols]
+        means = means.loc[:, mask_cols]
+
+        if pvals.empty:
+            raise ValueError(f"After removing columns with only {kind} interactions, none remain.")
+
+        return pvals, means
 
     def get_dendrogram(adata: AnnData, linkage: str = "complete") -> Mapping[str, Any]:
         z_var = sch.linkage(
@@ -194,7 +244,7 @@ def ligrec(
 
     if not isinstance(adata, dict):
         raise TypeError(
-            f"Expected `adata` to be either of type `anndata.AnnData` or `dict`, " f"found `{type(adata).__name__}`."
+            f"Expected `adata` to be either of type `anndata.AnnData` or `dict`, found `{type(adata).__name__}`."
         )
     if len(means_range) != 2:
         raise ValueError(f"Expected `means_range` to be a sequence of size `2`, found `{len(means_range)}`.")
@@ -228,20 +278,9 @@ def ligrec(
     pvals = pvals[pvals <= pvalue_threshold]
 
     if remove_empty_interactions:
-        mask = ~(pd.isnull(means) | pd.isnull(pvals))
-        mask_rows = mask.any(axis=1)
-        pvals = pvals.loc[mask_rows]
-        means = means.loc[mask_rows]
-
-        if pvals.empty:
-            raise ValueError("After removing rows with only NaN interactions, none remain.")
-
-        mask_cols = mask.any(axis=0)
-        pvals = pvals.loc[:, mask_cols]
-        means = means.loc[:, mask_cols]
-
-        if pvals.empty:
-            raise ValueError("After removing columns with only NaN interactions, none remain.")
+        pvals, means = filter_values(pvals, means, mask=~(pd.isnull(means) | pd.isnull(pvals)), kind="NaN")
+    if remove_nonsig_interactions and alpha is not None:
+        pvals, means = filter_values(pvals, means, mask=pvals <= alpha, kind="non-significant")
 
     start, label_ranges = 0, {}
 
@@ -255,8 +294,9 @@ def ligrec(
         start += size
     label_ranges = {k: label_ranges[k] for k in sorted(label_ranges.keys())}
 
-    pvals = -np.log10(pvals).fillna(0)
     pvals = pvals[label_ranges.keys()]
+    pvals = -np.log10(pvals + min(1e-3, alpha if alpha is not None else 1e-3)).fillna(0)
+
     pvals.columns = map(_SEP.join, pvals.columns.to_flat_index())
     pvals.index = map(_SEP.join, pvals.index.to_flat_index())
 
@@ -300,6 +340,7 @@ def ligrec(
         CustomDotplot(
             delta=delta,
             minn=minn,
+            alpha=alpha,
             adata=adata,
             var_names=adata.var_names,
             groupby="groups",
@@ -340,7 +381,7 @@ def ligrec(
             dp.ax_dict["mainplot_ax"].set_xticklabels(labs)
 
     if alpha is not None:
-        yy, xx = np.where(pvals.values >= -np.log10(alpha))
+        yy, xx = np.where((pvals.values + alpha) >= -np.log10(alpha))
         if len(xx) and len(yy):
             # for dendrogram='both', they are already re-ordered
             mapper = (

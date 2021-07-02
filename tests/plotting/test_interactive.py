@@ -1,3 +1,4 @@
+from typing import Tuple
 import sys
 import pytest
 
@@ -7,8 +8,11 @@ from anndata import AnnData
 from scipy.sparse import issparse
 import numpy as np
 
+from matplotlib.testing.compare import compare_images
+import matplotlib.pyplot as plt
+
 from squidpy.im import ImageContainer
-from tests.conftest import DPI, PlotTester, PlotTesterMeta
+from tests.conftest import DPI, TOL, ACTUAL, EXPECTED, PlotTester, PlotTesterMeta
 
 
 @pytest.mark.qt()
@@ -100,22 +104,6 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
 
         viewer.screenshot(dpi=DPI)
 
-    def test_plot_add_image(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
-        from napari.layers import Image
-
-        viewer = napari_cont.interactive(adata)
-        cnt = viewer._controller
-        img = np.zeros((*napari_cont.shape, 3), dtype=np.float32)
-        img[..., 0] = 1.0  # all red image
-
-        napari_cont.add_img(img, layer="foobar")
-        cnt.add_image("foobar")
-
-        assert viewer._controller.view.layernames == {"V1_Adult_Mouse_Brain", "foobar"}
-        assert isinstance(viewer._controller.view.layers["foobar"], Image)
-
-        viewer.screenshot(dpi=DPI)
-
     def test_plot_crop_center(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
         viewer = napari_cont.crop_corner(0, 0, size=500).interactive(adata)
         bdata = viewer.adata
@@ -133,3 +121,40 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
         cnt.add_points(bdata.obs_vector(bdata.var_names[42]), layer_name="foo")
 
         viewer.screenshot(dpi=DPI)
+
+    def test_plot_scalefactor(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
+        scale = 2
+        napari_cont.data.attrs["scale"] = scale
+
+        viewer = napari_cont.interactive(adata)
+        cnt = viewer._controller
+        model = cnt._model
+
+        data = np.random.normal(size=adata.n_obs)
+        cnt.add_points(data, layer_name="layer1")
+
+        # ignore z-dim
+        np.testing.assert_allclose(adata.obsm["spatial"][:, ::-1] * scale, model.coordinates[:, 1:])
+
+        viewer.screenshot(dpi=DPI)
+
+    @pytest.mark.parametrize("size", [(800, 600), (600, 800), (800, 800)])
+    @pytest.mark.parametrize("x", [-200, 200])
+    @pytest.mark.parametrize("y", [-200, 200])
+    def test_corner_corner_cases(
+        self, qtbot, adata: AnnData, napari_cont: ImageContainer, y: int, x: int, size: Tuple[int, int]
+    ):
+        viewer = napari_cont.crop_corner(y, x, size=size).interactive(adata)
+        bdata = viewer.adata
+        cnt = viewer._controller
+
+        cnt.add_points(bdata.obs_vector(bdata.var_names[42]), layer_name="foo")
+
+        basename = f"{self.__class__.__name__[4:]}_corner_case_{y}_{x}_{'_'.join(map(str, size))}.png"
+        viewer.screenshot(dpi=DPI)
+        plt.savefig(ACTUAL / basename, dpi=DPI)
+        plt.close()
+
+        res = compare_images(str(EXPECTED / basename), str(ACTUAL / basename), 2 * TOL)
+
+        assert res is None, res

@@ -28,23 +28,30 @@ def _html_page_context(
         warnings.warn("`github_repo` not specified")
         return
 
+    if not app.config.github_ref:
+        app.config.github_org = "theislab"
     if not app.config.github_nb_repo:
         nb_repo = f"{app.config.github_repo}_notebooks"
         warnings.warn(f"`github_nb_repo `not specified. Setting to `{nb_repo}`")
         app.config.github_nb_repo = nb_repo
+    if not app.config.github_ref:
+        warnings.warn("`github_ref` not specified. Setting to `'master'`")
+        app.config.github_ref = "master"
 
     path = os.path.relpath(doctree.get("source"), app.builder.srcdir)
     repo = get_github_repo(app, path)
 
     # For sphinx_rtd_theme.
     context["display_github"] = True
-    context["github_user"] = "theislab"
-    context["github_version"] = "master"
+    context["github_user"] = app.config.github_org
+    context["github_version"] = app.config.github_ref
     context["github_repo"] = repo
     context["conf_py_path"] = "/docs/source/"
 
 
 def setup(app: Sphinx) -> None:
-    app.add_config_value("github_nb_repo", "", True)
+    app.add_config_value("github_org", "", True)
     app.add_config_value("github_repo", "", True)
+    app.add_config_value("github_ref", "", True)
+    app.add_config_value("github_nb_repo", "", True)
     app.connect("html-page-context", _html_page_context)
