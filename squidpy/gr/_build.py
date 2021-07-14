@@ -184,8 +184,7 @@ def _build_connectivity(
             for i in np.arange(N):
                 dists_lst.append(
                     euclidean_distances(
-                        coords[conns_m.indices[conns_m.indptr[i]:conns_m.indptr[i+1]], :], 
-                        coords[np.newaxis, i, :]
+                        coords[conns_m.indices[conns_m.indptr[i] : conns_m.indptr[i + 1]], :], coords[np.newaxis, i, :]
                     )
                 )
 
@@ -216,7 +215,7 @@ def _build_connectivity(
 
         if return_distance:
             dists_m = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
-    
+
     if set_diag:
         conns_m.setdiag(1)
 
