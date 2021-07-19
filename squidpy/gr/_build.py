@@ -175,25 +175,22 @@ def _build_connectivity(
     dists_m = None
     if delaunay:
         tri = Delaunay(coords)
-        col_lst = []
-        row_lst = []
-        dists_lst = []
-        for i in np.arange(N):
-            idx = np.argwhere(i == tri.simplices)[:, 0]
-            idx_col = np.unique(np.setdiff1d(tri.simplices[idx.squeeze(), ...], i)).tolist()
-            col_lst.append(idx_col)
-            row_lst.append(np.repeat(i, len(idx_col)))
-            dists_lst.append(
-                euclidean_distances(
-                    coords[idx_col, :],
-                    coords[np.newaxis, i, :],
+
+        indptr, indices = tri.vertex_neighbor_vertices
+        conns_m = csr_matrix((np.ones(len(indices)), indices, indptr), shape=(N, N))
+
+        if return_distance:
+            dists_lst = []
+            for i in np.arange(N):
+                dists_lst.append(
+                    euclidean_distances(
+                        coords[conns_m.indices[conns_m.indptr[i] : conns_m.indptr[i + 1]], :], coords[np.newaxis, i, :]
+                    )
                 )
-            )
 
-        col_indices = np.array(list(chain(*col_lst)))
-        row_indices = np.array(list(chain(*row_lst)))
-        dists = np.array(list(chain(*dists_lst))).squeeze()
+            dists = np.array(list(chain(*dists_lst))).squeeze()
 
+            dists_m = csr_matrix((dists, indices, indptr), shape=(N, N))
     else:
         tree = NearestNeighbors(n_neighbors=n_neighbors, radius=radius or 1, metric="euclidean")
         tree.fit(coords)
@@ -214,14 +211,13 @@ def _build_connectivity(
                 row_indices, col_indices = row_indices[mask], col_indices[mask]
                 dists = dists[mask]
 
-    if return_distance:
-        dists_m = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
+        conns_m = csr_matrix((np.ones(len(row_indices)), (row_indices, col_indices)), shape=(N, N))
+
+        if return_distance:
+            dists_m = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
 
     if set_diag:
-        row_indices = np.concatenate((row_indices, np.arange(N)))
-        col_indices = np.concatenate((col_indices, np.arange(N)))
-
-    conns_m = csr_matrix((np.ones(len(row_indices)), (row_indices, col_indices)), shape=(N, N))
+        conns_m.setdiag(1)
 
     return (conns_m, dists_m) if return_distance else conns_m
 
