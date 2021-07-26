@@ -90,7 +90,8 @@ class TestContainerIO:
         img2 = ImageContainer.load(Path(tmpdir) / "foo")
 
         np.testing.assert_array_equal(img["image"].values, img2["image"].values)
-        np.testing.assert_array_equal(img.data.dims, img2.data.dims)
+        np.testing.assert_array_equal(img["image"].dims, img2["image"].dims)
+        assert img.data.dims == img2.data.dims
         np.testing.assert_array_equal(sorted(img.data.attrs.keys()), sorted(img2.data.attrs.keys()))
         for k, v in img.data.attrs.items():
             assert type(v) == type(img2.data.attrs[k])  # noqa: E721
