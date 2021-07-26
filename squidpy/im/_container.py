@@ -385,7 +385,7 @@ class ImageContainer(FeatureMixin):
         dims: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
         **_: Any,
     ) -> xr.DataArray:
-        logg.debug(f"Loading data `numpy.array` of shape `{img.shape}`")
+        logg.debug(f"Loading `numpy.array` of shape `{img.shape}`")
 
         return self._load_img(xr.DataArray(img), copy=copy, dims=dims, warn=False)
 
@@ -398,16 +398,17 @@ class ImageContainer(FeatureMixin):
         dims: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
         **_: Any,
     ) -> xr.DataArray:
-        logg.debug(f"Loading data `xarray.DataArray` of shape `{img.shape}`")
+        logg.debug(f"Loading `xarray.DataArray` of shape `{img.shape}`")
 
         img = img.copy() if copy else img
         if not ("y" in img.dims and "x" in img.dims and "z" in img.dims):
-            _, dims, _, axes = _infer_dimensions(img, infer_dimensions=dims)
-            # `axes` is always of length 1 or 2
-            dimnames = ("z", "channels") if len(axes) == 2 else (("channels",) if "z" in dims else ("z",))
-            img = img.expand_dims([d for _, d in zip(axes, dimnames)], axis=axes)
+            _, dims, _, expand_axes = _infer_dimensions(img, infer_dimensions=dims)
             if warn:
                 logg.warning(f"Unable to find `y`, `x` or `z` dimension in `{img.dims}`. Renaming to `{dims}`")
+            # `axes` is always of length 0, 1 or 2
+            if len(expand_axes):
+                dimnames = ("z", "channels") if len(expand_axes) == 2 else (("channels",) if "z" in dims else ("z",))
+                img = img.expand_dims([d for _, d in zip(expand_axes, dimnames)], axis=expand_axes)
             img = img.rename(dict(zip(img.dims, dims)))
 
         return img.transpose("y", "x", "z", ...)
