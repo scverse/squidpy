@@ -37,7 +37,10 @@ def _infer_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # type:
 
     if fname.endswith(".tif") or fname.endswith(".tiff"):
         image = TiffFile(fname)
-        return (len(image.pages),) + image.pages[0].shape, np.dtype(image.pages[0].dtype)
+        try:
+            return tuple(image.shaped_metadata[0]["shape"]), np.dtype(image.pages[0].dtype)
+        except (IndexError, KeyError):
+            return (len(image.pages),) + image.pages[0].shape, np.dtype(image.pages[0].dtype)
 
     image = Image.open(fname)
     n_frames = getattr(image, "n_frames", 1)
@@ -135,7 +138,7 @@ def _infer_dimensions(
 
     Raises
     ------
-    ValuesError
+    ValueError
         If the array is not `2`, `3,` or `4` dimensional.
     """
 
@@ -160,6 +163,7 @@ def _infer_dimensions(
         shape, dtype = _get_image_shape_dtype(obj)
     else:
         shape, dtype = obj.shape, obj.dtype
+    logg.debug(f"Found image of shape `{shape}` and dtype `{dtype}`")
 
     ndim = len(shape)
 
@@ -171,14 +175,17 @@ def _infer_dimensions(
             raise ValueError(f"Image is `{ndim}` dimensional, cannot assign to dims `{infer_dimensions}`.")
         _assert_dims_present(infer_dimensions, include_z=ndim == 4)
 
-        add_shape = tuple([1] * (4 - ndim))
-        return shape + add_shape, infer_dimensions, dtype, tuple(ndim + i for i in range(len(add_shape)))
+        infer_dimensions = tuple(infer_dimensions)
+        add_shape = (1,) * (4 - ndim)
+        dimnames = ("z", "channels") if ndim == 2 else (("channels",) if "z" in infer_dimensions else ("z",))
+
+        return shape + add_shape, infer_dimensions + dimnames, dtype, tuple(ndim + i for i in range(len(add_shape)))
 
     if ndim == 2:
         # assume only spatial dims are present
         return shape + (1, 1), ("y", "x", "z", "channels"), dtype, (2, 3)
 
-    x, y, *_ = np.argsort(shape)[::-1]
+    x, y, *_ = np.argsort(shape, kind="stable")[::-1]
     if y > x:
         # assume 1st 2 dimensions are spatial and are y, x
         y, x = x, y
@@ -209,29 +216,34 @@ def _lazy_load_image(
     dims: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
     chunks: Optional[Union[int, str, Tuple[int, ...], Mapping[str, Union[int, str]]]] = None,
 ) -> xr.DataArray:
+    # TODO(michalk8): switch to pims for tiffs? or switch completely once lazy-loading of JPEGs is done
     def read_unprotected(fname: str) -> np.ndarray:
-        # not setting MAX_IMAGE_PIXELS caues problems when with processes and dask.distributed
+        # not setting MAX_IMAGE_PIXELS causes problems when with processes and dask.distributed
         old_max_pixels = Image.MAX_IMAGE_PIXELS
         try:
             if fname.endswith(".tif") or fname.endswith(".tiff"):
-                return np.reshape(imread(fname, plugin="tifffile"), shape)
+                # do not use imread since it changes the shape to `y, x, ?, z`,
+                # whereas we use `z, y, x, ?` in `_infer_shape_dtype`
+                # return np.reshape(imread(fname, plugin="tifffile"), shape)
+                return np.reshape(TiffFile(fname).asarray(), shape)
 
             Image.MAX_IMAGE_PIXELS = None
             return np.reshape(imread(fname, plugin="pil"), shape)
         except Image.UnidentifiedImageError as e:  # should not happen
-            logg.warning(e)
+            logg.error(str(e))
             return np.reshape(imread(fname), shape)
         finally:
             Image.MAX_IMAGE_PIXELS = old_max_pixels
 
     fname = str(fname)
-    shape, dims_, dtype, _ = _infer_dimensions(fname, dims)
+    shape, dims, dtype, _ = _infer_dimensions(fname, dims)
+    logg.debug(f"Reshaping to `{shape}` with dimensions `{dims}`")
 
     if isinstance(chunks, dict):
-        chunks = tuple(chunks.get(d, "auto") for d in dims_)
+        chunks = tuple(chunks.get(d, "auto") for d in dims)  # type: ignore[union-attr]
 
     darr = da.from_delayed(delayed(read_unprotected)(fname), shape=shape, dtype=dtype)
     if chunks is not None:
         darr = darr.rechunk(chunks)
 
-    return xr.DataArray(darr, dims=dims_).transpose("y", "x", "z", ...)
+    return xr.DataArray(darr, dims=dims).transpose("y", "x", "z", ...)
