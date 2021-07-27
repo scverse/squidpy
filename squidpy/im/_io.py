@@ -37,7 +37,10 @@ def _infer_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # type:
 
     if fname.endswith(".tif") or fname.endswith(".tiff"):
         image = TiffFile(fname)
-        return (len(image.pages),) + image.pages[0].shape, np.dtype(image.pages[0].dtype)
+        try:
+            return tuple(image.shaped_metadata[0]["shape"]), np.dtype(image.pages[0].dtype)
+        except (IndexError, KeyError):
+            return (len(image.pages),) + image.pages[0].shape, np.dtype(image.pages[0].dtype)
 
     image = Image.open(fname)
     n_frames = getattr(image, "n_frames", 1)
@@ -174,10 +177,9 @@ def _infer_dimensions(
 
         infer_dimensions = tuple(infer_dimensions)
         add_shape = (1,) * (4 - ndim)
-        expand_dims = tuple(ndim + i for i in range(len(add_shape)))
         dimnames = ("z", "channels") if ndim == 2 else (("channels",) if "z" in infer_dimensions else ("z",))
 
-        return shape + add_shape, infer_dimensions + dimnames, dtype, expand_dims
+        return shape + add_shape, infer_dimensions + dimnames, dtype, tuple(ndim + i for i in range(len(add_shape)))
 
     if ndim == 2:
         # assume only spatial dims are present
@@ -238,7 +240,7 @@ def _lazy_load_image(
     logg.debug(f"Reshaping to `{shape}` with dimensions `{dims}`")
 
     if isinstance(chunks, dict):
-        chunks = tuple(chunks.get(d, "auto") for d in dims)
+        chunks = tuple(chunks.get(d, "auto") for d in dims)  # type: ignore[union-attr]
 
     darr = da.from_delayed(delayed(read_unprotected)(fname), shape=shape, dtype=dtype)
     if chunks is not None:

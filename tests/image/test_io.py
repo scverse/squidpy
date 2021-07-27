@@ -6,6 +6,7 @@ import numpy as np
 import xarray as xr
 import dask.array as da
 
+from skimage.io import imread
 import tifffile
 
 from squidpy.im._io import _lazy_load_image, _infer_dimensions, _get_image_shape_dtype
@@ -36,15 +37,9 @@ class TestIO:
         path = str(tmpdir / "img.tiff")
         img = self._create_image(path, shape)
 
-        expected_shape = shape
-        if shape[-1] == 1:
-            expected_shape = expected_shape[:-1]
-        if len(shape) < 4:
-            expected_shape = (1,) + expected_shape
-
         actual_shape, actual_dtype = _get_image_shape_dtype(path)
-        np.testing.assert_array_equal(actual_shape, expected_shape)
-        assert actual_dtype == img.dtype
+        np.testing.assert_array_equal(actual_shape, shape)
+        assert actual_dtype == img.dtype, (actual_dtype, img.dtype)
 
     @pytest.mark.parametrize("infer_dim", list(InferDimensions))
     @pytest.mark.parametrize(
@@ -98,3 +93,30 @@ class TestIO:
             np.testing.assert_array_equal(res.data.chunksize, [100, 100, 1, 3])
 
         np.testing.assert_array_equal(img, np.squeeze(res.values))
+
+    @pytest.mark.parametrize("n", [0, 1, 2, 3, 5])
+    def test_explicit_dimension_mismatch(self, tmpdir, n: int):
+        path = str(tmpdir / "img.tiff")
+        _ = self._create_image(path, (5, 100, 100, 2))
+
+        with pytest.raises(ValueError, match="Image is `4` dimensional"):
+            _ = _lazy_load_image(path, dims=tuple(str(i) for i in range(n)))
+
+    @pytest.mark.parametrize("n", [3, 4, 5])
+    def test_read_tiff_skimage(self, tmpdir, n: int):
+        path = str(tmpdir / "img.tiff")
+        img = self._create_image(path, (n, 100, 100))
+
+        res = _lazy_load_image(path, dims=("c", "y", "x"))
+        res_skimage = imread(path, plugin="tifffile")
+
+        assert isinstance(res, xr.DataArray)
+        assert isinstance(res_skimage, np.ndarray)
+
+        np.testing.assert_array_equal(img, res.transpose("c", "y", "x", ...).values.squeeze(-1))
+        if n in (3, 4):
+            np.testing.assert_array_equal(res_skimage.shape, [100, 100, n])
+            with pytest.raises(AssertionError, match="Arrays are not equal"):
+                np.testing.assert_array_equal(res_skimage.shape, np.squeeze(res.shape))
+        else:
+            np.testing.assert_array_equal(res_skimage, res.transpose("c", "y", "x", ...).values.squeeze(-1))
