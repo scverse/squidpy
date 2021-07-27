@@ -39,7 +39,7 @@ def _infer_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # type:
         image = TiffFile(fname)
         try:
             return tuple(image.shaped_metadata[0]["shape"]), np.dtype(image.pages[0].dtype)
-        except (IndexError, KeyError):
+        except (IndexError, KeyError, TypeError):
             return (len(image.pages),) + image.pages[0].shape, np.dtype(image.pages[0].dtype)
 
     image = Image.open(fname)
