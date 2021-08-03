@@ -28,10 +28,10 @@ def spatial_neighbors(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
     coord_type: Optional[Union[str, CoordType]] = None,
-    n_rings: int = 1,
     n_neighs: int = 6,
-    delaunay: bool = False,
     radius: Optional[Union[float, Tuple[float, float]]] = None,
+    delaunay: bool = False,
+    n_rings: int = 1,
     transform: Optional[Union[str, Transform]] = None,
     set_diag: bool = False,
     key_added: str = "spatial",
@@ -51,21 +51,21 @@ def spatial_neighbors(
             - `{c.GENERIC.s!r}` - generic coordinates.
             - `None` - `{c.GRID.s!r}` if ``spatial_key`` is in :attr:`anndata.AnnData.uns`
               with ``n_neighs = 6`` (Visium), otherwise use `{c.GENERIC.s!r}`.
-    n_rings
-        Number of rings of neighbors for grid data. Only used when ``coord_type = {c.GRID.s!r}``.
     n_neighs
         Depending on the ``coord_type``:
 
-            - `{c.GRID!r}` - number of neighboring tiles.
-            - `{c.GENERIC!r}` - number of neighbors in a KNN graph. Only used when ``delaunay = False``.
-    delaunay
-        Whether to compute the graph from Delaunay triangulation instead of KNN graph.
-        Only used when ``coord_type = {c.GENERIC.s!r}``.
+            - `{c.GRID.s!r}` - number of neighboring tiles.
+            - `{c.GENERIC.s!r}` - number of neighborhoods for non-grid data. Only used when ``delaunay = False``.
     radius
-        Depending of type:
+        Depending on the type:
 
-            - :class:`float` - radius of neighbors for non-grid data if ``coord_type = {c.GENERIC.s!r}``.
-            - :class:`tuple` - prune the graph to only contain edges in interval `[radius[0], radius[1]]`.
+            - :class:`float` - neighborhood radius for non-grid data if ``coord_type = {c.GENERIC.s!r}``
+              and ``delaunay = False``.
+            - :class:`tuple` - prune the final graph to only contain edges in interval `[radius[0], radius[1]]`.
+    delaunay
+        Whether to compute the graph from Delaunay triangulation. Only used when ``coord_type = {c.GENERIC.s!r}``.
+    n_rings
+        Number of rings of neighbors for grid data. Only used when ``coord_type = {c.GRID.s!r}``.
     transform
         Type of adjacency matrix transform. Valid options are:
 
@@ -73,9 +73,9 @@ def spatial_neighbors(
             - `{t.COSINE.s!r}` - cosine transformation of the adjacency matrix.
             - `{t.NONE.v}` - no transformation of the adjacency matrix.
     set_diag
-        Whether to set the diagonal of the connectivity matrix to `1.0`.
+        Whether to set the diagonal of the spatial connectivities to `1.0`.
     key_added
-        Key which controls where the results are saved.
+        Key which controls where the results are saved if ``copy = False``.
 
     Returns
     -------
@@ -83,9 +83,9 @@ def spatial_neighbors(
 
     Otherwise, modifies the ``adata`` with the following keys:
 
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_connectivities']`` - spatial connectivities.
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - spatial distances.
-        - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - spatial neighbors dictionary.
+        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_connectivities']`` - the spatial connectivities.
+        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - the spatial distances.
+        - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - :class:`dict` containing parameters.
     """
     _assert_positive(n_rings, name="n_rings")
     _assert_positive(n_neighs, name="n_neighs")
@@ -106,7 +106,7 @@ def spatial_neighbors(
             Adj, Dst = _build_grid(coords, n_neighs=n_neighs, n_rings=n_rings, delaunay=delaunay, set_diag=set_diag)
         elif coord_type == CoordType.GENERIC:
             Adj, Dst = _build_connectivity(
-                coords, n_neighbors=n_neighs, radius=radius, delaunay=delaunay, return_distance=True, set_diag=set_diag
+                coords, n_neighs=n_neighs, radius=radius, delaunay=delaunay, return_distance=True, set_diag=set_diag
             )
         else:
             raise NotImplementedError(f"Coordinate type `{coord_type}` is not yet implemented.")
@@ -139,8 +139,8 @@ def spatial_neighbors(
 
     neighbors_dict = {
         "connectivities_key": conns_key,
-        "params": {"n_neighbors": n_neighs, "coord_type": coord_type.v, "radius": radius, "transform": transform.v},
         "distances_key": dists_key,
+        "params": {"n_neighbors": n_neighs, "coord_type": coord_type.v, "radius": radius, "transform": transform.v},
     }
 
     if copy:
@@ -157,7 +157,7 @@ def _build_grid(
     if n_rings > 1:
         Adj: csr_matrix = _build_connectivity(
             coords,
-            n_neighbors=n_neighs,
+            n_neighs=n_neighs,
             neigh_correct=True,
             set_diag=True,
             delaunay=delaunay,
@@ -177,9 +177,7 @@ def _build_grid(
         Dst = Adj.copy()
         Adj.data[:] = 1.0
     else:
-        Adj = _build_connectivity(
-            coords, n_neighbors=n_neighs, neigh_correct=True, delaunay=delaunay, set_diag=set_diag
-        )
+        Adj = _build_connectivity(coords, n_neighs=n_neighs, neigh_correct=True, delaunay=delaunay, set_diag=set_diag)
         Dst = Adj.copy()
 
     Dst.setdiag(0.0)
@@ -189,17 +187,16 @@ def _build_grid(
 
 def _build_connectivity(
     coords: np.ndarray,
-    n_neighbors: int,
+    n_neighs: int,
     radius: Optional[Union[float, Tuple[float, float]]] = None,
     delaunay: bool = False,
     neigh_correct: bool = False,
     set_diag: bool = False,
     return_distance: bool = False,
-) -> Union[Tuple[csr_matrix, csr_matrix], csr_matrix]:
+) -> Union[csr_matrix, Tuple[csr_matrix, csr_matrix]]:
     N = coords.shape[0]
     if delaunay:
         tri = Delaunay(coords)
-
         indptr, indices = tri.vertex_neighbor_vertices
         Adj = csr_matrix((np.ones_like(indices, dtype=np.float64), indices, indptr), shape=(N, N))
 
@@ -214,13 +211,13 @@ def _build_connectivity(
             # fmt: on
     else:
         r = 1 if radius is None else radius if isinstance(radius, (int, float)) else max(radius)
-        tree = NearestNeighbors(n_neighbors=n_neighbors, radius=r, metric="euclidean")
+        tree = NearestNeighbors(n_neighbors=n_neighs, radius=r, metric="euclidean")
         tree.fit(coords)
 
         if radius is None:
             results = tree.kneighbors()
             dists, row_indices = (result.reshape(-1) for result in results)
-            col_indices = np.repeat(np.arange(N), n_neighbors)
+            col_indices = np.repeat(np.arange(N), n_neighs)
             if neigh_correct:
                 dist_cutoff = np.median(dists) * 1.3  # there's a small amount of sway
                 mask = dists < dist_cutoff
