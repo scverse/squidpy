@@ -35,7 +35,8 @@ def spatial_neighbors(
     transform: Optional[Union[str, Transform]] = None,
     set_diag: bool = False,
     key_added: str = "spatial",
-) -> None:
+    copy: bool = False,
+) -> Optional[Tuple[csr_matrix, csr_matrix]]:
     """
     Create a graph from spatial coordinates.
 
@@ -78,10 +79,12 @@ def spatial_neighbors(
 
     Returns
     -------
-    Nothing, just modifies the ``adata`` with the following keys:
+    If ``copy = True``, returns a :class:`tuple` with the spatial connectivities and distances matrices.
 
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_connectivities']`` - spatial connectivity matrix.
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - spatial distances matrix.
+    Otherwise, modifies the ``adata`` with the following keys:
+
+        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_connectivities']`` - spatial connectivities.
+        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - spatial distances.
         - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - spatial neighbors dictionary.
     """
     _assert_positive(n_rings, name="n_rings")
@@ -139,6 +142,9 @@ def spatial_neighbors(
         "params": {"n_neighbors": n_neighs, "coord_type": coord_type.v, "radius": radius, "transform": transform.v},
         "distances_key": dists_key,
     }
+
+    if copy:
+        return Adj, Dst
 
     _save_data(adata, attr="obsp", key=conns_key, data=Adj)
     _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
