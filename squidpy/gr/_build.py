@@ -109,7 +109,7 @@ def spatial_neighbors(
             raise NotImplementedError(f"Coordinate type `{coord_type}` is not yet implemented.")
 
     if isinstance(radius, Iterable):
-        minn, maxx = sorted(radius)[:2]
+        minn, maxx = sorted(radius)[:2]  # type: ignore[var-annotated]
         mask = (Dst.data < minn) | (Dst.data > maxx)
         a_diag = Adj.diagonal()
 
@@ -198,13 +198,14 @@ def _build_connectivity(
         Adj = csr_matrix((np.ones_like(indices, dtype=np.float64), indices, indptr), shape=(N, N))
 
         if return_distance:
-            dists = (
+            # fmt: off
+            dists = np.array(list(chain(*(
                 euclidean_distances(coords[indices[indptr[i] : indptr[i + 1]], :], coords[np.newaxis, i, :])
                 for i in range(N)
                 if len(indices[indptr[i] : indptr[i + 1]])
-            )
-            dists = np.array(list(chain(*dists))).squeeze()
+            ))))
             Dst = csr_matrix((dists, indices, indptr), shape=(N, N))
+            # fmt: on
     else:
         r = 1 if radius is None else radius if isinstance(radius, (int, float)) else max(radius)
         tree = NearestNeighbors(n_neighbors=n_neighbors, radius=r, metric="euclidean")
