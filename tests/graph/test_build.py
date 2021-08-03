@@ -28,7 +28,7 @@ def test_spatial_neighbors_squaregrid(adata_squaregrid: AnnData, n_rings: int, n
     check correctness of neighborhoods for visium coordinates
     """
     adata = adata_squaregrid
-    spatial_neighbors(adata, neigh_grid=n_neigh, n_rings=n_rings, coord_type="grid")
+    spatial_neighbors(adata, n_neighs=n_neigh, n_rings=n_rings, coord_type="grid")
     assert np.diff(adata.obsp["spatial_connectivities"].indptr).max() == sum_neigh
     assert adata.uns[Key.uns.spatial_neighs()]["distances_key"] == Key.obsp.spatial_dist()
 
@@ -80,7 +80,7 @@ def test_spatial_neighbors_non_visium(non_visium_adata: AnnData):
         ]
     )
 
-    spatial_neighbors(non_visium_adata, n_neigh=3, coord_type=None)
+    spatial_neighbors(non_visium_adata, n_neighs=3, coord_type=None)
     spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
     assert np.array_equal(spatial_graph, correct_knn_graph)
 
