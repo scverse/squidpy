@@ -203,7 +203,7 @@ def _build_connectivity(
                 euclidean_distances(coords[indices[indptr[i] : indptr[i + 1]], :], coords[np.newaxis, i, :])
                 for i in range(N)
                 if len(indices[indptr[i] : indptr[i + 1]])
-            ))))
+            )))).squeeze()
             Dst = csr_matrix((dists, indices, indptr), shape=(N, N))
             # fmt: on
     else:
