@@ -28,6 +28,7 @@ from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
 from squidpy.gr._utils import (
     _save_data,
+    _genesymbols,
     _assert_positive,
     _create_sparse_df,
     _check_tuple_needles,
@@ -628,6 +629,7 @@ def ligrec(
     corr_method: Optional[str] = None,
     corr_axis: str = CorrAxis.CLUSTERS.v,
     use_raw: bool = True,
+    genesymbols: Optional[str] = None,
     copy: bool = False,
     key_added: Optional[str] = None,
     **kwargs: Any,
@@ -645,19 +647,20 @@ def ligrec(
     -------
     %(ligrec_test_returns)s
     """  # noqa: D400
-    return (  # type: ignore[no-any-return]
-        PermutationTest(adata, use_raw=use_raw)
-        .prepare(interactions, complex_policy=complex_policy, **kwargs)
-        .test(
-            cluster_key=cluster_key,
-            threshold=threshold,
-            corr_method=corr_method,
-            corr_axis=corr_axis,
-            copy=copy,
-            key_added=key_added,
-            **kwargs,
+    with _genesymbols(adata, key=genesymbols, use_raw=use_raw, make_unique=False):
+        return (  # type: ignore[no-any-return]
+            PermutationTest(adata, use_raw=use_raw)
+            .prepare(interactions, complex_policy=complex_policy, **kwargs)
+            .test(
+                cluster_key=cluster_key,
+                threshold=threshold,
+                corr_method=corr_method,
+                corr_axis=corr_axis,
+                copy=copy,
+                key_added=key_added,
+                **kwargs,
+            )
         )
-    )
 
 
 @d.dedent

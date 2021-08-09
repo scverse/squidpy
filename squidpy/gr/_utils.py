@@ -10,6 +10,7 @@ from typing import (
     Sequence,
     TYPE_CHECKING,
 )
+from contextlib import contextmanager
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -20,6 +21,7 @@ from pandas.api.types import infer_dtype, is_categorical_dtype
 import numpy as np
 import pandas as pd
 
+from squidpy._docs import d
 from squidpy._utils import _unique_order_preserving
 
 
@@ -247,3 +249,52 @@ def _extract_expression(
         raise TypeError(f"Unable to handle type `{type(res)}`.")
 
     return res, genes
+
+
+@contextmanager
+@d.dedent
+def _genesymbols(
+    adata: AnnData, *, key: Optional[str] = None, use_raw: bool = True, make_unique: bool = False
+) -> AnnData:
+    """
+    TODO.
+
+    Parameters
+    ----------
+    %(adata)s
+    key
+        TODO.
+    make_unique
+        TODO
+
+    Yields
+    ------
+    TODO.
+    """
+
+    def key_present() -> bool:
+        if use_raw:
+            if adata.raw is None:
+                raise AttributeError("No `.raw` attribute found. Try specifying `use_raw=False`.")
+            return key in adata.raw._adata.obs
+        return key in adata.obs
+
+    if key is None:
+        yield adata
+    elif not key_present():
+        raise KeyError(f"Unable to find gene symbols in `adata.{'raw.' if use_raw else ''}obs[{key!r}]`.")
+    else:
+        adata_orig = adata
+        if use_raw:
+            adata = adata.raw._adata
+
+        obs_names = adata.obs_names
+        try:
+            adata.obs_names = adata.obs[key]
+            if make_unique:
+                adata.obs_names_make_unique()
+            if use_raw:
+                adata_orig.raw = adata
+            yield adata_orig
+        finally:
+            adata.obs_names = obs_names
