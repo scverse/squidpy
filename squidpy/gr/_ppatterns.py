@@ -106,7 +106,7 @@ def spatial_autocorr(
         - `'var_norm'` - variance of `'score'` under normality assumption.
         - `'{{p_val}}_{{corr_method}}'` - the corrected p-values if ``corr_method != None`` .
 
-    If ``n_perms != None`` is not None, additionally returns the following columns:
+    If ``n_perms != None``, additionally returns the following columns:
 
         - `'pval_z_sim'` - p-value based on standard normal approximation from permutations.
         - `'pval_sim'` - p-value based on permutations.
