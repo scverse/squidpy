@@ -28,6 +28,7 @@ from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
 from squidpy.gr._utils import (
     _save_data,
+    _genesymbols,
     _assert_positive,
     _create_sparse_df,
     _check_tuple_needles,
@@ -281,7 +282,7 @@ class PermutationTestABC(ABC):
         if self.interactions.empty:
             raise ValueError("The interactions are empty")
 
-        # first uppercaseA, then drop duplicates
+        # first uppercase, then drop duplicates
         self._data.columns = self._data.columns.str.upper()
         self.interactions[SOURCE] = self.interactions[SOURCE].str.upper()
         self.interactions[TARGET] = self.interactions[TARGET].str.upper()
@@ -630,6 +631,7 @@ def ligrec(
     use_raw: bool = True,
     copy: bool = False,
     key_added: Optional[str] = None,
+    gene_symbols: Optional[str] = None,
     **kwargs: Any,
 ) -> Optional[Mapping[str, pd.DataFrame]]:
     """
@@ -640,24 +642,27 @@ def ligrec(
     %(PT.parameters)s
     %(PT_prepare_full.parameters)s
     %(PT_test.parameters)s
+    gene_symbols
+        Key in :attr:`anndata.AnnData.var` to use instead of :attr:`anndata.AnnData.var_names`.
 
     Returns
     -------
     %(ligrec_test_returns)s
     """  # noqa: D400
-    return (  # type: ignore[no-any-return]
-        PermutationTest(adata, use_raw=use_raw)
-        .prepare(interactions, complex_policy=complex_policy, **kwargs)
-        .test(
-            cluster_key=cluster_key,
-            threshold=threshold,
-            corr_method=corr_method,
-            corr_axis=corr_axis,
-            copy=copy,
-            key_added=key_added,
-            **kwargs,
+    with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
+        return (  # type: ignore[no-any-return]
+            PermutationTest(adata, use_raw=use_raw)
+            .prepare(interactions, complex_policy=complex_policy, **kwargs)
+            .test(
+                cluster_key=cluster_key,
+                threshold=threshold,
+                corr_method=corr_method,
+                corr_axis=corr_axis,
+                copy=copy,
+                key_added=key_added,
+                **kwargs,
+            )
         )
-    )
 
 
 @d.dedent
