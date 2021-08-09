@@ -43,7 +43,7 @@ def _fetch_notebooks(repo_url: str) -> None:
     def fetch_remote(repo_url: str) -> None:
         info(f"Fetching notebooks from repo `{repo_url}`")
         with TemporaryDirectory() as repo_dir:
-            ref = "master" if _is_dev() else "dev"
+            ref = "dev" if _is_dev() else "master"
             repo = Repo.clone_from(repo_url, repo_dir, depth=1, branch=ref)
             repo.git.checkout(ref, force=True)
 
