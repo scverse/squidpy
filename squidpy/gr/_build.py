@@ -57,11 +57,11 @@ def spatial_neighbors(
             - `{c.GRID.s!r}` - number of neighboring tiles.
             - `{c.GENERIC.s!r}` - number of neighborhoods for non-grid data. Only used when ``delaunay = False``.
     radius
-        Depending on the type:
+        Only available when ``coord_type = {c.GENERIC.s!r}``. Depending on the type:
 
-            - :class:`float` - neighborhood radius for non-grid data if ``coord_type = {c.GENERIC.s!r}``
-              and ``delaunay = False``.
-            - :class:`tuple` - prune the final graph to only contain edges in interval `[radius[0], radius[1]]`.
+            - :class:`float` - compute the graph based on neighborhood radius.
+            - :class:`tuple` - prune the final graph to only contain edges in interval `[min(radius), max(radius)]`.
+
     delaunay
         Whether to compute the graph from Delaunay triangulation. Only used when ``coord_type = {c.GENERIC.s!r}``.
     n_rings
@@ -111,7 +111,7 @@ def spatial_neighbors(
         else:
             raise NotImplementedError(f"Coordinate type `{coord_type}` is not yet implemented.")
 
-    if isinstance(radius, Iterable):
+    if coord_type == CoordType.GENERIC and isinstance(radius, Iterable):
         minn, maxx = sorted(radius)[:2]  # type: ignore[var-annotated]
         mask = (Dst.data < minn) | (Dst.data > maxx)
         a_diag = Adj.diagonal()
