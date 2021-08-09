@@ -13,21 +13,22 @@ import subprocess
 HERE = Path(__file__).parent
 
 
-def _is_master() -> bool:
+def _is_dev() -> bool:
     try:
-        r = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True)
+        r = subprocess.run(["git", "show", "-s", "--pretty=%D", "HEAD"], capture_output=True)
         if r.returncode != 0:
             raise RuntimeError(f"Subprocess returned return code `{r.returncode}`.")
 
         ref = r.stdout.decode().strip()
-        if ref not in ("master", "dev"):
-            # most updates happen on branch that is merged to dev
+        if "HEAD -> master" not in ref and "HEAD -> dev" not in ref:
+            # e.g. HEAD, tag: v1.1.0
+            warning(f"Unable to determine ref from `{ref}`. Assuming it's `master`")
             return False
 
-        return ref == "master"
+        return "HEAD -> dev" in ref
 
     except Exception as e:
-        warning(f"Unable to fetch ref, reason: `{e}`. Using `master`")
+        warning(f"Unable to fetch ref, reason: `{e}`. Assuming it's `dev`")
         return True
 
 
@@ -42,7 +43,7 @@ def _fetch_notebooks(repo_url: str) -> None:
     def fetch_remote(repo_url: str) -> None:
         info(f"Fetching notebooks from repo `{repo_url}`")
         with TemporaryDirectory() as repo_dir:
-            ref = "master" if _is_master() else "dev"
+            ref = "master" if _is_dev() else "dev"
             repo = Repo.clone_from(repo_url, repo_dir, depth=1, branch=ref)
             repo.git.checkout(ref, force=True)
 
