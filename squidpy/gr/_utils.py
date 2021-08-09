@@ -257,19 +257,21 @@ def _genesymbols(
     adata: AnnData, *, key: Optional[str] = None, use_raw: bool = True, make_unique: bool = False
 ) -> AnnData:
     """
-    TODO.
+    Set observation names from a column in :attr:`anndata.AnnData.obs`.
 
     Parameters
     ----------
     %(adata)s
     key
-        TODO.
+        Key in :attr:`anndata.AnnData.obs` where the gene symbols are stored. If `None`, this operation is a no-op.
+    use_raw
+        Whether to change the observation names in :attr:`anndata.AnnData.raw`.
     make_unique
-        TODO
+        Whether to make the newly assigned observation names unique.
 
     Yields
     ------
-    TODO.
+    The same ``adata`` with modified :attr:`anndata.AnnData.obs_names`, depending on ``use_raw``.
     """
 
     def key_present() -> bool:
