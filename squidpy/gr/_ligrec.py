@@ -282,7 +282,7 @@ class PermutationTestABC(ABC):
         if self.interactions.empty:
             raise ValueError("The interactions are empty")
 
-        # first uppercaseA, then drop duplicates
+        # first uppercase, then drop duplicates
         self._data.columns = self._data.columns.str.upper()
         self.interactions[SOURCE] = self.interactions[SOURCE].str.upper()
         self.interactions[TARGET] = self.interactions[TARGET].str.upper()
@@ -629,9 +629,9 @@ def ligrec(
     corr_method: Optional[str] = None,
     corr_axis: str = CorrAxis.CLUSTERS.v,
     use_raw: bool = True,
-    genesymbols: Optional[str] = None,
     copy: bool = False,
     key_added: Optional[str] = None,
+    gene_symbols: Optional[str] = None,
     **kwargs: Any,
 ) -> Optional[Mapping[str, pd.DataFrame]]:
     """
@@ -642,12 +642,14 @@ def ligrec(
     %(PT.parameters)s
     %(PT_prepare_full.parameters)s
     %(PT_test.parameters)s
+    gene_symbols
+        Key in :attr:`anndata.AnnData.var` to use instead of :attr:`anndata.AnnData.var_names`.
 
     Returns
     -------
     %(ligrec_test_returns)s
     """  # noqa: D400
-    with _genesymbols(adata, key=genesymbols, use_raw=use_raw, make_unique=False):
+    with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)
             .prepare(interactions, complex_policy=complex_policy, **kwargs)

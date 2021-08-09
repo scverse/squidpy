@@ -257,46 +257,48 @@ def _genesymbols(
     adata: AnnData, *, key: Optional[str] = None, use_raw: bool = True, make_unique: bool = False
 ) -> AnnData:
     """
-    Set observation names from a column in :attr:`anndata.AnnData.obs`.
+    Set gene names from a column in :attr:`anndata.AnnData.var`.
 
     Parameters
     ----------
     %(adata)s
     key
-        Key in :attr:`anndata.AnnData.obs` where the gene symbols are stored. If `None`, this operation is a no-op.
+        Key in :attr:`anndata.AnnData.var` where the gene symbols are stored. If `None`, this operation is a no-op.
     use_raw
-        Whether to change the observation names in :attr:`anndata.AnnData.raw`.
+        Whether to change the gene names in :attr:`anndata.AnnData.raw`.
     make_unique
-        Whether to make the newly assigned observation names unique.
+        Whether to make the newly assigned gene names unique.
 
     Yields
     ------
-    The same ``adata`` with modified :attr:`anndata.AnnData.obs_names`, depending on ``use_raw``.
+    The same ``adata`` with modified :attr:`anndata.AnnData.var_names`, depending on ``use_raw``.
     """
 
     def key_present() -> bool:
         if use_raw:
             if adata.raw is None:
                 raise AttributeError("No `.raw` attribute found. Try specifying `use_raw=False`.")
-            return key in adata.raw._adata.obs
-        return key in adata.obs
+            return key in adata.raw._adata.var
+        return key in adata.var
 
     if key is None:
         yield adata
     elif not key_present():
-        raise KeyError(f"Unable to find gene symbols in `adata.{'raw.' if use_raw else ''}obs[{key!r}]`.")
+        raise KeyError(f"Unable to find gene symbols in `adata.{'raw.' if use_raw else ''}var[{key!r}]`.")
     else:
         adata_orig = adata
         if use_raw:
             adata = adata.raw._adata
 
-        obs_names = adata.obs_names
+        var_names = adata.var_names
         try:
-            adata.obs_names = adata.obs[key]
+            adata.var_names = adata.var[key]
             if make_unique:
-                adata.obs_names_make_unique()
+                adata.var_names_make_unique()
             if use_raw:
                 adata_orig.raw = adata
             yield adata_orig
         finally:
-            adata.obs_names = obs_names
+            adata.var_names = var_names
+            if use_raw:
+                adata_orig.raw = adata
