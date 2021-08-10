@@ -1,20 +1,21 @@
-from typing import Any, Optional
+from __future__ import annotations
+
+from typing import Any
 
 from scanpy import logging as logg
 from anndata import AnnData
-
-import numpy as np
 
 import matplotlib.pyplot as plt
 
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
+from squidpy._utils import NDArrayA
 from squidpy.pl._utils import save_fig
 
 try:
     from squidpy.pl._interactive._controller import ImageController
 except ImportError as e:
-    _error: Optional[str] = str(e)
+    _error: str | None = str(e)
 else:
     _error = None
 
@@ -39,7 +40,7 @@ class Interactive:
 
         self._controller = ImageController(adata, img, **kwargs)
 
-    def show(self, restore: bool = False) -> "Interactive":
+    def show(self, restore: bool = False) -> Interactive:
         """
         Launch the :class:`napari.Viewer`.
 
@@ -59,11 +60,11 @@ class Interactive:
     def screenshot(
         self,
         return_result: bool = False,
-        dpi: Optional[float] = 180,
-        save: Optional[str] = None,
+        dpi: float | None = 180,
+        save: str | None = None,
         canvas_only: bool = True,
         **kwargs: Any,
-    ) -> Optional[np.ndarray]:
+    ) -> NDArrayA | None:
         """
         Plot a screenshot of the viewer's canvas.
 

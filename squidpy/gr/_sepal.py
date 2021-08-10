@@ -1,4 +1,6 @@
-from typing import Tuple, Union, Callable, Optional, Sequence
+from __future__ import annotations
+
+from typing import Callable, Sequence
 from typing_extensions import Literal  # < 3.8
 
 from scanpy import logging as logg
@@ -11,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
+from squidpy._utils import Signal, NDArrayA, SigQueue, parallelize, _get_n_cores
 from squidpy.gr._utils import (
     _save_data,
     _extract_expression,
@@ -29,19 +31,19 @@ __all__ = ["sepal"]
 def sepal(
     adata: AnnData,
     max_neighs: Literal[4, 6],
-    genes: Optional[Union[str, Sequence[str]]] = None,
-    n_iter: Optional[int] = 30000,
+    genes: str | Sequence[str] | None = None,
+    n_iter: int | None = 30000,
     dt: float = 0.001,
     thresh: float = 1e-8,
     connectivity_key: str = Key.obsp.spatial_conn(),
     spatial_key: str = Key.obsm.spatial,
-    layer: Optional[str] = None,
+    layer: str | None = None,
     use_raw: bool = False,
     copy: bool = False,
-    n_jobs: Optional[int] = None,
+    n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """
     Identify spatially variable genes with *Sepal*.
 
@@ -158,17 +160,17 @@ def sepal(
 
 def _score_helper(
     ixs: Sequence[int],
-    vals: Union[spmatrix, np.ndarray],
+    vals: spmatrix | NDArrayA,
     max_neighs: int,
     n_iter: int,
-    sat: np.ndarray,
-    sat_idx: np.ndarray,
-    unsat: np.ndarray,
-    unsat_idx: np.ndarray,
+    sat: NDArrayA,
+    sat_idx: NDArrayA,
+    unsat: NDArrayA,
+    unsat_idx: NDArrayA,
     dt: np.float_,
     thresh: np.float_,
-    queue: Optional[SigQueue] = None,
-) -> np.ndarray:
+    queue: SigQueue | None = None,
+) -> NDArrayA:
     if max_neighs == 4:
         fun = _laplacian_rect
     elif max_neighs == 6:
@@ -193,17 +195,17 @@ def _score_helper(
 
 @njit(fastmath=True)
 def _diffusion(
-    conc: np.ndarray,
-    laplacian: Callable[[np.ndarray, np.ndarray, np.ndarray], np.float_],
+    conc: NDArrayA,
+    laplacian: Callable[[NDArrayA, NDArrayA, NDArrayA], np.float_],
     n_iter: int,
-    sat: np.ndarray,
-    sat_idx: np.ndarray,
-    unsat: np.ndarray,
-    unsat_idx: np.ndarray,
+    sat: NDArrayA,
+    sat_idx: NDArrayA,
+    unsat: NDArrayA,
+    unsat_idx: NDArrayA,
     dt: float = 0.001,
     D: float = 1.0,
     thresh: float = 1e-8,
-) -> np.float_:
+) -> float:
     """Simulate diffusion process on a regular graph."""
     sat_shape, conc_shape = sat.shape[0], conc.shape[0]
     entropy_arr = np.zeros(n_iter)
@@ -230,22 +232,22 @@ def _diffusion(
             break
 
     tmp = np.nonzero(entropy_arr <= thresh)[0]
-    return tmp[0] if len(tmp) else np.nan
+    return float(tmp[0] if len(tmp) else np.nan)
 
 
 # taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
 @njit(parallel=False, fastmath=True)
 def _laplacian_rect(
-    centers: np.ndarray,
-    nbrs: np.ndarray,
-    h: np.ndarray,
-) -> np.float_:
+    centers: NDArrayA,
+    nbrs: NDArrayA,
+    h: float,
+) -> NDArrayA:
     """
     Five point stencil approximation on rectilinear grid.
 
     See `Wikipedia <https://en.wikipedia.org/wiki/Five-point_stencil>`_ for more information.
     """
-    d2f = nbrs - 4 * centers
+    d2f: NDArrayA = nbrs - 4 * centers
     d2f = d2f / h ** 2
 
     return d2f
@@ -254,10 +256,10 @@ def _laplacian_rect(
 # taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
 @njit(fastmath=True)
 def _laplacian_hex(
-    centers: np.ndarray,
-    nbrs: np.ndarray,
-    h: np.ndarray,
-) -> np.float_:
+    centers: NDArrayA,
+    nbrs: NDArrayA,
+    h: float,
+) -> NDArrayA:
     """
     Seven point stencil approximation on hexagonal grid.
 
@@ -267,9 +269,9 @@ def _laplacian_hex(
     Curtis D. Benster, L.V. Kantorovich, V.I. Krylov,
     ISBN-13: 978-0486821603.
     """
-    d2f = nbrs - 6 * centers
+    d2f: NDArrayA = nbrs - 6 * centers
     d2f = d2f / h ** 2
-    d2f = (d2f * 2) / 3
+    d2f = (d2f * 2) / 3  # type: ignore[assignment]
 
     return d2f
 
@@ -277,19 +279,19 @@ def _laplacian_hex(
 # taken from https://github.com/almaan/sepal/blob/master/sepal/models.py
 @njit(fastmath=True)
 def _entropy(
-    xx: np.ndarray,
-) -> np.float_:
+    xx: NDArrayA,
+) -> float:
     """Get entropy of an array."""
     xnz = xx[xx > 0]
     xs = np.sum(xnz)
     xn = xnz / xs
     xl = np.log(xn)
-    return (-xl * xn).sum()
+    return float((-xl * xn).sum())
 
 
 def _compute_idxs(
-    g: spmatrix, spatial: np.ndarray, sat_thresh: int, metric: str = "l1"
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    g: spmatrix, spatial: NDArrayA, sat_thresh: int, metric: str = "l1"
+) -> tuple[NDArrayA, NDArrayA, NDArrayA, NDArrayA]:
     """Get saturated and unsaturated nodes and neighborhood indices."""
     sat, unsat = _get_sat_unsat_idx(g.indptr, g.shape[0], sat_thresh)
 
@@ -304,7 +306,7 @@ def _compute_idxs(
 
 
 @njit
-def _get_sat_unsat_idx(g_indptr: np.ndarray, g_shape: int, sat_thresh: int) -> Tuple[np.ndarray, np.ndarray]:
+def _get_sat_unsat_idx(g_indptr: NDArrayA, g_shape: int, sat_thresh: int) -> tuple[NDArrayA, NDArrayA]:
     """Get saturated and unsaturated nodes based on thresh."""
     n_indices = np.diff(g_indptr)
     unsat = np.arange(g_shape)[n_indices < sat_thresh]
@@ -315,8 +317,8 @@ def _get_sat_unsat_idx(g_indptr: np.ndarray, g_shape: int, sat_thresh: int) -> T
 
 @njit
 def _get_nhood_idx(
-    sat: np.ndarray, unsat: np.ndarray, g_indptr: np.ndarray, g_indices: np.ndarray, sat_thresh: int
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    sat: NDArrayA, unsat: NDArrayA, g_indptr: NDArrayA, g_indices: NDArrayA, sat_thresh: int
+) -> tuple[NDArrayA, NDArrayA, NDArrayA]:
     """Get saturated and unsaturated neighborhood indices."""
     # get saturated nhood indices
     sat_idx = np.zeros((sat.shape[0], sat_thresh))

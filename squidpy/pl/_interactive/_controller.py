@@ -1,4 +1,6 @@
-from typing import Any, Dict, Union, Optional
+from __future__ import annotations
+
+from typing import Any
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -16,7 +18,7 @@ from napari.layers import Points, Shapes
 
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
-from squidpy._utils import singledispatchmethod
+from squidpy._utils import NDArrayA, singledispatchmethod
 from squidpy.pl._utils import _points_inside_triangles
 from squidpy.pl._interactive._view import ImageView
 from squidpy.pl._interactive._model import ImageModel
@@ -139,7 +141,7 @@ class ImageController:
 
         return True
 
-    def add_points(self, vec: Union[np.ndarray, pd.Series], layer_name: str, key: Optional[str] = None) -> bool:
+    def add_points(self, vec: NDArrayA | pd.Series, layer_name: str, key: str | None = None) -> bool:
         """
         Add a new :mod:`napari` points layer.
 
@@ -230,7 +232,7 @@ class ImageController:
         except RuntimeError:
             pass
 
-    def screenshot(self, path: Optional[Union[str, Path]] = None, canvas_only: bool = True) -> np.ndarray:
+    def screenshot(self, path: str | Path | None = None, canvas_only: bool = True) -> NDArrayA:
         """
         Take a screenshot of the viewer's canvas.
 
@@ -256,7 +258,7 @@ class ImageController:
         triangles = shape_list._mesh.vertices[shape_list._mesh.displayed_triangles]
 
         # TODO: use only current z dim slice?
-        points_mask: np.ndarray = _points_inside_triangles(self.model.coordinates[:, 1:], triangles)
+        points_mask: NDArrayA = _points_inside_triangles(self.model.coordinates[:, 1:], triangles)
 
         self.model.adata.obs[key] = pd.Categorical(points_mask)
         self.model.adata.uns[key] = {"meshes": layer.data.copy()}
@@ -271,11 +273,11 @@ class ImageController:
             layer.refresh_colors()
 
     @singledispatchmethod
-    def _get_points_properties(self, vec: Union[np.ndarray, pd.Series], **_: Any) -> Dict[str, Any]:
+    def _get_points_properties(self, vec: NDArrayA | pd.Series, **_: Any) -> dict[str, Any]:
         raise NotImplementedError(type(vec))
 
     @_get_points_properties.register(np.ndarray)
-    def _(self, vec: np.ndarray, **_) -> Dict[str, Any]:
+    def _(self, vec: NDArrayA, **_) -> dict[str, Any]:
         return {
             "text": None,
             "face_color": "value",
@@ -284,7 +286,7 @@ class ImageController:
         }
 
     @_get_points_properties.register(pd.Series)  # type: ignore[no-redef]
-    def _(self, vec: pd.Series, key: str) -> Dict[str, Any]:
+    def _(self, vec: pd.Series, key: str) -> dict[str, Any]:
         face_color = _get_categorical(self.model.adata, key=key, palette=self.model.palette, vec=vec)
         return {
             "text": {"text": "{clusters}", "size": 24, "color": "white", "anchor": "center"},

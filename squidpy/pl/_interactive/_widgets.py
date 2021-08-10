@@ -1,6 +1,9 @@
+# type: ignore
+from __future__ import annotations
+
 from abc import abstractmethod
 from vispy import scene
-from typing import Any, Tuple, Union, Iterable, Optional
+from typing import Any, Iterable
 from vispy.scene.widgets import ColorBarWidget
 from vispy.color.colormap import Colormap, MatplotlibColormap
 
@@ -16,7 +19,7 @@ from napari._qt.widgets.qt_range_slider import QHRangeSlider
 
 from squidpy.pl._utils import ALayer
 
-__all__ = ["TwoStateCheckBox", "AListWidget", "CBarWidget", "RangeSlider"]
+__all__ = ["TwoStateCheckBox", "AListWidget", "CBarWidget", "RangeSlider", "ObsmIndexWidget", "LibraryListWidget"]
 
 
 # TODO: should inherit from ABC, but MC conflict (need to see how it's done for Qt)
@@ -31,7 +34,7 @@ class ListWidget(QtWidgets.QListWidget):
         else:
             self.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
 
-        self._index: Union[int, str] = 0
+        self._index: int | str = 0
         self._unique = unique
         self._controller = controller
 
@@ -40,17 +43,17 @@ class ListWidget(QtWidgets.QListWidget):
         self.indexChanged.connect(self._onAction)
 
     @abstractmethod
-    def setIndex(self, index: Union[int, str]) -> None:
+    def setIndex(self, index: int | str) -> None:
         pass
 
-    def getIndex(self) -> Union[int, str]:
+    def getIndex(self) -> int | str:
         return self._index
 
     @abstractmethod
     def _onAction(self, items: Iterable[str]) -> None:
         pass
 
-    def addItems(self, labels: Union[str, Iterable[str]]) -> None:
+    def addItems(self, labels: str | Iterable[str]) -> None:
         if isinstance(labels, str):
             labels = (labels,)
         labels = tuple(labels)
@@ -76,7 +79,7 @@ class LibraryListWidget(ListWidget):
 
         self.currentTextChanged.connect(self._onAction)
 
-    def setIndex(self, index: Union[int, str]) -> None:
+    def setIndex(self, index: int | str) -> None:
         # not used
         if index == self._index:
             return
@@ -84,7 +87,7 @@ class LibraryListWidget(ListWidget):
         self._index = index
         self.indexChanged.emit(tuple(s.text() for s in self.selectedItems()))
 
-    def _onAction(self, items: Union[str, Iterable[str]]) -> None:
+    def _onAction(self, items: str | Iterable[str]) -> None:
         if isinstance(items, str):
             items = (items,)
 
@@ -152,7 +155,7 @@ class AListWidget(ListWidget):
     def getRaw(self) -> bool:
         return self._alayer.raw
 
-    def setIndex(self, index: Union[str, int]) -> None:
+    def setIndex(self, index: str | int) -> None:
         if isinstance(index, str):
             if index == "":
                 index = 0
@@ -166,10 +169,10 @@ class AListWidget(ListWidget):
         if self._attr == "obsm":
             self.indexChanged.emit(tuple(s.text() for s in self.selectedItems()))
 
-    def getIndex(self) -> Union[int, str]:
+    def getIndex(self) -> int | str:
         return self._index
 
-    def setLayer(self, layer: Optional[str]) -> None:
+    def setLayer(self, layer: str | None) -> None:
         if layer in ("default", "None"):
             layer = None
         if layer == self.getLayer():
@@ -178,7 +181,7 @@ class AListWidget(ListWidget):
         self._alayer.layer = layer
         self.layerChanged.emit()
 
-    def getLayer(self) -> Optional[str]:
+    def getLayer(self) -> str | None:
         return self._alayer.layer
 
     def setLibraryId(self, library_id: str) -> None:
@@ -201,7 +204,7 @@ class ObsmIndexWidget(QtWidgets.QComboBox):
         self.setMaxVisibleItems(max_visible)
         self.setStyleSheet("combobox-popup: 0;")
 
-    def addItems(self, texts: Union[QtWidgets.QListWidgetItem, int, Iterable[str]]) -> None:
+    def addItems(self, texts: QtWidgets.QListWidgetItem | int | Iterable[str]) -> None:
         if isinstance(texts, QtWidgets.QListWidgetItem):
             try:
                 key = texts.text()
@@ -228,10 +231,10 @@ class CBarWidget(QtWidgets.QWidget):
 
     def __init__(
         self,
-        cmap: Union[str, Colormap],
-        label: Optional[str] = None,
-        width: Optional[int] = 250,
-        height: Optional[int] = 50,
+        cmap: str | Colormap,
+        label: str | None = None,
+        width: int | None = 250,
+        height: int | None = 50,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -301,20 +304,20 @@ class CBarWidget(QtWidgets.QWidget):
         self._colorbar.cmap = self._create_colormap(value)
         self._colorbar._colorbar._update()
 
-    def setClim(self, value: Tuple[float, float]) -> None:
+    def setClim(self, value: tuple[float, float]) -> None:
         if value == self._clim:
             return
 
         self._clim = value
         self.climChanged.emit(*value)
 
-    def getClim(self) -> Tuple[float, float]:
+    def getClim(self) -> tuple[float, float]:
         return self._clim
 
-    def getOclim(self) -> Tuple[float, float]:
+    def getOclim(self) -> tuple[float, float]:
         return self._oclim
 
-    def setOclim(self, value: Tuple[float, float]) -> None:
+    def setOclim(self, value: tuple[float, float]) -> None:
         # original color limit used for 0-1 normalization
         self._oclim = value
 
@@ -350,7 +353,7 @@ class RangeSlider(QHRangeSlider):
 
         self.valuesChanged.connect(self._onValueChange)
 
-    def _onValueChange(self, percentile: Tuple[float, float]) -> None:
+    def _onValueChange(self, percentile: tuple[float, float]) -> None:
         # TODO: use constants
         v = self._layer.metadata["data"]
         clipped = np.clip(v, *np.percentile(v, percentile))

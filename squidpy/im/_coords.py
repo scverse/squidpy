@@ -1,34 +1,37 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Hashable
 from dataclasses import dataclass
 
 import numpy as np
 
+from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_non_negative
 from squidpy._constants._pkg_constants import Key
 
 
-def _circular_mask(arr: np.ndarray, y: int, x: int, radius: float) -> np.ndarray:
+def _circular_mask(arr: NDArrayA, y: int, x: int, radius: float) -> NDArrayA:
     Y, X = np.ogrid[: arr.shape[0], : arr.shape[1]]
     return np.asarray(((Y - y) ** 2 + (X - x) ** 2) <= radius ** 2)
 
 
 class TupleSerializer(ABC):  # noqa: D101
     @abstractmethod
-    def to_tuple(self) -> Tuple[float, float, float, float]:
+    def to_tuple(self) -> tuple[float, float, float, float]:
         """Return self as a :class:`tuple`."""
 
     @classmethod
-    def from_tuple(cls, value: Tuple[float, float, float, float]) -> "TupleSerializer":
+    def from_tuple(cls, value: tuple[float, float, float, float]) -> TupleSerializer:
         """Create self from a :class:`tuple`."""
         return cls(*value)  # type: ignore[call-arg]
 
     @property
     @abstractmethod
-    def T(self) -> "TupleSerializer":
+    def T(self) -> TupleSerializer:
         """Transpose self."""  # currently unused
 
-    def __mul__(self, other: Union[int, float]) -> "TupleSerializer":
+    def __mul__(self, other: int | float) -> TupleSerializer:
         if not isinstance(other, (int, float)):
             return NotImplemented
 
@@ -36,7 +39,7 @@ class TupleSerializer(ABC):  # noqa: D101
         res = type(self)(a * other, b * other, c * other, d * other)  # type: ignore[call-arg]
         return res
 
-    def __rmul__(self, other: Union[int, float]) -> "TupleSerializer":
+    def __rmul__(self, other: int | float) -> TupleSerializer:
         return self * other
 
 
@@ -56,7 +59,7 @@ class CropCoords(TupleSerializer):
             raise ValueError(f"Expected `y0` <= `y1`, found `{self.y0}` > `{self.y1}`.")
 
     @property
-    def T(self) -> "CropCoords":
+    def T(self) -> CropCoords:
         """Transpose self."""
         return CropCoords(x0=self.y0, y0=self.x0, x1=self.y1, y1=self.x1)
 
@@ -80,7 +83,7 @@ class CropCoords(TupleSerializer):
         """Width of height."""
         return self.x0 + self.dy / 2.0
 
-    def to_image_coordinates(self, padding: "CropPadding") -> "CropCoords":
+    def to_image_coordinates(self, padding: CropPadding) -> CropCoords:
         """
         Convert global image coordinates to local.
 
@@ -97,16 +100,16 @@ class CropCoords(TupleSerializer):
         return CropCoords(x0=padding.x_pre, y0=padding.y_pre, x1=adj.dx - padding.x_post, y1=adj.dy - padding.y_post)
 
     @property
-    def slice(self) -> Tuple[slice, slice]:  # noqa: A003
+    def slice(self) -> tuple[slice, slice]:  # noqa: A003
         """Return the ``(height, width)`` int slice."""
         # has to convert to int, because of scaling, coords can also be floats
         return slice(int(self.y0), int(self.y1)), slice(int(self.x0), int(self.x1))
 
-    def to_tuple(self) -> Tuple[float, float, float, float]:
+    def to_tuple(self) -> tuple[float, float, float, float]:
         """Return self as a :class:`tuple`."""
         return self.x0, self.y0, self.x1, self.y1
 
-    def __add__(self, other: "CropPadding") -> "CropCoords":
+    def __add__(self, other: CropPadding) -> CropCoords:
         if not isinstance(other, CropPadding):
             return NotImplemented
 
@@ -114,7 +117,7 @@ class CropCoords(TupleSerializer):
             x0=self.x0 - other.x_pre, y0=self.y0 - other.y_pre, x1=self.x1 + other.x_post, y1=self.y1 + other.y_post
         )
 
-    def __sub__(self, other: "CropCoords") -> "CropPadding":
+    def __sub__(self, other: CropCoords) -> CropPadding:
         if not isinstance(other, CropCoords):
             return NotImplemented
 
@@ -142,11 +145,11 @@ class CropPadding(TupleSerializer):
         _assert_non_negative(self.y_post, name="y_post")
 
     @property
-    def T(self) -> "CropPadding":
+    def T(self) -> CropPadding:
         """Transpose self."""
         return CropPadding(x_pre=self.y_pre, y_pre=self.x_pre, x_post=self.y_post, y_post=self.x_post)
 
-    def to_tuple(self) -> Tuple[float, float, float, float]:
+    def to_tuple(self) -> tuple[float, float, float, float]:
         """Return self as a :class:`tuple`."""
         return self.x_pre, self.x_post, self.y_pre, self.y_post
 
@@ -156,7 +159,7 @@ _NULL_PADDING = CropPadding(0, 0, 0, 0)
 
 
 # functions for updating attributes with new scaling, CropCoords, CropPadding
-def _update_attrs_coords(attrs: Dict[str, Any], coords: CropCoords) -> Dict[str, Any]:
+def _update_attrs_coords(attrs: dict[Hashable, Any], coords: CropCoords) -> dict[Hashable, Any]:
     old_coords = attrs.get(Key.img.coords, _NULL_COORDS)
     if old_coords != _NULL_COORDS:
         new_coords = CropCoords(
@@ -171,7 +174,7 @@ def _update_attrs_coords(attrs: Dict[str, Any], coords: CropCoords) -> Dict[str,
     return attrs
 
 
-def _update_attrs_scale(attrs: Dict[str, Any], scale: Union[int, float]) -> Dict[str, Any]:
+def _update_attrs_scale(attrs: dict[Hashable, Any], scale: int | float) -> dict[Hashable, Any]:
     old_scale = attrs[Key.img.scale]
     attrs[Key.img.scale] = old_scale * scale
     attrs[Key.img.padding] = attrs[Key.img.padding] * scale

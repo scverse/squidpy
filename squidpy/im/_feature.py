@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from types import MappingProxyType
-from typing import Any, List, Union, Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import Any, Mapping, Sequence, TYPE_CHECKING
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -20,17 +22,17 @@ __all__ = ["calculate_image_features"]
 def calculate_image_features(
     adata: AnnData,
     img: ImageContainer,
-    layer: Optional[str] = None,
-    library_id: Optional[Union[str, Sequence[str]]] = None,
-    features: Union[str, Sequence[str]] = ImageFeature.SUMMARY.s,
+    layer: str | None = None,
+    library_id: str | Sequence[str] | None = None,
+    features: str | Sequence[str] = ImageFeature.SUMMARY.s,
     features_kwargs: Mapping[str, Mapping[str, Any]] = MappingProxyType({}),
     key_added: str = "img_features",
     copy: bool = False,
-    n_jobs: Optional[int] = None,
+    n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
     **kwargs: Any,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """
     Calculate image features for all observations in ``adata``.
 
@@ -106,10 +108,10 @@ def _calculate_image_features_helper(
     adata: AnnData,
     img: ImageContainer,
     layer: str,
-    library_id: Optional[Union[str, Sequence[str]]],
-    features: List[ImageFeature],
+    library_id: str | Sequence[str] | None,
+    features: list[ImageFeature],
     features_kwargs: Mapping[str, Any],
-    queue: Optional[SigQueue] = None,
+    queue: SigQueue | None = None,
     **kwargs: Any,
 ) -> pd.DataFrame:
     features_list = []

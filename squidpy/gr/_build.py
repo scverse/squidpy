@@ -1,5 +1,6 @@
 """Functions for building gr from spatial coordinates."""
-from typing import Tuple, Union, Optional
+from __future__ import annotations
+
 from itertools import chain
 from collections import Iterable
 import warnings
@@ -15,6 +16,7 @@ from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import numpy as np
 
 from squidpy._docs import d, inject_docs
+from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _save_data, _assert_positive, _assert_spatial_basis
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
@@ -27,16 +29,16 @@ __all__ = ["spatial_neighbors"]
 def spatial_neighbors(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
-    coord_type: Optional[Union[str, CoordType]] = None,
+    coord_type: str | CoordType | None = None,
     n_neighs: int = 6,
-    radius: Optional[Union[float, Tuple[float, float]]] = None,
+    radius: float | tuple[float, float] | None = None,
     delaunay: bool = False,
     n_rings: int = 1,
-    transform: Optional[Union[str, Transform]] = None,
+    transform: str | Transform | None = None,
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
-) -> Optional[Tuple[csr_matrix, csr_matrix]]:
+) -> tuple[csr_matrix, csr_matrix] | None:
     """
     Create a graph from spatial coordinates.
 
@@ -152,8 +154,8 @@ def spatial_neighbors(
 
 
 def _build_grid(
-    coords: np.ndarray, n_neighs: int, n_rings: int, delaunay: bool = False, set_diag: bool = False
-) -> Tuple[csr_matrix, csr_matrix]:
+    coords: NDArrayA, n_neighs: int, n_rings: int, delaunay: bool = False, set_diag: bool = False
+) -> tuple[csr_matrix, csr_matrix]:
     if n_rings > 1:
         Adj: csr_matrix = _build_connectivity(
             coords,
@@ -186,14 +188,14 @@ def _build_grid(
 
 
 def _build_connectivity(
-    coords: np.ndarray,
+    coords: NDArrayA,
     n_neighs: int,
-    radius: Optional[Union[float, Tuple[float, float]]] = None,
+    radius: float | tuple[float, float] | None = None,
     delaunay: bool = False,
     neigh_correct: bool = False,
     set_diag: bool = False,
     return_distance: bool = False,
-) -> Union[csr_matrix, Tuple[csr_matrix, csr_matrix]]:
+) -> csr_matrix | tuple[csr_matrix, csr_matrix]:
     N = coords.shape[0]
     if delaunay:
         tri = Delaunay(coords)
@@ -243,7 +245,7 @@ def _build_connectivity(
 
 
 @njit
-def outer(indices: np.ndarray, indptr: np.ndarray, degrees: np.ndarray) -> np.ndarray:
+def outer(indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA) -> NDArrayA:
     res = np.empty_like(indices, dtype=np.float64)
     start = 0
     for i in range(len(indptr) - 1):

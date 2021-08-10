@@ -1,5 +1,7 @@
 """Functions for point patterns spatial statistics."""
-from typing import Any, Dict, Tuple, Union, Iterable, Optional, Sequence, TYPE_CHECKING
+from __future__ import annotations
+
+from typing import Any, Iterable, Sequence, TYPE_CHECKING
 from itertools import chain
 from typing_extensions import Literal  # < 3.8
 
@@ -21,7 +23,7 @@ import pandas as pd
 import numba.types as nt
 
 from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
+from squidpy._utils import Signal, NDArrayA, SigQueue, parallelize, _get_n_cores
 from squidpy.gr._utils import (
     _save_data,
     _assert_positive,
@@ -48,20 +50,20 @@ fp = np.float32
 def spatial_autocorr(
     adata: AnnData,
     connectivity_key: str = Key.obsp.spatial_conn(),
-    genes: Optional[Union[str, Sequence[str]]] = None,
+    genes: str | Sequence[str] | None = None,
     mode: Literal["moran", "geary"] = SpatialAutocorr.MORAN.s,  # type: ignore[assignment]
     transformation: bool = True,
-    n_perms: Optional[int] = None,
+    n_perms: int | None = None,
     two_tailed: bool = False,
-    corr_method: Optional[str] = "fdr_bh",
-    layer: Optional[str] = None,
-    seed: Optional[int] = None,
+    corr_method: str | None = "fdr_bh",
+    layer: str | None = None,
+    seed: int | None = None,
     use_raw: bool = False,
     copy: bool = False,
-    n_jobs: Optional[int] = None,
+    n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """
     Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
 
@@ -198,9 +200,9 @@ def _score_helper(
     perms: Sequence[int],
     mode: SpatialAutocorr,
     g: spmatrix,
-    vals: np.ndarray,
-    seed: Optional[int] = None,
-    queue: Optional[SigQueue] = None,
+    vals: NDArrayA,
+    seed: int | None = None,
+    queue: SigQueue | None = None,
 ) -> pd.DataFrame:
     score_perms = np.empty((len(perms), vals.shape[0]))
     rng = default_rng(None if seed is None else ix + seed)
@@ -225,11 +227,11 @@ def _score_helper(
     fastmath=True,
 )
 def _occur_count(
-    clust: Tuple[np.ndarray, np.ndarray],
-    pw_dist: np.ndarray,
-    labs_unique: np.ndarray,
-    interval: np.ndarray,
-) -> np.ndarray:
+    clust: tuple[NDArrayA, NDArrayA],
+    pw_dist: NDArrayA,
+    labs_unique: NDArrayA,
+    interval: NDArrayA,
+) -> NDArrayA:
     num = labs_unique.shape[0]
     out = np.zeros((num, num, interval.shape[0] - 1), dtype=ft)
 
@@ -260,12 +262,12 @@ def _occur_count(
 
 
 def _co_occurrence_helper(
-    idx_splits: Iterable[Tuple[int, int]],
-    spatial_splits: Sequence[np.ndarray],
-    labs_splits: Sequence[np.ndarray],
-    labs_unique: np.ndarray,
-    interval: np.ndarray,
-    queue: Optional[SigQueue] = None,
+    idx_splits: Iterable[tuple[int, int]],
+    spatial_splits: Sequence[NDArrayA],
+    labs_splits: Sequence[NDArrayA],
+    labs_unique: NDArrayA,
+    interval: NDArrayA,
+    queue: SigQueue | None = None,
 ) -> pd.DataFrame:
 
     out_lst = []
@@ -294,11 +296,11 @@ def co_occurrence(
     spatial_key: str = Key.obsm.spatial,
     n_steps: int = 50,
     copy: bool = False,
-    n_splits: Optional[int] = None,
-    n_jobs: Optional[int] = None,
+    n_splits: int | None = None,
+    n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
-) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
 
@@ -407,7 +409,7 @@ def co_occurrence(
     )
 
 
-def _find_min_max(spatial: np.ndarray) -> Tuple[float, float]:
+def _find_min_max(spatial: NDArrayA) -> tuple[float, float]:
 
     coord_sum = np.sum(spatial, axis=1)
     min_idx, min_idx2 = np.argpartition(coord_sum, 2)[0:2]
@@ -426,11 +428,11 @@ def _find_min_max(spatial: np.ndarray) -> Tuple[float, float]:
 
 
 def _p_value_calc(
-    score: np.ndarray,
-    sims: Optional[np.ndarray],
-    weights: Union[spmatrix, np.ndarray],
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    score: NDArrayA,
+    sims: NDArrayA | None,
+    weights: spmatrix | NDArrayA,
+    params: dict[str, Any],
+) -> dict[str, Any]:
     """
     Handle p-value calculation for spatial autocorrelation function.
 
@@ -459,11 +461,11 @@ def _p_value_calc(
         return results
 
     n_perms = sims.shape[0]
-    large_perm = (sims >= score).sum(axis=0)
+    large_perm = (sims >= score).sum(axis=0)  # type: ignore[attr-defined]
     # subtract total perm for negative values
     large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
     # get p-value based on permutation
-    p_sim: np.ndarray = (large_perm + 1) / (n_perms + 1)
+    p_sim: NDArrayA = (large_perm + 1) / (n_perms + 1)
 
     # get p-value based on standard normal approximation from permutations
     e_score_sim = sims.sum(axis=0) / n_perms
@@ -483,9 +485,7 @@ def _p_value_calc(
     return results
 
 
-def _analytic_pval(
-    score: np.ndarray, g: Union[spmatrix, np.ndarray], params: Dict[str, Any]
-) -> Tuple[np.ndarray, float]:
+def _analytic_pval(score: NDArrayA, g: spmatrix | NDArrayA, params: dict[str, Any]) -> tuple[NDArrayA, float]:
     """
     Analytic p-value computation.
 
@@ -513,7 +513,7 @@ def _analytic_pval(
     return p_norm, Vscore_norm
 
 
-def _g_moments(w: Union[spmatrix, np.ndarray]) -> Tuple[np.float_, np.float_, np.float_]:
+def _g_moments(w: spmatrix | NDArrayA) -> tuple[float, float, float]:
     """
     Compute moments of adjacency matrix for analytic p-value calculation.
 
@@ -528,7 +528,7 @@ def _g_moments(w: Union[spmatrix, np.ndarray]) -> Tuple[np.float_, np.float_, np
     s1 = t2.sum() / 2.0
 
     # s2
-    s2array = np.array(w.sum(1) + w.sum(0).transpose()) ** 2
+    s2array: NDArrayA = np.array(w.sum(1) + w.sum(0).transpose()) ** 2
     s2 = s2array.sum()
 
     return s0, s1, s2

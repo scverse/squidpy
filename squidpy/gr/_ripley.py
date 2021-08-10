@@ -1,5 +1,7 @@
 """Functions for point patterns spatial statistics."""
-from typing import Dict, List, Tuple, Union, Optional, TYPE_CHECKING
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 from typing_extensions import Literal
 
 from scanpy import logging as logg
@@ -14,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from squidpy._docs import d, inject_docs
+from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _save_data, _assert_spatial_basis, _assert_categorical_obs
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
@@ -32,11 +35,11 @@ def ripley(
     n_neigh: int = 2,
     n_simulations: int = 100,
     n_observations: int = 1000,
-    max_dist: np.float_ = None,
+    max_dist: float | None = None,
     n_steps: int = 50,
-    seed: Optional[int] = None,
+    seed: int | None = None,
     copy: bool = False,
-) -> Dict[str, Union[pd.DataFrame, np.ndarray]]:
+) -> dict[str, pd.DataFrame | NDArrayA]:
     r"""
     Calculate various Ripley's statistics for point processes.
 
@@ -184,9 +187,7 @@ def ripley(
     _save_data(adata, attr="uns", key=Key.uns.ripley(cluster_key, mode), data=res, time=start)
 
 
-def _reshape_res(
-    results: np.ndarray, columns: Union[np.ndarray, List[str]], index: np.ndarray, var_name: str
-) -> pd.DataFrame:
+def _reshape_res(results: NDArrayA, columns: NDArrayA | list[str], index: NDArrayA, var_name: str) -> pd.DataFrame:
     df = pd.DataFrame(results, columns=columns, index=index)
     df.index.set_names(["bins"], inplace=True)
     df = df.melt(var_name=var_name, value_name="stats", ignore_index=False)
@@ -195,23 +196,21 @@ def _reshape_res(
     return df
 
 
-def _f_g_function(distances: np.ndarray, support: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _f_g_function(distances: NDArrayA, support: NDArrayA) -> tuple[NDArrayA, NDArrayA]:
     counts, bins = np.histogram(distances, bins=support)
     fracs = np.cumsum(counts) / counts.sum()
-    return bins, np.concatenate((np.zeros((1,), dtype=np.float_), fracs))
+    return bins, np.concatenate((np.zeros((1,), dtype=float), fracs))
 
 
-def _l_function(
-    distances: np.ndarray, support: np.ndarray, n: np.int_, area: np.float_
-) -> Tuple[np.ndarray, np.ndarray]:
-    n_pairs_less_than_d = (distances < support.reshape(-1, 1)).sum(axis=1)
+def _l_function(distances: NDArrayA, support: NDArrayA, n: int, area: float) -> tuple[NDArrayA, NDArrayA]:
+    n_pairs_less_than_d = (distances < support.reshape(-1, 1)).sum(axis=1)  # type: ignore[attr-defined]
     intensity = n / area
     k_estimate = ((n_pairs_less_than_d * 2) / n) / intensity
     l_estimate = np.sqrt(k_estimate / np.pi)
     return support, l_estimate
 
 
-def _ppp(hull: ConvexHull, n_simulations: int, n_observations: int, seed: Optional[int] = None) -> np.ndarray:
+def _ppp(hull: ConvexHull, n_simulations: int, n_observations: int, seed: int | None = None) -> NDArrayA:
     """
     Simulate Poisson Point Process on a polygon.
 

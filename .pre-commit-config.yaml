@@ -10,7 +10,7 @@ repos:
     rev: v0.910
     hooks:
     -   id: mypy
-        additional_dependencies: [numpy==1.20.0, scipy, pandas]
+        additional_dependencies: [numpy==1.21.0, scipy, pandas]
 -   repo: https://github.com/psf/black
     rev: 21.6b0
     hooks:

@@ -1,4 +1,4 @@
-from typing import Dict, Union, Optional
+from __future__ import annotations
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -14,15 +14,16 @@ import dask.array as da
 
 from matplotlib.colors import to_hex, to_rgb
 
+from squidpy._utils import NDArrayA
 from squidpy._constants._pkg_constants import Key
 
 
 def _get_categorical(
     adata: AnnData,
     key: str,
-    palette: Optional[str] = None,
-    vec: Optional[pd.Series] = None,
-) -> np.ndarray:
+    palette: str | None = None,
+    vec: pd.Series | None = None,
+) -> NDArrayA:
     if vec is not None:
         if not is_categorical_dtype(vec):
             raise TypeError(f"Expected a `categorical` type, found `{infer_dtype(vec)}`.")
@@ -40,7 +41,7 @@ def _get_categorical(
     return np.array([col_dict[v] for v in adata.obs[key]])
 
 
-def _position_cluster_labels(coords: np.ndarray, clusters: pd.Series, colors: np.ndarray) -> Dict[str, np.ndarray]:
+def _position_cluster_labels(coords: NDArrayA, clusters: pd.Series, colors: NDArrayA) -> dict[str, NDArrayA]:
     if not is_categorical_dtype(clusters):
         raise TypeError(f"Expected `clusters` to be `categorical`, found `{infer_dtype(clusters)}`.")
 
@@ -60,9 +61,9 @@ def _position_cluster_labels(coords: np.ndarray, clusters: pd.Series, colors: np
     return {"clusters": clusters, "colors": colors}
 
 
-def _not_in_01(arr: Union[np.ndarray, da.Array]) -> bool:
+def _not_in_01(arr: NDArrayA | da.Array) -> bool:
     @njit
-    def _helper_arr(arr: np.ndarray) -> bool:
+    def _helper_arr(arr: NDArrayA) -> bool:
         for val in arr.flat:
             if not (0 <= val <= 1):
                 return True
@@ -75,7 +76,7 @@ def _not_in_01(arr: Union[np.ndarray, da.Array]) -> bool:
     return bool(_helper_arr(np.asarray(arr)))
 
 
-def _display_channelwise(arr: Union[np.ndarray, da.Array]) -> bool:
+def _display_channelwise(arr: NDArrayA | da.Array) -> bool:
     n_channels: int = arr.shape[-1]
     if n_channels not in (3, 4):
         return n_channels != 1

@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from PIL import Image
-from typing import List, Tuple, Union, Mapping, Optional
+from typing import Mapping
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -13,10 +15,11 @@ from tifffile import TiffFile
 from skimage.io import imread
 
 from squidpy._docs import inject_docs
+from squidpy._utils import NDArrayA
 from squidpy._constants._constants import InferDimensions
 
 
-def _assert_dims_present(dims: Tuple[str, ...], include_z: bool = True) -> None:
+def _assert_dims_present(dims: tuple[str, ...], include_z: bool = True) -> None:
     missing_dims = ({"y", "x", "z"} if include_z else {"y", "x"}) - set(dims)
     if missing_dims:
         raise ValueError(f"Expected to find `{sorted(missing_dims)}` dimension(s) in `{dims}`.")
@@ -24,7 +27,7 @@ def _assert_dims_present(dims: Tuple[str, ...], include_z: bool = True) -> None:
 
 # modification of `skimage`'s `pil_to_ndarray`:
 # https://github.com/scikit-image/scikit-image/blob/main/skimage/io/_plugins/pil_plugin.py#L55
-def _infer_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # type: ignore[type-arg]
+def _infer_shape_dtype(fname: str) -> tuple[tuple[int, ...], np.dtype]:  # type: ignore[type-arg]
     def _palette_is_grayscale(pil_image: Image.Image) -> bool:
         # get palette as an array with R, G, B columns
         palette = np.asarray(pil_image.getpalette()).reshape((256, 3))
@@ -44,7 +47,7 @@ def _infer_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # type:
 
     image = Image.open(fname)
     n_frames = getattr(image, "n_frames", 1)
-    shape: Tuple[int, ...] = (n_frames,) + image.size[::-1]
+    shape: tuple[int, ...] = (n_frames,) + image.size[::-1]
 
     if image.mode == "P":
         if _palette_is_grayscale(image):
@@ -80,7 +83,7 @@ def _infer_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # type:
     raise ValueError(f"Unable to infer image dtype for image mode `{image.mode}`.")
 
 
-def _get_image_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # type: ignore[type-arg]
+def _get_image_shape_dtype(fname: str) -> tuple[tuple[int, ...], np.dtype]:  # type: ignore[type-arg]
     try:
         return _infer_shape_dtype(fname)
     except Image.UnidentifiedImageError as e:
@@ -98,9 +101,9 @@ def _get_image_shape_dtype(fname: str) -> Tuple[Tuple[int, ...], np.dtype]:  # t
 
 @inject_docs(id=InferDimensions)
 def _infer_dimensions(
-    obj: Union[np.ndarray, xr.DataArray, str],
-    infer_dimensions: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
-) -> Tuple[Tuple[int, ...], Tuple[str, ...], np.dtype, Tuple[int, ...]]:  # type: ignore[type-arg]
+    obj: NDArrayA | xr.DataArray | str,
+    infer_dimensions: InferDimensions | tuple[str, ...] = InferDimensions.DEFAULT,
+) -> tuple[tuple[int, ...], tuple[str, ...], np.dtype, tuple[int, ...]]:  # type: ignore[type-arg]
     """
     Infer dimension names of an array.
 
@@ -142,10 +145,10 @@ def _infer_dimensions(
         If the array is not `2`, `3,` or `4` dimensional.
     """
 
-    def dims(order: List[int]) -> Tuple[str, ...]:
+    def dims(order: list[int]) -> tuple[str, ...]:
         return tuple(np.array(["z", "y", "x", "channels"], dtype=object)[np.argsort(order)])
 
-    def infer(y: int, x: int, z: int, c: int) -> Tuple[str, ...]:
+    def infer(y: int, x: int, z: int, c: int) -> tuple[str, ...]:
         if infer_dimensions == InferDimensions.DEFAULT:
             if shape[z] == 1:
                 return dims([z, y, x, c])
@@ -212,12 +215,12 @@ def _infer_dimensions(
 
 
 def _lazy_load_image(
-    fname: Union[str, Path],
-    dims: Union[InferDimensions, Tuple[str, ...]] = InferDimensions.DEFAULT,
-    chunks: Optional[Union[int, str, Tuple[int, ...], Mapping[str, Union[int, str]]]] = None,
+    fname: str | Path,
+    dims: InferDimensions | tuple[str, ...] = InferDimensions.DEFAULT,
+    chunks: int | str | tuple[int, ...] | Mapping[str, int | str] | None = None,
 ) -> xr.DataArray:
     # TODO(michalk8): switch to pims for tiffs? or switch completely once lazy-loading of JPEGs is done
-    def read_unprotected(fname: str) -> np.ndarray:
+    def read_unprotected(fname: str) -> NDArrayA:
         # not setting MAX_IMAGE_PIXELS causes problems when with processes and dask.distributed
         old_max_pixels = Image.MAX_IMAGE_PIXELS
         try:
