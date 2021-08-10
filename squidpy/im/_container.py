@@ -294,8 +294,7 @@ class ImageContainer(FeatureMixin):
                     raise
                 # at this point, we know the container is not empty
                 raise ValueError(
-                    f"Expected image to have `{len(self.library_ids)}` "  # type: ignore[union-attr]
-                    f"Z-dimension(s), found `{res.sizes['z']}`."
+                    f"Expected image to have `{len(self.library_ids)}` Z-dimension(s), found `{res.sizes['z']}`."
                 ) from None
 
             if TYPE_CHECKING:
@@ -501,7 +500,7 @@ class ImageContainer(FeatureMixin):
                 y=(padding.y_pre, padding.y_post),
                 x=(padding.x_pre, padding.x_post),
                 mode="constant",
-                constant_values=cval,  # type: ignore[arg-type]
+                constant_values=cval,
             )
             crop.attrs[Key.img.padding] = padding
         else:
@@ -951,12 +950,12 @@ class ImageContainer(FeatureMixin):
                     f"found `{seg_arr.dtype}`."
                 )
 
-            seg_arr = seg_arr.values  # type: ignore[assignment]
+            seg_arr = seg_arr.values
             seg_cmap = np.array(default_palette, dtype=object)[np.arange(np.max(seg_arr)) % len(default_palette)]
             seg_cmap[0] = "#00000000"  # transparent background
             seg_cmap = ListedColormap(seg_cmap)
         else:
-            seg_arr, seg_cmap = None, None  # type: ignore[assignment]
+            seg_arr, seg_cmap = None, None
 
         for z, row in enumerate(ax):
             for c, ax_ in enumerate(row):
@@ -1371,7 +1370,7 @@ class ImageContainer(FeatureMixin):
                 }
         # this is just for convenience for DL iterators
         if isinstance(as_array, str):
-            res = res[as_array]  # type: ignore[assignment]
+            res = res[as_array]
         elif isinstance(as_array, Sequence):
             res = tuple(res[key] for key in as_array)  # type: ignore[assignment]
 

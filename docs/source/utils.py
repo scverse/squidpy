@@ -20,8 +20,11 @@ def _is_dev() -> bool:
             raise RuntimeError(f"Subprocess returned return code `{r.returncode}`.")
 
         ref = r.stdout.decode().strip()
+        if "tag" in ref:
+            return False
+        if "pull/" in ref:
+            return True
         if "HEAD -> master" not in ref and "HEAD -> dev" not in ref:
-            # e.g. HEAD, tag: v1.1.0
             warning(f"Unable to determine ref from `{ref}`. Assuming it's `master`")
             return False
 
