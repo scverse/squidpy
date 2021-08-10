@@ -5,6 +5,7 @@ import joblib as jl
 
 from enum import Enum
 from queue import Queue
+from typing import Union  # noqa: F401
 from typing import (
     Any,
     TypeVar,
@@ -44,7 +45,7 @@ except ImportError:
 
 try:
     from numpy.typing import NDArray
-except ModuleNotFoundError:
+except ImportError:
     ScalarType = TypeVar("ScalarType", bound=np.generic, covariant=True)
     NDArray = np.ndarray[Any, np.dtype[ScalarType]]  # type: ignore[misc]
 NDArrayA = NDArray[Any]

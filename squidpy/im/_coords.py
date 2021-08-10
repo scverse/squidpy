@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Union  # noqa: F401
 from typing import Any, Hashable
 from dataclasses import dataclass
 

@@ -1,6 +1,7 @@
 """Functions for point patterns spatial statistics."""
 from __future__ import annotations
 
+from typing import Union  # noqa: F401
 from typing import Any, Iterable, Sequence, TYPE_CHECKING
 from itertools import chain
 from typing_extensions import Literal  # < 3.8

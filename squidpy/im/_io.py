@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PIL import Image
+from typing import Union  # noqa: F401
 from typing import Mapping
 from pathlib import Path
 

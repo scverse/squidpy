@@ -1,6 +1,7 @@
 """Functions for neighborhood enrichment analysis (permutation test, centralities measures etc.)."""
 from __future__ import annotations
 
+from typing import Union  # noqa: F401
 from typing import Any, Callable, Iterable, Sequence
 from functools import partial
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Union  # noqa: F401
 from typing import Any
 
 from scanpy import logging as logg

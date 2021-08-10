@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Union  # noqa: F401
 from typing import Callable, Sequence
 from typing_extensions import Literal  # < 3.8
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
+from typing import Union  # noqa: F401
 from typing import Any, Mapping, Sequence, TYPE_CHECKING
 
 from scanpy import logging as logg

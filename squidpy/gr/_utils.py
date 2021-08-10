@@ -1,6 +1,7 @@
 """Graph utilities."""
 from __future__ import annotations
 
+from typing import Union  # noqa: F401
 from typing import Any, Hashable, Iterable, Sequence, TYPE_CHECKING
 from contextlib import contextmanager
 
