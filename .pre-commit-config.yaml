@@ -71,7 +71,6 @@ repos:
     -   id: script-must-have-extension
         name: Check executable files use .sh extension
         types: [shell, executable]
-# -   id: shellcheck  # TODO: The hook `shellcheck` specifies `additional_dependencies` but is using language `script` which does not install an environment.  Perhaps you meant to use a specific language?
 -   repo: https://github.com/myint/rstcheck
     rev: 3f92957478422df87bd730abde66f089cc1ee19b
     hooks:
@@ -85,7 +84,7 @@ repos:
     rev: v2.19.4
     hooks:
     -   id: pyupgrade
-        args: [--py3-plus, --py37-plus]
+        args: [--py3-plus, --py37-plus, --keep-runtime-typing]
 -   repo: https://github.com/pre-commit/pygrep-hooks
     rev: v1.9.0
     hooks:

@@ -63,7 +63,6 @@ def spatial_neighbors(
 
             - :class:`float` - compute the graph based on neighborhood radius.
             - :class:`tuple` - prune the final graph to only contain edges in interval `[min(radius), max(radius)]`.
-
     delaunay
         Whether to compute the graph from Delaunay triangulation. Only used when ``coord_type = {c.GENERIC.s!r}``.
     n_rings
@@ -78,6 +77,7 @@ def spatial_neighbors(
         Whether to set the diagonal of the spatial connectivities to `1.0`.
     key_added
         Key which controls where the results are saved if ``copy = False``.
+    %(copy)s
 
     Returns
     -------
