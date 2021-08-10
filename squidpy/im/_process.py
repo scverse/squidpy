@@ -98,7 +98,7 @@ def process(
     apply_kwargs["lazy"] = lazy
 
     if channel_dim is None:
-        channel_dim = img[layer].dims[-1]  # type: ignore[assignment]
+        channel_dim = str(img[layer].dims[-1])
     layer_new = Key.img.process(method, layer, layer_added=layer_added)
 
     if callable(method):

@@ -46,7 +46,7 @@ try:
     from numpy.typing import NDArray
 except ModuleNotFoundError:
     ScalarType = TypeVar("ScalarType", bound=np.generic, covariant=True)
-    NDArray = np.ndarray[Any, np.dtype[ScalarType]]
+    NDArray = np.ndarray[Any, np.dtype[ScalarType]]  # type: ignore[misc]
 NDArrayA = NDArray[Any]
 
 

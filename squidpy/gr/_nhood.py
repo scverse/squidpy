@@ -326,14 +326,8 @@ def interaction_matrix(
     g = g[mask, :][:, mask]
     n_cats = len(cats.cat.categories)
 
-    if weights:
-        g_data = g.data
-    else:
-        g_data = np.broadcast_to(1, shape=len(g.data))
-    if pd.api.types.is_bool_dtype(g.dtype) or pd.api.types.is_integer_dtype(g.dtype):
-        dtype = np.intp
-    else:
-        dtype = np.float_
+    g_data = g.data if weights else np.broadcast_to(1, shape=len(g.data))
+    dtype = int if pd.api.types.is_bool_dtype(g.dtype) or pd.api.types.is_integer_dtype(g.dtype) else float
     output = np.zeros((n_cats, n_cats), dtype=dtype)
 
     _interaction_matrix(g_data, g.indices, g.indptr, cats.cat.codes.to_numpy(), output)
@@ -343,6 +337,7 @@ def interaction_matrix(
 
     if copy:
         return output
+
     _save_data(adata, attr="uns", key=Key.uns.interaction_matrix(cluster_key), data=output)
 
 

@@ -90,7 +90,7 @@ class ImageView:
         layer_widget = QComboBox(parent=parent)
         layer_widget.addItem("default", None)
         layer_widget.addItems(self.model.adata.layers.keys())
-        layer_widget.currentTextChanged.connect(var_widget.setLayer)
+        layer_widget.currentTextChanged.connect(var_widget.setLayer)  # type: ignore[attr-defined]
         layer_widget.setCurrentText("default")
 
         # raw selection

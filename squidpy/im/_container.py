@@ -294,7 +294,8 @@ class ImageContainer(FeatureMixin):
                     raise
                 # at this point, we know the container is not empty
                 raise ValueError(
-                    f"Expected image to have `{len(self.library_ids)}` Z-dimension(s), found `{res.sizes['z']}`."
+                    f"Expected image to have `{len(self.library_ids)}` "  # type: ignore[union-attr]
+                    f"Z-dimension(s), found `{res.sizes['z']}`."
                 ) from None
 
             if TYPE_CHECKING:
@@ -500,7 +501,7 @@ class ImageContainer(FeatureMixin):
                 y=(padding.y_pre, padding.y_post),
                 x=(padding.x_pre, padding.x_post),
                 mode="constant",
-                constant_values=cval,
+                constant_values=cval,  # type: ignore[arg-type]
             )
             crop.attrs[Key.img.padding] = padding
         else:
@@ -950,12 +951,12 @@ class ImageContainer(FeatureMixin):
                     f"found `{seg_arr.dtype}`."
                 )
 
-            seg_arr = seg_arr.values  # force dask computation here
+            seg_arr = seg_arr.values  # type: ignore[assignment]
             seg_cmap = np.array(default_palette, dtype=object)[np.arange(np.max(seg_arr)) % len(default_palette)]
-            seg_cmap[0] = "#00000000"  # don't plot black background
+            seg_cmap[0] = "#00000000"  # transparent background
             seg_cmap = ListedColormap(seg_cmap)
         else:
-            seg_arr, seg_cmap = None, None
+            seg_arr, seg_cmap = None, None  # type: ignore[assignment]
 
         for z, row in enumerate(ax):
             for c, ax_ in enumerate(row):
@@ -1370,7 +1371,7 @@ class ImageContainer(FeatureMixin):
                 }
         # this is just for convenience for DL iterators
         if isinstance(as_array, str):
-            res = res[as_array]
+            res = res[as_array]  # type: ignore[assignment]
         elif isinstance(as_array, Sequence):
             res = tuple(res[key] for key in as_array)  # type: ignore[assignment]
 
@@ -1385,7 +1386,7 @@ class ImageContainer(FeatureMixin):
 
     def _get_next_channel_id(self, channel: str | xr.DataArray) -> str:
         if isinstance(channel, xr.DataArray):
-            channel, *_ = (dim for dim in channel.dims if dim not in ("y", "x", "z"))
+            channel, *_ = (str(dim) for dim in channel.dims if dim not in ("y", "x", "z"))
 
         pat = re.compile(rf"^{channel}_(\d*)$")
         iterator = chain.from_iterable(pat.finditer(v.dims[-1]) for v in self.data.values())
@@ -1434,7 +1435,7 @@ class ImageContainer(FeatureMixin):
                 library_id = self.library_ids
             elif isinstance(arr, xr.DataArray):
                 try:
-                    library_id = arr.coords["z"].values
+                    library_id = list(arr.coords["z"].values)
                 except (KeyError, AttributeError) as e:
                     logg.warning(f"Unable to retrieve library ids, reason `{e}`. Using default names")
                     # at this point, it should have Z-dim

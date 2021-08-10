@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from PyQt5.QtWidgets import QLabel, QGridLayout
+from PyQt5.QtWidgets import QLabel, QWidget, QGridLayout
 
 from napari import Viewer
 from napari.layers import Points, Shapes
@@ -27,7 +27,7 @@ from squidpy.pl._interactive._utils import (
     _display_channelwise,
     _position_cluster_labels,
 )
-from squidpy.pl._interactive._widgets import RangeSlider
+from squidpy.pl._interactive._widgets import RangeSlider  # type: ignore[attr-defined]
 
 # label string: attribute name
 _WIDGETS_TO_HIDE = {
@@ -317,6 +317,9 @@ class ImageController:
             if label_key in labels and widget is not None:
                 widget.setHidden(True)
                 labels[label_key].setHidden(True)
+
+        if TYPE_CHECKING:
+            assert isinstance(widget, QWidget)
 
         if not is_categorical:  # add the slider
             idx = gl.indexOf(widget)
