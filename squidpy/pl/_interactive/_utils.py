@@ -30,7 +30,6 @@ def _get_categorical(
         if key in adata.obs:
             logg.debug(f"Overwriting `adata.obs[{key!r}]`")
 
-        # TODO: change me
         adata.obs[key] = vec.values
 
     add_colors_for_categorical_sample_annotation(
@@ -45,7 +44,7 @@ def _position_cluster_labels(coords: NDArrayA, clusters: pd.Series, colors: NDAr
     if not is_categorical_dtype(clusters):
         raise TypeError(f"Expected `clusters` to be `categorical`, found `{infer_dtype(clusters)}`.")
 
-    coords = coords[:, 1:]  # TODO: z-dim
+    coords = coords[:, 1:]  # TODO(michalk8): account for current Z-dim?
     df = pd.DataFrame(coords)
     df["clusters"] = clusters.values
     df = df.groupby("clusters")[[0, 1]].apply(lambda g: list(np.median(g.values, axis=0)))
@@ -55,7 +54,7 @@ def _position_cluster_labels(coords: NDArrayA, clusters: pd.Series, colors: NDAr
     clusters = np.full(len(coords), fill_value="", dtype=object)
     # index consists of the categories that need not be string
     clusters[kdtree.query(df.values)[1]] = df.index.astype(str)
-    # napari v0.4.9bug - properties must be 1-D in napari/layers/points/points.py:581
+    # napari v0.4.9 - properties must be 1-D in napari/layers/points/points.py:581
     colors = np.array([to_hex(col if cl != "" else (0, 0, 0)) for cl, col in zip(clusters, colors)])
 
     return {"clusters": clusters, "colors": colors}

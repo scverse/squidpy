@@ -127,7 +127,7 @@ def extract(
     -----
     If :attr:`anndata.AnnData.obs` ``['{column}']`` already exists, it will be overwritten and a warning will be issued.
     """
-    # TODO: move to utils?
+
     def _warn_if_exists_obs(adata: AnnData, obs_key: str) -> None:
         if obs_key in adata.obs.columns:
             logg.warning(f"Overwriting `adata.obs[{obs_key!r}]`")
@@ -150,7 +150,6 @@ def extract(
         prefix = [f"{p}_" for p in prefix]
     else:
         # no prefix
-        # TODO default could also be obsm_key
         prefix = ["" for _ in obsm_key]
 
     # create tmp_adata and copy obsm columns

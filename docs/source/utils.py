@@ -20,18 +20,20 @@ def _is_dev() -> bool:
             raise RuntimeError(f"Subprocess returned return code `{r.returncode}`.")
 
         ref = r.stdout.decode().strip()
+        # mostly for RTD
+        # TODO(michalk8): improve me
         if "tag" in ref:
             return False
         if "pull/" in ref:
             return True
-        if "HEAD -> master" not in ref and "HEAD -> dev" not in ref:
-            warning(f"Unable to determine ref from `{ref}`. Assuming it's `master`")
+        if not ("origin/master" in ref or "origin/dev" in ref):
+            warning(f"Unable to determine ref from `{ref}`. Assuming it's `dev`")
             return False
 
-        return "HEAD -> dev" in ref
+        return "origin/dev" in ref
 
     except Exception as e:
-        warning(f"Unable to fetch ref, reason: `{e}`. Assuming it's `dev`")
+        warning(f"Unable to fetch ref, reason: `{e}`. Assuming it's `master`")
         return True
 
 
@@ -126,11 +128,11 @@ class SignatureFilter(Filter):
     """Ignore function signature artifacts."""
 
     def _skip(self, word: str) -> bool:
-        # TODO: find a better way (img/func is problem)
+        # TODO(michalk8): find a better way
         return word in ("img[", "imgs[", "img", "func[", "func", "combine_attrs", "**kwargs", "n_iter")
 
 
-# allow <type_1> | <type_2> | ... | <type_n> expression for sphinx-autodoc-typehints
+# allow `<type_1> | <type_2> | ... | <type_n>` expression for sphinx-autodoc-typehints
 def _fwd_ref_init(self: ForwardRef, arg: str, is_argument: bool = True) -> None:
     if not isinstance(arg, str):
         raise TypeError(f"Forward reference must be a string -- got {arg!r}")

@@ -1155,7 +1155,7 @@ class ImageContainer(FeatureMixin):
                     f"Function changed the number of channels, cannot use identity "
                     f"for library ids `{noop_library_ids}`. Replacing with 0"
                 )
-                # TODO: once (or if) Z-dim is not fixed, always drop ids
+                # TODO(michalk8): once (or if) Z-dim is not fixed, always drop ids
                 tmp = next(iter(res.values()))
                 for lid in noop_library_ids:
                     res[lid] = (np.zeros_like if chunks is None else da.zeros_like)(tmp)

@@ -177,11 +177,7 @@ class ImageController:
             symbol=self.model.symbol.v,
             **properties,
         )
-        # https://github.com/napari/napari/issues/2019
-        # TODO: uncomment the 2 lines below once a solution is found for contrasting colors
-        # we could use the selected points where the cluster labels are position as a black BG
-        # layer._text._color = properties["colors"]
-        # layer._text.events.color()
+        # TODO(michalk8): add contrasting fg/bg color once https://github.com/napari/napari/issues/2019 is done
         self._hide_points_controls(layer, is_categorical=is_categorical_dtype(vec))
         layer.editable = False
 
@@ -257,7 +253,7 @@ class ImageController:
         shape_list = layer._data_view
         triangles = shape_list._mesh.vertices[shape_list._mesh.displayed_triangles]
 
-        # TODO: use only current z dim slice?
+        # TODO(michalk8): account for current Z-dim?
         points_mask: NDArrayA = _points_inside_triangles(self.model.coordinates[:, 1:], triangles)
 
         self.model.adata.obs[key] = pd.Categorical(points_mask)

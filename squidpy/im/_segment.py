@@ -152,7 +152,7 @@ class SegmentationModel(ABC):
             new_channel_dim = f"{channel_dim}:{'all' if channel is None else channel}"
 
         _ = kwargs.pop("copy", None)
-        # TODO: allow volumetric segmentation? (precondition/postcondition needs change)
+        # TODO(michalk8): allow volumetric segmentation? (precondition/postcondition needs change)
         if isinstance(library_id, str):
             func = {library_id: self.segment}
         elif isinstance(library_id, Sequence):

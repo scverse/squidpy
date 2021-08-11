@@ -97,10 +97,9 @@ class ImageModel:
         self.library_id = list(libraries.cat.categories)
 
         self.coordinates = np.c_[libraries.cat.codes.values, self.coordinates[mask]]
-
         self.spot_diameter = np.array(
             [
                 np.array([0.0] + [Key.uns.spot_diameter(self.adata, self.spatial_key, lid)] * 2) * self.scale
                 for lid in libraries
             ]
-        )  # TODO spot_diameter needs to be 3d, and is potentially different for different library ids
+        )

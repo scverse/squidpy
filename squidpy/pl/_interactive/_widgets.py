@@ -22,7 +22,6 @@ from squidpy.pl._utils import ALayer
 __all__ = ["TwoStateCheckBox", "AListWidget", "CBarWidget", "RangeSlider", "ObsmIndexWidget", "LibraryListWidget"]
 
 
-# TODO: should inherit from ABC, but MC conflict (need to see how it's done for Qt)
 class ListWidget(QtWidgets.QListWidget):
     indexChanged = QtCore.pyqtSignal(object)
     enterPressed = QtCore.pyqtSignal(object)
@@ -354,7 +353,7 @@ class RangeSlider(QHRangeSlider):
         self.valuesChanged.connect(self._onValueChange)
 
     def _onValueChange(self, percentile: tuple[float, float]) -> None:
-        # TODO: use constants
+        # TODO(michalk8): use constants
         v = self._layer.metadata["data"]
         clipped = np.clip(v, *np.percentile(v, percentile))
 
