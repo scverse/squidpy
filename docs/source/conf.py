@@ -97,6 +97,7 @@ exclude_patterns = [
     "auto_*/**.ipynb",
     "auto_*/**.md5",
     "auto_*/**.py",
+    "release/changelog/*",
     "**.ipynb_checkpoints",
 ]
 suppress_warnings = ["download.not_readable"]
@@ -127,7 +128,7 @@ spelling_warning = True
 spelling_word_list_filename = "spelling_wordlist.txt"
 spelling_add_pypi_package_names = True
 spelling_show_suggestions = True
-spelling_exclude_patterns = ["references.rst", "release/changelog/*"]
+spelling_exclude_patterns = ["references.rst"]
 # see: https://pyenchant.github.io/pyenchant/api/enchant.tokenize.html
 spelling_filters = [
     "enchant.tokenize.URLFilter",
