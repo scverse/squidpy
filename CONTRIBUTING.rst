@@ -10,6 +10,7 @@ Table of Contents
 - `Writing documentation`_
 - `Writing tutorials/examples`_
 - `Creating a new release`_
+- `Creating release notes`_
 - `Submitting a PR`_
 - `Troubleshooting`_
 
@@ -135,6 +136,8 @@ Before submitting a new pull request, please make sure you followed these instru
 - make sure that all tests pass locally (see `Testing`_).
 - if there is no issue which this PR solves, create a new `one <https://github.com/theislab/squidpy/issues/new>`_
   briefly explaining what the problem is.
+- make sure that the section under ``## Description`` is properly formatted if automatically generating release notes,
+  see also `Creating release notes`_.
 
 Creating a new release
 ----------------------
@@ -152,6 +155,35 @@ them in the commit.
 
 After the version has been bumped, make sure to push the commit **AND** the newly create tag to the upstream. This
 can be done by e.g. setting ``push.followtags=true`` in your git config or use ``git push --atomic <branch> <tag>``.
+
+
+Creating release notes
+----------------------
+By default, news fragments are automatically generated from successfully merged PRs using. Everything under
+``## Description`` section will be rendered as ``.rst`` files and automatically committed in the target branch in
+`docs/source/release/changelog <docs/source/release/changelog>`_.
+When a new release happens, ``towncrier`` gathers all news fragments and creates the release notes under
+`docs/source/release <docs/source/release>`_.
+
+When submitting a PR, it should be tagged with one of the following tags, in order for ``towncrier`` to know under
+which section to render the news:
+
+- bugfix: the PR fixes some bug
+- feature: the PR introduces a new feature
+- deprecation: the PR deprecates something (e.g. a function)
+- doc: the PR is related to documentation
+- misc: the PR is not applicable to the above
+
+If none is specified, ``bugfix`` is assumed. If more than 1 is specified, the first one is taken.
+If ``ignore-towncrier`` label is specified, no news will be generated for the PR.
+
+To manually create news fragment, make sure that the PR doesn't generate it from the description as described above.
+The command to run is ``towncrier <PR_NUMBER>.<LABEL>``, where ``<LABEL>`` is one of the labels described above.
+This will create a new file in the appropriate location that needs to me modified and subsequently committed.
+
+Lastly, in order to see how the current news fragments would look like in the release notes, run::
+
+    towncrier build --draft
 
 Troubleshooting
 ---------------
