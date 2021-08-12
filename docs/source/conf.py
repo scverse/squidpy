@@ -18,7 +18,7 @@ sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to instal
 sys.path.insert(0, os.path.abspath("_ext"))
 
 from docs.source.utils import (  # noqa: E402
-    _is_master,
+    _is_dev,
     _get_thumbnails,
     _fetch_notebooks,
     MaybeMiniGallery,
@@ -35,7 +35,7 @@ copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
 
 github_org = "theislab"
 github_repo = "squidpy"
-github_ref = "master" if _is_master() else "dev"
+github_ref = "dev" if _is_dev() else "master"
 github_nb_repo = "squidpy_notebooks"
 _fetch_notebooks(repo_url=f"https://github.com/{github_org}/{github_nb_repo}")
 
@@ -97,6 +97,7 @@ exclude_patterns = [
     "auto_*/**.ipynb",
     "auto_*/**.md5",
     "auto_*/**.py",
+    "release/changelog/*",
     "**.ipynb_checkpoints",
 ]
 suppress_warnings = ["download.not_readable"]
@@ -136,11 +137,8 @@ spelling_filters = [
     "docs.source.utils.SignatureFilter",
     "enchant.tokenize.MentionFilter",
 ]
-# problematic entry: andersson2021
 # see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369
 user_agent = "Mozilla/5.0 (X11; Linux x86_64; rv:25.0) Gecko/20100101 Firefox/25.0"
-# TODO: has been fixed on notebooks' dev, remove once it's merged in master
-linkcheck_ignore = [r"\.\./\.\./external_tutorials/tutorial_napari.html"]
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

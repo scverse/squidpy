@@ -1,6 +1,6 @@
 from git import Repo
 from shutil import rmtree, copytree
-from typing import Dict, List, Union
+from typing import Dict, List, Union, ForwardRef
 from logging import info, warning
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -13,21 +13,27 @@ import subprocess
 HERE = Path(__file__).parent
 
 
-def _is_master() -> bool:
+def _is_dev() -> bool:
     try:
-        r = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True)
+        r = subprocess.run(["git", "show", "-s", "--pretty=%D", "HEAD"], capture_output=True)
         if r.returncode != 0:
             raise RuntimeError(f"Subprocess returned return code `{r.returncode}`.")
 
         ref = r.stdout.decode().strip()
-        if ref not in ("master", "dev"):
-            # most updates happen on branch that is merged to dev
+        # mostly for RTD
+        # TODO(michalk8): improve me
+        if "tag" in ref:
+            return False
+        if "pull/" in ref:
+            return True
+        if not ("origin/master" in ref or "origin/dev" in ref):
+            warning(f"Unable to determine ref from `{ref}`. Assuming it's `dev`")
             return False
 
-        return ref == "master"
+        return "origin/dev" in ref
 
     except Exception as e:
-        warning(f"Unable to fetch ref, reason: `{e}`. Using `master`")
+        warning(f"Unable to fetch ref, reason: `{e}`. Assuming it's `master`")
         return True
 
 
@@ -42,7 +48,7 @@ def _fetch_notebooks(repo_url: str) -> None:
     def fetch_remote(repo_url: str) -> None:
         info(f"Fetching notebooks from repo `{repo_url}`")
         with TemporaryDirectory() as repo_dir:
-            ref = "master" if _is_master() else "dev"
+            ref = "dev" if _is_dev() else "master"
             repo = Repo.clone_from(repo_url, repo_dir, depth=1, branch=ref)
             repo.git.checkout(ref, force=True)
 
@@ -122,5 +128,25 @@ class SignatureFilter(Filter):
     """Ignore function signature artifacts."""
 
     def _skip(self, word: str) -> bool:
-        # TODO: find a better way (img/func is problem)
+        # TODO(michalk8): find a better way
         return word in ("img[", "imgs[", "img", "func[", "func", "combine_attrs", "**kwargs", "n_iter")
+
+
+# allow `<type_1> | <type_2> | ... | <type_n>` expression for sphinx-autodoc-typehints
+def _fwd_ref_init(self: ForwardRef, arg: str, is_argument: bool = True) -> None:
+    if not isinstance(arg, str):
+        raise TypeError(f"Forward reference must be a string -- got {arg!r}")
+    if " | " in arg:
+        arg = "Union[" + ", ".join(arg.split(" | ")) + "]"
+    try:
+        code = compile(arg, "<string>", "eval")
+    except SyntaxError:
+        raise SyntaxError(f"Forward reference must be an expression -- got {arg!r}")
+    self.__forward_arg__ = arg
+    self.__forward_code__ = code
+    self.__forward_evaluated__ = False
+    self.__forward_value__ = None
+    self.__forward_is_argument__ = is_argument
+
+
+ForwardRef.__init__ = _fwd_ref_init  # type: ignore[assignment]

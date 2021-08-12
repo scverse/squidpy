@@ -1,4 +1,7 @@
-from typing import Any, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
+from __future__ import annotations
+
+from typing import Union  # noqa: F401
+from typing import Any, Mapping, Sequence, TYPE_CHECKING
 from pathlib import Path
 
 from scanpy import logging as logg
@@ -32,7 +35,7 @@ class CustomDotplot(sc.pl.DotPlot):
     DEFAULT_NUM_COLORBAR_TICKS = 5
     DEFAULT_NUM_LEGEND_DOTS = 5
 
-    def __init__(self, minn: float, delta: float, alpha: Optional[float], *args: Any, **kwargs: Any):
+    def __init__(self, minn: float, delta: float, alpha: float | None, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._delta = delta
         self._minn = minn
@@ -123,21 +126,21 @@ class CustomDotplot(sc.pl.DotPlot):
 
 @d.dedent
 def ligrec(
-    adata: Union[AnnData, Mapping[str, pd.DataFrame]],
-    cluster_key: Optional[str] = None,
-    source_groups: Optional[Union[str, Sequence[str]]] = None,
-    target_groups: Optional[Union[str, Sequence[str]]] = None,
-    means_range: Tuple[float, float] = (-np.inf, np.inf),
+    adata: AnnData | Mapping[str, pd.DataFrame],
+    cluster_key: str | None = None,
+    source_groups: str | Sequence[str] | None = None,
+    target_groups: str | Sequence[str] | None = None,
+    means_range: tuple[float, float] = (-np.inf, np.inf),
     pvalue_threshold: float = 1.0,
     remove_empty_interactions: bool = True,
     remove_nonsig_interactions: bool = False,
-    dendrogram: Optional[str] = None,
-    alpha: Optional[float] = 0.001,
+    dendrogram: str | None = None,
+    alpha: float | None = 0.001,
     swap_axes: bool = False,
-    title: Optional[str] = None,
-    figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
-    save: Optional[Union[str, Path]] = None,
+    title: str | None = None,
+    figsize: tuple[float, float] | None = None,
+    dpi: int | None = None,
+    save: str | Path | None = None,
     **kwargs: Any,
 ) -> None:
     """
@@ -191,7 +194,7 @@ def ligrec(
 
     def filter_values(
         pvals: pd.DataFrame, means: pd.DataFrame, *, mask: pd.DataFrame, kind: str
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         mask_rows = mask.any(axis=1)
         pvals = pvals.loc[mask_rows]
         means = means.loc[mask_rows]

@@ -18,10 +18,6 @@ Manuscript
 ----------
 Please see our `preprint`_ on **bioRxiv** to learn more.
 
-Latest additions
-^^^^^^^^^^^^^^^^
-.. include:: latest_additions.rst
-
 Squidpy's key applications
 --------------------------
 - Build and analyze the neighborhood graph from spatial coordinates.

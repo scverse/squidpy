@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from docrep import DocstringProcessor
 from typing import Any, Callable
 from textwrap import dedent

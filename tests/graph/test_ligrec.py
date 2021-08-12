@@ -1,5 +1,6 @@
 from time import time
 from typing import Tuple, Mapping, Optional, Sequence, TYPE_CHECKING
+from itertools import product
 import sys
 import pytest
 
@@ -430,3 +431,22 @@ class TestValidBehavior:
 
         for key in ["means", "pvalues", "metadata"]:
             assert_frame_equal(res[key], bdata.uns["foo"][key])
+
+    @pytest.mark.parametrize("use_raw", [False, True])
+    def test_gene_symbols(self, adata: AnnData, use_raw: bool):
+        gene_ids = adata.var["gene_ids"]
+        interactions = tuple(product(gene_ids[:5], gene_ids[:5]))
+        res = ligrec(
+            adata,
+            _CK,
+            interactions=interactions,
+            n_perms=5,
+            use_raw=use_raw,
+            copy=True,
+            show_progress_bar=False,
+            gene_symbols="gene_ids",
+        )
+
+        np.testing.assert_array_equal(res["means"].index, pd.MultiIndex.from_tuples(interactions))
+        np.testing.assert_array_equal(res["pvalues"].index, pd.MultiIndex.from_tuples(interactions))
+        np.testing.assert_array_equal(res["metadata"].index, pd.MultiIndex.from_tuples(interactions))

@@ -1,6 +1,8 @@
 """Functions for neighborhood enrichment analysis (permutation test, centralities measures etc.)."""
+from __future__ import annotations
 
-from typing import Any, Tuple, Union, Callable, Iterable, Optional, Sequence
+from typing import Union  # noqa: F401
+from typing import Any, Callable, Iterable, Sequence
 from functools import partial
 
 from scanpy import logging as logg
@@ -14,7 +16,7 @@ import numba.types as nt
 import networkx as nx
 
 from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
+from squidpy._utils import Signal, NDArrayA, SigQueue, parallelize, _get_n_cores
 from squidpy.gr._utils import (
     _save_data,
     _assert_positive,
@@ -30,7 +32,7 @@ dt = nt.uint32  # data type aliases (both for numpy and numba should match)
 ndt = np.uint32
 _template = """
 @njit(dt[:, :](dt[:], dt[:], dt[:]), parallel={parallel}, fastmath=True)
-def _nenrich_{n_cls}_{parallel}(indices: np.ndarray, indptr: np.ndarray, clustering: np.ndarray) -> np.ndarray:
+def _nenrich_{n_cls}_{parallel}(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA) -> np.ndarray:
     '''
     Count how many times clusters :math:`i` and :math:`j` are connected.
 
@@ -61,7 +63,7 @@ def _nenrich_{n_cls}_{parallel}(indices: np.ndarray, indptr: np.ndarray, cluster
 """
 
 
-def _create_function(n_cls: int, parallel: bool = False) -> Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray]:
+def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, NDArrayA, NDArrayA], NDArrayA]:
     """
     Create a :mod:`numba` function which counts the number of connections between clusters.
 
@@ -118,15 +120,15 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[np.ndarray
 def nhood_enrichment(
     adata: AnnData,
     cluster_key: str,
-    connectivity_key: Optional[str] = None,
+    connectivity_key: str | None = None,
     n_perms: int = 1000,
     numba_parallel: bool = False,
-    seed: Optional[int] = None,
+    seed: int | None = None,
     copy: bool = False,
-    n_jobs: Optional[int] = None,
+    n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
-) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute neighborhood enrichment by permutation test.
 
@@ -196,13 +198,13 @@ def nhood_enrichment(
 def centrality_scores(
     adata: AnnData,
     cluster_key: str,
-    score: Optional[Union[str, Iterable[str]]] = None,
-    connectivity_key: Optional[str] = None,
+    score: str | Iterable[str] | None = None,
+    connectivity_key: str | None = None,
     copy: bool = False,
-    n_jobs: Optional[int] = None,
+    n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = False,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """
     Compute centrality scores per cluster or cell type.
 
@@ -213,7 +215,7 @@ def centrality_scores(
     %(adata)s
     %(cluster_key)s
     score
-        Centrality measures as described in :class:`networkx.algorithms.centrality` :cite:`networkx`.
+        Centrality measures as described in :mod:`networkx.algorithms.centrality` :cite:`networkx`.
         If `None`, use all the options below. Valid options are:
 
             - `{c.CLOSENESS.s!r}` - measure of how close the group is to other nodes.
@@ -284,11 +286,11 @@ def centrality_scores(
 def interaction_matrix(
     adata: AnnData,
     cluster_key: str,
-    connectivity_key: Optional[str] = None,
+    connectivity_key: str | None = None,
     normalized: bool = False,
     copy: bool = False,
     weights: bool = False,
-) -> Optional[np.ndarray]:
+) -> NDArrayA | None:
     """
     Compute interaction matrix for clusters.
 
@@ -325,14 +327,8 @@ def interaction_matrix(
     g = g[mask, :][:, mask]
     n_cats = len(cats.cat.categories)
 
-    if weights:
-        g_data = g.data
-    else:
-        g_data = np.broadcast_to(1, shape=len(g.data))
-    if pd.api.types.is_bool_dtype(g.dtype) or pd.api.types.is_integer_dtype(g.dtype):
-        dtype = np.intp
-    else:
-        dtype = np.float_
+    g_data = g.data if weights else np.broadcast_to(1, shape=len(g.data))
+    dtype = int if pd.api.types.is_bool_dtype(g.dtype) or pd.api.types.is_integer_dtype(g.dtype) else float
     output = np.zeros((n_cats, n_cats), dtype=dtype)
 
     _interaction_matrix(g_data, g.indices, g.indptr, cats.cat.codes.to_numpy(), output)
@@ -342,13 +338,14 @@ def interaction_matrix(
 
     if copy:
         return output
+
     _save_data(adata, attr="uns", key=Key.uns.interaction_matrix(cluster_key), data=output)
 
 
 @njit
 def _interaction_matrix(
-    data: np.ndarray, indices: np.ndarray, indptr: np.ndarray, cats: np.ndarray, output: np.ndarray
-) -> np.ndarray:
+    data: NDArrayA, indices: NDArrayA, indptr: NDArrayA, cats: NDArrayA, output: NDArrayA
+) -> NDArrayA:
     indices_list = np.split(indices, indptr[1:-1])
     data_list = np.split(data, indptr[1:-1])
     for i in range(len(data_list)):
@@ -366,7 +363,7 @@ def _centrality_scores_helper(
     clusters: Sequence[str],
     fun: Callable[..., float],
     method: str,
-    queue: Optional[SigQueue] = None,
+    queue: SigQueue | None = None,
 ) -> pd.DataFrame:
     res_list = []
     for c in cat:
@@ -384,15 +381,15 @@ def _centrality_scores_helper(
 
 
 def _nhood_enrichment_helper(
-    ixs: np.ndarray,
-    callback: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray],
-    indices: np.ndarray,
-    indptr: np.ndarray,
-    int_clust: np.ndarray,
+    ixs: NDArrayA,
+    callback: Callable[[NDArrayA, NDArrayA, NDArrayA], NDArrayA],
+    indices: NDArrayA,
+    indptr: NDArrayA,
+    int_clust: NDArrayA,
     n_cls: int,
-    seed: Optional[int] = None,
-    queue: Optional[SigQueue] = None,
-) -> np.ndarray:
+    seed: int | None = None,
+    queue: SigQueue | None = None,
+) -> NDArrayA:
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
     int_clust = int_clust.copy()  # threading
     rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])

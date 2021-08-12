@@ -1,4 +1,6 @@
-from typing import Union, Optional, Sequence, TYPE_CHECKING
+from __future__ import annotations
+
+from typing import Sequence, TYPE_CHECKING
 from dataclasses import field, dataclass
 
 from anndata import AnnData
@@ -6,7 +8,7 @@ from anndata import AnnData
 import numpy as np
 
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
-from squidpy._utils import _unique_order_preserving
+from squidpy._utils import NDArrayA, _unique_order_preserving
 from squidpy.gr._utils import _assert_spatial_basis, _assert_categorical_obs
 from squidpy.pl._utils import ALayer
 from squidpy._constants._constants import Symbol
@@ -22,13 +24,13 @@ class ImageModel:
     adata: AnnData
     container: ImageContainer
     spatial_key: str = field(default=Key.obsm.spatial, repr=False)
-    library_key: Optional[str] = None
-    library_id: Optional[Union[str, Sequence[str]]] = None
-    spot_diameter: Union[np.ndarray, float] = field(default=0, init=False)
-    coordinates: np.ndarray = field(init=False, repr=False)
+    library_key: str | None = None
+    library_id: str | Sequence[str] | None = None
+    spot_diameter: NDArrayA | float = field(default=0, init=False)
+    coordinates: NDArrayA = field(init=False, repr=False)
     alayer: ALayer = field(init=False, repr=True)
 
-    palette: Optional[str] = field(default=None, repr=False)
+    palette: str | None = field(default=None, repr=False)
     cmap: str = field(default="viridis", repr=False)
     blending: str = field(default="opaque", repr=False)
     key_added: str = "shapes"
@@ -95,10 +97,9 @@ class ImageModel:
         self.library_id = list(libraries.cat.categories)
 
         self.coordinates = np.c_[libraries.cat.codes.values, self.coordinates[mask]]
-
         self.spot_diameter = np.array(
             [
                 np.array([0.0] + [Key.uns.spot_diameter(self.adata, self.spatial_key, lid)] * 2) * self.scale
                 for lid in libraries
             ]
-        )  # TODO spot_diameter needs to be 3d, and is potentially different for different library ids
+        )

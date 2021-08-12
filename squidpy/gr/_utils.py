@@ -1,15 +1,9 @@
 """Graph utilities."""
-from typing import (
-    Any,
-    List,
-    Tuple,
-    Union,
-    Hashable,
-    Iterable,
-    Optional,
-    Sequence,
-    TYPE_CHECKING,
-)
+from __future__ import annotations
+
+from typing import Union  # noqa: F401
+from typing import Any, Hashable, Iterable, Sequence, TYPE_CHECKING
+from contextlib import contextmanager
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -20,15 +14,16 @@ from pandas.api.types import infer_dtype, is_categorical_dtype
 import numpy as np
 import pandas as pd
 
-from squidpy._utils import _unique_order_preserving
+from squidpy._docs import d
+from squidpy._utils import NDArrayA, _unique_order_preserving
 
 
 def _check_tuple_needles(
-    needles: Sequence[Tuple[Any, Any]],
+    needles: Sequence[tuple[Any, Any]],
     haystack: Sequence[Any],
     msg: str,
     reraise: bool = True,
-) -> Sequence[Tuple[Any, Any]]:
+) -> Sequence[tuple[Any, Any]]:
     filtered = []
 
     for needle in needles:
@@ -56,9 +51,9 @@ def _check_tuple_needles(
 
 # modified from pandas' source code
 def _create_sparse_df(
-    data: Union[np.ndarray, spmatrix],
-    index: Optional[pd.Index] = None,
-    columns: Optional[Sequence[Any]] = None,
+    data: NDArrayA | spmatrix,
+    index: pd.Index | None = None,
+    columns: Sequence[Any] | None = None,
     fill_value: float = 0,
 ) -> pd.DataFrame:
     """
@@ -96,7 +91,7 @@ def _create_sparse_df(
         arrays = []
 
         for i in range(n_cols):
-            mask = pred(data[:, i])  # type: ignore[no-untyped-call]
+            mask = pred(data[:, i])
             idx = IntIndex(n_rows, np.where(mask)[0], check_integrity=False)
             arr = SparseArray._simple_new(data[mask, i], idx, dtype)
             arrays.append(arr)
@@ -156,8 +151,8 @@ def _assert_spatial_basis(adata: AnnData, key: str) -> None:
 
 
 def _assert_non_empty_sequence(
-    seq: Union[Hashable, Iterable[Hashable]], *, name: str, convert_scalar: bool = True
-) -> List[Any]:
+    seq: Hashable | Iterable[Hashable], *, name: str, convert_scalar: bool = True
+) -> list[Any]:
     if isinstance(seq, str) or not isinstance(seq, Iterable):
         if not convert_scalar:
             raise TypeError(f"Expected a sequence, found `{type(seq)}`.")
@@ -192,9 +187,7 @@ def _assert_in_range(value: float, minn: float, maxx: float, *, name: str) -> No
         raise ValueError(f"Expected `{name}` to be in interval `[{minn}, {maxx}]`, found `{value}`.")
 
 
-def _save_data(
-    adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool = True, time: Optional[Any] = None
-) -> None:
+def _save_data(adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool = True, time: Any | None = None) -> None:
     obj = getattr(adata, attr)
     obj[key] = data
 
@@ -207,8 +200,8 @@ def _save_data(
 
 
 def _extract_expression(
-    adata: AnnData, genes: Optional[Sequence[str]] = None, use_raw: bool = False, layer: Optional[str] = None
-) -> Tuple[Union[np.ndarray, spmatrix], Sequence[str]]:
+    adata: AnnData, genes: Sequence[str] | None = None, use_raw: bool = False, layer: str | None = None
+) -> tuple[NDArrayA | spmatrix, Sequence[str]]:
     if use_raw and adata.raw is None:
         logg.warning("AnnData object has no attribute `raw`. Setting `use_raw=False`")
         use_raw = False
@@ -247,3 +240,54 @@ def _extract_expression(
         raise TypeError(f"Unable to handle type `{type(res)}`.")
 
     return res, genes
+
+
+@contextmanager
+@d.dedent
+def _genesymbols(adata: AnnData, *, key: str | None = None, use_raw: bool = True, make_unique: bool = False) -> AnnData:
+    """
+    Set gene names from a column in :attr:`anndata.AnnData.var`.
+
+    Parameters
+    ----------
+    %(adata)s
+    key
+        Key in :attr:`anndata.AnnData.var` where the gene symbols are stored. If `None`, this operation is a no-op.
+    use_raw
+        Whether to change the gene names in :attr:`anndata.AnnData.raw`.
+    make_unique
+        Whether to make the newly assigned gene names unique.
+
+    Yields
+    ------
+    The same ``adata`` with modified :attr:`anndata.AnnData.var_names`, depending on ``use_raw``.
+    """
+
+    def key_present() -> bool:
+        if use_raw:
+            if adata.raw is None:
+                raise AttributeError("No `.raw` attribute found. Try specifying `use_raw=False`.")
+            return key in adata.raw._adata.var
+        return key in adata.var
+
+    if key is None:
+        yield adata
+    elif not key_present():
+        raise KeyError(f"Unable to find gene symbols in `adata.{'raw.' if use_raw else ''}var[{key!r}]`.")
+    else:
+        adata_orig = adata
+        if use_raw:
+            adata = adata.raw._adata
+
+        var_names = adata.var_names
+        try:
+            adata.var_names = adata.var[key]
+            if make_unique:
+                adata.var_names_make_unique()
+            if use_raw:
+                adata_orig.raw = adata
+            yield adata_orig
+        finally:
+            adata.var_names = var_names
+            if use_raw:
+                adata_orig.raw = adata
