@@ -1,7 +1,8 @@
 -r ../requirements.txt
 gitpython
 ipython
-nbsphinx>=0.8.1
+# very slow build
+nbsphinx>=0.8.1,<0.8.7
 pyenchant>=3.1.1
 requests
 sphinx>=4,<4.0.3  # https://github.com/spatialaudio/nbsphinx/issues/584

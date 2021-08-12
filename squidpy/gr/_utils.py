@@ -1,15 +1,8 @@
 """Graph utilities."""
-from typing import (
-    Any,
-    List,
-    Tuple,
-    Union,
-    Hashable,
-    Iterable,
-    Optional,
-    Sequence,
-    TYPE_CHECKING,
-)
+from __future__ import annotations
+
+from typing import Union  # noqa: F401
+from typing import Any, Hashable, Iterable, Sequence, TYPE_CHECKING
 from contextlib import contextmanager
 
 from scanpy import logging as logg
@@ -22,15 +15,15 @@ import numpy as np
 import pandas as pd
 
 from squidpy._docs import d
-from squidpy._utils import _unique_order_preserving
+from squidpy._utils import NDArrayA, _unique_order_preserving
 
 
 def _check_tuple_needles(
-    needles: Sequence[Tuple[Any, Any]],
+    needles: Sequence[tuple[Any, Any]],
     haystack: Sequence[Any],
     msg: str,
     reraise: bool = True,
-) -> Sequence[Tuple[Any, Any]]:
+) -> Sequence[tuple[Any, Any]]:
     filtered = []
 
     for needle in needles:
@@ -58,9 +51,9 @@ def _check_tuple_needles(
 
 # modified from pandas' source code
 def _create_sparse_df(
-    data: Union[np.ndarray, spmatrix],
-    index: Optional[pd.Index] = None,
-    columns: Optional[Sequence[Any]] = None,
+    data: NDArrayA | spmatrix,
+    index: pd.Index | None = None,
+    columns: Sequence[Any] | None = None,
     fill_value: float = 0,
 ) -> pd.DataFrame:
     """
@@ -98,7 +91,7 @@ def _create_sparse_df(
         arrays = []
 
         for i in range(n_cols):
-            mask = pred(data[:, i])  # type: ignore[no-untyped-call]
+            mask = pred(data[:, i])
             idx = IntIndex(n_rows, np.where(mask)[0], check_integrity=False)
             arr = SparseArray._simple_new(data[mask, i], idx, dtype)
             arrays.append(arr)
@@ -158,8 +151,8 @@ def _assert_spatial_basis(adata: AnnData, key: str) -> None:
 
 
 def _assert_non_empty_sequence(
-    seq: Union[Hashable, Iterable[Hashable]], *, name: str, convert_scalar: bool = True
-) -> List[Any]:
+    seq: Hashable | Iterable[Hashable], *, name: str, convert_scalar: bool = True
+) -> list[Any]:
     if isinstance(seq, str) or not isinstance(seq, Iterable):
         if not convert_scalar:
             raise TypeError(f"Expected a sequence, found `{type(seq)}`.")
@@ -194,9 +187,7 @@ def _assert_in_range(value: float, minn: float, maxx: float, *, name: str) -> No
         raise ValueError(f"Expected `{name}` to be in interval `[{minn}, {maxx}]`, found `{value}`.")
 
 
-def _save_data(
-    adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool = True, time: Optional[Any] = None
-) -> None:
+def _save_data(adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool = True, time: Any | None = None) -> None:
     obj = getattr(adata, attr)
     obj[key] = data
 
@@ -209,8 +200,8 @@ def _save_data(
 
 
 def _extract_expression(
-    adata: AnnData, genes: Optional[Sequence[str]] = None, use_raw: bool = False, layer: Optional[str] = None
-) -> Tuple[Union[np.ndarray, spmatrix], Sequence[str]]:
+    adata: AnnData, genes: Sequence[str] | None = None, use_raw: bool = False, layer: str | None = None
+) -> tuple[NDArrayA | spmatrix, Sequence[str]]:
     if use_raw and adata.raw is None:
         logg.warning("AnnData object has no attribute `raw`. Setting `use_raw=False`")
         use_raw = False
@@ -253,9 +244,7 @@ def _extract_expression(
 
 @contextmanager
 @d.dedent
-def _genesymbols(
-    adata: AnnData, *, key: Optional[str] = None, use_raw: bool = True, make_unique: bool = False
-) -> AnnData:
+def _genesymbols(adata: AnnData, *, key: str | None = None, use_raw: bool = True, make_unique: bool = False) -> AnnData:
     """
     Set gene names from a column in :attr:`anndata.AnnData.var`.
 
