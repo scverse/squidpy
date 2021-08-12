@@ -215,7 +215,7 @@ def centrality_scores(
     %(adata)s
     %(cluster_key)s
     score
-        Centrality measures as described in :class:`networkx.algorithms.centrality` :cite:`networkx`.
+        Centrality measures as described in :mod:`networkx.algorithms.centrality` :cite:`networkx`.
         If `None`, use all the options below. Valid options are:
 
             - `{c.CLOSENESS.s!r}` - measure of how close the group is to other nodes.
