@@ -148,7 +148,7 @@ jobs:
             with:
                 fetch-depth: 0
                 token: ${{ secrets.TOWNCRIER_TOKEN }}
-        -   name: Set up Python
+        -   name: Set up Python 3.9
             uses: actions/setup-python@v2
             with:
                 python-version: 3.9
