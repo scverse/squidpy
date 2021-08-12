@@ -4,6 +4,7 @@ autocorrelation
 backend
 binarize
 boolean
+Bugfixes
 Cellpose
 centralities
 centroid
