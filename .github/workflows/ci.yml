@@ -168,7 +168,7 @@ jobs:
                 commit_message: '[auto][ci skip] Generate release notes'
                 file_pattern: docs/source/release/**
                 commit_user_name: CI
-                skip_dirty_check: fals
+                skip_dirty_check: false
 
         -   name: Check if README can be rendered on PyPI
             run: |
