@@ -26,7 +26,7 @@ def _parse_description(comment: str) -> str:
         return "\n".join(lines).strip()
 
     inside_description = False
-    desc_lines = []
+    desc_lines: List[str] = []
 
     for line in comment.split("\n"):
         if line.startswith(State.COMMENT):
