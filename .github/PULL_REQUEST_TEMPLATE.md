@@ -1,17 +1,10 @@
-### Types of changes
-<!--- What types of changes are introduced? Put an `x` in all applicable boxes: -->
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] Breaking change (change that would cause existing functionality to not work as before)
-- [ ] New feature (non-breaking change which adds functionality)
+**IMPORTANT: Please search among the [Pull requests](../pulls) before creating one.**
 
-### Description
-<!--- What does this PR achieve? -->
-...
+## Description
+<!-- Clearly and concisely describe your changes. This section will be shown in the docs. -->
 
-### How has this been tested?
-<!--- Describe how you've tested your changes: -->
-...
+## How has this been tested?
+<!-- Describe in detail how you've tested your changes. -->
 
-### Closes
-<!--- If applicable, add `closes #XXXX` below to auto-close the issue related to this PR: -->
-...
+## Closes
+<!-- If applicable, type `closes #XXXX` in your comment to auto-close the issue that this PR fixes. -->

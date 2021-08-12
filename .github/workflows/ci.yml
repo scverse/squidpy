@@ -147,19 +147,33 @@ jobs:
         -   uses: actions/checkout@v2
             with:
                 fetch-depth: 0
+                token: ${{ secrets.TOWNCRIER_TOKEN }}
         -   name: Set up Python
             uses: actions/setup-python@v2
             with:
                 python-version: 3.9
-
-        -   name: Install pypa/build and tox
+        -   name: Install dependencies
             run: |
                 python -m pip install --upgrade pip
-                pip install build tox
+                pip install build towncrier tox
+
+        -   name: Generate release notes
+            run: |
+                towncrier build --yes
+                tox -e check-docs
+        -   name: Commit release notes
+            id: auto-commit-action
+            uses: stefanzweifel/git-auto-commit-action@v4
+            with:
+                commit_message: '[auto][ci skip] Generate release notes'
+                file_pattern: docs/source/release/**
+                commit_user_name: CI
+                skip_dirty_check: false
 
         -   name: Check if README can be rendered on PyPI
             run: |
                 tox -e readme
+
         -   name: Build a binary wheel and a source tarball
             run: |
                 python -m build --sdist --wheel --outdir dist/

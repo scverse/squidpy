@@ -56,3 +56,38 @@ only_modified = true
 group_by_package = true
 force_alphabetical_sort_within_sections = true
 lexicographical = true
+
+[tool.towncrier]
+package = "squidpy"
+single_file = true
+filename = "docs/source/release/notes-{version}.rst"
+directory = "docs/source/release/changelog"
+issue_format = "`#{issue} <https://github.com/theislab/squidpy/pull/{issue}>`__"
+template = "docs/source/release/changelog/template.rst"
+underlines = ["~", "-"]
+all_bullets = true
+
+[[tool.towncrier.type]]
+directory = "feature"
+name = "Features"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "bugfix"
+name = "Bugfixes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "deprecation"
+name = "Deprecations (in next major release)"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "misc"
+name = "Miscellaneous"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "doc"
+name = "Documentation"
+showcontent = true

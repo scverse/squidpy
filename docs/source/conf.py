@@ -97,6 +97,7 @@ exclude_patterns = [
     "auto_*/**.ipynb",
     "auto_*/**.md5",
     "auto_*/**.py",
+    "release/changelog/*",
     "**.ipynb_checkpoints",
 ]
 suppress_warnings = ["download.not_readable"]
