@@ -1,4 +1,6 @@
-from typing import Any, FrozenSet
+from __future__ import annotations
+
+from typing import Any
 
 from scanpy import logging as logg
 
@@ -10,7 +12,7 @@ from napari.layers import Points
 import napari
 
 from squidpy.pl._interactive._model import ImageModel
-from squidpy.pl._interactive._widgets import (
+from squidpy.pl._interactive._widgets import (  # type: ignore[attr-defined]
     CBarWidget,
     AListWidget,
     ObsmIndexWidget,
@@ -33,7 +35,7 @@ class ImageView:
         Controller for this view.
     """
 
-    def __init__(self, model: ImageModel, controller: "ImageController"):  # type: ignore[name-defined] # noqa: F821
+    def __init__(self, model: ImageModel, controller: ImageController):  # type: ignore[name-defined] # noqa: F821
         self._model = model
         self._controller = controller
 
@@ -165,7 +167,7 @@ class ImageView:
         return self.viewer.layers
 
     @property
-    def layernames(self) -> FrozenSet[str]:
+    def layernames(self) -> frozenset[str]:
         """Names of :attr:`napari.Viewer.layers`."""
         return frozenset(layer.name for layer in self.layers)
 
@@ -180,6 +182,6 @@ class ImageView:
         return self._model
 
     @property
-    def controller(self) -> "ImageController":  # type: ignore[name-defined] # noqa: F821
+    def controller(self) -> ImageController:  # type: ignore[name-defined] # noqa: F821
         """Controller for this view."""  # noqa: D401
         return self._controller

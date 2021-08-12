@@ -1,15 +1,6 @@
-from typing import (
-    Any,
-    Dict,
-    List,
-    Tuple,
-    Union,
-    Callable,
-    Iterable,
-    Optional,
-    Sequence,
-    TYPE_CHECKING,
-)
+from __future__ import annotations
+
+from typing import Any, Dict, Union, Callable, Iterable, Sequence, TYPE_CHECKING
 from typing_extensions import Protocol
 
 import numpy as np
@@ -20,6 +11,7 @@ from skimage.feature import greycoprops, greycomatrix
 import skimage.measure
 
 from squidpy._docs import d
+from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_non_empty_sequence
 from squidpy.im._coords import CropCoords, _NULL_PADDING
 from squidpy._constants._pkg_constants import Key
@@ -28,7 +20,7 @@ Feature_t = Dict[str, Any]
 Channel_t = Union[int, Sequence[int]]
 
 
-def _get_channels(xr_img: Union[np.ndarray, xr.DataArray], channels: Optional[Channel_t]) -> List[int]:
+def _get_channels(xr_img: NDArrayA | xr.DataArray, channels: Channel_t | None) -> list[int]:
     """Get correct channel ranges for feature calculation."""
     # if channels is None, compute features for all channels
     all_channels = list(range(xr_img.shape[-1]))
@@ -82,10 +74,10 @@ class HasGetItemProtocol(Protocol):
     def data(self) -> xr.Dataset:  # noqa: D102
         ...
 
-    def _get_layer(self, layer: Optional[str]) -> str:
+    def _get_layer(self, layer: str | None) -> str:
         ...
 
-    def _get_library_id(self, library_id: Optional[str]) -> str:
+    def _get_library_id(self, library_id: str | None) -> str:
         ...
 
 
@@ -96,9 +88,9 @@ class FeatureMixin:
     def features_summary(
         self: HasGetItemProtocol,
         layer: str,
-        library_id: Optional[str] = None,
+        library_id: str | None = None,
         feature_name: str = "summary",
-        channels: Optional[Channel_t] = None,
+        channels: Channel_t | None = None,
         quantiles: Sequence[float] = (0.9, 0.5, 0.1),
     ) -> Feature_t:
         """
@@ -143,11 +135,11 @@ class FeatureMixin:
     def features_histogram(
         self: HasGetItemProtocol,
         layer: str,
-        library_id: Optional[str] = None,
+        library_id: str | None = None,
         feature_name: str = "histogram",
-        channels: Optional[Channel_t] = None,
+        channels: Channel_t | None = None,
         bins: int = 10,
-        v_range: Optional[Tuple[int, int]] = None,
+        v_range: tuple[int, int] | None = None,
     ) -> Feature_t:
         """
         Compute histogram counts of color channel values.
@@ -194,9 +186,9 @@ class FeatureMixin:
     def features_texture(
         self: HasGetItemProtocol,
         layer: str,
-        library_id: Optional[str] = None,
+        library_id: str | None = None,
         feature_name: str = "texture",
-        channels: Optional[Channel_t] = None,
+        channels: Channel_t | None = None,
         props: Sequence[str] = ("contrast", "dissimilarity", "homogeneity", "correlation", "ASM"),
         distances: Sequence[int] = (1,),
         angles: Sequence[float] = (0, np.pi / 4, np.pi / 2, 3 * np.pi / 4),
@@ -264,10 +256,10 @@ class FeatureMixin:
     def features_segmentation(
         self: HasGetItemProtocol,
         label_layer: str,
-        intensity_layer: Optional[str] = None,
-        library_id: Optional[str] = None,
+        intensity_layer: str | None = None,
+        library_id: str | None = None,
         feature_name: str = "segmentation",
-        channels: Optional[Channel_t] = None,
+        channels: Channel_t | None = None,
         props: Sequence[str] = ("label", "area", "mean_intensity"),
     ) -> Feature_t:
         """
@@ -329,7 +321,7 @@ class FeatureMixin:
               channel `c` in ``channels``.
         """
 
-        def convert_to_full_image_coordinates(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+        def convert_to_full_image_coordinates(x: NDArrayA, y: NDArrayA) -> NDArrayA:
             if not len(y):
                 return np.array([[]], dtype=np.float64)
 
@@ -379,7 +371,7 @@ class FeatureMixin:
         else:
             channels = ()
 
-        features: Dict[str, Any] = {}
+        features: dict[str, Any] = {}
         label_arr = self[label_layer].sel(z=library_id)
         label_arr_0 = label_arr[..., 0].values
         # calculate features that do not depend on the intensity image
@@ -413,10 +405,10 @@ class FeatureMixin:
     @d.dedent
     def features_custom(
         self: HasGetItemProtocol,
-        func: Callable[[np.ndarray], Any],
-        layer: Optional[str],
-        channels: Optional[Channel_t] = None,
-        feature_name: Optional[str] = None,
+        func: Callable[[NDArrayA], Any],
+        layer: str | None,
+        channels: Channel_t | None = None,
+        feature_name: str | None = None,
         **kwargs: Any,
     ) -> Feature_t:
         """

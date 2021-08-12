@@ -40,7 +40,7 @@ jobs:
         -   name: Set up Python
             uses: actions/setup-python@v2
             with:
-                python-version: 3.8
+                python-version: 3.9
 
         -   uses: actions/cache@v2
             with:
@@ -150,11 +150,16 @@ jobs:
         -   name: Set up Python
             uses: actions/setup-python@v2
             with:
-                python-version: 3.8
-        -   name: Install pypa/build
+                python-version: 3.9
+
+        -   name: Install pypa/build and tox
             run: |
                 python -m pip install --upgrade pip
-                pip install build
+                pip install build tox
+
+        -   name: Check if README can be rendered on PyPI
+            run: |
+                tox -e readme
         -   name: Build a binary wheel and a source tarball
             run: |
                 python -m build --sdist --wheel --outdir dist/
