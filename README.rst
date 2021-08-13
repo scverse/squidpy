@@ -6,7 +6,7 @@ Squidpy - Spatial Single Cell Analysis in Python
 .. raw:: html
 
     <p align="center">
-        <a href="https://squidpy.readthedocs.io/en/latest/">
+        <a href="https://squidpy.readthedocs.io/en/stable/">
             <img src="https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png"
              width="400px" alt="Squidpy logo">
         </a>
@@ -21,7 +21,7 @@ tissue images if available.
 .. raw:: html
 
     <p align="center">
-        <a href="https://www.biorxiv.org/content/10.1101/2021.02.19.431994v1">
+        <a href="https://www.biorxiv.org/content/10.1101/2021.02.19.431994v2">
             <img src="https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png"
              width="400px" alt="Squidpy title figure">
         </a>
@@ -56,11 +56,11 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://img.shields.io/pypi/v/squidpy.svg
     :alt: PyPI
 
-.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/CI/master
+.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/CI/dev
     :target: https://github.com/theislab/squidpy/actions
     :alt: CI
 
-.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/master?label=notebooks
+.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/dev?label=notebooks
     :target: https://github.com/theislab/squidpy_notebooks/actions
     :alt: Notebooks CI
 
@@ -68,7 +68,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://squidpy.readthedocs.io/en/stable/
     :alt: Documentation
 
-.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/master/graph/badge.svg
+.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/dev/graph/badge.svg
     :target: https://codecov.io/gh/theislab/squidpy
     :alt: Coverage
 
@@ -76,7 +76,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pepy.tech/project/squidpy
     :alt: Downloads
 
-.. _preprint: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v1
+.. _preprint: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v2
 .. _scanpy: https://scanpy.readthedocs.io/en/stable/
 .. _anndata: https://anndata.readthedocs.io/en/stable/
 .. _napari: https://napari.org/
