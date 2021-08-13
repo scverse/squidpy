@@ -138,13 +138,13 @@ jobs:
             run: |
                 python -m pip install --upgrade pip
                 pip install build towncrier tox
+                pip install -e'.'
 
         -   name: Generate release notes
             run: |
                 towncrier build --yes
                 tox -e check-docs
         -   name: Commit release notes
-            id: auto-commit-action
             uses: stefanzweifel/git-auto-commit-action@v4
             with:
                 commit_message: '[auto][ci skip] Generate release notes'

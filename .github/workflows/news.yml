@@ -18,7 +18,7 @@ jobs:
             with:
                 python-version: 3.9
 
-        -   name: Install rstcheck
+        -   name: Install dependencies
             run: |
                 python -m pip install --upgrade pip
                 pip install rstcheck requests
@@ -30,10 +30,9 @@ jobs:
                 rstcheck docs/source/release/changelog/*.rst
 
         -   name: Commit news fragment
-            id: auto-commit-action
             uses: stefanzweifel/git-auto-commit-action@v4
             with:
-                commit_message: '[auto][ci-skip] Generate news fragment'
+                commit_message: '[auto][ci skip] Generate news fragment'
                 branch: ${{ github.base_ref }}
                 file_pattern: docs/source/release/changelog/*.rst
                 commit_user_name: CI
