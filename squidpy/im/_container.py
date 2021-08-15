@@ -452,13 +452,13 @@ class ImageContainer(FeatureMixin):
         img: NDArrayA | None = spatial_data.get("images", {}).get(img_key, None)
         if img is None:
             raise KeyError(
-                f"Unable to find image in `adata.uns[{spatial_key!r}][{library_id!r}]['images'][{img_key!r}]`."
+                f"Unable to find the image in `adata.uns[{spatial_key!r}][{library_id!r}]['images'][{img_key!r}]`."
             )
 
         scale = spatial_data.get("scalefactors", {}).get(f"tissue_{img_key}_scalef", None)
         if scale is None and "scale" not in kwargs:
             logg.warning(
-                f"Unable to determine the scale from "
+                f"Unable to determine the scale factor from "
                 f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors']['tissue_{img_key}_scalef']`, "
                 f"using `1.0`. Consider specifying it manually as `scale=...`"
             )
