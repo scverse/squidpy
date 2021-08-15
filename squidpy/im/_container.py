@@ -412,6 +412,7 @@ class ImageContainer(FeatureMixin):
         return img.transpose("y", "x", "z", ...)
 
     @classmethod
+    @d.dedent
     def from_adata(
         cls,
         adata: AnnData,
@@ -420,12 +421,29 @@ class ImageContainer(FeatureMixin):
         spatial_key: str = Key.uns.spatial,
         **kwargs: Any,
     ) -> ImageContainer:
-        """TODO."""
+        """
+        Load an image from :mod:`anndata` object.
+
+        %(adata)s
+        img_key
+            Key in :attr:`anndata.AnnData.uns` ``['{spatial_key}']['{library_id}']['images']``.
+            If `None`, use the first key found.
+        library_id
+            Key in :attr:`anndata.AnnData.uns` ``['{spatial_key}']`` specifying which library to access.
+        spatial_key
+            Key in :attr:`anndata.AnnData.uns` where spatial metadata is stored.
+        kwargs
+            Keyword arguments for :meth:`squidpy.im.ImageContainer.__init__`.
+
+        Returns
+        -------
+        The image container.
+        """
         library_id = Key.uns.library_id(adata, spatial_key, library_id)
         spatial_data = adata.uns[spatial_key][library_id]
         if img_key is None:
             try:
-                img_key = next(k for k in ("hires", "lowres") if k in spatial_data.get("images", []))
+                img_key = next(k for k in spatial_data.get("images", []))
             except StopIteration:
                 raise KeyError(f"No images found in `adata.uns[{spatial_key!r}][{library_id!r}]['images']`") from None
 
@@ -557,7 +575,7 @@ class ImageContainer(FeatureMixin):
         **_: Any,
     ) -> xr.Dataset:
         def _rescale(arr: xr.DataArray) -> xr.DataArray:
-            # once skimage==0.19.0, multichannel is deprecated
+            # TODO(michalk8): in skimage==0.19.0, multichannel is deprecated
             scaling_fn = partial(
                 rescale, scale=[scale, scale, 1], preserve_range=True, order=1, multichannel=True, cval=cval
             )
