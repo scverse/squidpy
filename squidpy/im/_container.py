@@ -424,16 +424,18 @@ class ImageContainer(FeatureMixin):
         """
         Load an image from :mod:`anndata` object.
 
+        Parameters
+        ----------
         %(adata)s
         img_key
             Key in :attr:`anndata.AnnData.uns` ``['{spatial_key}']['{library_id}']['images']``.
-            If `None`, use the first key found.
+            If `None`, the first key found is used.
         library_id
             Key in :attr:`anndata.AnnData.uns` ``['{spatial_key}']`` specifying which library to access.
         spatial_key
             Key in :attr:`anndata.AnnData.uns` where spatial metadata is stored.
         kwargs
-            Keyword arguments for :meth:`squidpy.im.ImageContainer.__init__`.
+            Keyword arguments for :class:`squidpy.im.ImageContainer`.
 
         Returns
         -------
