@@ -1,1 +1,1 @@
-Enable towncrier for release notes generation.
+Enable ``towncrier`` for release notes generation.
