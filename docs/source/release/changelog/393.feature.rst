@@ -1,0 +1,2 @@
+Allow defining cylindrical shells in :func:`squidpy.gr.spatial_neighbors` by using the ``radius`` argument.
+Also rename ``n_neigh``, ``n_neigh_grid`` arguments to ``n_neighs``.
