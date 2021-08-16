@@ -1,1 +1,0 @@
-Increase performance of Delaunay graph creation in :func:`squidpy.gr.spatial_neighbors`.
