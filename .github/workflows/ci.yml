@@ -134,27 +134,30 @@ jobs:
             uses: actions/setup-python@v2
             with:
                 python-version: 3.9
+        -   name: Get the tag
+            id: vars
+            run: |
+                echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+
         -   name: Install dependencies
             run: |
                 python -m pip install --upgrade pip
-                pip install build towncrier tox
-                pip install -e'.'
+                pip install tox build
+
+        -   name: Check valid PyPI README
+            run: |
+                tox -e readme
 
         -   name: Generate release notes
             run: |
-                towncrier build --yes
-                tox -e check-docs
+                tox -e build-release-notes,check-docs
         -   name: Commit release notes
             uses: stefanzweifel/git-auto-commit-action@v4
             with:
-                commit_message: '[auto][ci skip] Generate release notes'
+                commit_message: ${{ format('[auto][ci skip] Generate {0} release notes', steps.vars.outputs.tag) }}
                 file_pattern: docs/source/release/**
                 commit_user_name: CI
                 skip_dirty_check: false
-
-        -   name: Check if README can be rendered on PyPI
-            run: |
-                tox -e readme
 
         -   name: Build a binary wheel and a source tarball
             run: |

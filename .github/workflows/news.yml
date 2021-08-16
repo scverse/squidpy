@@ -21,19 +21,34 @@ jobs:
         -   name: Install dependencies
             run: |
                 python -m pip install --upgrade pip
-                pip install rstcheck requests
+                pip install tox
         -   name: Generate news fragment
             env:
                 PR_NUMBER: ${{ github.event.number }}
             run: |
-                python docs/source/create_news_fragment.py "$PR_NUMBER" -v
-                rstcheck docs/source/release/changelog/*.rst
+                tox -e news -- "$PR_NUMBER" -v
+                tox -e check-docs
 
         -   name: Commit news fragment
             uses: stefanzweifel/git-auto-commit-action@v4
             with:
-                commit_message: '[auto][ci skip] Generate news fragment'
+                commit_message: ${{ format('[auto][ci skip] Generate news fragment (#{0})', github.event.number) }}
                 branch: ${{ github.base_ref }}
                 file_pattern: docs/source/release/changelog/*.rst
+                commit_user_name: CI
+                skip_dirty_check: false
+
+        -   name: Update dev release notes
+            if: ${{ steps.auto-commit-action.outputs.changes_detected == 'true' && contains(github.base_ref, 'dev') }}
+            run: |
+                tox -e update-dev-notes
+
+        -   name: Commit dev release notes
+            if: ${{ steps.auto-commit-action.outputs.changes_detected == 'true' && contains(github.base_ref, 'dev') }}
+            uses: stefanzweifel/git-auto-commit-action@v4
+            with:
+                commit_message: ${{ format('[auto][ci skip] Update dev release notes (#{0})', github.event.number) }}
+                branch: ${{ github.base_ref }}
+                file_pattern: docs/source/release/notes-dev.rst
                 commit_user_name: CI
                 skip_dirty_check: false

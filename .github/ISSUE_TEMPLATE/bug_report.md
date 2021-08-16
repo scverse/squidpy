@@ -6,17 +6,17 @@ labels: bug
 assignees: "michalk8"
 ---
 
-### Description
+## Description
 <!-- Give a clear and concise description of the bug: -->
 ...
 
-### Minimal reproducible example
+## Minimal reproducible example
 <!-- Put an example code with which we can reproduce the bug: -->
 ```python
 ...
 ```
 
-### Traceback
+## Traceback
 <!-- If applicable, replace `...` with an error traceback below: -->
 
 <details>
@@ -27,6 +27,6 @@ assignees: "michalk8"
 
 </details>
 
-### Version
+## Version
 <!-- Output of squidpy.__version__ -->
 ...
