@@ -32,5 +32,5 @@ Miscellaneous
 Documentation
 -------------
 
-- Enable towncrier for release notes generation.
+- Enable ``towncrier`` for release notes generation.
   `#397 <https://github.com/theislab/squidpy/pull/397>`__
