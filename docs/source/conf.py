@@ -100,7 +100,7 @@ exclude_patterns = [
     "release/changelog/*",
     "**.ipynb_checkpoints",
 ]
-suppress_warnings = ["download.not_readable"]
+suppress_warnings = ["download.not_readable", "git.too_shallow"]
 
 # -- Options for HTML output -------------------------------------------------
 
