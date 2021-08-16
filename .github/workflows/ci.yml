@@ -138,7 +138,7 @@ jobs:
             id: vars
             run: |
                 raw=$(git branch -r --contains ${{ github.ref }})
-                branch=${raw/origin\/}
+                branch=${raw/[[:blank:]]*origin\/}
                 echo ::set-output name=branch::$branch
                 echo ::set-output name=tag::${GITHUB_REF#refs/*/}
 
