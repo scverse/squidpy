@@ -46,7 +46,7 @@ def _parse_description(comment: str) -> str:
 
 def create_news_fragment(issue_number: str, use_title: bool = False, sep: str = "~") -> None:
     try:
-        url = f"https://api.github.com/repos/theislab/cellrank/pulls/{issue_number}"
+        url = f"https://api.github.com/repos/theislab/squidpy/pulls/{issue_number}"
         resp = requests.get(url)
         resp.raise_for_status()
 
