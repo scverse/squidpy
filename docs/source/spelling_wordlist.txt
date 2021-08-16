@@ -27,6 +27,7 @@ deconvolution
 Delaunay
 dendrogram
 Dentate
+dev
 DL
 dotplot
 frac

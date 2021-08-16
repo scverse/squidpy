@@ -181,6 +181,10 @@ To manually create news fragment, make sure that the PR doesn't generate it from
 The command to run is ``towncrier <PR_NUMBER>.<LABEL>``, where ``<LABEL>`` is one of the labels described above.
 This will create a new file in the appropriate location that needs to me modified and subsequently committed.
 
+To locally create the news fragment from an already existing PR, just run::
+
+    tox -e news -- <PR_NUMBER>
+
 Lastly, in order to see how the current news fragments would look like in the release notes, run::
 
     towncrier build --draft
