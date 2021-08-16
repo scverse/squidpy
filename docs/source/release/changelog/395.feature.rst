@@ -1,0 +1,1 @@
+Allow specifying gene symbols from :attr:`anndata.AnnData.var` in :func:`squidpy.gr.ligrec`.

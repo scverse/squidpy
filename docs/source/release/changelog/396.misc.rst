@@ -1,0 +1,1 @@
+Update ``mypy`` type-checking and use PEP 604 for type annotations.
