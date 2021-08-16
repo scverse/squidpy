@@ -411,6 +411,62 @@ class ImageContainer(FeatureMixin):
 
         return img.transpose("y", "x", "z", ...)
 
+    @classmethod
+    @d.dedent
+    def from_adata(
+        cls,
+        adata: AnnData,
+        img_key: str | None = None,
+        library_id: str | None = None,
+        spatial_key: str = Key.uns.spatial,
+        **kwargs: Any,
+    ) -> ImageContainer:
+        """
+        Load an image from :mod:`anndata` object.
+
+        Parameters
+        ----------
+        %(adata)s
+        img_key
+            Key in :attr:`anndata.AnnData.uns` ``['{spatial_key}']['{library_id}']['images']``.
+            If `None`, the first key found is used.
+        library_id
+            Key in :attr:`anndata.AnnData.uns` ``['{spatial_key}']`` specifying which library to access.
+        spatial_key
+            Key in :attr:`anndata.AnnData.uns` where spatial metadata is stored.
+        kwargs
+            Keyword arguments for :class:`squidpy.im.ImageContainer`.
+
+        Returns
+        -------
+        The image container.
+        """
+        library_id = Key.uns.library_id(adata, spatial_key, library_id)
+        spatial_data = adata.uns[spatial_key][library_id]
+        if img_key is None:
+            try:
+                img_key = next(k for k in spatial_data.get("images", []))
+            except StopIteration:
+                raise KeyError(f"No images found in `adata.uns[{spatial_key!r}][{library_id!r}]['images']`") from None
+
+        img: NDArrayA | None = spatial_data.get("images", {}).get(img_key, None)
+        if img is None:
+            raise KeyError(
+                f"Unable to find the image in `adata.uns[{spatial_key!r}][{library_id!r}]['images'][{img_key!r}]`."
+            )
+
+        scale = spatial_data.get("scalefactors", {}).get(f"tissue_{img_key}_scalef", None)
+        if scale is None and "scale" not in kwargs:
+            logg.warning(
+                f"Unable to determine the scale factor from "
+                f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors']['tissue_{img_key}_scalef']`, "
+                f"using `1.0`. Consider specifying it manually as `scale=...`"
+            )
+            scale = 1.0
+        kwargs.setdefault("scale", scale)
+
+        return cls(img, layer=img_key, library_id=library_id, **kwargs)
+
     @d.get_sections(base="crop_corner", sections=["Parameters", "Returns"])
     @d.dedent
     def crop_corner(
@@ -521,7 +577,7 @@ class ImageContainer(FeatureMixin):
         **_: Any,
     ) -> xr.Dataset:
         def _rescale(arr: xr.DataArray) -> xr.DataArray:
-            # once skimage==0.19.0, multichannel is deprecated
+            # TODO(michalk8): in skimage==0.19.0, multichannel is deprecated
             scaling_fn = partial(
                 rescale, scale=[scale, scale, 1], preserve_range=True, order=1, multichannel=True, cval=cval
             )

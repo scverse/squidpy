@@ -129,7 +129,7 @@ class SignatureFilter(Filter):
 
     def _skip(self, word: str) -> bool:
         # TODO(michalk8): find a better way
-        return word in ("img[", "imgs[", "img", "func[", "func", "combine_attrs", "**kwargs", "n_iter")
+        return word in ("img[", "imgs[", "img", "img_key", "func[", "func", "combine_attrs", "**kwargs", "n_iter")
 
 
 # allow `<type_1> | <type_2> | ... | <type_n>` expression for sphinx-autodoc-typehints
