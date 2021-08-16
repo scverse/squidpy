@@ -141,7 +141,6 @@ jobs:
 
         -   name: Install dependencies
             run: |
-                sudo apt install pandoc
                 python -m pip install --upgrade pip
                 pip install tox build
 
@@ -151,7 +150,7 @@ jobs:
 
         -   name: Generate release notes
             run: |
-                tox -e build-release-notes,check-docs
+                tox -e build-release-notes
         -   name: Commit release notes
             uses: stefanzweifel/git-auto-commit-action@v4
             with:
