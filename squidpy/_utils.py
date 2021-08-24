@@ -39,8 +39,8 @@ try:
 
     NDArrayA = NDArray[Any]
 except (ImportError, TypeError):
-    NDArray = np.ndarray
-    NDArrayA = np.ndarray
+    NDArray = np.ndarray  # type: ignore[misc]
+    NDArrayA = np.ndarray  # type: ignore[misc]
 
 
 class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
