@@ -29,9 +29,6 @@ jobs:
                 PR_NUMBER: ${{ github.event.number }}
             run: |
                 tox -e news -- "$PR_NUMBER" -v
-
-        -   name: Check generated docs
-            run: |
                 tox -e check-docs
 
         -   name: Commit news fragment

@@ -39,9 +39,6 @@ jobs:
                 VERSION: ${{ steps.vars.output.tag }}
             run: |
                 tox -e build-release-notes -- --version "${VERSION/v/}"
-
-        -   name: Check generated docs
-            run: |
                 tox -e check-docs
 
         -   name: Commit release notes
