@@ -1,26 +1,24 @@
-name: CI
+name: Test
 
 on:
     schedule:
-    -   cron: 00 00 * * 1     # run every Monday at 00:00
+    -   cron: 00 00 * * 1      # every Monday at 00:00
     push:
-        branches:
-        -   master
-        -   dev
-        tags:
-        -   v[0-9]+.[0-9]+.[0-9]+
+        branches: [master, dev]
     pull_request:
-        branches:
-        -   master
-        -   dev
+        branches: [master, dev]
+    workflow_dispatch:
+        inputs:
+            reason:
+                description: Reason for the workflow dispatch.
+                required: true
+                default: release
 
 jobs:
     lint:
         runs-on: ubuntu-latest
         steps:
         -   uses: actions/checkout@v2
-            with:
-                fetch-depth: 0
         -   name: Set up Python
             uses: actions/setup-python@v2
             with:
@@ -57,8 +55,6 @@ jobs:
 
         steps:
         -   uses: actions/checkout@v2
-            with:
-                fetch-depth: 0
         -   name: Set up Python ${{ matrix.python }}
             uses: actions/setup-python@v2
             with:
@@ -110,7 +106,7 @@ jobs:
 
     rebuild-notebooks:
         needs: [lint, test]
-        if: github.event_name == 'schedule' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev'))
+        if: (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release')
         runs-on: ubuntu-latest
         steps:
         -   name: Rebuild tutorials/examples
@@ -121,56 +117,14 @@ jobs:
                 event-type: rebuild
                 client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
-    deploy:
+    trigger-release:
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release' }}
         needs: [lint, test]
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
         runs-on: ubuntu-latest
         steps:
-        -   uses: actions/checkout@v2
+        -   name: Invoke deployment workflow
+            uses: benc-uk/workflow-dispatch@v1
             with:
-                fetch-depth: 0
-                token: ${{ secrets.TOWNCRIER_TOKEN }}
-        -   name: Set up Python 3.9
-            uses: actions/setup-python@v2
-            with:
-                python-version: 3.9
-        -   name: Get the tag/branch
-            id: vars
-            run: |
-                raw=$(git branch -r --contains ${{ github.ref }})
-                branch=${raw/[[:blank:]]*origin\/}
-                echo ::set-output name=branch::$branch
-                echo ::set-output name=tag::${GITHUB_REF#refs/*/}
-
-        -   name: Install dependencies
-            run: |
-                python -m pip install --upgrade pip
-                pip install tox build
-
-        -   name: Check valid PyPI README
-            run: |
-                tox -e readme
-
-        -   name: Generate release notes
-            run: |
-                tox -e build-release-notes
-        -   name: Commit release notes
-            uses: stefanzweifel/git-auto-commit-action@v4
-            with:
-                commit_message: ${{ format('[auto][ci skip] Generate {0} release notes', steps.vars.outputs.tag) }}
-                branch: ${{ steps.vars.outputs.branch }}
-                file_pattern: docs/source/release/**
-                commit_user_name: CI
-                skip_dirty_check: false
-
-        -   name: Build a binary wheel and a source tarball
-            run: |
-                python -m build --sdist --wheel --outdir dist/
-
-        -   name: Publish package on PyPI
-            uses: pypa/gh-action-pypi-publish@master
-            with:
-                user: __token__
-                password: ${{ secrets.PYPI_TOKEN }}
-                skip_existing: true
-                verbose: true
+                workflow: Deployment
+                token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+                inputs: '{ "reason": "release" }'
