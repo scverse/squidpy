@@ -13,7 +13,7 @@ on:
 
 jobs:
     deploy:
-        if: (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags'))
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags')) }}
         runs-on: ubuntu-latest
         steps:
         -   uses: actions/checkout@v2
@@ -41,7 +41,7 @@ jobs:
                 verbose: true
 
     sync-branches:
-        if: github.event_name == 'workflow_dispatch'
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         needs: deploy
         runs-on: ubuntu-latest
         steps:

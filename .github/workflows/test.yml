@@ -100,7 +100,6 @@ jobs:
                 DISPLAY: :42
 
         -   name: Upload coverage
-            if: success()
             env:
                 CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
             run: |
@@ -108,7 +107,7 @@ jobs:
 
     rebuild-notebooks:
         needs: [lint, test]
-        if: (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release')
+        if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') }}
         runs-on: ubuntu-latest
         steps:
         -   name: Rebuild tutorials/examples
