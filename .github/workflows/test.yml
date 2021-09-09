@@ -28,6 +28,7 @@ jobs:
             with:
                 path: ~/.cache/pre-commit
                 key: precommit-${{ env.pythonLocation }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
         -   name: Install dependencies
             run: |
                 sudo apt install pandoc
@@ -64,6 +65,7 @@ jobs:
             id: pip-cache-dir
             run: |
                 echo "::set-output name=dir::$(pip cache dir)"
+
         -   name: Restore pip cache
             uses: actions/cache@v2
             with:

@@ -18,15 +18,21 @@ jobs:
             with:
                 python-version: 3.9
 
-        -   name: Install pip dependencies
+        -   name: Install dependencies
             run: |
+                sudo apt install pandoc
                 python -m pip install --upgrade pip
                 pip install tox
+
         -   name: Generate news fragment
             env:
                 PR_NUMBER: ${{ github.event.number }}
             run: |
                 tox -e news -- "$PR_NUMBER" -v
+
+        -   name: Check generated docs
+            run: |
+                tox -e check-docs
 
         -   name: Commit news fragment
             uses: stefanzweifel/git-auto-commit-action@v4

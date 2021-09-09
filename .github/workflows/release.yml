@@ -27,15 +27,22 @@ jobs:
             run: |
                 grep "^v[[:digit:]]\.[[:digit:]]\.[[:digit:]]$" <<< "$VERSION" || (echo "Invalid version: '$VERSION'" && exit 42)
 
-        -   name: Install pip dependencies
+        -   name: Install dependencies
             run: |
+                sudo apt install pandoc
                 python -m pip install --upgrade pip
                 pip install tox bump2version
                 pip install -e'.'
 
         -   name: Generate release notes
+            env:
+                VERSION: ${{ steps.vars.output.tag }}
             run: |
-                tox -e build-release-notes
+                tox -e build-release-notes -- --version "${VERSION/v/}"
+
+        -   name: Check generated docs
+            run: |
+                tox -e check-docs
 
         -   name: Commit release notes
             uses: stefanzweifel/git-auto-commit-action@v4
@@ -44,11 +51,6 @@ jobs:
                 commit_user_name: CI
                 commit_message: ${{ format('[auto][ci skip] Generate {0} release notes', steps.vars.output.tag) }}
                 skip_dirty_check: false
-
-        -   name: Check generated docs
-            # TODO(michalk8): must be run after the new file has been committed, because of `sphinx_last_updated_by_git`
-            run: |
-                tox -e check-docs
 
         -   name: Bump the version
             # the part (patch) doesn't matter when supplying --new-version

@@ -25,7 +25,7 @@ from docs.source.utils import (  # noqa: E402
 )
 import squidpy  # noqa: E402
 
-needs_sphinx = "3.0"
+needs_sphinx = "4.0"
 
 # -- Project information -----------------------------------------------------
 
@@ -55,11 +55,9 @@ extensions = [
     "sphinx_autodoc_typehints",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
-    "sphinx_last_updated_by_git",
     "sphinx_gallery.load_style",
     "nbsphinx",
     "sphinxcontrib.bibtex",
-    "edit_on_github",
     "typed_returns",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
