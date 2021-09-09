@@ -34,7 +34,6 @@ jobs:
                 pip install -e'.'
 
         -   name: Generate release notes
-            # TODO(michalk8): in the future, consider running tox -e check-docs afterwards
             run: |
                 tox -e build-release-notes
 
@@ -45,6 +44,11 @@ jobs:
                 commit_user_name: CI
                 commit_message: ${{ format('[auto][ci skip] Generate {0} release notes', steps.vars.output.tag) }}
                 skip_dirty_check: false
+
+        -   name: Check generated docs
+            # TODO(michalk8): must be run after the new file has been committed, because of `sphinx_last_updated_by_git`
+            run: |
+                tox -e check-docs
 
         -   name: Bump the version
             # the part (patch) doesn't matter when supplying --new-version
