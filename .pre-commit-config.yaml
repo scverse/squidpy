@@ -26,7 +26,7 @@ repos:
     rev: v1.2.3
     hooks:
     -   id: yesqa
-        additional_dependencies: [flake8-tidy-imports, flake8-docstrings, flake8-rst-docstrings, flake8-comprehensions, flake8-bugbear, flake8-logging-format, flake8-blind-except, flake8-builtins, flake8-pytest-style, flake8-mock, flake8-string-format]
+        additional_dependencies: [flake8-tidy-imports, flake8-docstrings, flake8-rst-docstrings, flake8-comprehensions, flake8-bugbear, flake8-blind-except, flake8-builtins, flake8-pytest-style, flake8-mock, flake8-string-format]
 -   repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
     rev: v2.1.0
     hooks:
@@ -64,7 +64,7 @@ repos:
     rev: 3.9.2
     hooks:
     -   id: flake8
-        additional_dependencies: [flake8-tidy-imports, flake8-docstrings, flake8-rst-docstrings, flake8-comprehensions, flake8-bugbear, flake8-logging-format, flake8-blind-except, flake8-builtins, flake8-pytest-style, flake8-mock, flake8-string-format]
+        additional_dependencies: [flake8-tidy-imports, flake8-docstrings, flake8-rst-docstrings, flake8-comprehensions, flake8-bugbear, flake8-blind-except, flake8-builtins, flake8-pytest-style, flake8-mock, flake8-string-format]
 -   repo: https://github.com/jumanjihouse/pre-commit-hooks
     rev: 2.1.5
     hooks:
