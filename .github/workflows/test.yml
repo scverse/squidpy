@@ -90,13 +90,13 @@ jobs:
                 path: .tox
                 key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}
 
-        -   name: Testing
-            run: |
-                tox -vv
+        -   name: Test
             env:
                 MPLBACKEND: agg
                 PLATFORM: ${{ matrix.os }}
                 DISPLAY: :42
+            run: |
+                tox -vv
 
         -   name: Upload coverage
             env:
