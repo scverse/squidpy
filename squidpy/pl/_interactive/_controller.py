@@ -324,12 +324,8 @@ class ImageController:
             slider = RangeSlider(
                 layer=layer,
                 colorbar=self.view._colorbar,
-                initial_values=(0, 100),
-                data_range=(0, 100),
-                step_size=0.01,
-                collapsible=False,
             )
-            slider.valuesChanged.emit((0, 100))
+            slider.valueChanged.emit((0, 100))
 
             gl.replaceWidget(labels[label_key], QLabel("percentile:"))
             gl.replaceWidget(widget, slider)

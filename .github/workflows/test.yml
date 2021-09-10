@@ -19,7 +19,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         -   uses: actions/checkout@v2
-        -   name: Set up Python
+        -   name: Set up Python 3.9
             uses: actions/setup-python@v2
             with:
                 python-version: 3.9
@@ -27,7 +27,7 @@ jobs:
         -   uses: actions/cache@v2
             with:
                 path: ~/.cache/pre-commit
-                key: precommit-${{ env.pythonLocation }}-${{ hashFiles('.pre-commit-config.yaml') }}
+                key: precommit-${{ env.pythonLocation }}-${{ hashFiles('**/.pre-commit-config.yaml') }}
 
         -   name: Install dependencies
             run: |
@@ -35,7 +35,7 @@ jobs:
                 python -m pip install --upgrade pip
                 pip install tox
 
-        -   name: Linting
+        -   name: Lint
             run: |
                 tox -e lint,check-docs
 
@@ -74,7 +74,7 @@ jobs:
                 restore-keys: |
                     pip-${{ runner.os }}-${{ env.pythonLocation }}-
 
-        -   name: Installed dependencies
+        -   name: Install dependencies
             run: |
                 ./.scripts/ci/install_dependencies.sh
 
@@ -89,7 +89,7 @@ jobs:
             uses: actions/cache@v2
             with:
                 path: .tox
-                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/tox.ini') }}
+                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}
 
         -   name: Testing
             run: |
@@ -100,26 +100,25 @@ jobs:
                 DISPLAY: :42
 
         -   name: Upload coverage
-            if: success()
             env:
                 CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
             run: |
                 codecov --no-color --required --flags unittests
 
-    rebuild-notebooks:
+    regenerate-notebooks:
         needs: [lint, test]
-        if: (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release')
+        if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') }}
         runs-on: ubuntu-latest
         steps:
         -   name: Rebuild tutorials/examples
             uses: peter-evans/repository-dispatch@v1
             with:
-                repository: theislab/squidpy_notebooks
                 token: ${{ secrets.NOTEBOOKS_ACCESS_TOKEN }}
+                repository: theislab/squidpy_notebooks
                 event-type: rebuild
                 client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
-    trigger-release:
+    release:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release' }}
         needs: [lint, test]
         runs-on: ubuntu-latest

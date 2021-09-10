@@ -49,7 +49,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://img.shields.io/pypi/v/squidpy.svg
     :alt: PyPI
 
-.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/CI/dev
+.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/test/dev
     :target: https://github.com/theislab/squidpy/actions
     :alt: CI
 
