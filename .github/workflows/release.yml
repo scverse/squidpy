@@ -70,7 +70,7 @@ jobs:
 
         # TODO(michalk8): bug on GitHub's side: doesn't seem to register `Test` as WD workflow
         # `Test` triggers `Deployment`
-        -   name: Invoke test workflow
+        -   name: Invoke deployment workflow
             uses: benc-uk/workflow-dispatch@v1
             with:
                 workflow: Deployment
