@@ -32,7 +32,7 @@ jobs:
             run: |
                 python -m build --sdist --wheel --outdir dist/
 
-        -   name: Publish Squidpy on PyPI
+        -   name: Publish on PyPI
             uses: pypa/gh-action-pypi-publish@master
             with:
                 user: __token__
@@ -59,7 +59,7 @@ jobs:
             with:
                 branch: dev
                 commit_user_name: CI
-                commit_message: ${{ format('[auto][ci skip] Merge branch {0} into dev', steps.vars.output.branch) }}
+                commit_message: ${{ format('[auto][ci skip] Merge branch {0} into dev', steps.vars.outputs.branch) }}
                 commit_options: --no-ff
 
         -   name: Merge release into master
@@ -67,5 +67,5 @@ jobs:
             with:
                 branch: master
                 commit_user_name: CI
-                commit_message: ${{ format('[auto][ci skip] Merge branch {0} into master', steps.vars.output.branch) }}
+                commit_message: ${{ format('[auto][ci skip] Merge branch {0} into master', steps.vars.outputs.branch) }}
                 commit_options: --no-ff

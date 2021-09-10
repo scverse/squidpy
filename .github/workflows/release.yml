@@ -19,11 +19,11 @@ jobs:
         -   name: Extract the tag
             id: vars
             run: |
-                echo ::set-output name=tag::${GITHUB_REF##*/}
+                echo "::set-output name=tag::${GITHUB_REF##*/}"
 
         -   name: Check tag validity
             env:
-                VERSION: ${{ steps.vars.output.tag }}
+                VERSION: ${{ steps.vars.outputs.tag }}
             run: |
                 grep "^v[[:digit:]]\.[[:digit:]]\.[[:digit:]]$" <<< "$VERSION" || (echo "Invalid version: '$VERSION'" && exit 42)
 
@@ -36,7 +36,7 @@ jobs:
 
         -   name: Generate release notes
             env:
-                VERSION: ${{ steps.vars.output.tag }}
+                VERSION: ${{ steps.vars.outputs.tag }}
             run: |
                 tox -e build-release-notes -- --version "${VERSION/v/}"
 
@@ -49,13 +49,13 @@ jobs:
             with:
                 file_pattern: docs/source/release/**
                 commit_user_name: CI
-                commit_message: ${{ format('[auto][ci skip] Generate {0} release notes', steps.vars.output.tag) }}
+                commit_message: ${{ format('[auto][ci skip] Generate {0} release notes', steps.vars.outputs.tag) }}
                 skip_dirty_check: false
 
         -   name: Bump the version
             # the part (patch) doesn't matter when supplying --new-version
             env:
-                VERSION: ${{ steps.vars.output.tag }}
+                VERSION: ${{ steps.vars.outputs.tag }}
             run: |
                 bump2version patch --no-commit --no-tag --verbose --new-version "${VERSION/v/}"
 
@@ -64,8 +64,8 @@ jobs:
             with:
                 file_pattern: setup.py squidpy/__init__.py .bumpversion.cfg
                 commit_user_name: CI
-                commit_message: ${{ format('[auto][ci skip] Release {0}', steps.vars.output.tag) }}
-                tagging_message: ${{ steps.vars.output.tag }}
+                commit_message: ${{ format('[auto][ci skip] Release {0}', steps.vars.outputs.tag) }}
+                tagging_message: ${{ steps.vars.outputs.tag }}
                 skip_dirty_check: false
 
         -   name: Invoke test workflow

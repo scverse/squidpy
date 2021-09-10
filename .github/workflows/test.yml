@@ -40,7 +40,6 @@ jobs:
                 tox -e lint,check-docs
 
     test:
-        timeout-minutes: 20
         runs-on: ${{ matrix.os }}
         strategy:
             fail-fast: false
