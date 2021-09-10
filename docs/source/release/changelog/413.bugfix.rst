@@ -1,1 +1,1 @@
-Fix :mod:`napari` slider.
+Fix :mod:`napari` slider and :mod:`numpy` typing.
