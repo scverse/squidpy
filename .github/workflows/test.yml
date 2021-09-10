@@ -10,7 +10,7 @@ on:
     workflow_dispatch:
         inputs:
             reason:
-                description: Reason for the workflow dispatch.
+                description: Reason for the workflow dispatch. Only "release" is valid.
                 required: true
                 default: release
 
