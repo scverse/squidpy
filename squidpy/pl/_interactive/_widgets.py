@@ -13,9 +13,10 @@ import numpy as np
 import pandas as pd
 
 from PyQt5 import QtCore, QtWidgets
+from superqt import QRangeSlider
+from PyQt5.QtCore import Qt
 
 from napari.layers import Points
-from napari._qt.widgets.qt_range_slider import QHRangeSlider
 
 from squidpy.pl._utils import ALayer
 
@@ -343,14 +344,18 @@ class CBarWidget(QtWidgets.QWidget):
         self._colorbar._colorbar._colorbar._update()
 
 
-class RangeSlider(QHRangeSlider):
+class RangeSlider(QRangeSlider):
     def __init__(self, *args: Any, layer: Points, colorbar: CBarWidget, **kwargs: Any):
         super().__init__(*args, **kwargs)
 
         self._layer = layer
         self._colorbar = colorbar
+        self.setValue((0, 100))
+        self.setSliderPosition((0, 100))
+        self.setSingleStep(0.01)
+        self.setOrientation(Qt.Horizontal)
 
-        self.valuesChanged.connect(self._onValueChange)
+        self.valueChanged.connect(self._onValueChange)
 
     def _onValueChange(self, percentile: tuple[float, float]) -> None:
         # TODO(michalk8): use constants

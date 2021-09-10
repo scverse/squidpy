@@ -1,0 +1,71 @@
+name: Deployment
+
+on:
+    push:
+        branches: [master]
+        tags: [v*]
+    workflow_dispatch:
+        inputs:
+            reason:
+                description: Reason for the workflow dispatch.
+                required: true
+                default: release
+
+jobs:
+    deploy:
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags')) }}
+        runs-on: ubuntu-latest
+        steps:
+        -   uses: actions/checkout@v2
+        -   name: Set up Python 3.9
+            uses: actions/setup-python@v2
+            with:
+                python-version: 3.9
+
+        -   name: Install pip dependencies
+            run: |
+                python -m pip install --upgrade pip
+                pip install build
+
+        # this will fail if the last commit is not tagged
+        -   name: Build a binary wheel and a source tarball
+            run: |
+                python -m build --sdist --wheel --outdir dist/
+
+        -   name: Publish Squidpy on PyPI
+            uses: pypa/gh-action-pypi-publish@master
+            with:
+                user: __token__
+                password: ${{ secrets.PYPI_TOKEN }}
+                skip_existing: true
+                verbose: true
+
+    sync-branches:
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        needs: deploy
+        runs-on: ubuntu-latest
+        steps:
+        -   uses: actions/checkout@v2
+            with:
+                token: ${{ secrets.TOWNCRIER_TOKEN }}
+
+        -   name: Extract branch name
+            id: vars
+            run: |
+                echo ::set-output name=branch::${GITHUB_REF#refs/*/}
+
+        -   name: Merge release into dev
+            uses: stefanzweifel/git-auto-commit-action@v4
+            with:
+                branch: dev
+                commit_user_name: CI
+                commit_message: ${{ format("[auto][ci skip] Merge branch '{0}' into dev", steps.vars.output.branch) }}
+                commit_options: --no-ff
+
+        -   name: Merge release into master
+            uses: stefanzweifel/git-auto-commit-action@v4
+            with:
+                branch: master
+                commit_user_name: CI
+                commit_message: ${{ format("[auto][ci skip] Merge branch '{0}' into master", steps.vars.output.branch) }}
+                commit_options: --no-ff

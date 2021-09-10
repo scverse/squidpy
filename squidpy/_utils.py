@@ -6,16 +6,7 @@ import joblib as jl
 from enum import Enum
 from queue import Queue
 from typing import Union  # noqa: F401
-from typing import (
-    Any,
-    TypeVar,
-    Callable,
-    Hashable,
-    Iterable,
-    Sequence,
-    Generator,
-    TYPE_CHECKING,
-)
+from typing import Any, Callable, Hashable, Iterable, Sequence, Generator, TYPE_CHECKING
 from threading import Thread
 from contextlib import contextmanager
 from multiprocessing import Manager, cpu_count
@@ -45,10 +36,11 @@ except ImportError:
 
 try:
     from numpy.typing import NDArray
-except ImportError:
-    ScalarType = TypeVar("ScalarType", bound=np.generic, covariant=True)
-    NDArray = np.ndarray[Any, np.dtype[ScalarType]]  # type: ignore[misc]
-NDArrayA = NDArray[Any]
+
+    NDArrayA = NDArray[Any]
+except (ImportError, TypeError):
+    NDArray = np.ndarray  # type: ignore[misc]
+    NDArrayA = np.ndarray  # type: ignore[misc]
 
 
 class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]

@@ -38,13 +38,13 @@ setup(
     install_requires=[l.strip() for l in Path("requirements.txt").read_text("utf-8").splitlines()],
     extras_require=dict(
         dev=["pre-commit>=2.9.0", "towncrier>=21.3.0"],
-        test=["tox>=3.20.1", "pytest-mock"],
+        test=["tox>=3.20.1"],
         docs=[
             l.strip()
             for l in (Path("docs") / "requirements.txt").read_text("utf-8").splitlines()
             if not l.startswith("-r")
         ],
-        interactive=["PyQt5>=5.15.0", "napari>=0.4.8,<0.5"],
+        interactive=["PyQt5>=5.15.0", "napari>=0.4.11,<0.5"],
     ),
     classifiers=[
         "Development Status :: 5 - Production/Stable",
