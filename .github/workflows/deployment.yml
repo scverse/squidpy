@@ -54,7 +54,7 @@ jobs:
                 echo ::set-output name=branch::${GITHUB_REF#refs/*/}
 
         -   name: Merge release into master
-        -   uses: everlytic/branch-merge@1.1.2
+            uses: everlytic/branch-merge@1.1.2
             with:
                 github_token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
                 target_branch: master
