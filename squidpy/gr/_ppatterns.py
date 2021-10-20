@@ -293,6 +293,7 @@ def co_occurrence(
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
     n_steps: int = 50,
+    interval = None,
     copy: bool = False,
     n_splits: Optional[int] = None,
     n_jobs: Optional[int] = None,
@@ -345,7 +346,8 @@ def co_occurrence(
     labs_unique = np.array(list(clust_map.values()), dtype=ip)
 
     # create intervals thresholds
-    interval = np.linspace(thres_min, thres_max, num=n_steps, dtype=fp)
+    if interval is None:
+        interval = np.linspace(thres_min, thres_max, num=n_steps, dtype=fp)
 
     n_obs = spatial.shape[0]
     if n_splits is None:
