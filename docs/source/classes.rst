@@ -1,26 +1,12 @@
 Classes
 =======
 
-ImageContainer
---------------
-.. autoclass:: squidpy.im.ImageContainer
-    :members:
-    :inherited-members:
+.. currentmodule:: squidpy
 
-InteractiveViewer
------------------
-.. autoclass:: squidpy.pl.Interactive
-    :members:
-    :inherited-members:
+.. autosummary::
+    :toctree: classes
 
-SegmentationModelWatershed
---------------------------
-.. autoclass:: squidpy.im.SegmentationWatershed
-    :members:
-    :inherited-members:
-
-SegmentationCustom
-------------------
-.. autoclass:: squidpy.im.SegmentationCustom
-    :members:
-    :inherited-members:
+    im.ImageContainer
+    pl.Interactive
+    im.SegmentationWatershed
+    im.SegmentationCustom

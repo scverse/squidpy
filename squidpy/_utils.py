@@ -5,26 +5,15 @@ import joblib as jl
 
 from enum import Enum
 from queue import Queue
-from typing import (
-    Any,
-    Set,
-    List,
-    Tuple,
-    Callable,
-    Hashable,
-    Iterable,
-    Optional,
-    Sequence,
-    Generator,
-    TYPE_CHECKING,
-)
+from typing import Union  # noqa: F401
+from typing import Any, Callable, Hashable, Iterable, Sequence, Generator, TYPE_CHECKING
 from threading import Thread
 from contextlib import contextmanager
 from multiprocessing import Manager, cpu_count
 
 import numpy as np
 
-__all__ = ["singledispatchmethod", "Signal", "SigQueue"]
+__all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
 
 
 try:
@@ -45,13 +34,22 @@ except ImportError:
         return wrapper
 
 
+try:
+    from numpy.typing import NDArray
+
+    NDArrayA = NDArray[Any]
+except (ImportError, TypeError):
+    NDArray = np.ndarray  # type: ignore[misc]
+    NDArrayA = np.ndarray  # type: ignore[misc]
+
+
 class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
     """Signalling queue."""
 
 
-def _unique_order_preserving(iterable: Iterable[Hashable]) -> Tuple[List[Hashable], Set[Hashable]]:
+def _unique_order_preserving(iterable: Iterable[Hashable]) -> tuple[list[Hashable], set[Hashable]]:
     """Remove items from an iterable while preserving the order."""
-    seen: Set[Hashable] = set()
+    seen: set[Hashable] = set()
     seen_add = seen.add
     return [i for i in iterable if not (i in seen or seen_add(i))], seen
 
@@ -68,12 +66,12 @@ class Signal(Enum):
 def parallelize(
     callback: Callable[..., Any],
     collection: Sequence[Any],
-    n_jobs: int = 1,
-    n_split: Optional[int] = None,
+    n_jobs: int | None = 1,
+    n_split: int | None = None,
     unit: str = "",
     use_ixs: bool = False,
     backend: str = "loky",
-    extractor: Optional[Callable[[Sequence[Any]], Any]] = None,
+    extractor: Callable[[Sequence[Any]], Any] | None = None,
     show_progress_bar: bool = True,
     use_runner: bool = False,
     **_: Any,
@@ -113,14 +111,18 @@ def parallelize(
     """
     if show_progress_bar:
         try:
-            from tqdm.notebook import tqdm
+            from tqdm.auto import tqdm
+            import ipywidgets  # noqa: F401
         except ImportError:
-            from tqdm import tqdm_notebook as tqdm
+            try:
+                from tqdm.std import tqdm
+            except ImportError:
+                tqdm = None
     else:
         tqdm = None
 
-    def runner(iterable: Iterable[Any], *args: Any, queue: Optional["SigQueue"] = None, **kwargs: Any) -> List[Any]:
-        result: List[Any] = []
+    def runner(iterable: Iterable[Any], *args: Any, queue: SigQueue | None = None, **kwargs: Any) -> list[Any]:
+        result: list[Any] = []
 
         for it in iterable:
             res = callback(it, *args, **kwargs)
@@ -134,7 +136,7 @@ def parallelize(
 
         return result
 
-    def update(pbar: "tqdm.std.tqdm", queue: "SigQueue", n_total: int) -> None:
+    def update(pbar: tqdm.std.tqdm, queue: SigQueue, n_total: int) -> None:
         n_finished = 0
         while n_finished < n_total:
             try:
@@ -178,9 +180,11 @@ def parallelize(
 
         return res if extractor is None else extractor(res)
 
+    if n_jobs is None:
+        n_jobs = 1
     if n_jobs == 0:
         raise ValueError("Number of jobs cannot be `0`.")
-    if n_jobs < 0:
+    elif n_jobs < 0:
         n_jobs = cpu_count() + 1 + n_jobs
 
     if n_split is None:
@@ -192,7 +196,9 @@ def parallelize(
     else:
         col_len = len(collection)
         step = int(np.ceil(len(collection) / n_split))
-        collections = list(filter(len, (collection[i * step : (i + 1) * step] for i in range(col_len))))
+        collections = list(
+            filter(len, (collection[i * step : (i + 1) * step] for i in range(int(np.ceil(col_len / step)))))
+        )
 
     if use_runner:
         use_ixs = False
@@ -201,7 +207,7 @@ def parallelize(
     return wrapper
 
 
-def _get_n_cores(n_cores: Optional[int]) -> int:
+def _get_n_cores(n_cores: int | None) -> int:
     """
     Make number of cores a positive integer.
 

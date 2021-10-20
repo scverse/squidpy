@@ -18,13 +18,14 @@ sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to instal
 sys.path.insert(0, os.path.abspath("_ext"))
 
 from docs.source.utils import (  # noqa: E402
+    _is_dev,
     _get_thumbnails,
+    _fetch_notebooks,
     MaybeMiniGallery,
-    _download_notebooks,
 )
 import squidpy  # noqa: E402
 
-needs_sphinx = "3.0"
+needs_sphinx = "4.0"
 
 # -- Project information -----------------------------------------------------
 
@@ -32,12 +33,14 @@ project = "squidpy"
 author = squidpy.__author__
 copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
 
+github_org = "theislab"
 github_repo = "squidpy"
+github_ref = "dev" if _is_dev() else "master"
 github_nb_repo = "squidpy_notebooks"
-_download_notebooks(org="theislab", repo=github_nb_repo, raise_exc=True)
+_fetch_notebooks(repo_url=f"https://github.com/{github_org}/{github_nb_repo}")
 
 # The full version, including alpha/beta/rc tags
-release = "master"
+release = github_ref
 version = f"{release} ({squidpy.__version__})"
 
 # -- General configuration ---------------------------------------------------
@@ -52,12 +55,11 @@ extensions = [
     "sphinx_autodoc_typehints",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
-    "sphinx_last_updated_by_git",
     "sphinx_gallery.load_style",
     "nbsphinx",
     "sphinxcontrib.bibtex",
-    "edit_on_github",
     "typed_returns",
+    "IPython.sphinxext.ipython_console_highlighting",
 ]
 intersphinx_mapping = dict(  # noqa: C408
     python=("https://docs.python.org/3", None),
@@ -71,7 +73,6 @@ intersphinx_mapping = dict(  # noqa: C408
     seaborn=("https://seaborn.pydata.org/", None),
     joblib=("https://joblib.readthedocs.io/en/latest/", None),
     networkx=("https://networkx.org/documentation/stable/", None),
-    astropy=("https://docs.astropy.org/en/stable/", None),
     dask=("https://docs.dask.org/en/latest/", None),
     skimage=("https://scikit-image.org/docs/stable/", None),
     sklearn=("https://scikit-learn.org/stable/", None),
@@ -94,9 +95,10 @@ exclude_patterns = [
     "auto_*/**.ipynb",
     "auto_*/**.md5",
     "auto_*/**.py",
+    "release/changelog/*",
     "**.ipynb_checkpoints",
 ]
-suppress_warnings = ["download.not_readable"]
+suppress_warnings = ["download.not_readable", "git.too_shallow"]
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -111,7 +113,6 @@ napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
 napoleon_use_rtype = True
 napoleon_use_param = True
-napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
 
 # bibliography
@@ -132,7 +133,10 @@ spelling_filters = [
     "enchant.tokenize.EmailFilter",
     "docs.source.utils.ModnameFilter",
     "docs.source.utils.SignatureFilter",
+    "enchant.tokenize.MentionFilter",
 ]
+# see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369
+user_agent = "Mozilla/5.0 (X11; Linux x86_64; rv:25.0) Gecko/20100101 Firefox/25.0"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

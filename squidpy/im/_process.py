@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Callable, Optional, Sequence
+from typing import Union  # noqa: F401
+from typing import Any, Mapping, Callable, Sequence
 
 from scanpy import logging as logg
 
@@ -13,6 +16,7 @@ from skimage.util.dtype import img_as_float32
 from dask_image.ndfilters import gaussian_filter as dask_gf
 
 from squidpy._docs import d, inject_docs
+from squidpy._utils import NDArrayA
 from squidpy.im._container import ImageContainer
 from squidpy._constants._constants import Processing
 from squidpy._constants._pkg_constants import Key
@@ -20,7 +24,7 @@ from squidpy._constants._pkg_constants import Key
 __all__ = ["process"]
 
 
-def to_grayscale(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array]:
+def to_grayscale(img: NDArrayA | da.Array) -> NDArrayA | da.Array:
     if img.shape[-1] != 3:
         raise ValueError(f"Expected channel dimension to be `3`, found `{img.shape[-1]}`.")
 
@@ -37,17 +41,17 @@ def to_grayscale(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array
 @inject_docs(p=Processing)
 def process(
     img: ImageContainer,
-    layer: Optional[str] = None,
-    library_id: Optional[Union[str, Sequence[str]]] = None,
-    method: Union[str, Callable[..., np.ndarray]] = "smooth",
-    chunks: Optional[int] = None,
+    layer: str | None = None,
+    library_id: str | Sequence[str] | None = None,
+    method: str | Callable[..., NDArrayA] = "smooth",
+    chunks: int | None = None,
     lazy: bool = False,
-    layer_added: Optional[str] = None,
-    channel_dim: Optional[str] = None,
+    layer_added: str | None = None,
+    channel_dim: str | None = None,
     copy: bool = False,
     apply_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
-) -> Optional[ImageContainer]:
+) -> ImageContainer | None:
     """
     Process an image by applying a transformation.
 
@@ -95,7 +99,7 @@ def process(
     apply_kwargs["lazy"] = lazy
 
     if channel_dim is None:
-        channel_dim = img[layer].dims[-1]
+        channel_dim = str(img[layer].dims[-1])
     layer_new = Key.img.process(method, layer, layer_added=layer_added)
 
     if callable(method):
@@ -110,7 +114,7 @@ def process(
 
         sigma = kwargs["sigma"]
         if isinstance(sigma, int):
-            kwargs["sigma"] = sigma = [sigma, sigma] + [0] * (4 - expected_ndim)
+            kwargs["sigma"] = sigma = [sigma, sigma] + [0] * (expected_ndim - 2)
         if len(sigma) != expected_ndim:
             raise ValueError(f"Expected `sigma` to be of length `{expected_ndim}`, found `{len(sigma)}`.")
 

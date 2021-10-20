@@ -1,9 +1,9 @@
+from __future__ import annotations
+
 from copy import copy
 from types import MappingProxyType
 from typing import (
     Any,
-    Dict,
-    List,
     Tuple,
     Union,
     Mapping,
@@ -41,14 +41,15 @@ from matplotlib.figure import Figure
 import matplotlib as mpl
 
 from squidpy._docs import d
+from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_categorical_obs
 from squidpy._constants._pkg_constants import Key
 
-Vector_name_t = Tuple[Optional[Union[pd.Series, np.ndarray]], Optional[str]]
+Vector_name_t = Tuple[Optional[Union[pd.Series, NDArrayA]], Optional[str]]
 
 
 @d.dedent
-def save_fig(fig: Figure, path: Union[str, Path], make_dir: bool = True, ext: str = "png", **kwargs: Any) -> None:
+def save_fig(fig: Figure, path: str | Path, make_dir: bool = True, ext: str = "png", **kwargs: Any) -> None:
     """
     Save a figure.
 
@@ -95,8 +96,8 @@ def save_fig(fig: Figure, path: Union[str, Path], make_dir: bool = True, ext: st
 @d.dedent
 def extract(
     adata: AnnData,
-    obsm_key: Union[List[str], str] = "img_features",
-    prefix: Optional[Union[List[str], str]] = None,
+    obsm_key: list[str] | str = "img_features",
+    prefix: list[str] | str | None = None,
 ) -> AnnData:
     """
     Create a temporary :class:`anndata.AnnData` object for plotting.
@@ -126,7 +127,7 @@ def extract(
     -----
     If :attr:`anndata.AnnData.obs` ``['{column}']`` already exists, it will be overwritten and a warning will be issued.
     """
-    # TODO: move to utils?
+
     def _warn_if_exists_obs(adata: AnnData, obs_key: str) -> None:
         if obs_key in adata.obs.columns:
             logg.warning(f"Overwriting `adata.obs[{obs_key!r}]`")
@@ -149,7 +150,6 @@ def extract(
         prefix = [f"{p}_" for p in prefix]
     else:
         # no prefix
-        # TODO default could also be obsm_key
         prefix = ["" for _ in obsm_key]
 
     # create tmp_adata and copy obsm columns
@@ -173,7 +173,7 @@ def extract(
 
 
 @njit(cache=True, fastmath=True)
-def _point_inside_triangles(triangles: np.ndarray) -> np.bool_:
+def _point_inside_triangles(triangles: NDArrayA) -> np.bool_:
     # modified from napari
     AB = triangles[:, 1, :] - triangles[:, 0, :]
     AC = triangles[:, 2, :] - triangles[:, 0, :]
@@ -187,7 +187,7 @@ def _point_inside_triangles(triangles: np.ndarray) -> np.bool_:
 
 
 @njit(parallel=True)
-def _points_inside_triangles(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
+def _points_inside_triangles(points: NDArrayA, triangles: NDArrayA) -> NDArrayA:
     out = np.empty(
         len(
             points,
@@ -200,7 +200,7 @@ def _points_inside_triangles(points: np.ndarray, triangles: np.ndarray) -> np.nd
     return out
 
 
-def _min_max_norm(vec: Union[spmatrix, np.ndarray]) -> np.ndarray:
+def _min_max_norm(vec: spmatrix | NDArrayA) -> NDArrayA:
     if issparse(vec):
         if TYPE_CHECKING:
             assert isinstance(vec, spmatrix)
@@ -218,7 +218,7 @@ def _min_max_norm(vec: Union[spmatrix, np.ndarray]) -> np.ndarray:
 
 def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vector_name_t]:
     @wraps(fn)
-    def decorator(self: "ALayer", *args: Any, **kwargs: Any) -> Vector_name_t:
+    def decorator(self: ALayer, *args: Any, **kwargs: Any) -> Vector_name_t:
         normalize = kwargs.pop("normalize", False)
         res, fmt = fn(self, *args, **kwargs)
         if res is None:
@@ -255,9 +255,9 @@ def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vect
     return decorator
 
 
-def _only_not_raw(fn: Callable[..., Optional[Any]]) -> Callable[..., Optional[Any]]:
+def _only_not_raw(fn: Callable[..., Any | None]) -> Callable[..., Any | None]:
     @wraps(fn)
-    def decorator(self: "ALayer", *args: Any, **kwargs: Any) -> Optional[Any]:
+    def decorator(self: ALayer, *args: Any, **kwargs: Any) -> Any | None:
         return None if self.raw else fn(self, *args, **kwargs)
 
     return decorator
@@ -283,7 +283,7 @@ class ALayer:
         adata: AnnData,
         library_ids: Sequence[str],
         is_raw: bool = False,
-        palette: Optional[str] = None,
+        palette: str | None = None,
     ):
         if is_raw and adata.raw is None:
             raise AttributeError("Attribute `.raw` is `None`.")
@@ -291,8 +291,8 @@ class ALayer:
         self._adata = adata
         self._library_id = library_ids[0]
         self._ix_to_group = dict(zip(range(len(library_ids)), library_ids))
-        self._layer: Optional[str] = None
-        self._previous_layer: Optional[str] = None
+        self._layer: str | None = None
+        self._previous_layer: str | None = None
         self._raw = is_raw
         self._palette = palette
 
@@ -302,12 +302,12 @@ class ALayer:
         return self._adata
 
     @property
-    def layer(self) -> Optional[str]:
+    def layer(self) -> str | None:
         """Layer in :attr:`anndata.AnnData.layers`."""
         return self._layer
 
     @layer.setter
-    def layer(self, layer: Optional[str] = None) -> None:
+    def layer(self, layer: str | None = None) -> None:
         if layer not in (None,) + tuple(self.adata.layers.keys()):
             raise KeyError(f"Invalid layer `{layer}`. Valid options are `{[None] + sorted(self.adata.layers.keys())}`.")
         self._previous_layer = layer
@@ -336,13 +336,13 @@ class ALayer:
         return self._library_id
 
     @library_id.setter
-    def library_id(self, library_id: Union[str, int]) -> None:
+    def library_id(self, library_id: str | int) -> None:
         if isinstance(library_id, int):
             library_id = self._ix_to_group[library_id]
         self._library_id = library_id
 
     @_ensure_dense_vector
-    def get_obs(self, name: str, **_: Any) -> Tuple[Optional[Union[pd.Series, np.ndarray]], str]:
+    def get_obs(self, name: str, **_: Any) -> tuple[pd.Series | NDArrayA | None, str]:
         """
         Return an observation.
 
@@ -360,7 +360,7 @@ class ALayer:
         return self.adata.obs[name], self._format_key(name, layer_modifier=False)
 
     @_ensure_dense_vector
-    def get_var(self, name: Union[str, int], **_: Any) -> Tuple[Optional[np.ndarray], str]:
+    def get_var(self, name: str | int, **_: Any) -> tuple[NDArrayA | None, str]:
         """
         Return a gene.
 
@@ -382,7 +382,7 @@ class ALayer:
 
         return self.adata._get_X(use_raw=self.raw, layer=self.layer)[ix], self._format_key(name, layer_modifier=True)
 
-    def get_items(self, attr: str) -> Tuple[str, ...]:
+    def get_items(self, attr: str) -> tuple[str, ...]:
         """
         Return valid keys for an attribute.
 
@@ -401,7 +401,7 @@ class ALayer:
         return tuple(map(str, getattr(adata, attr).index))
 
     @_ensure_dense_vector
-    def get_obsm(self, name: str, index: Union[int, str] = 0) -> Tuple[Optional[np.ndarray], str]:
+    def get_obsm(self, name: str, index: int | str = 0) -> tuple[NDArrayA | None, str]:
         """
         Return a vector from :attr:`anndata.AnnData.obsm`.
 
@@ -441,9 +441,7 @@ class ALayer:
 
         return (res if res.ndim == 1 else res[:, index]), pretty_name
 
-    def _format_key(
-        self, key: Union[str, int], layer_modifier: bool = False, index: Optional[Union[int, str]] = None
-    ) -> str:
+    def _format_key(self, key: str | int, layer_modifier: bool = False, index: int | str | None = None) -> str:
         if not layer_modifier:
             return str(key) + (f":{index}" if index is not None else "")
 
@@ -467,12 +465,12 @@ def _get_black_or_white(value: float, cmap: mcolors.Colormap) -> str:
     if not (0.0 <= value <= 1.0):
         raise ValueError(f"Value must be in range `[0, 1]`, found `{value}`.")
 
-    r, g, b, *_ = [int(c * 255) for c in cmap(value)]
+    r, g, b, *_ = (int(c * 255) for c in cmap(value))
     return _contrasting_color(r, g, b)
 
 
 def _annotate_heatmap(
-    im: mpl.image.AxesImage, valfmt: str = "{x:.2f}", cmap: Union[mpl.colors.Colormap, str] = "viridis", **kwargs: Any
+    im: mpl.image.AxesImage, valfmt: str = "{x:.2f}", cmap: mpl.colors.Colormap | str = "viridis", **kwargs: Any
 ) -> None:
     # modified from matplotlib's site
     if isinstance(cmap, str):
@@ -499,8 +497,8 @@ def _annotate_heatmap(
 def _get_cmap_norm(
     adata: AnnData,
     key: str,
-    order: Optional[Union[Tuple[List[int], List[int]], None]] = None,
-) -> Tuple[mcolors.ListedColormap, mcolors.ListedColormap, mcolors.BoundaryNorm, mcolors.BoundaryNorm, int]:
+    order: tuple[list[int], list[int]] | None | None = None,
+) -> tuple[mcolors.ListedColormap, mcolors.ListedColormap, mcolors.BoundaryNorm, mcolors.BoundaryNorm, int]:
     n_cls = adata.obs[key].nunique()
 
     colors = adata.uns[Key.uns.colors(key)]
@@ -524,11 +522,11 @@ def _heatmap(
     adata: AnnData,
     key: str,
     title: str = "",
-    method: Optional[str] = None,
-    cont_cmap: Union[str, mcolors.Colormap] = "viridis",
+    method: str | None = None,
+    cont_cmap: str | mcolors.Colormap = "viridis",
     annotate: bool = True,
-    figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
+    figsize: tuple[float, float] | None = None,
+    dpi: int | None = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> mpl.figure.Figure:
@@ -597,12 +595,12 @@ def _heatmap(
     return fig
 
 
-def _filter_kwargs(func: Callable[..., Any], kwargs: Mapping[str, Any]) -> Dict[str, Any]:
+def _filter_kwargs(func: Callable[..., Any], kwargs: Mapping[str, Any]) -> dict[str, Any]:
     style_args = {k for k in signature(func).parameters.keys()}  # noqa: C416
     return {k: v for k, v in kwargs.items() if k in style_args}
 
 
-def _dendrogram(data: np.ndarray, method: str, **kwargs: Any) -> Tuple[List[int], List[int], List[int], List[int]]:
+def _dendrogram(data: NDArrayA, method: str, **kwargs: Any) -> tuple[list[int], list[int], list[int], list[int]]:
     link_kwargs = _filter_kwargs(sch.linkage, kwargs)
     dendro_kwargs = _filter_kwargs(sch.dendrogram, kwargs)
 

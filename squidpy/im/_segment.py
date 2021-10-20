@@ -1,15 +1,9 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from types import MappingProxyType
-from typing import (
-    Any,
-    Tuple,
-    Union,
-    Mapping,
-    Callable,
-    Optional,
-    Sequence,
-    TYPE_CHECKING,
-)
+from typing import Union  # noqa: F401
+from typing import Any, Mapping, Callable, Sequence, TYPE_CHECKING
 
 from scanpy import logging as logg
 
@@ -22,7 +16,7 @@ from skimage.filters import threshold_otsu
 from skimage.segmentation import watershed
 
 from squidpy._docs import d, inject_docs
-from squidpy._utils import singledispatchmethod
+from squidpy._utils import NDArrayA, singledispatchmethod
 from squidpy.im._container import ImageContainer
 from squidpy._constants._constants import SegmentationBackend
 from squidpy._constants._pkg_constants import Key
@@ -55,7 +49,7 @@ class SegmentationModel(ABC):
     @d.get_full_description(base="segment")
     @d.get_sections(base="segment", sections=["Parameters", "Returns"])
     @d.dedent
-    def segment(self, img: Union[np.ndarray, ImageContainer], **kwargs: Any) -> Union[np.ndarray, ImageContainer]:
+    def segment(self, img: NDArrayA | ImageContainer, **kwargs: Any) -> NDArrayA | ImageContainer:
         """
         Segment an image.
 
@@ -81,7 +75,7 @@ class SegmentationModel(ABC):
         raise NotImplementedError(f"Segmentation of `{type(img).__name__}` is not yet implemented.")
 
     @staticmethod
-    def _precondition(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array]:
+    def _precondition(img: NDArrayA | da.Array) -> NDArrayA | da.Array:
         if img.ndim == 2:
             img = img[:, :, np.newaxis]
         if img.ndim != 3:
@@ -90,7 +84,7 @@ class SegmentationModel(ABC):
         return img
 
     @staticmethod
-    def _postcondition(img: Union[np.ndarray, da.Array]) -> Union[np.ndarray, da.Array]:
+    def _postcondition(img: NDArrayA | da.Array) -> NDArrayA | da.Array:
         if img.ndim == 2:
             img = img[..., np.newaxis]
         if img.ndim != 3:
@@ -101,7 +95,7 @@ class SegmentationModel(ABC):
         return img.astype(_SEG_DTYPE)
 
     @segment.register(np.ndarray)
-    def _(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
+    def _(self, img: NDArrayA, **kwargs: Any) -> NDArrayA:
         chunks = kwargs.pop("chunks", None)
         if chunks is not None:
             return self.segment(da.asarray(img).rechunk(chunks), **kwargs)
@@ -111,7 +105,7 @@ class SegmentationModel(ABC):
         return SegmentationModel._postcondition(img)
 
     @segment.register(da.Array)  # type: ignore[no-redef]
-    def _(self, img: da.Array, chunks: Optional[Union[str, int, Tuple[int, ...]]] = None, **kwargs: Any) -> np.ndarray:
+    def _(self, img: da.Array, chunks: str | int | tuple[int, ...] | None = None, **kwargs: Any) -> NDArrayA:
         img = SegmentationModel._precondition(img)
         if chunks is not None:
             img = img.rechunk(chunks)
@@ -146,8 +140,8 @@ class SegmentationModel(ABC):
         self,
         img: ImageContainer,
         layer: str,
-        library_id: Union[str, Sequence[str]],
-        channel: Optional[int] = None,
+        library_id: str | Sequence[str],
+        channel: int | None = None,
         fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
     ) -> ImageContainer:
@@ -158,7 +152,7 @@ class SegmentationModel(ABC):
             new_channel_dim = f"{channel_dim}:{'all' if channel is None else channel}"
 
         _ = kwargs.pop("copy", None)
-        # TODO: allow volumetric segmentation? (precondition/postcondition needs change)
+        # TODO(michalk8): allow volumetric segmentation? (precondition/postcondition needs change)
         if isinstance(library_id, str):
             func = {library_id: self.segment}
         elif isinstance(library_id, Sequence):
@@ -177,17 +171,17 @@ class SegmentationModel(ABC):
         return res
 
     @abstractmethod
-    def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
+    def _segment(self, arr: NDArrayA, **kwargs: Any) -> NDArrayA:
         pass
 
     def _segment_chunk(
         self,
-        block: np.ndarray,
-        block_id: Tuple[int, ...],
-        num_blocks: Tuple[int, ...],
+        block: NDArrayA,
+        block_id: tuple[int, ...],
+        num_blocks: tuple[int, ...],
         shift: int,
         **kwargs: Any,
-    ) -> np.ndarray:
+    ) -> NDArrayA:
         if len(num_blocks) == 2:
             block_num = block_id[0] * num_blocks[1] + block_id[1]
         elif len(num_blocks) == 3:
@@ -202,7 +196,7 @@ class SegmentationModel(ABC):
             raise ValueError(f"Expected either `2`, `3` or `4` dimensional chunks, found `{len(num_blocks)}`.")
 
         labels = self._segment(block, **kwargs).astype(_SEG_DTYPE)
-        mask = labels > 0
+        mask: NDArrayA = labels > 0
         labels[mask] = (labels[mask] << shift) | block_num
 
         return labels
@@ -222,15 +216,15 @@ class SegmentationWatershed(SegmentationModel):
 
     def _segment(
         self,
-        arr: np.ndarray,
-        thresh: Optional[float] = None,
+        arr: NDArrayA,
+        thresh: float | None = None,
         geq: bool = True,
         **kwargs: Any,
-    ) -> Union[np.ndarray, da.Array]:
+    ) -> NDArrayA | da.Array:
         arr = arr.squeeze(-1)  # we always pass a 3D image
         if thresh is None:
             thresh = threshold_otsu(arr)
-        mask = (arr >= thresh) if geq else (arr < thresh)
+        mask: NDArrayA = (arr >= thresh) if geq else (arr < thresh)
         distance = ndi.distance_transform_edt(mask)
         coords = peak_local_max(distance, footprint=np.ones((5, 5)), labels=mask)
         local_maxi = np.zeros(distance.shape, dtype=np.bool_)
@@ -253,12 +247,12 @@ class SegmentationCustom(SegmentationModel):
         The segmentation must be of :class:`numpy.uint32` type, where 0 marks background.
     """
 
-    def __init__(self, func: Callable[..., np.ndarray]):
+    def __init__(self, func: Callable[..., NDArrayA]):
         if not callable(func):
             raise TypeError()
         super().__init__(model=func)
 
-    def _segment(self, arr: np.ndarray, **kwargs: Any) -> np.ndarray:
+    def _segment(self, arr: NDArrayA, **kwargs: Any) -> NDArrayA:
         return np.asarray(self._model(arr, **kwargs))
 
     def __repr__(self) -> str:
@@ -272,16 +266,16 @@ class SegmentationCustom(SegmentationModel):
 @inject_docs(m=SegmentationBackend)
 def segment(
     img: ImageContainer,
-    layer: Optional[str] = None,
-    library_id: Optional[Union[str, Sequence[str]]] = None,
-    method: Union[str, SegmentationModel, Callable[..., np.ndarray]] = "watershed",
-    channel: Optional[int] = 0,
-    chunks: Optional[Union[str, int, Tuple[int, int]]] = None,
+    layer: str | None = None,
+    library_id: str | Sequence[str] | None = None,
+    method: str | SegmentationModel | Callable[..., NDArrayA] = "watershed",
+    channel: int | None = 0,
+    chunks: str | int | tuple[int, int] | None = None,
     lazy: bool = False,
-    layer_added: Optional[str] = None,
+    layer_added: str | None = None,
     copy: bool = False,
     **kwargs: Any,
-) -> Optional[ImageContainer]:
+) -> ImageContainer | None:
     """
     Segment an image.
 

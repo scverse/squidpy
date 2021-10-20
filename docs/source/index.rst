@@ -9,16 +9,14 @@ It provides analysis tools that leverages the spatial coordinates of the data, a
 tissue images if available.
 
 .. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png
-    :alt: Title figure
+    :alt: Squidpy title figure
     :width: 400px
     :align: center
-    :target: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v1
+    :target: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v2
 
 Manuscript
 ----------
 Please see our `preprint`_ on **bioRxiv** to learn more.
-
-.. include:: latest_additions.rst
 
 Squidpy's key applications
 --------------------------
@@ -51,22 +49,22 @@ We are happy about any contributions! Before you start, check out our `contribut
     examples
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/squidpy.svg
-    :target: https://img.shields.io/pypi/v/squidpy.svg
+    :target: https://pypi.org/project/squidpy/
     :alt: PyPI
 
-.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/CI/master
+.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/Test/dev
     :target: https://github.com/theislab/squidpy/actions
     :alt: CI
 
-.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/master?label=notebooks
+.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/dev?label=notebooks
     :target: https://github.com/theislab/squidpy_notebooks/actions
     :alt: Notebooks CI
 
 .. |Docs| image:: https://img.shields.io/readthedocs/squidpy
-    :target: https://squidpy.readthedocs.io/en/latest/
+    :target: https://squidpy.readthedocs.io/en/stable/
     :alt: Documentation
 
-.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/master/graph/badge.svg
+.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/dev/graph/badge.svg
     :target: https://codecov.io/gh/theislab/squidpy
     :alt: Coverage
 
@@ -74,9 +72,9 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pepy.tech/project/squidpy
     :alt: Downloads
 
-.. _preprint: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v1
-.. _scanpy: https://scanpy.readthedocs.io/en/latest/
-.. _anndata: https://anndata.readthedocs.io/en/latest/
+.. _preprint: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v2
+.. _scanpy: https://scanpy.readthedocs.io/en/stable/
+.. _anndata: https://anndata.readthedocs.io/en/stable/
 .. _napari: https://napari.org/
 .. _skimage: https://scikit-image.org/
 .. _contributing guide: https://github.com/theislab/squidpy/blob/master/CONTRIBUTING.rst

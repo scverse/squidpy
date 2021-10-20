@@ -1,7 +1,8 @@
 """Plotting for graph functions."""
+from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import Any, Union, Mapping, Optional, Sequence, TYPE_CHECKING
 from pathlib import Path
 from typing_extensions import Literal
 
@@ -31,7 +32,7 @@ __all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "riple
 Palette_t = Optional[Union[str, mcolors.ListedColormap]]
 
 
-def _maybe_set_colors(source: AnnData, target: AnnData, key: str, palette: Optional[str] = None) -> None:
+def _maybe_set_colors(source: AnnData, target: AnnData, key: str, palette: str | None = None) -> None:
     color_key = Key.uns.colors(key)
     try:
         if palette is not None:
@@ -52,7 +53,7 @@ def _get_data(adata: AnnData, cluster_key: str, func_name: str, **kwargs: Any) -
         ) from None
 
 
-def _get_palette(adata: AnnData, cluster_key: str, categories: Sequence[Any]) -> Optional[Mapping[str, Any]]:
+def _get_palette(adata: AnnData, cluster_key: str, categories: Sequence[Any]) -> Mapping[str, Any] | None:
     try:
         palette = adata.uns[Key.uns.colors(cluster_key)]
         if len(palette) < len(categories):
@@ -69,12 +70,12 @@ def _get_palette(adata: AnnData, cluster_key: str, categories: Sequence[Any]) ->
 def centrality_scores(
     adata: AnnData,
     cluster_key: str,
-    score: Optional[Union[str, Sequence[str]]] = None,
+    score: str | Sequence[str] | None = None,
     legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
     palette: Palette_t = None,
-    figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
-    save: Optional[Union[str, Path]] = None,
+    figsize: tuple[float, float] | None = None,
+    dpi: int | None = None,
+    save: str | Path | None = None,
     **kwargs: Any,
 ) -> None:
     """
@@ -142,14 +143,14 @@ def interaction_matrix(
     adata: AnnData,
     cluster_key: str,
     annotate: bool = False,
-    method: Optional[str] = None,
-    title: Optional[str] = None,
+    method: str | None = None,
+    title: str | None = None,
     cmap: str = "viridis",
     palette: Palette_t = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
-    save: Optional[Union[str, Path]] = None,
+    figsize: tuple[float, float] | None = None,
+    dpi: int | None = None,
+    save: str | Path | None = None,
     **kwargs: Any,
 ) -> None:
     """
@@ -199,14 +200,14 @@ def nhood_enrichment(
     cluster_key: str,
     mode: Literal["zscore", "count"] = "zscore",
     annotate: bool = False,
-    method: Optional[str] = None,
-    title: Optional[str] = None,
+    method: str | None = None,
+    title: str | None = None,
     cmap: str = "viridis",
     palette: Palette_t = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
-    save: Optional[Union[str, Path]] = None,
+    figsize: tuple[float, float] | None = None,
+    dpi: int | None = None,
+    save: str | Path | None = None,
     **kwargs: Any,
 ) -> None:
     """
@@ -263,9 +264,9 @@ def ripley(
     mode: Literal["F", "G", "L"] = "F",
     plot_sims: bool = True,
     palette: Palette_t = None,
-    figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
-    save: Optional[Union[str, Path]] = None,
+    figsize: tuple[float, float] | None = None,
+    dpi: int | None = None,
+    save: str | Path | None = None,
     legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> None:
@@ -327,10 +328,10 @@ def co_occurrence(
     adata: AnnData,
     cluster_key: str,
     palette: Palette_t = None,
-    clusters: Optional[Union[str, Sequence[str]]] = None,
-    figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
-    save: Optional[Union[str, Path]] = None,
+    clusters: str | Sequence[str] | None = None,
+    figsize: tuple[float, float] | None = None,
+    dpi: int | None = None,
+    save: str | Path | None = None,
     legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> None:

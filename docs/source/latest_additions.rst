@@ -1,4 +1,0 @@
-.. role:: small
-
-.. Latest additions
-.. -------------------

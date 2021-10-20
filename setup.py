@@ -11,7 +11,7 @@ except ImportError:
             "hannah.spitzer@helmholtz-muenchen.de",
         ]
     )
-    __version__ = "1.0.0"
+    __version__ = "1.1.2"
 
 setup(
     name="squidpy",
@@ -22,13 +22,13 @@ setup(
     author_email=__email__,
     maintainer=__author__,
     maintainer_email=__email__,
-    description=Path("README.rst").read_text("utf-8").splitlines()[2],
-    long_description=Path("README.rst").read_text("utf-8"),
+    description=Path("README_pypi.rst").read_text("utf-8").splitlines()[2],
+    long_description=Path("README_pypi.rst").read_text("utf-8"),
     long_description_content_type="text/x-rst; charset=UTF-8",
     url="https://github.com/theislab/squidpy",
     download_url="https://pypi.org/project/squidpy/",
     project_urls={
-        "Documentation": "https://squidpy.readthedocs.io/en/latest",
+        "Documentation": "https://squidpy.readthedocs.io/en/stable",
         "Source Code": "https://github.com/theislab/squidpy",
     },
     license="BSD",
@@ -37,15 +37,14 @@ setup(
     zip_safe=False,
     install_requires=[l.strip() for l in Path("requirements.txt").read_text("utf-8").splitlines()],
     extras_require=dict(
-        dev=["pre-commit>=2.9.0"],
-        test=["tox>=3.20.1", "pytest-mock"],
+        dev=["pre-commit>=2.9.0", "towncrier>=21.3.0"],
+        test=["tox>=3.20.1"],
         docs=[
             l.strip()
             for l in (Path("docs") / "requirements.txt").read_text("utf-8").splitlines()
             if not l.startswith("-r")
         ],
-        interactive=["PyQt5>=5.15.0", "napari>=0.4.8"],
-        all=["PyQt5>=5.15.0", "napari>=0.4.8", "astropy>=4.1"],
+        interactive=["PyQt5>=5.15.0", "napari>=0.4.11,<0.5"],
     ),
     classifiers=[
         "Development Status :: 5 - Production/Stable",

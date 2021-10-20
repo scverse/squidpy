@@ -36,7 +36,7 @@ known_stdlib = "joblib"
 known_bio = "anndata,scanpy"
 known_num = "numpy,numba,scipy,sklearn,statsmodels,pandas,xarray,dask"
 known_plot = "matplotlib,seaborn,napari"
-known_gui = "PyQt5"
+known_gui = "PyQt5,superqt"
 known_img = "skimage,tifffile,dask_image"
 known_graph = "networkx"
 sections = "FUTURE,STDLIB,THIRDPARTY,BIO,NUM,GUI,PLOT,IMG,GRAPH,FIRSTPARTY,LOCALFOLDER"
@@ -56,3 +56,38 @@ only_modified = true
 group_by_package = true
 force_alphabetical_sort_within_sections = true
 lexicographical = true
+
+[tool.towncrier]
+package = "squidpy"
+single_file = true
+filename = "docs/source/release/notes-{version}.rst"
+directory = "docs/source/release/changelog"
+issue_format = "`#{issue} <https://github.com/theislab/squidpy/pull/{issue}>`__"
+template = "docs/source/release/changelog/template.rst"
+underlines = ["~", "-"]
+all_bullets = true
+
+[[tool.towncrier.type]]
+directory = "feature"
+name = "Features"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "bugfix"
+name = "Bugfixes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "deprecation"
+name = "Deprecations (in next major release)"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "misc"
+name = "Miscellaneous"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "doc"
+name = "Documentation"
+showcontent = true

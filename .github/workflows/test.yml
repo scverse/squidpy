@@ -1,72 +1,48 @@
-name: CI
+name: Test
 
 on:
     schedule:
-    -   cron: 00 00 * * 1     # run every Monday at 00:00
+    -   cron: 00 00 * * 1      # every Monday at 00:00
     push:
-        branches:
-        -   master
-        -   dev
-        tags:
-        -   v[0-9]+.[0-9]+.[0-9]+
+        branches: [master, dev]
     pull_request:
-        branches:
-        -   master
-        -   dev
+        branches: [master, dev]
+    workflow_dispatch:
+        inputs:
+            reason:
+                description: Reason for the workflow dispatch. Only "release" is valid.
+                required: true
+                default: release
 
 jobs:
-    init:
-        runs-on: ubuntu-latest
-        outputs:
-            skip: ${{ steps.ci-skip-step.outputs.ci-skip }}
-        steps:
-        -   uses: actions/checkout@v2
-            with:
-                fetch-depth: 0
-        -   id: ci-skip-step
-            uses: mstachniuk/ci-skip@master
-            with:
-                commit-filter: '[ci skip];[ci-skip];[skip ci];[skip-ci]'
-                commit-filter-separator: ;
-
     lint:
-        needs: init
-        if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
         runs-on: ubuntu-latest
         steps:
         -   uses: actions/checkout@v2
-            with:
-                fetch-depth: 0
-        -   name: Set up Python
+        -   name: Set up Python 3.9
             uses: actions/setup-python@v2
             with:
-                python-version: 3.8
+                python-version: 3.9
 
         -   uses: actions/cache@v2
             with:
                 path: ~/.cache/pre-commit
-                key: precommit-${{ env.pythonLocation }}-${{ hashFiles('.pre-commit-config.yaml') }}
-                restore-keys: |
-                    precommit-${{ env.pythonLocation }}-
-                    precommit-
+                key: precommit-${{ env.pythonLocation }}-${{ hashFiles('**/.pre-commit-config.yaml') }}
 
         -   name: Install dependencies
             run: |
+                sudo apt install pandoc
                 python -m pip install --upgrade pip
                 pip install tox
 
-        -   name: Linting
+        -   name: Lint
             run: |
-                tox -e lint
+                tox -e lint,check-docs
 
     test:
-        needs: init
-        if: ${{ github.event_name == 'schedule' || needs.init.outputs.skip == 'false' }}
-        timeout-minutes: 20
         runs-on: ${{ matrix.os }}
         strategy:
             fail-fast: false
-            max-parallel: 4
             matrix:
                 python: [3.7, 3.8]
                 os: [ubuntu-latest, macos-latest]
@@ -79,8 +55,6 @@ jobs:
 
         steps:
         -   uses: actions/checkout@v2
-            with:
-                fetch-depth: 0
         -   name: Set up Python ${{ matrix.python }}
             uses: actions/setup-python@v2
             with:
@@ -90,6 +64,7 @@ jobs:
             id: pip-cache-dir
             run: |
                 echo "::set-output name=dir::$(pip cache dir)"
+
         -   name: Restore pip cache
             uses: actions/cache@v2
             with:
@@ -98,7 +73,7 @@ jobs:
                 restore-keys: |
                     pip-${{ runner.os }}-${{ env.pythonLocation }}-
 
-        -   name: Installed dependencies
+        -   name: Install dependencies
             run: |
                 ./.scripts/ci/install_dependencies.sh
 
@@ -113,60 +88,43 @@ jobs:
             uses: actions/cache@v2
             with:
                 path: .tox
-                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/tox.ini') }}
+                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}
 
-        -   name: Testing
-            run: |
-                tox -vv
+        -   name: Test
             env:
                 MPLBACKEND: agg
                 PLATFORM: ${{ matrix.os }}
                 DISPLAY: :42
+            run: |
+                tox -vv
 
         -   name: Upload coverage
-            if: success()
             env:
                 CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
             run: |
                 codecov --no-color --required --flags unittests
 
-    rebuild-notebooks:
+    regenerate-notebooks:
         needs: [lint, test]
-        if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+        if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') }}
         runs-on: ubuntu-latest
         steps:
         -   name: Rebuild tutorials/examples
             uses: peter-evans/repository-dispatch@v1
             with:
-                repository: theislab/squidpy_notebooks
                 token: ${{ secrets.NOTEBOOKS_ACCESS_TOKEN }}
+                repository: theislab/squidpy_notebooks
                 event-type: rebuild
                 client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
-    deploy:
+    release:
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release' }}
         needs: [lint, test]
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
         runs-on: ubuntu-latest
         steps:
-        -   uses: actions/checkout@v2
+        -   name: Invoke deployment workflow
+            uses: benc-uk/workflow-dispatch@v1
             with:
-                fetch-depth: 0
-        -   name: Set up Python
-            uses: actions/setup-python@v2
-            with:
-                python-version: 3.8
-        -   name: Install pypa/build
-            run: |
-                python -m pip install --upgrade pip
-                pip install build
-        -   name: Build a binary wheel and a source tarball
-            run: |
-                python -m build --sdist --wheel --outdir dist/
-
-        -   name: Publish package on PyPI
-            uses: pypa/gh-action-pypi-publish@master
-            with:
-                user: __token__
-                password: ${{ secrets.PYPI_TOKEN }}
-                skip_existing: true
-                verbose: true
+                workflow: Deployment
+                token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+                inputs: '{ "reason": "release" }'

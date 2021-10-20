@@ -90,7 +90,8 @@ class TestContainerIO:
         img2 = ImageContainer.load(Path(tmpdir) / "foo")
 
         np.testing.assert_array_equal(img["image"].values, img2["image"].values)
-        np.testing.assert_array_equal(img.data.dims, img2.data.dims)
+        np.testing.assert_array_equal(img["image"].dims, img2["image"].dims)
+        assert img.data.dims == img2.data.dims
         np.testing.assert_array_equal(sorted(img.data.attrs.keys()), sorted(img2.data.attrs.keys()))
         for k, v in img.data.attrs.items():
             assert type(v) == type(img2.data.attrs[k])  # noqa: E721
@@ -264,6 +265,34 @@ class TestContainerIO:
 
         with pytest.raises(KeyError, match=r"'image'"):
             del small_cont_1c["image"]
+
+    @pytest.mark.parametrize("img_key", [None, "hires", "lowres"])
+    def test_read_from_adata(self, adata: AnnData, img_key: Optional[str]):
+        img = sq.im.ImageContainer.from_adata(adata, img_key=img_key)
+        if img_key is None:
+            img_key = "hires"
+        shape = ((100, 100) if img_key == "hires" else (88, 49)) + (1, 3)
+
+        assert isinstance(img, ImageContainer)
+        assert img_key in img
+
+        np.testing.assert_array_equal(img[img_key].shape, shape)
+
+    @pytest.mark.parametrize("scale", [None, 42])
+    def test_read_from_adata_scalefactor(self, adata: AnnData, scale: Optional[int]):
+        img_key = "lowres"
+        library_id = Key.uns.library_id(adata, Key.uns.spatial)
+        del adata.uns[Key.uns.spatial][library_id]["scalefactors"][f"tissue_{img_key}_scalef"]
+        if scale is None:
+            kwargs = {}
+            scale = 1.0
+        else:
+            kwargs = {"scale": scale}
+
+        img = sq.im.ImageContainer.from_adata(adata, img_key=img_key, **kwargs, copy=False)
+
+        assert img.data.attrs["scale"] == scale
+        assert np.shares_memory(img[img_key].values, adata.uns[Key.uns.spatial][library_id]["images"][img_key])
 
 
 class TestContainerCropping:

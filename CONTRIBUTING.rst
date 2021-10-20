@@ -9,7 +9,8 @@ Table of Contents
 - `Testing`_
 - `Writing documentation`_
 - `Writing tutorials/examples`_
-- `Creating a new release`_
+- `Making a new release`_
+- `Creating release notes`_
 - `Submitting a PR`_
 - `Troubleshooting`_
 
@@ -135,23 +136,74 @@ Before submitting a new pull request, please make sure you followed these instru
 - make sure that all tests pass locally (see `Testing`_).
 - if there is no issue which this PR solves, create a new `one <https://github.com/theislab/squidpy/issues/new>`_
   briefly explaining what the problem is.
+- make sure that the section under ``## Description`` is properly formatted if automatically generating release notes,
+  see also `Creating release notes`_.
 
-Creating a new release
-----------------------
-If you are a core developer and you want to create a new release, you need to install ``bump2version`` first as::
+Making a new release
+--------------------
+New release is always created when a new tag is pushed to GitHub. When that happens, a new CI job starts the
+testing machinery. If all the tests pass, new release will be created on PyPI. Bioconda will automatically notice that
+a new release has been made and an automatic PR will be made to
+`bioconda-recipes <https://github.com/bioconda/bioconda-recipes/pulls>`_.
+Extra care has to be taken when updating runtime dependencies - this is not automatically picked up by Bioconda
+and a separate PR with the updated ``recipe.yaml`` will have to be made.
+
+Easiest way to create a new release it to create a branch named ``release/vX.X.X`` and push it onto GitHub. The CI
+will take care of the following:
+
+- create the new release notes (and empty the current ``dev`` release notes)
+- bump the version and create a new tag
+- run tests on the ``release/vX.X.X`` branch
+- publish on PyPI after all the tests have passed
+- merge ``release/vX.X.X`` into ``master`` and ``dev``
+
+Alternatively, it's possible to create a new release using ``bump2version``, which can be installed as::
 
     pip install bump2version
 
-Depending on what part of the release you want to update, you can run::
+Depending on what part of the version you want to update, you can run on ``master``::
 
     bump2version {major,minor,patch}
 
-By default, this will create a new tag and automatically update the ``__version__`` wherever necessary, commit the
-changes and create a new tag. If you have uncommitted files in the tree, you can use ``--allow-dirty`` flag to include
-them in the commit.
+By default, this will create a new tagged commit, automatically update the ``__version__`` wherever necessary.
+Afterwards, you can just push the changes to upstream by running::
 
-After the version has been bumped, make sure to push the commit **AND** the newly create tag to the upstream. This
-can be done by e.g. setting ``push.followtags=true`` in your git config or use ``git push --atomic <branch> <tag>``.
+    git push --atomic <branch> <tag>
+
+or set ``push.followtags=true`` in your git config and do a regular ``git push``. In this case, CI will not
+create any release notes, run tests or do any merges.
+
+Creating release notes
+----------------------
+By default, news fragments are automatically generated from successfully merged PRs using. Everything under
+``## Description`` section will be rendered as ``.rst`` files and automatically committed in the target branch in
+`docs/source/release/changelog <docs/source/release/changelog>`_.
+When a new release happens, ``towncrier`` gathers all news fragments and creates the release notes under
+`docs/source/release <docs/source/release>`_.
+
+When submitting a PR, it should be tagged with one of the following tags, in order for ``towncrier`` to know under
+which section to render the news:
+
+- bugfix: the PR fixes some bug
+- feature: the PR introduces a new feature
+- deprecation: the PR deprecates something (e.g. a function)
+- doc: the PR is related to documentation
+- misc: the PR is not applicable to the above
+
+If none is specified, ``bugfix`` is assumed. If more than 1 is specified, the first one is taken.
+If ``ignore-towncrier`` label is specified, no news will be generated for the PR.
+
+To manually create news fragment, make sure that the PR doesn't generate it from the description as described above.
+The command to run is ``towncrier <PR_NUMBER>.<LABEL>``, where ``<LABEL>`` is one of the labels described above.
+This will create a new file in the appropriate location that needs to me modified and subsequently committed.
+
+To locally create the news fragment from an already existing PR, just run::
+
+    tox -e news -- <PR_NUMBER>
+
+Lastly, in order to see how the current news fragments would look like in the release notes, run::
+
+    towncrier build --draft
 
 Troubleshooting
 ---------------

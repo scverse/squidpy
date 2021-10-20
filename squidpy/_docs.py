@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from docrep import DocstringProcessor
 from typing import Any, Callable
 from textwrap import dedent
@@ -157,7 +159,7 @@ Otherwise, modifies the ``adata`` object with the following key:
 
     - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - the above mentioned :class:`dict`.
 
-Statistics and pvalues are computed for each cluster :attr:`anndata.AnnData.obs` ``['{cluster_key}']`` separately."""
+Statistics and p-values are computed for each cluster :attr:`anndata.AnnData.obs` ``['{cluster_key}']`` separately."""
 _library_id_features = """\
 library_id
     Name of the Z-dimension that this function should be applied to."""

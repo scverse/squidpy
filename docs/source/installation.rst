@@ -10,10 +10,10 @@ Install Squidpy by running::
 
 Alternatively, to include all dependencies, such as interactive image viewer :mod:`napari`, run::
 
-    pip install 'squidpy[all]'
+    pip install 'squidpy[interactive]'
 
 Development version
 -------------------
 To install Squidpy from GitHub, run::
 
-    pip install git+https://github.com/theislab/squidpy
+    pip install git+https://github.com/theislab/squidpy@dev

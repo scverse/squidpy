@@ -169,7 +169,6 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
         pl.ligrec(ligrec_result, dendrogram="interacting_molecules")
 
     def test_plot_dendrogram_clusters(self, ligrec_result: Mapping[str, pd.DataFrame]):
-        # this currently "fails" (i.e. no dendrogram)
         np.random.seed(42)
         pl.ligrec(ligrec_result, dendrogram="interacting_clusters")
 
@@ -186,9 +185,15 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_alpha(self, ligrec_result: Mapping[str, pd.DataFrame]):
         pl.ligrec(ligrec_result, alpha=1)
 
+    def test_plot_alpha_none(self, ligrec_result: Mapping[str, pd.DataFrame]):
+        pl.ligrec(ligrec_result, alpha=None)
+
     def test_plot_cmap(self, ligrec_result: Mapping[str, pd.DataFrame]):
         pl.ligrec(ligrec_result, cmap="inferno")
 
     def test_plot_kwargs(self, ligrec_result: Mapping[str, pd.DataFrame]):
         # color_on is intentionally ignored
         pl.ligrec(ligrec_result, grid=False, color_on="square", x_padding=2, y_padding=2)
+
+    def test_plot_remove_nonsig_interactions(self, ligrec_result: Mapping[str, pd.DataFrame]):
+        pl.ligrec(ligrec_result, remove_nonsig_interactions=True, alpha=1e-4)

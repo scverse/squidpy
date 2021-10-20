@@ -1,11 +1,14 @@
 Release Notes
-=============
++++++++++++++
 
-.. role:: small
+.. toctree::
+    :maxdepth: 3
 
-Version 1.0
------------
+    release/notes-dev
 
-1.0.0 :small:`2021-02-20`
-~~~~~~~~~~~~~~~~~~~~~~~~~
-- Initial release
+.. toctree::
+    :maxdepth: 3
+    :glob:
+    :reversed:
+
+    release/notes-*.*.*
