@@ -18,6 +18,7 @@ from functools import partial
 from itertools import chain
 from typing_extensions import Literal
 import re
+import validators
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -329,7 +330,7 @@ class ImageContainer(FeatureMixin):
     @_load_img.register(Path)
     def _(
         self,
-        img: Pathlike_t,
+        img_path_or_url: Pathlike_t,
         chunks: int | None = None,
         dims: InferDimensions | tuple[str, ...] = InferDimensions.DEFAULT,
         **_: Any,
@@ -347,22 +348,22 @@ class ImageContainer(FeatureMixin):
 
             return data
 
-        img = Path(img)
-        logg.debug(f"Loading data from `{img}`")
-
-        if not img.exists():
-            raise OSError(f"Path `{img}` does not exist.")
+        is_url = validators.url(img_path_or_url)
+        img = Path(img_path_or_url)
+        if not is_url:
+            if not img.exists():
+                raise OSError(f"Path `{img}` does not exist.")
 
         suffix = img.suffix.lower()
 
         if suffix in (".jpg", ".jpeg", ".png", ".tif", ".tiff"):
             return _lazy_load_image(img, dims=dims, chunks=chunks)
 
-        if img.is_dir():
+        if img.is_dir() or suffix == ".zarr":
             if len(self._data):
                 raise ValueError("Loading data from `Zarr` store is disallowed when the container is not empty.")
-
-            self._data = transform_metadata(xr.open_zarr(str(img), chunks=chunks))
+            data_str = img_path_or_url if is_url else str(img)
+            self._data = transform_metadata(xr.open_zarr(data_str, chunks=chunks))
             return
 
         if suffix in (".nc", ".cdf"):
