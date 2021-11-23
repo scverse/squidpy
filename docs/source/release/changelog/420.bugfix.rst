@@ -1,1 +1,1 @@
-Require `numba>=0.52.0`.
+Require ``numba>=0.52.0``.

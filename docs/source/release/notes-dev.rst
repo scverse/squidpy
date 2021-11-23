@@ -1,3 +1,8 @@
-Squidpy dev (2021-09-10)
+Squidpy dev (2021-10-24)
 ========================
-No significant changes.
+
+Bugfixes
+--------
+
+- Require ``numba>=0.52.0``.
+  `#420 <https://github.com/theislab/squidpy/pull/420>`__

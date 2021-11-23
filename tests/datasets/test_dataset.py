@@ -1,5 +1,6 @@
 from types import FunctionType
 from pathlib import Path
+from http.client import RemoteDisconnected
 import pytest
 
 from anndata import AnnData
@@ -18,13 +19,19 @@ class TestDatasetsImports:
 
 class TestDatasetsDownload:
     def test_download_imc(self, tmp_path: Path):
-        adata = sq.datasets.imc(tmp_path / "foo")
+        try:
+            adata = sq.datasets.imc(tmp_path / "foo")
 
-        assert isinstance(adata, AnnData)
-        assert adata.shape == (4668, 34)
+            assert isinstance(adata, AnnData)
+            assert adata.shape == (4668, 34)
+        except RemoteDisconnected as e:
+            pytest.skip(str(e))
 
     def test_download_visium_hne_image_crop(self, tmp_path: Path):
-        img = sq.datasets.visium_hne_image_crop(tmp_path / "foo")
+        try:
+            img = sq.datasets.visium_hne_image_crop(tmp_path / "foo")
 
-        assert isinstance(img, sq.im.ImageContainer)
-        assert img.shape == (3527, 3527)
+            assert isinstance(img, sq.im.ImageContainer)
+            assert img.shape == (3527, 3527)
+        except RemoteDisconnected as e:
+            pytest.skip(str(e))
