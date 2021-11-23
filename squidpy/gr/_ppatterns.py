@@ -296,7 +296,7 @@ def co_occurrence(
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
     n_steps: int = 50,
-    interval: Sequence[int] | None  = None,
+    interval: Sequence[int] | None = None,
     copy: bool = False,
     n_splits: int | None = None,
     n_jobs: int | None = None,
