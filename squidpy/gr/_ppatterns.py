@@ -296,7 +296,7 @@ def co_occurrence(
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
     n_steps: int = 50,
-    interval: Sequence[int] | None = None,
+    interval: NDArrayA | None = None,
     copy: bool = False,
     n_splits: int | None = None,
     n_jobs: int | None = None,
@@ -316,7 +316,7 @@ def co_occurrence(
     n_steps
         Number of distance thresholds at which co-occurrence is computed.
     interval
-        Distances intervals at which co-occurence is computed. If specified, ``n_steps`` is ignored
+        Distances intervals at which co-occurrence is computed. If specified, ``n_steps`` is ignored
     %(copy)s
     n_splits
         Number of splits in which to divide the spatial coordinates in
