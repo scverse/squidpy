@@ -1,0 +1,1 @@
+Fix source/target being ``None`` in :func:`squidpy.gr.ligrec`.
