@@ -348,7 +348,7 @@ class ImageContainer(FeatureMixin):
 
             return data
 
-        is_url = validators.url(img_path_or_url)
+        is_url = validators.url(str(img_path_or_url))
         img = Path(img_path_or_url)
         if not is_url:
             if not img.exists():
