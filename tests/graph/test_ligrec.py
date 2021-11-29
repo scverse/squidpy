@@ -450,3 +450,10 @@ class TestValidBehavior:
         np.testing.assert_array_equal(res["means"].index, pd.MultiIndex.from_tuples(interactions))
         np.testing.assert_array_equal(res["pvalues"].index, pd.MultiIndex.from_tuples(interactions))
         np.testing.assert_array_equal(res["metadata"].index, pd.MultiIndex.from_tuples(interactions))
+
+    def test_none_source_target(self, adata: AnnData):
+        pt = PermutationTest(adata).prepare(
+            {"source": [None, adata.var_names[0]], "target": [None, adata.var_names[1]]}
+        )
+        assert isinstance(pt.interactions, pd.DataFrame)
+        assert len(pt.interactions) == 1
