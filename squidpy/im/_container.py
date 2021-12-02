@@ -247,7 +247,8 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         img
-            In-memory 2, 3 or 4-dimensional array or a path to an on-disk image.
+            In-memory 2, 3 or 4-dimensional array, a url to a zarr store (ending in .zarr),
+            or a path to an on-disk image.
         %(img_layer)s
         dims
             Where to save channel dimension when reading from a file or loading an array. Valid options are:
