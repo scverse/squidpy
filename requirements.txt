@@ -5,6 +5,7 @@ dask[array]>=2021.02.0
 docrep>=0.3.1
 fsspec>=2021.11.0
 leidenalg>=0.8.2
+numba>=0.52.0
 omnipath>=1.0.5
 pandas>=1.2.0
 scanpy>=1.8.0

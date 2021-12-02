@@ -53,7 +53,7 @@ Contributing to Squidpy
 We are happy about any contributions! Before you start, check out our `contributing guide <CONTRIBUTING.rst>`_.
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/squidpy.svg
-    :target: https://img.shields.io/pypi/v/squidpy.svg
+    :target: https://pypi.org/project/squidpy/
     :alt: PyPI
 
 .. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/Test/dev
