@@ -1,7 +1,7 @@
 """Internal constants not exposed to the user."""
 from __future__ import annotations
 
-from typing import Any, Union, Callable, Optional, Sequence
+from typing import Any, Union, Mapping, Callable, Optional, Sequence
 
 from anndata import AnnData
 
@@ -70,6 +70,10 @@ class Key:
         def spatial(cls) -> str:
             return Key.obsm.spatial
 
+        @cprop
+        def image_key(cls) -> str:
+            return "images"
+
         @classmethod
         def spatial_neighs(cls, value: Optional[str] = None) -> str:
             return f"{Key.obsm.spatial}_neighbors" if value is None else f"{value}_neighbors"
@@ -123,7 +127,7 @@ class Key:
             elif library_id is None and not unique_id:
                 library_id = haystack
             elif library_id is not None:
-                if not all(i in library_id for i in haystack):
+                if not any(i in library_id for i in haystack):
                     raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
 
             return library_id
@@ -137,6 +141,24 @@ class Key:
                     f"Unable to get the spot diameter from "
                     f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors']['spot_diameter_fullres']]`"
                 ) from None
+
+        @classmethod
+        def image_id(
+            cls,
+            adata: AnnData,
+            spatial_key: str,
+            image_key: str,
+            library_id: Sequence[str] | str,
+        ) -> Mapping[str, Sequence[str]]:
+            if spatial_key not in adata.uns:
+                raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.uns`.")
+            haystack = list(adata.uns[spatial_key].keys())
+            print(haystack)
+            if not any(i in library_id for i in haystack):
+                raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
+            img_key = {i: list(adata.uns[spatial_key][i][image_key].keys()) for i in library_id}
+
+            return img_key
 
     class obsp:
         @classmethod
