@@ -153,7 +153,8 @@ class Key:
             if spatial_key not in adata.uns:
                 raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.uns`.")
             haystack = list(adata.uns[spatial_key].keys())
-            print(haystack)
+            if not all(image_key in i for i in [adata.uns["spatial"][i].keys() for i in library_id]):
+                raise KeyError(f"Image key `{image_key}` not found in `adata.uns[{spatial_key}]['library_id']`.")
             if not any(i in library_id for i in haystack):
                 raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
             img_key = {i: list(adata.uns[spatial_key][i][image_key].keys()) for i in library_id}
