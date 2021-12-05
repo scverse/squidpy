@@ -1,5 +1,7 @@
 """Internal constants not exposed to the user."""
-from typing import Any, Union, Callable, Optional
+from __future__ import annotations
+
+from typing import Any, Union, Callable, Optional, Sequence
 
 from anndata import AnnData
 
@@ -101,20 +103,28 @@ class Key:
             return f"{cluster}_colors"
 
         @classmethod
-        def library_id(cls, adata: AnnData, spatial_key: str, library_id: Optional[str] = None) -> str:
+        def library_id(
+            cls,
+            adata: AnnData,
+            spatial_key: str,
+            library_id: Optional[Sequence[str] | str] = None,
+            unique_id: bool = True,
+        ) -> Sequence[str] | str | None:
             if spatial_key not in adata.uns:
                 raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.uns`.")
             haystack = list(adata.uns[spatial_key].keys())
-            if library_id is None:
+            if library_id is None and unique_id:
                 if len(haystack) > 1:
                     raise ValueError(
                         f"Unable to determine which library id to use. "
                         f"Please specify one from: `{sorted(haystack)}`."
                     )
                 library_id = haystack[0]
-
-            if library_id not in haystack:
-                raise KeyError(f"Library id `{library_id}` not found in `{sorted(haystack)}`.")
+            elif library_id is None and not unique_id:
+                library_id = haystack
+            elif library_id is not None:
+                if library_id not in haystack:
+                    raise KeyError(f"Library id `{library_id}` not found in `{sorted(haystack)}`.")
 
             return library_id
 

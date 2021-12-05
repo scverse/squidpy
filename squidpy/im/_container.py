@@ -417,7 +417,7 @@ class ImageContainer(FeatureMixin):
         cls,
         adata: AnnData,
         img_key: str | None = None,
-        library_id: str | None = None,
+        library_id: Sequence[str] | str | None = None,
         spatial_key: str = Key.uns.spatial,
         **kwargs: Any,
     ) -> ImageContainer:
@@ -442,6 +442,11 @@ class ImageContainer(FeatureMixin):
         The image container.
         """
         library_id = Key.uns.library_id(adata, spatial_key, library_id)
+        if isinstance(library_id, Sequence):
+            raise NotImplementedError(
+                f"It seems there are multiple `library_id` in `adata.uns['{Key.uns.spatial}']`.\n \
+                Loading multiple images is not implemented (yet), please specify a `library_id`."
+            )
         spatial_data = adata.uns[spatial_key][library_id]
         if img_key is None:
             try:
@@ -714,7 +719,7 @@ class ImageContainer(FeatureMixin):
         self,
         adata: AnnData,
         spatial_key: str = Key.obsm.spatial,
-        library_id: str | None = None,
+        library_id: Sequence[str] | str | None = None,
         spot_scale: float = 1.0,
         obs_names: Iterable[Any] | None = None,
         as_array: str | bool = False,
@@ -770,6 +775,11 @@ class ImageContainer(FeatureMixin):
         if library_id is None:
             try:
                 library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=None)
+                if isinstance(library_id, Sequence):
+                    raise NotImplementedError(
+                        f"It seems there are multiple `library_id` in `adata.uns['{Key.uns.spatial}']`.\n \
+                        Loading multiple images is not implemented (yet), please specify a `library_id`."
+                    )
                 obs_library_ids = [library_id] * adata.n_obs
             except ValueError as e:
                 if "Unable to determine which library id to use" in str(e):
@@ -788,6 +798,11 @@ class ImageContainer(FeatureMixin):
                     f"Trying in `adata.uns[{spatial_key!r}]`"
                 )
                 library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=library_id)
+                if isinstance(library_id, Sequence):
+                    raise NotImplementedError(
+                        f"It seems there are multiple `library_id` in `adata.uns['{Key.uns.spatial}']`.\n \
+                        Loading multiple images is not implemented (yet), please specify a `library_id`."
+                    )
                 obs_library_ids = [library_id] * adata.n_obs
 
         lids = set(obs_library_ids)
