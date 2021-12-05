@@ -123,8 +123,8 @@ class Key:
             elif library_id is None and not unique_id:
                 library_id = haystack
             elif library_id is not None:
-                if library_id not in haystack:
-                    raise KeyError(f"Library id `{library_id}` not found in `{sorted(haystack)}`.")
+                if not all(i in library_id for i in haystack):
+                    raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
 
             return library_id
 
