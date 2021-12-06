@@ -75,7 +75,7 @@ class Key:
             return "images"
 
         @cprop
-        def scalefactors_key(cls) -> str:
+        def scalefactor_key(cls) -> str:
             return "scalefactors"
 
         @classmethod
@@ -160,19 +160,19 @@ class Key:
             return image_mapping
 
         @classmethod
-        def scalefactors_id(
+        def scalefactor_id(
             cls,
             adata: AnnData,
             spatial_key: str,
-            scalefactors_key: str,
+            scalefactor_key: str,
             library_id: Optional[Sequence[str] | str] = None,
         ) -> Mapping[str, Sequence[str]]:
-            haystack = cls._check_haystack(adata, spatial_key, library_id, sub_key=scalefactors_key)
+            haystack = cls._check_haystack(adata, spatial_key, library_id, sub_key=scalefactor_key)
             if library_id is None:
                 library_id = haystack
-            scalefactors_mapping = {i: list(adata.uns[spatial_key][i][scalefactors_key].keys()) for i in library_id}
+            scalefactor_mapping = {i: list(adata.uns[spatial_key][i][scalefactor_key].keys()) for i in library_id}
 
-            return scalefactors_mapping
+            return scalefactor_mapping
 
         @classmethod
         def _check_haystack(
