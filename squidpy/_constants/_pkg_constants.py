@@ -74,6 +74,10 @@ class Key:
         def image_key(cls) -> str:
             return "images"
 
+        @cprop
+        def scalefactors_key(cls) -> str:
+            return "scalefactors"
+
         @classmethod
         def spatial_neighs(cls, value: Optional[str] = None) -> str:
             return f"{Key.obsm.spatial}_neighbors" if value is None else f"{value}_neighbors"
@@ -107,32 +111,6 @@ class Key:
             return f"{cluster}_colors"
 
         @classmethod
-        def library_id(
-            cls,
-            adata: AnnData,
-            spatial_key: str,
-            library_id: Optional[Sequence[str] | str] = None,
-            unique_id: bool = True,
-        ) -> Sequence[str] | str | None:
-            if spatial_key not in adata.uns:
-                raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.uns`.")
-            haystack = list(adata.uns[spatial_key].keys())
-            if library_id is None and unique_id:
-                if len(haystack) > 1:
-                    raise ValueError(
-                        f"Unable to determine which library id to use. "
-                        f"Please specify one from: `{sorted(haystack)}`."
-                    )
-                library_id = haystack[0]
-            elif library_id is None and not unique_id:
-                library_id = haystack
-            elif library_id is not None:
-                if not any(i in library_id for i in haystack):
-                    raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
-
-            return library_id
-
-        @classmethod
         def spot_diameter(cls, adata: AnnData, spatial_key: str, library_id: Optional[str] = None) -> float:
             try:
                 return float(adata.uns[spatial_key][library_id]["scalefactors"]["spot_diameter_fullres"])
@@ -143,6 +121,30 @@ class Key:
                 ) from None
 
         @classmethod
+        def library_id(
+            cls,
+            adata: AnnData,
+            spatial_key: str,
+            library_id: Optional[Sequence[str] | str] = None,
+            unique_id: bool = True,
+        ) -> Sequence[str] | str | None:
+
+            haystack = cls._check_haystack(adata, spatial_key, library_id, sub_key=None)
+            if len(haystack) == 0:
+                library_id = None
+            if library_id is None and unique_id:
+                if len(haystack) > 1:
+                    raise ValueError(
+                        f"Unable to determine which library id to use. "
+                        f"Please specify one from: `{sorted(haystack)}`."
+                    )
+                library_id = haystack[0]
+            elif library_id is None and not unique_id:
+                library_id = haystack
+
+            return library_id
+
+        @classmethod
         def image_id(
             cls,
             adata: AnnData,
@@ -150,16 +152,43 @@ class Key:
             image_key: str,
             library_id: Sequence[str] | str,
         ) -> Mapping[str, Sequence[str]]:
+            library_id = cls._check_haystack(adata, spatial_key, library_id, sub_key=image_key)
+            image_mapping = {i: list(adata.uns[spatial_key][i][image_key].keys()) for i in library_id}
+
+            return image_mapping
+
+        @classmethod
+        def scalefactors_id(
+            cls,
+            adata: AnnData,
+            spatial_key: str,
+            scalefactors_key: str,
+            library_id: Sequence[str] | str,
+        ) -> Mapping[str, Sequence[str]]:
+            library_id = cls._check_haystack(adata, spatial_key, library_id, sub_key=scalefactors_key)
+            scalefactors_mapping = {i: list(adata.uns[spatial_key][i][scalefactors_key].keys()) for i in library_id}
+
+            return scalefactors_mapping
+
+        @classmethod
+        def _check_haystack(
+            cls,
+            adata: AnnData,
+            spatial_key: str,
+            library_id: Optional[Sequence[str] | str] = None,
+            sub_key: Optional[str] = None,
+        ) -> Sequence[str]:
             if spatial_key not in adata.uns:
                 raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.uns`.")
             haystack = list(adata.uns[spatial_key].keys())
-            if not all(image_key in i for i in [adata.uns["spatial"][i].keys() for i in library_id]):
-                raise KeyError(f"Image key `{image_key}` not found in `adata.uns[{spatial_key}]['library_id']`.")
-            if not any(i in library_id for i in haystack):
-                raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
-            img_key = {i: list(adata.uns[spatial_key][i][image_key].keys()) for i in library_id}
+            if library_id is not None:
+                if not any(i in library_id for i in haystack):
+                    raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
+                if sub_key is not None:
+                    if not all(sub_key in i for i in [adata.uns["spatial"][i].keys() for i in library_id]):
+                        raise KeyError(f"`{sub_key}` not found in `adata.uns[{spatial_key}]['library_id'].keys()`.")
 
-            return img_key
+            return haystack
 
     class obsp:
         @classmethod
