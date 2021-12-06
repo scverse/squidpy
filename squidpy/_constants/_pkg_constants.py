@@ -150,9 +150,11 @@ class Key:
             adata: AnnData,
             spatial_key: str,
             image_key: str,
-            library_id: Sequence[str] | str,
+            library_id: Optional[Sequence[str] | str] = None,
         ) -> Mapping[str, Sequence[str]]:
-            library_id = cls._check_haystack(adata, spatial_key, library_id, sub_key=image_key)
+            haystack = cls._check_haystack(adata, spatial_key, library_id, sub_key=image_key)
+            if library_id is None:
+                library_id = haystack
             image_mapping = {i: list(adata.uns[spatial_key][i][image_key].keys()) for i in library_id}
 
             return image_mapping
@@ -163,9 +165,11 @@ class Key:
             adata: AnnData,
             spatial_key: str,
             scalefactors_key: str,
-            library_id: Sequence[str] | str,
+            library_id: Optional[Sequence[str] | str] = None,
         ) -> Mapping[str, Sequence[str]]:
-            library_id = cls._check_haystack(adata, spatial_key, library_id, sub_key=scalefactors_key)
+            haystack = cls._check_haystack(adata, spatial_key, library_id, sub_key=scalefactors_key)
+            if library_id is None:
+                library_id = haystack
             scalefactors_mapping = {i: list(adata.uns[spatial_key][i][scalefactors_key].keys()) for i in library_id}
 
             return scalefactors_mapping
