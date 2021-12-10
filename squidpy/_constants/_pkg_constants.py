@@ -129,7 +129,7 @@ class Key:
             return_all: bool = False,
         ) -> Sequence[str] | str | None:
 
-            library_id = cls._check_haystack(adata, spatial_key, library_id, sub_key=None)
+            library_id = cls._haystack(adata, spatial_key, library_id, sub_key=None)
             if library_id is not None and not return_all:
                 if len(library_id) > 1:
                     raise ValueError(
@@ -143,33 +143,20 @@ class Key:
                 return None
 
         @classmethod
-        def image_id(
+        def library_mapping(
             cls,
             adata: AnnData,
             spatial_key: str,
-            image_key: str,
+            sub_key: str,
             library_id: Optional[Sequence[str] | str] = None,
         ) -> Mapping[str, Sequence[str]]:
-            library_id = cls._check_haystack(adata, spatial_key, library_id, sub_key=image_key)
-            image_mapping = {i: list(adata.uns[spatial_key][i][image_key].keys()) for i in library_id}
+            library_id = cls._haystack(adata, spatial_key, library_id, sub_key)
+            mapping = {i: list(adata.uns[spatial_key][i][sub_key].keys()) for i in library_id}
 
-            return image_mapping
-
-        @classmethod
-        def scalefactor_id(
-            cls,
-            adata: AnnData,
-            spatial_key: str,
-            scalefactor_key: str,
-            library_id: Optional[Sequence[str] | str] = None,
-        ) -> Mapping[str, Sequence[str]]:
-            library_id = cls._check_haystack(adata, spatial_key, library_id, sub_key=scalefactor_key)
-            scalefactor_mapping = {i: list(adata.uns[spatial_key][i][scalefactor_key].keys()) for i in library_id}
-
-            return scalefactor_mapping
+            return mapping
 
         @classmethod
-        def _check_haystack(
+        def _haystack(
             cls,
             adata: AnnData,
             spatial_key: str,
