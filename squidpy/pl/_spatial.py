@@ -80,7 +80,5 @@ def _get_spatial_attrs(
 
 
 def _get_unique_map(dic: Mapping[str, Sequence[str]]) -> Sequence[str]:
+    """Get intersection of dict values."""
     return sorted(set.intersection(*map(set, dic.values())))
-
-
-# type: ignore
