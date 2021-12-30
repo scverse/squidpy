@@ -278,6 +278,7 @@ class PermutationTestABC(ABC):
         self.interactions[TARGET] = self.interactions[TARGET].str.upper()
 
         logg.debug("DEBUG: Removing duplicate interactions")
+        self.interactions.dropna(subset=(SOURCE, TARGET), inplace=True, how="any")
         self.interactions.drop_duplicates(subset=(SOURCE, TARGET), inplace=True, keep="first")
 
         logg.debug("DEBUG: Removing duplicate genes in the data")
