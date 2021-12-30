@@ -1,7 +1,7 @@
-"""Functions for building gr from spatial coordinates."""
+"""Functions for building graphs from spatial coordinates."""
 from __future__ import annotations
 
-from typing import Iterable, Union  # noqa: F401
+from typing import Union, Iterable  # noqa: F401
 from itertools import chain
 import warnings
 
