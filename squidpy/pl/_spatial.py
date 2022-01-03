@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Tuple, Literal, Mapping, Optional, Sequence
+from typing import Any, Tuple, Union, Literal, Mapping, Callable, Optional, Sequence
 
 from anndata import AnnData
 from scanpy.plotting._tools.scatterplots import _panel_grid
@@ -9,11 +9,14 @@ import numpy as np
 
 from matplotlib import pyplot as pl, rcParams
 from matplotlib.axes import Axes
+from matplotlib.colors import Normalize
 
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.pl._utils import _sanitize_anndata, _assert_value_in_obs
 from squidpy._constants._pkg_constants import Key
+
+VBound = Union[str, float, Callable[[Sequence[float]], float]]
 
 
 def spatial(
@@ -33,6 +36,10 @@ def spatial(
     wspace: Optional[float | None] = None,
     hspace: float = 0.25,
     ncols: int = 4,
+    vmin: Union[VBound, Sequence[VBound], None] = None,
+    vmax: Union[VBound, Sequence[VBound], None] = None,
+    vcenter: Union[VBound, Sequence[VBound], None] = None,
+    norm: Union[Normalize, Sequence[Normalize], None] = None,
     ax: Optional[Axes | None] = None,
     legend_kwargs: Optional[Mapping[str, Sequence[str]] | None] = None,
     label_kwargs: Optional[Mapping[str, Sequence[str]] | None] = None,
@@ -99,6 +106,8 @@ def spatial(
             fig = pl.figure()
             ax = fig.add_subplot(111, **args_3d)
 
+    vmin, vmax, vcenter, norm = _get_seq_vminmax(vmin, vmax, vcenter, norm)
+
     return fig, ax, grid, coords
 
 
@@ -155,11 +164,6 @@ def _get_spatial_attrs(
     return library_id, scale_factor, img
 
 
-def _get_unique_map(dic: Mapping[str, Any]) -> Any:
-    """Get intersection of dict values."""
-    return sorted(set.intersection(*map(set, dic.values())))
-
-
 def _get_coords(
     adata: AnnData,
     library_id: Sequence[str],
@@ -184,3 +188,23 @@ def _get_coords(
         raise ValueError("Len of `data_points` and `scale_factor` does not match.")
 
     return data_points
+
+
+def _get_unique_map(dic: Mapping[str, Any]) -> Any:
+    """Get intersection of dict values."""
+    return sorted(set.intersection(*map(set, dic.values())))
+
+
+def _get_seq_vminmax(
+    vmin: Any, vmax: Any, vcenter: Any, norm: Any
+) -> Tuple[Sequence[Any], Sequence[Any], Sequence[Any], Sequence[Any]]:
+    if isinstance(vmax, str) or not isinstance(vmax, Sequence):
+        vmax = [vmax]
+    if isinstance(vmin, str) or not isinstance(vmin, Sequence):
+        vmin = [vmin]
+    if isinstance(vcenter, str) or not isinstance(vcenter, Sequence):
+        vcenter = [vcenter]
+    if isinstance(norm, Normalize) or not isinstance(norm, Sequence):
+        norm = [norm]
+
+    return vmin, vmax, vcenter, norm
