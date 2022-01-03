@@ -9,7 +9,6 @@ import numpy as np
 from squidpy._utils import NDArrayA
 from squidpy._constants._pkg_constants import Key
 
-# @d.dedent
 # def spatial(
 #     adata: AnnData,
 #     spatial_key: str = Key.obsm.spatial,
@@ -19,6 +18,10 @@ from squidpy._constants._pkg_constants import Key
 #     legend_kwargs: Mapping = None,
 #     label_kwargs: Mapping = None,
 # ):
+#     """Spatial plotting for squidpy."""
+
+#     _sanitize_anndata(adata)
+
 #     return
 
 
@@ -34,7 +37,7 @@ def _get_spatial_attrs(
     """Return lists of image attributes saved in adata for plotting."""
     library_id = Key.uns.library_id(adata, spatial_key, library_id, return_all=True)
     if library_id is None:
-        raise ValueError("Should have prevented this upstream")
+        raise ValueError(f"Could not fetch `library_id`, check that `spatial_key={spatial_key}` is correct.")
 
     image_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.image_key, library_id)
     scalefactor_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.scalefactor_key, library_id)
