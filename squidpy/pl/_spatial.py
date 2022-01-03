@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Tuple, Mapping, Optional, Sequence
+from typing import Any, Tuple, Literal, Mapping, Optional, Sequence
 
 from anndata import AnnData
+from scanpy.plotting._tools.scatterplots import _panel_grid
 
 import numpy as np
 
-from matplotlib import rcParams
+from matplotlib import pyplot as pl, rcParams
+from matplotlib.axes import Axes
 
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_spatial_basis
@@ -27,13 +29,20 @@ def spatial(
     groups: Optional[Sequence[str] | str | None] = None,
     use_raw: Optional[bool | None] = None,
     layer: Optional[str | None] = None,
+    projection: Literal["2d", "3d"] = "2d",
     wspace: Optional[float | None] = None,
+    hspace: float = 0.25,
+    ncols: int = 4,
+    ax: Optional[Axes | None] = None,
     legend_kwargs: Optional[Mapping[str, Sequence[str]] | None] = None,
     label_kwargs: Optional[Mapping[str, Sequence[str]] | None] = None,
-) -> Sequence[NDArrayA]:
+) -> Any:
     """Spatial plotting for squidpy."""
     _sanitize_anndata(adata)
     _assert_spatial_basis(adata, spatial_key)
+
+    # get projection
+    args_3d = {"projection": "3d"} if projection == "3d" else {}
 
     # make colors and groups as list
     if groups:
@@ -77,7 +86,20 @@ def spatial(
         )
     coords = _get_coords(adata, library_id, spatial_key, batch_key, scale_factor)
 
-    return coords
+    if not isinstance(color, str) and isinstance(color, Sequence) and len(color) > 1:
+        if ax is not None:
+            raise ValueError("Cannot specify `ax` when plotting multiple panels ")
+
+        # each plot needs to be its own panel
+        num_panels = len(color) * len(library_id)
+        fig, grid = _panel_grid(hspace, wspace, ncols, num_panels)
+    else:
+        grid = None
+        if ax is None:
+            fig = pl.figure()
+            ax = fig.add_subplot(111, **args_3d)
+
+    return fig, ax, grid, coords
 
 
 def _get_spatial_attrs(
