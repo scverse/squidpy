@@ -6,23 +6,78 @@ from anndata import AnnData
 
 import numpy as np
 
+from matplotlib import rcParams
+
 from squidpy._utils import NDArrayA
+from squidpy.gr._utils import _assert_spatial_basis
+from squidpy.pl._utils import _sanitize_anndata, _assert_value_in_obs
 from squidpy._constants._pkg_constants import Key
 
-# def spatial(
-#     adata: AnnData,
-#     spatial_key: str = Key.obsm.spatial,
-#     color: Union[Sequence, str] = None,
-#     batch: str = None,
-#     cmap: str = "viridis",
-#     legend_kwargs: Mapping = None,
-#     label_kwargs: Mapping = None,
-# ):
-#     """Spatial plotting for squidpy."""
 
-#     _sanitize_anndata(adata)
+def spatial(
+    adata: AnnData,
+    spatial_key: str = Key.obsm.spatial,
+    library_id: Optional[Sequence[str] | str | None] = None,
+    batch_key: Optional[str | None] = None,
+    img: Optional[Sequence[NDArrayA] | NDArrayA | None] = None,
+    img_key: str | None = None,
+    scale_factor: Optional[Sequence[float] | float | None] = None,
+    bw: bool = False,
+    color: Optional[Sequence[str] | str | None] = None,
+    groups: Optional[Sequence[str] | str | None] = None,
+    use_raw: Optional[bool | None] = None,
+    layer: Optional[str | None] = None,
+    wspace: Optional[float | None] = None,
+    legend_kwargs: Optional[Mapping[str, Sequence[str]] | None] = None,
+    label_kwargs: Optional[Mapping[str, Sequence[str]] | None] = None,
+) -> Sequence[NDArrayA]:
+    """Spatial plotting for squidpy."""
+    _sanitize_anndata(adata)
+    _assert_spatial_basis(adata, spatial_key)
 
-#     return
+    # make colors and groups as list
+    if groups:
+        if isinstance(groups, str):
+            groups = [groups]
+    if isinstance(color, str):
+        color = [color]
+
+    # check raw
+    if use_raw is None:
+        use_raw = layer is None and adata.raw is not None
+    if use_raw and layer is not None:
+        raise ValueError(
+            "Cannot use both a layer and the raw representation. Was passed:" f"use_raw={use_raw}, layer={layer}."
+        )
+    if adata.raw is None and use_raw:
+        raise ValueError(f"`use_raw={use_raw}` but AnnData object does not have raw.")
+
+    # set wspace
+    if wspace is None:
+        wspace = 0.75 / rcParams["figure.figsize"][0] + 0.02
+
+    # set title
+    # set cmap
+
+    # get spatial attributes
+    if isinstance(library_id, str):
+        library_id = [library_id]
+    if isinstance(scale_factor, float):
+        scale_factor = [scale_factor]
+    if isinstance(img, np.ndarray):
+        img = [img]
+
+    library_id, scale_factor, img = _get_spatial_attrs(adata, spatial_key, library_id, img, img_key, scale_factor, bw)
+
+    if batch_key is not None:
+        _assert_value_in_obs(adata, key=batch_key, val=library_id)
+    if (len(library_id) > 1) and batch_key is None:
+        raise ValueError(
+            f"Multiple `library_id={library_id}` found but no `batch_key` specified. Please specify `batch_key`."
+        )
+    coords = _get_coords(adata, library_id, spatial_key, batch_key, scale_factor)
+
+    return coords
 
 
 def _get_spatial_attrs(
@@ -81,3 +136,29 @@ def _get_spatial_attrs(
 def _get_unique_map(dic: Mapping[str, Any]) -> Any:
     """Get intersection of dict values."""
     return sorted(set.intersection(*map(set, dic.values())))
+
+
+def _get_coords(
+    adata: AnnData,
+    library_id: Sequence[str],
+    spatial_key: str = Key.obsm.spatial,
+    batch_key: Optional[str | None] = None,
+    scale_factor: Optional[Sequence[float] | None] = None,
+) -> Sequence[NDArrayA]:
+
+    coords = adata.obsm[spatial_key]
+
+    if (batch_key is not None) and (len(library_id) > 1):
+        data_points = []
+        for lib in library_id:
+            data_points.append(coords[adata.obs[batch_key] == lib, :])
+    else:
+        data_points = [coords]
+
+    if scale_factor is not None and (len(data_points) == len(scale_factor)):
+        for i, sf in enumerate(scale_factor):
+            data_points[i] = np.multiply(data_points[i], sf)
+    else:
+        raise ValueError("Len of `data_points` and `scale_factor` does not match.")
+
+    return data_points
