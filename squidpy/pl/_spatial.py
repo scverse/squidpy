@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from cycler import Cycler
 from typing import Any, Tuple, Union, Literal, Mapping, Callable, Optional, Sequence
+from functools import partial
+import itertools
 
 from anndata import AnnData
-from scanpy.plotting._tools.scatterplots import _panel_grid
+from scanpy.plotting._tools.scatterplots import _panel_grid, _get_palette
 
+from pandas.core.dtypes.common import is_categorical_dtype
 import numpy as np
+import pandas as pd
 
-from matplotlib import pyplot as pl, rcParams
+from matplotlib import colors, pyplot as pl, rcParams
 from matplotlib.axes import Axes
 from matplotlib.colors import Normalize
 
@@ -32,7 +37,11 @@ def spatial(
     groups: Optional[Sequence[str] | str | None] = None,
     use_raw: Optional[bool | None] = None,
     layer: Optional[str | None] = None,
+    alt_var: Optional[str | None] = None,
     projection: Literal["2d", "3d"] = "2d",
+    size: Optional[float | None] = None,
+    palette: Optional[Sequence[str] | str | Cycler | None] = None,
+    na_color: Optional[str | Tuple[float, ...] | None] = None,
     wspace: Optional[float | None] = None,
     hspace: float = 0.25,
     ncols: int = 4,
@@ -57,6 +66,8 @@ def spatial(
             groups = [groups]
     if isinstance(color, str):
         color = [color]
+    elif color is None:
+        color = []
 
     # check raw
     if use_raw is None:
@@ -93,6 +104,7 @@ def spatial(
         )
     coords = _get_coords(adata, library_id, spatial_key, batch_key, scale_factor)
 
+    # initialize axis
     if not isinstance(color, str) and isinstance(color, Sequence) and len(color) > 1:
         if ax is not None:
             raise ValueError("Cannot specify `ax` when plotting multiple panels ")
@@ -108,7 +120,24 @@ def spatial(
 
     vmin, vmax, vcenter, norm = _get_seq_vminmax(vmin, vmax, vcenter, norm)
 
-    return fig, ax, grid, coords
+    # set size
+    if size is None:
+        size = 1
+
+    # make plots
+    for _count, (value_to_plot, _lib) in enumerate(itertools.product(color, library_id)):
+        color_source_vector = _get_source_vec(
+            adata, value_to_plot, layer=layer, use_raw=use_raw, alt_var=alt_var, groups=groups
+        )
+        color_vector, categorical = _get_color_vec(
+            adata,
+            value_to_plot,
+            color_source_vector,
+            palette=palette,
+            na_color=na_color,
+        )
+
+    return fig, ax, grid, coords, color_vector, categorical
 
 
 def _get_spatial_attrs(
@@ -208,3 +237,51 @@ def _get_seq_vminmax(
         norm = [norm]
 
     return vmin, vmax, vcenter, norm
+
+
+def _get_source_vec(
+    adata: AnnData,
+    value_to_plot: str | None,
+    use_raw: Optional[bool | None] = None,
+    alt_var: Optional[str | None] = None,
+    layer: Optional[str | None] = None,
+    groups: Optional[Sequence[str] | str | None] = None,
+) -> NDArrayA | pd.Series:
+
+    if value_to_plot is None:
+        return np.broadcast_to(np.nan, adata.n_obs)
+    if alt_var is not None and value_to_plot not in adata.obs.columns and value_to_plot not in adata.var_names:
+        value_to_plot = adata.var.index[adata.var[alt_var] == value_to_plot][0]
+    if use_raw and value_to_plot not in adata.obs.columns:
+        values = adata.raw.obs_vector(value_to_plot)
+    else:
+        values = adata.obs_vector(value_to_plot, layer=layer)
+    if groups and is_categorical_dtype(values):
+        values = values.replace(values.categories.difference(groups), np.nan)
+    return values
+
+
+def _get_color_vec(
+    adata: AnnData,
+    value_to_plot: str | None,
+    values: NDArrayA | pd.Series,
+    palette: Optional[Sequence[str] | str | Cycler | None] = None,
+    na_color: Optional[str | Tuple[float, ...] | None] = None,
+) -> Tuple[NDArrayA, bool]:
+    to_hex = partial(colors.to_hex, keep_alpha=True)
+    if value_to_plot is None:
+        return np.broadcast_to(to_hex(na_color), adata.n_obs), False
+    if not is_categorical_dtype(values):
+        return values, False
+    elif is_categorical_dtype(values):
+        # use scanpy _get_palette to set palette if not present
+        color_map = {k: to_hex(v) for k, v in _get_palette(adata, value_to_plot, palette)}
+        color_vector = values.map(color_map)  # type: ignore
+
+        # Set color to 'missing color' for all missing values
+        if color_vector.isna().any():
+            color_vector = color_vector.add_categories([to_hex(na_color)])
+            color_vector = color_vector.fillna(to_hex(na_color))
+        return color_vector, True
+    else:
+        raise ValueError(f"Wrong type for value passed `{value_to_plot}`.")
