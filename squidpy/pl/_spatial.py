@@ -5,7 +5,9 @@ from typing import Any, Tuple, Union, Literal, Mapping, Callable, Optional, Sequ
 from functools import partial
 import itertools
 
+from scanpy import logging as logg
 from anndata import AnnData
+from scanpy._settings import settings as sc_settings
 from scanpy.plotting._tools.scatterplots import _panel_grid, _get_palette
 
 from pandas.core.dtypes.common import is_categorical_dtype
@@ -42,6 +44,8 @@ def spatial(
     size: Optional[float | None] = None,
     palette: Optional[Sequence[str] | str | Cycler | None] = None,
     na_color: Optional[str | Tuple[float, ...] | None] = None,
+    frameon: Optional[bool] = None,
+    title: Union[str, Sequence[str], None] = None,
     wspace: Optional[float | None] = None,
     hspace: float = 0.25,
     ncols: int = 4,
@@ -117,6 +121,8 @@ def spatial(
         if ax is None:
             fig = pl.figure()
             ax = fig.add_subplot(111, **args_3d)
+    axs = []
+    library_idx = range(len(library_id))
 
     vmin, vmax, vcenter, norm = _get_seq_vminmax(vmin, vmax, vcenter, norm)
 
@@ -125,7 +131,7 @@ def spatial(
         size = 1
 
     # make plots
-    for _count, (value_to_plot, _lib) in enumerate(itertools.product(color, library_id)):
+    for count, (value_to_plot, lib_idx) in enumerate(itertools.product(color, library_idx)):
         color_source_vector = _get_source_vec(
             adata, value_to_plot, layer=layer, use_raw=use_raw, alt_var=alt_var, groups=groups
         )
@@ -137,7 +143,35 @@ def spatial(
             na_color=na_color,
         )
 
-    return fig, ax, grid, coords, color_vector, categorical
+        # order points [skip]
+        _coords = coords[lib_idx]  # [order, :]
+
+        # set frame
+        if grid:
+            ax = pl.subplot(grid[count], **args_3d)
+            axs.append(ax)
+        if not (sc_settings._frameon if frameon is None else frameon):
+            ax.axis("off")
+
+        # set title
+        if title is None:
+            if value_to_plot is not None:
+                ax.set_title(value_to_plot)
+            else:
+                ax.set_title("")
+        elif isinstance(title, list):
+            try:
+                ax.set_title(title[count])
+            except IndexError:
+                logg.warning(
+                    "The title list is shorter than the number of panels. "
+                    "Using 'color' value instead for some plots."
+                )
+                ax.set_title(value_to_plot)
+        else:
+            raise ValueError(f"Title: {title} is of wrong type: {type(title)}")
+
+    return fig, ax, grid, coords, color_vector, categorical, _coords
 
 
 def _get_spatial_attrs(
