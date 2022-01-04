@@ -8,29 +8,30 @@ from typing import (
     Union,
     Literal,
     Mapping,
-    Callable,
     Optional,
     Sequence,
     MutableMapping,
 )
+from pathlib import Path
 from functools import partial
 import itertools
 
 from scanpy import logging as logg
 from anndata import AnnData
 from scanpy._settings import settings as sc_settings
-from scanpy.plotting._utils import check_colornorm
+from scanpy.plotting._utils import VBound, _FontSize, _FontWeight, check_colornorm
 from scanpy.plotting._tools.scatterplots import (
     _panel_grid,
     _get_palette,
     _get_vboundnorm,
+    _add_categorical_legend,
 )
 
 from pandas.core.dtypes.common import is_categorical_dtype
 import numpy as np
 import pandas as pd
 
-from matplotlib import colors, pyplot as pl, rcParams
+from matplotlib import colors, pyplot as pl, rcParams, patheffects
 from matplotlib.axes import Axes
 from matplotlib.colors import Normalize
 from matplotlib.patches import Circle, Polygon
@@ -38,10 +39,8 @@ from matplotlib.collections import PatchCollection
 
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_spatial_basis
-from squidpy.pl._utils import _sanitize_anndata, _assert_value_in_obs
+from squidpy.pl._utils import save_fig, _sanitize_anndata, _assert_value_in_obs
 from squidpy._constants._pkg_constants import Key
-
-VBound = Union[str, float, Callable[[Sequence[float]], float]]
 
 
 def spatial(
@@ -76,8 +75,12 @@ def spatial(
     outline_width: Tuple[float, float] = (0.3, 0.05),
     outline_color: Tuple[str, str] = ("black", "white"),
     ax: Optional[Axes | None] = None,
-    legend_kwargs: Optional[MutableMapping[str, Any] | None] = None,
-    label_kwargs: Optional[MutableMapping[str, Any] | None] = None,
+    save: str | Path | None = None,
+    legend_fontsize: Union[int, float, _FontSize, None] = None,
+    legend_fontweight: Union[int, _FontWeight] = "bold",
+    legend_loc: str = "right margin",
+    legend_fontoutline: Optional[int] = None,
+    na_in_legend: bool = True,
     scatter_kwargs: Optional[MutableMapping[str, Any] | None] = None,
 ) -> Any:
     """Spatial plotting for squidpy."""
@@ -291,7 +294,41 @@ def spatial(
         if projection == "3d":
             ax.set_zticks([])
 
-    return fig, ax, grid, coords, color_vector, categorical, cax
+        ax.autoscale_view()
+
+        # plot edges and arrows if needed
+
+        if value_to_plot is None:
+            # if only dots were plotted without an associated value
+            # there is not need to plot a legend or a colorbar
+            continue
+
+        if legend_fontoutline is not None:
+            path_effect = [patheffects.withStroke(linewidth=legend_fontoutline, foreground="w")]
+        else:
+            path_effect = []
+
+        # Adding legends
+        if categorical:
+            _add_categorical_legend(
+                ax,
+                color_source_vector,
+                palette=_get_palette(adata, value_to_plot),
+                scatter_array=_coords,
+                legend_loc=legend_loc,
+                legend_fontweight=legend_fontweight,
+                legend_fontsize=legend_fontsize,
+                legend_fontoutline=path_effect,
+                na_color=na_color,
+                na_in_legend=na_in_legend,
+                multi_panel=bool(grid),
+            )
+        else:
+            # TODO: na_in_legend should have some effect here
+            pl.colorbar(cax, ax=ax, pad=0.01, fraction=0.08, aspect=30)
+
+    if save is not None:
+        save_fig(fig, path=save)
 
 
 def _get_spatial_attrs(
