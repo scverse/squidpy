@@ -1,14 +1,30 @@
 from __future__ import annotations
 
+from math import cos, sin
 from cycler import Cycler
-from typing import Any, Tuple, Union, Literal, Mapping, Callable, Optional, Sequence
+from typing import (
+    Any,
+    Tuple,
+    Union,
+    Literal,
+    Mapping,
+    Callable,
+    Optional,
+    Sequence,
+    MutableMapping,
+)
 from functools import partial
 import itertools
 
 from scanpy import logging as logg
 from anndata import AnnData
 from scanpy._settings import settings as sc_settings
-from scanpy.plotting._tools.scatterplots import _panel_grid, _get_palette
+from scanpy.plotting._utils import check_colornorm
+from scanpy.plotting._tools.scatterplots import (
+    _panel_grid,
+    _get_palette,
+    _get_vboundnorm,
+)
 
 from pandas.core.dtypes.common import is_categorical_dtype
 import numpy as np
@@ -17,6 +33,8 @@ import pandas as pd
 from matplotlib import colors, pyplot as pl, rcParams
 from matplotlib.axes import Axes
 from matplotlib.colors import Normalize
+from matplotlib.patches import Circle, Polygon
+from matplotlib.collections import PatchCollection
 
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_spatial_basis
@@ -37,6 +55,7 @@ def spatial(
     bw: bool = False,
     color: Optional[Sequence[str] | str | None] = None,
     groups: Optional[Sequence[str] | str | None] = None,
+    shape: Literal["circle", "square", "hex"] | None = None,
     use_raw: Optional[bool | None] = None,
     layer: Optional[str | None] = None,
     alt_var: Optional[str | None] = None,
@@ -53,9 +72,13 @@ def spatial(
     vmax: Union[VBound, Sequence[VBound], None] = None,
     vcenter: Union[VBound, Sequence[VBound], None] = None,
     norm: Union[Normalize, Sequence[Normalize], None] = None,
+    add_outline: Optional[bool] = False,
+    outline_width: Tuple[float, float] = (0.3, 0.05),
+    outline_color: Tuple[str, str] = ("black", "white"),
     ax: Optional[Axes | None] = None,
-    legend_kwargs: Optional[Mapping[str, Sequence[str]] | None] = None,
-    label_kwargs: Optional[Mapping[str, Sequence[str]] | None] = None,
+    legend_kwargs: Optional[MutableMapping[str, Any] | None] = None,
+    label_kwargs: Optional[MutableMapping[str, Any] | None] = None,
+    scatter_kwargs: Optional[MutableMapping[str, Any] | None] = None,
 ) -> Any:
     """Spatial plotting for squidpy."""
     _sanitize_anndata(adata)
@@ -63,6 +86,16 @@ def spatial(
 
     # get projection
     args_3d = {"projection": "3d"} if projection == "3d" else {}
+
+    # set scatter_kwargs
+    if scatter_kwargs is None:
+        scatter_kwargs = {}
+
+    # set shape
+    _avail_shapes = ["circle", "square", "hexagon"]
+    if shape is not None:
+        if shape not in _avail_shapes:
+            raise ValueError(f"Shape: `{shape}` not found. Available shapes are: `{_avail_shapes}`")
 
     # make colors and groups as list
     if groups:
@@ -171,7 +204,94 @@ def spatial(
         else:
             raise ValueError(f"Title: {title} is of wrong type: {type(title)}")
 
-    return fig, ax, grid, coords, color_vector, categorical, _coords
+        if not categorical:
+            vmin_float, vmax_float, vcenter_float, norm_obj = _get_vboundnorm(
+                vmin, vmax, vcenter, norm, count, color_vector
+            )
+            normalize = check_colornorm(
+                vmin_float,
+                vmax_float,
+                vcenter_float,
+                norm_obj,
+            )
+        else:
+            normalize = None
+
+        # make scatter
+        if projection == "3d":
+            cax = ax.scatter(
+                _coords[:, 0],
+                _coords[:, 1],
+                _coords[:, 2],
+                marker=".",
+                c=color_vector,
+                rasterized=sc_settings._vector_friendly,
+                norm=normalize,
+                **scatter_kwargs,
+            )
+        else:
+
+            scatter = (
+                partial(ax.scatter, s=size, plotnonfinite=True)
+                if shape is None
+                else partial(shaped_scatter, s=size, ax=ax, shape=shape)
+            )
+
+            if add_outline:
+                bg_width, gap_width = outline_width
+                point = np.sqrt(size)
+                gap_size = (point + (point * gap_width) * 2) ** 2
+                bg_size = (np.sqrt(gap_size) + (point * bg_width) * 2) ** 2
+                # the default black and white colors can be changes using
+                # the contour_config parameter
+                bg_color, gap_color = outline_color
+
+                scatter_kwargs["edgecolor"] = "none"  # remove edge from kwargs if present
+                if "alpha" in scatter_kwargs.keys():
+                    alpha = (
+                        scatter_kwargs.pop("alpha") if "alpha" in scatter_kwargs else None
+                    )  # remove alpha for outline
+
+                ax.scatter(
+                    _coords[:, 0],
+                    _coords[:, 1],
+                    s=bg_size,
+                    marker=".",
+                    c=bg_color,
+                    rasterized=sc_settings._vector_friendly,
+                    norm=normalize,
+                    **scatter_kwargs,
+                )
+                ax.scatter(
+                    _coords[:, 0],
+                    _coords[:, 1],
+                    s=gap_size,
+                    marker=".",
+                    c=gap_color,
+                    rasterized=sc_settings._vector_friendly,
+                    norm=normalize,
+                    **scatter_kwargs,
+                )
+
+                # if user did not set alpha, set alpha to 0.7
+                scatter_kwargs["alpha"] = 0.7 if alpha is None else alpha
+
+            cax = scatter(
+                _coords[:, 0],
+                _coords[:, 1],
+                marker=".",
+                c=color_vector,
+                rasterized=sc_settings._vector_friendly,
+                norm=normalize,
+                **scatter_kwargs,
+            )
+
+        ax.set_yticks([])
+        ax.set_xticks([])
+        if projection == "3d":
+            ax.set_zticks([])
+
+    return fig, ax, grid, coords, color_vector, categorical, cax
 
 
 def _get_spatial_attrs(
@@ -319,3 +439,39 @@ def _get_color_vec(
         return color_vector, True
     else:
         raise ValueError(f"Wrong type for value passed `{value_to_plot}`.")
+
+
+def shaped_scatter(
+    x: NDArrayA,
+    y: NDArrayA,
+    s: NDArrayA,
+    shape: Literal["circle", "square", "hex"],
+    ax: Axes,
+    c: NDArrayA,
+) -> Any:
+    """
+    Get shapes for scatterplot.
+
+    Adapted from here: https://gist.github.com/syrte/592a062c562cd2a98a83 .
+    This code is under [The BSD 3-Clause License](http://opensource.org/licenses/BSD-3-Clause)
+    """
+    zipped = np.broadcast(x, y, s)
+    if shape == "circle":
+        patches = [Circle((x_, y_), s_) for x_, y_, s_ in zipped]
+    else:
+        func = np.vectorize(_make_poly)
+        n = 4 if shape == "square" else 6
+        r: float = s / (2 * sin(np.pi / n))
+        patches = [Polygon(np.stack(func(x_, y_, r, n, range(n)), 1), True) for x_, y_, _ in zipped]
+    collection = PatchCollection(patches)
+    collection.set_facecolor(c)
+
+    ax.add_collection(collection)
+
+    return collection
+
+
+def _make_poly(x: float, y: float, r: float, n: int, i: int) -> Tuple[float, float]:
+    x_i = x + r * sin((np.pi / n) * (1 + 2 * i))
+    y_i = y + r * cos((np.pi / n) * (1 + 2 * i))
+    return x_i, y_i
