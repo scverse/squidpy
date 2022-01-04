@@ -442,7 +442,7 @@ class ImageContainer(FeatureMixin):
         The image container.
         """
         library_id = Key.uns.library_id(adata, spatial_key, library_id)
-        if isinstance(library_id, Sequence):
+        if not isinstance(library_id, str):
             raise NotImplementedError(
                 f"It seems there are multiple `library_id` in `adata.uns['{Key.uns.spatial}']`.\n \
                 Loading multiple images is not implemented (yet), please specify a `library_id`."
