@@ -93,21 +93,16 @@ def spatial(
         if shape not in get_args(_AvailShapes):
             raise ValueError(f"Shape: `{shape}` not found. Available shapes are: `{get_args(_AvailShapes)}`")
     else:  # handle library_id logic for non-image data
-        if batch_key is not None:
-            if library_id is None:
-                try:
-                    library_id = adata.obs[batch_key].cat.categories.tolist()
-                except IndexError:
-                    raise IndexError(f"`batch_key: {batch_key}` not in `adata.obs`.")
-            else:
-                _assert_value_in_obs(adata, key=batch_key, val=library_id)
-        else:
-            if library_id is None:
-                logg.warning(
-                    "Please specify a valid `library_id` or \
-                    set it permanently in `adata.uns['spatial'][<library_id>]`"
-                )
-                library_id = [""]  # create dummy library_id
+        if library_id is None and batch_key is not None:  # try to assign library_id
+            try:
+                library_id = adata.obs[batch_key].cat.categories.tolist()
+            except IndexError:
+                raise IndexError(f"`batch_key: {batch_key}` not in `adata.obs`.")
+        elif library_id is None and batch_key is None:
+            logg.warning(
+                "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
+            )
+            library_id = [""]  # create dummy library_id
 
     # get spatial attributes
     library_id = _maybe_get_list(library_id, str)
@@ -125,11 +120,12 @@ def spatial(
 
     if batch_key is not None:
         _assert_value_in_obs(adata, key=batch_key, val=library_id)
-    if (len(library_id) > 1) and batch_key is None:
-        raise ValueError(
-            f"Multiple `library_id={library_id}` found but no `batch_key` specified. Please specify `batch_key`."
-        )
-    coords = _get_coords(adata, library_id, spatial_key, batch_key, scale_factor)
+    else:
+        if len(library_id) > 1:
+            raise ValueError(
+                f"Multiple `library_ids: {library_id}` found but no `batch_key` specified. Please specify `batch_key`."
+            )
+    coords = _get_coords(adata, spatial_key, library_id, scale_factor, batch_key)
 
     # initialize axis
     if not isinstance(color, str) and isinstance(color, Sequence) and len(color) > 1:
@@ -395,26 +391,19 @@ def _get_spatial_attrs(
 
 def _get_coords(
     adata: AnnData,
+    spatial_key: str,
     library_id: Sequence[str],
-    spatial_key: str = Key.obsm.spatial,
+    scale_factor: Sequence[float],
     batch_key: Optional[str | None] = None,
-    scale_factor: Optional[Sequence[float] | None] = None,
 ) -> Sequence[NDArrayA]:
 
     coords = adata.obsm[spatial_key]
-
-    if (batch_key is not None) and (len(library_id) > 1):
-        data_points = []
-        for lib in library_id:
-            data_points.append(coords[adata.obs[batch_key] == lib, :])
+    if batch_key is None:
+        data_points = [np.multiply(coords, sf) for sf in scale_factor]
     else:
-        data_points = [coords]
-
-    if scale_factor is not None and (len(data_points) == len(scale_factor)):
-        for i, sf in enumerate(scale_factor):
-            data_points[i] = np.multiply(data_points[i], sf)
-    else:
-        raise ValueError("Len of `data_points` and `scale_factor` does not match.")
+        data_points = [
+            np.multiply(coords[adata.obs[batch_key] == lib, :], sf) for lib, sf in zip(library_id, scale_factor)
+        ]
 
     return data_points
 
