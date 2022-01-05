@@ -2,16 +2,7 @@ from __future__ import annotations
 
 from math import cos, sin
 from cycler import Cycler
-from typing import (
-    Any,
-    Tuple,
-    Union,
-    Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    MutableMapping,
-)
+from typing import Any, Tuple, Union, Literal, Mapping, get_args, Optional, Sequence
 from pathlib import Path
 from functools import partial
 import itertools
@@ -42,6 +33,8 @@ from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.pl._utils import save_fig, _sanitize_anndata, _assert_value_in_obs
 from squidpy._constants._pkg_constants import Key
 
+_AvailShapes = Literal["circle", "square", "hex"]
+
 
 def spatial(
     adata: AnnData,
@@ -51,15 +44,16 @@ def spatial(
     img: Optional[Sequence[NDArrayA] | NDArrayA | None] = None,
     img_key: str | None = None,
     scale_factor: Optional[Sequence[float] | float | None] = None,
+    size: Optional[Sequence[float] | float | None] = None,
+    size_key: str = Key.uns.size_key,
     bw: bool = False,
     color: Optional[Sequence[str] | str | None] = None,
     groups: Optional[Sequence[str] | str | None] = None,
-    shape: Literal["circle", "square", "hex"] | None = None,
+    shape: _AvailShapes | None = None,
     use_raw: Optional[bool | None] = None,
     layer: Optional[str | None] = None,
     alt_var: Optional[str | None] = None,
     projection: Literal["2d", "3d"] = "2d",
-    size: Optional[float | None] = None,
     palette: Optional[Sequence[str] | str | Cycler | None] = None,
     na_color: Optional[str | Tuple[float, ...] | None] = None,
     frameon: Optional[bool] = None,
@@ -81,7 +75,7 @@ def spatial(
     legend_loc: str = "right margin",
     legend_fontoutline: Optional[int] = None,
     na_in_legend: bool = True,
-    scatter_kwargs: Optional[MutableMapping[str, Any] | None] = None,
+    **kwargs: Any,
 ) -> Any:
     """Spatial plotting for squidpy."""
     _sanitize_anndata(adata)
@@ -90,51 +84,44 @@ def spatial(
     # get projection
     args_3d = {"projection": "3d"} if projection == "3d" else {}
 
-    # set scatter_kwargs
-    if scatter_kwargs is None:
-        scatter_kwargs = {}
+    # make colors and groups as list
+    groups = _maybe_get_list(groups, str)
+    color = _maybe_get_list(color, str)
 
     # set shape
-    _avail_shapes = ["circle", "square", "hexagon"]
     if shape is not None:
-        if shape not in _avail_shapes:
-            raise ValueError(f"Shape: `{shape}` not found. Available shapes are: `{_avail_shapes}`")
-
-    # make colors and groups as list
-    if groups:
-        if isinstance(groups, str):
-            groups = [groups]
-    if isinstance(color, str):
-        color = [color]
-    elif color is None:
-        color = []
-
-    # check raw
-    if use_raw is None:
-        use_raw = layer is None and adata.raw is not None
-    if use_raw and layer is not None:
-        raise ValueError(
-            "Cannot use both a layer and the raw representation. Was passed:" f"use_raw={use_raw}, layer={layer}."
-        )
-    if adata.raw is None and use_raw:
-        raise ValueError(f"`use_raw={use_raw}` but AnnData object does not have raw.")
-
-    # set wspace
-    if wspace is None:
-        wspace = 0.75 / rcParams["figure.figsize"][0] + 0.02
-
-    # set title
-    # set cmap
+        if shape not in get_args(_AvailShapes):
+            raise ValueError(f"Shape: `{shape}` not found. Available shapes are: `{get_args(_AvailShapes)}`")
+    else:  # handle library_id logic for non-image data
+        if batch_key is not None:
+            if library_id is None:
+                try:
+                    library_id = adata.obs[batch_key].cat.categories.tolist()
+                except IndexError:
+                    raise IndexError(f"`batch_key: {batch_key}` not in `adata.obs`.")
+            else:
+                _assert_value_in_obs(adata, key=batch_key, val=library_id)
+        else:
+            if library_id is None:
+                logg.warning(
+                    "Please specify a valid `library_id` or \
+                    set it permanently in `adata.uns['spatial'][<library_id>]`"
+                )
+                library_id = [""]  # create dummy library_id
 
     # get spatial attributes
-    if isinstance(library_id, str):
-        library_id = [library_id]
-    if isinstance(scale_factor, float):
-        scale_factor = [scale_factor]
-    if isinstance(img, np.ndarray):
-        img = [img]
+    library_id = _maybe_get_list(library_id, str)
 
-    library_id, scale_factor, img = _get_spatial_attrs(adata, spatial_key, library_id, img, img_key, scale_factor, bw)
+    if shape is None:  # handle logic for non-image data
+        size = 120000 / adata.shape[0] if size is None else size
+        size = _maybe_get_list(size, float, library_id)
+
+        scale_factor = 1.0 if scale_factor is None else scale_factor
+        scale_factor = _maybe_get_list(scale_factor, float, library_id)
+    else:
+        library_id, scale_factor, size, img = _get_spatial_attrs(
+            adata, spatial_key, library_id, img, img_key, scale_factor, size, size_key, bw
+        )
 
     if batch_key is not None:
         _assert_value_in_obs(adata, key=batch_key, val=library_id)
@@ -162,9 +149,24 @@ def spatial(
 
     vmin, vmax, vcenter, norm = _get_seq_vminmax(vmin, vmax, vcenter, norm)
 
-    # set size
-    if size is None:
-        size = 1
+    # check raw
+    if use_raw is None:
+        use_raw = layer is None and adata.raw is not None
+    if use_raw and layer is not None:
+        raise ValueError(
+            "Cannot use both a layer and the raw representation. Was passed:" f"use_raw={use_raw}, layer={layer}."
+        )
+    if adata.raw is None and use_raw:
+        raise ValueError(f"`use_raw={use_raw}` but AnnData object does not have raw.")
+
+    # set wspace
+    if wspace is None:
+        wspace = 0.75 / rcParams["figure.figsize"][0] + 0.02
+
+    # TODO: set title
+    # TODO: set cmap
+
+    # TODO: set cmap_img
 
     # make plots
     for count, (value_to_plot, lib_idx) in enumerate(itertools.product(color, library_idx)):
@@ -230,7 +232,7 @@ def spatial(
                 c=color_vector,
                 rasterized=sc_settings._vector_friendly,
                 norm=normalize,
-                **scatter_kwargs,
+                **kwargs,
             )
         else:
 
@@ -249,11 +251,8 @@ def spatial(
                 # the contour_config parameter
                 bg_color, gap_color = outline_color
 
-                scatter_kwargs["edgecolor"] = "none"  # remove edge from kwargs if present
-                if "alpha" in scatter_kwargs.keys():
-                    alpha = (
-                        scatter_kwargs.pop("alpha") if "alpha" in scatter_kwargs else None
-                    )  # remove alpha for outline
+                kwargs["edgecolor"] = "none"  # remove edge from kwargs if present
+                alpha = kwargs.pop("alpha") if "alpha" in kwargs else None  # remove alpha for outline
 
                 ax.scatter(
                     _coords[:, 0],
@@ -263,7 +262,7 @@ def spatial(
                     c=bg_color,
                     rasterized=sc_settings._vector_friendly,
                     norm=normalize,
-                    **scatter_kwargs,
+                    **kwargs,
                 )
                 ax.scatter(
                     _coords[:, 0],
@@ -273,11 +272,11 @@ def spatial(
                     c=gap_color,
                     rasterized=sc_settings._vector_friendly,
                     norm=normalize,
-                    **scatter_kwargs,
+                    **kwargs,
                 )
 
                 # if user did not set alpha, set alpha to 0.7
-                scatter_kwargs["alpha"] = 0.7 if alpha is None else alpha
+                kwargs["alpha"] = 0.7 if alpha is None else alpha
 
             cax = scatter(
                 _coords[:, 0],
@@ -286,7 +285,7 @@ def spatial(
                 c=color_vector,
                 rasterized=sc_settings._vector_friendly,
                 norm=normalize,
-                **scatter_kwargs,
+                **kwargs,
             )
 
         ax.set_yticks([])
@@ -335,11 +334,13 @@ def _get_spatial_attrs(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
     library_id: Optional[Sequence[str] | None] = None,
-    img: Optional[Sequence[NDArrayA] | None] = None,
+    img: Optional[Sequence[NDArrayA] | NDArrayA | None] = None,
     img_key: str | None = None,
-    scale_factor: Optional[Sequence[float] | None] = None,
+    scale_factor: Optional[Sequence[float] | float | None] = None,
+    size: Optional[Sequence[float] | float | None] = None,
+    size_key: str = Key.uns.size_key,
     bw: bool = False,
-) -> Tuple[Sequence[str], Sequence[float], Sequence[NDArrayA]]:
+) -> Tuple[Sequence[str], Sequence[float], Sequence[float], Sequence[NDArrayA]]:
     """Return lists of image attributes saved in adata for plotting."""
     library_id = Key.uns.library_id(adata, spatial_key, library_id, return_all=True)
     if library_id is None:
@@ -347,6 +348,7 @@ def _get_spatial_attrs(
 
     image_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.image_key, library_id)
     scalefactor_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.scalefactor_key, library_id)
+    scalefactors = _get_unique_map(scalefactor_mapping)
 
     if not (image_mapping.keys() == scalefactor_mapping.keys()):  # check that keys match
         raise KeyError(
@@ -360,28 +362,35 @@ def _get_spatial_attrs(
         if img_key not in image_mapping.values():
             raise ValueError(f"Image key: `{img_key}` does not exist. Available image keys: `{image_mapping.values()}`")
 
-    if scale_factor is None:  # get intersection of scale_factor and match to img_key
-        scale_factor_key = _get_unique_map(scalefactor_mapping)
-        scale_factor_key = [i for i in scale_factor_key if img_key in i][0]
-        if len(scale_factor_key) == 0:
-            raise ValueError(f"No `scale_factor` found that could match `img_key`: {img_key}.")
-        scale_factor = [adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][scale_factor_key] for i in library_id]
-    else:
-        if len(scale_factor) != len(library_id):
-            raise ValueError(
-                f"Len of scale_factor list: {len(scale_factor)} is not equal to len of library_id: {len(library_id)}."
-            )
-
     if img is None:
         img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_key] for i in library_id]
-    else:
-        if len(img) != len(library_id):
-            raise ValueError(f"Len of img list: {len(img)} is not equal to len of library_id: {len(library_id)}.")
+    else:  # handle case where img is ndarray or list
+        img = _maybe_get_list(img, np.ndarray, library_id)
 
     if bw:
         img = [np.dot(im[..., :3], [0.2989, 0.5870, 0.1140]) for im in img]
 
-    return library_id, scale_factor, img
+    if scale_factor is None:  # get intersection of scale_factor and match to img_key
+        scale_factor_key = [i for i in scalefactors if img_key in i]
+        if len(scale_factor_key) == 0:
+            raise ValueError(f"No `scale_factor` found that could match `img_key`: {img_key}.")
+        _scale_factor_key = scale_factor_key[0]  # get first scale_factor
+        scale_factor = [adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id]
+    else:  # handle case where scale_factor is float or list
+        scale_factor = _maybe_get_list(scale_factor, float, library_id)
+
+    # size_key = [i for i in scalefactors if size_key in i][0]
+    if size_key not in scalefactors and size is None:
+        raise ValueError(
+            f"Specified `size_key: {size_key}` does not exist and size is `None`,\
+            available keys are: `{scalefactors}`.\n Specify valid `size_key` or `size`."
+        )
+    if size is None:
+        size = 1.0
+    size = _maybe_get_list(size, float, library_id)
+    size = [adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][size_key] * s for i, s in zip(library_id, size)]
+
+    return library_id, scale_factor, size, img
 
 
 def _get_coords(
@@ -413,6 +422,22 @@ def _get_coords(
 def _get_unique_map(dic: Mapping[str, Any]) -> Any:
     """Get intersection of dict values."""
     return sorted(set.intersection(*map(set, dic.values())))
+
+
+def _maybe_get_list(var: Any, _type: Any, ref: Sequence[Any] | None = None) -> Sequence[Any] | Any:
+    if isinstance(var, _type):
+        if ref is None:
+            return [var]
+        else:
+            [var for _ in ref]
+    else:
+        if isinstance(var, list):
+            if ref is not None:
+                raise ValueError(f"Var len: {len(var)} is not equal to ref len: {len(ref)}. Please Check.")
+            else:
+                return var
+        else:
+            raise ValueError(f"Can't make list from var: `{var}`")
 
 
 def _get_seq_vminmax(

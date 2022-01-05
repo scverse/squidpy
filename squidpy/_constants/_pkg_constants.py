@@ -78,6 +78,10 @@ class Key:
         def scalefactor_key(cls) -> str:
             return "scalefactors"
 
+        @cprop
+        def size_key(cls) -> str:
+            return "spot_diameter_fullres"
+
         @classmethod
         def spatial_neighs(cls, value: Optional[str] = None) -> str:
             return f"{Key.obsm.spatial}_neighbors" if value is None else f"{value}_neighbors"
