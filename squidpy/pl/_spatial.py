@@ -46,7 +46,9 @@ def spatial(
     scale_factor: Optional[Sequence[float] | float | None] = None,
     size: Optional[Sequence[float] | float | None] = None,
     size_key: str = Key.uns.size_key,
+    crop_coord: Optional[Sequence[Tuple[int, int, int, int]] | Tuple[int, int, int, int] | None] = None,
     bw: bool = False,
+    alpha_img: float = 1.0,
     color: Optional[Sequence[str] | str | None] = None,
     groups: Optional[Sequence[str] | str | None] = None,
     shape: _AvailShapes | None = None,
@@ -88,6 +90,20 @@ def spatial(
     groups = _maybe_get_list(groups, str)
     color = _maybe_get_list(color, str)
 
+    # check raw
+    if use_raw is None:
+        use_raw = layer is None and adata.raw is not None
+    if use_raw and layer is not None:
+        raise ValueError(
+            "Cannot use both a layer and the raw representation. Was passed:" f"use_raw={use_raw}, layer={layer}."
+        )
+    if adata.raw is None and use_raw:
+        raise ValueError(f"`use_raw={use_raw}` but AnnData object does not have raw.")
+
+    # set wspace
+    if wspace is None:
+        wspace = 0.75 / rcParams["figure.figsize"][0] + 0.02
+
     # set shape
     if shape is not None:
         if shape not in get_args(_AvailShapes):
@@ -113,10 +129,18 @@ def spatial(
 
         scale_factor = 1.0 if scale_factor is None else scale_factor
         scale_factor = _maybe_get_list(scale_factor, float, library_id)
+
+        img = [None for _ in library_id]  # type: ignore # [misc] mypy error that I rather ignore
     else:
         library_id, scale_factor, size, img = _get_spatial_attrs(
             adata, spatial_key, library_id, img, img_key, scale_factor, size, size_key, bw
         )
+
+    if crop_coord is None:
+        crop_coord = [None for _ in library_id]  # type: ignore # [misc] mypy error that I rather ignore
+    else:
+        crop_coord = _maybe_get_list(crop_coord, tuple, library_id)
+        crops = [_check_crop_coord(cr, sf) for cr, sf in zip(crop_coord, scale_factor)]
 
     if batch_key is not None:
         _assert_value_in_obs(adata, key=batch_key, val=library_id)
@@ -140,32 +164,21 @@ def spatial(
         if ax is None:
             fig = pl.figure()
             ax = fig.add_subplot(111, **args_3d)
-    axs = []
+    axs: Any = []
     library_idx = range(len(library_id))
 
     vmin, vmax, vcenter, norm = _get_seq_vminmax(vmin, vmax, vcenter, norm)
 
-    # check raw
-    if use_raw is None:
-        use_raw = layer is None and adata.raw is not None
-    if use_raw and layer is not None:
-        raise ValueError(
-            "Cannot use both a layer and the raw representation. Was passed:" f"use_raw={use_raw}, layer={layer}."
-        )
-    if adata.raw is None and use_raw:
-        raise ValueError(f"`use_raw={use_raw}` but AnnData object does not have raw.")
-
-    # set wspace
-    if wspace is None:
-        wspace = 0.75 / rcParams["figure.figsize"][0] + 0.02
-
     # TODO: set title
     # TODO: set cmap
 
-    # TODO: set cmap_img
+    # set cmap_img
+    cmap_img = "gray" if bw else None
 
     # make plots
-    for count, (value_to_plot, lib_idx) in enumerate(itertools.product(color, library_idx)):
+    for count, (value_to_plot, lib_idx, _size, _img, _crops) in enumerate(
+        itertools.product(color, library_idx, size, img, crops)
+    ):
         color_source_vector = _get_source_vec(
             adata, value_to_plot, layer=layer, use_raw=use_raw, alt_var=alt_var, groups=groups
         )
@@ -228,14 +241,15 @@ def spatial(
                 c=color_vector,
                 rasterized=sc_settings._vector_friendly,
                 norm=normalize,
+                s=_size,
                 **kwargs,
             )
         else:
 
             scatter = (
-                partial(ax.scatter, s=size, plotnonfinite=True)
+                partial(ax.scatter, s=_size, plotnonfinite=True)
                 if shape is None
-                else partial(shaped_scatter, s=size, ax=ax, shape=shape)
+                else partial(shaped_scatter, s=_size, ax=ax, shape=shape)
             )
 
             if add_outline:
@@ -321,6 +335,22 @@ def spatial(
         else:
             # TODO: na_in_legend should have some effect here
             pl.colorbar(cax, ax=ax, pad=0.01, fraction=0.08, aspect=30)
+
+        cur_coords = np.concatenate([ax.get_xlim(), ax.get_ylim()])
+        if _img is not None:
+            ax.imshow(_img, cmap=cmap_img, alpha=alpha_img)
+        else:
+            ax.set_aspect("equal")
+            ax.invert_yaxis()
+
+        if _crops is not None:
+            ax.set_xlim(_crops[0], _crops[1])
+            ax.set_ylim(_crops[3], _crops[2])
+        else:
+            ax.set_xlim(cur_coords[0], cur_coords[1])
+            ax.set_ylim(cur_coords[3], cur_coords[2])
+
+    axs = axs if grid else ax
 
     if save is not None:
         save_fig(fig, path=save)
@@ -408,6 +438,17 @@ def _get_coords(
     return data_points
 
 
+def _check_crop_coord(
+    crop_coord: Tuple[float, float, float, float],
+    scale_factor: float,
+) -> Tuple[float, ...]:
+    """Handle cropping with image or basis."""
+    if len(crop_coord) != 4:
+        raise ValueError(f"Invalid crop_coord of length {len(crop_coord)}(!=4)")
+    _crop_coord = tuple(c * scale_factor for c in crop_coord)
+    return _crop_coord
+
+
 def _get_unique_map(dic: Mapping[str, Any]) -> Any:
     """Get intersection of dict values."""
     return sorted(set.intersection(*map(set, dic.values())))
@@ -421,7 +462,7 @@ def _maybe_get_list(var: Any, _type: Any, ref: Sequence[Any] | None = None) -> S
             [var for _ in ref]
     else:
         if isinstance(var, list):
-            if ref is not None:
+            if (ref is not None) and (len(ref) != len(var)):
                 raise ValueError(f"Var len: {len(var)} is not equal to ref len: {len(ref)}. Please Check.")
             else:
                 return var
