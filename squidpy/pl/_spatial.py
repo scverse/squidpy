@@ -49,9 +49,9 @@ def spatial(
     crop_coord: Optional[Sequence[Tuple[int, int, int, int]] | Tuple[int, int, int, int] | None] = None,
     bw: bool = False,
     alpha_img: float = 1.0,
-    color: Optional[Sequence[str] | str | None] = None,
-    groups: Optional[Sequence[str] | str | None] = None,
-    shape: _AvailShapes | None = None,
+    color: Optional[Sequence[str | None] | str | None] = None,
+    groups: Optional[Sequence[str | None] | str | None] = None,
+    shape: _AvailShapes | None = "circle",
     use_raw: Optional[bool | None] = None,
     layer: Optional[str | None] = None,
     alt_var: Optional[str | None] = None,
@@ -87,8 +87,8 @@ def spatial(
     args_3d = {"projection": "3d"} if projection == "3d" else {}
 
     # make colors and groups as list
-    groups = _maybe_get_list(groups, str)
-    color = _maybe_get_list(color, str)
+    groups = [groups] if isinstance(groups, str) or groups is None else groups
+    color = [color] if isinstance(color, str) or color is None else color
 
     # check raw
     if use_raw is None:
@@ -491,7 +491,7 @@ def _get_source_vec(
     use_raw: Optional[bool | None] = None,
     alt_var: Optional[str | None] = None,
     layer: Optional[str | None] = None,
-    groups: Optional[Sequence[str] | str | None] = None,
+    groups: Optional[Sequence[str | None] | str | None] = None,
 ) -> NDArrayA | pd.Series:
 
     if value_to_plot is None:
