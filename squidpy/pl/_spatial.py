@@ -184,7 +184,7 @@ def spatial(
         else:
             cmap = color_map
     cmap = copy(get_cmap(cmap))
-    cmap.set_bad(na_color)
+    cmap.set_bad("lightgray" if na_color is None else na_color)
     kwargs["cmap"] = cmap
 
     # set cmap_img
@@ -594,6 +594,7 @@ def shaped_scatter(
     c: NDArrayA,
     vmin: Union[VBound, Sequence[VBound], None] = None,
     vmax: Union[VBound, Sequence[VBound], None] = None,
+    marker: Any | None = None,  # dummy arg for using partial above
     **kwargs: Any,
 ) -> Any:
     """
@@ -610,7 +611,7 @@ def shaped_scatter(
         n = 4 if shape == "square" else 6
         r: float = s / (2 * sin(np.pi / n))
         patches = [Polygon(np.stack(func(x_, y_, r, n, range(n)), 1), True) for x_, y_, _ in zipped]
-    collection = PatchCollection(patches)
+    collection = PatchCollection(patches, **kwargs)
 
     if isinstance(c, np.ndarray) and np.issubdtype(c.dtype, np.number):
         collection.set_array(np.ma.masked_invalid(c))
