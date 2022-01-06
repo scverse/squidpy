@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import copy
 from math import cos, sin
 from cycler import Cycler
 from typing import Any, Tuple, Union, Literal, Mapping, get_args, Optional, Sequence
@@ -23,8 +24,9 @@ import numpy as np
 import pandas as pd
 
 from matplotlib import colors, pyplot as pl, rcParams, patheffects
+from matplotlib.cm import get_cmap
 from matplotlib.axes import Axes
-from matplotlib.colors import Normalize
+from matplotlib.colors import Colormap, Normalize
 from matplotlib.patches import Circle, Polygon
 from matplotlib.collections import PatchCollection
 
@@ -57,9 +59,12 @@ def spatial(
     alt_var: Optional[str | None] = None,
     projection: Literal["2d", "3d"] = "2d",
     palette: Optional[Sequence[str] | str | Cycler | None] = None,
+    color_map: Union[Colormap, str, None] = None,
+    cmap: Union[Colormap, str, None] = None,
     na_color: Optional[str | Tuple[float, ...] | None] = None,
     frameon: Optional[bool] = None,
     title: Union[str, Sequence[str], None] = None,
+    axis_label: Optional[str | None] = None,
     wspace: Optional[float | None] = None,
     hspace: float = 0.25,
     ncols: int = 4,
@@ -150,6 +155,7 @@ def spatial(
             )
     coords = _get_coords(adata, spatial_key, _library_id, scale_factor, batch_key)
     _subset = partial(_maybe_subset, batch_key=batch_key)
+
     # initialize axis
     if (not isinstance(color, str) and isinstance(color, Sequence) and len(color) > 1) or (len(_library_id) > 1):
         if ax is not None:
@@ -167,8 +173,19 @@ def spatial(
 
     vmin, vmax, vcenter, norm = _get_seq_vminmax(vmin, vmax, vcenter, norm)
 
-    # TODO: set title
-    # TODO: set cmap
+    # set title
+    if title is not None:
+        title = [title] if isinstance(title, str) else list(title)
+
+    # set cmap
+    if color_map is not None:
+        if cmap is not None:
+            raise ValueError("Cannot specify both `color_map` and `cmap`.")
+        else:
+            cmap = color_map
+    cmap = copy(get_cmap(cmap))
+    cmap.set_bad(na_color)
+    kwargs["cmap"] = cmap
 
     # set cmap_img
     cmap_img = "gray" if bw else None
@@ -308,6 +325,18 @@ def spatial(
         ax.set_xticks([])
         if projection == "3d":
             ax.set_zticks([])
+
+        axis_label = spatial_key if axis_label is None else axis_label
+        if projection == "3d":
+            axis_labels = [axis_label + str(x + 1) for x in range(3)]
+        else:
+            axis_labels = [axis_label + str(x + 1) for x in range(2)]
+
+        ax.set_xlabel(axis_labels[0])
+        ax.set_ylabel(axis_labels[1])
+        if projection == "3d":
+            # shift the label closer to the axis
+            ax.set_zlabel(axis_labels[2], labelpad=-7)
 
         ax.autoscale_view()
 
