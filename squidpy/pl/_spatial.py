@@ -63,7 +63,7 @@ def spatial(
     palette: Optional[Sequence[str] | str | Cycler | None] = None,
     color_map: Union[Colormap, str, None] = None,
     cmap: Union[Colormap, str, None] = None,
-    na_color: Optional[str | Tuple[float, ...] | None] = None,
+    na_color: Optional[str | Tuple[float, ...] | None] = (0.0, 0.0, 0.0, 0.0),
     frameon: Optional[bool] = None,
     title: Union[str, Sequence[str], None] = None,
     axis_label: Optional[str | None] = None,
@@ -139,8 +139,7 @@ def spatial(
 
         scale_factor = 1.0 if scale_factor is None else scale_factor
         scale_factor = _maybe_get_list(scale_factor, float, library_id)
-
-        img = [None for _ in library_id]  # type: ignore # [misc] mypy error that I rather ignore
+        img = [None for _ in _library_id]  # type: ignore # [misc] mypy error that I rather ignore
     else:
         _library_id, scale_factor, size, img = _get_spatial_attrs(
             adata, spatial_key, library_id, img, img_key, scale_factor, size, size_key, bw
@@ -212,6 +211,8 @@ def spatial(
         _scalebar_dx = _maybe_get_list(scalebar_dx, float, _library_id)
         scalebar_units = "um" if scalebar_units is None else scalebar_units
         _scalebar_units = _maybe_get_list(scalebar_units, str, _library_id)
+    else:
+        _scalebar_dx = None
 
     # make plots
     for count, (value_to_plot, _lib_count) in enumerate(itertools.product(color, library_idx)):
@@ -291,11 +292,7 @@ def spatial(
             )
         else:
 
-            scatter = (
-                partial(ax.scatter, s=_size, plotnonfinite=True)
-                if shape is None
-                else partial(shaped_scatter, s=_size, ax=ax, shape=shape)
-            )
+            scatter = partial(ax.scatter, plotnonfinite=True) if shape is None else partial(shaped_scatter, shape=shape)
 
             if add_outline:
                 bg_width, gap_width = outline_width
@@ -309,7 +306,7 @@ def spatial(
                 kwargs["edgecolor"] = "none"  # remove edge from kwargs if present
                 alpha = kwargs.pop("alpha") if "alpha" in kwargs else None  # remove alpha for outline
 
-                ax.scatter(
+                _cax = scatter(
                     _coords[:, 0],
                     _coords[:, 1],
                     s=bg_size,
@@ -319,7 +316,8 @@ def spatial(
                     norm=normalize,
                     **kwargs,
                 )
-                ax.scatter(
+                ax.add_collection(_cax)
+                _cax = scatter(
                     _coords[:, 0],
                     _coords[:, 1],
                     s=gap_size,
@@ -329,19 +327,22 @@ def spatial(
                     norm=normalize,
                     **kwargs,
                 )
+                ax.add_collection(_cax)
 
                 # if user did not set alpha, set alpha to 0.7
                 kwargs["alpha"] = 0.7 if alpha is None else alpha
 
-            cax = scatter(
-                _coords[:, 0],
-                _coords[:, 1],
-                marker=".",
-                c=color_vector,
-                rasterized=sc_settings._vector_friendly,
-                norm=normalize,
-                **kwargs,
-            )
+        _cax = scatter(
+            _coords[:, 0],
+            _coords[:, 1],
+            marker=".",
+            c=color_vector,
+            s=_size,
+            rasterized=sc_settings._vector_friendly,
+            norm=normalize,
+            **kwargs,
+        )
+        cax = ax.add_collection(_cax)
 
         ax.set_yticks([])
         ax.set_xticks([])
@@ -433,7 +434,7 @@ def _get_spatial_attrs(
     """Return lists of image attributes saved in adata for plotting."""
     library_id = Key.uns.library_id(adata, spatial_key, library_id, return_all=True)
     if library_id is None:
-        raise ValueError(f"Could not fetch `library_id`, check that `spatial_key={spatial_key}` is correct.")
+        raise ValueError(f"Could not fetch `library_id`, check that `spatial_key: {spatial_key}` is correct.")
 
     image_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.image_key, library_id)
     scalefactor_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.scalefactor_key, library_id)
@@ -616,7 +617,6 @@ def shaped_scatter(
     y: NDArrayA,
     s: NDArrayA,
     shape: Literal["circle", "square", "hex"],
-    ax: Axes,
     c: NDArrayA,
     vmin: Union[VBound, Sequence[VBound], None] = None,
     vmax: Union[VBound, Sequence[VBound], None] = None,
@@ -644,8 +644,6 @@ def shaped_scatter(
         collection.set_clim(vmin, vmax)
     else:
         collection.set_facecolor(c)
-
-    ax.add_collection(collection)
 
     return collection
 
