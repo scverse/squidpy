@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from copy import copy
 from math import cos, sin
+from types import MappingProxyType
 from cycler import Cycler
 from typing import Any, Tuple, Union, Literal, Mapping, get_args, Optional, Sequence
 from pathlib import Path
 from functools import partial
+import warnings
 import itertools
 
 from scanpy import logging as logg
@@ -82,6 +84,9 @@ def spatial(
     legend_loc: str = "right margin",
     legend_fontoutline: Optional[int] = None,
     na_in_legend: bool = True,
+    scalebar_dx: Optional[Sequence[float] | float | None] = None,
+    scalebar_units: Optional[Sequence[str] | str | None] = None,
+    scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> Any:
     """Spatial plotting for squidpy."""
@@ -191,6 +196,22 @@ def spatial(
     cmap_img = "gray" if bw else None
 
     library_idx = range(len(_library_id))
+
+    # set scalebar
+    if scalebar_dx is not None:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                from matplotlib_scalebar.scalebar import ScaleBar
+        except ImportError:
+            raise ImportError(
+                "To use scalebar functionality please install `matplotlib_scalebar` with: \n \
+                `pip install matplotlib_scalebar`"
+            )
+        _scalebar_dx = _maybe_get_list(scalebar_dx, float, _library_id)
+        scalebar_units = "um" if scalebar_units is None else scalebar_units
+        _scalebar_units = _maybe_get_list(scalebar_units, str, _library_id)
+
     # make plots
     for count, (value_to_plot, _lib_count) in enumerate(itertools.product(color, library_idx)):
         _size = size[_lib_count]
@@ -384,6 +405,10 @@ def spatial(
         else:
             ax.set_xlim(cur_coords[0], cur_coords[1])
             ax.set_ylim(cur_coords[3], cur_coords[2])
+
+        if isinstance(_scalebar_dx, list):
+            scalebar = ScaleBar(_scalebar_dx[_lib_count], units=_scalebar_units[_lib_count], **scalebar_kwargs)
+            ax.add_artist(scalebar)
 
     axs = axs if grid else ax
 
