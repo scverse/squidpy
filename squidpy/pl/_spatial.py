@@ -93,6 +93,7 @@ def spatial(
     _sanitize_anndata(adata)
     _assert_spatial_basis(adata, spatial_key)
 
+    scalebar_kwargs = dict(scalebar_kwargs)
     # get projection
     args_3d = {"projection": "3d"} if projection == "3d" else {}
 
