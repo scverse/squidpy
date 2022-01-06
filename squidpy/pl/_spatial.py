@@ -50,7 +50,7 @@ def spatial(
     bw: bool = False,
     alpha_img: float = 1.0,
     color: Optional[Sequence[str | None] | str | None] = None,
-    groups: Optional[Sequence[str | None] | str | None] = None,
+    groups: Optional[Sequence[str] | str | None] = None,
     shape: _AvailShapes | None = "circle",
     use_raw: Optional[bool | None] = None,
     layer: Optional[str | None] = None,
@@ -87,7 +87,7 @@ def spatial(
     args_3d = {"projection": "3d"} if projection == "3d" else {}
 
     # make colors and groups as list
-    groups = [groups] if isinstance(groups, str) or groups is None else groups
+    groups = [groups] if isinstance(groups, str) else groups
     color = [color] if isinstance(color, str) or color is None else color
 
     # check raw
@@ -111,17 +111,16 @@ def spatial(
     else:  # handle library_id logic for non-image data
         if library_id is None and batch_key is not None:  # try to assign library_id
             try:
-                library_id = adata.obs[batch_key].cat.categories.tolist()
+                _library_id = adata.obs[batch_key].cat.categories.tolist()
             except IndexError:
                 raise IndexError(f"`batch_key: {batch_key}` not in `adata.obs`.")
         elif library_id is None and batch_key is None:
             logg.warning(
                 "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
             )
-            library_id = [""]  # create dummy library_id
+            _library_id = [""]  # create dummy library_id
 
     # get spatial attributes
-    library_id = _maybe_get_list(library_id, str)
 
     if shape is None:  # handle logic for non-image data
         size = 120000 / adata.shape[0] if size is None else size
@@ -132,32 +131,32 @@ def spatial(
 
         img = [None for _ in library_id]  # type: ignore # [misc] mypy error that I rather ignore
     else:
-        library_id, scale_factor, size, img = _get_spatial_attrs(
+        _library_id, scale_factor, size, img = _get_spatial_attrs(
             adata, spatial_key, library_id, img, img_key, scale_factor, size, size_key, bw
         )
 
     if crop_coord is None:
-        crop_coord = [None for _ in library_id]  # type: ignore # [misc] mypy error that I rather ignore
+        crops: Union[list[Tuple[float, ...]], list[None]] = [None for _ in _library_id]
     else:
-        crop_coord = _maybe_get_list(crop_coord, tuple, library_id)
+        crop_coord = _maybe_get_list(crop_coord, tuple, _library_id)
         crops = [_check_crop_coord(cr, sf) for cr, sf in zip(crop_coord, scale_factor)]
 
     if batch_key is not None:
-        _assert_value_in_obs(adata, key=batch_key, val=library_id)
+        _assert_value_in_obs(adata, key=batch_key, val=_library_id)
     else:
-        if len(library_id) > 1:
+        if len(_library_id) > 1:
             raise ValueError(
-                f"Multiple `library_ids: {library_id}` found but no `batch_key` specified. Please specify `batch_key`."
+                f"Multiple `library_ids: {_library_id}` found but no `batch_key` specified. Please specify `batch_key`."
             )
-    coords = _get_coords(adata, spatial_key, library_id, scale_factor, batch_key)
-
+    coords = _get_coords(adata, spatial_key, _library_id, scale_factor, batch_key)
+    _subset = partial(_maybe_subset, batch_key=batch_key)
     # initialize axis
-    if not isinstance(color, str) and isinstance(color, Sequence) and len(color) > 1:
+    if (not isinstance(color, str) and isinstance(color, Sequence) and len(color) > 1) or (len(_library_id) > 1):
         if ax is not None:
             raise ValueError("Cannot specify `ax` when plotting multiple panels ")
 
         # each plot needs to be its own panel
-        num_panels = len(color) * len(library_id)
+        num_panels = len(color) * len(_library_id)
         fig, grid = _panel_grid(hspace, wspace, ncols, num_panels)
     else:
         grid = None
@@ -165,7 +164,6 @@ def spatial(
             fig = pl.figure()
             ax = fig.add_subplot(111, **args_3d)
     axs: Any = []
-    library_idx = range(len(library_id))
 
     vmin, vmax, vcenter, norm = _get_seq_vminmax(vmin, vmax, vcenter, norm)
 
@@ -175,23 +173,31 @@ def spatial(
     # set cmap_img
     cmap_img = "gray" if bw else None
 
+    library_idx = range(len(_library_id))
     # make plots
-    for count, (value_to_plot, lib_idx, _size, _img, _crops) in enumerate(
-        itertools.product(color, library_idx, size, img, crops)
-    ):
+    for count, (value_to_plot, _lib_count) in enumerate(itertools.product(color, library_idx)):
+        _size = size[_lib_count]
+        _img = img[_lib_count]
+        _crops = crops[_lib_count]
+        _lib = _library_id[_lib_count]
         color_source_vector = _get_source_vec(
-            adata, value_to_plot, layer=layer, use_raw=use_raw, alt_var=alt_var, groups=groups
+            _subset(adata, library_id=_lib),
+            value_to_plot,
+            layer=layer,
+            use_raw=use_raw,
+            alt_var=alt_var,
+            groups=groups,
         )
         color_vector, categorical = _get_color_vec(
-            adata,
+            _subset(adata, library_id=_lib),
             value_to_plot,
             color_source_vector,
             palette=palette,
             na_color=na_color,
         )
 
-        # order points [skip]
-        _coords = coords[lib_idx]  # [order, :]
+        # TODO: order points [skip] handle better or do
+        _coords = coords[_lib_count]  # [order, :]
 
         # set frame
         if grid:
@@ -254,7 +260,7 @@ def spatial(
 
             if add_outline:
                 bg_width, gap_width = outline_width
-                point = np.sqrt(size)
+                point = np.sqrt(_size)
                 gap_size = (point + (point * gap_width) * 2) ** 2
                 bg_size = (np.sqrt(gap_size) + (point * bg_width) * 2) ** 2
                 # the default black and white colors can be changes using
@@ -355,6 +361,8 @@ def spatial(
     if save is not None:
         save_fig(fig, path=save)
 
+    return axs
+
 
 def _get_spatial_attrs(
     adata: AnnData,
@@ -414,7 +422,10 @@ def _get_spatial_attrs(
     if size is None:
         size = 1.0
     size = _maybe_get_list(size, float, library_id)
-    size = [adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][size_key] * s for i, s in zip(library_id, size)]
+    size = [
+        adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][size_key] * s * sf * 0.5
+        for i, s, sf in zip(library_id, size, scale_factor)
+    ]
 
     return library_id, scale_factor, size, img
 
@@ -449,6 +460,18 @@ def _check_crop_coord(
     return _crop_coord
 
 
+def _maybe_subset(adata: AnnData, batch_key: str | None = None, library_id: str | None = None) -> AnnData:
+    if batch_key is None:
+        return adata
+    else:
+        try:
+            return adata[adata.obs[batch_key] == library_id]
+        except IndexError:
+            raise IndexError(
+                f"Cannot subset adata. Either `batch_key: {batch_key}` or `library_id: {library_id}` is invalid."
+            )
+
+
 def _get_unique_map(dic: Mapping[str, Any]) -> Any:
     """Get intersection of dict values."""
     return sorted(set.intersection(*map(set, dic.values())))
@@ -459,7 +482,7 @@ def _maybe_get_list(var: Any, _type: Any, ref: Sequence[Any] | None = None) -> S
         if ref is None:
             return [var]
         else:
-            [var for _ in ref]
+            return [var for _ in ref]
     else:
         if isinstance(var, list):
             if (ref is not None) and (len(ref) != len(var)):
@@ -491,7 +514,7 @@ def _get_source_vec(
     use_raw: Optional[bool | None] = None,
     alt_var: Optional[str | None] = None,
     layer: Optional[str | None] = None,
-    groups: Optional[Sequence[str | None] | str | None] = None,
+    groups: Optional[Sequence[str] | str | None] = None,
 ) -> NDArrayA | pd.Series:
 
     if value_to_plot is None:
@@ -521,7 +544,7 @@ def _get_color_vec(
         return values, False
     elif is_categorical_dtype(values):
         # use scanpy _get_palette to set palette if not present
-        color_map = {k: to_hex(v) for k, v in _get_palette(adata, value_to_plot, palette)}
+        color_map = {k: to_hex(v) for k, v in _get_palette(adata, value_to_plot, palette).items()}
         color_vector = values.map(color_map)  # type: ignore
 
         # Set color to 'missing color' for all missing values
@@ -540,6 +563,9 @@ def shaped_scatter(
     shape: Literal["circle", "square", "hex"],
     ax: Axes,
     c: NDArrayA,
+    vmin: Union[VBound, Sequence[VBound], None] = None,
+    vmax: Union[VBound, Sequence[VBound], None] = None,
+    **kwargs: Any,
 ) -> Any:
     """
     Get shapes for scatterplot.
@@ -556,7 +582,12 @@ def shaped_scatter(
         r: float = s / (2 * sin(np.pi / n))
         patches = [Polygon(np.stack(func(x_, y_, r, n, range(n)), 1), True) for x_, y_, _ in zipped]
     collection = PatchCollection(patches)
-    collection.set_facecolor(c)
+
+    if isinstance(c, np.ndarray) and np.issubdtype(c.dtype, np.number):
+        collection.set_array(np.ma.masked_invalid(c))
+        collection.set_clim(vmin, vmax)
+    else:
+        collection.set_facecolor(c)
 
     ax.add_collection(collection)
 

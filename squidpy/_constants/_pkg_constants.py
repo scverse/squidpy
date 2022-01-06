@@ -140,7 +140,8 @@ class Key:
                         f"Unable to determine which library id to use. "
                         f"Please specify one from: `{sorted(library_id)}`."
                     )
-                return library_id[0]
+                else:
+                    return library_id[0]
             elif len(library_id) > 0:
                 return library_id
             else:
