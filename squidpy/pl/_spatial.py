@@ -675,8 +675,8 @@ def _plot_edges(
     neighbors_key: Optional[str | None] = None,
 ) -> Any:
     """Graph plotting."""
+    from networkx import Graph
     from networkx.drawing.nx_pylab import draw_networkx_edges
-    import networkx as nx
 
     # try set neighbors_key if edges is True
     if neighbors_key is None:
@@ -687,7 +687,7 @@ def _plot_edges(
              Please set `neighbors_key`."
         )
 
-    g = nx.Graph(adata.obsp[neighbors_key])
+    g = Graph(adata.obsp[neighbors_key])
     edge_collection = draw_networkx_edges(
         g,
         coords,
