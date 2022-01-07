@@ -135,6 +135,8 @@ def spatial(
             _library_id = [""]
         elif isinstance(library_id, list):  # get library_id from arg
             _library_id = library_id
+        else:
+            raise ValueError(f"Could not set library_id: `{library_id}`")
 
         size = 120000 / adata.shape[0] if size is None else size
         size = _maybe_get_list(size, float, _library_id)
