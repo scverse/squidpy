@@ -45,6 +45,7 @@ def spatial(
     spatial_key: str = Key.obsm.spatial,
     library_id: Optional[Sequence[str] | str | None] = None,
     batch_key: Optional[str | None] = None,
+    shape: _AvailShapes | None = "circle",
     img: Optional[Sequence[NDArrayA] | NDArrayA | None] = None,
     img_key: str | None = None,
     scale_factor: Optional[Sequence[float] | float | None] = None,
@@ -55,7 +56,6 @@ def spatial(
     alpha_img: float = 1.0,
     color: Optional[Sequence[str | None] | str | None] = None,
     groups: Optional[Sequence[str] | str | None] = None,
-    shape: _AvailShapes | None = "circle",
     use_raw: Optional[bool | None] = None,
     layer: Optional[str | None] = None,
     alt_var: Optional[str | None] = None,
@@ -94,7 +94,70 @@ def spatial(
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> Any:
-    """Spatial plotting for squidpy."""
+    """
+    Spatial plotting for squidpy.
+
+    Parameters
+    ----------
+    adata
+    spatial_key
+    library_id
+    batch_key
+        If multiple library_id then batch_key necessary in order to subset adata[adata.obs[batch_key]==_library_id]
+    shape
+        This is the master argument for visium v. non-visium. If None, then it's just scatter and args are overridden.
+    img
+        To pass images not saved in anndata
+    img_key
+        To get images saved in anndata
+    scale_factor
+    size
+        If shape is not None (e.g. visium) then it functions as a scaling factor otherwise it's true size of point.
+    size_key
+        To get e.g. diameter in Visium, otherwise manually passed.
+    crop_coord
+    bw
+        for black and white of image.
+    alpha_img
+        for alpha of image
+    color
+    groups
+    use_raw
+    layer
+    alt_var
+        This is equivalent ot gene_symbol in embedding. See scanpy docs.
+    projection
+    edges
+    edges_width
+    edges_color
+    neighbors_key
+    palette
+    color_map
+    cmap
+    na_color
+    frameon
+    title
+    axis_label
+        to change something else from spatial1,2
+    wspace
+    hspace
+    ncols
+    vmin
+    vmax
+    vcenter
+    norm
+    add_outline
+    ...
+    scalebar_dx
+        px_to_scale factor for scalebar
+    scalebar_units
+        units, by default is "um".
+
+
+    Returns
+    -------
+    plotting_returns
+    """
     _sanitize_anndata(adata)
     _assert_spatial_basis(adata, spatial_key)
 
