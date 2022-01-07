@@ -112,47 +112,45 @@ def spatial(
         raise ValueError(f"`use_raw={use_raw}` but AnnData object does not have raw.")
 
     # set wspace
-    if wspace is None:
-        wspace = 0.75 / rcParams["figure.figsize"][0] + 0.02
+    wspace = 0.75 / rcParams["figure.figsize"][0] + 0.02 if wspace is None else wspace
 
-    # set shape
+    # logic for image v. non-image data is handled here
     if shape is not None:
         if shape not in get_args(_AvailShapes):
             raise ValueError(f"Shape: `{shape}` not found. Available shapes are: `{get_args(_AvailShapes)}`")
-    else:  # handle library_id logic for non-image data
+        # get spatial attrs if shape is not None
+        _library_id, scale_factor, size, img = _get_spatial_attrs(
+            adata, spatial_key, library_id, img, img_key, scale_factor, size, size_key, bw
+        )
+    else:  # handle library_id logic for non-image data and spatial attributes
         if library_id is None and batch_key is not None:  # try to assign library_id
             try:
                 _library_id = adata.obs[batch_key].cat.categories.tolist()
             except IndexError:
                 raise IndexError(f"`batch_key: {batch_key}` not in `adata.obs`.")
-        elif library_id is None and batch_key is None:
+        elif library_id is None and batch_key is None:  # create dummy library_id
             logg.warning(
                 "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
             )
-            _library_id = [""]  # create dummy library_id
-        else:
+            _library_id = [""]
+        elif isinstance(library_id, list):  # get library_id from arg
             _library_id = library_id
 
-    # get spatial attributes
-
-    if shape is None:  # handle logic for non-image data
         size = 120000 / adata.shape[0] if size is None else size
         size = _maybe_get_list(size, float, _library_id)
 
         scale_factor = 1.0 if scale_factor is None else scale_factor
         scale_factor = _maybe_get_list(scale_factor, float, _library_id)
         img = [None for _ in _library_id]  # type: ignore # [misc] mypy error that I rather ignore
-    else:
-        _library_id, scale_factor, size, img = _get_spatial_attrs(
-            adata, spatial_key, library_id, img, img_key, scale_factor, size, size_key, bw
-        )
 
+    # set crops
     if crop_coord is None:
         crops: Union[list[Tuple[float, ...]], list[None]] = [None for _ in _library_id]
     else:
         crop_coord = _maybe_get_list(crop_coord, tuple, _library_id)
         crops = [_check_crop_coord(cr, sf) for cr, sf in zip(crop_coord, scale_factor)]
 
+    # assert batch_key exists and follows logic
     if batch_key is not None:
         _assert_value_in_obs(adata, key=batch_key, val=_library_id)
     else:
@@ -160,7 +158,11 @@ def spatial(
             raise ValueError(
                 f"Multiple `library_ids: {_library_id}` found but no `batch_key` specified. Please specify `batch_key`."
             )
+
+    # set coords
     coords = _get_coords(adata, spatial_key, _library_id, scale_factor, batch_key)
+
+    # partial init subset
     _subset = partial(_maybe_subset, batch_key=batch_key)
 
     # initialize axis
@@ -176,8 +178,9 @@ def spatial(
         if ax is None:
             fig = pl.figure()
             ax = fig.add_subplot(111, **args_3d)
-    axs: Any = []
 
+    # init axs list and vparams
+    axs: Any = []
     vmin, vmax, vcenter, norm = _get_seq_vminmax(vmin, vmax, vcenter, norm)
 
     # set title
@@ -197,8 +200,6 @@ def spatial(
     # set cmap_img
     cmap_img = "gray" if bw else None
 
-    library_idx = range(len(_library_id))
-
     # set scalebar
     if scalebar_dx is not None:
         try:
@@ -217,6 +218,7 @@ def spatial(
         _scalebar_dx = None
 
     # make plots
+    library_idx = range(len(_library_id))
     for count, (value_to_plot, _lib_count) in enumerate(itertools.product(color, library_idx)):
         _size = size[_lib_count]
         _img = img[_lib_count]
