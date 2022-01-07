@@ -60,6 +60,10 @@ def spatial(
     layer: Optional[str | None] = None,
     alt_var: Optional[str | None] = None,
     projection: Literal["2d", "3d"] = "2d",
+    edges: bool = False,
+    edges_width: float = 0.1,
+    edges_color: Union[str, Sequence[float], Sequence[str]] = "grey",
+    neighbors_key: Optional[str | None] = None,
     palette: Optional[Sequence[str] | str | Cycler | None] = None,
     color_map: Union[Colormap, str, None] = None,
     cmap: Union[Colormap, str, None] = None,
@@ -226,6 +230,7 @@ def spatial(
         _img = img[_lib_count]
         _crops = crops[_lib_count]
         _lib = _library_id[_lib_count]
+
         color_source_vector = _get_source_vec(
             _subset(adata, library_id=_lib),
             value_to_plot,
@@ -283,6 +288,11 @@ def spatial(
         else:
             normalize = None
 
+        # plot edges and arrows if needed
+        if edges:
+            _cedge = _plot_edges(_subset(adata, library_id=_lib), _coords, edges_width, edges_color, neighbors_key)
+            ax.add_collection(_cedge)
+
         # make scatter
         if projection == "3d":
             cax = ax.scatter(
@@ -305,8 +315,7 @@ def spatial(
                 point = np.sqrt(_size)
                 gap_size = (point + (point * gap_width) * 2) ** 2
                 bg_size = (np.sqrt(gap_size) + (point * bg_width) * 2) ** 2
-                # the default black and white colors can be changes using
-                # the contour_config parameter
+                # the default black and white colors can be changes using the contour_config parameter
                 bg_color, gap_color = outline_color
 
                 kwargs["edgecolor"] = "none"  # remove edge from kwargs if present
@@ -368,8 +377,6 @@ def spatial(
             ax.set_zlabel(axis_labels[2], labelpad=-7)
 
         ax.autoscale_view()
-
-        # plot edges and arrows if needed
 
         if value_to_plot is None:
             # if only dots were plotted without an associated value
@@ -658,3 +665,36 @@ def _make_poly(x: float, y: float, r: float, n: int, i: int) -> Tuple[float, flo
     x_i = x + r * sin((np.pi / n) * (1 + 2 * i))
     y_i = y + r * cos((np.pi / n) * (1 + 2 * i))
     return x_i, y_i
+
+
+def _plot_edges(
+    adata: AnnData,
+    coords: NDArrayA,
+    edges_width: float = 0.1,
+    edges_color: Union[str, Sequence[float], Sequence[str]] = "grey",
+    neighbors_key: Optional[str | None] = None,
+) -> Any:
+    """Graph plotting."""
+    from networkx.drawing.nx_pylab import draw_networkx_edges
+    import networkx as nx
+
+    # try set neighbors_key if edges is True
+    if neighbors_key is None:
+        neighbors_key = f"{Key.uns.spatial}_connectivities"
+    if neighbors_key not in adata.obsp:
+        raise ValueError(
+            f"Could not find `neighbors_key: {neighbors_key}` in `adata.obsp`.\
+             Please set `neighbors_key`."
+        )
+
+    g = nx.Graph(adata.obsp[neighbors_key])
+    edge_collection = draw_networkx_edges(
+        g,
+        coords,
+        width=edges_width,
+        edge_color=edges_color,
+        arrows=False,
+    )
+    edge_collection.set_rasterized(sc_settings._vector_friendly)
+
+    return edge_collection
