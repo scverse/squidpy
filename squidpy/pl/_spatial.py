@@ -153,7 +153,7 @@ def spatial(
 
     # set crops
     if crop_coord is None:
-        crops: Union[list[Tuple[float, ...]], list[None]] = [None for _ in _library_id]
+        crops: Union[list[Tuple[float, ...]], Tuple[None, ...]] = tuple(None for _ in _library_id)
     else:
         crop_coord = _maybe_get_list(crop_coord, tuple, _library_id)
         crops = [_check_crop_coord(cr, sf) for cr, sf in zip(crop_coord, scale_factor)]
@@ -290,7 +290,7 @@ def spatial(
         else:
             normalize = None
 
-        # plot edges and arrows if needed
+        # plot edges and arrows if needed. Do it here cause otherwise image is on top.
         if edges:
             _cedge = _plot_edges(
                 _subset(adata, library_id=_lib), _coords, edges_width, edges_color, neighbors_key, edges_kwargs
