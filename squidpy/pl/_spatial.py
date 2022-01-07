@@ -91,6 +91,7 @@ def spatial(
     scalebar_dx: Optional[Sequence[float] | float | None] = None,
     scalebar_units: Optional[Sequence[str] | str | None] = None,
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> Any:
     """Spatial plotting for squidpy."""
@@ -98,6 +99,7 @@ def spatial(
     _assert_spatial_basis(adata, spatial_key)
 
     scalebar_kwargs = dict(scalebar_kwargs)
+    edges_kwargs = dict(edges_kwargs)
     # get projection
     args_3d = {"projection": "3d"} if projection == "3d" else {}
 
@@ -290,7 +292,9 @@ def spatial(
 
         # plot edges and arrows if needed
         if edges:
-            _cedge = _plot_edges(_subset(adata, library_id=_lib), _coords, edges_width, edges_color, neighbors_key)
+            _cedge = _plot_edges(
+                _subset(adata, library_id=_lib), _coords, edges_width, edges_color, neighbors_key, edges_kwargs
+            )
             ax.add_collection(_cedge)
 
         # make scatter
@@ -673,6 +677,7 @@ def _plot_edges(
     edges_width: float = 0.1,
     edges_color: Union[str, Sequence[float], Sequence[str]] = "grey",
     neighbors_key: Optional[str | None] = None,
+    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> Any:
     """Graph plotting."""
     from networkx import Graph
@@ -689,11 +694,7 @@ def _plot_edges(
 
     g = Graph(adata.obsp[neighbors_key])
     edge_collection = draw_networkx_edges(
-        g,
-        coords,
-        width=edges_width,
-        edge_color=edges_color,
-        arrows=False,
+        g, coords, width=edges_width, edge_color=edges_color, arrows=False, **edges_kwargs
     )
     edge_collection.set_rasterized(sc_settings._vector_friendly)
 
