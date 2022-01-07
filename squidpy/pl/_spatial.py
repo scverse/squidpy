@@ -130,15 +130,17 @@ def spatial(
                 "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
             )
             _library_id = [""]  # create dummy library_id
+        else:
+            _library_id = library_id
 
     # get spatial attributes
 
     if shape is None:  # handle logic for non-image data
         size = 120000 / adata.shape[0] if size is None else size
-        size = _maybe_get_list(size, float, library_id)
+        size = _maybe_get_list(size, float, _library_id)
 
         scale_factor = 1.0 if scale_factor is None else scale_factor
-        scale_factor = _maybe_get_list(scale_factor, float, library_id)
+        scale_factor = _maybe_get_list(scale_factor, float, _library_id)
         img = [None for _ in _library_id]  # type: ignore # [misc] mypy error that I rather ignore
     else:
         _library_id, scale_factor, size, img = _get_spatial_attrs(
