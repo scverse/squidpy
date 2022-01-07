@@ -210,7 +210,7 @@ def spatial(
             )
         _scalebar_dx = _maybe_get_list(scalebar_dx, float, _library_id)
         scalebar_units = "um" if scalebar_units is None else scalebar_units
-        _scalebar_units = (scalebar_units, str, _library_id)
+        _scalebar_units = _maybe_get_list(scalebar_units, str, _library_id)
     else:
         _scalebar_dx = None
 
@@ -236,8 +236,8 @@ def spatial(
             na_color=na_color,
         )
 
-        # TODO: order points [skip] handle better or do
-        _coords = coords[_lib_count]  # [order, :]
+        # TODO: do we want to order points? for now no, skip
+        _coords = coords[_lib_count]
 
         # set frame
         if grid:
@@ -332,17 +332,17 @@ def spatial(
                 # if user did not set alpha, set alpha to 0.7
                 kwargs["alpha"] = 0.7 if alpha is None else alpha
 
-        _cax = scatter(
-            _coords[:, 0],
-            _coords[:, 1],
-            marker=".",
-            c=color_vector,
-            s=_size,
-            rasterized=sc_settings._vector_friendly,
-            norm=normalize,
-            **kwargs,
-        )
-        cax = ax.add_collection(_cax)
+            _cax = scatter(
+                _coords[:, 0],
+                _coords[:, 1],
+                marker=".",
+                c=color_vector,
+                s=_size,
+                rasterized=sc_settings._vector_friendly,
+                norm=normalize,
+                **kwargs,
+            )
+            cax = ax.add_collection(_cax)
 
         ax.set_yticks([])
         ax.set_xticks([])
@@ -639,7 +639,7 @@ def shaped_scatter(
         patches = [Polygon(np.stack(func(x_, y_, r, n, range(n)), 1), True) for x_, y_, _ in zipped]
     collection = PatchCollection(patches, **kwargs)
 
-    if isinstance(c, np.ndarray) and np.issubdtype(c.dtype, float):
+    if isinstance(c, np.ndarray) and np.issubdtype(c.dtype, np.number):
         collection.set_array(np.ma.masked_invalid(c))
         collection.set_clim(vmin, vmax)
     else:
