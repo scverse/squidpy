@@ -210,7 +210,7 @@ def spatial(
             )
         _scalebar_dx = _maybe_get_list(scalebar_dx, float, _library_id)
         scalebar_units = "um" if scalebar_units is None else scalebar_units
-        _scalebar_units = _maybe_get_list(scalebar_units, str, _library_id)
+        _scalebar_units = (scalebar_units, str, _library_id)
     else:
         _scalebar_dx = None
 
@@ -639,7 +639,7 @@ def shaped_scatter(
         patches = [Polygon(np.stack(func(x_, y_, r, n, range(n)), 1), True) for x_, y_, _ in zipped]
     collection = PatchCollection(patches, **kwargs)
 
-    if isinstance(c, np.ndarray) and np.issubdtype(c.dtype, np.number):
+    if isinstance(c, np.ndarray) and np.issubdtype(c.dtype, float):
         collection.set_array(np.ma.masked_invalid(c))
         collection.set_clim(vmin, vmax)
     else:
