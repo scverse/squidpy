@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from copy import copy
-from math import cos, sin
 from types import MappingProxyType
 from cycler import Cycler
 from typing import (
@@ -74,10 +73,10 @@ def spatial(
     edges_width: float = 0.1,
     edges_color: Union[str, Sequence[float], Sequence[str]] = "grey",
     neighbors_key: Optional[str | None] = None,
-    palette: Optional[Sequence[str] | str | Cycler | None] = None,
+    palette: Sequence[str] | str | Cycler | None = None,
     color_map: Union[Colormap, str, None] = None,
     cmap: Union[Colormap, str, None] = None,
-    na_color: Optional[str | Tuple[float, ...] | None] = (0.0, 0.0, 0.0, 0.0),
+    na_color: str | Tuple[float, ...] | None = (0.0, 0.0, 0.0, 0.0),
     frameon: Optional[bool] = None,
     title: Union[str, Sequence[str], None] = None,
     axis_label: Optional[str | None] = None,
@@ -390,7 +389,7 @@ def spatial(
             scatter = (
                 partial(ax.scatter, marker=".", plotnonfinite=True)
                 if shape is None
-                else partial(shaped_scatter, shape=shape)
+                else partial(_shaped_scatter, shape=shape)
             )
 
             if add_outline:
@@ -667,7 +666,7 @@ def _get_source_vec(
 ) -> NDArrayA | pd.Series:
 
     if value_to_plot is None:
-        return np.broadcast_to(np.nan, adata.n_obs)
+        return np.full(np.nan, adata.n_obs)
     if alt_var is not None and value_to_plot not in adata.obs.columns and value_to_plot not in adata.var_names:
         value_to_plot = adata.var.index[adata.var[alt_var] == value_to_plot][0]
     if use_raw and value_to_plot not in adata.obs.columns:
@@ -688,7 +687,7 @@ def _get_color_vec(
 ) -> Tuple[NDArrayA, bool]:
     to_hex = partial(colors.to_hex, keep_alpha=True)
     if value_to_plot is None:
-        return np.broadcast_to(to_hex(na_color), adata.n_obs), False
+        return np.full(to_hex(na_color), adata.n_obs), False
     if not is_categorical_dtype(values):
         return values, False
     elif is_categorical_dtype(values):
@@ -705,10 +704,10 @@ def _get_color_vec(
         raise ValueError(f"Wrong type for value passed `{value_to_plot}`.")
 
 
-def shaped_scatter(
+def _shaped_scatter(
     x: NDArrayA,
     y: NDArrayA,
-    s: NDArrayA,
+    s: float,
     c: NDArrayA,
     shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
     vmin: VBound | Sequence[VBound] | None = None,
@@ -721,20 +720,19 @@ def shaped_scatter(
     Adapted from here: https://gist.github.com/syrte/592a062c562cd2a98a83 .
     This code is under [The BSD 3-Clause License](http://opensource.org/licenses/BSD-3-Clause)
     """
-    zipped = np.broadcast(x, y, s)
-
     shape = ScatterShape(shape)  # type: ignore[assignment]
     if TYPE_CHECKING:
         assert isinstance(shape, ScatterShape)
     shape = shape.s
 
     if shape == ScatterShape.CIRCLE.s:
+        zipped = np.broadcast(x, y, s)
         patches = [Circle((x_, y_), s_) for x_, y_, s_ in zipped]
     else:
-        func = np.vectorize(_make_poly)
         n = 4 if shape == ScatterShape.SQUARE.s else 6
-        r: float = s / (2 * sin(np.pi / n))
-        patches = [Polygon(np.stack(func(x_, y_, r, n, range(n)), 1), True) for x_, y_, _ in zipped]
+        r: float = s / (2 * np.sin(np.pi / n))
+        polys = np.stack([_make_poly(x, y, r, n, i) for i in range(n)], 1).swapaxes(0, 2)
+        patches = [Polygon(p, False) for p in polys]
     collection = PatchCollection(patches, **kwargs)
 
     if isinstance(c, np.ndarray) and np.issubdtype(c.dtype, np.number):
@@ -746,9 +744,9 @@ def shaped_scatter(
     return collection
 
 
-def _make_poly(x: float, y: float, r: float, n: int, i: int) -> Tuple[float, float]:
-    x_i = x + r * sin((np.pi / n) * (1 + 2 * i))
-    y_i = y + r * cos((np.pi / n) * (1 + 2 * i))
+def _make_poly(x: NDArrayA, y: NDArrayA, r: float, n: int, i: int) -> Tuple[NDArrayA, NDArrayA]:
+    x_i = x + r * np.sin((np.pi / n) * (1 + 2 * i))
+    y_i = y + r * np.cos((np.pi / n) * (1 + 2 * i))
     return x_i, y_i
 
 
