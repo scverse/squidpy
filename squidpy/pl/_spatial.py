@@ -688,8 +688,6 @@ def _get_color_vec(
     to_hex = partial(colors.to_hex, keep_alpha=True)
     if value_to_plot is None:
         return np.full(to_hex(na_color), adata.n_obs), False
-    if not is_categorical_dtype(values):
-        return values, False
     elif is_categorical_dtype(values):
         # use scanpy _get_palette to set palette if not present
         color_map = {k: to_hex(v) for k, v in _get_palette(adata, value_to_plot, palette).items()}
@@ -700,8 +698,7 @@ def _get_color_vec(
             color_vector = color_vector.add_categories([to_hex(na_color)])
             color_vector = color_vector.fillna(to_hex(na_color))
         return color_vector, True
-    else:
-        raise ValueError(f"Wrong type for value passed `{value_to_plot}`.")
+    return values, False
 
 
 def _shaped_scatter(
