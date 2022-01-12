@@ -4,7 +4,16 @@ from copy import copy
 from math import cos, sin
 from types import MappingProxyType
 from cycler import Cycler
-from typing import Any, Tuple, Union, Literal, Mapping, get_args, Optional, Sequence
+from typing import (
+    Any,
+    Tuple,
+    Union,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    TYPE_CHECKING,
+)
 from pathlib import Path
 from functools import partial
 import warnings
@@ -35,6 +44,7 @@ from matplotlib.collections import PatchCollection
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.pl._utils import save_fig, _sanitize_anndata, _assert_value_in_obs
+from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 
 _AvailShapes = Literal["circle", "square", "hex"]
@@ -45,7 +55,7 @@ def spatial(
     spatial_key: str = Key.obsm.spatial,
     library_id: Optional[Sequence[str] | str | None] = None,
     batch_key: Optional[str | None] = None,
-    shape: _AvailShapes | None = "circle",
+    shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
     img: Optional[Sequence[NDArrayA] | NDArrayA | None] = None,
     img_key: str | None = None,
     scale_factor: Optional[Sequence[float] | float | None] = None,
@@ -184,9 +194,11 @@ def spatial(
     wspace = 0.75 / rcParams["figure.figsize"][0] + 0.02 if wspace is None else wspace
 
     # logic for image v. non-image data is handled here
+    shape = ScatterShape(shape)  # type: ignore[assignment]
+    if TYPE_CHECKING:
+        assert isinstance(shape, ScatterShape)
+
     if shape is not None:
-        if shape not in get_args(_AvailShapes):
-            raise ValueError(f"Shape: `{shape}` not found. Available shapes are: `{get_args(_AvailShapes)}`")
         # get spatial attrs if shape is not None
         _library_id, scale_factor, size, img = _get_spatial_attrs(
             adata, spatial_key, library_id, img, img_key, scale_factor, size, size_key, bw
@@ -212,7 +224,7 @@ def spatial(
 
         scale_factor = 1.0 if scale_factor is None else scale_factor
         scale_factor = _maybe_get_list(scale_factor, float, _library_id)
-        img = [None for _ in _library_id]  # type: ignore # [misc] mypy error that I rather ignore
+        img = [None for _ in _library_id]
 
     # set crops
     if crop_coord is None:
@@ -375,7 +387,11 @@ def spatial(
             )
         else:
 
-            scatter = partial(ax.scatter, plotnonfinite=True) if shape is None else partial(shaped_scatter, shape=shape)
+            scatter = (
+                partial(ax.scatter, marker=".", plotnonfinite=True)
+                if shape is None
+                else partial(shaped_scatter, shape=shape)
+            )
 
             if add_outline:
                 bg_width, gap_width = outline_width
@@ -392,7 +408,6 @@ def spatial(
                     _coords[:, 0],
                     _coords[:, 1],
                     s=bg_size,
-                    marker=".",
                     c=bg_color,
                     rasterized=sc_settings._vector_friendly,
                     norm=normalize,
@@ -403,7 +418,6 @@ def spatial(
                     _coords[:, 0],
                     _coords[:, 1],
                     s=gap_size,
-                    marker=".",
                     c=gap_color,
                     rasterized=sc_settings._vector_friendly,
                     norm=normalize,
@@ -417,7 +431,6 @@ def spatial(
             _cax = scatter(
                 _coords[:, 0],
                 _coords[:, 1],
-                marker=".",
                 c=color_vector,
                 s=_size,
                 rasterized=sc_settings._vector_friendly,
@@ -696,13 +709,12 @@ def shaped_scatter(
     x: NDArrayA,
     y: NDArrayA,
     s: NDArrayA,
-    shape: Literal["circle", "square", "hex"],
     c: NDArrayA,
-    vmin: Union[VBound, Sequence[VBound], None] = None,
-    vmax: Union[VBound, Sequence[VBound], None] = None,
-    marker: Any | None = None,  # dummy arg for using partial above
+    shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
+    vmin: VBound | Sequence[VBound] | None = None,
+    vmax: VBound | Sequence[VBound] | None = None,
     **kwargs: Any,
-) -> Any:
+) -> PatchCollection:
     """
     Get shapes for scatterplot.
 
@@ -710,11 +722,17 @@ def shaped_scatter(
     This code is under [The BSD 3-Clause License](http://opensource.org/licenses/BSD-3-Clause)
     """
     zipped = np.broadcast(x, y, s)
-    if shape == "circle":
+
+    shape = ScatterShape(shape)  # type: ignore[assignment]
+    if TYPE_CHECKING:
+        assert isinstance(shape, ScatterShape)
+    shape = shape.s
+
+    if shape == ScatterShape.CIRCLE.s:
         patches = [Circle((x_, y_), s_) for x_, y_, s_ in zipped]
     else:
         func = np.vectorize(_make_poly)
-        n = 4 if shape == "square" else 6
+        n = 4 if shape == ScatterShape.SQUARE.s else 6
         r: float = s / (2 * sin(np.pi / n))
         patches = [Polygon(np.stack(func(x_, y_, r, n, range(n)), 1), True) for x_, y_, _ in zipped]
     collection = PatchCollection(patches, **kwargs)
@@ -746,12 +764,10 @@ def _plot_edges(
     from networkx import Graph
     from networkx.drawing.nx_pylab import draw_networkx_edges
 
-    # try set neighbors_key if edges is True
-    if neighbors_key is None:
-        neighbors_key = f"{Key.uns.spatial}_connectivities"
+    neighbors_key = Key.obsp.spatial_conn(neighbors_key)
     if neighbors_key not in adata.obsp:
-        raise ValueError(
-            f"Could not find `neighbors_key: {neighbors_key}` in `adata.obsp`.\
+        raise KeyError(
+            f"Unable to find `neighbors_key: {neighbors_key}` in `adata.obsp`.\
              Please set `neighbors_key`."
         )
 

@@ -105,3 +105,10 @@ class RipleyStat(ModeEnum):
     F = "F"
     G = "G"
     L = "L"
+
+
+@unique
+class ScatterShape(ModeEnum):
+    CIRCLE = "circles"
+    SQUARE = "squares"
+    HEX = "hex"
