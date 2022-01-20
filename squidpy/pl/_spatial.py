@@ -320,7 +320,6 @@ def spatial(
             alt_var=alt_var,
             groups=groups,
         )
-        print(palette)
         color_vector, categorical = _get_color_vec(
             _subset(adata, library_id=_lib),
             value_to_plot,
