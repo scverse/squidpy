@@ -109,6 +109,6 @@ class RipleyStat(ModeEnum):
 
 @unique
 class ScatterShape(ModeEnum):
-    CIRCLE = "circles"
+    CIRCLE = "circle"
     SQUARE = "square"
     HEX = "hex"

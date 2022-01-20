@@ -12,8 +12,9 @@ from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 import numpy as np
 import pandas as pd
 
+from matplotlib.colors import to_hex
+from matplotlib.colors.mcolors import ListedColormap
 import seaborn as sns
-import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 
 from squidpy._docs import d
@@ -29,7 +30,7 @@ from squidpy._constants._pkg_constants import Key
 __all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "ripley", "co_occurrence"]
 
 
-Palette_t = Optional[Union[str, mcolors.ListedColormap]]
+Palette_t = Optional[Union[str, ListedColormap, None]]
 
 
 def _maybe_set_colors(source: AnnData, target: AnnData, key: str, palette: str | None = None) -> None:
@@ -53,17 +54,35 @@ def _get_data(adata: AnnData, cluster_key: str, func_name: str, **kwargs: Any) -
         ) from None
 
 
-def _get_palette(adata: AnnData, cluster_key: str, categories: Sequence[Any]) -> Mapping[str, Any] | None:
-    try:
-        palette = adata.uns[Key.uns.colors(cluster_key)]
-        if len(palette) < len(categories):
-            raise ValueError(
-                f"Expected to find at least `{len(categories)}` colors, "
-                f"found `{len(palette)}` for key `{cluster_key}`."
+def _get_palette(
+    adata: AnnData, cluster_key: str, categories: Sequence[Any], palette: Palette_t = None
+) -> Mapping[str, str]:
+    if palette is None:
+        try:
+            palette = adata.uns[Key.uns.colors(cluster_key)]
+            if len(palette) < len(categories):
+                raise ValueError(
+                    f"Expected to find at least `{len(categories)}` colors, "
+                    f"found `{len(palette)}` for key `{cluster_key}`."
+                )
+        except KeyError:
+            raise KeyError(
+                f"Unable to find colors palette in: `{Key.uns.colors(cluster_key)}` for key: `{cluster_key}`."
             )
-        return dict(zip(categories, palette))
-    except KeyError:
-        return None
+    elif isinstance(palette, str):
+        if palette in plt.colormaps():
+            cmap = plt.get_cmap(palette)
+            palette = [to_hex(x) for x in cmap(np.linspace(0, 1, adata.obs[cluster_key].cat.categories.shape[0]))]
+        else:
+            raise KeyError(
+                f"Unable to find palette: `{palette}` in `matplotlib.pyplot.colomaps()`. Please specify valid palette."
+            )
+    elif isinstance(palette, ListedColormap):
+        palette = [to_hex(x) for x in palette(np.linspace(0, 1, 5))]
+    else:
+        raise TypeError(f"Palette is {type(palette)} but should be string.")
+
+    return dict(zip(categories, palette))
 
 
 @d.dedent

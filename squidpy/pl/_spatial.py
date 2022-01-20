@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from copy import copy
 from types import MappingProxyType
-from cycler import Cycler
 from typing import (
     Any,
     Tuple,
@@ -24,7 +23,6 @@ from scanpy._settings import settings as sc_settings
 from scanpy.plotting._utils import VBound, _FontSize, _FontWeight, check_colornorm
 from scanpy.plotting._tools.scatterplots import (
     _panel_grid,
-    _get_palette,
     _get_vboundnorm,
     _add_categorical_legend,
 )
@@ -39,14 +37,17 @@ from matplotlib.axes import Axes
 from matplotlib.colors import Colormap, Normalize
 from matplotlib.patches import Circle, Polygon
 from matplotlib.collections import PatchCollection
+import matplotlib.colors as mcolors
 
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_spatial_basis
+from squidpy.pl._graph import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import save_fig, _sanitize_anndata, _assert_value_in_obs
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 
 _AvailShapes = Literal["circle", "square", "hex"]
+Palette_t = Optional[Union[str, mcolors.ListedColormap]]
 
 
 def spatial(
@@ -63,17 +64,17 @@ def spatial(
     crop_coord: Optional[Sequence[Tuple[int, int, int, int]] | Tuple[int, int, int, int] | None] = None,
     bw: bool = False,
     alpha_img: float = 1.0,
-    color: Optional[Sequence[str | None] | str | None] = None,
-    groups: Optional[Sequence[str] | str | None] = None,
+    color: Sequence[str | None] | str | None = None,
+    groups: Sequence[str] | str | None = None,
     use_raw: Optional[bool | None] = None,
-    layer: Optional[str | None] = None,
+    layer: str | None = None,
     alt_var: Optional[str | None] = None,
     projection: Literal["2d", "3d"] = "2d",
     edges: bool = False,
     edges_width: float = 0.1,
     edges_color: Union[str, Sequence[float], Sequence[str]] = "grey",
     neighbors_key: Optional[str | None] = None,
-    palette: Sequence[str] | str | Cycler | None = None,
+    palette: Palette_t = None,
     color_map: Union[Colormap, str, None] = None,
     cmap: Union[Colormap, str, None] = None,
     na_color: str | Tuple[float, ...] | None = (0.0, 0.0, 0.0, 0.0),
@@ -178,6 +179,11 @@ def spatial(
     # make colors and groups as list
     groups = [groups] if isinstance(groups, str) else groups
     color = [color] if isinstance(color, str) or color is None else color
+
+    # set palette if missing
+    for c in color:
+        if c in adata.obs.columns and is_categorical_dtype(adata.obs[c]) and c is not None:
+            _maybe_set_colors(source=adata, target=adata, key=c, palette=palette)
 
     # check raw
     if use_raw is None:
@@ -469,10 +475,12 @@ def spatial(
 
         # Adding legends
         if categorical:
+            clusters = adata.obs[value_to_plot].cat.categories
+            palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
             _add_categorical_legend(
                 ax,
                 color_source_vector,
-                palette=_get_palette(adata, value_to_plot),
+                palette=palette,
                 scatter_array=_coords,
                 legend_loc=legend_loc,
                 legend_fontweight=legend_fontweight,
@@ -668,13 +676,13 @@ def _get_source_vec(
     if value_to_plot is None:
         return np.full(np.nan, adata.n_obs)
     if alt_var is not None and value_to_plot not in adata.obs.columns and value_to_plot not in adata.var_names:
-        value_to_plot = adata.var.index[adata.var[alt_var] == value_to_plot][0]
+        value_to_plot = adata.var_names[adata.var[alt_var] == value_to_plot][0]
     if use_raw and value_to_plot not in adata.obs.columns:
         values = adata.raw.obs_vector(value_to_plot)
     else:
         values = adata.obs_vector(value_to_plot, layer=layer)
-    if groups and is_categorical_dtype(values):
-        values = values.replace(values.categories.difference(groups), np.nan)
+    if groups is not None and is_categorical_dtype(values):
+        values = pd.Series(values).cat.remove_categories(values.categories.difference(groups))
     return values
 
 
@@ -682,7 +690,7 @@ def _get_color_vec(
     adata: AnnData,
     value_to_plot: str | None,
     values: NDArrayA | pd.Series,
-    palette: Optional[Sequence[str] | str | Cycler | None] = None,
+    palette: Palette_t = None,
     na_color: Optional[str | Tuple[float, ...] | None] = None,
 ) -> Tuple[NDArrayA, bool]:
     to_hex = partial(colors.to_hex, keep_alpha=True)
@@ -690,7 +698,8 @@ def _get_color_vec(
         return np.full(to_hex(na_color), adata.n_obs), False
     elif is_categorical_dtype(values):
         # use scanpy _get_palette to set palette if not present
-        color_map = {k: to_hex(v) for k, v in _get_palette(adata, value_to_plot, palette).items()}
+        clusters = adata.obs[value_to_plot].cat.categories
+        color_map = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
         color_vector = values.map(color_map)  # type: ignore
 
         # Set color to 'missing color' for all missing values
