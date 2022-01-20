@@ -34,10 +34,9 @@ import pandas as pd
 from matplotlib import colors, pyplot as pl, rcParams, patheffects
 from matplotlib.cm import get_cmap
 from matplotlib.axes import Axes
-from matplotlib.colors import Colormap, Normalize
+from matplotlib.colors import Colormap, Normalize, ListedColormap
 from matplotlib.patches import Circle, Polygon
 from matplotlib.collections import PatchCollection
-import matplotlib.colors as mcolors
 
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_spatial_basis
@@ -47,7 +46,7 @@ from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 
 _AvailShapes = Literal["circle", "square", "hex"]
-Palette_t = Optional[Union[str, mcolors.ListedColormap]]
+Palette_t = Optional[Union[str, ListedColormap]]
 
 
 def spatial(
@@ -321,6 +320,7 @@ def spatial(
             alt_var=alt_var,
             groups=groups,
         )
+        print(palette)
         color_vector, categorical = _get_color_vec(
             _subset(adata, library_id=_lib),
             value_to_plot,
@@ -476,11 +476,11 @@ def spatial(
         # Adding legends
         if categorical:
             clusters = adata.obs[value_to_plot].cat.categories
-            palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
+            _palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
             _add_categorical_legend(
                 ax,
                 color_source_vector,
-                palette=palette,
+                palette=_palette,
                 scatter_array=_coords,
                 legend_loc=legend_loc,
                 legend_fontweight=legend_fontweight,

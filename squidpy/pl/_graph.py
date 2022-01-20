@@ -12,8 +12,7 @@ from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 import numpy as np
 import pandas as pd
 
-from matplotlib.colors import to_hex
-from matplotlib.colors.mcolors import ListedColormap
+from matplotlib.colors import to_hex, ListedColormap
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -59,30 +58,31 @@ def _get_palette(
 ) -> Mapping[str, str]:
     if palette is None:
         try:
-            palette = adata.uns[Key.uns.colors(cluster_key)]
-            if len(palette) < len(categories):
+            _palette = adata.uns[Key.uns.colors(cluster_key)]
+            if len(_palette) < len(categories):
                 raise ValueError(
                     f"Expected to find at least `{len(categories)}` colors, "
-                    f"found `{len(palette)}` for key `{cluster_key}`."
+                    f"found `{len(_palette)}` for key `{cluster_key}`."
                 )
         except KeyError:
             raise KeyError(
                 f"Unable to find colors palette in: `{Key.uns.colors(cluster_key)}` for key: `{cluster_key}`."
             )
     elif isinstance(palette, str):
+        len_cat = adata.obs[cluster_key].cat.categories.shape[0]
         if palette in plt.colormaps():
             cmap = plt.get_cmap(palette)
-            palette = [to_hex(x) for x in cmap(np.linspace(0, 1, adata.obs[cluster_key].cat.categories.shape[0]))]
+            _palette = [to_hex(x) for x in cmap(np.linspace(0, 1, len_cat))]
         else:
             raise KeyError(
                 f"Unable to find palette: `{palette}` in `matplotlib.pyplot.colomaps()`. Please specify valid palette."
             )
     elif isinstance(palette, ListedColormap):
-        palette = [to_hex(x) for x in palette(np.linspace(0, 1, 5))]
+        _palette = [to_hex(x) for x in palette(np.linspace(0, 1, len_cat))]
     else:
         raise TypeError(f"Palette is {type(palette)} but should be string.")
 
-    return dict(zip(categories, palette))
+    return dict(zip(categories, _palette))
 
 
 @d.dedent
