@@ -55,7 +55,7 @@ def _get_data(adata: AnnData, cluster_key: str, func_name: str, **kwargs: Any) -
 
 def _get_palette(
     adata: AnnData, cluster_key: str, categories: Sequence[Any], palette: Palette_t = None
-) -> Mapping[str, str]:
+) -> Mapping[str, str] | None:
     if palette is None:
         try:
             _palette = adata.uns[Key.uns.colors(cluster_key)]
@@ -65,9 +65,7 @@ def _get_palette(
                     f"found `{len(_palette)}` for key `{cluster_key}`."
                 )
         except KeyError:
-            raise KeyError(
-                f"Unable to find colors palette in: `{Key.uns.colors(cluster_key)}` for key: `{cluster_key}`."
-            )
+            return None
     elif isinstance(palette, str):
         len_cat = adata.obs[cluster_key].cat.categories.shape[0]
         if palette in plt.colormaps():
@@ -128,7 +126,7 @@ def centrality_scores(
     df[cluster_key] = df.index.values
 
     clusters = adata.obs[cluster_key].cat.categories
-    palette = _get_palette(adata, cluster_key=cluster_key, categories=clusters, palette=palette)
+    palette = _get_palette(adata, cluster_key=cluster_key, categories=clusters)
 
     score = scores if score is None else score
     score = _assert_non_empty_sequence(score, name="centrality scores")

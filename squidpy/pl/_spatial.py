@@ -591,18 +591,18 @@ def _get_coords(
     spatial_key: str,
     library_id: Sequence[str],
     scale_factor: Sequence[float],
-    library_key: Optional[str | None] = None,
+    library_key: str | None = None,
 ) -> Sequence[NDArrayA]:
 
     coords = adata.obsm[spatial_key]
     if library_key is None:
-        data_points = [np.multiply(coords, sf) for sf in scale_factor]
+        return [coords * sf for sf in scale_factor]
     else:
-        data_points = [
-            np.multiply(coords[adata.obs[library_key] == lib, :], sf) for lib, sf in zip(library_id, scale_factor)
-        ]
-
-    return data_points
+        if len(library_id) != len(scale_factor):
+            raise ValueError(
+                f"Length `library_id: {len(library_id)}` is not equal to length `scale_factor: {len(scale_factor)}`."
+            )
+        return [coords[adata.obs[library_key] == lib, :] * sf for lib, sf in zip(library_id, scale_factor)]
 
 
 def _subs(adata: AnnData, library_key: str | None = None, library_id: str | None = None) -> AnnData:
