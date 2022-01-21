@@ -14,6 +14,7 @@ from typing import (
 )
 from pathlib import Path
 from functools import partial
+from collections import namedtuple
 import warnings
 import itertools
 
@@ -47,6 +48,9 @@ from squidpy._constants._pkg_constants import Key
 
 _AvailShapes = Literal["circle", "square", "hex"]
 Palette_t = Optional[Union[str, ListedColormap]]
+_VBound = Union[VBound, Sequence[VBound]]
+_Normalize = Union[Normalize, Sequence[Normalize]]
+CmapParams = namedtuple("CmapParams", ["vmin", "vmax", "vcenter", "norm"])
 
 
 def spatial(
@@ -83,10 +87,7 @@ def spatial(
     wspace: Optional[float | None] = None,
     hspace: float = 0.25,
     ncols: int = 4,
-    vmin: Union[VBound, Sequence[VBound], None] = None,
-    vmax: Union[VBound, Sequence[VBound], None] = None,
-    vcenter: Union[VBound, Sequence[VBound], None] = None,
-    norm: Union[Normalize, Sequence[Normalize], None] = None,
+    cmap_kwargs: Mapping[str, _VBound | _Normalize] | None = None,
     add_outline: Optional[bool] = False,
     outline_width: Tuple[float, float] = (0.3, 0.05),
     outline_color: Tuple[str, str] = ("black", "white"),
@@ -268,7 +269,7 @@ def spatial(
 
     # init axs list and vparams
     axs: Any = []
-    vmin, vmax, vcenter, norm = _get_seq_vminmax(vmin, vmax, vcenter, norm)
+    _cmap_kwargs = _get_cmap_params(cmap_kwargs)
 
     # set title
     if title is not None:
@@ -357,9 +358,7 @@ def spatial(
             raise ValueError(f"Title: {title} is of wrong type: {type(title)}")
 
         if not categorical:
-            vmin_float, vmax_float, vcenter_float, norm_obj = _get_vboundnorm(
-                vmin, vmax, vcenter, norm, count, color_vector
-            )
+            vmin_float, vmax_float, vcenter_float, norm_obj = _get_vboundnorm(*_cmap_kwargs, count, color_vector)
             normalize = check_colornorm(
                 vmin_float,
                 vmax_float,
@@ -648,19 +647,23 @@ def _maybe_get_list(var: Any, _type: Any, ref: Sequence[Any] | None = None) -> S
             raise ValueError(f"Can't make list from var: `{var}`")
 
 
-def _get_seq_vminmax(
-    vmin: Any, vmax: Any, vcenter: Any, norm: Any
-) -> Tuple[Sequence[Any], Sequence[Any], Sequence[Any], Sequence[Any]]:
-    if isinstance(vmax, str) or not isinstance(vmax, Sequence):
-        vmax = [vmax]
-    if isinstance(vmin, str) or not isinstance(vmin, Sequence):
-        vmin = [vmin]
-    if isinstance(vcenter, str) or not isinstance(vcenter, Sequence):
-        vcenter = [vcenter]
-    if isinstance(norm, Normalize) or not isinstance(norm, Sequence):
-        norm = [norm]
+def _get_cmap_params(
+    cmap_kwargs: Mapping[str, _VBound | _Normalize] | None = None,
+) -> CmapParams:
+    if cmap_kwargs is not None:
+        cmap_params = []
+        for f in CmapParams._fields:
+            if f in cmap_kwargs.keys():
+                v = cmap_kwargs[f]
+            else:
+                v = None
+            if isinstance(v, str) or not isinstance(v, Sequence):
+                v = [v]
+            cmap_params.append(v)
+    else:
+        cmap_params = [[None] for _ in CmapParams._fields]
 
-    return vmin, vmax, vcenter, norm
+    return CmapParams(*cmap_params)
 
 
 def _get_source_vec(
