@@ -79,7 +79,6 @@ def spatial(
     edges_color: Union[str, Sequence[float], Sequence[str]] = "grey",
     neighbors_key: Optional[str | None] = None,
     palette: Palette_t = None,
-    color_map: Union[Colormap, str, None] = None,
     cmap: Union[Colormap, str, None] = None,
     na_color: str | Tuple[float, ...] | None = (0.0, 0.0, 0.0, 0.0),
     frameon: Optional[bool] = None,
@@ -278,11 +277,6 @@ def spatial(
         title = [title] if isinstance(title, str) else list(title)
 
     # set cmap
-    if color_map is not None:
-        if cmap is not None:
-            raise ValueError("Cannot specify both `color_map` and `cmap`.")
-        else:
-            cmap = color_map
     cmap = copy(get_cmap(cmap))
     cmap.set_bad("lightgray" if na_color is None else na_color)
     kwargs["cmap"] = cmap
