@@ -57,7 +57,7 @@ def spatial(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
     library_id: Optional[Sequence[str] | str | None] = None,
-    batch_key: Optional[str | None] = None,
+    library_key: Optional[str | None] = None,
     shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
     img: Optional[Sequence[NDArrayA] | NDArrayA | None] = None,
     img_key: str | None = None,
@@ -112,8 +112,8 @@ def spatial(
     adata
     spatial_key
     library_id
-    batch_key
-        If multiple library_id then batch_key necessary in order to subset adata[adata.obs[batch_key]==_library_id]
+    library_key
+        If multiple library_id then library_key necessary in order to subset adata[adata.obs[library_key]==_library_id]
     shape
         This is the master argument for visium v. non-visium. If None, then it's just scatter and args are overridden.
     img
@@ -209,12 +209,12 @@ def spatial(
             adata, spatial_key, library_id, img, img_key, scale_factor, size, size_key, bw
         )
     else:  # handle library_id logic for non-image data and spatial attributes
-        if library_id is None and batch_key is not None:  # try to assign library_id
+        if library_id is None and library_key is not None:  # try to assign library_id
             try:
-                _library_id = adata.obs[batch_key].cat.categories.tolist()
+                _library_id = adata.obs[library_key].cat.categories.tolist()
             except IndexError:
-                raise IndexError(f"`batch_key: {batch_key}` not in `adata.obs`.")
-        elif library_id is None and batch_key is None:  # create dummy library_id
+                raise IndexError(f"`library_key: {library_key}` not in `adata.obs`.")
+        elif library_id is None and library_key is None:  # create dummy library_id
             logg.warning(
                 "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
             )
@@ -238,20 +238,21 @@ def spatial(
         crop_coord = _maybe_get_list(crop_coord, tuple, _library_id)
         crops = [_check_crop_coord(cr, sf) for cr, sf in zip(crop_coord, scale_factor)]
 
-    # assert batch_key exists and follows logic
-    if batch_key is not None:
-        _assert_value_in_obs(adata, key=batch_key, val=_library_id)
+    # assert library_key exists and follows logic
+    if library_key is not None:
+        _assert_value_in_obs(adata, key=library_key, val=_library_id)
     else:
         if len(_library_id) > 1:
             raise ValueError(
-                f"Multiple `library_ids: {_library_id}` found but no `batch_key` specified. Please specify `batch_key`."
+                f"Multiple `library_ids: {_library_id}` found but no `library_key` specified. \
+                    Please specify `library_key`."
             )
 
     # set coords
-    coords = _get_coords(adata, spatial_key, _library_id, scale_factor, batch_key)
+    coords = _get_coords(adata, spatial_key, _library_id, scale_factor, library_key)
 
     # partial init subset
-    _subset = partial(_maybe_subset, batch_key=batch_key)
+    _subset = partial(_subs, library_key=library_key) if library_key is not None else lambda _, **__: _
 
     # initialize axis
     if (not isinstance(color, str) and isinstance(color, Sequence) and len(color) > 1) or (len(_library_id) > 1):
@@ -589,41 +590,38 @@ def _get_coords(
     spatial_key: str,
     library_id: Sequence[str],
     scale_factor: Sequence[float],
-    batch_key: Optional[str | None] = None,
+    library_key: Optional[str | None] = None,
 ) -> Sequence[NDArrayA]:
 
     coords = adata.obsm[spatial_key]
-    if batch_key is None:
+    if library_key is None:
         data_points = [np.multiply(coords, sf) for sf in scale_factor]
     else:
         data_points = [
-            np.multiply(coords[adata.obs[batch_key] == lib, :], sf) for lib, sf in zip(library_id, scale_factor)
+            np.multiply(coords[adata.obs[library_key] == lib, :], sf) for lib, sf in zip(library_id, scale_factor)
         ]
 
     return data_points
 
 
 def _check_crop_coord(
-    crop_coord: Tuple[float, float, float, float],
+    crop_coord: Tuple[float, ...],
     scale_factor: float,
 ) -> Tuple[float, ...]:
     """Handle cropping with image or basis."""
     if len(crop_coord) != 4:
-        raise ValueError(f"Invalid crop_coord of length {len(crop_coord)}(!=4)")
-    _crop_coord = tuple(c * scale_factor for c in crop_coord)
-    return _crop_coord
+        raise ValueError(f"Expected crop coordinates to be of length `4`, found `{len(crop_coord)}.")
+    crop_coord = tuple(c * scale_factor for c in crop_coord)
+    return crop_coord
 
 
-def _maybe_subset(adata: AnnData, batch_key: str | None = None, library_id: str | None = None) -> AnnData:
-    if batch_key is None:
-        return adata
-    else:
-        try:
-            return adata[adata.obs[batch_key] == library_id]
-        except IndexError:
-            raise IndexError(
-                f"Cannot subset adata. Either `batch_key: {batch_key}` or `library_id: {library_id}` is invalid."
-            )
+def _subs(adata: AnnData, library_key: str | None = None, library_id: str | None = None) -> AnnData:
+    try:
+        return adata[adata.obs[library_key] == library_id]
+    except KeyError:
+        raise KeyError(
+            f"Cannot subset adata. Either `library_key: {library_key}` or `library_id: {library_id}` is invalid."
+        )
 
 
 def _get_unique_map(dic: Mapping[str, Any]) -> Any:
