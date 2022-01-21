@@ -43,6 +43,7 @@ from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.pl._graph import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import save_fig, _sanitize_anndata, _assert_value_in_obs
+from squidpy.im._coords import CropCoords
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 
@@ -236,7 +237,7 @@ def spatial(
         crops: Union[list[Tuple[float, ...]], Tuple[None, ...]] = tuple(None for _ in _library_id)
     else:
         crop_coord = _maybe_get_list(crop_coord, tuple, _library_id)
-        crops = [_check_crop_coord(cr, sf) for cr, sf in zip(crop_coord, scale_factor)]
+        crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, scale_factor)]
 
     # assert library_key exists and follows logic
     if library_key is not None:
@@ -501,8 +502,8 @@ def spatial(
             ax.invert_yaxis()
 
         if _crops is not None:
-            ax.set_xlim(_crops[0], _crops[1])
-            ax.set_ylim(_crops[3], _crops[2])
+            ax.set_xlim(_crops.to_tuple()[0], _crops.to_tuple()[1])
+            ax.set_ylim(_crops.to_tuple()[3], _crops.to_tuple()[2])
         else:
             ax.set_xlim(cur_coords[0], cur_coords[1])
             ax.set_ylim(cur_coords[3], cur_coords[2])
@@ -602,17 +603,6 @@ def _get_coords(
         ]
 
     return data_points
-
-
-def _check_crop_coord(
-    crop_coord: Tuple[float, ...],
-    scale_factor: float,
-) -> Tuple[float, ...]:
-    """Handle cropping with image or basis."""
-    if len(crop_coord) != 4:
-        raise ValueError(f"Expected crop coordinates to be of length `4`, found `{len(crop_coord)}.")
-    crop_coord = tuple(c * scale_factor for c in crop_coord)
-    return crop_coord
 
 
 def _subs(adata: AnnData, library_key: str | None = None, library_id: str | None = None) -> AnnData:
