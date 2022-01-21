@@ -128,7 +128,7 @@ def centrality_scores(
     df[cluster_key] = df.index.values
 
     clusters = adata.obs[cluster_key].cat.categories
-    palette = _get_palette(adata, cluster_key=cluster_key, categories=clusters) if palette is None else palette
+    palette = _get_palette(adata, cluster_key=cluster_key, categories=clusters, palette=palette)
 
     score = scores if score is None else score
     score = _assert_non_empty_sequence(score, name="centrality scores")
@@ -326,7 +326,7 @@ def ripley(
         legend_kwargs.setdefault("bbox_to_anchor", (1, 0.5))
 
     categories = adata.obs[cluster_key].cat.categories
-    palette = _get_palette(adata, cluster_key=cluster_key, categories=categories) if palette is None else palette
+    palette = _get_palette(adata, cluster_key=cluster_key, categories=categories, palette=palette)
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     sns.lineplot(
@@ -391,7 +391,7 @@ def co_occurrence(
     clusters = _assert_non_empty_sequence(clusters, name="clusters")
     clusters = sorted(_get_valid_values(clusters, categories))
 
-    palette = _get_palette(adata, cluster_key=cluster_key, categories=categories) if palette is None else palette
+    palette = _get_palette(adata, cluster_key=cluster_key, categories=categories, palette=palette)
 
     fig, axs = plt.subplots(
         1,
