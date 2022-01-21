@@ -174,7 +174,7 @@ def spatial(
     scalebar_kwargs = dict(scalebar_kwargs)
     edges_kwargs = dict(edges_kwargs)
     # get projection
-    args_3d = {"projection": "3d"} if projection == "3d" else {}
+    subplot_kwargs = {"projection": "3d"} if projection == "3d" else {}
 
     # make colors and groups as list
     groups = [groups] if isinstance(groups, str) else groups
@@ -266,7 +266,7 @@ def spatial(
         grid = None
         if ax is None:
             fig = pl.figure()
-            ax = fig.add_subplot(111, **args_3d)
+            ax = fig.add_subplot(111, **subplot_kwargs)
 
     # init axs list and vparams
     axs: Any = []
@@ -330,7 +330,7 @@ def spatial(
 
         # set frame
         if grid:
-            ax = pl.subplot(grid[count], **args_3d)
+            ax = pl.subplot(grid[count], **subplot_kwargs)
             axs.append(ax)
         if not (sc_settings._frameon if frameon is None else frameon):
             ax.axis("off")
