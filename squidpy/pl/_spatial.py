@@ -286,7 +286,8 @@ def spatial(
     cmap_img = "gray" if bw else None
 
     # set scalebar
-    _scalebar_dx, _scalebar_units = _get_scalebar(scalebar_dx, scalebar_units, _library_id)
+    if scalebar_dx is not None:
+        _scalebar_dx, _scalebar_units = _get_scalebar(scalebar_dx, scalebar_units, _library_id)
     # make plots
     for count, (value_to_plot, _lib_count) in enumerate(itertools.product(color, library_idx)):
         _size = size[_lib_count]
@@ -568,7 +569,7 @@ def _get_coords(
 
 def _subs(adata: AnnData, library_key: str | None = None, library_id: str | None = None) -> AnnData:
     try:
-        return adata[adata.obs[library_key] == library_id]
+        return adata[adata.obs[library_key] == library_id].copy()
     except KeyError:
         raise KeyError(
             f"Cannot subset adata. Either `library_key: {library_key}` or `library_id: {library_id}` is invalid."
@@ -633,7 +634,7 @@ def _get_source_vec(
     else:
         values = adata.obs_vector(value_to_plot, layer=layer)
     if groups is not None and is_categorical_dtype(values):
-        values = pd.Series(values).cat.remove_categories(values.categories.difference(groups))
+        values = values.replace(values.categories.difference(groups), np.nan)
     return values
 
 
@@ -647,18 +648,18 @@ def _get_color_vec(
     to_hex = partial(colors.to_hex, keep_alpha=True)
     if value_to_plot is None:
         return np.full(to_hex(na_color), adata.n_obs), False
-    elif is_categorical_dtype(values):
+    if not is_categorical_dtype(values):
+        return values, False
+    else:
         # use scanpy _get_palette to set palette if not present
         clusters = adata.obs[value_to_plot].cat.categories
         color_map = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
-        color_vector = values.map(color_map)  # type: ignore
-
+        color_vector = values.rename_categories(color_map)  # type: ignore
         # Set color to 'missing color' for all missing values
         if color_vector.isna().any():
             color_vector = color_vector.add_categories([to_hex(na_color)])
             color_vector = color_vector.fillna(to_hex(na_color))
         return color_vector, True
-    return values, False
 
 
 def _shaped_scatter(
