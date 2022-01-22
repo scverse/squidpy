@@ -83,7 +83,7 @@ def spatial(
     na_color: str | Tuple[float, ...] | None = (0.0, 0.0, 0.0, 0.0),
     frameon: Optional[bool] = None,
     title: Union[str, Sequence[str], None] = None,
-    axis_label: Optional[str | None] = None,
+    axis_label: Sequence[str] | str | None = None,
     wspace: Optional[float | None] = None,
     hspace: float = 0.25,
     ncols: int = 4,
@@ -276,6 +276,21 @@ def spatial(
     if title is not None:
         title = [title] if isinstance(title, str) else list(title)
 
+    axis_label = spatial_key if axis_label is None else axis_label
+
+    if isinstance(axis_label, list):
+        if "3d" in subplot_kwargs.values() and len(axis_label) != 3:
+            raise ValueError(f"Invalid `len(axis_label)={len(axis_label)}` for `projection='3d'`.")
+        elif len(axis_label) != 2:
+            raise ValueError("Invalid `len(axis_label)={len(axis_label)}` for `projection='2d'`.")
+        else:
+            axis_labels = axis_label
+    else:
+        if "3d" in subplot_kwargs.values():
+            axis_labels = [axis_label + str(x + 1) for x in range(3)]
+        else:
+            axis_labels = [axis_label + str(x + 1) for x in range(2)]
+
     # set cmap
     cmap = copy(get_cmap(cmap))
     cmap.set_bad("lightgray" if na_color is None else na_color)
@@ -443,12 +458,6 @@ def spatial(
         if projection == "3d":
             ax.set_zticks([])
 
-        axis_label = spatial_key if axis_label is None else axis_label
-        if projection == "3d":
-            axis_labels = [axis_label + str(x + 1) for x in range(3)]
-        else:
-            axis_labels = [axis_label + str(x + 1) for x in range(2)]
-
         ax.set_xlabel(axis_labels[0])
         ax.set_ylabel(axis_labels[1])
         if projection == "3d":
@@ -508,7 +517,7 @@ def spatial(
 
     axs = axs if grid else ax
 
-    if save is not None:
+    if fig is not None and save is not None:
         save_fig(fig, path=save)
 
     return axs
