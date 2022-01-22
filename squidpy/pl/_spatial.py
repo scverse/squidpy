@@ -15,7 +15,7 @@ from typing import (
 from pathlib import Path
 from functools import partial
 from collections import namedtuple
-import warnings
+from matplotlib_scalebar.scalebar import ScaleBar
 import itertools
 
 from scanpy import logging as logg
@@ -143,7 +143,6 @@ def spatial(
     edges_color
     neighbors_key
     palette
-    color_map
     cmap
     na_color
     frameon
@@ -200,7 +199,7 @@ def spatial(
     wspace = 0.75 / rcParams["figure.figsize"][0] + 0.02 if wspace is None else wspace
 
     # logic for image v. non-image data is handled here
-    shape = ScatterShape(shape)  # type: ignore[assignment]
+    shape = ScatterShape(shape) if shape is not None else shape  # type: ignore
     if TYPE_CHECKING:
         assert isinstance(shape, ScatterShape)
 
@@ -226,17 +225,17 @@ def spatial(
             raise ValueError(f"Could not set library_id: `{library_id}`")
 
         size = 120000 / adata.shape[0] if size is None else size
-        size = _maybe_get_list(size, float, _library_id)
+        size = _get_list(size, float, _library_id)
 
         scale_factor = 1.0 if scale_factor is None else scale_factor
-        scale_factor = _maybe_get_list(scale_factor, float, _library_id)
+        scale_factor = _get_list(scale_factor, float, _library_id)
         img = [None for _ in _library_id]
 
     # set crops
     if crop_coord is None:
         crops: Union[list[Tuple[float, ...]], Tuple[None, ...]] = tuple(None for _ in _library_id)
     else:
-        crop_coord = _maybe_get_list(crop_coord, tuple, _library_id)
+        crop_coord = _get_list(crop_coord, tuple, _library_id)
         crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, scale_factor)]
 
     # assert library_key exists and follows logic
@@ -277,7 +276,7 @@ def spatial(
     n_plots = len(list(itertools.product(color, library_idx)))
 
     # set title and axis labels
-    title, axis_labels = _title_axlabels(title, axis_label, spatial_key, n_plots, subplot_kwargs)
+    title, axis_labels = _get_title_axlabels(title, axis_label, spatial_key, n_plots, subplot_kwargs)
     # set cmap
     cmap = copy(get_cmap(cmap))
     cmap.set_bad("lightgray" if na_color is None else na_color)
@@ -287,24 +286,8 @@ def spatial(
     cmap_img = "gray" if bw else None
 
     # set scalebar
-    if scalebar_dx is not None:
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", UserWarning)
-                from matplotlib_scalebar.scalebar import ScaleBar
-        except ImportError:
-            raise ImportError(
-                "To use scalebar functionality please install `matplotlib_scalebar` with: \n \
-                `pip install matplotlib_scalebar`"
-            )
-        _scalebar_dx = _maybe_get_list(scalebar_dx, float, _library_id)
-        scalebar_units = "um" if scalebar_units is None else scalebar_units
-        _scalebar_units = _maybe_get_list(scalebar_units, str, _library_id)
-    else:
-        _scalebar_dx = None
-
+    _scalebar_dx, _scalebar_units = _get_scalebar(scalebar_dx, scalebar_units, _library_id)
     # make plots
-
     for count, (value_to_plot, _lib_count) in enumerate(itertools.product(color, library_idx)):
         _size = size[_lib_count]
         _img = img[_lib_count]
@@ -533,7 +516,7 @@ def _get_spatial_attrs(
     if img is None:
         img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_key] for i in library_id]
     else:  # handle case where img is ndarray or list
-        img = _maybe_get_list(img, np.ndarray, library_id)
+        img = _get_list(img, np.ndarray, library_id)
 
     if bw:
         img = [np.dot(im[..., :3], [0.2989, 0.5870, 0.1140]) for im in img]
@@ -545,7 +528,7 @@ def _get_spatial_attrs(
         _scale_factor_key = scale_factor_key[0]  # get first scale_factor
         scale_factor = [adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id]
     else:  # handle case where scale_factor is float or list
-        scale_factor = _maybe_get_list(scale_factor, float, library_id)
+        scale_factor = _get_list(scale_factor, float, library_id)
 
     # size_key = [i for i in scalefactors if size_key in i][0]
     if size_key not in scalefactors and size is None:
@@ -555,7 +538,7 @@ def _get_spatial_attrs(
         )
     if size is None:
         size = 1.0
-    size = _maybe_get_list(size, float, library_id)
+    size = _get_list(size, float, library_id)
     size = [
         adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][size_key] * s * sf * 0.5
         for i, s, sf in zip(library_id, size, scale_factor)
@@ -597,7 +580,7 @@ def _get_unique_map(dic: Mapping[str, Any]) -> Any:
     return sorted(set.intersection(*map(set, dic.values())))
 
 
-def _maybe_get_list(var: Any, _type: Any, ref: Sequence[Any] | None = None) -> Sequence[Any] | Any:
+def _get_list(var: Any, _type: Any, ref: Sequence[Any] | None = None) -> Sequence[Any] | Any:
     if isinstance(var, _type):
         if ref is None:
             return [var]
@@ -752,8 +735,8 @@ def _plot_edges(
     return edge_collection
 
 
-def _title_axlabels(
-    title: _SeqStr, axis_label: _SeqStr, n_plots: int, spatial_key: str, subplot_kwargs: Mapping[str, Any]
+def _get_title_axlabels(
+    title: _SeqStr, axis_label: _SeqStr, spatial_key: str, n_plots: int, subplot_kwargs: Mapping[str, Any]
 ) -> Tuple[_SeqStr, _SeqStr]:
 
     # handle title
@@ -763,7 +746,7 @@ def _title_axlabels(
     elif isinstance(title, str):
         title = [title] * n_plots
     else:
-        raise ValueError(f"Title: {title} is of wrong type: {type(title)}")
+        title = None
 
     # handle axis labels
     axis_label = spatial_key if axis_label is None else axis_label
@@ -782,3 +765,18 @@ def _title_axlabels(
         axis_labels = axis_label
 
     return title, axis_labels
+
+
+def _get_scalebar(
+    scalebar_dx: Optional[Sequence[float] | float | None] = None,
+    scalebar_units: Optional[Sequence[str] | str | None] = None,
+    library_id: Sequence[str] | str | None = None,
+) -> Any:
+    if scalebar_dx is not None:
+        _scalebar_dx = _get_list(scalebar_dx, float, library_id)
+        scalebar_units = "um" if scalebar_units is None else scalebar_units
+        _scalebar_units = _get_list(scalebar_units, str, library_id)
+    else:
+        _scalebar_dx = None
+
+    return _scalebar_dx, _scalebar_units
