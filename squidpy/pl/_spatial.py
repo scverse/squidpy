@@ -51,6 +51,7 @@ _AvailShapes = Literal["circle", "square", "hex"]
 Palette_t = Optional[Union[str, ListedColormap]]
 _VBound = Union[VBound, Sequence[VBound]]
 _Normalize = Union[Normalize, Sequence[Normalize]]
+_SeqStr = Union[Sequence[str], str, None]
 CmapParams = namedtuple("CmapParams", ["vmin", "vmax", "vcenter", "norm"])
 
 
@@ -63,7 +64,7 @@ def spatial(
     img: Optional[Sequence[NDArrayA] | NDArrayA | None] = None,
     img_key: str | None = None,
     scale_factor: Optional[Sequence[float] | float | None] = None,
-    size: Optional[Sequence[float] | float | None] = None,
+    size: Sequence[float] | float | None = None,
     size_key: str = Key.uns.size_key,
     crop_coord: Optional[Sequence[Tuple[int, int, int, int]] | Tuple[int, int, int, int] | None] = None,
     bw: bool = False,
@@ -272,25 +273,11 @@ def spatial(
     axs: Any = []
     _cmap_kwargs = _get_cmap_params(cmap_kwargs)
 
-    # set title
-    if title is not None:
-        title = [title] if isinstance(title, str) else list(title)
+    library_idx = range(len(_library_id))
+    n_plots = len(list(itertools.product(color, library_idx)))
 
-    axis_label = spatial_key if axis_label is None else axis_label
-
-    if isinstance(axis_label, list):
-        if "3d" in subplot_kwargs.values() and len(axis_label) != 3:
-            raise ValueError(f"Invalid `len(axis_label)={len(axis_label)}` for `projection='3d'`.")
-        elif len(axis_label) != 2:
-            raise ValueError("Invalid `len(axis_label)={len(axis_label)}` for `projection='2d'`.")
-        else:
-            axis_labels = axis_label
-    else:
-        if "3d" in subplot_kwargs.values():
-            axis_labels = [axis_label + str(x + 1) for x in range(3)]
-        else:
-            axis_labels = [axis_label + str(x + 1) for x in range(2)]
-
+    # set title and axis labels
+    title, axis_labels = _title_axlabels(title, axis_label, spatial_key, n_plots, subplot_kwargs)
     # set cmap
     cmap = copy(get_cmap(cmap))
     cmap.set_bad("lightgray" if na_color is None else na_color)
@@ -317,7 +304,7 @@ def spatial(
         _scalebar_dx = None
 
     # make plots
-    library_idx = range(len(_library_id))
+
     for count, (value_to_plot, _lib_count) in enumerate(itertools.product(color, library_idx)):
         _size = size[_lib_count]
         _img = img[_lib_count]
@@ -352,21 +339,9 @@ def spatial(
 
         # set title
         if title is None:
-            if value_to_plot is not None:
-                ax.set_title(value_to_plot)
-            else:
-                ax.set_title("")
-        elif isinstance(title, list):
-            try:
-                ax.set_title(title[count])
-            except IndexError:
-                logg.warning(
-                    "The title list is shorter than the number of panels. "
-                    "Using 'color' value instead for some plots."
-                )
-                ax.set_title(value_to_plot)
+            ax.set_title(value_to_plot)
         else:
-            raise ValueError(f"Title: {title} is of wrong type: {type(title)}")
+            ax.set_title(title[count])
 
         if not categorical:
             vmin_float, vmax_float, vcenter_float, norm_obj = _get_vboundnorm(*_cmap_kwargs, count, color_vector)
@@ -775,3 +750,35 @@ def _plot_edges(
     edge_collection.set_rasterized(sc_settings._vector_friendly)
 
     return edge_collection
+
+
+def _title_axlabels(
+    title: _SeqStr, axis_label: _SeqStr, n_plots: int, spatial_key: str, subplot_kwargs: Mapping[str, Any]
+) -> Tuple[_SeqStr, _SeqStr]:
+
+    # handle title
+    if title is not None:
+        if isinstance(title, list) and len(title) != n_plots:
+            raise ValueError("Title list is shorter than number of plots.")
+    elif isinstance(title, str):
+        title = [title] * n_plots
+    else:
+        raise ValueError(f"Title: {title} is of wrong type: {type(title)}")
+
+    # handle axis labels
+    axis_label = spatial_key if axis_label is None else axis_label
+
+    if isinstance(axis_label, list):
+        if "3d" in subplot_kwargs.values() and len(axis_label) != 3:
+            raise ValueError(f"Invalid `len(axis_label)={len(axis_label)}` for `projection='3d'`.")
+        elif len(axis_label) != 2:
+            raise ValueError("Invalid `len(axis_label)={len(axis_label)}` for `projection='2d'`.")
+    elif isinstance(axis_label, str):
+        if "3d" in subplot_kwargs.values():
+            axis_labels: Sequence[str] = [axis_label + str(x + 1) for x in range(3)]
+        else:
+            axis_labels = [axis_label + str(x + 1) for x in range(2)]
+    else:
+        axis_labels = axis_label
+
+    return title, axis_labels
