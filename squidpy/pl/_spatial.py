@@ -81,7 +81,7 @@ def spatial(
     neighbors_key: Optional[str | None] = None,
     palette: Palette_t = None,
     cmap: Union[Colormap, str, None] = None,
-    na_color: str | Tuple[float, ...] | None = (0.0, 0.0, 0.0, 0.0),
+    na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
     frameon: Optional[bool] = None,
     title: Union[str, Sequence[str], None] = None,
     axis_label: Sequence[str] | str | None = None,
