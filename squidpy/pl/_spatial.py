@@ -205,31 +205,11 @@ def spatial(
 
     if shape is not None:
         # get spatial attrs if shape is not None
-        _library_id, scale_factor, size, img = _get_spatial_attrs(
+        _library_id, scale_factor, size, img = _image_spatial_attrs(
             adata, spatial_key, library_id, img, img_key, scale_factor, size, size_key, bw
         )
     else:  # handle library_id logic for non-image data and spatial attributes
-        if library_id is None and library_key is not None:  # try to assign library_id
-            try:
-                _library_id = adata.obs[library_key].cat.categories.tolist()
-            except IndexError:
-                raise IndexError(f"`library_key: {library_key}` not in `adata.obs`.")
-        elif library_id is None and library_key is None:  # create dummy library_id
-            logg.warning(
-                "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
-            )
-            _library_id = [""]
-        elif isinstance(library_id, list):  # get library_id from arg
-            _library_id = library_id
-        else:
-            raise ValueError(f"Could not set library_id: `{library_id}`")
-
-        size = 120000 / adata.shape[0] if size is None else size
-        size = _get_list(size, float, _library_id)
-
-        scale_factor = 1.0 if scale_factor is None else scale_factor
-        scale_factor = _get_list(scale_factor, float, _library_id)
-        img = [None for _ in _library_id]
+        _library_id, scale_factor, size, img = _spatial_attrs(adata, library_id, scale_factor, size)
 
     # set crops
     if crop_coord is None:
@@ -482,7 +462,40 @@ def spatial(
     return axs
 
 
-def _get_spatial_attrs(
+def _spatial_attrs(
+    adata: AnnData,
+    library_id: Optional[Sequence[str] | None] = None,
+    library_key: Optional[str | None] = None,
+    scale_factor: Optional[Sequence[float] | float | None] = None,
+    size: Optional[Sequence[float] | float | None] = None,
+) -> Tuple[Sequence[str], Sequence[float], Sequence[float], Sequence[None]]:
+
+    if library_id is None and library_key is not None:  # try to assign library_id
+        try:
+            _library_id = adata.obs[library_key].cat.categories.tolist()
+        except IndexError:
+            raise IndexError(f"`library_key: {library_key}` not in `adata.obs`.")
+    elif library_id is None and library_key is None:  # create dummy library_id
+        logg.warning(
+            "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
+        )
+        _library_id = [""]
+    elif isinstance(library_id, list):  # get library_id from arg
+        _library_id = library_id
+    else:
+        raise ValueError(f"Could not set library_id: `{library_id}`")
+
+    size = 120000 / adata.shape[0] if size is None else size
+    size = _get_list(size, float, _library_id)
+
+    scale_factor = 1.0 if scale_factor is None else scale_factor
+    scale_factor = _get_list(scale_factor, float, _library_id)
+    img = [None for _ in _library_id]
+
+    return _library_id, scale_factor, size, img
+
+
+def _image_spatial_attrs(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
     library_id: Optional[Sequence[str] | None] = None,
