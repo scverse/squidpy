@@ -209,7 +209,7 @@ def spatial(
             adata, spatial_key, library_id, img, img_key, scale_factor, size, size_key, bw
         )
     else:  # handle library_id logic for non-image data and spatial attributes
-        _library_id, scale_factor, size, img = _spatial_attrs(adata, library_id, scale_factor, size)
+        _library_id, scale_factor, size, img = _spatial_attrs(adata, library_id, library_key, scale_factor, size)
 
     # set crops
     if crop_coord is None:
