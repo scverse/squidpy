@@ -58,49 +58,49 @@ CmapParams = namedtuple("CmapParams", ["vmin", "vmax", "vcenter", "norm"])
 def spatial(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
-    library_id: Optional[Sequence[str] | str | None] = None,
-    library_key: Optional[str | None] = None,
+    library_id: Sequence[str] | str | None = None,
+    library_key: str | None = None,
     shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
-    img: Optional[Sequence[NDArrayA] | NDArrayA | None] = None,
+    img: Sequence[NDArrayA] | NDArrayA | None = None,
     img_key: str | None = None,
-    scale_factor: Optional[Sequence[float] | float | None] = None,
+    scale_factor: Sequence[float] | float | None = None,
     size: Sequence[float] | float | None = None,
     size_key: str = Key.uns.size_key,
-    crop_coord: Optional[Sequence[Tuple[int, int, int, int]] | Tuple[int, int, int, int] | None] = None,
+    crop_coord: Sequence[Tuple[int, int, int, int]] | Tuple[int, int, int, int] | None = None,
     bw: bool = False,
     alpha_img: float = 1.0,
     color: Sequence[str | None] | str | None = None,
     groups: Sequence[str] | str | None = None,
-    use_raw: Optional[bool | None] = None,
+    use_raw: bool | None = None,
     layer: str | None = None,
-    alt_var: Optional[str | None] = None,
+    alt_var: str | None = None,
     projection: Literal["2d", "3d"] = "2d",
     edges: bool = False,
     edges_width: float = 0.1,
     edges_color: str | Sequence[float] | Sequence[str] = "grey",
-    neighbors_key: Optional[str | None] = None,
+    neighbors_key: str | None = None,
     palette: Palette_t = None,
     cmap: Colormap | str | None = None,
     na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
     frameon: Optional[bool] = None,
     title: str | Sequence[str] | None = None,
     axis_label: Sequence[str] | str | None = None,
-    wspace: Optional[float | None] = None,
+    wspace: float | None = None,
     hspace: float = 0.25,
     ncols: int = 4,
     cmap_kwargs: Mapping[str, _VBound | _Normalize] | None = None,
     add_outline: Optional[bool] = False,
     outline_width: Tuple[float, float] = (0.3, 0.05),
     outline_color: Tuple[str, str] = ("black", "white"),
-    ax: Optional[Axes | None] = None,
+    ax: Axes | None = None,
     save: str | Path | None = None,
     legend_fontsize: int | float | _FontSize | None = None,
     legend_fontweight: int | _FontWeight = "bold",
     legend_loc: str = "right margin",
     legend_fontoutline: Optional[int] = None,
     na_in_legend: bool = True,
-    scalebar_dx: Optional[Sequence[float] | float | None] = None,
-    scalebar_units: Optional[Sequence[str] | str | None] = None,
+    scalebar_dx: Sequence[float] | float | None = None,
+    scalebar_units: Sequence[str] | str | None = None,
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
@@ -464,10 +464,10 @@ def spatial(
 
 def _spatial_attrs(
     adata: AnnData,
-    library_id: Optional[Sequence[str] | None] = None,
-    library_key: Optional[str | None] = None,
-    scale_factor: Optional[Sequence[float] | float | None] = None,
-    size: Optional[Sequence[float] | float | None] = None,
+    library_id: Sequence[str] | None = None,
+    library_key: str | None = None,
+    scale_factor: Sequence[float] | float | None = None,
+    size: Sequence[float] | float | None = None,
 ) -> Tuple[Sequence[str], Sequence[float], Sequence[float], Sequence[None]]:
 
     if library_id is None and library_key is not None:  # try to assign library_id
@@ -498,11 +498,11 @@ def _spatial_attrs(
 def _image_spatial_attrs(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
-    library_id: Optional[Sequence[str] | None] = None,
-    img: Optional[Sequence[NDArrayA] | NDArrayA | None] = None,
+    library_id: Sequence[str] | None = None,
+    img: Sequence[NDArrayA] | NDArrayA | None = None,
     img_key: str | None = None,
-    scale_factor: Optional[Sequence[float] | float | None] = None,
-    size: Optional[Sequence[float] | float | None] = None,
+    scale_factor: Sequence[float] | float | None = None,
+    size: Sequence[float] | float | None = None,
     size_key: str = Key.uns.size_key,
     bw: bool = False,
 ) -> Tuple[Sequence[str], Sequence[float], Sequence[float], Sequence[NDArrayA]]:
@@ -632,10 +632,10 @@ def _get_cmap_params(
 def _get_source_vec(
     adata: AnnData,
     value_to_plot: str | None,
-    use_raw: Optional[bool | None] = None,
-    alt_var: Optional[str | None] = None,
-    layer: Optional[str | None] = None,
-    groups: Optional[Sequence[str] | str | None] = None,
+    use_raw: bool | None = None,
+    alt_var: str | None = None,
+    layer: str | None = None,
+    groups: Sequence[str] | str | None = None,
 ) -> NDArrayA | pd.Series:
 
     if value_to_plot is None:
@@ -656,7 +656,7 @@ def _get_color_vec(
     value_to_plot: str | None,
     values: NDArrayA | pd.Series,
     palette: Palette_t = None,
-    na_color: Optional[str | Tuple[float, ...] | None] = None,
+    na_color: str | Tuple[float, ...] | None = None,
 ) -> Tuple[NDArrayA, bool]:
     to_hex = partial(colors.to_hex, keep_alpha=True)
     if value_to_plot is None:
@@ -726,7 +726,7 @@ def _plot_edges(
     coords: NDArrayA,
     edges_width: float = 0.1,
     edges_color: str | Sequence[float] | Sequence[str] = "grey",
-    neighbors_key: Optional[str | None] = None,
+    neighbors_key: str | None = None,
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> Any:
     """Graph plotting."""
@@ -782,8 +782,8 @@ def _get_title_axlabels(
 
 
 def _get_scalebar(
-    scalebar_dx: Optional[Sequence[float] | float | None] = None,
-    scalebar_units: Optional[Sequence[str] | str | None] = None,
+    scalebar_dx: Sequence[float] | float | None = None,
+    scalebar_units: Sequence[str] | str | None = None,
     library_id: Sequence[str] | str | None = None,
 ) -> Any:
     if scalebar_dx is not None:
