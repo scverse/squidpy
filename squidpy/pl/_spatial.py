@@ -68,7 +68,8 @@ def spatial(
     size_key: str = Key.uns.size_key,
     crop_coord: Sequence[Tuple[int, int, int, int]] | Tuple[int, int, int, int] | None = None,
     bw: bool = False,
-    alpha_img: float = 1.0,
+    alpha: Optional[float] = None,
+    alpha_img: Optional[float] = None,
     color: Sequence[str | None] | str | None = None,
     groups: Sequence[str] | str | None = None,
     use_raw: bool | None = None,
@@ -92,8 +93,6 @@ def spatial(
     add_outline: Optional[bool] = False,
     outline_width: Tuple[float, float] = (0.3, 0.05),
     outline_color: Tuple[str, str] = ("black", "white"),
-    ax: Axes | None = None,
-    save: str | Path | None = None,
     legend_fontsize: int | float | _FontSize | None = None,
     legend_fontweight: int | _FontWeight = "bold",
     legend_loc: str = "right margin",
@@ -103,6 +102,9 @@ def spatial(
     scalebar_units: Sequence[str] | str | None = None,
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    dpi: int | None = None,
+    ax: Axes | None = None,
+    save: str | Path | None = None,
     **kwargs: Any,
 ) -> Any:
     """
@@ -175,6 +177,8 @@ def spatial(
     edges_kwargs = dict(edges_kwargs)
     # get projection
     subplot_kwargs = {"projection": "3d"} if projection == "3d" else {}
+    alpha = 1.0 if alpha is None else alpha
+    alpha_img = 1.0 if alpha_img is None else alpha_img
 
     # make colors and groups as list
     groups = [groups] if isinstance(groups, str) else groups
@@ -230,6 +234,12 @@ def spatial(
 
     # set coords
     coords = _get_coords(adata, spatial_key, _library_id, scale_factor, library_key)
+    if subplot_kwargs["projection"] == "3d":
+        for arr in coords:
+            if arr.shape[1] != 3:
+                raise ValueError(
+                    f"If `projection='3d'` expects all `coords` to be 3d, but found dimensions=`{arr.shape[1]}`."
+                )
 
     # partial init subset
     _subset = partial(_subs, library_key=library_key) if library_key is not None else lambda _, **__: _
@@ -341,9 +351,9 @@ def spatial(
         else:
 
             scatter = (
-                partial(ax.scatter, marker=".", plotnonfinite=True)
+                partial(ax.scatter, marker=".", alpha=alpha, plotnonfinite=True)
                 if shape is None
-                else partial(_shaped_scatter, shape=shape)
+                else partial(_shaped_scatter, shape=shape, alpha=alpha)
             )
 
             if add_outline:
@@ -354,7 +364,7 @@ def spatial(
                 # the default black and white colors can be changes using the contour_config parameter
                 bg_color, gap_color = outline_color
 
-                kwargs["edgecolor"] = "none"  # remove edge from kwargs if present
+                kwargs.pop("edgecolor", None)  # remove edge from kwargs if present
                 alpha = kwargs.pop("alpha") if "alpha" in kwargs else None  # remove alpha for outline
 
                 _cax = scatter(
@@ -379,7 +389,7 @@ def spatial(
                 ax.add_collection(_cax)
 
                 # if user did not set alpha, set alpha to 0.7
-                kwargs["alpha"] = 0.7 if alpha is None else alpha
+                alpha = 0.7 if alpha is None else alpha
 
             _cax = scatter(
                 _coords[:, 0],
@@ -388,6 +398,7 @@ def spatial(
                 s=_size,
                 rasterized=sc_settings._vector_friendly,
                 norm=normalize,
+                alpha=alpha,
                 **kwargs,
             )
             cax = ax.add_collection(_cax)
