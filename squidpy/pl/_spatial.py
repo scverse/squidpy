@@ -234,7 +234,7 @@ def spatial(
 
     # set coords
     coords = _get_coords(adata, spatial_key, _library_id, scale_factor, library_key)
-    if subplot_kwargs["projection"] == "3d":
+    if "3d" in subplot_kwargs.values():
         for arr in coords:
             if arr.shape[1] != 3:
                 raise ValueError(
