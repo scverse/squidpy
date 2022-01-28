@@ -172,13 +172,13 @@ class Key:
             if library_id is not None:
                 if isinstance(library_id, str):
                     return [library_id]
-                if not any(i in library_id for i in haystack):
+                if not all(i in library_id for i in haystack):
                     raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
                 if sub_key is not None:
-                    if not all(sub_key in i for i in [adata.uns["spatial"][i].keys() for i in library_id]):
+                    if not all(sub_key in lib for lib in [adata.uns[spatial_key][lib].keys() for lib in library_id]):
                         raise KeyError(
-                            f"`{sub_key}` not found in `adata.uns[{spatial_key}]['library_id'].keys()` with \
-                                following `library_id`: {library_id}."
+                            f"`{sub_key}` not found in `adata.uns[{spatial_key}]['library_id'].keys()`\
+                                with following `library_id`: {library_id}."
                         )
                     return library_id
             return haystack
