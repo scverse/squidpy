@@ -75,7 +75,6 @@ def spatial(
     use_raw: bool | None = None,
     layer: str | None = None,
     alt_var: str | None = None,
-    projection: Literal["2d", "3d"] = "2d",
     edges: bool = False,
     edges_width: float = 0.1,
     edges_color: str | Sequence[float] | Sequence[str] = "grey",
@@ -139,7 +138,6 @@ def spatial(
     layer
     alt_var
         This is equivalent ot gene_symbol in embedding. See scanpy docs.
-    projection
     edges
     edges_width
     edges_color
@@ -175,8 +173,6 @@ def spatial(
 
     scalebar_kwargs = dict(scalebar_kwargs)
     edges_kwargs = dict(edges_kwargs)
-    # get projection
-    subplot_kwargs = {"projection": "3d"} if projection == "3d" else {}
     alpha = 1.0 if alpha is None else alpha
     alpha_img = 1.0 if alpha_img is None else alpha_img
 
@@ -234,12 +230,6 @@ def spatial(
 
     # set coords
     coords = _get_coords(adata, spatial_key, _library_id, scale_factor, library_key)
-    if "3d" in subplot_kwargs.values():
-        for arr in coords:
-            if arr.shape[1] != 3:
-                raise ValueError(
-                    f"If `projection='3d'` expects all `coords` to be 3d, but found dimensions=`{arr.shape[1]}`."
-                )
 
     # partial init subset
     _subset = partial(_subs, library_key=library_key) if library_key is not None else lambda _, **__: _
@@ -256,7 +246,7 @@ def spatial(
         grid = None
         if ax is None:
             fig = pl.figure()
-            ax = fig.add_subplot(111, **subplot_kwargs)
+            ax = fig.add_subplot(111)
 
     # init axs list and vparams
     axs: Any = []
@@ -266,7 +256,7 @@ def spatial(
     n_plots = len(list(itertools.product(color, library_idx)))
 
     # set title and axis labels
-    title, axis_labels = _get_title_axlabels(title, axis_label, spatial_key, n_plots, subplot_kwargs)
+    title, axis_labels = _get_title_axlabels(title, axis_label, spatial_key, n_plots)
     # set cmap
     cmap = copy(get_cmap(cmap))
     cmap.set_bad("lightgray" if na_color is None else na_color)
@@ -306,7 +296,7 @@ def spatial(
 
         # set frame
         if grid:
-            ax = pl.subplot(grid[count], **subplot_kwargs)
+            ax = pl.subplot(grid[count])
             axs.append(ax)
         if not (sc_settings._frameon if frameon is None else frameon):
             ax.axis("off")
@@ -335,84 +325,64 @@ def spatial(
             )
             ax.add_collection(_cedge)
 
-        # make scatter
-        if projection == "3d":
-            cax = ax.scatter(
-                _coords[:, 0],
-                _coords[:, 1],
-                _coords[:, 2],
-                marker=".",
-                c=color_vector,
-                rasterized=sc_settings._vector_friendly,
-                norm=normalize,
-                s=_size,
-                **kwargs,
-            )
-        else:
+        scatter = (
+            partial(ax.scatter, marker=".", alpha=alpha, plotnonfinite=True)
+            if shape is None
+            else partial(_shaped_scatter, shape=shape, alpha=alpha)
+        )
 
-            scatter = (
-                partial(ax.scatter, marker=".", alpha=alpha, plotnonfinite=True)
-                if shape is None
-                else partial(_shaped_scatter, shape=shape, alpha=alpha)
-            )
+        if add_outline:
+            bg_width, gap_width = outline_width
+            point = np.sqrt(_size)
+            gap_size = (point + (point * gap_width) * 2) ** 2
+            bg_size = (np.sqrt(gap_size) + (point * bg_width) * 2) ** 2
+            # the default black and white colors can be changes using the contour_config parameter
+            bg_color, gap_color = outline_color
 
-            if add_outline:
-                bg_width, gap_width = outline_width
-                point = np.sqrt(_size)
-                gap_size = (point + (point * gap_width) * 2) ** 2
-                bg_size = (np.sqrt(gap_size) + (point * bg_width) * 2) ** 2
-                # the default black and white colors can be changes using the contour_config parameter
-                bg_color, gap_color = outline_color
-
-                kwargs.pop("edgecolor", None)  # remove edge from kwargs if present
-                alpha = kwargs.pop("alpha") if "alpha" in kwargs else None  # remove alpha for outline
-
-                _cax = scatter(
-                    _coords[:, 0],
-                    _coords[:, 1],
-                    s=bg_size,
-                    c=bg_color,
-                    rasterized=sc_settings._vector_friendly,
-                    norm=normalize,
-                    **kwargs,
-                )
-                ax.add_collection(_cax)
-                _cax = scatter(
-                    _coords[:, 0],
-                    _coords[:, 1],
-                    s=gap_size,
-                    c=gap_color,
-                    rasterized=sc_settings._vector_friendly,
-                    norm=normalize,
-                    **kwargs,
-                )
-                ax.add_collection(_cax)
-
-                # if user did not set alpha, set alpha to 0.7
-                alpha = 0.7 if alpha is None else alpha
+            kwargs.pop("edgecolor", None)  # remove edge from kwargs if present
+            alpha = kwargs.pop("alpha") if "alpha" in kwargs else None  # remove alpha for outline
 
             _cax = scatter(
                 _coords[:, 0],
                 _coords[:, 1],
-                c=color_vector,
-                s=_size,
+                s=bg_size,
+                c=bg_color,
                 rasterized=sc_settings._vector_friendly,
                 norm=normalize,
-                alpha=alpha,
                 **kwargs,
             )
-            cax = ax.add_collection(_cax)
+            ax.add_collection(_cax)
+            _cax = scatter(
+                _coords[:, 0],
+                _coords[:, 1],
+                s=gap_size,
+                c=gap_color,
+                rasterized=sc_settings._vector_friendly,
+                norm=normalize,
+                **kwargs,
+            )
+            ax.add_collection(_cax)
+
+            # if user did not set alpha, set alpha to 0.7
+            alpha = 0.7 if alpha is None else alpha
+
+        _cax = scatter(
+            _coords[:, 0],
+            _coords[:, 1],
+            c=color_vector,
+            s=_size,
+            rasterized=sc_settings._vector_friendly,
+            norm=normalize,
+            alpha=alpha,
+            **kwargs,
+        )
+        cax = ax.add_collection(_cax)
 
         ax.set_yticks([])
         ax.set_xticks([])
-        if projection == "3d":
-            ax.set_zticks([])
 
         ax.set_xlabel(axis_labels[0])
         ax.set_ylabel(axis_labels[1])
-        if projection == "3d":
-            # shift the label closer to the axis
-            ax.set_zlabel(axis_labels[2], labelpad=-7)
 
         ax.autoscale_view()
 
@@ -760,9 +730,7 @@ def _plot_edges(
     return edge_collection
 
 
-def _get_title_axlabels(
-    title: _SeqStr, axis_label: _SeqStr, spatial_key: str, n_plots: int, subplot_kwargs: Mapping[str, Any]
-) -> Tuple[_SeqStr, _SeqStr]:
+def _get_title_axlabels(title: _SeqStr, axis_label: _SeqStr, spatial_key: str, n_plots: int) -> Tuple[_SeqStr, _SeqStr]:
 
     # handle title
     if title is not None:
@@ -777,17 +745,11 @@ def _get_title_axlabels(
     axis_label = spatial_key if axis_label is None else axis_label
 
     if isinstance(axis_label, list):
-        if "3d" in subplot_kwargs.values() and len(axis_label) != 3:
-            raise ValueError(f"Invalid `len(axis_label)={len(axis_label)}` for `projection='3d'`.")
-        elif len(axis_label) != 2:
-            raise ValueError("Invalid `len(axis_label)={len(axis_label)}` for `projection='2d'`.")
-    elif isinstance(axis_label, str):
-        if "3d" in subplot_kwargs.values():
-            axis_labels: Sequence[str] = [axis_label + str(x + 1) for x in range(3)]
-        else:
-            axis_labels = [axis_label + str(x + 1) for x in range(2)]
-    else:
+        if len(axis_label) != 2:
+            raise ValueError("Invalid `len(axis_label)={len(axis_label)}`.")
         axis_labels = axis_label
+    elif isinstance(axis_label, str):
+        axis_labels = [axis_label + str(x + 1) for x in range(2)]
 
     return title, axis_labels
 
