@@ -580,13 +580,12 @@ def _get_list(var: Any, _type: Any, ref_len: int | None = None) -> Sequence[Any]
         if ref_len is None:
             return [var]
         return [var] * ref_len
+    elif isinstance(var, list):
+        if (ref_len is not None) and (ref_len != len(var)):
+            raise ValueError(f"Var len: {len(var)} is not equal to ref len: {ref_len}. Please Check.")
+        return var
     else:
-        if isinstance(var, list):
-            if (ref_len is not None) and (ref_len != len(var)):
-                raise ValueError(f"Var len: {len(var)} is not equal to ref len: {ref_len}. Please Check.")
-            return var
-        else:
-            raise ValueError(f"Can't make list from var: `{var}`")
+        raise ValueError(f"Can't make list from var: `{var}`")
 
 
 def _get_cmap_params(
