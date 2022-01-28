@@ -140,12 +140,10 @@ class Key:
                         f"Unable to determine which library id to use. "
                         f"Please specify one from: `{sorted(library_id)}`."
                     )
-                else:
-                    return library_id[0]
-            elif len(library_id) > 0:
+                return library_id[0]
+            if len(library_id) > 0:
                 return library_id
-            else:
-                return None
+            return None
 
         @classmethod
         def library_mapping(
@@ -153,7 +151,7 @@ class Key:
             adata: AnnData,
             spatial_key: str,
             sub_key: str,
-            library_id: Optional[Sequence[str] | str] = None,
+            library_id: Sequence[str] | str | None = None,
         ) -> Mapping[str, Sequence[str]]:
             library_id = cls._haystack(adata, spatial_key, library_id, sub_key)
             mapping = {i: list(adata.uns[spatial_key][i][sub_key].keys()) for i in library_id}
@@ -165,7 +163,7 @@ class Key:
             cls,
             adata: AnnData,
             spatial_key: str,
-            library_id: Optional[Sequence[str] | str] = None,
+            library_id: Sequence[str] | str | None = None,
             sub_key: Optional[str] = None,
         ) -> Sequence[str]:
             if spatial_key not in adata.uns:
@@ -173,7 +171,7 @@ class Key:
             haystack = list(adata.uns[spatial_key].keys())
             if library_id is not None:
                 if isinstance(library_id, str):
-                    library_id = [library_id]
+                    return [library_id]
                 if not any(i in library_id for i in haystack):
                     raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
                 if sub_key is not None:
@@ -182,9 +180,8 @@ class Key:
                             f"`{sub_key}` not found in `adata.uns[{spatial_key}]['library_id'].keys()` with \
                                 following `library_id`: {library_id}."
                         )
-                return library_id
-            else:
-                return haystack
+                    return library_id
+            return haystack
 
     class obsp:
         @classmethod
