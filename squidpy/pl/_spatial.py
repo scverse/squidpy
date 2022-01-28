@@ -63,16 +63,17 @@ def spatial(
     spatial_key: str = Key.obsm.spatial,
     library_id: _SeqStr = None,
     library_key: str | None = None,
+    library_first: bool = True,
     shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
     img: NDArrayA | Sequence[NDArrayA] | None = None,
     img_key: str | None = None,
+    img_alpha: Optional[float] = None,
     scale_factor: _SeqFloat = None,
     size: _SeqFloat = None,
     size_key: str = Key.uns.size_key,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
     bw: bool = False,
     alpha: Optional[float] = None,
-    img_alpha: Optional[float] = None,
     color: Sequence[str | None] | str | None = None,
     groups: _SeqStr = None,
     use_raw: bool | None = None,
@@ -256,7 +257,11 @@ def spatial(
     _cmap_kwargs = _get_cmap_params(cmap_kwargs)
 
     library_idx = range(len(_library_id))
-    n_plots = len(list(itertools.product(color, library_idx)))
+    if library_first:
+        iter_panels = itertools.product(library_idx, color)
+    else:
+        iter_panels = itertools.product(color, library_idx)
+    n_plots = len(list(iter_panels))
 
     # set title and axis labels
     title, axis_labels = _get_title_axlabels(title, axis_label, spatial_key, n_plots)
@@ -272,7 +277,13 @@ def spatial(
     if scalebar_dx is not None:
         _scalebar_dx, _scalebar_units = _get_scalebar(scalebar_dx, scalebar_units, len(_library_id))
     # make plots
-    for count, (value_to_plot, _lib_count) in enumerate(itertools.product(color, library_idx)):
+    for count, (first, second) in enumerate(iter_panels):
+        if library_first:
+            _lib_count = first
+            value_to_plot = second
+        else:
+            _lib_count = second
+            value_to_plot = first
         _size = size[_lib_count]
         _img = img[_lib_count]
         _crops = crops[_lib_count]
