@@ -78,9 +78,9 @@ def spatial(
     use_raw: bool | None = None,
     layer: str | None = None,
     alt_var: str | None = None,
-    edges: bool = False,
-    edges_width: float = 0.1,
-    edges_color: str | Sequence[float] | Sequence[str] = "grey",
+    edge: bool = False,
+    edge_width: float = 0.1,
+    edge_color: str | Sequence[float] | Sequence[str] = "grey",
     connectivity_key: str = Key.obsp.spatial_conn(),
     palette: Palette_t = None,
     cmap: Colormap | str | None = None,
@@ -103,7 +103,7 @@ def spatial(
     scalebar_dx: _SeqFloat = None,
     scalebar_units: _SeqStr = None,
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    edge_kwargs: Mapping[str, Any] = MappingProxyType({}),
     dpi: int | None = None,
     ax: Axes | None = None,
     save: str | Path | None = None,
@@ -141,9 +141,9 @@ def spatial(
     layer
     alt_var
         This is equivalent ot gene_symbol in embedding. See scanpy docs.
-    edges
-    edges_width
-    edges_color
+    edge
+    edge_width
+    edge_color
     neighbors_key
     palette
     cmap
@@ -175,7 +175,7 @@ def spatial(
     _assert_spatial_basis(adata, spatial_key)
 
     scalebar_kwargs = dict(scalebar_kwargs)
-    edges_kwargs = dict(edges_kwargs)
+    edge_kwargs = dict(edge_kwargs)
     alpha = 1.0 if alpha is None else alpha
     img_alpha = 1.0 if img_alpha is None else img_alpha
 
@@ -321,10 +321,10 @@ def spatial(
         else:
             normalize = None
 
-        # plot edges and arrows if needed. Do it here cause otherwise image is on top.
-        if edges:
-            _cedge = _plot_edges(
-                _subset(adata, library_id=_lib), _coords, edges_width, edges_color, connectivity_key, edges_kwargs
+        # plot edge and arrows if needed. Do it here cause otherwise image is on top.
+        if edge:
+            _cedge = _plot_edge(
+                _subset(adata, library_id=_lib), _coords, edge_width, edge_color, connectivity_key, edge_kwargs
             )
             ax.add_collection(_cedge)
 
@@ -704,13 +704,13 @@ def _make_poly(x: NDArrayA, y: NDArrayA, r: float, n: int, i: int) -> Tuple[NDAr
     return x_i, y_i
 
 
-def _plot_edges(
+def _plot_edge(
     adata: AnnData,
     coords: NDArrayA,
-    edges_width: float = 0.1,
-    edges_color: str | Sequence[float] | Sequence[str] = "grey",
+    edge_width: float = 0.1,
+    edge_color: str | Sequence[float] | Sequence[str] = "grey",
     connectivity_key: str = Key.obsp.spatial_conn(),
-    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    edge_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> Any:
     """Graph plotting."""
     from networkx import Graph
@@ -724,7 +724,7 @@ def _plot_edges(
 
     g = Graph(adata.obsp[connectivity_key])
     edge_collection = draw_networkx_edges(
-        g, coords, width=edges_width, edge_color=edges_color, arrows=False, **edges_kwargs
+        g, coords, width=edge_width, edge_color=edge_color, arrows=False, **edge_kwargs
     )
     edge_collection.set_rasterized(sc_settings._vector_friendly)
 
