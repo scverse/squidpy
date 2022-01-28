@@ -51,8 +51,9 @@ _AvailShapes = Literal["circle", "square", "hex"]
 Palette_t = Optional[Union[str, ListedColormap]]
 _VBound = Union[VBound, Sequence[VBound]]
 _Normalize = Union[Normalize, Sequence[Normalize]]
-_SeqStr = Union[Sequence[str], str, None]
-
+_SeqStr = Union[str, Sequence[str], None]
+_SeqFloat = Union[float, Sequence[float], None]
+_CoordTuple = Tuple[int, int, int, int]
 # named tuples
 CmapParams = namedtuple("CmapParams", ["vmin", "vmax", "vcenter", "norm"])
 
@@ -60,33 +61,33 @@ CmapParams = namedtuple("CmapParams", ["vmin", "vmax", "vcenter", "norm"])
 def spatial(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
-    library_id: Sequence[str] | str | None = None,
+    library_id: _SeqStr = None,
     library_key: str | None = None,
     shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
-    img: Sequence[NDArrayA] | NDArrayA | None = None,
+    img: NDArrayA | Sequence[NDArrayA] | None = None,
     img_key: str | None = None,
-    scale_factor: Sequence[float] | float | None = None,
-    size: Sequence[float] | float | None = None,
+    scale_factor: _SeqFloat = None,
+    size: _SeqFloat = None,
     size_key: str = Key.uns.size_key,
-    crop_coord: Sequence[Tuple[int, int, int, int]] | Tuple[int, int, int, int] | None = None,
+    crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
     bw: bool = False,
     alpha: Optional[float] = None,
     alpha_img: Optional[float] = None,
     color: Sequence[str | None] | str | None = None,
-    groups: Sequence[str] | str | None = None,
+    groups: _SeqStr = None,
     use_raw: bool | None = None,
     layer: str | None = None,
     alt_var: str | None = None,
     edges: bool = False,
     edges_width: float = 0.1,
     edges_color: str | Sequence[float] | Sequence[str] = "grey",
-    neighbors_key: str | None = None,
+    connectivity_key: str = Key.obsp.spatial_conn(),
     palette: Palette_t = None,
     cmap: Colormap | str | None = None,
     na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
     frameon: Optional[bool] = None,
-    title: str | Sequence[str] | None = None,
-    axis_label: Sequence[str] | str | None = None,
+    title: _SeqStr = None,
+    axis_label: _SeqStr = None,
     wspace: float | None = None,
     hspace: float = 0.25,
     ncols: int = 4,
@@ -99,8 +100,8 @@ def spatial(
     legend_loc: str = "right margin",
     legend_fontoutline: Optional[int] = None,
     na_in_legend: bool = True,
-    scalebar_dx: Sequence[float] | float | None = None,
-    scalebar_units: Sequence[str] | str | None = None,
+    scalebar_dx: _SeqFloat = None,
+    scalebar_units: _SeqStr = None,
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     dpi: int | None = None,
@@ -323,7 +324,7 @@ def spatial(
         # plot edges and arrows if needed. Do it here cause otherwise image is on top.
         if edges:
             _cedge = _plot_edges(
-                _subset(adata, library_id=_lib), _coords, edges_width, edges_color, neighbors_key, edges_kwargs
+                _subset(adata, library_id=_lib), _coords, edges_width, edges_color, connectivity_key, edges_kwargs
             )
             ax.add_collection(_cedge)
 
@@ -449,8 +450,8 @@ def _spatial_attrs(
     adata: AnnData,
     library_id: Sequence[str] | None = None,
     library_key: str | None = None,
-    scale_factor: Sequence[float] | float | None = None,
-    size: Sequence[float] | float | None = None,
+    scale_factor: _SeqFloat = None,
+    size: _SeqFloat = None,
 ) -> Tuple[Sequence[str], Sequence[float], Sequence[float], Sequence[None]]:
 
     if library_id is None and library_key is not None:  # try to assign library_id
@@ -482,10 +483,10 @@ def _image_spatial_attrs(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
     library_id: Sequence[str] | None = None,
-    img: Sequence[NDArrayA] | NDArrayA | None = None,
+    img: NDArrayA | Sequence[NDArrayA] | None = None,
     img_key: str | None = None,
-    scale_factor: Sequence[float] | float | None = None,
-    size: Sequence[float] | float | None = None,
+    scale_factor: _SeqFloat = None,
+    size: _SeqFloat = None,
     size_key: str = Key.uns.size_key,
     bw: bool = False,
 ) -> Tuple[Sequence[str], Sequence[float], Sequence[float], Sequence[NDArrayA]]:
@@ -617,7 +618,7 @@ def _get_source_vec(
     use_raw: bool | None = None,
     alt_var: str | None = None,
     layer: str | None = None,
-    groups: Sequence[str] | str | None = None,
+    groups: _SeqStr = None,
 ) -> NDArrayA | pd.Series:
 
     if value_to_plot is None:
@@ -708,21 +709,20 @@ def _plot_edges(
     coords: NDArrayA,
     edges_width: float = 0.1,
     edges_color: str | Sequence[float] | Sequence[str] = "grey",
-    neighbors_key: str | None = None,
+    connectivity_key: str = Key.obsp.spatial_conn(),
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> Any:
     """Graph plotting."""
     from networkx import Graph
     from networkx.drawing.nx_pylab import draw_networkx_edges
 
-    neighbors_key = Key.obsp.spatial_conn(neighbors_key)
-    if neighbors_key not in adata.obsp:
+    if connectivity_key not in adata.obsp:
         raise KeyError(
-            f"Unable to find `neighbors_key: {neighbors_key}` in `adata.obsp`.\
-             Please set `neighbors_key`."
+            f"Unable to find `connectivity_key: {connectivity_key}` in `adata.obsp`.\
+             Please set `connectivity_key`."
         )
 
-    g = Graph(adata.obsp[neighbors_key])
+    g = Graph(adata.obsp[connectivity_key])
     edge_collection = draw_networkx_edges(
         g, coords, width=edges_width, edge_color=edges_color, arrows=False, **edges_kwargs
     )
@@ -756,8 +756,8 @@ def _get_title_axlabels(title: _SeqStr, axis_label: _SeqStr, spatial_key: str, n
 
 
 def _get_scalebar(
-    scalebar_dx: Sequence[float] | float | None = None,
-    scalebar_units: Sequence[str] | str | None = None,
+    scalebar_dx: _SeqFloat = None,
+    scalebar_units: _SeqStr = None,
     len_lib: Optional[int] = None,
 ) -> Any:
     if scalebar_dx is not None:
