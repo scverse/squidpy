@@ -9,7 +9,7 @@ from scanpy.readwrite import read_visium
 
 def _download_visium_dataset(
     sample_id: str, spaceranger_version: str, base_dir: Optional[Path] = None, download_image: bool = False
-) -> str:
+) -> None:
     """Download Visium dataset.
 
     Params
