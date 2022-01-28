@@ -72,7 +72,7 @@ def spatial(
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
     bw: bool = False,
     alpha: Optional[float] = None,
-    alpha_img: Optional[float] = None,
+    img_alpha: Optional[float] = None,
     color: Sequence[str | None] | str | None = None,
     groups: _SeqStr = None,
     use_raw: bool | None = None,
@@ -92,7 +92,7 @@ def spatial(
     hspace: float = 0.25,
     ncols: int = 4,
     cmap_kwargs: Mapping[str, _VBound | _Normalize] | None = None,
-    add_outline: Optional[bool] = False,
+    add_outline: bool = False,
     outline_width: Tuple[float, float] = (0.3, 0.05),
     outline_color: Tuple[str, str] = ("black", "white"),
     legend_fontsize: int | float | _FontSize | None = None,
@@ -133,7 +133,7 @@ def spatial(
     crop_coord
     bw
         for black and white of image.
-    alpha_img
+    img_alpha
         for alpha of image
     color
     groups
@@ -177,7 +177,7 @@ def spatial(
     scalebar_kwargs = dict(scalebar_kwargs)
     edges_kwargs = dict(edges_kwargs)
     alpha = 1.0 if alpha is None else alpha
-    alpha_img = 1.0 if alpha_img is None else alpha_img
+    img_alpha = 1.0 if img_alpha is None else img_alpha
 
     # make colors and groups as list
     groups = [groups] if isinstance(groups, str) else groups
@@ -422,7 +422,7 @@ def spatial(
 
         cur_coords = np.concatenate([ax.get_xlim(), ax.get_ylim()])
         if _img is not None:
-            ax.imshow(_img, cmap=cmap_img, alpha=alpha_img)
+            ax.imshow(_img, cmap=cmap_img, alpha=img_alpha)
         else:
             ax.set_aspect("equal")
             ax.invert_yaxis()
