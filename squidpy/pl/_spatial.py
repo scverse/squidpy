@@ -37,6 +37,7 @@ from matplotlib.cm import get_cmap
 from matplotlib.axes import Axes
 from matplotlib.colors import Colormap, Normalize, ListedColormap
 from matplotlib.patches import Circle, Polygon
+from matplotlib.gridspec import GridSpec
 from matplotlib.collections import PatchCollection
 
 from squidpy._utils import NDArrayA
@@ -65,9 +66,6 @@ def spatial(
     library_key: str | None = None,
     library_first: bool = True,
     shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
-    img: NDArrayA | Sequence[NDArrayA] | None = None,
-    img_key: str | None = None,
-    img_alpha: Optional[float] = None,
     scale_factor: _SeqFloat = None,
     size: _SeqFloat = None,
     size_key: str = Key.uns.size_key,
@@ -85,7 +83,11 @@ def spatial(
     connectivity_key: str = Key.obsp.spatial_conn(),
     palette: Palette_t = None,
     cmap: Colormap | str | None = None,
-    na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
+    img: NDArrayA | Sequence[NDArrayA] | None = None,
+    img_key: str | None = None,
+    img_alpha: Optional[float] = None,
+    img_cmap: Colormap | str | None = None,
+    img_channel: int | None = None,
     frameon: Optional[bool] = None,
     title: _SeqStr = None,
     axis_label: _SeqStr = None,
@@ -100,6 +102,7 @@ def spatial(
     legend_fontweight: int | _FontWeight = "bold",
     legend_loc: str = "right margin",
     legend_fontoutline: Optional[int] = None,
+    na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
     na_in_legend: bool = True,
     scalebar_dx: _SeqFloat = None,
     scalebar_units: _SeqStr = None,
@@ -210,7 +213,16 @@ def spatial(
     if shape is not None:
         # get spatial attrs if shape is not None
         _library_id, scale_factor, size, img = _image_spatial_attrs(
-            adata, spatial_key, library_id, img, img_key, scale_factor, size, size_key, bw
+            adata=adata,
+            spatial_key=spatial_key,
+            library_id=library_id,
+            img=img,
+            img_key=img_key,
+            img_channel=img_channel,
+            scale_factor=scale_factor,
+            size=size,
+            size_key=size_key,
+            bw=bw,
         )
     else:  # handle library_id logic for non-image data and spatial attributes
         _library_id, scale_factor, size, img = _spatial_attrs(adata, library_id, library_key, scale_factor, size)
@@ -269,8 +281,8 @@ def spatial(
     cmap.set_bad("lightgray" if na_color is None else na_color)
     kwargs["cmap"] = cmap
 
-    # set cmap_img
-    cmap_img = "gray" if bw else None
+    # set img_cmap
+    img_cmap = "gray" if bw else img_cmap if cmap is not None else None
 
     # set scalebar
     if scalebar_dx is not None:
@@ -391,62 +403,32 @@ def spatial(
         )
         cax = ax.add_collection(_cax)
 
-        ax.set_yticks([])
-        ax.set_xticks([])
-
-        ax.set_xlabel(axis_labels[0])
-        ax.set_ylabel(axis_labels[1])
-
-        ax.autoscale_view()
-
-        if value_to_plot is None:
-            # if only dots were plotted without an associated value
-            # there is not need to plot a legend or a colorbar
-            continue
-
-        if legend_fontoutline is not None:
-            path_effect = [patheffects.withStroke(linewidth=legend_fontoutline, foreground="w")]
-        else:
-            path_effect = []
-
-        # Adding legends
-        if categorical:
-            clusters = adata.obs[value_to_plot].cat.categories
-            _palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
-            _add_categorical_legend(
-                ax,
-                color_source_vector,
-                palette=_palette,
-                scatter_array=_coords,
-                legend_loc=legend_loc,
-                legend_fontweight=legend_fontweight,
-                legend_fontsize=legend_fontsize,
-                legend_fontoutline=path_effect,
-                na_color=na_color,
-                na_in_legend=na_in_legend,
-                multi_panel=bool(grid),
-            )
-        else:
-            # TODO: na_in_legend should have some effect here
-            pl.colorbar(cax, ax=ax, pad=0.01, fraction=0.08, aspect=30)
-
-        cur_coords = np.concatenate([ax.get_xlim(), ax.get_ylim()])
-        if _img is not None:
-            ax.imshow(_img, cmap=cmap_img, alpha=img_alpha)
-        else:
-            ax.set_aspect("equal")
-            ax.invert_yaxis()
-
-        if _crops is not None:
-            ax.set_xlim(_crops.to_tuple()[0], _crops.to_tuple()[1])
-            ax.set_ylim(_crops.to_tuple()[3], _crops.to_tuple()[2])
-        else:
-            ax.set_xlim(cur_coords[0], cur_coords[1])
-            ax.set_ylim(cur_coords[3], cur_coords[2])
-
-        if isinstance(_scalebar_dx, list):
-            scalebar = ScaleBar(_scalebar_dx[_lib_count], units=_scalebar_units[_lib_count], **scalebar_kwargs)
-            ax.add_artist(scalebar)
+        ax = _decorate_axs(
+            ax=ax,
+            cax=cax,
+            lib_count=_lib_count,
+            grid=grid,
+            adata=adata,
+            coords=_coords,
+            img=_img,
+            img_cmap=img_cmap,
+            img_alpha=img_alpha,
+            value_to_plot=value_to_plot,
+            color_source_vector=color_source_vector,
+            axis_labels=axis_labels,
+            crops=_crops,
+            categorical=categorical,
+            palette=palette,
+            legend_fontsize=legend_fontsize,
+            legend_fontweight=legend_fontweight,
+            legend_loc=legend_loc,
+            legend_fontoutline=legend_fontoutline,
+            na_color=na_color,
+            na_in_legend=na_in_legend,
+            scalebar_dx=scalebar_dx,
+            scalebar_units=scalebar_units,
+            scalebar_kwargs=scalebar_kwargs,
+        )
 
     axs = axs if grid else ax
 
@@ -495,6 +477,7 @@ def _image_spatial_attrs(
     library_id: Sequence[str] | None = None,
     img: NDArrayA | Sequence[NDArrayA] | None = None,
     img_key: str | None = None,
+    img_channel: int | None = None,
     scale_factor: _SeqFloat = None,
     size: _SeqFloat = None,
     size_key: str = Key.uns.size_key,
@@ -522,10 +505,14 @@ def _image_spatial_attrs(
         if img_key not in image_mapping.values():
             raise ValueError(f"Image key: `{img_key}` does not exist. Available image keys: `{image_mapping.values()}`")
 
+    _img_channel = [0, 1, 2] if img_channel is None else [img_channel]
+    if max(_img_channel) > 2:
+        raise ValueError(f"Invalid value for `img_channel: {_img_channel}`.")
     if img is None:
-        img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_key] for i in library_id]
+        img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_key][..., _img_channel] for i in library_id]
     else:  # handle case where img is ndarray or list
         img = _get_list(img, np.ndarray, len(library_id))
+        img = [im[..., _img_channel] for im in img]
 
     if bw:
         img = [np.dot(im[..., :3], [0.2989, 0.5870, 0.1140]) for im in img]
@@ -742,7 +729,9 @@ def _plot_edges(
     return edge_collection
 
 
-def _get_title_axlabels(title: _SeqStr, axis_label: _SeqStr, spatial_key: str, n_plots: int) -> Tuple[_SeqStr, _SeqStr]:
+def _get_title_axlabels(
+    title: _SeqStr, axis_label: _SeqStr, spatial_key: str, n_plots: int
+) -> Tuple[_SeqStr, Sequence[str]]:
 
     # handle title
     if title is not None:
@@ -769,13 +758,101 @@ def _get_title_axlabels(title: _SeqStr, axis_label: _SeqStr, spatial_key: str, n
 def _get_scalebar(
     scalebar_dx: _SeqFloat = None,
     scalebar_units: _SeqStr = None,
-    len_lib: Optional[int] = None,
-) -> Any:
+    len_lib: int | None = None,
+) -> Tuple[Sequence[float] | None, Sequence[str] | None]:
     if scalebar_dx is not None:
         _scalebar_dx = _get_list(scalebar_dx, float, len_lib)
         scalebar_units = "um" if scalebar_units is None else scalebar_units
         _scalebar_units = _get_list(scalebar_units, str, len_lib)
     else:
         _scalebar_dx = None
+        _scalebar_units = None
 
     return _scalebar_dx, _scalebar_units
+
+
+def _decorate_axs(
+    ax: Axes,
+    cax: PatchCollection,
+    lib_count: int,
+    grid: GridSpec,
+    adata: AnnData,
+    coords: NDArrayA,
+    img: NDArrayA,
+    img_cmap: str,
+    img_alpha: float,
+    value_to_plot: str,
+    color_source_vector: NDArrayA | pd.Series,
+    axis_labels: Sequence[str],
+    crops: CropCoords,
+    categorical: bool,
+    palette: Palette_t = None,
+    legend_fontsize: int | float | _FontSize | None = None,
+    legend_fontweight: int | _FontWeight = "bold",
+    legend_loc: str = "right margin",
+    legend_fontoutline: Optional[int] = None,
+    na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
+    na_in_legend: bool = True,
+    scalebar_dx: Sequence[float] | None = None,
+    scalebar_units: Sequence[str] | None = None,
+    scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+) -> Axes:
+
+    ax.set_yticks([])
+    ax.set_xticks([])
+
+    ax.set_xlabel(axis_labels[0])
+    ax.set_ylabel(axis_labels[1])
+
+    ax.autoscale_view()
+
+    if value_to_plot is None:
+        # if only dots were plotted without an associated value
+        # there is not need to plot a legend or a colorbar
+        return ax
+
+    if legend_fontoutline is not None:
+        path_effect = [patheffects.withStroke(linewidth=legend_fontoutline, foreground="w")]
+    else:
+        path_effect = []
+
+    # Adding legends
+    if categorical:
+        clusters = adata.obs[value_to_plot].cat.categories
+        _palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
+        _add_categorical_legend(
+            ax,
+            color_source_vector,
+            palette=_palette,
+            scatter_array=coords,
+            legend_loc=legend_loc,
+            legend_fontweight=legend_fontweight,
+            legend_fontsize=legend_fontsize,
+            legend_fontoutline=path_effect,
+            na_color=na_color,
+            na_in_legend=na_in_legend,
+            multi_panel=bool(grid),
+        )
+    else:
+        # TODO: na_in_legend should have some effect here
+        pl.colorbar(cax, ax=ax, pad=0.01, fraction=0.08, aspect=30)
+
+    cur_coords = np.concatenate([ax.get_xlim(), ax.get_ylim()])
+    if img is not None:
+        ax.imshow(img, cmap=img_cmap, alpha=img_alpha)
+    else:
+        ax.set_aspect("equal")
+        ax.invert_yaxis()
+
+    if crops is not None:
+        ax.set_xlim(crops.to_tuple()[0], crops.to_tuple()[1])
+        ax.set_ylim(crops.to_tuple()[3], crops.to_tuple()[2])
+    else:
+        ax.set_xlim(cur_coords[0], cur_coords[1])
+        ax.set_ylim(cur_coords[3], cur_coords[2])
+
+    if isinstance(scalebar_dx, list) and isinstance(scalebar_units, list):
+        scalebar = ScaleBar(scalebar_dx[lib_count], units=scalebar_units[lib_count], **scalebar_kwargs)
+        ax.add_artist(scalebar)
+
+    return ax
