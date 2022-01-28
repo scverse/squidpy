@@ -256,12 +256,11 @@ def spatial(
     axs: Any = []
     _cmap_kwargs = _get_cmap_params(cmap_kwargs)
 
-    library_idx = range(len(_library_id))
     if library_first:
-        iter_panels = itertools.product(library_idx, color)
+        iter_panels = (range(len(_library_id)), color)
     else:
-        iter_panels = itertools.product(color, library_idx)
-    n_plots = len(list(iter_panels))
+        iter_panels = (color, range(len(_library_id)))
+    n_plots = len(list(itertools.product(*iter_panels)))
 
     # set title and axis labels
     title, axis_labels = _get_title_axlabels(title, axis_label, spatial_key, n_plots)
@@ -277,7 +276,7 @@ def spatial(
     if scalebar_dx is not None:
         _scalebar_dx, _scalebar_units = _get_scalebar(scalebar_dx, scalebar_units, len(_library_id))
     # make plots
-    for count, (first, second) in enumerate(iter_panels):
+    for count, (first, second) in enumerate(itertools.product(*iter_panels)):
         if library_first:
             _lib_count = first
             value_to_plot = second
@@ -508,12 +507,13 @@ def _image_spatial_attrs(
 
     image_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.image_key, library_id)
     scalefactor_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.scalefactor_key, library_id)
-    scalefactors = _get_unique_map(scalefactor_mapping)
 
-    if not (image_mapping.keys() == scalefactor_mapping.keys()):  # check that keys match
+    if image_mapping.keys() != scalefactor_mapping.keys():  # check that keys match
         raise KeyError(
             f"Image keys: `{image_mapping.keys()}` and scalefactor keys: `{scalefactor_mapping.keys()}` are not equal."
         )
+
+    scalefactors = _get_unique_map(scalefactor_mapping)
 
     if img_key is None:
         img_key = _get_unique_map(image_mapping)  # get intersection of image_mapping.values()
