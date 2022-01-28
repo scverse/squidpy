@@ -579,14 +579,12 @@ def _get_list(var: Any, _type: Any, ref_len: int | None = None) -> Sequence[Any]
     if isinstance(var, _type):
         if ref_len is None:
             return [var]
-        else:
-            return [var] * ref_len
+        return [var] * ref_len
     else:
         if isinstance(var, list):
             if (ref_len is not None) and (ref_len != len(var)):
                 raise ValueError(f"Var len: {len(var)} is not equal to ref len: {ref_len}. Please Check.")
-            else:
-                return var
+            return var
         else:
             raise ValueError(f"Can't make list from var: `{var}`")
 
