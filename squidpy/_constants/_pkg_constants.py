@@ -129,7 +129,7 @@ class Key:
             cls,
             adata: AnnData,
             spatial_key: str,
-            library_id: Optional[Sequence[str] | str] = None,
+            library_id: Sequence[str] | str | None = None,
             return_all: bool = False,
         ) -> Sequence[str] | str | None:
 

@@ -52,6 +52,8 @@ Palette_t = Optional[Union[str, ListedColormap]]
 _VBound = Union[VBound, Sequence[VBound]]
 _Normalize = Union[Normalize, Sequence[Normalize]]
 _SeqStr = Union[Sequence[str], str, None]
+
+# named tuples
 CmapParams = namedtuple("CmapParams", ["vmin", "vmax", "vcenter", "norm"])
 
 
@@ -518,7 +520,7 @@ def _image_spatial_attrs(
 
     if scale_factor is None:  # get intersection of scale_factor and match to img_key
         scale_factor_key = [i for i in scalefactors if img_key in i]
-        if len(scale_factor_key) == 0:
+        if not len(scale_factor_key):
             raise ValueError(f"No `scale_factor` found that could match `img_key`: {img_key}.")
         _scale_factor_key = scale_factor_key[0]  # get first scale_factor
         scale_factor = [adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id]
@@ -534,6 +536,8 @@ def _image_spatial_attrs(
     if size is None:
         size = 1.0
     size = _get_list(size, float, len(library_id))
+    if not (len(size) == len(library_id) == len(scale_factor)):
+        raise ValueError("Len of `size`, `library_id` and `scale_factor` do not match.")
     size = [
         adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][size_key] * s * sf * 0.5
         for i, s, sf in zip(library_id, size, scale_factor)
