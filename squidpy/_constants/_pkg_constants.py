@@ -154,9 +154,7 @@ class Key:
             library_id: Sequence[str] | str | None = None,
         ) -> Mapping[str, Sequence[str]]:
             library_id = cls._haystack(adata, spatial_key, library_id, sub_key)
-            mapping = {i: list(adata.uns[spatial_key][i][sub_key].keys()) for i in library_id}
-
-            return mapping
+            return {i: list(adata.uns[spatial_key][i][sub_key].keys()) for i in library_id}
 
         @classmethod
         def _haystack(
