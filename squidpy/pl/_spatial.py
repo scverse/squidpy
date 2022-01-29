@@ -2,24 +2,14 @@ from __future__ import annotations
 
 from copy import copy
 from types import MappingProxyType
-from typing import (
-    Any,
-    Tuple,
-    Union,
-    Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    TYPE_CHECKING,
-)
+from typing import Any, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
 from pathlib import Path
 from functools import partial
-from collections import namedtuple
 import itertools
 
 from anndata import AnnData
 from scanpy._settings import settings as sc_settings
-from scanpy.plotting._utils import VBound, _FontSize, _FontWeight, check_colornorm
+from scanpy.plotting._utils import _FontSize, _FontWeight, check_colornorm
 from scanpy.plotting._tools.scatterplots import _panel_grid, _get_vboundnorm
 
 from pandas.core.dtypes.common import is_categorical_dtype
@@ -28,7 +18,7 @@ import numpy as np
 from matplotlib import pyplot as pl, rcParams
 from matplotlib.cm import get_cmap
 from matplotlib.axes import Axes
-from matplotlib.colors import Colormap, Normalize, ListedColormap
+from matplotlib.colors import Colormap
 
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_spatial_basis
@@ -37,9 +27,16 @@ from squidpy.pl._utils import save_fig, _sanitize_anndata, _assert_value_in_obs
 from squidpy.im._coords import CropCoords
 from squidpy.pl._spatial_utils import (
     _subs,
+    _SeqStr,
+    _VBound,
     _get_list,
+    _SeqFloat,
+    Palette_t,
+    _Normalize,
+    _CoordTuple,
     _get_coords,
     _plot_edges,
+    _AvailShapes,
     _decorate_axs,
     _get_scalebar,
     _get_color_vec,
@@ -52,16 +49,6 @@ from squidpy.pl._spatial_utils import (
 )
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
-
-_AvailShapes = Literal["circle", "square", "hex"]
-Palette_t = Optional[Union[str, ListedColormap]]
-_VBound = Union[VBound, Sequence[VBound]]
-_Normalize = Union[Normalize, Sequence[Normalize]]
-_SeqStr = Union[str, Sequence[str], None]
-_SeqFloat = Union[float, Sequence[float], None]
-_CoordTuple = Tuple[int, int, int, int]
-# named tuples
-CmapParams = namedtuple("CmapParams", ["vmin", "vmax", "vcenter", "norm"])
 
 
 def spatial(

@@ -45,6 +45,7 @@ _Normalize = Union[Normalize, Sequence[Normalize]]
 _SeqStr = Union[str, Sequence[str], None]
 _SeqFloat = Union[float, Sequence[float], None]
 _CoordTuple = Tuple[int, int, int, int]
+
 # named tuples
 CmapParams = namedtuple("CmapParams", ["vmin", "vmax", "vcenter", "norm"])
 
