@@ -49,6 +49,8 @@ _CoordTuple = Tuple[int, int, int, int]
 # named tuples
 CmapParams = namedtuple("CmapParams", ["vmin", "vmax", "vcenter", "norm"])
 
+SpatialParams = namedtuple("SpatialParams", ["library_id", "scale_factor", "size", "img"])
+
 
 def _spatial_attrs(
     adata: AnnData,
@@ -85,8 +87,10 @@ def _spatial_attrs(
 
 def _image_spatial_attrs(
     adata: AnnData,
+    shape: _AvailShapes | None,
     spatial_key: str = Key.obsm.spatial,
     library_id: Sequence[str] | None = None,
+    library_key: str | None = None,
     img: NDArrayA | Sequence[NDArrayA] | None = None,
     img_key: str | None = None,
     img_channel: int | None = None,
@@ -94,67 +98,97 @@ def _image_spatial_attrs(
     size: _SeqFloat = None,
     size_key: str = Key.uns.size_key,
     bw: bool = False,
-) -> Tuple[Sequence[str], Sequence[float], Sequence[float], Sequence[NDArrayA]]:
+) -> SpatialParams:
     """Return lists of image attributes saved in adata for plotting."""
-    library_id = Key.uns.library_id(adata, spatial_key, library_id, return_all=True)
-    if library_id is None:
-        raise ValueError(f"Could not fetch `library_id`, check that `spatial_key: {spatial_key}` is correct.")
+    if shape is not None:
+        library_id = Key.uns.library_id(adata, spatial_key, library_id, return_all=True)
+        if library_id is None:
+            raise ValueError(f"Could not fetch `library_id`, check that `spatial_key: {spatial_key}` is correct.")
 
-    image_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.image_key, library_id)
-    scalefactor_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.scalefactor_key, library_id)
+        image_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.image_key, library_id)
+        scalefactor_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.scalefactor_key, library_id)
 
-    if image_mapping.keys() != scalefactor_mapping.keys():  # check that keys match
-        raise KeyError(
-            f"Image keys: `{image_mapping.keys()}` and scalefactor keys: `{scalefactor_mapping.keys()}` are not equal."
-        )
+        if image_mapping.keys() != scalefactor_mapping.keys():  # check that keys match
+            raise KeyError(
+                f"Expected iamge keys: `{image_mapping.keys()}` and \
+                    scalefactor keys: `{scalefactor_mapping.keys()}` to be same."
+            )
 
-    scalefactors = _get_unique_map(scalefactor_mapping)
+        scalefactors = _get_unique_map(scalefactor_mapping)
 
-    if img_key is None:
-        img_key = _get_unique_map(image_mapping)  # get intersection of image_mapping.values()
-        img_key = img_key[0]  # get first of set
+        if img_key is None:
+            img_key = _get_unique_map(image_mapping)  # get intersection of image_mapping.values()
+            img_key = img_key[0]  # get first of set
+        else:
+            if img_key not in image_mapping.values():
+                raise ValueError(
+                    f"Image key: `{img_key}` does not exist. Available image keys: `{image_mapping.values()}`"
+                )
+
+        _img_channel = [0, 1, 2] if img_channel is None else [img_channel]
+        if max(_img_channel) > 2:
+            raise ValueError(f"Invalid value for `img_channel: {_img_channel}`.")
+        if img is None:
+            img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_key][..., _img_channel] for i in library_id]
+        else:  # handle case where img is ndarray or list
+            img = _get_list(img, np.ndarray, len(library_id))
+            img = [im[..., _img_channel] for im in img]
+
+        if bw:
+            img = [np.dot(im[..., :3], [0.2989, 0.5870, 0.1140]) for im in img]
+
+        if scale_factor is None:  # get intersection of scale_factor and match to img_key
+            scale_factor_key = [i for i in scalefactors if img_key in i]
+            if not len(scale_factor_key):
+                raise ValueError(f"No `scale_factor` found that could match `img_key`: {img_key}.")
+            _scale_factor_key = scale_factor_key[0]  # get first scale_factor
+            scale_factor = [
+                adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id
+            ]
+        else:  # handle case where scale_factor is float or list
+            scale_factor = _get_list(scale_factor, float, len(library_id))
+
+        # size_key = [i for i in scalefactors if size_key in i][0]
+        if size_key not in scalefactors and size is None:
+            raise ValueError(
+                f"Specified `size_key: {size_key}` does not exist and size is `None`,\
+                available keys are: `{scalefactors}`.\n Specify valid `size_key` or `size`."
+            )
+        if size is None:
+            size = 1.0
+        size = _get_list(size, float, len(library_id))
+        if not (len(size) == len(library_id) == len(scale_factor)):
+            raise ValueError("Len of `size`, `library_id` and `scale_factor` do not match.")
+        size = [
+            adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][size_key] * s * sf * 0.5
+            for i, s, sf in zip(library_id, size, scale_factor)
+        ]
+
+        return SpatialParams(library_id, scale_factor, size, img)
     else:
-        if img_key not in image_mapping.values():
-            raise ValueError(f"Image key: `{img_key}` does not exist. Available image keys: `{image_mapping.values()}`")
+        if library_id is None and library_key is not None:  # try to assign library_id
+            try:
+                library_id = adata.obs[library_key].cat.categories.tolist()
+            except IndexError:
+                raise IndexError(f"`library_key: {library_key}` not in `adata.obs`.")
+        elif library_id is None and library_key is None:  # create dummy library_id
+            logg.warning(
+                "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
+            )
+            library_id = [""]
+        elif isinstance(library_id, list):  # get library_id from arg
+            library_id = library_id
+        else:
+            raise ValueError(f"Could not set library_id: `{library_id}`")
 
-    _img_channel = [0, 1, 2] if img_channel is None else [img_channel]
-    if max(_img_channel) > 2:
-        raise ValueError(f"Invalid value for `img_channel: {_img_channel}`.")
-    if img is None:
-        img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_key][..., _img_channel] for i in library_id]
-    else:  # handle case where img is ndarray or list
-        img = _get_list(img, np.ndarray, len(library_id))
-        img = [im[..., _img_channel] for im in img]
+        size = 120000 / adata.shape[0] if size is None else size
+        size = _get_list(size, float, len(library_id))
 
-    if bw:
-        img = [np.dot(im[..., :3], [0.2989, 0.5870, 0.1140]) for im in img]
-
-    if scale_factor is None:  # get intersection of scale_factor and match to img_key
-        scale_factor_key = [i for i in scalefactors if img_key in i]
-        if not len(scale_factor_key):
-            raise ValueError(f"No `scale_factor` found that could match `img_key`: {img_key}.")
-        _scale_factor_key = scale_factor_key[0]  # get first scale_factor
-        scale_factor = [adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id]
-    else:  # handle case where scale_factor is float or list
+        scale_factor = 1.0 if scale_factor is None else scale_factor
         scale_factor = _get_list(scale_factor, float, len(library_id))
+        _img = [None for _ in library_id]
 
-    # size_key = [i for i in scalefactors if size_key in i][0]
-    if size_key not in scalefactors and size is None:
-        raise ValueError(
-            f"Specified `size_key: {size_key}` does not exist and size is `None`,\
-            available keys are: `{scalefactors}`.\n Specify valid `size_key` or `size`."
-        )
-    if size is None:
-        size = 1.0
-    size = _get_list(size, float, len(library_id))
-    if not (len(size) == len(library_id) == len(scale_factor)):
-        raise ValueError("Len of `size`, `library_id` and `scale_factor` do not match.")
-    size = [
-        adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][size_key] * s * sf * 0.5
-        for i, s, sf in zip(library_id, size, scale_factor)
-    ]
-
-    return library_id, scale_factor, size, img
+        return SpatialParams(library_id, scale_factor, size, _img)
 
 
 def _get_coords(

@@ -40,7 +40,6 @@ from squidpy.pl._spatial_utils import (
     _decorate_axs,
     _get_scalebar,
     _get_color_vec,
-    _spatial_attrs,
     _get_source_vec,
     _shaped_scatter,
     _get_cmap_params,
@@ -49,6 +48,22 @@ from squidpy.pl._spatial_utils import (
 )
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
+
+
+def spatial_point(
+    adata: AnnData,
+    **kwargs: Any,
+) -> Any:
+    """Spatial point."""
+    _spatial_plot(adata, shape=None, **kwargs)
+
+
+def spatial_shape(
+    adata: AnnData,
+    **kwargs: Any,
+) -> Any:
+    """Spatial shape."""
+    _spatial_plot(adata, **kwargs)
 
 
 def _spatial_plot(
@@ -172,6 +187,7 @@ def _spatial_plot(
 
     scalebar_kwargs = dict(scalebar_kwargs)
     edges_kwargs = dict(edges_kwargs)
+
     alpha = 1.0 if alpha is None else alpha
     img_alpha = 1.0 if img_alpha is None else img_alpha
 
@@ -202,53 +218,53 @@ def _spatial_plot(
     if TYPE_CHECKING:
         assert isinstance(shape, ScatterShape)
 
-    if shape is not None:
-        # get spatial attrs if shape is not None
-        _library_id, scale_factor, size, img = _image_spatial_attrs(
-            adata=adata,
-            spatial_key=spatial_key,
-            library_id=library_id,
-            img=img,
-            img_key=img_key,
-            img_channel=img_channel,
-            scale_factor=scale_factor,
-            size=size,
-            size_key=size_key,
-            bw=bw,
-        )
-    else:  # handle library_id logic for non-image data and spatial attributes
-        _library_id, scale_factor, size, img = _spatial_attrs(adata, library_id, library_key, scale_factor, size)
+    spatial_params = _image_spatial_attrs(
+        adata=adata,
+        shape=shape,
+        spatial_key=spatial_key,
+        library_id=library_id,
+        library_key=library_key,
+        img=img,
+        img_key=img_key,
+        img_channel=img_channel,
+        scale_factor=scale_factor,
+        size=size,
+        size_key=size_key,
+        bw=bw,
+    )
 
     # set crops
     if crop_coord is None:
-        crops: Union[list[Tuple[float, ...]], Tuple[None, ...]] = tuple(None for _ in _library_id)
+        crops: Union[list[Tuple[float, ...]], Tuple[None, ...]] = tuple(None for _ in spatial_params.library_id)
     else:
-        crop_coord = _get_list(crop_coord, tuple, len(_library_id))
-        crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, scale_factor)]
+        crop_coord = _get_list(crop_coord, tuple, len(spatial_params.library_id))
+        crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor)]
 
     # assert library_key exists and follows logic
     if library_key is not None:
-        _assert_value_in_obs(adata, key=library_key, val=_library_id)
+        _assert_value_in_obs(adata, key=library_key, val=spatial_params.library_id)
     else:
-        if len(_library_id) > 1:
+        if len(spatial_params.library_id) > 1:
             raise ValueError(
-                f"Multiple `library_ids: {_library_id}` found but no `library_key` specified. \
+                f"Multiple `library_ids: {spatial_params.library_id}` found but no `library_key` specified. \
                     Please specify `library_key`."
             )
 
     # set coords
-    coords = _get_coords(adata, spatial_key, _library_id, scale_factor, library_key)
+    coords = _get_coords(adata, spatial_key, spatial_params.library_id, spatial_params.scale_factor, library_key)
 
     # partial init subset
     _subset = partial(_subs, library_key=library_key) if library_key is not None else lambda _, **__: _
 
     # initialize axis
-    if (not isinstance(color, str) and isinstance(color, Sequence) and len(color) > 1) or (len(_library_id) > 1):
+    if (not isinstance(color, str) and isinstance(color, Sequence) and len(color) > 1) or (
+        len(spatial_params.library_id) > 1
+    ):
         if ax is not None:
             raise ValueError("Cannot specify `ax` when plotting multiple panels ")
 
         # each plot needs to be its own panel
-        num_panels = len(color) * len(_library_id)
+        num_panels = len(color) * len(spatial_params.library_id)
         fig, grid = _panel_grid(hspace, wspace, ncols, num_panels)
     else:
         grid = None
@@ -261,9 +277,9 @@ def _spatial_plot(
     _cmap_kwargs = _get_cmap_params(cmap_kwargs)
 
     if library_first:
-        iter_panels = (range(len(_library_id)), color)
+        iter_panels = (range(len(spatial_params.library_id)), color)
     else:
-        iter_panels = (color, range(len(_library_id)))
+        iter_panels = (color, range(len(spatial_params.library_id)))
     n_plots = len(list(itertools.product(*iter_panels)))
 
     # set title and axis labels
@@ -278,7 +294,7 @@ def _spatial_plot(
 
     # set scalebar
     if scalebar_dx is not None:
-        scalebar_dx, scalebar_units = _get_scalebar(scalebar_dx, scalebar_units, len(_library_id))
+        scalebar_dx, scalebar_units = _get_scalebar(scalebar_dx, scalebar_units, len(spatial_params.library_id))
     # make plots
     for count, (first, second) in enumerate(itertools.product(*iter_panels)):
         if library_first:
@@ -287,10 +303,10 @@ def _spatial_plot(
         else:
             _lib_count = second
             value_to_plot = first
-        _size = size[_lib_count]
-        _img = img[_lib_count]
+        _size = spatial_params.size[_lib_count]
+        _img = spatial_params.img[_lib_count]
         _crops = crops[_lib_count]
-        _lib = _library_id[_lib_count]
+        _lib = spatial_params.library_id[_lib_count]
 
         color_source_vector = _get_source_vec(
             _subset(adata, library_id=_lib),
