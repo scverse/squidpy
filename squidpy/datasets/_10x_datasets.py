@@ -84,6 +84,15 @@ def visium_sge(
         "Parent_Visium_Human_OvarianCancer",
         "Targeted_Visium_Human_ColorectalCancer_GeneSignature",
         "Parent_Visium_Human_ColorectalCancer",
+        # spaceranger version 1.3.0
+        "Visium_FFPE_Mouse_Brain",
+        "Visium_FFPE_Mouse_Brain_IF",
+        "Visium_FFPE_Mouse_Kidney",
+        "Visium_FFPE_Human_Breast_Cancer",
+        "Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma",
+        "Visium_FFPE_Human_Prostate_Cancer",
+        "Visium_FFPE_Human_Prostate_IF",
+        "Visium_FFPE_Human_Normal_Prostate",
     ] = "V1_Breast_Cancer_Block_A_Section_1",
     *,
     include_hires_tiff: bool = False,
@@ -104,8 +113,10 @@ def visium_sge(
     """
     if "V1_" in sample_id:
         spaceranger_version = "1.1.0"
-    else:
+    elif sample_id.startswith("Targeted_") or sample_id.startswith("Parent_"):
         spaceranger_version = "1.2.0"
+    else:
+        spaceranger_version = "1.3.0"
     _download_visium_dataset(sample_id, spaceranger_version, download_image=include_hires_tiff)
     if include_hires_tiff:
         adata = read_visium(
