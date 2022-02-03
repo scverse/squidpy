@@ -41,7 +41,7 @@ def _check_tuple_needles(
                 continue
         if b not in haystack:
             if reraise:
-                raise ValueError(msg.format(a))
+                raise ValueError(msg.format(b))
             else:
                 continue
 
