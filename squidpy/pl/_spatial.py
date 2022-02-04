@@ -20,7 +20,6 @@ from matplotlib.cm import get_cmap
 from matplotlib.axes import Axes
 from matplotlib.colors import Colormap
 
-from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.pl._graph import _maybe_set_colors
 from squidpy.pl._utils import save_fig, _sanitize_anndata, _assert_value_in_obs
@@ -30,6 +29,7 @@ from squidpy.pl._spatial_utils import (
     _SeqStr,
     _VBound,
     _get_list,
+    _SeqArray,
     _SeqFloat,
     Palette_t,
     _Normalize,
@@ -86,7 +86,7 @@ def _spatial_plot(
     size: _SeqFloat = None,
     size_key: str = Key.uns.size_key,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
-    img: NDArrayA | Sequence[NDArrayA] | None = None,
+    img: _SeqArray = None,
     img_key: str | None = None,
     img_alpha: Optional[float] = None,
     img_cmap: Colormap | str | None = None,

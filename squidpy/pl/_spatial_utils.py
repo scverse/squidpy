@@ -44,6 +44,7 @@ _VBound = Union[VBound, Sequence[VBound]]
 _Normalize = Union[Normalize, Sequence[Normalize]]
 _SeqStr = Union[str, Sequence[str], None]
 _SeqFloat = Union[float, Sequence[float], None]
+_SeqArray = Union[NDArrayA, Sequence[NDArrayA], None]
 _CoordTuple = Tuple[int, int, int, int]
 
 # named tuples
@@ -91,7 +92,7 @@ def _image_spatial_attrs(
     spatial_key: str = Key.obsm.spatial,
     library_id: Sequence[str] | None = None,
     library_key: str | None = None,
-    img: NDArrayA | Sequence[NDArrayA] | None = None,
+    img: _SeqArray = None,
     img_key: str | None = None,
     img_channel: int | None = None,
     scale_factor: _SeqFloat = None,
