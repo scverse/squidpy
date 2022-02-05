@@ -1,10 +1,16 @@
+from enum import unique
 from typing import Literal, Optional
 from pathlib import Path
+from collections import namedtuple
 
 from scanpy import _utils
 from anndata import AnnData
 from scanpy._settings import settings
 from scanpy.readwrite import read_visium
+
+from squidpy._constants._utils import ModeEnum
+
+VisiumFiles = namedtuple("VisiumFiles", ["feature_matrix", "spatial_attrs", "tif_image"])
 
 
 def _download_visium_dataset(
@@ -31,10 +37,13 @@ def _download_visium_dataset(
     sample_dir = base_dir / sample_id
     sample_dir.mkdir(exist_ok=True)
 
+    visium_files = VisiumFiles(
+        f"{sample_id}_filtered_feature_bc_matrix.h5", f"{sample_id}_spatial.tar.gz", f"{sample_id}_image.tif"
+    )
+
     # Download spatial data
-    tar_filename = f"{sample_id}_spatial.tar.gz"
-    tar_pth = sample_dir / tar_filename
-    _utils.check_presence_download(filename=tar_pth, backup_url=url_prefix + tar_filename)
+    tar_pth = sample_dir / visium_files.spatial_attrs
+    _utils.check_presence_download(filename=tar_pth, backup_url=url_prefix + visium_files.spatial_attrs)
     with tarfile.open(tar_pth) as f:
         for el in f:
             if not (sample_dir / el.name).exists():
@@ -43,14 +52,14 @@ def _download_visium_dataset(
     # Download counts
     _utils.check_presence_download(
         filename=sample_dir / "filtered_feature_bc_matrix.h5",
-        backup_url=url_prefix + f"{sample_id}_filtered_feature_bc_matrix.h5",
+        backup_url=url_prefix + visium_files.feature_matrix,
     )
 
     # Download image
     if download_image:
         _utils.check_presence_download(
             filename=sample_dir / "image.tif",
-            backup_url=url_prefix + f"{sample_id}_image.tif",
+            backup_url=url_prefix + visium_files.tif_image,
         )
 
 
@@ -111,12 +120,19 @@ def visium_sge(
     -------
     Annotated data matrix.
     """
+
+    @unique
+    class TenxVersions(ModeEnum):
+        V1 = "1.0.0"
+        V2 = "1.2.0"
+        V3 = "1.3.0"
+
     if "V1_" in sample_id:
-        spaceranger_version = "1.1.0"
+        spaceranger_version = TenxVersions.V1.s
     elif sample_id.startswith("Targeted_") or sample_id.startswith("Parent_"):
-        spaceranger_version = "1.2.0"
+        spaceranger_version = TenxVersions.V2.s
     else:
-        spaceranger_version = "1.3.0"
+        spaceranger_version = TenxVersions.V3.s
     _download_visium_dataset(sample_id, spaceranger_version, download_image=include_hires_tiff)
     if include_hires_tiff:
         adata = read_visium(
