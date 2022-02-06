@@ -14,22 +14,32 @@ import squidpy as sq
 
 
 @pytest.mark.internet()
-def test_visium_datasets(tmp_dataset_dir, tmpdir):
-    # Tests that reading/ downloading works and is does not have global effects
-    hheart = sq.datasets.visium_sge("V1_Human_Heart")
-    mbrain = sq.datasets.visium_sge("V1_Adult_Mouse_Brain")
-    hheart_again = sq.datasets.visium_sge("V1_Human_Heart")
-    assert_adata_equal(hheart, hheart_again)
+@pytest.mark.parametrize(
+    # Loading samples from spaceranger versions 1.1.0, 1.2.0 and 1.3.0
+    "sample1",
+    "sample2",
+    [
+        ("V1_Human_Heart", "V1_Adult_Mouse_Brain"),
+        ("Targeted_Visium_Human_Glioblastoma_Pan_Cancer", "Parent_Visium_Human_BreastCancer"),
+        ("Visium_FFPE_Mouse_Kidney", "Visium_FFPE_Human_Prostate_IF"),
+    ],
+)
+def test_visium_datasets(sample1, sample2, tmp_dataset_dir, tmpdir):
+    # Tests that reading / downloading works and it does not have global effects
+    testsample1 = sq.datasets.visium_sge(sample1)
+    testsample2 = sq.datasets.visium_sge(sample2)
+    testsample1_again = sq.datasets.visium_sge(sample1)
+    assert_adata_equal(testsample1, testsample1_again)
 
     # Test that changing the dataset dir doesn't break reading
     settings.datasetdir = Path(tmpdir)
-    mbrain_again = sq.datasets.visium_sge("V1_Adult_Mouse_Brain")
-    assert_adata_equal(mbrain, mbrain_again)
+    testsample2_again = sq.datasets.visium_sge(sample2)
+    assert_adata_equal(testsample2, testsample2_again)
 
     # Test that downloading tissue image works
-    mbrain = sq.datasets.visium_sge("V1_Adult_Mouse_Brain", include_hires_tiff=True)
-    expected_image_path = settings.datasetdir / "V1_Adult_Mouse_Brain" / "image.tif"
-    image_path = Path(mbrain.uns["spatial"]["V1_Adult_Mouse_Brain"]["metadata"]["source_image_path"])
+    testsample2 = sq.datasets.visium_sge(sample2, include_hires_tiff=True)
+    expected_image_path = settings.datasetdir / sample2 / "image.tif"
+    image_path = Path(testsample2.uns["spatial"][sample2]["metadata"]["source_image_path"])
     assert image_path == expected_image_path
 
     # Test that tissue image exists and is a valid image file
