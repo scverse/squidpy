@@ -12,6 +12,8 @@ from scanpy.datasets._ebi_expression_atlas import ebi_expression_atlas
 
 import squidpy as sq
 
+tmpdir = None
+
 
 @pytest.mark.internet()
 @pytest.mark.parametrize(
@@ -24,7 +26,7 @@ import squidpy as sq
         ("Visium_FFPE_Mouse_Kidney", "Visium_FFPE_Human_Prostate_IF"),
     ],
 )
-def test_visium_datasets(sample1, sample2, tmp_dataset_dir, tmpdir):
+def testsamples(sample1, sample2):
     # Tests that reading / downloading works and it does not have global effects
     testsample1 = sq.datasets.visium_sge(sample1)
     testsample2 = sq.datasets.visium_sge(sample2)

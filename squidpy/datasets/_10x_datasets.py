@@ -65,6 +65,7 @@ def _download_visium_dataset(
 
 def visium_sge(
     sample_id: Literal[
+        # spaceranger version 1.1.0 datasets
         "V1_Breast_Cancer_Block_A_Section_1",
         "V1_Breast_Cancer_Block_A_Section_2",
         "V1_Human_Heart",
@@ -79,7 +80,7 @@ def visium_sge(
         "V1_Human_Brain_Section_2",
         "V1_Adult_Mouse_Brain_Coronal_Section_1",
         "V1_Adult_Mouse_Brain_Coronal_Section_2",
-        # spaceranger version 1.2.0
+        # spaceranger version 1.2.0 datasets
         "Targeted_Visium_Human_Cerebellum_Neuroscience",
         "Parent_Visium_Human_Cerebellum",
         "Targeted_Visium_Human_SpinalCord_Neuroscience",
@@ -93,7 +94,7 @@ def visium_sge(
         "Parent_Visium_Human_OvarianCancer",
         "Targeted_Visium_Human_ColorectalCancer_GeneSignature",
         "Parent_Visium_Human_ColorectalCancer",
-        # spaceranger version 1.3.0
+        # spaceranger version 1.3.0 datasets
         "Visium_FFPE_Mouse_Brain",
         "Visium_FFPE_Mouse_Brain_IF",
         "Visium_FFPE_Mouse_Kidney",
@@ -123,7 +124,8 @@ def visium_sge(
 
     @unique
     class TenxVersions(ModeEnum):
-        V1 = "1.0.0"
+        # Version numbers as class objects of TenxVersions
+        V1 = "1.1.0"
         V2 = "1.2.0"
         V3 = "1.3.0"
 
