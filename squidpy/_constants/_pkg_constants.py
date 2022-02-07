@@ -75,6 +75,10 @@ class Key:
             return "images"
 
         @cprop
+        def seg_key(cls) -> str:
+            return "segmentation"
+
+        @cprop
         def scalefactor_key(cls) -> str:
             return "scalefactors"
 

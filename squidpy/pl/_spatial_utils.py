@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import (
     Any,
+    List,
     Tuple,
     Union,
     Literal,
@@ -21,6 +22,7 @@ from scanpy._settings import settings as sc_settings
 from scanpy.plotting._utils import VBound, _FontSize, _FontWeight
 from scanpy.plotting._tools.scatterplots import _add_categorical_legend
 
+from pandas.api.types import CategoricalDtype
 from pandas.core.dtypes.common import is_categorical_dtype
 import numpy as np
 import pandas as pd
@@ -31,6 +33,10 @@ from matplotlib.colors import Normalize, ListedColormap
 from matplotlib.patches import Circle, Polygon
 from matplotlib.gridspec import GridSpec
 from matplotlib.collections import PatchCollection
+
+from skimage.util import map_array
+from skimage.color import label2rgb
+from skimage.segmentation import find_boundaries
 
 from squidpy._utils import NDArrayA
 from squidpy.pl._graph import _get_palette
@@ -49,8 +55,7 @@ _CoordTuple = Tuple[int, int, int, int]
 
 # named tuples
 CmapParams = namedtuple("CmapParams", ["vmin", "vmax", "vcenter", "norm"])
-
-SpatialParams = namedtuple("SpatialParams", ["library_id", "scale_factor", "size", "img"])
+SpatialParams = namedtuple("SpatialParams", ["library_id", "scale_factor", "size", "img", "cell_id"])
 
 
 def _spatial_attrs(
@@ -95,6 +100,8 @@ def _image_spatial_attrs(
     img: _SeqArray = None,
     img_key: str | None = None,
     img_channel: int | None = None,
+    seg_key: str | None = None,
+    cell_id_key: str | None = None,
     scale_factor: _SeqFloat = None,
     size: _SeqFloat = None,
     size_key: str = Key.uns.size_key,
@@ -165,7 +172,7 @@ def _image_spatial_attrs(
             for i, s, sf in zip(library_id, size, scale_factor)
         ]
 
-        return SpatialParams(library_id, scale_factor, size, img)
+        return SpatialParams(library_id, scale_factor, size, img, None)
     else:
         if library_id is None and library_key is not None:  # try to assign library_id
             try:
@@ -181,15 +188,31 @@ def _image_spatial_attrs(
             library_id = library_id
         else:
             raise ValueError(f"Could not set library_id: `{library_id}`")
+        if seg_key is not None:
+            try:
+                cell_id_vec = adata.obs[cell_id_key].values
+                if cell_id_vec.dtype != np.int_:
+                    raise ValueError(f"Invalid type {cell_id_vec.dtype} for `adata.obs[{cell_id_key}]`.")
+                cell_id_vec = [cell_id_vec[adata.obs[library_key] == lib] for lib in library_id]
+            except ValueError:
+                raise ValueError(
+                    f"Invalid `cell_id_key: {cell_id_key}`. Pass a valid `cell_id_key` if `seg_key` is not None."
+                )
+            if img is None:
+                _img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][seg_key] for i in library_id]
+            else:  # handle case where img is ndarray or list
+                _img = _get_list(img, np.ndarray, len(library_id))
+        else:
+            _img = [None for _ in library_id]
+            cell_id_vec = None
 
         size = 120000 / adata.shape[0] if size is None else size
         size = _get_list(size, float, len(library_id))
 
         scale_factor = 1.0 if scale_factor is None else scale_factor
         scale_factor = _get_list(scale_factor, float, len(library_id))
-        _img = [None for _ in library_id]
 
-        return SpatialParams(library_id, scale_factor, size, _img)
+        return SpatialParams(library_id, scale_factor, size, _img, cell_id_vec)
 
 
 def _get_coords(
@@ -225,7 +248,7 @@ def _get_unique_map(dic: Mapping[str, Any]) -> Any:
     return sorted(set.intersection(*map(set, dic.values())))
 
 
-def _get_list(var: Any, _type: Any, ref_len: int | None = None) -> Sequence[Any] | Any:
+def _get_list(var: Any, _type: Any, ref_len: int | None = None) -> List[Any] | Any:
     if isinstance(var, _type):
         if ref_len is None:
             return [var]
@@ -430,6 +453,7 @@ def _decorate_axs(
     img_alpha: float,
     value_to_plot: str,
     color_source_vector: NDArrayA | pd.Series,
+    seg_key: bool,
     axis_labels: Sequence[str],
     crops: CropCoords,
     categorical: bool,
@@ -485,8 +509,10 @@ def _decorate_axs(
         pl.colorbar(cax, ax=ax, pad=0.01, fraction=0.08, aspect=30)
 
     cur_coords = np.concatenate([ax.get_xlim(), ax.get_ylim()])
+
     if img is not None:
-        ax.imshow(img, cmap=img_cmap, alpha=img_alpha)
+        if seg_key is None:
+            ax.imshow(img, cmap=img_cmap, alpha=img_alpha)
     else:
         ax.set_aspect("equal")
         ax.invert_yaxis()
@@ -503,3 +529,29 @@ def _decorate_axs(
         ax.add_artist(scalebar)
 
     return ax
+
+
+def _map_color_seg(
+    img: NDArrayA,
+    cell_id: NDArrayA,
+    color_vector: NDArrayA | pd.Series[CategoricalDtype],
+    plot_boundaries: bool = False,
+) -> NDArrayA:
+
+    if is_categorical_dtype(color_vector):
+        val_im: NDArrayA = map_array(img, cell_id, color_vector.codes + 1)  # type: ignore
+        seg_im: NDArrayA = label2rgb(
+            val_im,
+            colors=colors.to_rgba_array(color_vector.categories),  # type: ignore
+            bg_label=0,
+            bg_color=(1, 1, 1, 0),
+            image_alpha=0,
+        )
+        if plot_boundaries:
+            seg_bound: NDArrayA = np.clip(seg_im - find_boundaries(val_im)[:, :, None], 0, 1)
+            return seg_bound
+        else:
+            return seg_im
+    else:
+        val_im = map_array(img, cell_id, color_vector)
+        return val_im

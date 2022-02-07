@@ -40,6 +40,7 @@ from squidpy.pl._spatial_utils import (
     _decorate_axs,
     _get_scalebar,
     _get_color_vec,
+    _map_color_seg,
     _get_source_vec,
     _shaped_scatter,
     _get_cmap_params,
@@ -64,6 +65,15 @@ def spatial_shape(
 ) -> Any:
     """Spatial shape."""
     _spatial_plot(adata, **kwargs)
+
+
+def spatial_segment(
+    adata: AnnData,
+    seg_key: str = Key.uns.seg_key,
+    **kwargs: Any,
+) -> Any:
+    """Spatial shape."""
+    _spatial_plot(adata, shape=None, **kwargs)
 
 
 def _spatial_plot(
@@ -91,6 +101,9 @@ def _spatial_plot(
     img_alpha: Optional[float] = None,
     img_cmap: Colormap | str | None = None,
     img_channel: int | None = None,
+    seg_key: str = Key.uns.seg_key,
+    cell_id_key: str | None = None,
+    seg_boundaries: bool = False,
     bw: bool = False,
     edges: bool = False,
     edges_width: float = 0.1,
@@ -231,6 +244,8 @@ def _spatial_plot(
         size=size,
         size_key=size_key,
         bw=bw,
+        seg_key=seg_key,
+        cell_id_key=cell_id_key,
     )
 
     # set crops
@@ -297,16 +312,14 @@ def _spatial_plot(
         scalebar_dx, scalebar_units = _get_scalebar(scalebar_dx, scalebar_units, len(spatial_params.library_id))
     # make plots
     for count, (first, second) in enumerate(itertools.product(*iter_panels)):
-        if library_first:
-            _lib_count = first
-            value_to_plot = second
-        else:
-            _lib_count = second
-            value_to_plot = first
+        _lib_count = first if library_first else second
+        value_to_plot = second if library_first else first
+
         _size = spatial_params.size[_lib_count]
         _img = spatial_params.img[_lib_count]
         _crops = crops[_lib_count]
         _lib = spatial_params.library_id[_lib_count]
+        _cell_id = spatial_params.cell_id[_lib_count]
 
         color_source_vector = _get_source_vec(
             _subset(adata, library_id=_lib),
@@ -323,6 +336,9 @@ def _spatial_plot(
             palette=palette,
             na_color=na_color,
         )
+
+        if seg_key is not None:
+            _img = _map_color_seg(_img, _cell_id, color_vector, seg_boundaries)
 
         # TODO: do we want to order points? for now no, skip
         _coords = coords[_lib_count]
@@ -352,64 +368,75 @@ def _spatial_plot(
             normalize = None
 
         # plot edges and arrows if needed. Do it here cause otherwise image is on top.
-        if edges:
-            _cedge = _plot_edges(
-                _subset(adata, library_id=_lib), _coords, edges_width, edges_color, connectivity_key, edges_kwargs
+        if seg_key is None:
+            if edges:
+                _cedge = _plot_edges(
+                    _subset(adata, library_id=_lib), _coords, edges_width, edges_color, connectivity_key, edges_kwargs
+                )
+                ax.add_collection(_cedge)
+
+            scatter = (
+                partial(ax.scatter, marker=".", alpha=alpha, plotnonfinite=True)
+                if shape is None
+                else partial(_shaped_scatter, shape=shape, alpha=alpha)
             )
-            ax.add_collection(_cedge)
 
-        scatter = (
-            partial(ax.scatter, marker=".", alpha=alpha, plotnonfinite=True)
-            if shape is None
-            else partial(_shaped_scatter, shape=shape, alpha=alpha)
-        )
+            if add_outline:
+                bg_width, gap_width = outline_width
+                point = np.sqrt(_size)
+                gap_size = (point + (point * gap_width) * 2) ** 2
+                bg_size = (np.sqrt(gap_size) + (point * bg_width) * 2) ** 2
+                # the default black and white colors can be changes using the contour_config parameter
+                bg_color, gap_color = outline_color
 
-        if add_outline:
-            bg_width, gap_width = outline_width
-            point = np.sqrt(_size)
-            gap_size = (point + (point * gap_width) * 2) ** 2
-            bg_size = (np.sqrt(gap_size) + (point * bg_width) * 2) ** 2
-            # the default black and white colors can be changes using the contour_config parameter
-            bg_color, gap_color = outline_color
+                kwargs.pop("edgecolor", None)  # remove edge from kwargs if present
+                alpha = kwargs.pop("alpha") if "alpha" in kwargs else None  # remove alpha for outline
 
-            kwargs.pop("edgecolor", None)  # remove edge from kwargs if present
-            alpha = kwargs.pop("alpha") if "alpha" in kwargs else None  # remove alpha for outline
+                _cax = scatter(
+                    _coords[:, 0],
+                    _coords[:, 1],
+                    s=bg_size,
+                    c=bg_color,
+                    rasterized=sc_settings._vector_friendly,
+                    norm=normalize,
+                    **kwargs,
+                )
+                ax.add_collection(_cax)
+                _cax = scatter(
+                    _coords[:, 0],
+                    _coords[:, 1],
+                    s=gap_size,
+                    c=gap_color,
+                    rasterized=sc_settings._vector_friendly,
+                    norm=normalize,
+                    **kwargs,
+                )
+                ax.add_collection(_cax)
+
+                # if user did not set alpha, set alpha to 0.7
+                alpha = 0.7 if alpha is None else alpha
 
             _cax = scatter(
                 _coords[:, 0],
                 _coords[:, 1],
-                s=bg_size,
-                c=bg_color,
+                c=color_vector,
+                s=_size,
                 rasterized=sc_settings._vector_friendly,
                 norm=normalize,
+                alpha=alpha,
                 **kwargs,
             )
-            ax.add_collection(_cax)
-            _cax = scatter(
-                _coords[:, 0],
-                _coords[:, 1],
-                s=gap_size,
-                c=gap_color,
+            cax = ax.add_collection(_cax)
+        else:
+            _cax = ax.imshow(
+                _img,
                 rasterized=sc_settings._vector_friendly,
                 norm=normalize,
+                alpha=alpha,
+                origin="lower",
                 **kwargs,
             )
-            ax.add_collection(_cax)
-
-            # if user did not set alpha, set alpha to 0.7
-            alpha = 0.7 if alpha is None else alpha
-
-        _cax = scatter(
-            _coords[:, 0],
-            _coords[:, 1],
-            c=color_vector,
-            s=_size,
-            rasterized=sc_settings._vector_friendly,
-            norm=normalize,
-            alpha=alpha,
-            **kwargs,
-        )
-        cax = ax.add_collection(_cax)
+            cax = ax.add_collection(_cax, autolim=False)
 
         ax = _decorate_axs(
             ax=ax,
@@ -423,6 +450,7 @@ def _spatial_plot(
             img_alpha=img_alpha,
             value_to_plot=value_to_plot,
             color_source_vector=color_source_vector,
+            seg_key=seg_key,
             axis_labels=axis_labels,
             crops=_crops,
             categorical=categorical,
