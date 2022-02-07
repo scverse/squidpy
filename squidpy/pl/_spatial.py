@@ -70,10 +70,11 @@ def spatial_shape(
 def spatial_segment(
     adata: AnnData,
     seg_key: str = Key.uns.seg_key,
+    na_color: str | Tuple[float, ...] = "lightgray",
     **kwargs: Any,
 ) -> Any:
     """Spatial shape."""
-    _spatial_plot(adata, shape=None, **kwargs)
+    _spatial_plot(adata, shape=None, na_color=na_color, seg_key=seg_key, **kwargs)
 
 
 def _spatial_plot(
@@ -432,7 +433,7 @@ def _spatial_plot(
                 _img,
                 rasterized=sc_settings._vector_friendly,
                 norm=normalize,
-                alpha=alpha,
+                alpha=img_alpha,
                 origin="lower",
                 **kwargs,
             )
