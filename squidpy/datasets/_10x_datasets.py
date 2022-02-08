@@ -11,6 +11,47 @@ from squidpy._constants._constants import TenxVersions
 
 VisiumFiles = namedtuple("VisiumFiles", ["feature_matrix", "spatial_attrs", "tif_image"])
 
+_VisiumDatasets = Literal[
+    # spaceranger version 1.1.0 datasets
+    "V1_Breast_Cancer_Block_A_Section_1",
+    "V1_Breast_Cancer_Block_A_Section_2",
+    "V1_Human_Heart",
+    "V1_Human_Lymph_Node",
+    "V1_Mouse_Kidney",
+    "V1_Adult_Mouse_Brain",
+    "V1_Mouse_Brain_Sagittal_Posterior",
+    "V1_Mouse_Brain_Sagittal_Posterior_Section_2",
+    "V1_Mouse_Brain_Sagittal_Anterior",
+    "V1_Mouse_Brain_Sagittal_Anterior_Section_2",
+    "V1_Human_Brain_Section_1",
+    "V1_Human_Brain_Section_2",
+    "V1_Adult_Mouse_Brain_Coronal_Section_1",
+    "V1_Adult_Mouse_Brain_Coronal_Section_2",
+    # spaceranger version 1.2.0 datasets
+    "Targeted_Visium_Human_Cerebellum_Neuroscience",
+    "Parent_Visium_Human_Cerebellum",
+    "Targeted_Visium_Human_SpinalCord_Neuroscience",
+    "Parent_Visium_Human_SpinalCord",
+    "Targeted_Visium_Human_Glioblastoma_Pan_Cancer",
+    "Parent_Visium_Human_Glioblastoma",
+    "Targeted_Visium_Human_BreastCancer_Immunology",
+    "Parent_Visium_Human_BreastCancer",
+    "Targeted_Visium_Human_OvarianCancer_Pan_Cancer",
+    "Targeted_Visium_Human_OvarianCancer_Immunology",
+    "Parent_Visium_Human_OvarianCancer",
+    "Targeted_Visium_Human_ColorectalCancer_GeneSignature",
+    "Parent_Visium_Human_ColorectalCancer",
+    # spaceranger version 1.3.0 datasets
+    "Visium_FFPE_Mouse_Brain",
+    "Visium_FFPE_Mouse_Brain_IF",
+    "Visium_FFPE_Mouse_Kidney",
+    "Visium_FFPE_Human_Breast_Cancer",
+    "Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma",
+    "Visium_FFPE_Human_Prostate_Cancer",
+    "Visium_FFPE_Human_Prostate_IF",
+    "Visium_FFPE_Human_Normal_Prostate",
+]
+
 
 def _download_visium_dataset(
     sample_id: str, spaceranger_version: str, base_dir: Optional[Path] = None, download_image: bool = False
@@ -63,46 +104,7 @@ def _download_visium_dataset(
 
 
 def visium_sge(
-    sample_id: Literal[
-        # spaceranger version 1.1.0 datasets
-        "V1_Breast_Cancer_Block_A_Section_1",
-        "V1_Breast_Cancer_Block_A_Section_2",
-        "V1_Human_Heart",
-        "V1_Human_Lymph_Node",
-        "V1_Mouse_Kidney",
-        "V1_Adult_Mouse_Brain",
-        "V1_Mouse_Brain_Sagittal_Posterior",
-        "V1_Mouse_Brain_Sagittal_Posterior_Section_2",
-        "V1_Mouse_Brain_Sagittal_Anterior",
-        "V1_Mouse_Brain_Sagittal_Anterior_Section_2",
-        "V1_Human_Brain_Section_1",
-        "V1_Human_Brain_Section_2",
-        "V1_Adult_Mouse_Brain_Coronal_Section_1",
-        "V1_Adult_Mouse_Brain_Coronal_Section_2",
-        # spaceranger version 1.2.0 datasets
-        "Targeted_Visium_Human_Cerebellum_Neuroscience",
-        "Parent_Visium_Human_Cerebellum",
-        "Targeted_Visium_Human_SpinalCord_Neuroscience",
-        "Parent_Visium_Human_SpinalCord",
-        "Targeted_Visium_Human_Glioblastoma_Pan_Cancer",
-        "Parent_Visium_Human_Glioblastoma",
-        "Targeted_Visium_Human_BreastCancer_Immunology",
-        "Parent_Visium_Human_BreastCancer",
-        "Targeted_Visium_Human_OvarianCancer_Pan_Cancer",
-        "Targeted_Visium_Human_OvarianCancer_Immunology",
-        "Parent_Visium_Human_OvarianCancer",
-        "Targeted_Visium_Human_ColorectalCancer_GeneSignature",
-        "Parent_Visium_Human_ColorectalCancer",
-        # spaceranger version 1.3.0 datasets
-        "Visium_FFPE_Mouse_Brain",
-        "Visium_FFPE_Mouse_Brain_IF",
-        "Visium_FFPE_Mouse_Kidney",
-        "Visium_FFPE_Human_Breast_Cancer",
-        "Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma",
-        "Visium_FFPE_Human_Prostate_Cancer",
-        "Visium_FFPE_Human_Prostate_IF",
-        "Visium_FFPE_Human_Normal_Prostate",
-    ] = "V1_Breast_Cancer_Block_A_Section_1",
+    sample_id: _VisiumDatasets = "V1_Breast_Cancer_Block_A_Section_1",
     *,
     include_hires_tiff: bool = False,
 ) -> AnnData:
