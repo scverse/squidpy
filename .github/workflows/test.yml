@@ -55,6 +55,11 @@ jobs:
 
         steps:
         -   uses: actions/checkout@v2
+            if: github.event_name == 'schedule'
+            with:
+                ref: dev
+        -   uses: actions/checkout@v2
+            if: github.event_name != 'schedule'
         -   name: Set up Python ${{ matrix.python }}
             uses: actions/setup-python@v2
             with:
