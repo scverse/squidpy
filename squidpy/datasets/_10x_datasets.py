@@ -103,7 +103,7 @@ def _download_visium_dataset(
         )
 
 
-def visium_sge(
+def visium(
     sample_id: _VisiumDatasets = "V1_Breast_Cancer_Block_A_Section_1",
     *,
     include_hires_tiff: bool = False,

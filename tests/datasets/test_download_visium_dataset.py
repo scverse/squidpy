@@ -10,24 +10,24 @@ from scanpy._settings import settings
 from anndata.tests.helpers import assert_adata_equal
 from scanpy.datasets._ebi_expression_atlas import ebi_expression_atlas
 
-import squidpy as sq
+from squidpy.datasets import visium
 
 
 @pytest.mark.internet()
 def test_visium_datasets(tmpdir):
     # Tests that reading/ downloading works and is does not have global effects
-    hheart = sq.datasets.visium_sge("V1_Human_Heart")
-    mbrain = sq.datasets.visium_sge("V1_Adult_Mouse_Brain")
-    hheart_again = sq.datasets.visium_sge("V1_Human_Heart")
+    hheart = visium("V1_Human_Heart")
+    mbrain = visium("V1_Adult_Mouse_Brain")
+    hheart_again = visium("V1_Human_Heart")
     assert_adata_equal(hheart, hheart_again)
 
     # Test that changing the dataset dir doesn't break reading
     settings.datasetdir = Path(tmpdir)
-    mbrain_again = sq.datasets.visium_sge("V1_Adult_Mouse_Brain")
+    mbrain_again = visium("V1_Adult_Mouse_Brain")
     assert_adata_equal(mbrain, mbrain_again)
 
     # Test that downloading tissue image works
-    mbrain = sq.datasets.visium_sge("V1_Adult_Mouse_Brain", include_hires_tiff=True)
+    mbrain = visium("V1_Adult_Mouse_Brain", include_hires_tiff=True)
     expected_image_path = settings.datasetdir / "V1_Adult_Mouse_Brain" / "image.tif"
     image_path = Path(mbrain.uns["spatial"]["V1_Adult_Mouse_Brain"]["metadata"]["source_image_path"])
     assert image_path == expected_image_path
