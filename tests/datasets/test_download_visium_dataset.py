@@ -14,7 +14,7 @@ import squidpy as sq
 
 
 @pytest.mark.internet()
-def test_visium_datasets(tmp_dataset_dir, tmpdir):
+def test_visium_datasets(tmpdir):
     # Tests that reading/ downloading works and is does not have global effects
     hheart = sq.datasets.visium_sge("V1_Human_Heart")
     mbrain = sq.datasets.visium_sge("V1_Adult_Mouse_Brain")

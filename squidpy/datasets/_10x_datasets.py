@@ -1,4 +1,3 @@
-from enum import unique
 from typing import Literal, Optional
 from pathlib import Path
 from collections import namedtuple
@@ -8,7 +7,7 @@ from anndata import AnnData
 from scanpy._settings import settings
 from scanpy.readwrite import read_visium
 
-from squidpy._constants._utils import ModeEnum
+from squidpy._constants._constants import TenxVersions
 
 VisiumFiles = namedtuple("VisiumFiles", ["feature_matrix", "spatial_attrs", "tif_image"])
 
@@ -121,14 +120,6 @@ def visium_sge(
     -------
     Annotated data matrix.
     """
-
-    @unique
-    class TenxVersions(ModeEnum):
-        # Version numbers as class objects of TenxVersions
-        V1 = "1.1.0"
-        V2 = "1.2.0"
-        V3 = "1.3.0"
-
     if "V1_" in sample_id:
         spaceranger_version = TenxVersions.V1.s
     elif sample_id.startswith("Targeted_") or sample_id.startswith("Parent_"):

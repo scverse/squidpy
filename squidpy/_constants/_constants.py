@@ -105,3 +105,11 @@ class RipleyStat(ModeEnum):
     F = "F"
     G = "G"
     L = "L"
+
+
+@unique
+class TenxVersions(ModeEnum):
+    # Version numbers as class objects of TenxVersions
+    V1 = "1.1.0"
+    V2 = "1.2.0"
+    V3 = "1.3.0"
