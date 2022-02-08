@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import copy
 from types import MappingProxyType
-from typing import Any, Tuple, Union, Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import Any, Tuple, Mapping, Optional, Sequence, TYPE_CHECKING
 from pathlib import Path
 from functools import partial
 import itertools
@@ -23,18 +23,15 @@ from matplotlib.colors import Colormap
 from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.pl._graph import _maybe_set_colors
 from squidpy.pl._utils import save_fig, _sanitize_anndata, _assert_value_in_obs
-from squidpy.im._coords import CropCoords
 from squidpy.pl._spatial_utils import (
     _subs,
     _SeqStr,
     _VBound,
-    _get_list,
     _SeqArray,
     _SeqFloat,
     Palette_t,
     _Normalize,
     _CoordTuple,
-    _get_coords,
     _plot_edges,
     _AvailShapes,
     _decorate_axs,
@@ -44,6 +41,7 @@ from squidpy.pl._spatial_utils import (
     _get_source_vec,
     _shaped_scatter,
     _get_cmap_params,
+    _get_coords_crops,
     _get_title_axlabels,
     _image_spatial_attrs,
 )
@@ -249,13 +247,6 @@ def _spatial_plot(
         cell_id_key=cell_id_key,
     )
 
-    # set crops
-    if crop_coord is None:
-        crops: Union[list[Tuple[float, ...]], Tuple[None, ...]] = tuple(None for _ in spatial_params.library_id)
-    else:
-        crop_coord = _get_list(crop_coord, tuple, len(spatial_params.library_id))
-        crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor)]
-
     # assert library_key exists and follows logic
     if library_key is not None:
         _assert_value_in_obs(adata, key=library_key, val=spatial_params.library_id)
@@ -267,7 +258,13 @@ def _spatial_plot(
             )
 
     # set coords
-    coords = _get_coords(adata, spatial_key, spatial_params.library_id, spatial_params.scale_factor, library_key)
+    coords, crops = _get_coords_crops(
+        adata=adata,
+        spatial_params=spatial_params,
+        spatial_key=spatial_key,
+        library_key=library_key,
+        crop_coord=crop_coord,
+    )
 
     # partial init subset
     _subset = partial(_subs, library_key=library_key) if library_key is not None else lambda _, **__: _

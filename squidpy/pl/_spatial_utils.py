@@ -58,39 +58,6 @@ CmapParams = namedtuple("CmapParams", ["vmin", "vmax", "vcenter", "norm"])
 SpatialParams = namedtuple("SpatialParams", ["library_id", "scale_factor", "size", "img", "cell_id"])
 
 
-def _spatial_attrs(
-    adata: AnnData,
-    library_id: Sequence[str] | None = None,
-    library_key: str | None = None,
-    scale_factor: _SeqFloat = None,
-    size: _SeqFloat = None,
-) -> Tuple[Sequence[str], Sequence[float], Sequence[float], Sequence[None]]:
-
-    if library_id is None and library_key is not None:  # try to assign library_id
-        try:
-            _library_id = adata.obs[library_key].cat.categories.tolist()
-        except IndexError:
-            raise IndexError(f"`library_key: {library_key}` not in `adata.obs`.")
-    elif library_id is None and library_key is None:  # create dummy library_id
-        logg.warning(
-            "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
-        )
-        _library_id = [""]
-    elif isinstance(library_id, list):  # get library_id from arg
-        _library_id = library_id
-    else:
-        raise ValueError(f"Could not set library_id: `{library_id}`")
-
-    size = 120000 / adata.shape[0] if size is None else size
-    size = _get_list(size, float, len(_library_id))
-
-    scale_factor = 1.0 if scale_factor is None else scale_factor
-    scale_factor = _get_list(scale_factor, float, len(_library_id))
-    img = [None for _ in _library_id]
-
-    return _library_id, scale_factor, size, img
-
-
 def _image_spatial_attrs(
     adata: AnnData,
     shape: _AvailShapes | None,
@@ -215,23 +182,29 @@ def _image_spatial_attrs(
         return SpatialParams(library_id, scale_factor, size, _img, cell_id_vec)
 
 
-def _get_coords(
+def _get_coords_crops(
     adata: AnnData,
+    spatial_params: SpatialParams,
     spatial_key: str,
-    library_id: Sequence[str],
-    scale_factor: Sequence[float],
     library_key: str | None = None,
-) -> Sequence[NDArrayA]:
+    crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
+) -> Tuple[Sequence[NDArrayA], list[Tuple[float, ...]] | Tuple[None, ...]]:
+
+    # set crops
+    if crop_coord is None:
+        crops: Union[list[Tuple[float, ...]], Tuple[None, ...]] = tuple(None for _ in spatial_params.library_id)
+    else:
+        crop_coord = _get_list(crop_coord, tuple, len(spatial_params.library_id))
+        crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor)]
 
     coords = adata.obsm[spatial_key]
     if library_key is None:
-        return [coords * sf for sf in scale_factor]
+        return [coords * sf for sf in spatial_params.scale_factor], crops
     else:
-        if len(library_id) != len(scale_factor):
-            raise ValueError(
-                f"Length `library_id: {len(library_id)}` is not equal to length `scale_factor: {len(scale_factor)}`."
-            )
-        return [coords[adata.obs[library_key] == lib, :] * sf for lib, sf in zip(library_id, scale_factor)]
+        return [
+            coords[adata.obs[library_key] == lib, :] * sf  # TODO: check that library_key is asserted upstream
+            for lib, sf in zip(spatial_params.library_id, spatial_params.scale_factor)
+        ], crops
 
 
 def _subs(adata: AnnData, library_key: str | None = None, library_id: str | None = None) -> AnnData:
