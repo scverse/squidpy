@@ -554,4 +554,5 @@ def _map_color_seg(
             return seg_im
     else:
         val_im = map_array(img, cell_id, color_vector)
+        val_im = np.ma.masked_where(val_im == 0, val_im)
         return val_im

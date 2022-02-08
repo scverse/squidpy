@@ -70,7 +70,7 @@ def spatial_shape(
 def spatial_segment(
     adata: AnnData,
     seg_key: str = Key.uns.seg_key,
-    na_color: str | Tuple[float, ...] = "lightgray",
+    na_color: str | Tuple[float, ...] = (0, 0, 0, 0),  # "lightgray",
     **kwargs: Any,
 ) -> Any:
     """Spatial shape."""
