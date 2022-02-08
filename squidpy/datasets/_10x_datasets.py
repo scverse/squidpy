@@ -114,7 +114,7 @@ def visium_sge(
     Parameters
     ----------
     sample_id
-        The ID of the data sample in 10x’s spatial database.
+        The ID of the data sample in 10x's spatial database.
     include_hires_tiff
         Download and include the high-resolution tissue image (tiff)
         in `adata.uns["spatial"][sample_id]["metadata"]["source_image_path"]`.
