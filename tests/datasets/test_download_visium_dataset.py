@@ -1,5 +1,5 @@
-"""
-Tests to make sure the visium example datasets load.
+""""
+Tests to make sure the Visium example datasets load.
 """
 
 from pathlib import Path
@@ -14,22 +14,24 @@ from squidpy.datasets import visium
 
 
 @pytest.mark.internet()
-def test_visium_datasets(tmpdir):
-    # Tests that reading/ downloading works and is does not have global effects
-    hheart = visium("V1_Human_Heart")
-    mbrain = visium("V1_Adult_Mouse_Brain")
-    hheart_again = visium("V1_Human_Heart")
-    assert_adata_equal(hheart, hheart_again)
+@pytest.mark.parametrize(
+    "sample", ["V1_Mouse_Kidney", "Targeted_Visium_Human_SpinalCord_Neuroscience", "Visium_FFPE_Human_Breast_Cancer"]
+)
+def test_visium_datasets(tmpdir, sample):
+    # Tests that reading / downloading datasets works and it does not have any global effects
+    sample_dataset = visium(sample)
+    sample_dataset_again = visium(sample)
+    assert_adata_equal(sample_dataset, sample_dataset_again)
 
-    # Test that changing the dataset dir doesn't break reading
+    # Test that changing the dataset directory doesn't break reading
     settings.datasetdir = Path(tmpdir)
-    mbrain_again = visium("V1_Adult_Mouse_Brain")
-    assert_adata_equal(mbrain, mbrain_again)
+    sample_dataset_again = visium(sample)
+    assert_adata_equal(sample_dataset, sample_dataset_again)
 
     # Test that downloading tissue image works
-    mbrain = visium("V1_Adult_Mouse_Brain", include_hires_tiff=True)
-    expected_image_path = settings.datasetdir / "V1_Adult_Mouse_Brain" / "image.tif"
-    image_path = Path(mbrain.uns["spatial"]["V1_Adult_Mouse_Brain"]["metadata"]["source_image_path"])
+    sample_dataset = visium(sample, include_hires_tiff=True)
+    expected_image_path = settings.datasetdir / sample / "image.tif"
+    image_path = Path(sample_dataset.uns["spatial"][sample]["metadata"]["source_image_path"])
     assert image_path == expected_image_path
 
     # Test that tissue image exists and is a valid image file
