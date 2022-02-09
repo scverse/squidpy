@@ -56,10 +56,10 @@ _VisiumDatasets = Literal[
 def _download_visium_dataset(
     sample_id: str, spaceranger_version: str, base_dir: Optional[Path] = None, download_image: bool = False
 ) -> None:
-    """Download Visium dataset.
+    """Download Visium dataset from 10x Genomics.
 
-    Params
-    ------
+    Parameters
+    ----------
     sample_id
         String name of example visium dataset.
     base_dir
@@ -113,6 +113,7 @@ def visium(
     Database: https://support.10xgenomics.com/spatial-gene-expression/datasets
     Parameters
     ----------
+    %(adata)s
     sample_id
         The ID of the data sample in 10x's spatial database.
     include_hires_tiff
@@ -120,7 +121,7 @@ def visium(
         in `adata.uns["spatial"][sample_id]["metadata"]["source_image_path"]`.
     Returns
     -------
-    Annotated data matrix.
+    ``adata``.
     """
     if "V1_" in sample_id:
         spaceranger_version = TenxVersions.V1.s
