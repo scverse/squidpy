@@ -8,7 +8,6 @@ import subprocess
 
 from scanpy._settings import settings
 from anndata.tests.helpers import assert_adata_equal
-from scanpy.datasets._ebi_expression_atlas import ebi_expression_atlas
 
 from squidpy.datasets import visium
 
@@ -41,10 +40,3 @@ def test_visium_datasets(tmpdir, sample):
     process = subprocess.run(["file", "--mime-type", image_path], stdout=subprocess.PIPE)
     output = process.stdout.strip().decode()  # make process output string
     assert output == str(image_path) + ": image/tiff"
-
-
-def test_download_failure():
-    from urllib.error import HTTPError
-
-    with pytest.raises(HTTPError):
-        ebi_expression_atlas("not_a_real_accession")
