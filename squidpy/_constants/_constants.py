@@ -108,7 +108,7 @@ class RipleyStat(ModeEnum):
 
 
 @unique
-class TenxVersions(ModeEnum):
+class TenxVersions(str, ModeEnum):
     # Version numbers as class objects of TenxVersions
     V1 = "1.1.0"
     V2 = "1.2.0"

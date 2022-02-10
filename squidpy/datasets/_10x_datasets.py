@@ -1,6 +1,7 @@
 from typing import Literal, Optional
 from pathlib import Path
 from collections import namedtuple
+import tarfile
 
 from scanpy import _utils
 from anndata import AnnData
@@ -8,6 +9,8 @@ from scanpy._settings import settings
 from scanpy.readwrite import read_visium
 
 from squidpy._constants._constants import TenxVersions
+
+__all__ = ["visium"]
 
 VisiumFiles = namedtuple("VisiumFiles", ["feature_matrix", "spatial_attrs", "tif_image"])
 
@@ -56,7 +59,8 @@ _VisiumDatasets = Literal[
 def _download_visium_dataset(
     sample_id: str, spaceranger_version: str, base_dir: Optional[Path] = None, download_image: bool = False
 ) -> None:
-    """Download Visium dataset from 10x Genomics.
+    """
+    Download Visium dataset from 10x Genomics.
 
     Parameters
     ----------
@@ -67,8 +71,6 @@ def _download_visium_dataset(
     download_image
         Whether to download the high-resolution tissue section.
     """
-    import tarfile
-
     if base_dir is None:
         base_dir = settings.datasetdir
 
@@ -124,11 +126,11 @@ def visium(
     ``adata``.
     """
     if "V1_" in sample_id:
-        spaceranger_version = TenxVersions.V1.s
+        spaceranger_version = TenxVersions.V1
     elif sample_id.startswith("Targeted_") or sample_id.startswith("Parent_"):
-        spaceranger_version = TenxVersions.V2.s
+        spaceranger_version = TenxVersions.V2
     else:
-        spaceranger_version = TenxVersions.V3.s
+        spaceranger_version = TenxVersions.V3
     _download_visium_dataset(sample_id, spaceranger_version, download_image=include_hires_tiff)
     if include_hires_tiff:
         adata = read_visium(
