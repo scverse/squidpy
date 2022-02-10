@@ -131,7 +131,7 @@ def visium(
 
     Returns
     -------
-    Spatially annotated data object - ``adata``.
+    Spatially annotated data object ``adata``.
     """
     if sample_id.startswith("V1_"):
         spaceranger_version = TenxVersions.V1
