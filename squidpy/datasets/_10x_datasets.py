@@ -8,6 +8,7 @@ from anndata import AnnData
 from scanpy._settings import settings
 from scanpy.readwrite import read_visium
 
+from squidpy._docs import d
 from squidpy._constants._constants import TenxVersions
 
 __all__ = ["visium"]
@@ -70,6 +71,10 @@ def _download_visium_dataset(
         Where to download the dataset to.
     download_image
         Whether to download the high-resolution tissue section.
+
+    Returns
+    -------
+    `None`, just optionally downloads the data if not already present.
     """
     if base_dir is None:
         base_dir = settings.datasetdir
@@ -77,7 +82,7 @@ def _download_visium_dataset(
     url_prefix = f"https://cf.10xgenomics.com/samples/spatial-exp/{spaceranger_version}/{sample_id}/"
 
     sample_dir = base_dir / sample_id
-    sample_dir.mkdir(exist_ok=True)
+    sample_dir.mkdir(exist_ok=True, parents=True)
 
     visium_files = VisiumFiles(
         f"{sample_id}_filtered_feature_bc_matrix.h5", f"{sample_id}_spatial.tar.gz", f"{sample_id}_image.tif"
@@ -105,27 +110,30 @@ def _download_visium_dataset(
         )
 
 
+@d.dedent
 def visium(
     sample_id: _VisiumDatasets = "V1_Breast_Cancer_Block_A_Section_1",
     *,
     include_hires_tiff: bool = False,
 ) -> AnnData:
-    """Process Visium Spatial Gene Expression data from 10x Genomics.
+    """
+    Process Visium Spatial Gene Expression data from 10x Genomics.
 
-    Database: https://support.10xgenomics.com/spatial-gene-expression/datasets
     Parameters
     ----------
     %(adata)s
     sample_id
         The ID of the data sample in 10x's spatial database.
+        `Database: https://support.10xgenomics.com/spatial-gene-expression/datasets`_.
     include_hires_tiff
         Download and include the high-resolution tissue image (tiff)
-        in `adata.uns["spatial"][sample_id]["metadata"]["source_image_path"]`.
+        in ``adata.uns['spatial']['{sample_id}']['metadata']['source_image_path']``.
+
     Returns
     -------
-    ``adata``.
+    Spatially annotated data object - ``adata``.
     """
-    if "V1_" in sample_id:
+    if sample_id.startswith("V1_"):
         spaceranger_version = TenxVersions.V1
     elif sample_id.startswith("Targeted_") or sample_id.startswith("Parent_"):
         spaceranger_version = TenxVersions.V2
