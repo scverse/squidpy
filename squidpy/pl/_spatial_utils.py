@@ -363,30 +363,6 @@ def _set_color_source_vec(
         return color_source_vector, color_vector, True
 
 
-def _get_color_vec(
-    adata: AnnData,
-    value_to_plot: str | None,
-    values: NDArrayA | pd.Series,
-    palette: Palette_t = None,
-    na_color: str | Tuple[float, ...] | None = None,
-) -> Tuple[NDArrayA, bool]:
-    to_hex = partial(colors.to_hex, keep_alpha=True)
-    if value_to_plot is None:
-        return np.full(to_hex(na_color), adata.n_obs), False
-    if not is_categorical_dtype(values):
-        return values, False
-    else:
-        # use scanpy _get_palette to set palette if not present
-        clusters = adata.obs[value_to_plot].cat.categories
-        color_map = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
-        color_vector = values.rename_categories(color_map)  # type: ignore
-        # Set color to 'missing color' for all missing values
-        if color_vector.isna().any():
-            color_vector = color_vector.add_categories([to_hex(na_color)])
-            color_vector = color_vector.fillna(to_hex(na_color))
-        return color_vector, True
-
-
 def _shaped_scatter(
     x: NDArrayA,
     y: NDArrayA,
