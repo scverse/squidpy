@@ -310,7 +310,5 @@ def _spatial_plot(
             scalebar_kwargs=scalebar_kwargs,
         )
 
-    fig_params.axs if fig_params.axs is not None else ax
-
     if fig_params.fig is not None and save is not None:
         save_fig(fig_params.fig, path=save)
