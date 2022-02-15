@@ -29,13 +29,15 @@ from squidpy.pl._interactive._utils import (
 )
 from squidpy.pl._interactive._widgets import RangeSlider  # type: ignore[attr-defined]
 
+__all__ = ["ImageController"]
+
 # label string: attribute name
 _WIDGETS_TO_HIDE = {
     "symbol:": "symbolComboBox",
     "point size:": "sizeSlider",
     "face color:": "faceColorEdit",
     "edge color:": "edgeColorEdit",
-    "n-dim:": "ndimCheckBox",
+    "out of slice:": "outOfSliceCheckBox",
 }
 
 
@@ -89,8 +91,12 @@ class ImageController:
         if rgb is None:
             logg.debug("Automatically determining whether image is an RGB image")
             rgb = not _display_channelwise(img.data)
-        if not rgb:
+
+        if rgb:
+            contrast_limits = None
+        else:
             img = img.transpose(..., "z", "y", "x")  # channels first
+            contrast_limits = float(img.min()), float(img.max())
 
         logg.info(f"Creating image `{layer}` layer")
         self.view.viewer.add_image(
@@ -100,6 +106,7 @@ class ImageController:
             colormap=colormap,
             blending=self.model.blending,
             multiscale=multiscale,
+            contrast_limits=contrast_limits,
         )
 
         return True
@@ -293,8 +300,8 @@ class ImageController:
 
     def _hide_points_controls(self, layer: Points, is_categorical: bool) -> None:
         try:
-            # shouldn't happen
-            points_controls = self.view.viewer.window.qt_viewer.controls.widgets[layer]
+            # TODO(michalk8): find a better way: https://github.com/napari/napari/issues/3066
+            points_controls = self.view.viewer.window._qt_viewer.controls.widgets[layer]
         except KeyError:
             return
 
@@ -318,6 +325,9 @@ class ImageController:
             assert isinstance(widget, QWidget)
 
         if not is_categorical:  # add the slider
+            if widget is None:
+                logg.warning("Unable to set the percentile slider")
+                return
             idx = gl.indexOf(widget)
             row, *_ = gl.getItemPosition(idx)
 
@@ -326,7 +336,6 @@ class ImageController:
                 colorbar=self.view._colorbar,
             )
             slider.valueChanged.emit((0, 100))
-
             gl.replaceWidget(labels[label_key], QLabel("percentile:"))
             gl.replaceWidget(widget, slider)
 
