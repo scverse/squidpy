@@ -625,7 +625,7 @@ def _sanitize_anndata(adata: AnnData) -> None:
 def _assert_value_in_obs(adata: AnnData, key: str, val: Sequence[Any] | Any) -> None:
     if key not in adata.obs:
         raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
-    if not isinstance(val, Sequence):
+    if not isinstance(val, list):
         val = [val]
     val = list(set(val) - set(adata.obs[key].unique()))
     if len(val) != 0:

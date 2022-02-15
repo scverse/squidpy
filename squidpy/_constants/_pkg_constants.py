@@ -75,7 +75,11 @@ class Key:
             return "images"
 
         @cprop
-        def seg_key(cls) -> str:
+        def image_res_key(cls) -> str:
+            return "hires"
+
+        @cprop
+        def image_seg_key(cls) -> str:
             return "segmentation"
 
         @cprop
@@ -174,7 +178,7 @@ class Key:
             if library_id is not None:
                 if isinstance(library_id, str):
                     return [library_id]
-                if not all(i in library_id for i in haystack):
+                if not any(i in library_id for i in haystack):
                     raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
                 if sub_key is not None:
                     if not all(sub_key in lib for lib in [adata.uns[spatial_key][lib].keys() for lib in library_id]):
