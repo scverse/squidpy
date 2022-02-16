@@ -30,7 +30,6 @@ from squidpy.pl._spatial_utils import (
     _plot_scatter,
     _plot_segment,
     _set_ax_title,
-    _map_color_seg,
     _set_coords_crops,
     _prepare_args_plot,
     _image_spatial_attrs,
@@ -237,18 +236,6 @@ def _spatial_plot(
             na_color=na_color,
         )
 
-        if _seg:
-            _seg = _map_color_seg(
-                seg=_seg,
-                cell_id=_cell_id,
-                color_vector=color_vector,
-                color_source_vector=color_source_vector,
-                cmap_params=cmap_params,
-                seg_erosionpx=seg_erosionpx,
-                seg_boundaries=seg_boundaries,
-                seg_transparent=seg_transparent,
-            )
-
         # set frame and title
         ax = _set_ax_title(fig_params, count, value_to_plot)
 
@@ -265,7 +252,7 @@ def _spatial_plot(
             )
             ax.add_collection(_cedge)
 
-        if not seg:
+        if _seg is None:
             outline_params, kwargs = _set_outline(
                 size=_size, outline=outline, outline_width=outline_width, outline_color=outline_color, **kwargs
             )
@@ -282,7 +269,18 @@ def _spatial_plot(
             )
         else:
             ax, cax = _plot_segment(
-                img=_seg, ax=ax, cmap_params=cmap_params, color_params=color_params, categorical=categorical, **kwargs
+                seg=_seg,
+                cell_id=_cell_id,
+                color_vector=color_vector,
+                color_source_vector=color_source_vector,
+                seg_erosionpx=seg_erosionpx,
+                seg_boundaries=seg_boundaries,
+                na_color=na_color,
+                ax=ax,
+                cmap_params=cmap_params,
+                color_params=color_params,
+                categorical=categorical,
+                **kwargs,
             )
 
         ax = _decorate_axs(

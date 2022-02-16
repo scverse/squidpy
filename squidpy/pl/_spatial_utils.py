@@ -572,17 +572,22 @@ def _map_color_seg(
     cmap_params: CmapParams,
     seg_erosionpx: int | None = None,
     seg_boundaries: bool = False,
-    seg_transparent: bool = False,
+    na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
 ) -> NDArrayA:
 
     cell_id = np.array(cell_id)
+    if isinstance(na_color, tuple) and len(na_color) == 4:
+        transparency: Union[float, None] = na_color[-1]
+    else:
+        transparency = None
+
     if is_categorical_dtype(color_vector):
-        if seg_transparent and np.any(color_source_vector.isna()):
+        if transparency and np.any(color_source_vector.isna()):
             cell_id[color_source_vector.isna()] = 0
         val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)  # type: ignore
         cols = colors.to_rgba_array(color_vector.categories)  # type: ignore
     else:
-        val_im = map_array(seg, cell_id, cell_id)
+        val_im = map_array(seg, cell_id, cell_id)  # replace with same seg id to remove missing segs
         cols = cmap_params.cmap(cmap_params.norm(color_vector))
 
     if seg_erosionpx is not None:
@@ -852,17 +857,34 @@ def _plot_scatter(
 
 
 def _plot_segment(
-    img: NDArrayA,
+    seg: NDArrayA,
+    cell_id: NDArrayA,
+    color_vector: NDArrayA | pd.Series[CategoricalDtype],
+    color_source_vector: pd.Series[CategoricalDtype],
     ax: Axes,
     cmap_params: CmapParams,
     color_params: Colormap,
     categorical: bool,
+    seg_erosionpx: int | None = None,
+    seg_boundaries: bool = False,
+    na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
     **kwargs: Any,
 ) -> Tuple[Axes, Collection]:
 
+    img = _map_color_seg(
+        seg=seg,
+        cell_id=cell_id,
+        color_vector=color_vector,
+        color_source_vector=color_source_vector,
+        cmap_params=cmap_params,
+        seg_erosionpx=seg_erosionpx,
+        seg_boundaries=seg_boundaries,
+        na_color=na_color,
+    )
+
     _cax = ax.imshow(
         img,
-        rasterized=sc_settings._vector_friendly,
+        rasterized=True,
         cmap=cmap_params.cmap if not categorical else None,
         norm=cmap_params.norm if not categorical else None,
         alpha=color_params.alpha,
