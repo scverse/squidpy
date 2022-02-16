@@ -237,7 +237,7 @@ def _spatial_plot(
             na_color=na_color,
         )
 
-        if seg:
+        if _seg:
             _seg = _map_color_seg(
                 seg=_seg,
                 cell_id=_cell_id,
