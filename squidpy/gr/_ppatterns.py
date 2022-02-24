@@ -346,9 +346,9 @@ def co_occurrence(
         thresh_min, thresh_max = _find_min_max(spatial)
         interval = np.linspace(thresh_min, thresh_max, num=interval, dtype=fp)
     else:
-        interval = np.array(interval, dtype=fp, copy=True)
-    if not len(interval):
-        raise ValueError("Empty interval specified.")
+        interval = np.array(sorted(interval), dtype=fp, copy=True)
+    if len(interval) <= 1:
+        raise ValueError(f"Expected interval to be of length `>= 2`, found `{len(interval)}`.")
 
     n_obs = spatial.shape[0]
     if n_splits is None:
