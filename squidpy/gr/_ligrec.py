@@ -7,6 +7,7 @@ from typing import Any, Tuple, Union, Mapping, Iterable, Sequence, TYPE_CHECKING
 from functools import partial
 from itertools import product
 from collections import namedtuple
+from typing_extensions import Literal
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -130,7 +131,12 @@ def _create_template(n_cls: int, return_means: bool = False, parallel: bool = Tr
     )
 
 
-def _fdr_correct(pvals: pd.DataFrame, corr_method: str, corr_axis: str | CorrAxis, alpha: float = 0.05) -> pd.DataFrame:
+def _fdr_correct(
+    pvals: pd.DataFrame,
+    corr_method: str,
+    corr_axis: Literal["interactions", "clusters"] | CorrAxis,
+    alpha: float = 0.05,
+) -> pd.DataFrame:
     """Correct p-values for FDR along specific axis in ``pvals``."""
     from pandas.core.arrays.sparse import SparseArray
     from statsmodels.stats.multitest import multipletests
@@ -206,7 +212,7 @@ class PermutationTestABC(ABC):
     @d.get_sections(base="PT_prepare", sections=["Parameters", "Returns"])
     @inject_docs(src=SOURCE, tgt=TARGET, cp=ComplexPolicy)
     def prepare(
-        self, interactions: Interaction_t, complex_policy: str | ComplexPolicy = ComplexPolicy.MIN.v
+        self, interactions: Interaction_t, complex_policy: Literal["min", "all"] | ComplexPolicy = ComplexPolicy.MIN.v
     ) -> PermutationTestABC:
         """
         Prepare self for running the permutation test.
@@ -308,7 +314,7 @@ class PermutationTestABC(ABC):
         threshold: float = 0.01,
         seed: int | None = None,
         corr_method: str | None = None,
-        corr_axis: str | CorrAxis = CorrAxis.INTERACTIONS.v,
+        corr_axis: Literal["interactions", "clusters"] | CorrAxis = CorrAxis.INTERACTIONS.v,
         alpha: float = 0.05,
         copy: bool = False,
         key_added: str | None = None,
@@ -490,7 +496,10 @@ class PermutationTestABC(ABC):
         but no filtering happens at this stage - genes not present in the data are filtered at a later stage.
         """
 
-        def find_min_gene_in_complex(_complex: str) -> str | None:
+        def find_min_gene_in_complex(_complex: str | None) -> str | None:
+            # TODO(michalk8): how can this happen?
+            if _complex is None:
+                return None
             if "_" not in _complex:
                 return _complex
             complexes = [c for c in _complex.split("_") if c in self._data.columns]
@@ -513,9 +522,9 @@ class PermutationTestABC(ABC):
             self.interactions[TARGET] = self.interactions[TARGET].apply(find_min_gene_in_complex)
         elif complex_policy == ComplexPolicy.ALL:
             logg.debug("DEBUG: Creating all gene combinations within complexes")
-            src = self.interactions.pop(SOURCE).apply(lambda s: s.split("_")).explode()
+            src = self.interactions.pop(SOURCE).apply(lambda s: str(s).split("_")).explode()
             src.name = SOURCE
-            tgt = self.interactions.pop(TARGET).apply(lambda s: s.split("_")).explode()
+            tgt = self.interactions.pop(TARGET).apply(lambda s: str(s).split("_")).explode()
             tgt.name = TARGET
 
             self._interactions = pd.merge(self.interactions, src, how="left", left_index=True, right_index=True)
@@ -553,7 +562,7 @@ class PermutationTest(PermutationTestABC):
     def prepare(
         self,
         interactions: Interaction_t | None = None,
-        complex_policy: str = ComplexPolicy.MIN.v,
+        complex_policy: Literal["min", "all"] = ComplexPolicy.MIN.v,
         interactions_params: Mapping[str, Any] = MappingProxyType({}),
         transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
         receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
@@ -615,10 +624,10 @@ def ligrec(
     adata: AnnData,
     cluster_key: str,
     interactions: Interaction_t | None = None,
-    complex_policy: str = ComplexPolicy.MIN.v,
+    complex_policy: Literal["min", "all"] = ComplexPolicy.MIN.v,
     threshold: float = 0.01,
     corr_method: str | None = None,
-    corr_axis: str = CorrAxis.CLUSTERS.v,
+    corr_axis: Literal["interactions", "clusters"] = CorrAxis.CLUSTERS.v,
     use_raw: bool = True,
     copy: bool = False,
     key_added: str | None = None,

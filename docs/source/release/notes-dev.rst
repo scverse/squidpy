@@ -1,4 +1,4 @@
-Squidpy dev (2021-11-24)
+Squidpy dev (2021-12-30)
 ========================
 
 Bugfixes

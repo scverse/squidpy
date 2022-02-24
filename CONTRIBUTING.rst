@@ -20,6 +20,7 @@ Clone Squidpy from source as::
 
     git clone https://github.com/theislab/squidpy
     cd squidpy
+    git checkout dev
 
 Install the test and development mode::
 
@@ -130,6 +131,7 @@ Submitting a PR
 ---------------
 Before submitting a new pull request, please make sure you followed these instructions:
 
+- make sure that you've branched off ``dev`` and are merging into ``dev``
 - make sure that your code follows the above specified conventions
   (see `Code style guide`_ and `Writing documentation`_).
 - if applicable, make sure you've added/modified at least 1 test to account for the changes you've made
