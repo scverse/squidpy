@@ -496,7 +496,10 @@ class PermutationTestABC(ABC):
         but no filtering happens at this stage - genes not present in the data are filtered at a later stage.
         """
 
-        def find_min_gene_in_complex(_complex: str) -> str | None:
+        def find_min_gene_in_complex(_complex: str | None) -> str | None:
+            # TODO(michalk8): how can this happen?
+            if _complex is None:
+                return None
             if "_" not in _complex:
                 return _complex
             complexes = [c for c in _complex.split("_") if c in self._data.columns]
@@ -519,9 +522,9 @@ class PermutationTestABC(ABC):
             self.interactions[TARGET] = self.interactions[TARGET].apply(find_min_gene_in_complex)
         elif complex_policy == ComplexPolicy.ALL:
             logg.debug("DEBUG: Creating all gene combinations within complexes")
-            src = self.interactions.pop(SOURCE).apply(lambda s: s.split("_")).explode()
+            src = self.interactions.pop(SOURCE).apply(lambda s: str(s).split("_")).explode()
             src.name = SOURCE
-            tgt = self.interactions.pop(TARGET).apply(lambda s: s.split("_")).explode()
+            tgt = self.interactions.pop(TARGET).apply(lambda s: str(s).split("_")).explode()
             tgt.name = TARGET
 
             self._interactions = pd.merge(self.interactions, src, how="left", left_index=True, right_index=True)
