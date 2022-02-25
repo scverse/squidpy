@@ -6,6 +6,8 @@ from pandas.testing import assert_frame_equal
 import numpy as np
 
 from squidpy.gr import co_occurrence, spatial_autocorr
+from squidpy.gr._ppatterns import _find_min_max
+from squidpy._constants._pkg_constants import Key
 
 MORAN_K = "moranI"
 GEARY_C = "gearyC"
@@ -106,3 +108,17 @@ def test_co_occurrence_reproducibility(adata: AnnData, n_jobs: int, n_splits: in
 
     np.testing.assert_array_equal(sorted(interval_1), sorted(interval_2))
     np.testing.assert_allclose(arr_1, arr_2)
+
+
+@pytest.mark.parametrize("size", [1, 3])
+def test_co_occurrence_explicit_interval(adata: AnnData, size: int):
+    minn, maxx = _find_min_max(adata.obsm[Key.obsm.spatial])
+    interval = np.linspace(minn, maxx, size)
+    if size == 1:
+        with pytest.raises(ValueError, match=r"Expected interval to be of length"):
+            _ = co_occurrence(adata, cluster_key="leiden", copy=True, interval=interval)
+    else:
+        _, interval_1 = co_occurrence(adata, cluster_key="leiden", copy=True, interval=interval)
+
+        assert interval is not interval_1
+        np.testing.assert_allclose(interval, interval_1)  # allclose because in the func, we use f32
