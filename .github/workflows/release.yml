@@ -69,11 +69,10 @@ jobs:
                 tagging_message: ${{ steps.vars.outputs.tag }}
                 skip_dirty_check: false
 
-        # TODO(michalk8): bug on GitHub's side: doesn't seem to register `Test` as WD workflow
         # `Test` triggers `Deployment`
         -   name: Invoke deployment workflow
             uses: benc-uk/workflow-dispatch@v1
             with:
-                workflow: Deployment
+                workflow: Test
                 token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
                 inputs: '{ "reason": "release" }'

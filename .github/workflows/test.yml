@@ -4,9 +4,9 @@ on:
     schedule:
     -   cron: 00 00 * * 1      # every Monday at 00:00
     push:
-        branches: [master, dev]
+        branches: [master]
     pull_request:
-        branches: [master, dev]
+        branches: [master]
     workflow_dispatch:
         inputs:
             reason:
@@ -55,11 +55,6 @@ jobs:
 
         steps:
         -   uses: actions/checkout@v2
-            if: github.event_name == 'schedule'
-            with:
-                ref: dev
-        -   uses: actions/checkout@v2
-            if: github.event_name != 'schedule'
         -   name: Set up Python ${{ matrix.python }}
             uses: actions/setup-python@v2
             with:
@@ -111,7 +106,7 @@ jobs:
 
     regenerate-notebooks:
         needs: [lint, test]
-        if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') }}
+        if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/master')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') }}
         runs-on: ubuntu-latest
         steps:
         -   name: Rebuild tutorials/examples
