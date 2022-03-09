@@ -79,7 +79,7 @@ class ImageController:
             return self.add_labels(layer)
 
         img: xr.DataArray = self.model.container.data[layer].transpose("z", "y", "x", ...)
-        multiscale = np.prod(img.shape[1:3]) > (2 ** 16) ** 2
+        multiscale = np.prod(img.shape[1:3]) > (2**16) ** 2
         n_channels = img.shape[-1]
 
         rgb = img.attrs.get("rgb", None)
@@ -143,7 +143,7 @@ class ImageController:
         self.view.viewer.add_labels(
             img.data,
             name=layer,
-            multiscale=np.prod(img.shape[-2:]) > (2 ** 16) ** 2,
+            multiscale=np.prod(img.shape[-2:]) > (2**16) ** 2,
         )
 
         return True
@@ -280,7 +280,7 @@ class ImageController:
         raise NotImplementedError(type(vec))
 
     @_get_points_properties.register(np.ndarray)
-    def _(self, vec: NDArrayA, **_) -> dict[str, Any]:
+    def _(self, vec: NDArrayA, **_: Any) -> dict[str, Any]:
         return {
             "text": None,
             "face_color": "value",
@@ -288,7 +288,7 @@ class ImageController:
             "metadata": {"perc": (0, 100), "data": vec, "minmax": (np.nanmin(vec), np.nanmax(vec))},
         }
 
-    @_get_points_properties.register(pd.Series)  # type: ignore[no-redef]
+    @_get_points_properties.register(pd.Series)
     def _(self, vec: pd.Series, key: str) -> dict[str, Any]:
         face_color = _get_categorical(self.model.adata, key=key, palette=self.model.palette, vec=vec)
         return {

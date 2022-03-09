@@ -329,7 +329,7 @@ class FeatureMixin:
                 if self.data.dims["y"] != self.data.dims["x"]:
                     raise ValueError(f"Crop is not a square: `{self.data.dims}`.")
                 c = self.data.dims["x"] // 2  # center
-                mask = (x - c) ** 2 + (y - c) ** 2 <= c ** 2
+                mask = (x - c) ** 2 + (y - c) ** 2 <= c**2
                 y = y[mask]
                 x = x[mask]
 
@@ -453,7 +453,7 @@ class FeatureMixin:
                 additional_layer = self._get_layer(additional_layer)
                 kwargs[additional_layer] = self[additional_layer].values
         # calculate features by calling feature_fn
-        res = func(self[layer][..., channels].values, **kwargs)  # type: ignore[call-arg]
+        res = func(self[layer][..., channels].values, **kwargs)
         if not isinstance(res, Iterable):
             res = [res]
         features = {f"{feature_name}_{i}": f for i, f in enumerate(res)}

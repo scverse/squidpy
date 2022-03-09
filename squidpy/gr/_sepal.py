@@ -249,7 +249,7 @@ def _laplacian_rect(
     See `Wikipedia <https://en.wikipedia.org/wiki/Five-point_stencil>`_ for more information.
     """
     d2f: NDArrayA = nbrs - 4 * centers
-    d2f = d2f / h ** 2
+    d2f = d2f / h**2
 
     return d2f
 
@@ -271,7 +271,7 @@ def _laplacian_hex(
     ISBN-13: 978-0486821603.
     """
     d2f: NDArrayA = nbrs - 6 * centers
-    d2f = d2f / h ** 2
+    d2f = d2f / h**2
     d2f = (d2f * 2) / 3  # type: ignore[assignment]
 
     return d2f

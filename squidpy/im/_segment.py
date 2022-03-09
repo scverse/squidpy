@@ -98,13 +98,13 @@ class SegmentationModel(ABC):
     def _(self, img: NDArrayA, **kwargs: Any) -> NDArrayA:
         chunks = kwargs.pop("chunks", None)
         if chunks is not None:
-            return self.segment(da.asarray(img).rechunk(chunks), **kwargs)
+            return self.segment(da.asarray(img).rechunk(chunks), **kwargs)  # type: ignore[no-any-return]
 
         img = SegmentationModel._precondition(img)
         img = self._segment(img, **kwargs)
         return SegmentationModel._postcondition(img)
 
-    @segment.register(da.Array)  # type: ignore[no-redef]
+    @segment.register(da.Array)
     def _(self, img: da.Array, chunks: str | int | tuple[int, ...] | None = None, **kwargs: Any) -> NDArrayA:
         img = SegmentationModel._precondition(img)
         if chunks is not None:
@@ -135,7 +135,7 @@ class SegmentationModel(ABC):
 
         return SegmentationModel._postcondition(relabeled)
 
-    @segment.register(ImageContainer)  # type: ignore[no-redef]
+    @segment.register(ImageContainer)
     def _(
         self,
         img: ImageContainer,
@@ -162,7 +162,7 @@ class SegmentationModel(ABC):
                 f"Expected library id to be `None` or of type `str` or `sequence`, found `{type(library_id).__name__}`."
             )
 
-        res = img.apply(func, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)
+        res: ImageContainer = img.apply(func, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)
         res._data = res.data.rename({channel_dim: new_channel_dim})
 
         for k in res:
