@@ -21,7 +21,7 @@ tissue images if available.
 .. raw:: html
 
     <p align="center">
-        <a href="https://www.biorxiv.org/content/10.1101/2021.02.19.431994v2">
+        <a href="https://doi.org/10.1038/s41592-021-01358-2">
             <img src="https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png"
              width="400px" alt="Squidpy title figure">
         </a>
@@ -31,7 +31,7 @@ Visit our `documentation`_ for installation, tutorials, examples and more.
 
 Manuscript
 ----------
-Please see our `preprint`_ on **bioRxiv** to learn more.
+Please see our manuscript `Palla et al. (2022)`_ in **Nature Methods** to learn more.
 
 Squidpy's key applications
 --------------------------
@@ -76,7 +76,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pepy.tech/project/squidpy
     :alt: Downloads
 
-.. _preprint: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v2
+.. _Palla et al. (2022): https://doi.org/10.1038/s41592-021-01358-2
 .. _scanpy: https://scanpy.readthedocs.io/en/stable/
 .. _anndata: https://anndata.readthedocs.io/en/stable/
 .. _napari: https://napari.org/
