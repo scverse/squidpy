@@ -420,7 +420,7 @@ class TestContainerCropping:
                 small_cont_1c.crop_corner(0, 0, size=size, mask_circle=True, cval=np.nan)
         else:
             crop = small_cont_1c.crop_corner(0, 0, size=20, mask_circle=True, cval=np.nan)
-            mask = (crop.data.x - 10) ** 2 + (crop.data.y - 10) ** 2 <= 10 ** 2
+            mask = (crop.data.x - 10) ** 2 + (crop.data.y - 10) ** 2 <= 10**2
 
             assert crop.shape == (20, 20)
             np.testing.assert_array_equal(crop["image"].values[..., 0][~mask.values], np.nan)
@@ -565,7 +565,7 @@ class TestContainerCropping:
         for crop in cont.generate_spot_crops(adata, cval=np.nan, mask_circle=True, preserve_dtypes=False):
             assert crop.shape[0] == crop.shape[1]
             c = crop.shape[0] // 2
-            mask = (crop.data.x - c) ** 2 + (crop.data.y - c) ** 2 <= c ** 2
+            mask = (crop.data.x - c) ** 2 + (crop.data.y - c) ** 2 <= c**2
 
             np.testing.assert_array_equal(crop["image"].values[..., 0][~mask.values], np.nan)
 

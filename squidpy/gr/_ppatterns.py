@@ -352,7 +352,7 @@ def co_occurrence(
 
     n_obs = spatial.shape[0]
     if n_splits is None:
-        size_arr = (n_obs ** 2 * spatial.itemsize) / 1024 / 1024  # calc expected mem usage
+        size_arr = (n_obs**2 * spatial.itemsize) / 1024 / 1024  # calc expected mem usage
         if size_arr > 2000:
             n_splits = 1
             while 2048 < (n_obs / n_splits):

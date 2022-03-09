@@ -376,7 +376,7 @@ class PermutationTestABC(ABC):
         if clusters is None:
             clusters = list(map(str, self._adata.obs[cluster_key].cat.categories))
         if all(isinstance(c, str) for c in clusters):
-            clusters = list(product(clusters, repeat=2))  # type: ignore[no-redef,assignment]
+            clusters = list(product(clusters, repeat=2))  # type: ignore[assignment]
         clusters = sorted(
             _check_tuple_needles(
                 clusters,  # type: ignore[arg-type]
@@ -809,7 +809,7 @@ def _analysis_helper(
     # keep it f64, because we're setting NaN
     res = np.zeros((len(interactions), len(interaction_clusters)), dtype=np.float64)
     numba_parallel = (
-        (np.prod(res.shape) >= 2 ** 20 or clustering.shape[0] >= 2 ** 15) if numba_parallel is None else numba_parallel
+        (np.prod(res.shape) >= 2**20 or clustering.shape[0] >= 2**15) if numba_parallel is None else numba_parallel
     )
 
     fn_key = f"_test_{n_cls}_{int(return_means)}_{bool(numba_parallel)}"
