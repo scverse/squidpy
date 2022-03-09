@@ -18,7 +18,6 @@ sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to instal
 sys.path.insert(0, os.path.abspath("_ext"))
 
 from docs.source.utils import (  # noqa: E402
-    _is_dev,
     _get_thumbnails,
     _fetch_notebooks,
     MaybeMiniGallery,
@@ -29,13 +28,13 @@ needs_sphinx = "4.0"
 
 # -- Project information -----------------------------------------------------
 
-project = "squidpy"
+project = "Squidpy"
 author = squidpy.__author__
 copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
 
 github_org = "theislab"
 github_repo = "squidpy"
-github_ref = "dev" if _is_dev() else "master"
+github_ref = "master"
 github_nb_repo = "squidpy_notebooks"
 _fetch_notebooks(repo_url=f"https://github.com/{github_org}/{github_nb_repo}")
 
@@ -63,9 +62,9 @@ extensions = [
 ]
 intersphinx_mapping = dict(  # noqa: C408
     python=("https://docs.python.org/3", None),
-    numpy=("https://docs.scipy.org/doc/numpy/", None),
+    numpy=("https://numpy.org/doc/stable/", None),
     statsmodels=("https://www.statsmodels.org/stable/", None),
-    scipy=("https://docs.scipy.org/doc/scipy/reference/", None),
+    scipy=("https://docs.scipy.org/doc/scipy/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),
     anndata=("https://anndata.readthedocs.io/en/stable/", None),
     scanpy=("https://scanpy.readthedocs.io/en/stable/", None),

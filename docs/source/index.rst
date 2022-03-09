@@ -16,7 +16,7 @@ tissue images if available.
 
 Manuscript
 ----------
-Please see our `preprint`_ on **bioRxiv** to learn more.
+Please see our manuscript :cite:`palla:22` in **Nature Methods** to learn more.
 
 Squidpy's key applications
 --------------------------
@@ -49,7 +49,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     examples
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/squidpy.svg
-    :target: https://img.shields.io/pypi/v/squidpy.svg
+    :target: https://pypi.org/project/squidpy/
     :alt: PyPI
 
 .. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/Test/dev
@@ -72,7 +72,6 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pepy.tech/project/squidpy
     :alt: Downloads
 
-.. _preprint: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v2
 .. _scanpy: https://scanpy.readthedocs.io/en/stable/
 .. _anndata: https://anndata.readthedocs.io/en/stable/
 .. _napari: https://napari.org/

@@ -13,6 +13,7 @@ jobs:
         -   uses: actions/checkout@v2
             with:
                 token: ${{ secrets.TOWNCRIER_TOKEN }}
+                fetch-depth: 0
         -   name: Set up Python 3.9
             uses: actions/setup-python@v2
             with:
@@ -44,15 +45,13 @@ jobs:
                 skip_dirty_check: false
 
         -   name: Update dev release notes
-            if: ${{ steps.auto-commit-action.outputs.changes_detected == 'true' && contains(github.base_ref, 'dev') }}
             run: |
                 tox -e update-dev-notes
 
         -   name: Commit dev release notes
-            if: ${{ steps.auto-commit-action.outputs.changes_detected == 'true' && contains(github.base_ref, 'dev') }}
             uses: stefanzweifel/git-auto-commit-action@v4
             with:
-                commit_message: ${{ format('[auto][ci skip] Update dev release notes (#{0})', github.event.number) }}
+                commit_message: ${{ format('[auto][ci skip] Update release notes (#{0})', github.event.number) }}
                 branch: ${{ github.base_ref }}
                 file_pattern: docs/source/release/notes-dev.rst
                 commit_user_name: CI

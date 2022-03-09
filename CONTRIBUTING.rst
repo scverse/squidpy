@@ -9,7 +9,7 @@ Table of Contents
 - `Testing`_
 - `Writing documentation`_
 - `Writing tutorials/examples`_
-- `Creating a new release`_
+- `Making a new release`_
 - `Creating release notes`_
 - `Submitting a PR`_
 - `Troubleshooting`_
@@ -130,6 +130,7 @@ Submitting a PR
 ---------------
 Before submitting a new pull request, please make sure you followed these instructions:
 
+- make sure that you've branched off ``master`` and are merging into ``master``
 - make sure that your code follows the above specified conventions
   (see `Code style guide`_ and `Writing documentation`_).
 - if applicable, make sure you've added/modified at least 1 test to account for the changes you've made
@@ -139,23 +140,39 @@ Before submitting a new pull request, please make sure you followed these instru
 - make sure that the section under ``## Description`` is properly formatted if automatically generating release notes,
   see also `Creating release notes`_.
 
-Creating a new release
-----------------------
-If you are a core developer and you want to create a new release, you need to install ``bump2version`` first as::
+Making a new release
+--------------------
+New release is always created when a new tag is pushed to GitHub. When that happens, a new CI job starts the
+testing machinery. If all the tests pass, new release will be created on PyPI. Bioconda will automatically notice that
+a new release has been made and an automatic PR will be made to
+`bioconda-recipes <https://github.com/bioconda/bioconda-recipes/pulls>`_.
+Extra care has to be taken when updating runtime dependencies - this is not automatically picked up by Bioconda
+and a separate PR with the updated ``recipe.yaml`` will have to be made.
+
+Easiest way to create a new release it to create a branch named ``release/vX.X.X`` and push it onto GitHub. The CI
+will take care of the following:
+
+- create the new release notes
+- bump the version and create a new tag
+- run tests on the ``release/vX.X.X`` branch
+- publish on PyPI after all the tests have passed
+- merge ``release/vX.X.X`` into ``master``
+
+Alternatively, it's possible to create a new release using ``bump2version``, which can be installed as::
 
     pip install bump2version
 
-Depending on what part of the release you want to update, you can run::
+Depending on what part of the version you want to update, you can run on ``master``::
 
     bump2version {major,minor,patch}
 
-By default, this will create a new tag and automatically update the ``__version__`` wherever necessary, commit the
-changes and create a new tag. If you have uncommitted files in the tree, you can use ``--allow-dirty`` flag to include
-them in the commit.
+By default, this will create a new tagged commit, automatically update the ``__version__`` wherever necessary.
+Afterwards, you can just push the changes to upstream by running::
 
-After the version has been bumped, make sure to push the commit **AND** the newly create tag to the upstream. This
-can be done by e.g. setting ``push.followtags=true`` in your git config or use ``git push --atomic <branch> <tag>``.
+    git push --atomic <branch> <tag>
 
+or set ``push.followtags=true`` in your git config and do a regular ``git push``. In this case, CI will not
+create any release notes, run tests or do any merges.
 
 Creating release notes
 ----------------------

@@ -163,7 +163,7 @@ def parallelize(
             thread = Thread(target=update, args=(pbar, queue, len(collections)))
             thread.start()
         else:
-            pbar, queue, thread = None, None, None  # type: ignore[assignment]
+            pbar, queue, thread = None, None, None
 
         res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
             jl.delayed(runner if use_runner else callback)(

@@ -1,6 +1,6 @@
 from git import Repo
 from shutil import rmtree, copytree
-from typing import Dict, List, Union, ForwardRef
+from typing import Any, Dict, List, Union, ForwardRef
 from logging import info, warning
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -8,33 +8,8 @@ from enchant.tokenize import Filter
 from sphinx_gallery.directives import MiniGallery
 import os
 import re
-import subprocess
 
 HERE = Path(__file__).parent
-
-
-def _is_dev() -> bool:
-    try:
-        r = subprocess.run(["git", "show", "-s", "--pretty=%D", "HEAD"], capture_output=True)
-        if r.returncode != 0:
-            raise RuntimeError(f"Subprocess returned return code `{r.returncode}`.")
-
-        ref = r.stdout.decode().strip()
-        # mostly for RTD
-        # TODO(michalk8): improve me
-        if "tag" in ref:
-            return False
-        if "pull/" in ref:
-            return True
-        if not ("origin/master" in ref or "origin/dev" in ref):
-            warning(f"Unable to determine ref from `{ref}`. Assuming it's `dev`")
-            return False
-
-        return "origin/dev" in ref
-
-    except Exception as e:
-        warning(f"Unable to fetch ref, reason: `{e}`. Assuming it's `master`")
-        return True
 
 
 def _fetch_notebooks(repo_url: str) -> None:
@@ -48,7 +23,7 @@ def _fetch_notebooks(repo_url: str) -> None:
     def fetch_remote(repo_url: str) -> None:
         info(f"Fetching notebooks from repo `{repo_url}`")
         with TemporaryDirectory() as repo_dir:
-            ref = "dev" if _is_dev() else "master"
+            ref = "master"
             repo = Repo.clone_from(repo_url, repo_dir, depth=1, branch=ref)
             repo.git.checkout(ref, force=True)
 
@@ -133,7 +108,7 @@ class SignatureFilter(Filter):
 
 
 # allow `<type_1> | <type_2> | ... | <type_n>` expression for sphinx-autodoc-typehints
-def _fwd_ref_init(self: ForwardRef, arg: str, is_argument: bool = True) -> None:
+def _fwd_ref_init(self: ForwardRef, arg: str, is_argument: bool = True, module: Any = None) -> None:
     if not isinstance(arg, str):
         raise TypeError(f"Forward reference must be a string -- got {arg!r}")
     if " | " in arg:
@@ -147,6 +122,10 @@ def _fwd_ref_init(self: ForwardRef, arg: str, is_argument: bool = True) -> None:
     self.__forward_evaluated__ = False
     self.__forward_value__ = None
     self.__forward_is_argument__ = is_argument
+    try:
+        self.__forward_module__ = module  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
 
 
 ForwardRef.__init__ = _fwd_ref_init  # type: ignore[assignment]
