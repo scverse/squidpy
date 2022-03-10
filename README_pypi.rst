@@ -49,11 +49,11 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pypi.org/project/squidpy/
     :alt: PyPI
 
-.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/Test/dev
+.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/Test/master
     :target: https://github.com/theislab/squidpy/actions
     :alt: CI
 
-.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/dev?label=notebooks
+.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/master?label=notebooks
     :target: https://github.com/theislab/squidpy_notebooks/actions
     :alt: Notebooks CI
 
@@ -61,7 +61,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://squidpy.readthedocs.io/en/stable/
     :alt: Documentation
 
-.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/dev/graph/badge.svg
+.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/theislab/squidpy
     :alt: Coverage
 
