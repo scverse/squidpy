@@ -1088,7 +1088,7 @@ class ImageContainer(FeatureMixin):
                 - :attr:`anndata.AnnData.uns` ``['{layer_name}_{key_added}']['meshes']`` - list of :class:`numpy.array`,
                   defining a mesh in the spatial coordinates.
 
-            See :mod:`napari`'s `tutorial <https://napari.org/tutorials/fundamentals/shapes.html>`_ for more
+            See :mod:`napari`'s `tutorial <https://napari.org/howtos/layers/shapes.html>`_ for more
             information about different mesh types, such as circles, squares etc.
 
         Returns
