@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from h5py import File
 from types import MappingProxyType
-from typing import Any, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional
 from pathlib import Path
 import json
 
@@ -16,6 +16,60 @@ from matplotlib.image import imread
 __all__ = ["read_visium", "read_mtx", "read_text"]
 
 sp = "spatial"
+
+
+def read_count_file(
+    path: str | Path,
+    count_file: str,
+    genome: Optional[str] = None,
+    library_id: Optional[str] = None,
+    text_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    mtx_kwargs: Mapping[str, Any] = MappingProxyType({}),
+) -> AnnData:
+    path = Path(path)
+    if count_file.endswith(".h5"):
+        adata = read_10x_h5(path / count_file, genome=genome)
+        adata.uns["spatial"] = {}
+        with File(path / count_file, mode="r") as f:
+            attrs = dict(f.attrs)
+        if library_id is None:
+            library_id = str(attrs.pop("library_ids")[0], "utf-8")
+            adata.uns["spatial"][library_id] = {}
+            return adata
+    elif count_file.endswith((".csv", ".txt")):
+        return read_text(count_file, **text_kwargs)
+    elif count_file.endswith(".mtx"):
+        return read_mtx(count_file, **mtx_kwargs)
+
+
+def load_images(
+    path: str | Path,
+    tissue_positions_file: str | Path,
+    scalefactors_file: str | Path,
+    hires_image: str | Path,
+    lowres_image: str | Path,
+) -> Dict[Any, Any]:
+    path = Path(path)
+    files = {
+        "tissue_positions_file": path / tissue_positions_file,
+        "scalefactors_json_file": path / scalefactors_file,
+        "hires_image": path / hires_image,
+        "lowres_image": path / lowres_image,
+    }
+
+    for f in files.values():
+        if not f.exists():
+            if any(x in str(f) for x in ["hires_image", "lowres_image"]):
+                logg.warning(f"You seem to be missing an image file.\n" f"Could not find '{f}'.")
+            else:
+                raise OSError(f"Could not find '{f}'")
+    images = {}
+    for res in ["hires", "lowres"]:
+        try:
+            images[res] = imread(str(files[f"{res}_image"]))
+        except KeyError:
+            raise KeyError(f"Could not find '{res}_image'")
+    return images
 
 
 def read_visium(
