@@ -5,6 +5,7 @@ from types import MappingProxyType
 from typing import (
     Any,
     List,
+    Type,
     Tuple,
     Union,
     Literal,
@@ -385,7 +386,7 @@ def _set_color_source_vec(
     groups: _SeqStr = None,
     palette: Palette_t = None,
     na_color: str | Tuple[float, ...] | None = None,
-) -> Tuple[NDArrayA | pd.Series, NDArrayA, bool]:
+) -> Tuple[NDArrayA | pd.Series | None, NDArrayA, bool]:
 
     if alt_var is not None and value_to_plot not in adata.obs.columns and value_to_plot not in adata.var_names:
         value_to_plot = adata.var_names[adata.var[alt_var] == value_to_plot][0]
