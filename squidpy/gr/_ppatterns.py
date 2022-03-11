@@ -295,7 +295,7 @@ def co_occurrence(
     adata: AnnData,
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
-    n_steps: int = 50,
+    interval: int | NDArrayA = 50,
     copy: bool = False,
     n_splits: int | None = None,
     n_jobs: int | None = None,
@@ -305,16 +305,14 @@ def co_occurrence(
     """
     Compute co-occurrence probability of clusters.
 
-    The co-occurrence is computed across ``n_steps`` distance thresholds in spatial dimensions.
-
     Parameters
     ----------
     %(adata)s
     %(cluster_key)s
     %(spatial_key)s
-    n_steps
-        Number of distance thresholds at which co-occurrence is computed.
-
+    interval
+        Distances interval at which co-occurrence is computed. If :class:`int`, uniformly spaced interval
+        of the given size will be used.
     %(copy)s
     n_splits
         Number of splits in which to divide the spatial coordinates in
@@ -330,7 +328,7 @@ def co_occurrence(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['occ']`` - the co-occurrence probabilities
           across interval thresholds.
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
-          computed at ``n_steps``.
+          computed at ``interval``.
     """
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
@@ -338,33 +336,33 @@ def co_occurrence(
     spatial = adata.obsm[spatial_key].astype(fp)
     original_clust = adata.obs[cluster_key]
 
-    # find minimum, second minimum and maximum for thresholding
-    thres_min, thres_max = _find_min_max(spatial)
-
     # annotate cluster idx
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
     labs = np.array([clust_map[c] for c in original_clust], dtype=ip)
-
     labs_unique = np.array(list(clust_map.values()), dtype=ip)
 
     # create intervals thresholds
-    interval = np.linspace(thres_min, thres_max, num=n_steps, dtype=fp)
+    if isinstance(interval, int):
+        thresh_min, thresh_max = _find_min_max(spatial)
+        interval = np.linspace(thresh_min, thresh_max, num=interval, dtype=fp)
+    else:
+        interval = np.array(sorted(interval), dtype=fp, copy=True)
+    if len(interval) <= 1:
+        raise ValueError(f"Expected interval to be of length `>= 2`, found `{len(interval)}`.")
 
     n_obs = spatial.shape[0]
     if n_splits is None:
-        size_arr = (n_obs ** 2 * 4) / 1024 / 1024  # calc expected mem usage
-        if size_arr > 2_000:
-            s = 1
-            while 2_048 < (n_obs / s):
-                s += 1
-            n_splits = s
+        size_arr = (n_obs**2 * spatial.itemsize) / 1024 / 1024  # calc expected mem usage
+        if size_arr > 2000:
+            n_splits = 1
+            while 2048 < (n_obs / n_splits):
+                n_splits += 1
             logg.warning(
-                f"`n_splits` was automatically set to: {n_splits}\n"
-                f"preventing a NxN with N={n_obs} distance matrix to be created"
+                f"`n_splits` was automatically set to `{n_splits}` to "
+                f"prevent `{n_obs}x{n_obs}` distance matrix from being created"
             )
         else:
             n_splits = 1
-
     n_splits = max(min(n_splits, n_obs), 1)
 
     # split array and labels
@@ -376,10 +374,8 @@ def co_occurrence(
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(
-        f"Calculating co-occurrence probabilities for\
-            `{len(interval)}` intervals\
-            `{len(idx_splits)}` split combinations\
-            using `{n_jobs}` core(s)"
+        f"Calculating co-occurrence probabilities for `{len(interval)}` intervals "
+        f"`{len(idx_splits)}` split combinations using `{n_jobs}` core(s)"
     )
 
     out_lst = parallelize(
@@ -395,11 +391,7 @@ def co_occurrence(
         labs_unique=labs_unique,
         interval=interval,
     )
-
-    if len(idx_splits) == 1:
-        out = list(out_lst)[0]
-    else:
-        out = sum(list(out_lst)) / len(idx_splits)
+    out = list(out_lst)[0] if len(idx_splits) == 1 else sum(list(out_lst)) / len(idx_splits)
 
     if copy:
         logg.info("Finish", time=start)
@@ -411,21 +403,15 @@ def co_occurrence(
 
 
 def _find_min_max(spatial: NDArrayA) -> tuple[float, float]:
-
     coord_sum = np.sum(spatial, axis=1)
-    min_idx, min_idx2 = np.argpartition(coord_sum, 2)[0:2]
+    min_idx, min_idx2 = np.argpartition(coord_sum, 2)[:2]
     max_idx = np.argmax(coord_sum)
-    thres_max = (
-        pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[max_idx, :].reshape(1, -1),)[
-            0
-        ][0]
-        / 2.0
-    ).astype(fp)
-    thres_min = pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[min_idx2, :].reshape(1, -1),)[0][
-        0
-    ].astype(fp)
+    # fmt: off
+    thres_max = pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[max_idx, :].reshape(1, -1))[0, 0] / 2.0
+    thres_min = pairwise_distances(spatial[min_idx, :].reshape(1, -1), spatial[min_idx2, :].reshape(1, -1))[0, 0]
+    # fmt: on
 
-    return thres_min, thres_max
+    return thres_min.astype(fp), thres_max.astype(fp)
 
 
 def _p_value_calc(

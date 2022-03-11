@@ -14,7 +14,7 @@ from squidpy._constants._pkg_constants import Key
 
 def _circular_mask(arr: NDArrayA, y: int, x: int, radius: float) -> NDArrayA:
     Y, X = np.ogrid[: arr.shape[0], : arr.shape[1]]
-    return np.asarray(((Y - y) ** 2 + (X - x) ** 2) <= radius ** 2)
+    return np.asarray(((Y - y) ** 2 + (X - x) ** 2) <= radius**2)
 
 
 class TupleSerializer(ABC):  # noqa: D101

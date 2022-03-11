@@ -363,18 +363,15 @@ class ImageContainer(FeatureMixin):
                 raise ValueError("Loading data from `Zarr` store is disallowed when the container is not empty.")
 
             self._data = transform_metadata(xr.open_zarr(str(img), chunks=chunks))
-            return
-
-        if suffix in (".nc", ".cdf"):
+        elif suffix in (".nc", ".cdf"):
             if len(self._data):
                 raise ValueError("Loading data from `NetCDF` is disallowed when the container is not empty.")
 
             self._data = transform_metadata(xr.open_dataset(img, chunks=chunks))
-            return
+        else:
+            raise ValueError(f"Unknown suffix `{img.suffix}`.")
 
-        raise ValueError(f"Unknown suffix `{img.suffix}`.")
-
-    @_load_img.register(da.Array)  # type: ignore[no-redef]
+    @_load_img.register(da.Array)
     @_load_img.register(np.ndarray)
     def _(
         self,
@@ -387,7 +384,7 @@ class ImageContainer(FeatureMixin):
 
         return self._load_img(xr.DataArray(img), copy=copy, dims=dims, warn=False)
 
-    @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
+    @_load_img.register(xr.DataArray)
     def _(
         self,
         img: xr.DataArray,
@@ -401,6 +398,8 @@ class ImageContainer(FeatureMixin):
         img = img.copy() if copy else img
         if not ("y" in img.dims and "x" in img.dims and "z" in img.dims):
             _, dims, _, expand_axes = _infer_dimensions(img, infer_dimensions=dims)
+            if TYPE_CHECKING:
+                assert isinstance(dims, Iterable)
             if warn:
                 logg.warning(f"Unable to find `y`, `x` or `z` dimension in `{img.dims}`. Renaming to `{dims}`")
             # `axes` is always of length 0, 1 or 2
@@ -614,7 +613,7 @@ class ImageContainer(FeatureMixin):
             c = data.x.shape[0] // 2
             # manually reassign coordinates
             library_ids = data.coords["z"]
-            data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c ** 2, other=cval).assign_coords(
+            data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c**2, other=cval).assign_coords(
                 {"z": library_ids}
             )
             data.attrs[Key.img.mask_circle] = True
@@ -1104,7 +1103,7 @@ class ImageContainer(FeatureMixin):
                 - :attr:`anndata.AnnData.uns` ``['{layer_name}_{key_added}']['meshes']`` - list of :class:`numpy.array`,
                   defining a mesh in the spatial coordinates.
 
-            See :mod:`napari`'s `tutorial <https://napari.org/tutorials/fundamentals/shapes.html>`_ for more
+            See :mod:`napari`'s `tutorial <https://napari.org/howtos/layers/shapes.html>`_ for more
             information about different mesh types, such as circles, squares etc.
 
         Returns

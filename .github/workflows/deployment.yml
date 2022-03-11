@@ -59,10 +59,3 @@ jobs:
                 github_token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
                 target_branch: master
                 commit_message_template: ${{ format('[auto][ci skip] Merge branch ''{0}'' into master', steps.vars.outputs.branch) }}
-
-        -   name: Merge release into dev
-            uses: everlytic/branch-merge@1.1.2
-            with:
-                github_token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
-                target_branch: dev
-                commit_message_template: ${{ format('[auto][ci skip] Merge branch ''{0}'' into dev', steps.vars.outputs.branch) }}
