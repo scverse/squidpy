@@ -68,6 +68,10 @@ class Key:
         def spatial(cls) -> str:
             return Key.obsm.spatial
 
+        @cprop
+        def image_key(cls) -> str:
+            return "images"
+
         @classmethod
         def spatial_neighs(cls, value: Optional[str] = None) -> str:
             return f"{Key.obsm.spatial}_neighbors" if value is None else f"{value}_neighbors"
