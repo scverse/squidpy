@@ -119,16 +119,6 @@ class SpatialParams(NamedTuple):
     cell_id: Sequence[NDArrayA] | Tuple[None, ...]
 
 
-# FigParams = namedtuple("FigParams", ["fig", "ax", "axs", "iter_panels", "title", "ax_labels", "frameon"])
-# CmapParams = namedtuple("CmapParams", ["cmap", "img_cmap", "norm"])
-# OutlineParams = namedtuple("OutlineParams", ["outline", "gap_size", "gap_color", "bg_size", "bg_color"])
-
-# ScalebarParams = namedtuple("ScalebarParams", ["scalebar_dx", "scalebar_units"])
-
-# ColorParams = namedtuple("ColorParams", ["shape", "color", "groups", "alpha", "img_alpha", "use_raw"])
-# SpatialParams = namedtuple("SpatialParams", ["library_id", "scale_factor", "size", "img", "segment", "cell_id"])
-
-
 def _get_library_id(
     adata: AnnData,
     shape: _AvailShapes | None,
@@ -141,27 +131,25 @@ def _get_library_id(
         if library_id is None:
             raise ValueError(f"Could not fetch `library_id`, check that `spatial_key: {spatial_key}` is correct.")
         return library_id
+    if library_key is not None:
+        if library_key not in adata.obs.columns:
+            raise ValueError(f"`library_key: {library_key}` not in `adata.obs`.")
+        if library_id is None:
+            library_id = adata.obs[library_key].cat.categories.tolist()
+        _assert_value_in_obs(adata, key=library_key, val=library_id)
+        return library_id
+    if library_id is None:
+        logg.warning(
+            "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
+        )
+        library_id = [""]
+    elif isinstance(library_id, list):  # get library_id from arg
+        library_id = library_id
+    elif isinstance(library_id, str):
+        library_id = [library_id]
     else:
-        if library_key is not None:
-            if library_key not in adata.obs.columns:
-                raise ValueError(f"`library_key: {library_key}` not in `adata.obs`.")
-            if library_id is None:
-                library_id = adata.obs[library_key].cat.categories.tolist()
-            _assert_value_in_obs(adata, key=library_key, val=library_id)
-            return library_id
-        else:
-            if library_id is None:
-                logg.warning(
-                    "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
-                )
-                library_id = [""]
-            elif isinstance(library_id, list):  # get library_id from arg
-                library_id = library_id
-            elif isinstance(library_id, str):
-                library_id = [library_id]
-            else:
-                raise ValueError(f"Invalid `library_id`: {library_id}.")
-            return library_id
+        raise ValueError(f"Invalid `library_id`: {library_id}.")
+    return library_id
 
 
 def _get_image(
@@ -237,6 +225,7 @@ def _get_scalefactor_size(
         scalefactor_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.scalefactor_key, library_id)
         scalefactors = _get_unique_map(scalefactor_mapping)
     except KeyError:
+        logg.debug("`scalefactors` set to `None`.")
         scalefactors = None
     if scalefactors is not None:
         if scale_factor is None:  # get intersection of scale_factor and match to img_res_key
@@ -252,8 +241,8 @@ def _get_scalefactor_size(
 
         if size_key not in scalefactors and size is None:
             raise ValueError(
-                f"Specified `size_key: {size_key}` does not exist and size is `None`,\
-                available keys are: `{scalefactors}`.\n Specify valid `size_key` or `size`."
+                f"Specified `size_key: {size_key}` does not exist and size is `None`, "
+                f"available keys are: `{scalefactors}`.\n Specify valid `size_key` or `size`."
             )
         if size is None:
             size = 1.0
@@ -483,8 +472,7 @@ def _plot_edges(
 
     if connectivity_key not in adata.obsp:
         raise KeyError(
-            f"Unable to find `connectivity_key: {connectivity_key}` in `adata.obsp`.\
-             Please set `connectivity_key`."
+            f"Unable to find `connectivity_key: {connectivity_key}` in `adata.obsp`. " "Please set `connectivity_key`."
         )
 
     g = Graph(adata.obsp[connectivity_key])
