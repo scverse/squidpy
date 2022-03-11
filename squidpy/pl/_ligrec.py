@@ -49,7 +49,7 @@ class CustomDotplot(sc.pl.DotPlot):
         # no point in showing dot of size 0
         size_range = size_range[1:]
 
-        size = size_range ** self.size_exponent
+        size = size_range**self.size_exponent
         mult = (self.largest_dot - self.smallest_dot) + self.smallest_dot
         size = size * mult
 
@@ -268,8 +268,8 @@ def ligrec(
     if title is None:
         title = "Receptor-ligand test"
 
-    source_groups, _ = _unique_order_preserving(source_groups)  # type: ignore[no-redef,assignment]
-    target_groups, _ = _unique_order_preserving(target_groups)  # type: ignore[no-redef,assignment]
+    source_groups, _ = _unique_order_preserving(source_groups)  # type: ignore[assignment]
+    target_groups, _ = _unique_order_preserving(target_groups)  # type: ignore[assignment]
 
     pvals: pd.DataFrame = adata["pvalues"].loc[:, (source_groups, target_groups)]
     means: pd.DataFrame = adata["means"].loc[:, (source_groups, target_groups)]
