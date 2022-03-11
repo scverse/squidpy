@@ -15,7 +15,6 @@ from typing import (
     TYPE_CHECKING,
 )
 from functools import partial
-from collections import namedtuple
 from matplotlib_scalebar.scalebar import ScaleBar
 import itertools
 
@@ -47,7 +46,7 @@ from skimage.segmentation import find_boundaries
 from squidpy._utils import NDArrayA
 from squidpy.pl._graph import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
-from squidpy.im._coords import CropCoords
+from squidpy.im._coords import CropCoords, TupleSerializer
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 
@@ -67,20 +66,67 @@ class FigParams(NamedTuple):
     fig: Figure
     ax: Axes
     axs: Sequence[Axes] | None
-    iter_panels: Tuple[range, Any]
+    iter_panels: Tuple[Sequence[str] | range, Sequence[str] | range]
     title: _SeqStr
     ax_labels: Sequence[str]
     frameon: bool | None
 
 
+class CmapParams(NamedTuple):
+    """Cmap params."""
+
+    cmap: Colormap
+    img_cmap: Colormap
+    norm: Normalize
+
+
+class OutlineParams(NamedTuple):
+    """Outline params."""
+
+    outline: bool
+    gap_size: float
+    gap_color: str
+    bg_size: float
+    bg_color: str
+
+
+class ScalebarParams(NamedTuple):
+    """Scalebar params."""
+
+    scalebar_dx: Sequence[float] | None
+    scalebar_units: _SeqStr
+
+
+class ColorParams(NamedTuple):
+    """Color params."""
+
+    shape: _AvailShapes | None
+    color: Sequence[str]
+    groups: Sequence[str] | None
+    alpha: float
+    img_alpha: float
+    use_raw: bool
+
+
+class SpatialParams(NamedTuple):
+    """Color params."""
+
+    library_id: Sequence[str]
+    scale_factor: Sequence[float]
+    size: Sequence[float]
+    img: Sequence[NDArrayA] | Tuple[None, ...]
+    segment: Sequence[NDArrayA] | Tuple[None, ...]
+    cell_id: Sequence[NDArrayA] | Tuple[None, ...]
+
+
 # FigParams = namedtuple("FigParams", ["fig", "ax", "axs", "iter_panels", "title", "ax_labels", "frameon"])
-CmapParams = namedtuple("CmapParams", ["cmap", "img_cmap", "norm"])
-OutlineParams = namedtuple("OutlineParams", ["outline", "gap_size", "gap_color", "bg_size", "bg_color"])
+# CmapParams = namedtuple("CmapParams", ["cmap", "img_cmap", "norm"])
+# OutlineParams = namedtuple("OutlineParams", ["outline", "gap_size", "gap_color", "bg_size", "bg_color"])
 
-ScalebarParams = namedtuple("ScalebarParams", ["scalebar_dx", "scalebar_units"])
+# ScalebarParams = namedtuple("ScalebarParams", ["scalebar_dx", "scalebar_units"])
 
-ColorParams = namedtuple("ColorParams", ["shape", "color", "groups", "alpha", "img_alpha", "use_raw"])
-SpatialParams = namedtuple("SpatialParams", ["library_id", "scale_factor", "size", "img", "segment", "cell_id"])
+# ColorParams = namedtuple("ColorParams", ["shape", "color", "groups", "alpha", "img_alpha", "use_raw"])
+# SpatialParams = namedtuple("SpatialParams", ["library_id", "scale_factor", "size", "img", "segment", "cell_id"])
 
 
 def _get_library_id(
@@ -295,11 +341,11 @@ def _set_coords_crops(
     spatial_key: str,
     library_key: str | None = None,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
-) -> Tuple[Sequence[NDArrayA], list[Tuple[float, ...]] | Tuple[None, ...]]:
+) -> Tuple[Sequence[NDArrayA], List[TupleSerializer] | Tuple[None, ...]]:
 
     # set crops
     if crop_coord is None:
-        crops: Union[list[Tuple[float, ...]], Tuple[None, ...]] = tuple(None for _ in spatial_params.library_id)
+        crops: Union[List[TupleSerializer], Tuple[None, ...]] = tuple(None for _ in spatial_params.library_id)
     else:
         crop_coord = _get_list(crop_coord, tuple, len(spatial_params.library_id))
         crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor)]
@@ -688,7 +734,10 @@ def _prepare_params_plot(
 ) -> Tuple[FigParams, CmapParams, ScalebarParams, Any]:
 
     if library_first:
-        iter_panels = (range(len(spatial_params.library_id)), color_params.color)
+        iter_panels: Tuple[range | Sequence[str], range | Sequence[str]] = (
+            range(len(spatial_params.library_id)),
+            color_params.color,
+        )
     else:
         iter_panels = (color_params.color, range(len(spatial_params.library_id)))
     num_panels = len(list(itertools.product(*iter_panels)))
