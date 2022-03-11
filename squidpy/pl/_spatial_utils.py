@@ -363,7 +363,7 @@ def _get_unique_map(dic: Mapping[str, Any]) -> Any:
     return sorted(set.intersection(*map(set, dic.values())))
 
 
-def _get_list(var: Any, _type: Any, ref_len: int | None = None) -> List[Any] | Any:
+def _get_list(var: Any, _type: Type[Any], ref_len: int | None = None) -> List[Any]:
     if isinstance(var, _type):
         if ref_len is None:
             return [var]
