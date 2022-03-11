@@ -67,7 +67,7 @@ class FigParams(NamedTuple):
     fig: Figure
     ax: Axes
     axs: Sequence[Axes] | None
-    iter_panels: Tuple[Sequence[str] | range, Sequence[str] | range]
+    iter_panels: Tuple[Sequence[str | None] | range, Sequence[str | None] | range]
     title: _SeqStr
     ax_labels: Sequence[str]
     frameon: bool | None
@@ -102,7 +102,7 @@ class ColorParams(NamedTuple):
     """Color params."""
 
     shape: _AvailShapes | None
-    color: Sequence[str]
+    color: Sequence[str | None]
     groups: Sequence[str] | None
     alpha: float
     img_alpha: float
@@ -431,7 +431,7 @@ def _shaped_scatter(
     shape = ScatterShape(shape)  # type: ignore[assignment]
     if TYPE_CHECKING:
         assert isinstance(shape, ScatterShape)
-    shape = shape.s
+    shape = ScatterShape(shape).s
 
     if shape == ScatterShape.CIRCLE.s:
         zipped = np.broadcast(x, y, s)
@@ -465,7 +465,7 @@ def _plot_edges(
     edges_width: float = 0.1,
     edges_color: str | Sequence[float] | Sequence[str] = "grey",
     connectivity_key: str = Key.obsp.spatial_conn(),
-    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    **kwargs: Any,
 ) -> Any:
     """Graph plotting."""
     from networkx import Graph
@@ -478,7 +478,7 @@ def _plot_edges(
 
     g = Graph(adata.obsp[connectivity_key])
     edge_collection = draw_networkx_edges(
-        g, coords, width=edges_width, edge_color=edges_color, arrows=False, ax=ax, **edges_kwargs
+        g, coords, width=edges_width, edge_color=edges_color, arrows=False, ax=ax, **kwargs
     )
     edge_collection.set_rasterized(sc_settings._vector_friendly)
 
@@ -491,7 +491,7 @@ def _get_title_axlabels(
 
     # handle title
     if title is not None:
-        if isinstance(title, list) and len(title) != n_plots:
+        if isinstance(title, (tuple, list)):
             raise ValueError("Title list is shorter than number of plots.")
     elif isinstance(title, str):
         title = [title] * n_plots
@@ -600,8 +600,9 @@ def _decorate_axs(
         ax.invert_yaxis()
 
     if crops is not None:
-        ax.set_xlim(crops.to_tuple()[0], crops.to_tuple()[1])
-        ax.set_ylim(crops.to_tuple()[3], crops.to_tuple()[2])
+        crops_tup = crops.to_tuple()
+        ax.set_xlim(crops_tup[0], crops_tup[1])
+        ax.set_ylim(crops_tup[3], crops_tup[2])
     else:
         ax.set_xlim(cur_coords[0], cur_coords[1])
         ax.set_ylim(cur_coords[3], cur_coords[2])
@@ -677,7 +678,7 @@ def _prepare_args_plot(
 
     # set palette if missing
     for c in color:
-        if c in adata.obs.columns and is_categorical_dtype(adata.obs[c]) and c is not None:
+        if c is not None and c in adata.obs.columns and is_categorical_dtype(adata.obs[c]):
             _maybe_set_colors(source=adata, target=adata, key=c, palette=palette)
 
     # check raw
@@ -685,7 +686,7 @@ def _prepare_args_plot(
         use_raw = layer is None and adata.raw is not None
     if use_raw and layer is not None:
         raise ValueError(
-            "Cannot use both a layer and the raw representation. Was passed:" f"use_raw={use_raw}, layer={layer}."
+            f"Cannot use both a layer and the raw representation. Was passed: use_raw={use_raw}, layer={layer}."
         )
     if adata.raw is None and use_raw:
         raise ValueError(f"`use_raw={use_raw}` but AnnData object does not have raw.")
@@ -693,7 +694,7 @@ def _prepare_args_plot(
     # logic for image v. non-image data is handled here
     shape = ScatterShape(shape).s if shape is not None else shape  # type: ignore
     if TYPE_CHECKING:
-        assert isinstance(shape, ScatterShape)
+        assert isinstance(shape, ScatterShape) or shape is None
 
     return ColorParams(shape, color, groups, alpha, img_alpha, use_raw)
 
@@ -723,7 +724,7 @@ def _prepare_params_plot(
 ) -> Tuple[FigParams, CmapParams, ScalebarParams, Any]:
 
     if library_first:
-        iter_panels: Tuple[range | Sequence[str], range | Sequence[str]] = (
+        iter_panels: Tuple[range | Sequence[str | None], range | Sequence[str | None]] = (
             range(len(spatial_params.library_id)),
             color_params.color,
         )
