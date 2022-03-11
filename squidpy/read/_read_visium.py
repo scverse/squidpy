@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from h5py import File
 from types import MappingProxyType
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Tuple, Mapping, Optional
+from imageio import imread
 from pathlib import Path
 import json
 
@@ -11,11 +12,9 @@ from anndata import AnnData, read_mtx, read_text
 
 import pandas as pd
 
-from matplotlib.image import imread
+from squidpy._constants._pkg_constants import Key
 
 __all__ = ["read_visium", "read_mtx", "read_text"]
-
-sp = "spatial"
 
 
 def read_count_file(
@@ -26,15 +25,16 @@ def read_count_file(
     text_kwargs: Mapping[str, Any] = MappingProxyType({}),
     mtx_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> AnnData:
+    """Load count files."""
     path = Path(path)
     if count_file.endswith(".h5"):
         adata = read_10x_h5(path / count_file, genome=genome)
-        adata.uns["spatial"] = {}
+        adata.uns[Key.uns.spatial] = {}
         with File(path / count_file, mode="r") as f:
             attrs = dict(f.attrs)
         if library_id is None:
             library_id = str(attrs.pop("library_ids")[0], "utf-8")
-            adata.uns["spatial"][library_id] = {}
+            adata.uns[Key.uns.spatial][library_id] = {}
             return adata
     elif count_file.endswith((".csv", ".txt")):
         return read_text(count_file, **text_kwargs)
@@ -49,6 +49,7 @@ def load_images(
     hires_image: str | Path,
     lowres_image: str | Path,
 ) -> Dict[Any, Any]:
+    """Load images."""
     path = Path(path)
     files = {
         "tissue_positions_file": path / tissue_positions_file,
@@ -71,22 +72,24 @@ def load_images(
             raise KeyError(f"Could not find '{res}_image'")
     return images
 
+
 def load_coords(
     path: str | Path,
-    tissue_positions_file: str | Path,
-    positions_columns: str | list[str],
-    expected_axis_file: str | AnnData) -> AnnData:
-    positions_columns_list = positions_columns
-    axis_file = expected_axis_file
-    positions = pd.read_csv(f"{path}/{tissue_positions_file}", header = None)
-    if axis_file.obs.shape[0] != positions.shape[0]:
-        except ValueError:
-            raise ValueError(f"The number of observations does not match between '{tissue_positions_file}' and '{expected_axis_file}'.")
-        elif:
-            except ValueError for column for column in positions_columns_list if not in positions.columns:
-            raise ValueError(f"The names of the columns do not match.")
-        else:
-            return positions[positions_columns_list]
+    cols: str | list[str],
+    shape: Tuple[int],
+) -> AnnData:
+    """Load coordinates."""
+    coords = pd.read_csv(path, header=None)
+
+    if coords.shape[0] != shape[0]:
+        raise ValueError(f"Invalid shape of `coordinates` file: `{coords.shape}`.")
+    if cols:
+        if cols not in coords.columns:
+            raise ValueError(f"Columns: `{cols}` not in `coordinates` file.")
+        return coords[cols].numpy().to_numpy()
+    else:
+        return coords.to_numpy()
+
 
 def read_visium(
     path: str | Path,
@@ -155,21 +158,21 @@ def read_visium(
     if count_file.endswith(".h5"):
         adata = read_10x_h5(path / count_file, genome=genome)
 
-        adata.uns[sp] = {}
+        adata.uns[Key.uns.spatial] = {}
 
         with File(path / count_file, mode="r") as f:
             attrs = dict(f.attrs)
         if library_id is None:
             library_id = str(attrs.pop("library_ids")[0], "utf-8")
 
-        adata.uns[sp][library_id] = {}
+        adata.uns[Key.uns.spatial][library_id] = {}
 
         if load_images:
             files = {
-                "tissue_positions_file": path / f"{sp}/tissue_positions_list.csv",
-                "scalefactors_json_file": path / f"{sp}/scalefactors_json.json",
-                "hires_image": path / f"{sp}/tissue_hires_image.png",
-                "lowres_image": path / f"{sp}/tissue_lowres_image.png",
+                "tissue_positions_file": path / f"{Key.uns.spatial}/tissue_positions_list.csv",
+                "scalefactors_json_file": path / f"{Key.uns.spatial}/scalefactors_json.json",
+                "hires_image": path / f"{Key.uns.spatial}/tissue_hires_image.png",
+                "lowres_image": path / f"{Key.uns.spatial}/tissue_lowres_image.png",
             }
 
             # check if files exists, continue if images are missing
@@ -180,17 +183,19 @@ def read_visium(
                     else:
                         raise OSError(f"Could not find '{f}'")
 
-            adata.uns[sp][library_id]["images"] = {}
+            adata.uns[Key.uns.spatial][library_id]["images"] = {}
             for res in ["hires", "lowres"]:
                 try:
-                    adata.uns[sp][library_id]["images"][res] = imread(str(files[f"{res}_image"]))
+                    adata.uns[Key.uns.spatial][library_id]["images"][res] = imread(str(files[f"{res}_image"]))
                 except KeyError:
                     raise KeyError(f"Could not find '{res}_image'")
 
             # read json scalefactors
-            adata.uns[sp][library_id]["scalefactors"] = json.loads(files["scalefactors_json_file"].read_bytes())
+            adata.uns[Key.uns.spatial][library_id]["scalefactors"] = json.loads(
+                files["scalefactors_json_file"].read_bytes()
+            )
 
-            adata.uns[sp][library_id]["metadata"] = {
+            adata.uns[Key.uns.spatial][library_id]["metadata"] = {
                 k: (str(attrs[k], "utf-8") if isinstance(attrs[k], bytes) else attrs[k])
                 for k in ("chemistry_description", "software_version")
                 if k in attrs
@@ -210,7 +215,7 @@ def read_visium(
 
             adata.obs = adata.obs.join(positions, how="left")
 
-            adata.obsm[sp] = adata.obs[["pxl_row_in_fullres", "pxl_col_in_fullres"]].to_numpy()
+            adata.obsm[Key.uns.spatial] = adata.obs[["pxl_row_in_fullres", "pxl_col_in_fullres"]].to_numpy()
             adata.obs.drop(
                 columns=["barcode", "pxl_row_in_fullres", "pxl_col_in_fullres"],
                 inplace=True,
@@ -220,7 +225,7 @@ def read_visium(
             if source_image_path is not None:
                 # get an absolute path
                 source_image_path = str(Path(source_image_path).resolve())
-                adata.uns[sp][library_id]["metadata"]["source_image_path"] = str(source_image_path)
+                adata.uns[Key.uns.spatial][library_id]["metadata"]["source_image_path"] = str(source_image_path)
         return adata
     # if the file passed is not a .h5 file, but a text file as .csv or .txt
     elif count_file.endswith((".csv", ".txt")):
