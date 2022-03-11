@@ -627,6 +627,6 @@ def _assert_value_in_obs(adata: AnnData, key: str, val: Sequence[Any] | Any) -> 
         raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
     if not isinstance(val, list):
         val = [val]
-    val = list(set(val) - set(adata.obs[key].unique()))
+    val = set(val) - set(adata.obs[key].unique())
     if len(val) != 0:
         raise ValueError(f"Values `{val}` not found in `adata.obs[{key}]`.")

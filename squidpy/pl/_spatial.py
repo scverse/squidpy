@@ -89,13 +89,13 @@ def _spatial_plot(
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
     cmap: Colormap | str | None = None,
     palette: Palette_t = None,
-    alpha: Optional[float] = None,
+    alpha: float | None = None,
     norm: _Normalize = None,
     na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
     # image
     img: _SeqArray | bool = None,
     img_res_key: str | None = Key.uns.image_res_key,
-    img_alpha: Optional[float] = None,
+    img_alpha: float | None = None,
     img_cmap: Colormap | str | None = None,
     img_channel: int | None = None,
     # segment

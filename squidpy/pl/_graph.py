@@ -69,18 +69,13 @@ def _get_palette(
             logg.error(f"Unable to fetch palette, reason: {e}. Using `None`.")
             return None
     elif isinstance(palette, str):
-        len_cat = adata.obs[cluster_key].cat.categories.shape[0]
-        if palette in plt.colormaps():
-            cmap = plt.get_cmap(palette)
-            _palette = [to_hex(x) for x in cmap(np.linspace(0, 1, len_cat))]
-        else:
-            raise KeyError(
-                f"Unable to find palette: `{palette}` in `matplotlib.pyplot.colomaps()`. Please specify valid palette."
-            )
+        len_cat = len(adata.obs[cluster_key].cat.categories)
+        cmap = plt.get_cmap(palette)
+        _palette = [to_hex(x) for x in cmap(np.linspace(0, 1, len_cat))]
     elif isinstance(palette, ListedColormap):
         _palette = [to_hex(x) for x in palette(np.linspace(0, 1, len_cat))]
     else:
-        raise TypeError(f"Palette is {type(palette)} but should be string.")
+        raise TypeError(f"Palette is {type(palette)} but should be string or `ListedColormap`.")
 
     return dict(zip(categories, _palette))
 

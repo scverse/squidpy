@@ -11,6 +11,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    NamedTuple,
     TYPE_CHECKING,
 )
 from functools import partial
@@ -58,8 +59,21 @@ _SeqFloat = Union[float, Sequence[float], None]
 _SeqArray = Union[NDArrayA, Sequence[NDArrayA], None]
 _CoordTuple = Tuple[int, int, int, int]
 
+
 # named tuples
-FigParams = namedtuple("FigParams", ["fig", "ax", "axs", "iter_panels", "title", "ax_labels", "frameon"])
+class FigParams(NamedTuple):
+    """Figure params."""
+
+    fig: Figure
+    ax: Axes
+    axs: Sequence[Axes] | None
+    iter_panels: Tuple[range, Any]
+    title: _SeqStr
+    ax_labels: Sequence[str]
+    frameon: bool | None
+
+
+# FigParams = namedtuple("FigParams", ["fig", "ax", "axs", "iter_panels", "title", "ax_labels", "frameon"])
 CmapParams = namedtuple("CmapParams", ["cmap", "img_cmap", "norm"])
 OutlineParams = namedtuple("OutlineParams", ["outline", "gap_size", "gap_color", "bg_size", "bg_color"])
 

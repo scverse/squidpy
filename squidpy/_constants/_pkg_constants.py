@@ -173,7 +173,7 @@ class Key:
             sub_key: Optional[str] = None,
         ) -> Sequence[str]:
             if spatial_key not in adata.uns:
-                raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.uns`.")
+                raise KeyError(f"Spatial key {spatial_key!r} not found in `adata.uns`.")
             haystack = list(adata.uns[spatial_key].keys())
             if library_id is not None:
                 if isinstance(library_id, str):
@@ -183,7 +183,7 @@ class Key:
                 if sub_key is not None:
                     if not all(sub_key in lib for lib in [adata.uns[spatial_key][lib].keys() for lib in library_id]):
                         raise KeyError(
-                            f"`{sub_key}` not found in `adata.uns[{spatial_key}]['library_id'].keys()` "
+                            f"`{sub_key}` not found in `adata.uns[{spatial_key!r}]['library_id'].keys()` "
                             f"with following `library_id`: {library_id}."
                         )
                     return library_id
