@@ -6,6 +6,7 @@ from typing import Any, Union, Mapping, Optional, Sequence, TYPE_CHECKING
 from pathlib import Path
 from typing_extensions import Literal
 
+from scanpy import logging as logg
 from anndata import AnnData
 from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
@@ -64,7 +65,8 @@ def _get_palette(
                     f"Expected to find at least `{len(categories)}` colors, "
                     f"found `{len(_palette)}` for key `{cluster_key}`."
                 )
-        except KeyError:
+        except KeyError as e:
+            logg.error(f"Unable to fetch palette, reason: {e}. Using none")
             return None
     elif isinstance(palette, str):
         len_cat = adata.obs[cluster_key].cat.categories.shape[0]
