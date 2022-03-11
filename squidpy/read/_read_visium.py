@@ -76,17 +76,20 @@ def load_coords(
     path: str | Path,
     tissue_positions_file: str | Path,
     positions_columns: str | list[str],
-    expected_axis_file: AnnData,
+    expected_axis_file: str | AnnData,
 ) -> AnnData:
     positions_columns_list = positions_columns
+    path = Path(path)
     axis_file = expected_axis_file
     positions = pd.read_csv(f"{path}/{tissue_positions_file}", header=None)
+    print(axis_file.obs.shape[0])
+    print(positions.shape[0])
     if axis_file.obs.shape[0] != positions.shape[0]:
         raise ValueError(
             f"The number of observations does not match between '{tissue_positions_file}' and '{expected_axis_file}'."
         )
     elif [column for column in positions_columns_list if column not in positions.columns]:
-        raise ValueError("The names of the columns do not match.")
+        raise ValueError(f"The names of the columns do not match.")
     else:
         positions = positions[positions_columns_list]
     return positions
