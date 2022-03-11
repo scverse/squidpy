@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import Any, Union, Mapping, Sequence, TYPE_CHECKING
 from pathlib import Path
 from typing_extensions import Literal
 
@@ -30,7 +30,7 @@ from squidpy._constants._pkg_constants import Key
 __all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "ripley", "co_occurrence"]
 
 
-Palette_t = Optional[Union[str, ListedColormap, None]]
+Palette_t = Union[str, ListedColormap, None]
 
 
 def _maybe_set_colors(source: AnnData, target: AnnData, key: str, palette: str | None = None) -> None:
@@ -66,7 +66,7 @@ def _get_palette(
                     f"found `{len(_palette)}` for key `{cluster_key}`."
                 )
         except KeyError as e:
-            logg.error(f"Unable to fetch palette, reason: {e}. Using none")
+            logg.error(f"Unable to fetch palette, reason: {e}. Using `None`.")
             return None
     elif isinstance(palette, str):
         len_cat = adata.obs[cluster_key].cat.categories.shape[0]

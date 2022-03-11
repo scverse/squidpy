@@ -183,8 +183,8 @@ class Key:
                 if sub_key is not None:
                     if not all(sub_key in lib for lib in [adata.uns[spatial_key][lib].keys() for lib in library_id]):
                         raise KeyError(
-                            f"`{sub_key}` not found in `adata.uns[{spatial_key}]['library_id'].keys()`\
-                                with following `library_id`: {library_id}."
+                            f"`{sub_key}` not found in `adata.uns[{spatial_key}]['library_id'].keys()` "
+                            f"with following `library_id`: {library_id}."
                         )
                     return library_id
             return haystack
