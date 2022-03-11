@@ -71,6 +71,22 @@ def load_images(
             raise KeyError(f"Could not find '{res}_image'")
     return images
 
+def load_coords(
+    path: str | Path,
+    tissue_positions_file: str | Path,
+    positions_columns: str | list[str],
+    expected_axis_file: str | AnnData) -> AnnData:
+    positions_columns_list = positions_columns
+    axis_file = expected_axis_file
+    positions = pd.read_csv(f"{path}/{tissue_positions_file}", header = None)
+    if axis_file.obs.shape[0] != positions.shape[0]:
+        except ValueError:
+            raise ValueError(f"The number of observations does not match between '{tissue_positions_file}' and '{expected_axis_file}'.")
+        elif:
+            except ValueError for column for column in positions_columns_list if not in positions.columns:
+            raise ValueError(f"The names of the columns do not match.")
+        else:
+            return positions[positions_columns_list]
 
 def read_visium(
     path: str | Path,
