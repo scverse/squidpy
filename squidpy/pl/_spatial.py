@@ -13,6 +13,7 @@ from matplotlib.axes import Axes
 from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 
+from squidpy._docs import d
 from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.pl._utils import save_fig, _sanitize_anndata
 from squidpy.pl._spatial_utils import (
@@ -70,6 +71,7 @@ def spatial_segment(
     _spatial_plot(adata, img=img, seg=seg, seg_key=seg_key, cell_id_key=cell_id_key, **kwargs)
 
 
+@d.dedent
 def _spatial_plot(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
@@ -141,7 +143,32 @@ def _spatial_plot(
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> None:
-    """Spatial point."""
+    """
+    Plot spatial omics data saved in AnnData.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(spatial_key)s
+    %(shape)s
+    %(color)s
+    %(groups)s
+    %(library_id)s
+    %(library_key)s
+    %(plotting_image)s
+    %(plotting_segment)s
+    %(plotting_features)s
+    scalebar_kwargs
+        Keyword arguments for :func:`matplotlib_scalebar.ScaleBar`.
+    edges_kwargs
+        Keyword arguments for :func:`networkx.draw_networkx_edges`.
+    kwargs
+        Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
+
+    Returns
+    -------
+    %(plotting_returns)s
+    """
     _sanitize_anndata(adata)
     _assert_spatial_basis(adata, spatial_key)
 
