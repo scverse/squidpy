@@ -67,7 +67,7 @@ class FigParams(NamedTuple):
     fig: Figure
     ax: Axes
     axs: Sequence[Axes] | None
-    iter_panels: Tuple[Sequence[str | None] | range, Sequence[str | None] | range]
+    iter_panels: Tuple[Any, Any]
     title: _SeqStr
     ax_labels: Sequence[str]
     frameon: bool | None
@@ -536,7 +536,7 @@ def _decorate_axs(
     coords: NDArrayA,
     value_to_plot: str,
     color_source_vector: pd.Series[CategoricalDtype],
-    crops: CropCoords,
+    crops: TupleSerializer | None = None,
     img: NDArrayA | None = None,
     img_cmap: str | None = None,
     img_alpha: float | None = None,

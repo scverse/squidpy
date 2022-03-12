@@ -70,33 +70,6 @@ spatial_key
 _conn_key = """\
 connectivity_key
     Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored."""
-_plotting = """\
-figsize
-    Size of the figure in inches.
-dpi
-    Dots per inch.
-save
-    Whether to save the plot."""
-_cat_plotting = f"""\
-palette
-    Categorical colormap for the clusters.
-    If `None`, use :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``, if available.
-{_plotting}"""
-_heatmap_plotting = f"""\
-annotate
-    Whether to annotate the cells of the heatmap.
-method
-    The linkage method to be used for dendrogram/clustering, see :func:`scipy.cluster.hierarchy.linkage`.
-title
-    The title of the plot.
-cmap
-    Continuous colormap to use.
-cbar_kwargs
-    Keyword arguments for :meth:`matplotlib.figure.Figure.colorbar`.
-{_cat_plotting}"""
-_plotting_returns = """\
-Nothing, just plots the and optionally saves the plot.
-"""
 _parallelize = """\
 n_jobs
     Number of parallel jobs.
@@ -172,6 +145,164 @@ library_id
     - If `None`, there should only exist one entry in :attr:`anndata.AnnData.uns` ``['{spatial_key}']``.
     - If a :class:`str`, first search :attr:`anndata.AnnData.obs` ``['{library_id}']`` which contains the mapping
       from observations to library ids, then search :attr:`anndata.AnnData.uns` ``['{spatial_key}']``."""
+# plotting docs
+
+_plotting_save = """\
+figsize
+    Size of the figure in inches.
+dpi
+    Dots per inch.
+save
+    Whether to save the plot."""
+_plotting_ax = f"""\
+title
+    Panel titles.
+axis_label
+    Panel axis labels.
+fig
+    :class:`matplotlib.figure.Figure` object.
+ax
+    :class:`matplotlib.axes.Axes` object.
+{_plotting_save}"""
+_plotting_scalebar = f"""\
+scalebar_dx
+    Size of one pixel in units specified by `scalebar_units`.
+scalebar_units
+    Units of `scalebar_dx`.
+{_plotting_ax}"""
+_plotting_legend = f"""\
+legend_loc
+    Location of legend, see :class:`matplotlib.legend.Legend`.
+legend_fontsize
+    See :meth:`matplotlib.text.Text.set_fontsize`.
+legend_fontweight
+    See :meth:`matplotlib.text.Text.set_fontweight`.
+legend_fontoutline
+    See :class:`matplotlib.patheffects.withStroke`.
+legend_na
+    If there are missing values, whether they get an entry in the legend.
+{_plotting_scalebar}"""
+_plotting_outline = f"""\
+outline
+    If set to True, a thin border around points is plotted.
+outline_color
+    Color of the outline.
+outline_width
+    Width of the outline color.
+{_plotting_legend}"""
+_plotting_panels = f"""\
+library_first
+    If multiple libraries are plotted, set the order with respect to `color`.
+frameon
+    If True, draw a frame around the panel.
+wspace
+    Width space between panels.
+hspace
+    Height space between panels.
+ncols
+    Number of panels per row.
+{_plotting_outline}"""
+_plotting_edges = f"""\
+edges
+    If True, draw edges based on graph.
+edges_width
+    Width of edges.
+edges_color
+    Color of edges
+connectivity_key
+    Key for neighbors graph to plot.
+{_plotting_panels}"""
+_plotting_sizecoords = f"""\
+size
+    Size of the scatter point/shape.
+size_key
+    Key of size for scatter point/shape in :attr:`anndata.AnnData.uns`.
+scale_factor
+    Scale factor for scatter point/shape.
+crop_coord
+    Coordinates for the panel.
+cmap
+    Colormap for continuous annotations. See :class:`matplotlib.colors.Colormap`.
+palette
+    Palette for discrete annotations.
+alpha
+    Alpha value for scatter point/shape.
+norm
+    Colormap normalization for continuous annotations. See :class:`matplotlib.colors.Normalize`.
+na_color
+    Color to be used for NAs values, if present.
+{_plotting_edges}"""
+_plotting_features = f"""\
+use_raw
+    If True, use :attr:`anndata.AnnData.raw`.
+layer
+    Which layer to use for features.
+alt_var
+    Which column to use in :attr:`anndata.AnnData.var` to select alternative `var_name`.
+{_plotting_sizecoords}"""
+
+_plotting_segment = """\
+seg
+    Whether to plot segmentation masks.
+seg_key
+    Key of segmentation mask in :attr:`anndata.AnnData.uns`.
+cell_id_key
+    Column in :attr:`anndata.AnnData.obs` with unique segmentation mask ids.
+seg_erosionpx
+    Whether to plot empty segmentation mask with contour. See :func:`skimage.morphology.erosion`.
+seg_boundaries
+    Whether to plot segmentation boundaries."""
+
+_plotting_image = """\
+img
+    Whether to plot images.
+img_res_key
+    Key of image resolution in :attr:`anndata.AnnData.uns`.
+img_alpha
+    Alpha value for the underlying image.
+image_cmap
+    Colormap for the image. See :class:`matplotlib.colors.Colormap`.
+img_channel
+    To select which channel to plot (all by default)."""
+
+_shape = """\
+shape
+    Whether to plot scatter plot of points or regular polygons."""
+_color = """\
+color
+    Which features to plot from :class:`anndata.AnnData`."""
+_groups = """\
+groups
+    For discrete annotation in `color`, select which values to plot (other values are set to NAs)."""
+_plotting_library_id = """\
+library_id
+    Select one or some of the unique `library_id` that constitute the AnnData to plot."""
+_library_key = """\
+library_key
+    If multiple `library_id`, column in :attr:`anndata.AnnData.obs` which stores mapping between `library_id` and obs"""
+
+_cat_plotting = f"""\
+palette
+    Categorical colormap for the clusters.
+    If `None`, use :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``, if available.
+{_plotting_save}"""
+
+_heatmap_plotting = f"""\
+annotate
+    Whether to annotate the cells of the heatmap.
+method
+    The linkage method to be used for dendrogram/clustering, see :func:`scipy.cluster.hierarchy.linkage`.
+title
+    The title of the plot.
+cmap
+    Continuous colormap to use.
+cbar_kwargs
+    Keyword arguments for :meth:`matplotlib.figure.Figure.colorbar`.
+{_cat_plotting}"""
+
+_plotting_returns = """\
+Nothing, just plots the and optionally saves the plot.
+"""
 
 d = DocstringProcessor(
     adata=_adata,
@@ -189,7 +320,7 @@ d = DocstringProcessor(
     cluster_key=_cluster_key,
     spatial_key=_spatial_key,
     conn_key=_conn_key,
-    plotting=_plotting,
+    plotting_save=_plotting_save,
     cat_plotting=_cat_plotting,
     plotting_returns=_plotting_returns,
     parallelize=_parallelize,
@@ -206,4 +337,12 @@ d = DocstringProcessor(
     library_id_features=_library_id_features,
     library_id=_library_id,
     img_library_id=_img_library_id,
+    plotting_features=_plotting_features,
+    plotting_segment=_plotting_segment,
+    plotting_image=_plotting_image,
+    shape=_shape,
+    color=_color,
+    groups=_groups,
+    plotting_library_id=_plotting_library_id,
+    library_key=_library_key,
 )

@@ -78,6 +78,18 @@ def _spatial_plot(
     groups: _SeqStr = None,
     library_id: _SeqStr = None,
     library_key: str | None = None,
+    # image
+    img: _SeqArray | bool = None,
+    img_res_key: str | None = Key.uns.image_res_key,
+    img_alpha: float | None = None,
+    img_cmap: Colormap | str | None = None,
+    img_channel: int | None = None,
+    # segment
+    seg: _SeqArray | bool = None,
+    seg_key: str | None = Key.uns.image_seg_key,
+    cell_id_key: str | None = None,
+    seg_erosionpx: int | None = None,
+    seg_boundaries: bool = False,
     # features
     use_raw: bool | None = None,
     layer: str | None = None,
@@ -92,19 +104,6 @@ def _spatial_plot(
     alpha: float | None = None,
     norm: _Normalize = None,
     na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
-    # image
-    img: _SeqArray | bool = None,
-    img_res_key: str | None = Key.uns.image_res_key,
-    img_alpha: float | None = None,
-    img_cmap: Colormap | str | None = None,
-    img_channel: int | None = None,
-    # segment
-    seg: _SeqArray | bool = None,
-    seg_key: str | None = Key.uns.image_seg_key,
-    cell_id_key: str | None = None,
-    seg_erosionpx: int | None = None,
-    seg_boundaries: bool = False,
-    seg_transparent: bool = False,
     # edges
     edges: bool = False,
     edges_width: float = 0.1,
@@ -118,12 +117,12 @@ def _spatial_plot(
     ncols: int = 4,
     # outline
     outline: bool = False,
-    outline_width: Tuple[float, float] = (0.3, 0.05),
     outline_color: Tuple[str, str] = ("black", "white"),
+    outline_width: Tuple[float, float] = (0.3, 0.05),
     # legend
+    legend_loc: str = "right margin",
     legend_fontsize: int | float | _FontSize | None = None,
     legend_fontweight: int | _FontWeight = "bold",
-    legend_loc: str = "right margin",
     legend_fontoutline: Optional[int] = None,
     legend_na: bool = True,
     # scalebar
@@ -214,8 +213,8 @@ def _spatial_plot(
     _subset = partial(_subs, library_key=library_key) if library_key is not None else lambda _, **__: _
 
     for count, (first, second) in enumerate(itertools.product(*fig_params.iter_panels)):
-        _lib_count = first if library_first else second
-        value_to_plot = second if library_first else first
+        _lib_count: int = first if library_first else second
+        value_to_plot: str = second if library_first else first
 
         _size = spatial_params.size[_lib_count]
         _img = spatial_params.img[_lib_count]
@@ -252,7 +251,7 @@ def _spatial_plot(
             )
             ax.add_collection(_cedge)
 
-        if _seg is None:
+        if _seg is None and _cell_id is None:
             outline_params, kwargs = _set_outline(
                 size=_size, outline=outline, outline_width=outline_width, outline_color=outline_color, **kwargs
             )
@@ -267,7 +266,7 @@ def _spatial_plot(
                 color_vector=color_vector,
                 **kwargs,
             )
-        else:
+        elif _seg is not None and _cell_id is not None:
             ax, cax = _plot_segment(
                 seg=_seg,
                 cell_id=_cell_id,
