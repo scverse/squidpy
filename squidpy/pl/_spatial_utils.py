@@ -583,7 +583,7 @@ def _decorate_axs(
             legend_fontweight=legend_fontweight,
             legend_fontsize=legend_fontsize,
             legend_fontoutline=path_effect,
-            na_color=na_color,
+            na_color=[na_color],
             na_in_legend=na_in_legend,
             multi_panel=True if fig_params.axs is not None else False,
         )
@@ -649,6 +649,7 @@ def _map_color_seg(
         bg_label=0,
         bg_color=(1, 1, 1),  # transparency doesn't really work
     )
+
     if seg_boundaries:
         seg_bound: NDArrayA = np.clip(seg_im - find_boundaries(val_im)[:, :, None], 0, 1)
         seg_bound = np.dstack((seg_bound, np.where(val_im > 0, 1, 0)))  # add transparency here
