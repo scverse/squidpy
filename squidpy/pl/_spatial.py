@@ -41,36 +41,6 @@ from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 
 
-def spatial_point(
-    adata: AnnData,
-    **kwargs: Any,
-) -> Any:
-    """Spatial shape."""
-    _spatial_plot(adata, img_res_key=None, size_key=None, seg_key=None, **kwargs)
-
-
-def spatial_shape(
-    adata: AnnData,
-    shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
-    img: _SeqArray | bool = True,
-    **kwargs: Any,
-) -> Any:
-    """Spatial shape."""
-    _spatial_plot(adata, shape=shape, img=img, seg_key=None, **kwargs)
-
-
-def spatial_segment(
-    adata: AnnData,
-    cell_id_key: str,
-    seg_key: str = Key.uns.image_seg_key,
-    img: _SeqArray | bool = True,
-    seg: _SeqArray | bool = True,
-    **kwargs: Any,
-) -> Any:
-    """Spatial shape."""
-    _spatial_plot(adata, img=img, seg=seg, seg_key=seg_key, cell_id_key=cell_id_key, **kwargs)
-
-
 @d.dedent
 def _spatial_plot(
     adata: AnnData,
@@ -336,3 +306,39 @@ def _spatial_plot(
 
     if fig_params.fig is not None and save is not None:
         save_fig(fig_params.fig, path=save)
+
+
+@d.delete_params("_spatial_plot.parameters", "plotting_image", "plotting_segment")
+@d.dedent
+def spatial_point(
+    adata: AnnData,
+    **kwargs: Any,
+) -> Any:
+    """Spatial shape."""
+    _spatial_plot(adata, img_res_key=None, size_key=None, seg_key=None, **kwargs)
+
+
+@d.delete_params("_spatial_plot.parameters", "plotting_segment")
+@d.dedent
+def spatial_shape(
+    adata: AnnData,
+    shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
+    img: _SeqArray | bool = True,
+    **kwargs: Any,
+) -> Any:
+    """Spatial shape."""
+    _spatial_plot(adata, shape=shape, img=img, seg_key=None, **kwargs)
+
+
+@d.delete_params("_spatial_plot.parameters", "shape")
+@d.dedent
+def spatial_segment(
+    adata: AnnData,
+    cell_id_key: str,
+    seg_key: str = Key.uns.image_seg_key,
+    img: _SeqArray | bool = True,
+    seg: _SeqArray | bool = True,
+    **kwargs: Any,
+) -> Any:
+    """Spatial shape."""
+    _spatial_plot(adata, img=img, seg=seg, seg_key=seg_key, cell_id_key=cell_id_key, **kwargs)
