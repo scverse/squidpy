@@ -53,6 +53,9 @@ Plotting
     pl.ripley
     pl.co_occurrence
     pl.extract
+    pl.spatial_point
+    pl.spatial_shape
+    pl.spatial_segment
 
 Datasets
 ~~~~~~~~
