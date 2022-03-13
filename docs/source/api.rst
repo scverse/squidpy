@@ -56,6 +56,7 @@ Plotting
     pl.spatial_point
     pl.spatial_shape
     pl.spatial_segment
+    pl.spatial_plot
 
 Datasets
 ~~~~~~~~

@@ -13,7 +13,7 @@ from matplotlib.axes import Axes
 from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 
-from squidpy._docs import d
+from squidpy._docs import d, inject_docs
 from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.pl._utils import save_fig, _sanitize_anndata
 from squidpy.pl._spatial_utils import (
@@ -42,7 +42,8 @@ from squidpy._constants._pkg_constants import Key
 
 
 @d.dedent
-def _spatial_plot(
+@inject_docs(key=Key.obsp.spatial_conn())
+def spatial_plot(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
     shape: _AvailShapes | None = None,
@@ -308,30 +309,76 @@ def _spatial_plot(
         save_fig(fig_params.fig, path=save)
 
 
-@d.delete_params("_spatial_plot.parameters", "plotting_image", "plotting_segment")
 @d.dedent
+@inject_docs(key=Key.obsp.spatial_conn())
 def spatial_point(
     adata: AnnData,
     **kwargs: Any,
 ) -> Any:
-    """Spatial shape."""
-    _spatial_plot(adata, img_res_key=None, size_key=None, seg_key=None, **kwargs)
+    """
+    Plot spatial omics data saved in AnnData as a scatterplot of points.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(spatial_key)s
+    %(color)s
+    %(groups)s
+    %(library_id)s
+    %(library_key)s
+    %(plotting_features)s
+    scalebar_kwargs
+        Keyword arguments for :func:`matplotlib_scalebar.ScaleBar`.
+    edges_kwargs
+        Keyword arguments for :func:`networkx.draw_networkx_edges`.
+    kwargs
+        Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
+
+    Returns
+    -------
+    %(plotting_returns)s
+    """
+    spatial_plot(adata, img_res_key=None, size_key=None, seg_key=None, **kwargs)
 
 
-@d.delete_params("_spatial_plot.parameters", "plotting_segment")
 @d.dedent
+@inject_docs(key=Key.obsp.spatial_conn())
 def spatial_shape(
     adata: AnnData,
     shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
     img: _SeqArray | bool = True,
     **kwargs: Any,
 ) -> Any:
-    """Spatial shape."""
-    _spatial_plot(adata, shape=shape, img=img, seg_key=None, **kwargs)
+    """
+    Plot spatial omics data saved in AnnData as a scatterplot of shapes.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(spatial_key)s
+    %(shape)s
+    %(color)s
+    %(groups)s
+    %(library_id)s
+    %(library_key)s
+    %(plotting_image)s
+    %(plotting_features)s
+    scalebar_kwargs
+        Keyword arguments for :func:`matplotlib_scalebar.ScaleBar`.
+    edges_kwargs
+        Keyword arguments for :func:`networkx.draw_networkx_edges`.
+    kwargs
+        Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
+
+    Returns
+    -------
+    %(plotting_returns)s
+    """
+    spatial_plot(adata, shape=shape, img=img, seg_key=None, **kwargs)
 
 
-@d.delete_params("_spatial_plot.parameters", "shape")
 @d.dedent
+@inject_docs(key=Key.obsp.spatial_conn())
 def spatial_segment(
     adata: AnnData,
     cell_id_key: str,
@@ -340,5 +387,29 @@ def spatial_segment(
     seg: _SeqArray | bool = True,
     **kwargs: Any,
 ) -> Any:
-    """Spatial shape."""
-    _spatial_plot(adata, img=img, seg=seg, seg_key=seg_key, cell_id_key=cell_id_key, **kwargs)
+    """
+    Plot spatial omics data saved in AnnData as segmentation masks.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(spatial_key)s
+    %(shape)s
+    %(color)s
+    %(groups)s
+    %(library_id)s
+    %(library_key)s
+    %(plotting_image)s
+    %(plotting_features)s
+    scalebar_kwargs
+        Keyword arguments for :func:`matplotlib_scalebar.ScaleBar`.
+    edges_kwargs
+        Keyword arguments for :func:`networkx.draw_networkx_edges`.
+    kwargs
+        Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
+
+    Returns
+    -------
+    %(plotting_returns)s
+    """
+    spatial_plot(adata, img=img, seg=seg, seg_key=seg_key, cell_id_key=cell_id_key, **kwargs)
