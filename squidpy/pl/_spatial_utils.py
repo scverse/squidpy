@@ -8,7 +8,6 @@ from typing import (
     Type,
     Tuple,
     Union,
-    Literal,
     Mapping,
     Optional,
     Sequence,
@@ -16,6 +15,7 @@ from typing import (
     TYPE_CHECKING,
 )
 from functools import partial
+from typing_extensions import Literal
 from matplotlib_scalebar.scalebar import ScaleBar
 import itertools
 
