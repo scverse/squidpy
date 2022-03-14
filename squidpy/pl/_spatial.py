@@ -430,12 +430,12 @@ def spatial_segment(
     ----------
     %(adata)s
     %(spatial_key)s
-    %(shape)s
     %(color)s
     %(groups)s
     %(library_id)s
     %(library_key)s
     %(plotting_image)s
+    %(plotting_segment)s
     %(plotting_features)s
     scalebar_kwargs
         Keyword arguments for :func:`matplotlib_scalebar.ScaleBar`.
