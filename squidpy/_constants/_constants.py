@@ -108,7 +108,7 @@ class RipleyStat(ModeEnum):
 
 
 @unique
-class ScatterShape(ModeEnum):
+class ScatterShape(str, ModeEnum):
     CIRCLE = "circle"
     SQUARE = "square"
     HEX = "hex"

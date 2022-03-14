@@ -357,7 +357,7 @@ def spatial_point(
 @inject_docs(key=Key.obsp.spatial_conn())
 def spatial_shape(
     adata: AnnData,
-    shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
+    shape: _AvailShapes | None = ScatterShape.CIRCLE,  # type: ignore[assignment]
     img: _SeqArray | bool = True,
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),

@@ -419,7 +419,7 @@ def _shaped_scatter(
     y: NDArrayA,
     s: float,
     c: NDArrayA,
-    shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
+    shape: _AvailShapes | ScatterShape | None = ScatterShape.CIRCLE,
     norm: _Normalize = None,
     **kwargs: Any,
 ) -> PatchCollection:
@@ -429,16 +429,16 @@ def _shaped_scatter(
     Adapted from here: https://gist.github.com/syrte/592a062c562cd2a98a83 .
     This code is under [The BSD 3-Clause License](http://opensource.org/licenses/BSD-3-Clause)
     """
-    shape = ScatterShape(shape)  # type: ignore[assignment]
+    shape = ScatterShape(shape)
     if TYPE_CHECKING:
         assert isinstance(shape, ScatterShape)
-    shape = ScatterShape(shape).s
+    shape = ScatterShape(shape)
 
-    if shape == ScatterShape.CIRCLE.s:
+    if shape == ScatterShape.CIRCLE:
         zipped = np.broadcast(x, y, s)
         patches = [Circle((x_, y_), s_) for x_, y_, s_ in zipped]
     else:
-        n = 4 if shape == ScatterShape.SQUARE.s else 6
+        n = 4 if shape == ScatterShape.SQUARE else 6
         r: float = s / (2 * np.sin(np.pi / n))
         polys = np.stack([_make_poly(x, y, r, n, i) for i in range(n)], 1).swapaxes(0, 2)
         patches = [Polygon(p, False) for p in polys]
@@ -693,7 +693,7 @@ def _prepare_args_plot(
         raise ValueError(f"`use_raw={use_raw}` but AnnData object does not have raw.")
 
     # logic for image v. non-image data is handled here
-    shape = ScatterShape(shape).s if shape is not None else shape  # type: ignore
+    shape = ScatterShape(shape) if shape is not None else shape  # type: ignore
     if TYPE_CHECKING:
         assert isinstance(shape, ScatterShape) or shape is None
 
