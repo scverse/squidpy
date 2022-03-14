@@ -320,7 +320,11 @@ def spatial_point(
     **kwargs: Any,
 ) -> None:
     """
-    Plot spatial omics data saved in AnnData as a scatterplot of points.
+    Plot scatter plot of points in spatial coordinates.
+
+    %(plotting_point_summary)s
+
+    %(plotting_general_summary)s
 
     Parameters
     ----------
@@ -364,7 +368,11 @@ def spatial_shape(
     **kwargs: Any,
 ) -> None:
     """
-    Plot spatial omics data saved in AnnData as a scatterplot of shapes.
+    Plot scatter plot of shapes in spatial coordinates.
+
+    %(plotting_shape_summary)s
+
+    %(plotting_general_summary)s
 
     Parameters
     ----------
@@ -412,7 +420,11 @@ def spatial_segment(
     **kwargs: Any,
 ) -> None:
     """
-    Plot spatial omics data saved in AnnData as segmentation masks.
+    Plot segmentation masks in spatial coordinates.
+
+    %(plotting_segment_summary)s
+
+    %(plotting_general_summary)s
 
     Parameters
     ----------
