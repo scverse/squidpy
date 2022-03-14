@@ -91,3 +91,5 @@ transcriptomics
 uncommenting
 Visium
 zscore
+scalebar
+kwargs

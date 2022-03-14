@@ -174,9 +174,9 @@ _plotting_legend = f"""\
 legend_loc
     Location of legend, see :class:`matplotlib.legend.Legend`.
 legend_fontsize
-    Fontsize of legend, see:meth:`matplotlib.text.Text.set_fontsize`.
+    Font size of legend, see:meth:`matplotlib.text.Text.set_fontsize`.
 legend_fontweight
-    Fontweight of legend, see :meth:`matplotlib.text.Text.set_fontweight`.
+    Font weight of legend, see :meth:`matplotlib.text.Text.set_fontweight`.
 legend_fontoutline
     Font outline of legend, see :class:`matplotlib.patheffects.withStroke`.
 legend_na
@@ -270,7 +270,7 @@ img
     passed for plotting.
 img_res_key
     Key for image resolution, used to get `img` and `scale_factor` from `"images"`
-    and `"scalefactors"` entires for this library.
+    and `"scalefactors"` entries for this library.
 img_alpha
     Alpha value for the underlying image.
 image_cmap
@@ -338,7 +338,7 @@ coordinate space.
 """
 
 _plotting_shape_summary = """\
-The plotted shapes (circles, squares or heaxagons) have a real "size" with respect to their
+The plotted shapes (circles, squares or hexagons) have a real "size" with respect to their
 coordinate space, which can be specified via the `size` or `size_key` parameter.
 
 This function allows overlaying data on top of images.
