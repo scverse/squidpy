@@ -45,9 +45,9 @@ from skimage.morphology import square, erosion
 from skimage.segmentation import find_boundaries
 
 from squidpy._utils import NDArrayA
-from squidpy.pl._graph import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
 from squidpy.im._coords import CropCoords, TupleSerializer
+from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 
@@ -352,7 +352,7 @@ def _set_coords_crops(
 
 def _subs(adata: AnnData, library_key: str | None = None, library_id: str | None = None) -> AnnData:
     try:
-        return adata[adata.obs[library_key] == library_id].copy()
+        return adata[adata.obs[library_key] == library_id]
     except KeyError:
         raise KeyError(
             f"Cannot subset adata. Either `library_key: {library_key}` or `library_id: {library_id}` is invalid."

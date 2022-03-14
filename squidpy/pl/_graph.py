@@ -6,14 +6,12 @@ from typing import Any, Union, Mapping, Sequence, TYPE_CHECKING
 from pathlib import Path
 from typing_extensions import Literal
 
-from scanpy import logging as logg
 from anndata import AnnData
-from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
 import numpy as np
 import pandas as pd
 
-from matplotlib.colors import to_hex, ListedColormap
+from matplotlib.colors import ListedColormap
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -24,6 +22,7 @@ from squidpy.gr._utils import (
     _assert_non_empty_sequence,
 )
 from squidpy.pl._utils import _heatmap, save_fig
+from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 
@@ -31,16 +30,6 @@ __all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "riple
 
 
 Palette_t = Union[str, ListedColormap, None]
-
-
-def _maybe_set_colors(source: AnnData, target: AnnData, key: str, palette: str | None = None) -> None:
-    color_key = Key.uns.colors(key)
-    try:
-        if palette is not None:
-            raise KeyError("Unable to copy the palette when there was other explicitly specified.")
-        target.uns[color_key] = source.uns[color_key]
-    except KeyError:
-        add_colors_for_categorical_sample_annotation(target, key=key, force_update_colors=True, palette=palette)
 
 
 def _get_data(adata: AnnData, cluster_key: str, func_name: str, **kwargs: Any) -> Any:
@@ -52,32 +41,6 @@ def _get_data(adata: AnnData, cluster_key: str, func_name: str, **kwargs: Any) -
             f"Unable to get the data from `adata.uns[{key!r}]`. "
             f"Please run `squidpy.gr.{func_name}(..., cluster_key={cluster_key!r})` first."
         ) from None
-
-
-def _get_palette(
-    adata: AnnData, cluster_key: str, categories: Sequence[Any], palette: Palette_t = None
-) -> Mapping[str, str] | None:
-    if palette is None:
-        try:
-            _palette = adata.uns[Key.uns.colors(cluster_key)]
-            if len(_palette) < len(categories):
-                raise ValueError(
-                    f"Expected to find at least `{len(categories)}` colors, "
-                    f"found `{len(_palette)}` for key `{cluster_key}`."
-                )
-        except KeyError as e:
-            logg.error(f"Unable to fetch palette, reason: {e}. Using `None`.")
-            return None
-    elif isinstance(palette, str):
-        len_cat = len(adata.obs[cluster_key].cat.categories)
-        cmap = plt.get_cmap(palette)
-        _palette = [to_hex(x) for x in cmap(np.linspace(0, 1, len_cat))]
-    elif isinstance(palette, ListedColormap):
-        _palette = [to_hex(x) for x in palette(np.linspace(0, 1, len_cat))]
-    else:
-        raise TypeError(f"Palette is {type(palette)} but should be string or `ListedColormap`.")
-
-    return dict(zip(categories, _palette))
 
 
 @d.dedent
