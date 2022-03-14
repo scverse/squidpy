@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, Tuple, Mapping, Optional, Sequence
+from typing import Any, Tuple, Mapping, Callable, Optional, Sequence
 from pathlib import Path
 from functools import partial
 import itertools
@@ -208,7 +208,9 @@ def spatial_plot(
         **kwargs,
     )
 
-    _subset = partial(_subs, library_key=library_key) if library_key is not None else lambda _, **__: _
+    _subset: Callable[[AnnData, str | None, str | None], AnnData] = (
+        partial(_subs, library_key=library_key) if library_key is not None else lambda _, **__: _  # type: ignore
+    )
 
     for count, (first, second) in enumerate(itertools.product(*fig_params.iter_panels)):
         _lib_count: int = first if library_first else second
@@ -245,7 +247,7 @@ def spatial_plot(
                 edges_width,
                 edges_color,
                 connectivity_key,
-                edges_kwargs,
+                **edges_kwargs,
             )
             ax.add_collection(_cedge)
 
@@ -313,8 +315,10 @@ def spatial_plot(
 @inject_docs(key=Key.obsp.spatial_conn())
 def spatial_point(
     adata: AnnData,
+    scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
-) -> Any:
+) -> None:
     """
     Plot spatial omics data saved in AnnData as a scatterplot of points.
 
@@ -338,7 +342,15 @@ def spatial_point(
     -------
     %(plotting_returns)s
     """
-    spatial_plot(adata, img_res_key=None, size_key=None, seg_key=None, **kwargs)
+    spatial_plot(
+        adata,
+        img_res_key=None,
+        size_key=None,
+        seg_key=None,
+        scalebar_kwargs=scalebar_kwargs,
+        edges_kwargs=edges_kwargs,
+        **kwargs,
+    )
 
 
 @d.dedent
@@ -347,8 +359,10 @@ def spatial_shape(
     adata: AnnData,
     shape: _AvailShapes | None = ScatterShape.CIRCLE.s,  # type: ignore[assignment]
     img: _SeqArray | bool = True,
+    scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
-) -> Any:
+) -> None:
     """
     Plot spatial omics data saved in AnnData as a scatterplot of shapes.
 
@@ -374,7 +388,15 @@ def spatial_shape(
     -------
     %(plotting_returns)s
     """
-    spatial_plot(adata, shape=shape, img=img, seg_key=None, **kwargs)
+    spatial_plot(
+        adata,
+        shape=shape,
+        img=img,
+        seg_key=None,
+        scalebar_kwargs=scalebar_kwargs,
+        edges_kwargs=edges_kwargs,
+        **kwargs,
+    )
 
 
 @d.dedent
@@ -385,8 +407,10 @@ def spatial_segment(
     seg_key: str = Key.uns.image_seg_key,
     img: _SeqArray | bool = True,
     seg: _SeqArray | bool = True,
+    scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
-) -> Any:
+) -> None:
     """
     Plot spatial omics data saved in AnnData as segmentation masks.
 
@@ -412,4 +436,13 @@ def spatial_segment(
     -------
     %(plotting_returns)s
     """
-    spatial_plot(adata, img=img, seg=seg, seg_key=seg_key, cell_id_key=cell_id_key, **kwargs)
+    spatial_plot(
+        adata,
+        img=img,
+        seg=seg,
+        seg_key=seg_key,
+        cell_id_key=cell_id_key,
+        scalebar_kwargs=scalebar_kwargs,
+        edges_kwargs=edges_kwargs,
+        **kwargs,
+    )

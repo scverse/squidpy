@@ -388,6 +388,10 @@ def _set_color_source_vec(
     na_color: str | Tuple[float, ...] | None = None,
 ) -> Tuple[NDArrayA | pd.Series | None, NDArrayA, bool]:
 
+    to_hex = partial(colors.to_hex, keep_alpha=True)
+
+    if value_to_plot is None:
+        return np.full(adata.n_obs, to_hex(na_color)), np.broadcast_to(np.nan, adata.n_obs), False
     if alt_var is not None and value_to_plot not in adata.obs.columns and value_to_plot not in adata.var_names:
         value_to_plot = adata.var_names[adata.var[alt_var] == value_to_plot][0]
     if use_raw and value_to_plot not in adata.obs.columns:
@@ -397,14 +401,11 @@ def _set_color_source_vec(
     if groups is not None and is_categorical_dtype(color_source_vector):
         color_source_vector = color_source_vector.replace(color_source_vector.categories.difference(groups), np.nan)
 
-    to_hex = partial(colors.to_hex, keep_alpha=True)
-    if value_to_plot is None:
-        return None, np.full(to_hex(na_color), adata.n_obs), False
     if not is_categorical_dtype(color_source_vector):
         return None, color_source_vector, False
     else:
         clusters = color_source_vector.categories
-        color_map = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
+        color_map = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)  # type: ignore
         color_vector = color_source_vector.rename_categories(color_map)
         # Set color to 'missing color' for all missing values
         if color_vector.isna().any():
@@ -560,36 +561,35 @@ def _decorate_axs(
 
     ax.autoscale_view()
 
-    if value_to_plot is None:
+    if value_to_plot is not None:
         # if only dots were plotted without an associated value
         # there is not need to plot a legend or a colorbar
-        return ax
 
-    if legend_fontoutline is not None:
-        path_effect = [patheffects.withStroke(linewidth=legend_fontoutline, foreground="w")]
-    else:
-        path_effect = []
+        if legend_fontoutline is not None:
+            path_effect = [patheffects.withStroke(linewidth=legend_fontoutline, foreground="w")]
+        else:
+            path_effect = []
 
-    # Adding legends
-    if is_categorical_dtype(color_source_vector):
-        clusters = color_source_vector.categories
-        _palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
-        _add_categorical_legend(
-            ax,
-            color_source_vector,
-            palette=_palette,
-            scatter_array=coords,
-            legend_loc=legend_loc,
-            legend_fontweight=legend_fontweight,
-            legend_fontsize=legend_fontsize,
-            legend_fontoutline=path_effect,
-            na_color=[na_color],
-            na_in_legend=na_in_legend,
-            multi_panel=True if fig_params.axs is not None else False,
-        )
-    else:
-        # TODO: na_in_legend should have some effect here
-        plt.colorbar(cax, ax=ax, pad=0.01, fraction=0.08, aspect=30)
+        # Adding legends
+        if is_categorical_dtype(color_source_vector):
+            clusters = color_source_vector.categories
+            _palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
+            _add_categorical_legend(
+                ax,
+                color_source_vector,
+                palette=_palette,
+                scatter_array=coords,
+                legend_loc=legend_loc,
+                legend_fontweight=legend_fontweight,
+                legend_fontsize=legend_fontsize,
+                legend_fontoutline=path_effect,
+                na_color=[na_color],
+                na_in_legend=na_in_legend,
+                multi_panel=True if fig_params.axs is not None else False,
+            )
+        else:
+            # TODO: na_in_legend should have some effect here
+            plt.colorbar(cax, ax=ax, pad=0.01, fraction=0.08, aspect=30)
 
     cur_coords = np.concatenate([ax.get_xlim(), ax.get_ylim()])
 
