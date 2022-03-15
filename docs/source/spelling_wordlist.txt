@@ -79,6 +79,7 @@ segmentations
 seqFISH
 seqV
 Squidpy
+squidpy
 StarDist
 stromal
 subsetting

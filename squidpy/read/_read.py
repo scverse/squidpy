@@ -19,27 +19,27 @@ def read_visium(
     source_image_path: str | Path | None = None,
 ) -> AnnData:
     r"""
-    Read 10x-Genomics-formatted visium dataset.
+    Read 10x-Genomics-formatted Visium dataset.
 
     In addition to reading regular 10x output,
     this looks for the `spatial` folder and loads images,
     coordinates and scale factors.
     Based on the `Space Ranger output docs`_.
-    See :func:`~scanpy.pl.spatial` for a compatible plotting function.
+    See :func:`scanpy.pl.spatial` for a compatible plotting function.
     .. _Space Ranger output docs:
     https://support.10xgenomics.com/spatial-gene-expression/software/pipelines/latest/output/overview
 
     Parameters
     ----------
     path
-        Path to directory for visium datafiles.
+        Path to directory for Visium data files.
     genome
         Filter expression to genes within this genome.
     count_file
         Which file in the passed directory to use as the count file. Typically would be one of:
         'filtered_feature_bc_matrix.h5' or 'raw_feature_bc_matrix.h5'.
     library_id
-        Identifier for the visium library. Can be modified when concatenating multiple adata objects.
+        Identifier for the Visium library. Can be modified when concatenating multiple adata objects.
     source_image_path
         Path to the high-resolution tissue image. Path will be included in
         `.uns["spatial"][library_id]["metadata"]["source_image_path"]`.
