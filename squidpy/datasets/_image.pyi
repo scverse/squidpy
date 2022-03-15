@@ -1,8 +1,11 @@
-from typing import Any, Callable
+from typing import Any, Union, Protocol
 
 from squidpy.im._container import ImageContainer
 from squidpy.datasets._utils import PathLike
 
-visium_fluo_image_crop: Callable[[PathLike, Any], ImageContainer]
-visium_hne_image_crop: Callable[[PathLike, Any], ImageContainer]
-visium_hne_image: Callable[[PathLike, Any], ImageContainer]
+class ImageDataset(Protocol):
+    def __call__(self, path: Union[PathLike, None] = ..., **kwargs: Any) -> ImageContainer: ...
+
+visium_fluo_image_crop: ImageDataset
+visium_hne_image_crop: ImageDataset
+visium_hne_image: ImageDataset
