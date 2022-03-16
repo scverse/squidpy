@@ -1,7 +1,4 @@
-from squidpy import datasets
-import squidpy.gr
-import squidpy.im
-import squidpy.pl
+from squidpy import gr, im, pl, datasets
 
 __author__ = __maintainer__ = "Theislab"
 __email__ = ", ".join(
