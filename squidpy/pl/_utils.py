@@ -528,12 +528,16 @@ def _heatmap(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    ax = None,
     **kwargs: Any,
 ) -> mpl.figure.Figure:
     _assert_categorical_obs(adata, key=key)
 
     cbar_kwargs = dict(cbar_kwargs)
-    fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
+    if ax is None:
+        fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
+    else:
+        fig = ax.figure
 
     if method is not None:
         row_order, col_order, row_link, col_link = _dendrogram(adata.X, method, optimal_ordering=adata.n_obs <= 1500)
