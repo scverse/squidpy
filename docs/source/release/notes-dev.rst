@@ -19,3 +19,6 @@ Miscellaneous
 
 - Change imports in the topmost ``__init__.py`` for correct IDE module resolution.
   `#479 <https://github.com/theislab/squidpy/pull/479>`__
+
+- Remove various warnings.
+  `#489 <https://github.com/theislab/squidpy/pull/489>`__
