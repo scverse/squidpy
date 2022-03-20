@@ -1150,7 +1150,8 @@ class ImageContainer(FeatureMixin):
         kwargs
             Keyword arguments for :func:`dask.array.map_overlap` or :func:`dask.array.map_blocks`, depending whether
             ``depth`` is present in ``fn_kwargs``. Only used when ``chunks != None``.
-            Use ``depth`` to control boundary artifacts if ``func`` requires data from neighboring chunks.
+            Use ``depth`` to control boundary artifacts if ``func`` requires data from neighboring chunks,
+            by default, ``boundary = 'reflect`` is used.
 
         Returns
         -------
@@ -1171,6 +1172,9 @@ class ImageContainer(FeatureMixin):
                 if "depth" in kwargs
                 else da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
             )
+
+        if "depth" in kwargs:
+            kwargs.setdefault("boundary", "reflect")
 
         layer = self._get_layer(layer)
         if new_layer is None:
