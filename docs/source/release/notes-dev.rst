@@ -1,4 +1,4 @@
-Squidpy dev (2022-03-15)
+Squidpy dev (2022-03-20)
 ========================
 
 Bugfixes
@@ -9,6 +9,9 @@ Bugfixes
 
 - Fix source/target being ``None`` in :func:`squidpy.gr.ligrec`.
   `#434 <https://github.com/theislab/squidpy/pull/434>`__
+
+- Do not set edge with in :mod:`napari` since it caused all points to be black.
+  `#488 <https://github.com/theislab/squidpy/pull/488>`__
 
 
 Miscellaneous
