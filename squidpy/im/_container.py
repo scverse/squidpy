@@ -576,9 +576,8 @@ class ImageContainer(FeatureMixin):
         **_: Any,
     ) -> xr.Dataset:
         def _rescale(arr: xr.DataArray) -> xr.DataArray:
-            # TODO(michalk8): in skimage==0.19.0, multichannel is deprecated
             scaling_fn = partial(
-                rescale, scale=[scale, scale, 1], preserve_range=True, order=1, multichannel=True, cval=cval
+                rescale, scale=[scale, scale, 1], preserve_range=True, order=1, channel_axis=-1, cval=cval
             )
             dtype = arr.dtype
 

@@ -7,7 +7,7 @@ import numpy as np
 import xarray as xr
 
 from skimage.util import img_as_ubyte
-from skimage.feature import greycoprops, greycomatrix
+from skimage.feature import graycoprops, graycomatrix
 import skimage.measure
 
 from squidpy._docs import d
@@ -196,12 +196,12 @@ class FeatureMixin:
         """
         Calculate texture features.
 
-        A grey level co-occurrence matrix (`GLCM <https://en.wikipedia.org/wiki/Co-occurrence_matrix>`_) is computed
+        A gray level co-occurrence matrix (`GLCM <https://en.wikipedia.org/wiki/Co-occurrence_matrix>`_) is computed
         for different combinations of distance and angle.
 
         The distance defines the pixel difference of co-occurrence. The angle define the direction along which
-        we check for co-occurrence. The GLCM includes the number of times that grey-level :math:`j` occurs at a distance
-        :math:`d` and at an angle theta from grey-level :math:`i`.
+        we check for co-occurrence. The GLCM includes the number of times that gray-level :math:`j` occurs at a distance
+        :math:`d` and at an angle theta from gray-level :math:`i`.
 
         Parameters
         ----------
@@ -210,11 +210,11 @@ class FeatureMixin:
         %(feature_name)s
         %(channels)s
         props
-            Texture features that are calculated, see the `prop` argument in :func:`skimage.feature.greycoprops`.
+            Texture features that are calculated, see the `prop` argument in :func:`skimage.feature.graycoprops`.
         distances
-            The `distances` argument in :func:`skimage.feature.greycomatrix`.
+            The `distances` argument in :func:`skimage.feature.graycomatrix`.
         angles
-            The `angles` argument in :func:`skimage.feature.greycomatrix`.
+            The `angles` argument in :func:`skimage.feature.graycomatrix`.
 
         Returns
         -------
@@ -244,9 +244,9 @@ class FeatureMixin:
 
         features = {}
         for c in channels:
-            comatrix = greycomatrix(arr[..., c], distances=distances, angles=angles, levels=256)
+            comatrix = graycomatrix(arr[..., c], distances=distances, angles=angles, levels=256)
             for p in props:
-                tmp_features = greycoprops(comatrix, prop=p)
+                tmp_features = graycoprops(comatrix, prop=p)
                 for d_idx, dist in enumerate(distances):
                     for a_idx, a in enumerate(angles):
                         features[f"{feature_name}_ch-{c}_{p}_dist-{dist}_angle-{a:.2f}"] = tmp_features[d_idx, a_idx]

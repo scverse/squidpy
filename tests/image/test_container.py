@@ -1,11 +1,11 @@
 from typing import Any, Set, List, Tuple, Union, Optional, Sequence
-from imageio import imread, imsave
 from pathlib import Path
 from itertools import permutations
 from collections import defaultdict
 from html.parser import HTMLParser
 from pytest_mock import MockerFixture
 import pytest
+import imageio
 
 from anndata import AnnData
 import anndata as ad
@@ -60,7 +60,7 @@ class TestContainerIO:
         img_orig = np.random.randint(low=0, high=255, size=(100, 100, 1), dtype=np.uint8)
         if on_init:
             fname = str(tmpdir / "tmp.tiff")
-            tifffile.imsave(fname, img_orig)
+            tifffile.imwrite(fname, img_orig)
             img = ImageContainer(fname, lazy=True)
         else:
             img = ImageContainer(da.from_array(img_orig), lazy=True)
@@ -143,9 +143,9 @@ class TestContainerIO:
     def test_load_ext(self, shape: Tuple[int, ...], ext: str, tmpdir):
         img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
         fname = tmpdir / f"tmp.{ext}"
-        imsave(str(fname), img_orig)
+        imageio.imsave(str(fname), img_orig)
 
-        gt = imread(str(fname))  # because of compression, we load again
+        gt = imageio.imread(str(fname))  # because of compression, we load again
         cont = ImageContainer(str(fname))
 
         np.testing.assert_array_equal(cont["image"].values.squeeze(), gt.squeeze())
@@ -154,7 +154,7 @@ class TestContainerIO:
     def test_load_tiff(self, shape: Tuple[int, ...], tmpdir):
         img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
         fname = tmpdir / "tmp.tiff"
-        tifffile.imsave(fname, img_orig)
+        tifffile.imwrite(fname, img_orig)
 
         cont = ImageContainer(str(fname))
 
@@ -750,8 +750,7 @@ class TestContainerUtils:
             assert isinstance(res["image"].data, da.Array)
         else:
             assert isinstance(res["image"].data, np.ndarray)
-
-        assert not np.shares_memory(cont["image"].data, res["image"].data)
+            assert not np.shares_memory(cont["image"].data, res["image"].data)
 
     def test_apply_wrong_number_of_dim(self):
         def func(arr: np.ndarray) -> float:
@@ -863,12 +862,14 @@ class TestZStacks:
             np.zeros((len(crop_coords), 1)),
             uns={"spatial": {"1": {"scalefactors": {"spot_diameter_fullres": 5}}}},
             obsm={"spatial": crop_coords},
+            dtype=float,
         )
         # for library_id 2 (with larger scalefactor)
         adata2 = AnnData(
             np.zeros((len(crop_coords), 1)),
             uns={"spatial": {"2": {"scalefactors": {"spot_diameter_fullres": 7}}}},
             obsm={"spatial": crop_coords},
+            dtype=float,
         )
         # concatenate
         adata = ad.concat({"1": adata1, "2": adata2}, uns_merge="unique", label="library_id")

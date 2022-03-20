@@ -244,7 +244,7 @@ def centrality_scores(
 
     centralities = [Centrality(c) for c in centrality]
 
-    graph = nx.from_scipy_sparse_matrix(adata.obsp[connectivity_key])
+    graph = nx.from_scipy_sparse_array(adata.obsp[connectivity_key])
 
     cat = adata.obs[cluster_key].cat.categories.values
     clusters = adata.obs[cluster_key].values

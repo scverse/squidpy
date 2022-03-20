@@ -17,7 +17,7 @@ class TestIO:
     def _create_image(self, path: str, shape: Tuple[int, ...]):
         dtype = np.uint8 if len(shape) <= 3 else np.float32
         img = np.random.randint(0, 255, size=shape).astype(dtype)
-        tifffile.imsave(path, img)
+        tifffile.imwrite(path, img)
 
         return img
 
