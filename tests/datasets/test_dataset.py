@@ -2,8 +2,9 @@ from types import FunctionType
 from pathlib import Path
 from http.client import RemoteDisconnected
 import pytest
+import warnings
 
-from anndata import AnnData
+from anndata import AnnData, OldFormatWarning
 
 import squidpy as sq
 
@@ -17,21 +18,26 @@ class TestDatasetsImports:
         assert isinstance(fn, FunctionType)
 
 
+# TODO(michalk8): parse the code and xfail iff server issue
 class TestDatasetsDownload:
     def test_download_imc(self, tmp_path: Path):
-        try:
-            adata = sq.datasets.imc(tmp_path / "foo")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=OldFormatWarning)
+            try:
+                adata = sq.datasets.imc(tmp_path / "foo")
 
-            assert isinstance(adata, AnnData)
-            assert adata.shape == (4668, 34)
-        except RemoteDisconnected as e:
-            pytest.skip(str(e))
+                assert isinstance(adata, AnnData)
+                assert adata.shape == (4668, 34)
+            except RemoteDisconnected as e:
+                pytest.xfail(str(e))
 
     def test_download_visium_hne_image_crop(self, tmp_path: Path):
-        try:
-            img = sq.datasets.visium_hne_image_crop(tmp_path / "foo")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=OldFormatWarning)
+            try:
+                img = sq.datasets.visium_hne_image_crop(tmp_path / "foo")
 
-            assert isinstance(img, sq.im.ImageContainer)
-            assert img.shape == (3527, 3527)
-        except RemoteDisconnected as e:
-            pytest.skip(str(e))
+                assert isinstance(img, sq.im.ImageContainer)
+                assert img.shape == (3527, 3527)
+            except RemoteDisconnected as e:
+                pytest.xfail(str(e))

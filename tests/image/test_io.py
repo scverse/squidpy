@@ -14,10 +14,12 @@ from squidpy._constants._constants import InferDimensions
 
 
 class TestIO:
-    def _create_image(self, path: str, shape: Tuple[int, ...]):
+    @staticmethod
+    def _create_image(path: str, shape: Tuple[int, ...]):
         dtype = np.uint8 if len(shape) <= 3 else np.float32
         img = np.random.randint(0, 255, size=shape).astype(dtype)
-        tifffile.imwrite(path, img)
+        # set `photometric` to remove warnings
+        tifffile.imwrite(path, img, photometric=tifffile.TIFF.PHOTOMETRIC.MINISBLACK)
 
         return img
 
