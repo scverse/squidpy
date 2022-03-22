@@ -13,9 +13,9 @@ import numpy as np
 import pandas as pd
 
 import seaborn as sns
+import matplotlib as mpl
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
-import matplotlib as mpl
 
 from squidpy._docs import d
 from squidpy.gr._utils import (
@@ -209,7 +209,7 @@ def nhood_enrichment(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
-    ax = None,
+    ax: mpl.axes._subplots.Axes = None,
     **kwargs: Any,
 ) -> None:
     """

@@ -528,7 +528,7 @@ def _heatmap(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    ax = None,
+    ax: mpl.axes._subplots.Axes = None,
     **kwargs: Any,
 ) -> mpl.figure.Figure:
     _assert_categorical_obs(adata, key=key)
