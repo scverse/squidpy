@@ -10,7 +10,7 @@ omnipath>=1.0.5
 pandas>=1.2.0
 Pillow
 scanpy>=1.8.0
-scikit-image>=0.17.1
+scikit-image>=0.19
 scikit-learn>=0.24.0
 statsmodels>=0.12.0
 tifffile
