@@ -8,6 +8,8 @@ import scanpy as sc
 import numpy as np
 import pandas as pd
 
+import matplotlib.pyplot as plt
+
 from squidpy import gr, pl
 from tests.conftest import DPI, PlotTester, PlotTesterMeta
 
@@ -56,6 +58,9 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
         gr.nhood_enrichment(adata, cluster_key=C_KEY)
 
         pl.nhood_enrichment(adata, cluster_key=C_KEY)
+
+        fig, ax = plt.subplots()
+        pl.nhood_enrichment(adata, cluster_key=C_KEY, ax=ax)
 
     def test_plot_nhood_enrichment_dendro(self, adata: AnnData):
         gr.spatial_neighbors(adata)
