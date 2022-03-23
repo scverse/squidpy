@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import MappingProxyType
+from typing import Any, Mapping
 from pathlib import Path
 import json
 
@@ -107,6 +109,7 @@ def read_visium(
         coords_scalefactors_files["tissue_positions_file"],
         adata.shape[0],
         columns,
+        kwargs={"header": None},
     )
 
     coords.index = coords["barcode"].values  # type: ignore
@@ -124,4 +127,71 @@ def read_visium(
         # get an absolute path
         source_image_path = str(Path(source_image_path).resolve())
         adata.uns[Key.uns.spatial][library_id]["metadata"]["source_image_path"] = str(source_image_path)
+    return adata
+
+
+# def _read_nanostring(
+#     path: str | Path,
+#     genome: str | None,
+#     *,
+#     count_file: str = "",
+#     library_id: str | None = None,
+#     load_images: bool | None = True,
+#     source_image_path: str | Path | None = None,
+# ) -> AnnData:
+
+
+def read_vizgen(
+    path: str | Path,
+    genome: str | None = None,
+    *,
+    count_file: str,
+    obs_file: str,
+    library_id: str | None = None,
+    text_kwargs: Mapping[str, Any] = MappingProxyType({}),
+) -> AnnData:
+    r"""
+    Read Vizgen formatted dataset.
+
+    In addition to reading the regular Vizgen output,
+    this function loads metadata file and loads the spatial co-ordinates.
+    """
+    if isinstance(path, str):
+        path = Path(path)
+
+    adata = _read_count(path=path, count_file=count_file, genome=genome, text_kwargs=text_kwargs)
+
+    if library_id is not None:
+        adata.uns[Key.uns.spatial] = {library_id: {}}
+    else:
+        adata.uns[Key.uns.spatial] = {}
+
+    coords_file = {
+        "metadata_file": path / obs_file,
+    }
+
+    columns = [
+        "fov",
+        "volume",
+        "center_x",
+        "center_y",
+        "min_x",
+        "max_x",
+        "min_y",
+        "max_y",
+    ]
+
+    coords = _read_coords(
+        coords_file["metadata_file"],
+        n_obs=adata.shape[0],
+        cols=columns,
+        header=0,
+        index_col=0,
+        # kwargs={"index_col": 0,"header": 0,}
+    )
+
+    adata.obs = adata.obs.join(coords, how="left")
+
+    adata.obsm[Key.uns.spatial] = adata.obs[["center_x", "center_y"]].to_numpy()
+
     return adata
