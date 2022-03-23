@@ -529,17 +529,15 @@ def _heatmap(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    subplots_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ax: Axes | None = None,
     **kwargs: Any,
 ) -> mpl.figure.Figure:
     _assert_categorical_obs(adata, key=key)
 
     cbar_kwargs = dict(cbar_kwargs)
-    subplots_kwargs = dict(subplots_kwargs)
 
     if ax is None:
-        fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize, **subplots_kwargs)
+        fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
     else:
         fig = ax.figure
 
