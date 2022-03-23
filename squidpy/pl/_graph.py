@@ -12,8 +12,8 @@ from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 import numpy as np
 import pandas as pd
 
+from matplotlib.axes import Axes
 import seaborn as sns
-import matplotlib as mpl
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 
@@ -209,7 +209,7 @@ def nhood_enrichment(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
-    ax: mpl.axes._subplots.Axes = None,
+    ax: Axes | None = None,
     **kwargs: Any,
 ) -> None:
     """

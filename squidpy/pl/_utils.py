@@ -37,6 +37,7 @@ import numpy as np
 import pandas as pd
 
 from matplotlib import colors as mcolors, pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import matplotlib as mpl
 
@@ -528,7 +529,7 @@ def _heatmap(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    ax: mpl.axes._subplots.Axes = None,
+    ax: Axes | None = None,
     **kwargs: Any,
 ) -> mpl.figure.Figure:
     _assert_categorical_obs(adata, key=key)
@@ -538,6 +539,7 @@ def _heatmap(
         fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
     else:
         fig = ax.figure
+        fig.set_constrained_layout(True)
 
     if method is not None:
         row_order, col_order, row_link, col_link = _dendrogram(adata.X, method, optimal_ordering=adata.n_obs <= 1500)
