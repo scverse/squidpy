@@ -20,13 +20,14 @@ def _read_count(
     count_file: str,
     genome: Optional[str] = None,
     library_id: Optional[str] = None,
+    h5_kwargs: Mapping[str, Any] = MappingProxyType({}),
     text_kwargs: Mapping[str, Any] = MappingProxyType({}),
     mtx_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> AnnData:
     """Load count files."""
     path = Path(path)
     if count_file.endswith(".h5"):
-        adata = read_10x_h5(path / count_file, genome=genome)
+        adata = read_10x_h5(path / count_file, genome=genome, **h5_kwargs)
         with File(path / count_file, mode="r") as f:
             attrs = dict(f.attrs)
             if library_id is None:
@@ -68,7 +69,7 @@ def _read_coords(
     **kwargs: Any,
 ) -> NDArrayA | pd.DataFrame:
     """Load coordinates."""
-    coords = pd.read_csv(path, **kwargs)
+    coords = pd.read_csv(path, **kwargs)  # nice how you worked with kwargs here
 
     if coords.shape[0] != n_obs:
         raise ValueError(f"Invalid shape of `coordinates` file: `{coords.shape}`.")

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from types import MappingProxyType
-from typing import Any, Mapping
 from pathlib import Path
 import json
 
@@ -143,12 +141,10 @@ def read_visium(
 
 def read_vizgen(
     path: str | Path,
-    genome: str | None = None,
     *,
     count_file: str,
     obs_file: str,
     library_id: str | None = None,
-    text_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> AnnData:
     r"""
     Read Vizgen formatted dataset.
@@ -159,7 +155,12 @@ def read_vizgen(
     if isinstance(path, str):
         path = Path(path)
 
-    adata = _read_count(path=path, count_file=count_file, genome=genome, text_kwargs=text_kwargs)
+    text_kwargs = {
+        "first_column_names": True,
+        "delimiter": ",",
+    }
+
+    adata = _read_count(path=path, count_file=count_file, text_kwargs=text_kwargs)
 
     if library_id is not None:
         adata.uns[Key.uns.spatial] = {library_id: {}}
@@ -187,7 +188,6 @@ def read_vizgen(
         cols=columns,
         header=0,
         index_col=0,
-        # kwargs={"index_col": 0,"header": 0,}
     )
 
     adata.obs = adata.obs.join(coords, how="left")
