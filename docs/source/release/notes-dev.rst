@@ -1,10 +1,13 @@
-Squidpy dev (2022-03-23)
+Squidpy dev (2022-03-24)
 ========================
 
 Features
 --------
 
-- An optional ``ax`` keyword can now be passed to :func:`squidpy.pl.nhood_enrichment` function. The keyword can be used to create a matplotlib figure outside of squidpy and then plot on any matplotlib subplot, which could give the user greater flexibility in working with nhood enrichment plots.
+- An optional ``ax`` keyword can now be passed to :func:`squidpy.pl.nhood_enrichment` function. The
+  keyword can be used to create a matplotlib figure outside of squidpy and then plot on any matplotlib
+  subplot, which could give the user greater flexibility in working with enrichment plots.
+  `@jo-mueller <https://github.com/jo-mueller>`__
   `#493 <https://github.com/theislab/squidpy/pull/493>`__
 
 

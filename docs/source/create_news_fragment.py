@@ -83,7 +83,7 @@ def create_news_fragment(issue_number: str, use_title: bool = False, add_author:
         author = _extract_pr_author(data)
 
         fragment = f"{title}\n{len(title) * sep}\n{description}" if use_title else description
-        fragment = "\n".join(textwrap.wrap(fragment, width=120, tabsize=4))
+        fragment = "\n".join(textwrap.wrap(fragment, width=100, tabsize=4))
         fpath = _root / f"{issue_number}.{typ}.rst"
 
         logging.info(f"Saving news fragment into `{fpath}`")
