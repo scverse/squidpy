@@ -12,6 +12,7 @@ from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 import numpy as np
 import pandas as pd
 
+from matplotlib.axes import Axes
 import seaborn as sns
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -151,6 +152,7 @@ def interaction_matrix(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
+    ax: Axes | None = None,
     **kwargs: Any,
 ) -> None:
     """
@@ -187,6 +189,7 @@ def interaction_matrix(
         figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
         dpi=dpi,
         cbar_kwargs=cbar_kwargs,
+        ax=ax,
         **kwargs,
     )
 
@@ -208,6 +211,7 @@ def nhood_enrichment(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
+    ax: Axes | None = None,
     **kwargs: Any,
 ) -> None:
     """
@@ -250,6 +254,7 @@ def nhood_enrichment(
         figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
         dpi=dpi,
         cbar_kwargs=cbar_kwargs,
+        ax=ax,
         **kwargs,
     )
 
@@ -267,6 +272,7 @@ def ripley(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
+    ax: Axes | None = None,
     legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> None:
@@ -284,6 +290,8 @@ def ripley(
     plot_sims
         Whether to overlay simulations in the plot.
     %(cat_plotting)s
+    ax
+        Axes, :class:`matplotlib.axes.Axes`.
     legend_kwargs
         Keyword arguments for :func:`matplotlib.pyplot.legend`.
     kwargs
@@ -308,10 +316,19 @@ def ripley(
 
     categories = adata.obs[cluster_key].cat.categories
     palette = _get_palette(adata, cluster_key=cluster_key, categories=categories) if palette is None else palette
-
-    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    else:
+        fig = ax.figure
     sns.lineplot(
-        y="stats", x="bins", hue=cluster_key, data=res[f"{mode.s}_stat"], hue_order=categories, palette=palette, ax=ax
+        y="stats",
+        x="bins",
+        hue=cluster_key,
+        data=res[f"{mode.s}_stat"],
+        hue_order=categories,
+        palette=palette,
+        ax=ax,
+        **kwargs,
     )
     if plot_sims:
         sns.lineplot(y="stats", x="bins", ci="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)
