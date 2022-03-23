@@ -529,20 +529,22 @@ def _heatmap(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    subplots_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ax: Axes | None = None,
     **kwargs: Any,
 ) -> mpl.figure.Figure:
     _assert_categorical_obs(adata, key=key)
 
     cbar_kwargs = dict(cbar_kwargs)
+    subplots_kwargs = dict(subplots_kwargs)
+
     if ax is None:
-        fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
+        fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize, **subplots_kwargs)
     else:
         fig = ax.figure
-        fig.set_constrained_layout(True)
 
     if method is not None:
-        row_order, col_order, row_link, col_link = _dendrogram(adata.X, method, optimal_ordering=adata.n_obs <= 1500)
+        row_order, col_order, _, col_link = _dendrogram(adata.X, method, optimal_ordering=adata.n_obs <= 1500)
     else:
         row_order = col_order = np.arange(len(adata.uns[Key.uns.colors(key)]))
 

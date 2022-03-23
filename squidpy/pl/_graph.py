@@ -149,9 +149,11 @@ def interaction_matrix(
     cmap: str = "viridis",
     palette: Palette_t = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    subplots_kwargs: Mapping[str, Any] = MappingProxyType({}),
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
+    ax: Axes | None = None,
     **kwargs: Any,
 ) -> None:
     """
@@ -188,6 +190,8 @@ def interaction_matrix(
         figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
         dpi=dpi,
         cbar_kwargs=cbar_kwargs,
+        subplots_kwargs=subplots_kwargs,
+        ax=ax,
         **kwargs,
     )
 
@@ -206,6 +210,7 @@ def nhood_enrichment(
     cmap: str = "viridis",
     palette: Palette_t = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    subplots_kwargs: Mapping[str, Any] = MappingProxyType({}),
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
@@ -252,6 +257,7 @@ def nhood_enrichment(
         figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
         dpi=dpi,
         cbar_kwargs=cbar_kwargs,
+        subplots_kwargs=subplots_kwargs,
         ax=ax,
         **kwargs,
     )
