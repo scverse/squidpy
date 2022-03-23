@@ -112,6 +112,7 @@ class SegmentationModel(ABC):
 
         shift = int(np.prod(img.numblocks) - 1).bit_length()
         kwargs.setdefault("depth", {0: 30, 1: 30})
+        kwargs.setdefault("boundary", "reflect")
 
         img = da.map_overlap(
             self._segment_chunk,

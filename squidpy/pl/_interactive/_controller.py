@@ -177,7 +177,6 @@ class ImageController:
             name=layer_name,
             size=self.model.spot_diameter,
             opacity=1,
-            edge_width=1,
             blending=self.model.blending,
             face_colormap=self.model.cmap,
             edge_colormap=self.model.cmap,

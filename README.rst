@@ -38,7 +38,7 @@ Squidpy's key applications
 - Build and analyze the neighborhood graph from spatial coordinates.
 - Compute spatial statistics for cell-types and genes.
 - Efficiently store, analyze and visualize large tissue images, leveraging `skimage`_.
-- Explore `anndata`_ and the large tissue image in `napari`_.
+- Interactively explore `anndata`_ and large tissue images in `napari`_.
 
 Installation
 ------------
