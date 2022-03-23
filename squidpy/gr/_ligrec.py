@@ -457,7 +457,7 @@ class PermutationTestABC(ABC):
             assert isinstance(self.interactions, pd.DataFrame)
 
         logg.debug("DEBUG: Removing genes not in any interaction")
-        self._filtered_data = self._data.loc[:, set(self.interactions[SOURCE]) | set(self.interactions[TARGET])]
+        self._filtered_data = self._data.loc[:, list(set(self.interactions[SOURCE]) | set(self.interactions[TARGET]))]
 
     def _filter_interactions_by_genes(self) -> None:
         """Subset :attr:`interactions` to only those for which we have the data."""
