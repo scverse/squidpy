@@ -69,7 +69,7 @@ def _read_coords(
     **kwargs: Any,
 ) -> NDArrayA | pd.DataFrame:
     """Load coordinates."""
-    coords = pd.read_csv(path, **kwargs)  # nice how you worked with kwargs here
+    coords = pd.read_csv(path, **kwargs)
 
     if coords.shape[0] != n_obs:
         raise ValueError(f"Invalid shape of `coordinates` file: `{coords.shape}`.")

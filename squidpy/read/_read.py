@@ -5,6 +5,8 @@ import json
 
 from anndata import AnnData
 
+import pandas as pd
+
 from squidpy.read._utils import _read_count, _read_coords, _read_images
 from squidpy._constants._pkg_constants import Key
 
@@ -107,7 +109,7 @@ def read_visium(
         coords_scalefactors_files["tissue_positions_file"],
         adata.shape[0],
         columns,
-        kwargs={"header": None},
+        **{"header": None},
     )
 
     coords.index = coords["barcode"].values  # type: ignore
@@ -144,6 +146,7 @@ def read_vizgen(
     *,
     count_file: str,
     obs_file: str,
+    transformation_file: str,
     library_id: str | None = None,
 ) -> AnnData:
     r"""
@@ -162,10 +165,12 @@ def read_vizgen(
 
     adata = _read_count(path=path, count_file=count_file, text_kwargs=text_kwargs)
 
+    transformation_matrix = {"transformation_matrix": pd.read_csv(path / f"images/{transformation_file}")}
+
     if library_id is not None:
-        adata.uns[Key.uns.spatial] = {library_id: {}}
+        adata.uns[Key.uns.spatial] = {library_id: {"scalefactors": transformation_matrix}}
     else:
-        adata.uns[Key.uns.spatial] = {}
+        adata.uns[Key.uns.spatial] = {"scalefactors": transformation_matrix}
 
     coords_file = {
         "metadata_file": path / obs_file,
