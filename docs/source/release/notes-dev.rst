@@ -32,3 +32,11 @@ Miscellaneous
 
 - Remove various warnings.
   `#489 <https://github.com/theislab/squidpy/pull/489>`__
+
+
+Documentation
+-------------
+
+- Add author to automatically generated news fragment.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#494 <https://github.com/theislab/squidpy/pull/494>`__
