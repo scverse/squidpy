@@ -165,7 +165,9 @@ def read_vizgen(
 
     adata = _read_count(path=path, count_file=count_file, text_kwargs=text_kwargs)
 
-    transformation_matrix = {"transformation_matrix": pd.read_csv(path / f"images/{transformation_file}")}
+    transformation_matrix = {
+        "transformation_matrix": pd.read_csv(path / f"images/{transformation_file}", sep=" ", header=None)
+    }
 
     if library_id is not None:
         adata.uns[Key.uns.spatial] = {library_id: {"scalefactors": transformation_matrix}}
