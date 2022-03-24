@@ -29,7 +29,7 @@ jobs:
             env:
                 PR_NUMBER: ${{ github.event.number }}
             run: |
-                tox -e news -- "$PR_NUMBER" -v
+                tox -e news -- "$PR_NUMBER" --add-author -v
 
         -   name: Check generated docs
             run: |
