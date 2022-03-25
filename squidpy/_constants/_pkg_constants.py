@@ -140,7 +140,6 @@ class Key:
             library_id: Sequence[str] | str | None = None,
             return_all: bool = False,
         ) -> Sequence[str] | str | None:
-
             library_id = cls._haystack(adata, spatial_key, library_id, sub_key=None)
             if library_id is not None and not return_all:
                 if len(library_id) > 1:
@@ -177,7 +176,7 @@ class Key:
             haystack = list(adata.uns[spatial_key].keys())
             if library_id is not None:
                 if isinstance(library_id, str):
-                    return [library_id]
+                    library_id = [library_id]
                 if not any(i in library_id for i in haystack):
                     raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
                 if sub_key is not None:
@@ -187,6 +186,7 @@ class Key:
                             f"with following `library_id`: {library_id}."
                         )
                     return library_id
+                return library_id
             return haystack
 
     class obsp:

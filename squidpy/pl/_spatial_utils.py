@@ -138,6 +138,8 @@ def _get_library_id(
         if library_id is None:
             library_id = adata.obs[library_key].cat.categories.tolist()
         _assert_value_in_obs(adata, key=library_key, val=library_id)
+        if isinstance(library_id, str):
+            library_id = [library_id]
         return library_id
     if library_id is None:
         logg.warning(
