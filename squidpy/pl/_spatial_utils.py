@@ -230,7 +230,7 @@ def _get_scalefactor_size(
     except KeyError:
         logg.debug("`scalefactors` set to `None`.")
         scalefactors = None
-    if scalefactors is not None:
+    if scalefactors is not None and img_res_key is not None:
         if scale_factor is None:  # get intersection of scale_factor and match to img_res_key
             scale_factor_key = [i for i in scalefactors if img_res_key in i]
             if not len(scale_factor_key):
