@@ -581,9 +581,8 @@ class ImageContainer(FeatureMixin):
         **_: Any,
     ) -> xr.Dataset:
         def _rescale(arr: xr.DataArray) -> xr.DataArray:
-            # TODO(michalk8): in skimage==0.19.0, multichannel is deprecated
             scaling_fn = partial(
-                rescale, scale=[scale, scale, 1], preserve_range=True, order=1, multichannel=True, cval=cval
+                rescale, scale=[scale, scale, 1], preserve_range=True, order=1, channel_axis=-1, cval=cval
             )
             dtype = arr.dtype
 
@@ -1166,7 +1165,8 @@ class ImageContainer(FeatureMixin):
         kwargs
             Keyword arguments for :func:`dask.array.map_overlap` or :func:`dask.array.map_blocks`, depending whether
             ``depth`` is present in ``fn_kwargs``. Only used when ``chunks != None``.
-            Use ``depth`` to control boundary artifacts if ``func`` requires data from neighboring chunks.
+            Use ``depth`` to control boundary artifacts if ``func`` requires data from neighboring chunks,
+            by default, ``boundary = 'reflect`` is used.
 
         Returns
         -------
@@ -1187,6 +1187,9 @@ class ImageContainer(FeatureMixin):
                 if "depth" in kwargs
                 else da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
             )
+
+        if "depth" in kwargs:
+            kwargs.setdefault("boundary", "reflect")
 
         layer = self._get_layer(layer)
         if new_layer is None:

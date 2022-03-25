@@ -1,0 +1,2 @@
+Add author to automatically generated news fragment.
+`@michalk8 <https://github.com/michalk8>`__

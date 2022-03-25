@@ -7,7 +7,7 @@ from typing import Any, Mapping, Callable, Sequence
 from scanpy import logging as logg
 
 from dask import delayed
-from scipy.ndimage.filters import gaussian_filter as scipy_gf
+from scipy.ndimage import gaussian_filter as scipy_gf
 import numpy as np
 import dask.array as da
 

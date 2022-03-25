@@ -11,6 +11,7 @@ from anndata import AnnData
 import numpy as np
 import pandas as pd
 
+from matplotlib.axes import Axes
 from matplotlib.colors import ListedColormap
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -128,6 +129,7 @@ def interaction_matrix(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
+    ax: Axes | None = None,
     **kwargs: Any,
 ) -> None:
     """
@@ -150,7 +152,7 @@ def interaction_matrix(
     _assert_categorical_obs(adata, key=cluster_key)
     array = _get_data(adata, cluster_key=cluster_key, func_name="interaction_matrix")
 
-    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
+    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)}, dtype=array.dtype)
     _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
     if title is None:
         title = "Interaction matrix"
@@ -164,6 +166,7 @@ def interaction_matrix(
         figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
         dpi=dpi,
         cbar_kwargs=cbar_kwargs,
+        ax=ax,
         **kwargs,
     )
 
@@ -185,6 +188,7 @@ def nhood_enrichment(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
+    ax: Axes | None = None,
     **kwargs: Any,
 ) -> None:
     """
@@ -213,7 +217,7 @@ def nhood_enrichment(
     _assert_categorical_obs(adata, key=cluster_key)
     array = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")[mode]
 
-    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
+    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)}, dtype=array.dtype)
     _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
     if title is None:
         title = "Neighborhood enrichment"
@@ -227,6 +231,7 @@ def nhood_enrichment(
         figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
         dpi=dpi,
         cbar_kwargs=cbar_kwargs,
+        ax=ax,
         **kwargs,
     )
 
@@ -244,6 +249,7 @@ def ripley(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
+    ax: Axes | None = None,
     legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> None:
@@ -261,6 +267,8 @@ def ripley(
     plot_sims
         Whether to overlay simulations in the plot.
     %(cat_plotting)s
+    ax
+        Axes, :class:`matplotlib.axes.Axes`.
     legend_kwargs
         Keyword arguments for :func:`matplotlib.pyplot.legend`.
     kwargs
@@ -284,11 +292,20 @@ def ripley(
         legend_kwargs.setdefault("bbox_to_anchor", (1, 0.5))
 
     categories = adata.obs[cluster_key].cat.categories
-    palette = _get_palette(adata, cluster_key=cluster_key, categories=categories, palette=palette)
-
-    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    palette = _get_palette(adata, cluster_key=cluster_key, categories=categories) if palette is None else palette
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    else:
+        fig = ax.figure
     sns.lineplot(
-        y="stats", x="bins", hue=cluster_key, data=res[f"{mode.s}_stat"], hue_order=categories, palette=palette, ax=ax
+        y="stats",
+        x="bins",
+        hue=cluster_key,
+        data=res[f"{mode.s}_stat"],
+        hue_order=categories,
+        palette=palette,
+        ax=ax,
+        **kwargs,
     )
     if plot_sims:
         sns.lineplot(y="stats", x="bins", ci="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)

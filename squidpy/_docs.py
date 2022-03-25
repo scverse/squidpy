@@ -70,6 +70,35 @@ spatial_key
 _conn_key = """\
 connectivity_key
     Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored."""
+_plotting = """\
+figsize
+    Size of the figure in inches.
+dpi
+    Dots per inch.
+save
+    Whether to save the plot."""
+_cat_plotting = f"""\
+palette
+    Categorical colormap for the clusters.
+    If `None`, use :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``, if available.
+{_plotting}"""
+_heatmap_plotting = f"""\
+annotate
+    Whether to annotate the cells of the heatmap.
+method
+    The linkage method to be used for dendrogram/clustering, see :func:`scipy.cluster.hierarchy.linkage`.
+title
+    The title of the plot.
+cmap
+    Continuous colormap to use.
+cbar_kwargs
+    Keyword arguments for :meth:`matplotlib.figure.Figure.colorbar`.
+{_cat_plotting}
+ax
+    Axes, :class:`matplotlib.axes.Axes`."""
+_plotting_returns = """\
+Nothing, just plots the and optionally saves the plot.
+"""
 _parallelize = """\
 n_jobs
     Number of parallel jobs.
