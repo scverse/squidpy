@@ -61,8 +61,8 @@ def spatial_plot(
     seg: _SeqArray | bool = None,
     seg_key: str | None = Key.uns.image_seg_key,
     cell_id_key: str | None = None,
-    seg_erosionpx: int | None = None,
-    seg_boundaries: bool = False,
+    seg_contourpx: int | None = None,
+    seg_outline: bool = False,
     # features
     use_raw: bool | None = None,
     layer: str | None = None,
@@ -272,8 +272,8 @@ def spatial_plot(
                 cell_id=_cell_id,
                 color_vector=color_vector,
                 color_source_vector=color_source_vector,
-                seg_erosionpx=seg_erosionpx,
-                seg_boundaries=seg_boundaries,
+                seg_contourpx=seg_contourpx,
+                seg_outline=seg_outline,
                 na_color=na_color,
                 ax=ax,
                 cmap_params=cmap_params,
@@ -313,53 +313,7 @@ def spatial_plot(
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
-def spatial_point(
-    adata: AnnData,
-    scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    **kwargs: Any,
-) -> None:
-    """
-    Plot scatter plot of points in spatial coordinates.
-
-    %(plotting_point_summary)s
-
-    %(plotting_general_summary)s
-
-    Parameters
-    ----------
-    %(adata)s
-    %(spatial_key)s
-    %(color)s
-    %(groups)s
-    %(library_id)s
-    %(library_key)s
-    %(plotting_features)s
-    scalebar_kwargs
-        Keyword arguments for :func:`matplotlib_scalebar.ScaleBar`.
-    edges_kwargs
-        Keyword arguments for :func:`networkx.draw_networkx_edges`.
-    kwargs
-        Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
-
-    Returns
-    -------
-    %(plotting_returns)s
-    """
-    spatial_plot(
-        adata,
-        img_res_key=None,
-        size_key=None,
-        seg_key=None,
-        scalebar_kwargs=scalebar_kwargs,
-        edges_kwargs=edges_kwargs,
-        **kwargs,
-    )
-
-
-@d.dedent
-@inject_docs(key=Key.obsp.spatial_conn())
-def spatial_shape(
+def spatial_scatter(
     adata: AnnData,
     shape: _AvailShapes | None = ScatterShape.CIRCLE,  # type: ignore[assignment]
     img: _SeqArray | bool = True,

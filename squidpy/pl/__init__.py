@@ -8,10 +8,9 @@ from squidpy.pl._graph import (
 )
 from squidpy.pl._utils import extract
 from squidpy.pl._ligrec import ligrec
-from squidpy.pl._spatial import (
+from squidpy.pl._spatial import (  # spatial_point,
     spatial_plot,
-    spatial_point,
-    spatial_shape,
+    spatial_scatter,
     spatial_segment,
 )
 from squidpy.pl._interactive import Interactive  # type: ignore[attr-defined]

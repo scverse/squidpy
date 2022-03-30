@@ -288,9 +288,10 @@ seg_key
 cell_id_key
     Column in :attr:`anndata.AnnData.obs` with unique segmentation mask ids. Required to filter
     valid segmentation masks.
-seg_erosionpx
-    Whether to plot empty segmentation mask with contour. See :func:`skimage.morphology.erosion`.
-seg_boundaries
+seg_contourpx
+    Draw contour of specified width for each segment. If `None`, fills
+    entire segment. See :func:`skimage.morphology.erosion`.
+seg_outline
     Whether to plot boundaries around segmentation masks."""
 
 _plotting_image = """\
@@ -388,7 +389,7 @@ and the parameter `library_id` to select the image.
 By default, `'segmentation'` `seg_key` is attempted and
 `'hires'` image key is attempted.
 Use `img_alpha`, `img_cmap` or `img_channel` to control how the image is displayed.
-Use `seg_erosionpx` or `seg_boundaries` to control how the segmentation mask is displayed.
+Use `seg_contourpx` or `seg_outline` to control how the segmentation mask is displayed.
 """
 
 _plotting_general_summary = """\

@@ -298,7 +298,7 @@ def _image_spatial_attrs(
         size_key=size_key,
     )
 
-    if img:
+    if img and shape is not None:
         _img = _get_image(
             adata=adata,
             spatial_key=spatial_key,
@@ -921,8 +921,8 @@ def _plot_segment(
     cmap_params: CmapParams,
     color_params: Colormap,
     categorical: bool,
-    seg_erosionpx: int | None = None,
-    seg_boundaries: bool = False,
+    seg_contourpx: int | None = None,
+    seg_outline: bool = False,
     na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
     **kwargs: Any,
 ) -> Tuple[Axes, Collection]:
@@ -933,8 +933,8 @@ def _plot_segment(
         color_vector=color_vector,
         color_source_vector=color_source_vector,
         cmap_params=cmap_params,
-        seg_erosionpx=seg_erosionpx,
-        seg_boundaries=seg_boundaries,
+        seg_erosionpx=seg_contourpx,
+        seg_boundaries=seg_outline,
         na_color=na_color,
     )
 
