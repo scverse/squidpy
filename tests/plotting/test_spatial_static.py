@@ -19,8 +19,8 @@ sc.set_figure_params(dpi=40, color_map="viridis")
 
 
 class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
-    def test_spatial_scatter_image(self, adata: AnnData):
-        pl.spatial_scatter(adata, na_color="lightgrey")
+    def test_spatial_scatter_image(self, adata_hne: AnnData):
+        pl.spatial_scatter(adata_hne, na_color="lightgrey")
 
-    def test_spatial_scatter_noimage(self, adata: AnnData):
-        pl.spatial_scatter(adata, shape=None, na_color="lightgrey")
+    def test_spatial_scatter_noimage(self, adata_hne: AnnData):
+        pl.spatial_scatter(adata_hne, shape=None, na_color="lightgrey")
