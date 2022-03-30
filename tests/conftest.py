@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 
 from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
-import squidpy as sp
+import squidpy as sq
 
 HERE: Path = Path(__file__).parent
 
@@ -55,7 +55,7 @@ def nhood_data(adata: AnnData) -> AnnData:
     sc.pp.pca(adata)
     sc.pp.neighbors(adata)
     sc.tl.leiden(adata, key_added="leiden")
-    sp.gr.spatial_neighbors(adata)
+    sq.gr.spatial_neighbors(adata)
 
     return adata
 
@@ -66,7 +66,7 @@ def dummy_adata() -> AnnData:
     adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)}, dtype=float)
 
     adata.obsm[Key.obsm.spatial] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
-    sp.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
+    sq.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
 
     return adata
 
@@ -219,7 +219,7 @@ def ligrec_no_numba() -> Mapping[str, pd.DataFrame]:
 def ligrec_result() -> Mapping[str, pd.DataFrame]:
     adata = _adata.copy()
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
-    return sp.gr.ligrec(
+    return sq.gr.ligrec(
         adata, "leiden", interactions=interactions, n_perms=25, n_jobs=1, show_progress_bar=False, copy=True, seed=0
     )
 
@@ -353,3 +353,19 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(scope="session")
 def _test_napari(pytestconfig):
     _ = pytestconfig.getoption("--test-napari", skip=True)
+
+
+def cached_dataset(func):
+    store = []
+
+    @wraps(func)
+    def wrapper():
+        if len(store) < 1:
+            store.append(func())
+        return store[0].copy()
+
+    return wrapper
+
+
+mibitof = cached_dataset(sq.datasets.mibitof())
+adata_hne = cached_dataset(sq.datasets.visium_hne_adata())
