@@ -30,8 +30,34 @@ DPI = 40
 
 C_KEY_PALETTE = "leiden"
 
+
+def cached_dataset(func):
+    store = []
+
+    @wraps(func)
+    def wrapper():
+        if len(store) < 1:
+            store.append(func())
+        return store[0].copy()
+
+    return wrapper
+
+
 _adata = sc.read("tests/_data/test_data.h5ad")
 _adata.raw = _adata.copy()
+
+_adata_mibitof = cached_dataset(sq.datasets.mibitof())
+_adata_hne = cached_dataset(sq.datasets.visium_hne_adata())
+
+
+@pytest.fixture()
+def adata_hne() -> AnnData:
+    return _adata_hne().copy()
+
+
+@pytest.fixture()
+def adata_mibitof() -> AnnData:
+    return _adata_mibitof().copy()
 
 
 @pytest.fixture()
@@ -353,19 +379,3 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(scope="session")
 def _test_napari(pytestconfig):
     _ = pytestconfig.getoption("--test-napari", skip=True)
-
-
-def cached_dataset(func):
-    store = []
-
-    @wraps(func)
-    def wrapper():
-        if len(store) < 1:
-            store.append(func())
-        return store[0].copy()
-
-    return wrapper
-
-
-mibitof = cached_dataset(sq.datasets.mibitof())
-adata_hne = cached_dataset(sq.datasets.visium_hne_adata())
