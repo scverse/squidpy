@@ -46,18 +46,15 @@ def cached_dataset(func):
 _adata = sc.read("tests/_data/test_data.h5ad")
 _adata.raw = _adata.copy()
 
-_adata_mibitof = cached_dataset(sq.datasets.mibitof)
-_adata_hne = cached_dataset(sq.datasets.visium_hne_adata)
 
-
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def adata_hne() -> AnnData:
-    return _adata_hne().copy()
+    return sq.datasets.visium_hne_adata().copy()
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def adata_mibitof() -> AnnData:
-    return _adata_mibitof().copy()
+    return sq.datasets.mibitof().copy()
 
 
 @pytest.fixture()
