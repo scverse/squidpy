@@ -287,6 +287,10 @@ def _image_spatial_attrs(
     library_id = _get_library_id(
         adata=adata, shape=shape, spatial_key=spatial_key, library_id=library_id, library_key=library_key
     )
+    if len(library_id) > 1 and library_key is None:
+        raise ValueError(
+            f"Found `library_id: `{library_id} but no `library_key` specified. Please specify `library_key`."
+        )
 
     scale_factor, size = _get_scalefactor_size(
         adata=adata,
