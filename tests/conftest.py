@@ -49,7 +49,7 @@ _adata.raw = _adata.copy()
 
 @pytest.fixture(scope="session")
 def adata_hne() -> AnnData:
-    return sq.datasets.visium_hne_adata().copy()
+    return sq.datasets.visium_hne_adata_crop().copy()
 
 
 @pytest.fixture(scope="session")
