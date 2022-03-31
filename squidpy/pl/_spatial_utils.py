@@ -179,7 +179,7 @@ def _get_image(
     if max(_img_channel) > 2:
         raise ValueError(f"Invalid value for `img_channel: {_img_channel}`.")
     if isinstance(img, np.ndarray) or isinstance(img, list):
-        img = _get_list(img, np.ndarray, len(library_id))
+        img = _get_list(img, np.ndarray, len(library_id), "img")
         img = [im[..., _img_channel] for im in img]
     else:
         img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_res_key][..., _img_channel] for i in library_id]
@@ -208,7 +208,7 @@ def _get_segment(
     cell_id_vec = [cell_id_vec[adata.obs[library_key] == lib] for lib in library_id]
 
     if isinstance(seg, np.ndarray) or isinstance(seg, list):
-        img_seg = _get_list(seg, np.ndarray, len(library_id))
+        img_seg = _get_list(seg, np.ndarray, len(library_id), "img_seg")
     else:
         img_seg = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][seg_key] for i in library_id]
     return img_seg, cell_id_vec
@@ -240,7 +240,7 @@ def _get_scalefactor_size(
                 adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id
             ]
         else:  # handle case where scale_factor is float or list
-            scale_factor = _get_list(scale_factor, float, len(library_id))
+            scale_factor = _get_list(scale_factor, float, len(library_id), "scale_factor")
 
         if size_key not in scalefactors and size is None:
             raise ValueError(
@@ -249,7 +249,7 @@ def _get_scalefactor_size(
             )
         if size is None:
             size = 1.0
-        size = _get_list(size, float, len(library_id))
+        size = _get_list(size, float, len(library_id), "size")
         if not (len(size) == len(library_id) == len(scale_factor)):
             raise ValueError("Len of `size`, `library_id` and `scale_factor` do not match.")
         size = [
@@ -259,10 +259,10 @@ def _get_scalefactor_size(
         return scale_factor, size
     else:
         scale_factor = 1.0 if scale_factor is None else scale_factor
-        scale_factor = _get_list(scale_factor, float, len(library_id))
+        scale_factor = _get_list(scale_factor, float, len(library_id), "scale_factor")
 
         size = 120000 / adata.shape[0] if size is None else size
-        size = _get_list(size, float, len(library_id))
+        size = _get_list(size, float, len(library_id), "size")
         return scale_factor, size
 
 
@@ -343,7 +343,7 @@ def _set_coords_crops(
     if crop_coord is None:
         crops: Union[List[TupleSerializer], Tuple[None, ...]] = tuple(None for _ in spatial_params.library_id)
     else:
-        crop_coord = _get_list(crop_coord, tuple, len(spatial_params.library_id))
+        crop_coord = _get_list(crop_coord, tuple, len(spatial_params.library_id), "crop_coord")
         crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor)]
 
     coords = adata.obsm[spatial_key]
@@ -370,17 +370,24 @@ def _get_unique_map(dic: Mapping[str, Any]) -> Any:
     return sorted(set.intersection(*map(set, dic.values())))
 
 
-def _get_list(var: Any, _type: Type[Any], ref_len: int | None = None) -> List[Any]:
+def _get_list(
+    var: Any,
+    _type: Type[Any],
+    ref_len: int | None = None,
+    name: str | None = None,
+) -> List[Any]:
     if isinstance(var, _type):
         if ref_len is None:
             return [var]
         return [var] * ref_len
     elif isinstance(var, list):
         if (ref_len is not None) and (ref_len != len(var)):
-            raise ValueError(f"Var len: {len(var)} is not equal to ref len: {ref_len}. Please Check.")
+            raise ValueError(
+                f"Variable: `{name}` has length: {len(var)}, which is not equal to reference length: {ref_len}."
+            )
         return var
     else:
-        raise ValueError(f"Can't make list from var: `{var}`")
+        raise ValueError(f"Can't make list from variable: `{var}`")
 
 
 def _set_color_source_vec(
@@ -524,9 +531,9 @@ def _get_scalebar(
     len_lib: int | None = None,
 ) -> Tuple[Sequence[float] | None, Sequence[str] | None]:
     if scalebar_dx is not None:
-        _scalebar_dx = _get_list(scalebar_dx, float, len_lib)
+        _scalebar_dx = _get_list(scalebar_dx, float, len_lib, "scalebar_dx")
         scalebar_units = "um" if scalebar_units is None else scalebar_units
-        _scalebar_units = _get_list(scalebar_units, str, len_lib)
+        _scalebar_units = _get_list(scalebar_units, str, len_lib, "scalebar_units")
     else:
         _scalebar_dx = None
         _scalebar_units = None
