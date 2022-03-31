@@ -26,4 +26,9 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
         pl.spatial_scatter(adata_hne, shape=None, na_color="lightgrey")
 
     def test_plot_spatial_segment(self, adata_mibitof: AnnData):
-        pl.spatial_scatter(adata_mibitof, shape=None, na_color="lightgrey")
+        pl.spatial_segment(
+            adata_mibitof,
+            cell_id_key="cell_id",
+            library_key="library_id",
+            na_color="lightgrey",
+        )
