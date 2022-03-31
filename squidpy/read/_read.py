@@ -130,17 +130,6 @@ def read_visium(
     return adata
 
 
-# def _read_nanostring(
-#     path: str | Path,
-#     genome: str | None,
-#     *,
-#     count_file: str = "",
-#     library_id: str | None = None,
-#     load_images: bool | None = True,
-#     source_image_path: str | Path | None = None,
-# ) -> AnnData:
-
-
 def read_vizgen(
     path: str | Path,
     *,
@@ -200,5 +189,63 @@ def read_vizgen(
     adata.obs = adata.obs.join(coords, how="left")
 
     adata.obsm[Key.uns.spatial] = adata.obs[["center_x", "center_y"]].to_numpy()
+
+    return adata
+
+
+def read_nanostring(
+    path: str | Path,
+    *,
+    count_file: str,
+    obs_file: str,
+    fov_file: str,
+    load_images: bool | None = True,
+) -> AnnData:
+    r"""
+    Read Nanostring formatted dataset.
+
+    In addition to reading the regular Nanostring output,
+    this function loads metadata file and loads the spatial co-ordinates.
+    """
+    if isinstance(path, str):
+        path = Path(path)
+
+    count_file = pd.read_csv(path / count_file)
+    obs_file = pd.read_csv(path / obs_file)
+
+    fov_positions = {"fov_positions": pd.read_csv(path / fov_file)}
+
+    for file in [count_file, obs_file]:
+        file["index"] = file["fov"].astype(str) + "_" + file["cell_ID"].astype(str)
+        cols = list(file.columns)
+        cols = [cols[-1]] + cols[:-1]
+        file = file[cols]
+
+    for column in ["fov", "cell_ID"]:
+        count_file.pop(column)
+
+    merged_df = count_file.merge(obs_file, on="index", how="left")
+
+    adata = AnnData(count_file, obs=merged_df[cols])
+
+    adata.obsm[Key.uns.spatial] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].to_numpy()
+    adata.obsm["spatial_fov"] = adata.obs[["CenterX_local_px", "CenterY_local_px"]].to_numpy()
+
+    adata.uns[Key.uns.spatial] = fov_positions
+
+    if load_images is not None:
+        image_files = {}
+        for i in range(1, 21):
+            if i < 10:
+                image_files[f"FOV_{i}"] = path / f"CellComposite/CellComposite_F00{i}.jpg"
+            else:
+                image_files[f"FOV_{i}"] = path / f"CellComposite/CellComposite_F0{i}.jpg"
+
+        image_dic = _read_images(image_files)
+
+        for i in range(1, 21):
+            adata.uns[Key.uns.spatial][f"FOV_{i}"] = {Key.uns.image_key: image_dic[f"FOV_{i}"]}
+    else:
+        return adata
 
     return adata
