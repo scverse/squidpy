@@ -123,7 +123,7 @@ class SpatialParams(NamedTuple):
 def _get_library_id(
     adata: AnnData,
     shape: _AvailShapes | None,
-    spatial_key: str = Key.obsm.spatial,
+    spatial_key: str = Key.uns.spatial,
     library_id: Sequence[str] | None = None,
     library_key: str | None = None,
 ) -> Sequence[str]:
