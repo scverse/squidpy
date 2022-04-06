@@ -1224,3 +1224,15 @@ class TestPileLine:
         for key, cont in zip(["foo", "bar", "baz"], [c1, c2, c3]):
             cont.compute()
             assert isinstance(cont[key].data, np.ndarray)
+
+    @pytest.mark.parametrize("dim_name", ["channels", "z"])
+    def test_loading_bwd_compat_no_zdim(self, dim_name: str, tmpdir):
+        ds = xr.Dataset({"foo": xr.DataArray(np.random.normal(size=(64, 64, 3)), dims=("x", "y", dim_name))})
+        ds.to_zarr(tmpdir)
+
+        if dim_name == "z":
+            with pytest.raises(ValueError, match=r".*z.*exists"):
+                _ = ImageContainer.load(str(tmpdir))
+        else:
+            img = ImageContainer.load(str(tmpdir))
+            assert img.data.dims == {"x": 64, "y": 64, "z": 1, dim_name: 3}
