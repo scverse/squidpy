@@ -126,5 +126,11 @@ def test_co_occurrence_explicit_interval(adata: AnnData, size: int):
 
 
 def test_use_raw(dummy_adata: AnnData):
-    dummy_adata.raw = None  # TODO(michalk8): add dummy raw
-    _ = spatial_autocorr(dummy_adata, use_raw=True, copy=True)
+    var_names = [str(i) for i in range(10)]
+    raw = dummy_adata[:, dummy_adata.var_names[: len(var_names)]].copy()
+    raw.var_names = var_names
+    dummy_adata.raw = raw
+
+    df = spatial_autocorr(dummy_adata, use_raw=True, copy=True)
+
+    np.testing.assert_equal(sorted(df.index), sorted(var_names))
