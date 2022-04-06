@@ -336,7 +336,7 @@ class ImageContainer(FeatureMixin):
     ) -> xr.DataArray | None:
         def transform_metadata(data: xr.Dataset) -> xr.Dataset:
             for img in data.values():
-                _assert_dims_present(img.dims)
+                _assert_dims_present(img.dims, include_z=len(img.dims) == 4)
 
             data.attrs[Key.img.coords] = CropCoords.from_tuple(data.attrs.get(Key.img.coords, _NULL_COORDS.to_tuple()))
             data.attrs[Key.img.padding] = CropPadding.from_tuple(
