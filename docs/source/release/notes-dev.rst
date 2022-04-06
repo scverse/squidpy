@@ -31,6 +31,10 @@ Bugfixes
   `@MxMstrmn <https://github.com/MxMstrmn>`__
   `#508 <https://github.com/theislab/squidpy/pull/508>`__
 
+- Fix a typo when saving a figure caused a strange directory name to be created.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#510 <https://github.com/theislab/squidpy/pull/510>`__
+
 
 Miscellaneous
 -------------
