@@ -50,8 +50,9 @@ def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
 @pytest.mark.parametrize("n_jobs", [1, 2])
 def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mode: str):
     """Check spatial autocorr reproducibility results."""
+    rng = np.random.RandomState(42)
     spatial_autocorr(dummy_adata, mode=mode)
-    dummy_adata.var["highly_variable"] = np.random.choice([True, False], size=dummy_adata.var_names.shape)
+    dummy_adata.var["highly_variable"] = rng.choice([True, False], size=dummy_adata.var_names.shape)
     # seed will work only when multiprocessing/loky
     df_1 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
     df_2 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
@@ -122,3 +123,8 @@ def test_co_occurrence_explicit_interval(adata: AnnData, size: int):
 
         assert interval is not interval_1
         np.testing.assert_allclose(interval, interval_1)  # allclose because in the func, we use f32
+
+
+def test_use_raw(dummy_adata: AnnData):
+    dummy_adata.raw = None  # TODO(michalk8): add dummy raw
+    _ = spatial_autocorr(dummy_adata, use_raw=True, copy=True)
