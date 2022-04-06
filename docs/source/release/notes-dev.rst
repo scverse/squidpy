@@ -1,4 +1,4 @@
-Squidpy dev (2022-03-24)
+Squidpy dev (2022-04-06)
 ========================
 
 Features
@@ -22,6 +22,10 @@ Bugfixes
 
 - Do not set edge with in :mod:`napari` since it caused all points to be black.
   `#488 <https://github.com/theislab/squidpy/pull/488>`__
+
+- See below.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#506 <https://github.com/theislab/squidpy/pull/506>`__
 
 
 Miscellaneous
