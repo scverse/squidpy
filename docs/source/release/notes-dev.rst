@@ -27,6 +27,10 @@ Bugfixes
   `@michalk8 <https://github.com/michalk8>`__
   `#506 <https://github.com/theislab/squidpy/pull/506>`__
 
+- Include check to be able to load ImageContainer that were generated from another version of squidpy.
+  `@MxMstrmn <https://github.com/MxMstrmn>`__
+  `#508 <https://github.com/theislab/squidpy/pull/508>`__
+
 
 Miscellaneous
 -------------
