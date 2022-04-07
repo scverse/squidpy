@@ -799,9 +799,12 @@ class ImageContainer(FeatureMixin):
         if adata.n_obs != len(obs_library_ids):
             raise ValueError(f"Expected library ids to be of length `{adata.n_obs}`, found `{len(obs_library_ids)}`.")
 
+        sid = kwargs.pop("spot_diameter_key", "spot_diameter_fullres")
         for i, (obs, lid) in enumerate(zip(adata.obs_names, obs_library_ids)):
             # get spot diameter of current obs (might be different library ids)
-            diameter = Key.uns.spot_diameter(adata, spatial_key=spatial_key, library_id=lid) * scale
+            diameter = (
+                Key.uns.spot_diameter(adata, spatial_key=spatial_key, library_id=lid, spot_diameter_key=sid) * scale
+            )
             radius = int(round(diameter // 2 * spot_scale))
 
             # get coords in image pixel space from original space
