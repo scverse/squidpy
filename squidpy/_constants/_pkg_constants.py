@@ -124,7 +124,7 @@ class Key:
             adata: AnnData,
             spatial_key: str,
             library_id: Optional[str] = None,
-            spot_diameter_key: Optional[str] = "spot_diameter_fullres",
+            spot_diameter_key: str = "spot_diameter_fullres",
         ) -> float:
             try:
                 return float(adata.uns[spatial_key][library_id]["scalefactors"][spot_diameter_key])
