@@ -1,4 +1,4 @@
-Squidpy dev (2022-04-06)
+Squidpy dev (2022-04-07)
 ========================
 
 Features
@@ -9,6 +9,10 @@ Features
   subplot, which could give the user greater flexibility in working with enrichment plots.
   `@jo-mueller <https://github.com/jo-mueller>`__
   `#493 <https://github.com/theislab/squidpy/pull/493>`__
+
+- Enable specifying diameter in :meth:`squidpy.im.ImageContainer.generate_spot_crops`.
+  `@MxMstrmn <https://github.com/MxMstrmn>`__
+  `#514 <https://github.com/theislab/squidpy/pull/514>`__
 
 
 Bugfixes
