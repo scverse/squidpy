@@ -738,7 +738,8 @@ class ImageContainer(FeatureMixin):
         %(spatial_key)s
         %(img_library_id)s
         spot_diameter_key
-            Keyword under which the spot diameter in stored (px).
+            Key in :attr:`anndata.AnnData.uns` ``['{spatial_key}']['{library_id}']['scalefactors']``
+            where the spot diameter is stored.
         spot_scale
             Scaling factor for the spot diameter. Larger values mean more context.
         obs_names
