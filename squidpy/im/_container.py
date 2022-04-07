@@ -715,6 +715,7 @@ class ImageContainer(FeatureMixin):
         adata: AnnData,
         spatial_key: str = Key.obsm.spatial,
         library_id: str | None = None,
+        spot_diameter_key: str = "spot_diameter_fullres",
         spot_scale: float = 1.0,
         obs_names: Iterable[Any] | None = None,
         as_array: str | bool = False,
@@ -736,6 +737,8 @@ class ImageContainer(FeatureMixin):
         %(adata)s
         %(spatial_key)s
         %(img_library_id)s
+        spot_diameter_key
+            Keyword under which the spot diameter in stored (px).
         spot_scale
             Scaling factor for the spot diameter. Larger values mean more context.
         obs_names
@@ -799,11 +802,13 @@ class ImageContainer(FeatureMixin):
         if adata.n_obs != len(obs_library_ids):
             raise ValueError(f"Expected library ids to be of length `{adata.n_obs}`, found `{len(obs_library_ids)}`.")
 
-        sid = kwargs.pop("spot_diameter_key", "spot_diameter_fullres")
         for i, (obs, lid) in enumerate(zip(adata.obs_names, obs_library_ids)):
             # get spot diameter of current obs (might be different library ids)
             diameter = (
-                Key.uns.spot_diameter(adata, spatial_key=spatial_key, library_id=lid, spot_diameter_key=sid) * scale
+                Key.uns.spot_diameter(
+                    adata, spatial_key=spatial_key, library_id=lid, spot_diameter_key=spot_diameter_key
+                )
+                * scale
             )
             radius = int(round(diameter // 2 * spot_scale))
 
