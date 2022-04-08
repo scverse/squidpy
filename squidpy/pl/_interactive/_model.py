@@ -26,6 +26,7 @@ class ImageModel:
     spatial_key: str = field(default=Key.obsm.spatial, repr=False)
     library_key: str | None = None
     library_id: str | Sequence[str] | None = None
+    spot_diameter_key: str = "spot_diameter_fullres"
     spot_diameter: NDArrayA | float = field(default=0, init=False)
     coordinates: NDArrayA = field(init=False, repr=False)
     alayer: ALayer = field(init=False, repr=True)
@@ -76,7 +77,10 @@ class ImageModel:
             self.library_id = self.container.library_ids
             if TYPE_CHECKING:
                 assert isinstance(self.library_id, Sequence)
-            self.spot_diameter = Key.uns.spot_diameter(self.adata, self.spatial_key, self.library_id[0]) * self.scale
+            self.spot_diameter = (
+                Key.uns.spot_diameter(self.adata, self.spatial_key, self.library_id[0], self.spot_diameter_key)
+                * self.scale
+            )
             return
 
         _assert_categorical_obs(self.adata, self.library_key)
@@ -99,7 +103,8 @@ class ImageModel:
         self.coordinates = np.c_[libraries.cat.codes.values, self.coordinates[mask]]
         self.spot_diameter = np.array(
             [
-                np.array([0.0] + [Key.uns.spot_diameter(self.adata, self.spatial_key, lid)] * 2) * self.scale
+                np.array([0.0] + [Key.uns.spot_diameter(self.adata, self.spatial_key, lid, self.spot_diameter_key)] * 2)
+                * self.scale
                 for lid in libraries
             ]
         )

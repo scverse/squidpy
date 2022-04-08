@@ -37,6 +37,7 @@ import numpy as np
 import pandas as pd
 
 from matplotlib import colors as mcolors, pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import matplotlib as mpl
 
@@ -81,9 +82,9 @@ def save_fig(fig: Figure, path: str | Path, make_dir: bool = True, ext: str = "p
 
     if make_dir:
         try:
-            os.makedirs(str(Path.parent), exist_ok=True)
+            path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as e:
-            logg.debug(f"Unable to create directory `{Path.parent}`. Reason: `{e}`")
+            logg.debug(f"Unable to create directory `{path.parent}`. Reason: `{e}`")
 
     logg.debug(f"Saving figure to `{path!r}`")
 
@@ -528,15 +529,20 @@ def _heatmap(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    ax: Axes | None = None,
     **kwargs: Any,
 ) -> mpl.figure.Figure:
     _assert_categorical_obs(adata, key=key)
 
     cbar_kwargs = dict(cbar_kwargs)
-    fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
+
+    if ax is None:
+        fig, ax = plt.subplots(constrained_layout=True, dpi=dpi, figsize=figsize)
+    else:
+        fig = ax.figure
 
     if method is not None:
-        row_order, col_order, row_link, col_link = _dendrogram(adata.X, method, optimal_ordering=adata.n_obs <= 1500)
+        row_order, col_order, _, col_link = _dendrogram(adata.X, method, optimal_ordering=adata.n_obs <= 1500)
     else:
         row_order = col_order = np.arange(len(adata.uns[Key.uns.colors(key)]))
 

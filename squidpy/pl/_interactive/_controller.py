@@ -29,13 +29,15 @@ from squidpy.pl._interactive._utils import (
 )
 from squidpy.pl._interactive._widgets import RangeSlider  # type: ignore[attr-defined]
 
+__all__ = ["ImageController"]
+
 # label string: attribute name
 _WIDGETS_TO_HIDE = {
     "symbol:": "symbolComboBox",
     "point size:": "sizeSlider",
     "face color:": "faceColorEdit",
     "edge color:": "edgeColorEdit",
-    "n-dim:": "ndimCheckBox",
+    "out of slice:": "outOfSliceCheckBox",
 }
 
 
@@ -77,7 +79,7 @@ class ImageController:
             return self.add_labels(layer)
 
         img: xr.DataArray = self.model.container.data[layer].transpose("z", "y", "x", ...)
-        multiscale = np.prod(img.shape[1:3]) > (2 ** 16) ** 2
+        multiscale = np.prod(img.shape[1:3]) > (2**16) ** 2
         n_channels = img.shape[-1]
 
         rgb = img.attrs.get("rgb", None)
@@ -89,8 +91,12 @@ class ImageController:
         if rgb is None:
             logg.debug("Automatically determining whether image is an RGB image")
             rgb = not _display_channelwise(img.data)
-        if not rgb:
+
+        if rgb:
+            contrast_limits = None
+        else:
             img = img.transpose(..., "z", "y", "x")  # channels first
+            contrast_limits = float(img.min()), float(img.max())
 
         logg.info(f"Creating image `{layer}` layer")
         self.view.viewer.add_image(
@@ -100,6 +106,7 @@ class ImageController:
             colormap=colormap,
             blending=self.model.blending,
             multiscale=multiscale,
+            contrast_limits=contrast_limits,
         )
 
         return True
@@ -136,7 +143,7 @@ class ImageController:
         self.view.viewer.add_labels(
             img.data,
             name=layer,
-            multiscale=np.prod(img.shape[-2:]) > (2 ** 16) ** 2,
+            multiscale=np.prod(img.shape[-2:]) > (2**16) ** 2,
         )
 
         return True
@@ -170,7 +177,6 @@ class ImageController:
             name=layer_name,
             size=self.model.spot_diameter,
             opacity=1,
-            edge_width=1,
             blending=self.model.blending,
             face_colormap=self.model.cmap,
             edge_colormap=self.model.cmap,
@@ -273,7 +279,7 @@ class ImageController:
         raise NotImplementedError(type(vec))
 
     @_get_points_properties.register(np.ndarray)
-    def _(self, vec: NDArrayA, **_) -> dict[str, Any]:
+    def _(self, vec: NDArrayA, **_: Any) -> dict[str, Any]:
         return {
             "text": None,
             "face_color": "value",
@@ -281,7 +287,7 @@ class ImageController:
             "metadata": {"perc": (0, 100), "data": vec, "minmax": (np.nanmin(vec), np.nanmax(vec))},
         }
 
-    @_get_points_properties.register(pd.Series)  # type: ignore[no-redef]
+    @_get_points_properties.register(pd.Series)
     def _(self, vec: pd.Series, key: str) -> dict[str, Any]:
         face_color = _get_categorical(self.model.adata, key=key, palette=self.model.palette, vec=vec)
         return {
@@ -293,8 +299,8 @@ class ImageController:
 
     def _hide_points_controls(self, layer: Points, is_categorical: bool) -> None:
         try:
-            # shouldn't happen
-            points_controls = self.view.viewer.window.qt_viewer.controls.widgets[layer]
+            # TODO(michalk8): find a better way: https://github.com/napari/napari/issues/3066
+            points_controls = self.view.viewer.window._qt_viewer.controls.widgets[layer]
         except KeyError:
             return
 
@@ -318,6 +324,9 @@ class ImageController:
             assert isinstance(widget, QWidget)
 
         if not is_categorical:  # add the slider
+            if widget is None:
+                logg.warning("Unable to set the percentile slider")
+                return
             idx = gl.indexOf(widget)
             row, *_ = gl.getItemPosition(idx)
 
@@ -326,7 +335,6 @@ class ImageController:
                 colorbar=self.view._colorbar,
             )
             slider.valueChanged.emit((0, 100))
-
             gl.replaceWidget(labels[label_key], QLabel("percentile:"))
             gl.replaceWidget(widget, slider)
 

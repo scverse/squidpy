@@ -337,8 +337,10 @@ class ImageContainer(FeatureMixin):
         **_: Any,
     ) -> xr.DataArray | None:
         def transform_metadata(data: xr.Dataset) -> xr.Dataset:
-            for img in data.values():
-                _assert_dims_present(img.dims)
+            for key, img in data.items():
+                if len(img.dims) != 4:
+                    data[key] = img = img.expand_dims({"z": 1}, axis=-2)  # assume only channel dim is present
+                _assert_dims_present(img.dims, include_z=True)
 
             data.attrs[Key.img.coords] = CropCoords.from_tuple(data.attrs.get(Key.img.coords, _NULL_COORDS.to_tuple()))
             data.attrs[Key.img.padding] = CropPadding.from_tuple(
@@ -372,11 +374,10 @@ class ImageContainer(FeatureMixin):
                 raise ValueError("Loading data from `NetCDF` is disallowed when the container is not empty.")
 
             self._data = transform_metadata(xr.open_dataset(img, chunks=chunks))
-            return
+        else:
+            raise ValueError(f"Unknown suffix `{img.suffix}`.")
 
-        raise ValueError(f"Unknown suffix `{img.suffix}`.")
-
-    @_load_img.register(da.Array)  # type: ignore[no-redef]
+    @_load_img.register(da.Array)
     @_load_img.register(np.ndarray)
     def _(
         self,
@@ -389,7 +390,7 @@ class ImageContainer(FeatureMixin):
 
         return self._load_img(xr.DataArray(img), copy=copy, dims=dims, warn=False)
 
-    @_load_img.register(xr.DataArray)  # type: ignore[no-redef]
+    @_load_img.register(xr.DataArray)
     def _(
         self,
         img: xr.DataArray,
@@ -403,6 +404,8 @@ class ImageContainer(FeatureMixin):
         img = img.copy() if copy else img
         if not ("y" in img.dims and "x" in img.dims and "z" in img.dims):
             _, dims, _, expand_axes = _infer_dimensions(img, infer_dimensions=dims)
+            if TYPE_CHECKING:
+                assert isinstance(dims, Iterable)
             if warn:
                 logg.warning(f"Unable to find `y`, `x` or `z` dimension in `{img.dims}`. Renaming to `{dims}`")
             # `axes` is always of length 0, 1 or 2
@@ -579,9 +582,8 @@ class ImageContainer(FeatureMixin):
         **_: Any,
     ) -> xr.Dataset:
         def _rescale(arr: xr.DataArray) -> xr.DataArray:
-            # TODO(michalk8): in skimage==0.19.0, multichannel is deprecated
             scaling_fn = partial(
-                rescale, scale=[scale, scale, 1], preserve_range=True, order=1, multichannel=True, cval=cval
+                rescale, scale=[scale, scale, 1], preserve_range=True, order=1, channel_axis=-1, cval=cval
             )
             dtype = arr.dtype
 
@@ -611,7 +613,7 @@ class ImageContainer(FeatureMixin):
             c = data.x.shape[0] // 2
             # manually reassign coordinates
             library_ids = data.coords["z"]
-            data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c ** 2, other=cval).assign_coords(
+            data = data.where((data.x - c) ** 2 + (data.y - c) ** 2 <= c**2, other=cval).assign_coords(
                 {"z": library_ids}
             )
             data.attrs[Key.img.mask_circle] = True
@@ -717,6 +719,7 @@ class ImageContainer(FeatureMixin):
         adata: AnnData,
         spatial_key: str = Key.obsm.spatial,
         library_id: str | None = None,
+        spot_diameter_key: str = "spot_diameter_fullres",
         spot_scale: float = 1.0,
         obs_names: Iterable[Any] | None = None,
         as_array: str | bool = False,
@@ -738,6 +741,9 @@ class ImageContainer(FeatureMixin):
         %(adata)s
         %(spatial_key)s
         %(img_library_id)s
+        spot_diameter_key
+            Key in :attr:`anndata.AnnData.uns` ``['{spatial_key}']['{library_id}']['scalefactors']``
+            where the spot diameter is stored.
         spot_scale
             Scaling factor for the spot diameter. Larger values mean more context.
         obs_names
@@ -803,7 +809,12 @@ class ImageContainer(FeatureMixin):
 
         for i, (obs, lid) in enumerate(zip(adata.obs_names, obs_library_ids)):
             # get spot diameter of current obs (might be different library ids)
-            diameter = Key.uns.spot_diameter(adata, spatial_key=spatial_key, library_id=lid) * scale
+            diameter = (
+                Key.uns.spot_diameter(
+                    adata, spatial_key=spatial_key, library_id=lid, spot_diameter_key=spot_diameter_key
+                )
+                * scale
+            )
             radius = int(round(diameter // 2 * spot_scale))
 
             # get coords in image pixel space from original space
@@ -1091,7 +1102,7 @@ class ImageContainer(FeatureMixin):
                 - :attr:`anndata.AnnData.uns` ``['{layer_name}_{key_added}']['meshes']`` - list of :class:`numpy.array`,
                   defining a mesh in the spatial coordinates.
 
-            See :mod:`napari`'s `tutorial <https://napari.org/tutorials/fundamentals/shapes.html>`_ for more
+            See :mod:`napari`'s `tutorial <https://napari.org/howtos/layers/shapes.html>`_ for more
             information about different mesh types, such as circles, squares etc.
 
         Returns
@@ -1154,7 +1165,8 @@ class ImageContainer(FeatureMixin):
         kwargs
             Keyword arguments for :func:`dask.array.map_overlap` or :func:`dask.array.map_blocks`, depending whether
             ``depth`` is present in ``fn_kwargs``. Only used when ``chunks != None``.
-            Use ``depth`` to control boundary artifacts if ``func`` requires data from neighboring chunks.
+            Use ``depth`` to control boundary artifacts if ``func`` requires data from neighboring chunks,
+            by default, ``boundary = 'reflect`` is used.
 
         Returns
         -------
@@ -1175,6 +1187,9 @@ class ImageContainer(FeatureMixin):
                 if "depth" in kwargs
                 else da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
             )
+
+        if "depth" in kwargs:
+            kwargs.setdefault("boundary", "reflect")
 
         layer = self._get_layer(layer)
         if new_layer is None:

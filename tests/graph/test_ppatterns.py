@@ -6,6 +6,8 @@ from pandas.testing import assert_frame_equal
 import numpy as np
 
 from squidpy.gr import co_occurrence, spatial_autocorr
+from squidpy.gr._ppatterns import _find_min_max
+from squidpy._constants._pkg_constants import Key
 
 MORAN_K = "moranI"
 GEARY_C = "gearyC"
@@ -48,8 +50,9 @@ def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
 @pytest.mark.parametrize("n_jobs", [1, 2])
 def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mode: str):
     """Check spatial autocorr reproducibility results."""
+    rng = np.random.RandomState(42)
     spatial_autocorr(dummy_adata, mode=mode)
-    dummy_adata.var["highly_variable"] = np.random.choice([True, False], size=dummy_adata.var_names.shape)
+    dummy_adata.var["highly_variable"] = rng.choice([True, False], size=dummy_adata.var_names.shape)
     # seed will work only when multiprocessing/loky
     df_1 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
     df_2 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
@@ -106,3 +109,28 @@ def test_co_occurrence_reproducibility(adata: AnnData, n_jobs: int, n_splits: in
 
     np.testing.assert_array_equal(sorted(interval_1), sorted(interval_2))
     np.testing.assert_allclose(arr_1, arr_2)
+
+
+@pytest.mark.parametrize("size", [1, 3])
+def test_co_occurrence_explicit_interval(adata: AnnData, size: int):
+    minn, maxx = _find_min_max(adata.obsm[Key.obsm.spatial])
+    interval = np.linspace(minn, maxx, size)
+    if size == 1:
+        with pytest.raises(ValueError, match=r"Expected interval to be of length"):
+            _ = co_occurrence(adata, cluster_key="leiden", copy=True, interval=interval)
+    else:
+        _, interval_1 = co_occurrence(adata, cluster_key="leiden", copy=True, interval=interval)
+
+        assert interval is not interval_1
+        np.testing.assert_allclose(interval, interval_1)  # allclose because in the func, we use f32
+
+
+def test_use_raw(dummy_adata: AnnData):
+    var_names = [str(i) for i in range(10)]
+    raw = dummy_adata[:, dummy_adata.var_names[: len(var_names)]].copy()
+    raw.var_names = var_names
+    dummy_adata.raw = raw
+
+    df = spatial_autocorr(dummy_adata, use_raw=True, copy=True)
+
+    np.testing.assert_equal(sorted(df.index), sorted(var_names))

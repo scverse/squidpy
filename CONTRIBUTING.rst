@@ -130,6 +130,7 @@ Submitting a PR
 ---------------
 Before submitting a new pull request, please make sure you followed these instructions:
 
+- make sure that you've branched off ``master`` and are merging into ``master``
 - make sure that your code follows the above specified conventions
   (see `Code style guide`_ and `Writing documentation`_).
 - if applicable, make sure you've added/modified at least 1 test to account for the changes you've made
@@ -151,11 +152,11 @@ and a separate PR with the updated ``recipe.yaml`` will have to be made.
 Easiest way to create a new release it to create a branch named ``release/vX.X.X`` and push it onto GitHub. The CI
 will take care of the following:
 
-- create the new release notes (and empty the current ``dev`` release notes)
+- create the new release notes
 - bump the version and create a new tag
 - run tests on the ``release/vX.X.X`` branch
 - publish on PyPI after all the tests have passed
-- merge ``release/vX.X.X`` into ``master`` and ``dev``
+- merge ``release/vX.X.X`` into ``master``
 
 Alternatively, it's possible to create a new release using ``bump2version``, which can be installed as::
 
@@ -199,7 +200,7 @@ This will create a new file in the appropriate location that needs to me modifie
 
 To locally create the news fragment from an already existing PR, just run::
 
-    tox -e news -- <PR_NUMBER>
+    tox -e news -- <PR_NUMBER> --add-author
 
 Lastly, in order to see how the current news fragments would look like in the release notes, run::
 

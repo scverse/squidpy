@@ -1,6 +1,6 @@
 codecov:
     require_ci_to_pass: no
-    strict_yaml_branch: dev
+    strict_yaml_branch: master
 
 coverage:
     range: 80..100
@@ -16,4 +16,3 @@ comment:
     require_changes: true
     branches:
     -   master
-    -   dev
