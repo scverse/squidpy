@@ -664,7 +664,7 @@ def _map_color_seg(
     )
 
     if seg_boundaries:
-        seg_bound: NDArrayA = np.clip(seg_im - find_boundaries(val_im)[:, :, None], 0, 1)
+        seg_bound: NDArrayA = np.clip(seg_im - find_boundaries(seg)[:, :, None], 0, 1)
         seg_bound = np.dstack((seg_bound, np.where(val_im > 0, 1, 0)))  # add transparency here
         return seg_bound
     else:
