@@ -96,9 +96,9 @@ def spatial_neighbors(
     transform = Transform.NONE if transform is None else Transform(transform)
     if coord_type is None:
         if radius is not None:
-            warnings.warn(
-                f"\nGraph creation with `radius` is only available when `coord_type = {CoordType.GENERIC!r}` specified. "
-                f"\nIgnoring parameter `radius = {radius}`."
+            logg.warning(
+                f"Graph creation with `radius` is only available when `coord_type = {CoordType.GENERIC!r}` specified. "
+                f"Ignoring parameter `radius = {radius}`."
             )
         coord_type = CoordType.GRID if Key.uns.spatial in adata.uns else CoordType.GENERIC
     else:
