@@ -302,7 +302,7 @@ def _image_spatial_attrs(
         size_key=size_key,
     )
 
-    if img and shape is not None:
+    if (img and seg) or (img and shape is not None):
         _img = _get_image(
             adata=adata,
             spatial_key=spatial_key,
