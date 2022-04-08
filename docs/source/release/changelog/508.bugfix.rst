@@ -1,0 +1,2 @@
+Include check to be able to load ImageContainer that were generated from another version of squidpy.
+`@MxMstrmn <https://github.com/MxMstrmn>`__

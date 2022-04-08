@@ -108,7 +108,14 @@ class SignatureFilter(Filter):
 
 
 # allow `<type_1> | <type_2> | ... | <type_n>` expression for sphinx-autodoc-typehints
-def _fwd_ref_init(self: ForwardRef, arg: str, is_argument: bool = True, module: Any = None) -> None:
+def _fwd_ref_init(
+    self: ForwardRef,
+    arg: str,
+    is_argument: bool = True,
+    module: Any = None,
+    *,
+    is_class: bool = False,
+) -> None:
     if not isinstance(arg, str):
         raise TypeError(f"Forward reference must be a string -- got {arg!r}")
     if " | " in arg:
@@ -122,6 +129,10 @@ def _fwd_ref_init(self: ForwardRef, arg: str, is_argument: bool = True, module: 
     self.__forward_evaluated__ = False
     self.__forward_value__ = None
     self.__forward_is_argument__ = is_argument
+    try:
+        self.__forward_is_class__ = is_class  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
     try:
         self.__forward_module__ = module  # type: ignore[attr-defined]
     except AttributeError:

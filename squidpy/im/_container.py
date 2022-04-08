@@ -335,8 +335,10 @@ class ImageContainer(FeatureMixin):
         **_: Any,
     ) -> xr.DataArray | None:
         def transform_metadata(data: xr.Dataset) -> xr.Dataset:
-            for img in data.values():
-                _assert_dims_present(img.dims)
+            for key, img in data.items():
+                if len(img.dims) != 4:
+                    data[key] = img = img.expand_dims({"z": 1}, axis=-2)  # assume only channel dim is present
+                _assert_dims_present(img.dims, include_z=True)
 
             data.attrs[Key.img.coords] = CropCoords.from_tuple(data.attrs.get(Key.img.coords, _NULL_COORDS.to_tuple()))
             data.attrs[Key.img.padding] = CropPadding.from_tuple(
@@ -718,6 +720,7 @@ class ImageContainer(FeatureMixin):
         adata: AnnData,
         spatial_key: str = Key.obsm.spatial,
         library_id: Sequence[str] | str | None = None,
+        spot_diameter_key: str = "spot_diameter_fullres",
         spot_scale: float = 1.0,
         obs_names: Iterable[Any] | None = None,
         as_array: str | bool = False,
@@ -739,6 +742,9 @@ class ImageContainer(FeatureMixin):
         %(adata)s
         %(spatial_key)s
         %(img_library_id)s
+        spot_diameter_key
+            Key in :attr:`anndata.AnnData.uns` ``['{spatial_key}']['{library_id}']['scalefactors']``
+            where the spot diameter is stored.
         spot_scale
             Scaling factor for the spot diameter. Larger values mean more context.
         obs_names
@@ -814,7 +820,12 @@ class ImageContainer(FeatureMixin):
 
         for i, (obs, lid) in enumerate(zip(adata.obs_names, obs_library_ids)):
             # get spot diameter of current obs (might be different library ids)
-            diameter = Key.uns.spot_diameter(adata, spatial_key=spatial_key, library_id=lid) * scale
+            diameter = (
+                Key.uns.spot_diameter(
+                    adata, spatial_key=spatial_key, library_id=lid, spot_diameter_key=spot_diameter_key
+                )
+                * scale
+            )
             radius = int(round(diameter // 2 * spot_scale))
 
             # get coords in image pixel space from original space

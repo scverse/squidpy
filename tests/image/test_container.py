@@ -569,6 +569,13 @@ class TestContainerCropping:
 
             np.testing.assert_array_equal(crop["image"].values[..., 0][~mask.values], np.nan)
 
+    @pytest.mark.parametrize("diameter", [13, 17])
+    def test_spot_crops_diameter(self, adata: AnnData, cont: ImageContainer, diameter: int):
+        adata.uns[Key.uns.spatial] = {"bar": {"scalefactors": {"foo": diameter}}}
+        for crop in cont.generate_spot_crops(adata, spot_diameter_key="foo"):
+            assert crop.shape[0] == crop.shape[1]
+            assert crop.shape[0] == diameter
+
     def test_uncrop_preserves_shape(self, small_cont_1c: ImageContainer):
         small_cont_1c.add_img(np.random.normal(size=(small_cont_1c.shape + (4,))), channel_dim="foobar", layer="baz")
         crops = list(small_cont_1c.generate_equal_crops(size=13))
@@ -1224,3 +1231,15 @@ class TestPileLine:
         for key, cont in zip(["foo", "bar", "baz"], [c1, c2, c3]):
             cont.compute()
             assert isinstance(cont[key].data, np.ndarray)
+
+    @pytest.mark.parametrize("dim_name", ["channels", "z"])
+    def test_loading_bwd_compat_no_zdim(self, dim_name: str, tmpdir):
+        ds = xr.Dataset({"foo": xr.DataArray(np.random.normal(size=(64, 64, 3)), dims=("x", "y", dim_name))})
+        ds.to_zarr(tmpdir)
+
+        if dim_name == "z":
+            with pytest.raises(ValueError, match=r".*z.*exists"):
+                _ = ImageContainer.load(str(tmpdir))
+        else:
+            img = ImageContainer.load(str(tmpdir))
+            assert img.data.dims == {"x": 64, "y": 64, "z": 1, dim_name: 3}
