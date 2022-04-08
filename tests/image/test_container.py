@@ -569,6 +569,13 @@ class TestContainerCropping:
 
             np.testing.assert_array_equal(crop["image"].values[..., 0][~mask.values], np.nan)
 
+    @pytest.mark.parametrize("diameter", [13, 17])
+    def test_spot_crops_diameter(self, adata: AnnData, cont: ImageContainer, diameter: int):
+        adata.uns[Key.uns.spatial] = {"bar": {"scalefactors": {"foo": diameter}}}
+        for crop in cont.generate_spot_crops(adata, spot_diameter_key="foo"):
+            assert crop.shape[0] == crop.shape[1]
+            assert crop.shape[0] == diameter
+
     def test_uncrop_preserves_shape(self, small_cont_1c: ImageContainer):
         small_cont_1c.add_img(np.random.normal(size=(small_cont_1c.shape + (4,))), channel_dim="foobar", layer="baz")
         crops = list(small_cont_1c.generate_equal_crops(size=13))
