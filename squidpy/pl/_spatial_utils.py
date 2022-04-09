@@ -639,13 +639,9 @@ def _map_color_seg(
 ) -> NDArrayA:
 
     cell_id = np.array(cell_id)
-    if isinstance(na_color, tuple) and len(na_color) == 4:
-        transparency: Union[float, None] = na_color[-1]
-    else:
-        transparency = None
 
     if is_categorical_dtype(color_vector):
-        if transparency and np.any(color_source_vector.isna()):
+        if isinstance(na_color, tuple) and len(na_color) == 4 and np.any(color_source_vector.isna()):
             cell_id[color_source_vector.isna()] = 0
         val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)  # type: ignore
         cols = colors.to_rgba_array(color_vector.categories)  # type: ignore
