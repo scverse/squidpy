@@ -14,6 +14,7 @@ from typing import (
     NamedTuple,
     TYPE_CHECKING,
 )
+from numbers import Number
 from functools import partial
 from typing_extensions import Literal
 from matplotlib_scalebar.scalebar import ScaleBar
@@ -128,7 +129,9 @@ def _get_library_id(
     library_key: str | None = None,
 ) -> Sequence[str]:
     if shape is not None:
+        print(library_id)
         library_id = Key.uns.library_id(adata, spatial_key, library_id, return_all=True)
+        print(library_id)
         if library_id is None:
             raise ValueError(f"Could not fetch `library_id`, check that `spatial_key: {spatial_key}` is correct.")
         return library_id
@@ -262,7 +265,7 @@ def _get_scalefactor_size(
         scale_factor = _get_list(scale_factor, float, len(library_id), "scale_factor")
 
         size = 120000 / adata.shape[0] if size is None else size
-        size = _get_list(size, float, len(library_id), "size")
+        size = _get_list(size, Number, len(library_id), "size")
         return scale_factor, size
 
 
@@ -287,6 +290,7 @@ def _image_spatial_attrs(
     library_id = _get_library_id(
         adata=adata, shape=shape, spatial_key=spatial_key, library_id=library_id, library_key=library_key
     )
+    print(library_id)
     if len(library_id) > 1 and library_key is None:
         raise ValueError(
             f"Found `library_id: `{library_id} but no `library_key` specified. Please specify `library_key`."
@@ -502,13 +506,12 @@ def _plot_edges(
 def _get_title_axlabels(
     title: _SeqStr, axis_label: _SeqStr, spatial_key: str, n_plots: int
 ) -> Tuple[_SeqStr, Sequence[str]]:
-
     # handle title
     if title is not None:
         if isinstance(title, (tuple, list)):
             raise ValueError("Title list is shorter than number of plots.")
-    elif isinstance(title, str):
-        title = [title] * n_plots
+        elif isinstance(title, str):
+            title = [title] * n_plots
     else:
         title = None
 

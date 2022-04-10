@@ -9,6 +9,7 @@ import pytest
 
 from anndata import AnnData
 import scanpy as sc
+import anndata as ad
 
 from scipy.sparse import csr_matrix
 import numpy as np
@@ -17,6 +18,7 @@ import pandas as pd
 from matplotlib.testing.compare import compare_images
 import matplotlib.pyplot as plt
 
+from squidpy.gr import spatial_neighbors
 from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
 import squidpy as sq
@@ -50,6 +52,22 @@ _adata.raw = _adata.copy()
 @pytest.fixture(scope="session")
 def adata_hne() -> AnnData:
     return sq.datasets.visium_hne_adata_crop().copy()
+
+
+@pytest.fixture(scope="session")
+def adata_hne_concat() -> AnnData:
+    adata1 = sq.datasets.visium_hne_adata_crop().copy()
+    spatial_neighbors(adata1)
+    adata2 = adata1[0:100, :].copy()
+    adata2.uns["spatial"] = {}
+    adata2.uns["spatial"]["V2_Adult_Mouse_Brain"] = adata1.uns["spatial"]["V1_Adult_Mouse_Brain"]
+    adata_concat = ad.concat(
+        {"V1_Adult_Mouse_Brain": adata1, "V2_Adult_Mouse_Brain": adata2},
+        label="batch_key",
+        uns_merge="unique",
+        pairwise=True,
+    )
+    return adata_concat
 
 
 @pytest.fixture(scope="session")

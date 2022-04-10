@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from squidpy import pl
+from squidpy.gr import spatial_neighbors
 from tests.conftest import PlotTester, PlotTesterMeta
 from squidpy.pl._spatial_utils import _get_library_id
 from squidpy._constants._pkg_constants import Key
@@ -32,6 +33,78 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
 
     def test_plot_spatial_scatter_noimage(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, shape=None, na_color="lightgrey")
+
+    def test_plot_spatial_scatter_title_single(self, adata_hne_concat: AnnData):
+        pl.spatial_scatter(
+            adata_hne_concat,
+            shape="hex",
+            library_key="batch_key",
+            library_id=["V2_Adult_Mouse_Brain"],
+            color=["Sox17", "cluster"],
+            title="Visium test",
+        )
+
+    def test_plot_spatial_scatter_crop(self, adata_hne_concat: AnnData):
+        pl.spatial_scatter(
+            adata_hne_concat,
+            shape="square",
+            library_key="batch_key",
+            size=[1, 1.25],
+            color=["Sox17", "cluster"],
+            edges=True,
+            edges_width=5,
+            title=None,
+            outline=True,
+            library_first=True,
+            outline_width=(0.05, 0.05),
+            crop_coord=[(1500, 2800, 1500, 2800), (2000, 2800, 2000, 2800)],
+            scalebar_dx=2.0,
+            scalebar_kwargs={"scale_loc": "bottom", "location": "lower right"},
+        )
+
+    def test_plot_spatial_scatter_group(self, adata_hne_concat: AnnData):
+        pl.spatial_scatter(
+            adata_hne_concat,
+            cmap="inferno",
+            shape="hex",
+            library_key="batch_key",
+            library_id=["V1_Adult_Mouse_Brain", "V2_Adult_Mouse_Brain"],
+            size=[1, 1.25],
+            color=["Sox17", "cluster"],
+            edges=False,
+            edges_width=5,
+            title=None,
+            outline=True,
+            outline_width=(0.05, 0.05),
+            scalebar_dx=2.0,
+            scalebar_kwargs={"scale_loc": "bottom", "location": "lower right"},
+        )
+
+    def test_plot_spatial_scatter_nospatial(self, adata_hne_concat: AnnData):
+        spatial_neighbors(adata_hne_concat)
+        adata_hne_concat.uns.pop("spatial")
+        pl.spatial_scatter(
+            adata_hne_concat,
+            shape=None,
+            library_key="batch_key",
+            library_id=["V1_Adult_Mouse_Brain", "V2_Adult_Mouse_Brain"],
+            edges=True,
+            edges_width=3,
+            size=[1.0, 50],
+            color="cluster",
+        )
+
+    def test_plot_spatial_scatter_novisium(self, adata_mibitof: AnnData):
+        spatial_neighbors(adata_mibitof, coord_type="generic", radius=50)
+        pl.spatial_scatter(
+            adata_mibitof,
+            cell_id_key="cell_id",
+            library_key="library_id",
+            library_id=["point8"],
+            na_color="lightgrey",
+            edges=True,
+            edges_width=0.5,
+        )
 
     def test_plot_spatial_segment(self, adata_mibitof: AnnData):
         pl.spatial_segment(
