@@ -129,9 +129,7 @@ def _get_library_id(
     library_key: str | None = None,
 ) -> Sequence[str]:
     if shape is not None:
-        print(library_id)
         library_id = Key.uns.library_id(adata, spatial_key, library_id, return_all=True)
-        print(library_id)
         if library_id is None:
             raise ValueError(f"Could not fetch `library_id`, check that `spatial_key: {spatial_key}` is correct.")
         return library_id
@@ -290,7 +288,6 @@ def _image_spatial_attrs(
     library_id = _get_library_id(
         adata=adata, shape=shape, spatial_key=spatial_key, library_id=library_id, library_key=library_key
     )
-    print(library_id)
     if len(library_id) > 1 and library_key is None:
         raise ValueError(
             f"Found `library_id: `{library_id} but no `library_key` specified. Please specify `library_key`."
