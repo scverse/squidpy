@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+from imageio import imread
 from pathlib import Path
+import os
 import json
 
 from anndata import AnnData
 
+from scipy.sparse import csc_matrix
 import pandas as pd
 
+from squidpy._docs import d
 from squidpy.read._utils import _read_count, _read_coords, _read_images
 from squidpy._constants._pkg_constants import Key
 
 
+@d.dedent
 def read_visium(
     path: str | Path,
     genome: str | None = None,
@@ -52,6 +57,8 @@ def read_visium(
     barcode and variables/genes by gene name. Stores the following information:
     :attr:`~anndata.AnnData.X`
         The data matrix is stored
+    :attr:`~anndata.AnnData.obs`
+        Table with rows that correspond to the spots, including row, column coordinates and pixel coordinates
     :attr:`~anndata.AnnData.obs_names`
         Cell names
     :attr:`~anndata.AnnData.var_names`
@@ -142,7 +149,44 @@ def read_vizgen(
     Read Vizgen formatted dataset.
 
     In addition to reading the regular Vizgen output,
-    this function loads metadata file and loads the spatial co-ordinates.
+    this function loads metadata file to load spatial coordinates and loads transformation matrix.
+    .. _Vizgen sample output docs:
+    https://f.hubspotusercontent40.net/hubfs/9150442/Vizgen%20MERFISH%20Mouse%20Receptor%20Map%20File%20Descriptions%20.pdf?__hstc=&__hssc=
+
+    Parameters
+    ----------
+    path
+        Path to directory for Vizgen data files.
+    count_file
+        Which file in the passed directory to use as the count file. Typically would be one of:
+        '_cell_by_gene.csv'.
+    obs_file
+        This metadata file has the spatial coordinates of each of the detected cells.
+    transformation_file
+        Transformation matrix file for converting micron coordinates into pixels in images.
+    library_id
+        Identifier for the Vizgen library. Can be modified when concatenating multiple adata objects.
+
+    Returns
+    -------
+    Annotated data matrix ``adata``, where observations/cells are named by their
+    barcode and variables/genes by gene name. Stores the following information:
+    :attr:`~anndata.AnnData.X`
+        The data matrix is stored
+    :attr:`~anndata.AnnData.obs`
+        Spatial metadata containing the volume and coordinates of center of cells
+    :attr:`~anndata.AnnData.obs_names`
+        Cell ids
+    :attr:`~anndata.AnnData.var_names`
+        Gene names
+    :attr:`~anndata.AnnData.var`
+        Gene IDs
+    :attr:`~anndata.AnnData.uns`\\ `['spatial']`
+        Dict of vizgen output files with 'library_id' as key
+    :attr:`~anndata.AnnData.uns`\\ `['spatial'][library_id]['scalefactors']['transformation_matrix']`
+        Transformation matrix for converting micron coordinates to pixels
+    :attr:`~anndata.AnnData.obsm`\\ `['spatial']`
+        Spatial coordinates of center of cells in micron coordinates, usable as `basis` by :func:`~scanpy.pl.embedding`.
     """
     if isinstance(path, str):
         path = Path(path)
@@ -199,53 +243,79 @@ def read_nanostring(
     count_file: str,
     obs_file: str,
     fov_file: str,
-    load_images: bool | None = True,
 ) -> AnnData:
     r"""
     Read Nanostring formatted dataset.
 
     In addition to reading the regular Nanostring output,
-    this function loads metadata file and loads the spatial co-ordinates.
+    loading metadata file to load spatial coordinates,
+    this function reads fov_file to load coordinates of fields of view
+    and looks for `CellCompsite` folder and loads images.
+
+    Parameters
+    ----------
+    path
+        Path to directory for Nanostring data files.
+    count_file
+        Which file in the passed directory to use as the count file. Typically would be one of:
+        '_exprMat_file.csv'.
+    obs_file
+        Which metadata file in the passed directory to use as the obs file. Typically would be one of:
+        '_metadata_file.csv'.
+    fov_file
+        This file includes the coordinates of all the fields of view.
+
+    Returns
+    -------
+    Annotated data matrix ``adata``, where observations/cells are named by their
+    barcode and variables/genes by gene name. Stores the following information:
+    :attr:`~anndata.AnnData.X`
+        The data matrix is stored
+    :attr:`~anndata.AnnData.obs`
+        Table with rows that correspond to the cells, including area, local and global cell coordinates
+    :attr:`~anndata.AnnData.obs_names`
+        Cell names
+    :attr:`~anndata.AnnData.var`
+        Gene names
+    :attr:`~anndata.AnnData.obsm`\\ `['spatial']`
+        Local coordinates of the centers of cells
+    :attr:`~anndata.AnnData.obsm`\\ `['spatial_fov']``
+        Global coordinates of the centers of cells in the FOV
+    :attr:`~anndata.AnnData.uns`\\ `['spatial']`
+        Dict of Nanostring output files with 'fov_positions', cell composite images with "FOV_<number>" as keys
+    :attr:`~anndata.AnnData.uns`\\ `['spatial'][FOV_id]['images']`
+        Dict of images
     """
     if isinstance(path, str):
         path = Path(path)
 
     count_file = pd.read_csv(path / count_file)
+    count_file.index = count_file.fov.astype(str) + "_" + count_file.cell_ID.astype(str)
+
     obs_file = pd.read_csv(path / obs_file)
+    obs_file.index = obs_file.fov.astype(str) + "_" + obs_file.cell_ID.astype(str)
 
     fov_positions = {"fov_positions": pd.read_csv(path / fov_file)}
 
-    for file in [count_file, obs_file]:
-        file["index"] = file["fov"].astype(str) + "_" + file["cell_ID"].astype(str)
-        cols = list(file.columns)
-        cols = [cols[-1]] + cols[:-1]
-        file = file[cols]
+    merged_df = count_file.merge(obs_file, how="left")
+    count_file.drop(columns=["fov", "cell_ID"], inplace=True)
+    obs_columns = obs_file.columns
+    merged_df["fov"] = pd.Categorical(merged_df["fov"].astype(str))
 
-    for column in ["fov", "cell_ID"]:
-        count_file.pop(column)
+    adata = AnnData(csc_matrix(count_file.to_numpy()), obs=merged_df[obs_columns].copy())
+    adata.var_names = count_file.columns
+    adata.obsm[Key.obsm.spatial] = adata.obs[["CenterX_local_px", "CenterY_local_px"]].to_numpy()
+    adata.obsm["spatial_fov"] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].to_numpy()
 
-    merged_df = count_file.merge(obs_file, on="index", how="left")
+    adata.uns[Key.uns.spatial] = {
+        k: {"images": {"hires": None}, "scalefactors": {}} for k in adata.obs.fov.cat.categories
+    }
+    adata.uns[Key.uns.spatial]["fov"] = fov_positions
 
-    adata = AnnData(count_file, obs=merged_df[cols])
+    images = os.listdir(path / "CellComposite")
+    images = {str(int(i.strip(".jpg").replace("CellComposite_F", ""))): i for i in images}
 
-    adata.obsm[Key.uns.spatial] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].to_numpy()
-    adata.obsm["spatial_fov"] = adata.obs[["CenterX_local_px", "CenterY_local_px"]].to_numpy()
-
-    adata.uns[Key.uns.spatial] = fov_positions
-
-    if load_images is not None:
-        image_files = {}
-        for i in range(1, 21):
-            if i < 10:
-                image_files[f"FOV_{i}"] = path / f"CellComposite/CellComposite_F00{i}.jpg"
-            else:
-                image_files[f"FOV_{i}"] = path / f"CellComposite/CellComposite_F0{i}.jpg"
-
-        image_dic = _read_images(image_files)
-
-        for i in range(1, 21):
-            adata.uns[Key.uns.spatial][f"FOV_{i}"] = {Key.uns.image_key: image_dic[f"FOV_{i}"]}
-    else:
-        return adata
+    for fov, file_name in images.items():
+        adata.uns[Key.uns.spatial][fov]["images"]["hires"] = imread(path / "CellComposite" / file_name)
 
     return adata

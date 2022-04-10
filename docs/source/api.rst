@@ -88,3 +88,5 @@ Reading
     :toctree: api
 
     read.read_visium
+    read.read_vizgen
+    read.read_nanostring
