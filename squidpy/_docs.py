@@ -445,6 +445,7 @@ d = DocstringProcessor(
     library_id_features=_library_id_features,
     library_id=_library_id,
     img_library_id=_img_library_id,
+    plotting=_plotting,
     plotting_features=_plotting_features,
     plotting_segment=_plotting_segment,
     plotting_image=_plotting_image,
