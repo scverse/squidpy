@@ -71,6 +71,7 @@ quantiles
 reproducibility
 Rescale
 ResNet
+RGB
 sagittal
 sc
 scalability
