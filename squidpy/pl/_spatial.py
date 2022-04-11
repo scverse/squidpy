@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
+from typing import Union  # noqa: F401
 from typing import Any, Tuple, Mapping, Callable, Optional, Sequence
 from pathlib import Path
 from functools import partial
