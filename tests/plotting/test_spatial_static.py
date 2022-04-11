@@ -7,6 +7,8 @@ import scanpy as sc
 import numpy as np
 import pandas as pd
 
+import matplotlib.pyplot as plt
+
 from squidpy import pl
 from squidpy.gr import spatial_neighbors
 from tests.conftest import PlotTester, PlotTesterMeta
@@ -81,8 +83,9 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
         )
 
     def test_plot_spatial_scatter_nospatial(self, adata_hne_concat: AnnData):
-        spatial_neighbors(adata_hne_concat)
-        adata_hne_concat.uns.pop("spatial")
+        adata = adata_hne_concat.copy()
+        spatial_neighbors(adata)
+        adata.uns.pop("spatial")
         pl.spatial_scatter(
             adata_hne_concat,
             shape=None,
@@ -92,6 +95,18 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             edges_width=3,
             size=[1.0, 50],
             color="cluster",
+        )
+
+    def test_plot_spatial_scatter_axfig(self, adata_hne_concat: AnnData):
+        fig, ax = plt.subplots(1, 4, figsize=(3, 3), dpi=20)
+        pl.spatial_scatter(
+            adata_hne_concat,
+            shape="square",
+            library_key="batch_key",
+            size=[1, 1.25],
+            color=["Sox17", "cluster"],
+            fig=fig,
+            ax=ax,
         )
 
     def test_plot_spatial_scatter_novisium(self, adata_mibitof: AnnData):
