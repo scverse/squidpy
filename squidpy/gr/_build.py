@@ -120,6 +120,8 @@ def spatial_neighbors(
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
         libs = adata.obs[library_key].cat.categories
+    else:
+        libs = [None]
 
     start = logg.info(
         f"Creating graph using `{coord_type}` coordinates and `{transform}` transform and `{len(libs)}` libraries."
