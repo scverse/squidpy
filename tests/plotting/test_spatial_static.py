@@ -97,13 +97,11 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             color="cluster",
         )
 
-    def test_plot_spatial_scatter_axfig(self, adata_hne_concat: AnnData):
-        fig, ax = plt.subplots(1, 4, figsize=(3, 3), dpi=40)
+    def test_plot_spatial_scatter_axfig(self, adata_hne: AnnData):
+        fig, ax = plt.subplots(1, 2, figsize=(3, 3), dpi=40)
         pl.spatial_scatter(
-            adata_hne_concat,
+            adata_hne,
             shape="square",
-            library_key="batch_key",
-            size=[1, 1.25],
             color=["Sox17", "cluster"],
             fig=fig,
             ax=ax,
