@@ -98,7 +98,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
         )
 
     def test_plot_spatial_scatter_axfig(self, adata_hne_concat: AnnData):
-        fig, ax = plt.subplots(1, 4, figsize=(3, 3), dpi=20)
+        fig, ax = plt.subplots(1, 4, figsize=(3, 3), dpi=40)
         pl.spatial_scatter(
             adata_hne_concat,
             shape="square",
