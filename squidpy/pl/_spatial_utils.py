@@ -505,7 +505,7 @@ def _get_title_axlabels(
 ) -> Tuple[_SeqStr, Sequence[str]]:
     # handle title
     if title is not None:
-        if isinstance(title, (tuple, list)):
+        if isinstance(title, (tuple, list)) and len(title) != n_plots:
             raise ValueError("Title list is shorter than number of plots.")
         elif isinstance(title, str):
             title = [title] * n_plots
