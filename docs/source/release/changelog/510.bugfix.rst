@@ -1,0 +1,2 @@
+Fix a typo when saving a figure caused a strange directory name to be created.
+`@michalk8 <https://github.com/michalk8>`__

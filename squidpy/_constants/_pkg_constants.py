@@ -119,13 +119,19 @@ class Key:
             return library_id
 
         @classmethod
-        def spot_diameter(cls, adata: AnnData, spatial_key: str, library_id: Optional[str] = None) -> float:
+        def spot_diameter(
+            cls,
+            adata: AnnData,
+            spatial_key: str,
+            library_id: Optional[str] = None,
+            spot_diameter_key: str = "spot_diameter_fullres",
+        ) -> float:
             try:
-                return float(adata.uns[spatial_key][library_id]["scalefactors"]["spot_diameter_fullres"])
+                return float(adata.uns[spatial_key][library_id]["scalefactors"][spot_diameter_key])
             except KeyError:
                 raise KeyError(
                     f"Unable to get the spot diameter from "
-                    f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors']['spot_diameter_fullres']]`"
+                    f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors'][{spot_diameter_key!r}]]`"
                 ) from None
 
     class obsp:

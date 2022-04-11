@@ -1,11 +1,11 @@
 from typing import Any, Set, List, Tuple, Union, Optional, Sequence
-from imageio import imread, imsave
 from pathlib import Path
 from itertools import permutations
 from collections import defaultdict
 from html.parser import HTMLParser
 from pytest_mock import MockerFixture
 import pytest
+import imageio
 
 from anndata import AnnData
 import anndata as ad
@@ -60,7 +60,7 @@ class TestContainerIO:
         img_orig = np.random.randint(low=0, high=255, size=(100, 100, 1), dtype=np.uint8)
         if on_init:
             fname = str(tmpdir / "tmp.tiff")
-            tifffile.imsave(fname, img_orig)
+            tifffile.imwrite(fname, img_orig)
             img = ImageContainer(fname, lazy=True)
         else:
             img = ImageContainer(da.from_array(img_orig), lazy=True)
@@ -143,9 +143,9 @@ class TestContainerIO:
     def test_load_ext(self, shape: Tuple[int, ...], ext: str, tmpdir):
         img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
         fname = tmpdir / f"tmp.{ext}"
-        imsave(str(fname), img_orig)
+        imageio.imsave(str(fname), img_orig)
 
-        gt = imread(str(fname))  # because of compression, we load again
+        gt = imageio.imread(str(fname))  # because of compression, we load again
         cont = ImageContainer(str(fname))
 
         np.testing.assert_array_equal(cont["image"].values.squeeze(), gt.squeeze())
@@ -154,7 +154,7 @@ class TestContainerIO:
     def test_load_tiff(self, shape: Tuple[int, ...], tmpdir):
         img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
         fname = tmpdir / "tmp.tiff"
-        tifffile.imsave(fname, img_orig)
+        tifffile.imwrite(fname, img_orig)
 
         cont = ImageContainer(str(fname))
 
@@ -420,7 +420,7 @@ class TestContainerCropping:
                 small_cont_1c.crop_corner(0, 0, size=size, mask_circle=True, cval=np.nan)
         else:
             crop = small_cont_1c.crop_corner(0, 0, size=20, mask_circle=True, cval=np.nan)
-            mask = (crop.data.x - 10) ** 2 + (crop.data.y - 10) ** 2 <= 10 ** 2
+            mask = (crop.data.x - 10) ** 2 + (crop.data.y - 10) ** 2 <= 10**2
 
             assert crop.shape == (20, 20)
             np.testing.assert_array_equal(crop["image"].values[..., 0][~mask.values], np.nan)
@@ -565,9 +565,16 @@ class TestContainerCropping:
         for crop in cont.generate_spot_crops(adata, cval=np.nan, mask_circle=True, preserve_dtypes=False):
             assert crop.shape[0] == crop.shape[1]
             c = crop.shape[0] // 2
-            mask = (crop.data.x - c) ** 2 + (crop.data.y - c) ** 2 <= c ** 2
+            mask = (crop.data.x - c) ** 2 + (crop.data.y - c) ** 2 <= c**2
 
             np.testing.assert_array_equal(crop["image"].values[..., 0][~mask.values], np.nan)
+
+    @pytest.mark.parametrize("diameter", [13, 17])
+    def test_spot_crops_diameter(self, adata: AnnData, cont: ImageContainer, diameter: int):
+        adata.uns[Key.uns.spatial] = {"bar": {"scalefactors": {"foo": diameter}}}
+        for crop in cont.generate_spot_crops(adata, spot_diameter_key="foo"):
+            assert crop.shape[0] == crop.shape[1]
+            assert crop.shape[0] == diameter
 
     def test_uncrop_preserves_shape(self, small_cont_1c: ImageContainer):
         small_cont_1c.add_img(np.random.normal(size=(small_cont_1c.shape + (4,))), channel_dim="foobar", layer="baz")
@@ -750,8 +757,7 @@ class TestContainerUtils:
             assert isinstance(res["image"].data, da.Array)
         else:
             assert isinstance(res["image"].data, np.ndarray)
-
-        assert not np.shares_memory(cont["image"].data, res["image"].data)
+            assert not np.shares_memory(cont["image"].data, res["image"].data)
 
     def test_apply_wrong_number_of_dim(self):
         def func(arr: np.ndarray) -> float:
@@ -863,12 +869,14 @@ class TestZStacks:
             np.zeros((len(crop_coords), 1)),
             uns={"spatial": {"1": {"scalefactors": {"spot_diameter_fullres": 5}}}},
             obsm={"spatial": crop_coords},
+            dtype=float,
         )
         # for library_id 2 (with larger scalefactor)
         adata2 = AnnData(
             np.zeros((len(crop_coords), 1)),
             uns={"spatial": {"2": {"scalefactors": {"spot_diameter_fullres": 7}}}},
             obsm={"spatial": crop_coords},
+            dtype=float,
         )
         # concatenate
         adata = ad.concat({"1": adata1, "2": adata2}, uns_merge="unique", label="library_id")
@@ -1223,3 +1231,15 @@ class TestPileLine:
         for key, cont in zip(["foo", "bar", "baz"], [c1, c2, c3]):
             cont.compute()
             assert isinstance(cont[key].data, np.ndarray)
+
+    @pytest.mark.parametrize("dim_name", ["channels", "z"])
+    def test_loading_bwd_compat_no_zdim(self, dim_name: str, tmpdir):
+        ds = xr.Dataset({"foo": xr.DataArray(np.random.normal(size=(64, 64, 3)), dims=("x", "y", dim_name))})
+        ds.to_zarr(tmpdir)
+
+        if dim_name == "z":
+            with pytest.raises(ValueError, match=r".*z.*exists"):
+                _ = ImageContainer.load(str(tmpdir))
+        else:
+            img = ImageContainer.load(str(tmpdir))
+            assert img.data.dims == {"x": 64, "y": 64, "z": 1, dim_name: 3}

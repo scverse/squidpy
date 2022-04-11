@@ -63,7 +63,7 @@ def nhood_data(adata: AnnData) -> AnnData:
 @pytest.fixture()
 def dummy_adata() -> AnnData:
     r = np.random.RandomState(100)
-    adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
+    adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)}, dtype=float)
 
     adata.obsm[Key.obsm.spatial] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
     sp.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
@@ -88,6 +88,7 @@ def adata_intmat() -> AnnData:
         np.zeros((5, 5)),
         obs={"cat": pd.Categorical.from_codes([0, 0, 0, 1, 1], ("a", "b"))},
         obsp={"spatial_connectivities": graph},
+        dtype=float,
     )
 
 
@@ -108,7 +109,7 @@ def adata_squaregrid() -> AnnData:
     coord = rng.integers(0, 10, size=(400, 2))
     coord = np.unique(coord, axis=0)
     counts = rng.integers(0, 10, size=(coord.shape[0], 10))
-    adata = AnnData(counts)
+    adata = AnnData(counts, dtype=counts.dtype)
     adata.obsm["spatial"] = coord
     sc.pp.scale(adata)
     return adata
@@ -275,7 +276,7 @@ def visium_adata():
             [4400, 7729],
         ]
     )
-    adata = AnnData(X=np.ones((visium_coords.shape[0], 3)))
+    adata = AnnData(X=np.ones((visium_coords.shape[0], 3)), dtype=float)
     adata.obsm[Key.obsm.spatial] = visium_coords
     adata.uns[Key.uns.spatial] = {}
     return adata
@@ -284,7 +285,7 @@ def visium_adata():
 @pytest.fixture()
 def non_visium_adata():
     non_visium_coords = np.array([[1, 0], [3, 0], [5, 6], [0, 4]])
-    adata = AnnData(X=non_visium_coords)
+    adata = AnnData(X=non_visium_coords, dtype=int)
     adata.obsm[Key.obsm.spatial] = non_visium_coords
     return adata
 
