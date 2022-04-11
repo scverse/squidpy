@@ -8,11 +8,12 @@ import warnings
 
 from scanpy import logging as logg
 from anndata import AnnData
+from anndata.utils import make_index_unique
 
 from numba import njit
 from scipy.sparse import (
-    bmat,
     spmatrix,
+    block_diag,
     csr_matrix,
     isspmatrix_csr,
     SparseEfficiencyWarning,
@@ -59,6 +60,7 @@ def spatial_neighbors(
     ----------
     %(adata)s
     %(spatial_key)s
+    %(library_key)s
     coord_type
         Type of coordinate system. Valid options are:
 
@@ -120,6 +122,7 @@ def spatial_neighbors(
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
         libs = adata.obs[library_key].cat.categories
+        unique_obs_names = make_index_unique(adata.obs_names)
     else:
         libs = [None]
 
@@ -143,16 +146,15 @@ def spatial_neighbors(
         dst_mats = []
         obs_names = []
         for lib in libs:
-            obs_names.extend(adata[adata.obs[library_key] == lib].obs_names)
+            obs_names.extend(unique_obs_names[adata.obs[library_key] == lib])
             Adj, Dst = _build_fun(adata[adata.obs[library_key] == lib])
             adj_mats.append(Adj)
             dst_mats.append(Dst)
-        adj_tmp = AnnData(bmat(adj_mats, format="csr"), dtype="float64")
-        dst_tmp = AnnData(bmat(dst_mats, format="csr"), dtype="float64")
-        adj_tmp.obs_names, dst_tmp.obs_names = obs_names, obs_names
-        adj_tmp.var_names, dst_tmp.var_names = obs_names, obs_names
-        Adj = adj_tmp[adata.obs_names, :][:, adata.obs_names]
-        Dst = dst_tmp[adata.obs_names, :][:, adata.obs_names]
+        adj_tmp = AnnData(block_diag(adj_mats, format="csr"), dtype="float64")
+        dst_tmp = AnnData(block_diag(dst_mats, format="csr"), dtype="float64")
+        adj_tmp.obs_names = dst_tmp.obs_names = adj_tmp.var_names = dst_tmp.var_names = obs_names
+        Adj = adj_tmp[unique_obs_names, unique_obs_names].X.copy()
+        Dst = dst_tmp[unique_obs_names, unique_obs_names].X.copy()
     else:
         Adj, Dst = _build_fun(adata)
 

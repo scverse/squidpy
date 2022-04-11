@@ -2,6 +2,7 @@ from typing import Tuple
 import pytest
 
 from anndata import AnnData
+import anndata as ad
 
 from scipy.sparse import isspmatrix_csr
 import numpy as np
@@ -23,6 +24,17 @@ class TestSpatialNeighbors:
     # ground-truth Delaunay graph
     _gt_dgraph = np.array([[0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0], [1.0, 1.0, 1.0, 0.0]])
 
+    def _adata_concat(self, adata1, adata2):
+        adata2.uns["spatial"] = {"library2": None}  # needed to trigger grid building
+        batch1, batch2 = "batch1", "batch2"
+        adata_concat = ad.concat(
+            {batch1: adata1, batch2: adata2},
+            label="library_id",
+            uns_merge="unique",
+        )
+
+        return adata_concat, batch1, batch2
+
     # TODO: add edge cases
     @pytest.mark.parametrize(("n_rings", "n_neigh", "sum_dist"), [(1, 6, 0), (2, 18, 30), (3, 36, 84)])
     def test_spatial_neighbors_visium(self, visium_adata: AnnData, n_rings: int, n_neigh: int, sum_dist: int):
@@ -35,6 +47,21 @@ class TestSpatialNeighbors:
         if n_rings > 1:
             assert visium_adata.obsp[Key.obsp.spatial_dist()][0].sum() == sum_dist
 
+        # test for library_key
+        visium_adata2 = visium_adata.copy()
+        adata_concat, batch1, batch2 = self._adata_concat(visium_adata, visium_adata2)
+        spatial_neighbors(visium_adata2, n_rings=n_rings)
+        spatial_neighbors(adata_concat, library_key="library_id", n_rings=n_rings)
+        assert adata_concat.obsp[Key.obsp.spatial_conn()][0].sum() == n_neigh
+        np.testing.assert_array_equal(
+            adata_concat[adata_concat.obs.library_id == batch1].obsp[Key.obsp.spatial_conn()].A,
+            visium_adata.obsp[Key.obsp.spatial_conn()].A,
+        )
+        np.testing.assert_array_equal(
+            adata_concat[adata_concat.obs.library_id == batch2].obsp[Key.obsp.spatial_conn()].A,
+            visium_adata2.obsp[Key.obsp.spatial_conn()].A,
+        )
+
     @pytest.mark.parametrize(("n_rings", "n_neigh", "sum_neigh"), [(1, 4, 4), (2, 4, 12), (3, 4, 24)])
     def test_spatial_neighbors_squaregrid(self, adata_squaregrid: AnnData, n_rings: int, n_neigh: int, sum_neigh: int):
         """
@@ -44,6 +71,21 @@ class TestSpatialNeighbors:
         spatial_neighbors(adata, n_neighs=n_neigh, n_rings=n_rings, coord_type="grid")
         assert np.diff(adata.obsp[Key.obsp.spatial_conn()].indptr).max() == sum_neigh
         assert adata.uns[Key.uns.spatial_neighs()]["distances_key"] == Key.obsp.spatial_dist()
+
+        # test for library_key
+        adata2 = adata.copy()
+        adata_concat, batch1, batch2 = self._adata_concat(adata, adata2)
+        spatial_neighbors(adata2, n_neighs=n_neigh, n_rings=n_rings, coord_type="grid")
+        spatial_neighbors(adata_concat, library_key="library_id", n_neighs=n_neigh, n_rings=n_rings, coord_type="grid")
+        assert np.diff(adata_concat.obsp[Key.obsp.spatial_conn()].indptr).max() == sum_neigh
+        np.testing.assert_array_equal(
+            adata_concat[adata_concat.obs.library_id == batch1].obsp[Key.obsp.spatial_conn()].A,
+            adata.obsp[Key.obsp.spatial_conn()].A,
+        )
+        np.testing.assert_array_equal(
+            adata_concat[adata_concat.obs.library_id == batch2].obsp[Key.obsp.spatial_conn()].A,
+            adata2.obsp[Key.obsp.spatial_conn()].A,
+        )
 
     @pytest.mark.parametrize("type_rings", [("grid", 1), ("grid", 6), ("generic", 1)])
     @pytest.mark.parametrize("set_diag", [False, True])
@@ -94,6 +136,21 @@ class TestSpatialNeighbors:
 
         np.testing.assert_array_equal(spatial_graph, self._gt_dgraph)
         np.testing.assert_allclose(spatial_dist, self._gt_ddist)
+
+        # test for library_key
+        non_visium_adata2 = non_visium_adata.copy()
+        adata_concat, batch1, batch2 = self._adata_concat(non_visium_adata, non_visium_adata2)
+        spatial_neighbors(adata_concat, library_key="library_id", delaunay=True, coord_type=None)
+        spatial_neighbors(non_visium_adata2, delaunay=True, coord_type=None)
+
+        np.testing.assert_array_equal(
+            adata_concat[adata_concat.obs.library_id == batch1].obsp[Key.obsp.spatial_conn()].A,
+            non_visium_adata.obsp[Key.obsp.spatial_conn()].A,
+        )
+        np.testing.assert_array_equal(
+            adata_concat[adata_concat.obs.library_id == batch2].obsp[Key.obsp.spatial_conn()].A,
+            non_visium_adata2.obsp[Key.obsp.spatial_conn()].A,
+        )
 
     @pytest.mark.parametrize("set_diag", [False, True])
     @pytest.mark.parametrize("radius", [(0, np.inf), (2.0, 4.0), (-42, -420), (100, 200)])
