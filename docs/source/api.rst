@@ -46,6 +46,9 @@ Plotting
 .. autosummary::
     :toctree: api
 
+    pl.spatial_scatter
+    pl.spatial_segment
+    pl.spatial_plot
     pl.nhood_enrichment
     pl.centrality_scores
     pl.interaction_matrix
@@ -53,9 +56,6 @@ Plotting
     pl.ripley
     pl.co_occurrence
     pl.extract
-    pl.spatial_scatter
-    pl.spatial_segment
-    pl.spatial_plot
 
 Datasets
 ~~~~~~~~

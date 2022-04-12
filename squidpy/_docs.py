@@ -147,7 +147,7 @@ _chunks_lazy = """\
 chunks
     Number of chunks for :mod:`dask`. For automatic chunking, use ``chunks = 'auto'``.
 lazy
-    Whether to lazily compute the result or not. Only used when ``chunks != None```."""
+    Whether to lazily compute the result or not. Only used when ``chunks != None``."""
 
 _ripley_stat_returns = """\
 If ``copy = True``, returns a :class:`dict` with following keys:
@@ -195,7 +195,7 @@ ax
 {_plotting_save}"""
 _plotting_scalebar = f"""\
 scalebar_dx
-    Size of one pixel in units specified by `scalebar_units`.
+    Size of one pixel in units specified by ``scalebar_units``.
 scalebar_units
     Units of `scalebar_dx`.
 {_plotting_ax}"""
@@ -203,17 +203,17 @@ _plotting_legend = f"""\
 legend_loc
     Location of legend, see :class:`matplotlib.legend.Legend`.
 legend_fontsize
-    Font size of legend, see:meth:`matplotlib.text.Text.set_fontsize`.
+    Font size of legend, see :meth:`matplotlib.text.Text.set_fontsize`.
 legend_fontweight
     Font weight of legend, see :meth:`matplotlib.text.Text.set_fontweight`.
 legend_fontoutline
     Font outline of legend, see :class:`matplotlib.patheffects.withStroke`.
 legend_na
-    If there are missing values, whether they get an entry in the legend.
+    Whether to show NA values in the legend.
 {_plotting_scalebar}"""
 _plotting_outline = f"""\
 outline
-    If set to True, a thin border around points/shapes is plotted.
+    If `True`, a thin border around points/shapes is plotted.
 outline_color
     Color of the border.
 outline_width
@@ -221,7 +221,7 @@ outline_width
 {_plotting_legend}"""
 _plotting_panels = f"""\
 library_first
-    If multiple libraries are plotted, set the plotting order with respect to `color`.
+    If multiple libraries are plotted, set the plotting order with respect to ``color``.
 frameon
     If True, draw a frame around the panel.
 wspace
@@ -243,30 +243,30 @@ connectivity_key
 {_plotting_panels}"""
 _plotting_sizecoords = f"""\
 size
-    Size of the scatter point/shape. In case of `spatial_shape` it represents to the
-    scaling factor for shape (accessed with `size_key`). In case of `spatial_point`,
-    it represents the `size` argument in :func:`matplotlib.pyplot.scatter`.
+    Size of the scatter point/shape. In case of ``spatial_shape`` it represents to the
+    scaling factor for shape (accessed with ``size_key``). In case of ``spatial_point``,
+    it represents the ``size`` argument in :func:`matplotlib.pyplot.scatter`.
 size_key
     Key of of pixel size of shapes to be plotted, stored in :attr:`anndata.AnnData.uns`.
-    Only needed for `spatial_shape`.
+    Only needed for ``spatial_shape``.
 scale_factor
     Scaling factor used to map from coordinate space to pixel space.
-    Found by default if `library_id` and `img_key` can be resolved.
-    Otherwise defaults to `1.`.
+    Found by default if ``library_id`` and ``img_key`` can be resolved.
+    Otherwise defaults to ``1``.
 crop_coord
     Coordinates to use for cropping the image (left, right, top, bottom).
-    These coordinates are expected to be in pixel space (same as `spatial`)
-    and will be transformed by `scale_factor`.
-    If not provided, image is automatically cropped to bounds of `spatial`,
+    These coordinates are expected to be in pixel space (same as ``spatial``)
+    and will be transformed by ``scale_factor``.
+    If not provided, image is automatically cropped to bounds of ``spatial``,
     plus a border.
 cmap
-    Colormap for continuous annotations. See :class:`matplotlib.colors.Colormap`.
+    Colormap for continuous annotations, see :class:`matplotlib.colors.Colormap`.
 palette
-    Palette for discrete annotations. See :class:`matplotlib.colors.Colormap`.
+    Palette for discrete annotations, see :class:`matplotlib.colors.Colormap`.
 alpha
     Alpha value for scatter point/shape.
 norm
-    Colormap normalization for continuous annotations. See :class:`matplotlib.colors.Normalize`.
+    Colormap normalization for continuous annotations, see :class:`matplotlib.colors.Normalize`.
 na_color
     Color to be used for NAs values, if present.
 {_plotting_edges}"""
@@ -274,9 +274,9 @@ _plotting_features = f"""\
 use_raw
     If True, use :attr:`anndata.AnnData.raw`.
 layer
-    Which layer to use for features.
+    Key in :attr`anndata.AnnData.layers` or `None` for :attr:`anndata.AnnData.X`.
 alt_var
-    Which column to use in :attr:`anndata.AnnData.var` to select alternative `var_name`.
+    Which column to use in :attr:`anndata.AnnData.var` to select alternative ``var_name``.
 {_plotting_sizecoords}"""
 
 _plotting_segment = """\
@@ -290,7 +290,7 @@ cell_id_key
     valid segmentation masks.
 seg_contourpx
     Draw contour of specified width for each segment. If `None`, fills
-    entire segment. See :func:`skimage.morphology.erosion`.
+    entire segment, see :func:`skimage.morphology.erosion`.
 seg_outline
     Whether to plot boundaries around segmentation masks."""
 
@@ -299,12 +299,12 @@ img
     Whether to plot the image. One (or more) :class:`numpy.ndarray` can also be
     passed for plotting.
 img_res_key
-    Key for image resolution, used to get `img` and `scale_factor` from `"images"`
-    and `"scalefactors"` entries for this library.
+    Key for image resolution, used to get ``img`` and ``scale_factor`` from ``"images"``
+    and ``"scalefactors"`` entries for this library.
 img_alpha
     Alpha value for the underlying image.
 image_cmap
-    Colormap for the image. See :class:`matplotlib.colors.Colormap`.
+    Colormap for the image, see :class:`matplotlib.colors.Colormap`.
 img_channel
     To select which channel to plot (all by default)."""
 
@@ -316,18 +316,19 @@ color
     Which features to plot from :class:`anndata.AnnData`."""
 _groups = """\
 groups
-    For discrete annotation in `color`, select which values to plot (other values are set to NAs)."""
+    For discrete annotation in ``color``, select which values to plot (other values are set to NAs)."""
 _plotting_library_id = """\
 library_id
-    Select one or some of the unique `library_id` that constitute the AnnData to plot."""
+    Select one or some of the unique ``library_id`` that constitute the AnnData to plot."""
 _library_key = """\
 library_key
-    If multiple `library_id`, column in :attr:`anndata.AnnData.obs` which stores mapping between `library_id` and obs"""
+    If multiple `library_id`, column in :attr:`anndata.AnnData.obs`
+    which stores mapping between ``library_id`` and obs"""
 
 _cat_plotting = f"""\
 palette
     Categorical colormap for the clusters.
-    If `None`, use :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``, if available.
+    If ``None``, use :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``, if available.
 {_plotting_save}"""
 
 _heatmap_plotting = f"""\
@@ -357,9 +358,9 @@ with image data.
 2. Coordinates are in the pixel space of the source image, so an equal
 aspect ratio is assumed.
 
-If your anndata object has a `"spatial"` entry in `.uns`, the `img_key`, `seg_key`
-and `library_id` parameters to find values for `img`, `seg`, `scale_factor`,
-and `spot_size` arguments. Alternatively, these values be passed directly.
+If your anndata object has a ``"spatial"`` entry in ``.uns``, the ``img_key``, ``seg_key``
+and ``library_id`` parameters to find values for ``img``, ``seg``, ``scale_factor``,
+and ``spot_size`` arguments. Alternatively, these values be passed directly.
 """
 
 _plotting_point_summary = """\
@@ -369,34 +370,34 @@ coordinate space.
 
 _plotting_shape_summary = """\
 The plotted shapes (circles, squares or hexagons) have a real "size" with respect to their
-coordinate space, which can be specified via the `size` or `size_key` parameter.
+coordinate space, which can be specified via the ``size`` or ``size_key`` parameter.
 
 This function allows overlaying data on top of images.
 
-Use the parameter `img_key` to see the image in the background
-and the parameter `library_id` to select the image.
-By default, `'hires'` key is attempted.
-Use `img_alpha`, `img_cmap` or `img_channel` to control how it is displayed.
-Use `size` to scale the size of the shapes plotted on top.
+Use the parameter ``img_key`` to see the image in the background
+and the parameter ``library_id`` to select the image.
+By default, ``'hires'`` key is attempted.
+Use ``img_alpha``, ``img_cmap`` or ``img_channel`` to control how it is displayed.
+Use ``size`` to scale the size of the shapes plotted on top.
 """
 
 _plotting_segment_summary = """\
 This function allows overlaying segmentation masks on top of images.
 
-Use the parameter `seg_key` to see the image in the background
-and the parameter `library_id` to select the image.
+Use the parameter ``seg_key`` to see the image in the background
+and the parameter ``library_id`` to select the image.
 
-By default, `'segmentation'` `seg_key` is attempted and
-`'hires'` image key is attempted.
-Use `img_alpha`, `img_cmap` or `img_channel` to control how the image is displayed.
-Use `seg_contourpx` or `seg_outline` to control how the segmentation mask is displayed.
+By default, ``'segmentation'`` ``seg_key`` is attempted and
+``'hires'`` image key is attempted.
+Use ``img_alpha``, ``img_cmap` or ``img_channel`` to control how the image is displayed.
+Use ``seg_contourpx`` or ``seg_outline`` to control how the segmentation mask is displayed.
 """
 
 _plotting_general_summary = """\
-Use the parameter `library_id` to select the image.
-If multiple `library_id` are available, use `library_key` to plot subsets of
+Use the parameter ``library_id`` to select the image.
+If multiple ``library_id`` are available, use ``library_key`` to plot subsets of
 the :class:`anndata.AnnData`.
-Use `crop_coord` to crop the spatial plot based on coordinate boundaries.
+Use ``crop_coord`` to crop the spatial plot based on coordinate boundaries.
 
 As this function is designed to for imaging data, there are two key assumptions
 about how coordinates are handled:
@@ -407,8 +408,8 @@ with image data.
 2. Coordinates are in the pixel space of the source image, so an equal
 aspect ratio is assumed.
 
-If your anndata object has a `"spatial"` entry in `.uns`, the `img_key`, `seg_key`
-and `library_id` parameters to find values for `img`, `seg` and `scale_factor`.
+If your anndata object has a `"spatial"` entry in ``.uns``, the ``img_key``, ``seg_key``
+and ``library_id`` parameters to find values for ``img``, ``seg`` and ``scale_factor``.
 Alternatively, these values can be passed directly.
 """
 
