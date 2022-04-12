@@ -38,12 +38,12 @@ _adata.raw = _adata.copy()
 
 @pytest.fixture(scope="session")
 def adata_hne() -> AnnData:
-    return sq.datasets.visium_hne_adata_crop().copy()
+    return sq.datasets.visium_hne_adata_crop()
 
 
 @pytest.fixture(scope="session")
 def adata_hne_concat() -> AnnData:
-    adata1 = sq.datasets.visium_hne_adata_crop().copy()
+    adata1 = sq.datasets.visium_hne_adata_crop()
     spatial_neighbors(adata1)
     adata2 = adata1[0:100, :].copy()
     adata2.uns["spatial"] = {}

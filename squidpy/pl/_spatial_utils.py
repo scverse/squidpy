@@ -135,7 +135,7 @@ def _get_library_id(
         return library_id
     if library_key is not None:
         if library_key not in adata.obs.columns:
-            raise ValueError(f"`library_key: {library_key}` not in `adata.obs`.")
+            raise KeyError(f"`library_key: {library_key}` not in `adata.obs`.")
         if library_id is None:
             library_id = adata.obs[library_key].cat.categories.tolist()
         _assert_value_in_obs(adata, key=library_key, val=library_id)
@@ -165,11 +165,10 @@ def _get_image(
     img_channel: int | None = None,
     img_cmap: Colormap | str | None = None,
 ) -> Union[Sequence[NDArrayA], Tuple[None, ...]]:
-
     image_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.image_key, library_id)
     if img_res_key is None:
-        img_res_key = _get_unique_map(image_mapping)  # get intersection of image_mapping.values()
-        img_res_key = img_res_key[0]  # get first of set
+        _img_res_key = _get_unique_map(image_mapping)  # get intersection of image_mapping.values()
+        _img_res_key = _img_res_key[0]  # get first of set
     else:
         if img_res_key not in _get_unique_map(image_mapping):
             raise ValueError(
@@ -183,7 +182,7 @@ def _get_image(
         img = _get_list(img, np.ndarray, len(library_id), "img")
         img = [im[..., _img_channel] for im in img]
     else:
-        img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_res_key][..., _img_channel] for i in library_id]
+        img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][_img_res_key][..., _img_channel] for i in library_id]
     if img_cmap == "gray":
         img = [np.dot(im[..., :3], [0.2989, 0.5870, 0.1140]) for im in img]
     return img
@@ -197,7 +196,6 @@ def _get_segment(
     seg: _SeqArray | bool = None,
     seg_key: str | None = None,
 ) -> Tuple[Sequence[NDArrayA], Sequence[NDArrayA]] | Tuple[Tuple[None, ...], Tuple[None, ...]]:
-
     if cell_id_key not in adata.obs.columns:
         raise ValueError(f"`cell_id_key: {cell_id_key}` not in `adata.obs`.")
     cell_id_vec = adata.obs[cell_id_key].values
@@ -224,7 +222,6 @@ def _get_scalefactor_size(
     size: _SeqFloat = None,
     size_key: str | None = Key.uns.size_key,
 ) -> Tuple[Sequence[float], Sequence[float]]:
-
     try:
         scalefactor_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.scalefactor_key, library_id)
         scalefactors = _get_unique_map(scalefactor_mapping)
@@ -284,7 +281,6 @@ def _image_spatial_attrs(
     size_key: str | None = Key.uns.size_key,
     img_cmap: Colormap | str | None = None,
 ) -> SpatialParams:
-
     library_id = _get_library_id(
         adata=adata, shape=shape, spatial_key=spatial_key, library_id=library_id, library_key=library_key
     )
@@ -339,7 +335,6 @@ def _set_coords_crops(
     library_key: str | None = None,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
 ) -> Tuple[Sequence[NDArrayA], List[TupleSerializer] | Tuple[None, ...]]:
-
     # set crops
     if crop_coord is None:
         crops: Union[List[TupleSerializer], Tuple[None, ...]] = tuple(None for _ in spatial_params.library_id)
@@ -359,6 +354,8 @@ def _set_coords_crops(
 
 def _subs(adata: AnnData, library_key: str | None = None, library_id: str | None = None) -> AnnData:
     try:
+        if not adata[adata.obs[library_key] == library_id].shape[0]:
+            raise ValueError("Subset is empty.")
         return adata[adata.obs[library_key] == library_id]
     except KeyError:
         raise KeyError(
@@ -366,7 +363,7 @@ def _subs(adata: AnnData, library_key: str | None = None, library_id: str | None
         )
 
 
-def _get_unique_map(dic: Mapping[str, Any]) -> Any:
+def _get_unique_map(dic: Mapping[str, Any]) -> Sequence[Any]:
     """Get intersection of dict values."""
     return sorted(set.intersection(*map(set, dic.values())))
 
@@ -401,7 +398,6 @@ def _set_color_source_vec(
     palette: Palette_t = None,
     na_color: str | Tuple[float, ...] | None = None,
 ) -> Tuple[NDArrayA | pd.Series | None, NDArrayA, bool]:
-
     to_hex = partial(colors.to_hex, keep_alpha=True)
 
     if value_to_plot is None:
@@ -640,7 +636,6 @@ def _map_color_seg(
     seg_boundaries: bool = False,
     na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
 ) -> NDArrayA:
-
     cell_id = np.array(cell_id)
 
     if is_categorical_dtype(color_vector):
