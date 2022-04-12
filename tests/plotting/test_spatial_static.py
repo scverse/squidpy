@@ -166,7 +166,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
 
 class TestSpatialStaticUtils:
     @staticmethod
-    def _create_anndata(self, shape: str | None, library_id: str | Sequence[str] | None, library_key: str | None):
+    def _create_anndata(shape: str | None, library_id: str | Sequence[str] | None, library_key: str | None):
         n_obs = len(library_id) * 2 if isinstance(library_id, list) else 2
         X = np.empty((n_obs, 3))
         if not isinstance(library_id, list) and library_id is not None:
@@ -182,7 +182,7 @@ class TestSpatialStaticUtils:
     @pytest.mark.parametrize("library_id", [None, "1", ["1"], ["1", "2"]])
     @pytest.mark.parametrize("library_key", [None, "batch_key"])
     def test_get_library_id(self, shape, library_id, library_key):
-        adata = self._create_anndata(shape, library_id, library_key)
+        adata = TestSpatialStaticUtils._create_anndata(shape, library_id, library_key)
         if not isinstance(library_id, list) and library_id is not None:
             library_id = [library_id]
         _get_libid = partial(

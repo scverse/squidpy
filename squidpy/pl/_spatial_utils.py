@@ -171,7 +171,7 @@ def _get_image(
         _img_res_key = _img_res_key[0]  # get first of set
     else:
         if img_res_key not in _get_unique_map(image_mapping):
-            raise ValueError(
+            raise KeyError(
                 f"Image key: `{img_res_key}` does not exist. Available image keys: `{image_mapping.values()}`"
             )
         _img_res_key = img_res_key
@@ -180,7 +180,7 @@ def _get_image(
     if max(_img_channel) > 2:
         raise ValueError(f"Invalid value for `img_channel: {_img_channel}`.")
     if isinstance(img, np.ndarray) or isinstance(img, list):
-        img = _get_list(img, np.ndarray, len(library_id), "img")
+        img = _get_list(img, _type=np.ndarray, ref_len=len(library_id), name="img")
         img = [im[..., _img_channel] for im in img]
     else:
         img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][_img_res_key][..., _img_channel] for i in library_id]
@@ -203,7 +203,7 @@ def _get_segment(
 
     if library_key not in adata.obs:
         raise ValueError(f"`library_key: {library_key}` not in `adata.obs`.")
-    if np.issubdtype(cell_id_vec.dtype, np.integer):
+    if not np.issubdtype(cell_id_vec.dtype, np.integer):
         raise ValueError(f"Invalid type {cell_id_vec.dtype} for `adata.obs[{cell_id_key}]`.")
     cell_id_vec = [cell_id_vec[adata.obs[library_key] == lib] for lib in library_id]
 
