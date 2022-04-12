@@ -134,7 +134,7 @@ def _get_library_id(
             raise ValueError(f"Could not fetch `library_id`, check that `spatial_key: {spatial_key}` is correct.")
         return library_id
     if library_key is not None:
-        if library_key not in adata.obs.columns:
+        if library_key not in adata.obs:
             raise KeyError(f"`library_key: {library_key}` not in `adata.obs`.")
         if library_id is None:
             library_id = adata.obs[library_key].cat.categories.tolist()
@@ -196,13 +196,13 @@ def _get_segment(
     seg: _SeqArray | bool = None,
     seg_key: str | None = None,
 ) -> Tuple[Sequence[NDArrayA], Sequence[NDArrayA]] | Tuple[Tuple[None, ...], Tuple[None, ...]]:
-    if cell_id_key not in adata.obs.columns:
-        raise ValueError(f"`cell_id_key: {cell_id_key}` not in `adata.obs`.")
+    if cell_id_key not in adata.obs:
+        raise ValueError(f"Cell id `{cell_id_key!r}` not found in `adata.obs`.")
     cell_id_vec = adata.obs[cell_id_key].values
 
-    if library_key not in adata.obs.columns:
+    if library_key not in adata.obs:
         raise ValueError(f"`library_key: {library_key}` not in `adata.obs`.")
-    if cell_id_vec.dtype != np.int_:
+    if np.issubdtype(cell_id_vec.dtype, np.integer):
         raise ValueError(f"Invalid type {cell_id_vec.dtype} for `adata.obs[{cell_id_key}]`.")
     cell_id_vec = [cell_id_vec[adata.obs[library_key] == lib] for lib in library_id]
 
@@ -402,9 +402,9 @@ def _set_color_source_vec(
 
     if value_to_plot is None:
         return np.full(adata.n_obs, to_hex(na_color)), np.broadcast_to(np.nan, adata.n_obs), False
-    if alt_var is not None and value_to_plot not in adata.obs.columns and value_to_plot not in adata.var_names:
+    if alt_var is not None and value_to_plot not in adata.obs and value_to_plot not in adata.var_names:
         value_to_plot = adata.var_names[adata.var[alt_var] == value_to_plot][0]
-    if use_raw and value_to_plot not in adata.obs.columns:
+    if use_raw and value_to_plot not in adata.obs:
         color_source_vector = adata.raw.obs_vector(value_to_plot)
     else:
         color_source_vector = adata.obs_vector(value_to_plot, layer=layer)
@@ -686,7 +686,7 @@ def _prepare_args_plot(
 
     # set palette if missing
     for c in color:
-        if c is not None and c in adata.obs.columns and is_categorical_dtype(adata.obs[c]):
+        if c is not None and c in adata.obs and is_categorical_dtype(adata.obs[c]):
             _maybe_set_colors(source=adata, target=adata, key=c, palette=palette)
 
     # check raw
