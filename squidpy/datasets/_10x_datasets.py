@@ -1,6 +1,5 @@
-from typing import Optional
+from typing import Optional, NamedTuple
 from pathlib import Path
-from collections import namedtuple
 from typing_extensions import Literal
 import tarfile
 
@@ -14,7 +13,12 @@ from squidpy._constants._constants import TenxVersions
 
 __all__ = ["visium"]
 
-VisiumFiles = namedtuple("VisiumFiles", ["feature_matrix", "spatial_attrs", "tif_image"])
+
+class VisiumFiles(NamedTuple):
+    feature_matrix: str
+    spatial_attrs: str
+    tif_image: str
+
 
 _VisiumDatasets = Literal[
     # spaceranger version 1.1.0 datasets
