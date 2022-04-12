@@ -33,19 +33,20 @@ def _get_palette(
     if palette is None:
         try:
             _palette = adata.uns[Key.uns.colors(cluster_key)]
-            if len(_palette) < len(categories):
-                raise ValueError(
-                    f"Expected to find at least `{len(categories)}` colors, "
-                    f"found `{len(_palette)}` for key `{cluster_key}`."
-                )
+            if len(_palette) != len(categories):
+                raise ValueError(f"Expected palette to be of length `{len(categories)}`, found `{len(_palette)}`.")
+            return dict(zip(categories, _palette))
         except KeyError as e:
             logg.error(f"Unable to fetch palette, reason: {e}. Using `None`.")
             return None
-    elif isinstance(palette, str):
-        len_cat = len(adata.obs[cluster_key].cat.categories)
+
+    len_cat = len(adata.obs[cluster_key].cat.categories)
+
+    if isinstance(palette, str):
         cmap = plt.get_cmap(palette)
         _palette = [to_hex(x) for x in cmap(np.linspace(0, 1, len_cat))]
     elif isinstance(palette, ListedColormap):
+        # TODO(michalk8): test this, seems wrong
         _palette = [to_hex(x) for x in palette(np.linspace(0, 1, len_cat))]
     else:
         raise TypeError(f"Palette is {type(palette)} but should be string or `ListedColormap`.")

@@ -603,11 +603,11 @@ def _decorate_axs(
         # Adding legends
         if is_categorical_dtype(color_source_vector):
             clusters = color_source_vector.categories
-            _palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
+            palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
             _add_categorical_legend(
                 ax,
                 color_source_vector,
-                palette=_palette,
+                palette=palette,
                 scatter_array=coords,
                 legend_loc=legend_loc,
                 legend_fontweight=legend_fontweight,
