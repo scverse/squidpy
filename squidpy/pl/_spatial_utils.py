@@ -23,7 +23,6 @@ import itertools
 from scanpy import logging as logg
 from anndata import AnnData
 from scanpy._settings import settings as sc_settings
-from scanpy.plotting._utils import _FontSize, _FontWeight
 from scanpy.plotting._tools.scatterplots import _add_categorical_legend
 
 from pandas.api.types import CategoricalDtype
@@ -59,6 +58,8 @@ _SeqStr = Union[str, Sequence[str]]
 _SeqFloat = Union[float, Sequence[float]]
 _SeqArray = Union[NDArrayA, Sequence[NDArrayA]]
 _CoordTuple = Tuple[int, int, int, int]
+_FontWeight = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
+_FontSize = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
 
 
 # named tuples

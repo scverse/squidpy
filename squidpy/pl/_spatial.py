@@ -8,7 +8,6 @@ from functools import partial
 import itertools
 
 from anndata import AnnData
-from scanpy.plotting._utils import _FontSize, _FontWeight
 
 from matplotlib.axes import Axes
 from matplotlib.colors import Colormap
@@ -20,11 +19,13 @@ from squidpy.pl._utils import save_fig, sanitize_anndata
 from squidpy.pl._spatial_utils import (
     _subs,
     _SeqStr,
+    _FontSize,
     _SeqArray,
     _SeqFloat,
     Palette_t,
     _Normalize,
     _CoordTuple,
+    _FontWeight,
     _plot_edges,
     _AvailShapes,
     _set_outline,
