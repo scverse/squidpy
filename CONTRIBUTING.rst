@@ -201,7 +201,7 @@ This will create a new file in the appropriate location that needs to me modifie
 
 To locally create the news fragment from an already existing PR, just run::
 
-    tox -e news -- <PR_NUMBER>
+    tox -e news -- <PR_NUMBER> --add-author
 
 Lastly, in order to see how the current news fragments would look like in the release notes, run::
 

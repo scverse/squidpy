@@ -123,10 +123,18 @@ def spatial_autocorr(
     _assert_connectivity_key(adata, connectivity_key)
 
     if genes is None:
-        if "highly_variable" in adata.var.columns:
-            genes = adata[:, adata.var.highly_variable.values].var_names.values
+        if "highly_variable" in adata.var:
+            genes = adata[:, adata.var["highly_variable"]].var_names.values
         else:
             genes = adata.var_names.values
+    if use_raw:
+        if adata.raw is None:
+            raise AttributeError("No `.raw` attribute found. Try specifying `use_raw=False`.")
+        genes = list(set(genes) & set(adata.raw.var_names))
+        vals = adata.raw[:, genes].X.T
+    else:
+        vals = _get_obs_rep(adata[:, genes], use_raw=False, layer=layer).T
+
     genes = _assert_non_empty_sequence(genes, name="genes")
 
     mode = SpatialAutocorr(mode)  # type: ignore[assignment]
@@ -147,16 +155,13 @@ def spatial_autocorr(
     else:
         raise NotImplementedError(f"Mode `{mode}` is not yet implemented.")
 
-    n_jobs = _get_n_cores(n_jobs)
-
-    vals = _get_obs_rep(adata[:, genes], use_raw=use_raw, layer=layer).T
     g = adata.obsp[connectivity_key].copy()
-    # row-normalize
-    if transformation:
+    if transformation:  # row-normalize
         normalize(g, norm="l1", axis=1, copy=False)
 
     score = params["func"](g, vals)
 
+    n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
         _assert_positive(n_perms, name="n_perms")
@@ -177,10 +182,7 @@ def spatial_autocorr(
     with np.errstate(divide="ignore"):
         pval_results = _p_value_calc(score, score_perms, g, params)
 
-    results = {params["stat"]: score}
-    results.update(pval_results)
-
-    df = pd.DataFrame(results, index=genes)
+    df = pd.DataFrame({params["stat"]: score, **pval_results}, index=genes)
 
     if corr_method is not None:
         for pv in filter(lambda x: "pval" in x, df.columns):
