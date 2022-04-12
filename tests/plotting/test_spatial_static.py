@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from typing import Sequence
 from functools import partial
 import pytest
 
@@ -162,7 +165,8 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
 
 
 class TestSpatialStaticUtils:
-    def _create_anndata(self, shape, library_id, library_key):
+    @staticmethod
+    def _create_anndata(self, shape: str | None, library_id: str | Sequence[str] | None, library_key: str | None):
         n_obs = len(library_id) * 2 if isinstance(library_id, list) else 2
         X = np.empty((n_obs, 3))
         if not isinstance(library_id, list) and library_id is not None:

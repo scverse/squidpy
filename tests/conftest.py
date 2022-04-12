@@ -32,19 +32,6 @@ DPI = 40
 
 C_KEY_PALETTE = "leiden"
 
-
-def cached_dataset(func):
-    store = []
-
-    @wraps(func)
-    def wrapper():
-        if len(store) < 1:
-            store.append(func())
-        return store[0].copy()
-
-    return wrapper
-
-
 _adata = sc.read("tests/_data/test_data.h5ad")
 _adata.raw = _adata.copy()
 
