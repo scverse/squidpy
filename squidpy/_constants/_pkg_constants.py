@@ -146,7 +146,7 @@ class Key:
             library_id: Sequence[str] | str | None = None,
             return_all: bool = False,
         ) -> Sequence[str] | str | None:
-            library_id = cls._haystack(adata, spatial_key, library_id, sub_key=None)
+            library_id = cls._sort_haystack(adata, spatial_key, library_id, sub_key=None)
             if library_id is not None and not return_all:
                 if len(library_id) > 1:
                     raise ValueError(
@@ -166,11 +166,11 @@ class Key:
             sub_key: str,
             library_id: Sequence[str] | str | None = None,
         ) -> Mapping[str, Sequence[str]]:
-            library_id = cls._haystack(adata, spatial_key, library_id, sub_key)
+            library_id = cls._sort_haystack(adata, spatial_key, library_id, sub_key)
             return {i: list(adata.uns[spatial_key][i][sub_key].keys()) for i in library_id}
 
         @classmethod
-        def _haystack(
+        def _sort_haystack(
             cls,
             adata: AnnData,
             spatial_key: str,

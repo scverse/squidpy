@@ -107,7 +107,7 @@ def _spatial_plot(
     axis_label: _SeqStr | None = None,
     fig: Figure | None = None,
     ax: Axes | Sequence[Axes] | None = None,
-    figsize: tuple[float, float] | None = None,
+    figsize: Tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
     # kwargs

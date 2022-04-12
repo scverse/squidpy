@@ -724,7 +724,7 @@ def _prepare_params_plot(
     axis_label: _SeqStr | None = None,
     scalebar_dx: _SeqFloat | None = None,
     scalebar_units: _SeqStr | None = None,
-    figsize: tuple[float, float] | None = None,
+    figsize: Tuple[float, float] | None = None,
     dpi: int | None = None,
     fig: Figure | None = None,
     ax: Axes | Sequence[Axes] | None = None,
@@ -797,7 +797,7 @@ def _panel_grid(
     hspace: float,
     wspace: float,
     ncols: int,
-    figsize: tuple[float, float],
+    figsize: Tuple[float, float],
     dpi: int | None = None,
 ) -> Tuple[Figure, GridSpec]:
     n_panels_x = min(ncols, num_panels)
