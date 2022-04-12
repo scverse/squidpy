@@ -79,6 +79,7 @@ Scanpy
 segmentations
 seqFISH
 seqV
+seg
 Squidpy
 StarDist
 stromal
