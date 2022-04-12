@@ -33,7 +33,13 @@ import pandas as pd
 from matplotlib import colors, pyplot as plt, rcParams, patheffects
 from matplotlib.cm import get_cmap
 from matplotlib.axes import Axes
-from matplotlib.colors import Colormap, Normalize, TwoSlopeNorm, ListedColormap
+from matplotlib.colors import (
+    Colormap,
+    Normalize,
+    TwoSlopeNorm,
+    ColorConverter,
+    ListedColormap,
+)
 from matplotlib.figure import Figure
 from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib.gridspec import GridSpec
@@ -472,7 +478,9 @@ def _shaped_scatter(
         collection.set_array(np.ma.masked_invalid(c))
         collection.set_norm(norm)
     else:
+        alpha = ColorConverter().to_rgba_array(c)[..., -1]
         collection.set_facecolor(c)
+        collection.set_alpha(alpha)
 
     return collection
 
