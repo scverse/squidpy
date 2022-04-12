@@ -29,10 +29,10 @@ img
     High-resolution image."""
 _copy = """\
 copy
-    If `True`, return the result, otherwise save it to the ``adata`` object."""
+    If ``True``, return the result, otherwise save it to the ``adata`` object."""
 _copy_cont = """\
 copy
-    If `True`, return the result, otherwise save it to the image container."""
+    If ``True``, return the result, otherwise save it to the image container."""
 _numba_parallel = """\
 numba_parallel
     Whether to use :class:`numba.prange` or not. If `None`, it is determined automatically.
