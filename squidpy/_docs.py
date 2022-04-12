@@ -201,13 +201,13 @@ scalebar_units
 {_plotting_ax}"""
 _plotting_legend = f"""\
 legend_loc
-    Location of legend, see :class:`matplotlib.legend.Legend`.
+    Location of the legend, see :class:`matplotlib.legend.Legend`.
 legend_fontsize
-    Font size of legend, see :meth:`matplotlib.text.Text.set_fontsize`.
+    Font size of the legend, see :meth:`matplotlib.text.Text.set_fontsize`.
 legend_fontweight
-    Font weight of legend, see :meth:`matplotlib.text.Text.set_fontweight`.
+    Font weight of the legend, see :meth:`matplotlib.text.Text.set_fontweight`.
 legend_fontoutline
-    Font outline of legend, see :class:`matplotlib.patheffects.withStroke`.
+    Font outline of the legend, see :class:`matplotlib.patheffects.withStroke`.
 legend_na
     Whether to show NA values in the legend.
 {_plotting_scalebar}"""
@@ -313,7 +313,7 @@ shape
     Whether to plot scatter plot of points or regular polygons."""
 _color = """\
 color
-    Which features to plot from :class:`anndata.AnnData`."""
+    Key for annotations in :attr:`adata.obs` or variables/genes."""
 _groups = """\
 groups
     For discrete annotation in ``color``, select which values to plot (other values are set to NAs)."""
@@ -352,10 +352,10 @@ _plotting_general_summary = """\
 As this function is designed to for imaging data, there are two key assumptions
 about how coordinates are handled:
 
-1. The origin (e.g `(0, 0)`) is at the top left - as is common convention
+#. The origin (e.g `(0, 0)`) is at the top left - as is common convention
 with image data.
 
-2. Coordinates are in the pixel space of the source image, so an equal
+#. Coordinates are in the pixel space of the source image, so an equal
 aspect ratio is assumed.
 
 If your anndata object has a ``"spatial"`` entry in ``.uns``, the ``img_key``, ``seg_key``

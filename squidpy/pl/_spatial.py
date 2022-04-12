@@ -44,7 +44,7 @@ from squidpy._constants._pkg_constants import Key
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
-def spatial_plot(
+def _spatial_plot(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
     shape: _AvailShapes | None = None,
@@ -75,7 +75,7 @@ def spatial_plot(
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
     cmap: Colormap | str | None = None,
     palette: Palette_t = None,
-    alpha: float | None = None,
+    alpha: float = 1.0,
     norm: _Normalize | None = None,
     na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
     # edges
@@ -117,6 +117,12 @@ def spatial_plot(
 ) -> None:
     """
     Plot spatial omics data saved in AnnData.
+
+    This is a general purpose function for plotting scatterplots, images and segmentation masks.
+    Consider using :func:`squidpy.pl.spatial_scatter` or :func:`squidpy.pl.spatial_segment` for
+    specific use cases.
+
+    %(plotting_general_summary)s
 
     Parameters
     ----------
@@ -321,7 +327,7 @@ def spatial_scatter(
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
-) -> None:
+) -> Any:
     """
     Plot scatter plot of shapes in spatial coordinates.
 
@@ -351,7 +357,7 @@ def spatial_scatter(
     -------
     %(plotting_returns)s
     """
-    spatial_plot(
+    return _spatial_plot(
         adata,
         shape=shape,
         img=img,
@@ -373,7 +379,7 @@ def spatial_segment(
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
-) -> None:
+) -> Any:
     """
     Plot segmentation masks in spatial coordinates.
 
@@ -403,7 +409,7 @@ def spatial_segment(
     -------
     %(plotting_returns)s
     """
-    spatial_plot(
+    return _spatial_plot(
         adata,
         img=img,
         seg=seg,

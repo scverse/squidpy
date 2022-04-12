@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Sequence, TYPE_CHECKING
+from typing import Any, Mapping, Sequence, TYPE_CHECKING
 from pathlib import Path
 from typing_extensions import Literal
 
@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 
 from matplotlib.axes import Axes
-from matplotlib.colors import ListedColormap
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -23,14 +22,11 @@ from squidpy.gr._utils import (
     _assert_non_empty_sequence,
 )
 from squidpy.pl._utils import _heatmap, save_fig
-from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
+from squidpy.pl._color_utils import Palette_t, _get_palette, _maybe_set_colors
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 
 __all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "ripley", "co_occurrence"]
-
-
-Palette_t = Union[str, ListedColormap, None]
 
 
 def _get_data(adata: AnnData, cluster_key: str, func_name: str, **kwargs: Any) -> Any:

@@ -18,9 +18,6 @@ from tests.conftest import PlotTester, PlotTesterMeta
 from squidpy.pl._spatial_utils import _get_library_id
 from squidpy._constants._pkg_constants import Key
 
-C_KEY = "Cluster"
-
-
 sc.set_figure_params(dpi=40, color_map="viridis")
 
 # WARNING:

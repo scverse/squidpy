@@ -146,13 +146,13 @@ def _get_library_id(
         logg.warning(
             "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
         )
-        library_id = [""]
+        library_id = [""]  # dummy value to maintain logic of number of plots (nplots=library_id*color)
     elif isinstance(library_id, list):  # get library_id from arg
-        library_id = library_id
+        pass
     elif isinstance(library_id, str):
         library_id = [library_id]
     else:
-        raise ValueError(f"Invalid `library_id`: {library_id}.")
+        raise TypeError(f"Invalid `library_id`: {library_id}.")
     return library_id
 
 
@@ -208,7 +208,7 @@ def _get_segment(
     cell_id_vec = [cell_id_vec[adata.obs[library_key] == lib] for lib in library_id]
 
     if isinstance(seg, np.ndarray) or isinstance(seg, list):
-        img_seg = _get_list(seg, np.ndarray, len(library_id), "img_seg")
+        img_seg = _get_list(seg, _type=np.ndarray, ref_len=len(library_id), name="img_seg")
     else:
         img_seg = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][seg_key] for i in library_id]
     return img_seg, cell_id_vec
@@ -239,7 +239,7 @@ def _get_scalefactor_size(
                 adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id
             ]
         else:  # handle case where scale_factor is float or list
-            scale_factor = _get_list(scale_factor, float, len(library_id), "scale_factor")
+            scale_factor = _get_list(scale_factor, _type=float, ref_len=len(library_id), name="scale_factor")
 
         if size_key not in scalefactors and size is None:
             raise ValueError(
@@ -248,7 +248,7 @@ def _get_scalefactor_size(
             )
         if size is None:
             size = 1.0
-        size = _get_list(size, float, len(library_id), "size")
+        size = _get_list(size, _type=float, ref_len=len(library_id), name="size")
         if not (len(size) == len(library_id) == len(scale_factor)):
             raise ValueError("Len of `size`, `library_id` and `scale_factor` do not match.")
         size = [
@@ -258,10 +258,10 @@ def _get_scalefactor_size(
         return scale_factor, size
     else:
         scale_factor = 1.0 if scale_factor is None else scale_factor
-        scale_factor = _get_list(scale_factor, float, len(library_id), "scale_factor")
+        scale_factor = _get_list(scale_factor, _type=float, ref_len=len(library_id), name="scale_factor")
 
         size = 120000 / adata.shape[0] if size is None else size
-        size = _get_list(size, Number, len(library_id), "size")
+        size = _get_list(size, _type=Number, ref_len=len(library_id), name="size")
         return scale_factor, size
 
 
@@ -340,7 +340,7 @@ def _set_coords_crops(
     if crop_coord is None:
         crops: Union[List[TupleSerializer], Tuple[None, ...]] = tuple(None for _ in spatial_params.library_id)
     else:
-        crop_coord = _get_list(crop_coord, tuple, len(spatial_params.library_id), "crop_coord")
+        crop_coord = _get_list(crop_coord, _type=tuple, ref_len=len(spatial_params.library_id), name="crop_coord")
         crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor)]
 
     coords = adata.obsm[spatial_key]
@@ -531,9 +531,9 @@ def _get_scalebar(
     len_lib: int | None = None,
 ) -> Tuple[Sequence[float] | None, Sequence[str] | None]:
     if scalebar_dx is not None:
-        _scalebar_dx = _get_list(scalebar_dx, float, len_lib, "scalebar_dx")
+        _scalebar_dx = _get_list(scalebar_dx, _type=float, ref_len=len_lib, name="scalebar_dx")
         scalebar_units = "um" if scalebar_units is None else scalebar_units
-        _scalebar_units = _get_list(scalebar_units, str, len_lib, "scalebar_units")
+        _scalebar_units = _get_list(scalebar_units, _type=str, ref_len=len_lib, name="scalebar_units")
     else:
         _scalebar_dx = None
         _scalebar_units = None
@@ -673,12 +673,11 @@ def _prepare_args_plot(
     color: Sequence[str | None] | str | None = None,
     groups: _SeqStr | None = None,
     img_alpha: float | None = None,
-    alpha: float | None = None,
+    alpha: float = 1.0,
     use_raw: bool | None = None,
     layer: str | None = None,
     palette: Palette_t = None,
 ) -> ColorParams:
-    alpha = 1.0 if alpha is None else alpha
     img_alpha = 1.0 if img_alpha is None else img_alpha
 
     # make colors and groups as list

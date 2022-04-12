@@ -48,7 +48,6 @@ Plotting
 
     pl.spatial_scatter
     pl.spatial_segment
-    pl.spatial_plot
     pl.nhood_enrichment
     pl.centrality_scores
     pl.interaction_matrix
