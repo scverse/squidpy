@@ -174,6 +174,7 @@ def _get_image(
             raise ValueError(
                 f"Image key: `{img_res_key}` does not exist. Available image keys: `{image_mapping.values()}`"
             )
+        _img_res_key = img_res_key
 
     _img_channel = [0, 1, 2] if img_channel is None else [img_channel]
     if max(_img_channel) > 2:
