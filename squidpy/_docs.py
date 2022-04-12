@@ -274,7 +274,7 @@ _plotting_features = f"""\
 use_raw
     If True, use :attr:`anndata.AnnData.raw`.
 layer
-    Key in :attr`anndata.AnnData.layers` or `None` for :attr:`anndata.AnnData.X`.
+    Key in :attr:`anndata.AnnData.layers` or `None` for :attr:`anndata.AnnData.X`.
 alt_var
     Which column to use in :attr:`anndata.AnnData.var` to select alternative ``var_name``.
 {_plotting_sizecoords}"""
@@ -358,7 +358,7 @@ with image data.
 #. Coordinates are in the pixel space of the source image, so an equal
 aspect ratio is assumed.
 
-If your anndata object has a ``"spatial"`` entry in ``.uns``, the ``img_key``, ``seg_key``
+If your AnnData object has a ``"spatial"`` entry in ``.uns``, the ``img_key``, ``seg_key``
 and ``library_id`` parameters to find values for ``img``, ``seg``, ``scale_factor``,
 and ``spot_size`` arguments. Alternatively, these values be passed directly.
 """
