@@ -248,7 +248,7 @@ def _get_scalefactor_size(
             )
         if size is None:
             size = 1.0
-        size = _get_list(size, _type=float, ref_len=len(library_id), name="size")
+        size = _get_list(size, _type=Number, ref_len=len(library_id), name="size")
         if not (len(size) == len(library_id) == len(scale_factor)):
             raise ValueError("Len of `size`, `library_id` and `scale_factor` do not match.")
         size = [
@@ -311,7 +311,7 @@ def _image_spatial_attrs(
             img_cmap=img_cmap,
         )
     else:
-        _img = tuple(None for _ in library_id)
+        _img = (None,) * len(library_id)
 
     if seg:
         _seg, _cell_vec = _get_segment(
