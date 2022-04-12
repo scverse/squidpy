@@ -384,6 +384,9 @@ def _get_list(
             raise ValueError(
                 f"Variable: `{name}` has length: {len(var)}, which is not equal to reference length: {ref_len}."
             )
+        for v in var:
+            if isinstance(var, _type):
+                raise ValueError(f"Variable: `{name}` has invalid type: {type(v)}, expected: {_type}.")
         return var
     else:
         raise ValueError(f"Can't make list from variable: `{var}`")
