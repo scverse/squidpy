@@ -407,26 +407,32 @@ def _set_color_source_vec(
 
     if value_to_plot is None:
         return np.full(adata.n_obs, to_hex(na_color)), np.broadcast_to(np.nan, adata.n_obs), False
+
     if alt_var is not None and value_to_plot not in adata.obs and value_to_plot not in adata.var_names:
         value_to_plot = adata.var_names[adata.var[alt_var] == value_to_plot][0]
     if use_raw and value_to_plot not in adata.obs:
         color_source_vector = adata.raw.obs_vector(value_to_plot)
     else:
         color_source_vector = adata.obs_vector(value_to_plot, layer=layer)
-    if groups is not None and is_categorical_dtype(color_source_vector):
-        color_source_vector = color_source_vector.replace(color_source_vector.categories.difference(groups), np.nan)
 
     if not is_categorical_dtype(color_source_vector):
         return None, color_source_vector, False
-    else:
-        clusters = color_source_vector.categories
-        color_map = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)  # type: ignore
-        color_vector = color_source_vector.rename_categories(color_map)
-        # Set color to 'missing color' for all missing values
-        if color_vector.isna().any():
-            color_vector = color_vector.add_categories([to_hex(na_color)])
-            color_vector = color_vector.fillna(to_hex(na_color))
-        return color_source_vector, color_vector, True
+
+    color_source_vector = pd.Categorical(color_source_vector)  # convert, e.g., `pd.Series`
+    categories = color_source_vector.categories
+    if groups is not None:
+        color_source_vector = color_source_vector.remove_categories(categories.difference(groups))
+
+    color_map = _get_palette(
+        adata, cluster_key=value_to_plot, categories=categories, palette=palette  # type: ignore[arg-type]
+    )
+    color_vector = color_source_vector.rename_categories(color_map)
+    # set color to 'missing color' for all missing values
+    if color_vector.isna().any():
+        color_vector = color_vector.add_categories([to_hex(na_color)])
+        color_vector = color_vector.fillna(to_hex(na_color))
+
+    return color_source_vector, color_vector, True
 
 
 def _shaped_scatter(
@@ -554,7 +560,7 @@ def _decorate_axs(
     coords: NDArrayA,
     value_to_plot: str,
     color_source_vector: pd.Series[CategoricalDtype],
-    crops: TupleSerializer | None = None,
+    crops: TupleSerializer | None = None,  # TODO(giovp): CropCoords is the correct type
     img: NDArrayA | None = None,
     img_cmap: str | None = None,
     img_alpha: float | None = None,
@@ -569,7 +575,6 @@ def _decorate_axs(
     scalebar_units: Sequence[str] | None = None,
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> Axes:
-
     ax.set_yticks([])
     ax.set_xticks([])
 
@@ -615,9 +620,9 @@ def _decorate_axs(
         ax.invert_yaxis()
 
     if crops is not None:
-        crops_tup = crops.to_tuple()
-        ax.set_xlim(crops_tup[0], crops_tup[1])
-        ax.set_ylim(crops_tup[3], crops_tup[2])
+        x0, x1, y1, y0 = crops.to_tuple()
+        ax.set_xlim(x0, x1)
+        ax.set_ylim(y0, y1)
 
     if isinstance(scalebar_dx, list) and isinstance(scalebar_units, list):
         scalebar = ScaleBar(scalebar_dx[lib_count], units=scalebar_units[lib_count], **scalebar_kwargs)
