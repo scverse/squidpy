@@ -54,8 +54,8 @@ from squidpy._constants._pkg_constants import Key
 
 _AvailShapes = Literal["circle", "square", "hex"]
 Palette_t = Optional[Union[str, ListedColormap]]
-_Normalize = Union[Normalize, Sequence[Normalize], None]
-_SeqStr = Union[str, Sequence[str], None]
+_Normalize = Union[Normalize, Sequence[Normalize]]
+_SeqStr = Union[str, Sequence[str]]
 _SeqFloat = Union[float, Sequence[float], None]
 _SeqArray = Union[NDArrayA, Sequence[NDArrayA], None]
 _CoordTuple = Tuple[int, int, int, int]
@@ -69,7 +69,7 @@ class FigParams(NamedTuple):
     ax: Axes
     axs: Sequence[Axes] | None
     iter_panels: Tuple[Any, Any]
-    title: _SeqStr
+    title: _SeqStr | None
     ax_labels: Sequence[str]
     frameon: bool | None
 
@@ -96,7 +96,7 @@ class ScalebarParams(NamedTuple):
     """Scalebar params."""
 
     scalebar_dx: Sequence[float] | None
-    scalebar_units: _SeqStr
+    scalebar_units: _SeqStr | None
 
 
 class ColorParams(NamedTuple):
@@ -395,7 +395,7 @@ def _set_color_source_vec(
     use_raw: bool | None = None,
     alt_var: str | None = None,
     layer: str | None = None,
-    groups: _SeqStr = None,
+    groups: _SeqStr | None = None,
     palette: Palette_t = None,
     na_color: str | Tuple[float, ...] | None = None,
 ) -> Tuple[NDArrayA | pd.Series | None, NDArrayA, bool]:
@@ -431,7 +431,7 @@ def _shaped_scatter(
     s: float,
     c: NDArrayA,
     shape: _AvailShapes | ScatterShape | None = ScatterShape.CIRCLE,
-    norm: _Normalize = None,
+    norm: _Normalize | None = None,
     **kwargs: Any,
 ) -> PatchCollection:
     """
@@ -501,8 +501,8 @@ def _plot_edges(
 
 
 def _get_title_axlabels(
-    title: _SeqStr, axis_label: _SeqStr, spatial_key: str, n_plots: int
-) -> Tuple[_SeqStr, Sequence[str]]:
+    title: _SeqStr | None, axis_label: _SeqStr | None, spatial_key: str, n_plots: int
+) -> Tuple[_SeqStr | None, Sequence[str]]:
     # handle title
     if title is not None:
         if isinstance(title, (tuple, list)) and len(title) != n_plots:
@@ -527,7 +527,7 @@ def _get_title_axlabels(
 
 def _get_scalebar(
     scalebar_dx: _SeqFloat = None,
-    scalebar_units: _SeqStr = None,
+    scalebar_units: _SeqStr | None = None,
     len_lib: int | None = None,
 ) -> Tuple[Sequence[float] | None, Sequence[str] | None]:
     if scalebar_dx is not None:
@@ -671,7 +671,7 @@ def _prepare_args_plot(
     adata: AnnData,
     shape: _AvailShapes | None = None,
     color: Sequence[str | None] | str | None = None,
-    groups: _SeqStr = None,
+    groups: _SeqStr | None = None,
     img_alpha: float | None = None,
     alpha: float | None = None,
     use_raw: bool | None = None,
@@ -716,15 +716,15 @@ def _prepare_params_plot(
     hspace: float = 0.25,
     ncols: int = 4,
     cmap: Colormap | str | None = None,
-    norm: _Normalize = None,
+    norm: _Normalize | None = None,
     library_first: bool = True,
     img_cmap: Colormap | str | None = None,
     frameon: bool | None = None,
     na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
-    title: _SeqStr = None,
-    axis_label: _SeqStr = None,
+    title: _SeqStr | None = None,
+    axis_label: _SeqStr | None = None,
     scalebar_dx: _SeqFloat = None,
-    scalebar_units: _SeqStr = None,
+    scalebar_units: _SeqStr | None = None,
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     fig: Figure | None = None,

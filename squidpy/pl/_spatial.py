@@ -49,8 +49,8 @@ def spatial_plot(
     spatial_key: str = Key.obsm.spatial,
     shape: _AvailShapes | None = None,
     color: Sequence[str | None] | str | None = None,
-    groups: _SeqStr = None,
-    library_id: _SeqStr = None,
+    groups: _SeqStr | None = None,
+    library_id: _SeqStr | None = None,
     library_key: str | None = None,
     # image
     img: _SeqArray | bool = None,
@@ -76,7 +76,7 @@ def spatial_plot(
     cmap: Colormap | str | None = None,
     palette: Palette_t = None,
     alpha: float | None = None,
-    norm: _Normalize = None,
+    norm: _Normalize | None = None,
     na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
     # edges
     edges: bool = False,
@@ -101,10 +101,10 @@ def spatial_plot(
     legend_na: bool = True,
     # scalebar
     scalebar_dx: _SeqFloat = None,
-    scalebar_units: _SeqStr = None,
+    scalebar_units: _SeqStr | None = None,
     # title and axis
-    title: _SeqStr = None,
-    axis_label: _SeqStr = None,
+    title: _SeqStr | None = None,
+    axis_label: _SeqStr | None = None,
     fig: Figure | None = None,
     ax: Axes | Sequence[Axes] | None = None,
     figsize: tuple[float, float] | None = None,
