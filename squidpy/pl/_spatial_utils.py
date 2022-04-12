@@ -615,7 +615,7 @@ def _decorate_axs(
                 legend_fontoutline=path_effect,
                 na_color=[na_color],
                 na_in_legend=na_in_legend,
-                multi_panel=True if fig_params.axs is not None else False,
+                multi_panel=fig_params.axs is not None,
             )
         else:
             # TODO: na_in_legend should have some effect here
