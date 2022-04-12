@@ -488,7 +488,7 @@ def _plot_edges(
 
     if connectivity_key not in adata.obsp:
         raise KeyError(
-            f"Unable to find `connectivity_key: {connectivity_key}` in `adata.obsp`. " "Please set `connectivity_key`."
+            f"Unable to find `connectivity_key: {connectivity_key}` in `adata.obsp`. Please set `connectivity_key`."
         )
 
     g = Graph(adata.obsp[connectivity_key])
@@ -517,7 +517,7 @@ def _get_title_axlabels(
 
     if isinstance(axis_label, list):
         if len(axis_label) != 2:
-            raise ValueError("Invalid `len(axis_label)={len(axis_label)}`.")
+            raise ValueError(f"Expected axis label to be of length `2`, found `{len(axis_label)}`.")
         axis_labels = axis_label
     elif isinstance(axis_label, str):
         axis_labels = [axis_label + str(x + 1) for x in range(2)]
@@ -558,7 +558,7 @@ def _decorate_axs(
     legend_fontsize: int | float | _FontSize | None = None,
     legend_fontweight: int | _FontWeight = "bold",
     legend_loc: str = "right margin",
-    legend_fontoutline: Optional[int] = None,
+    legend_fontoutline: int | None = None,
     na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
     na_in_legend: bool = True,
     scalebar_dx: Sequence[float] | None = None,
@@ -672,8 +672,8 @@ def _prepare_args_plot(
     shape: _AvailShapes | None = None,
     color: Sequence[str | None] | str | None = None,
     groups: _SeqStr = None,
-    img_alpha: Optional[float] = None,
-    alpha: Optional[float] = None,
+    img_alpha: float | None = None,
+    alpha: float | None = None,
     use_raw: bool | None = None,
     layer: str | None = None,
     palette: Palette_t = None,
@@ -695,7 +695,7 @@ def _prepare_args_plot(
         use_raw = layer is None and adata.raw is not None
     if use_raw and layer is not None:
         raise ValueError(
-            f"Cannot use both a layer and the raw representation. Was passed: use_raw={use_raw}, layer={layer}."
+            f"Cannot use both a layer and the raw representation. Got passed: use_raw={use_raw}, layer={layer}."
         )
     if adata.raw is None and use_raw:
         raise ValueError(f"`use_raw={use_raw}` but AnnData object does not have raw.")
@@ -719,7 +719,7 @@ def _prepare_params_plot(
     norm: _Normalize = None,
     library_first: bool = True,
     img_cmap: Colormap | str | None = None,
-    frameon: Optional[bool] = None,
+    frameon: bool | None = None,
     na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
     title: _SeqStr = None,
     axis_label: _SeqStr = None,
