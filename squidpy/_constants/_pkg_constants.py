@@ -190,7 +190,6 @@ class Key:
                             f"`{sub_key}` not found in `adata.uns[{spatial_key!r}]['library_id'].keys()` "
                             f"with following `library_id`: {library_id}."
                         )
-                    return library_id
                 return library_id
             return haystack
 

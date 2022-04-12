@@ -219,9 +219,9 @@ def _spatial_plot(
         partial(_subs, library_key=library_key) if library_key is not None else lambda _, **__: _  # type: ignore
     )
 
-    for count, (first, second) in enumerate(itertools.product(*fig_params.iter_panels)):
-        _lib_count: int = first if library_first else second
-        value_to_plot: str = second if library_first else first
+    for count, (_lib_count, value_to_plot) in enumerate(itertools.product(*fig_params.iter_panels)):
+        if not library_first:
+            _lib_count, value_to_plot = value_to_plot, _lib_count
 
         _size = spatial_params.size[_lib_count]
         _img = spatial_params.img[_lib_count]

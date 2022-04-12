@@ -323,7 +323,7 @@ library_id
 _library_key = """\
 library_key
     If multiple `library_id`, column in :attr:`anndata.AnnData.obs`
-    which stores mapping between ``library_id`` and obs"""
+    which stores mapping between ``library_id`` and obs."""
 
 _cat_plotting = f"""\
 palette
@@ -360,7 +360,7 @@ aspect ratio is assumed.
 
 If your AnnData object has a ``"spatial"`` entry in ``.uns``, the ``img_key``, ``seg_key``
 and ``library_id`` parameters to find values for ``img``, ``seg``, ``scale_factor``,
-and ``spot_size`` arguments. Alternatively, these values be passed directly.
+and ``spot_size`` arguments. Alternatively, these values can be passed directly.
 """
 
 _plotting_point_summary = """\
