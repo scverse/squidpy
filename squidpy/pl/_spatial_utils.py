@@ -41,7 +41,7 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.collections import Collection, PatchCollection
 
 from skimage.util import map_array
-from skimage.color import label2rgb
+from skimage.color import rgb2gray, label2rgb
 from skimage.morphology import square, erosion
 from skimage.segmentation import find_boundaries
 
@@ -185,7 +185,7 @@ def _get_image(
     else:
         img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][_img_res_key][..., _img_channel] for i in library_id]
     if img_cmap == "gray":
-        img = [np.dot(im[..., :3], [0.2989, 0.5870, 0.1140]) for im in img]
+        img = [rgb2gray(im) for im in img]
     return img
 
 
