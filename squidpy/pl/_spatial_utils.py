@@ -608,8 +608,6 @@ def _decorate_axs(
             # TODO: na_in_legend should have some effect here
             plt.colorbar(cax, ax=ax, pad=0.01, fraction=0.08, aspect=30)
 
-    cur_coords = np.concatenate([ax.get_xlim(), ax.get_ylim()])
-
     if img is not None:
         ax.imshow(img, cmap=img_cmap, alpha=img_alpha)
     else:
@@ -620,9 +618,6 @@ def _decorate_axs(
         crops_tup = crops.to_tuple()
         ax.set_xlim(crops_tup[0], crops_tup[1])
         ax.set_ylim(crops_tup[3], crops_tup[2])
-    else:
-        ax.set_xlim(cur_coords[0], cur_coords[1])
-        ax.set_ylim(cur_coords[3], cur_coords[2])
 
     if isinstance(scalebar_dx, list) and isinstance(scalebar_units, list):
         scalebar = ScaleBar(scalebar_dx[lib_count], units=scalebar_units[lib_count], **scalebar_kwargs)
