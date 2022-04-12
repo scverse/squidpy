@@ -147,16 +147,13 @@ class Key:
             return_all: bool = False,
         ) -> Sequence[str] | str | None:
             library_id = cls._sort_haystack(adata, spatial_key, library_id, sub_key=None)
-            if library_id is not None and not return_all:
-                if len(library_id) > 1:
-                    raise ValueError(
-                        f"Unable to determine which library id to use. "
-                        f"Please specify one from: `{sorted(library_id)}`."
-                    )
-                return library_id[0]
-            if len(library_id) > 0:
+            if return_all or library_id is None:
                 return library_id
-            return None
+            if len(library_id) != 0:
+                raise ValueError(
+                    f"Unable to determine which library id to use. " f"Please specify one from: `{sorted(library_id)}`."
+                )
+            return library_id[0]
 
         @classmethod
         def library_mapping(
@@ -167,6 +164,8 @@ class Key:
             library_id: Sequence[str] | str | None = None,
         ) -> Mapping[str, Sequence[str]]:
             library_id = cls._sort_haystack(adata, spatial_key, library_id, sub_key)
+            if library_id is None:
+                raise ValueError("Invalid `library_id = None`")
             return {i: list(adata.uns[spatial_key][i][sub_key].keys()) for i in library_id}
 
         @classmethod
@@ -176,7 +175,7 @@ class Key:
             spatial_key: str,
             library_id: Sequence[str] | str | None = None,
             sub_key: Optional[str] = None,
-        ) -> Sequence[str]:
+        ) -> Sequence[str] | None:
             if spatial_key not in adata.uns:
                 raise KeyError(f"Spatial key {spatial_key!r} not found in `adata.uns`.")
             haystack = list(adata.uns[spatial_key].keys())
