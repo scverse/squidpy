@@ -1,6 +1,7 @@
-from typing import Literal, Optional
+from typing import Optional
 from pathlib import Path
 from collections import namedtuple
+from typing_extensions import Literal
 import tarfile
 
 from scanpy import _utils
@@ -119,12 +120,13 @@ def visium(
     """
     Process Visium Spatial Gene Expression data from 10x Genomics.
 
+    Database: https://support.10xgenomics.com/spatial-gene-expression/datasets
+
     Parameters
     ----------
     %(adata)s
     sample_id
         The ID of the data sample in 10x's spatial database.
-        `Database: https://support.10xgenomics.com/spatial-gene-expression/datasets`_.
     include_hires_tiff
         Download and include the high-resolution tissue image (tiff)
         in ``adata.uns['spatial']['{sample_id}']['metadata']['source_image_path']``.
