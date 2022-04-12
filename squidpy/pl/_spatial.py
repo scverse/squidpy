@@ -53,13 +53,13 @@ def spatial_plot(
     library_id: _SeqStr | None = None,
     library_key: str | None = None,
     # image
-    img: _SeqArray | bool = None,
+    img: _SeqArray | bool | None = None,
     img_res_key: str | None = Key.uns.image_res_key,
     img_alpha: float | None = None,
     img_cmap: Colormap | str | None = None,
     img_channel: int | None = None,
     # segment
-    seg: _SeqArray | bool = None,
+    seg: _SeqArray | bool | None = None,
     seg_key: str | None = Key.uns.image_seg_key,
     cell_id_key: str | None = None,
     seg_contourpx: int | None = None,
@@ -69,9 +69,9 @@ def spatial_plot(
     layer: str | None = None,
     alt_var: str | None = None,
     # size, coords, cmap, palette
-    size: _SeqFloat = None,
+    size: _SeqFloat | None = None,
     size_key: str | None = Key.uns.size_key,
-    scale_factor: _SeqFloat = None,
+    scale_factor: _SeqFloat | None = None,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
     cmap: Colormap | str | None = None,
     palette: Palette_t = None,
@@ -100,7 +100,7 @@ def spatial_plot(
     legend_fontoutline: Optional[int] = None,
     legend_na: bool = True,
     # scalebar
-    scalebar_dx: _SeqFloat = None,
+    scalebar_dx: _SeqFloat | None = None,
     scalebar_units: _SeqStr | None = None,
     # title and axis
     title: _SeqStr | None = None,
@@ -317,7 +317,7 @@ def spatial_plot(
 def spatial_scatter(
     adata: AnnData,
     shape: _AvailShapes | None = ScatterShape.CIRCLE,  # type: ignore[assignment]
-    img: _SeqArray | bool = True,
+    img: _SeqArray | bool | None = True,
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
@@ -368,8 +368,8 @@ def spatial_segment(
     adata: AnnData,
     cell_id_key: str,
     seg_key: str = Key.uns.image_seg_key,
-    img: _SeqArray | bool = True,
-    seg: _SeqArray | bool = True,
+    img: _SeqArray | bool | None = True,
+    seg: _SeqArray | bool | None = True,
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,

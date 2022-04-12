@@ -56,8 +56,8 @@ _AvailShapes = Literal["circle", "square", "hex"]
 Palette_t = Optional[Union[str, ListedColormap]]
 _Normalize = Union[Normalize, Sequence[Normalize]]
 _SeqStr = Union[str, Sequence[str]]
-_SeqFloat = Union[float, Sequence[float], None]
-_SeqArray = Union[NDArrayA, Sequence[NDArrayA], None]
+_SeqFloat = Union[float, Sequence[float]]
+_SeqArray = Union[NDArrayA, Sequence[NDArrayA]]
 _CoordTuple = Tuple[int, int, int, int]
 
 
@@ -160,7 +160,7 @@ def _get_image(
     adata: AnnData,
     library_id: Sequence[str],
     spatial_key: str = Key.obsm.spatial,
-    img: _SeqArray | bool = None,
+    img: _SeqArray | bool | None = None,
     img_res_key: str | None = None,
     img_channel: int | None = None,
     img_cmap: Colormap | str | None = None,
@@ -194,7 +194,7 @@ def _get_segment(
     library_id: Sequence[str],
     cell_id_key: str | None = None,
     library_key: str | None = None,
-    seg: _SeqArray | bool = None,
+    seg: _SeqArray | bool | None = None,
     seg_key: str | None = None,
 ) -> Tuple[Sequence[NDArrayA], Sequence[NDArrayA]] | Tuple[Tuple[None, ...], Tuple[None, ...]]:
     if cell_id_key not in adata.obs:
@@ -219,8 +219,8 @@ def _get_scalefactor_size(
     library_id: Sequence[str],
     spatial_key: str = Key.obsm.spatial,
     img_res_key: str | None = None,
-    scale_factor: _SeqFloat = None,
-    size: _SeqFloat = None,
+    scale_factor: _SeqFloat | None = None,
+    size: _SeqFloat | None = None,
     size_key: str | None = Key.uns.size_key,
 ) -> Tuple[Sequence[float], Sequence[float]]:
     try:
@@ -271,14 +271,14 @@ def _image_spatial_attrs(
     spatial_key: str = Key.obsm.spatial,
     library_id: Sequence[str] | None = None,
     library_key: str | None = None,
-    img: _SeqArray | bool = None,
+    img: _SeqArray | bool | None = None,
     img_res_key: str | None = Key.uns.image_res_key,
     img_channel: int | None = None,
-    seg: _SeqArray | bool = None,
+    seg: _SeqArray | bool | None = None,
     seg_key: str | None = None,
     cell_id_key: str | None = None,
-    scale_factor: _SeqFloat = None,
-    size: _SeqFloat = None,
+    scale_factor: _SeqFloat | None = None,
+    size: _SeqFloat | None = None,
     size_key: str | None = Key.uns.size_key,
     img_cmap: Colormap | str | None = None,
 ) -> SpatialParams:
@@ -526,7 +526,7 @@ def _get_title_axlabels(
 
 
 def _get_scalebar(
-    scalebar_dx: _SeqFloat = None,
+    scalebar_dx: _SeqFloat | None = None,
     scalebar_units: _SeqStr | None = None,
     len_lib: int | None = None,
 ) -> Tuple[Sequence[float] | None, Sequence[str] | None]:
@@ -723,7 +723,7 @@ def _prepare_params_plot(
     na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
     title: _SeqStr | None = None,
     axis_label: _SeqStr | None = None,
-    scalebar_dx: _SeqFloat = None,
+    scalebar_dx: _SeqFloat | None = None,
     scalebar_units: _SeqStr | None = None,
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
