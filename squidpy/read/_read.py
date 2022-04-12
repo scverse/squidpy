@@ -310,7 +310,8 @@ def read_nanostring(
     adata.obsm["spatial_fov"] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].to_numpy()
 
     adata.uns[Key.uns.spatial] = {
-        k: {"images": {"hires": None}, "scalefactors": {}} for k in adata.obs.fov.cat.categories
+        k: {"images": {"hires": None}, "scalefactors": {"tissue_hires_scalef": 1, "spot_diameter_fullres": 1}}
+        for k in adata.obs.fov.cat.categories
     }
     adata.uns[Key.uns.spatial]["fov"] = fov_positions
 
