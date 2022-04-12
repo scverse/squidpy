@@ -685,6 +685,9 @@ def _prepare_args_plot(
 
     # make colors and groups as list
     groups = [groups] if isinstance(groups, str) else groups
+    if isinstance(color, list):
+        if not len(color):
+            color = None
     color = [color] if isinstance(color, str) or color is None else color
 
     # set palette if missing
