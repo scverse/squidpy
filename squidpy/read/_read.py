@@ -183,7 +183,7 @@ def read_vizgen(
     :attr:`~anndata.AnnData.var`
         Gene IDs
     :attr:`~anndata.AnnData.uns`\\ `['spatial']`
-        Dict of vizgen output files with 'library_id' as key
+        Dict of Vizgen output files with 'library_id' as key
     :attr:`~anndata.AnnData.uns`\\ `['spatial'][library_id]['scalefactors']['transformation_matrix']`
         Transformation matrix for converting micron coordinates to pixels
     :attr:`~anndata.AnnData.obsm`\\ `['spatial']`
