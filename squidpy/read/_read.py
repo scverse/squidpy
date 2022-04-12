@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Dict, Sequence
 from imageio import imread
 from pathlib import Path
 import os
@@ -289,21 +290,21 @@ def read_nanostring(
     if isinstance(path, str):
         path = Path(path)
 
-    count_file = pd.read_csv(path / count_file)
-    count_file.index = count_file.fov.astype(str) + "_" + count_file.cell_ID.astype(str)
+    counts = pd.read_csv(path / count_file)
+    counts.index = counts.fov.astype(str) + "_" + counts.cell_ID.astype(str)
 
-    obs_file = pd.read_csv(path / obs_file)
-    obs_file.index = obs_file.fov.astype(str) + "_" + obs_file.cell_ID.astype(str)
+    obs = pd.read_csv(path / obs_file)
+    obs.index = obs.fov.astype(str) + "_" + obs.cell_ID.astype(str)
 
     fov_positions = {"fov_positions": pd.read_csv(path / fov_file)}
 
-    merged_df = count_file.merge(obs_file, how="left")
-    count_file.drop(columns=["fov", "cell_ID"], inplace=True)
-    obs_columns = obs_file.columns
+    merged_df = counts.merge(obs, how="left")
+    counts.drop(columns=["fov", "cell_ID"], inplace=True)
+    obs_columns = obs.columns
     merged_df["fov"] = pd.Categorical(merged_df["fov"].astype(str))
 
-    adata = AnnData(csc_matrix(count_file.to_numpy()), obs=merged_df[obs_columns].copy())
-    adata.var_names = count_file.columns
+    adata = AnnData(csc_matrix(counts.to_numpy()), obs=merged_df[obs_columns].copy())
+    adata.var_names = counts.columns
     adata.obsm[Key.obsm.spatial] = adata.obs[["CenterX_local_px", "CenterY_local_px"]].to_numpy()
     adata.obsm["spatial_fov"] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].to_numpy()
 
@@ -312,8 +313,8 @@ def read_nanostring(
     }
     adata.uns[Key.uns.spatial]["fov"] = fov_positions
 
-    images = os.listdir(path / "CellComposite")
-    images = {str(int(i.strip(".jpg").replace("CellComposite_F", ""))): i for i in images}
+    image_files: Sequence[str] = os.listdir(path / "CellComposite")
+    images: Dict[str, str] = {str(int(i.strip(".jpg").replace("CellComposite_F", ""))): i for i in image_files}
 
     for fov, file_name in images.items():
         adata.uns[Key.uns.spatial][fov]["images"]["hires"] = imread(path / "CellComposite" / file_name)
