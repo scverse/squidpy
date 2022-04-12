@@ -292,18 +292,19 @@ def read_nanostring(
 
     counts = pd.read_csv(path / count_file)
     counts.index = counts.fov.astype(str) + "_" + counts.cell_ID.astype(str)
+    counts.drop(columns=["fov", "cell_ID"], inplace=True)
+    counts_columns = counts.columns
 
     obs = pd.read_csv(path / obs_file)
     obs.index = obs.fov.astype(str) + "_" + obs.cell_ID.astype(str)
 
     fov_positions = {"fov_positions": pd.read_csv(path / fov_file)}
 
-    merged_df = counts.merge(obs, how="left")
-    counts.drop(columns=["fov", "cell_ID"], inplace=True)
+    merged_df = pd.merge(counts, obs, left_index=True, right_index=True)
     obs_columns = obs.columns
     merged_df["fov"] = pd.Categorical(merged_df["fov"].astype(str))
 
-    adata = AnnData(csc_matrix(counts.to_numpy()), obs=merged_df[obs_columns].copy())
+    adata = AnnData(csc_matrix(merged_df[counts_columns].to_numpy()), obs=merged_df[obs_columns].copy())
     adata.var_names = counts.columns
     adata.obsm[Key.obsm.spatial] = adata.obs[["CenterX_local_px", "CenterY_local_px"]].to_numpy()
     adata.obsm["spatial_fov"] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].to_numpy()
