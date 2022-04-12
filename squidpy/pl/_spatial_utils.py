@@ -721,7 +721,10 @@ def _prepare_params_plot(
     library_first: bool = True,
     img_cmap: Colormap | str | None = None,
     frameon: bool | None = None,
-    na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
+    na_color: str | Tuple[float, ...] | None = (0.0, 0.0, 0.0, 0.0),
+    vmin: float | None = None,
+    vmax: float | None = None,
+    vcenter: float | None = None,
     title: _SeqStr | None = None,
     axis_label: _SeqStr | None = None,
     scalebar_dx: _SeqFloat | None = None,
@@ -767,18 +770,12 @@ def _prepare_params_plot(
     cmap = copy(get_cmap(cmap))
     cmap.set_bad("lightgray" if na_color is None else na_color)
 
-    vmin = kwargs.pop("vmin", None)
-    vmax = kwargs.pop("vmax", None)
-    vcenter = kwargs.pop("vcenter", None)
-
-    if norm is not None:
-        if (vmin is not None) or (vmax is not None) or (vcenter is not None):
-            raise ValueError("Passing both norm and vmin/vmax/vcenter is not allowed.")
+    if isinstance(norm, Normalize):
+        pass
+    elif vcenter is None:
+        norm = Normalize(vmin=vmin, vmax=vmax)
     else:
-        if vcenter is not None:
-            norm = TwoSlopeNorm(vmin=vmin, vmax=vmax, vcenter=vcenter)
-        else:
-            norm = Normalize(vmin=vmin, vmax=vmax)
+        norm = TwoSlopeNorm(vmin=vmin, vmax=vmax, vcenter=vcenter)
 
     # set title and axis labels
     title, ax_labels = _get_title_axlabels(title, axis_label, spatial_key, num_panels)
@@ -878,6 +875,9 @@ def _plot_scatter(
     else:
         scatter = partial(ax.scatter, marker=".", alpha=color_params.alpha, plotnonfinite=True)
 
+    # prevents reusing vmin/vmax
+    norm = copy(cmap_params.norm)
+
     if outline_params.outline:
         _cax = scatter(
             coords[:, 0],
@@ -886,7 +886,7 @@ def _plot_scatter(
             c=outline_params.bg_color,
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
-            norm=cmap_params.norm,
+            norm=norm,
             **kwargs,
         )
         ax.add_collection(_cax)
@@ -897,7 +897,7 @@ def _plot_scatter(
             c=outline_params.gap_color,
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
-            norm=cmap_params.norm,
+            norm=norm,
             **kwargs,
         )
         ax.add_collection(_cax)
@@ -909,7 +909,7 @@ def _plot_scatter(
         s=size,
         rasterized=sc_settings._vector_friendly,
         cmap=cmap_params.cmap,
-        norm=cmap_params.norm,
+        norm=norm,
         **kwargs,
     )
     cax = ax.add_collection(_cax)
