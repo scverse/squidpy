@@ -4,6 +4,8 @@ from docrep import DocstringProcessor
 from typing import Any, Callable
 from textwrap import dedent
 
+from squidpy._constants._pkg_constants import Key
+
 
 def inject_docs(**kwargs: Any) -> Callable[..., Any]:  # noqa: D103
     # taken from scanpy
@@ -21,6 +23,7 @@ def inject_docs(**kwargs: Any) -> Callable[..., Any]:  # noqa: D103
     return decorator
 
 
+_ConnKey = Key.obsp.spatial_conn()
 _adata = """\
 adata
     Annotated data object."""
@@ -67,9 +70,10 @@ cluster_key
 _spatial_key = """\
 spatial_key
     Key in :attr:`anndata.AnnData.obsm` where spatial coordinates are stored."""
-_conn_key = """\
+_conn_key = f"""\
 connectivity_key
-    Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored."""
+    Key in :attr:`anndata.AnnData.obsp` where spatial connectivities are stored.
+    Default is: :attr:`anndata.AnnData.obsp` ``['{_ConnKey}']``."""
 _plotting = """\
 figsize
     Size of the figure in inches.
@@ -232,14 +236,12 @@ ncols
     Number of panels per row.
 {_plotting_outline}"""
 _plotting_edges = f"""\
-edges
-    If True, draw edges based on graph.
+connectivity_key
+    Key for neighbors graph to plot. Default is: :attr:`anndata.AnnData.obsp` ``['{_ConnKey}']``.
 edges_width
-    Width of edges.
+    Width of edges. Only used when ``connectivity_key`` != None
 edges_color
     Color of edges.
-connectivity_key
-    Key for neighbors graph to plot.
 {_plotting_panels}"""
 _plotting_sizecoords = f"""\
 size
@@ -285,7 +287,7 @@ seg
     passed for plotting.
 seg_key
     Key of segmentation mask in :attr:`anndata.AnnData.uns`.
-cell_id_key
+seg_cell_id
     Column in :attr:`anndata.AnnData.obs` with unique segmentation mask ids. Required to filter
     valid segmentation masks.
 seg_contourpx

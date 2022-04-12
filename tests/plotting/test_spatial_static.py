@@ -52,7 +52,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             library_key="library_id",
             size=[1, 1.25],
             color=["Sox17", "cluster"],
-            edges=True,
+            connectivity_key="spatial_connectivities",
             edges_width=5,
             title=None,
             outline=True,
@@ -72,7 +72,6 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             library_id=["V1_Adult_Mouse_Brain", "V2_Adult_Mouse_Brain"],
             size=[1, 1.25],
             color=["Sox17", "cluster"],
-            edges=False,
             edges_width=5,
             title=None,
             outline=True,
@@ -90,7 +89,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             shape=None,
             library_key="library_id",
             library_id=["V1_Adult_Mouse_Brain", "V2_Adult_Mouse_Brain"],
-            edges=True,
+            connectivity_key="spatial_connectivities",
             edges_width=3,
             size=[1.0, 50],
             color="cluster",
@@ -110,18 +109,17 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
         spatial_neighbors(adata_mibitof, coord_type="generic", radius=50)
         pl.spatial_scatter(
             adata_mibitof,
-            cell_id_key="cell_id",
             library_key="library_id",
             library_id=["point8"],
             na_color="lightgrey",
-            edges=True,
+            connectivity_key="spatial_connectivities",
             edges_width=0.5,
         )
 
     def test_plot_spatial_segment(self, adata_mibitof: AnnData):
         pl.spatial_segment(
             adata_mibitof,
-            cell_id_key="cell_id",
+            seg_cell_id="cell_id",
             library_key="library_id",
             na_color="lightgrey",
         )
@@ -132,7 +130,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             color=["Cluster"],
             groups=["Fibroblast", "Endothelial"],
             library_key="library_id",
-            cell_id_key="cell_id",
+            seg_cell_id="cell_id",
             img=False,
             seg=True,
             figsize=(5, 5),
@@ -147,7 +145,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             color=["Cluster", "cell_size"],
             groups=["Fibroblast", "Endothelial"],
             library_key="library_id",
-            cell_id_key="cell_id",
+            seg_cell_id="cell_id",
             img=True,
             seg=True,
             seg_outline=True,

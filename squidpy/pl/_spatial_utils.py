@@ -193,19 +193,19 @@ def _get_image(
 def _get_segment(
     adata: AnnData,
     library_id: Sequence[str],
-    cell_id_key: str | None = None,
+    seg_cell_id: str | None = None,
     library_key: str | None = None,
     seg: _SeqArray | bool | None = None,
     seg_key: str | None = None,
 ) -> Tuple[Sequence[NDArrayA], Sequence[NDArrayA]] | Tuple[Tuple[None, ...], Tuple[None, ...]]:
-    if cell_id_key not in adata.obs:
-        raise ValueError(f"Cell id `{cell_id_key!r}` not found in `adata.obs`.")
-    cell_id_vec = adata.obs[cell_id_key].values
+    if seg_cell_id not in adata.obs:
+        raise ValueError(f"Cell id `{seg_cell_id!r}` not found in `adata.obs`.")
+    cell_id_vec = adata.obs[seg_cell_id].values
 
     if library_key not in adata.obs:
         raise ValueError(f"`library_key: {library_key}` not in `adata.obs`.")
     if not np.issubdtype(cell_id_vec.dtype, np.integer):
-        raise ValueError(f"Invalid type {cell_id_vec.dtype} for `adata.obs[{cell_id_key}]`.")
+        raise ValueError(f"Invalid type {cell_id_vec.dtype} for `adata.obs[{seg_cell_id}]`.")
     cell_id_vec = [cell_id_vec[adata.obs[library_key] == lib] for lib in library_id]
 
     if isinstance(seg, np.ndarray) or isinstance(seg, list):
@@ -318,7 +318,7 @@ def _image_spatial_attrs(
         _seg, _cell_vec = _get_segment(
             adata=adata,
             library_id=library_id,
-            cell_id_key=cell_id_key,
+            seg_cell_id=cell_id_key,
             library_key=library_key,
             seg=seg,
             seg_key=seg_key,

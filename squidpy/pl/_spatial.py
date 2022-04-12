@@ -44,7 +44,6 @@ from squidpy._constants._pkg_constants import Key
 
 
 @d.dedent
-@inject_docs(key=Key.obsp.spatial_conn())
 def _spatial_plot(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
@@ -62,7 +61,7 @@ def _spatial_plot(
     # segment
     seg: _SeqArray | bool | None = None,
     seg_key: str | None = Key.uns.image_seg_key,
-    cell_id_key: str | None = None,
+    seg_cell_id: str | None = None,
     seg_contourpx: int | None = None,
     seg_outline: bool = False,
     # features
@@ -80,10 +79,9 @@ def _spatial_plot(
     norm: _Normalize | None = None,
     na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
     # edges
-    edges: bool = False,
-    edges_width: float = 0.1,
+    connectivity_key: str | None = None,
+    edges_width: float = 1,
     edges_color: str | Sequence[str] | Sequence[float] = "grey",
-    connectivity_key: str = Key.obsp.spatial_conn(),
     # panels
     library_first: bool = True,
     frameon: Optional[bool] = None,
@@ -177,7 +175,7 @@ def _spatial_plot(
         img_channel=img_channel,
         seg=seg,
         seg_key=seg_key,
-        cell_id_key=cell_id_key,
+        cell_id_key=seg_cell_id,
         scale_factor=scale_factor,
         size=size,
         size_key=size_key,
@@ -247,7 +245,7 @@ def _spatial_plot(
         ax = _set_ax_title(fig_params, count, value_to_plot)
 
         # plot edges and arrows if needed. Do it here cause otherwise image is on top.
-        if edges:
+        if connectivity_key is not None:
             _cedge = _plot_edges(
                 _subset(adata, library_id=_lib),  # type: ignore
                 _coords,
@@ -373,7 +371,7 @@ def spatial_scatter(
 @inject_docs(key=Key.obsp.spatial_conn())
 def spatial_segment(
     adata: AnnData,
-    cell_id_key: str,
+    seg_cell_id: str,
     seg_key: str = Key.uns.image_seg_key,
     img: _SeqArray | bool | None = True,
     seg: _SeqArray | bool | None = True,
@@ -415,7 +413,7 @@ def spatial_segment(
         img=img,
         seg=seg,
         seg_key=seg_key,
-        cell_id_key=cell_id_key,
+        seg_cell_id=seg_cell_id,
         scalebar_kwargs=scalebar_kwargs,
         edges_kwargs=edges_kwargs,
         **kwargs,
