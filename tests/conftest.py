@@ -6,16 +6,19 @@ from itertools import product
 import sys
 import pickle
 import pytest
+import warnings
 
 from anndata import AnnData
 import scanpy as sc
 import anndata as ad
 
 from scipy.sparse import csr_matrix
+from numba.core.errors import NumbaPerformanceWarning
 import numpy as np
 import pandas as pd
 
 from matplotlib.testing.compare import compare_images
+import matplotlib
 import matplotlib.pyplot as plt
 
 from squidpy.gr import spatial_neighbors
@@ -36,6 +39,16 @@ _adata = sc.read("tests/_data/test_data.h5ad")
 _adata.raw = _adata.copy()
 
 
+def pytest_sessionstart(session) -> None:
+    matplotlib.use("Agg")
+    matplotlib.rcParams["figure.max_open_warning"] = 0
+    np.random.seed(42)
+
+    # https://github.com/theislab/cellrank/issues/683
+    warnings.simplefilter("ignore", NumbaPerformanceWarning)
+    sc.pl.set_rcParams_defaults()
+
+
 @pytest.fixture(scope="session")
 def adata_hne() -> AnnData:
     return sq.datasets.visium_hne_adata_crop()
@@ -45,12 +58,12 @@ def adata_hne() -> AnnData:
 def adata_hne_concat() -> AnnData:
     adata1 = sq.datasets.visium_hne_adata_crop()
     spatial_neighbors(adata1)
-    adata2 = adata1[0:100, :].copy()
+    adata2 = adata1[:100, :].copy()
     adata2.uns["spatial"] = {}
     adata2.uns["spatial"]["V2_Adult_Mouse_Brain"] = adata1.uns["spatial"]["V1_Adult_Mouse_Brain"]
     adata_concat = ad.concat(
         {"V1_Adult_Mouse_Brain": adata1, "V2_Adult_Mouse_Brain": adata2},
-        label="batch_key",
+        label="library_id",
         uns_merge="unique",
         pairwise=True,
     )

@@ -623,14 +623,14 @@ def _dendrogram(data: NDArrayA, method: str, **kwargs: Any) -> tuple[list[int], 
     return row_order, col_order, row_link, col_link
 
 
-def _sanitize_anndata(adata: AnnData) -> None:
+def sanitize_anndata(adata: AnnData) -> None:
     """Transform string annotations to categoricals."""
     adata._sanitize()
 
 
 def _assert_value_in_obs(adata: AnnData, key: str, val: Sequence[Any] | Any) -> None:
     if key not in adata.obs:
-        raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
+        raise KeyError(f"Key `{key}` not found in `adata.obs`.")
     if not isinstance(val, list):
         val = [val]
     val = set(val) - set(adata.obs[key].unique())

@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 
 from squidpy._docs import d, inject_docs
 from squidpy.gr._utils import _assert_spatial_basis
-from squidpy.pl._utils import save_fig, _sanitize_anndata
+from squidpy.pl._utils import save_fig, sanitize_anndata
 from squidpy.pl._spatial_utils import (
     _subs,
     _SeqStr,
@@ -141,7 +141,7 @@ def spatial_plot(
     -------
     %(plotting_returns)s
     """
-    _sanitize_anndata(adata)
+    sanitize_anndata(adata)
     _assert_spatial_basis(adata, spatial_key)
 
     scalebar_kwargs = dict(scalebar_kwargs)

@@ -21,7 +21,6 @@ from squidpy._constants._pkg_constants import Key
 C_KEY = "Cluster"
 
 
-sc.pl.set_rcParams_defaults()
 sc.set_figure_params(dpi=40, color_map="viridis")
 
 # WARNING:
@@ -43,7 +42,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
         pl.spatial_scatter(
             adata_hne_concat,
             shape="hex",
-            library_key="batch_key",
+            library_key="library_id",
             library_id=["V2_Adult_Mouse_Brain"],
             color=["Sox17", "cluster"],
             title="Visium test",
@@ -53,7 +52,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
         pl.spatial_scatter(
             adata_hne_concat,
             shape="square",
-            library_key="batch_key",
+            library_key="library_id",
             size=[1, 1.25],
             color=["Sox17", "cluster"],
             edges=True,
@@ -72,7 +71,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             adata_hne_concat,
             cmap="inferno",
             shape="hex",
-            library_key="batch_key",
+            library_key="library_id",
             library_id=["V1_Adult_Mouse_Brain", "V2_Adult_Mouse_Brain"],
             size=[1, 1.25],
             color=["Sox17", "cluster"],
@@ -92,7 +91,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
         pl.spatial_scatter(
             adata_hne_concat,
             shape=None,
-            library_key="batch_key",
+            library_key="library_id",
             library_id=["V1_Adult_Mouse_Brain", "V2_Adult_Mouse_Brain"],
             edges=True,
             edges_width=3,
@@ -180,7 +179,7 @@ class TestSpatialStaticUtils:
 
     @pytest.mark.parametrize("shape", ["circle", None])
     @pytest.mark.parametrize("library_id", [None, "1", ["1"], ["1", "2"]])
-    @pytest.mark.parametrize("library_key", [None, "batch_key"])
+    @pytest.mark.parametrize("library_key", [None, "library_id"])
     def test_get_library_id(self, shape, library_id, library_key):
         adata = TestSpatialStaticUtils._create_anndata(shape, library_id, library_key)
         if not isinstance(library_id, list) and library_id is not None:
@@ -196,7 +195,7 @@ class TestSpatialStaticUtils:
                 if library_key is None:
                     assert _get_libid(adata) == [""]
                 else:
-                    with pytest.raises(ValueError, match="library_key"):
+                    with pytest.raises(KeyError, match="library_id"):
                         _get_libid(adata)
             else:
                 assert library_id == _get_libid(adata)
