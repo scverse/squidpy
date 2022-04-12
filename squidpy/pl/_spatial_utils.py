@@ -36,7 +36,7 @@ from matplotlib.cm import get_cmap
 from matplotlib.axes import Axes
 from matplotlib.colors import Colormap, Normalize, TwoSlopeNorm, ListedColormap
 from matplotlib.figure import Figure
-from matplotlib.patches import Circle, Polygon
+from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib.gridspec import GridSpec
 from matplotlib.collections import Collection, PatchCollection
 
@@ -449,14 +449,17 @@ def _shaped_scatter(
     shape = ScatterShape(shape)
 
     if shape == ScatterShape.CIRCLE:
-        zipped = np.broadcast(x, y, s)
-        patches = [Circle((x_, y_), s_) for x_, y_, s_ in zipped]
-    else:
-        n = 4 if shape == ScatterShape.SQUARE else 6
-        r: float = s / (2 * np.sin(np.pi / n))
+        patches = [Circle((x, y), radius=s) for x, y, s in np.broadcast(x, y, s)]
+    elif shape == ScatterShape.SQUARE:
+        patches = [Rectangle((x - s, y - s), width=2 * s, height=2 * s) for x, y, s in np.broadcast(x, y, s)]
+    elif shape == ScatterShape.HEX:
+        n = 6
+        r = s / (2 * np.sin(np.pi / n))
         polys = np.stack([_make_poly(x, y, r, n, i) for i in range(n)], 1).swapaxes(0, 2)
-        patches = [Polygon(p, False) for p in polys]
-    collection = PatchCollection(patches, **kwargs)
+        patches = [Polygon(p, closed=False) for p in polys]
+    else:
+        raise NotImplementedError(f"Shape `{shape}` is not yet implemented.")
+    collection = PatchCollection(patches, snap=False, **kwargs)
 
     if isinstance(c, np.ndarray) and np.issubdtype(c.dtype, np.number):
         collection.set_array(np.ma.masked_invalid(c))
@@ -758,12 +761,10 @@ def _prepare_params_plot(
                 f"Invalid value of `fig`: {fig}. If a list of `Axes` is passed, a `Figure` must also be specified."
             )
         axs = ax
-        grid = None
     else:
         axs = None
         if ax is None:
-            fig = plt.figure(figsize=figsize, dpi=dpi)
-            ax = fig.add_subplot(111)
+            fig, ax = plt.subplots(figsize=figsize, dpi=dpi, constrained_layout=True)
 
     # set cmap and norm
     cmap = copy(get_cmap(cmap))
