@@ -122,7 +122,7 @@ def spatial_neighbors(
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
         libs = adata.obs[library_key].cat.categories
-        unique_obs_names = make_index_unique(adata.obs_names)
+        make_index_unique(adata.obs_names)
     else:
         libs = [None]
 
@@ -143,15 +143,13 @@ def spatial_neighbors(
 
     if library_key is not None:
         mats: List[Tuple[spmatrix, spmatrix]] = []
-        obs_names = []
+        ixs = []
         for lib in libs:
-            obs_names.extend(unique_obs_names[adata.obs[library_key] == lib])
+            ixs.extend(np.where(adata.obs[library_key] == lib)[0])
             mats.append(_build_fun(adata[adata.obs[library_key] == lib]))
-        adj_tmp = AnnData(block_diag([m[0] for m in mats], format="csr"), dtype="float64")
-        dst_tmp = AnnData(block_diag([m[1] for m in mats], format="csr"), dtype="float64")
-        adj_tmp.obs_names = dst_tmp.obs_names = adj_tmp.var_names = dst_tmp.var_names = obs_names
-        Adj = csr_matrix(adj_tmp[unique_obs_names, :][:, unique_obs_names].X, copy=False)
-        Dst = csr_matrix(dst_tmp[unique_obs_names, :][:, unique_obs_names].X, copy=False)
+        ixs = np.argsort(ixs)  # type: ignore[assignment] # invert
+        Adj = block_diag([m[0] for m in mats], format="csr")[ixs, :][:, ixs]
+        Dst = block_diag([m[1] for m in mats], format="csr")[ixs, :][:, ixs]
     else:
         Adj, Dst = _build_fun(adata)
 
