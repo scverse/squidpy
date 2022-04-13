@@ -1,4 +1,7 @@
-from typing import Optional, NamedTuple
+from __future__ import annotations
+
+from typing import Union  # noqa: F401
+from typing import NamedTuple
 from pathlib import Path
 from typing_extensions import Literal
 import tarfile
@@ -8,7 +11,6 @@ from anndata import AnnData
 from scanpy._settings import settings
 from scanpy.readwrite import read_visium
 
-from squidpy._docs import d
 from squidpy._constants._constants import TenxVersions
 
 __all__ = ["visium"]
@@ -20,7 +22,7 @@ class VisiumFiles(NamedTuple):
     tif_image: str
 
 
-_VisiumDatasets = Literal[
+VisiumDatasets = Literal[
     # spaceranger version 1.1.0 datasets
     "V1_Breast_Cancer_Block_A_Section_1",
     "V1_Breast_Cancer_Block_A_Section_2",
@@ -62,82 +64,28 @@ _VisiumDatasets = Literal[
 ]
 
 
-def _download_visium_dataset(
-    sample_id: str, spaceranger_version: str, base_dir: Optional[Path] = None, download_image: bool = False
-) -> None:
-    """
-    Download Visium dataset from 10x Genomics.
-
-    Parameters
-    ----------
-    sample_id
-        String name of example visium dataset.
-    base_dir
-        Where to download the dataset to.
-    download_image
-        Whether to download the high-resolution tissue section.
-
-    Returns
-    -------
-    `None`, just optionally downloads the data if not already present.
-    """
-    if base_dir is None:
-        base_dir = settings.datasetdir
-
-    url_prefix = f"https://cf.10xgenomics.com/samples/spatial-exp/{spaceranger_version}/{sample_id}/"
-
-    sample_dir = base_dir / sample_id
-    sample_dir.mkdir(exist_ok=True, parents=True)
-
-    visium_files = VisiumFiles(
-        f"{sample_id}_filtered_feature_bc_matrix.h5", f"{sample_id}_spatial.tar.gz", f"{sample_id}_image.tif"
-    )
-
-    # Download spatial data
-    tar_pth = sample_dir / visium_files.spatial_attrs
-    _utils.check_presence_download(filename=tar_pth, backup_url=url_prefix + visium_files.spatial_attrs)
-    with tarfile.open(tar_pth) as f:
-        for el in f:
-            if not (sample_dir / el.name).exists():
-                f.extract(el, sample_dir)
-
-    # Download counts
-    _utils.check_presence_download(
-        filename=sample_dir / "filtered_feature_bc_matrix.h5",
-        backup_url=url_prefix + visium_files.feature_matrix,
-    )
-
-    # Download image
-    if download_image:
-        _utils.check_presence_download(
-            filename=sample_dir / "image.tif",
-            backup_url=url_prefix + visium_files.tif_image,
-        )
-
-
-@d.dedent
 def visium(
-    sample_id: _VisiumDatasets = "V1_Breast_Cancer_Block_A_Section_1",
+    sample_id: VisiumDatasets,
     *,
     include_hires_tiff: bool = False,
+    base_dir: str | Path | None = None,
 ) -> AnnData:
     """
-    Process Visium Spatial Gene Expression data from 10x Genomics.
-
-    Database: https://support.10xgenomics.com/spatial-gene-expression/datasets
+    Download Visium `datasets <https://support.10xgenomics.com/spatial-gene-expression/datasets>`_ from *10x Genomics*.
 
     Parameters
     ----------
-    %(adata)s
     sample_id
-        The ID of the data sample in 10x's spatial database.
+        Name of the Visium dataset.
     include_hires_tiff
-        Download and include the high-resolution tissue image (tiff)
-        in ``adata.uns['spatial']['{sample_id}']['metadata']['source_image_path']``.
+        Whether to download the high-resolution tissue section into
+        :attr:`anndata.AnnData.uns` ``['spatial']['{sample_id}']['metadata']['source_image_path']``.
+    base_dir
+        Directory where to download the data. If `None`, use :attr:`scanpy.settings.datasetdir`.
 
     Returns
     -------
-    Spatially annotated data object ``adata``.
+    Spatial :class:`anndata.AnnData`.
     """
     if sample_id.startswith("V1_"):
         spaceranger_version = TenxVersions.V1
@@ -145,12 +93,40 @@ def visium(
         spaceranger_version = TenxVersions.V2
     else:
         spaceranger_version = TenxVersions.V3
-    _download_visium_dataset(sample_id, spaceranger_version, download_image=include_hires_tiff)
-    if include_hires_tiff:
-        adata = read_visium(
-            settings.datasetdir / sample_id,
-            source_image_path=settings.datasetdir / sample_id / "image.tif",
+
+    if base_dir is None:
+        base_dir = settings.datasetdir
+    base_dir = Path(base_dir)
+    sample_dir = base_dir / sample_id
+    sample_dir.mkdir(exist_ok=True, parents=True)
+
+    url_prefix = f"https://cf.10xgenomics.com/samples/spatial-exp/{spaceranger_version}/{sample_id}/"
+    visium_files = VisiumFiles(
+        f"{sample_id}_filtered_feature_bc_matrix.h5", f"{sample_id}_spatial.tar.gz", f"{sample_id}_image.tif"
+    )
+
+    # download spatial data
+    tar_pth = sample_dir / visium_files.spatial_attrs
+    _utils.check_presence_download(filename=tar_pth, backup_url=url_prefix + visium_files.spatial_attrs)
+    with tarfile.open(tar_pth) as f:
+        for el in f:
+            if not (sample_dir / el.name).exists():
+                f.extract(el, sample_dir)
+
+    # download counts
+    _utils.check_presence_download(
+        filename=sample_dir / "filtered_feature_bc_matrix.h5",
+        backup_url=url_prefix + visium_files.feature_matrix,
+    )
+
+    if include_hires_tiff:  # download image
+        _utils.check_presence_download(
+            filename=sample_dir / "image.tif",
+            backup_url=url_prefix + visium_files.tif_image,
         )
-    else:
-        adata = read_visium(settings.datasetdir / sample_id)
-    return adata
+        return read_visium(
+            base_dir,
+            source_image_path=base_dir / sample_id / "image.tif",
+        )
+
+    return read_visium(base_dir / sample_id)
