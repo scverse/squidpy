@@ -22,7 +22,7 @@ __all__ = ["visium", "vizgen", "nanostring"]
 def visium(
     path: PathLike,
     *,
-    count_file: str = "filtered_feature_bc_matrix.h5",
+    counts_file: str = "filtered_feature_bc_matrix.h5",
     library_id: str | None = None,
     load_images: bool = True,
     source_image_path: PathLike | None = None,
@@ -43,7 +43,7 @@ def visium(
     ----------
     path
         Path to directory for Visium data files.
-    count_file
+    counts_file
         Which file in the passed directory to use as the count file. Typically would be one of:
         'filtered_feature_bc_matrix.h5' or 'raw_feature_bc_matrix.h5'.
     library_id
@@ -56,13 +56,13 @@ def visium(
     Annotated data matrix ``adata``, where observations/cells are named by their
     barcode and variables/genes by gene name. Stores the following information:
 
-        - :attr:`anndata.AnnData.obsm` `['spatial']` - spatial spot coordinates
-        - :attr:`anndata.AnnData.uns` `['spatial']['{library_id}']['images']` - *hires* and *lowres* images.
-        - :attr:`anndata.AnnData.uns` `['spatial']['{library_id}']['scalefactors']` - scale factors for the spots.
-        - :attr:`anndata.AnnData.uns` `['spatial']['{library_id}']['metadata']` - metadata.
+        - :attr:`anndata.AnnData.obsm` ``['spatial']`` - spatial spot coordinates.
+        - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['images']`` - *hires* and *lowres* images.
+        - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['scalefactors']`` - scale factors for the spots.
+        - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['metadata']`` - metadata.
     """
     path = Path(path)
-    adata, library_id = _read_counts(path, count_file=count_file, library_id=library_id, **kwargs)
+    adata, library_id = _read_counts(path, count_file=counts_file, library_id=library_id, **kwargs)
 
     if not load_images:
         return adata
@@ -95,8 +95,8 @@ def visium(
 def vizgen(
     path: str | Path,
     *,
-    count_file: str,
-    obs_file: str,
+    counts_file: str,
+    meta_file: str,
     transformation_file: str | None = None,
     library_id: str = "library",
     **kwargs: Any,
@@ -113,10 +113,10 @@ def vizgen(
     ----------
     path
         Path to directory for Vizgen data files.
-    count_file
+    counts_file
         Which file in the passed directory to use as the count file. Typically would be one of:
         '_cell_by_gene.csv'.
-    obs_file
+    meta_file
         This metadata file has the spatial coordinates of each of the detected cells.
     transformation_file
         Transformation matrix file for converting micron coordinates into pixels in images.
@@ -137,12 +137,12 @@ def vizgen(
     """
     path = Path(path)
     adata, library_id = _read_counts(
-        path=path, count_file=count_file, library_id=library_id, delimiter=",", first_column_names=True, **kwargs
+        path=path, count_file=counts_file, library_id=library_id, delimiter=",", first_column_names=True, **kwargs
     )
     adata.X = csr_matrix(adata.X)
 
     # fmt: off
-    coords = pd.read_csv(path / obs_file, header=0, index_col=0)
+    coords = pd.read_csv(path / meta_file, header=0, index_col=0)
     coords.columns = ["fov", "volume", "center_x", "center_y", "min_x", "max_x", "min_y", "max_y"]
     # fmt: on
 
@@ -160,8 +160,8 @@ def vizgen(
 def nanostring(
     path: str | Path,
     *,
-    count_file: str,
-    obs_file: str,
+    counts_file: str,
+    meta_file: str,
     fov_file: str | None = None,
 ) -> AnnData:
     """
@@ -176,10 +176,10 @@ def nanostring(
     ----------
     path
         Path to directory for Nanostring data files.
-    count_file
+    counts_file
         Which file in the passed directory to use as the count file. Typically would be one of:
         '_exprMat_file.csv'.
-    obs_file
+    meta_file
         Which metadata file in the passed directory to use as the obs file. Typically would be one of:
         '_metadata_file.csv'.
     fov_file
@@ -208,16 +208,17 @@ def nanostring(
     """
     path, fov = Path(path), "fov"
 
-    counts = pd.read_csv(path / count_file, header=0, index_col="cell_ID")
+    counts = pd.read_csv(path / counts_file, header=0, index_col="cell_ID")
     counts.index = counts.index.astype(str).str.cat(counts.pop(fov).astype(str).values, sep="_")
 
-    obs = pd.read_csv(path / obs_file, header=0, index_col="cell_ID")
+    obs = pd.read_csv(path / meta_file, header=0, index_col="cell_ID")
     obs[fov] = pd.Categorical(obs[fov].astype(str))
     obs.index = obs.index.astype(str).str.cat(obs[fov].values, sep="_")
 
     adata = AnnData(csr_matrix(counts.values), dtype=counts.values.dtype, uns={Key.uns.spatial: {}})
-    adata.obs = pd.merge(adata.obs, obs, left_index=True, right_index=True, how="left")
+    adata.obs_names = counts.index
     adata.var_names = counts.columns
+    adata.obs = pd.merge(adata.obs, obs, left_index=True, right_index=True, how="left")
 
     adata.obsm[Key.obsm.spatial] = adata.obs[["CenterX_local_px", "CenterY_local_px"]].values
     adata.obsm["spatial_fov"] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].values
@@ -239,6 +240,6 @@ def nanostring(
     if fov_file is not None:
         fov_positions = pd.read_csv(path / fov_file, header=0, index_col=fov)
         for fov, row in fov_positions.iterrows():
-            adata.uns[Key.uns.spatial][fov] = row.to_dict()
+            adata.uns[Key.uns.spatial][str(fov)] = row.to_dict()
 
     return adata
