@@ -1,8 +1,12 @@
-Squidpy dev (2022-04-08)
+Squidpy dev (2022-04-13)
 ========================
 
 Features
 --------
+
+- Add :func:`squidpy.datasets.visium` to download *10x Genomics* datasets.
+  `@dineshpalli <https://github.com/dineshpalli>`__
+  `#449 <https://github.com/theislab/squidpy/pull/449>`__
 
 - An optional ``ax`` keyword can now be passed to :func:`squidpy.pl.nhood_enrichment` function. The
   keyword can be used to create a matplotlib figure outside of squidpy and then plot on any matplotlib
