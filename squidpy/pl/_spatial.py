@@ -387,7 +387,9 @@ def _wrap_signature(key: Literal["spatial_scatter", "spatial_segment"]) -> Any:
 
             return func
 
-        return _wrap_plot
+        return wrapper
+
+    return _wrap_plot
 
 
 @_wrap_signature(key="spatial_scatter")
