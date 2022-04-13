@@ -9,8 +9,8 @@ import tarfile
 from scanpy import _utils
 from anndata import AnnData
 from scanpy._settings import settings
-from scanpy.readwrite import read_visium
 
+from squidpy.read._read import visium as read_visium
 from squidpy.datasets._utils import PathLike
 from squidpy._constants._constants import TenxVersions
 
