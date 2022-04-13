@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from squidpy._utils import NDArrayA
-from squidpy.read._utils import _read_coords, _read_counts
+from squidpy.read._utils import _read_counts
 from squidpy.datasets._utils import PathLike
 from squidpy._constants._pkg_constants import Key
 
@@ -82,21 +82,14 @@ def visium(
         (path / f"{Key.uns.spatial}/scalefactors_json.json").read_bytes()
     )
 
+    # fmt: off
     coords = pd.read_csv(path / f"{Key.uns.spatial}/tissue_positions_list.csv", index_col=0, header=None)
-    coords.columns = [
-        "in_tissue",
-        "array_row",
-        "array_col",
-        "pxl_col_in_fullres",
-        "pxl_row_in_fullres",
-    ]
-    adata.obs = pd.merge(adata.obs, coords, how="left", left_index=True, right_index=True)
+    coords.columns = ["in_tissue", "array_row", "array_col", "pxl_col_in_fullres", "pxl_row_in_fullres"]
+    # fmt: on
 
-    adata.obsm[Key.uns.spatial] = adata.obs[["pxl_row_in_fullres", "pxl_col_in_fullres"]].values
-    adata.obs.drop(
-        columns=["pxl_row_in_fullres", "pxl_col_in_fullres"],
-        inplace=True,
-    )
+    adata.obs = pd.merge(adata.obs, coords, how="left", left_index=True, right_index=True)
+    adata.obsm[Key.obsm.spatial] = adata.obs[["pxl_row_in_fullres", "pxl_col_in_fullres"]].values
+    adata.obs.drop(columns=["pxl_row_in_fullres", "pxl_col_in_fullres"], inplace=True)
 
     if source_image_path is not None:
         source_image_path = Path(source_image_path).absolute()
@@ -112,8 +105,9 @@ def vizgen(
     *,
     count_file: str,
     obs_file: str,
-    transformation_file: str,
-    library_id: str | None = None,
+    transformation_file: str | None = None,
+    library_id: str = "library",
+    **kwargs: Any,
 ) -> AnnData:
     r"""
     Read Vizgen formatted dataset.
@@ -141,16 +135,7 @@ def vizgen(
     -------
     Annotated data matrix ``adata``, where observations/cells are named by their
     barcode and variables/genes by gene name. Stores the following information:
-    :attr:`~anndata.AnnData.X`
-        The data matrix is stored
-    :attr:`~anndata.AnnData.obs`
-        Spatial metadata containing the volume and coordinates of center of cells
-    :attr:`~anndata.AnnData.obs_names`
-        Cell ids
-    :attr:`~anndata.AnnData.var_names`
-        Gene names
-    :attr:`~anndata.AnnData.var`
-        Gene IDs
+    # TODO
     :attr:`~anndata.AnnData.uns`\\ `['spatial']`
         Dict of Vizgen output files with 'library_id' as key
     :attr:`~anndata.AnnData.uns`\\ `['spatial'][library_id]['scalefactors']['transformation_matrix']`
@@ -158,51 +143,23 @@ def vizgen(
     :attr:`~anndata.AnnData.obsm`\\ `['spatial']`
         Spatial coordinates of center of cells in micron coordinates, usable as `basis` by :func:`~scanpy.pl.embedding`.
     """
-    if isinstance(path, str):
-        path = Path(path)
-
-    text_kwargs = {
-        "first_column_names": True,
-        "delimiter": ",",
-    }
-
-    adata, _ = _read_counts(path=path, count_file=count_file, text_kwargs=text_kwargs)
-
-    transformation_matrix = {
-        "transformation_matrix": pd.read_csv(path / f"images/{transformation_file}", sep=" ", header=None)
-    }
-
-    if library_id is not None:
-        adata.uns[Key.uns.spatial] = {library_id: {"scalefactors": transformation_matrix}}
-    else:
-        adata.uns[Key.uns.spatial] = {"scalefactors": transformation_matrix}
-
-    coords_file = {
-        "metadata_file": path / obs_file,
-    }
-
-    columns = [
-        "fov",
-        "volume",
-        "center_x",
-        "center_y",
-        "min_x",
-        "max_x",
-        "min_y",
-        "max_y",
-    ]
-
-    coords = _read_coords(
-        coords_file["metadata_file"],
-        n_obs=adata.shape[0],
-        cols=columns,
-        header=0,
-        index_col=0,
+    path = Path(path)
+    adata, library_id = _read_counts(
+        path=path, count_file=count_file, library_id=library_id, delimiter=",", first_column_names=True, **kwargs
     )
 
-    adata.obs = adata.obs.join(coords, how="left")
+    # fmt: off
+    coords = pd.read_csv(path / obs_file, header=0, index_col=0)
+    coords.columns = ["fov", "volume", "center_x", "center_y", "min_x", "max_x", "min_y", "max_y"]
+    # fmt: on
 
-    adata.obsm[Key.uns.spatial] = adata.obs[["center_x", "center_y"]].to_numpy()
+    adata.obs = pd.merge(adata.obs, coords, how="left", left_index=True, right_index=True)
+    adata.obsm[Key.obsm.spatial] = adata.obs[["center_x", "center_y"]].values
+    adata.obs.drop(columns=["center_x", "center_x"], inplace=True)
+
+    if transformation_file is not None:
+        matrix = pd.read_csv(path / f"images/{transformation_file}", sep=" ", header=None)
+        adata.uns[Key.uns.spatial][library_id]["scalefactors"] = {"transformation_matrix": matrix}
 
     return adata
 

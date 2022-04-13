@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from h5py import File
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional
 from imageio import imread
 from pathlib import Path
 
 from scanpy import read_10x_h5
 from anndata import AnnData, read_mtx, read_text
-
-import pandas as pd
 
 from squidpy._utils import NDArrayA
 from squidpy._constants._pkg_constants import Key
@@ -68,24 +66,3 @@ def _read_images(
         dic[k] = imread(f)
 
     return dic
-
-
-def _read_coords(
-    path: str | Path,
-    n_obs: int,
-    cols: Sequence[str] | None = None,
-    **kwargs: Any,
-) -> NDArrayA | pd.DataFrame:
-    """Load coordinates."""
-    coords = pd.read_csv(path, **kwargs)
-
-    if coords.shape[0] != n_obs:
-        raise ValueError(f"Invalid shape of `coordinates` file: `{coords.shape}`.")
-
-    if cols is None:
-        return coords.to_numpy()
-    else:
-        if len(cols) != coords.columns.shape[0]:
-            raise ValueError(f"Invalid length for columns: `{cols}`.")
-        coords.columns = cols
-        return coords
