@@ -3,6 +3,7 @@ AnnData
 autocorrelation
 backend
 barcode
+bc
 binarize
 boolean
 Bugfixes
@@ -33,6 +34,8 @@ Dentate
 dev
 DL
 dotplot
+FOV
+fov
 frac
 geary
 Geary
@@ -58,6 +61,7 @@ modularity
 moran
 Moran's I
 Napari
+Nanostring
 NEUN
 obsm
 omics
@@ -95,5 +99,6 @@ tori
 transcriptomics
 uncommenting
 Visium
+visium
 Vizgen
 zscore
