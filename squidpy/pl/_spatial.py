@@ -4,6 +4,8 @@ from types import MappingProxyType
 from typing import Union  # noqa: F401
 from typing import Any, Tuple, Mapping, Optional, Sequence
 from pathlib import Path
+from functools import wraps
+from typing_extensions import Literal
 import itertools
 
 from anndata import AnnData
@@ -341,6 +343,54 @@ def _spatial_plot(
         save_fig(fig_params.fig, path=save)
 
 
+def _wrap_signature(key: Literal["spatial_scatter", "spatial_segment"]) -> Any:
+    def _wrap_plot(func: Any) -> Any:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            import inspect
+
+            params = inspect.signature(_spatial_plot).parameters.copy()
+            wrapper_sig = inspect.signature(func)
+            wrapper_params = wrapper_sig.parameters.copy()
+
+            if key == "spatial_scatter":
+                params.pop("seg")
+                params.pop("seg_key")
+                params.pop("seg_cell_id")
+                params.pop("seg_contourpx")
+                params.pop("seg_outline")
+                wrapper_params.pop("adata")
+                wrapper_params.pop("shape")
+            elif key == "spatial_segment":
+                params.pop("shape")
+                params.pop("size")
+                params.pop("size_key")
+                params.pop("scale_factor")
+                wrapper_params.pop("adata")
+                wrapper_params.pop("seg_cell_id")
+                wrapper_params.pop("seg")
+                wrapper_params.pop("seg_key")
+                wrapper_params.pop("seg_contourpx")
+                wrapper_params.pop("seg_outline")
+            else:
+                raise NotImplementedError("Function signature not implemented.")
+
+            params.update(wrapper_params)
+            annotations = {k: v.annotation for k, v in params.items() if v.annotation != inspect.Parameter.empty}
+            if wrapper_sig.return_annotation is not inspect.Signature.empty:
+                annotations["return"] = wrapper_sig.return_annotation
+
+            func.__signature__ = inspect.Signature(
+                list(params.values()), return_annotation=wrapper_sig.return_annotation
+            )
+            func.__annotations__ = annotations
+
+            return func
+
+        return _wrap_plot
+
+
+@_wrap_signature(key="spatial_scatter")
 @d.dedent
 def spatial_scatter(
     adata: AnnData,
@@ -389,6 +439,7 @@ def spatial_scatter(
     )
 
 
+@_wrap_signature(key="spatial_segment")
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
 def spatial_segment(
