@@ -413,7 +413,7 @@ def spatial_scatter(
         - Use ``img_alpha``, ``img_cmap`` or ``img_channel`` to control how it is displayed.
         - Use ``size`` to scale the size of the shapes plotted on top.
 
-    If no image is present or plotted, it will defaults to a scatterplot,
+    If no image is present or plotted, it will defaults to a scatter plot,
     see :func:`matplotlib.axes.Axes.scatter`.
 
     %(spatial_plot.summary_ext)s
