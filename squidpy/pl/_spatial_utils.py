@@ -128,6 +128,9 @@ class SpatialParams(NamedTuple):
     cell_id: Sequence[NDArrayA] | Tuple[None, ...]
 
 
+to_hex = partial(colors.to_hex, keep_alpha=True)
+
+
 def _get_library_id(
     adata: AnnData,
     shape: _AvailShapes | None,
@@ -409,7 +412,6 @@ def _set_color_source_vec(
     palette: Palette_t = None,
     na_color: str | Tuple[float, ...] | None = None,
 ) -> Tuple[NDArrayA | pd.Series | None, NDArrayA, bool]:
-    to_hex = partial(colors.to_hex, keep_alpha=True)
 
     if value_to_plot is None:
         return np.full(adata.n_obs, to_hex(na_color)), np.broadcast_to(np.nan, adata.n_obs), False
@@ -880,6 +882,7 @@ def _plot_scatter(
     color_params: Colormap,
     size: float,
     color_vector: NDArrayA,
+    na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
     **kwargs: Any,
 ) -> Tuple[Axes, Collection | PatchCollection]:
 
@@ -890,13 +893,22 @@ def _plot_scatter(
 
     # prevents reusing vmin/vmax
     norm = copy(cmap_params.norm)
+    # outline consistent with na_color
+    na_color = to_hex(na_color)
+    bg_col: Union[NDArrayA, str] = outline_params.bg_color
+    gap_col: Union[NDArrayA, str] = outline_params.gap_color
+    if np.any(color_vector == na_color):
+        bg_col = color_vector.astype(str).copy()
+        bg_col[bg_col != na_color] = outline_params.bg_color
+        gap_col = color_vector.astype(str).copy()
+        gap_col[gap_col != na_color] = outline_params.gap_color
 
     if outline_params.outline:
         _cax = scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.bg_size,
-            c=outline_params.bg_color,
+            c=bg_col,
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,
@@ -907,14 +919,13 @@ def _plot_scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.gap_size,
-            c=outline_params.gap_color,
+            c=gap_col,
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,
             **kwargs,
         )
         ax.add_collection(_cax)
-
     _cax = scatter(
         coords[:, 0],
         coords[:, 1],

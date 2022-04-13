@@ -33,8 +33,10 @@ def _get_palette(
     if palette is None:
         try:
             _palette = adata.uns[Key.uns.colors(cluster_key)]
-            if len(_palette) != len(categories):
-                raise ValueError(f"Expected palette to be of length `{len(categories)}`, found `{len(_palette)}`.")
+            if len(_palette) < len(categories):
+                raise ValueError(
+                    f"Expected palette to be of minimum length `{len(categories)}`, found `{len(_palette)}`."
+                )
             return dict(zip(categories, _palette))
         except KeyError as e:
             logg.error(f"Unable to fetch palette, reason: {e}. Using `None`.")

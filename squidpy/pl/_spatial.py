@@ -234,9 +234,9 @@ def _spatial_plot(
             _subset(adata, library_id=_lib),  # type: ignore
             value_to_plot,
             layer=layer,
-            use_raw=use_raw,
+            use_raw=color_params.use_raw,
             alt_var=alt_var,
-            groups=groups,
+            groups=color_params.groups,
             palette=palette,
             na_color=na_color,
         )
@@ -270,6 +270,7 @@ def _spatial_plot(
                 color_params=color_params,
                 size=_size,
                 color_vector=color_vector,
+                na_color=na_color,
                 **kwargs,
             )
         elif _seg is not None and _cell_id is not None:
