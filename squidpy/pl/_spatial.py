@@ -386,7 +386,7 @@ def _wrap_signature(key: Literal["spatial_scatter", "spatial_segment"]) -> Any:
             )
             func.__annotations__ = annotations
 
-            return func
+            return func(*args, **kwargs)
 
         return wrapper
 
