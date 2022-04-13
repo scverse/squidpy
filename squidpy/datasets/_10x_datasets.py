@@ -82,7 +82,7 @@ def visium(
         Whether to download the high-resolution tissue section into
         :attr:`anndata.AnnData.uns` ``['spatial']['{sample_id}']['metadata']['source_image_path']``.
     base_dir
-        Directory where to download the data. If `None`, use :attr:`scanpy.settings.datasetdir`.
+        Directory where to download the data. If `None`, use :attr:`scanpy._settings.ScanpyConfig.datasetdir`.
 
     Returns
     -------
