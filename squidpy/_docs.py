@@ -176,7 +176,7 @@ library_id
       from observations to library ids, then search :attr:`anndata.AnnData.uns` ``['{spatial_key}']``."""
 _library_key = """\
 library_key
-    Entry in :attr:`adata.obs` for ``the library_id`` key."""
+    Key in :attr:`anndata.AnnData.obs` containing library ids for which to build the spatial graphs separately."""
 
 d = DocstringProcessor(
     adata=_adata,

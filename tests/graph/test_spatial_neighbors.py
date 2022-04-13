@@ -24,7 +24,8 @@ class TestSpatialNeighbors:
     # ground-truth Delaunay graph
     _gt_dgraph = np.array([[0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0], [1.0, 1.0, 1.0, 0.0]])
 
-    def _adata_concat(self, adata1, adata2):
+    @staticmethod
+    def _adata_concat(adata1, adata2):
         adata2.uns["spatial"] = {"library2": None}  # needed to trigger grid building
         batch1, batch2 = "batch1", "batch2"
         adata_concat = ad.concat(
@@ -49,16 +50,16 @@ class TestSpatialNeighbors:
 
         # test for library_key
         visium_adata2 = visium_adata.copy()
-        adata_concat, batch1, batch2 = self._adata_concat(visium_adata, visium_adata2)
+        adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(visium_adata, visium_adata2)
         spatial_neighbors(visium_adata2, n_rings=n_rings)
         spatial_neighbors(adata_concat, library_key="library_id", n_rings=n_rings)
         assert adata_concat.obsp[Key.obsp.spatial_conn()][0].sum() == n_neigh
         np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs.library_id == batch1].obsp[Key.obsp.spatial_conn()].A,
+            adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].A,
             visium_adata.obsp[Key.obsp.spatial_conn()].A,
         )
         np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs.library_id == batch2].obsp[Key.obsp.spatial_conn()].A,
+            adata_concat[adata_concat.obs["library_id"] == batch2].obsp[Key.obsp.spatial_conn()].A,
             visium_adata2.obsp[Key.obsp.spatial_conn()].A,
         )
 
@@ -74,16 +75,16 @@ class TestSpatialNeighbors:
 
         # test for library_key
         adata2 = adata.copy()
-        adata_concat, batch1, batch2 = self._adata_concat(adata, adata2)
+        adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(adata, adata2)
         spatial_neighbors(adata2, n_neighs=n_neigh, n_rings=n_rings, coord_type="grid")
         spatial_neighbors(adata_concat, library_key="library_id", n_neighs=n_neigh, n_rings=n_rings, coord_type="grid")
         assert np.diff(adata_concat.obsp[Key.obsp.spatial_conn()].indptr).max() == sum_neigh
         np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs.library_id == batch1].obsp[Key.obsp.spatial_conn()].A,
+            adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].A,
             adata.obsp[Key.obsp.spatial_conn()].A,
         )
         np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs.library_id == batch2].obsp[Key.obsp.spatial_conn()].A,
+            adata_concat[adata_concat.obs["library_id"] == batch2].obsp[Key.obsp.spatial_conn()].A,
             adata2.obsp[Key.obsp.spatial_conn()].A,
         )
 
@@ -139,16 +140,16 @@ class TestSpatialNeighbors:
 
         # test for library_key
         non_visium_adata2 = non_visium_adata.copy()
-        adata_concat, batch1, batch2 = self._adata_concat(non_visium_adata, non_visium_adata2)
+        adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(non_visium_adata, non_visium_adata2)
         spatial_neighbors(adata_concat, library_key="library_id", delaunay=True, coord_type=None)
         spatial_neighbors(non_visium_adata2, delaunay=True, coord_type=None)
 
         np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs.library_id == batch1].obsp[Key.obsp.spatial_conn()].A,
+            adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].A,
             non_visium_adata.obsp[Key.obsp.spatial_conn()].A,
         )
         np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs.library_id == batch2].obsp[Key.obsp.spatial_conn()].A,
+            adata_concat[adata_concat.obs["library_id"] == batch2].obsp[Key.obsp.spatial_conn()].A,
             non_visium_adata2.obsp[Key.obsp.spatial_conn()].A,
         )
 

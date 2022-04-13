@@ -1,7 +1,7 @@
 """Functions for building graphs from spatial coordinates."""
 from __future__ import annotations
 
-from typing import Union, Iterable  # noqa: F401
+from typing import List, Tuple, Union, Iterable  # noqa: F401
 from functools import partial
 from itertools import chain
 import warnings
@@ -142,19 +142,16 @@ def spatial_neighbors(
     )
 
     if library_key is not None:
-        adj_mats = []
-        dst_mats = []
+        mats: List[Tuple[spmatrix, spmatrix]] = []
         obs_names = []
         for lib in libs:
             obs_names.extend(unique_obs_names[adata.obs[library_key] == lib])
-            Adj, Dst = _build_fun(adata[adata.obs[library_key] == lib])
-            adj_mats.append(Adj)
-            dst_mats.append(Dst)
-        adj_tmp = AnnData(block_diag(adj_mats, format="csr"), dtype="float64")
-        dst_tmp = AnnData(block_diag(dst_mats, format="csr"), dtype="float64")
+            mats.append(_build_fun(adata[adata.obs[library_key] == lib]))
+        adj_tmp = AnnData(block_diag([m[0] for m in mats], format="csr"), dtype="float64")
+        dst_tmp = AnnData(block_diag([m[1] for m in mats], format="csr"), dtype="float64")
         adj_tmp.obs_names = dst_tmp.obs_names = adj_tmp.var_names = dst_tmp.var_names = obs_names
-        Adj = adj_tmp[unique_obs_names, unique_obs_names].X.copy()
-        Dst = dst_tmp[unique_obs_names, unique_obs_names].X.copy()
+        Adj = csr_matrix(adj_tmp[unique_obs_names, :][:, unique_obs_names].X, copy=False)
+        Dst = csr_matrix(dst_tmp[unique_obs_names, :][:, unique_obs_names].X, copy=False)
     else:
         Adj, Dst = _build_fun(adata)
 
