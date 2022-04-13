@@ -1,20 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Sequence
-from imageio import imread
+from typing import Any
 from pathlib import Path
 import os
+import re
 import json
 
 from scanpy import logging as logg
 from anndata import AnnData
 
 from scipy.sparse import csr_matrix
-import numpy as np
 import pandas as pd
 
-from squidpy._utils import NDArrayA
-from squidpy.read._utils import _read_counts
+from squidpy.read._utils import _load_image, _read_counts
 from squidpy.datasets._utils import PathLike
 from squidpy._constants._pkg_constants import Key
 
@@ -63,12 +61,6 @@ def visium(
         - :attr:`anndata.AnnData.uns` `['spatial']['{library_id}']['scalefactors']` - scale factors for the spots.
         - :attr:`anndata.AnnData.uns` `['spatial']['{library_id}']['metadata']` - metadata.
     """
-
-    def load_image(path: PathLike) -> NDArrayA:
-        from PIL import Image
-
-        return np.asarray(Image.open(path))
-
     path = Path(path)
     adata, library_id = _read_counts(path, count_file=count_file, library_id=library_id, **kwargs)
 
@@ -76,7 +68,7 @@ def visium(
         return adata
 
     adata.uns[Key.uns.spatial][library_id][Key.uns.image_key] = {
-        f"{res}_image": load_image(path / f"{Key.uns.spatial}/tissue_{res}_image.png") for res in ["hires", "lowres"]
+        f"{res}_image": _load_image(path / f"{Key.uns.spatial}/tissue_{res}_image.png") for res in ["hires", "lowres"]
     }
     adata.uns[Key.uns.spatial][library_id]["scalefactors"] = json.loads(
         (path / f"{Key.uns.spatial}/scalefactors_json.json").read_bytes()
@@ -156,7 +148,7 @@ def vizgen(
 
     adata.obs = pd.merge(adata.obs, coords, how="left", left_index=True, right_index=True)
     adata.obsm[Key.obsm.spatial] = adata.obs[["center_x", "center_y"]].values
-    adata.obs.drop(columns=["center_x", "center_x"], inplace=True)
+    adata.obs.drop(columns=["center_x", "center_y"], inplace=True)
 
     if transformation_file is not None:
         matrix = pd.read_csv(path / f"images/{transformation_file}", sep=" ", header=None)
@@ -170,9 +162,9 @@ def nanostring(
     *,
     count_file: str,
     obs_file: str,
-    fov_file: str,
+    fov_file: str | None = None,
 ) -> AnnData:
-    r"""
+    """
     Read Nanostring formatted dataset.
 
     In addition to reading the regular Nanostring output,
@@ -205,55 +197,48 @@ def nanostring(
         Cell names
     :attr:`~anndata.AnnData.var`
         Gene names
-    :attr:`~anndata.AnnData.obsm`\\ `['spatial']`
+    :attr:`~anndata.AnnData.obsm` `['spatial']`
         Local coordinates of the centers of cells
-    :attr:`~anndata.AnnData.obsm`\\ `['spatial_fov']``
+    :attr:`~anndata.AnnData.obsm` `['spatial_fov']``
         Global coordinates of the centers of cells in the field of view (FOV)
-    :attr:`~anndata.AnnData.uns`\\ `['spatial']`
+    :attr:`~anndata.AnnData.uns` `['spatial']`
         Dict of Nanostring output files with 'fov_positions', cell composite images with "FOV_<number>" as keys
-    :attr:`~anndata.AnnData.uns`\\ `['spatial'][FOV_id]['images']`
+    :attr:`~anndata.AnnData.uns` `['spatial'][FOV_id]['images']`
         Dict of images
     """
-    path = Path(path)
+    path, fov = Path(path), "fov"
 
-    counts = pd.read_csv(path / count_file)
-    counts.index = counts.fov.astype(str) + "_" + counts.cell_ID.astype(str)
-    counts.drop(columns=["fov", "cell_ID"], inplace=True)
-    counts_columns = counts.columns
+    counts = pd.read_csv(path / count_file, header=0, index_col="cell_ID")
+    counts.index = counts.index.astype(str).str.cat(counts.pop(fov).astype(str).values, sep="_")
 
-    obs = pd.read_csv(path / obs_file)
-    obs.index = obs.fov.astype(str) + "_" + obs.cell_ID.astype(str)
+    obs = pd.read_csv(path / obs_file, header=0, index_col="cell_ID")
+    obs[fov] = pd.Categorical(obs[fov].astype(str))
+    obs.index = obs.index.astype(str).str.cat(obs[fov].values, sep="_")
 
-    fov_positions = {"fov_positions": pd.read_csv(path / fov_file)}
-
-    merged_df = pd.merge(counts, obs, left_index=True, right_index=True)
-    obs_columns = obs.columns
-    merged_df["fov"] = pd.Categorical(merged_df["fov"].astype(str))
-
-    adata = AnnData(csr_matrix(merged_df[counts_columns].to_numpy()), obs=merged_df[obs_columns].copy())
+    adata = AnnData(csr_matrix(counts.values), dtype=counts.values.dtype, uns={Key.uns.spatial: {}})
+    adata.obs = pd.merge(adata.obs, obs, left_index=True, right_index=True, how="left")
     adata.var_names = counts.columns
-    adata.obsm[Key.obsm.spatial] = adata.obs[["CenterX_local_px", "CenterY_local_px"]].to_numpy()
-    adata.obsm["spatial_fov"] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].to_numpy()
 
-    adata.uns[Key.uns.spatial] = {
-        k: {"images": {"hires": None}, "scalefactors": {"tissue_hires_scalef": 1, "spot_diameter_fullres": 1}}
-        for k in adata.obs.fov.cat.categories
-    }
-    adata.uns[Key.uns.spatial]["fov"] = fov_positions
+    adata.obsm[Key.obsm.spatial] = adata.obs[["CenterX_local_px", "CenterY_local_px"]].values
+    adata.obsm["spatial_fov"] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].values
+    adata.obs.drop(columns=["CenterX_local_px", "CenterY_local_px"], inplace=True)
 
-    img_and_segmasks: Dict[str, str] = {"CellComposite": ".jpg", "CellLabels": ".tif"}
-
-    for folder in img_and_segmasks:
-        image_or_seg_files: Sequence[str] = os.listdir(path / folder)
-        images_or_segmasks: Dict[str, str] = {
-            str(int(i.strip(img_and_segmasks[folder]).replace(folder + "_F", ""))): i for i in image_or_seg_files
+    for fov in adata.obs[fov].cat.categories:
+        adata.uns[Key.uns.spatial][fov] = {
+            "images": {},
+            "scalefactors": {"tissue_hires_scalef": 1, "spot_diameter_fullres": 1},
         }
 
-        if folder == "CellComposite":
-            for fov, file_name in images_or_segmasks.items():
-                adata.uns[Key.uns.spatial][fov]["images"]["hires"] = imread(path / folder / file_name)
-        else:
-            for fov, file_name in images_or_segmasks.items():
-                adata.uns[Key.uns.spatial][fov]["images"]["segmentation"] = imread(path / folder / file_name)
+    pat = re.compile(r".*_F(\d+)")
+    for subdir in ["CellComposite", "CellLabels"]:
+        kind = "hires" if subdir == "CellComposite" else "segmentation"
+        for fname in os.listdir(path / subdir):
+            fov = str(int(pat.findall(fname)[0]))
+            adata.uns[Key.uns.spatial][fov]["images"][kind] = _load_image(path / subdir / fname)
+
+    if fov_file is not None:
+        fov_positions = pd.read_csv(path / fov_file, header=0, index_col=fov)
+        for fov, row in fov_positions.iterrows():
+            adata.uns[Key.uns.spatial][fov] = row.to_dict()
 
     return adata

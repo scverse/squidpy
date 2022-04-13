@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+from PIL import Image
 from h5py import File
-from typing import Any, Mapping, Optional
-from imageio import imread
+from typing import Any, Optional
 from pathlib import Path
 
 from scanpy import read_10x_h5
 from anndata import AnnData, read_mtx, read_text
 
+import numpy as np
+
 from squidpy._utils import NDArrayA
+from squidpy.datasets._utils import PathLike
 from squidpy._constants._pkg_constants import Key
 
 
@@ -55,14 +58,5 @@ def _read_counts(
     return adata, library_id
 
 
-def _read_images(
-    image_dic: Mapping[str, Path],
-) -> Mapping[str, NDArrayA]:
-    """Load images."""
-    dic = {}
-    for k, f in image_dic.items():
-        if not f.exists():
-            raise ValueError(f"Could not find: `{f}`")
-        dic[k] = imread(f)
-
-    return dic
+def _load_image(path: PathLike) -> NDArrayA:
+    return np.asarray(Image.open(path))
