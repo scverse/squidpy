@@ -191,17 +191,17 @@ def nanostring(
           :attr:`anndata.AnnData.obsm` ``['spatial_fov']`` - global coordinates of the centers of cells in the
           field of view.
         - :attr:`anndata.AnnData.uns` ``['spatial']['{fov}']['images']`` - *hires* and *segmentation* images.
-        - :attr:`anndata.AnnData.uns` ``['spatial']['{fov}']['{x,y}_global_px']`` - coordinates of the field of view.
+        - :attr:`anndata.AnnData.uns` ``['spatial']['{fov}']['metadata']]['{x,y}_global_px']`` - coordinates of the field of view.
           Only present if ``fov_file != None``.
-    """
-    path, fov = Path(path), "fov"
+    """  # noqa: E501
+    path, fov_key = Path(path), "fov"
 
     counts = pd.read_csv(path / counts_file, header=0, index_col="cell_ID")
-    counts.index = counts.index.astype(str).str.cat(counts.pop(fov).astype(str).values, sep="_")
+    counts.index = counts.index.astype(str).str.cat(counts.pop(fov_key).astype(str).values, sep="_")
 
     obs = pd.read_csv(path / meta_file, header=0, index_col="cell_ID")
-    obs[fov] = pd.Categorical(obs[fov].astype(str))
-    obs.index = obs.index.astype(str).str.cat(obs[fov].values, sep="_")
+    obs[fov_key] = pd.Categorical(obs[fov_key].astype(str))
+    obs.index = obs.index.astype(str).str.cat(obs[fov_key].values, sep="_")
 
     adata = AnnData(csr_matrix(counts.values), dtype=counts.values.dtype, uns={Key.uns.spatial: {}})
     adata.obs_names = counts.index
@@ -212,7 +212,7 @@ def nanostring(
     adata.obsm["spatial_fov"] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].values
     adata.obs.drop(columns=["CenterX_local_px", "CenterY_local_px"], inplace=True)
 
-    for fov in adata.obs[fov].cat.categories:
+    for fov in adata.obs[fov_key].cat.categories:
         adata.uns[Key.uns.spatial][fov] = {
             "images": {},
             "scalefactors": {"tissue_hires_scalef": 1, "spot_diameter_fullres": 1},
@@ -226,8 +226,8 @@ def nanostring(
             adata.uns[Key.uns.spatial][fov]["images"][kind] = _load_image(path / subdir / fname)
 
     if fov_file is not None:
-        fov_positions = pd.read_csv(path / fov_file, header=0, index_col=fov)
+        fov_positions = pd.read_csv(path / fov_file, header=0, index_col=fov_key)
         for fov, row in fov_positions.iterrows():
-            adata.uns[Key.uns.spatial][str(fov)] = row.to_dict()
+            adata.uns[Key.uns.spatial][str(fov)]["metadata"] = row.to_dict()
 
     return adata
