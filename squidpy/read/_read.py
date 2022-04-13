@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Union  # noqa: F401
 from typing import Any
 from pathlib import Path
 import os
@@ -29,37 +30,35 @@ def visium(
     **kwargs: Any,
 ) -> AnnData:
     """
-    Read 10x-Genomics-formatted Visium dataset.
+    Read *10x Genomics* Visium formatted dataset.
 
-    In addition to reading regular 10x output,
-    this looks for the `spatial` folder and loads images,
-    coordinates and scale factors.
-    Based on the `Space Ranger output docs`_.
-    See :func:`scanpy.pl.spatial` for a compatible plotting function.
-    .. _Space Ranger output docs:
-    https://support.10xgenomics.com/spatial-gene-expression/software/pipelines/latest/output/overview
+    In addition to reading the regular Visium output, it looks for the `spatial` directory and loads images,
+    spatial coordinates and scale factors.
+
+    .. seealso::
+
+        - `Space Ranger output <https://support.10xgenomics.com/spatial-gene-expression/software/pipelines/latest/output/overview>`_
 
     Parameters
     ----------
     path
-        Path to directory for Visium data files.
+        Path to the root directory containing *Visium* files.
     counts_file
-        Which file in the passed directory to use as the count file. Typically would be one of:
-        'filtered_feature_bc_matrix.h5' or 'raw_feature_bc_matrix.h5'.
+        Which file in the passed directory to use as the count file. Typically either *filtered_feature_bc_matrix.h5* or
+        *raw_feature_bc_matrix.h5*.
     library_id
-        Identifier for the Visium library. Can be modified when concatenating multiple adata objects.
+        Identifier for the *Visium* library. Useful when concatenating multiple :class:`anndata.AnnData` objects.
     kwargs
-        Keyword arguments for TODO.
+        Keyword arguments for :func:`scanpy.read_10x_h5`, :func:`anndata.read_mtx` or :func:`read_text`.
 
     Returns
     -------
-    Annotated data matrix ``adata``, where observations/cells are named by their
-    barcode and variables/genes by gene name. Stores the following information:
+    Annotated data object with the following keys:
 
         - :attr:`anndata.AnnData.obsm` ``['spatial']`` - spatial spot coordinates.
         - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['images']`` - *hires* and *lowres* images.
         - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['scalefactors']`` - scale factors for the spots.
-        - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['metadata']`` - metadata.
+        - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['metadata']`` - various metadata .
     """
     path = Path(path)
     adata, library_id = _read_counts(path, count_file=counts_file, library_id=library_id, **kwargs)
@@ -101,39 +100,37 @@ def vizgen(
     library_id: str = "library",
     **kwargs: Any,
 ) -> AnnData:
-    r"""
-    Read Vizgen formatted dataset.
+    """
+    Read *Vizgen* formatted dataset.
 
-    In addition to reading the regular Vizgen output,
-    this function loads metadata file to load spatial coordinates and loads transformation matrix.
-    .. _Vizgen sample output docs:
-    https://f.hubspotusercontent40.net/hubfs/9150442/Vizgen%20MERFISH%20Mouse%20Receptor%20Map%20File%20Descriptions%20.pdf?__hstc=&__hssc=
+    In addition to reading the regular *Vizgen* output, it loads the metadata and optionally loads
+    the transformation matrix.
+
+    .. seealso::
+
+        - `Vizgen data release program <https://vizgen.com/data-release-program/>`_
 
     Parameters
     ----------
     path
-        Path to directory for Vizgen data files.
+        Path to the root directory containing *Vizgen* files.
     counts_file
-        Which file in the passed directory to use as the count file. Typically would be one of:
-        '_cell_by_gene.csv'.
+        File containing the counts. Typically ends with *_cell_by_gene.csv*.
     meta_file
-        This metadata file has the spatial coordinates of each of the detected cells.
+        File containing the spatial coordinates and additional cell-level metadata.
     transformation_file
         Transformation matrix file for converting micron coordinates into pixels in images.
     library_id
-        Identifier for the Vizgen library. Can be modified when concatenating multiple adata objects.
+        Identifier for the *Vizgen* library. Useful when concatenating multiple :class:`anndata.AnnData` objects.
 
     Returns
     -------
-    Annotated data matrix ``adata``, where observations/cells are named by their
-    barcode and variables/genes by gene name. Stores the following information:
-    # TODO
-    :attr:`~anndata.AnnData.uns`\\ `['spatial']`
-        Dict of Vizgen output files with 'library_id' as key
-    :attr:`~anndata.AnnData.uns`\\ `['spatial'][library_id]['scalefactors']['transformation_matrix']`
-        Transformation matrix for converting micron coordinates to pixels
-    :attr:`~anndata.AnnData.obsm`\\ `['spatial']`
-        Spatial coordinates of center of cells in micron coordinates, usable as `basis` by :func:`~scanpy.pl.embedding`.
+    Annotated data object with the following keys:
+
+        - :attr:`anndata.AnnData.obsm` ``['spatial']`` - spatial spot coordinates in microns.
+        - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['scalefactors']['transformation_matrix']`` -
+          transformation matrix for converting micron coordinates to pixels.
+          Only present if ``transformation_file != None``.
     """
     path = Path(path)
     adata, library_id = _read_counts(
@@ -165,46 +162,37 @@ def nanostring(
     fov_file: str | None = None,
 ) -> AnnData:
     """
-    Read Nanostring formatted dataset.
+    Read *Nanostring* formatted dataset.
 
-    In addition to reading the regular Nanostring output,
-    loading metadata file to load spatial coordinates,
-    this function reads fov_file to load coordinates of fields of view
-    and looks for `CellCompsite` folder and loads images.
+    In addition to reading the regular *Nanostring* output, it loads the metadata file, *CellComposite* and *CellLabels*
+    directories containing images and optionally the field of view file.
+
+    .. seealso::
+
+        - `Nanostring Spatial Molecular Imager <https://nanostring.com/products/cosmx-spatial-molecular-imager/>`_
 
     Parameters
     ----------
     path
-        Path to directory for Nanostring data files.
+        Path to the root directory containing *Nanostring* files.
     counts_file
-        Which file in the passed directory to use as the count file. Typically would be one of:
-        '_exprMat_file.csv'.
+        File containing the counts. Typically ends with *_exprMat_file.csv*.
     meta_file
-        Which metadata file in the passed directory to use as the obs file. Typically would be one of:
-        '_metadata_file.csv'.
+        File containing the spatial coordinates and additional cell-level metadata.
+        Typically ends with *_metadata_file.csv*.
     fov_file
-        This file includes the coordinates of all the fields of view.
+        File containing the coordinates of all the fields of view.
 
     Returns
     -------
-    Annotated data matrix ``adata``, where observations/cells are named by their
-    barcode and variables/genes by gene name. Stores the following information:
-    :attr:`~anndata.AnnData.X`
-        The data matrix is stored
-    :attr:`~anndata.AnnData.obs`
-        Table with rows that correspond to the cells, including area, local and global cell coordinates
-    :attr:`~anndata.AnnData.obs_names`
-        Cell names
-    :attr:`~anndata.AnnData.var`
-        Gene names
-    :attr:`~anndata.AnnData.obsm` `['spatial']`
-        Local coordinates of the centers of cells
-    :attr:`~anndata.AnnData.obsm` `['spatial_fov']``
-        Global coordinates of the centers of cells in the field of view (FOV)
-    :attr:`~anndata.AnnData.uns` `['spatial']`
-        Dict of Nanostring output files with 'fov_positions', cell composite images with "FOV_<number>" as keys
-    :attr:`~anndata.AnnData.uns` `['spatial'][FOV_id]['images']`
-        Dict of images
+    Annotated data object with the following keys:
+
+        - :attr:`anndata.AnnData.obsm` ``['spatial']`` -  local coordinates of the centers of cells.
+          :attr:`anndata.AnnData.obsm` ``['spatial_fov']`` - global coordinates of the centers of cells in the
+          field of view.
+        - :attr:`anndata.AnnData.uns` ``['spatial']['{fov}']['images']`` - *hires* and *segmentation* images.
+        - :attr:`anndata.AnnData.uns` ``['spatial']['{fov}']['{x,y}_global_px']`` - coordinates of the field of view.
+          Only present if ``fov_file != None``.
     """
     path, fov = Path(path), "fov"
 
