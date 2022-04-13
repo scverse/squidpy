@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from types import MappingProxyType
 from typing import Union  # noqa: F401
-from typing import Any, Tuple, Mapping, Callable, Optional, Sequence
+from typing import Any, Tuple, Mapping, Optional, Sequence
 from pathlib import Path
-from functools import partial
 import itertools
 
 from anndata import AnnData
@@ -43,17 +42,20 @@ from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 
 
+@d.get_sections(base="spatial_plot", section=["Returns"])
+@d.get_extended_summary(base="spatial_plot")
+@d.get_summary(base="spatial_plot")
 @d.dedent
 def _spatial_plot(
     adata: AnnData,
-    spatial_key: str = Key.obsm.spatial,
     shape: _AvailShapes | None = None,
     color: Sequence[str | None] | str | None = None,
     groups: _SeqStr | None = None,
     library_id: _SeqStr | None = None,
     library_key: str | None = None,
+    spatial_key: str = Key.obsm.spatial,
     # image
-    img: _SeqArray | bool | None = None,
+    img: _SeqArray | bool | None = True,
     img_res_key: str | None = Key.uns.image_res_key,
     img_alpha: float | None = None,
     img_cmap: Colormap | str | None = None,
@@ -93,11 +95,12 @@ def _spatial_plot(
     outline_color: Tuple[str, str] = ("black", "white"),
     outline_width: Tuple[float, float] = (0.3, 0.05),
     # legend
-    legend_loc: str = "right margin",
+    legend_loc: str | None = "right margin",
     legend_fontsize: int | float | _FontSize | None = None,
     legend_fontweight: int | _FontWeight = "bold",
     legend_fontoutline: Optional[int] = None,
     legend_na: bool = True,
+    colorbar: bool = True,
     # scalebar
     scalebar_dx: _SeqFloat | None = None,
     scalebar_units: _SeqStr | None = None,
@@ -117,30 +120,47 @@ def _spatial_plot(
     """
     Plot spatial omics data saved in AnnData.
 
-    This is a general purpose function for plotting scatterplots, images and segmentation masks.
-    Consider using :func:`squidpy.pl.spatial_scatter` or :func:`squidpy.pl.spatial_segment` for
-    specific use cases.
+    Use the parameter ``library_id`` to select the image.
+    If multiple ``library_id`` are available, use ``library_key`` to plot subsets of
+    the :class:`anndata.AnnData`.
+    Use ``crop_coord`` to crop the spatial plot based on coordinate boundaries.
 
-    %(plotting_general_summary)s
+    This function has few key assumptions about how coordinates and libraries are handled:
+
+        - The arguments ``library_key`` and ``library_id`` control which dataset is plotted.
+          If multiple libraries are present, specifying solely ``library_key`` will suffice, and
+          all unique libraries will be plotted sequentially. To select specific libraries, use
+          the ``library_id`` argument.
+        - The arguments ``color`` controls which features in obs/var are plotted. They are plotted
+          for all available/specified libraries. The argument ``groups`` can be used to select
+          categories to be plotted (valid only for categorical features in :attr:`adata.obs`).
+        - If multiple ``library_id`` are available, arguments such as ``size`` and ``crop_coord``
+          accept lists, to selectively customize different ``library_id`` plots. This requires that
+          the length of such lists match the number of unique libraries in the dataset.
+        - Coordinates are in the pixel space of the source image, so an equal
+          aspect ratio is assumed.
+        - The origin (e.g `(0, 0)`) is at the top left - as is common convention
+          with image data.
+        - The plotted points (dots) do not have a real "size" but only relative to their
+          coordinate/pixel space. This does not hold if no image is plotted, then size correspond
+          to points size passed to :func:`matplotlib.axes.Axes.scatter`.
+
+    If your anndata object has a `"spatial"` entry in ``.uns``, use ``img_key``, ``seg_key``
+    and ``size_key`` parameters to find values for ``img``, ``seg`` and ``size``.
+    Alternatively, these values can be passed directly.
 
     Parameters
     ----------
     %(adata)s
-    %(spatial_key)s
     %(shape)s
     %(color)s
     %(groups)s
     %(library_id)s
     %(library_key)s
+    %(spatial_key)s
     %(plotting_image)s
     %(plotting_segment)s
     %(plotting_features)s
-    scalebar_kwargs
-        Keyword arguments for :func:`matplotlib_scalebar.ScaleBar`.
-    edges_kwargs
-        Keyword arguments for :func:`networkx.draw_networkx_edges`.
-    kwargs
-        Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
 
     Returns
     -------
@@ -186,7 +206,6 @@ def _spatial_plot(
         adata=adata,
         spatial_params=spatial_params,
         spatial_key=spatial_key,
-        library_key=library_key,
         crop_coord=crop_coord,
     )
 
@@ -214,10 +233,6 @@ def _spatial_plot(
         **kwargs,
     )
 
-    _subset: Callable[[AnnData, str | None, str | None], AnnData] = (
-        partial(_subs, library_key=library_key) if library_key is not None else lambda _, **__: _  # type: ignore
-    )
-
     for count, (_lib_count, value_to_plot) in enumerate(itertools.product(*fig_params.iter_panels)):
         if not library_first:
             _lib_count, value_to_plot = value_to_plot, _lib_count
@@ -229,9 +244,18 @@ def _spatial_plot(
         _crops = crops[_lib_count]
         _lib = spatial_params.library_id[_lib_count]
         _coords = coords[_lib_count]  # TODO: do we want to order points? for now no, skip
-
+        adata_sub, coords_sub, image_sub = _subs(
+            adata,
+            _coords,
+            _img,
+            library_key=library_key,
+            library_id=_lib,
+            crop_coords=_crops,
+            groups_key=value_to_plot,
+            groups=color_params.groups,
+        )
         color_source_vector, color_vector, categorical = _set_color_source_vec(
-            _subset(adata, library_id=_lib),  # type: ignore
+            adata_sub,
             value_to_plot,
             layer=layer,
             use_raw=color_params.use_raw,
@@ -246,16 +270,15 @@ def _spatial_plot(
 
         # plot edges and arrows if needed. Do it here cause otherwise image is on top.
         if connectivity_key is not None:
-            _cedge = _plot_edges(
-                _subset(adata, library_id=_lib),  # type: ignore
-                _coords,
-                ax,
-                edges_width,
-                edges_color,
+            _plot_edges(
+                adata_sub,
+                coords_sub,
                 connectivity_key,
+                ax=ax,
+                edges_width=edges_width,
+                edges_color=edges_color,
                 **edges_kwargs,
             )
-            ax.add_collection(_cedge)
 
         if _seg is None and _cell_id is None:
             outline_params, kwargs = _set_outline(
@@ -263,7 +286,7 @@ def _spatial_plot(
             )
 
             ax, cax = _plot_scatter(
-                coords=_coords,
+                coords=coords_sub,
                 ax=ax,
                 outline_params=outline_params,
                 cmap_params=cmap_params,
@@ -294,12 +317,11 @@ def _spatial_plot(
             cax=cax,
             lib_count=_lib_count,
             fig_params=fig_params,
-            adata=adata,
-            coords=_coords,
+            adata=adata_sub,
+            coords=coords_sub,
             value_to_plot=value_to_plot,
             color_source_vector=color_source_vector,
-            crops=_crops,
-            img=_img,
+            img=image_sub,
             img_cmap=cmap_params.img_cmap,
             img_alpha=color_params.img_alpha,
             palette=palette,
@@ -309,6 +331,7 @@ def _spatial_plot(
             legend_fontoutline=legend_fontoutline,
             na_color=na_color,
             na_in_legend=legend_na,
+            colorbar=colorbar,
             scalebar_dx=scalebar_params.scalebar_dx,
             scalebar_units=scalebar_params.scalebar_units,
             scalebar_kwargs=scalebar_kwargs,
@@ -319,51 +342,49 @@ def _spatial_plot(
 
 
 @d.dedent
-@inject_docs(key=Key.obsp.spatial_conn())
 def spatial_scatter(
     adata: AnnData,
     shape: _AvailShapes | None = ScatterShape.CIRCLE,  # type: ignore[assignment]
-    img: _SeqArray | bool | None = True,
-    scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> Any:
     """
-    Plot scatter plot of shapes in spatial coordinates.
+    %(spatial_plot.summary)s # noqa: D400
 
-    %(plotting_shape_summary)s
+    This function allows overlaying data on top of images.
+    The plotted shapes (circles, squares or hexagons) have a real "size" with respect to their
+    coordinate space, which can be specified via the ``size`` or ``size_key`` parameter.
 
-    %(plotting_general_summary)s
+        - Use the parameter ``img_key`` to see the image in the background.
+        - Use the parameter ``library_id`` to select the image.
+          By default, ``'hires'`` key is attempted.
+        - Use ``img_alpha``, ``img_cmap`` or ``img_channel`` to control how it is displayed.
+        - Use ``size`` to scale the size of the shapes plotted on top.
+
+    If no image is present or plotted, it will defaults to a scatterplot,
+    see :func:`matplotlib.axes.Axes.scatter`.
+
+    %(spatial_plot.summary_ext)s
 
     Parameters
     ----------
     %(adata)s
-    %(spatial_key)s
     %(shape)s
     %(color)s
     %(groups)s
     %(library_id)s
     %(library_key)s
+    %(spatial_key)s
     %(plotting_image)s
     %(plotting_features)s
-    scalebar_kwargs
-        Keyword arguments for :func:`matplotlib_scalebar.ScaleBar`.
-    edges_kwargs
-        Keyword arguments for :func:`networkx.draw_networkx_edges`.
-    kwargs
-        Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
 
     Returns
     -------
-    %(plotting_returns)s
+    %(spatial_plot.returns)s
     """
     return _spatial_plot(
         adata,
         shape=shape,
-        img=img,
         seg_key=None,
-        scalebar_kwargs=scalebar_kwargs,
-        edges_kwargs=edges_kwargs,
         **kwargs,
     )
 
@@ -373,49 +394,48 @@ def spatial_scatter(
 def spatial_segment(
     adata: AnnData,
     seg_cell_id: str,
-    seg_key: str = Key.uns.image_seg_key,
-    img: _SeqArray | bool | None = True,
     seg: _SeqArray | bool | None = True,
-    scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    seg_key: str = Key.uns.image_seg_key,
+    seg_contourpx: int | None = None,
+    seg_outline: bool = False,
     **kwargs: Any,
 ) -> Any:
     """
-    Plot segmentation masks in spatial coordinates.
+    %(spatial_plot.summary)s # noqa: D400
 
-    %(plotting_segment_summary)s
+    This function allows overlaying segmentation masks on top of images.
+    ``seg_cell_id`` is a mandatory argument in :attr:`adata.obs` to control
+    unique segmentation masks's ids to be plotted.
+    By default, ``'segmentation'`` ``seg_key`` is attempted and
+    ``'hires'`` image key is attempted.
 
-    %(plotting_general_summary)s
+        - Use the parameter ``seg_key`` to see the image in the background.
+        - Use ``seg_contourpx`` or ``seg_outline`` to control how the segmentation mask is displayed.
+
+    %(spatial_plot.summary_ext)s
 
     Parameters
     ----------
     %(adata)s
-    %(spatial_key)s
+    %(plotting_segment)s
     %(color)s
     %(groups)s
     %(library_id)s
     %(library_key)s
+    %(spatial_key)s
     %(plotting_image)s
-    %(plotting_segment)s
     %(plotting_features)s
-    scalebar_kwargs
-        Keyword arguments for :func:`matplotlib_scalebar.ScaleBar`.
-    edges_kwargs
-        Keyword arguments for :func:`networkx.draw_networkx_edges`.
-    kwargs
-        Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
 
     Returns
     -------
-    %(plotting_returns)s
+    %(spatial_plot.returns)s
     """
     return _spatial_plot(
         adata,
-        img=img,
         seg=seg,
         seg_key=seg_key,
         seg_cell_id=seg_cell_id,
-        scalebar_kwargs=scalebar_kwargs,
-        edges_kwargs=edges_kwargs,
+        seg_contourpx=seg_contourpx,
+        seg_outline=seg_outline,
         **kwargs,
     )

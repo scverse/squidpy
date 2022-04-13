@@ -52,7 +52,7 @@ from skimage.segmentation import find_boundaries
 
 from squidpy._utils import NDArrayA
 from squidpy.pl._utils import _assert_value_in_obs
-from squidpy.im._coords import CropCoords, TupleSerializer
+from squidpy.im._coords import CropCoords
 from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
@@ -75,7 +75,7 @@ class FigParams(NamedTuple):
     fig: Figure
     ax: Axes
     axs: Sequence[Axes] | None
-    iter_panels: Tuple[Any, Any]
+    iter_panels: Tuple[Sequence[Any], Sequence[Any]]
     title: _SeqStr | None
     ax_labels: Sequence[str]
     frameon: bool | None
@@ -343,35 +343,74 @@ def _set_coords_crops(
     adata: AnnData,
     spatial_params: SpatialParams,
     spatial_key: str,
-    library_key: str | None = None,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
-) -> Tuple[Sequence[NDArrayA], List[TupleSerializer] | Tuple[None, ...]]:
+) -> Tuple[List[NDArrayA], List[CropCoords] | List[None]]:
     # set crops
     if crop_coord is None:
-        crops: Union[List[TupleSerializer], Tuple[None, ...]] = tuple(None for _ in spatial_params.library_id)
+        crops = [None] * len(spatial_params.library_id)
     else:
         crop_coord = _get_list(crop_coord, _type=tuple, ref_len=len(spatial_params.library_id), name="crop_coord")
-        crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor)]
+        crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor)]  # type: ignore[misc]
 
     coords = adata.obsm[spatial_key]
-    if library_key is None:
-        return [coords * sf for sf in spatial_params.scale_factor], crops
-    else:
-        return [
-            coords[adata.obs[library_key] == lib, :] * sf  # TODO: check that library_key is asserted upstream
-            for lib, sf in zip(spatial_params.library_id, spatial_params.scale_factor)
-        ], crops
+    return [coords * sf for sf in spatial_params.scale_factor], crops  # TODO(giovp): refactor with _subs
 
 
-def _subs(adata: AnnData, library_key: str | None = None, library_id: str | None = None) -> AnnData:
-    try:
-        if not adata[adata.obs[library_key] == library_id].shape[0]:
-            raise ValueError("Subset is empty.")
-        return adata[adata.obs[library_key] == library_id]
-    except KeyError:
-        raise KeyError(
-            f"Cannot subset adata. Either `library_key: {library_key}` or `library_id: {library_id}` is invalid."
+def _subs(
+    adata: AnnData,
+    coords: NDArrayA,
+    img: NDArrayA | None = None,
+    library_key: str | None = None,
+    library_id: str | None = None,
+    crop_coords: CropCoords | None = None,
+    groups_key: str | None = None,
+    groups: Sequence[Any] | None = None,
+) -> AnnData:
+    def assert_notempty(adata: AnnData, *, msg: str) -> AnnData:
+        if not adata.n_obs:
+            raise ValueError(f"Empty AnnData, reason: {msg}.")
+        return adata
+
+    def subset_by_key(
+        adata: AnnData,
+        coords: NDArrayA,
+        key: str | None,
+        values: Sequence[Any] | None,
+    ) -> Tuple[AnnData, NDArrayA]:
+        if key is None or values is None:
+            return adata, coords
+        if key not in adata.obs or not is_categorical_dtype(adata.obs[key]):
+            return adata, coords
+        try:
+            mask = adata.obs[key].isin(values).values
+            msg = f"None of `adata.obs[{key}]` are in `{values}`"
+            return assert_notempty(adata[mask], msg=msg), coords[mask]
+        except KeyError:
+            raise KeyError(f"Unable to find `{key!r}` in `adata.obs`.") from None
+
+    def subset_by_coords(
+        adata: AnnData, coords: NDArrayA, img: NDArrayA | None, crop_coords: CropCoords | None
+    ) -> Tuple[AnnData, NDArrayA, NDArrayA | None]:
+        if crop_coords is None:
+            return adata, coords, img
+
+        mask = (
+            (coords[:, 0] >= crop_coords.x0)
+            & (coords[:, 0] <= crop_coords.x1)
+            & (coords[:, 1] >= crop_coords.y0)
+            & (coords[:, 1] <= crop_coords.y1)
         )
+        msg = f"Empty crop coordinates `{crop_coords}`"
+        adata = assert_notempty(adata[mask, :], msg=msg)
+        coords = coords[mask]
+        if img is not None:
+            img = img[crop_coords.slice]
+        return adata, coords, img
+
+    adata, coords, img = subset_by_coords(adata, coords=coords, img=img, crop_coords=crop_coords)
+    adata, coords = subset_by_key(adata, coords=coords, key=library_key, values=[library_id])
+    adata, coords = subset_by_key(adata, coords=coords, key=groups_key, values=groups)
+    return adata, coords, img
 
 
 def _get_unique_map(dic: Mapping[str, Any]) -> Sequence[Any]:
@@ -496,12 +535,12 @@ def _make_poly(x: NDArrayA, y: NDArrayA, r: float, n: int, i: int) -> Tuple[NDAr
 def _plot_edges(
     adata: AnnData,
     coords: NDArrayA,
+    connectivity_key: str,
     ax: Axes,
     edges_width: float = 0.1,
     edges_color: str | Sequence[float] | Sequence[str] = "grey",
-    connectivity_key: str = Key.obsp.spatial_conn(),
     **kwargs: Any,
-) -> Any:
+) -> None:
     """Graph plotting."""
     from networkx import Graph
     from networkx.drawing.nx_pylab import draw_networkx_edges
@@ -512,12 +551,13 @@ def _plot_edges(
         )
 
     g = Graph(adata.obsp[connectivity_key])
+    if not len(g.edges):
+        return None
     edge_collection = draw_networkx_edges(
         g, coords, width=edges_width, edge_color=edges_color, arrows=False, ax=ax, **kwargs
     )
     edge_collection.set_rasterized(sc_settings._vector_friendly)
-
-    return edge_collection
+    ax.add_collection(edge_collection)
 
 
 def _get_title_axlabels(
@@ -570,17 +610,17 @@ def _decorate_axs(
     coords: NDArrayA,
     value_to_plot: str,
     color_source_vector: pd.Series[CategoricalDtype],
-    crops: TupleSerializer | None = None,  # TODO(giovp): CropCoords is the correct type
     img: NDArrayA | None = None,
     img_cmap: str | None = None,
     img_alpha: float | None = None,
     palette: Palette_t = None,
     legend_fontsize: int | float | _FontSize | None = None,
     legend_fontweight: int | _FontWeight = "bold",
-    legend_loc: str = "right margin",
+    legend_loc: str | None = "right margin",
     legend_fontoutline: int | None = None,
     na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
     na_in_legend: bool = True,
+    colorbar: bool = True,
     scalebar_dx: Sequence[float] | None = None,
     scalebar_units: Sequence[str] | None = None,
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -619,7 +659,7 @@ def _decorate_axs(
                 na_in_legend=na_in_legend,
                 multi_panel=fig_params.axs is not None,
             )
-        else:
+        elif colorbar:
             # TODO: na_in_legend should have some effect here
             plt.colorbar(cax, ax=ax, pad=0.01, fraction=0.08, aspect=30)
 
@@ -628,11 +668,6 @@ def _decorate_axs(
     else:
         ax.set_aspect("equal")
         ax.invert_yaxis()
-
-    if crops is not None:
-        x0, x1, y1, y0 = crops.to_tuple()
-        ax.set_xlim(x0, x1)
-        ax.set_ylim(y0, y1)
 
     if isinstance(scalebar_dx, list) and isinstance(scalebar_units, list):
         scalebar = ScaleBar(scalebar_dx[lib_count], units=scalebar_units[lib_count], **scalebar_kwargs)

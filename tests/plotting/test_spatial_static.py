@@ -35,6 +35,9 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_spatial_scatter_noimage(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, shape=None, na_color="lightgrey")
 
+    def test_plot_spatial_scatter_group_outline(self, adata_hne: AnnData):
+        pl.spatial_scatter(adata_hne, shape="circle", color="cluster", groups="Cortex_1", outline=True)
+
     def test_plot_spatial_scatter_title_single(self, adata_hne_concat: AnnData):
         pl.spatial_scatter(
             adata_hne_concat,
@@ -58,7 +61,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             outline=True,
             library_first=True,
             outline_width=(0.05, 0.05),
-            crop_coord=[(1500, 2800, 1500, 2800), (2000, 2800, 2000, 2800)],
+            crop_coord=[(0, 0, 300, 300), (0, 0, 300, 300)],
             scalebar_dx=2.0,
             scalebar_kwargs={"scale_loc": "bottom", "location": "lower right"},
         )
@@ -153,7 +156,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             figsize=(5, 5),
             cmap="magma",
             vmin=500,
-            crop_coord=[[0, 500, 0, 500], [0, 500, 0, 500], [0, 500, 0, 500]],
+            crop_coord=[[100, 100, 500, 500], [100, 100, 500, 500], [100, 100, 500, 500]],
             img_alpha=0.5,
         )
 

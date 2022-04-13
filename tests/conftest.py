@@ -8,12 +8,11 @@ import pickle
 import pytest
 import warnings
 
-from anndata import AnnData
+from anndata import AnnData, OldFormatWarning
 import scanpy as sc
 import anndata as ad
 
 from scipy.sparse import csr_matrix
-from numba.core.errors import NumbaPerformanceWarning
 import numpy as np
 import pandas as pd
 
@@ -45,7 +44,7 @@ def pytest_sessionstart(session) -> None:
     np.random.seed(42)
 
     # https://github.com/theislab/cellrank/issues/683
-    warnings.simplefilter("ignore", NumbaPerformanceWarning)
+    warnings.simplefilter("ignore", OldFormatWarning)
     sc.pl.set_rcParams_defaults()
 
 

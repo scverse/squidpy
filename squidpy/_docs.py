@@ -101,7 +101,7 @@ cbar_kwargs
 ax
     Axes, :class:`matplotlib.axes.Axes`."""
 _plotting_returns = """\
-Nothing, just plots the and optionally saves the plot.
+Nothing, just plots the figure and optionally saves the plot.
 """
 _parallelize = """\
 n_jobs
@@ -178,15 +178,24 @@ library_id
     - If `None`, there should only exist one entry in :attr:`anndata.AnnData.uns` ``['{spatial_key}']``.
     - If a :class:`str`, first search :attr:`anndata.AnnData.obs` ``['{library_id}']`` which contains the mapping
       from observations to library ids, then search :attr:`anndata.AnnData.uns` ``['{spatial_key}']``."""
-# plotting docs
 
-_plotting_save = """\
+# static plotting docs
+_plotting_kwargs_static = """\
+scalebar_kwargs
+    Keyword arguments for :func:`matplotlib_scalebar.ScaleBar`.
+edges_kwargs
+    Keyword arguments for :func:`networkx.draw_networkx_edges`.
+kwargs
+    Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
+"""
+_plotting_save = f"""\
 figsize
     Size of the figure in inches.
 dpi
     Dots per inch.
 save
-    Whether to save the plot."""
+    Whether to save the plot.
+{_plotting_kwargs_static}"""
 _plotting_ax = f"""\
 title
     Panel titles.
@@ -214,6 +223,8 @@ legend_fontoutline
     Font outline of the legend, see :class:`matplotlib.patheffects.withStroke`.
 legend_na
     Whether to show NA values in the legend.
+colorbar
+    Whether to show the colorbar, see :func:`matplotlib.pyplot.colorbar`.
 {_plotting_scalebar}"""
 _plotting_outline = f"""\
 outline
@@ -281,15 +292,23 @@ alt_var
     Which column to use in :attr:`anndata.AnnData.var` to select alternative ``var_name``.
 {_plotting_sizecoords}"""
 
+_cat_plotting = f"""\
+palette
+    Categorical colormap for the clusters.
+    If ``None``, use :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``, if available.
+{_plotting_save}"""
+
+# general static plotting docstrings
 _plotting_segment = """\
+seg_cell_id
+    Column in :attr:`anndata.AnnData.obs` with unique segmentation mask ids. Required to filter
+    valid segmentation masks.
 seg
     Whether to plot the segmentation mask. One (or more) :class:`numpy.ndarray` can also be
     passed for plotting.
 seg_key
     Key of segmentation mask in :attr:`anndata.AnnData.uns`.
-seg_cell_id
-    Column in :attr:`anndata.AnnData.obs` with unique segmentation mask ids. Required to filter
-    valid segmentation masks.
+
 seg_contourpx
     Draw contour of specified width for each segment. If `None`, fills
     entire segment, see :func:`skimage.morphology.erosion`.
@@ -327,12 +346,6 @@ library_key
     If multiple `library_id`, column in :attr:`anndata.AnnData.obs`
     which stores mapping between ``library_id`` and obs."""
 
-_cat_plotting = f"""\
-palette
-    Categorical colormap for the clusters.
-    If ``None``, use :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_colors']``, if available.
-{_plotting_save}"""
-
 _heatmap_plotting = f"""\
 annotate
     Whether to annotate the cells of the heatmap.
@@ -348,71 +361,6 @@ cbar_kwargs
 
 _plotting_returns = """\
 Nothing, just plots and optionally saves the plot.
-"""
-
-_plotting_general_summary = """\
-As this function is designed to for imaging data, there are two key assumptions
-about how coordinates are handled:
-
-#. The origin (e.g `(0, 0)`) is at the top left - as is common convention
-with image data.
-
-#. Coordinates are in the pixel space of the source image, so an equal
-aspect ratio is assumed.
-
-If your AnnData object has a ``"spatial"`` entry in ``.uns``, the ``img_key``, ``seg_key``
-and ``library_id`` parameters to find values for ``img``, ``seg``, ``scale_factor``,
-and ``spot_size`` arguments. Alternatively, these values can be passed directly.
-"""
-
-_plotting_point_summary = """\
-The plotted points (dots) do not have a real "size" but only relative to their
-coordinate space.
-"""
-
-_plotting_shape_summary = """\
-The plotted shapes (circles, squares or hexagons) have a real "size" with respect to their
-coordinate space, which can be specified via the ``size`` or ``size_key`` parameter.
-
-This function allows overlaying data on top of images.
-
-Use the parameter ``img_key`` to see the image in the background
-and the parameter ``library_id`` to select the image.
-By default, ``'hires'`` key is attempted.
-Use ``img_alpha``, ``img_cmap`` or ``img_channel`` to control how it is displayed.
-Use ``size`` to scale the size of the shapes plotted on top.
-"""
-
-_plotting_segment_summary = """\
-This function allows overlaying segmentation masks on top of images.
-
-Use the parameter ``seg_key`` to see the image in the background
-and the parameter ``library_id`` to select the image.
-
-By default, ``'segmentation'`` ``seg_key`` is attempted and
-``'hires'`` image key is attempted.
-Use ``img_alpha``, ``img_cmap` or ``img_channel`` to control how the image is displayed.
-Use ``seg_contourpx`` or ``seg_outline`` to control how the segmentation mask is displayed.
-"""
-
-_plotting_general_summary = """\
-Use the parameter ``library_id`` to select the image.
-If multiple ``library_id`` are available, use ``library_key`` to plot subsets of
-the :class:`anndata.AnnData`.
-Use ``crop_coord`` to crop the spatial plot based on coordinate boundaries.
-
-As this function is designed to for imaging data, there are two key assumptions
-about how coordinates are handled:
-
-1. The origin (e.g `(0, 0)`) is at the top left - as is common convention
-with image data.
-
-2. Coordinates are in the pixel space of the source image, so an equal
-aspect ratio is assumed.
-
-If your anndata object has a `"spatial"` entry in ``.uns``, the ``img_key``, ``seg_key``
-and ``library_id`` parameters to find values for ``img``, ``seg`` and ``scale_factor``.
-Alternatively, these values can be passed directly.
 """
 
 d = DocstringProcessor(
@@ -457,8 +405,4 @@ d = DocstringProcessor(
     groups=_groups,
     plotting_library_id=_plotting_library_id,
     library_key=_library_key,
-    plotting_general_summary=_plotting_general_summary,
-    plotting_point_summary=_plotting_point_summary,
-    plotting_shape_summary=_plotting_shape_summary,
-    plotting_segment_summary=_plotting_segment_summary,
 )
