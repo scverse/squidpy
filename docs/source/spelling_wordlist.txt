@@ -3,7 +3,6 @@ AnnData
 autocorrelation
 backend
 barcode
-bc
 binarize
 boolean
 Bugfixes
@@ -34,8 +33,6 @@ Dentate
 dev
 DL
 dotplot
-FOV
-fov
 frac
 geary
 Geary
@@ -61,7 +58,6 @@ modularity
 moran
 Moran's I
 Napari
-Nanostring
 NEUN
 obsm
 omics
@@ -87,7 +83,6 @@ segmentations
 seqFISH
 seqV
 Squidpy
-squidpy
 StarDist
 stromal
 subsetting
@@ -99,6 +94,5 @@ tori
 transcriptomics
 uncommenting
 Visium
-visium
 Vizgen
 zscore
