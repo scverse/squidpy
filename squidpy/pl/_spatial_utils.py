@@ -819,7 +819,7 @@ def _panel_grid(
         figsize=(figsize[0] * n_panels_x * (1 + wspace), figsize[1] * n_panels_y),
         dpi=dpi,
     )
-    left = 0.5 / n_panels_x
+    left = 0.2 / n_panels_x
     bottom = 0.13 / n_panels_y
     gs = GridSpec(
         nrows=n_panels_y,
