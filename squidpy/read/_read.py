@@ -69,7 +69,7 @@ def read_visium(
     :attr:`~anndata.AnnData.var`\\ `['feature_types']`
         Feature types
     :attr:`~anndata.AnnData.uns`\\ `['spatial']`
-        Dict of spaceranger output files with 'library_id' as key
+        Dict of space ranger output files with 'library_id' as key
     :attr:`~anndata.AnnData.uns`\\ `['spatial'][library_id]['images']`
         Dict of images (`'hires'` and `'lowres'`)
     :attr:`~anndata.AnnData.uns`\\ `['spatial'][library_id]['scalefactors']`
@@ -281,7 +281,7 @@ def read_nanostring(
     :attr:`~anndata.AnnData.obsm`\\ `['spatial']`
         Local coordinates of the centers of cells
     :attr:`~anndata.AnnData.obsm`\\ `['spatial_fov']``
-        Global coordinates of the centers of cells in the FOV
+        Global coordinates of the centers of cells in the field of view (FOV)
     :attr:`~anndata.AnnData.uns`\\ `['spatial']`
         Dict of Nanostring output files with 'fov_positions', cell composite images with "FOV_<number>" as keys
     :attr:`~anndata.AnnData.uns`\\ `['spatial'][FOV_id]['images']`
@@ -315,10 +315,19 @@ def read_nanostring(
     }
     adata.uns[Key.uns.spatial]["fov"] = fov_positions
 
-    image_files: Sequence[str] = os.listdir(path / "CellComposite")
-    images: Dict[str, str] = {str(int(i.strip(".jpg").replace("CellComposite_F", ""))): i for i in image_files}
+    img_and_segmasks: Dict[str, str] = {"CellComposite": ".jpg", "CellLabels": ".tif"}
 
-    for fov, file_name in images.items():
-        adata.uns[Key.uns.spatial][fov]["images"]["hires"] = imread(path / "CellComposite" / file_name)
+    for folder in img_and_segmasks:
+        image_or_seg_files: Sequence[str] = os.listdir(path / folder)
+        images_or_segmasks: Dict[str, str] = {
+            str(int(i.strip(img_and_segmasks[folder]).replace(folder + "_F", ""))): i for i in image_or_seg_files
+        }
+
+        if folder == "CellComposite":
+            for fov, file_name in images_or_segmasks.items():
+                adata.uns[Key.uns.spatial][fov]["images"]["hires"] = imread(path / folder / file_name)
+        else:
+            for fov, file_name in images_or_segmasks.items():
+                adata.uns[Key.uns.spatial][fov]["images"]["segmentation"] = imread(path / folder / file_name)
 
     return adata
