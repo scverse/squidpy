@@ -2,6 +2,7 @@ adata
 AnnData
 autocorrelation
 backend
+barcode
 binarize
 boolean
 Bugfixes
@@ -18,7 +19,9 @@ connectivities
 convolutional
 CP
 Crofton
+csv
 Cytometry
+Database
 dataframe
 dataset
 datasets
@@ -92,6 +95,7 @@ tori
 transcriptomics
 uncommenting
 Visium
+Vizgen
 zscore
 scalebar
 kwargs
