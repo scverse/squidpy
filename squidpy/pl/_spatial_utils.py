@@ -239,6 +239,7 @@ def _get_scalefactor_size(
     except KeyError as e:
         logg.debug(f"Setting `scalefactors=None`, reason: `{e}`")
         scalefactors = None
+
     if scalefactors is not None and img_res_key is not None:
         if scale_factor is None:  # get intersection of scale_factor and match to img_res_key
             scale_factor_key = [i for i in scalefactors if img_res_key in i]
@@ -266,13 +267,13 @@ def _get_scalefactor_size(
             for i, s, sf in zip(library_id, size, scale_factor)
         ]
         return scale_factor, size
-    else:
-        scale_factor = 1.0 if scale_factor is None else scale_factor
-        scale_factor = _get_list(scale_factor, _type=float, ref_len=len(library_id), name="scale_factor")
 
-        size = 120000 / adata.shape[0] if size is None else size
-        size = _get_list(size, _type=Number, ref_len=len(library_id), name="size")
-        return scale_factor, size
+    scale_factor = 1.0 if scale_factor is None else scale_factor
+    scale_factor = _get_list(scale_factor, _type=float, ref_len=len(library_id), name="scale_factor")
+
+    size = 120000 / adata.shape[0] if size is None else size
+    size = _get_list(size, _type=Number, ref_len=len(library_id), name="size")
+    return scale_factor, size
 
 
 def _image_spatial_attrs(
@@ -333,8 +334,8 @@ def _image_spatial_attrs(
             seg_key=seg_key,
         )
     else:
-        _seg = tuple(None for _ in library_id)
-        _cell_vec = tuple(None for _ in library_id)
+        _seg = (None,) * len(library_id)
+        _cell_vec = (None,) * len(library_id)
 
     return SpatialParams(library_id, scale_factor, size, _img, _seg, _cell_vec)
 
@@ -400,9 +401,10 @@ def _subs(
             & (coords[:, 1] >= crop_coords.y0)
             & (coords[:, 1] <= crop_coords.y1)
         )
-        msg = f"Empty crop coordinates `{crop_coords}`"
-        adata = assert_notempty(adata[mask, :], msg=msg)
+        adata = assert_notempty(adata[mask, :], msg=f"Empty crop coordinates `{crop_coords}`")
         coords = coords[mask]
+        coords[:, 0] -= crop_coords.x0
+        coords[:, 1] -= crop_coords.y0
         if img is not None:
             img = img[crop_coords.slice]
         return adata, coords, img
@@ -421,24 +423,22 @@ def _get_unique_map(dic: Mapping[str, Any]) -> Sequence[Any]:
 def _get_list(
     var: Any,
     _type: Type[Any],
-    ref_len: int | None = None,
+    ref_len: int | None = None,  # TODO(giovp): default of 1
     name: str | None = None,
 ) -> List[Any]:
     if isinstance(var, _type):
-        if ref_len is None:
-            return [var]
-        return [var] * ref_len
-    elif isinstance(var, list):
+        return [var] if ref_len is None else ([var] * ref_len)
+    if isinstance(var, list):
         if (ref_len is not None) and (ref_len != len(var)):
             raise ValueError(
                 f"Variable: `{name}` has length: {len(var)}, which is not equal to reference length: {ref_len}."
             )
         for v in var:
-            if isinstance(var, _type):
+            if not isinstance(v, _type):
                 raise ValueError(f"Variable: `{name}` has invalid type: {type(v)}, expected: {_type}.")
         return var
-    else:
-        raise ValueError(f"Can't make list from variable: `{var}`")
+
+    raise ValueError(f"Can't make list from variable: `{var}`")
 
 
 def _set_color_source_vec(
@@ -451,7 +451,6 @@ def _set_color_source_vec(
     palette: Palette_t = None,
     na_color: str | Tuple[float, ...] | None = None,
 ) -> Tuple[NDArrayA | pd.Series | None, NDArrayA, bool]:
-
     if value_to_plot is None:
         return np.full(adata.n_obs, to_hex(na_color)), np.broadcast_to(np.nan, adata.n_obs), False
 
@@ -627,11 +626,8 @@ def _decorate_axs(
 ) -> Axes:
     ax.set_yticks([])
     ax.set_xticks([])
-
     ax.set_xlabel(fig_params.ax_labels[0])
     ax.set_ylabel(fig_params.ax_labels[1])
-
-    ax.autoscale_view()
 
     if value_to_plot is not None:
         # if only dots were plotted without an associated value
@@ -711,9 +707,8 @@ def _map_color_seg(
         seg_bound: NDArrayA = np.clip(seg_im - find_boundaries(seg)[:, :, None], 0, 1)
         seg_bound = np.dstack((seg_bound, np.where(val_im > 0, 1, 0)))  # add transparency here
         return seg_bound
-    else:
-        seg_im = np.dstack((seg_im, np.where(val_im > 0, 1, 0)))  # add transparency here
-        return seg_im
+    seg_im = np.dstack((seg_im, np.where(val_im > 0, 1, 0)))  # add transparency here
+    return seg_im
 
 
 def _prepare_args_plot(
@@ -785,7 +780,6 @@ def _prepare_params_plot(
     ax: Axes | Sequence[Axes] | None = None,
     **kwargs: Any,
 ) -> Tuple[FigParams, CmapParams, ScalebarParams, Any]:
-
     if library_first:
         iter_panels: Tuple[range | Sequence[str | None], range | Sequence[str | None]] = (
             range(len(spatial_params.library_id)),
