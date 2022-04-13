@@ -11,6 +11,7 @@ from anndata import AnnData
 from scanpy._settings import settings
 from scanpy.readwrite import read_visium
 
+from squidpy.datasets._utils import PathLike
 from squidpy._constants._constants import TenxVersions
 
 __all__ = ["visium"]
@@ -68,7 +69,7 @@ def visium(
     sample_id: VisiumDatasets,
     *,
     include_hires_tiff: bool = False,
-    base_dir: str | Path | None = None,
+    base_dir: PathLike | None = None,
 ) -> AnnData:
     """
     Download Visium `datasets <https://support.10xgenomics.com/spatial-gene-expression/datasets>`_ from *10x Genomics*.
@@ -125,7 +126,7 @@ def visium(
             backup_url=url_prefix + visium_files.tif_image,
         )
         return read_visium(
-            base_dir,
+            base_dir / sample_id,
             source_image_path=base_dir / sample_id / "image.tif",
         )
 
