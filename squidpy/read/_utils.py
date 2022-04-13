@@ -19,15 +19,16 @@ def _read_counts(
     count_file: str,
     library_id: Optional[str] = None,
     **kwargs: Any,
-) -> AnnData:
+) -> tuple[AnnData, str]:
     path = Path(path)
     if count_file.endswith(".h5"):
-        adata = read_10x_h5(path / count_file, **kwargs)
+        adata: AnnData = read_10x_h5(path / count_file, **kwargs)
         with File(path / count_file, mode="r") as f:
             attrs = dict(f.attrs)
             if library_id is None:
                 try:
-                    library_id = str(attrs.pop("library_ids")[0], "utf-8")
+                    lid = attrs.pop("library_ids")[0]
+                    library_id = lid.decode("utf-8") if isinstance(lid, bytes) else str(lid)
                 except ValueError:
                     raise KeyError(
                         "Unable to extract library id from attributes. Please specify one explicitly."
@@ -40,7 +41,7 @@ def _read_counts(
                 metadata = attrs[key].decode("utf-8") if isinstance(attrs[key], bytes) else attrs[key]
                 adata.uns[Key.uns.spatial][library_id]["metadata"][key] = metadata
 
-        return adata
+        return adata, library_id
 
     if library_id is None:
         raise ValueError("Please explicitly specify library id.")
@@ -52,8 +53,8 @@ def _read_counts(
     else:
         raise NotImplementedError("TODO")
 
-    adata.uns[Key.uns.spatial] = {library_id: {}}  # can overwrite
-    return adata
+    adata.uns[Key.uns.spatial] = {library_id: {"metadata": {}}}  # can overwrite
+    return adata, library_id
 
 
 def _read_images(
