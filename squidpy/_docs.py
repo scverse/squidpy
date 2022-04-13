@@ -308,7 +308,6 @@ seg
     passed for plotting.
 seg_key
     Key of segmentation mask in :attr:`anndata.AnnData.uns`.
-
 seg_contourpx
     Draw contour of specified width for each segment. If `None`, fills
     entire segment, see :func:`skimage.morphology.erosion`.
@@ -320,8 +319,8 @@ img
     Whether to plot the image. One (or more) :class:`numpy.ndarray` can also be
     passed for plotting.
 img_res_key
-    Key for image resolution, used to get ``img`` and ``scale_factor`` from ``"images"``
-    and ``"scalefactors"`` entries for this library.
+    Key for image resolution, used to get ``img`` and ``scale_factor`` from ``'images'``
+    and ``'scalefactors'`` entries for this library.
 img_alpha
     Alpha value for the underlying image.
 image_cmap
@@ -345,23 +344,6 @@ _library_key = """\
 library_key
     If multiple `library_id`, column in :attr:`anndata.AnnData.obs`
     which stores mapping between ``library_id`` and obs."""
-
-_heatmap_plotting = f"""\
-annotate
-    Whether to annotate the cells of the heatmap.
-method
-    The linkage method to be used for dendrogram/clustering, see :func:`scipy.cluster.hierarchy.linkage`.
-title
-    The title of the plot.
-cmap
-    Continuous colormap to use.
-cbar_kwargs
-    Keyword arguments for :meth:`matplotlib.figure.Figure.colorbar`.
-{_cat_plotting}"""
-
-_plotting_returns = """\
-Nothing, just plots and optionally saves the plot.
-"""
 
 d = DocstringProcessor(
     adata=_adata,

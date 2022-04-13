@@ -123,8 +123,7 @@ def _spatial_plot(
     Plot spatial omics data saved in AnnData.
 
     Use the parameter ``library_id`` to select the image.
-    If multiple ``library_id`` are available, use ``library_key`` to plot subsets of
-    the :class:`anndata.AnnData`.
+    If multiple ``library_id`` are available, use ``library_key`` to plot subsets of :class:`anndata.AnnData` object.
     Use ``crop_coord`` to crop the spatial plot based on coordinate boundaries.
 
     This function has few key assumptions about how coordinates and libraries are handled:
@@ -139,13 +138,11 @@ def _spatial_plot(
         - If multiple ``library_id`` are available, arguments such as ``size`` and ``crop_coord``
           accept lists, to selectively customize different ``library_id`` plots. This requires that
           the length of such lists match the number of unique libraries in the dataset.
-        - Coordinates are in the pixel space of the source image, so an equal
-          aspect ratio is assumed.
-        - The origin (e.g `(0, 0)`) is at the top left - as is common convention
-          with image data.
+        - Coordinates are in the pixel space of the source image, so an equal aspect ratio is assumed.
+        - The origin (e.g `(0, 0)`) is at the top left - as is common convention with image data.
         - The plotted points (dots) do not have a real "size" but only relative to their
           coordinate/pixel space. This does not hold if no image is plotted, then size correspond
-          to points size passed to :func:`matplotlib.axes.Axes.scatter`.
+          to points size passed to :meth:`matplotlib.axes.Axes.scatter`.
 
     If your anndata object has a `"spatial"` entry in :attr:`anndata.AnnData.uns`,
     use ``img_key``, ``seg_key`` and ``size_key`` parameters to find values
@@ -315,7 +312,7 @@ def _spatial_plot(
                 **kwargs,
             )
 
-        ax = _decorate_axs(
+        _ = _decorate_axs(
             ax=ax,
             cax=cax,
             lib_count=_lib_count,
@@ -408,8 +405,7 @@ def spatial_scatter(
     coordinate space, which can be specified via the ``size`` or ``size_key`` parameter.
 
         - Use the parameter ``img_key`` to see the image in the background.
-        - Use the parameter ``library_id`` to select the image.
-          By default, ``'hires'`` key is attempted.
+        - Use the parameter ``library_id`` to select the image. By default, ``'hires'`` key is attempted.
         - Use ``img_alpha``, ``img_cmap`` or ``img_channel`` to control how it is displayed.
         - Use ``size`` to scale the size of the shapes plotted on top.
 
@@ -457,11 +453,9 @@ def spatial_segment(
     """
     %(spatial_plot.summary)s
 
-    This function allows overlaying segmentation masks on top of images.
-    ``seg_cell_id`` is a mandatory argument in :attr:`adata.obs` to control
-    unique segmentation masks's ids to be plotted.
-    By default, ``'segmentation'`` ``seg_key`` is attempted and
-    ``'hires'`` image key is attempted.
+    This function allows overlaying segmentation masks on top of images. ``seg_cell_id`` is a mandatory argument
+    in :attr:`anndata.AnnData.obs` to control unique segmentation masks's ids to be plotted.
+    By default, ``'segmentation'`` ``seg_key`` is attempted and ``'hires'`` image key is attempted.
 
         - Use the parameter ``seg_key`` to see the image in the background.
         - Use ``seg_contourpx`` or ``seg_outline`` to control how the segmentation mask is displayed.
