@@ -48,22 +48,33 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             title="Visium test",
         )
 
-    def test_plot_spatial_scatter_crop(self, adata_hne_concat: AnnData):
+    def test_plot_spatial_scatter_crop_graph(self, adata_hne_concat: AnnData):
         pl.spatial_scatter(
             adata_hne_concat,
             shape="square",
             library_key="library_id",
-            size=[1, 1.25],
+            size=[0.3, 0.3],
             color=["Sox17", "cluster"],
             connectivity_key="spatial_connectivities",
             edges_width=5,
             title=None,
             outline=True,
-            library_first=True,
+            library_first=False,
             outline_width=(0.05, 0.05),
             crop_coord=[(0, 0, 300, 300), (0, 0, 300, 300)],
             scalebar_dx=2.0,
             scalebar_kwargs={"scale_loc": "bottom", "location": "lower right"},
+        )
+
+    def test_plot_spatial_scatter_group_multi(self, adata_hne: AnnData):
+        spatial_neighbors(adata_hne)
+        pl.spatial_scatter(
+            adata_hne,
+            shape="circle",
+            color=["Sox9", "cluster", "leiden"],
+            groups=["Cortex_1", "Cortex_3", "3"],
+            crop_coord=[[0, 0, 500, 500]],
+            connectivity_key="spatial_connectivities",
         )
 
     def test_plot_spatial_scatter_group(self, adata_hne_concat: AnnData):

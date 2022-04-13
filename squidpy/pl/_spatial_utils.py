@@ -928,22 +928,12 @@ def _plot_scatter(
 
     # prevents reusing vmin/vmax
     norm = copy(cmap_params.norm)
-    # outline consistent with na_color
-    na_color = to_hex(na_color)
-    bg_col: Union[NDArrayA, str] = outline_params.bg_color
-    gap_col: Union[NDArrayA, str] = outline_params.gap_color
-    if np.any(color_vector == na_color):
-        bg_col = color_vector.astype(str).copy()
-        bg_col[bg_col != na_color] = outline_params.bg_color
-        gap_col = color_vector.astype(str).copy()
-        gap_col[gap_col != na_color] = outline_params.gap_color
-
     if outline_params.outline:
         _cax = scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.bg_size,
-            c=bg_col,
+            c=outline_params.bg_color,
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,
@@ -954,7 +944,7 @@ def _plot_scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.gap_size,
-            c=gap_col,
+            c=outline_params.gap_color,
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,

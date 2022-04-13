@@ -42,7 +42,7 @@ from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 
 
-@d.get_sections(base="spatial_plot", section=["Returns"])
+@d.get_sections(base="spatial_plot", sections=["Returns"])
 @d.get_extended_summary(base="spatial_plot")
 @d.get_summary(base="spatial_plot")
 @d.dedent
