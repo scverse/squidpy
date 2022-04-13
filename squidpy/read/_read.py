@@ -9,7 +9,7 @@ import json
 from scanpy import logging as logg
 from anndata import AnnData
 
-from scipy.sparse import csc_matrix
+from scipy.sparse import csr_matrix
 import numpy as np
 import pandas as pd
 
@@ -147,6 +147,7 @@ def vizgen(
     adata, library_id = _read_counts(
         path=path, count_file=count_file, library_id=library_id, delimiter=",", first_column_names=True, **kwargs
     )
+    adata.X = csr_matrix(adata.X)
 
     # fmt: off
     coords = pd.read_csv(path / obs_file, header=0, index_col=0)
@@ -213,8 +214,7 @@ def nanostring(
     :attr:`~anndata.AnnData.uns`\\ `['spatial'][FOV_id]['images']`
         Dict of images
     """
-    if isinstance(path, str):
-        path = Path(path)
+    path = Path(path)
 
     counts = pd.read_csv(path / count_file)
     counts.index = counts.fov.astype(str) + "_" + counts.cell_ID.astype(str)
@@ -230,7 +230,7 @@ def nanostring(
     obs_columns = obs.columns
     merged_df["fov"] = pd.Categorical(merged_df["fov"].astype(str))
 
-    adata = AnnData(csc_matrix(merged_df[counts_columns].to_numpy()), obs=merged_df[obs_columns].copy())
+    adata = AnnData(csr_matrix(merged_df[counts_columns].to_numpy()), obs=merged_df[obs_columns].copy())
     adata.var_names = counts.columns
     adata.obsm[Key.obsm.spatial] = adata.obs[["CenterX_local_px", "CenterY_local_px"]].to_numpy()
     adata.obsm["spatial_fov"] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].to_numpy()
