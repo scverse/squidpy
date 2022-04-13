@@ -1,0 +1,2 @@
+Add :func:`squidpy.datasets.visium` to download *10x Genomics* datasets.
+`@dineshpalli <https://github.com/dineshpalli>`__
