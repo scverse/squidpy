@@ -32,7 +32,7 @@ def visium(
     """
     Read *10x Genomics* Visium formatted dataset.
 
-    In addition to reading the regular Visium output, it looks for the `spatial` directory and loads images,
+    In addition to reading the regular *Visium* output, it looks for the *spatial* directory and loads the images,
     spatial coordinates and scale factors.
 
     .. seealso::
@@ -58,8 +58,8 @@ def visium(
         - :attr:`anndata.AnnData.obsm` ``['spatial']`` - spatial spot coordinates.
         - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['images']`` - *hires* and *lowres* images.
         - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['scalefactors']`` - scale factors for the spots.
-        - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['metadata']`` - various metadata .
-    """
+        - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['metadata']`` - various metadata.
+    """  # noqa: E501
     path = Path(path)
     adata, library_id = _read_counts(path, count_file=counts_file, library_id=library_id, **kwargs)
 
@@ -103,7 +103,7 @@ def vizgen(
     """
     Read *Vizgen* formatted dataset.
 
-    In addition to reading the regular *Vizgen* output, it loads the metadata and optionally loads
+    In addition to reading the regular *Vizgen* output, it loads the metadata file and optionally loads
     the transformation matrix.
 
     .. seealso::
@@ -165,7 +165,7 @@ def nanostring(
     Read *Nanostring* formatted dataset.
 
     In addition to reading the regular *Nanostring* output, it loads the metadata file, *CellComposite* and *CellLabels*
-    directories containing images and optionally the field of view file.
+    directories containing the images and optionally the field of view file.
 
     .. seealso::
 
