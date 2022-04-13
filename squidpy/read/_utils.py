@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from h5py import File
-from types import MappingProxyType
 from typing import Any, Mapping, Optional, Sequence
 from imageio import imread
 from pathlib import Path
@@ -15,38 +14,46 @@ from squidpy._utils import NDArrayA
 from squidpy._constants._pkg_constants import Key
 
 
-def _read_count(
+def _read_counts(
     path: str | Path,
     count_file: str,
-    genome: Optional[str] = None,
     library_id: Optional[str] = None,
-    h5_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    text_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    mtx_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    **kwargs: Any,
 ) -> AnnData:
-    """Load count files."""
     path = Path(path)
     if count_file.endswith(".h5"):
-        adata = read_10x_h5(path / count_file, genome=genome, **h5_kwargs)
+        adata = read_10x_h5(path / count_file, **kwargs)
         with File(path / count_file, mode="r") as f:
             attrs = dict(f.attrs)
             if library_id is None:
                 try:
                     library_id = str(attrs.pop("library_ids")[0], "utf-8")
                 except ValueError:
-                    raise ValueError(f"Invalid value for `library_id: {library_id}`. Cannot be None.")
-            adata.uns[Key.uns.spatial] = {library_id: {}}
-            metadata_dic = {
-                k: (str(attrs[k], "utf-8") if isinstance(attrs[k], bytes) else attrs[k])
-                for k in ("chemistry_description", "software_version")
-                if k in attrs
-            }
-            adata.uns[Key.uns.spatial][library_id]["metadata"] = metadata_dic
+                    raise KeyError(
+                        "Unable to extract library id from attributes. Please specify one explicitly."
+                    ) from None
+
+            adata.uns[Key.uns.spatial] = {library_id: {"metadata": {}}}  # can overwrite
+            for key in ["chemistry_description", "software_version"]:
+                if key not in attrs:
+                    continue
+                metadata = attrs[key].decode("utf-8") if isinstance(attrs[key], bytes) else attrs[key]
+                adata.uns[Key.uns.spatial][library_id]["metadata"][key] = metadata
+
         return adata
-    elif count_file.endswith((".csv", ".txt")):
-        return read_text(path / count_file, **text_kwargs)
+
+    if library_id is None:
+        raise ValueError("Please explicitly specify library id.")
+
+    if count_file.endswith((".csv", ".txt")):
+        adata = read_text(path / count_file, **kwargs)
     elif count_file.endswith(".mtx"):
-        return read_mtx(path / count_file, **mtx_kwargs)
+        adata = read_mtx(path / count_file, **kwargs)
+    else:
+        raise NotImplementedError("TODO")
+
+    adata.uns[Key.uns.spatial] = {library_id: {}}  # can overwrite
+    return adata
 
 
 def _read_images(

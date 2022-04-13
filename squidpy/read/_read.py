@@ -12,7 +12,7 @@ from scipy.sparse import csc_matrix
 import pandas as pd
 
 from squidpy._docs import d
-from squidpy.read._utils import _read_count, _read_coords, _read_images
+from squidpy.read._utils import _read_coords, _read_counts, _read_images
 from squidpy._constants._pkg_constants import Key
 
 
@@ -82,7 +82,7 @@ def read_visium(
     if isinstance(path, str):
         path = Path(path)
 
-    adata = _read_count(path, count_file, genome)
+    adata = _read_counts(path, count_file, genome)
     library_id = Key.uns.library_id(adata, Key.uns.spatial, library_id)
     if library_id is None:
         raise ValueError(f"Invalid value for `library_id: {library_id}`. Cannot be None.")
@@ -197,7 +197,7 @@ def read_vizgen(
         "delimiter": ",",
     }
 
-    adata = _read_count(path=path, count_file=count_file, text_kwargs=text_kwargs)
+    adata = _read_counts(path=path, count_file=count_file, text_kwargs=text_kwargs)
 
     transformation_matrix = {
         "transformation_matrix": pd.read_csv(path / f"images/{transformation_file}", sep=" ", header=None)
