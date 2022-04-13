@@ -210,7 +210,7 @@ _plotting_scalebar = f"""\
 scalebar_dx
     Size of one pixel in units specified by ``scalebar_units``.
 scalebar_units
-    Units of `scalebar_dx`.
+    Units of ``scalebar_dx``.
 {_plotting_ax}"""
 _plotting_legend = f"""\
 legend_loc
@@ -334,7 +334,7 @@ shape
     Whether to plot scatter plot of points or regular polygons."""
 _color = """\
 color
-    Key for annotations in :attr:`adata.obs` or variables/genes."""
+    Key for annotations in :attr:`anndata.AnnData.obs` or variables/genes."""
 _groups = """\
 groups
     For discrete annotation in ``color``, select which values to plot (other values are set to NAs)."""

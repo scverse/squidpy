@@ -147,8 +147,9 @@ def _spatial_plot(
           coordinate/pixel space. This does not hold if no image is plotted, then size correspond
           to points size passed to :func:`matplotlib.axes.Axes.scatter`.
 
-    If your anndata object has a `"spatial"` entry in ``.uns``, use ``img_key``, ``seg_key``
-    and ``size_key`` parameters to find values for ``img``, ``seg`` and ``size``.
+    If your anndata object has a `"spatial"` entry in :attr:`anndata.AnnData.uns`,
+    use ``img_key``, ``seg_key`` and ``size_key`` parameters to find values
+    for ``img``, ``seg`` and ``size``.
     Alternatively, these values can be passed directly.
 
     Parameters
@@ -400,7 +401,7 @@ def spatial_scatter(
     **kwargs: Any,
 ) -> Any:
     """
-    %(spatial_plot.summary)s # noqa: D400
+    %(spatial_plot.summary)s
 
     This function allows overlaying data on top of images.
     The plotted shapes (circles, squares or hexagons) have a real "size" with respect to their
@@ -432,7 +433,7 @@ def spatial_scatter(
     Returns
     -------
     %(spatial_plot.returns)s
-    """
+    """  # noqa: D400
     return _spatial_plot(
         adata,
         shape=shape,
@@ -454,7 +455,7 @@ def spatial_segment(
     **kwargs: Any,
 ) -> Any:
     """
-    %(spatial_plot.summary)s # noqa: D400
+    %(spatial_plot.summary)s
 
     This function allows overlaying segmentation masks on top of images.
     ``seg_cell_id`` is a mandatory argument in :attr:`adata.obs` to control
@@ -482,7 +483,7 @@ def spatial_segment(
     Returns
     -------
     %(spatial_plot.returns)s
-    """
+    """  # noqa: D400
     return _spatial_plot(
         adata,
         seg=seg,

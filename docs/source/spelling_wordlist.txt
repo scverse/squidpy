@@ -12,6 +12,7 @@ centroid
 centroids
 colorectal
 colormap
+colorbar
 Colormap
 cond
 conda
