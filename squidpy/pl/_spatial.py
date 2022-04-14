@@ -117,7 +117,7 @@ def _spatial_plot(
     """
     Plot spatial omics data saved in :class:`anndata.AnnData`.
 
-    Use ``library_id`` to select the image. If multiple ``library_ids`` are available, use ``library_key`` in
+    Use ``library_id`` to select the image. If multiple ``library_id`` are available, use ``library_key`` in
     :attr:`anndata.AnnData.obs` to plot the subsets.
     Use ``crop_coord`` to crop the spatial plot based on coordinate boundaries.
 
