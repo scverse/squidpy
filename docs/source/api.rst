@@ -54,6 +54,19 @@ Plotting
     pl.co_occurrence
     pl.extract
 
+Reading
+~~~~~~~
+
+.. module:: squidpy.read
+.. currentmodule:: squidpy
+
+.. autosummary::
+    :toctree: api
+
+    read.visium
+    read.vizgen
+    read.nanostring
+
 Datasets
 ~~~~~~~~
 
@@ -70,6 +83,7 @@ Datasets
     datasets.mibitof
     datasets.slideseqv2
     datasets.sc_mouse_cortex
+    datasets.visium
     datasets.visium_hne_adata
     datasets.visium_hne_adata_crop
     datasets.visium_fluo_adata
