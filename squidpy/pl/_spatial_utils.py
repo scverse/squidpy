@@ -297,7 +297,7 @@ def _image_spatial_attrs(
     img_cmap: Colormap | str | None = None,
 ) -> SpatialParams:
     def truthy(img: bool | NDArrayA | _SeqArray | None) -> bool:
-        if img is None:
+        if img is None or img is False:
             return False
         return img is True or len(img)  # type: ignore
 
