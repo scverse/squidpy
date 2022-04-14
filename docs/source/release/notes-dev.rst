@@ -77,6 +77,10 @@ Miscellaneous
   `@michalk8 <https://github.com/michalk8>`__
   `#489 <https://github.com/theislab/squidpy/pull/489>`__
 
+- Fix missing authors in release notes.
+  `@giovp <https://github.com/giovp>`__
+  `#520 <https://github.com/theislab/squidpy/pull/520>`__
+
 
 Documentation
 -------------
