@@ -65,7 +65,8 @@ Arraylike_t = Union[NDArrayA, xr.DataArray]
 InferDims_t = Union[Literal["default", "prefer_channels", "prefer_z"], Sequence[str]]
 Input_t = Union[Pathlike_t, Arraylike_t, "ImageContainer"]
 Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependencies
-
+_ERROR_NOTIMPLEMENTED_LIBID = f"It seems there are multiple `library_id` in `adata.uns[{Key.uns.spatial!r}]`.\n \
+                                Loading multiple images is not implemented (yet), please specify a `library_id`."
 
 __all__ = ["ImageContainer"]
 
@@ -418,7 +419,7 @@ class ImageContainer(FeatureMixin):
         cls,
         adata: AnnData,
         img_key: str | None = None,
-        library_id: str | None = None,
+        library_id: Sequence[str] | str | None = None,
         spatial_key: str = Key.uns.spatial,
         **kwargs: Any,
     ) -> ImageContainer:
@@ -443,6 +444,8 @@ class ImageContainer(FeatureMixin):
         The image container.
         """
         library_id = Key.uns.library_id(adata, spatial_key, library_id)
+        if not isinstance(library_id, str):
+            raise NotImplementedError(_ERROR_NOTIMPLEMENTED_LIBID)
         spatial_data = adata.uns[spatial_key][library_id]
         if img_key is None:
             try:
@@ -714,7 +717,7 @@ class ImageContainer(FeatureMixin):
         self,
         adata: AnnData,
         spatial_key: str = Key.obsm.spatial,
-        library_id: str | None = None,
+        library_id: Sequence[str] | str | None = None,
         spot_diameter_key: str = "spot_diameter_fullres",
         spot_scale: float = 1.0,
         obs_names: Iterable[Any] | None = None,
@@ -774,6 +777,8 @@ class ImageContainer(FeatureMixin):
         if library_id is None:
             try:
                 library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=None)
+                if not isinstance(library_id, str):
+                    raise NotImplementedError(_ERROR_NOTIMPLEMENTED_LIBID)
                 obs_library_ids = [library_id] * adata.n_obs
             except ValueError as e:
                 if "Unable to determine which library id to use" in str(e):
@@ -792,6 +797,8 @@ class ImageContainer(FeatureMixin):
                     f"Trying in `adata.uns[{spatial_key!r}]`"
                 )
                 library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=library_id)
+                if not isinstance(library_id, str):
+                    raise NotImplementedError(_ERROR_NOTIMPLEMENTED_LIBID)
                 obs_library_ids = [library_id] * adata.n_obs
 
         lids = set(obs_library_ids)

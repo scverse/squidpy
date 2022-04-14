@@ -1,0 +1,3 @@
+Add :func:`squidpy.pl.spatial_scatter` and :func:`squidpy.pl.spatial_segment` to statically plot
+spatial omics data.
+`@giovp <https://github.com/giovp>`__

@@ -108,6 +108,13 @@ class RipleyStat(ModeEnum):
 
 
 @unique
+class ScatterShape(str, ModeEnum):
+    CIRCLE = "circle"
+    SQUARE = "square"
+    HEX = "hex"
+
+
+@unique
 class TenxVersions(str, ModeEnum):
     # Version numbers as class objects of TenxVersions
     V1 = "1.1.0"

@@ -6,20 +6,24 @@ from itertools import product
 import sys
 import pickle
 import pytest
+import warnings
 
-from anndata import AnnData
+from anndata import AnnData, OldFormatWarning
 import scanpy as sc
+import anndata as ad
 
 from scipy.sparse import csr_matrix
 import numpy as np
 import pandas as pd
 
 from matplotlib.testing.compare import compare_images
+import matplotlib
 import matplotlib.pyplot as plt
 
+from squidpy.gr import spatial_neighbors
 from squidpy.im._container import ImageContainer
 from squidpy._constants._pkg_constants import Key
-import squidpy as sp
+import squidpy as sq
 
 HERE: Path = Path(__file__).parent
 
@@ -32,6 +36,41 @@ C_KEY_PALETTE = "leiden"
 
 _adata = sc.read("tests/_data/test_data.h5ad")
 _adata.raw = _adata.copy()
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    matplotlib.use("Agg")
+    matplotlib.rcParams["figure.max_open_warning"] = 0
+    np.random.seed(42)
+
+    warnings.simplefilter("ignore", OldFormatWarning)
+    sc.pl.set_rcParams_defaults()
+
+
+@pytest.fixture(scope="session")
+def adata_hne() -> AnnData:
+    return sq.datasets.visium_hne_adata_crop()
+
+
+@pytest.fixture(scope="session")
+def adata_hne_concat() -> AnnData:
+    adata1 = sq.datasets.visium_hne_adata_crop()
+    spatial_neighbors(adata1)
+    adata2 = adata1[:100, :].copy()
+    adata2.uns["spatial"] = {}
+    adata2.uns["spatial"]["V2_Adult_Mouse_Brain"] = adata1.uns["spatial"]["V1_Adult_Mouse_Brain"]
+    adata_concat = ad.concat(
+        {"V1_Adult_Mouse_Brain": adata1, "V2_Adult_Mouse_Brain": adata2},
+        label="library_id",
+        uns_merge="unique",
+        pairwise=True,
+    )
+    return adata_concat
+
+
+@pytest.fixture(scope="session")
+def adata_mibitof() -> AnnData:
+    return sq.datasets.mibitof().copy()
 
 
 @pytest.fixture()
@@ -55,7 +94,7 @@ def nhood_data(adata: AnnData) -> AnnData:
     sc.pp.pca(adata)
     sc.pp.neighbors(adata)
     sc.tl.leiden(adata, key_added="leiden")
-    sp.gr.spatial_neighbors(adata)
+    sq.gr.spatial_neighbors(adata)
 
     return adata
 
@@ -66,7 +105,7 @@ def dummy_adata() -> AnnData:
     adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)}, dtype=float)
 
     adata.obsm[Key.obsm.spatial] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
-    sp.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
+    sq.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
 
     return adata
 
@@ -219,7 +258,7 @@ def ligrec_no_numba() -> Mapping[str, pd.DataFrame]:
 def ligrec_result() -> Mapping[str, pd.DataFrame]:
     adata = _adata.copy()
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
-    return sp.gr.ligrec(
+    return sq.gr.ligrec(
         adata, "leiden", interactions=interactions, n_perms=25, n_jobs=1, show_progress_bar=False, copy=True, seed=0
     )
 

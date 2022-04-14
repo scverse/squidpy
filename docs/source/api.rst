@@ -46,6 +46,8 @@ Plotting
 .. autosummary::
     :toctree: api
 
+    pl.spatial_scatter
+    pl.spatial_segment
     pl.nhood_enrichment
     pl.centrality_scores
     pl.interaction_matrix

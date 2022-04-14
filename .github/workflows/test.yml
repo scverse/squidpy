@@ -44,11 +44,11 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                python: [3.7, 3.8]
-                os: [ubuntu-latest, macos-latest]
+                python: [3.7, 3.8, 3.9]
+                os: [ubuntu-latest]
                 include:
-                -   python: 3.9
-                    os: ubuntu-latest
+                -   python: 3.8
+                    os: macos-latest
         env:
             OS: ${{ matrix.os }}
             PYTHON: ${{ matrix.python }}
@@ -82,6 +82,19 @@ jobs:
                 python -m pip install --upgrade pip
                 pip install tox tox-gh-actions codecov
 
+        -   name: Restore data cache
+            id: data-cache
+            uses: actions/cache@v2
+            with:
+                path: |
+                    ~/.cache/squidpy/*.h5ad
+                key: data-${{ hashFiles('**/download_data.py') }}
+
+        -   name: Download datasets
+            if: steps.data-cache.outputs.cache-hit != 'true'
+            run: |
+                tox -e download-data
+
         # caching .tox is not encouraged, but since we're private and this shaves off ~1min from the step
         # if any problems occur and/or once the package is public, this can be removed
         -   name: Restore tox cache
@@ -91,6 +104,7 @@ jobs:
                 key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}
 
         -   name: Test
+            timeout-minutes: 30
             env:
                 MPLBACKEND: agg
                 PLATFORM: ${{ matrix.os }}

@@ -20,6 +20,7 @@ Clone Squidpy from source as::
 
     git clone https://github.com/theislab/squidpy
     cd squidpy
+    git checkout dev
 
 Install the test and development mode::
 
