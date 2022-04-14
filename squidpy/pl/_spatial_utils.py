@@ -626,6 +626,7 @@ def _decorate_axs(
     ax.set_xticks([])
     ax.set_xlabel(fig_params.ax_labels[0])
     ax.set_ylabel(fig_params.ax_labels[1])
+    ax.autoscale_view()  # needed when plotting points but no image
 
     if value_to_plot is not None:
         # if only dots were plotted without an associated value
