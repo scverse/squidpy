@@ -390,6 +390,9 @@ def spatial_scatter(
 
     %(spatial_plot.summary_ext)s
 
+    .. seealso::
+        - :func:`squidpy.pl.spatial_segment` on how to plot spatial data with segmentation masks on top.
+
     Parameters
     ----------
     %(adata)s
@@ -430,6 +433,9 @@ def spatial_segment(
         - Use ``seg_contourpx`` or ``seg_outline`` to control how the segmentation mask is displayed.
 
     %(spatial_plot.summary_ext)s
+
+    .. seealso::
+        - :func:`squidpy.pl.spatial_scatter` on how to plot spatial data with overlayed data on top.
 
     Parameters
     ----------

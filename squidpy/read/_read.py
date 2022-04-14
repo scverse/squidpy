@@ -37,7 +37,8 @@ def visium(
 
     .. seealso::
 
-        - `Space Ranger output <https://support.10xgenomics.com/spatial-gene-expression/software/pipelines/latest/output/overview>`_
+        - `Space Ranger output <https://support.10xgenomics.com/spatial-gene-expression/software/pipelines/latest/output/overview>`_.
+        - :func:`squidpy.pl.spatial_scatter` on how to plot spatial data.
 
     Parameters
     ----------
@@ -108,7 +109,8 @@ def vizgen(
 
     .. seealso::
 
-        - `Vizgen data release program <https://vizgen.com/data-release-program/>`_
+        - `Vizgen data release program <https://vizgen.com/data-release-program/>`_.
+        - :func:`squidpy.pl.spatial_scatter` on how to plot spatial data.
 
     Parameters
     ----------
@@ -169,7 +171,8 @@ def nanostring(
 
     .. seealso::
 
-        - `Nanostring Spatial Molecular Imager <https://nanostring.com/products/cosmx-spatial-molecular-imager/>`_
+        - `Nanostring Spatial Molecular Imager <https://nanostring.com/products/cosmx-spatial-molecular-imager/>`_.
+        - :func:`squidpy.pl.spatial_scatter` on how to plot spatial data.
 
     Parameters
     ----------
