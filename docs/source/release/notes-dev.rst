@@ -4,6 +4,11 @@ Squidpy dev (2022-04-14)
 Features
 --------
 
+- Add :func:`squidpy.pl.spatial_scatter` and :func:`squidpy.pl.spatial_segment` to statically plot
+  spatial omics data.
+  `@giovp <https://github.com/giovp>`__
+  `#437 <https://github.com/theislab/squidpy/pull/437>`__
+
 - Add :func:`squidpy.datasets.visium` to download *10x Genomics* datasets.
   `@dineshpalli <https://github.com/dineshpalli>`__
   `#449 <https://github.com/theislab/squidpy/pull/449>`__
