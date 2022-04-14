@@ -1,8 +1,17 @@
-Squidpy dev (2022-04-08)
+Squidpy dev (2022-04-14)
 ========================
 
 Features
 --------
+
+- Add :func:`squidpy.datasets.visium` to download *10x Genomics* datasets.
+  `@dineshpalli <https://github.com/dineshpalli>`__
+  `#449 <https://github.com/theislab/squidpy/pull/449>`__
+
+- Add :func:`squidpy.read.visium`, :func:`squidpy.read.vizgen` and :func:`squidpy.read.nanostring` to
+  read *Visium*, *Vizgen* and *Nanostring* files, respectively.
+  `@dineshpalli <https://github.com/dineshpalli>`__
+  `#468 <https://github.com/theislab/squidpy/pull/468>`__
 
 - An optional ``ax`` keyword can now be passed to :func:`squidpy.pl.nhood_enrichment` function. The
   keyword can be used to create a matplotlib figure outside of squidpy and then plot on any matplotlib
