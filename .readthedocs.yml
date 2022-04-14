@@ -7,7 +7,6 @@ sphinx:
 
 formats:
 -   htmlzip
--   pdf
 
 build:
     image: testing
