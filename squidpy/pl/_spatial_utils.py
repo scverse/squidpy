@@ -187,7 +187,7 @@ def _get_image(
     _img_channel = [0, 1, 2] if img_channel is None else [img_channel]
     if max(_img_channel) > 2:
         raise ValueError(f"Invalid value for `img_channel: {_img_channel}`.")
-    if isinstance(img, np.ndarray) or isinstance(img, list):
+    if isinstance(img, (list, np.ndarray)):
         img = _get_list(img, _type=np.ndarray, ref_len=len(library_id), name="img")
         img = [im[..., _img_channel] for im in img]
     else:
