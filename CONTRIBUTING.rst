@@ -202,6 +202,11 @@ To locally create the news fragment from an already existing PR, just run::
 
     tox -e news -- <PR_NUMBER> --add-author
 
+You can modify the created fragment, then commit and run::
+
+    tox -e update-dev-notes
+
+In order to inject the fragment in ``docs/source/release/notes-dev.rst``.
 Lastly, in order to see how the current news fragments would look like in the release notes, run::
 
     towncrier build --draft
