@@ -77,6 +77,7 @@ Rescale
 ResNet
 RGB
 sagittal
+semibold
 sc
 scalability
 Scanpy

@@ -241,7 +241,7 @@ _plotting_panels = f"""\
 library_first
     If multiple libraries are plotted, set the plotting order with respect to ``color``.
 frameon
-    If True, draw a frame around the panel.
+    If `True`, draw a frame around the panels.
 wspace
     Width space between panels.
 hspace
@@ -268,7 +268,7 @@ size_key
 scale_factor
     Scaling factor used to map from coordinate space to pixel space.
     Found by default if ``library_id`` and ``img_key`` can be resolved.
-    Otherwise defaults to ``1``.
+    Otherwise, defaults to `1`.
 crop_coord
     Coordinates to use for cropping the image (left, right, top, bottom).
     These coordinates are expected to be in pixel space (same as ``spatial``)

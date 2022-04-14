@@ -9,7 +9,7 @@ from matplotlib.axes import Axes
 from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 
-from squidpy._docs import d, inject_docs
+from squidpy._docs import d
 from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.pl._utils import save_fig, sanitize_anndata
 from squidpy.pl._spatial_utils import (
@@ -41,7 +41,6 @@ from squidpy._constants._pkg_constants import Key
 
 @d.get_sections(base="spatial_plot", sections=["Returns"])
 @d.get_extended_summary(base="spatial_plot")
-@d.get_summary(base="spatial_plot")
 @d.dedent
 def _spatial_plot(
     adata: AnnData,
@@ -115,7 +114,7 @@ def _spatial_plot(
     **kwargs: Any,
 ) -> None:
     """
-    Plot spatial omics data saved in :class:`anndata.AnnData`.
+    Plot spatial omics data.
 
     Use ``library_id`` to select the image. If multiple ``library_id`` are available, use ``library_key`` in
     :attr:`anndata.AnnData.obs` to plot the subsets.
@@ -124,23 +123,22 @@ def _spatial_plot(
     This function has few key assumptions about how coordinates and libraries are handled:
 
         - The arguments ``library_key`` and ``library_id`` control which dataset is plotted.
-          If multiple libraries are present, specifying solely ``library_key`` will suffice, and
-          all unique libraries will be plotted sequentially. To select specific libraries, use
-          the ``library_id`` argument.
-        - The arguments ``color`` controls which features in obs/var are plotted. They are plotted
-          for all available/specified libraries. The argument ``groups`` can be used to select
-          categories to be plotted (valid only for categorical features in :attr:`adata.obs`).
-        - If multiple ``library_id`` are available, arguments such as ``size`` and ``crop_coord``
-          accept lists, to selectively customize different ``library_id`` plots. This requires that
-          the length of such lists match the number of unique libraries in the dataset.
+          If multiple libraries are present, specifying solely ``library_key`` will suffice, and all unique libraries
+          will be plotted sequentially. To select specific libraries, use the ``library_id`` argument.
+        - The argument ``color`` controls which features in obs/var are plotted. They are plotted for all
+          available/specified libraries. The argument ``groups`` can be used to select categories to be plotted.
+          This is valid only for categorical features in :attr:`anndata.AnnData.obs`.
+        - If multiple ``library_id`` are available, arguments such as ``size`` and ``crop_coord`` accept lists to
+          selectively customize different ``library_id`` plots. This requires that the length of such lists matches
+          the number of unique libraries in the dataset.
         - Coordinates are in the pixel space of the source image, so an equal aspect ratio is assumed.
-        - The origin (e.g, `(0, 0)`) is at the top left - as is common convention with image data.
-        - The plotted points (dots) do not have a real "size" but only relative to their
-          coordinate/pixel space. This does not hold if no image is plotted, then size correspond
-          to points size passed to :meth:`matplotlib.axes.Axes.scatter`.
+        - The origin (e.g, *(0, 0)*) is at the top left - as is common convention with image data.
+        - The plotted points (dots) do not have a real "size" but it is relative to their coordinate/pixel space.
+          This does not hold if no image is plotted, then the size corresponds to points size passed to
+          :meth:`matplotlib.axes.Axes.scatter`.
 
-    If your anndata object has a `"spatial"` entry in :attr:`anndata.AnnData.uns`,
-    use ``img_key``, ``seg_key`` and ``size_key`` arguments to find values for ``img``, ``seg`` and ``size``.
+    If :attr:`anndata.AnnData.uns` ``['spatial']`` is present, use ``img_key``, ``seg_key`` and
+    ``size_key`` arguments to find values for ``img``, ``seg`` and ``size``.
     Alternatively, these values can be passed directly via ``img``.
 
     Parameters
@@ -378,18 +376,17 @@ def spatial_scatter(
     **kwargs: Any,
 ) -> Any:
     """
-    %(spatial_plot.summary)s
+    Plot spatial omics data with data overlayed on top.
 
-    This function allows overlaying data on top of images.
     The plotted shapes (circles, squares or hexagons) have a real "size" with respect to their
     coordinate space, which can be specified via the ``size`` or ``size_key`` argument.
 
-        - Use ``img_key`` to see the image in the background.
-        - Use ``library_id`` to select the image. By default, ``'hires'`` key is attempted.
-        - Use ``img_alpha``, ``img_cmap`` or ``img_channel`` to control how it is displayed.
+        - Use ``img_key`` to display the image in the background.
+        - Use ``library_id`` to select the image. By default, ``'hires'`` is attempted.
+        - Use ``img_alpha``, ``img_cmap`` and ``img_channel`` to control how it is displayed.
         - Use ``size`` to scale the size of the shapes plotted on top.
 
-    If no image is present or plotted, it will defaults to a scatter plot, see :meth:`matplotlib.axes.Axes.scatter`.
+    If no image is plotted, it defaults to a scatter plot, see :meth:`matplotlib.axes.Axes.scatter`.
 
     %(spatial_plot.summary_ext)s
 
@@ -408,12 +405,11 @@ def spatial_scatter(
     Returns
     -------
     %(spatial_plot.returns)s
-    """  # noqa: D400
+    """
     return _spatial_plot(adata, shape=shape, seg_key=None, **kwargs)
 
 
 @d.dedent  # type: ignore[arg-type]
-@inject_docs(key=Key.obsp.spatial_conn())
 @_wrap_signature
 def spatial_segment(
     adata: AnnData,
@@ -425,13 +421,12 @@ def spatial_segment(
     **kwargs: Any,
 ) -> Any:
     """
-    %(spatial_plot.summary)s
+    Plot spatial omics data with segmentation masks on top.
 
-    This function allows overlaying segmentation masks on top of images. ``seg_cell_id`` is a mandatory argument
-    in :attr:`anndata.AnnData.obs` which controls unique segmentation mask's ids to be plotted.
-    By default, ``'segmentation'`` or ``seg_key`` for the segmentation and ``'hires'`` for the image is attempted.
+    Argument ``seg_cell_id`` in :attr:`anndata.AnnData.obs` controls unique segmentation mask's ids to be plotted.
+    By default, ``'segmentation'``, ``seg_key`` for the segmentation and ``'hires'`` for the image is attempted.
 
-        - Use ``seg_key`` to see the image in the background.
+        - Use ``seg_key`` to display the image in the background.
         - Use ``seg_contourpx`` or ``seg_outline`` to control how the segmentation mask is displayed.
 
     %(spatial_plot.summary_ext)s
@@ -451,7 +446,7 @@ def spatial_segment(
     Returns
     -------
     %(spatial_plot.returns)s
-    """  # noqa: D400
+    """
     return _spatial_plot(
         adata,
         seg=seg,
