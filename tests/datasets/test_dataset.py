@@ -20,7 +20,7 @@ class TestDatasetsImports:
 
 # TODO(michalk8): parse the code and xfail iff server issue
 class TestDatasetsDownload:
-    @pytest.mark.skip(reason="skip test for deployment")
+    @pytest.mark.timeout(120)
     def test_download_imc(self, tmp_path: Path):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=OldFormatWarning)
@@ -32,7 +32,7 @@ class TestDatasetsDownload:
             except RemoteDisconnected as e:
                 pytest.xfail(str(e))
 
-    @pytest.mark.skip(reason="skip test for deployment")
+    @pytest.mark.timeout(120)
     def test_download_visium_hne_image_crop(self, tmp_path: Path):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=OldFormatWarning)
