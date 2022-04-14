@@ -1,1 +1,2 @@
 Change imports in the topmost ``__init__.py`` for correct IDE module resolution.
+`@chaichontat <https://github.com/chaichontat>`__

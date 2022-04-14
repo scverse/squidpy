@@ -1,1 +1,2 @@
 Remove various warnings.
+`@michalk8 <https://github.com/michalk8>`__
