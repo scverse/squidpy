@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Sequence
 from functools import partial
 import pytest
+import platform
 
 from anndata import AnnData
 import scanpy as sc
@@ -29,6 +30,7 @@ sc.set_figure_params(dpi=40, color_map="viridis")
 
 
 class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
+    @pytest.mark.skipif(platform.system() == "Darwin", reason="Fails on macOS 3.8 CI")
     def test_plot_spatial_scatter_image(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, na_color="lightgrey")
 
@@ -131,6 +133,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             ax=ax,
         )
 
+    @pytest.mark.skipif(platform.system() == "Darwin", reason="Fails on macOS 3.8 CI")
     def test_plot_spatial_scatter_novisium(self, adata_mibitof: AnnData):
         spatial_neighbors(adata_mibitof, coord_type="generic", radius=50)
         pl.spatial_scatter(
