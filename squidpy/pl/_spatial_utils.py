@@ -489,10 +489,10 @@ def _shaped_scatter(
     **kwargs: Any,
 ) -> PatchCollection:
     """
-    Get shapes for scatterplot.
+    Get shapes for scatter plot.
 
-    Adapted from here: https://gist.github.com/syrte/592a062c562cd2a98a83 .
-    This code is under [The BSD 3-Clause License](http://opensource.org/licenses/BSD-3-Clause)
+    Adapted from `here <https://gist.github.com/syrte/592a062c562cd2a98a83>`_.
+    This code is under `The BSD 3-Clause License <http://opensource.org/licenses/BSD-3-Clause>`_.
     """
     shape = ScatterShape(shape)
     if TYPE_CHECKING:
@@ -578,6 +578,8 @@ def _get_title_axlabels(
         axis_labels = axis_label
     elif isinstance(axis_label, str):
         axis_labels = [axis_label + str(x + 1) for x in range(2)]
+    else:
+        raise TypeError(f"Expect axis labels to be of type `list` or `str`, found `{type(axis_label).__name__}`.")
 
     return title, axis_labels
 
@@ -907,7 +909,7 @@ def _plot_scatter(
     ax: Axes,
     outline_params: OutlineParams,
     cmap_params: CmapParams,
-    color_params: Colormap,
+    color_params: ColorParams,
     size: float,
     color_vector: NDArrayA,
     na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
@@ -966,7 +968,7 @@ def _plot_segment(
     color_source_vector: pd.Series[CategoricalDtype],
     ax: Axes,
     cmap_params: CmapParams,
-    color_params: Colormap,
+    color_params: ColorParams,
     categorical: bool,
     seg_contourpx: int | None = None,
     seg_outline: bool = False,
