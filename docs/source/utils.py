@@ -93,7 +93,7 @@ def _get_thumbnails(root: Union[str, Path]) -> Dict[str, str]:
 class ModnameFilter(Filter):
     """Ignore module names."""
 
-    _pat = re.compile(r"squidpy\.(im|gr|pl|datasets|ImageContainer).+")
+    _pat = re.compile(r"squidpy\.(im|gr|pl|read|datasets|ImageContainer).+")
 
     def _skip(self, word: str) -> bool:
         return self._pat.match(word) is not None
