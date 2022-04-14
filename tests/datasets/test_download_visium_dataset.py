@@ -12,6 +12,7 @@ from anndata.tests.helpers import assert_adata_equal
 from squidpy.datasets import visium
 
 
+@pytest.mark.timeout(120)
 @pytest.mark.internet()
 @pytest.mark.parametrize(
     "sample", ["V1_Mouse_Kidney", "Targeted_Visium_Human_SpinalCord_Neuroscience", "Visium_FFPE_Human_Breast_Cancer"]
