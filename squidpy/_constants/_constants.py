@@ -113,6 +113,7 @@ class ScatterShape(str, ModeEnum):
     SQUARE = "square"
     HEX = "hex"
 
+
 @unique
 class TenxVersions(str, ModeEnum):
     # Version numbers as class objects of TenxVersions
