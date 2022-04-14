@@ -296,6 +296,11 @@ def _image_spatial_attrs(
     size_key: str | None = Key.uns.size_key,
     img_cmap: Colormap | str | None = None,
 ) -> SpatialParams:
+    def truthy(img: bool | NDArrayA | _SeqArray | None) -> bool:
+        if img is None:
+            return False
+        return img is True or len(img)  # type: ignore
+
     library_id = _get_library_id(
         adata=adata, shape=shape, spatial_key=spatial_key, library_id=library_id, library_key=library_key
     )
@@ -315,7 +320,7 @@ def _image_spatial_attrs(
     )
 
     # TODO(michalk8): if img/seg is an array, this raises an error
-    if (img and seg) or (img and shape is not None):
+    if (truthy(img) and truthy(seg)) or (truthy(img) and shape is not None):
         _img = _get_image(
             adata=adata,
             spatial_key=spatial_key,
@@ -328,7 +333,7 @@ def _image_spatial_attrs(
     else:
         _img = (None,) * len(library_id)
 
-    if seg:
+    if truthy(seg):
         _seg, _cell_vec = _get_segment(
             adata=adata,
             library_id=library_id,

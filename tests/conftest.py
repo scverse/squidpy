@@ -38,12 +38,11 @@ _adata = sc.read("tests/_data/test_data.h5ad")
 _adata.raw = _adata.copy()
 
 
-def pytest_sessionstart(session) -> None:
+def pytest_sessionstart(session: pytest.Session) -> None:
     matplotlib.use("Agg")
     matplotlib.rcParams["figure.max_open_warning"] = 0
     np.random.seed(42)
 
-    # https://github.com/theislab/cellrank/issues/683
     warnings.simplefilter("ignore", OldFormatWarning)
     sc.pl.set_rcParams_defaults()
 

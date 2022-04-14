@@ -413,7 +413,7 @@ def spatial_scatter(
     -------
     %(spatial_plot.returns)s
     """
-    return _spatial_plot(adata, shape=shape, seg_key=None, **kwargs)
+    return _spatial_plot(adata, shape=shape, seg=None, seg_key=None, **kwargs)
 
 
 @d.dedent  # type: ignore[arg-type]
