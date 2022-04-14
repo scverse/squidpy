@@ -185,7 +185,7 @@ library_key
 # static plotting docs
 _plotting_kwargs_static = """\
 scalebar_kwargs
-    Keyword arguments for :func:`matplotlib_scalebar.ScaleBar`.
+    Keyword arguments for :meth:`matplotlib_scalebar.ScaleBar`.
 edges_kwargs
     Keyword arguments for :func:`networkx.draw_networkx_edges`.
 kwargs
@@ -253,14 +253,14 @@ _plotting_edges = f"""\
 connectivity_key
     Key for neighbors graph to plot. Default is: :attr:`anndata.AnnData.obsp` ``['{_ConnKey}']``.
 edges_width
-    Width of edges. Only used when ``connectivity_key`` != None
+    Width of the edges. Only used when ``connectivity_key != None`` .
 edges_color
-    Color of edges.
+    Color of the edges.
 {_plotting_panels}"""
 _plotting_sizecoords = f"""\
 size
     Size of the scatter point/shape. In case of ``spatial_shape`` it represents to the
-    scaling factor for shape (accessed with ``size_key``). In case of ``spatial_point``,
+    scaling factor for shape (accessed via ``size_key``). In case of ``spatial_point``,
     it represents the ``size`` argument in :func:`matplotlib.pyplot.scatter`.
 size_key
     Key of of pixel size of shapes to be plotted, stored in :attr:`anndata.AnnData.uns`.

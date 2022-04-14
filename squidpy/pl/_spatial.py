@@ -4,8 +4,6 @@ from types import MappingProxyType
 from typing import Union  # noqa: F401
 from typing import Any, Tuple, Mapping, Optional, Sequence
 from pathlib import Path
-from functools import wraps
-from typing_extensions import Literal
 import itertools
 
 from anndata import AnnData
@@ -120,10 +118,10 @@ def _spatial_plot(
     **kwargs: Any,
 ) -> None:
     """
-    Plot spatial omics data saved in AnnData.
+    Plot spatial omics data saved in :class:`anndata.AnnData`.
 
-    Use the parameter ``library_id`` to select the image.
-    If multiple ``library_id`` are available, use ``library_key`` to plot subsets of :class:`anndata.AnnData` object.
+    Use ``library_id`` to select the image. If multiple ``library_id``s are available, use ``library_key`` in
+    :attr:`anndata.AnnData.obs` to plot the subsets.
     Use ``crop_coord`` to crop the spatial plot based on coordinate boundaries.
 
     This function has few key assumptions about how coordinates and libraries are handled:
@@ -139,15 +137,14 @@ def _spatial_plot(
           accept lists, to selectively customize different ``library_id`` plots. This requires that
           the length of such lists match the number of unique libraries in the dataset.
         - Coordinates are in the pixel space of the source image, so an equal aspect ratio is assumed.
-        - The origin (e.g `(0, 0)`) is at the top left - as is common convention with image data.
+        - The origin (e.g, `(0, 0)`) is at the top left - as is common convention with image data.
         - The plotted points (dots) do not have a real "size" but only relative to their
           coordinate/pixel space. This does not hold if no image is plotted, then size correspond
           to points size passed to :meth:`matplotlib.axes.Axes.scatter`.
 
     If your anndata object has a `"spatial"` entry in :attr:`anndata.AnnData.uns`,
-    use ``img_key``, ``seg_key`` and ``size_key`` parameters to find values
-    for ``img``, ``seg`` and ``size``.
-    Alternatively, these values can be passed directly.
+    use ``img_key``, ``seg_key`` and ``size_key`` arguments to find values for ``img``, ``seg`` and ``size``.
+    Alternatively, these values can be passed directly via ``img``.
 
     Parameters
     ----------
@@ -341,56 +338,6 @@ def _spatial_plot(
         save_fig(fig_params.fig, path=save)
 
 
-def _wrap_signature(key: Literal["spatial_scatter", "spatial_segment"]) -> Any:
-    def _wrap_plot(func: Any) -> Any:
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            import inspect
-
-            params = inspect.signature(_spatial_plot).parameters.copy()
-            wrapper_sig = inspect.signature(func)
-            wrapper_params = wrapper_sig.parameters.copy()
-
-            if key == "spatial_scatter":
-                params.pop("seg")
-                params.pop("seg_key")
-                params.pop("seg_cell_id")
-                params.pop("seg_contourpx")
-                params.pop("seg_outline")
-                wrapper_params.pop("adata")
-                wrapper_params.pop("shape")
-            elif key == "spatial_segment":
-                params.pop("shape")
-                params.pop("size")
-                params.pop("size_key")
-                params.pop("scale_factor")
-                wrapper_params.pop("adata")
-                wrapper_params.pop("seg_cell_id")
-                wrapper_params.pop("seg")
-                wrapper_params.pop("seg_key")
-                wrapper_params.pop("seg_contourpx")
-                wrapper_params.pop("seg_outline")
-            else:
-                raise NotImplementedError("Function signature not implemented.")
-
-            params.update(wrapper_params)
-            annotations = {k: v.annotation for k, v in params.items() if v.annotation != inspect.Parameter.empty}
-            if wrapper_sig.return_annotation is not inspect.Signature.empty:
-                annotations["return"] = wrapper_sig.return_annotation
-
-            func.__signature__ = inspect.Signature(
-                list(params.values()), return_annotation=wrapper_sig.return_annotation
-            )
-            func.__annotations__ = annotations
-
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    return _wrap_plot
-
-
-@_wrap_signature(key="spatial_scatter")
 @d.dedent
 def spatial_scatter(
     adata: AnnData,
@@ -462,15 +409,14 @@ def spatial_scatter(
 
     This function allows overlaying data on top of images.
     The plotted shapes (circles, squares or hexagons) have a real "size" with respect to their
-    coordinate space, which can be specified via the ``size`` or ``size_key`` parameter.
+    coordinate space, which can be specified via the ``size`` or ``size_key`` argument.
 
-        - Use the parameter ``img_key`` to see the image in the background.
-        - Use the parameter ``library_id`` to select the image. By default, ``'hires'`` key is attempted.
+        - Use ``img_key`` to see the image in the background.
+        - Use ``library_id`` to select the image. By default, ``'hires'`` key is attempted.
         - Use ``img_alpha``, ``img_cmap`` or ``img_channel`` to control how it is displayed.
         - Use ``size`` to scale the size of the shapes plotted on top.
 
-    If no image is present or plotted, it will defaults to a scatter plot,
-    see :func:`matplotlib.axes.Axes.scatter`.
+    If no image is present or plotted, it will defaults to a scatter plot, see :meth:`matplotlib.axes.Axes.scatter`.
 
     %(spatial_plot.summary_ext)s
 
@@ -495,7 +441,6 @@ def spatial_scatter(
     return _spatial_plot(**locs, **kwargs)
 
 
-@_wrap_signature(key="spatial_segment")
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
 def spatial_segment(
@@ -569,10 +514,10 @@ def spatial_segment(
     %(spatial_plot.summary)s
 
     This function allows overlaying segmentation masks on top of images. ``seg_cell_id`` is a mandatory argument
-    in :attr:`anndata.AnnData.obs` to control unique segmentation masks's ids to be plotted.
-    By default, ``'segmentation'`` ``seg_key`` is attempted and ``'hires'`` image key is attempted.
+    in :attr:`anndata.AnnData.obs` which controls unique segmentation mask's ids to be plotted.
+    By default, ``'segmentation'`` or ``seg_key`` for the segmentation and ``'hires'`` for the image is attempted.
 
-        - Use the parameter ``seg_key`` to see the image in the background.
+        - Use ``seg_key`` to see the image in the background.
         - Use ``seg_contourpx`` or ``seg_outline`` to control how the segmentation mask is displayed.
 
     %(spatial_plot.summary_ext)s

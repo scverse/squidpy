@@ -542,7 +542,7 @@ def _plot_edges(
 ) -> None:
     """Graph plotting."""
     from networkx import Graph
-    from networkx.drawing.nx_pylab import draw_networkx_edges
+    from networkx.drawing import draw_networkx_edges
 
     if connectivity_key not in adata.obsp:
         raise KeyError(
