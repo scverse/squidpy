@@ -47,7 +47,7 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.collections import Collection, PatchCollection
 
 from skimage.util import map_array
-from skimage.color import rgb2gray, label2rgb
+from skimage.color import label2rgb
 from skimage.morphology import square, erosion
 from skimage.segmentation import find_boundaries
 
@@ -174,6 +174,8 @@ def _get_image(
     img_channel: int | None = None,
     img_cmap: Colormap | str | None = None,
 ) -> Union[Sequence[NDArrayA], Tuple[None, ...]]:
+    from squidpy.pl._utils import _to_grayscale
+
     image_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.image_key, library_id)
     if img_res_key is None:
         _img_res_key = _get_unique_map(image_mapping)  # get intersection of image_mapping.values()
@@ -195,7 +197,7 @@ def _get_image(
         img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][_img_res_key][..., _img_channel] for i in library_id]
     if img_cmap == "gray":
         # TODO(michalk8): use dask function if it's a dask array
-        img = [rgb2gray(im) for im in img]
+        img = [_to_grayscale(im) for im in img]
 
     return img
 
