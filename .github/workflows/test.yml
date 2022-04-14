@@ -104,6 +104,7 @@ jobs:
                 key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}
 
         -   name: Test
+            timeout-minutes: 30
             env:
                 MPLBACKEND: agg
                 PLATFORM: ${{ matrix.os }}
