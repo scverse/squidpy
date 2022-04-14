@@ -54,6 +54,19 @@ Plotting
     pl.co_occurrence
     pl.extract
 
+Reading
+~~~~~~~
+
+.. module:: squidpy.read
+.. currentmodule:: squidpy
+
+.. autosummary::
+    :toctree: api
+
+    read.visium
+    read.vizgen
+    read.nanostring
+
 Datasets
 ~~~~~~~~
 
