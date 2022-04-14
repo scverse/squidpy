@@ -29,6 +29,7 @@ from pandas.api.types import CategoricalDtype
 from pandas.core.dtypes.common import is_categorical_dtype
 import numpy as np
 import pandas as pd
+import dask.array as da
 
 from matplotlib import colors, pyplot as plt, rcParams, patheffects
 from matplotlib.cm import get_cmap
@@ -187,13 +188,15 @@ def _get_image(
     _img_channel = [0, 1, 2] if img_channel is None else [img_channel]
     if max(_img_channel) > 2:
         raise ValueError(f"Invalid value for `img_channel: {_img_channel}`.")
-    if isinstance(img, (list, np.ndarray)):
-        img = _get_list(img, _type=np.ndarray, ref_len=len(library_id), name="img")
+    if isinstance(img, (list, np.ndarray, da.Array)):
+        img = _get_list(img, _type=(np.ndarray, da.Array), ref_len=len(library_id), name="img")
         img = [im[..., _img_channel] for im in img]
     else:
         img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][_img_res_key][..., _img_channel] for i in library_id]
     if img_cmap == "gray":
+        # TODO(michalk8): use dask function if it's a dask array
         img = [rgb2gray(im) for im in img]
+
     return img
 
 
@@ -215,8 +218,8 @@ def _get_segment(
         raise ValueError(f"Invalid type {cell_id_vec.dtype} for `adata.obs[{seg_cell_id}]`.")
     cell_id_vec = [cell_id_vec[adata.obs[library_key] == lib] for lib in library_id]
 
-    if isinstance(seg, np.ndarray) or isinstance(seg, list):
-        img_seg = _get_list(seg, _type=np.ndarray, ref_len=len(library_id), name="img_seg")
+    if isinstance(seg, (list, np.ndarray, da.Array)):
+        img_seg = _get_list(seg, _type=(np.ndarray, da.Array), ref_len=len(library_id), name="img_seg")
     else:
         img_seg = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][seg_key] for i in library_id]
     return img_seg, cell_id_vec
@@ -309,6 +312,7 @@ def _image_spatial_attrs(
         size_key=size_key,
     )
 
+    # TODO(michalk8): if img/seg is an array, this raises an error
     if (img and seg) or (img and shape is not None):
         _img = _get_image(
             adata=adata,
@@ -420,7 +424,7 @@ def _get_unique_map(dic: Mapping[str, Any]) -> Sequence[Any]:
 
 def _get_list(
     var: Any,
-    _type: Type[Any],
+    _type: Type[Any] | tuple[Type[Any], ...],
     ref_len: int | None = None,  # TODO(giovp): default of 1
     name: str | None = None,
 ) -> List[Any]:
