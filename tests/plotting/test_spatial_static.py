@@ -66,6 +66,18 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             scalebar_kwargs={"scale_loc": "bottom", "location": "lower right"},
         )
 
+    def test_plot_spatial_scatter_crop_noorigin(self, adata_hne_concat: AnnData):
+        pl.spatial_scatter(
+            adata_hne_concat,
+            shape="circle",
+            library_key="library_id",
+            color=["Sox17", "cluster"],
+            outline_width=(0.05, 0.05),
+            crop_coord=[(300, 300, 5000, 5000), (3000, 3000, 5000, 5000)],
+            scalebar_dx=2.0,
+            scalebar_kwargs={"scale_loc": "bottom", "location": "lower right"},
+        )
+
     def test_plot_spatial_scatter_group_multi(self, adata_hne: AnnData):
         spatial_neighbors(adata_hne)
         pl.spatial_scatter(
@@ -73,7 +85,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             shape="circle",
             color=["Sox9", "cluster", "leiden"],
             groups=["Cortex_1", "Cortex_3", "3"],
-            crop_coord=[[0, 0, 500, 500]],
+            crop_coord=[(0, 0, 500, 500)],
             connectivity_key="spatial_connectivities",
         )
 
@@ -167,7 +179,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             figsize=(5, 5),
             cmap="magma",
             vmin=500,
-            crop_coord=[[100, 100, 500, 500], [100, 100, 500, 500], [100, 100, 500, 500]],
+            crop_coord=[(100, 100, 500, 500), (100, 100, 500, 500), (100, 100, 500, 500)],
             img_alpha=0.5,
         )
 
