@@ -174,6 +174,9 @@ library_id
     - If `None`, there should only exist one entry in :attr:`anndata.AnnData.uns` ``['{spatial_key}']``.
     - If a :class:`str`, first search :attr:`anndata.AnnData.obs` ``['{library_id}']`` which contains the mapping
       from observations to library ids, then search :attr:`anndata.AnnData.uns` ``['{spatial_key}']``."""
+_library_key = """\
+library_key
+    Key in :attr:`anndata.AnnData.obs` containing library ids for which to build the spatial graphs separately."""
 
 d = DocstringProcessor(
     adata=_adata,
@@ -208,4 +211,5 @@ d = DocstringProcessor(
     library_id_features=_library_id_features,
     library_id=_library_id,
     img_library_id=_img_library_id,
+    library_key=_library_key,
 )

@@ -23,6 +23,11 @@ Features
   `@MxMstrmn <https://github.com/MxMstrmn>`__
   `#514 <https://github.com/theislab/squidpy/pull/514>`__
 
+- Add ``library_key`` in :func:`squidpy.gr.spatial_neighbors` to support building graphs across
+  multiple slides.
+  `@giovp <https://github.com/giovp>`__
+  `#516 <https://github.com/theislab/squidpy/pull/516>`__
+
 
 Bugfixes
 --------
