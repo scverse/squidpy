@@ -40,3 +40,12 @@ for an entry point to the :class:`squidpy.im.ImageContainer`.
 
     auto_examples/image/compute_show
     auto_examples/image/compute_crops
+
+Plotting
+--------
+This section contains various examples from the :mod:`squidpy.pl` module.
+
+.. nbgallery::
+    :glob:
+
+    auto_examples/plotting/plot_*
