@@ -1,15 +1,23 @@
 """Functions for building graphs from spatial coordinates."""
 from __future__ import annotations
 
-from typing import Union, Iterable  # noqa: F401
+from typing import List, Tuple, Union, Iterable  # noqa: F401
+from functools import partial
 from itertools import chain
 import warnings
 
 from scanpy import logging as logg
 from anndata import AnnData
+from anndata.utils import make_index_unique
 
 from numba import njit
-from scipy.sparse import spmatrix, csr_matrix, isspmatrix_csr, SparseEfficiencyWarning
+from scipy.sparse import (
+    spmatrix,
+    block_diag,
+    csr_matrix,
+    isspmatrix_csr,
+    SparseEfficiencyWarning,
+)
 from scipy.spatial import Delaunay
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
@@ -17,7 +25,12 @@ import numpy as np
 
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA
-from squidpy.gr._utils import _save_data, _assert_positive, _assert_spatial_basis
+from squidpy.gr._utils import (
+    _save_data,
+    _assert_positive,
+    _assert_spatial_basis,
+    _assert_categorical_obs,
+)
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 
@@ -29,6 +42,7 @@ __all__ = ["spatial_neighbors"]
 def spatial_neighbors(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
+    library_key: str | None = None,
     coord_type: str | CoordType | None = None,
     n_neighs: int = 6,
     radius: float | tuple[float, float] | None = None,
@@ -46,6 +60,7 @@ def spatial_neighbors(
     ----------
     %(adata)s
     %(spatial_key)s
+    %(library_key)s
     coord_type
         Type of coordinate system. Valid options are:
 
@@ -104,8 +119,69 @@ def spatial_neighbors(
     else:
         coord_type = CoordType(coord_type)
 
-    start = logg.info(f"Creating graph using `{coord_type}` coordinates and `{transform}` transform")
+    if library_key is not None:
+        _assert_categorical_obs(adata, key=library_key)
+        libs = adata.obs[library_key].cat.categories
+        make_index_unique(adata.obs_names)
+    else:
+        libs = [None]
 
+    start = logg.info(
+        f"Creating graph using `{coord_type}` coordinates and `{transform}` transform and `{len(libs)}` libraries."
+    )
+    _build_fun = partial(
+        _spatial_neighbor,
+        spatial_key=spatial_key,
+        coord_type=coord_type,
+        n_neighs=n_neighs,
+        radius=radius,
+        delaunay=delaunay,
+        n_rings=n_rings,
+        transform=transform,
+        set_diag=set_diag,
+    )
+
+    if library_key is not None:
+        mats: List[Tuple[spmatrix, spmatrix]] = []
+        ixs = []
+        for lib in libs:
+            ixs.extend(np.where(adata.obs[library_key] == lib)[0])
+            mats.append(_build_fun(adata[adata.obs[library_key] == lib]))
+        ixs = np.argsort(ixs)  # type: ignore[assignment] # invert
+        Adj = block_diag([m[0] for m in mats], format="csr")[ixs, :][:, ixs]
+        Dst = block_diag([m[1] for m in mats], format="csr")[ixs, :][:, ixs]
+    else:
+        Adj, Dst = _build_fun(adata)
+
+    neighs_key = Key.uns.spatial_neighs(key_added)
+    conns_key = Key.obsp.spatial_conn(key_added)
+    dists_key = Key.obsp.spatial_dist(key_added)
+
+    neighbors_dict = {
+        "connectivities_key": conns_key,
+        "distances_key": dists_key,
+        "params": {"n_neighbors": n_neighs, "coord_type": coord_type.v, "radius": radius, "transform": transform.v},
+    }
+
+    if copy:
+        return Adj, Dst
+
+    _save_data(adata, attr="obsp", key=conns_key, data=Adj)
+    _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
+    _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
+
+
+def _spatial_neighbor(
+    adata: AnnData,
+    spatial_key: str = Key.obsm.spatial,
+    coord_type: str | CoordType | None = None,
+    n_neighs: int = 6,
+    radius: float | tuple[float, float] | None = None,
+    delaunay: bool = False,
+    n_rings: int = 1,
+    transform: str | Transform | None = None,
+    set_diag: bool = False,
+) -> tuple[csr_matrix, csr_matrix]:
     coords = adata.obsm[spatial_key]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", SparseEfficiencyWarning)
@@ -140,22 +216,7 @@ def spatial_neighbors(
     else:
         raise NotImplementedError(f"Transform `{transform}` is not yet implemented.")
 
-    neighs_key = Key.uns.spatial_neighs(key_added)
-    conns_key = Key.obsp.spatial_conn(key_added)
-    dists_key = Key.obsp.spatial_dist(key_added)
-
-    neighbors_dict = {
-        "connectivities_key": conns_key,
-        "distances_key": dists_key,
-        "params": {"n_neighbors": n_neighs, "coord_type": coord_type.v, "radius": radius, "transform": transform.v},
-    }
-
-    if copy:
-        return Adj, Dst
-
-    _save_data(adata, attr="obsp", key=conns_key, data=Adj)
-    _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
-    _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
+    return Adj, Dst
 
 
 def _build_grid(

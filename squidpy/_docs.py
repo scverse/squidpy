@@ -178,6 +178,9 @@ library_id
     - If `None`, there should only exist one entry in :attr:`anndata.AnnData.uns` ``['{spatial_key}']``.
     - If a :class:`str`, first search :attr:`anndata.AnnData.obs` ``['{library_id}']`` which contains the mapping
       from observations to library ids, then search :attr:`anndata.AnnData.uns` ``['{spatial_key}']``."""
+_library_key = """\
+library_key
+    Key in :attr:`anndata.AnnData.obs` containing library ids for which to build the spatial graphs separately."""
 
 # static plotting docs
 _plotting_kwargs_static = """\
