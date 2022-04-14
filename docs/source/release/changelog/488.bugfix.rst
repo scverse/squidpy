@@ -1,1 +1,2 @@
 Do not set edge with in :mod:`napari` since it caused all points to be black.
+`@michalk8 <https://github.com/michalk8>`__

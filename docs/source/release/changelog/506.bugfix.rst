@@ -1,2 +1,2 @@
-See below.
+Fix ``use_raw`` in :func:`squidpy.gr.spatial_autocorr`.
 `@michalk8 <https://github.com/michalk8>`__
