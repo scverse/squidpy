@@ -53,7 +53,7 @@ Bugfixes
   `@michalk8 <https://github.com/michalk8>`__
   `#488 <https://github.com/theislab/squidpy/pull/488>`__
 
-- See below.
+- Fix ``use_raw`` in :func:`squidpy.gr.spatial_autocorr`.
   `@michalk8 <https://github.com/michalk8>`__
   `#506 <https://github.com/theislab/squidpy/pull/506>`__
 
