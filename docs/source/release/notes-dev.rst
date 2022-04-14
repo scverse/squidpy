@@ -37,12 +37,15 @@ Bugfixes
 --------
 
 - Require ``numba>=0.52.0``.
+  `@michalk8 <https://github.com/michalk8>`__
   `#420 <https://github.com/theislab/squidpy/pull/420>`__
 
 - Fix source/target being ``None`` in :func:`squidpy.gr.ligrec`.
+  `@michalk8 <https://github.com/michalk8>`__
   `#434 <https://github.com/theislab/squidpy/pull/434>`__
 
 - Do not set edge with in :mod:`napari` since it caused all points to be black.
+  `@michalk8 <https://github.com/michalk8>`__
   `#488 <https://github.com/theislab/squidpy/pull/488>`__
 
 - See below.
@@ -62,9 +65,11 @@ Miscellaneous
 -------------
 
 - Change imports in the topmost ``__init__.py`` for correct IDE module resolution.
+  `@chaichontat <https://github.com/chaichontat>`__
   `#479 <https://github.com/theislab/squidpy/pull/479>`__
 
 - Remove various warnings.
+  `@michalk8 <https://github.com/michalk8>`__
   `#489 <https://github.com/theislab/squidpy/pull/489>`__
 
 
