@@ -35,6 +35,7 @@ from squidpy.pl._spatial_utils import (
     _prepare_params_plot,
     _set_color_source_vec,
 )
+from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 
 
@@ -116,7 +117,7 @@ def _spatial_plot(
     """
     Plot spatial omics data saved in :class:`anndata.AnnData`.
 
-    Use ``library_id`` to select the image. If multiple ``library_id``s are available, use ``library_key`` in
+    Use ``library_id`` to select the image. If multiple ``library_ids`` are available, use ``library_key`` in
     :attr:`anndata.AnnData.obs` to plot the subsets.
     Use ``crop_coord`` to crop the spatial plot based on coordinate boundaries.
 
@@ -343,15 +344,18 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
     wrapper_params = wrapper_sig.parameters.copy()
 
     if name == "spatial_scatter":
-        params_remove = ["seg", "seg_key", "seg_cell_id", "seg_contourpx", "seg_outline"]
+        params_remove = ["seg", "seg_cell_id", "seg_key", "seg_contourpx", "seg_outline"]
+        wrapper_remove = ["shape"]
     elif name == "spatial_segment":
         params_remove = ["shape", "size", "size_key", "scale_factor"]
-        wrapper_params.pop("seg_cell_id")  # because no default is specified
+        wrapper_remove = ["seg_cell_id", "seg", "seg_key", "seg_contourpx", "seg_outline"]
     else:
         raise NotImplementedError(f"Docstring interpolation not implemented for `{name}`.")
 
     for key in params_remove:
         params.pop(key)
+    for key in wrapper_remove:
+        wrapper_params.pop(key)
 
     params.update(wrapper_params)
     annotations = {k: v.annotation for k, v in params.items() if v.annotation != inspect.Parameter.empty}
@@ -370,6 +374,7 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
 @_wrap_signature
 def spatial_scatter(
     adata: AnnData,
+    shape: Optional[_AvailShapes] = ScatterShape.CIRCLE.v,
     **kwargs: Any,
 ) -> Any:
     """
@@ -404,7 +409,7 @@ def spatial_scatter(
     -------
     %(spatial_plot.returns)s
     """  # noqa: D400
-    return _spatial_plot(adata, **kwargs)
+    return _spatial_plot(adata, shape=shape, seg_key=None, **kwargs)
 
 
 @d.dedent  # type: ignore[arg-type]
@@ -413,6 +418,10 @@ def spatial_scatter(
 def spatial_segment(
     adata: AnnData,
     seg_cell_id: str,
+    seg: Optional[Union[bool, _SeqArray]] = True,
+    seg_key: str = Key.uns.image_seg_key,
+    seg_contourpx: Optional[int] = None,
+    seg_outline: bool = False,
     **kwargs: Any,
 ) -> Any:
     """
@@ -443,4 +452,12 @@ def spatial_segment(
     -------
     %(spatial_plot.returns)s
     """  # noqa: D400
-    return _spatial_plot(adata, seg_cell_id=seg_cell_id, **kwargs)
+    return _spatial_plot(
+        adata,
+        seg=seg,
+        seg_key=seg_key,
+        seg_cell_id=seg_cell_id,
+        seg_contourpx=seg_contourpx,
+        seg_outline=seg_outline,
+        **kwargs,
+    )
