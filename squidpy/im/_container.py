@@ -351,9 +351,9 @@ class ImageContainer(FeatureMixin):
 
             return data
 
+        is_url = validators.url(str(img_path))  # before conversion to `Path`, since it removes `//`
         img_path = Path(img_path)
         suffix = img_path.suffix.lower()
-        is_url = validators.url(str(img_path))
         logg.debug(f"Loading data from `{img_path}`")
 
         if not is_url and not img_path.exists():
