@@ -5,8 +5,8 @@ from collections import defaultdict
 from html.parser import HTMLParser
 from pytest_mock import MockerFixture
 import pytest
-import subprocess
 import imageio
+import subprocess
 
 from anndata import AnnData
 import anndata as ad
@@ -85,14 +85,12 @@ class TestContainerIO:
     def test_save_load_zarr(self, tmpdir):
         img = ImageContainer(np.random.normal(size=(100, 100, 1)))
         img.data.attrs["scale"] = 42
-
         img.save(Path(tmpdir) / "foo.zarr")
 
         img2 = ImageContainer.load(Path(tmpdir) / "foo.zarr")
-
         proc = None
         try:
-            # Start a simple http-server
+            # start a simple http-server
             proc = subprocess.Popen(
                 f"python -m http.server 8080 --bind 127.0.0.1 --directory {tmpdir}".split(" "),
                 stderr=subprocess.DEVNULL,
@@ -106,7 +104,6 @@ class TestContainerIO:
                 assert img.data.dims == test_img.data.dims
                 np.testing.assert_array_equal(sorted(img.data.attrs.keys()), sorted(img2.data.attrs.keys()))
                 for k, v in img.data.attrs.items():
-                    assert type(v) == type(test_img.data.attrs[k])  # noqa: E721
                     assert v == test_img.data.attrs[k]
         finally:
             if proc is not None:

@@ -247,7 +247,7 @@ class ImageContainer(FeatureMixin):
         Parameters
         ----------
         img
-            In-memory 2, 3 or 4-dimensional array, a url to a zarr store (ending in .zarr),
+            In-memory 2, 3 or 4-dimensional array, a URL to a *Zarr* store (ending in *.zarr*),
             or a path to an on-disk image.
         %(img_layer)s
         dims
@@ -331,7 +331,7 @@ class ImageContainer(FeatureMixin):
     @_load_img.register(Path)
     def _(
         self,
-        img_path_or_url: Pathlike_t,
+        img_path: Pathlike_t,
         chunks: int | None = None,
         dims: InferDimensions | tuple[str, ...] = InferDimensions.DEFAULT,
         **_: Any,
@@ -351,31 +351,28 @@ class ImageContainer(FeatureMixin):
 
             return data
 
-        is_url = validators.url(str(img_path_or_url))
-        img = Path(img_path_or_url)
-        if not is_url:
-            if not img.exists():
-                raise OSError(f"Path `{img}` does not exist.")
+        img_path = Path(img_path)
+        suffix = img_path.suffix.lower()
+        is_url = validators.url(str(img_path))
+        logg.debug(f"Loading data from `{img_path}`")
 
-        suffix = img.suffix.lower()
+        if not is_url and not img_path.exists():
+            raise OSError(f"Path `{img_path}` does not exist.")
 
         if suffix in (".jpg", ".jpeg", ".png", ".tif", ".tiff"):
-            return _lazy_load_image(img, dims=dims, chunks=chunks)
+            return _lazy_load_image(img_path, dims=dims, chunks=chunks)
 
-        if img.is_dir() or suffix == ".zarr":
+        if suffix == ".zarr" or img_path.is_dir():  # can also be a URL
             if len(self._data):
                 raise ValueError("Loading data from `Zarr` store is disallowed when the container is not empty.")
-            data_str = img_path_or_url if is_url else str(img)
-            self._data = transform_metadata(xr.open_zarr(data_str, chunks=chunks))
-            return
-
-        if suffix in (".nc", ".cdf"):
+            self._data = transform_metadata(xr.open_zarr(str(img_path), chunks=chunks))
+        elif suffix in (".nc", ".cdf"):
             if len(self._data):
                 raise ValueError("Loading data from `NetCDF` is disallowed when the container is not empty.")
 
-            self._data = transform_metadata(xr.open_dataset(img, chunks=chunks))
+            self._data = transform_metadata(xr.open_dataset(img_path, chunks=chunks))
         else:
-            raise ValueError(f"Unknown suffix `{img.suffix}`.")
+            raise ValueError(f"Unable to handle path `{img_path}`.")
 
     @_load_img.register(da.Array)
     @_load_img.register(np.ndarray)
