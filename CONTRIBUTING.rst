@@ -206,7 +206,8 @@ You can modify the created fragment, then commit and run::
 
     tox -e update-dev-notes
 
-In order to inject the fragment in ``docs/source/release/notes-dev.rst``.
+In order to inject the fragment in the release note.
+
 Lastly, in order to see how the current news fragments would look like in the release notes, run::
 
     towncrier build --draft
