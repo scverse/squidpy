@@ -19,6 +19,10 @@ Features
   `@jo-mueller <https://github.com/jo-mueller>`__
   `#493 <https://github.com/theislab/squidpy/pull/493>`__
 
+- Add option to load remote *Zarr* store in :class:`squidpy.im.ImageContainer`.
+  `@ilan-gold <https://github.com/ilan-gold>`__
+  `#500 <https://github.com/theislab/squidpy/pull/500>`__
+
 - Enable specifying diameter in :meth:`squidpy.im.ImageContainer.generate_spot_crops`.
   `@MxMstrmn <https://github.com/MxMstrmn>`__
   `#514 <https://github.com/theislab/squidpy/pull/514>`__

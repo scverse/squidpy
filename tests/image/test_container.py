@@ -6,6 +6,7 @@ from html.parser import HTMLParser
 from pytest_mock import MockerFixture
 import pytest
 import imageio
+import subprocess
 
 from anndata import AnnData
 import anndata as ad
@@ -84,18 +85,30 @@ class TestContainerIO:
     def test_save_load_zarr(self, tmpdir):
         img = ImageContainer(np.random.normal(size=(100, 100, 1)))
         img.data.attrs["scale"] = 42
+        img.save(Path(tmpdir) / "foo.zarr")
 
-        img.save(Path(tmpdir) / "foo")
+        img2 = ImageContainer.load(Path(tmpdir) / "foo.zarr")
+        proc = None
+        try:
+            # start a simple http-server
+            proc = subprocess.Popen(
+                f"python -m http.server 8080 --bind 127.0.0.1 --directory {tmpdir}".split(" "),
+                stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+            )
+            img3 = ImageContainer.load("http://127.0.0.1:8080/foo.zarr")
 
-        img2 = ImageContainer.load(Path(tmpdir) / "foo")
-
-        np.testing.assert_array_equal(img["image"].values, img2["image"].values)
-        np.testing.assert_array_equal(img["image"].dims, img2["image"].dims)
-        assert img.data.dims == img2.data.dims
-        np.testing.assert_array_equal(sorted(img.data.attrs.keys()), sorted(img2.data.attrs.keys()))
-        for k, v in img.data.attrs.items():
-            assert type(v) == type(img2.data.attrs[k])  # noqa: E721
-            assert v == img2.data.attrs[k]
+            for test_img in [img2, img3]:
+                np.testing.assert_array_equal(img["image"].values, test_img["image"].values)
+                np.testing.assert_array_equal(img["image"].dims, test_img["image"].dims)
+                assert img.data.dims == test_img.data.dims
+                np.testing.assert_array_equal(sorted(img.data.attrs.keys()), sorted(img2.data.attrs.keys()))
+                for k, v in img.data.attrs.items():
+                    assert v == test_img.data.attrs[k]
+        finally:
+            if proc is not None:
+                proc.terminate()
+                proc.wait()
 
     def test_load_zarr_2_objects_can_overwrite_store(self, tmpdir):
         img = ImageContainer(np.random.normal(size=(100, 100, 1)))
