@@ -205,9 +205,11 @@ title
 axis_label
     Panel axis labels.
 fig
-    Optional :class:`matplotlib.figure.Figure` object.
+    Optional :class:`matplotlib.figure.Figure` to use.
 ax
-    Optional :class:`matplotlib.axes.Axes` object.
+    Optional :class:`matplotlib.axes.Axes` to use.
+return_ax
+    Whether to return :class:`matplotlib.axes.Axes` object(s).
 {_plotting_save}"""
 _plotting_scalebar = f"""\
 scalebar_dx

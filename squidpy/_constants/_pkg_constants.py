@@ -149,9 +149,9 @@ class Key:
             library_id = cls._sort_haystack(adata, spatial_key, library_id, sub_key=None)
             if return_all or library_id is None:
                 return library_id
-            if len(library_id) != 0:
+            if len(library_id) != 1:
                 raise ValueError(
-                    f"Unable to determine which library id to use. " f"Please specify one from: `{sorted(library_id)}`."
+                    f"Unable to determine which library id to use. Please specify one from: `{sorted(library_id)}`."
                 )
             return library_id[0]
 
@@ -165,8 +165,8 @@ class Key:
         ) -> Mapping[str, Sequence[str]]:
             library_id = cls._sort_haystack(adata, spatial_key, library_id, sub_key)
             if library_id is None:
-                raise ValueError("Invalid `library_id = None`")
-            return {i: list(adata.uns[spatial_key][i][sub_key].keys()) for i in library_id}
+                raise ValueError("Invalid `library_id=None`")
+            return {i: list(adata.uns[spatial_key][i][sub_key]) for i in library_id}
 
         @classmethod
         def _sort_haystack(
@@ -178,16 +178,16 @@ class Key:
         ) -> Sequence[str] | None:
             if spatial_key not in adata.uns:
                 raise KeyError(f"Spatial key {spatial_key!r} not found in `adata.uns`.")
-            haystack = list(adata.uns[spatial_key].keys())
+            haystack = list(adata.uns[spatial_key])
             if library_id is not None:
                 if isinstance(library_id, str):
                     library_id = [library_id]
                 if not any(i in library_id for i in haystack):
                     raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
                 if sub_key is not None:
-                    if not all(sub_key in lib for lib in [adata.uns[spatial_key][lib].keys() for lib in library_id]):
+                    if not all(sub_key in lib for lib in [adata.uns[spatial_key][lib] for lib in library_id]):
                         raise KeyError(
-                            f"`{sub_key}` not found in `adata.uns[{spatial_key!r}]['library_id'].keys()` "
+                            f"`{sub_key}` not found in `adata.uns[{spatial_key!r}]['library_id'])` "
                             f"with following `library_id`: {library_id}."
                         )
                 return library_id

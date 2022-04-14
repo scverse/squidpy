@@ -105,6 +105,7 @@ def _spatial_plot(
     axis_label: Optional[_SeqStr] = None,
     fig: Optional[Figure] = None,
     ax: Optional[Union[Axes, Sequence[Axes]]] = None,
+    return_ax: bool = False,
     figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
@@ -112,7 +113,7 @@ def _spatial_plot(
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
-) -> None:
+) -> Optional[Union[Axes, Sequence[Axes]]]:
     """
     Plot spatial omics data.
 
@@ -132,7 +133,7 @@ def _spatial_plot(
           selectively customize different ``library_id`` plots. This requires that the length of such lists matches
           the number of unique libraries in the dataset.
         - Coordinates are in the pixel space of the source image, so an equal aspect ratio is assumed.
-        - The origin (e.g, *(0, 0)*) is at the top left - as is common convention with image data.
+        - The origin *(0, 0)* is on the top left, as is common convention with image data.
         - The plotted points (dots) do not have a real "size" but it is relative to their coordinate/pixel space.
           This does not hold if no image is plotted, then the size corresponds to points size passed to
           :meth:`matplotlib.axes.Axes.scatter`.
@@ -332,6 +333,9 @@ def _spatial_plot(
     if fig_params.fig is not None and save is not None:
         save_fig(fig_params.fig, path=save)
 
+    if return_ax:
+        return fig_params.ax if fig_params.axs is None else fig_params.axs
+
 
 def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
     import inspect
@@ -374,7 +378,7 @@ def spatial_scatter(
     adata: AnnData,
     shape: Optional[_AvailShapes] = ScatterShape.CIRCLE.v,
     **kwargs: Any,
-) -> Any:
+) -> Optional[Union[Axes, Sequence[Axes]]]:
     """
     Plot spatial omics data with data overlayed on top.
 
@@ -422,7 +426,7 @@ def spatial_segment(
     seg_contourpx: Optional[int] = None,
     seg_outline: bool = False,
     **kwargs: Any,
-) -> Any:
+) -> Optional[Union[Axes, Sequence[Axes]]]:
     """
     Plot spatial omics data with segmentation masks on top.
 

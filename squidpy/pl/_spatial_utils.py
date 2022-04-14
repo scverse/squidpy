@@ -153,9 +153,7 @@ def _get_library_id(
             library_id = [library_id]
         return library_id
     if library_id is None:
-        logg.warning(
-            "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial'][<library_id>]`"
-        )
+        logg.warning("Please specify a valid `library_id` or set it permanently in `adata.uns['spatial']`")
         library_id = [""]  # dummy value to maintain logic of number of plots (nplots=library_id*color)
     elif isinstance(library_id, list):  # get library_id from arg
         pass
@@ -298,7 +296,7 @@ def _image_spatial_attrs(
     )
     if len(library_id) > 1 and library_key is None:
         raise ValueError(
-            f"Found `library_id: `{library_id} but no `library_key` specified. Please specify `library_key`."
+            f"Found `library_id: `{library_id} but no `library_key` was specified. Please specify `library_key`."
         )
 
     scale_factor, size = _get_scalefactor_size(
