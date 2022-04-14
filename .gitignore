@@ -152,3 +152,6 @@ docs/source/external_tutorials
 
 # Vim .swp
 *.swp
+
+# vscode
+.vscode

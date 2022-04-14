@@ -1,5 +1,7 @@
 """Internal constants not exposed to the user."""
-from typing import Any, Union, Callable, Optional
+from __future__ import annotations
+
+from typing import Any, Union, Mapping, Callable, Optional, Sequence
 
 from anndata import AnnData
 
@@ -72,6 +74,22 @@ class Key:
         def image_key(cls) -> str:
             return "images"
 
+        @cprop
+        def image_res_key(cls) -> str:
+            return "hires"
+
+        @cprop
+        def image_seg_key(cls) -> str:
+            return "segmentation"
+
+        @cprop
+        def scalefactor_key(cls) -> str:
+            return "scalefactors"
+
+        @cprop
+        def size_key(cls) -> str:
+            return "spot_diameter_fullres"
+
         @classmethod
         def spatial_neighs(cls, value: Optional[str] = None) -> str:
             return f"{Key.obsm.spatial}_neighbors" if value is None else f"{value}_neighbors"
@@ -105,24 +123,6 @@ class Key:
             return f"{cluster}_colors"
 
         @classmethod
-        def library_id(cls, adata: AnnData, spatial_key: str, library_id: Optional[str] = None) -> str:
-            if spatial_key not in adata.uns:
-                raise KeyError(f"Spatial key `{spatial_key}` not found in `adata.uns`.")
-            haystack = list(adata.uns[spatial_key].keys())
-            if library_id is None:
-                if len(haystack) > 1:
-                    raise ValueError(
-                        f"Unable to determine which library id to use. "
-                        f"Please specify one from: `{sorted(haystack)}`."
-                    )
-                library_id = haystack[0]
-
-            if library_id not in haystack:
-                raise KeyError(f"Library id `{library_id}` not found in `{sorted(haystack)}`.")
-
-            return library_id
-
-        @classmethod
         def spot_diameter(
             cls,
             adata: AnnData,
@@ -137,6 +137,61 @@ class Key:
                     f"Unable to get the spot diameter from "
                     f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors'][{spot_diameter_key!r}]]`"
                 ) from None
+
+        @classmethod
+        def library_id(
+            cls,
+            adata: AnnData,
+            spatial_key: str,
+            library_id: Sequence[str] | str | None = None,
+            return_all: bool = False,
+        ) -> Sequence[str] | str | None:
+            library_id = cls._sort_haystack(adata, spatial_key, library_id, sub_key=None)
+            if return_all or library_id is None:
+                return library_id
+            if len(library_id) != 1:
+                raise ValueError(
+                    f"Unable to determine which library id to use. Please specify one from: `{sorted(library_id)}`."
+                )
+            return library_id[0]
+
+        @classmethod
+        def library_mapping(
+            cls,
+            adata: AnnData,
+            spatial_key: str,
+            sub_key: str,
+            library_id: Sequence[str] | str | None = None,
+        ) -> Mapping[str, Sequence[str]]:
+            library_id = cls._sort_haystack(adata, spatial_key, library_id, sub_key)
+            if library_id is None:
+                raise ValueError("Invalid `library_id=None`")
+            return {i: list(adata.uns[spatial_key][i][sub_key]) for i in library_id}
+
+        @classmethod
+        def _sort_haystack(
+            cls,
+            adata: AnnData,
+            spatial_key: str,
+            library_id: Sequence[str] | str | None = None,
+            sub_key: Optional[str] = None,
+        ) -> Sequence[str] | None:
+            if spatial_key not in adata.uns:
+                raise KeyError(f"Spatial key {spatial_key!r} not found in `adata.uns`.")
+            haystack = list(adata.uns[spatial_key])
+            if library_id is not None:
+                if isinstance(library_id, str):
+                    library_id = [library_id]
+                if not any(i in library_id for i in haystack):
+                    raise KeyError(f"`library_id`: {library_id}` not found in `{sorted(haystack)}`.")
+                if sub_key is not None:
+                    if not all(sub_key in lib for lib in [adata.uns[spatial_key][lib] for lib in library_id]):
+                        raise KeyError(
+                            f"`{sub_key}` not found in `adata.uns[{spatial_key!r}]['library_id'])` "
+                            f"with following `library_id`: {library_id}."
+                        )
+                return library_id
+            return haystack
 
     class obsp:
         @classmethod

@@ -21,6 +21,7 @@ import os
 from scanpy import logging as logg, settings
 from anndata import AnnData
 
+from dask import array as da, delayed
 from numba import njit, prange
 from scipy.sparse import issparse, spmatrix
 from scipy.cluster import hierarchy as sch
@@ -40,6 +41,9 @@ from matplotlib import colors as mcolors, pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import matplotlib as mpl
+
+from skimage import img_as_float32
+from skimage.color import rgb2gray
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
@@ -621,3 +625,31 @@ def _dendrogram(data: NDArrayA, method: str, **kwargs: Any) -> tuple[list[int], 
     col_order = col_dendro["leaves"]
 
     return row_order, col_order, row_link, col_link
+
+
+def sanitize_anndata(adata: AnnData) -> None:
+    """Transform string annotations to categoricals."""
+    adata._sanitize()
+
+
+def _assert_value_in_obs(adata: AnnData, key: str, val: Sequence[Any] | Any) -> None:
+    if key not in adata.obs:
+        raise KeyError(f"Key `{key}` not found in `adata.obs`.")
+    if not isinstance(val, list):
+        val = [val]
+    val = set(val) - set(adata.obs[key].unique())
+    if len(val) != 0:
+        raise ValueError(f"Values `{val}` not found in `adata.obs[{key}]`.")
+
+
+def _to_grayscale(img: NDArrayA | da.Array) -> NDArrayA | da.Array:
+    if img.shape[-1] != 3:
+        raise ValueError(f"Expected channel dimension to be `3`, found `{img.shape[-1]}`.")
+
+    if isinstance(img, da.Array):
+        img = da.from_delayed(delayed(img_as_float32)(img), shape=img.shape, dtype=np.float32)
+        coeffs = np.array([0.2125, 0.7154, 0.0721], dtype=img.dtype)
+
+        return img @ coeffs
+
+    return rgb2gray(img)

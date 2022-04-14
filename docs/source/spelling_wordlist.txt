@@ -12,6 +12,7 @@ centroid
 centroids
 colorectal
 colormap
+colorbar
 Colormap
 cond
 conda
@@ -76,12 +77,14 @@ Rescale
 ResNet
 RGB
 sagittal
+semibold
 sc
 scalability
 Scanpy
 segmentations
 seqFISH
 seqV
+seg
 Squidpy
 StarDist
 stromal
@@ -96,3 +99,5 @@ uncommenting
 Visium
 Vizgen
 zscore
+scalebar
+kwargs

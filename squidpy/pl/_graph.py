@@ -2,19 +2,18 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import Union  # noqa: F401
+from typing import Any, Mapping, Sequence, TYPE_CHECKING
 from pathlib import Path
 from typing_extensions import Literal
 
 from anndata import AnnData
-from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
 import numpy as np
 import pandas as pd
 
 from matplotlib.axes import Axes
 import seaborn as sns
-import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 
 from squidpy._docs import d
@@ -24,23 +23,11 @@ from squidpy.gr._utils import (
     _assert_non_empty_sequence,
 )
 from squidpy.pl._utils import _heatmap, save_fig
+from squidpy.pl._color_utils import Palette_t, _get_palette, _maybe_set_colors
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 
 __all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "ripley", "co_occurrence"]
-
-
-Palette_t = Optional[Union[str, mcolors.ListedColormap]]
-
-
-def _maybe_set_colors(source: AnnData, target: AnnData, key: str, palette: str | None = None) -> None:
-    color_key = Key.uns.colors(key)
-    try:
-        if palette is not None:
-            raise KeyError("Unable to copy the palette when there was other explicitly specified.")
-        target.uns[color_key] = source.uns[color_key]
-    except KeyError:
-        add_colors_for_categorical_sample_annotation(target, key=key, force_update_colors=True, palette=palette)
 
 
 def _get_data(adata: AnnData, cluster_key: str, func_name: str, **kwargs: Any) -> Any:
@@ -52,19 +39,6 @@ def _get_data(adata: AnnData, cluster_key: str, func_name: str, **kwargs: Any) -
             f"Unable to get the data from `adata.uns[{key!r}]`. "
             f"Please run `squidpy.gr.{func_name}(..., cluster_key={cluster_key!r})` first."
         ) from None
-
-
-def _get_palette(adata: AnnData, cluster_key: str, categories: Sequence[Any]) -> Mapping[str, Any] | None:
-    try:
-        palette = adata.uns[Key.uns.colors(cluster_key)]
-        if len(palette) < len(categories):
-            raise ValueError(
-                f"Expected to find at least `{len(categories)}` colors, "
-                f"found `{len(palette)}` for key `{cluster_key}`."
-            )
-        return dict(zip(categories, palette))
-    except KeyError:
-        return None
 
 
 @d.dedent
@@ -110,7 +84,7 @@ def centrality_scores(
     df[cluster_key] = df.index.values
 
     clusters = adata.obs[cluster_key].cat.categories
-    palette = _get_palette(adata, cluster_key=cluster_key, categories=clusters) if palette is None else palette
+    palette = _get_palette(adata, cluster_key=cluster_key, categories=clusters)
 
     score = scores if score is None else score
     score = _assert_non_empty_sequence(score, name="centrality scores")
@@ -389,7 +363,7 @@ def co_occurrence(
     clusters = _assert_non_empty_sequence(clusters, name="clusters")
     clusters = sorted(_get_valid_values(clusters, categories))
 
-    palette = _get_palette(adata, cluster_key=cluster_key, categories=categories) if palette is None else palette
+    palette = _get_palette(adata, cluster_key=cluster_key, categories=categories, palette=palette)
 
     fig, axs = plt.subplots(
         1,

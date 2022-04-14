@@ -6,13 +6,9 @@ from typing import Any, Mapping, Callable, Sequence
 
 from scanpy import logging as logg
 
-from dask import delayed
 from scipy.ndimage import gaussian_filter as scipy_gf
-import numpy as np
 import dask.array as da
 
-from skimage.color import rgb2gray
-from skimage.util.dtype import img_as_float32
 from dask_image.ndfilters import gaussian_filter as dask_gf
 
 from squidpy._docs import d, inject_docs
@@ -22,19 +18,6 @@ from squidpy._constants._constants import Processing
 from squidpy._constants._pkg_constants import Key
 
 __all__ = ["process"]
-
-
-def to_grayscale(img: NDArrayA | da.Array) -> NDArrayA | da.Array:
-    if img.shape[-1] != 3:
-        raise ValueError(f"Expected channel dimension to be `3`, found `{img.shape[-1]}`.")
-
-    if isinstance(img, da.Array):
-        img = da.from_delayed(delayed(img_as_float32)(img), shape=img.shape, dtype=np.float32)
-        coeffs = np.array([0.2125, 0.7154, 0.0721], dtype=img.dtype)
-
-        return img @ coeffs
-
-    return rgb2gray(img)
 
 
 @d.dedent
@@ -93,6 +76,8 @@ def process(
     NotImplementedError
         If ``method`` has not been implemented.
     """
+    from squidpy.pl._utils import _to_grayscale
+
     layer = img._get_layer(layer)
     method = Processing(method) if isinstance(method, (str, Processing)) else method  # type: ignore[assignment]
     apply_kwargs = dict(apply_kwargs)
@@ -126,7 +111,7 @@ def process(
             callback = scipy_gf
     elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
         apply_kwargs["drop_axis"] = 3
-        callback = to_grayscale
+        callback = _to_grayscale
     else:
         raise NotImplementedError(f"Method `{method}` is not yet implemented.")
 

@@ -183,7 +183,7 @@ def ligrec(
         Whether to show the cluster combinations as rows and the interacting pairs as columns.
     title
         Title of the plot.
-    %(plotting)s
+    %(plotting_save)s
     kwargs
         Keyword arguments for :meth:`scanpy.pl.DotPlot.style` or :meth:`scanpy.pl.DotPlot.legend`.
 
