@@ -395,6 +395,66 @@ def _wrap_signature(key: Literal["spatial_scatter", "spatial_segment"]) -> Any:
 def spatial_scatter(
     adata: AnnData,
     shape: _AvailShapes | None = ScatterShape.CIRCLE,  # type: ignore[assignment]
+    color: Sequence[str | None] | str | None = None,
+    groups: _SeqStr | None = None,
+    library_id: _SeqStr | None = None,
+    library_key: str | None = None,
+    spatial_key: str = Key.obsm.spatial,
+    # image
+    img: _SeqArray | bool | None = True,
+    img_res_key: str | None = Key.uns.image_res_key,
+    img_alpha: float | None = None,
+    img_cmap: Colormap | str | None = None,
+    img_channel: int | None = None,
+    # features
+    use_raw: bool | None = None,
+    layer: str | None = None,
+    alt_var: str | None = None,
+    # size, coords, cmap, palette
+    size: _SeqFloat | None = None,
+    size_key: str | None = Key.uns.size_key,
+    scale_factor: _SeqFloat | None = None,
+    crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
+    cmap: Colormap | str | None = None,
+    palette: Palette_t = None,
+    alpha: float = 1.0,
+    norm: _Normalize | None = None,
+    na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
+    # edges
+    connectivity_key: str | None = None,
+    edges_width: float = 1,
+    edges_color: str | Sequence[str] | Sequence[float] = "grey",
+    # panels
+    library_first: bool = True,
+    frameon: Optional[bool] = None,
+    wspace: float | None = None,
+    hspace: float = 0.25,
+    ncols: int = 4,
+    # outline
+    outline: bool = False,
+    outline_color: Tuple[str, str] = ("black", "white"),
+    outline_width: Tuple[float, float] = (0.3, 0.05),
+    # legend
+    legend_loc: str | None = "right margin",
+    legend_fontsize: int | float | _FontSize | None = None,
+    legend_fontweight: int | _FontWeight = "bold",
+    legend_fontoutline: Optional[int] = None,
+    legend_na: bool = True,
+    colorbar: bool = True,
+    # scalebar
+    scalebar_dx: _SeqFloat | None = None,
+    scalebar_units: _SeqStr | None = None,
+    # title and axis
+    title: _SeqStr | None = None,
+    axis_label: _SeqStr | None = None,
+    fig: Figure | None = None,
+    ax: Axes | Sequence[Axes] | None = None,
+    figsize: Tuple[float, float] | None = None,
+    dpi: int | None = None,
+    save: str | Path | None = None,
+    # kwargs
+    scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> Any:
     """
@@ -430,12 +490,9 @@ def spatial_scatter(
     -------
     %(spatial_plot.returns)s
     """  # noqa: D400
-    return _spatial_plot(
-        adata,
-        shape=shape,
-        seg_key=None,
-        **kwargs,
-    )
+    locs = locals()
+    kwargs = locs.pop("kwargs", {})
+    return _spatial_plot(**locs, **kwargs)
 
 
 @_wrap_signature(key="spatial_segment")
@@ -448,6 +505,64 @@ def spatial_segment(
     seg_key: str = Key.uns.image_seg_key,
     seg_contourpx: int | None = None,
     seg_outline: bool = False,
+    # colors
+    color: Sequence[str | None] | str | None = None,
+    groups: _SeqStr | None = None,
+    library_id: _SeqStr | None = None,
+    library_key: str | None = None,
+    spatial_key: str = Key.obsm.spatial,
+    # image
+    img: _SeqArray | bool | None = True,
+    img_res_key: str | None = Key.uns.image_res_key,
+    img_alpha: float | None = None,
+    img_cmap: Colormap | str | None = None,
+    img_channel: int | None = None,
+    # features
+    use_raw: bool | None = None,
+    layer: str | None = None,
+    alt_var: str | None = None,
+    # size, coords, cmap, palette
+    crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
+    cmap: Colormap | str | None = None,
+    palette: Palette_t = None,
+    alpha: float = 1.0,
+    norm: _Normalize | None = None,
+    na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
+    # edges
+    connectivity_key: str | None = None,
+    edges_width: float = 1,
+    edges_color: str | Sequence[str] | Sequence[float] = "grey",
+    # panels
+    library_first: bool = True,
+    frameon: Optional[bool] = None,
+    wspace: float | None = None,
+    hspace: float = 0.25,
+    ncols: int = 4,
+    # outline
+    outline: bool = False,
+    outline_color: Tuple[str, str] = ("black", "white"),
+    outline_width: Tuple[float, float] = (0.3, 0.05),
+    # legend
+    legend_loc: str | None = "right margin",
+    legend_fontsize: int | float | _FontSize | None = None,
+    legend_fontweight: int | _FontWeight = "bold",
+    legend_fontoutline: Optional[int] = None,
+    legend_na: bool = True,
+    colorbar: bool = True,
+    # scalebar
+    scalebar_dx: _SeqFloat | None = None,
+    scalebar_units: _SeqStr | None = None,
+    # title and axis
+    title: _SeqStr | None = None,
+    axis_label: _SeqStr | None = None,
+    fig: Figure | None = None,
+    ax: Axes | Sequence[Axes] | None = None,
+    figsize: Tuple[float, float] | None = None,
+    dpi: int | None = None,
+    save: str | Path | None = None,
+    # kwargs
+    scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
 ) -> Any:
     """
@@ -478,12 +593,6 @@ def spatial_segment(
     -------
     %(spatial_plot.returns)s
     """  # noqa: D400
-    return _spatial_plot(
-        adata,
-        seg=seg,
-        seg_key=seg_key,
-        seg_cell_id=seg_cell_id,
-        seg_contourpx=seg_contourpx,
-        seg_outline=seg_outline,
-        **kwargs,
-    )
+    locs = locals()
+    kwargs = locs.pop("kwargs", {})
+    return _spatial_plot(**locs, **kwargs)
