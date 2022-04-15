@@ -1,4 +1,4 @@
-Squidpy dev (2022-04-14)
+Squidpy dev (2022-04-15)
 ========================
 
 Features
