@@ -169,36 +169,36 @@ def _get_image(
     adata: AnnData,
     library_id: Sequence[str],
     spatial_key: str = Key.obsm.spatial,
-    img: _SeqArray | bool | None = None,
+    img: bool | _SeqArray | None = None,
     img_res_key: str | None = None,
-    img_channel: int | None = None,
+    img_channel: int | List[int] | None = None,
     img_cmap: Colormap | str | None = None,
 ) -> Union[Sequence[NDArrayA], Tuple[None, ...]]:
     from squidpy.pl._utils import _to_grayscale
 
-    image_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.image_key, library_id)
-    if img_res_key is None:
-        _img_res_key = _get_unique_map(image_mapping)  # get intersection of image_mapping.values()
-        _img_res_key = _img_res_key[0]  # get first of set
+    if isinstance(img, (list, np.ndarray, da.Array)):
+        img = _get_list(img, _type=(np.ndarray, da.Array), ref_len=len(library_id), name="img")
     else:
-        if img_res_key not in _get_unique_map(image_mapping):
+        image_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.image_key, library_id)
+        if img_res_key is None:
+            img_res_key = _get_unique_map(image_mapping)[0]
+        elif img_res_key not in _get_unique_map(image_mapping):
             raise KeyError(
                 f"Image key: `{img_res_key}` does not exist. Available image keys: `{image_mapping.values()}`"
             )
-        _img_res_key = img_res_key
+        img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_res_key] for i in library_id]
 
-    _img_channel = [0, 1, 2] if img_channel is None else [img_channel]
-    if max(_img_channel) > 2:
-        raise ValueError(f"Invalid value for `img_channel: {_img_channel}`.")
-    if isinstance(img, (list, np.ndarray, da.Array)):
-        img = _get_list(img, _type=(np.ndarray, da.Array), ref_len=len(library_id), name="img")
-        img = [im[..., _img_channel] for im in img]
+    if img_channel is None:
+        img = [im[..., :3] for im in img]
+    elif isinstance(img_channel, int):
+        img = [im[..., [img_channel]] for im in img]
+    elif isinstance(img_channel, list):
+        img = [im[..., img_channel] for im in img]
     else:
-        img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][_img_res_key][..., _img_channel] for i in library_id]
-    if img_cmap == "gray":
-        # TODO(michalk8): use dask function if it's a dask array
-        img = [_to_grayscale(im) for im in img]
+        raise TypeError(f"Expected image channel to be either `int` or `None`, found `{type(img_channel).__name__}`.")
 
+    if img_cmap == "gray":
+        img = [_to_grayscale(im) for im in img]
     return img
 
 
@@ -215,9 +215,9 @@ def _get_segment(
     cell_id_vec = adata.obs[seg_cell_id].values
 
     if library_key not in adata.obs:
-        raise ValueError(f"`library_key: {library_key}` not in `adata.obs`.")
+        raise ValueError(f"Library key `{library_key}` not found in `adata.obs`.")
     if not np.issubdtype(cell_id_vec.dtype, np.integer):
-        raise ValueError(f"Invalid type {cell_id_vec.dtype} for `adata.obs[{seg_cell_id}]`.")
+        raise ValueError(f"Invalid type `{cell_id_vec.dtype}` for `adata.obs[{seg_cell_id!r}]`.")
     cell_id_vec = [cell_id_vec[adata.obs[library_key] == lib] for lib in library_id]
 
     if isinstance(seg, (list, np.ndarray, da.Array)):
@@ -240,8 +240,8 @@ def _get_scalefactor_size(
         scalefactor_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.scalefactor_key, library_id)
         scalefactors = _get_unique_map(scalefactor_mapping)
     except KeyError as e:
-        logg.debug(f"Setting `scalefactors=None`, reason: `{e}`")
         scalefactors = None
+        logg.debug(f"Setting `scalefactors={scalefactors}`, reason: `{e}`")
 
     if scalefactors is not None and img_res_key is not None:
         if scale_factor is None:  # get intersection of scale_factor and match to img_res_key
@@ -258,7 +258,7 @@ def _get_scalefactor_size(
         if size_key not in scalefactors and size is None:
             raise ValueError(
                 f"Specified `size_key: {size_key}` does not exist and size is `None`, "
-                f"available keys are: `{scalefactors}`.\n Specify valid `size_key` or `size`."
+                f"available keys are: `{scalefactors}`. Specify a valid `size_key` or `size`."
             )
         if size is None:
             size = 1.0
@@ -285,9 +285,9 @@ def _image_spatial_attrs(
     spatial_key: str = Key.obsm.spatial,
     library_id: Sequence[str] | None = None,
     library_key: str | None = None,
-    img: _SeqArray | bool | None = None,
+    img: bool | _SeqArray | None = None,
     img_res_key: str | None = Key.uns.image_res_key,
-    img_channel: int | None = None,
+    img_channel: int | List[int] | None = None,
     seg: _SeqArray | bool | None = None,
     seg_key: str | None = None,
     cell_id_key: str | None = None,
@@ -319,7 +319,6 @@ def _image_spatial_attrs(
         size_key=size_key,
     )
 
-    # TODO(michalk8): if img/seg is an array, this raises an error
     if (truthy(img) and truthy(seg)) or (truthy(img) and shape is not None):
         _img = _get_image(
             adata=adata,
@@ -355,7 +354,6 @@ def _set_coords_crops(
     spatial_key: str,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
 ) -> Tuple[List[NDArrayA], List[CropCoords] | List[None]]:
-    # set crops
     if crop_coord is None:
         crops = [None] * len(spatial_params.library_id)
     else:
@@ -410,7 +408,7 @@ def _subs(
             & (coords[:, 1] >= crop_coords.y0)
             & (coords[:, 1] <= crop_coords.y1)
         )
-        adata = assert_notempty(adata[mask, :], msg=f"Empty crop coordinates `{crop_coords}`")
+        adata = assert_notempty(adata[mask, :], msg=f"Invalid crop coordinates `{crop_coords}`")
         coords = coords[mask]
         coords[:, 0] -= crop_coords.x0
         coords[:, 1] -= crop_coords.y0
@@ -432,13 +430,13 @@ def _get_unique_map(dic: Mapping[str, Any]) -> Sequence[Any]:
 def _get_list(
     var: Any,
     _type: Type[Any] | tuple[Type[Any], ...],
-    ref_len: int | None = None,  # TODO(giovp): default of 1
+    ref_len: int | None = None,
     name: str | None = None,
 ) -> List[Any]:
     if isinstance(var, _type):
         return [var] if ref_len is None else ([var] * ref_len)
     if isinstance(var, list):
-        if (ref_len is not None) and (ref_len != len(var)):
+        if ref_len is not None and ref_len != len(var):
             raise ValueError(
                 f"Variable: `{name}` has length: {len(var)}, which is not equal to reference length: {ref_len}."
             )
@@ -447,7 +445,7 @@ def _get_list(
                 raise ValueError(f"Variable: `{name}` has invalid type: {type(v)}, expected: {_type}.")
         return var
 
-    raise ValueError(f"Can't make list from variable: `{var}`")
+    raise ValueError(f"Can't make a list from variable: `{var}`")
 
 
 def _set_color_source_vec(
@@ -549,7 +547,6 @@ def _plot_edges(
     edges_color: str | Sequence[float] | Sequence[str] = "grey",
     **kwargs: Any,
 ) -> None:
-    """Graph plotting."""
     from networkx import Graph
     from networkx.drawing import draw_networkx_edges
 
@@ -571,26 +568,23 @@ def _plot_edges(
 def _get_title_axlabels(
     title: _SeqStr | None, axis_label: _SeqStr | None, spatial_key: str, n_plots: int
 ) -> Tuple[_SeqStr | None, Sequence[str]]:
-    # handle title
     if title is not None:
         if isinstance(title, (tuple, list)) and len(title) != n_plots:
-            raise ValueError("Title list is shorter than number of plots.")
+            raise ValueError(f"Expected `{n_plots}` titles, found `{len(title)}`.")
         elif isinstance(title, str):
             title = [title] * n_plots
     else:
         title = None
 
-    # handle axis labels
     axis_label = spatial_key if axis_label is None else axis_label
-
     if isinstance(axis_label, list):
         if len(axis_label) != 2:
-            raise ValueError(f"Expected axis label to be of length `2`, found `{len(axis_label)}`.")
+            raise ValueError(f"Expected axis labels to be of length `2`, found `{len(axis_label)}`.")
         axis_labels = axis_label
     elif isinstance(axis_label, str):
         axis_labels = [axis_label + str(x + 1) for x in range(2)]
     else:
-        raise TypeError(f"Expect axis labels to be of type `list` or `str`, found `{type(axis_label).__name__}`.")
+        raise TypeError(f"Expected axis labels to be of type `list` or `str`, found `{type(axis_label).__name__}`.")
 
     return title, axis_labels
 
@@ -885,7 +879,6 @@ def _set_ax_title(fig_params: FigParams, count: int, value_to_plot: str | None =
     if not (sc_settings._frameon if fig_params.frameon is None else fig_params.frameon):
         ax.axis("off")
 
-    # set title
     if fig_params.title is None:
         ax.set_title(value_to_plot)
     else:
@@ -923,7 +916,7 @@ def _plot_scatter(
     color_params: ColorParams,
     size: float,
     color_vector: NDArrayA,
-    na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
+    na_color: str | Tuple[float, ...] = (0, 0, 0, 0),  # TODO(giovp): remove?
     **kwargs: Any,
 ) -> Tuple[Axes, Collection | PatchCollection]:
 
@@ -932,7 +925,7 @@ def _plot_scatter(
     else:
         scatter = partial(ax.scatter, marker=".", alpha=color_params.alpha, plotnonfinite=True)
 
-    # prevents reusing vmin/vmax
+    # prevents reusing vmin/vmax when sharing a norm
     norm = copy(cmap_params.norm)
     if outline_params.outline:
         _cax = scatter(
