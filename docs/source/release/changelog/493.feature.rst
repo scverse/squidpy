@@ -1,4 +1,0 @@
-An optional ``ax`` keyword can now be passed to :func:`squidpy.pl.nhood_enrichment` function. The
-keyword can be used to create a matplotlib figure outside of squidpy and then plot on any matplotlib
-subplot, which could give the user greater flexibility in working with enrichment plots.
-`@jo-mueller <https://github.com/jo-mueller>`__

@@ -1,2 +1,0 @@
-Add option to load remote *Zarr* store in :class:`squidpy.im.ImageContainer`.
-`@ilan-gold <https://github.com/ilan-gold>`__

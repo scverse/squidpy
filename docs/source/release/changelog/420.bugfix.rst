@@ -1,2 +1,0 @@
-Require ``numba>=0.52.0``.
-`@michalk8 <https://github.com/michalk8>`__

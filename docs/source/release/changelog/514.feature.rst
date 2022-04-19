@@ -1,2 +1,0 @@
-Enable specifying diameter in :meth:`squidpy.im.ImageContainer.generate_spot_crops`.
-`@MxMstrmn <https://github.com/MxMstrmn>`__

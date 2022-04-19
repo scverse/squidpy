@@ -1,3 +1,0 @@
-Add :func:`squidpy.read.visium`, :func:`squidpy.read.vizgen` and :func:`squidpy.read.nanostring` to
-read *Visium*, *Vizgen* and *Nanostring* files, respectively.
-`@dineshpalli <https://github.com/dineshpalli>`__
