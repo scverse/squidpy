@@ -70,9 +70,10 @@ jobs:
                 skip_dirty_check: false
 
         # `Test` triggers `Deployment`
+        # TODO(michalk8): can't find WD for `Test`
         -   name: Invoke deployment workflow
             uses: benc-uk/workflow-dispatch@v1
             with:
-                workflow: Test
+                workflow: Deployment
                 token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
                 inputs: '{ "reason": "release" }'
