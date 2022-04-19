@@ -1,3 +1,0 @@
-Add ``library_key`` in :func:`squidpy.gr.spatial_neighbors` to support building graphs across
-multiple slides.
-`@giovp <https://github.com/giovp>`__

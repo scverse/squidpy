@@ -1,2 +1,0 @@
-Fix missing authors in release notes.
-`@giovp <https://github.com/giovp>`__
