@@ -27,7 +27,7 @@ Squidpy's key applications
 
 Getting started with Squidpy
 ----------------------------
-- Browse :doc:`tutorials </auto_tutorials}` and :doc:`examples </auto_examples}`
+- Browse :doc:`tutorials </auto_tutorials>}` and :doc:`examples </auto_examples>}`
 - Discuss usage on `discourse`_ and development on `github`_.
 
 Contributing to Squidpy
