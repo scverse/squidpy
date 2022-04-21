@@ -25,6 +25,11 @@ Squidpy's key applications
 - Efficiently store, analyze and visualize large tissue images, leveraging `skimage`_.
 - Interactively explore `anndata`_ and large tissue images in `napari`_.
 
+Getting started with Squidpy
+----------------------------
+- Browse :doc:`tutorials </auto_tutorials}` and :doc:`examples </auto_examples}`
+- Discuss usage on `discourse`_ and development on `github`_.
+
 Contributing to Squidpy
 -----------------------
 We are happy about any contributions! Before you start, check out our `contributing guide`_.
@@ -77,3 +82,5 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. _napari: https://napari.org/
 .. _skimage: https://scikit-image.org/
 .. _contributing guide: https://github.com/theislab/squidpy/blob/master/CONTRIBUTING.rst
+.. _discourse: https://discourse.scverse.org/
+.. _github: https://github.com/theislab/squidpy
