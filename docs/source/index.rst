@@ -27,7 +27,7 @@ Squidpy's key applications
 
 Getting started with Squidpy
 ----------------------------
-- Browse :doc:`tutorials </auto_tutorials>}` and :doc:`examples </auto_examples>}`
+- Browse `tutorials`_ and `examples`_
 - Discuss usage on `discourse`_ and development on `github`_.
 
 Contributing to Squidpy
@@ -84,3 +84,5 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. _contributing guide: https://github.com/theislab/squidpy/blob/master/CONTRIBUTING.rst
 .. _discourse: https://discourse.scverse.org/
 .. _github: https://github.com/theislab/squidpy
+.. _tutorials: /tutorials.rst
+.. _examples: /examples.rst
