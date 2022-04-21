@@ -1,0 +1,2 @@
+Add discourse, zulip badges and links.
+`@giovp <https://github.com/giovp>`__
