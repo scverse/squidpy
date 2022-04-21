@@ -1,4 +1,4 @@
-|PyPI| |Downloads| |CI| |Notebooks| |Docs| |Coverage|
+|PyPI| |Downloads| |CI| |Notebooks| |Docs| |Coverage| |Discourse| |Zulip|
 
 Squidpy - Spatial Single Cell Analysis in Python
 ================================================
@@ -24,7 +24,7 @@ Visit our `documentation`_ for installation, tutorials, examples and more.
 
 Manuscript
 ----------
-Please see our manuscript `Palla et al. (2022)`_ in **Nature Methods** to learn more.
+Please see our manuscript `Palla, Spitzer et al. (2022)`_ in **Nature Methods** to learn more.
 
 Squidpy's key applications
 --------------------------
@@ -69,7 +69,15 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pepy.tech/project/squidpy
     :alt: Downloads
 
-.. _Palla et al. (2022): https://doi.org/10.1038/s41592-021-01358-2
+.. |Discourse| image:: https://img.shields.io/discourse/posts?color=yellow&logo=discourse&server=https%3A%2F%2Fdiscourse.scverse.org
+    :target: https://discourse.scverse.org/
+    :alt: Discourse
+
+.. |Zulip| image:: https://img.shields.io/badge/zulip-join_chat-%2367b08f.svg
+    :target: https://scverse.zulipchat.com
+    :alt: Zulip
+
+.. _Palla, Spitzer et al. (2022): https://doi.org/10.1038/s41592-021-01358-2
 .. _scanpy: https://scanpy.readthedocs.io/en/stable/
 .. _anndata: https://anndata.readthedocs.io/en/stable/
 .. _napari: https://napari.org/
