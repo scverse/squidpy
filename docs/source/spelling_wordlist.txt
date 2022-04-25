@@ -10,9 +10,9 @@ Cellpose
 centralities
 centroid
 centroids
+colorbar
 colorectal
 colormap
-colorbar
 Colormap
 cond
 conda
@@ -48,6 +48,7 @@ ImageNet
 intercellular
 interpretable
 KNN
+kwargs
 leiden
 ligand
 ligands
@@ -77,14 +78,15 @@ Rescale
 ResNet
 RGB
 sagittal
-semibold
 sc
 scalability
+scalebar
 Scanpy
+seg
 segmentations
+semibold
 seqFISH
 seqV
-seg
 Squidpy
 StarDist
 stromal
@@ -99,5 +101,4 @@ uncommenting
 Visium
 Vizgen
 zscore
-scalebar
-kwargs
+zulip
