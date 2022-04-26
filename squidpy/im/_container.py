@@ -1289,7 +1289,6 @@ class ImageContainer(FeatureMixin):
         adjust_interactive: bool = False,
     ) -> AnnData:
         _assert_spatial_basis(adata, spatial_key)
-
         adata = adata.copy()
         s = self.data.attrs.get(Key.img.scale, 1)
         coordinates = adata.obsm[spatial_key]

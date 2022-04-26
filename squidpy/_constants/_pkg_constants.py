@@ -135,7 +135,7 @@ class Key:
             except KeyError:
                 raise KeyError(
                     f"Unable to get the spot diameter from "
-                    f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors'][{spot_diameter_key!r}]]`"
+                    f"`adata.uns[{spatial_key!r}][{library_id!r}]['scalefactors'][{spot_diameter_key!r}].`"
                 ) from None
 
         @classmethod
