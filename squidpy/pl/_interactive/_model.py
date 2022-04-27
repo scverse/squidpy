@@ -11,6 +11,7 @@ from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._utils import NDArrayA, _unique_order_preserving
 from squidpy.gr._utils import _assert_spatial_basis, _assert_categorical_obs
 from squidpy.pl._utils import ALayer
+from squidpy.im._coords import CropCoords, CropPadding, _NULL_COORDS, _NULL_PADDING
 from squidpy._constants._constants import Symbol
 from squidpy._constants._pkg_constants import Key
 
@@ -41,12 +42,11 @@ class ImageModel:
         _assert_spatial_basis(self.adata, self.spatial_key)
 
         self.symbol = Symbol(self.symbol)
-        self.adata = self.container._subset(self.adata, spatial_key=self.spatial_key, adjust_interactive=True)
+        self.adata = self.container.subset(self.adata, spatial_key=self.spatial_key)
         if not self.adata.n_obs:
-            raise ValueError("No spots were selected. Please ensure that the image contains at least 1 spot.")
-        self.coordinates = self.adata.obsm[self.spatial_key][:, ::-1][:, :2].copy()
-        self.scale = self.container.data.attrs.get(Key.img.scale, 1)
-        self._update_coords()
+            raise ValueError("Please ensure that the image contains at least 1 spot.")
+        self._set_scale_coords()
+        self._set_library()
 
         if TYPE_CHECKING:
             assert isinstance(self.library_id, Sequence)
@@ -66,7 +66,19 @@ class ImageModel:
                 f"Valid container library ids are `{self.container.library_ids}`. Please specify a valid `library_id`."
             ) from None
 
-    def _update_coords(self) -> None:
+    def _set_scale_coords(self) -> None:
+        self.scale = self.container.data.attrs.get(Key.img.scale, 1)
+        coordinates = self.adata.obsm[self.spatial_key][:, :2] * self.scale
+
+        c: CropCoords = self.container.data.attrs.get(Key.img.coords, _NULL_COORDS)
+        p: CropPadding = self.container.data.attrs.get(Key.img.padding, _NULL_PADDING)
+        if c != _NULL_COORDS:
+            coordinates -= c.x0 - p.x_pre
+            coordinates -= c.y0 - p.y_pre
+
+        self.coordinates = coordinates[:, ::-1]
+
+    def _set_library(self) -> None:
         if self.library_key is None:
             if len(self.container.library_ids) > 1:
                 raise KeyError(

@@ -1266,56 +1266,39 @@ class ImageContainer(FeatureMixin):
         )
 
     @d.dedent
-    def subset(self, adata: AnnData, spatial_key: str = "spatial") -> AnnData:
+    def subset(self, adata: AnnData, spatial_key: str = Key.obsm.spatial, copy: bool = False) -> AnnData:
         """
-        Subset :class:`anndata.AnnData` object based on this image.
+        Subset :class:`anndata.AnnData` using this container.
+
+        Useful when this container is a crop of the original image.
 
         Parameters
         ----------
         %(adata)s
         %(spatial_key)s
+        copy
+            Whether to return a copy of ``adata``.
 
         Returns
         -------
-        The copied subset of :class:`anndata.AnnData` object.
+        Subset of :class:`anndata.AnnData`.
         """
-        return self._subset(adata, spatial_key=spatial_key, adjust_interactive=False)
-
-    def _subset(
-        self,
-        adata: AnnData,
-        spatial_key: str = "spatial",
-        adjust_interactive: bool = False,
-    ) -> AnnData:
-        _assert_spatial_basis(adata, spatial_key)
-        adata = adata.copy()
-        s = self.data.attrs.get(Key.img.scale, 1)
-        coordinates = adata.obsm[spatial_key]
-
-        if s != 1:
-            # update coordinates with image scale
-            coordinates = coordinates * s
-
         c: CropCoords = self.data.attrs.get(Key.img.coords, _NULL_COORDS)
-        p: CropPadding = self.data.attrs.get(Key.img.padding, _NULL_PADDING)
-        if c != _NULL_COORDS:
-            mask = (
-                (coordinates[:, 0] >= c.x0)
-                & (coordinates[:, 0] <= c.x1)
-                & (coordinates[:, 1] >= c.y0)
-                & (coordinates[:, 1] <= c.y1)
-            )
+        if c == _NULL_COORDS:  # not a crop
+            return adata.copy() if copy else adata
 
-            adata = adata[mask, :].copy()
-            # shift and scale appropriately for interactive viewer
-            if adjust_interactive:
-                adata.obsm[spatial_key] = coordinates[mask, :]
-                adata.obsm[spatial_key][:, 0] -= c.x0 - p.x_pre
-                adata.obsm[spatial_key][:, 1] -= c.y0 - p.y_pre
-        elif adjust_interactive and s != 1:
-            adata.obsm[spatial_key] = coordinates
+        _assert_spatial_basis(adata, spatial_key)
+        coordinates = adata.obsm[spatial_key]
+        coordinates = coordinates * self.data.attrs.get(Key.img.scale, 1)
 
-        return adata
+        mask = (
+            (coordinates[:, 0] >= c.x0)
+            & (coordinates[:, 0] <= c.x1)
+            & (coordinates[:, 1] >= c.y0)
+            & (coordinates[:, 1] <= c.y1)
+        )
+
+        return adata[mask, :].copy() if copy else adata[mask, :]
 
     def rename(self, old: str, new: str) -> ImageContainer:
         """
