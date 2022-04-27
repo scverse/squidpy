@@ -260,7 +260,6 @@ class ImageContainer(FeatureMixin):
                   tries to also load the first dimension as channels if the last non-spatial dimension is 1.
                 - a sequence of dimension names matching the shape of ``img``, e.g. ``('y', 'x', 'z', 'channels')``.
                   `'y'`, `'x'` and `'z'` must always be present.
-
         library_id
             Name for each Z-dimension of the image. This should correspond to the ``library_id``
             in :attr:`anndata.AnnData.uns`.
@@ -1289,7 +1288,6 @@ class ImageContainer(FeatureMixin):
         adjust_interactive: bool = False,
     ) -> AnnData:
         _assert_spatial_basis(adata, spatial_key)
-
         adata = adata.copy()
         s = self.data.attrs.get(Key.img.scale, 1)
         coordinates = adata.obsm[spatial_key]

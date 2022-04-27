@@ -63,7 +63,7 @@ class ImageModel:
         except KeyError:
             raise KeyError(
                 f"Unable to subset the image container with library ids `{self.library_id}`. "
-                f"Valid library ids are `{self.container.library_ids}`."
+                f"Valid container library ids are `{self.container.library_ids}`. Please specify a valid `library_id`."
             ) from None
 
     def _update_coords(self) -> None:
@@ -93,11 +93,11 @@ class ImageModel:
         if not len(self.library_id):
             raise ValueError("No library ids have been selected.")
         # invalid library ids from adata are filtered below
-        # invalid library ids from container raise KeyError in __post_init__
+        # invalid library ids from container raise KeyError in `__post_init__` after this call
 
         libraries = self.adata.obs[self.library_key]
         mask = libraries.isin(self.library_id)
-        libraries = libraries[mask]
+        libraries = libraries[mask].cat.remove_unused_categories()
         self.library_id = list(libraries.cat.categories)
 
         self.coordinates = np.c_[libraries.cat.codes.values, self.coordinates[mask]]
@@ -108,3 +108,4 @@ class ImageModel:
                 for lid in libraries
             ]
         )
+        self.adata = self.adata[mask]
