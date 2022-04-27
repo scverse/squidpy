@@ -1298,7 +1298,7 @@ class ImageContainer(FeatureMixin):
             & (coordinates[:, 1] <= c.y1)
         )
 
-        return adata[mask, :].copy() if copy else adata
+        return adata[mask, :].copy() if copy else adata[mask, :]
 
     def rename(self, old: str, new: str) -> ImageContainer:
         """
