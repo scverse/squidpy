@@ -63,7 +63,7 @@ class ImageModel:
         except KeyError:
             raise KeyError(
                 f"Unable to subset the image container with library ids `{self.library_id}`. "
-                f"Valid container library ids are `{self.container.library_ids}`."
+                f"Valid container library ids are `{self.container.library_ids}`. Please specify a valid `library_id`."
             ) from None
 
     def _update_coords(self) -> None:
