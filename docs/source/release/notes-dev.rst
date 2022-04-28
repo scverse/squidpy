@@ -1,5 +1,13 @@
-Squidpy dev (2022-04-27)
+Squidpy dev (2022-04-28)
 ========================
+
+Features
+--------
+
+- Refactor :meth:`squidpy.im.ImageContainer.subset` to return a view.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#534 <https://github.com/theislab/squidpy/pull/534>`__
+
 
 Bugfixes
 --------
