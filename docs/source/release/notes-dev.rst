@@ -1,4 +1,4 @@
-Squidpy dev (2022-04-28)
+Squidpy dev (2022-05-01)
 ========================
 
 Features
@@ -19,3 +19,7 @@ Bugfixes
 - Fix not correctly subsetting :class:`anndata.AnnData` when interactively visualizing it.
   `@michalk8 <https://github.com/michalk8>`__
   `#531 <https://github.com/theislab/squidpy/pull/531>`__
+
+- Close #536. Set consistent image resolution key in `sq.read.visium`.
+  `@giovp <https://github.com/giovp>`__
+  `#537 <https://github.com/theislab/squidpy/pull/537>`__
