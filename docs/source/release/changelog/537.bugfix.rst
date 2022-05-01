@@ -1,0 +1,2 @@
+Close #536. Set consistent image resolution key in `sq.read.visium`.
+`@giovp <https://github.com/giovp>`__
