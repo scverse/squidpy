@@ -68,7 +68,7 @@ def visium(
         return adata
 
     adata.uns[Key.uns.spatial][library_id][Key.uns.image_key] = {
-        f"{res}_image": _load_image(path / f"{Key.uns.spatial}/tissue_{res}_image.png") for res in ["hires", "lowres"]
+        res: _load_image(path / f"{Key.uns.spatial}/tissue_{res}_image.png") for res in ["hires", "lowres"]
     }
     adata.uns[Key.uns.spatial][library_id]["scalefactors"] = json.loads(
         (path / f"{Key.uns.spatial}/scalefactors_json.json").read_bytes()
