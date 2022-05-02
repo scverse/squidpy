@@ -20,6 +20,6 @@ Bugfixes
   `@michalk8 <https://github.com/michalk8>`__
   `#531 <https://github.com/theislab/squidpy/pull/531>`__
 
-- Close #536. Set consistent image resolution key in `sq.read.visium`.
+- Close #536. Set consistent image resolution key in :func:`squidpy.read.visium`.
   `@giovp <https://github.com/giovp>`__
   `#537 <https://github.com/theislab/squidpy/pull/537>`__
