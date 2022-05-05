@@ -186,6 +186,9 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             img_alpha=0.5,
         )
 
+    def test_plot_spatial_scatter_categorical_alpha(self, adata_hne: AnnData):
+        pl.spatial_scatter(adata_hne, shape="circle", color="cluster", alpha=0)
+
 
 class TestSpatialStaticUtils:
     @staticmethod
