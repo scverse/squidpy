@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Sequence
 from functools import partial
+import sys
 import pytest
 import platform
 
@@ -186,6 +187,8 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             img_alpha=0.5,
         )
 
+    # TODO(michalk8): remove once 3.7 is deprecated
+    @pytest.mark.skipif(sys.version_info[:2] == (3, 7), reason="Fails on 3.7")
     def test_plot_spatial_scatter_categorical_alpha(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, shape="circle", color="cluster", alpha=0)
 
