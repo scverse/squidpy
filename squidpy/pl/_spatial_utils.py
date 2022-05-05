@@ -457,6 +457,7 @@ def _set_color_source_vec(
     groups: _SeqStr | None = None,
     palette: Palette_t = None,
     na_color: str | Tuple[float, ...] | None = None,
+    alpha: float = 1.0,
 ) -> Tuple[NDArrayA | pd.Series | None, NDArrayA, bool]:
     if value_to_plot is None:
         return np.full(adata.n_obs, to_hex(na_color)), np.broadcast_to(np.nan, adata.n_obs), False
@@ -477,7 +478,7 @@ def _set_color_source_vec(
         color_source_vector = color_source_vector.remove_categories(categories.difference(groups))
 
     color_map = _get_palette(
-        adata, cluster_key=value_to_plot, categories=categories, palette=palette  # type: ignore[arg-type]
+        adata, cluster_key=value_to_plot, categories=categories, palette=palette, alpha=alpha  # type: ignore[arg-type]
     )
     color_vector = color_source_vector.rename_categories(color_map)
     # set color to 'missing color' for all missing values
@@ -618,6 +619,7 @@ def _decorate_axs(
     img_cmap: str | None = None,
     img_alpha: float | None = None,
     palette: Palette_t = None,
+    alpha: float = 1.0,
     legend_fontsize: int | float | _FontSize | None = None,
     legend_fontweight: int | _FontWeight = "bold",
     legend_loc: str | None = "right margin",
@@ -647,7 +649,7 @@ def _decorate_axs(
         # Adding legends
         if is_categorical_dtype(color_source_vector):
             clusters = color_source_vector.categories
-            palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette)
+            palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette, alpha=alpha)
             _add_categorical_legend(
                 ax,
                 color_source_vector,

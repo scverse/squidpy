@@ -256,6 +256,7 @@ def _spatial_plot(
             groups=color_params.groups,
             palette=palette,
             na_color=na_color,
+            alpha=color_params.alpha,
         )
 
         # set frame and title
@@ -318,6 +319,7 @@ def _spatial_plot(
             img_cmap=cmap_params.img_cmap,
             img_alpha=color_params.img_alpha,
             palette=palette,
+            alpha=color_params.alpha,
             legend_fontsize=legend_fontsize,
             legend_fontweight=legend_fontweight,
             legend_loc=legend_loc,
