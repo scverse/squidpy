@@ -1,0 +1,2 @@
+Fix alpha in :func:`squidpy.pl.spatial_scatter` when keys are categorical.
+`@michalk8 <https://github.com/michalk8>`__
