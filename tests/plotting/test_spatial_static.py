@@ -31,6 +31,8 @@ sc.set_figure_params(dpi=40, color_map="viridis")
 
 
 class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
+    # TODO(michalk8): remove once 3.7 is deprecated
+    @pytest.mark.skipif(sys.version_info[:2] == (3, 7), reason="Fails on 3.7 CI")
     @pytest.mark.skipif(platform.system() == "Darwin", reason="Fails on macOS 3.8 CI")
     def test_plot_spatial_scatter_image(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, na_color="lightgrey")
@@ -187,8 +189,6 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             img_alpha=0.5,
         )
 
-    # TODO(michalk8): remove once 3.7 is deprecated
-    @pytest.mark.skipif(sys.version_info[:2] == (3, 7), reason="Fails on 3.7")
     def test_plot_spatial_scatter_categorical_alpha(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, shape="circle", color="cluster", alpha=0)
 
