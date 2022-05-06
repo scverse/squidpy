@@ -1,4 +1,4 @@
-Squidpy dev (2022-05-01)
+Squidpy dev (2022-05-06)
 ========================
 
 Features
@@ -23,3 +23,7 @@ Bugfixes
 - Close #536. Set consistent image resolution key in :func:`squidpy.read.visium`.
   `@giovp <https://github.com/giovp>`__
   `#537 <https://github.com/theislab/squidpy/pull/537>`__
+
+- Fix alpha in :func:`squidpy.pl.spatial_scatter` when keys are categorical.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#542 <https://github.com/theislab/squidpy/pull/542>`__
