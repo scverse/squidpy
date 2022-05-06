@@ -9,7 +9,7 @@ from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
 import numpy as np
 
-from matplotlib.colors import to_hex, ListedColormap
+from matplotlib.colors import to_hex, to_rgba, ListedColormap
 import matplotlib.pyplot as plt
 
 from squidpy._constants._pkg_constants import Key
@@ -28,14 +28,18 @@ def _maybe_set_colors(source: AnnData, target: AnnData, key: str, palette: str |
 
 
 def _get_palette(
-    adata: AnnData, cluster_key: str, categories: Sequence[Any], palette: Palette_t = None
+    adata: AnnData,
+    cluster_key: str,
+    categories: Sequence[Any],
+    palette: Palette_t = None,
+    alpha: float = 1.0,
 ) -> Mapping[str, str] | None:
     if palette is None:
         try:
-            _palette = adata.uns[Key.uns.colors(cluster_key)]
-            if len(_palette) != len(categories):
-                raise ValueError(f"Expected palette to be of length `{len(categories)}`, found `{len(_palette)}`.")
-            return dict(zip(categories, _palette))
+            palette = adata.uns[Key.uns.colors(cluster_key)]
+            if len(palette) != len(categories):
+                raise ValueError(f"Expected palette to be of length `{len(categories)}`, found `{len(palette)}`.")
+            return {cat: to_hex(to_rgba(col)[:3] + (alpha,), keep_alpha=True) for cat, col in zip(categories, palette)}
         except KeyError as e:
             logg.error(f"Unable to fetch palette, reason: {e}. Using `None`.")
             return None
@@ -44,11 +48,10 @@ def _get_palette(
 
     if isinstance(palette, str):
         cmap = plt.get_cmap(palette)
-        _palette = [to_hex(x) for x in cmap(np.linspace(0, 1, len_cat))]
+        palette = [to_hex(x, keep_alpha=True) for x in cmap(np.linspace(0, 1, len_cat), alpha=alpha)]
     elif isinstance(palette, ListedColormap):
-        # TODO(michalk8): test this, seems wrong
-        _palette = [to_hex(x) for x in palette(np.linspace(0, 1, len_cat))]
+        palette = [to_hex(x, keep_alpha=True) for x in palette(np.linspace(0, 1, len_cat), alpha=alpha)]
     else:
         raise TypeError(f"Palette is {type(palette)} but should be string or `ListedColormap`.")
 
-    return dict(zip(categories, _palette))
+    return dict(zip(categories, palette))
