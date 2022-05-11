@@ -221,12 +221,15 @@ def nanostring(
             "scalefactors": {"tissue_hires_scalef": 1, "spot_diameter_fullres": 1},
         }
 
+    file_extensions = (".jpg", ".png", ".jpeg", ".tif", ".tiff")
+
     pat = re.compile(r".*_F(\d+)")
     for subdir in ["CellComposite", "CellLabels"]:
         kind = "hires" if subdir == "CellComposite" else "segmentation"
         for fname in os.listdir(path / subdir):
-            fov = str(int(pat.findall(fname)[0]))
-            adata.uns[Key.uns.spatial][fov]["images"][kind] = _load_image(path / subdir / fname)
+            if fname.endswith(file_extensions):
+                fov = str(int(pat.findall(fname)[0]))
+                adata.uns[Key.uns.spatial][fov]["images"][kind] = _load_image(path / subdir / fname)
 
     if fov_file is not None:
         fov_positions = pd.read_csv(path / fov_file, header=0, index_col=fov_key)
