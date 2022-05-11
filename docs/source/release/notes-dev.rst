@@ -1,4 +1,4 @@
-Squidpy dev (2022-05-06)
+Squidpy dev (2022-05-11)
 ========================
 
 Features
@@ -27,3 +27,7 @@ Bugfixes
 - Fix alpha in :func:`squidpy.pl.spatial_scatter` when keys are categorical.
   `@michalk8 <https://github.com/michalk8>`__
   `#542 <https://github.com/theislab/squidpy/pull/542>`__
+
+- `sq.read.nanostring` reads only image file extensions.
+  `@dineshpalli <https://github.com/dineshpalli>`__
+  `#546 <https://github.com/theislab/squidpy/pull/546>`__
