@@ -115,7 +115,7 @@ repos:
       rev: v2.31.1
       hooks:
           - id: pyupgrade
-            args: [--py3-plus, --py37-plus, --keep-runtime-typing]
+            args: [--py3-plus, --py38-plus, --keep-runtime-typing]
     - repo: https://github.com/pre-commit/pygrep-hooks
       rev: v1.9.0
       hooks:

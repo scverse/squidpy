@@ -6,7 +6,7 @@ sphinx:
     fail_on_warning: false
 
 formats:
--   htmlzip
+    - htmlzip
 
 build:
     image: testing
@@ -14,7 +14,7 @@ build:
 python:
     version: 3.9
     install:
-    -   method: pip
-        path: .
-        extra_requirements:
-        -   docs
+        - method: pip
+          path: .
+          extra_requirements:
+              - docs

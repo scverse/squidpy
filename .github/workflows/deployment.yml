@@ -16,46 +16,46 @@ jobs:
         if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags')) }}
         runs-on: ubuntu-latest
         steps:
-        -   uses: actions/checkout@v2
-            with:
-                fetch-depth: 0
-        -   name: Set up Python 3.9
-            uses: actions/setup-python@v2
-            with:
-                python-version: 3.9
+            - uses: actions/checkout@v2
+              with:
+                  fetch-depth: 0
+            - name: Set up Python 3.9
+              uses: actions/setup-python@v2
+              with:
+                  python-version: 3.9
 
-        -   name: Install pip dependencies
-            run: |
-                python -m pip install --upgrade pip
-                pip install build
+            - name: Install pip dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install build
 
-        # this will fail if the last commit is not tagged
-        -   name: Build a binary wheel and a source tarball
-            run: |
-                python -m build --sdist --wheel --outdir dist/
+            # this will fail if the last commit is not tagged
+            - name: Build a binary wheel and a source tarball
+              run: |
+                  python -m build --sdist --wheel --outdir dist/
 
-        -   name: Publish on PyPI
-            uses: pypa/gh-action-pypi-publish@master
-            with:
-                user: __token__
-                password: ${{ secrets.PYPI_TOKEN }}
-                skip_existing: true
-                verbose: true
+            - name: Publish on PyPI
+              uses: pypa/gh-action-pypi-publish@master
+              with:
+                  user: __token__
+                  password: ${{ secrets.PYPI_TOKEN }}
+                  skip_existing: true
+                  verbose: true
 
     sync-branches:
         if: ${{ github.event_name == 'workflow_dispatch' }}
         needs: deploy
         runs-on: ubuntu-latest
         steps:
-        -   uses: actions/checkout@v2
-        -   name: Extract branch name
-            id: vars
-            run: |
-                echo ::set-output name=branch::${GITHUB_REF#refs/*/}
+            - uses: actions/checkout@v2
+            - name: Extract branch name
+              id: vars
+              run: |
+                  echo ::set-output name=branch::${GITHUB_REF#refs/*/}
 
-        -   name: Merge release into master
-            uses: everlytic/branch-merge@1.1.2
-            with:
-                github_token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
-                target_branch: master
-                commit_message_template: ${{ format('[auto][ci skip] Merge branch ''{0}'' into master', steps.vars.outputs.branch) }}
+            - name: Merge release into master
+              uses: everlytic/branch-merge@1.1.2
+              with:
+                  github_token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+                  target_branch: master
+                  commit_message_template: ${{ format('[auto][ci skip] Merge branch ''{0}'' into master', steps.vars.outputs.branch) }}
