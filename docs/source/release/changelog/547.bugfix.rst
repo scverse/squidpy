@@ -1,0 +1,2 @@
+Return cell_id for segmentation masks in ``read.nanostring``.
+`@giovp <https://github.com/giovp>`__

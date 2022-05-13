@@ -31,3 +31,7 @@ Bugfixes
 - ``sq.read.nanostring`` reads only image file extensions.
   `@dineshpalli <https://github.com/dineshpalli>`__
   `#546 <https://github.com/theislab/squidpy/pull/546>`__
+
+- Return cell_id for segmentation masks in ``read.nanostring``.
+  `@giovp <https://github.com/giovp>`__
+  `#547 <https://github.com/theislab/squidpy/pull/547>`__
