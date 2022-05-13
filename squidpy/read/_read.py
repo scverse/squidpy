@@ -11,6 +11,7 @@ from scanpy import logging as logg
 from anndata import AnnData
 
 from scipy.sparse import csr_matrix
+import numpy as np
 import pandas as pd
 
 from squidpy.read._utils import _load_image, _read_counts
@@ -198,18 +199,25 @@ def nanostring(
           Only present if ``fov_file != None``.
     """  # noqa: E501
     path, fov_key = Path(path), "fov"
-
-    counts = pd.read_csv(path / counts_file, header=0, index_col="cell_ID")
+    cell_id_key = "cell_ID"
+    counts = pd.read_csv(path / counts_file, header=0, index_col=cell_id_key)
     counts.index = counts.index.astype(str).str.cat(counts.pop(fov_key).astype(str).values, sep="_")
 
-    obs = pd.read_csv(path / meta_file, header=0, index_col="cell_ID")
+    obs = pd.read_csv(path / meta_file, header=0, index_col=cell_id_key)
     obs[fov_key] = pd.Categorical(obs[fov_key].astype(str))
+    obs[cell_id_key] = obs.index.astype(np.int64)
+    obs.rename_axis(None, inplace=True)
     obs.index = obs.index.astype(str).str.cat(obs[fov_key].values, sep="_")
 
-    adata = AnnData(csr_matrix(counts.values), dtype=counts.values.dtype, uns={Key.uns.spatial: {}})
-    adata.obs_names = counts.index
+    common_index = obs.index.intersection(counts.index)
+
+    adata = AnnData(
+        csr_matrix(counts.loc[common_index, :].values),
+        dtype=counts.values.dtype,
+        obs=obs.loc[common_index, :],
+        uns={Key.uns.spatial: {}},
+    )
     adata.var_names = counts.columns
-    adata.obs = pd.merge(adata.obs, obs, left_index=True, right_index=True, how="left")
 
     adata.obsm[Key.obsm.spatial] = adata.obs[["CenterX_local_px", "CenterY_local_px"]].values
     adata.obsm["spatial_fov"] = adata.obs[["CenterX_global_px", "CenterY_global_px"]].values

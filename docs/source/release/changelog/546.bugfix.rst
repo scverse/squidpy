@@ -1,2 +1,2 @@
-`sq.read.nanostring` reads only image file extensions.
+``sq.read.nanostring`` reads only image file extensions.
 `@dineshpalli <https://github.com/dineshpalli>`__
