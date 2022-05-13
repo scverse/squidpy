@@ -206,7 +206,7 @@ def nanostring(
     obs = pd.read_csv(path / meta_file, header=0, index_col=cell_id_key)
     obs[fov_key] = pd.Categorical(obs[fov_key].astype(str))
     obs[cell_id_key] = obs.index.astype(np.int64)
-    obs.rename_axis(None)
+    obs.rename_axis(None, inplace=True)
     obs.index = obs.index.astype(str).str.cat(obs[fov_key].values, sep="_")
 
     common_index = obs.index.intersection(counts.index)
