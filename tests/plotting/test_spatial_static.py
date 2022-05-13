@@ -35,7 +35,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
     # @pytest.mark.skipif(platform.system() == "Darwin", reason="Fails on macOS 3.8 CI")
     def test_tol_plot_spatial_scatter_image(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, na_color="lightgrey")
-        self.compare("Graph_co_occurrence", tolerance=60)
+        self.compare("SpatialStatic_spatial_scatter_image", tolerance=60)
 
     def test_plot_spatial_scatter_noimage(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, shape=None, na_color="lightgrey")
