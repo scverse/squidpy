@@ -43,3 +43,11 @@ Bugfixes
 - Rename default branch from ``master`` to ``main``.
   `@giovp <https://github.com/giovp>`__
   `#549 <https://github.com/theislab/squidpy/pull/549>`__
+
+
+Miscellaneous
+-------------
+
+- Fix news fragment generation checks.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#550 <https://github.com/theislab/squidpy/pull/550>`__

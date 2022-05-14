@@ -1,0 +1,2 @@
+Fix news fragment generation checks.
+`@michalk8 <https://github.com/michalk8>`__
