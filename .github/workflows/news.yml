@@ -31,7 +31,7 @@ jobs:
               run: |
                   tox -e news -- "$PR_NUMBER" --add-author -v
                   tox -e update-dev-notes
-                  git add "docs/source/changelog/$PR_NUMBER*.rst"
+                  git add "docs/source/release/changelog/$PR_NUMBER*.rst"
                   git status -s
 
             - name: Check generated docs
