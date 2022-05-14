@@ -7,7 +7,7 @@ Squidpy - Spatial Single Cell Analysis in Python
 
     <p align="center">
         <a href="https://squidpy.readthedocs.io/en/stable/">
-            <img src="https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png"
+            <img src="https://raw.githubusercontent.com/theislab/squidpy/main/docs/source/_static/img/squidpy_horizontal.png"
              width="400px" alt="Squidpy logo">
         </a>
     </p>
@@ -22,7 +22,7 @@ tissue images if available.
 
     <p align="center">
         <a href="https://doi.org/10.1038/s41592-021-01358-2">
-            <img src="https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png"
+            <img src="https://raw.githubusercontent.com/theislab/squidpy/main/docs/source/_static/img/figure1.png"
              width="400px" alt="Squidpy title figure">
         </a>
     </p>

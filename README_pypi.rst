@@ -3,7 +3,7 @@
 Squidpy - Spatial Single Cell Analysis in Python
 ================================================
 
-.. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png
+.. image:: https://raw.githubusercontent.com/theislab/squidpy/main/docs/source/_static/img/squidpy_horizontal.png
     :alt: Squidpy logo
     :width: 400px
     :align: center
@@ -14,7 +14,7 @@ It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity 
 It provides analysis tools that leverages the spatial coordinates of the data, as well as
 tissue images if available.
 
-.. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png
+.. image:: https://raw.githubusercontent.com/theislab/squidpy/main/docs/source/_static/img/figure1.png
     :alt: Squidpy title figure
     :width: 400px
     :align: center

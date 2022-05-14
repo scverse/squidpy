@@ -8,7 +8,7 @@ It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity 
 It provides analysis tools that leverages the spatial coordinates of the data, as well as
 tissue images if available.
 
-.. image:: https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png
+.. image:: https://raw.githubusercontent.com/theislab/squidpy/main/docs/source/_static/img/figure1.png
     :alt: Squidpy title figure
     :width: 400px
     :align: center
@@ -81,6 +81,6 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. _anndata: https://anndata.readthedocs.io/en/stable/
 .. _napari: https://napari.org/
 .. _skimage: https://scikit-image.org/
-.. _contributing guide: https://github.com/theislab/squidpy/blob/master/CONTRIBUTING.rst
+.. _contributing guide: https://github.com/theislab/squidpy/blob/main/CONTRIBUTING.rst
 .. _discourse: https://discourse.scverse.org/
 .. _github: https://github.com/theislab/squidpy

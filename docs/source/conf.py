@@ -34,7 +34,7 @@ copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
 
 github_org = "theislab"
 github_repo = "squidpy"
-github_ref = "master"
+github_ref = "main"
 github_nb_repo = "squidpy_notebooks"
 _fetch_notebooks(repo_url=f"https://github.com/{github_org}/{github_nb_repo}")
 
