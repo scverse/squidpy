@@ -12,7 +12,7 @@ tissue images if available.
     :alt: Squidpy title figure
     :width: 400px
     :align: center
-    :target: https://www.biorxiv.org/content/10.1101/2021.02.19.431994v2
+    :target: https://doi.org/10.1038/s41592-021-01358-2
 
 Manuscript
 ----------
@@ -57,11 +57,11 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pypi.org/project/squidpy/
     :alt: PyPI
 
-.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/Test/master
+.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/Test/main
     :target: https://github.com/theislab/squidpy/actions
     :alt: CI
 
-.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/master?label=notebooks
+.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/main?label=notebooks
     :target: https://github.com/theislab/squidpy_notebooks/actions
     :alt: Notebooks CI
 
@@ -69,7 +69,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://squidpy.readthedocs.io/en/stable/
     :alt: Documentation
 
-.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/master/graph/badge.svg
+.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/main/graph/badge.svg
     :target: https://codecov.io/gh/theislab/squidpy
     :alt: Coverage
 
