@@ -59,7 +59,7 @@ Mibitof
 modularity
 moran
 Moran's I
-mac-os
+os
 Napari
 NEUN
 obsm
