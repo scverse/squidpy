@@ -1,2 +1,0 @@
-Close #536. Set consistent image resolution key in :func:`squidpy.read.visium`.
-`@giovp <https://github.com/giovp>`__

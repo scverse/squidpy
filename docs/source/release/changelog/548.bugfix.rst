@@ -1,2 +1,0 @@
-Add prettier pre-commit check, remove python 3.7 and add mac-os python 3.9 .
-`@giovp <https://github.com/giovp>`__

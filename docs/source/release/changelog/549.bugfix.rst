@@ -1,2 +1,0 @@
-Rename default branch from ``master`` to ``main``.
-`@giovp <https://github.com/giovp>`__

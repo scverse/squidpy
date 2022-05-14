@@ -1,2 +1,0 @@
-Fix not correctly subsetting :class:`anndata.AnnData` when interactively visualizing it.
-`@michalk8 <https://github.com/michalk8>`__
