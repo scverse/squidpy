@@ -15,4 +15,4 @@ comment:
     behavior: default
     require_changes: true
     branches:
-    -   master
+        - master

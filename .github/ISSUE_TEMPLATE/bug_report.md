@@ -7,16 +7,21 @@ assignees: "michalk8"
 ---
 
 ## Description
+
 <!-- Give a clear and concise description of the bug: -->
+
 ...
 
 ## Minimal reproducible example
+
 <!-- Put an example code with which we can reproduce the bug: -->
+
 ```python
 ...
 ```
 
 ## Traceback
+
 <!-- If applicable, replace `...` with an error traceback below: -->
 
 <details>
@@ -28,5 +33,7 @@ assignees: "michalk8"
 </details>
 
 ## Version
+
 <!-- Output of squidpy.__version__ -->
+
 ...

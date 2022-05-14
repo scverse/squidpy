@@ -2,7 +2,7 @@ name: Test
 
 on:
     schedule:
-    -   cron: 00 00 * * 1      # every Monday at 00:00
+        - cron: 00 00 * * 1 # every Monday at 00:00
     push:
         branches: [master]
     pull_request:
@@ -18,127 +18,129 @@ jobs:
     lint:
         runs-on: ubuntu-latest
         steps:
-        -   uses: actions/checkout@v2
-        -   name: Set up Python 3.9
-            uses: actions/setup-python@v2
-            with:
-                python-version: 3.9
+            - uses: actions/checkout@v2
+            - name: Set up Python 3.9
+              uses: actions/setup-python@v2
+              with:
+                  python-version: 3.9
 
-        -   uses: actions/cache@v2
-            with:
-                path: ~/.cache/pre-commit
-                key: precommit-${{ env.pythonLocation }}-${{ hashFiles('**/.pre-commit-config.yaml') }}
+            - uses: actions/cache@v2
+              with:
+                  path: ~/.cache/pre-commit
+                  key: precommit-${{ env.pythonLocation }}-${{ hashFiles('**/.pre-commit-config.yaml') }}
 
-        -   name: Install dependencies
-            run: |
-                sudo apt install pandoc
-                python -m pip install --upgrade pip
-                pip install tox
+            - name: Install dependencies
+              run: |
+                  sudo apt install pandoc
+                  python -m pip install --upgrade pip
+                  pip install tox
 
-        -   name: Lint
-            run: |
-                tox -e lint,check-docs
+            - name: Lint
+              run: |
+                  tox -e lint,check-docs
 
     test:
         runs-on: ${{ matrix.os }}
         strategy:
             fail-fast: false
             matrix:
-                python: [3.7, 3.8, 3.9]
+                python: [3.8, 3.9]
                 os: [ubuntu-latest]
                 include:
-                -   python: 3.8
-                    os: macos-latest
+                    - python: 3.8
+                      os: macos-latest
+                    - python: 3.9
+                      os: macos-latest
         env:
             OS: ${{ matrix.os }}
             PYTHON: ${{ matrix.python }}
 
         steps:
-        -   uses: actions/checkout@v2
-        -   name: Set up Python ${{ matrix.python }}
-            uses: actions/setup-python@v2
-            with:
-                python-version: ${{ matrix.python }}
+            - uses: actions/checkout@v2
+            - name: Set up Python ${{ matrix.python }}
+              uses: actions/setup-python@v2
+              with:
+                  python-version: ${{ matrix.python }}
 
-        -   name: Get pip cache dir
-            id: pip-cache-dir
-            run: |
-                echo "::set-output name=dir::$(pip cache dir)"
+            - name: Get pip cache dir
+              id: pip-cache-dir
+              run: |
+                  echo "::set-output name=dir::$(pip cache dir)"
 
-        -   name: Restore pip cache
-            uses: actions/cache@v2
-            with:
-                path: ${{ steps.pip-cache-dir.outputs.dir }}
-                key: pip-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}
-                restore-keys: |
-                    pip-${{ runner.os }}-${{ env.pythonLocation }}-
+            - name: Restore pip cache
+              uses: actions/cache@v2
+              with:
+                  path: ${{ steps.pip-cache-dir.outputs.dir }}
+                  key: pip-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}
+                  restore-keys: |
+                      pip-${{ runner.os }}-${{ env.pythonLocation }}-
 
-        -   name: Install dependencies
-            run: |
-                ./.scripts/ci/install_dependencies.sh
+            - name: Install dependencies
+              run: |
+                  ./.scripts/ci/install_dependencies.sh
 
-        -   name: Install pip dependencies
-            run: |
-                python -m pip install --upgrade pip
-                pip install tox tox-gh-actions codecov
+            - name: Install pip dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install tox tox-gh-actions codecov
 
-        -   name: Restore data cache
-            id: data-cache
-            uses: actions/cache@v2
-            with:
-                path: |
-                    ~/.cache/squidpy/*.h5ad
-                key: data-${{ hashFiles('**/download_data.py') }}
+            - name: Restore data cache
+              id: data-cache
+              uses: actions/cache@v2
+              with:
+                  path: |
+                      ~/.cache/squidpy/*.h5ad
+                  key: data-${{ hashFiles('**/download_data.py') }}
 
-        -   name: Download datasets
-            if: steps.data-cache.outputs.cache-hit != 'true'
-            run: |
-                tox -e download-data
+            - name: Download datasets
+              if: steps.data-cache.outputs.cache-hit != 'true'
+              run: |
+                  tox -e download-data
 
-        # caching .tox is not encouraged, but since we're private and this shaves off ~1min from the step
-        # if any problems occur and/or once the package is public, this can be removed
-        -   name: Restore tox cache
-            uses: actions/cache@v2
-            with:
-                path: .tox
-                key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}
+            # caching .tox is not encouraged, but since we're private and this shaves off ~1min from the step
+            # if any problems occur and/or once the package is public, this can be removed
+            - name: Restore tox cache
+              uses: actions/cache@v2
+              with:
+                  path: .tox
+                  key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}
 
-        -   name: Test
-            timeout-minutes: 60
-            env:
-                MPLBACKEND: agg
-                PLATFORM: ${{ matrix.os }}
-                DISPLAY: :42
-            run: |
-                tox -vv
+            - name: Test
+              timeout-minutes: 60
+              env:
+                  MPLBACKEND: agg
+                  PLATFORM: ${{ matrix.os }}
+                  DISPLAY: :42
+              run: |
+                  tox -vv
 
-        -   name: Upload coverage
-            env:
-                CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
-            run: |
-                codecov --no-color --required --flags unittests
+            - name: Upload coverage
+              env:
+                  CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
+              run: |
+                  codecov --no-color --required --flags unittests
 
     regenerate-notebooks:
         needs: [lint, test]
         if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/master')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') }}
         runs-on: ubuntu-latest
         steps:
-        -   name: Rebuild tutorials/examples
-            uses: peter-evans/repository-dispatch@v1
-            with:
-                token: ${{ secrets.NOTEBOOKS_ACCESS_TOKEN }}
-                repository: theislab/squidpy_notebooks
-                event-type: rebuild
-                client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+            - name: Rebuild tutorials/examples
+              uses: peter-evans/repository-dispatch@v1
+              with:
+                  token: ${{ secrets.NOTEBOOKS_ACCESS_TOKEN }}
+                  repository: theislab/squidpy_notebooks
+                  event-type: rebuild
+                  client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
     release:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release' }}
         needs: [lint, test]
         runs-on: ubuntu-latest
         steps:
-        -   name: Invoke deployment workflow
-            uses: benc-uk/workflow-dispatch@v1
-            with:
-                workflow: Deployment
-                token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
-                inputs: '{ "reason": "release" }'
+            - name: Invoke deployment workflow
+              uses: benc-uk/workflow-dispatch@v1
+              with:
+                  workflow: Deployment
+                  token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+                  inputs: '{ "reason": "release" }'
