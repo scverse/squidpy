@@ -39,3 +39,7 @@ Bugfixes
 - Add prettier pre-commit check, remove python 3.7 and add mac-os python 3.9 .
   `@giovp <https://github.com/giovp>`__
   `#548 <https://github.com/theislab/squidpy/pull/548>`__
+
+- Rename default branch from ``master`` to ``main``.
+  `@giovp <https://github.com/giovp>`__
+  `#549 <https://github.com/theislab/squidpy/pull/549>`__
