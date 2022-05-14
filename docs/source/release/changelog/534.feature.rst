@@ -1,2 +1,0 @@
-Refactor :meth:`squidpy.im.ImageContainer.subset` to return a view.
-`@michalk8 <https://github.com/michalk8>`__
