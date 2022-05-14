@@ -1,4 +1,4 @@
-Squidpy dev (2022-05-13)
+Squidpy dev (2022-05-14)
 ========================
 
 Features
@@ -35,3 +35,7 @@ Bugfixes
 - Return cell_id for segmentation masks in ``read.nanostring``.
   `@giovp <https://github.com/giovp>`__
   `#547 <https://github.com/theislab/squidpy/pull/547>`__
+
+- Add prettier pre-commit check, remove python 3.7 and add mac-os python 3.9
+  `@giovp <https://github.com/giovp>`__
+  `#548 <https://github.com/theislab/squidpy/pull/548>`__
