@@ -69,14 +69,14 @@ def create_news_fragment(issue_number: str, use_title: bool = False, add_author:
         data = resp.json()
         types = data["labels"]
 
-        if "ignore-towncrier" in [t["name"] for t in types]:
-            logging.info(f"Ignoring news fragment generation for issue `{issue_number}`")
+        if not len(types) or "ignore-towncrier" in [t["name"] for t in types]:
+            logging.info(f"Ignoring news generation for issue `{issue_number}`")
             return
 
-        typ = str(types[0]["name"] if len(types) else "bugfix").strip()
+        typ = str(types[0]["name"]).strip()
         if typ not in _valid_types:
-            raise ValueError(f"Expected label to be on of `{_valid_types}`, found `{typ!r}`.")
-        logging.info(f"Generating `{typ}` news fragment generation for issue `{issue_number}`")
+            raise ValueError(f"Expected label to be one of `{_valid_types}`, found `{typ!r}`.")
+        logging.info(f"Generating `{typ}` news fragment for issue `{issue_number}`")
 
         title = str(data["title"]).strip()
         description = _parse_description(data["body"])
@@ -94,6 +94,7 @@ def create_news_fragment(issue_number: str, use_title: bool = False, add_author:
                 print(author, file=fout)
     except Exception as e:
         logging.error(f"Unable to generate news fragment. Reason: `{e}`")
+        exit(1)
 
 
 if __name__ == "__main__":
@@ -102,7 +103,7 @@ if __name__ == "__main__":
         "issue_number",
         type=str,
         metavar="ISSUE_NUMBER",
-        help="Issue from which to create the news fragment.",
+        help="Issue for which to create the news fragment.",
     )
     parser.add_argument(
         "--title",
