@@ -131,7 +131,7 @@ Submitting a PR
 ---------------
 Before submitting a new pull request, please make sure you followed these instructions:
 
-- make sure that you've branched off ``master`` and are merging into ``master``
+- make sure that you've branched off ``main`` and are merging into ``main``
 - make sure that your code follows the above specified conventions
   (see `Code style guide`_ and `Writing documentation`_).
 - if applicable, make sure you've added/modified at least 1 test to account for the changes you've made
@@ -157,13 +157,13 @@ will take care of the following:
 - bump the version and create a new tag
 - run tests on the ``release/vX.X.X`` branch
 - publish on PyPI after all the tests have passed
-- merge ``release/vX.X.X`` into ``master``
+- merge ``release/vX.X.X`` into ``main``
 
 Alternatively, it's possible to create a new release using ``bump2version``, which can be installed as::
 
     pip install bump2version
 
-Depending on what part of the version you want to update, you can run on ``master``::
+Depending on what part of the version you want to update, you can run on ``main``::
 
     bump2version {major,minor,patch}
 

@@ -2,7 +2,7 @@ name: News
 
 on:
     pull_request_target:
-        branches: [master, dev]
+        branches: [main, dev]
         types: [closed]
 
 jobs:

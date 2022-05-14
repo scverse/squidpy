@@ -59,6 +59,7 @@ Mibitof
 modularity
 moran
 Moran's I
+os
 Napari
 NEUN
 obsm

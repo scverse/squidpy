@@ -28,14 +28,14 @@ Bugfixes
   `@michalk8 <https://github.com/michalk8>`__
   `#542 <https://github.com/theislab/squidpy/pull/542>`__
 
-- ``sq.read.nanostring`` reads only image file extensions.
+- :func:`squidpy.read.nanostring` reads only image file extensions.
   `@dineshpalli <https://github.com/dineshpalli>`__
   `#546 <https://github.com/theislab/squidpy/pull/546>`__
 
-- Return cell_id for segmentation masks in ``read.nanostring``.
+- Return cell_id for segmentation masks in :func:`squidpy.read.nanostring``.
   `@giovp <https://github.com/giovp>`__
   `#547 <https://github.com/theislab/squidpy/pull/547>`__
 
-- Add prettier pre-commit check, remove python 3.7 and add mac-os python 3.9
+- Add prettier pre-commit check, remove python 3.7 and add mac-os python 3.9 .
   `@giovp <https://github.com/giovp>`__
   `#548 <https://github.com/theislab/squidpy/pull/548>`__

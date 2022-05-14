@@ -2,7 +2,7 @@ name: Deployment
 
 on:
     push:
-        branches: [master]
+        branches: [main]
         tags: [v*]
     workflow_dispatch:
         inputs:
@@ -53,9 +53,9 @@ jobs:
               run: |
                   echo ::set-output name=branch::${GITHUB_REF#refs/*/}
 
-            - name: Merge release into master
+            - name: Merge release into main
               uses: everlytic/branch-merge@1.1.2
               with:
                   github_token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
-                  target_branch: master
-                  commit_message_template: ${{ format('[auto][ci skip] Merge branch ''{0}'' into master', steps.vars.outputs.branch) }}
+                  target_branch: main
+                  commit_message_template: ${{ format('[auto][ci skip] Merge branch ''{0}'' into main', steps.vars.outputs.branch) }}

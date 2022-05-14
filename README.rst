@@ -7,7 +7,7 @@ Squidpy - Spatial Single Cell Analysis in Python
 
     <p align="center">
         <a href="https://squidpy.readthedocs.io/en/stable/">
-            <img src="https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/squidpy_horizontal.png"
+            <img src="https://raw.githubusercontent.com/theislab/squidpy/main/docs/source/_static/img/squidpy_horizontal.png"
              width="400px" alt="Squidpy logo">
         </a>
     </p>
@@ -22,7 +22,7 @@ tissue images if available.
 
     <p align="center">
         <a href="https://doi.org/10.1038/s41592-021-01358-2">
-            <img src="https://raw.githubusercontent.com/theislab/squidpy/master/docs/source/_static/img/figure1.png"
+            <img src="https://raw.githubusercontent.com/theislab/squidpy/main/docs/source/_static/img/figure1.png"
              width="400px" alt="Squidpy title figure">
         </a>
     </p>
@@ -56,11 +56,11 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pypi.org/project/squidpy/
     :alt: PyPI
 
-.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/Test/master
+.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/Test/main
     :target: https://github.com/theislab/squidpy/actions
     :alt: CI
 
-.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/master?label=notebooks
+.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/main?label=notebooks
     :target: https://github.com/theislab/squidpy_notebooks/actions
     :alt: Notebooks CI
 
@@ -68,7 +68,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://squidpy.readthedocs.io/en/stable/
     :alt: Documentation
 
-.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/master/graph/badge.svg
+.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/main/graph/badge.svg
     :target: https://codecov.io/gh/theislab/squidpy
     :alt: Coverage
 
