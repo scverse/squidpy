@@ -1,2 +1,2 @@
-Return cell_id for segmentation masks in :func:`squidpy.read.nanostring``.
+Return ``cell_id`` for segmentation masks in :func:`squidpy.read.nanostring`.
 `@giovp <https://github.com/giovp>`__

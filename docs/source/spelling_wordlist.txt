@@ -59,11 +59,11 @@ Mibitof
 modularity
 moran
 Moran's I
-os
 Napari
 NEUN
 obsm
 omics
+os
 Otsu
 overlayed
 parallelization
