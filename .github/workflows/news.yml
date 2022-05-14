@@ -43,6 +43,6 @@ jobs:
               with:
                   commit_message: ${{ format('[auto][ci skip] Update release notes (#{0})', github.event.number) }}
                   branch: ${{ github.base_ref }}
-                  file_pattern: docs/source/release/notes-dev.rst
+                  file_pattern: docs/source/release/changelog/*.rst docs/source/release/notes-dev.rst
                   commit_user_name: CI
                   skip_dirty_check: false
