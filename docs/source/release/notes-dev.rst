@@ -32,7 +32,7 @@ Bugfixes
   `@dineshpalli <https://github.com/dineshpalli>`__
   `#546 <https://github.com/theislab/squidpy/pull/546>`__
 
-- Return cell_id for segmentation masks in :func:`squidpy.read.nanostring``.
+- Return ``cell_id`` for segmentation masks in :func:`squidpy.read.nanostring`.
   `@giovp <https://github.com/giovp>`__
   `#547 <https://github.com/theislab/squidpy/pull/547>`__
 

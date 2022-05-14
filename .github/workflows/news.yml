@@ -25,34 +25,24 @@ jobs:
                   python -m pip install --upgrade pip
                   pip install tox
 
-            - name: Generate news fragment
+            - name: Update dev release notes
               env:
                   PR_NUMBER: ${{ github.event.number }}
               run: |
                   tox -e news -- "$PR_NUMBER" --add-author -v
+                  tox -e update-dev-notes
+                  git add "docs/source/release/changelog/$PR_NUMBER*.rst"
+                  git status -s
 
             - name: Check generated docs
               run: |
                   tox -e check-docs
-
-            - name: Commit news fragment
-              uses: stefanzweifel/git-auto-commit-action@v4
-              with:
-                  commit_message: ${{ format('[auto][ci skip] Generate news fragment (#{0})', github.event.number) }}
-                  branch: ${{ github.base_ref }}
-                  file_pattern: docs/source/release/changelog/*.rst
-                  commit_user_name: CI
-                  skip_dirty_check: false
-
-            - name: Update dev release notes
-              run: |
-                  tox -e update-dev-notes
 
             - name: Commit dev release notes
               uses: stefanzweifel/git-auto-commit-action@v4
               with:
                   commit_message: ${{ format('[auto][ci skip] Update release notes (#{0})', github.event.number) }}
                   branch: ${{ github.base_ref }}
-                  file_pattern: docs/source/release/notes-dev.rst
+                  file_pattern: docs/source/release/changelog/*.rst docs/source/release/notes-dev.rst
                   commit_user_name: CI
                   skip_dirty_check: false

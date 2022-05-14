@@ -192,8 +192,8 @@ which section to render the news:
 - doc: the PR is related to documentation
 - misc: the PR is not applicable to the above
 
-If none is specified, ``bugfix`` is assumed. If more than 1 is specified, the first one is taken.
-If ``ignore-towncrier`` label is specified, no news will be generated for the PR.
+If no label (or ``ignore-towncrier`` label) is specified, no news will be generated for the PR.
+If more than 1 is specified, the first one is used.
 
 To manually create news fragment, make sure that the PR doesn't generate it from the description as described above.
 The command to run is ``towncrier <PR_NUMBER>.<LABEL>``, where ``<LABEL>`` is one of the labels described above.
