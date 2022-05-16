@@ -1,5 +1,5 @@
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Callable, Optional, Sequence
+from typing import Any, List, Tuple, Union, Mapping, Callable, Optional, Sequence
 from pathlib import Path
 import itertools
 
@@ -55,7 +55,7 @@ def _spatial_plot(
     img_res_key: Optional[str] = Key.uns.image_res_key,
     img_alpha: Optional[float] = None,
     img_cmap: Union[Colormap, Optional[str]] = None,
-    img_channel: Optional[Union[int, list[int]]] = None,
+    img_channel: Optional[Union[int, List[int]]] = None,
     # segment
     seg: Optional[Union[bool, _SeqArray]] = None,
     seg_key: Optional[str] = Key.uns.image_seg_key,
@@ -75,7 +75,7 @@ def _spatial_plot(
     palette: Palette_t = None,
     alpha: float = 1.0,
     norm: Optional[_Normalize] = None,
-    na_color: Union[str, tuple[float, ...]] = (0, 0, 0, 0),
+    na_color: Union[str, Tuple[float, ...]] = (0, 0, 0, 0),
     # edges
     connectivity_key: Optional[str] = None,
     edges_width: float = 1.0,
@@ -88,8 +88,8 @@ def _spatial_plot(
     ncols: int = 4,
     # outline
     outline: bool = False,
-    outline_color: tuple[str, str] = ("black", "white"),
-    outline_width: tuple[float, float] = (0.3, 0.05),
+    outline_color: Tuple[str, str] = ("black", "white"),
+    outline_width: Tuple[float, float] = (0.3, 0.05),
     # legend
     legend_loc: Optional[str] = "right margin",
     legend_fontsize: Optional[Union[int, float, _FontSize]] = None,
@@ -106,7 +106,7 @@ def _spatial_plot(
     fig: Optional[Figure] = None,
     ax: Optional[Union[Axes, Sequence[Axes]]] = None,
     return_ax: bool = False,
-    figsize: Optional[tuple[float, float]] = None,
+    figsize: Optional[Tuple[float, float]] = None,
     dpi: Optional[int] = None,
     save: Optional[Union[str, Path]] = None,
     # kwargs

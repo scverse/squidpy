@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from copy import copy
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Optional, Sequence, NamedTuple, TYPE_CHECKING
+from typing import (
+    Any,
+    List,
+    Type,
+    Tuple,
+    Union,
+    Mapping,
+    Optional,
+    Sequence,
+    NamedTuple,
+    TYPE_CHECKING,
+)
 from numbers import Number
 from functools import partial
 from typing_extensions import Literal
@@ -53,7 +64,7 @@ _Normalize = Union[Normalize, Sequence[Normalize]]
 _SeqStr = Union[str, Sequence[str]]
 _SeqFloat = Union[float, Sequence[float]]
 _SeqArray = Union[NDArrayA, Sequence[NDArrayA]]
-_CoordTuple = tuple[int, int, int, int]
+_CoordTuple = Tuple[int, int, int, int]
 _FontWeight = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
 _FontSize = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
 
@@ -65,7 +76,7 @@ class FigParams(NamedTuple):
     fig: Figure
     ax: Axes
     axs: Sequence[Axes] | None
-    iter_panels: tuple[Sequence[Any], Sequence[Any]]
+    iter_panels: Tuple[Sequence[Any], Sequence[Any]]
     title: _SeqStr | None
     ax_labels: Sequence[str]
     frameon: bool | None
@@ -113,9 +124,9 @@ class SpatialParams(NamedTuple):
     library_id: Sequence[str]
     scale_factor: Sequence[float]
     size: Sequence[float]
-    img: Sequence[NDArrayA] | tuple[None, ...]
-    segment: Sequence[NDArrayA] | tuple[None, ...]
-    cell_id: Sequence[NDArrayA] | tuple[None, ...]
+    img: Sequence[NDArrayA] | Tuple[None, ...]
+    segment: Sequence[NDArrayA] | Tuple[None, ...]
+    cell_id: Sequence[NDArrayA] | Tuple[None, ...]
 
 
 to_hex = partial(colors.to_hex, keep_alpha=True)
@@ -160,9 +171,9 @@ def _get_image(
     spatial_key: str = Key.obsm.spatial,
     img: bool | _SeqArray | None = None,
     img_res_key: str | None = None,
-    img_channel: int | list[int] | None = None,
+    img_channel: int | List[int] | None = None,
     img_cmap: Colormap | str | None = None,
-) -> Union[Sequence[NDArrayA], tuple[None, ...]]:
+) -> Union[Sequence[NDArrayA], Tuple[None, ...]]:
     from squidpy.pl._utils import _to_grayscale
 
     if isinstance(img, (list, np.ndarray, da.Array)):
@@ -198,7 +209,7 @@ def _get_segment(
     library_key: str | None = None,
     seg: _SeqArray | bool | None = None,
     seg_key: str | None = None,
-) -> tuple[Sequence[NDArrayA], Sequence[NDArrayA]] | tuple[tuple[None, ...], tuple[None, ...]]:
+) -> Tuple[Sequence[NDArrayA], Sequence[NDArrayA]] | Tuple[Tuple[None, ...], Tuple[None, ...]]:
     if seg_cell_id not in adata.obs:
         raise ValueError(f"Cell id `{seg_cell_id!r}` not found in `adata.obs`.")
     cell_id_vec = adata.obs[seg_cell_id].values
@@ -224,7 +235,7 @@ def _get_scalefactor_size(
     scale_factor: _SeqFloat | None = None,
     size: _SeqFloat | None = None,
     size_key: str | None = Key.uns.size_key,
-) -> tuple[Sequence[float], Sequence[float]]:
+) -> Tuple[Sequence[float], Sequence[float]]:
     try:
         scalefactor_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.scalefactor_key, library_id)
         scalefactors = _get_unique_map(scalefactor_mapping)
@@ -276,7 +287,7 @@ def _image_spatial_attrs(
     library_key: str | None = None,
     img: bool | _SeqArray | None = None,
     img_res_key: str | None = Key.uns.image_res_key,
-    img_channel: int | list[int] | None = None,
+    img_channel: int | List[int] | None = None,
     seg: _SeqArray | bool | None = None,
     seg_key: str | None = None,
     cell_id_key: str | None = None,
@@ -342,7 +353,7 @@ def _set_coords_crops(
     spatial_params: SpatialParams,
     spatial_key: str,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
-) -> tuple[list[NDArrayA], list[CropCoords] | list[None]]:
+) -> Tuple[List[NDArrayA], List[CropCoords] | List[None]]:
     if crop_coord is None:
         crops = [None] * len(spatial_params.library_id)
     else:
@@ -373,7 +384,7 @@ def _subs(
         coords: NDArrayA,
         key: str | None,
         values: Sequence[Any] | None,
-    ) -> tuple[AnnData, NDArrayA]:
+    ) -> Tuple[AnnData, NDArrayA]:
         if key is None or values is None:
             return adata, coords
         if key not in adata.obs or not is_categorical_dtype(adata.obs[key]):
@@ -387,7 +398,7 @@ def _subs(
 
     def subset_by_coords(
         adata: AnnData, coords: NDArrayA, img: NDArrayA | None, crop_coords: CropCoords | None
-    ) -> tuple[AnnData, NDArrayA, NDArrayA | None]:
+    ) -> Tuple[AnnData, NDArrayA, NDArrayA | None]:
         if crop_coords is None:
             return adata, coords, img
 
@@ -418,10 +429,10 @@ def _get_unique_map(dic: Mapping[str, Any]) -> Sequence[Any]:
 
 def _get_list(
     var: Any,
-    _type: type[Any] | tuple[type[Any], ...],
+    _type: Type[Any] | Tuple[Type[Any], ...],
     ref_len: int | None = None,
     name: str | None = None,
-) -> list[Any]:
+) -> List[Any]:
     if isinstance(var, _type):
         return [var] if ref_len is None else ([var] * ref_len)
     if isinstance(var, list):
@@ -445,9 +456,9 @@ def _set_color_source_vec(
     layer: str | None = None,
     groups: _SeqStr | None = None,
     palette: Palette_t = None,
-    na_color: str | tuple[float, ...] | None = None,
+    na_color: str | Tuple[float, ...] | None = None,
     alpha: float = 1.0,
-) -> tuple[NDArrayA | pd.Series | None, NDArrayA, bool]:
+) -> Tuple[NDArrayA | pd.Series | None, NDArrayA, bool]:
     if value_to_plot is None:
         return np.full(adata.n_obs, to_hex(na_color)), np.broadcast_to(np.nan, adata.n_obs), False
 
@@ -522,7 +533,7 @@ def _shaped_scatter(
     return collection
 
 
-def _make_poly(x: NDArrayA, y: NDArrayA, r: float, n: int, i: int) -> tuple[NDArrayA, NDArrayA]:
+def _make_poly(x: NDArrayA, y: NDArrayA, r: float, n: int, i: int) -> Tuple[NDArrayA, NDArrayA]:
     x_i = x + r * np.sin((np.pi / n) * (1 + 2 * i))
     y_i = y + r * np.cos((np.pi / n) * (1 + 2 * i))
     return x_i, y_i
@@ -557,7 +568,7 @@ def _plot_edges(
 
 def _get_title_axlabels(
     title: _SeqStr | None, axis_label: _SeqStr | None, spatial_key: str, n_plots: int
-) -> tuple[_SeqStr | None, Sequence[str]]:
+) -> Tuple[_SeqStr | None, Sequence[str]]:
     if title is not None:
         if isinstance(title, (tuple, list)) and len(title) != n_plots:
             raise ValueError(f"Expected `{n_plots}` titles, found `{len(title)}`.")
@@ -583,7 +594,7 @@ def _get_scalebar(
     scalebar_dx: _SeqFloat | None = None,
     scalebar_units: _SeqStr | None = None,
     len_lib: int | None = None,
-) -> tuple[Sequence[float] | None, Sequence[str] | None]:
+) -> Tuple[Sequence[float] | None, Sequence[str] | None]:
     if scalebar_dx is not None:
         _scalebar_dx = _get_list(scalebar_dx, _type=float, ref_len=len_lib, name="scalebar_dx")
         scalebar_units = "um" if scalebar_units is None else scalebar_units
@@ -613,7 +624,7 @@ def _decorate_axs(
     legend_fontweight: int | _FontWeight = "bold",
     legend_loc: str | None = "right margin",
     legend_fontoutline: int | None = None,
-    na_color: str | tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
+    na_color: str | Tuple[float, ...] = (0.0, 0.0, 0.0, 0.0),
     na_in_legend: bool = True,
     colorbar: bool = True,
     scalebar_dx: Sequence[float] | None = None,
@@ -677,7 +688,7 @@ def _map_color_seg(
     cmap_params: CmapParams,
     seg_erosionpx: int | None = None,
     seg_boundaries: bool = False,
-    na_color: str | tuple[float, ...] = (0, 0, 0, 0),
+    na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
 ) -> NDArrayA:
     cell_id = np.array(cell_id)
 
@@ -763,7 +774,7 @@ def _prepare_params_plot(
     library_first: bool = True,
     img_cmap: Colormap | str | None = None,
     frameon: bool | None = None,
-    na_color: str | tuple[float, ...] | None = (0.0, 0.0, 0.0, 0.0),
+    na_color: str | Tuple[float, ...] | None = (0.0, 0.0, 0.0, 0.0),
     vmin: float | None = None,
     vmax: float | None = None,
     vcenter: float | None = None,
@@ -771,14 +782,14 @@ def _prepare_params_plot(
     axis_label: _SeqStr | None = None,
     scalebar_dx: _SeqFloat | None = None,
     scalebar_units: _SeqStr | None = None,
-    figsize: tuple[float, float] | None = None,
+    figsize: Tuple[float, float] | None = None,
     dpi: int | None = None,
     fig: Figure | None = None,
     ax: Axes | Sequence[Axes] | None = None,
     **kwargs: Any,
-) -> tuple[FigParams, CmapParams, ScalebarParams, Any]:
+) -> Tuple[FigParams, CmapParams, ScalebarParams, Any]:
     if library_first:
-        iter_panels: tuple[range | Sequence[str | None], range | Sequence[str | None]] = (
+        iter_panels: Tuple[range | Sequence[str | None], range | Sequence[str | None]] = (
             range(len(spatial_params.library_id)),
             color_params.color,
         )
@@ -837,9 +848,9 @@ def _panel_grid(
     hspace: float,
     wspace: float,
     ncols: int,
-    figsize: tuple[float, float],
+    figsize: Tuple[float, float],
     dpi: int | None = None,
-) -> tuple[Figure, GridSpec]:
+) -> Tuple[Figure, GridSpec]:
     n_panels_x = min(ncols, num_panels)
     n_panels_y = np.ceil(num_panels / n_panels_x).astype(int)
 
@@ -880,10 +891,10 @@ def _set_ax_title(fig_params: FigParams, count: int, value_to_plot: str | None =
 def _set_outline(
     size: float,
     outline: bool = False,
-    outline_width: tuple[float, float] = (0.3, 0.05),
-    outline_color: tuple[str, str] = ("black", "white"),
+    outline_width: Tuple[float, float] = (0.3, 0.05),
+    outline_color: Tuple[str, str] = ("black", "white"),
     **kwargs: Any,
-) -> tuple[OutlineParams, Any]:
+) -> Tuple[OutlineParams, Any]:
 
     bg_width, gap_width = outline_width
     point = np.sqrt(size)
@@ -907,9 +918,9 @@ def _plot_scatter(
     color_params: ColorParams,
     size: float,
     color_vector: NDArrayA,
-    na_color: str | tuple[float, ...] = (0, 0, 0, 0),  # TODO(giovp): remove?
+    na_color: str | Tuple[float, ...] = (0, 0, 0, 0),  # TODO(giovp): remove?
     **kwargs: Any,
-) -> tuple[Axes, Collection | PatchCollection]:
+) -> Tuple[Axes, Collection | PatchCollection]:
 
     if color_params.shape is not None:
         scatter = partial(_shaped_scatter, shape=color_params.shape, alpha=color_params.alpha)
@@ -967,9 +978,9 @@ def _plot_segment(
     categorical: bool,
     seg_contourpx: int | None = None,
     seg_outline: bool = False,
-    na_color: str | tuple[float, ...] = (0, 0, 0, 0),
+    na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
     **kwargs: Any,
-) -> tuple[Axes, Collection]:
+) -> Tuple[Axes, Collection]:
 
     img = _map_color_seg(
         seg=seg,

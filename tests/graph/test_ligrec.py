@@ -1,5 +1,5 @@
 from time import time
-from typing import Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import Tuple, Mapping, Optional, Sequence, TYPE_CHECKING
 from itertools import product
 import sys
 import pytest
@@ -18,8 +18,8 @@ from squidpy.gr._ligrec import PermutationTest
 from squidpy._constants._pkg_constants import Key
 
 _CK = "leiden"
-Interactions_t = tuple[Sequence[str], Sequence[str]]
-Complexes_t = Sequence[tuple[str, str]]
+Interactions_t = Tuple[Sequence[str], Sequence[str]]
+Complexes_t = Sequence[Tuple[str, str]]
 
 
 class TestInvalidBehavior:

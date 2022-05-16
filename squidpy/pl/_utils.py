@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from copy import copy
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Callable, Optional, Sequence, TYPE_CHECKING
+from typing import (
+    Any,
+    List,
+    Tuple,
+    Union,
+    Mapping,
+    Callable,
+    Optional,
+    Sequence,
+    TYPE_CHECKING,
+)
 from inspect import signature
 from pathlib import Path
 from functools import wraps
@@ -41,7 +51,7 @@ from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_categorical_obs
 from squidpy._constants._pkg_constants import Key
 
-Vector_name_t = tuple[Optional[Union[pd.Series, NDArrayA]], Optional[str]]
+Vector_name_t = Tuple[Optional[Union[pd.Series, NDArrayA]], Optional[str]]
 
 
 @d.dedent
@@ -92,8 +102,8 @@ def save_fig(fig: Figure, path: str | Path, make_dir: bool = True, ext: str = "p
 @d.dedent
 def extract(
     adata: AnnData,
-    obsm_key: list[str] | str = "img_features",
-    prefix: list[str] | str | None = None,
+    obsm_key: List[str] | str = "img_features",
+    prefix: List[str] | str | None = None,
 ) -> AnnData:
     """
     Create a temporary :class:`anndata.AnnData` object for plotting.
@@ -338,7 +348,7 @@ class ALayer:
         self._library_id = library_id
 
     @_ensure_dense_vector
-    def get_obs(self, name: str, **_: Any) -> tuple[pd.Series | NDArrayA | None, str]:
+    def get_obs(self, name: str, **_: Any) -> Tuple[pd.Series | NDArrayA | None, str]:
         """
         Return an observation.
 
@@ -356,7 +366,7 @@ class ALayer:
         return self.adata.obs[name], self._format_key(name, layer_modifier=False)
 
     @_ensure_dense_vector
-    def get_var(self, name: str | int, **_: Any) -> tuple[NDArrayA | None, str]:
+    def get_var(self, name: str | int, **_: Any) -> Tuple[NDArrayA | None, str]:
         """
         Return a gene.
 
@@ -378,7 +388,7 @@ class ALayer:
 
         return self.adata._get_X(use_raw=self.raw, layer=self.layer)[ix], self._format_key(name, layer_modifier=True)
 
-    def get_items(self, attr: str) -> tuple[str, ...]:
+    def get_items(self, attr: str) -> Tuple[str, ...]:
         """
         Return valid keys for an attribute.
 
@@ -397,7 +407,7 @@ class ALayer:
         return tuple(map(str, getattr(adata, attr).index))
 
     @_ensure_dense_vector
-    def get_obsm(self, name: str, index: int | str = 0) -> tuple[NDArrayA | None, str]:
+    def get_obsm(self, name: str, index: int | str = 0) -> Tuple[NDArrayA | None, str]:
         """
         Return a vector from :attr:`anndata.AnnData.obsm`.
 
@@ -493,8 +503,8 @@ def _annotate_heatmap(
 def _get_cmap_norm(
     adata: AnnData,
     key: str,
-    order: tuple[list[int], list[int]] | None | None = None,
-) -> tuple[mcolors.ListedColormap, mcolors.ListedColormap, mcolors.BoundaryNorm, mcolors.BoundaryNorm, int]:
+    order: Tuple[List[int], List[int]] | None | None = None,
+) -> Tuple[mcolors.ListedColormap, mcolors.ListedColormap, mcolors.BoundaryNorm, mcolors.BoundaryNorm, int]:
     n_cls = adata.obs[key].nunique()
 
     colors = adata.uns[Key.uns.colors(key)]
@@ -521,7 +531,7 @@ def _heatmap(
     method: str | None = None,
     cont_cmap: str | mcolors.Colormap = "viridis",
     annotate: bool = True,
-    figsize: tuple[float, float] | None = None,
+    figsize: Tuple[float, float] | None = None,
     dpi: int | None = None,
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ax: Axes | None = None,
@@ -601,7 +611,7 @@ def _filter_kwargs(func: Callable[..., Any], kwargs: Mapping[str, Any]) -> dict[
     return {k: v for k, v in kwargs.items() if k in style_args}
 
 
-def _dendrogram(data: NDArrayA, method: str, **kwargs: Any) -> tuple[list[int], list[int], list[int], list[int]]:
+def _dendrogram(data: NDArrayA, method: str, **kwargs: Any) -> Tuple[List[int], List[int], List[int], List[int]]:
     link_kwargs = _filter_kwargs(sch.linkage, kwargs)
     dendro_kwargs = _filter_kwargs(sch.dendrogram, kwargs)
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PIL import Image
 from h5py import File
-from typing import Any, Optional
+from typing import Any, Tuple, Optional
 from pathlib import Path
 
 from scanpy import read_10x_h5
@@ -20,7 +20,7 @@ def _read_counts(
     count_file: str,
     library_id: Optional[str] = None,
     **kwargs: Any,
-) -> tuple[AnnData, str]:
+) -> Tuple[AnnData, str]:
     path = Path(path)
     if count_file.endswith(".h5"):
         adata: AnnData = read_10x_h5(path / count_file, **kwargs)
