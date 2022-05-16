@@ -1,3 +1,4 @@
+from typing import Tuple
 import sys
 import pytest
 
@@ -141,7 +142,7 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
     @pytest.mark.parametrize("x", [-200, 200])
     @pytest.mark.parametrize("y", [-200, 200])
     def test_corner_corner_cases(
-        self, qtbot, adata: AnnData, napari_cont: ImageContainer, y: int, x: int, size: tuple[int, int]
+        self, qtbot, adata: AnnData, napari_cont: ImageContainer, y: int, x: int, size: Tuple[int, int]
     ):
         viewer = napari_cont.crop_corner(y, x, size=size).interactive(adata)
         bdata = viewer.adata

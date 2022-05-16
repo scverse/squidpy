@@ -1,6 +1,6 @@
 from abc import ABC, ABCMeta
 from enum import Enum, EnumMeta
-from typing import Any, Type, Mapping, Callable
+from typing import Any, Type, Tuple, Mapping, Callable
 from functools import wraps
 
 
@@ -49,7 +49,7 @@ class ABCEnumMeta(EnumMeta, ABCMeta):
     """Metaclass which injects."""
 
     def __new__(  # noqa: D102
-        cls, clsname: str, bases: tuple[EnumMeta, ...], namespace: Mapping[str, Any]
+        cls, clsname: str, bases: Tuple[EnumMeta, ...], namespace: Mapping[str, Any]
     ) -> "ABCEnumMeta":
         res = super().__new__(cls, clsname, bases, namespace)  # type: ignore[arg-type]
         res.__new__ = _pretty_raise_enum(res, res.__new__)  # type: ignore[assignment,arg-type]

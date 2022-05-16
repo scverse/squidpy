@@ -1,5 +1,5 @@
 from abc import ABC, ABCMeta
-from typing import Mapping, Callable, Optional, Sequence
+from typing import Tuple, Mapping, Callable, Optional, Sequence
 from pathlib import Path
 from functools import wraps
 from itertools import product
@@ -231,12 +231,12 @@ def napari_cont() -> ImageContainer:
 
 
 @pytest.fixture()
-def interactions(adata: AnnData) -> tuple[Sequence[str], Sequence[str]]:
+def interactions(adata: AnnData) -> Tuple[Sequence[str], Sequence[str]]:
     return tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))  # type: ignore
 
 
 @pytest.fixture()
-def complexes(adata: AnnData) -> Sequence[tuple[str, str]]:
+def complexes(adata: AnnData) -> Sequence[Tuple[str, str]]:
     g = adata.raw.var_names
     return [
         (g[0], g[1]),

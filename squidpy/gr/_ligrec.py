@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from abc import ABC
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Iterable, Sequence, TYPE_CHECKING
+from typing import Any, Tuple, Union, Mapping, Iterable, Sequence, TYPE_CHECKING
 from functools import partial
 from itertools import product
 from collections import namedtuple
@@ -33,9 +33,9 @@ from squidpy._constants._pkg_constants import Key
 __all__ = ["ligrec", "PermutationTest"]
 
 StrSeq = Sequence[str]
-SeqTuple = Sequence[tuple[str, str]]
-Interaction_t = Union[pd.DataFrame, Mapping[str, StrSeq], StrSeq, tuple[StrSeq, StrSeq], SeqTuple]
-Cluster_t = Union[StrSeq, tuple[StrSeq, StrSeq], SeqTuple]
+SeqTuple = Sequence[Tuple[str, str]]
+Interaction_t = Union[pd.DataFrame, Mapping[str, StrSeq], StrSeq, Tuple[StrSeq, StrSeq], SeqTuple]
+Cluster_t = Union[StrSeq, Tuple[StrSeq, StrSeq], SeqTuple]
 
 SOURCE = "source"
 TARGET = "target"
