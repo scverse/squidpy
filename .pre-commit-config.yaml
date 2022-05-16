@@ -102,10 +102,6 @@ repos:
           - id: script-must-have-extension
             name: Check executable files use .sh extension
             types: [shell, executable]
-    - repo: https://github.com/myint/rstcheck
-      rev: 3f92957478422df87bd730abde66f089cc1ee19b
-      hooks:
-          - id: rstcheck
     - repo: https://github.com/asottile/blacken-docs
       rev: v1.12.1
       hooks:
