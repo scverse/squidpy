@@ -77,7 +77,7 @@ Testing
 -------
 We use ``tox`` to automate our testing, as well as linting and documentation creation. To run the tests, run::
 
-    tox -e py{37,38,39}-{linux,macos}
+    tox -e py{38,39,310}-{linux,macos}
 
 depending on the Python version(s) in your ``PATH`` and your operating system. We use ``flake8`` and ``mypy`` to further
 analyze the code. Use ``# noqa: <error1>,<error2>`` to ignore certain ``flake8`` errors and
@@ -90,7 +90,7 @@ To run only a subset of tests, run::
 where ``<name>`` can be a path to a test file/directory or a name of a test function/class.
 For example, to run only the tests in the ``nhood`` module, use::
 
-    tox -e py38-linux -- tests/graph/test_nhood.py
+    tox -e py39-linux -- tests/graph/test_nhood.py
 
 If needed, a specific ``tox`` environment can be recreated as::
 
