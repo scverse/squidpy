@@ -8,7 +8,7 @@ It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity 
 It provides analysis tools that leverages the spatial coordinates of the data, as well as
 tissue images if available.
 
-.. image:: https://raw.githubusercontent.com/theislab/squidpy/main/docs/source/_static/img/figure1.png
+.. image:: https://raw.githubusercontent.com/scverse/squidpy/main/docs/source/_static/img/figure1.png
     :alt: Squidpy title figure
     :width: 400px
     :align: center
@@ -57,20 +57,20 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pypi.org/project/squidpy/
     :alt: PyPI
 
-.. |CI| image:: https://img.shields.io/github/workflow/status/theislab/squidpy/Test/main
-    :target: https://github.com/theislab/squidpy/actions
+.. |CI| image:: https://img.shields.io/github/workflow/status/scverse/squidpy/Test/main
+    :target: https://github.com/scverse/squidpy/actions
     :alt: CI
 
-.. |Notebooks| image:: https://img.shields.io/github/workflow/status/theislab/squidpy_notebooks/CI/main?label=notebooks
-    :target: https://github.com/theislab/squidpy_notebooks/actions
+.. |Notebooks| image:: https://img.shields.io/github/workflow/status/scverse/squidpy_notebooks/CI/main?label=notebooks
+    :target: https://github.com/scverse/squidpy_notebooks/actions
     :alt: Notebooks CI
 
 .. |Docs| image:: https://img.shields.io/readthedocs/squidpy
     :target: https://squidpy.readthedocs.io/en/stable/
     :alt: Documentation
 
-.. |Coverage| image:: https://codecov.io/gh/theislab/squidpy/branch/main/graph/badge.svg
-    :target: https://codecov.io/gh/theislab/squidpy
+.. |Coverage| image:: https://codecov.io/gh/scverse/squidpy/branch/main/graph/badge.svg
+    :target: https://codecov.io/gh/scverse/squidpy
     :alt: Coverage
 
 .. |Downloads| image:: https://pepy.tech/badge/squidpy
@@ -81,6 +81,6 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. _anndata: https://anndata.readthedocs.io/en/stable/
 .. _napari: https://napari.org/
 .. _skimage: https://scikit-image.org/
-.. _contributing guide: https://github.com/theislab/squidpy/blob/main/CONTRIBUTING.rst
+.. _contributing guide: https://github.com/scverse/squidpy/blob/main/CONTRIBUTING.rst
 .. _discourse: https://discourse.scverse.org/
-.. _github: https://github.com/theislab/squidpy
+.. _github: https://github.com/scverse/squidpy

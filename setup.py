@@ -25,11 +25,11 @@ setup(
     description=Path("README_pypi.rst").read_text("utf-8").splitlines()[2],
     long_description=Path("README_pypi.rst").read_text("utf-8"),
     long_description_content_type="text/x-rst; charset=UTF-8",
-    url="https://github.com/theislab/squidpy",
+    url="https://github.com/scverse/squidpy",
     download_url="https://pypi.org/project/squidpy/",
     project_urls={
         "Documentation": "https://squidpy.readthedocs.io/en/stable",
-        "Source Code": "https://github.com/theislab/squidpy",
+        "Source Code": "https://github.com/scverse/squidpy",
     },
     license="BSD",
     platforms=["Linux", "MacOSX"],

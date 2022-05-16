@@ -16,7 +16,7 @@ scanpy>=1.8.0
 scikit-image>=0.19
 scikit-learn>=0.24.0
 statsmodels>=0.12.0
-tifffile!=2022.4.22  # https://github.com/theislab/squidpy/issues/526
+tifffile!=2022.4.22  # https://github.com/scverse/squidpy/issues/526
 tqdm>=4.50.2
 typing_extensions
 validators>=0.18.2

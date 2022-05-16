@@ -62,7 +62,7 @@ def _extract_pr_author(data: Mapping[str, Any]) -> Optional[str]:
 
 def create_news_fragment(issue_number: str, use_title: bool = False, add_author: bool = True, sep: str = "~") -> None:
     try:
-        url = f"https://api.github.com/repos/theislab/squidpy/pulls/{issue_number}"
+        url = f"https://api.github.com/repos/scverse/squidpy/pulls/{issue_number}"
         resp = requests.get(url)
         resp.raise_for_status()
 

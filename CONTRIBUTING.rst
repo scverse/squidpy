@@ -18,7 +18,7 @@ Contributing to Squidpy
 -----------------------
 Clone Squidpy from source as::
 
-    git clone https://github.com/theislab/squidpy
+    git clone https://github.com/scverse/squidpy
     cd squidpy
     git checkout dev
 
@@ -124,8 +124,8 @@ If you need to clean the artifacts from previous documentation builds, run::
 Writing tutorials/examples
 --------------------------
 Tutorials and examples are hosted on a separate repository called `squidpy_notebooks
-<https://github.com/theislab/squidpy_notebooks>`_.
-Please refer to this `guide <https://github.com/theislab/squidpy_notebooks/CONTRIBUTING.rst>`_ for more information.
+<https://github.com/scverse/squidpy_notebooks>`_.
+Please refer to this `guide <https://github.com/scverse/squidpy_notebooks/CONTRIBUTING.rst>`_ for more information.
 
 Submitting a PR
 ---------------
@@ -136,7 +136,7 @@ Before submitting a new pull request, please make sure you followed these instru
   (see `Code style guide`_ and `Writing documentation`_).
 - if applicable, make sure you've added/modified at least 1 test to account for the changes you've made
 - make sure that all tests pass locally (see `Testing`_).
-- if there is no issue which this PR solves, create a new `one <https://github.com/theislab/squidpy/issues/new>`_
+- if there is no issue which this PR solves, create a new `one <https://github.com/scverse/squidpy/issues/new>`_
   briefly explaining what the problem is.
 - make sure that the section under ``## Description`` is properly formatted if automatically generating release notes,
   see also `Creating release notes`_.
