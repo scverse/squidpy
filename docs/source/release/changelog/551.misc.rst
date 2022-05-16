@@ -1,0 +1,2 @@
+Rename organization references and update pre-commit checks.
+`@giovp <https://github.com/giovp>`__
