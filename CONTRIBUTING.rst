@@ -20,7 +20,7 @@ Clone Squidpy from source as::
 
     git clone https://github.com/scverse/squidpy
     cd squidpy
-    git checkout dev
+    git checkout main
 
 Install the test and development mode::
 
