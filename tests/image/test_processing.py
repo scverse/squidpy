@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Callable, Optional, Sequence
+from typing import Union, Callable, Optional, Sequence
 from pytest_mock import MockerFixture
 import pytest
 
@@ -88,7 +88,7 @@ class TestProcess:
     @pytest.mark.parametrize("chunks", [25, (50, 50, 1, 3), "auto"])
     @pytest.mark.parametrize("lazy", [False, True])
     def test_dask_processing(
-        self, small_cont: ImageContainer, dask_input: bool, chunks: Union[int, Tuple[int, ...], str], lazy: bool
+        self, small_cont: ImageContainer, dask_input: bool, chunks: Union[int, tuple[int, ...], str], lazy: bool
     ):
         def func(chunk: np.ndarray):
             if isinstance(chunks, tuple):

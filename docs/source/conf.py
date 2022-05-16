@@ -32,7 +32,7 @@ project = "Squidpy"
 author = squidpy.__author__
 copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
 
-github_org = "theislab"
+github_org = "scverse"
 github_repo = "squidpy"
 github_ref = "main"
 github_nb_repo = "squidpy_notebooks"
@@ -157,7 +157,7 @@ nbsphinx_prolog = r"""
 
     <div class="binder-badge docutils container">
         <a class="reference external image-reference"
-           href="https://mybinder.org/v2/gh/theislab/squidpy_notebooks/{{ env.config.release|e }}?filepath={{ docname|e }}">
+           href="https://mybinder.org/v2/gh/scverse/squidpy_notebooks/{{ env.config.release|e }}?filepath={{ docname|e }}">
         <img alt="Launch binder" src="https://mybinder.org/badge_logo.svg" width="150px">
         </a>
     </div>

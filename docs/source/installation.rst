@@ -16,4 +16,4 @@ Development version
 -------------------
 To install Squidpy from GitHub, run::
 
-    pip install git+https://github.com/theislab/squidpy@main
+    pip install git+https://github.com/scverse/squidpy@main

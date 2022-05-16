@@ -18,9 +18,9 @@ Contributing to Squidpy
 -----------------------
 Clone Squidpy from source as::
 
-    git clone https://github.com/theislab/squidpy
+    git clone https://github.com/scverse/squidpy
     cd squidpy
-    git checkout dev
+    git checkout main
 
 Install the test and development mode::
 
@@ -77,7 +77,7 @@ Testing
 -------
 We use ``tox`` to automate our testing, as well as linting and documentation creation. To run the tests, run::
 
-    tox -e py{37,38,39}-{linux,macos}
+    tox -e py{38,39,310}-{linux,macos}
 
 depending on the Python version(s) in your ``PATH`` and your operating system. We use ``flake8`` and ``mypy`` to further
 analyze the code. Use ``# noqa: <error1>,<error2>`` to ignore certain ``flake8`` errors and
@@ -90,7 +90,7 @@ To run only a subset of tests, run::
 where ``<name>`` can be a path to a test file/directory or a name of a test function/class.
 For example, to run only the tests in the ``nhood`` module, use::
 
-    tox -e py38-linux -- tests/graph/test_nhood.py
+    tox -e py39-linux -- tests/graph/test_nhood.py
 
 If needed, a specific ``tox`` environment can be recreated as::
 
@@ -124,8 +124,8 @@ If you need to clean the artifacts from previous documentation builds, run::
 Writing tutorials/examples
 --------------------------
 Tutorials and examples are hosted on a separate repository called `squidpy_notebooks
-<https://github.com/theislab/squidpy_notebooks>`_.
-Please refer to this `guide <https://github.com/theislab/squidpy_notebooks/CONTRIBUTING.rst>`_ for more information.
+<https://github.com/scverse/squidpy_notebooks>`_.
+Please refer to this `guide <https://github.com/scverse/squidpy_notebooks/CONTRIBUTING.rst>`_ for more information.
 
 Submitting a PR
 ---------------
@@ -136,7 +136,7 @@ Before submitting a new pull request, please make sure you followed these instru
   (see `Code style guide`_ and `Writing documentation`_).
 - if applicable, make sure you've added/modified at least 1 test to account for the changes you've made
 - make sure that all tests pass locally (see `Testing`_).
-- if there is no issue which this PR solves, create a new `one <https://github.com/theislab/squidpy/issues/new>`_
+- if there is no issue which this PR solves, create a new `one <https://github.com/scverse/squidpy/issues/new>`_
   briefly explaining what the problem is.
 - make sure that the section under ``## Description`` is properly formatted if automatically generating release notes,
   see also `Creating release notes`_.

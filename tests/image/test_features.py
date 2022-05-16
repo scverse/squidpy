@@ -1,4 +1,4 @@
-from typing import Tuple, Sequence
+from typing import Sequence
 from pytest_mock import MockerFixture
 import pytest
 
@@ -27,7 +27,7 @@ class TestFeatureMixin:
             small_cont.features_summary("image", channels=-1)
 
     @pytest.mark.parametrize("quantiles", [(), (0.5,), (0.1, 0.9)])
-    def test_summary_quantiles(self, small_cont: ImageContainer, quantiles: Tuple[float, ...]):
+    def test_summary_quantiles(self, small_cont: ImageContainer, quantiles: tuple[float, ...]):
         if not len(quantiles):
             with pytest.raises(ValueError, match=r"No quantiles have been selected."):
                 small_cont.features_summary("image", quantiles=quantiles, feature_name="foo", channels=(0, 1))
@@ -143,7 +143,7 @@ class TestFeatureMixin:
         assert custom_features[f"{np.mean.__name__}_0"] == summary_features["summary_ch-0_mean"]
 
     def test_custom_returns_iterable(self, small_cont: ImageContainer):
-        def dummy(_: np.ndarray) -> Tuple[int, int]:
+        def dummy(_: np.ndarray) -> tuple[int, int]:
             return 0, 1
 
         features = small_cont.features_custom(dummy, layer="image", feature_name="foo")

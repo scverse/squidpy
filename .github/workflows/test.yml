@@ -44,7 +44,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                python: [3.8, 3.9]
+                python: [3.9, "3.10"]
                 os: [ubuntu-latest]
                 include:
                     - python: 3.8
@@ -129,7 +129,7 @@ jobs:
               uses: peter-evans/repository-dispatch@v1
               with:
                   token: ${{ secrets.NOTEBOOKS_ACCESS_TOKEN }}
-                  repository: theislab/squidpy_notebooks
+                  repository: scverse/squidpy_notebooks
                   event-type: rebuild
                   client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 

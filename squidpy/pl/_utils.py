@@ -2,16 +2,7 @@ from __future__ import annotations
 
 from copy import copy
 from types import MappingProxyType
-from typing import (
-    Any,
-    Tuple,
-    Union,
-    Mapping,
-    Callable,
-    Optional,
-    Sequence,
-    TYPE_CHECKING,
-)
+from typing import Any, Union, Mapping, Callable, Optional, Sequence, TYPE_CHECKING
 from inspect import signature
 from pathlib import Path
 from functools import wraps
@@ -50,7 +41,7 @@ from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_categorical_obs
 from squidpy._constants._pkg_constants import Key
 
-Vector_name_t = Tuple[Optional[Union[pd.Series, NDArrayA]], Optional[str]]
+Vector_name_t = tuple[Optional[Union[pd.Series, NDArrayA]], Optional[str]]
 
 
 @d.dedent

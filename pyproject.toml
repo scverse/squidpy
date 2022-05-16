@@ -4,7 +4,7 @@ build-backend = 'setuptools.build_meta'
 
 [tool.black]
 line-length = 120
-target-version = ['py38']
+target-version = ['py39']
 include = '\.pyi?$'
 exclude = '''
 (
@@ -62,7 +62,7 @@ package = "squidpy"
 single_file = true
 filename = "docs/source/release/notes-{version}.rst"
 directory = "docs/source/release/changelog"
-issue_format = "`#{issue} <https://github.com/theislab/squidpy/pull/{issue}>`__"
+issue_format = "`#{issue} <https://github.com/scverse/squidpy/pull/{issue}>`__"
 template = "docs/source/release/changelog/template.rst"
 underlines = ["~", "-"]
 all_bullets = true

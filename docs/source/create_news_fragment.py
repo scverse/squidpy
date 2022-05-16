@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, List, Mapping, Optional
+from typing import Any, Mapping, Optional
 from pathlib import Path
 import logging
 import argparse
@@ -17,7 +17,7 @@ class State(str, Enum):
 
 
 def _parse_description(comment: str) -> str:
-    def generate(lines: List[str]) -> str:
+    def generate(lines: list[str]) -> str:
         if not len(lines):
             raise ValueError("No description lines have been detected.")
         lines = [line.strip() for line in lines]
@@ -27,7 +27,7 @@ def _parse_description(comment: str) -> str:
         return "\n".join(lines).strip()
 
     inside_description = False
-    desc_lines: List[str] = []
+    desc_lines: list[str] = []
 
     for line in comment.split("\n"):
         if line.startswith(State.COMMENT):
@@ -62,7 +62,7 @@ def _extract_pr_author(data: Mapping[str, Any]) -> Optional[str]:
 
 def create_news_fragment(issue_number: str, use_title: bool = False, add_author: bool = True, sep: str = "~") -> None:
     try:
-        url = f"https://api.github.com/repos/theislab/squidpy/pulls/{issue_number}"
+        url = f"https://api.github.com/repos/scverse/squidpy/pulls/{issue_number}"
         resp = requests.get(url)
         resp.raise_for_status()
 
