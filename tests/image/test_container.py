@@ -1,4 +1,4 @@
-from typing import Any, List, Tuple, Union, Optional, Sequence
+from typing import Any, Set, List, Tuple, Union, Optional, Sequence
 from pathlib import Path
 from itertools import permutations
 from collections import defaultdict
@@ -24,7 +24,7 @@ import squidpy as sq
 
 
 class SimpleHTMLValidator(HTMLParser):  # modified from CellRank
-    def __init__(self, n_expected_rows: int, expected_tags: set[str], **kwargs: Any):
+    def __init__(self, n_expected_rows: int, expected_tags: Set[str], **kwargs: Any):
         super().__init__(**kwargs)
         self._cnt = defaultdict(int)
         self._n_rows = 0
