@@ -1,4 +1,3 @@
-from typing import Tuple
 import pytest
 
 from anndata import AnnData
@@ -90,7 +89,7 @@ class TestSpatialNeighbors:
 
     @pytest.mark.parametrize("type_rings", [("grid", 1), ("grid", 6), ("generic", 1)])
     @pytest.mark.parametrize("set_diag", [False, True])
-    def test_set_diag(self, adata_squaregrid: AnnData, set_diag: bool, type_rings: Tuple[str, int]):
+    def test_set_diag(self, adata_squaregrid: AnnData, set_diag: bool, type_rings: tuple[str, int]):
         typ, n_rings = type_rings
         spatial_neighbors(adata_squaregrid, coord_type=typ, set_diag=set_diag, n_rings=n_rings)
         G = adata_squaregrid.obsp[Key.obsp.spatial_conn()]
@@ -155,7 +154,7 @@ class TestSpatialNeighbors:
 
     @pytest.mark.parametrize("set_diag", [False, True])
     @pytest.mark.parametrize("radius", [(0, np.inf), (2.0, 4.0), (-42, -420), (100, 200)])
-    def test_radius_min_max(self, non_visium_adata: AnnData, radius: Tuple[float, float], set_diag: bool):
+    def test_radius_min_max(self, non_visium_adata: AnnData, radius: tuple[float, float], set_diag: bool):
         gt_ddist = self._gt_ddist.copy()
         gt_dgraph = self._gt_dgraph.copy()
 
