@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from copy import copy
 from types import MappingProxyType
-from typing import Any, Union, Mapping, Optional, Sequence, NamedTuple, TYPE_CHECKING
+from typing import (
+    Any,
+    Type,
+    Union,
+    Mapping,
+    Optional,
+    Sequence,
+    NamedTuple,
+    TYPE_CHECKING,
+)
 from numbers import Number
 from functools import partial
 from typing_extensions import Literal
@@ -418,7 +427,7 @@ def _get_unique_map(dic: Mapping[str, Any]) -> Sequence[Any]:
 
 def _get_list(
     var: Any,
-    _type: type[Any] | tuple[type[Any], ...],
+    _type: Type[Any] | tuple[Type[Any], ...],
     ref_len: int | None = None,
     name: str | None = None,
 ) -> list[Any]:

@@ -1,10 +1,10 @@
 from abc import ABC, ABCMeta
 from enum import Enum, EnumMeta
-from typing import Any, Mapping, Callable
+from typing import Any, Type, Mapping, Callable
 from functools import wraps
 
 
-def _pretty_raise_enum(cls: type["ModeEnum"], fun: Callable[..., Any]) -> Callable[..., Any]:
+def _pretty_raise_enum(cls: Type["ModeEnum"], fun: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(fun)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
