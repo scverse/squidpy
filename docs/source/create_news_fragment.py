@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Mapping, Optional
+from typing import Any, List, Mapping, Optional
 from pathlib import Path
 import logging
 import argparse
@@ -17,7 +17,7 @@ class State(str, Enum):
 
 
 def _parse_description(comment: str) -> str:
-    def generate(lines: list[str]) -> str:
+    def generate(lines: List[str]) -> str:
         if not len(lines):
             raise ValueError("No description lines have been detected.")
         lines = [line.strip() for line in lines]
@@ -27,7 +27,7 @@ def _parse_description(comment: str) -> str:
         return "\n".join(lines).strip()
 
     inside_description = False
-    desc_lines: list[str] = []
+    desc_lines: List[str] = []
 
     for line in comment.split("\n"):
         if line.startswith(State.COMMENT):

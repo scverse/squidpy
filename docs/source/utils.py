@@ -1,6 +1,6 @@
 from git import Repo
 from shutil import rmtree, copytree
-from typing import Any, Dict, Union, ForwardRef
+from typing import Any, Dict, List, Union, ForwardRef
 from logging import info, warning
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -54,7 +54,7 @@ def _fetch_notebooks(repo_url: str) -> None:
 
 
 class MaybeMiniGallery(MiniGallery):
-    def run(self) -> list[str]:
+    def run(self) -> List[str]:
         config = self.state.document.settings.env.config
         backreferences_dir = config.sphinx_gallery_conf["backreferences_dir"]
         obj_list = self.arguments[0].split()

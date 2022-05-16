@@ -4,6 +4,7 @@ from copy import copy
 from types import MappingProxyType
 from typing import (
     Any,
+    List,
     Type,
     Tuple,
     Union,
@@ -170,7 +171,7 @@ def _get_image(
     spatial_key: str = Key.obsm.spatial,
     img: bool | _SeqArray | None = None,
     img_res_key: str | None = None,
-    img_channel: int | list[int] | None = None,
+    img_channel: int | List[int] | None = None,
     img_cmap: Colormap | str | None = None,
 ) -> Union[Sequence[NDArrayA], Tuple[None, ...]]:
     from squidpy.pl._utils import _to_grayscale
@@ -286,7 +287,7 @@ def _image_spatial_attrs(
     library_key: str | None = None,
     img: bool | _SeqArray | None = None,
     img_res_key: str | None = Key.uns.image_res_key,
-    img_channel: int | list[int] | None = None,
+    img_channel: int | List[int] | None = None,
     seg: _SeqArray | bool | None = None,
     seg_key: str | None = None,
     cell_id_key: str | None = None,
@@ -352,7 +353,7 @@ def _set_coords_crops(
     spatial_params: SpatialParams,
     spatial_key: str,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
-) -> Tuple[list[NDArrayA], list[CropCoords] | list[None]]:
+) -> Tuple[List[NDArrayA], List[CropCoords] | List[None]]:
     if crop_coord is None:
         crops = [None] * len(spatial_params.library_id)
     else:
@@ -431,7 +432,7 @@ def _get_list(
     _type: Type[Any] | Tuple[Type[Any], ...],
     ref_len: int | None = None,
     name: str | None = None,
-) -> list[Any]:
+) -> List[Any]:
     if isinstance(var, _type):
         return [var] if ref_len is None else ([var] * ref_len)
     if isinstance(var, list):

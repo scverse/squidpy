@@ -4,6 +4,7 @@ from copy import copy
 from types import MappingProxyType
 from typing import (
     Any,
+    List,
     Tuple,
     Union,
     Mapping,
@@ -101,8 +102,8 @@ def save_fig(fig: Figure, path: str | Path, make_dir: bool = True, ext: str = "p
 @d.dedent
 def extract(
     adata: AnnData,
-    obsm_key: list[str] | str = "img_features",
-    prefix: list[str] | str | None = None,
+    obsm_key: List[str] | str = "img_features",
+    prefix: List[str] | str | None = None,
 ) -> AnnData:
     """
     Create a temporary :class:`anndata.AnnData` object for plotting.
@@ -502,7 +503,7 @@ def _annotate_heatmap(
 def _get_cmap_norm(
     adata: AnnData,
     key: str,
-    order: Tuple[list[int], list[int]] | None | None = None,
+    order: Tuple[List[int], List[int]] | None | None = None,
 ) -> Tuple[mcolors.ListedColormap, mcolors.ListedColormap, mcolors.BoundaryNorm, mcolors.BoundaryNorm, int]:
     n_cls = adata.obs[key].nunique()
 
@@ -610,7 +611,7 @@ def _filter_kwargs(func: Callable[..., Any], kwargs: Mapping[str, Any]) -> dict[
     return {k: v for k, v in kwargs.items() if k in style_args}
 
 
-def _dendrogram(data: NDArrayA, method: str, **kwargs: Any) -> Tuple[list[int], list[int], list[int], list[int]]:
+def _dendrogram(data: NDArrayA, method: str, **kwargs: Any) -> Tuple[List[int], List[int], List[int], List[int]]:
     link_kwargs = _filter_kwargs(sch.linkage, kwargs)
     dendro_kwargs = _filter_kwargs(sch.dendrogram, kwargs)
 

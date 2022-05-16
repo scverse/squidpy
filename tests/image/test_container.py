@@ -1,4 +1,4 @@
-from typing import Any, Tuple, Union, Optional, Sequence
+from typing import Any, List, Tuple, Union, Optional, Sequence
 from pathlib import Path
 from itertools import permutations
 from collections import defaultdict
@@ -931,7 +931,7 @@ class TestZStacks:
     @pytest.mark.parametrize("channel", [None, 0])
     @pytest.mark.parametrize("copy", [False, True])
     @pytest.mark.parametrize("library_id", [["l1"], ["l2"], ["l1", "l2", "l3"], None])
-    def test_apply(self, copy: bool, channel: Optional[int], library_id: Optional[Union[list[str], str]]):
+    def test_apply(self, copy: bool, channel: Optional[int], library_id: Optional[Union[List[str], str]]):
         cont = ImageContainer(
             np.random.normal(size=(100, 100, 3, 2)), dims=("y", "x", "z", "channels"), library_id=["l1", "l2", "l3"]
         )

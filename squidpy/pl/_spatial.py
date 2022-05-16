@@ -1,5 +1,5 @@
 from types import MappingProxyType
-from typing import Any, Tuple, Union, Mapping, Callable, Optional, Sequence
+from typing import Any, List, Tuple, Union, Mapping, Callable, Optional, Sequence
 from pathlib import Path
 import itertools
 
@@ -55,7 +55,7 @@ def _spatial_plot(
     img_res_key: Optional[str] = Key.uns.image_res_key,
     img_alpha: Optional[float] = None,
     img_cmap: Union[Colormap, Optional[str]] = None,
-    img_channel: Optional[Union[int, list[int]]] = None,
+    img_channel: Optional[Union[int, List[int]]] = None,
     # segment
     seg: Optional[Union[bool, _SeqArray]] = None,
     seg_key: Optional[str] = Key.uns.image_seg_key,
