@@ -1,6 +1,6 @@
 from git import Repo
 from shutil import rmtree, copytree
-from typing import Any, Union, ForwardRef
+from typing import Any, Dict, Union, ForwardRef
 from logging import info, warning
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -74,7 +74,7 @@ class MaybeMiniGallery(MiniGallery):
             return []
 
 
-def _get_thumbnails(root: Union[str, Path]) -> dict[str, str]:
+def _get_thumbnails(root: Union[str, Path]) -> Dict[str, str]:
     res = {}
     root = Path(root)
     thumb_path = Path(__file__).parent.parent.parent / "docs" / "source"

@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Optional
+from typing import Dict, Tuple, Union, Optional
 from pytest_mock import MockerFixture
 import pytest
 
@@ -83,7 +83,7 @@ class TestIO:
             np.testing.assert_array_equal(actual_shape, shape)
 
     @pytest.mark.parametrize("chunks", [100, (1, 100, 100, 3), "auto", None, {"y": 100, "x": 100}])
-    def test_lazy_load_image(self, chunks: Optional[Union[int, Tuple[int, ...], str, dict[str, int]]], tmpdir):
+    def test_lazy_load_image(self, chunks: Optional[Union[int, Tuple[int, ...], str, Dict[str, int]]], tmpdir):
         path = str(tmpdir / "img.tiff")
         img = self._create_image(path, (256, 256, 3))
 

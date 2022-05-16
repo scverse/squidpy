@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from typing import Union  # noqa: F401
-from typing import Any, Iterable, Sequence, TYPE_CHECKING
+from typing import Any, Dict, Iterable, Sequence, TYPE_CHECKING
 from itertools import chain
 from typing_extensions import Literal  # < 3.8
 
@@ -420,8 +420,8 @@ def _p_value_calc(
     score: NDArrayA,
     sims: NDArrayA | None,
     weights: spmatrix | NDArrayA,
-    params: dict[str, Any],
-) -> dict[str, Any]:
+    params: Dict[str, Any],
+) -> Dict[str, Any]:
     """
     Handle p-value calculation for spatial autocorrelation function.
 
@@ -474,7 +474,7 @@ def _p_value_calc(
     return results
 
 
-def _analytic_pval(score: NDArrayA, g: spmatrix | NDArrayA, params: dict[str, Any]) -> tuple[NDArrayA, float]:
+def _analytic_pval(score: NDArrayA, g: spmatrix | NDArrayA, params: Dict[str, Any]) -> tuple[NDArrayA, float]:
     """
     Analytic p-value computation.
 

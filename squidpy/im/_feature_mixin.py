@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Union, Callable, Iterable, Sequence, TYPE_CHECKING
+from typing import Any, Dict, Union, Callable, Iterable, Sequence, TYPE_CHECKING
 from typing_extensions import Protocol
 
 import numpy as np
@@ -16,7 +16,7 @@ from squidpy.gr._utils import _assert_non_empty_sequence
 from squidpy.im._coords import CropCoords, _NULL_PADDING
 from squidpy._constants._pkg_constants import Key
 
-Feature_t = dict[str, Any]
+Feature_t = Dict[str, Any]
 Channel_t = Union[int, Sequence[int]]
 
 
@@ -371,7 +371,7 @@ class FeatureMixin:
         else:
             channels = ()
 
-        features: dict[str, Any] = {}
+        features: Dict[str, Any] = {}
         label_arr = self[label_layer].sel(z=library_id)
         label_arr_0 = label_arr[..., 0].values
         # calculate features that do not depend on the intensity image
