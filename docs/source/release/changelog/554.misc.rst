@@ -1,2 +1,0 @@
-Fix types.
-`@giovp <https://github.com/giovp>`__
