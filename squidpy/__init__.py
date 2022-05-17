@@ -7,7 +7,7 @@ __email__ = ", ".join(
         "hannah.spitzer@helmholtz-muenchen.de",
     ]
 )
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 try:
     from importlib_metadata import version  # Python < 3.8
