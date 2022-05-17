@@ -9,3 +9,5 @@ prune docs
 prune resources
 prune .scripts
 prune .github
+
+include docs/requirements.txt
