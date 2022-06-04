@@ -41,6 +41,10 @@ Install Squidpy via PyPI by running::
     # or with napari included
     pip install 'squidpy[interactive]'
 
+or via Conda as::
+
+    conda install -c conda-forge squidpy
+
 Contributing to Squidpy
 -----------------------
 We are happy about any contributions! Before you start, check out our `contributing guide <CONTRIBUTING.rst>`_.
