@@ -189,6 +189,10 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_spatial_scatter_categorical_alpha(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, shape="circle", color="cluster", alpha=0)
 
+    def test_plot_spatial_scatter_non_unique_colors(self, adata_hne: AnnData):
+        adata_hne.uns["cluster_colors"] = ["#000000"] * len(adata_hne.uns["cluster_colors"])
+        pl.spatial_scatter(adata_hne, color="cluster", legend_loc=None)
+
 
 class TestSpatialStaticUtils:
     @staticmethod

@@ -477,11 +477,11 @@ def _set_color_source_vec(
     if groups is not None:
         color_source_vector = color_source_vector.remove_categories(categories.difference(groups))
 
-    color_map = _get_palette(
-        adata, cluster_key=value_to_plot, categories=categories, palette=palette, alpha=alpha  # type: ignore[arg-type]
-    )
-    color_vector = color_source_vector.rename_categories(color_map)
-    # set color to 'missing color' for all missing values
+    color_map = _get_palette(adata, cluster_key=value_to_plot, categories=categories, palette=palette, alpha=alpha)
+    if color_map is None:
+        raise ValueError("Unable to create color palette.")
+    # do not rename categories, as colors need not be unique
+    color_vector = color_source_vector.map(color_map)
     if color_vector.isna().any():
         color_vector = color_vector.add_categories([to_hex(na_color)])
         color_vector = color_vector.fillna(to_hex(na_color))

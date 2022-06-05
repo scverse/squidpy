@@ -1,7 +1,7 @@
 """Utils for plotting functions."""
 from __future__ import annotations
 
-from typing import Any, Union, Mapping, Sequence
+from typing import Any, Union, Mapping, Optional, Sequence
 
 from scanpy import logging as logg
 from anndata import AnnData
@@ -29,14 +29,14 @@ def _maybe_set_colors(source: AnnData, target: AnnData, key: str, palette: str |
 
 def _get_palette(
     adata: AnnData,
-    cluster_key: str,
+    cluster_key: Optional[str],
     categories: Sequence[Any],
     palette: Palette_t = None,
     alpha: float = 1.0,
 ) -> Mapping[str, str] | None:
     if palette is None:
         try:
-            palette = adata.uns[Key.uns.colors(cluster_key)]
+            palette = adata.uns[Key.uns.colors(cluster_key)]  # type: ignore[arg-type]
             if len(palette) != len(categories):
                 raise ValueError(f"Expected palette to be of length `{len(categories)}`, found `{len(palette)}`.")
             return {cat: to_hex(to_rgba(col)[:3] + (alpha,), keep_alpha=True) for cat, col in zip(categories, palette)}
@@ -44,8 +44,7 @@ def _get_palette(
             logg.error(f"Unable to fetch palette, reason: {e}. Using `None`.")
             return None
 
-    len_cat = len(adata.obs[cluster_key].cat.categories)
-
+    len_cat = len(categories)
     if isinstance(palette, str):
         cmap = plt.get_cmap(palette)
         palette = [to_hex(x, keep_alpha=True) for x in cmap(np.linspace(0, 1, len_cat), alpha=alpha)]
