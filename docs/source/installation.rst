@@ -14,7 +14,7 @@ Alternatively, to include all dependencies, such as the interactive image viewer
 
 Conda
 -----
-Install Squipy via Conda as::
+Install Squidpy via Conda as::
 
     conda install -c conda-forge squidpy
 
