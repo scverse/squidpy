@@ -1438,7 +1438,7 @@ class ImageContainer(FeatureMixin):
     def _get_next_image_id(self, layer: str) -> str:
         pat = re.compile(rf"^{layer}_(\d*)$")
         iterator = chain.from_iterable(pat.finditer(k) for k in self.data.keys())
-        return f"{layer}_{(max(map(lambda m: int(m.groups()[0]), iterator), default=-1) + 1)}"
+        return f"{layer}_{(max((int(m.groups()[0]) for m in iterator), default=-1) + 1)}"
 
     def _get_next_channel_id(self, channel: str | xr.DataArray) -> str:
         if isinstance(channel, xr.DataArray):
@@ -1446,7 +1446,7 @@ class ImageContainer(FeatureMixin):
 
         pat = re.compile(rf"^{channel}_(\d*)$")
         iterator = chain.from_iterable(pat.finditer(v.dims[-1]) for v in self.data.values())
-        return f"{channel}_{(max(map(lambda m: int(m.groups()[0]), iterator), default=-1) + 1)}"
+        return f"{channel}_{(max((int(m.groups()[0]) for m in iterator), default=-1) + 1)}"
 
     def _get_library_id(self, library_id: str | None = None) -> str:
         self._assert_not_empty()
