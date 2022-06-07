@@ -1,0 +1,2 @@
+Better error message for handling palette in  :func:`squidpy.pl.spatial_scatter`.
+`@giovp <https://github.com/giovp>`__
