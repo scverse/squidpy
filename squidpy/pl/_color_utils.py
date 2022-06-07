@@ -38,7 +38,10 @@ def _get_palette(
         try:
             palette = adata.uns[Key.uns.colors(cluster_key)]  # type: ignore[arg-type]
             if len(palette) != len(categories):
-                raise ValueError(f"Expected palette to be of length `{len(categories)}`, found `{len(palette)}`.")
+                raise ValueError(
+                    f"Expected palette to be of length `{len(categories)}`, found `{len(palette)}`.",
+                    f"You might have to remove the colors in `adata.uns` with `adata.uns.pop('{cluster_key}_colors').`",
+                )
             return {cat: to_hex(to_rgba(col)[:3] + (alpha,), keep_alpha=True) for cat, col in zip(categories, palette)}
         except KeyError as e:
             logg.error(f"Unable to fetch palette, reason: {e}. Using `None`.")
