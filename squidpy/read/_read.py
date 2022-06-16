@@ -242,6 +242,10 @@ def nanostring(
     if fov_file is not None:
         fov_positions = pd.read_csv(path / fov_file, header=0, index_col=fov_key)
         for fov, row in fov_positions.iterrows():
-            adata.uns[Key.uns.spatial][str(fov)]["metadata"] = row.to_dict()
+            try:
+                adata.uns[Key.uns.spatial][str(fov)]["metadata"] = row.to_dict()
+            except KeyError:
+                logg.warning(f"FOV `{str(fov)}` does not exist, skipping it.")
+                continue
 
     return adata
