@@ -85,6 +85,7 @@ sagittal
 sc
 scalability
 scalebar
+scalebars
 Scanpy
 seg
 segmentations
