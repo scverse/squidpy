@@ -131,6 +131,7 @@ def vizgen(
     Annotated data object with the following keys:
 
         - :attr:`anndata.AnnData.obsm` ``['spatial']`` - spatial spot coordinates in microns.
+        - :attr:`anndata.AnnData.obsm` ``['blank_genes']`` - blank genes from Vizgen platform.
         - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['scalefactors']['transformation_matrix']`` -
           transformation matrix for converting micron coordinates to pixels.
           Only present if ``transformation_file != None``.
@@ -139,6 +140,12 @@ def vizgen(
     adata, library_id = _read_counts(
         path=path, count_file=counts_file, library_id=library_id, delimiter=",", first_column_names=True, **kwargs
     )
+    blank_genes = np.array(["Blank" in v for v in adata.var_names])
+    adata.obsm["blank_genes"] = pd.DataFrame(
+        adata[:, blank_genes].X.copy(), columns=adata.var_names[blank_genes], index=adata.obs_names
+    )
+    adata = adata[:, ~blank_genes].copy()
+
     adata.X = csr_matrix(adata.X)
 
     # fmt: off
@@ -192,7 +199,7 @@ def nanostring(
     Annotated data object with the following keys:
 
         - :attr:`anndata.AnnData.obsm` ``['spatial']`` -  local coordinates of the centers of cells.
-          :attr:`anndata.AnnData.obsm` ``['spatial_fov']`` - global coordinates of the centers of cells in the
+        - :attr:`anndata.AnnData.obsm` ``['spatial_fov']`` - global coordinates of the centers of cells in the
           field of view.
         - :attr:`anndata.AnnData.uns` ``['spatial']['{fov}']['images']`` - *hires* and *segmentation* images.
         - :attr:`anndata.AnnData.uns` ``['spatial']['{fov}']['metadata']]['{x,y}_global_px']`` - coordinates of the field of view.
