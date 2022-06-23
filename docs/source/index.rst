@@ -1,4 +1,4 @@
-|PyPI| |Downloads| |CI| |Notebooks| |Docs| |Coverage|
+|PyPI| |Downloads| |CI| |Notebooks| |Docs| |Coverage| |Discourse| |Zulip|
 
 Squidpy - Spatial Single Cell Analysis in Python
 ================================================
@@ -76,6 +76,14 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. |Downloads| image:: https://pepy.tech/badge/squidpy
     :target: https://pepy.tech/project/squidpy
     :alt: Downloads
+
+.. |Discourse| image:: https://img.shields.io/discourse/posts?color=yellow&logo=discourse&server=https%3A%2F%2Fdiscourse.scverse.org
+    :target: https://discourse.scverse.org/
+    :alt: Discourse
+
+.. |Zulip| image:: https://img.shields.io/badge/zulip-join_chat-%2367b08f.svg
+    :target: https://scverse.zulipchat.com
+    :alt: Zulip
 
 .. _scanpy: https://scanpy.readthedocs.io/en/stable/
 .. _anndata: https://anndata.readthedocs.io/en/stable/
