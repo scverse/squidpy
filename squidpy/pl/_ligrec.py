@@ -295,7 +295,7 @@ def ligrec(
     for cls, size in (pvals.groupby(level=0, axis=1)).size().to_dict().items():
         label_ranges[cls] = (start, start + size - 1)
         start += size
-    label_ranges = {k: label_ranges[k] for k in sorted(label_ranges.keys())}
+    label_ranges = {k: label_ranges[k] for k in label_ranges.keys()}
 
     pvals = pvals[label_ranges.keys()]
     pvals = -np.log10(pvals + min(1e-3, alpha if alpha is not None else 1e-3)).fillna(0)
