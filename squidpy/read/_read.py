@@ -76,7 +76,8 @@ def visium(
     )
 
     # fmt: off
-    coords = pd.read_csv(path / f"{Key.uns.spatial}/tissue_positions_list.csv", index_col=0, header=None)
+    tissue_positions_file=[file_path for file_path in path.glob(f"{Key.uns.spatial}/tissue_positions*.csv")][0]
+    coords = pd.read_csv(tissue_positions_file, index_col=0)
     coords.columns = ["in_tissue", "array_row", "array_col", "pxl_col_in_fullres", "pxl_row_in_fullres"]
     # fmt: on
 
