@@ -1,0 +1,3 @@
+Fix passing :class:`matplotlib.colors.ListedColorMap` as palette to
+:func:`squidpy.pl.spatial_scatter`.
+`@michalk8 <https://github.com/michalk8>`__

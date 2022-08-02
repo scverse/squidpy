@@ -1,6 +1,7 @@
 """Utils for plotting functions."""
 from __future__ import annotations
 
+from cycler import cycler, Cycler
 from typing import Any, Union, Mapping, Optional, Sequence
 
 from scanpy import logging as logg
@@ -17,13 +18,17 @@ from squidpy._constants._pkg_constants import Key
 Palette_t = Union[str, ListedColormap, None]
 
 
-def _maybe_set_colors(source: AnnData, target: AnnData, key: str, palette: str | None = None) -> None:
+def _maybe_set_colors(
+    source: AnnData, target: AnnData, key: str, palette: str | ListedColormap | Cycler | Sequence[Any] | None = None
+) -> None:
     color_key = Key.uns.colors(key)
     try:
         if palette is not None:
             raise KeyError("Unable to copy the palette when there was other explicitly specified.")
         target.uns[color_key] = source.uns[color_key]
     except KeyError:
+        if isinstance(palette, ListedColormap):  # `scanpy` requires it
+            palette = cycler(color=palette.colors)
         add_colors_for_categorical_sample_annotation(target, key=key, force_update_colors=True, palette=palette)
 
 

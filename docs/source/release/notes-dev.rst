@@ -1,4 +1,4 @@
-Squidpy dev (2022-06-24)
+Squidpy dev (2022-08-02)
 ========================
 
 Bugfixes
@@ -15,6 +15,11 @@ Bugfixes
 - Fix :func:`squidpy.read.vizgen`.
   `@giovp <https://github.com/giovp>`__
   `#568 <https://github.com/scverse/squidpy/pull/568>`__
+
+- Fix passing :class:`matplotlib.colors.ListedColorMap` as palette to
+  :func:`squidpy.pl.spatial_scatter`.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#580 <https://github.com/scverse/squidpy/pull/580>`__
 
 
 Miscellaneous
