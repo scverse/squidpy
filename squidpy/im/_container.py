@@ -5,6 +5,7 @@ from types import MappingProxyType
 from typing import (
     Any,
     Union,
+    Literal,
     Mapping,
     TypeVar,
     Callable,
@@ -16,7 +17,6 @@ from typing import (
 from pathlib import Path
 from functools import partial
 from itertools import chain
-from typing_extensions import Literal
 import re
 import validators
 

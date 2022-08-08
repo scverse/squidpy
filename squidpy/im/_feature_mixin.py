@@ -1,7 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Union, Callable, Iterable, Sequence, TYPE_CHECKING
-from typing_extensions import Protocol
+from typing import (
+    Any,
+    Dict,
+    Union,
+    Callable,
+    Iterable,
+    Protocol,
+    Sequence,
+    TYPE_CHECKING,
+)
 
 import numpy as np
 import xarray as xr
