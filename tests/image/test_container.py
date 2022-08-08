@@ -207,7 +207,7 @@ class TestContainerIO:
 
     def test_add_img_invalid_yx(self, small_cont_1c: ImageContainer):
         arr = xr.DataArray(np.empty((small_cont_1c.shape[0] - 1, small_cont_1c.shape[1])), dims=["y", "x"])
-        with pytest.raises(ValueError, match=r".*be aligned because they have different dimension sizes"):
+        with pytest.raises(ValueError, match=r".*cannot reindex or align along dimension"):
             small_cont_1c.add_img(arr)
 
     def test_xarray_remapping_spatial_dims(self):

@@ -306,7 +306,7 @@ class ImageContainer(FeatureMixin):
                 self.data[layer] = res
             except ValueError as e:
                 c_dim = res.dims[-1]
-                if f"along dimension {str(c_dim)!r} cannot be aligned" not in str(e):
+                if f"cannot reindex or align along dimension {str(c_dim)!r}" not in str(e):
                     raise
                 channel_dim = self._get_next_channel_id(res)
                 logg.warning(f"Channel dimension cannot be aligned with an existing one, using `{channel_dim}`")
