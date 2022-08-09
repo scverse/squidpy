@@ -113,6 +113,7 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
 
         viewer.screenshot(dpi=DPI)
 
+    @pytest.mark.skip(reason="Soon to be deprecated.")
     def test_plot_crop_corner(self, qtbot, adata: AnnData, napari_cont: ImageContainer):
         viewer = napari_cont.crop_center(500, 500, radius=250).interactive(adata)
         bdata = viewer.adata
@@ -138,6 +139,7 @@ class TestNapari(PlotTester, metaclass=PlotTesterMeta):
 
         viewer.screenshot(dpi=DPI)
 
+    @pytest.mark.skip(reason="Soon to be deprecated.")
     @pytest.mark.parametrize("size", [(800, 600), (600, 800), (800, 800)])
     @pytest.mark.parametrize("x", [-200, 200])
     @pytest.mark.parametrize("y", [-200, 200])
