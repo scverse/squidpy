@@ -16,10 +16,10 @@ from squidpy.im import ImageContainer
 from tests.conftest import DPI, TOL, ACTUAL, EXPECTED, PlotTester, PlotTesterMeta
 
 
-@pytest.mark.skipif(platform.system() == "Ubuntu", reason="Fails on ubuntu")
+@pytest.mark.skipif(platform.system() == "Linux", reason="Fails on ubuntu")
 @pytest.mark.qt()
 class TestNapari(PlotTester, metaclass=PlotTesterMeta):
-    def test_add_same_layer(self, qtbot, adata: AnnData, napari_cont: ImageContainer, capsys):
+    def test_add_same_layer(self, adata: AnnData, napari_cont: ImageContainer, capsys):
         from napari.layers import Points
 
         s.logfile = sys.stderr
