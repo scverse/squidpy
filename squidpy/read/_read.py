@@ -75,10 +75,18 @@ def visium(
         (path / f"{Key.uns.spatial}/scalefactors_json.json").read_bytes()
     )
 
-    # fmt: off
-    coords = pd.read_csv(path / f"{Key.uns.spatial}/tissue_positions_list.csv", index_col=0, header=None)
+    tissue_positions_file = (
+        path / "spatial/tissue_positions.csv"
+        if (path / "spatial/tissue_positions.csv").exists()
+        else path / "spatial/tissue_positions_list.csv"
+    )
+
+    coords = pd.read_csv(
+        tissue_positions_file,
+        header=1 if tissue_positions_file.name == "tissue_positions.csv" else None,
+        index_col=0,
+    )
     coords.columns = ["in_tissue", "array_row", "array_col", "pxl_col_in_fullres", "pxl_row_in_fullres"]
-    # fmt: on
 
     adata.obs = pd.merge(adata.obs, coords, how="left", left_index=True, right_index=True)
     adata.obsm[Key.obsm.spatial] = adata.obs[["pxl_row_in_fullres", "pxl_col_in_fullres"]].values
@@ -131,6 +139,7 @@ def vizgen(
     Annotated data object with the following keys:
 
         - :attr:`anndata.AnnData.obsm` ``['spatial']`` - spatial spot coordinates in microns.
+        - :attr:`anndata.AnnData.obsm` ``['blank_genes']`` - blank genes from Vizgen platform.
         - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['scalefactors']['transformation_matrix']`` -
           transformation matrix for converting micron coordinates to pixels.
           Only present if ``transformation_file != None``.
@@ -139,6 +148,12 @@ def vizgen(
     adata, library_id = _read_counts(
         path=path, count_file=counts_file, library_id=library_id, delimiter=",", first_column_names=True, **kwargs
     )
+    blank_genes = np.array(["Blank" in v for v in adata.var_names])
+    adata.obsm["blank_genes"] = pd.DataFrame(
+        adata[:, blank_genes].X.copy(), columns=adata.var_names[blank_genes], index=adata.obs_names
+    )
+    adata = adata[:, ~blank_genes].copy()
+
     adata.X = csr_matrix(adata.X)
 
     # fmt: off
@@ -192,7 +207,7 @@ def nanostring(
     Annotated data object with the following keys:
 
         - :attr:`anndata.AnnData.obsm` ``['spatial']`` -  local coordinates of the centers of cells.
-          :attr:`anndata.AnnData.obsm` ``['spatial_fov']`` - global coordinates of the centers of cells in the
+        - :attr:`anndata.AnnData.obsm` ``['spatial_fov']`` - global coordinates of the centers of cells in the
           field of view.
         - :attr:`anndata.AnnData.uns` ``['spatial']['{fov}']['images']`` - *hires* and *segmentation* images.
         - :attr:`anndata.AnnData.uns` ``['spatial']['{fov}']['metadata']]['{x,y}_global_px']`` - coordinates of the field of view.
@@ -242,6 +257,10 @@ def nanostring(
     if fov_file is not None:
         fov_positions = pd.read_csv(path / fov_file, header=0, index_col=fov_key)
         for fov, row in fov_positions.iterrows():
-            adata.uns[Key.uns.spatial][str(fov)]["metadata"] = row.to_dict()
+            try:
+                adata.uns[Key.uns.spatial][str(fov)]["metadata"] = row.to_dict()
+            except KeyError:
+                logg.warning(f"FOV `{str(fov)}` does not exist, skipping it.")
+                continue
 
     return adata

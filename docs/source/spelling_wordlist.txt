@@ -21,6 +21,7 @@ convolutional
 CP
 Crofton
 csv
+cytokeratin
 Cytometry
 Database
 dataframe
@@ -53,12 +54,14 @@ leiden
 ligand
 ligands
 Linnarson
+Logarithmize
 Merfish
 mesenchymal
 Mibitof
 modularity
 moran
 Moran's I
+Nanostring
 Napari
 NEUN
 obsm
@@ -82,6 +85,7 @@ sagittal
 sc
 scalability
 scalebar
+scalebars
 Scanpy
 seg
 segmentations
