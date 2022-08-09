@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 from typing import Union  # noqa: F401
-from typing import TYPE_CHECKING
-from typing_extensions import Literal
+from typing import Literal, TYPE_CHECKING
 
 from scanpy import logging as logg
 from anndata import AnnData
