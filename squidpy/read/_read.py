@@ -75,10 +75,18 @@ def visium(
         (path / f"{Key.uns.spatial}/scalefactors_json.json").read_bytes()
     )
 
-    # fmt: off
-    coords = pd.read_csv(path / f"{Key.uns.spatial}/tissue_positions_list.csv", index_col=0, header=None)
+    tissue_positions_file = (
+        path / "spatial/tissue_positions.csv"
+        if (path / "spatial/tissue_positions.csv").exists()
+        else path / "spatial/tissue_positions_list.csv"
+    )
+
+    coords = pd.read_csv(
+        tissue_positions_file,
+        header=1 if tissue_positions_file.name == "tissue_positions.csv" else None,
+        index_col=0,
+    )
     coords.columns = ["in_tissue", "array_row", "array_col", "pxl_col_in_fullres", "pxl_row_in_fullres"]
-    # fmt: on
 
     adata.obs = pd.merge(adata.obs, coords, how="left", left_index=True, right_index=True)
     adata.obsm[Key.obsm.spatial] = adata.obs[["pxl_row_in_fullres", "pxl_col_in_fullres"]].values

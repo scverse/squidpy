@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 from typing import Union  # noqa: F401
+from typing import Literal  # < 3.8
 from typing import Any, Dict, Iterable, Sequence, TYPE_CHECKING
 from itertools import chain
-from typing_extensions import Literal  # < 3.8
 
 from scanpy import logging as logg
 from anndata import AnnData

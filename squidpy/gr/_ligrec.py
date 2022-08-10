@@ -3,11 +3,19 @@ from __future__ import annotations
 
 from abc import ABC
 from types import MappingProxyType
-from typing import Any, Tuple, Union, Mapping, Iterable, Sequence, TYPE_CHECKING
+from typing import (
+    Any,
+    Tuple,
+    Union,
+    Literal,
+    Mapping,
+    Iterable,
+    Sequence,
+    TYPE_CHECKING,
+)
 from functools import partial
 from itertools import product
 from collections import namedtuple
-from typing_extensions import Literal
 
 from scanpy import logging as logg
 from anndata import AnnData

@@ -11,6 +11,7 @@ import scanpy as sc
 import numpy as np
 import pandas as pd
 
+from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
 
 from squidpy import pl
@@ -192,6 +193,13 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_spatial_scatter_non_unique_colors(self, adata_hne: AnnData):
         adata_hne.uns["cluster_colors"] = ["#000000"] * len(adata_hne.uns["cluster_colors"])
         pl.spatial_scatter(adata_hne, color="cluster", legend_loc=None)
+
+    def test_tol_plot_palette_listed_cmap(self, adata_hne: AnnData):
+        del adata_hne.uns["cluster_colors"]
+        palette = plt.get_cmap("Set3")
+        assert isinstance(palette, ListedColormap)
+        pl.spatial_scatter(adata_hne, color="cluster", palette=palette, legend_loc=None)
+        self.compare("SpatialStatic_palette_listed_cmap", tolerance=60)
 
 
 class TestSpatialStaticUtils:
