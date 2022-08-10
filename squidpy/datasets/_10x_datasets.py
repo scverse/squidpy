@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from typing import Union  # noqa: F401
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 from pathlib import Path
-from typing_extensions import Literal
 import tarfile
 
 from scanpy import _utils

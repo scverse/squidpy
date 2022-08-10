@@ -207,7 +207,7 @@ class TestContainerIO:
 
     def test_add_img_invalid_yx(self, small_cont_1c: ImageContainer):
         arr = xr.DataArray(np.empty((small_cont_1c.shape[0] - 1, small_cont_1c.shape[1])), dims=["y", "x"])
-        with pytest.raises(ValueError, match=r".*be aligned because they have different dimension sizes"):
+        with pytest.raises(ValueError, match=r".*cannot reindex or align along dimension"):
             small_cont_1c.add_img(arr)
 
     def test_xarray_remapping_spatial_dims(self):
@@ -1248,7 +1248,7 @@ class TestPileLine:
     @pytest.mark.parametrize("dim_name", ["channels", "z"])
     def test_loading_bwd_compat_no_zdim(self, dim_name: str, tmpdir):
         ds = xr.Dataset({"foo": xr.DataArray(np.random.normal(size=(64, 64, 3)), dims=("x", "y", dim_name))})
-        ds.to_zarr(tmpdir)
+        ds.to_zarr(Path(tmpdir))
 
         if dim_name == "z":
             with pytest.raises(ValueError, match=r".*z.*exists"):

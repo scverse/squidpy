@@ -130,11 +130,11 @@ def _fwd_ref_init(
     self.__forward_value__ = None
     self.__forward_is_argument__ = is_argument
     try:
-        self.__forward_is_class__ = is_class  # type: ignore[attr-defined]
+        self.__forward_is_class__ = is_class
     except AttributeError:
         pass
     try:
-        self.__forward_module__ = module  # type: ignore[attr-defined]
+        self.__forward_module__ = module
     except AttributeError:
         pass
 
