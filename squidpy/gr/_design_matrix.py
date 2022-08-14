@@ -1,21 +1,21 @@
+from typing import Union, Optional
 from functools import reduce
 from itertools import product
-from typing import Optional, Union
 
-import numpy as np
-import pandas as pd
 from anndata import AnnData
-from pandas.api.types import CategoricalDtype
-from scipy.sparse import csr_matrix
+
 from sklearn.metrics import DistanceMetric
+from pandas.api.types import CategoricalDtype
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import MinMaxScaler
+import numpy as np
+import pandas as pd
 
 
 def gexp_distance(
     adata: AnnData,
-    annotation: str = None,  # categorical
-    anchor: Union[str, list, np.ndarray] = None,
+    annotation: str,  # categorical
+    anchor: Union[str, list, np.ndarray],
     metric: str = "euclidean",
     design_matrix_key: str = "design_matrix",
     batch_key: Optional[str] = None,  # batch_key #categorical
@@ -47,7 +47,9 @@ def gexp_distance(
         # initialize dataframe and anndata depending on whether batches are used or not
         if batch_var is not None:
             df = _init_design_matrix(adata[adata.obs[batch_key] == batch_var], True, annotation, anchor_var, batch_key)
-            anchor_coord, batch_coord = _get_coordinates(adata[adata.obs[batch_key] == batch_var], anchor_var, annotation)
+            anchor_coord, batch_coord = _get_coordinates(
+                adata[adata.obs[batch_key] == batch_var], anchor_var, annotation
+            )
 
         else:
             df = _init_design_matrix(adata, False, annotation, anchor_var)
@@ -82,7 +84,7 @@ def gexp_distance(
         df = batch_design_matrices[str((batch_var, anchor_var))]
 
     # normalize euclidean distances column(s)
-    df = _normalize_distances(df, anchor, design_matrix_key)
+    df = _normalize_distances(adata, df, anchor, design_matrix_key)
 
     # add additional covariates to design matrix
     if covariates is not None:
@@ -94,7 +96,9 @@ def gexp_distance(
             categorical_columns.append(covariate)
 
     # organize data frames after merging, depending if batches were used or not
-    adata.obsm[design_matrix_key + "_raw_dist"] = adata.obsm[design_matrix_key + "_raw_dist"][[value for key, value in adata.uns[design_matrix_key].items() if key not in ["metric"]]]
+    adata.obsm[design_matrix_key + "_raw_dist"] = adata.obsm[design_matrix_key + "_raw_dist"][
+        [value for key, value in adata.uns[design_matrix_key].items() if key not in ["metric"]]
+    ]
     df = df[[value for key, value in adata.uns[design_matrix_key].items() if key not in ["metric"]]]
 
     # make sure that columns without numerical values are of type categorical
@@ -109,7 +113,58 @@ def gexp_distance(
 
     return
 
-def _normalize_distances(df: pd.DataFrame, anchor: list = None, design_matrix_key: str = None) -> pd.DataFrame:
+
+def _add_metadata(
+    adata: AnnData,
+    annotation: str,  # categorical
+    anchor: Union[str, list, np.ndarray],
+    batch_key: Optional[str],  # categorical
+    covariates: Optional[Union[str, list]],
+    metric: str = "euclidean",
+):
+    """Add metadata to adata.uns."""
+    metadata = {}
+    if isinstance(anchor, np.ndarray):
+        metadata["anchor"] = "custom_anchor"
+    elif isinstance(anchor, list):
+        for i, a in enumerate(anchor):
+            metadata["anchor_" + str(i)] = a
+    else:
+        metadata["anchor"] = anchor
+
+    metadata["annotation"] = annotation
+
+    if batch_key is not None:
+        metadata["batch_key"] = batch_key
+
+    metadata["x"] = "x"
+    metadata["y"] = "y"
+
+    metadata["metric"] = "euclidean"
+
+    if covariates is not None:
+        if isinstance(covariates, str):
+            covariates = [covariates]
+        for i, covariate in enumerate(covariates):
+            metadata["covariate_" + str(i)] = covariate
+
+    return metadata
+
+
+def _init_design_matrix(
+    adata: AnnData, batch: bool, annotation: str, anchor: str, batch_key: Optional[str]
+) -> pd.DataFrame:
+    """Initialize design matrix."""
+    df = adata.obs[[annotation]]
+    if batch:
+        df[batch_key] = adata.obs[batch_key]
+    df["x"] = adata.obsm["spatial"][:, 0]
+    df["y"] = adata.obsm["spatial"][:, 1]
+
+    return df
+
+
+def _normalize_distances(adata: AnnData, df: pd.DataFrame, anchor: list, design_matrix_key: str) -> pd.DataFrame:
     """Normalize distances to anchor."""
     # .values used for fit and transform to avoid:
     # "FutureWarning: The feature names should match those that were passed during fit.
@@ -131,10 +186,7 @@ def _normalize_distances(df: pd.DataFrame, anchor: list = None, design_matrix_ke
     return df
 
 
-def _get_coordinates(
-    adata: AnnData,
-    anchor: str = None,
-    annotation: str = None) -> (np.ndarray, np.ndarray):
+def _get_coordinates(adata: AnnData, anchor: str, annotation: str) -> (np.ndarray, np.ndarray):
     """Get anchor coordinates and coordinates of all observations."""
     if isinstance(anchor, np.ndarray):
         return (anchor, adata.obsm["spatial"])
