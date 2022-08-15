@@ -385,13 +385,11 @@ class PermutationTestABC(ABC):
             clusters = list(map(str, self._adata.obs[cluster_key].cat.categories))
         if all(isinstance(c, str) for c in clusters):
             clusters = list(product(clusters, repeat=2))  # type: ignore[assignment]
-        clusters = sorted(
-            _check_tuple_needles(
-                clusters,  # type: ignore[arg-type]
-                self._filtered_data["clusters"].cat.categories,
-                msg="Invalid cluster `{0!r}`.",
-                reraise=True,
-            )
+        clusters = _check_tuple_needles(
+            clusters,  # type: ignore[arg-type]
+            self._filtered_data["clusters"].cat.categories,
+            msg="Invalid cluster `{0!r}`.",
+            reraise=True,
         )
         clusters_flat = list({c for cs in clusters for c in cs})
 
