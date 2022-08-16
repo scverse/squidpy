@@ -5,4 +5,3 @@ from squidpy.gr._sepal import sepal
 from squidpy.gr._ligrec import ligrec
 from squidpy.gr._ripley import ripley
 from squidpy.gr._ppatterns import co_occurrence, spatial_autocorr
-from squidpy.gr._design_matrix import gexp_distance

@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 
-def gexp_distance(
+def exp_dist(
     adata: AnnData,
     annotation: str,  # categorical
     anchor: Union[str, list, np.ndarray],
