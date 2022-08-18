@@ -1,27 +1,56 @@
+from __future__ import annotations
 from typing import Union, Optional
 from functools import reduce
 from itertools import product
 
 from anndata import AnnData
-
+from scanpy import logging as logg
 from sklearn.metrics import DistanceMetric
 from pandas.api.types import CategoricalDtype
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 import pandas as pd
+from squidpy._docs import d
+from squidpy.gr._utils import _save_data
 
 
+@d.dedent
 def exp_dist(
     adata: AnnData,
-    annotation: str,  # categorical
+    annotation: str,
     anchor: Union[str, list, np.ndarray],
     metric: str = "euclidean",
     design_matrix_key: str = "design_matrix",
-    batch_key: Optional[str] = None,  # batch_key #categorical
-    covariates: Optional[Union[str, list]] = None,
+    batch_key: str | None = None,
+    covariates: Union[str, list] | None = None,
+    copy: bool = False,
 ) -> Optional[AnnData]:
-    """Build a design matrix consisting of gene expression by distance to selected anchor point(s)."""
+    """
+    Build a design matrix consisting of gene expression by distance to selected anchor point(s).
+
+    Parameters
+    ----------
+    %(adata)s
+    %(cluster_key)s
+    anchor
+        TODO
+    metric
+        TODO
+    design_matrix
+        TODO
+    batch_key
+        TODO
+    covariates
+        TODO
+
+    Returns
+    -------
+    TODO
+    If ``copy = True``, returns the design_matrix and the distance thresholds intervals TODO....
+
+    Otherwise, TODO
+    """
     # list of columns which will be categorical later on
     categorical_columns = [annotation]
 
@@ -108,10 +137,17 @@ def exp_dist(
         else:
             df[cat_name] = pd.Categorical(df[cat_name])
 
-    # save design matrix dataframe to adata.obsm
-    adata.obsm[design_matrix_key] = df
+    if copy:
+        return df
 
-    return
+    # save design matrix dataframe to adata.obsm
+    # TODO remove and use _save_data instead, see below
+    # see https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/gr/_ppatterns.py#L398-L404
+    # adata.obsm[design_matrix_key] = df
+
+    # _save_data(
+    #     adata, attr="uns", key=Key.uns.co_occurrence(cluster_key), data={"occ": out, "interval": interval}, time=start
+    # )
 
 
 def _add_metadata(
