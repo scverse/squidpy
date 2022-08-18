@@ -25,6 +25,9 @@ def plot_gexp_dist(
     dfs = {}
 
     # get design matrix from anndata object
+    # TODO use this for getting the data from obsm if possible
+    # https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/pl/_graph.py#L32-L40
+    # although you'd have to modify with attribute and key
     if use_raw:
         df = adata.obsm[design_matrix_key + "_raw_dist"].copy()
 
