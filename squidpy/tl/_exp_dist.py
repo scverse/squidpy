@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Union, Optional
+from typing import Union, Optional, Tuple
 from functools import reduce
 from itertools import product
 
@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from squidpy._docs import d
 from squidpy.gr._utils import _save_data
+from squidpy._utils import NDArrayA
 
 
 @d.dedent
@@ -222,7 +223,7 @@ def _normalize_distances(adata: AnnData, df: pd.DataFrame, anchor: list, design_
     return df
 
 
-def _get_coordinates(adata: AnnData, anchor: str, annotation: str) -> (np.ndarray, np.ndarray):
+def _get_coordinates(adata: AnnData, anchor: str, annotation: str) -> Tuple(NDArrayA, NDArrayA):
     """Get anchor coordinates and coordinates of all observations."""
     if isinstance(anchor, np.ndarray):
         return (anchor, adata.obsm["spatial"])
