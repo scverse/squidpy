@@ -9,5 +9,5 @@ from squidpy.pl._graph import (
 from squidpy.pl._utils import extract
 from squidpy.pl._ligrec import ligrec
 from squidpy.pl._spatial import spatial_scatter, spatial_segment
+from squidpy.pl._exp_dist import plot_gexp_dist
 from squidpy.pl._interactive import Interactive  # type: ignore[attr-defined]
-from squidpy.pl._feature_by_dist import plot_gexp_dist

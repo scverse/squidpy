@@ -1,31 +1,35 @@
 from __future__ import annotations
-from typing import Union, Optional, Tuple
+
+from typing import Any, Dict, List, Optional
 from functools import reduce
 from itertools import product
 
 from anndata import AnnData
-from scanpy import logging as logg
+
 from sklearn.metrics import DistanceMetric
-from pandas.api.types import CategoricalDtype
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 import pandas as pd
+
 from squidpy._docs import d
-from squidpy.gr._utils import _save_data
 from squidpy._utils import NDArrayA
+from squidpy._constants._pkg_constants import Key
+
+__all__ = ["exp_dist"]
 
 
 @d.dedent
 def exp_dist(
     adata: AnnData,
-    annotation: str,
-    anchor: Union[str, list, np.ndarray],
-    metric: str = "euclidean",
+    cluster_key: str,
+    groups: str | List[str] | NDArrayA,
     design_matrix_key: str = "design_matrix",
     batch_key: str | None = None,
-    covariates: Union[str, list] | None = None,
-    copy: bool = False,
+    covariates: str | List[str] | None = None,
+    spatial_key: str = Key.obsm.spatial,
+    metric: str = "euclidean",
+    copy: bool = True,  # TODO(LLehner): once save_adata implemented, default to False
 ) -> Optional[AnnData]:
     """
     Build a design matrix consisting of gene expression by distance to selected anchor point(s).
@@ -34,116 +38,138 @@ def exp_dist(
     ----------
     %(adata)s
     %(cluster_key)s
-    anchor
-        TODO
+    groups
+        TODO(LLehner)
     metric
-        TODO
+        TODO(LLehner)
     design_matrix
-        TODO
+        TODO(LLehner)
     batch_key
-        TODO
+        TODO(LLehner)
     covariates
-        TODO
+        TODO(LLehner)
 
     Returns
     -------
-    TODO
-    If ``copy = True``, returns the design_matrix and the distance thresholds intervals TODO....
+    TODO(LLehner)
+    If ``copy = True``, returns the design_matrix and the distance thresholds intervals TODO(LLehner)....
 
-    Otherwise, TODO
+    Otherwise, TODO(LLehner)
     """
+    # TODO(LLehner): if a key should be a categorical series, check it with :
+    # TODO(LLehner): squidpy.gr._utils import _assert_categorical_obs
+    # TODO(LLehner): e.g. batch_key, cluster_key
+    # TODO(LLehner):  also check if entries are valid with
+    # TODO(LLehner): squidpy.gr._utils import _get_valid_values
+
+    # TODO(LLehner): consider removing?
     # list of columns which will be categorical later on
-    categorical_columns = [annotation]
+    # categorical_columns = [cluster_key]
 
     # save initial metadata to adata.uns
-    adata.uns[design_matrix_key] = _add_metadata(adata, annotation, anchor, metric, batch_key, covariates)
-
-    anchor_count = 0
-    if isinstance(anchor, str) or isinstance(anchor, np.ndarray):
-        anchor = [anchor]
-        anchor_count = 1
+    adata.uns[design_matrix_key] = _add_metadata(
+        cluster_key,
+        groups,
+        batch_key=batch_key,
+        covariates=covariates,
+        metric=metric,
+    )
 
     # prepare batch key for iteration (Nonetype alone in product will result in neutral element)
-    if batch_key is None:
-        batch = [None]
+    batch = [batch_key] if batch_key is None else adata.obs[batch_key].cat.categorical
+
+    if isinstance(groups, np.ndarray):
+        anchor: List[str | None] = [None]  # if None, then assumed ArrayLike
     else:
-        batch = adata.obs[batch_key].unique()
-        categorical_columns.append(batch_key)
+        anchor = [groups] if isinstance(groups, str) else groups  # type: ignore [assignment]
 
     batch_design_matrices = {}
 
     # iterate over slide + anchor combinations (anchor only possible as well)
     for batch_var, anchor_var in product(batch, anchor):
         # initialize dataframe and anndata depending on whether batches are used or not
+        df = _init_design_matrix(
+            adata,
+            cluster_key,
+            spatial_key,
+            batch_key=batch_key,
+            batch_var=batch_var,
+        )
         if batch_var is not None:
-            df = _init_design_matrix(adata[adata.obs[batch_key] == batch_var], True, annotation, anchor_var, batch_key)
-            anchor_coord, batch_coord = _get_coordinates(
-                adata[adata.obs[batch_key] == batch_var], anchor_var, annotation
-            )
-
+            batch_coord = adata[adata.obs[batch_key] == batch_var].obsm[spatial_key]
         else:
-            df = _init_design_matrix(adata, False, annotation, anchor_var)
-            anchor_coord, batch_coord = _get_coordinates(adata, anchor_var, annotation)
+            batch_coord = adata.obsm["spatial"]
 
+        if anchor_var is not None:
+            anchor_coord = adata[adata.obs[cluster_key] == anchor_var].obsm["spatial"]
+        elif isinstance(groups, np.ndarray):
+            anchor_coord = groups
+        else:
+            raise ValueError("TODO(LLehner).")
+
+        # TODO(LLehner): does from sklearn.metrics.DistanceMetric import get_metric works?
+        # TODO(LLehner): if so, please do that instead of using class
         tree = KDTree(anchor_coord, metric=DistanceMetric.get_metric(metric))
         mindist, _ = tree.query(batch_coord)
 
-        if isinstance(anchor_var, np.ndarray):
+        if anchor_var is None:
             anchor_var = "custom_anchor"
         df.insert(loc=2, column=str(anchor_var), value=mindist)
         if batch_var is not None:
-            df["obs"] = adata[adata.obs[batch_key] == batch_var].obs_names
+            df.index = adata[adata.obs[batch_key] == batch_var].obs_names.copy()
         else:
-            df["obs"] = adata.obs_names
+            df.index = adata.obs_names.copy()
+
         batch_design_matrices[str((batch_var, anchor_var))] = df
 
     # merge individual data frames
     # use merge when several anchor points were used and concat when one anchor but several slides were used
     # if a single anchor point with a single batch is used take design matrix directly
-    if batch_key is None and anchor_count == 0:
+    if batch_key is None and len(anchor) == 1:
         df = reduce(
-            lambda df1, df2: pd.merge(df1, df2, on=[annotation, "x", "y", "obs"]),
+            lambda df1, df2: pd.merge(df1, df2, on=[cluster_key, "x", "y", "obs"]),
             list(batch_design_matrices.values()),
         )
-        df.set_index("obs", inplace=True)
         df.index.name = None
     elif batch_key is not None:
         df = pd.concat(list(batch_design_matrices.values()))
         df = df.reindex(adata.obs_names)
     else:
+        # TODO(LLehner): is this needed?
+        # TODO(LLehner): from line 126 looks like a circular assign
         df = batch_design_matrices[str((batch_var, anchor_var))]
 
     # normalize euclidean distances column(s)
-    df = _normalize_distances(adata, df, anchor, design_matrix_key)
+    df = _normalize_distances(adata, df, anchor)
 
     # add additional covariates to design matrix
     if covariates is not None:
         if isinstance(covariates, str):
             covariates = [covariates]
-        for covariate in covariates:
-            df[covariate] = adata.obs[covariate]
-            adata.obsm[design_matrix_key + "_raw_dist"][covariate] = adata.obs[covariate]
-            categorical_columns.append(covariate)
+        adata.obsm[design_matrix_key][covariates] = adata.obs[covariates].copy()
 
     # organize data frames after merging, depending if batches were used or not
-    adata.obsm[design_matrix_key + "_raw_dist"] = adata.obsm[design_matrix_key + "_raw_dist"][
-        [value for key, value in adata.uns[design_matrix_key].items() if key not in ["metric"]]
-    ]
-    df = df[[value for key, value in adata.uns[design_matrix_key].items() if key not in ["metric"]]]
+    # TODO(LLehner): consider removing below commented code
+    # adata.obsm[design_matrix_key + "_raw_dist"] = adata.obsm[design_matrix_key + "_raw_dist"][
+    #     [value for key, value in adata.uns[design_matrix_key].items() if key not in ["metric"]]
+    # ]
+    # df = df[[value for key, value in adata.uns[design_matrix_key].items() if key not in ["metric"]]]
 
     # make sure that columns without numerical values are of type categorical
-    for cat_name in categorical_columns:
-        if isinstance(cat_name, CategoricalDtype):
-            continue
-        else:
-            df[cat_name] = pd.Categorical(df[cat_name])
+    # TODO(LLehner): they should be (I don't think merge/concat change type)
+    # TODO(LLehner): but please check and uncomment out if needed
+    # for cat_name in categorical_columns:
+    #     if isinstance(cat_name, CategoricalDtype):
+    #         continue
+    #     else:
+    #         df[cat_name] = pd.Categorical(df[cat_name])
 
     if copy:
         return df
 
     # save design matrix dataframe to adata.obsm
-    # TODO remove and use _save_data instead, see below
-    # see https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/gr/_ppatterns.py#L398-L404
+    # TODO(LLehner): remove and use _save_data instead, see below
+    # https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/gr/_ppatterns.py#L398-L404
     # adata.obsm[design_matrix_key] = df
 
     # _save_data(
@@ -152,64 +178,72 @@ def exp_dist(
 
 
 def _add_metadata(
-    adata: AnnData,
-    annotation: str,  # categorical
-    anchor: Union[str, list, np.ndarray],
-    batch_key: Optional[str],  # categorical
-    covariates: Optional[Union[str, list]],
+    cluster_key: str,
+    groups: str | List[str] | NDArrayA,
+    batch_key: str | None = None,
+    covariates: str | List[str] | None = None,
     metric: str = "euclidean",
-):
+) -> Dict[str, Any]:
     """Add metadata to adata.uns."""
-    metadata = {}
-    if isinstance(anchor, np.ndarray):
-        metadata["anchor"] = "custom_anchor"
-    elif isinstance(anchor, list):
-        for i, a in enumerate(anchor):
-            metadata["anchor_" + str(i)] = a
-    else:
-        metadata["anchor"] = anchor
+    # TODO maybe a dataclass or named tuple would be good idea.
+    metadata: Dict[str, Any] = {}
+    metadata["cluster_key"] = cluster_key
 
-    metadata["annotation"] = annotation
+    if isinstance(groups, np.ndarray):
+        metadata["groups"] = ["custom"]
+    else:
+        metadata["groups"] = [groups] if isinstance(groups, str) else groups
 
     if batch_key is not None:
         metadata["batch_key"] = batch_key
 
-    metadata["x"] = "x"
-    metadata["y"] = "y"
-
-    metadata["metric"] = "euclidean"
+    metadata["metric"] = metric
 
     if covariates is not None:
         if isinstance(covariates, str):
             covariates = [covariates]
-        for i, covariate in enumerate(covariates):
-            metadata["covariate_" + str(i)] = covariate
+        metadata["covariates"] = covariates
 
     return metadata
 
 
 def _init_design_matrix(
-    adata: AnnData, batch: bool, annotation: str, anchor: str, batch_key: Optional[str]
+    adata: AnnData,
+    cluster_key: str,
+    spatial_key: str,
+    batch_key: Optional[str] = None,
+    batch_var: Optional[str] = None,
 ) -> pd.DataFrame:
     """Initialize design matrix."""
-    df = adata.obs[[annotation]]
-    if batch:
+    if batch_key is not None and batch_var is not None:
+        df = adata[adata.obs[batch_key] == batch_var].obs[[cluster_key]].copy()
         df[batch_key] = adata.obs[batch_key]
-    df["x"] = adata.obsm["spatial"][:, 0]
-    df["y"] = adata.obsm["spatial"][:, 1]
-
+    else:
+        df = adata.obs[[cluster_key]].copy()
+    # TODO(LLehner): is x and y consistent across datasets?
+    # TODO(LLehner): also do we need to store it?
+    df["x"] = adata.obsm[spatial_key][:, 0].copy()
+    df["y"] = adata.obsm[spatial_key][:, 1].copy()
     return df
 
 
-def _normalize_distances(adata: AnnData, df: pd.DataFrame, anchor: list, design_matrix_key: str) -> pd.DataFrame:
+def _normalize_distances(
+    adata: AnnData,
+    df: pd.DataFrame,
+    anchor: List[str | None],
+) -> pd.DataFrame:
     """Normalize distances to anchor."""
     # .values used for fit and transform to avoid:
+    # TODO(LLehner): what's this warning about?
     # "FutureWarning: The feature names should match those that were passed during fit.
     # Starting version 1.2, an error will be raised."
+
     scaler = MinMaxScaler()
-    raw_dist = df.copy()
-    if "custom_anchor" in df.columns:
-        anchor = ["custom_anchor"]
+    anchor = ["custom_anchor"] if anchor is None else anchor
+    # TODO(LLehner): check if correct
+    print(anchor)
+    print(df)
+    print(df[anchor])
     if len(anchor) > 1:
         max_dist_anchor = df[anchor].columns[np.where(df[anchor].values == np.max(df[anchor].values))[1]][0]
         scaler.fit(df[[max_dist_anchor]].values)
@@ -218,14 +252,9 @@ def _normalize_distances(adata: AnnData, df: pd.DataFrame, anchor: list, design_
         for a in anchor:
             df[a] = scaler.transform(df[[a]].values)
     else:
-        df[anchor] = scaler.fit_transform(df[anchor].values)
-    adata.obsm[design_matrix_key + "_raw_dist"] = raw_dist
+        df[anchor] = scaler.fit_transform(df[anchor].values.flatten())
+    # TODO(LLehner): idea is to save raw dist inside the same df (design_matrix)
+    # TODO(LLehner): instead of separate obsm
+    # TODO(LLehner): with column name like f"{anchor}_raw"
+    # adata.obsm[design_matrix_key + "_raw_dist"] = raw_dist
     return df
-
-
-def _get_coordinates(adata: AnnData, anchor: str, annotation: str) -> Tuple(NDArrayA, NDArrayA):
-    """Get anchor coordinates and coordinates of all observations."""
-    if isinstance(anchor, np.ndarray):
-        return (anchor, adata.obsm["spatial"])
-    else:
-        return (np.array(adata[adata.obs[annotation] == anchor].obsm["spatial"]), adata.obsm["spatial"])

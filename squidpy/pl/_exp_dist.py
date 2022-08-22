@@ -20,7 +20,7 @@ def plot_gexp_dist(
 ) -> Union[Figure, Axes, None]:
     """Plot gene expression by distance to anchor point."""
     if isinstance(var, str):
-        var = [var]
+        var = [var]  # type: ignore[assignment]
 
     dfs = {}
 
