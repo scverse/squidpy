@@ -114,7 +114,7 @@ def exp_dist(
 
         if anchor_var is None:
             anchor_var = "custom_anchor"
-        df.insert(loc=2, column=str(anchor_var), value=mindist)
+        df[anchor_var] = mindist
         if batch_var is not None:
             df.index = adata[adata.obs[batch_key] == batch_var].obs_names.copy()
         else:
@@ -222,8 +222,9 @@ def _init_design_matrix(
         df = adata.obs[[cluster_key]].copy()
     # TODO(LLehner): is x and y consistent across datasets?
     # TODO(LLehner): also do we need to store it?
-    df["x"] = adata.obsm[spatial_key][:, 0].copy()
-    df["y"] = adata.obsm[spatial_key][:, 1].copy()
+    # TODO(LLehner): please remove
+    # df["x"] = adata.obsm[spatial_key][:, 0].copy()
+    # df["y"] = adata.obsm[spatial_key][:, 1].copy()
     return df
 
 
@@ -241,9 +242,6 @@ def _normalize_distances(
     scaler = MinMaxScaler()
     anchor = ["custom_anchor"] if anchor is None else anchor
     # TODO(LLehner): check if correct
-    print(anchor)
-    print(df)
-    print(df[anchor])
     if len(anchor) > 1:
         max_dist_anchor = df[anchor].columns[np.where(df[anchor].values == np.max(df[anchor].values))[1]][0]
         scaler.fit(df[[max_dist_anchor]].values)
@@ -252,7 +250,7 @@ def _normalize_distances(
         for a in anchor:
             df[a] = scaler.transform(df[[a]].values)
     else:
-        df[anchor] = scaler.fit_transform(df[anchor].values.flatten())
+        df[anchor] = scaler.fit_transform(df[anchor].values)
     # TODO(LLehner): idea is to save raw dist inside the same df (design_matrix)
     # TODO(LLehner): instead of separate obsm
     # TODO(LLehner): with column name like f"{anchor}_raw"
