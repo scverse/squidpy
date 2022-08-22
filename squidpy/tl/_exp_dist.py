@@ -140,7 +140,7 @@ def exp_dist(
         df = batch_design_matrices[str((batch_var, anchor_var))]
 
     # normalize euclidean distances column(s)
-    df = _normalize_distances(adata, df, anchor)
+    df = _normalize_distances(df, anchor)
 
     # add additional covariates to design matrix
     if covariates is not None:
@@ -229,7 +229,6 @@ def _init_design_matrix(
 
 
 def _normalize_distances(
-    adata: AnnData,
     df: pd.DataFrame,
     anchor: List[str | None],
 ) -> pd.DataFrame:
