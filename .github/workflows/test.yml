@@ -15,30 +15,6 @@ on:
                 default: release
 
 jobs:
-    lint:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v2
-            - name: Set up Python 3.9
-              uses: actions/setup-python@v2
-              with:
-                  python-version: 3.9
-
-            - uses: actions/cache@v2
-              with:
-                  path: ~/.cache/pre-commit
-                  key: precommit-${{ env.pythonLocation }}-${{ hashFiles('**/.pre-commit-config.yaml') }}
-
-            - name: Install dependencies
-              run: |
-                  sudo apt install pandoc
-                  python -m pip install --upgrade pip
-                  pip install tox
-
-            - name: Lint
-              run: |
-                  tox -e lint,check-docs
-
     test:
         runs-on: ${{ matrix.os }}
         strategy:
@@ -121,7 +97,7 @@ jobs:
                   codecov --no-color --required --flags unittests
 
     regenerate-notebooks:
-        needs: [lint, test]
+        needs: test
         if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') }}
         runs-on: ubuntu-latest
         steps:
@@ -135,7 +111,7 @@ jobs:
 
     release:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release' }}
-        needs: [lint, test]
+        needs: test
         runs-on: ubuntu-latest
         steps:
             - name: Invoke deployment workflow
