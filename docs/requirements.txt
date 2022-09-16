@@ -3,10 +3,12 @@ gitpython
 ipython
 Jinja2<3.1.0  # https://github.com/spatialaudio/nbsphinx/issues/641
 # very slow build
-nbsphinx>=0.8.1,<0.8.7
+# nbsphinx>=0.8.1,<0.8.7
+nbsphinx>=0.8.9
 pyenchant>=3.1.1
 requests
-sphinx>=4,<4.0.3  # https://github.com/spatialaudio/nbsphinx/issues/584
+# sphinx>=4,<4.0.3  # https://github.com/spatialaudio/nbsphinx/issues/584
+sphinx>=5.1.1
 sphinx-autodoc-annotation
 sphinx-autodoc-typehints>=1.10.3
 sphinx_gallery>=0.8.2
