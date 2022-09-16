@@ -75,18 +75,25 @@ def visium(
         (path / f"{Key.uns.spatial}/scalefactors_json.json").read_bytes()
     )
 
-    tissue_positions_file = (
-        path / "spatial/tissue_positions.csv"
-        if (path / "spatial/tissue_positions.csv").exists()
-        else path / "spatial/tissue_positions_list.csv"
-    )
+    # spacerangerV2.0.0
+    if (path / "spatial/tissue_positions.csv").exists():
+        tissue_positions_file = path / "spatial/tissue_positions.csv"
+        header = 1
+        tissue_position_cols = ["in_tissue", "array_row", "array_col", "pxl_row_in_fullres", "pxl_col_in_fullres"]
+    # spacerangerV1.0.0
+    elif (path / "spatial/tissue_positions_list.csv").exists():
+        tissue_positions_file = path / "spatial/tissue_positions_list.csv"
+        header = None
+        tissue_position_cols = ["in_tissue", "array_row", "array_col", "pxl_col_in_fullres", "pxl_row_in_fullres"]
+    else:
+        raise ValueError("Invalid space ranger output.")
 
     coords = pd.read_csv(
         tissue_positions_file,
-        header=1 if tissue_positions_file.name == "tissue_positions.csv" else None,
+        header=header,
         index_col=0,
     )
-    coords.columns = ["in_tissue", "array_row", "array_col", "pxl_col_in_fullres", "pxl_row_in_fullres"]
+    coords.columns = tissue_position_cols
 
     adata.obs = pd.merge(adata.obs, coords, how="left", left_index=True, right_index=True)
     adata.obsm[Key.obsm.spatial] = adata.obs[["pxl_row_in_fullres", "pxl_col_in_fullres"]].values
