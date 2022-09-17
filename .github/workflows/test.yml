@@ -15,6 +15,20 @@ on:
                 default: release
 
 jobs:
+    cancel_previous_runs:
+        if: |
+            !endsWith(github.event.head_commit.message, '# ci skip') &&
+            (
+              startsWith(github.ref, 'refs/heads') ||
+              startsWith(github.ref, 'refs/tags') ||
+              github.event.pull_request.draft == false
+            )
+        runs-on: ${{ matrix.os }}
+        steps:
+            - name: Cancel Previous Runs
+              uses: styfle/cancel-workflow-action@0.10.0
+              with:
+                  access_token: ${{ github.token }}
     test:
         runs-on: ${{ matrix.os }}
         strategy:
