@@ -1,19 +1,20 @@
 -r ../requirements.txt
 gitpython
 ipython
+ipywidgets>=8.0.0
 # Jinja2<3.1.0  # https://github.com/spatialaudio/nbsphinx/issues/641
-Jinja>=3.1.2
+Jinja2>=3.1.1
 nbconvert>=6.4.5
 # very slow build
 # nbsphinx>=0.8.1,<0.8.7
-nbsphinx>=0.8.9
+nbsphinx>=0.8.1,<0.8.7
 pyenchant>=3.1.1
 requests
 # sphinx>=4,<4.0.3  # https://github.com/spatialaudio/nbsphinx/issues/584
 sphinx>=5.1.1
 sphinx-autodoc-annotation
 sphinx-autodoc-typehints>=1.10.3
-sphinx_gallery>=0.8.2
+sphinx_gallery>=0.8.2,<0.11 # https://github.com/spatialaudio/nbsphinx/pull/666
 sphinx_rtd_theme
 sphinxcontrib-bibtex>=2.2.0
 sphinxcontrib-spelling
