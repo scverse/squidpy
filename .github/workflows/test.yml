@@ -29,6 +29,7 @@ jobs:
               uses: styfle/cancel-workflow-action@0.10.0
               with:
                   access_token: ${{ github.token }}
+
     test:
         runs-on: ${{ matrix.os }}
         strategy:
