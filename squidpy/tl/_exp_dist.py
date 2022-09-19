@@ -64,16 +64,11 @@ def exp_dist(
         adata, cluster_key, groups, metric=metric, batch_key=batch_key, covariates=covariates
     )
 
-    # anchor_count = 0
-    # if isinstance(groups, np.ndarray):
-    # anchor: List[str | None] = [None] # if None, then assumed ArrayLike
-    # else:
     anchor = (
         [groups] if isinstance(groups, str) or isinstance(groups, np.ndarray) else groups
     )  # type: ignore [assignment]
 
     # prepare batch key for iteration (Nonetype alone in product will result in neutral element)
-    # batch = [batch_key] if batch_key is None else adata.obs[batch_key].cat.categorical
     if batch_key is None:
         batch = [None]
     else:
@@ -100,8 +95,6 @@ def exp_dist(
         tree = KDTree(anchor_coord, metric=DistanceMetric.get_metric(metric))
         mindist, _ = tree.query(batch_coord)
 
-        # test later
-        # ARRAY = ARRAY[ARRAY >= some_condition]
         if isinstance(anchor_var, np.ndarray):
             anchor_var = "custom_anchor"
             anchor = ["custom_anchor"]
@@ -138,10 +131,6 @@ def exp_dist(
         if isinstance(covariates, str):
             covariates = [covariates]
         df[covariates] = adata.obs[covariates].copy()
-
-    # organize data frames after merging, depending if batches were used or not
-    # adata.obsm[design_matrix_key + "_raw_dist"] = adata.obsm[design_matrix_key + "_raw_dist"][[value for key, value in adata.uns[design_matrix_key].items() if key not in ["metric"]]]
-    # df = df[[value for key, value in adata.uns[design_matrix_key].items() if key not in ["metric"]]]
 
     # make sure that columns without numerical values are of type categorical
     # for cat_name in categorical_columns:
