@@ -1,0 +1,118 @@
+name: Bug report
+description: Report something that is broken or incorrect
+labels: bug
+body:
+    - type: markdown
+      attributes:
+          value: |
+              **Note**: Please read [this guide](https://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports)
+              detailing how to provide the necessary information for us to reproduce your bug. In brief:
+                * Please provide exact steps how to reproduce the bug in a clean Python environment.
+                * In case it's not clear what's causing this bug, please provide the data or the data generation procecure.
+                * Sometimes it is not possible to share the data but usually it is possible to replicate problems on publicly
+                  available datasets or to share a subset of your data.
+
+    - type: textarea
+      id: description
+      attributes:
+          label: Description of the bug
+          description: A clear and concise description of what the bug is.
+      validations:
+          required: true
+
+    - type: textarea
+      id: repex
+      attributes:
+          label: Minimal reproducible example
+          description: A code snipped that we can copy&paste to reproduce the bug without having any data
+          render: Python
+          placeholder: |
+              import scanpy as sc
+              adata = sc.datasets.pbmc3k()
+
+              sc.do_something_that_doesnt_work(adata)
+
+    - type: textarea
+      id: stacktrace
+      attributes:
+          label: The error message produced by the code above
+          description: Please paste the entire error message
+          render: pytb
+          placeholder: |
+              ---------------------------------------------------------------------------
+              AssertionError                            Traceback (most recent call last)
+              <ipython-input-5-78750baef17a> in <module>
+              ----> 1 adata = sc.do_something_that_doesnt_work(adata)
+
+              /opt/conda/lib/python3.8/site-packages/scanpy/_preprocessing.py in do_something_that_doesnt_work(adata)
+                  438
+              --> 439     raise AssertionError("Demo function that fails")
+                  440
+
+    - type: textarea
+      id: versions
+      attributes:
+          label: Version information
+          description: |
+              Please paste below the output of
+
+              ```python
+              import session_info
+              session_info.show(html=False, dependencies=True)
+              ```
+          placeholder: |
+              -----
+              anndata             0.8.0rc2.dev27+ge524389
+              session_info        1.0.0
+              -----
+              asttokens           NA
+              awkward             1.8.0
+              backcall            0.2.0
+              cython_runtime      NA
+              dateutil            2.8.2
+              debugpy             1.6.0
+              decorator           5.1.1
+              entrypoints         0.4
+              executing           0.8.3
+              h5py                3.7.0
+              ipykernel           6.15.0
+              jedi                0.18.1
+              mpl_toolkits        NA
+              natsort             8.1.0
+              numpy               1.22.4
+              packaging           21.3
+              pandas              1.4.2
+              parso               0.8.3
+              pexpect             4.8.0
+              pickleshare         0.7.5
+              pkg_resources       NA
+              prompt_toolkit      3.0.29
+              psutil              5.9.1
+              ptyprocess          0.7.0
+              pure_eval           0.2.2
+              pydev_ipython       NA
+              pydevconsole        NA
+              pydevd              2.8.0
+              pydevd_file_utils   NA
+              pydevd_plugins      NA
+              pydevd_tracing      NA
+              pygments            2.12.0
+              pytz                2022.1
+              scipy               1.8.1
+              setuptools          62.5.0
+              setuptools_scm      NA
+              six                 1.16.0
+              stack_data          0.3.0
+              tornado             6.1
+              traitlets           5.3.0
+              wcwidth             0.2.5
+              zmq                 23.1.0
+              -----
+              IPython             8.4.0
+              jupyter_client      7.3.4
+              jupyter_core        4.10.0
+              -----
+              Python 3.9.13 | packaged by conda-forge | (main, May 27 2022, 16:58:50) [GCC 10.3.0]
+              Linux-5.18.6-arch1-1-x86_64-with-glibc2.35
+              -----
+              Session information updated at 2022-07-07 17:55
