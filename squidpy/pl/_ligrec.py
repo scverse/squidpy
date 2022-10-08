@@ -293,6 +293,9 @@ def ligrec(
         means = means.T
 
     for cls, size in (pvals.groupby(level=0, axis=1)).size().to_dict().items():
+        size = np.unique(list(size.values()))
+        if len(size) != 1:
+            raise ValueError(f"Expected all groups to have the same number of interacting clusters, found `{size}`.")
         label_ranges[cls] = (start, start + size - 1)
         start += size
     label_ranges = {k: label_ranges[k] for k in sorted(label_ranges.keys())}
