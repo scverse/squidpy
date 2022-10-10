@@ -296,6 +296,7 @@ def ligrec(
         size = np.unique(list(size.values()))
         if len(size) != 1:
             raise ValueError(f"Expected all groups to have the same number of interacting clusters, found `{size}`.")
+        size = size[0]
         label_ranges[cls] = (start, start + size - 1)
         start += size
     label_ranges = {k: label_ranges[k] for k in sorted(label_ranges.keys())}
