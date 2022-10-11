@@ -1,4 +1,4 @@
-Squidpy dev (2022-08-02)
+Squidpy dev (2022-10-11)
 ========================
 
 Bugfixes
@@ -20,6 +20,11 @@ Bugfixes
   :func:`squidpy.pl.spatial_scatter`.
   `@michalk8 <https://github.com/michalk8>`__
   `#580 <https://github.com/scverse/squidpy/pull/580>`__
+
+- This PR updates squidpy to accommodate the latest changes made in spaceranger 2.0 which will break
+  the released version of squidpy. Will provide backwards compatibility to pre 2.0 releases.
+  `@stephenwilliams22 <https://github.com/stephenwilliams22>`__
+  `#583 <https://github.com/scverse/squidpy/pull/583>`__
 
 
 Miscellaneous
