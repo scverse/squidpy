@@ -92,6 +92,7 @@ segmentations
 semibold
 seqFISH
 seqV
+spaceranger
 Squidpy
 StarDist
 stromal
