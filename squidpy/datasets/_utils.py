@@ -14,7 +14,7 @@ PathLike = Union[os.PathLike, str]
 Function_t = Callable[..., Union[AnnData, Any]]
 
 
-@dataclass(frozen=True)  # type: ignore[misc]
+@dataclass(frozen=True)
 class Metadata(ABC):
     """Base class handling metadata."""
 
