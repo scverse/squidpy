@@ -154,7 +154,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             na_color="lightgrey",
         )
 
-    def test_plot_spatial_segment_group(self, adata_mibitof: AnnData):
+    def test_tol_plot_spatial_segment_group(self, adata_mibitof: AnnData):
         pl.spatial_segment(
             adata_mibitof,
             color=["Cluster"],
@@ -168,6 +168,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             scalebar_dx=2.0,
             scalebar_kwargs={"scale_loc": "bottom", "location": "lower right"},
         )
+        self.compare("SpatialStatic_spatial_segment_group", tolerance=60)
 
     def test_plot_spatial_segment_crop(self, adata_mibitof: AnnData):
         pl.spatial_segment(

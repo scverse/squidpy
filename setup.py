@@ -37,8 +37,8 @@ setup(
     zip_safe=False,
     install_requires=[l.strip() for l in Path("requirements.txt").read_text("utf-8").splitlines()],
     extras_require=dict(
-        dev=["pre-commit>=2.9.0", "towncrier>=21.3.0"],
-        test=["tox>=3.20.1"],
+        dev=["pre-commit>=2.9.0", "towncrier>=22.8.0"],
+        test=["tox>=3.26.0"],
         docs=[
             l.strip()
             for l in (Path("docs") / "requirements.txt").read_text("utf-8").splitlines()
