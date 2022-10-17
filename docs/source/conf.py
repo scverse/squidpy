@@ -94,6 +94,7 @@ exclude_patterns = [
     "auto_*/**.ipynb",
     "auto_*/**.md5",
     "auto_*/**.py",
+    "auto_*/**/index.rst",
     "release/changelog/*",
     "**.ipynb_checkpoints",
 ]

@@ -1071,7 +1071,7 @@ class ImageContainer(FeatureMixin):
         blending: Literal["opaque", "translucent", "additive"] = "opaque",
         symbol: Literal["disc", "square"] = "disc",
         key_added: str = "shapes",
-    ) -> Interactive:
+    ) -> Interactive:  # type: ignore[type-var]
         """
         Launch :mod:`napari` viewer.
 
