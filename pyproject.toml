@@ -59,7 +59,7 @@ lexicographical = true
 
 [tool.towncrier]
 package = "squidpy"
-single_file = true
+single_file = false
 filename = "docs/source/release/notes-{version}.rst"
 directory = "docs/source/release/changelog"
 issue_format = "`#{issue} <https://github.com/scverse/squidpy/pull/{issue}>`__"
