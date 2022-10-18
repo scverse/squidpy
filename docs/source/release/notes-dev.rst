@@ -47,6 +47,6 @@ Documentation
   `@LLehner <https://github.com/LLehner>`__
   `#615 <https://github.com/scverse/squidpy/pull/615>`__
 
-- New tutorial for Vizgen Merscope mouse liver data.
+- New tutorial for Vizgen mouse liver data.
   `@cornhundred <https://github.com/cornhundred>`__
   `#616 <https://github.com/scverse/squidpy/pull/616>`__
