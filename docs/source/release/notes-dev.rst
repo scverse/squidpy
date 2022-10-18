@@ -42,5 +42,11 @@ Documentation
   Remove reference of ``scanpy.pl.spatial`` plotting in examples.
   `@dineshpalli <https://github.com/dineshpalli>`__
   `#569 <https://github.com/scverse/squidpy/pull/569>`__
+
 - New tutorial for 10x Genomics Xenium data.
   `@LLehner <https://github.com/LLehner>`__
+  `#615 <https://github.com/scverse/squidpy/pull/615>`__
+
+- New tutorial for Vizgen Merscope mouse liver data.
+  `@cornhundred <https://github.com/cornhundred>`__
+  `#616 <https://github.com/scverse/squidpy/pull/616>`__
