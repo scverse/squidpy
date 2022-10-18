@@ -1,3 +1,0 @@
-This PR updates squidpy to accommodate the latest changes made in spaceranger 2.0 which will break
-the released version of squidpy. Will provide backwards compatibility to pre 2.0 releases.
-`@stephenwilliams22 <https://github.com/stephenwilliams22>`__
