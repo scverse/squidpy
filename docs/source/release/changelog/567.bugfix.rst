@@ -1,2 +1,0 @@
-Fixes :func:`squidpy.read.nanostring` . Closes #566 .
-`@giovp <https://github.com/giovp>`__
