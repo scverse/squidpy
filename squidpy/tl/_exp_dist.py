@@ -1,24 +1,31 @@
+from anndata import AnnData
+
 from __future__ import annotations
 
-from anndata import AnnData
+import scanpy as sc
 from scanpy import logging as logg
-from squidpy._constants._pkg_constants import Key
+import warnings
+
 from squidpy._docs import d
-from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _save_data
+from squidpy._utils import NDArrayA
+from squidpy._constants._pkg_constants import Key
 
 __all__ = ["exp_dist"]
 
-from functools import reduce
-from itertools import product
-from typing import Any, Dict, List, Optional
-
 import numpy as np
 import pandas as pd
-from sklearn.metrics import DistanceMetric
-from sklearn.neighbors import KDTree
-from sklearn.preprocessing import MinMaxScaler
+from pandas.api.types import CategoricalDtype
 
+from sklearn.neighbors import KDTree
+from sklearn.metrics import DistanceMetric
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.cluster import DBSCAN
+
+from typing import Any, Dict, List, Optional, Tuple
+
+from itertools import product
+from functools import reduce
 
 @d.dedent
 def exp_dist(
@@ -30,7 +37,7 @@ def exp_dist(
     covariates: str | List[str] | None = None,
     spatial_key: str = Key.obsm.spatial,
     metric: str = "euclidean",
-    copy: bool = False,
+    copy: bool = False
 ) -> Optional[AnnData]:
     """
     Build a design matrix consisting of gene expression by distance to selected anchor point(s).
@@ -58,16 +65,18 @@ def exp_dist(
     start = logg.info(f"Creating {design_matrix_key}")
     # list of columns which will be categorical later on
     categorical_columns = [cluster_key]
-
+    
     # save initial metadata to adata.uns
     adata.uns[design_matrix_key] = _add_metadata(
-        adata, cluster_key, groups, metric=metric, batch_key=batch_key, covariates=covariates
-    )
+        adata, 
+        cluster_key, 
+        groups, 
+        metric=metric, 
+        batch_key=batch_key, 
+        covariates=covariates)
 
-    anchor = (
-        [groups] if isinstance(groups, str) or isinstance(groups, np.ndarray) else groups
-    )  # type: ignore [assignment]
-
+    anchor = [groups] if isinstance(groups, str) or isinstance(groups, np.ndarray) else groups # type: ignore [assignment]
+    
     # prepare batch key for iteration (Nonetype alone in product will result in neutral element)
     if batch_key is None:
         batch = [None]
@@ -76,25 +85,31 @@ def exp_dist(
         categorical_columns.append(batch_key)
 
     batch_design_matrices = {}
-
+    
     # iterate over slide + anchor combinations (anchor only possible as well)
     for batch_var, anchor_var in product(batch, anchor):
         # initialize dataframe and anndata depending on whether batches are used or not
         if batch_var is not None:
-            df = _init_design_matrix(adata, cluster_key, spatial_key, batch_key=batch_key, batch_var=batch_var)
-            anchor_coord, batch_coord = _get_coordinates(
-                adata[adata.obs[batch_key] == batch_var], anchor_var, cluster_key
-            )
+            df = _init_design_matrix(adata, 
+                                     cluster_key, 
+                                     spatial_key, 
+                                     batch_key=batch_key, 
+                                     batch_var=batch_var
+                                    )
+            anchor_coord, batch_coord = _get_coordinates(adata[adata.obs[batch_key] == batch_var], anchor_var, cluster_key)
 
         else:
             df = _init_design_matrix(adata, cluster_key, spatial_key)
             anchor_coord, batch_coord = _get_coordinates(adata, anchor_var, cluster_key)
 
-        anchor_coord = _prune_anchor_tree(anchor_coord, 0.05, 4, metric)
+        #if dbscan detects outliers or at least one additional cluster, a warning will be issued
+        if _check_outliers(anchor_coord = anchor_coord):
+            logg.warning(f"Anchor point {anchor_var} contains spatial outliers. It is recommended to remove them for more accurate gene expression analysis.")
 
         tree = KDTree(anchor_coord, metric=DistanceMetric.get_metric(metric))
         mindist, _ = tree.query(batch_coord)
-
+        
+        
         if isinstance(anchor_var, np.ndarray):
             anchor_var = "custom_anchor"
             anchor = ["custom_anchor"]
@@ -125,26 +140,19 @@ def exp_dist(
 
     # normalize euclidean distances column(s)
     df = _normalize_distances(df, anchor)
-
+    
     # add additional covariates to design matrix
     if covariates is not None:
         if isinstance(covariates, str):
             covariates = [covariates]
         df[covariates] = adata.obs[covariates].copy()
-
-    # make sure that columns without numerical values are of type categorical
-    # for cat_name in categorical_columns:
-    #    if isinstance(cat_name, CategoricalDtype):
-    #        continue
-    #    else:
-    #        df[cat_name] = pd.Categorical(df[cat_name])
-
+            
     if copy:
+        logg.info("Finish", time=start)
         return df
     else:
-        # adapted from https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/gr/_ppatterns.py#L398-L404
+        #adapted from https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/gr/_ppatterns.py#L398-L404
         return _save_data(adata, attr="obsm", key=design_matrix_key, data=df, time=start)
-
 
 def _add_metadata(
     adata: AnnData,
@@ -152,8 +160,8 @@ def _add_metadata(
     groups: str | List[str] | NDArrayA,
     batch_key: str | None = None,
     covariates: str | List[str] | None = None,
-    metric: str = "euclidean",
-) -> Dict[str, Any]:
+    metric: str = "euclidean"
+    ) -> Dict[str, Any]:
     """Add metadata to adata.uns."""
     metadata = {}
     if isinstance(groups, np.ndarray):
@@ -166,14 +174,14 @@ def _add_metadata(
     else:
         metadata["anchor_scaled"] = groups
         metadata["anchor_raw"] = groups + "_raw"
-
+        
     metadata["annotation"] = cluster_key
-
+    
     if batch_key is not None:
         metadata["batch_key"] = batch_key
-
+    
     metadata["metric"] = metric
-
+    
     if covariates is not None:
         if isinstance(covariates, str):
             covariates = [covariates]
@@ -181,70 +189,47 @@ def _add_metadata(
             metadata["covariate_" + str(i)] = covariate
 
     return metadata
-
-
+    
 def _init_design_matrix(
-    adata: AnnData, cluster_key: str, spatial_key: str, batch_key: Optional[str] = None, batch_var: Optional[str] = None
-) -> pd.DataFrame:
+    adata: AnnData,
+    cluster_key: str,
+    spatial_key: str,
+    batch_key: Optional[str] = None,
+    batch_var: Optional[str] = None
+    ) -> pd.DataFrame:
     """Initialize design matrix."""
     if batch_key is not None and batch_var is not None:
         df = adata[adata.obs[batch_key] == batch_var].obs[[cluster_key]].copy()
         df[batch_key] = adata[adata.obs[batch_key] == batch_var].obs[batch_key].copy()
     else:
         df = adata.obs[[cluster_key]].copy()
-
+    
     return df
-
-
-def _get_coordinates(adata: AnnData, anchor: str = None, annotation: str = None) -> Tuple(NDArrayA, NDArrayA):
+    
+def _get_coordinates(
+    adata: AnnData,
+    anchor: str = None,
+    annotation: str = None) -> Tuple[NDArrayA, NDArrayA]:
     """Get anchor coordinates and coordinates of all observations."""
     if isinstance(anchor, np.ndarray):
         return (anchor, adata.obsm["spatial"])
     else:
         return (np.array(adata[adata.obs[annotation] == anchor].obsm["spatial"]), adata.obsm["spatial"])
 
+def _check_outliers(anchor_coord: np.ndarray) -> bool:
+    """Check if the anchor point contains spatial outliers."""
+    anchor_coord_df = pd.DataFrame(data=anchor_coord, columns=["x","y"])
+    dbscan = DBSCAN()
+    model = dbscan.fit(anchor_coord_df)
+    
+    if not anchor_coord_df[model.labels_ == -1].empty or not anchor_coord_df[model.labels_ == 1].empty:
+        return True
+    else:
+        return False
 
-def _prune_anchor_tree(anchor_coord: np.ndarray, pct_node_to_filter: float, nth_nbor: int, metric: str) -> np.ndarray:
-    """
-    Prune the anchor coordinate tree to keep the anchor point dense.
-    ----------
-    pct_node_to_filter
-        Percentage of anchor point spots to be removed.
-    nth_nbor
-        Filter based on the distance to nth neighbor. If a single spot belonging to an anchor point
-        is distant to the main region of the anchor point, then a value of 1 will filter the spot
-        if there is a cluster of spots distant to the main region of the anchor point, the value needs to be greater
-        than the amount of spots in the cluster, to filter the entire cluster.
-    Returns
-    -------
-    A np.ndarray of anchor coordinates.
-    """
-
-    # query the anchor point spots against each other to get the distances between all spots within the anchor point
-    anchor_tree = KDTree(anchor_coord, metric=DistanceMetric.get_metric(metric))
-    anchor_dist, anchor_id = anchor_tree.query(anchor_coord, k=nth_nbor)
-
-    # m amount of nodes to filter in the tree
-    top_n_dist = round(len(anchor_dist) * pct_node_to_filter)
-
-    # for all nodes in the tree, get the distances to the nth neighbor
-    nth_nbor_dist = anchor_dist[..., (nth_nbor - 1)].ravel()
-
-    # get the nodes which have the top m highest distances to the nth neighbor
-    top_indices = np.argpartition(nth_nbor_dist, -top_n_dist)[-top_n_dist:]
-
-    # from the tree remove the nodes with the m highest distances to the nth neighbor
-    to_keep = np.ones(len(anchor_dist), dtype=bool)
-    to_keep[top_indices] = False
-    anchor_coord = anchor_coord[to_keep]
-
-    return anchor_coord
-
-
-def _normalize_distances(
-    df: pd.DataFrame,
-    anchor: list = None,
-) -> pd.DataFrame:
+def _normalize_distances(df: pd.DataFrame,
+                         anchor: list = None, 
+                         ) -> pd.DataFrame:
     """Normalize distances to anchor."""
     scaler = MinMaxScaler()
     if len(anchor) > 1:
