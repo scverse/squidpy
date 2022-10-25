@@ -1,6 +1,6 @@
-from anndata import AnnData
-
 from __future__ import annotations
+
+from anndata import AnnData
 
 import scanpy as sc
 from scanpy import logging as logg

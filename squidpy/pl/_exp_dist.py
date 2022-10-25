@@ -78,7 +78,7 @@ def exp_dist(
 
 
 # adapted from https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/pl/_graph.py#L32-L40
-def _get_data(adata: AnnData, key: str, func_name: str, attr: str = "obsm") -> Any:
+def _get_data(adata: AnnData, key: str, func_name: str, attr: str = "obsm"):
     try:
         if attr == "obsm":
             return adata.obsm[key]
