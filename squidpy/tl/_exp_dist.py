@@ -35,28 +35,32 @@ def exp_dist(
     design_matrix_key: str = "design_matrix",
     batch_key: str | None = None,
     covariates: str | List[str] | None = None,
-    spatial_key: str = Key.obsm.spatial,
     metric: str = "euclidean",
+    spatial_key: str = Key.obsm.spatial,
     copy: bool = False
 ) -> Optional[AnnData]:
     """
     Build a design matrix consisting of gene expression by distance to selected anchor point(s).
     Parameters
     ----------
-    %(adata)s
-    %(cluster_key)s
+    adata
+        Annotated data matrix
     groups
-        anchor points to calculate distances from, can be a single str, a list of str or a numpy array of coordinates
+        Anchor points to calculate distances from, can be a single `str`, a `List[str]` or a `numpy.array` of coordinates.
     cluster_key
-        annotation in .obs to take anchor point from
-    metric
-        distance metric, defaults to "euclidean"
+        Annotation column in `.obs` to take anchor point(s) from.
     design_matrix
-        name of the design matrix saved to .obsm, defaults to "design_matrix"
+        Name of the design matrix saved to `.obsm`, defaults to "design_matrix".
     batch_key
-        optional: specifiy batches which contain identical anchor points
+        Optional: specify batches which contain identical anchor points.
     covariates
-        additional covariates from .obs which can be used for modelling
+        Additional covariates from `.obs` to include in the design matrix.
+    metric
+        Distance metric, defaults to "euclidean".
+    spatial_key: 
+        Source of spatial coordinates for each observation.
+    copy
+        Whether to modify copied input object. 
     Returns
     -------
     If ``copy = True``, returns the design_matrix and the distance thresholds intervals
@@ -219,7 +223,7 @@ def _get_coordinates(
 def _check_outliers(anchor_coord: np.ndarray) -> bool:
     """Check if the anchor point contains spatial outliers."""
     anchor_coord_df = pd.DataFrame(data=anchor_coord, columns=["x","y"])
-    dbscan = DBSCAN()
+    dbscan = DBSCAN(eps=(0.075*anchor_coord.values.max()))
     model = dbscan.fit(anchor_coord_df)
     
     if not anchor_coord_df[model.labels_ == -1].empty or not anchor_coord_df[model.labels_ == 1].empty:

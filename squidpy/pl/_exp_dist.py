@@ -1,5 +1,7 @@
 from anndata import AnnData
+
 import scanpy as sc
+from scanpy.plotting import _utils
 
 import seaborn as sns
 
@@ -8,17 +10,47 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from pandas.api.types import is_categorical_dtype
 from typing import Optional, Union
 
-def pl_exp_dist(
+def exp_dist(
     adata: AnnData, 
     design_matrix_key: str = None,
     var: str = None,
     n_bins: int = 20,
     show_model_fit: bool = False,
-    use_raw: Optional[bool] = False) -> Union[Figure, Axes, None]:
-    """Plot gene expression by distance to anchor point."""
+    raw_dist: Optional[bool] = False,
+    use_raw: Optional[bool] = None,
+    layer: Optional[str] = None,
+    show: Optional[bool] = None,
+    save: Union[bool, str, None] = None) -> Union[Figure, Axes, None]:
+    """
+    Plot gene expression by distance to anchor point.
+    Parameters
+    ----------
+    adata
+        Annotated data matrix.
+    design_matrix_key
+        Name of the design matrix previously computed with tl._exp_dist to use.
+    var
+        Variables to plot expression of.
+    n_bins
+        Number of bins to use for plotting.
+    show_model_fit
+        If `True` plot fitted values from `tl.spatial_de` model fit for each var instead of counts from `X.`
+    raw_dist
+        If `True` use raw distance from anchor point instead of normalized distance to plot on x-axis.
+    use_raw
+        Use `raw` attribute of `adata` if present.
+    layer
+        sKey from `adata.layers` whose value will plotted on the y-axis.
+    show
+        Show the plot, do not return axis.
+    save
+        If `True` or a `str`, save the figure. A string is appended to the default filename. Infer the filetype if ending on {`'.pdf'`, `'.png'`, `'.svg'`}.
+    Returns
+    -------
+    If `show==False` a `Axes` or a list of it.
+    """
     if isinstance(var, str):
         var = [var] # type: ignore[assignment]
 
@@ -26,7 +58,7 @@ def pl_exp_dist(
     
     df = _get_data(adata = adata, key=design_matrix_key, func_name="_exp_dist", attr = "obsm")
 
-    if use_raw:
+    if raw_dist:
         anchor_type = "anchor_raw"
         df = df[[value for key, value in adata.uns[design_matrix_key].items() if "anchor_raw" in key or "annotation" in key or "batch" in key]]
     else:
@@ -38,8 +70,19 @@ def pl_exp_dist(
             # add var column with fitted values from model to design matrix
             df[v] = adata.uns[design_matrix_key + "_fitted_values"][[v]]
         else:
+            # adapted from https://github.com/scverse/scanpy/blob/2e98705347ea484c36caa9ba10de1987b09081bf/scanpy/tools/_rank_genes_groups.py#L114-L121
+            if layer is not None:
+                if use_raw:
+                    raise ValueError("Cannot specify `layer` and have `use_raw=True`.")
+                layer = layer
+                use_raw = False
+            else:
+                if use_raw and adata.raw is not None:
+                    use_raw = use_raw
+                else:
+                    use_raw = False
             # add var column to design matrix
-            df[v] = sc.get.obs_df(adata, v).to_numpy()
+            df[v] = sc.get.obs_df(adata, v, layer=layer, use_raw=use_raw).to_numpy()
 
         # set some plot settings depending on input
         if "batch_key" in adata.uns[design_matrix_key]:
@@ -68,11 +111,12 @@ def pl_exp_dist(
         dfs[v] = df_melt
 
     # generate the plots
+    name = "exp_by_dist_" + '_'.join(var)
     for idx, v in enumerate(var):
         plt.subplot(1, len(var), idx + 1)
         plot = sns.lineplot(data=dfs[v], x=x_axis_desc, y=v, hue=anchor)
         plot.set(xlim=(0, dfs[v][adata.uns[design_matrix_key]["metric"]].max()))
-    plt.show()
+    _utils.savefig_or_show(name, show=show, save=save)
 
 #adapted from https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/pl/_graph.py#L32-L40
 def _get_data(adata: AnnData, key: str, func_name: str, attr: str = "obsm") -> Any:
