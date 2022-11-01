@@ -44,7 +44,7 @@ def exp_dist(
     Parameters
     ----------
     adata
-        Annotated data matrix
+        Annotated data matrix.
     groups
         Anchor points to calculate distances from, can be a single `str`, a `List[str]` or a `numpy.array` of coordinates.
     cluster_key
@@ -223,7 +223,7 @@ def _get_coordinates(
 def _check_outliers(anchor_coord: np.ndarray) -> bool:
     """Check if the anchor point contains spatial outliers."""
     anchor_coord_df = pd.DataFrame(data=anchor_coord, columns=["x","y"])
-    dbscan = DBSCAN(eps=(0.075*anchor_coord.values.max()))
+    dbscan = DBSCAN(eps=(0.075*anchor_coord_df.values.max()))
     model = dbscan.fit(anchor_coord_df)
     
     if not anchor_coord_df[model.labels_ == -1].empty or not anchor_coord_df[model.labels_ == 1].empty:
