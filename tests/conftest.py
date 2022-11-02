@@ -392,3 +392,7 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(scope="session")
 def _test_napari(pytestconfig):
     _ = pytestconfig.getoption("--test-napari", skip=True)
+
+@pytest.fixture()
+def _adata_seqfish() -> AnnData:
+    return sq.datasets.seqfish()
