@@ -393,6 +393,7 @@ def pytest_collection_modifyitems(config, items):
 def _test_napari(pytestconfig):
     _ = pytestconfig.getoption("--test-napari", skip=True)
 
+
 @pytest.fixture()
 def adata_seqfish() -> AnnData:
     return sq.datasets.seqfish()

@@ -1,19 +1,18 @@
+from typing import Union, Optional
+
 from anndata import AnnData
-
-import scanpy as sc
 from scanpy.plotting import _utils
-
-import seaborn as sns
+import scanpy as sc
 
 import pandas as pd
 
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+import seaborn as sns
 
-from typing import Optional, Union
 
 def exp_dist(
-    adata: AnnData, 
+    adata: AnnData,
     design_matrix_key: str = None,
     var: str = None,
     n_bins: int = 20,
@@ -22,7 +21,8 @@ def exp_dist(
     use_raw: Optional[bool] = None,
     layer: Optional[str] = None,
     show: Optional[bool] = None,
-    save: Union[bool, str, None] = None) -> Union[Figure, Axes, None]:
+    save: Union[bool, str, None] = None,
+) -> Union[Figure, Axes, None]:
     """
     Plot gene expression by distance to anchor point.
     Parameters
@@ -52,19 +52,31 @@ def exp_dist(
     If `show==False` a `Axes` or a list of it.
     """
     if isinstance(var, str):
-        var = [var] # type: ignore[assignment]
+        var = [var]  # type: ignore[assignment]
 
     dfs = {}
-    
-    df = _get_data(adata = adata, key=design_matrix_key, func_name="_exp_dist", attr = "obsm")
+
+    df = _get_data(adata=adata, key=design_matrix_key, func_name="_exp_dist", attr="obsm")
 
     if raw_dist:
         anchor_type = "anchor_raw"
-        df = df[[value for key, value in adata.uns[design_matrix_key].items() if "anchor_raw" in key or "annotation" in key or "batch" in key]]
+        df = df[
+            [
+                value
+                for key, value in adata.uns[design_matrix_key].items()
+                if "anchor_raw" in key or "annotation" in key or "batch" in key
+            ]
+        ]
     else:
         anchor_type = "anchor_scaled"
-        df = df[[value for key, value in adata.uns[design_matrix_key].items() if "anchor_scaled" in key or "annotation" in key or "batch" in key]]
-        
+        df = df[
+            [
+                value
+                for key, value in adata.uns[design_matrix_key].items()
+                if "anchor_scaled" in key or "annotation" in key or "batch" in key
+            ]
+        ]
+
     for v in var:
         if show_model_fit:
             # add var column with fitted values from model to design matrix
@@ -102,7 +114,7 @@ def exp_dist(
 
         # sort by distance
         df_melt.sort_values(adata.uns[design_matrix_key]["metric"], inplace=True)
-        
+
         # create bins and get median from each binning interval
         df_melt["bin"] = pd.cut(df_melt[adata.uns[design_matrix_key]["metric"]], n_bins, include_lowest=True)
 
@@ -111,14 +123,15 @@ def exp_dist(
         dfs[v] = df_melt
 
     # generate the plots
-    name = "exp_by_dist_" + '_'.join(var)
+    name = "exp_by_dist_" + "_".join(var)
     for idx, v in enumerate(var):
         plt.subplot(1, len(var), idx + 1)
         plot = sns.lineplot(data=dfs[v], x=x_axis_desc, y=v, hue=anchor)
         plot.set(xlim=(0, dfs[v][adata.uns[design_matrix_key]["metric"]].max()))
     _utils.savefig_or_show(name, show=show, save=save)
 
-#adapted from https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/pl/_graph.py#L32-L40
+
+# adapted from https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/pl/_graph.py#L32-L40
 def _get_data(adata: AnnData, key: str, func_name: str, attr: str = "obsm") -> Any:
     try:
         if attr == "obsm":
@@ -129,5 +142,5 @@ def _get_data(adata: AnnData, key: str, func_name: str, attr: str = "obsm") -> A
             raise ValueError(f"attr must be either 'uns' or 'obsm', got {attr}")
     except KeyError:
         raise KeyError(
-            f"Unable to get the data from 'adata.{attr}[{key}]'. "
-            f"Please run `squidpy.tl.{func_name}' first.")
+            f"Unable to get the data from 'adata.{attr}[{key}]'. " f"Please run `squidpy.tl.{func_name}' first."
+        )
