@@ -1,38 +1,48 @@
-from typing import Union, Optional
+from __future__ import annotations
+
+from types import MappingProxyType
+from typing import Any, Union, Mapping, Optional
+from pathlib import Path
 
 from anndata import AnnData
-from scanpy.plotting import _utils
 import scanpy as sc
 
+import numpy as np
 import pandas as pd
 
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import seaborn as sns
+import matplotlib.pyplot as plt
+
+from squidpy.pl._utils import save_fig
 
 
 def exp_dist(
     adata: AnnData,
-    design_matrix_key: str = None,
-    var: str = None,
+    var: str,
+    design_matrix_key: str = "design_matrix",
     n_bins: int = 20,
     show_model_fit: bool = False,
     raw_dist: Optional[bool] = False,
-    use_raw: Optional[bool] = None,
     layer: Optional[str] = None,
-    show: Optional[bool] = None,
-    save: Union[bool, str, None] = None,
+    figsize: tuple[float, float] | None = None,
+    dpi: int | None = None,
+    save: str | Path | None = None,
+    legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    **kwargs: Any,
 ) -> Union[Figure, Axes, None]:
     """
     Plot gene expression by distance to anchor point.
+
     Parameters
     ----------
     adata
         Annotated data matrix.
-    design_matrix_key
-        Name of the design matrix previously computed with tl._exp_dist to use.
     var
         Variables to plot expression of.
+    design_matrix_key
+        Name of the design matrix previously computed with tl._exp_dist to use.
     n_bins
         Number of bins to use for plotting.
     show_model_fit
@@ -43,10 +53,9 @@ def exp_dist(
         Use `raw` attribute of `adata` if present.
     layer
         sKey from `adata.layers` whose value will plotted on the y-axis.
-    show
-        Show the plot, do not return axis.
     save
-        If `True` or a `str`, save the figure. A string is appended to the default filename. Infer the filetype if ending on {`'.pdf'`, `'.png'`, `'.svg'`}.
+        Whether to save the plot.
+
     Returns
     -------
     If `show==False` a `Axes` or a list of it.
@@ -56,7 +65,7 @@ def exp_dist(
 
     dfs = {}
 
-    df = _get_data(adata=adata, key=design_matrix_key, func_name="_exp_dist", attr="obsm")
+    df = adata.obsm[design_matrix_key].copy()
 
     if raw_dist:
         anchor_type = "anchor_raw"
@@ -82,34 +91,27 @@ def exp_dist(
             # add var column with fitted values from model to design matrix
             df[v] = adata.uns[design_matrix_key + "_fitted_values"][[v]]
         else:
-            # adapted from https://github.com/scverse/scanpy/blob/2e98705347ea484c36caa9ba10de1987b09081bf/scanpy/tools/_rank_genes_groups.py#L114-L121
-            if layer is not None:
-                if use_raw:
-                    raise ValueError("Cannot specify `layer` and have `use_raw=True`.")
-                layer = layer
-                use_raw = False
-            else:
-                if use_raw and adata.raw is not None:
-                    use_raw = use_raw
-                else:
-                    use_raw = False
+            # adapted from
+            # https://github.com/scverse/scanpy/blob/2e98705347ea484c36caa9ba10de1987b09081bf/scanpy/tools/_rank_genes_groups.py#L114-L121
             # add var column to design matrix
-            df[v] = sc.get.obs_df(adata, v, layer=layer, use_raw=use_raw).to_numpy()
+            df[v] = sc.get.obs_df(adata, v, layer=layer).to_numpy()
 
+        # set variables
+        anchor = adata.uns[design_matrix_key]["batch_key"]
+        metric = adata.uns[design_matrix_key]["metric"]
+        annotation = adata.uns[design_matrix_key]["annotation"]
+        anchor_type_ = adata.uns[design_matrix_key][anchor_type]
         # set some plot settings depending on input
         if "batch_key" in adata.uns[design_matrix_key]:
-            anchor = adata.uns[design_matrix_key]["batch_key"]
-            x_axis_desc = f'{adata.uns[design_matrix_key]["metric"]} distance to {adata.uns[design_matrix_key]["annotation"]} cluster {adata.uns[design_matrix_key][anchor_type]} ({n_bins} bins)'
-            df_melt = df.rename(
-                {str(adata.uns[design_matrix_key][anchor_type]): adata.uns[design_matrix_key]["metric"]}, axis=1
-            )
+            x_axis_desc = f"{metric} distance to {annotation} cluster {anchor_type_} ({n_bins} bins)"
+            df_melt = df.rename({str(anchor_type_): metric}, axis=1)
         else:
             anchor = "anchor"
-            x_axis_desc = f'{adata.uns[design_matrix_key]["metric"]} distance to anchor point ({n_bins} bins)'
+            x_axis_desc = f"{metric} distance to anchor point ({n_bins} bins)"
             df_melt = df.melt(
-                id_vars=[v, adata.uns[design_matrix_key]["annotation"]],
+                id_vars=[v, annotation],
                 var_name=anchor,
-                value_name=adata.uns[design_matrix_key]["metric"],
+                value_name=metric,
             )
 
         # sort by distance
@@ -123,24 +125,31 @@ def exp_dist(
         dfs[v] = df_melt
 
     # generate the plots
-    name = "exp_by_dist_" + "_".join(var)
-    for idx, v in enumerate(var):
-        plt.subplot(1, len(var), idx + 1)
-        plot = sns.lineplot(data=dfs[v], x=x_axis_desc, y=v, hue=anchor)
-        plot.set(xlim=(0, dfs[v][adata.uns[design_matrix_key]["metric"]].max()))
-    _utils.savefig_or_show(name, show=show, save=save)
+    "exp_by_dist_" + "_".join(var)
 
+    fig, axs = plt.subplots(
+        1,
+        len(var),
+        figsize=(5 * len(var), 5) if figsize is None else figsize,
+        dpi=dpi,
+        constrained_layout=True,
+    )
+    axs = np.ravel(axs)  # make into iterable
 
-# adapted from https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/pl/_graph.py#L32-L40
-def _get_data(adata: AnnData, key: str, func_name: str, attr: str = "obsm") -> Any:
-    try:
-        if attr == "obsm":
-            return adata.obsm[key]
-        elif attr == "uns":
-            return adata.uns[key]
-        else:
-            raise ValueError(f"attr must be either 'uns' or 'obsm', got {attr}")
-    except KeyError:
-        raise KeyError(
-            f"Unable to get the data from 'adata.{attr}[{key}]'. " f"Please run `squidpy.tl.{func_name}' first."
+    for v, ax in zip(var, axs):
+        sns.lineplot(
+            data=dfs[v],
+            x=x_axis_desc,
+            y=v,
+            hue=anchor,
+            ax=ax,
         )
+        ax.set(xlim=(0, dfs[v][adata.uns[design_matrix_key]["metric"]].max()))
+        ax.set_title(v)
+        # ax.set_xlabel("value")
+
+        # ax.set_yticks([])
+        ax.legend(**legend_kwargs)
+
+    if save is not None:
+        save_fig(fig, path=save)

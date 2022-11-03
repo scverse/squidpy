@@ -1,10 +1,13 @@
+from typing import List
 import pytest
 
 from anndata import AnnData
 
+from pandas.core.dtypes.common import is_categorical_dtype
 import numpy as np
-import pytest
-from tl.exp_dist import exp_dist
+
+from squidpy.tl.exp_dist import exp_dist
+import squidpy as sq
 
 
 @pytest.mark.parametrize("groups", ["NMP", ["NMP", "Spinal cord"], None])
@@ -12,11 +15,11 @@ from tl.exp_dist import exp_dist
 @pytest.mark.parametrize("batch_key", None)
 @pytest.mark.parametrize("metric", ["euclidean", "manhattan"])
 def test_exp_dist(
-    adata_seqfish: AnnData, 
+    adata_seqfish: AnnData,
     groups: str | List[str] | None,
     batch_key: str | None,
     covariates: str | List[str] | None,
-    metric: str
+    metric: str,
 ):
     """Check whether the design matrix is being built correctly by analyzing shape, type and normalization"""
     adata = sq.datasets.seqfish()
@@ -31,7 +34,7 @@ def test_exp_dist(
         copy=True,
     )
 
-    if isinstance(group, str):
+    if isinstance(groups, str):
         groups = [groups]
     if isinstance(covariates, str):
         covariates = [covariates]
@@ -42,9 +45,8 @@ def test_exp_dist(
     # shape
     assert df.index == adata.obs.index
     assert min_length <= len(df.columns) <= max_length
-    # type
-    assert isinstance(df.iloc[:, 0], CategoricalDtype)
-    assert isinstance(df["batch"], CategoricalDtype)
+    # check type
+    assert is_categorical_dtype(df["batch"])
     # normalization
     assert np.max(df[groups].values) <= 1
     assert df[groups].value_counts()[1] <= 1

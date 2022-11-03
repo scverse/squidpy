@@ -1,7 +1,19 @@
 from __future__ import annotations
 
+from typing import Any, Dict, List, Tuple, Optional
+from functools import reduce
+from itertools import product
+
 from scanpy import logging as logg
 from anndata import AnnData
+
+from numpy.typing import ArrayLike
+from sklearn.cluster import DBSCAN
+from sklearn.metrics import DistanceMetric
+from sklearn.neighbors import KDTree
+from sklearn.preprocessing import MinMaxScaler
+import numpy as np
+import pandas as pd
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
@@ -9,17 +21,6 @@ from squidpy.gr._utils import _save_data
 from squidpy._constants._pkg_constants import Key
 
 __all__ = ["exp_dist"]
-
-from typing import Any, Dict, List, Tuple, Optional
-from functools import reduce
-from itertools import product
-
-from sklearn.cluster import DBSCAN
-from sklearn.metrics import DistanceMetric
-from sklearn.neighbors import KDTree
-from sklearn.preprocessing import MinMaxScaler
-import numpy as np
-import pandas as pd
 
 
 @d.dedent
@@ -36,12 +37,14 @@ def exp_dist(
 ) -> Optional[AnnData]:
     """
     Build a design matrix consisting of gene expression by distance to selected anchor point(s).
+
     Parameters
     ----------
     adata
         Annotated data matrix.
     groups
-        Anchor points to calculate distances from, can be a single `str`, a `List[str]` or a `numpy.array` of coordinates.
+        Anchor points to calculate distances from, can be a single gene,
+        a list of genes or a set of coordinates.
     cluster_key
         Annotation column in `.obs` to take anchor point(s) from.
     design_matrix
@@ -56,6 +59,7 @@ def exp_dist(
         Source of spatial coordinates for each observation.
     copy
         Whether to modify copied input object.
+
     Returns
     -------
     If ``copy = True``, returns the design_matrix and the distance thresholds intervals
@@ -70,7 +74,12 @@ def exp_dist(
         adata, cluster_key, groups, metric=metric, batch_key=batch_key, covariates=covariates
     )
 
-    anchor = [groups] if isinstance(groups, str) or isinstance(groups, np.ndarray) else groups  # type: ignore [assignment]
+    if isinstance(groups, str) or isinstance(groups, np.ndarray):
+        anchor: List[Any] = [groups]
+    elif isinstance(groups, list):
+        anchor = groups
+    else:
+        raise TypeError(f"Invalid type for groups: {type(groups)}.")
 
     # prepare batch key for iteration (Nonetype alone in product will result in neutral element)
     if batch_key is None:
@@ -97,7 +106,8 @@ def exp_dist(
         # if dbscan detects outliers or at least one additional cluster, a warning will be issued
         if _check_outliers(anchor_coord=anchor_coord):
             logg.warning(
-                f"Anchor point {anchor_var} contains spatial outliers. It is recommended to remove them for more accurate gene expression analysis."
+                f"Anchor point {anchor_var} contains spatial outliers.\n \
+                It is recommended to remove them for more accurate gene expression analysis."
             )
 
         tree = KDTree(anchor_coord, metric=DistanceMetric.get_metric(metric))
@@ -144,8 +154,7 @@ def exp_dist(
         logg.info("Finish", time=start)
         return df
     else:
-        # adapted from https://github.com/scverse/squidpy/blob/2cf664ffd9a1654b6d921307a76f5732305a371c/squidpy/gr/_ppatterns.py#L398-L404
-        return _save_data(adata, attr="obsm", key=design_matrix_key, data=df, time=start)
+        _save_data(adata, attr="obsm", key=design_matrix_key, data=df, time=start)
 
 
 def _add_metadata(
@@ -198,7 +207,7 @@ def _init_design_matrix(
     return df
 
 
-def _get_coordinates(adata: AnnData, anchor: str = None, annotation: str = None) -> Tuple[NDArrayA, NDArrayA]:
+def _get_coordinates(adata: AnnData, anchor: str, annotation: str) -> Tuple[NDArrayA, NDArrayA]:
     """Get anchor coordinates and coordinates of all observations."""
     if isinstance(anchor, np.ndarray):
         return (anchor, adata.obsm["spatial"])
@@ -206,7 +215,7 @@ def _get_coordinates(adata: AnnData, anchor: str = None, annotation: str = None)
         return (np.array(adata[adata.obs[annotation] == anchor].obsm["spatial"]), adata.obsm["spatial"])
 
 
-def _check_outliers(anchor_coord: np.ndarray) -> bool:
+def _check_outliers(anchor_coord: ArrayLike) -> bool:
     """Check if the anchor point contains spatial outliers."""
     anchor_coord_df = pd.DataFrame(data=anchor_coord, columns=["x", "y"])
     dbscan = DBSCAN(eps=(0.075 * anchor_coord_df.values.max()))
@@ -220,11 +229,11 @@ def _check_outliers(anchor_coord: np.ndarray) -> bool:
 
 def _normalize_distances(
     df: pd.DataFrame,
-    anchor: list = None,
+    anchor: List[str],
 ) -> pd.DataFrame:
     """Normalize distances to anchor."""
     scaler = MinMaxScaler()
-    if len(anchor) > 1:
+    if isinstance(anchor, list):
         max_dist_anchor = df[anchor].columns[np.where(df[anchor].values == np.max(df[anchor].values))[1]][0]
         scaler.fit(df[[max_dist_anchor]].values)
         df[f"{max_dist_anchor}_raw"] = df[max_dist_anchor]
@@ -233,7 +242,6 @@ def _normalize_distances(
         for a in anchor:
             df[f"{a}_raw"] = df[a]
             df[a] = scaler.transform(df[[a]].values)
-
     else:
         df[f"{anchor[0]}_raw"] = df[anchor]
         df[anchor] = scaler.fit_transform(df[anchor].values)
