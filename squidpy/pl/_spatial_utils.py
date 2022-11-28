@@ -460,7 +460,8 @@ def _set_color_source_vec(
     alpha: float = 1.0,
 ) -> Tuple[NDArrayA | pd.Series | None, NDArrayA, bool]:
     if value_to_plot is None:
-        return np.full(adata.n_obs, to_hex(na_color)), np.broadcast_to(np.nan, adata.n_obs), False
+        color = np.full(adata.n_obs, to_hex(na_color))
+        return color, color, False
 
     if alt_var is not None and value_to_plot not in adata.obs and value_to_plot not in adata.var_names:
         value_to_plot = adata.var_names[adata.var[alt_var] == value_to_plot][0]
