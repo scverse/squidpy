@@ -460,7 +460,8 @@ def _set_color_source_vec(
     alpha: float = 1.0,
 ) -> Tuple[NDArrayA | pd.Series | None, NDArrayA, bool]:
     if value_to_plot is None:
-        return np.full(adata.n_obs, to_hex(na_color)), np.broadcast_to(np.nan, adata.n_obs), False
+        color = np.full(adata.n_obs, to_hex(na_color))
+        return color, color, False
 
     if alt_var is not None and value_to_plot not in adata.obs and value_to_plot not in adata.var_names:
         value_to_plot = adata.var_names[adata.var[alt_var] == value_to_plot][0]
@@ -699,7 +700,11 @@ def _map_color_seg(
         cols = colors.to_rgba_array(color_vector.categories)  # type: ignore
     else:
         val_im = map_array(seg, cell_id, cell_id)  # replace with same seg id to remove missing segs
-        cols = cmap_params.cmap(cmap_params.norm(color_vector))
+        try:
+            cols = cmap_params.cmap(cmap_params.norm(color_vector))
+        except TypeError:
+            assert all(colors.is_color_like(c) for c in color_vector), "Not all values are color-like."
+            cols = colors.to_rgba_array(color_vector)
 
     if seg_erosionpx is not None:
         val_im[val_im == erosion(val_im, square(seg_erosionpx))] = 0

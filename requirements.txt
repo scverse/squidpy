@@ -6,7 +6,7 @@ dask[array]>=2021.02.0
 docrep>=0.3.1
 fsspec>=2021.11.0
 leidenalg>=0.8.2
-matplotlib>=3.3,!=3.6.1  # https://github.com/matplotlib/matplotlib/issues/24127
+matplotlib>=3.3
 matplotlib-scalebar>=0.8.0
 networkx>=2.6.0
 numba>=0.55.0,<0.56.0
@@ -20,7 +20,6 @@ scikit-learn>=0.24.0
 statsmodels>=0.12.0
 tifffile!=2022.4.22  # https://github.com/scverse/squidpy/issues/526
 tqdm>=4.50.2
-typing_extensions
 validators>=0.18.2
 xarray>=0.16.1
 zarr>=2.6.1
