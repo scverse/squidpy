@@ -60,7 +60,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://pypi.org/project/squidpy/
     :alt: PyPI
 
-.. |CI| image:: https://img.shields.io/github/workflow/status/scverse/squidpy/Test/main
+.. |CI| image:: https://img.shields.io/github/actions/workflow/status/scverse/squidpy/test.yml?branch=main
     :target: https://github.com/scverse/squidpy/actions
     :alt: CI
 
@@ -68,7 +68,7 @@ We are happy about any contributions! Before you start, check out our `contribut
    :target: https://results.pre-commit.ci/latest/github/scverse/squidpy/main
    :alt: pre-commit.ci status
 
-.. |Notebooks| image:: https://img.shields.io/github/workflow/status/scverse/squidpy_notebooks/CI/main?label=notebooks
+.. |Notebooks| image:: https://img.shields.io/github/actions/workflow/status/scverse/squidpy_notebooks/ci.yml?branch=main&label=notebooks
     :target: https://github.com/scverse/squidpy_notebooks/actions
     :alt: Notebooks CI
 
