@@ -1,2 +1,0 @@
-Fix :func:`squidpy.read.vizgen`.
-`@giovp <https://github.com/giovp>`__

@@ -1,2 +1,0 @@
-Fix plotting non-unique categorical colors in :func:`squidpy.pl.spatial_scatter`.
-`@michalk8 <https://github.com/michalk8>`__

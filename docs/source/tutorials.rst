@@ -18,6 +18,7 @@ to a diverse set of different spatial datasets.
     auto_tutorials/tutorial_fouri
     external_tutorials/tutorial_nanostring
     external_tutorials/tutorial_vizgen
+    external_tutorials/tutorial_vizgen_mouse_liver
     external_tutorials/tutorial_xenium
 
 Advanced Tutorials
