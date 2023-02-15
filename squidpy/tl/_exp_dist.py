@@ -65,10 +65,11 @@ def exp_dist(
     start = logg.info(f"Creating {design_matrix_key}")
     # list of columns which will be categorical later on
     categorical_columns = [cluster_key]
-    # save initial metadata to adata.uns
-    adata.uns[design_matrix_key] = _add_metadata(
-        cluster_key, groups, metric=metric, library_key=library_key, covariates=covariates
-    )
+    # save initial metadata to adata.uns if copy == False
+    if not copy:
+        adata.uns[design_matrix_key] = _add_metadata(
+            cluster_key, groups, metric=metric, library_key=library_key, covariates=covariates
+        )
 
     if isinstance(groups, str) or isinstance(groups, np.ndarray):
         anchor: List[Any] = [groups]
