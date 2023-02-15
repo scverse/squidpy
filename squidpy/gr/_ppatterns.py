@@ -272,7 +272,6 @@ def _co_occurrence_helper(
     interval: NDArrayA,
     queue: SigQueue | None = None,
 ) -> pd.DataFrame:
-
     out_lst = []
     for t in idx_splits:
         idx_x, idx_y = t
@@ -371,7 +370,7 @@ def co_occurrence(
     spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))
     labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))
     # create idx array including unique combinations and self-comparison
-    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))
+    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))  # type: ignore[arg-type]
     idx_splits = [(i, j) for i, j in zip(x, y)]
 
     n_jobs = _get_n_cores(n_jobs)
@@ -450,7 +449,7 @@ def _p_value_calc(
         return results
 
     n_perms = sims.shape[0]
-    large_perm = (sims >= score).sum(axis=0)  # type: ignore[attr-defined]
+    large_perm = (sims >= score).sum(axis=0)
     # subtract total perm for negative values
     large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
     # get p-value based on permutation
@@ -513,7 +512,7 @@ def _g_moments(w: spmatrix | NDArrayA) -> tuple[float, float, float]:
 
     # s1
     t = w.transpose() + w
-    t2 = t.multiply(t)
+    t2 = t.multiply(t)  # type: ignore[union-attr]
     s1 = t2.sum() / 2.0
 
     # s2

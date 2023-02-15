@@ -272,7 +272,7 @@ def _laplacian_hex(
     """
     d2f: NDArrayA = nbrs - 6 * centers
     d2f = d2f / h**2
-    d2f = (d2f * 2) / 3  # type: ignore[assignment]
+    d2f = (d2f * 2) / 3
 
     return d2f
 

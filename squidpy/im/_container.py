@@ -724,9 +724,7 @@ class ImageContainer(FeatureMixin):
         squeeze: bool = True,
         return_obs: bool = False,
         **kwargs: Any,
-    ) -> (
-        Iterator[ImageContainer] | Iterator[NDArrayA] | Iterator[tuple[NDArrayA, ...]] | Iterator[dict[str, NDArrayA]]
-    ):
+    ) -> Iterator[ImageContainer] | Iterator[NDArrayA] | Iterator[tuple[NDArrayA, ...]] | Iterator[dict[str, NDArrayA]]:
         """
         Iterate over :attr:`anndata.AnnData.obs_names` and extract crops.
 
@@ -1114,7 +1112,7 @@ class ImageContainer(FeatureMixin):
         """
         from squidpy.pl import Interactive  # type: ignore[attr-defined]
 
-        return Interactive(  # type: ignore[no-any-return]
+        return Interactive(  # type: ignore[return-value]
             img=self,
             adata=adata,
             spatial_key=spatial_key,

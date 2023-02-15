@@ -28,7 +28,6 @@ _SEP = " | "  # cluster separator
 
 
 class CustomDotplot(sc.pl.DotPlot):
-
     BASE = 10
 
     DEFAULT_LARGEST_DOT = 50.0

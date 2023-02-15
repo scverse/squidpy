@@ -203,7 +203,7 @@ def _f_g_function(distances: NDArrayA, support: NDArrayA) -> tuple[NDArrayA, NDA
 
 
 def _l_function(distances: NDArrayA, support: NDArrayA, n: int, area: float) -> tuple[NDArrayA, NDArrayA]:
-    n_pairs_less_than_d = (distances < support.reshape(-1, 1)).sum(axis=1)  # type: ignore[attr-defined]
+    n_pairs_less_than_d = (distances < support.reshape(-1, 1)).sum(axis=1)
     intensity = n / area
     k_estimate = ((n_pairs_less_than_d * 2) / n) / intensity
     l_estimate = np.sqrt(k_estimate / np.pi)

@@ -900,7 +900,6 @@ def _set_outline(
     outline_color: Tuple[str, str] = ("black", "white"),
     **kwargs: Any,
 ) -> Tuple[OutlineParams, Any]:
-
     bg_width, gap_width = outline_width
     point = np.sqrt(size)
     gap_size = (point + (point * gap_width) * 2) ** 2
@@ -926,7 +925,6 @@ def _plot_scatter(
     na_color: str | Tuple[float, ...] = (0, 0, 0, 0),  # TODO(giovp): remove?
     **kwargs: Any,
 ) -> Tuple[Axes, Collection | PatchCollection]:
-
     if color_params.shape is not None:
         scatter = partial(_shaped_scatter, shape=color_params.shape, alpha=color_params.alpha)
     else:
@@ -986,7 +984,6 @@ def _plot_segment(
     na_color: str | Tuple[float, ...] = (0, 0, 0, 0),
     **kwargs: Any,
 ) -> Tuple[Axes, Collection]:
-
     img = _map_color_seg(
         seg=seg,
         cell_id=cell_id,
