@@ -24,8 +24,8 @@ __all__ = ["exp_dist"]
 def exp_dist(
     adata: AnnData,
     groups: str | List[str] | NDArrayA,
-    library_key: str,
     cluster_key: str,
+    library_key: str | None = None,
     design_matrix_key: str = "design_matrix",
     covariates: str | List[str] | None = None,
     metric: str = "euclidean",
@@ -105,44 +105,51 @@ def exp_dist(
             anchor_coord, batch_coord, nan_ids = _get_coordinates(adata, anchor_var, cluster_key, spatial_key)
             anchor_col_id = 1
 
-        tree = KDTree(anchor_coord, metric=DistanceMetric.get_metric(metric))
-        mindist, _ = tree.query(batch_coord)
+        tree = KDTree(
+            anchor_coord, metric=DistanceMetric.get_metric(metric)
+        )  # build KDTree of anchor point coordinates
+        mindist, _ = tree.query(
+            batch_coord
+        )  # calculate closest distance from any observation to an observation within anchor point
 
-        if isinstance(anchor_var, np.ndarray):
+        if isinstance(anchor_var, np.ndarray):  # adjust anchor column name if it is a numpy array
             anchor_var = "custom_anchor"
             anchor = ["custom_anchor"]
-        if nan_ids.size != 0:
+        if nan_ids.size != 0:  # in case there were nan coordinates before building the tree, add them back in
             mindist = np.insert(mindist, nan_ids - np.arange(len(nan_ids)), np.nan)
-        df.insert(loc=anchor_col_id, column=str(anchor_var), value=mindist)
+
+        df.insert(loc=anchor_col_id, column=str(anchor_var), value=mindist)  # add distance measurements to dataframe
         if batch_var is not None:
             df["obs"] = adata[adata.obs[library_key] == batch_var].obs_names
         else:
             df["obs"] = adata.obs_names
+
+        # store dataframes by (slide, anchor) combination and also the corresponding maximum distance for normalization
         batch_design_matrices[(batch_var, anchor_var)] = df
         max_distances[(batch_var, anchor_var)] = df[anchor_var].max()
 
-    # scale euclidean distances by slide
-    batch_design_matrices = _normalize_distances(batch_design_matrices, anchor, batch, max_distances)
+    # normalize euclidean distances by slide
+    batch_design_matrices_ = _normalize_distances(batch_design_matrices, anchor, batch, max_distances)
 
     # combine individual data frames
     # merge if multiple anchor points are used but there is no separation by slides
     if library_key is None and len(anchor) > 1:
         df = reduce(
             lambda df1, df2: pd.merge(df1, df2, on=[cluster_key, "obs"]),
-            list(batch_design_matrices.values()),
+            batch_design_matrices_,
         )
         df.set_index("obs", inplace=True)
         df.index.name = None
     # concatenate if a single anchor point is used within multiple slides
     elif library_key is not None and len(anchor) == 1:
-        df = pd.concat(list(batch_design_matrices.values()))
+        df = pd.concat(batch_design_matrices_)
         df = df.reindex(adata.obs_names)
         df = df.drop("obs", axis=1)
     # merge if multiple anchor points are used within multiple slides
     elif library_key is not None and len(anchor) > 1:
         df_by_anchor = []
         for a in anchor:
-            df = pd.concat([value for key, value in batch_design_matrices.items() if a == key[1]])
+            df = pd.concat([i for i in batch_design_matrices_ if a in i.columns])
             df = df.reindex(adata.obs_names)
             df = df.drop("obs", axis=1)
             df_by_anchor.append(df)
@@ -154,7 +161,7 @@ def exp_dist(
         )
     # if a single anchor point is used and there is no separation by slides, no combination needs to be applied
     else:
-        df = batch_design_matrices[(batch_var, anchor_var)].drop("obs", axis=1)
+        df = batch_design_matrices_[0].drop("obs", axis=1)
 
     # add additional covariates to design matrix
     if covariates is not None:
@@ -242,27 +249,32 @@ def _get_coordinates(adata: AnnData, anchor: str, annotation: str, spatial_key: 
 
 
 def _normalize_distances(
-    df: Dict[Tuple[Any, Any], Any], anchor: List[str], slides: List[str], max_distances: dict
+    mapping_design_matrix: Dict[Tuple[str | None, str], pd.DataFrame],
+    anchor: str | List[str],
+    slides: List[str] | List[None],
+    mapping_max_distances: Dict[Tuple[str | None, str], float],
 ) -> pd.DataFrame:
     """Normalize distances to anchor."""
     if not isinstance(anchor, list):
         anchor = [anchor]
 
     # save raw distances, set 0 distances to NaN and smallest non-zero distance to 0 for scaling
-    for key, value in df.items():
-        value[f"{key[1]}_raw"] = value[key[1]]
-        value[key[1]].replace(0, np.nan, inplace=True)
-        value.loc[value[key[1]].idxmin(), key[1]] = 0
+    for (_, anchor_point), design_matrix in mapping_design_matrix.items():  # (slide, anchor_point) , design_matrix
+        design_matrix[f"{anchor_point}_raw"] = design_matrix[anchor_point]
+        design_matrix[anchor_point].replace(0, np.nan, inplace=True)
+        design_matrix.loc[design_matrix[anchor_point].idxmin(), anchor_point] = 0
+
     # for each anchor point, get the slide with the highest maximum distance
     for a in anchor:
-        pairs = list(product(slides, [a]))
-        subset = {k: max_distances[k] for k in pairs if k in max_distances}
-        max_pair = max(subset, key=subset.get)
+        pairs = list(product(slides, [a]))  # get all (slides, anchor) possibilities for given anchor
+        mapping_subset = {
+            k: mapping_max_distances[k] for k in pairs if k in mapping_max_distances
+        }  # k is (slide, anchor)
+        max_slide, max_anchor = max(mapping_subset, key=mapping_subset.get)  # type: ignore[arg-type]
         scaler = MinMaxScaler()
-        scaler.fit(df[max_pair][[max_pair[1]]].values)
-        df[max_pair][max_pair[1]] = scaler.transform(df[max_pair][[max_pair[1]]].values)
-        del subset[max_pair]
-        for key in subset.keys():
-            df[key][key[1]] = scaler.transform(df[key][[key[1]]].values)
-
-    return df
+        scaler.fit(mapping_design_matrix[(max_slide, max_anchor)][[max_anchor]].values)
+        for (slide_, anchor_) in mapping_subset.keys():
+            mapping_design_matrix[(slide_, anchor_)][anchor_] = scaler.transform(
+                mapping_design_matrix[(slide_, anchor_)][[anchor_]].values
+            )
+    return list(mapping_design_matrix.values())
