@@ -149,8 +149,7 @@ class ImgMetadata(Metadata):
 
     Returns
     -------
-    :class:`squidpy.im.ImageContainer`
-        The image data."""
+    :class:`squidpy.im.ImageContainer` The image data."""
     # not the perfect annotation, but better than nothing
     _EXT = ".tiff"
 
