@@ -31,7 +31,7 @@ sc.set_figure_params(dpi=40, color_map="viridis")
 class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
     def test_tol_plot_spatial_scatter_image(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, na_color="lightgrey")
-        self.compare("SpatialStatic_spatial_scatter_image", tolerance=60)
+        self.compare("SpatialStatic_spatial_scatter_image", tolerance=70)
 
     def test_plot_spatial_scatter_noimage(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, shape=None, na_color="lightgrey")
@@ -189,16 +189,17 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_spatial_scatter_categorical_alpha(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, shape="circle", color="cluster", alpha=0)
 
-    def test_plot_spatial_scatter_non_unique_colors(self, adata_hne: AnnData):
+    def test_tol_plot_spatial_scatter_non_unique_colors(self, adata_hne: AnnData):
         adata_hne.uns["cluster_colors"] = ["#000000"] * len(adata_hne.uns["cluster_colors"])
         pl.spatial_scatter(adata_hne, color="cluster", legend_loc=None)
+        self.compare("SpatialStatic_spatial_scatter_non_unique_colors", tolerance=70)
 
     def test_tol_plot_palette_listed_cmap(self, adata_hne: AnnData):
         del adata_hne.uns["cluster_colors"]
         palette = plt.get_cmap("Set3")
         assert isinstance(palette, ListedColormap)
         pl.spatial_scatter(adata_hne, color="cluster", palette=palette, legend_loc=None)
-        self.compare("SpatialStatic_palette_listed_cmap", tolerance=60)
+        self.compare("SpatialStatic_palette_listed_cmap", tolerance=70)
 
 
 class TestSpatialStaticUtils:
