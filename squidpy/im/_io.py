@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-from PIL import Image
-from typing import Union  # noqa: F401
-from typing import Mapping
 from pathlib import Path
+from typing import (
+    Mapping,
+    Union,  # noqa: F401
+)
 
-from scanpy import logging as logg
-
-from dask import delayed
+import dask.array as da
 import numpy as np
 import xarray as xr
-import dask.array as da
-
-from tifffile import TiffFile
+from dask import delayed
+from PIL import Image
+from scanpy import logging as logg
 from skimage.io import imread
+from tifffile import TiffFile
 
+from squidpy._constants._constants import InferDimensions
 from squidpy._docs import inject_docs
 from squidpy._utils import NDArrayA
-from squidpy._constants._constants import InferDimensions
 
 
 def _assert_dims_present(dims: tuple[str, ...], include_z: bool = True) -> None:

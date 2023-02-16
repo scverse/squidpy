@@ -1,9 +1,9 @@
-from types import FunctionType
-from pathlib import Path
-from http.client import RemoteDisconnected
-import pytest
 import warnings
+from http.client import RemoteDisconnected
+from pathlib import Path
+from types import FunctionType
 
+import pytest
 from anndata import AnnData, OldFormatWarning
 
 import squidpy as sq

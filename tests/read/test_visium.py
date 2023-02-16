@@ -1,7 +1,7 @@
 from anndata.tests.helpers import assert_adata_equal
 
-from squidpy.read import visium
 from squidpy._constants._pkg_constants import Key
+from squidpy.read import visium
 
 
 def test_read_visium():

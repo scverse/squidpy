@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Union  # noqa: F401
-from typing import Any, Mapping, Sequence, TYPE_CHECKING
-
-from scanpy import logging as logg
-from anndata import AnnData
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Mapping,
+    Sequence,
+    Union,  # noqa: F401
+)
 
 import pandas as pd
+from anndata import AnnData
+from scanpy import logging as logg
 
+from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, SigQueue, parallelize, _get_n_cores
+from squidpy._utils import Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import _save_data
 from squidpy.im._container import ImageContainer
-from squidpy._constants._constants import ImageFeature
 
 __all__ = ["calculate_image_features"]
 

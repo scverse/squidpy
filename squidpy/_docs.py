@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from docrep import DocstringProcessor
-from typing import Any, Callable
 from textwrap import dedent
+from typing import Any, Callable
+
+from docrep import DocstringProcessor
 
 from squidpy._constants._pkg_constants import Key
 

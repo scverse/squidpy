@@ -1,14 +1,13 @@
 from typing import Tuple
-import pytest
 
-from anndata import AnnData
 import anndata as ad
-
-from scipy.sparse import isspmatrix_csr
 import numpy as np
+import pytest
+from anndata import AnnData
+from scipy.sparse import isspmatrix_csr
 
-from squidpy.gr import spatial_neighbors
 from squidpy._constants._pkg_constants import Key
+from squidpy.gr import spatial_neighbors
 
 
 class TestSpatialNeighbors:

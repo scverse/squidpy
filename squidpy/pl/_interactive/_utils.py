@@ -1,21 +1,19 @@
 from __future__ import annotations
 
-from scanpy import logging as logg
-from anndata import AnnData
-from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
-
-from numba import njit
-from scipy.spatial import KDTree
-from pandas._libs.lib import infer_dtype
-from pandas.core.dtypes.common import is_categorical_dtype
+import dask.array as da
 import numpy as np
 import pandas as pd
-import dask.array as da
-
+from anndata import AnnData
 from matplotlib.colors import to_hex, to_rgb
+from numba import njit
+from pandas._libs.lib import infer_dtype
+from pandas.core.dtypes.common import is_categorical_dtype
+from scanpy import logging as logg
+from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
+from scipy.spatial import KDTree
 
-from squidpy._utils import NDArrayA
 from squidpy._constants._pkg_constants import Key
+from squidpy._utils import NDArrayA
 
 
 def _get_categorical(

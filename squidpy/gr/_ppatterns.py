@@ -1,40 +1,45 @@
 """Functions for point patterns spatial statistics."""
 from __future__ import annotations
 
-from typing import Union  # noqa: F401
-from typing import Literal  # < 3.8
-from typing import Any, Dict, Iterable, Sequence, TYPE_CHECKING
 from itertools import chain
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterable,
+    Literal,  # < 3.8
+    Sequence,
+    Union,  # noqa: F401
+)
 
-from scanpy import logging as logg
+import numba.types as nt
+import numpy as np
+import pandas as pd
 from anndata import AnnData
+from numba import njit
+from numpy.random import default_rng
+from scanpy import logging as logg
 from scanpy.get import _get_obs_rep
 from scanpy.metrics._gearys_c import _gearys_c
 from scanpy.metrics._morans_i import _morans_i
-
-from numba import njit
 from scipy import stats
-from numpy.random import default_rng
 from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from statsmodels.stats.multitest import multipletests
-import numpy as np
-import pandas as pd
-import numba.types as nt
 
+from squidpy._constants._constants import SpatialAutocorr
+from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, NDArrayA, SigQueue, parallelize, _get_n_cores
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import (
-    _save_data,
-    _assert_positive,
-    _assert_spatial_basis,
     _assert_categorical_obs,
     _assert_connectivity_key,
     _assert_non_empty_sequence,
+    _assert_positive,
+    _assert_spatial_basis,
+    _save_data,
 )
-from squidpy._constants._constants import SpatialAutocorr
-from squidpy._constants._pkg_constants import Key
 
 __all__ = ["spatial_autocorr", "co_occurrence"]
 

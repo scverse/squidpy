@@ -1,4 +1,4 @@
-from typing import Any, Union, Protocol
+from typing import Any, Protocol, Union
 
 from anndata import AnnData
 

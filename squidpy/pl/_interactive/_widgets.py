@@ -2,21 +2,18 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from vispy import scene
-from typing import Any, Tuple, Iterable
-from vispy.scene.widgets import ColorBarWidget
-from vispy.color.colormap import Colormap, MatplotlibColormap
-
-from scanpy import logging as logg
+from typing import Any, Iterable, Tuple
 
 import numpy as np
 import pandas as pd
-
-from PyQt5 import QtCore, QtWidgets
-from superqt import QRangeSlider
-from PyQt5.QtCore import Qt
-
 from napari.layers import Points
+from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtCore import Qt
+from scanpy import logging as logg
+from superqt import QRangeSlider
+from vispy import scene
+from vispy.color.colormap import Colormap, MatplotlibColormap
+from vispy.scene.widgets import ColorBarWidget
 
 from squidpy.pl._utils import ALayer
 
@@ -140,7 +137,7 @@ class AListWidget(ListWidget):
         for item in sorted(set(items)):
             try:
                 vec, name = self._getter(item, index=self.getIndex())
-            except Exception as e:  # noqa: B902
+            except Exception as e:  # noqa: BLE001
                 logg.error(e)
                 continue
             self._controller.add_points(vec, key=item, layer_name=name)

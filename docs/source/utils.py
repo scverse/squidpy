@@ -1,13 +1,14 @@
-from git import Repo
-from shutil import rmtree, copytree
-from typing import Any, Dict, List, Union, ForwardRef
-from logging import info, warning
-from pathlib import Path
-from tempfile import TemporaryDirectory
-from enchant.tokenize import Filter
-from sphinx_gallery.directives import MiniGallery
 import os
 import re
+from logging import info, warning
+from pathlib import Path
+from shutil import copytree, rmtree
+from tempfile import TemporaryDirectory
+from typing import Any, Dict, ForwardRef, List, Union
+
+from enchant.tokenize import Filter
+from git import Repo
+from sphinx_gallery.directives import MiniGallery
 
 HERE = Path(__file__).parent
 
@@ -42,7 +43,7 @@ def _fetch_notebooks(repo_url: str) -> None:
     )
     try:
         fetch_local(notebooks_local_path)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         warning(f"Unable to fetch notebooks locally from `{notebooks_local_path}`, reason: `{e}`. Trying remote")
         download = int(os.environ.get("SQUIDPY_DOWNLOAD_NOTEBOOKS", 1))
         if not download:

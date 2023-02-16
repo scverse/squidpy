@@ -1,24 +1,22 @@
 from __future__ import annotations
 
-from typing import Sequence
-from functools import partial
-import pytest
 import platform
+from functools import partial
+from typing import Sequence
 
-from anndata import AnnData
-import scanpy as sc
-
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
+import pytest
+import scanpy as sc
+from anndata import AnnData
 from matplotlib.colors import ListedColormap
-import matplotlib.pyplot as plt
 
 from squidpy import pl
-from squidpy.gr import spatial_neighbors
-from tests.conftest import PlotTester, PlotTesterMeta
-from squidpy.pl._spatial_utils import _get_library_id
 from squidpy._constants._pkg_constants import Key
+from squidpy.gr import spatial_neighbors
+from squidpy.pl._spatial_utils import _get_library_id
+from tests.conftest import PlotTester, PlotTesterMeta
 
 sc.set_figure_params(dpi=40, color_map="viridis")
 

@@ -1,38 +1,37 @@
 """Functions for building graphs from spatial coordinates."""
 from __future__ import annotations
 
-from typing import List, Tuple, Union, Iterable  # noqa: F401
+import warnings
 from functools import partial
 from itertools import chain
-import warnings
+from typing import Iterable, List, Tuple, Union  # noqa: F401
 
-from scanpy import logging as logg
+import numpy as np
 from anndata import AnnData
 from anndata.utils import make_index_unique
-
 from numba import njit
+from scanpy import logging as logg
 from scipy.sparse import (
-    spmatrix,
+    SparseEfficiencyWarning,
     block_diag,
     csr_matrix,
     isspmatrix_csr,
-    SparseEfficiencyWarning,
+    spmatrix,
 )
 from scipy.spatial import Delaunay
-from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
-import numpy as np
+from sklearn.neighbors import NearestNeighbors
 
+from squidpy._constants._constants import CoordType, Transform
+from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import (
-    _save_data,
+    _assert_categorical_obs,
     _assert_positive,
     _assert_spatial_basis,
-    _assert_categorical_obs,
+    _save_data,
 )
-from squidpy._constants._constants import CoordType, Transform
-from squidpy._constants._pkg_constants import Key
 
 __all__ = ["spatial_neighbors"]
 

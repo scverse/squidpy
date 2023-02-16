@@ -1,17 +1,15 @@
-import pytest
-
-from anndata import AnnData
-
 import numpy as np
 import pandas as pd
+import pytest
+from anndata import AnnData
 
-from squidpy.gr import (
-    nhood_enrichment,
-    centrality_scores,
-    spatial_neighbors,
-    interaction_matrix,
-)
 from squidpy._constants._pkg_constants import Key
+from squidpy.gr import (
+    centrality_scores,
+    interaction_matrix,
+    nhood_enrichment,
+    spatial_neighbors,
+)
 
 _CK = "leiden"
 

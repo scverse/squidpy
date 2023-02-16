@@ -1,19 +1,17 @@
-from typing import Tuple
-import sys
-import pytest
 import platform
+import sys
+from typing import Tuple
 
-from scanpy import settings as s
-from anndata import AnnData
-
-from scipy.sparse import issparse
-import numpy as np
-
-from matplotlib.testing.compare import compare_images
 import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+from anndata import AnnData
+from matplotlib.testing.compare import compare_images
+from scanpy import settings as s
+from scipy.sparse import issparse
 
 from squidpy.im import ImageContainer
-from tests.conftest import DPI, TOL, ACTUAL, EXPECTED, PlotTester, PlotTesterMeta
+from tests.conftest import ACTUAL, DPI, EXPECTED, TOL, PlotTester, PlotTesterMeta
 
 
 @pytest.mark.skipif(platform.system() == "Linux", reason="Fails on ubuntu")

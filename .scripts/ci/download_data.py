@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-from typing import Any
-from pathlib import Path
 import argparse
+from pathlib import Path
+from typing import Any
 
 _CNT = 0  # increment this when you want to rebuild the CI cache
 _ROOT = Path.home() / ".cache" / "squidpy"
@@ -20,7 +20,7 @@ def _maybe_download_data(func_name: str, path: Path) -> Any:
 
     try:
         return getattr(sq.datasets, func_name)(path=path)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"File {str(path):>25} seems to be corrupted: {e}. Removing and retrying")
         path.unlink()
 

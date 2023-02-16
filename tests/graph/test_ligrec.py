@@ -1,21 +1,20 @@
-from time import time
-from typing import Tuple, Mapping, Optional, Sequence, TYPE_CHECKING
-from itertools import product
 import sys
-import pytest
+from itertools import product
+from time import time
+from typing import TYPE_CHECKING, Mapping, Optional, Sequence, Tuple
 
-from scanpy import settings as s
-from anndata import AnnData
-from scanpy.datasets import blobs
-import scanpy as sc
-
-from pandas.testing import assert_frame_equal
 import numpy as np
 import pandas as pd
+import pytest
+import scanpy as sc
+from anndata import AnnData
+from pandas.testing import assert_frame_equal
+from scanpy import settings as s
+from scanpy.datasets import blobs
 
+from squidpy._constants._pkg_constants import Key
 from squidpy.gr import ligrec
 from squidpy.gr._ligrec import PermutationTest
-from squidpy._constants._pkg_constants import Key
 
 _CK = "leiden"
 Interactions_t = Tuple[Sequence[str], Sequence[str]]

@@ -1,30 +1,33 @@
 """Functions for neighborhood enrichment analysis (permutation test, centralities measures etc.)."""
 from __future__ import annotations
 
-from typing import Union  # noqa: F401
-from typing import Any, Callable, Iterable, Sequence
 from functools import partial
-
-from scanpy import logging as logg
-from anndata import AnnData
-
-from numba import njit, prange  # noqa: F401
-import numpy as np
-import pandas as pd
-import numba.types as nt
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Sequence,
+    Union,  # noqa: F401
+)
 
 import networkx as nx
+import numba.types as nt
+import numpy as np
+import pandas as pd
+from anndata import AnnData
+from numba import njit, prange  # noqa: F401
+from scanpy import logging as logg
 
-from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, NDArrayA, SigQueue, parallelize, _get_n_cores
-from squidpy.gr._utils import (
-    _save_data,
-    _assert_positive,
-    _assert_categorical_obs,
-    _assert_connectivity_key,
-)
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
+from squidpy._docs import d, inject_docs
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy.gr._utils import (
+    _assert_categorical_obs,
+    _assert_connectivity_key,
+    _assert_positive,
+    _save_data,
+)
 
 __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
 

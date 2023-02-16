@@ -1,1 +1,1 @@
-from squidpy.read._read import visium, vizgen, nanostring
+from squidpy.read._read import nanostring, visium, vizgen

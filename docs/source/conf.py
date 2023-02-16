@@ -4,25 +4,25 @@
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-from pathlib import Path
-from datetime import datetime
-from sphinx.application import Sphinx
-from sphinx_gallery.gen_gallery import DEFAULT_GALLERY_CONF
-
 # -- Path setup --------------------------------------------------------------
 import os
 import sys
+from datetime import datetime
+from pathlib import Path
+
+from sphinx.application import Sphinx
+from sphinx_gallery.gen_gallery import DEFAULT_GALLERY_CONF
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
 sys.path.insert(0, os.path.abspath("_ext"))
 
-from docs.source.utils import (  # noqa: E402
-    _get_thumbnails,
-    _fetch_notebooks,
-    MaybeMiniGallery,
-)
 import squidpy  # noqa: E402
+from docs.source.utils import (  # noqa: E402
+    MaybeMiniGallery,
+    _fetch_notebooks,
+    _get_thumbnails,
+)
 
 needs_sphinx = "4.0"
 

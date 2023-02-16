@@ -1,62 +1,60 @@
 from __future__ import annotations
 
+import itertools
 from copy import copy
+from functools import partial
+from numbers import Number
 from types import MappingProxyType
 from typing import (
+    TYPE_CHECKING,
     Any,
     List,
-    Type,
-    Tuple,
-    Union,
     Literal,
     Mapping,
+    NamedTuple,
     Optional,
     Sequence,
-    NamedTuple,
-    TYPE_CHECKING,
+    Tuple,
+    Type,
+    Union,
 )
-from numbers import Number
-from functools import partial
-from matplotlib_scalebar.scalebar import ScaleBar
-import itertools
 
-from scanpy import logging as logg
-from anndata import AnnData
-from scanpy._settings import settings as sc_settings
-from scanpy.plotting._tools.scatterplots import _add_categorical_legend
-
-from pandas.api.types import CategoricalDtype
-from pandas.core.dtypes.common import is_categorical_dtype
+import dask.array as da
 import numpy as np
 import pandas as pd
-import dask.array as da
-
-from matplotlib import colors, pyplot as plt, rcParams, patheffects
-from matplotlib.cm import get_cmap
+from anndata import AnnData
+from matplotlib import colors, patheffects, rcParams
+from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.cm import get_cmap
+from matplotlib.collections import Collection, PatchCollection
 from matplotlib.colors import (
+    ColorConverter,
     Colormap,
+    ListedColormap,
     Normalize,
     TwoSlopeNorm,
-    ColorConverter,
-    ListedColormap,
 )
 from matplotlib.figure import Figure
-from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib.gridspec import GridSpec
-from matplotlib.collections import Collection, PatchCollection
-
-from skimage.util import map_array
+from matplotlib.patches import Circle, Polygon, Rectangle
+from matplotlib_scalebar.scalebar import ScaleBar
+from pandas.api.types import CategoricalDtype
+from pandas.core.dtypes.common import is_categorical_dtype
+from scanpy import logging as logg
+from scanpy._settings import settings as sc_settings
+from scanpy.plotting._tools.scatterplots import _add_categorical_legend
 from skimage.color import label2rgb
-from skimage.morphology import square, erosion
+from skimage.morphology import erosion, square
 from skimage.segmentation import find_boundaries
+from skimage.util import map_array
 
-from squidpy._utils import NDArrayA
-from squidpy.pl._utils import _assert_value_in_obs
-from squidpy.im._coords import CropCoords
-from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
+from squidpy._utils import NDArrayA
+from squidpy.im._coords import CropCoords
+from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
+from squidpy.pl._utils import _assert_value_in_obs
 
 _AvailShapes = Literal["circle", "square", "hex"]
 Palette_t = Optional[Union[str, ListedColormap]]

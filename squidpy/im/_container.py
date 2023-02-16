@@ -1,63 +1,60 @@
 from __future__ import annotations
 
+import re
 from copy import copy, deepcopy
+from functools import partial
+from itertools import chain
+from pathlib import Path
 from types import MappingProxyType
 from typing import (
+    TYPE_CHECKING,
     Any,
-    Union,
-    Literal,
-    Mapping,
-    TypeVar,
     Callable,
     Iterable,
     Iterator,
+    Literal,
+    Mapping,
     Sequence,
-    TYPE_CHECKING,
+    TypeVar,
+    Union,
 )
-from pathlib import Path
-from functools import partial
-from itertools import chain
-import re
-import validators
 
-from scanpy import logging as logg
-from anndata import AnnData
-from scanpy.plotting.palettes import default_102 as default_palette
-
-from dask import delayed
-import numpy as np
-import xarray as xr
 import dask.array as da
-
-from matplotlib.colors import ListedColormap
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-
-from skimage.util import img_as_float
+import numpy as np
+import validators
+import xarray as xr
+from anndata import AnnData
+from dask import delayed
+from matplotlib.colors import ListedColormap
+from scanpy import logging as logg
+from scanpy.plotting.palettes import default_102 as default_palette
 from skimage.transform import rescale
+from skimage.util import img_as_float
 
-from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, singledispatchmethod
-from squidpy.im._io import _lazy_load_image, _infer_dimensions, _assert_dims_present
-from squidpy.gr._utils import (
-    _assert_in_range,
-    _assert_positive,
-    _assert_non_negative,
-    _assert_spatial_basis,
-    _assert_non_empty_sequence,
-)
-from squidpy.im._coords import (
-    CropCoords,
-    CropPadding,
-    _NULL_COORDS,
-    _NULL_PADDING,
-    TupleSerializer,
-    _update_attrs_scale,
-    _update_attrs_coords,
-)
-from squidpy.im._feature_mixin import FeatureMixin
 from squidpy._constants._constants import InferDimensions
 from squidpy._constants._pkg_constants import Key
+from squidpy._docs import d, inject_docs
+from squidpy._utils import NDArrayA, singledispatchmethod
+from squidpy.gr._utils import (
+    _assert_in_range,
+    _assert_non_empty_sequence,
+    _assert_non_negative,
+    _assert_positive,
+    _assert_spatial_basis,
+)
+from squidpy.im._coords import (
+    _NULL_COORDS,
+    _NULL_PADDING,
+    CropCoords,
+    CropPadding,
+    TupleSerializer,
+    _update_attrs_coords,
+    _update_attrs_scale,
+)
+from squidpy.im._feature_mixin import FeatureMixin
+from squidpy.im._io import _assert_dims_present, _infer_dimensions, _lazy_load_image
 
 FoI_t = Union[int, float]
 Pathlike_t = Union[str, Path]
@@ -782,7 +779,7 @@ class ImageContainer(FeatureMixin):
                     raise ValueError(
                         str(e)
                         + " Or specify a key in `adata.obs` containing a mapping from observations to library ids."
-                    )
+                    ) from e
                 else:
                     raise e
         else:
@@ -795,7 +792,7 @@ class ImageContainer(FeatureMixin):
                 )
                 library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=library_id)
                 if not isinstance(library_id, str):
-                    raise NotImplementedError(_ERROR_NOTIMPLEMENTED_LIBID)
+                    raise NotImplementedError(_ERROR_NOTIMPLEMENTED_LIBID) from None
                 obs_library_ids = [library_id] * adata.n_obs
 
         lids = set(obs_library_ids)

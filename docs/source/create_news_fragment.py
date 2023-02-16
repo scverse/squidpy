@@ -1,10 +1,11 @@
-from enum import Enum
-from typing import Any, List, Mapping, Optional
-from pathlib import Path
-import logging
 import argparse
-import requests
+import logging
 import textwrap
+from enum import Enum
+from pathlib import Path
+from typing import Any, List, Mapping, Optional
+
+import requests
 
 _root = Path(__file__).parent / "release" / "changelog"
 _valid_types = ("feature", "bugfix", "deprecation", "misc", "doc", "ignore-towncrier")
@@ -92,7 +93,7 @@ def create_news_fragment(issue_number: str, use_title: bool = False, add_author:
             print(add_author, author)
             if add_author and author is not None:
                 print(author, file=fout)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logging.error(f"Unable to generate news fragment. Reason: `{e}`")
         exit(1)
 

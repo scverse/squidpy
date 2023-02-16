@@ -1,22 +1,23 @@
 from __future__ import annotations
 
-from typing import Union  # noqa: F401
-from typing import Any
-from pathlib import Path
+import json
 import os
 import re
-import json
+from pathlib import Path
+from typing import (
+    Any,
+    Union,  # noqa: F401
+)
 
-from scanpy import logging as logg
-from anndata import AnnData
-
-from scipy.sparse import csr_matrix
 import numpy as np
 import pandas as pd
+from anndata import AnnData
+from scanpy import logging as logg
+from scipy.sparse import csr_matrix
 
-from squidpy.read._utils import _load_image, _read_counts
-from squidpy.datasets._utils import PathLike
 from squidpy._constants._pkg_constants import Key
+from squidpy.datasets._utils import PathLike
+from squidpy.read._utils import _load_image, _read_counts
 
 __all__ = ["visium", "vizgen", "nanostring"]
 
