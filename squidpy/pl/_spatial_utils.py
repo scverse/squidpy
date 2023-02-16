@@ -1005,6 +1005,6 @@ def _plot_segment(
         zorder=3,
         **kwargs,
     )
-    cax = ax.add_collection(_cax, autolim=False)
+    cax = ax.add_image(_cax)
 
     return ax, cax
