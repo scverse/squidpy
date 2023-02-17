@@ -1,18 +1,17 @@
+# Based on pydata/xarray
 codecov:
-    require_ci_to_pass: no
-    strict_yaml_branch: main
+    require_ci_to_pass: false
 
 coverage:
-    range: 80..100
     status:
         project:
             default:
+                # Require 1% coverage, i.e., always succeed
                 target: 1
-        patch: off
+        patch: false
+        changes: false
 
 comment:
-    layout: reach, diff, files
-    behavior: default
-    require_changes: true
-    branches:
-        - main
+    layout: "diff, flags, files"
+    behavior: once
+    require_base: false

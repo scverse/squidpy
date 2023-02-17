@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from typing import Union  # noqa: F401
-from typing import Any
-
-from scanpy import logging as logg
-from anndata import AnnData
+from typing import (
+    Any,
+    Union,  # noqa: F401
+)
 
 import matplotlib.pyplot as plt
+from anndata import AnnData
+from scanpy import logging as logg
 
-from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
+from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy.pl._utils import save_fig
 
 try:

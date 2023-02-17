@@ -1,55 +1,55 @@
 from __future__ import annotations
 
+import os
 from copy import copy
-from types import MappingProxyType
-from typing import (
-    Any,
-    List,
-    Tuple,
-    Union,
-    Mapping,
-    Callable,
-    Optional,
-    Sequence,
-    TYPE_CHECKING,
-)
+from functools import wraps
 from inspect import signature
 from pathlib import Path
-from functools import wraps
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-import os
+from types import MappingProxyType
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
-from scanpy import logging as logg, settings
+import matplotlib as mpl
+import numpy as np
+import pandas as pd
 from anndata import AnnData
-
-from dask import array as da, delayed
+from dask import array as da
+from dask import delayed
+from matplotlib import colors as mcolors
+from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from numba import njit, prange
-from scipy.sparse import issparse, spmatrix
-from scipy.cluster import hierarchy as sch
 from pandas._libs.lib import infer_dtype
 from pandas.core.dtypes.common import (
     is_bool_dtype,
-    is_object_dtype,
-    is_string_dtype,
+    is_categorical_dtype,
     is_integer_dtype,
     is_numeric_dtype,
-    is_categorical_dtype,
+    is_object_dtype,
+    is_string_dtype,
 )
-import numpy as np
-import pandas as pd
-
-from matplotlib import colors as mcolors, pyplot as plt
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
-import matplotlib as mpl
-
+from scanpy import logging as logg
+from scanpy import settings
+from scipy.cluster import hierarchy as sch
+from scipy.sparse import issparse, spmatrix
 from skimage import img_as_float32
 from skimage.color import rgb2gray
 
+from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_categorical_obs
-from squidpy._constants._pkg_constants import Key
 
 Vector_name_t = Tuple[Optional[Union[pd.Series, NDArrayA]], Optional[str]]
 

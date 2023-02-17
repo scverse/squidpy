@@ -1,11 +1,9 @@
+import numpy as np
 import pytest
-
 from anndata import AnnData
 
-import numpy as np
-
-from squidpy.gr import ripley
 from squidpy._constants._constants import RipleyStat
+from squidpy.gr import ripley
 
 CLUSTER_KEY = "leiden"
 

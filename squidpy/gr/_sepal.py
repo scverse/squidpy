@@ -1,28 +1,30 @@
 from __future__ import annotations
 
-from typing import Union  # noqa: F401
-from typing import Literal  # < 3.8
-from typing import Callable, Sequence
+from typing import (
+    Callable,
+    Literal,  # < 3.8
+    Sequence,
+    Union,  # noqa: F401
+)
 
-from scanpy import logging as logg
-from anndata import AnnData
-
-from numba import njit
-from scipy.sparse import issparse, spmatrix, csr_matrix, isspmatrix_csr
-from sklearn.metrics import pairwise_distances
 import numpy as np
 import pandas as pd
+from anndata import AnnData
+from numba import njit
+from scanpy import logging as logg
+from scipy.sparse import csr_matrix, issparse, isspmatrix_csr, spmatrix
+from sklearn.metrics import pairwise_distances
 
+from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, NDArrayA, SigQueue, parallelize, _get_n_cores
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import (
-    _save_data,
-    _extract_expression,
-    _assert_spatial_basis,
     _assert_connectivity_key,
     _assert_non_empty_sequence,
+    _assert_spatial_basis,
+    _extract_expression,
+    _save_data,
 )
-from squidpy._constants._pkg_constants import Key
 
 __all__ = ["sepal"]
 
@@ -272,7 +274,7 @@ def _laplacian_hex(
     """
     d2f: NDArrayA = nbrs - 6 * centers
     d2f = d2f / h**2
-    d2f = (d2f * 2) / 3  # type: ignore[assignment]
+    d2f = (d2f * 2) / 3
 
     return d2f
 

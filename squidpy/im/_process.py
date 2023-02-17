@@ -1,21 +1,24 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Union  # noqa: F401
-from typing import Any, Mapping, Callable, Sequence
+from typing import (
+    Any,
+    Callable,
+    Mapping,
+    Sequence,
+    Union,  # noqa: F401
+)
 
-from scanpy import logging as logg
-
-from scipy.ndimage import gaussian_filter as scipy_gf
 import dask.array as da
-
 from dask_image.ndfilters import gaussian_filter as dask_gf
+from scanpy import logging as logg
+from scipy.ndimage import gaussian_filter as scipy_gf
 
+from squidpy._constants._constants import Processing
+from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA
 from squidpy.im._container import ImageContainer
-from squidpy._constants._constants import Processing
-from squidpy._constants._pkg_constants import Key
 
 __all__ = ["process"]
 

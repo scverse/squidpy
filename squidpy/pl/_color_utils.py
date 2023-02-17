@@ -1,17 +1,15 @@
 """Utils for plotting functions."""
 from __future__ import annotations
 
-from cycler import cycler, Cycler
-from typing import Any, Union, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, Union
 
-from scanpy import logging as logg
-from anndata import AnnData
-from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
-
-import numpy as np
-
-from matplotlib.colors import to_hex, to_rgba, ListedColormap
 import matplotlib.pyplot as plt
+import numpy as np
+from anndata import AnnData
+from cycler import Cycler, cycler
+from matplotlib.colors import ListedColormap, to_hex, to_rgba
+from scanpy import logging as logg
+from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
 from squidpy._constants._pkg_constants import Key
 

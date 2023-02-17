@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-from typing import Sequence, TYPE_CHECKING
-from dataclasses import field, dataclass
-
-from anndata import AnnData
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
+from anndata import AnnData
 
-from squidpy.im import ImageContainer  # type: ignore[attr-defined]
-from squidpy._utils import NDArrayA, _unique_order_preserving
-from squidpy.gr._utils import _assert_spatial_basis, _assert_categorical_obs
-from squidpy.pl._utils import ALayer
-from squidpy.im._coords import CropCoords, CropPadding, _NULL_COORDS, _NULL_PADDING
 from squidpy._constants._constants import Symbol
 from squidpy._constants._pkg_constants import Key
+from squidpy._utils import NDArrayA, _unique_order_preserving
+from squidpy.gr._utils import _assert_categorical_obs, _assert_spatial_basis
+from squidpy.im import ImageContainer  # type: ignore[attr-defined]
+from squidpy.im._coords import _NULL_COORDS, _NULL_PADDING, CropCoords, CropPadding
+from squidpy.pl._utils import ALayer
 
 __all__ = ["ImageModel"]
 

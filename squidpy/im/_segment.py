@@ -2,24 +2,28 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from types import MappingProxyType
-from typing import Union  # noqa: F401
-from typing import Any, Mapping, Callable, Sequence, TYPE_CHECKING
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Mapping,
+    Sequence,
+    Union,  # noqa: F401
+)
 
-from scanpy import logging as logg
-
-from scipy import ndimage as ndi
-import numpy as np
 import dask.array as da
-
+import numpy as np
+from scanpy import logging as logg
+from scipy import ndimage as ndi
 from skimage.feature import peak_local_max
 from skimage.filters import threshold_otsu
 from skimage.segmentation import watershed
 
+from squidpy._constants._constants import SegmentationBackend
+from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, singledispatchmethod
 from squidpy.im._container import ImageContainer
-from squidpy._constants._constants import SegmentationBackend
-from squidpy._constants._pkg_constants import Key
 
 __all__ = ["SegmentationModel", "SegmentationWatershed", "SegmentationCustom"]
 _SEG_DTYPE = np.uint32
@@ -124,9 +128,9 @@ class SegmentationModel(ABC):
             **kwargs,
         )
         from dask_image.ndmeasure._utils._label import (
-            relabel_blocks,
-            label_adjacency_graph,
             connected_components_delayed,
+            label_adjacency_graph,
+            relabel_blocks,
         )
 
         # max because labels are not continuous (and won't be continuous)

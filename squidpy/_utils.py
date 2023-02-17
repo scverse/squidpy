@@ -1,16 +1,23 @@
 """Spatial tools general utility functions."""
 from __future__ import annotations
 
-import joblib as jl
-
-from enum import Enum
-from queue import Queue
-from typing import Union  # noqa: F401
-from typing import Any, Callable, Hashable, Iterable, Sequence, Generator, TYPE_CHECKING
-from threading import Thread
 from contextlib import contextmanager
+from enum import Enum
 from multiprocessing import Manager, cpu_count
+from queue import Queue
+from threading import Thread
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generator,
+    Hashable,
+    Iterable,
+    Sequence,
+    Union,  # noqa: F401
+)
 
+import joblib as jl
 import numpy as np
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
@@ -111,8 +118,8 @@ def parallelize(
     """
     if show_progress_bar:
         try:
-            from tqdm.auto import tqdm
             import ipywidgets  # noqa: F401
+            from tqdm.auto import tqdm
         except ImportError:
             try:
                 from tqdm.std import tqdm

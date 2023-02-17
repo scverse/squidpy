@@ -2,41 +2,40 @@
 from __future__ import annotations
 
 from abc import ABC
-from types import MappingProxyType
-from typing import (
-    Any,
-    Tuple,
-    Union,
-    Literal,
-    Mapping,
-    Iterable,
-    Sequence,
-    TYPE_CHECKING,
-)
+from collections import namedtuple
 from functools import partial
 from itertools import product
-from collections import namedtuple
+from types import MappingProxyType
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Iterable,
+    Literal,
+    Mapping,
+    Sequence,
+    Tuple,
+    Union,
+)
 
-from scanpy import logging as logg
-from anndata import AnnData
-
-from numba import njit, prange  # noqa: F401
-from scipy.sparse import csc_matrix
 import numpy as np
 import pandas as pd
+from anndata import AnnData
+from numba import njit, prange  # noqa: F401
+from scanpy import logging as logg
+from scipy.sparse import csc_matrix
 
-from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, NDArrayA, SigQueue, parallelize, _get_n_cores
-from squidpy.gr._utils import (
-    _save_data,
-    _genesymbols,
-    _assert_positive,
-    _create_sparse_df,
-    _check_tuple_needles,
-    _assert_categorical_obs,
-)
-from squidpy._constants._constants import CorrAxis, ComplexPolicy
+from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
+from squidpy._docs import d, inject_docs
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy.gr._utils import (
+    _assert_categorical_obs,
+    _assert_positive,
+    _check_tuple_needles,
+    _create_sparse_df,
+    _genesymbols,
+    _save_data,
+)
 
 __all__ = ["ligrec", "PermutationTest"]
 

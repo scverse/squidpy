@@ -1,19 +1,24 @@
 """Graph utilities."""
 from __future__ import annotations
 
-from typing import Union  # noqa: F401
-from typing import Any, Hashable, Iterable, Sequence, TYPE_CHECKING
 from contextlib import contextmanager
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Hashable,
+    Iterable,
+    Sequence,
+    Union,  # noqa: F401
+)
 
-from scanpy import logging as logg
-from anndata import AnnData
-from anndata.utils import make_index_unique
-from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
-
-from scipy.sparse import issparse, spmatrix, csc_matrix, csr_matrix
-from pandas.api.types import infer_dtype, is_categorical_dtype
 import numpy as np
 import pandas as pd
+from anndata import AnnData
+from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
+from anndata.utils import make_index_unique
+from pandas.api.types import infer_dtype, is_categorical_dtype
+from scanpy import logging as logg
+from scipy.sparse import csc_matrix, csr_matrix, issparse, spmatrix
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, _unique_order_preserving

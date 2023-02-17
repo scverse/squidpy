@@ -1,7 +1,8 @@
-from typing import List, Iterable, Iterator
+import re
+from typing import Iterable, Iterator, List
+
 from sphinx.application import Sphinx
 from sphinx.ext.napoleon import NumpyDocstring
-import re
 
 
 def _process_return(lines: Iterable[str]) -> Iterator[str]:
