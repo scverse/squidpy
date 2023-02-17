@@ -90,11 +90,11 @@ jobs:
               run: |
                   tox -vv
 
-            - name: Upload coverage
-              env:
-                  CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
-              run: |
-                  codecov --no-color --required --flags unittests
+            - name: Upload coverage to Codecov
+              uses: codecov/codecov-action@v3.1.1
+              with:
+                  name: coverage
+                  verbose: true
 
     regenerate-notebooks:
         needs: test
