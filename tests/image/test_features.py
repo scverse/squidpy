@@ -1,15 +1,14 @@
-from typing import Tuple, Sequence
-from pytest_mock import MockerFixture
-import pytest
-
-from anndata import AnnData
+from typing import Sequence, Tuple
 
 import numpy as np
 import pandas as pd
+import pytest
+from anndata import AnnData
+from pytest_mock import MockerFixture
 
-from squidpy.im._feature import calculate_image_features
-from squidpy.im._container import ImageContainer
 from squidpy._constants._constants import ImageFeature
+from squidpy.im._container import ImageContainer
+from squidpy.im._feature import calculate_image_features
 
 
 class TestFeatureMixin:

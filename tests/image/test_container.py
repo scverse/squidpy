@@ -1,26 +1,24 @@
-from typing import Any, Set, List, Tuple, Union, Optional, Sequence
-from pathlib import Path
-from itertools import permutations
+import subprocess
 from collections import defaultdict
 from html.parser import HTMLParser
-from pytest_mock import MockerFixture
-import pytest
-import imageio
-import subprocess
+from itertools import permutations
+from pathlib import Path
+from typing import Any, List, Optional, Sequence, Set, Tuple, Union
 
-from anndata import AnnData
 import anndata as ad
-
-import numpy as np
-import xarray as xr
 import dask.array as da
-
+import imageio
+import numpy as np
+import pytest
 import tifffile
+import xarray as xr
+from anndata import AnnData
+from pytest_mock import MockerFixture
 
-from squidpy.im import ImageContainer
-from squidpy.im._coords import CropCoords, CropPadding, _NULL_COORDS
-from squidpy._constants._pkg_constants import Key
 import squidpy as sq
+from squidpy._constants._pkg_constants import Key
+from squidpy.im import ImageContainer
+from squidpy.im._coords import _NULL_COORDS, CropCoords, CropPadding
 
 
 class SimpleHTMLValidator(HTMLParser):  # modified from CellRank

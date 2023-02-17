@@ -1,14 +1,12 @@
 from copy import deepcopy
 from typing import Mapping
-import pytest
-
-from anndata import AnnData
-import scanpy as sc
-
-import numpy as np
-import pandas as pd
 
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pytest
+import scanpy as sc
+from anndata import AnnData
 
 from squidpy import gr, pl
 from tests.conftest import DPI, PlotTester, PlotTesterMeta

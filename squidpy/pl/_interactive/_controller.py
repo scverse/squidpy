@@ -1,33 +1,30 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from scanpy import logging as logg
-from anndata import AnnData
-
-from pandas.core.dtypes.common import is_categorical_dtype
 import numpy as np
 import pandas as pd
 import xarray as xr
-
-from PyQt5.QtWidgets import QLabel, QWidget, QGridLayout
-
+from anndata import AnnData
 from napari import Viewer
 from napari.layers import Points, Shapes
+from pandas.core.dtypes.common import is_categorical_dtype
+from PyQt5.QtWidgets import QGridLayout, QLabel, QWidget
+from scanpy import logging as logg
 
-from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, singledispatchmethod
-from squidpy.pl._utils import _points_inside_triangles
-from squidpy.pl._interactive._view import ImageView
+from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy.pl._interactive._model import ImageModel
 from squidpy.pl._interactive._utils import (
-    _get_categorical,
     _display_channelwise,
+    _get_categorical,
     _position_cluster_labels,
 )
+from squidpy.pl._interactive._view import ImageView
 from squidpy.pl._interactive._widgets import RangeSlider  # type: ignore[attr-defined]
+from squidpy.pl._utils import _points_inside_triangles
 
 __all__ = ["ImageController"]
 

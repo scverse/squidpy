@@ -1,12 +1,12 @@
-from typing import Tuple, Union, Callable, Optional, Sequence
-from pytest_mock import MockerFixture
-import pytest
+from typing import Callable, Optional, Sequence, Tuple, Union
 
-import numpy as np
 import dask.array as da
+import numpy as np
+import pytest
+from pytest_mock import MockerFixture
 
-from squidpy.im import process, ImageContainer
 from squidpy._constants._pkg_constants import Key
+from squidpy.im import ImageContainer, process
 
 
 class TestProcess:

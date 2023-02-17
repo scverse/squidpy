@@ -1,42 +1,41 @@
-from types import MappingProxyType
-from typing import Any, List, Tuple, Union, Mapping, Callable, Optional, Sequence
-from pathlib import Path
 import itertools
+from pathlib import Path
+from types import MappingProxyType
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, Union
 
 from anndata import AnnData
-
 from matplotlib.axes import Axes
 from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 
-from squidpy._docs import d
-from squidpy.gr._utils import _assert_spatial_basis
-from squidpy.pl._utils import save_fig, sanitize_anndata
-from squidpy.pl._spatial_utils import (
-    _subs,
-    _SeqStr,
-    _FontSize,
-    _SeqArray,
-    _SeqFloat,
-    Palette_t,
-    _Normalize,
-    _CoordTuple,
-    _FontWeight,
-    _plot_edges,
-    _AvailShapes,
-    _set_outline,
-    _decorate_axs,
-    _plot_scatter,
-    _plot_segment,
-    _set_ax_title,
-    _set_coords_crops,
-    _prepare_args_plot,
-    _image_spatial_attrs,
-    _prepare_params_plot,
-    _set_color_source_vec,
-)
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
+from squidpy._docs import d
+from squidpy.gr._utils import _assert_spatial_basis
+from squidpy.pl._spatial_utils import (
+    Palette_t,
+    _AvailShapes,
+    _CoordTuple,
+    _decorate_axs,
+    _FontSize,
+    _FontWeight,
+    _image_spatial_attrs,
+    _Normalize,
+    _plot_edges,
+    _plot_scatter,
+    _plot_segment,
+    _prepare_args_plot,
+    _prepare_params_plot,
+    _SeqArray,
+    _SeqFloat,
+    _SeqStr,
+    _set_ax_title,
+    _set_color_source_vec,
+    _set_coords_crops,
+    _set_outline,
+    _subs,
+)
+from squidpy.pl._utils import sanitize_anndata, save_fig
 
 
 @d.get_sections(base="spatial_plot", sections=["Returns"])

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union  # noqa: F401
-from typing import Any, Hashable
 from dataclasses import dataclass
+from typing import (
+    Any,
+    Hashable,
+    Union,  # noqa: F401
+)
 
 import numpy as np
 
+from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_non_negative
-from squidpy._constants._pkg_constants import Key
 
 
 def _circular_mask(arr: NDArrayA, y: int, x: int, radius: float) -> NDArrayA:

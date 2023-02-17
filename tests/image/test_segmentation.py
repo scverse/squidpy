@@ -1,19 +1,19 @@
-from typing import Tuple, Union, Callable, Optional, Sequence
-from pytest_mock import MockerFixture
-import pytest
+from typing import Callable, Optional, Sequence, Tuple, Union
 
-import numpy as np
 import dask.array as da
+import numpy as np
+import pytest
+from pytest_mock import MockerFixture
 
+from squidpy._constants._constants import SegmentationBackend
+from squidpy._constants._pkg_constants import Key
 from squidpy.im import (
-    segment,
     ImageContainer,
     SegmentationCustom,
     SegmentationWatershed,
+    segment,
 )
 from squidpy.im._segment import _SEG_DTYPE
-from squidpy._constants._constants import SegmentationBackend
-from squidpy._constants._pkg_constants import Key
 
 
 def dummy_segment(arr: np.ndarray) -> np.ndarray:

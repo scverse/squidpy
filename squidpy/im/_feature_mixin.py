@@ -1,28 +1,27 @@
 from __future__ import annotations
 
 from typing import (
+    TYPE_CHECKING,
     Any,
-    Dict,
-    Union,
     Callable,
+    Dict,
     Iterable,
     Protocol,
     Sequence,
-    TYPE_CHECKING,
+    Union,
 )
 
 import numpy as np
-import xarray as xr
-
-from skimage.util import img_as_ubyte
-from skimage.feature import graycoprops, graycomatrix
 import skimage.measure
+import xarray as xr
+from skimage.feature import graycomatrix, graycoprops
+from skimage.util import img_as_ubyte
 
+from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_non_empty_sequence
-from squidpy.im._coords import CropCoords, _NULL_PADDING
-from squidpy._constants._pkg_constants import Key
+from squidpy.im._coords import _NULL_PADDING, CropCoords
 
 Feature_t = Dict[str, Any]
 Channel_t = Union[int, Sequence[int]]

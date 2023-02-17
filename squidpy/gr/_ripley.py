@@ -1,25 +1,27 @@
 """Functions for point patterns spatial statistics."""
 from __future__ import annotations
 
-from typing import Union  # noqa: F401
-from typing import Literal, TYPE_CHECKING
+from typing import (
+    TYPE_CHECKING,
+    Literal,
+    Union,  # noqa: F401
+)
 
-from scanpy import logging as logg
-from anndata import AnnData
-
-from numpy.random import default_rng
-from scipy.spatial import Delaunay, ConvexHull
-from sklearn.neighbors import NearestNeighbors
-from sklearn.preprocessing import LabelEncoder
-from scipy.spatial.distance import pdist
 import numpy as np
 import pandas as pd
+from anndata import AnnData
+from numpy.random import default_rng
+from scanpy import logging as logg
+from scipy.spatial import ConvexHull, Delaunay
+from scipy.spatial.distance import pdist
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import LabelEncoder
 
-from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA
-from squidpy.gr._utils import _save_data, _assert_spatial_basis, _assert_categorical_obs
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
+from squidpy._docs import d, inject_docs
+from squidpy._utils import NDArrayA
+from squidpy.gr._utils import _assert_categorical_obs, _assert_spatial_basis, _save_data
 
 __all__ = ["ripley"]
 
@@ -203,7 +205,7 @@ def _f_g_function(distances: NDArrayA, support: NDArrayA) -> tuple[NDArrayA, NDA
 
 
 def _l_function(distances: NDArrayA, support: NDArrayA, n: int, area: float) -> tuple[NDArrayA, NDArrayA]:
-    n_pairs_less_than_d = (distances < support.reshape(-1, 1)).sum(axis=1)  # type: ignore[attr-defined]
+    n_pairs_less_than_d = (distances < support.reshape(-1, 1)).sum(axis=1)
     intensity = n / area
     k_estimate = ((n_pairs_less_than_d * 2) / n) / intensity
     l_estimate = np.sqrt(k_estimate / np.pi)

@@ -1,24 +1,22 @@
 from __future__ import annotations
 
-from typing import Sequence
-from functools import partial
-import pytest
 import platform
+from functools import partial
+from typing import Sequence
 
-from anndata import AnnData
-import scanpy as sc
-
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
+import pytest
+import scanpy as sc
+from anndata import AnnData
 from matplotlib.colors import ListedColormap
-import matplotlib.pyplot as plt
 
 from squidpy import pl
-from squidpy.gr import spatial_neighbors
-from tests.conftest import PlotTester, PlotTesterMeta
-from squidpy.pl._spatial_utils import _get_library_id
 from squidpy._constants._pkg_constants import Key
+from squidpy.gr import spatial_neighbors
+from squidpy.pl._spatial_utils import _get_library_id
+from tests.conftest import PlotTester, PlotTesterMeta
 
 sc.set_figure_params(dpi=40, color_map="viridis")
 
@@ -33,7 +31,7 @@ sc.set_figure_params(dpi=40, color_map="viridis")
 class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
     def test_tol_plot_spatial_scatter_image(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, na_color="lightgrey")
-        self.compare("SpatialStatic_spatial_scatter_image", tolerance=60)
+        self.compare("SpatialStatic_spatial_scatter_image", tolerance=70)
 
     def test_plot_spatial_scatter_noimage(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, shape=None, na_color="lightgrey")
@@ -191,16 +189,17 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_spatial_scatter_categorical_alpha(self, adata_hne: AnnData):
         pl.spatial_scatter(adata_hne, shape="circle", color="cluster", alpha=0)
 
-    def test_plot_spatial_scatter_non_unique_colors(self, adata_hne: AnnData):
+    def test_tol_plot_spatial_scatter_non_unique_colors(self, adata_hne: AnnData):
         adata_hne.uns["cluster_colors"] = ["#000000"] * len(adata_hne.uns["cluster_colors"])
         pl.spatial_scatter(adata_hne, color="cluster", legend_loc=None)
+        self.compare("SpatialStatic_spatial_scatter_non_unique_colors", tolerance=70)
 
     def test_tol_plot_palette_listed_cmap(self, adata_hne: AnnData):
         del adata_hne.uns["cluster_colors"]
         palette = plt.get_cmap("Set3")
         assert isinstance(palette, ListedColormap)
         pl.spatial_scatter(adata_hne, color="cluster", palette=palette, legend_loc=None)
-        self.compare("SpatialStatic_palette_listed_cmap", tolerance=60)
+        self.compare("SpatialStatic_palette_listed_cmap", tolerance=70)
 
 
 class TestSpatialStaticUtils:

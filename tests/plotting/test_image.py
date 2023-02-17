@@ -1,16 +1,13 @@
-import pytest
-
-from anndata import AnnData
-import scanpy as sc
-
-import numpy as np
-
-from matplotlib.testing.compare import compare_images
 import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+import scanpy as sc
+from anndata import AnnData
+from matplotlib.testing.compare import compare_images
 
-from squidpy.im import ImageContainer
-from tests.conftest import DPI, TOL, ACTUAL, EXPECTED, PlotTester, PlotTesterMeta
 import squidpy as sq
+from squidpy.im import ImageContainer
+from tests.conftest import ACTUAL, DPI, EXPECTED, TOL, PlotTester, PlotTesterMeta
 
 
 class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):

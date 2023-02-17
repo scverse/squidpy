@@ -1,4 +1,6 @@
-from squidpy import gr, im, pl, read, datasets
+from packaging.version import parse
+
+from squidpy import datasets, gr, im, pl, read
 
 __author__ = __maintainer__ = "Theislab"
 __email__ = ", ".join(
@@ -14,7 +16,6 @@ try:
 except ImportError:
     from importlib.metadata import version  # Python = 3.8
 
-from packaging.version import parse
 
 try:
     __full_version__ = parse(version(__name__))

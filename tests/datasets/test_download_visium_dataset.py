@@ -2,12 +2,12 @@
 Tests to make sure the Visium example datasets load.
 """
 
-from pathlib import Path
-import pytest
 import subprocess
+from pathlib import Path
 
-from scanpy._settings import settings
+import pytest
 from anndata.tests.helpers import assert_adata_equal
+from scanpy._settings import settings
 
 from squidpy.datasets import visium
 

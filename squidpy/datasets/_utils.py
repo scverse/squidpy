@@ -1,14 +1,15 @@
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple, Union, Callable, Optional, Sequence
-from inspect import Parameter, signature, Signature
-from pathlib import Path
-from dataclasses import field, dataclass
 import os
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from inspect import Parameter, Signature, signature
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
-from scanpy import read, logging as logg
-from anndata import AnnData
-from scanpy._utils import check_presence_download
 import anndata
+from anndata import AnnData
+from scanpy import logging as logg
+from scanpy import read
+from scanpy._utils import check_presence_download
 
 PathLike = Union[os.PathLike, str]
 Function_t = Callable[..., Union[AnnData, Any]]
@@ -148,8 +149,7 @@ class ImgMetadata(Metadata):
 
     Returns
     -------
-    :class:`squidpy.im.ImageContainer`
-        The image data."""
+    :class:`squidpy.im.ImageContainer` The image data."""
     # not the perfect annotation, but better than nothing
     _EXT = ".tiff"
 

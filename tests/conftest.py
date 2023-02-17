@@ -1,29 +1,27 @@
+import pickle
+import sys
+import warnings
 from abc import ABC, ABCMeta
-from typing import Tuple, Mapping, Callable, Optional, Sequence
-from pathlib import Path
 from functools import wraps
 from itertools import product
-import sys
-import pickle
-import pytest
-import warnings
+from pathlib import Path
+from typing import Callable, Mapping, Optional, Sequence, Tuple
 
-from anndata import AnnData, OldFormatWarning
-import scanpy as sc
 import anndata as ad
-
-from scipy.sparse import csr_matrix
-import numpy as np
-import pandas as pd
-
-from matplotlib.testing.compare import compare_images
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pytest
+import scanpy as sc
+from anndata import AnnData, OldFormatWarning
+from matplotlib.testing.compare import compare_images
+from scipy.sparse import csr_matrix
 
+import squidpy as sq
+from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_neighbors
 from squidpy.im._container import ImageContainer
-from squidpy._constants._pkg_constants import Key
-import squidpy as sq
 
 HERE: Path = Path(__file__).parent
 

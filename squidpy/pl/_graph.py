@@ -1,30 +1,34 @@
 """Plotting for graph functions."""
 from __future__ import annotations
 
-from types import MappingProxyType
-from typing import Union  # noqa: F401
-from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING
 from pathlib import Path
+from types import MappingProxyType
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    Mapping,
+    Sequence,
+    Union,  # noqa: F401
+)
 
-from anndata import AnnData
-
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
-from matplotlib.axes import Axes
 import seaborn as sns
-import matplotlib.pyplot as plt
+from anndata import AnnData
+from matplotlib.axes import Axes
 
-from squidpy._docs import d
-from squidpy.gr._utils import (
-    _get_valid_values,
-    _assert_categorical_obs,
-    _assert_non_empty_sequence,
-)
-from squidpy.pl._utils import _heatmap, save_fig
-from squidpy.pl._color_utils import Palette_t, _get_palette, _maybe_set_colors
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
+from squidpy._docs import d
+from squidpy.gr._utils import (
+    _assert_categorical_obs,
+    _assert_non_empty_sequence,
+    _get_valid_values,
+)
+from squidpy.pl._color_utils import Palette_t, _get_palette, _maybe_set_colors
+from squidpy.pl._utils import _heatmap, save_fig
 
 __all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "ripley", "co_occurrence"]
 

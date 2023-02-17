@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-from PIL import Image
-from h5py import File
-from typing import Any, Tuple, Optional
 from pathlib import Path
-
-from scanpy import read_10x_h5
-from anndata import AnnData, read_mtx, read_text
+from typing import Any, Optional, Tuple
 
 import numpy as np
+from anndata import AnnData, read_mtx, read_text
+from h5py import File
+from PIL import Image
+from scanpy import read_10x_h5
 
+from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
 from squidpy.datasets._utils import PathLike
-from squidpy._constants._pkg_constants import Key
 
 
 def _read_counts(

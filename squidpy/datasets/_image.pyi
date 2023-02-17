@@ -1,7 +1,7 @@
-from typing import Any, Union, Protocol
+from typing import Any, Protocol, Union
 
-from squidpy.im._container import ImageContainer
 from squidpy.datasets._utils import PathLike
+from squidpy.im._container import ImageContainer
 
 class ImageDataset(Protocol):
     def __call__(self, path: Union[PathLike, None] = ..., **kwargs: Any) -> ImageContainer: ...

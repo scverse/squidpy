@@ -1,26 +1,29 @@
 from __future__ import annotations
 
-from typing import Union  # noqa: F401
-from typing import Any, Mapping, Sequence, TYPE_CHECKING
 from pathlib import Path
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Mapping,
+    Sequence,
+    Union,  # noqa: F401
+)
 
-from scanpy import logging as logg
-from anndata import AnnData
-import scanpy as sc
-
-from scipy.cluster import hierarchy as sch
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
+import scanpy as sc
+from anndata import AnnData
 from matplotlib.axes import Axes
 from matplotlib.colorbar import ColorbarBase
-import matplotlib.pyplot as plt
+from scanpy import logging as logg
+from scipy.cluster import hierarchy as sch
 
-from squidpy._docs import d
-from squidpy._utils import verbosity, _unique_order_preserving
-from squidpy.pl._utils import save_fig, _dendrogram, _filter_kwargs
 from squidpy._constants._constants import DendrogramAxis
 from squidpy._constants._pkg_constants import Key
+from squidpy._docs import d
+from squidpy._utils import _unique_order_preserving, verbosity
+from squidpy.pl._utils import _dendrogram, _filter_kwargs, save_fig
 
 __all__ = ["ligrec"]
 
@@ -28,7 +31,6 @@ _SEP = " | "  # cluster separator
 
 
 class CustomDotplot(sc.pl.DotPlot):
-
     BASE = 10
 
     DEFAULT_LARGEST_DOT = 50.0
@@ -330,7 +332,7 @@ def ligrec(
     except IndexError:
         # just in case pandas indexing fails
         raise
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logg.warning(f"Unable to create a dendrogram. Reason: `{e}`")
         dendrogram = None
 

@@ -2,22 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from scanpy import logging as logg
-
-import numpy as np
-
-from PyQt5.QtWidgets import QLabel, QWidget, QComboBox, QHBoxLayout
-
-from napari.layers import Points
 import napari
+import numpy as np
+from napari.layers import Points
+from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QLabel, QWidget
+from scanpy import logging as logg
 
 from squidpy.pl._interactive._model import ImageModel
 from squidpy.pl._interactive._widgets import (  # type: ignore[attr-defined]
-    CBarWidget,
     AListWidget,
+    CBarWidget,
+    LibraryListWidget,
     ObsmIndexWidget,
     TwoStateCheckBox,
-    LibraryListWidget,
 )
 
 __all__ = ["ImageView"]

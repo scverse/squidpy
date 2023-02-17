@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-from typing import Union  # noqa: F401
-from typing import Literal, NamedTuple
-from pathlib import Path
 import tarfile
+from pathlib import Path
+from typing import (
+    Literal,
+    NamedTuple,
+    Union,  # noqa: F401
+)
 
-from scanpy import _utils
 from anndata import AnnData
+from scanpy import _utils
 from scanpy._settings import settings
 
-from squidpy.datasets._utils import PathLike
 from squidpy._constants._constants import TenxVersions
+from squidpy.datasets._utils import PathLike
 
 __all__ = ["visium"]
 

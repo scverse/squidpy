@@ -1,40 +1,45 @@
 """Functions for point patterns spatial statistics."""
 from __future__ import annotations
 
-from typing import Union  # noqa: F401
-from typing import Literal  # < 3.8
-from typing import Any, Dict, Iterable, Sequence, TYPE_CHECKING
 from itertools import chain
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterable,
+    Literal,  # < 3.8
+    Sequence,
+    Union,  # noqa: F401
+)
 
-from scanpy import logging as logg
+import numba.types as nt
+import numpy as np
+import pandas as pd
 from anndata import AnnData
+from numba import njit
+from numpy.random import default_rng
+from scanpy import logging as logg
 from scanpy.get import _get_obs_rep
 from scanpy.metrics._gearys_c import _gearys_c
 from scanpy.metrics._morans_i import _morans_i
-
-from numba import njit
 from scipy import stats
-from numpy.random import default_rng
 from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from statsmodels.stats.multitest import multipletests
-import numpy as np
-import pandas as pd
-import numba.types as nt
 
+from squidpy._constants._constants import SpatialAutocorr
+from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, NDArrayA, SigQueue, parallelize, _get_n_cores
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import (
-    _save_data,
-    _assert_positive,
-    _assert_spatial_basis,
     _assert_categorical_obs,
     _assert_connectivity_key,
     _assert_non_empty_sequence,
+    _assert_positive,
+    _assert_spatial_basis,
+    _save_data,
 )
-from squidpy._constants._constants import SpatialAutocorr
-from squidpy._constants._pkg_constants import Key
 
 __all__ = ["spatial_autocorr", "co_occurrence"]
 
@@ -272,7 +277,6 @@ def _co_occurrence_helper(
     interval: NDArrayA,
     queue: SigQueue | None = None,
 ) -> pd.DataFrame:
-
     out_lst = []
     for t in idx_splits:
         idx_x, idx_y = t
@@ -371,7 +375,7 @@ def co_occurrence(
     spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))
     labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))
     # create idx array including unique combinations and self-comparison
-    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))
+    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))  # type: ignore[arg-type]
     idx_splits = [(i, j) for i, j in zip(x, y)]
 
     n_jobs = _get_n_cores(n_jobs)
@@ -450,7 +454,7 @@ def _p_value_calc(
         return results
 
     n_perms = sims.shape[0]
-    large_perm = (sims >= score).sum(axis=0)  # type: ignore[attr-defined]
+    large_perm = (sims >= score).sum(axis=0)
     # subtract total perm for negative values
     large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
     # get p-value based on permutation
@@ -513,7 +517,7 @@ def _g_moments(w: spmatrix | NDArrayA) -> tuple[float, float, float]:
 
     # s1
     t = w.transpose() + w
-    t2 = t.multiply(t)
+    t2 = t.multiply(t)  # type: ignore[union-attr]
     s1 = t2.sum() / 2.0
 
     # s2
