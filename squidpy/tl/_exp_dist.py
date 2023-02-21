@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
 from functools import reduce
 from itertools import product
+from typing import Any, Dict, List, Tuple
 
-from scanpy import logging as logg
+import numpy as np
+import pandas as pd
 from anndata import AnnData
-
+from scanpy import logging as logg
 from sklearn.metrics import DistanceMetric
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import MinMaxScaler
-import numpy as np
-import pandas as pd
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
@@ -274,7 +273,7 @@ def _normalize_distances(
         max_slide, max_anchor = max(mapping_subset, key=mapping_subset.get)  # type: ignore[arg-type]
         scaler = MinMaxScaler()
         scaler.fit(mapping_design_matrix[(max_slide, max_anchor)][[max_anchor]].values)
-        for (slide_, anchor_) in mapping_subset.keys():
+        for slide_, anchor_ in mapping_subset.keys():
             mapping_design_matrix[(slide_, anchor_)][anchor_] = scaler.transform(
                 mapping_design_matrix[(slide_, anchor_)][[anchor_]].values
             )

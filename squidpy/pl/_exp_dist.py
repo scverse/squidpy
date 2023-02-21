@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-from types import MappingProxyType
-from typing import Any, Union, Mapping, Optional
 from pathlib import Path
+from types import MappingProxyType
+from typing import Any, Mapping, Optional, Union
 
-from anndata import AnnData
-import scanpy as sc
-
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
+import scanpy as sc
+import seaborn as sns
+from anndata import AnnData
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 from squidpy.pl._utils import save_fig
 

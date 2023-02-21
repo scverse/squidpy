@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from anndata import AnnData
 import scanpy as sc
+from anndata import AnnData
 
 from tests.conftest import PlotTester, PlotTesterMeta
 
