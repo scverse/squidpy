@@ -159,7 +159,6 @@ def vizgen(
 
     # fmt: off
     coords = pd.read_csv(path / meta_file, header=0, index_col=0)
-    coords.columns = ["fov", "volume", "center_x", "center_y", "min_x", "max_x", "min_y", "max_y"]
     # fmt: on
 
     adata.obs = pd.merge(adata.obs, coords, how="left", left_index=True, right_index=True)
