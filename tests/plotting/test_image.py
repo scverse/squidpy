@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import pytest
 import scanpy as sc
 from anndata import AnnData
@@ -67,15 +68,12 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
         assert res is None, res
 
 
-def test_extract(adata: AnnData, cont: ImageContainer, caplog):
-    """
-    Calculate features and extract columns to obs
-    """
-    # get obsm
+@pytest.mark.parametrize("is_view", [False, True])
+def test_extract(adata: AnnData, cont: ImageContainer, caplog, is_view: bool):
     sq.im.calculate_image_features(adata, cont, features=["summary"])
 
     # extract columns (default values)
-    extr_adata = sq.pl.extract(adata)
+    extr_adata = sq.pl.extract(adata[:10] if is_view else adata)
     # Test that expected columns exist
     for col in [
         "summary_ch-0_quantile-0.9",
@@ -88,15 +86,15 @@ def test_extract(adata: AnnData, cont: ImageContainer, caplog):
         "summary_ch-2_quantile-0.5",
         "summary_ch-2_quantile-0.1",
     ]:
-        assert col in extr_adata.obs.columns
+        np.testing.assert_array_equal(np.isfinite(extr_adata.obs[col]), True)
 
     # get obsm that is a numpy array
     adata.obsm["pca_features"] = sc.pp.pca(np.asarray(adata.obsm["img_features"]), n_comps=3)
     # extract columns
-    extr_adata = sq.pl.extract(adata, obsm_key="pca_features", prefix="pca_features")
+    extr_adata = sq.pl.extract(adata[3:10] if is_view else adata, obsm_key="pca_features", prefix="pca_features")
     # Test that expected columns exist
     for col in ["pca_features_0", "pca_features_1", "pca_features_2"]:
-        assert col in extr_adata.obs.columns
+        np.testing.assert_array_equal(np.isfinite(extr_adata.obs[col]), True)
 
     # extract multiple obsm at once (no prefix)
     extr_adata = sq.pl.extract(adata, obsm_key=["img_features", "pca_features"])
@@ -115,12 +113,4 @@ def test_extract(adata: AnnData, cont: ImageContainer, caplog):
         "1",
         "2",
     ]:
-        assert col in extr_adata.obs.columns
-
-    # TODO: test similarly to ligrec
-    # currently logging to stderr, and not captured by caplog
-    # extract obsm twice and make sure that warnings are issued
-    # with caplog.at_level(logging.WARNING):
-    #    extr2_adata = sq.pl.extract(extr_adata, obsm_key=['pca_features'])
-    #    log = caplog.text
-    #    assert "will be overwritten by extract" in log
+        np.testing.assert_array_equal(np.isfinite(extr_adata.obs[col]), True)
