@@ -157,9 +157,9 @@ def vizgen(
 
     adata.X = csr_matrix(adata.X)
 
-    # fmt: off
     coords = pd.read_csv(path / meta_file, header=0, index_col=0)
-    # fmt: on
+    # https://github.com/scverse/squidpy/issues/657
+    coords.set_index(coords.index.astype(adata.obs.index.dtype), inplace=True)
 
     adata.obs = pd.merge(adata.obs, coords, how="left", left_index=True, right_index=True)
     adata.obsm[Key.obsm.spatial] = adata.obs[["center_x", "center_y"]].values
