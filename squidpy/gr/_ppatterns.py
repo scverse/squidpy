@@ -169,11 +169,11 @@ def spatial_autocorr(
         return adata.obsm[layer][:, ixs].T, ixs
 
     if attr == "X":
-        vals, names = extract_X(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_X(adata, genes)  # type: ignore[arg-type]
     elif attr == "obs":
-        vals, names = extract_obs(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_obs(adata, genes)  # type: ignore[arg-type]
     elif attr == "obsm":
-        vals, names = extract_obsm(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_obsm(adata, genes)  # type: ignore[arg-type]
     else:
         raise NotImplementedError(f"Extracting from `adata.{attr}` is not yet implemented.")
 
@@ -222,7 +222,7 @@ def spatial_autocorr(
     with np.errstate(divide="ignore"):
         pval_results = _p_value_calc(score, score_perms, g, params)
 
-    df = pd.DataFrame({params["stat"]: score, **pval_results}, index=names)
+    df = pd.DataFrame({params["stat"]: score, **pval_results}, index=index)
 
     if corr_method is not None:
         for pv in filter(lambda x: "pval" in x, df.columns):
