@@ -81,20 +81,22 @@ def spatial_autocorr(
     %(adata)s
     %(conn_key)s
     genes
-        Depending on ``attr``:
+        Depending on the ``attr``:
 
             - if ``attr = 'X'``, it corresponds to genes stored in :attr:`anndata.AnnData.var_names`.
               If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``,
               if present. Otherwise, it's computed for all genes.
             - if ``attr = 'obs'``, it corresponds to a list of columns in :attr:`anndata.AnnData.obs`.
-              If `None`, all numerical columns are used.
+              If `None`, use all numerical columns.
             - if ``attr = 'obsm'``, it corresponds sto indices in :attr:`anndata.AnnData.obsm` ``['{{layer}}']``.
               If `None`, all indices are used.
+
     mode
         Mode of score calculation:
 
             - `{sp.MORAN.s!r}` - `Moran's I autocorrelation <https://en.wikipedia.org/wiki/Moran%27s_I>`_.
             - `{sp.GEARY.s!r}` - `Geary's C autocorrelation <https://en.wikipedia.org/wiki/Geary%27s_C>`_.
+
     transformation
         If `True`, weights in :attr:`anndata.AnnData.obsp` ``['{key}']`` are row-normalized,
         advised for analytic p-value calculation.
