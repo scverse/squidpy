@@ -88,7 +88,7 @@ def spatial_autocorr(
               if present. Otherwise, it's computed for all genes.
             - if ``attr = 'obs'``, it corresponds to a list of columns in :attr:`anndata.AnnData.obs`.
               If `None`, use all numerical columns.
-            - if ``attr = 'obsm'``, it corresponds sto indices in :attr:`anndata.AnnData.obsm` ``['{{layer}}']``.
+            - if ``attr = 'obsm'``, it corresponds to indices in :attr:`anndata.AnnData.obsm` ``['{{layer}}']``.
               If `None`, all indices are used.
 
     mode
