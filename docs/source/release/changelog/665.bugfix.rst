@@ -1,0 +1,3 @@
+Set coordinates' index type to same as in :attr:`anndata.AnnData.obs` in :func:`squidpy.read.vizgen`
+and :func:`squidpy.read.visium`.
+`@michalk8 <https://github.com/michalk8>`__
