@@ -167,13 +167,14 @@ def extract(
             for col in obsm.columns:
                 obs_key = f"{prefix[i]}{col}"
                 _warn_if_exists_obs(tmp_adata, obs_key)
-                tmp_adata.obs[obs_key] = obsm.loc[:, col]
+                tmp_adata.obs[obs_key] = obsm[col]
         else:
             # names will be integer indices
             for j in range(obsm.shape[1]):
                 obs_key = f"{prefix[i]}{j}"
                 _warn_if_exists_obs(tmp_adata, obs_key)
-                tmp_adata.obs[obs_key] = obsm[:, j]
+                # https://github.com/scverse/squidpy/issues/646
+                tmp_adata.obs[obs_key] = pd.Series(obsm[:, j], index=tmp_adata.obs_names)
 
     return tmp_adata
 
