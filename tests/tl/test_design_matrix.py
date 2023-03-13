@@ -59,5 +59,3 @@ class TestDesignMatrix:
             assert (
                 nan_ids <= zero_dist_ids
             )  # zero value indices must be subset of indices with NaN values in anchor column
-
-        return
