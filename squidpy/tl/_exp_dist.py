@@ -45,7 +45,7 @@ def exp_dist(
         Annotation column in `.obs` to take anchor point(s) from.
     library_key
         specify slide location in '.obs' which contain identical anchor points.
-    design_matrix
+    design_matrix_key
         Name of the design matrix saved to `.obsm`, defaults to "design_matrix".
     covariates
         Additional covariates from `.obs` to include in the design matrix.

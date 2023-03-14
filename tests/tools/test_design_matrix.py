@@ -12,7 +12,7 @@ class TestDesignMatrix:
     @pytest.mark.parametrize("groups", ["Endothelial", ["Endothelial", "Epithelial", "Fibroblast"]])
     @pytest.mark.parametrize("cluster_key", ["Cluster"])
     @pytest.mark.parametrize("covariates", ["category", ["category", "cell_size"], None])
-    @pytest.mark.parametrize("library_key", ["library_id", None])
+    @pytest.mark.parametrize("library_key", ["point", None])
     def test_design_matrix_several_slides(
         adata_mibitof: AnnData,
         groups: str | List[str],

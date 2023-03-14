@@ -21,7 +21,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             adata_mibitof,
             cluster_key="Cluster",
             groups="Epithelial",
-            library_key="points",
+            library_key="point",
         )
         pl.exp_dist(adata=adata_mibitof, design_matrix_key="design_matrix", var="HK1", anchor_key="Epithelial")
         self.compare("exp_dist_single_anchor_one_gene", tolerance=70)
