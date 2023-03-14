@@ -550,7 +550,7 @@ def _heatmap(
     if method is not None:
         row_order, col_order, _, col_link = _dendrogram(adata.X, method, optimal_ordering=adata.n_obs <= 1500)
     else:
-        row_order = col_order = np.arange(len(adata.uns[Key.uns.colors(key)])) # type: ignore[assignment] 
+        row_order = col_order = np.arange(len(adata.uns[Key.uns.colors(key)]))  # type: ignore[assignment]
 
     row_order = row_order[::-1]
     row_labels = adata.obs[key][row_order]

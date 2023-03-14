@@ -972,7 +972,7 @@ class ImageContainer(FeatureMixin):
                 raise ValueError("No channels have been selected.")
             arr = arr[{arr.dims[-1]: channel}]
         else:
-            channel = np.arange(arr.shape[-1]) # type: ignore[assignment]
+            channel = np.arange(arr.shape[-1])  # type: ignore[assignment]
         if TYPE_CHECKING:
             assert isinstance(channel, Sequence)
 
