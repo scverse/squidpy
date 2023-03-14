@@ -10,8 +10,7 @@ repos:
       rev: v1.0.0
       hooks:
           - id: mypy
-            additional_dependencies:
-                [numpy==1.24.2, scipy, pandas, types-requests]
+            additional_dependencies: [numpy, pandas, types-requests]
             exclude: .scripts/ci/download_data.py|squidpy/datasets/_(dataset|image).py # See https://github.com/pre-commit/mirrors-mypy/issues/33
     - repo: https://github.com/psf/black
       rev: 23.1.0
