@@ -18,7 +18,7 @@ class TestDesignMatrix:
         groups: str | List[str],
         cluster_key: str,
         library_key: str | None,
-        covariates: str | List[str] | None = None,
+        covariates: str | List[str] | None,
     ):
         df = exp_dist(
             adata_mibitof,
