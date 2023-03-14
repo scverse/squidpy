@@ -1,22 +1,21 @@
 from __future__ import annotations
 
-from types import MappingProxyType
-from typing import Any, Union, Mapping, List
 from pathlib import Path
+from types import MappingProxyType
+from typing import Any, List, Mapping, Union
 
-from anndata import AnnData
-import scanpy as sc
-
+import matplotlib.pyplot as plt
 import numpy as np
-
+import scanpy as sc
+import seaborn as sns
+from anndata import AnnData
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 from squidpy.pl._utils import save_fig
 
 __all__ = ["exp_dist"]
+
 
 def exp_dist(
     adata: AnnData,
@@ -24,7 +23,7 @@ def exp_dist(
     design_matrix_key: str,
     anchor_key: str | List[str],
     show_scatter: bool = True,
-    covariate: str = None,
+    covariate: str | None = None,
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
@@ -55,8 +54,10 @@ def exp_dist(
     -------
 
     """
-    sc.settings.set_figure_params(dpi=200, facecolor='white')
+    sc.settings.set_figure_params(dpi=200, facecolor="white")
     adata.obsm[design_matrix_key][var] = np.array(adata[:, var].X)
     df = adata.obsm[design_matrix_key]
-    fig, ax = plt.subplots(1,1)
-    sns.regplot(data = df, x=anchor_key, y=var, color='blue', order=6, scatter=show_scatter, ax=ax, scatter_kws={"color":"grey"})
+    fig, ax = plt.subplots(1, 1)
+    sns.regplot(
+        data=df, x=anchor_key, y=var, color="blue", order=6, scatter=show_scatter, ax=ax, scatter_kws={"color": "grey"}
+    )
