@@ -4,6 +4,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, List, Mapping, Union
 
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 import scanpy as sc
@@ -53,8 +54,8 @@ def exp_dist(
     adata.obsm[design_matrix_key][var] = np.array(adata[:, var].X)
     df = adata.obsm[design_matrix_key]
     fig, ax = plt.subplots(1, 1)
-    sns.regplot(
-        data=df, x=anchor_key, y=var, color="blue", order=6, scatter=show_scatter, ax=ax, scatter_kws={"color": "grey"}
-    )
+    sns.regplot(data=df, x=anchor_key, y=var, order=6, color="black", scatter=show_scatter, ax=ax)
+    plt.scatter(data=df, x=anchor_key, y=var, c=var, cmap="viridis")
+    ax.set(xlabel=f"distance to {anchor_key}")
     if save is not None:
         save_fig(fig, path=save, transparent=False)
