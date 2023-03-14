@@ -168,7 +168,6 @@ def exp_dist(
         if isinstance(covariates, str):
             covariates = [covariates]
         df[covariates] = adata.obs[covariates].copy()
-    df.columns = df.columns.str.replace(" ", "_")
     if copy:
         logg.info("Finish", time=start)
         return df
