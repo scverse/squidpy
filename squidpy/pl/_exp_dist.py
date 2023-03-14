@@ -23,6 +23,7 @@ def exp_dist(
     var: str,
     design_matrix_key: str,
     anchor_key: str | List[str],
+    show_scatter: bool = True,
     covariate: str = None,
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
@@ -58,4 +59,4 @@ def exp_dist(
     adata.obsm[design_matrix_key][var] = np.array(adata[:, var].X)
     df = adata.obsm[design_matrix_key]
     fig, ax = plt.subplots(1,1)
-    sns.regplot(data = df, x=anchor_key, y=var, color='blue', order=6, scatter=True, ax=ax, scatter_kws={"color":"grey"})
+    sns.regplot(data = df, x=anchor_key, y=var, color='blue', order=6, scatter=show_scatter, ax=ax, scatter_kws={"color":"grey"})

@@ -394,4 +394,4 @@ def _test_napari(pytestconfig):
 
 @pytest.fixture()
 def adata_seqfish() -> AnnData:
-    return sq.datasets.seqfish()
+    return sq.datasets.seqfish().copy()
