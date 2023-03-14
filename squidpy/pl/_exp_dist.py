@@ -19,11 +19,10 @@ __all__ = ["exp_dist"]
 
 def exp_dist(
     adata: AnnData,
-    var: str,
     design_matrix_key: str,
+    var: str,
     anchor_key: str | List[str],
     show_scatter: bool = True,
-    covariate: str | None = None,
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     save: str | Path | None = None,
@@ -37,16 +36,12 @@ def exp_dist(
     ----------
     adata
         Annotated data matrix.
-    var
-        Variables to plot expression of.
     design_matrix_key
-        Name of the design matrix previously computed with tl._exp_dist to use.
-    n_bins
-        Number of bins to use for plotting.
-    use_raw
-        Use `raw` attribute of `adata` if present.
-    layer
-        sKey from `adata.layers` whose value will plotted on the y-axis.
+        Name of the design matrix, previously computed with tl._exp_dist, to use.
+    var
+        Variables to plot on y-axis.
+    anchor_key
+        Anchor point used to plot distances on x-axis
     save
         Whether to save the plot.
 
@@ -54,10 +49,12 @@ def exp_dist(
     -------
 
     """
-    sc.settings.set_figure_params(dpi=200, facecolor="white")
+    sc.settings.set_figure_params(dpi=dpi, facecolor="white")
     adata.obsm[design_matrix_key][var] = np.array(adata[:, var].X)
     df = adata.obsm[design_matrix_key]
     fig, ax = plt.subplots(1, 1)
     sns.regplot(
         data=df, x=anchor_key, y=var, color="blue", order=6, scatter=show_scatter, ax=ax, scatter_kws={"color": "grey"}
     )
+    if save is not None:
+        save_fig(fig, path=save, transparent=False)

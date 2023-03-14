@@ -9,7 +9,7 @@ from squidpy.tl import exp_dist
 
 
 class TestDesignMatrix:
-    @pytest.mark.parametrize("groups", ["Endothelial", ["Endothelial", "Epitheliel", "Fibroblast"]])
+    @pytest.mark.parametrize("groups", ["Endothelial", ["Endothelial", "Epithelial", "Fibroblast"]])
     @pytest.mark.parametrize("cluster_key", ["Cluster"])
     @pytest.mark.parametrize("covariates", ["category", ["category", "cell_size"], None])
     @pytest.mark.parametrize("library_key", ["library_id", None])
