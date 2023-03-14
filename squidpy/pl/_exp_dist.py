@@ -23,6 +23,7 @@ def exp_dist(
     design_matrix_key: str,
     var: str,
     anchor_key: str | List[str],
+    color: str | None = None,
     show_scatter: bool = True,
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
@@ -41,6 +42,8 @@ def exp_dist(
         Name of the design matrix, previously computed with tl._exp_dist, to use.
     var
         Variables to plot on y-axis.
+    color
+        Variables to plot on color palette.
     anchor_key
         Anchor point used to plot distances on x-axis
     save
@@ -55,7 +58,7 @@ def exp_dist(
     df = adata.obsm[design_matrix_key]
     fig, ax = plt.subplots(1, 1)
     sns.regplot(data=df, x=anchor_key, y=var, order=6, color="black", scatter=show_scatter, ax=ax)
-    plt.scatter(data=df, x=anchor_key, y=var, c=var, cmap="viridis")
+    plt.scatter(data=df, x=anchor_key, y=var, c=color, cmap="viridis")
     ax.set(xlabel=f"distance to {anchor_key}")
     if save is not None:
         save_fig(fig, path=save, transparent=False)
