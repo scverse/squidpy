@@ -1,8 +1,9 @@
 import scanpy as sc
 from anndata import AnnData
 
-from squidpy import pl
-from squidpy.tl import exp_dist
+from squidpy import pl, tl
+
+# from squidpy.tl import exp_dist
 from tests.conftest import PlotTester, PlotTesterMeta
 
 # WARNING:
@@ -15,7 +16,7 @@ from tests.conftest import PlotTester, PlotTesterMeta
 
 class TestSpatialExpDist(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_exp_dist(self, adata_mibitof: AnnData):
-        exp_dist(
+        tl.exp_dist(
             adata_mibitof,
             cluster_key="Cluster",
             groups="Epithelial",
