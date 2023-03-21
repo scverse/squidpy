@@ -53,7 +53,7 @@ class TestDesignMatrix:
             )  # covariate column in design matrix match covariate column in .obs
 
         for anchor in groups:
-            anchor_ids_adata = adata_mibitof.obs.index[adata_mibitof.obs["Cluster"] == anchor].tolist()
+            anchor_ids_adata = adata_mibitof.obs.index[adata_mibitof.obs[cluster_key] == anchor].tolist()
             anchor_ids_design_matrix = df.index[df["Cluster"] == anchor].tolist()
             zero_dist_ids = df.index[df[f"{anchor}_raw"] == 0.0].tolist()
             nan_ids = df.index[df[anchor].isna()].tolist()
@@ -77,10 +77,9 @@ class TestDesignMatrix:
         df = exp_dist(adata_seqfish, groups=groups, cluster_key=cluster_key, library_key=library_key, copy=True)
 
         assert len(df) == adata_seqfish.n_obs  # correct amount of rows
-        assert len(df.columns) == len([groups]) + len([cluster_key]) * 2  # correct amount of columns
+        assert len(df.columns) == len([groups]) * 2 + len([cluster_key])  # correct amount of columns
 
         anchor_ids = adata_seqfish.obs.index[adata_seqfish.obs[cluster_key] == groups]
-        print(df.columns)
         nan_ids = df.index[df[groups].isna()]
 
         assert anchor_ids.equals(nan_ids)  # nan ids match anchor point ids

@@ -1,6 +1,6 @@
 from packaging.version import parse
 
-from squidpy import datasets, gr, im, pl, read
+from squidpy import datasets, gr, im, pl, read, tl
 
 __author__ = __maintainer__ = "Theislab"
 __email__ = ", ".join(

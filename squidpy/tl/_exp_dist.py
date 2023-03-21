@@ -58,7 +58,7 @@ def exp_dist(
 
     Returns
     -------
-    If ``copy = True``, returns the design_matrix and the distance thresholds intervals
+    If ``copy = True``, returns the design_matrix with the distances to an anchor point
     Otherwise, stores design_matrix in .obsm
     """
     start = logg.info(f"Creating {design_matrix_key}")
