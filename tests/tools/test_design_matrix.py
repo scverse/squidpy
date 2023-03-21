@@ -6,6 +6,7 @@ import pytest
 from anndata import AnnData
 
 from squidpy.tl import exp_dist
+from squidpy.tl._exp_dist import _normalize_distances
 
 
 class TestDesignMatrix:
@@ -83,3 +84,8 @@ class TestDesignMatrix:
         nan_ids = df.index[df[groups].isna()]
 
         assert anchor_ids.equals(nan_ids)  # nan ids match anchor point ids
+
+    def test_normalize_distances(self):
+        distances = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        normalized_distances = _normalize_distances(distances)
+        assert normalized_distances == [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
