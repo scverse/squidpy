@@ -21,5 +21,12 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
             groups="Epithelial",
             library_key="point",
         )
-        pl.exp_dist(adata=adata_mibitof, design_matrix_key="design_matrix", var="HK1", anchor_key="Epithelial", color="HK1", dpi=200)
+        pl.exp_dist(
+            adata=adata_mibitof,
+            design_matrix_key="design_matrix",
+            var="HK1",
+            anchor_key="Epithelial",
+            color="HK1",
+            dpi=200,
+        )
         self.compare("Exp_dist_single_anchor_one_gene", tolerance=70)
