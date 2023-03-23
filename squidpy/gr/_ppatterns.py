@@ -56,13 +56,12 @@ fp = np.float32
 def spatial_autocorr(
     adata: AnnData,
     connectivity_key: str = Key.obsp.spatial_conn(),
-    genes: str | int | Sequence[str] | Sequence[int] | None = None,
+    genes: str | Sequence[str] | None = None,
     mode: Literal["moran", "geary"] = SpatialAutocorr.MORAN.s,  # type: ignore[assignment]
     transformation: bool = True,
     n_perms: int | None = None,
     two_tailed: bool = False,
     corr_method: str | None = "fdr_bh",
-    attr: Literal["obs", "X", "obsm"] = "X",
     layer: str | None = None,
     seed: int | None = None,
     use_raw: bool = False,
@@ -81,16 +80,11 @@ def spatial_autocorr(
     %(adata)s
     %(conn_key)s
     genes
-        Depending on the ``attr``:
+        List of gene names, as stored in :attr:`anndata.AnnData.var_names`, used to compute global
+        spatial autocorrelation statistic.
 
-            - if ``attr = 'X'``, it corresponds to genes stored in :attr:`anndata.AnnData.var_names`.
-              If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``,
-              if present. Otherwise, it's computed for all genes.
-            - if ``attr = 'obs'``, it corresponds to a list of columns in :attr:`anndata.AnnData.obs`.
-              If `None`, use all numerical columns.
-            - if ``attr = 'obsm'``, it corresponds to indices in :attr:`anndata.AnnData.obsm` ``['{{layer}}']``.
-              If `None`, all indices are used.
-
+        If `None`, it's computed :attr:`anndata.AnnData.var` ``['highly_variable']``, if present. Otherwise,
+        it's computed for all genes.
     mode
         Mode of score calculation:
 
@@ -105,13 +99,8 @@ def spatial_autocorr(
     two_tailed
         If `True`, p-values are two-tailed, otherwise they are one-tailed.
     %(corr_method)s
-    use_raw
-        Whether to access :attr:`anndata.AnnData.raw`. Only used when ``attr = 'X'``.
     layer
-        Depending on ``attr``:
         Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
-    attr
-        Which attribute of :class:`~anndata.AnnData` to access. See ``genes`` parameter for more information.
     %(seed)s
     %(copy)s
     %(parallelize)s
@@ -138,46 +127,20 @@ def spatial_autocorr(
     """
     _assert_connectivity_key(adata, connectivity_key)
 
-    def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
-        if genes is None:
-            if "highly_variable" in adata.var:
-                genes = adata[:, adata.var["highly_variable"]].var_names.values
-            else:
-                genes = adata.var_names.values
-        elif isinstance(genes, str):
-            genes = [genes]
-
-        if not use_raw:
-            return _get_obs_rep(adata[:, genes], use_raw=False, layer=layer).T, genes
+    if genes is None:
+        if "highly_variable" in adata.var:
+            genes = adata[:, adata.var["highly_variable"]].var_names.values
+        else:
+            genes = adata.var_names.values
+    if use_raw:
         if adata.raw is None:
             raise AttributeError("No `.raw` attribute found. Try specifying `use_raw=False`.")
         genes = list(set(genes) & set(adata.raw.var_names))
-        return adata.raw[:, genes].X.T, genes
-
-    def extract_obs(adata: AnnData, cols: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
-        if cols is None:
-            df = adata.obs.select_dtypes(include=np.number)
-            return df.T.to_numpy(), df.columns
-        if isinstance(cols, str):
-            cols = [cols]
-        return adata.obs[cols].T.to_numpy(), cols
-
-    def extract_obsm(adata: AnnData, ixs: int | Sequence[int] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
-        if layer not in adata.obsm:
-            raise KeyError(f"Key `{layer!r}` not found in `adata.obsm`.")
-        if ixs is None:
-            ixs = np.arange(adata.obsm[layer].shape[1])
-        ixs = list(np.ravel([ixs]))  # type: ignore[arg-type]
-        return adata.obsm[layer][:, ixs].T, ixs
-
-    if attr == "X":
-        vals, index = extract_X(adata, genes)  # type: ignore[arg-type]
-    elif attr == "obs":
-        vals, index = extract_obs(adata, genes)  # type: ignore[arg-type]
-    elif attr == "obsm":
-        vals, index = extract_obsm(adata, genes)  # type: ignore[arg-type]
+        vals = adata.raw[:, genes].X.T
     else:
-        raise NotImplementedError(f"Extracting from `adata.{attr}` is not yet implemented.")
+        vals = _get_obs_rep(adata[:, genes], use_raw=False, layer=layer).T
+
+    genes = _assert_non_empty_sequence(genes, name="genes")
 
     mode = SpatialAutocorr(mode)  # type: ignore[assignment]
     if TYPE_CHECKING:
@@ -224,7 +187,7 @@ def spatial_autocorr(
     with np.errstate(divide="ignore"):
         pval_results = _p_value_calc(score, score_perms, g, params)
 
-    df = pd.DataFrame({params["stat"]: score, **pval_results}, index=index)
+    df = pd.DataFrame({params["stat"]: score, **pval_results}, index=genes)
 
     if corr_method is not None:
         for pv in filter(lambda x: "pval" in x, df.columns):
