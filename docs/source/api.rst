@@ -55,6 +55,7 @@ Plotting
     pl.ripley
     pl.co_occurrence
     pl.extract
+    pl.exp_dist
 
 Reading
 ~~~~~~~
@@ -68,6 +69,17 @@ Reading
     read.visium
     read.vizgen
     read.nanostring
+
+Tools
+~~~~~~~~
+
+.. module:: squidpy.tl 
+.. currentmodule:: squidpy
+
+.. autosummary::
+    :toctree: api
+
+    tl.exp_dist
 
 Datasets
 ~~~~~~~~
