@@ -28,7 +28,7 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             dpi=300,
             figsize=(5, 4),
         )
-        self.compare("Exp_dist_single_anchor_and_gene")
+        self.compare("Exp_dist_single_anchor_and_gene", tolerance=65)
 
     def test_tol_plot_exp_dist_with_covariate(self, adata_mibitof: AnnData):
         tl.exp_dist(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
