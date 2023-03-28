@@ -73,7 +73,7 @@ Reading
 Tools
 ~~~~~~~~
 
-.. module:: squidpy.tl 
+.. module:: squidpy.tl
 .. currentmodule:: squidpy
 
 .. autosummary::
