@@ -82,6 +82,7 @@ def exp_dist(
     Returns
     -------
     %(plotting_returns)s
+    %(plotting_returns)s
     """
     dpi = rcParams["figure.dpi"] if dpi is None else dpi
     regplot_kwargs = dict(regplot_kwargs)
