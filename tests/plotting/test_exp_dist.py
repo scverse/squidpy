@@ -66,6 +66,6 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             anchor_key="Epithelial",
             covariate="donor",
             line_palette=["blue", "orange"],
-            show_scatter=False
+            show_scatter=False,
         )
         self.compare("Exp_dist_single_anchor_one_gene_two_categories_without_scatter")
