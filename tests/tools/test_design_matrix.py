@@ -6,6 +6,7 @@ import pytest
 from anndata import AnnData
 
 from squidpy.tl import exp_dist
+from squidpy.tl._exp_dist import _normalize_distances
 
 
 class TestDesignMatrix:
