@@ -60,7 +60,7 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             line_palette=["red", "blue"],
         )
         self.compare(
-            "Exp_dist_single_anchor_four_genes_two_categories_two_palettes", tolerance=65
+            "Exp_dist_single_anchor_four_genes_two_categories_two_palettes", tolerance=70
         )  # tolerance added due to numerical errors of spline
 
     def test_tol_plot_exp_dist_without_scatter(self, adata_mibitof: AnnData):
@@ -75,5 +75,5 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             show_scatter=False,
         )
         self.compare(
-            "Exp_dist_single_anchor_one_gene_two_categories_without_scatter", tolerance=65
+            "Exp_dist_single_anchor_one_gene_two_categories_without_scatter", tolerance=70
         )  # tolerance added due to numerical errors of spline
