@@ -23,6 +23,7 @@ conda
 connectivities
 convolutional
 covariate
+covariates
 CP
 Crofton
 csv
