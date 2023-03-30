@@ -58,9 +58,11 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             covariate="donor",
             scatter_palette="plasma",
             line_palette=["red", "blue"],
+            dpi=300,
+            figsize=(5, 4),
         )
         self.compare(
-            "Exp_dist_single_anchor_four_genes_two_categories_two_palettes", tolerance=75
+            "Exp_dist_single_anchor_four_genes_two_categories_two_palettes", tolerance=60
         )  # tolerance added due to numerical errors of spline
 
     def test_tol_plot_exp_dist_without_scatter(self, adata_mibitof: AnnData):
@@ -73,7 +75,9 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             covariate="donor",
             line_palette=["blue", "orange"],
             show_scatter=False,
+            dpi=300,
+            figsize=(5, 4),
         )
         self.compare(
-            "Exp_dist_single_anchor_one_gene_two_categories_without_scatter", tolerance=75
+            "Exp_dist_single_anchor_one_gene_two_categories_without_scatter", tolerance=60
         )  # tolerance added due to numerical errors of spline
