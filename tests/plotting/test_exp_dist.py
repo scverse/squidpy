@@ -59,7 +59,7 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             scatter_palette="plasma",
             line_palette=["red", "blue"],
             dpi=300,
-            figsize=(5, 4),
+            figsize=(10, 4),
         )
         self.compare(
             "Exp_dist_single_anchor_four_genes_two_categories_two_palettes", tolerance=60
