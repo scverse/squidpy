@@ -114,6 +114,7 @@ seqFISH
 seqV
 Sfrp
 spaceranger
+squidpy
 Squidpy
 StarDist
 stromal
@@ -122,6 +123,7 @@ Tangram
 Tensorflow
 th
 thresholded
+tl
 tori
 transcriptomics
 uncommenting
