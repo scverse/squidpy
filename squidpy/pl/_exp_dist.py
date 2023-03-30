@@ -48,7 +48,7 @@ def exp_dist(
     adata
         Annotated data matrix.
     design_matrix_key
-        Name of the design matrix, previously computed with tl._exp_dist, to use.
+        Name of the design matrix, previously computed with :func:`squidpy.tl.exp_dist`, to use.    
     var
         Variables to plot on y-axis.
     anchor_key
@@ -58,9 +58,7 @@ def exp_dist(
     covariate
         A covariate for which separate regression lines are plotted for each category.
     order
-        Order of the polynomial fit for `sns.regplot`.
-    show_scatter
-        Whether to show the scatter plot.
+        Order of the polynomial fit for :func:`seaborn.regplot`.        
     dpi
         Dpi value of the plot.
     figsize
