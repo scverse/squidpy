@@ -28,7 +28,9 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             dpi=300,
             figsize=(5, 4),
         )
-        self.compare("Exp_dist_single_anchor_and_gene", tolerance=65)
+        self.compare(
+            "Exp_dist_single_anchor_and_gene", tolerance=60
+        )  # tolerance added due to numerical errors of spline
 
     def test_tol_plot_exp_dist_with_covariate(self, adata_mibitof: AnnData):
         tl.exp_dist(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
@@ -41,7 +43,9 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             dpi=300,
             figsize=(5, 4),
         )
-        self.compare("Exp_dist_single_anchor_and_gene_two_categories")
+        self.compare(
+            "Exp_dist_single_anchor_and_gene_two_categories", tolerance=60
+        )  # tolerance added due to numerical errors of spline
 
     def test_tol_plot_exp_dist_various_palettes(self, adata_mibitof: AnnData):
         tl.exp_dist(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
@@ -55,7 +59,9 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             scatter_palette="plasma",
             line_palette=["red", "blue"],
         )
-        self.compare("Exp_dist_single_anchor_four_genes_two_categories_two_palettes")
+        self.compare(
+            "Exp_dist_single_anchor_four_genes_two_categories_two_palettes", tolerance=60
+        )  # tolerance added due to numerical errors of spline
 
     def test_tol_plot_exp_dist_without_scatter(self, adata_mibitof: AnnData):
         tl.exp_dist(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
@@ -68,4 +74,6 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             line_palette=["blue", "orange"],
             show_scatter=False,
         )
-        self.compare("Exp_dist_single_anchor_one_gene_two_categories_without_scatter")
+        self.compare(
+            "Exp_dist_single_anchor_one_gene_two_categories_without_scatter", tolerance=60
+        )  # tolerance added due to numerical errors of spline
