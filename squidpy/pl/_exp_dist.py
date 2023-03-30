@@ -76,10 +76,11 @@ def exp_dist(
     scatterplot_kwargs
         kwargs for `sns.scatter`
     %(plotting_save)s
+    %(plotting_dpi)s
+    %(plotting_figsize)s
 
     Returns
     -------
-    %(plotting_returns)s
     %(plotting_returns)s
     """
     dpi = rcParams["figure.dpi"] if dpi is None else dpi
