@@ -1,7 +1,11 @@
+import scanpy as sc
 from anndata import AnnData
 
 from squidpy import pl, tl
 from tests.conftest import PlotTester, PlotTesterMeta
+
+sc.pl.set_rcParams_defaults()
+sc.set_figure_params(dpi=40)
 
 # WARNING:
 # 1. all classes must both subclass PlotTester and use metaclass=PlotTesterMeta
@@ -25,7 +29,6 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             var="HK1",
             anchor_key="Epithelial",
             color="HK1",
-            dpi=300,
             figsize=(5, 4),
         )
         self.compare(
@@ -40,7 +43,6 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             var="IDH2",
             anchor_key="Epithelial",
             covariate="donor",
-            dpi=300,
             figsize=(5, 4),
         )
         self.compare(
@@ -58,7 +60,6 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             covariate="donor",
             scatter_palette="plasma",
             line_palette=["red", "blue"],
-            dpi=300,
             figsize=(10, 4),
         )
         self.compare(
@@ -75,7 +76,6 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             covariate="donor",
             line_palette=["blue", "orange"],
             show_scatter=False,
-            dpi=300,
             figsize=(5, 4),
         )
         self.compare(
