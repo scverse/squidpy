@@ -31,12 +31,12 @@ class TestVarDist(PlotTester, metaclass=PlotTesterMeta):
             color="HK1",
             figsize=(5, 4),
         )
-        self.compare(
-            "var_by_distance_single_anchor_and_gene"
-        )  # tolerance added due to numerical errors of spline
+        self.compare("var_by_distance_single_anchor_and_gene")  # tolerance added due to numerical errors of spline
 
     def test_tol_plot_var_by_distance_with_covariate(self, adata_mibitof: AnnData):
-        tl.var_by_distance(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
+        tl.var_by_distance(
+            adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor"
+        )
         pl.var_by_distance(
             adata=adata_mibitof,
             design_matrix_key="design_matrix",
@@ -50,7 +50,9 @@ class TestVarDist(PlotTester, metaclass=PlotTesterMeta):
         )  # tolerance added due to numerical errors of spline
 
     def test_tol_plot_var_by_distance_various_palettes(self, adata_mibitof: AnnData):
-        tl.var_by_distance(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
+        tl.var_by_distance(
+            adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor"
+        )
         pl.var_by_distance(
             adata=adata_mibitof,
             design_matrix_key="design_matrix",
@@ -67,7 +69,9 @@ class TestVarDist(PlotTester, metaclass=PlotTesterMeta):
         )  # tolerance added due to numerical errors of spline
 
     def test_tol_plot_var_by_distance_without_scatter(self, adata_mibitof: AnnData):
-        tl.var_by_distance(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
+        tl.var_by_distance(
+            adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor"
+        )
         pl.var_by_distance(
             adata=adata_mibitof,
             design_matrix_key="design_matrix",
