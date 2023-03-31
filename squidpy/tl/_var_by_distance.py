@@ -16,11 +16,11 @@ from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _save_data
 
-__all__ = ["exp_dist"]
+__all__ = ["var_by_distance"]
 
 
 @d.dedent
-def exp_dist(
+def var_by_distance(
     adata: AnnData,
     groups: str | List[str] | NDArrayA,
     cluster_key: str,

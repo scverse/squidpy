@@ -5,11 +5,11 @@ from typing import List
 import pytest
 from anndata import AnnData
 
-from squidpy.tl import exp_dist
-from squidpy.tl._exp_dist import _normalize_distances
+from squidpy.tl import var_by_distance
+from squidpy.tl._var_by_distance import _normalize_distances
 
 
-class TestDesignMatrix:
+class TestVarDist:
     @pytest.mark.parametrize("groups", ["Endothelial", ["Endothelial", "Epithelial", "Fibroblast"]])
     @pytest.mark.parametrize("cluster_key", ["Cluster"])
     @pytest.mark.parametrize("covariates", ["category", ["category", "cell_size"], None])
@@ -22,7 +22,7 @@ class TestDesignMatrix:
         library_key: str | None,
         covariates: str | List[str] | None,
     ):
-        df = exp_dist(
+        df = var_by_distance(
             adata_mibitof,
             cluster_key=cluster_key,
             groups=groups,
@@ -75,7 +75,7 @@ class TestDesignMatrix:
         cluster_key: str,
         library_key: str | None,
     ):
-        df = exp_dist(adata_seqfish, groups=groups, cluster_key=cluster_key, library_key=library_key, copy=True)
+        df = var_by_distance(adata_seqfish, groups=groups, cluster_key=cluster_key, library_key=library_key, copy=True)
 
         assert len(df) == adata_seqfish.n_obs  # correct amount of rows
         assert len(df.columns) == len([groups]) * 2 + len([cluster_key])  # correct amount of columns

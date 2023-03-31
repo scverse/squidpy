@@ -19,10 +19,10 @@ from scipy.sparse import issparse
 
 from squidpy.pl._utils import save_fig
 
-__all__ = ["exp_dist"]
+__all__ = ["var_by_distance"]
 
 
-def exp_dist(
+def var_by_distance(
     adata: AnnData,
     design_matrix_key: str,
     var: str | List[str],
@@ -48,7 +48,7 @@ def exp_dist(
     adata
         Annotated data matrix.
     design_matrix_key
-        Name of the design matrix, previously computed with :func:`squidpy.tl.exp_dist`, to use.
+        Name of the design matrix, previously computed with :func:`squidpy.tl.var_by_distance`, to use.
     var
         Variables to plot on y-axis.
     anchor_key

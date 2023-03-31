@@ -15,15 +15,15 @@ sc.set_figure_params(dpi=40)
 #    ".png" is appended to <your_filename>, no need to set it
 
 
-class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
-    def test_tol_plot_exp_dist(self, adata_mibitof: AnnData):
-        tl.exp_dist(
+class TestVarDist(PlotTester, metaclass=PlotTesterMeta):
+    def test_tol_plot_var_by_distance(self, adata_mibitof: AnnData):
+        tl.var_by_distance(
             adata_mibitof,
             cluster_key="Cluster",
             groups="Epithelial",
             library_key="point",
         )
-        pl.exp_dist(
+        pl.var_by_distance(
             adata=adata_mibitof,
             design_matrix_key="design_matrix",
             var="HK1",
@@ -32,12 +32,12 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             figsize=(5, 4),
         )
         self.compare(
-            "Exp_dist_single_anchor_and_gene", tolerance=65
+            "var_by_distance_single_anchor_and_gene"
         )  # tolerance added due to numerical errors of spline
 
-    def test_tol_plot_exp_dist_with_covariate(self, adata_mibitof: AnnData):
-        tl.exp_dist(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
-        pl.exp_dist(
+    def test_tol_plot_var_by_distance_with_covariate(self, adata_mibitof: AnnData):
+        tl.var_by_distance(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
+        pl.var_by_distance(
             adata=adata_mibitof,
             design_matrix_key="design_matrix",
             var="IDH2",
@@ -46,12 +46,12 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             figsize=(5, 4),
         )
         self.compare(
-            "Exp_dist_single_anchor_and_gene_two_categories", tolerance=60
+            "var_by_distance_single_anchor_and_gene_two_categories"
         )  # tolerance added due to numerical errors of spline
 
-    def test_tol_plot_exp_dist_various_palettes(self, adata_mibitof: AnnData):
-        tl.exp_dist(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
-        pl.exp_dist(
+    def test_tol_plot_var_by_distance_various_palettes(self, adata_mibitof: AnnData):
+        tl.var_by_distance(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
+        pl.var_by_distance(
             adata=adata_mibitof,
             design_matrix_key="design_matrix",
             var=["IDH2", "H3", "vimentin", "CD98"],
@@ -63,12 +63,12 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             figsize=(10, 4),
         )
         self.compare(
-            "Exp_dist_single_anchor_four_genes_two_categories_two_palettes", tolerance=60
+            "var_by_distance_single_anchor_four_genes_two_categories_two_palettes"
         )  # tolerance added due to numerical errors of spline
 
-    def test_tol_plot_exp_dist_without_scatter(self, adata_mibitof: AnnData):
-        tl.exp_dist(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
-        pl.exp_dist(
+    def test_tol_plot_var_by_distance_without_scatter(self, adata_mibitof: AnnData):
+        tl.var_by_distance(adata_mibitof, cluster_key="Cluster", groups="Epithelial", library_key="point", covariates="donor")
+        pl.var_by_distance(
             adata=adata_mibitof,
             design_matrix_key="design_matrix",
             var="CD98",
@@ -79,5 +79,5 @@ class TestExpDist(PlotTester, metaclass=PlotTesterMeta):
             figsize=(5, 4),
         )
         self.compare(
-            "Exp_dist_single_anchor_one_gene_two_categories_without_scatter", tolerance=60
+            "var_by_distance_single_anchor_one_gene_two_categories_without_scatter"
         )  # tolerance added due to numerical errors of spline
