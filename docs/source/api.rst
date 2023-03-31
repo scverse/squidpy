@@ -55,7 +55,7 @@ Plotting
     pl.ripley
     pl.co_occurrence
     pl.extract
-    pl.exp_dist
+    pl.var_by_distance
 
 Reading
 ~~~~~~~
@@ -79,7 +79,7 @@ Tools
 .. autosummary::
     :toctree: api
 
-    tl.exp_dist
+    tl.var_by_distance
 
 Datasets
 ~~~~~~~~
