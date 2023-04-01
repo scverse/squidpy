@@ -16,7 +16,13 @@ Bugfixes
 Miscellaneous
 -------------
 
+<<<<<<< HEAD
 - Add :attr:`attr` option to :func:`squidpy.gr.spatial_autocorr` to select values from :attr:`anndata.AnnData.obs`
   or :attr:`anndata.AnnData.obsm.`
   `@michalk8 <https://github.com/michalk8>`__
   `#672 <https://github.com/scverse/squidpy/pull/672>`__
+=======
+Add :attr:`attr` option to :func:`squidpy.gr.spatial_autocorr` to select values from :attr:`anndata.AnnData.obs`
+or :attr:`anndata.AnnData.obsm.`
+`@michalk8 <https://github.com/michalk8>`__
+>>>>>>> 5bbabe71801dd171aa02667eefb70f3be062a504
