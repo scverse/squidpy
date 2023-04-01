@@ -1,2 +1,3 @@
-Added :func:`squidpy.tl.var_by_distance` to calculate distances to user-defined anchor points and stores them in a design matrix.
+Added :func:`squidpy.tl.var_by_distance` to calculate distances to user-defined anchor points.
+Stores the resulting design matrix in :attr:`adata.obsm`.
 Added :func:`squidpy.pl.var_by_distance` to visualize a variable such as expression by distance to an anchor points.
