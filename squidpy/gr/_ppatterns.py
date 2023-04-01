@@ -166,8 +166,8 @@ def spatial_autocorr(
         if layer not in adata.obsm:
             raise KeyError(f"Key `{layer!r}` not found in `adata.obsm`.")
         if ixs is None:
-            ixs = np.arange(adata.obsm[layer].shape[1])
-        ixs = list(np.ravel([ixs]))  # type: ignore[arg-type]
+            ixs = np.arange(adata.obsm[layer].shape[1])  # type: ignore[assignment]
+        ixs = list(np.ravel([ixs]))
         return adata.obsm[layer][:, ixs].T, ixs
 
     if attr == "X":
@@ -409,8 +409,8 @@ def co_occurrence(
     n_splits = max(min(n_splits, n_obs), 1)
 
     # split array and labels
-    spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))
-    labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))
+    spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))  # type: ignore[arg-type]
+    labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))  # type: ignore[arg-type]
     # create idx array including unique combinations and self-comparison
     x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))  # type: ignore[arg-type]
     idx_splits = [(i, j) for i, j in zip(x, y)]
