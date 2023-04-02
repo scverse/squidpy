@@ -17,11 +17,13 @@ from scanpy.plotting._tools.scatterplots import _panel_grid
 from scanpy.plotting._utils import _set_default_colors_for_categorical_obs
 from scipy.sparse import issparse
 
+from squidpy._docs import d
 from squidpy.pl._utils import save_fig
 
 __all__ = ["var_by_distance"]
 
 
+@d.dedent
 def var_by_distance(
     adata: AnnData,
     var: str | List[str],
