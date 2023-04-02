@@ -25,15 +25,6 @@ jobs:
                   python -m pip install --upgrade pip
                   pip install tox
 
-            - name: Update dev release notes
-              env:
-                  PR_NUMBER: ${{ github.event.number }}
-              run: |
-                  tox -e news -- "$PR_NUMBER" --add-author -v
-                  tox -e update-dev-notes
-                  git add "docs/source/release/changelog/$PR_NUMBER*.rst"
-                  git status -s
-
             - name: Check generated docs
               run: |
                   tox -e check-docs
