@@ -24,9 +24,9 @@ __all__ = ["var_by_distance"]
 
 def var_by_distance(
     adata: AnnData,
-    design_matrix_key: str,
     var: str | List[str],
     anchor_key: str | List[str],
+    design_matrix_key: str = "design_matrix",
     color: str | None = None,
     covariate: str | None = None,
     order: int = 5,
@@ -45,39 +45,33 @@ def var_by_distance(
 
     Parameters
     ----------
-    adata
-        Annotated data matrix.
+    %(adata)s
     design_matrix_key
         Name of the design matrix, previously computed with :func:`squidpy.tl.var_by_distance`, to use.
     var
         Variables to plot on y-axis.
     anchor_key
-        anchor point column from which distances are taken.
+        Anchor point column from which distances are taken.
     color
         Variables to plot on color palette.
     covariate
         A covariate for which separate regression lines are plotted for each category.
     order
         Order of the polynomial fit for :func:`seaborn.regplot`.
-    dpi
-        Dpi value of the plot.
-    figsize
-        Size of the plot in inches.
+    show_scatter
+        Whether to show a scatter plot underlying the regression line.
+    %(plotting_dpi)s
+    %(plotting_figsize)s
     line_palette
         Categorical color palette used in case a covariate is specified.
     scatter_palette
         Color palette for the scatter plot underlying the `sns.regplot`
-    save
-        Path to save the figure to.
-    return_ax
-        Whether to return `matplotlib.axes.Axes` object(s).
-    regplot_kwargs
-        kwargs for `sns.regplot`
-    scatterplot_kwargs
-        kwargs for `sns.scatter`
     %(plotting_save)s
-    %(plotting_dpi)s
-    %(plotting_figsize)s
+    %(cat_plotting_return_ax)s
+    regplot_kwargs
+        Kwargs for `sns.regplot`
+    scatterplot_kwargs
+        Kwargs for `sns.scatter`
 
     Returns
     -------

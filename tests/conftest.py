@@ -71,6 +71,11 @@ def adata_mibitof() -> AnnData:
     return sq.datasets.mibitof().copy()
 
 
+@pytest.fixture(scope="session")
+def adata_seqfish() -> AnnData:
+    return sq.datasets.seqfish().copy()
+
+
 @pytest.fixture()
 def adata() -> AnnData:
     return _adata.copy()
@@ -390,8 +395,3 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(scope="session")
 def _test_napari(pytestconfig):
     _ = pytestconfig.getoption("--test-napari", skip=True)
-
-
-@pytest.fixture()
-def adata_seqfish() -> AnnData:
-    return sq.datasets.seqfish().copy()
