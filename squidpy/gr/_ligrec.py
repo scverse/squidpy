@@ -817,13 +817,11 @@ def _analysis_helper(
     res = np.zeros((len(interactions), len(interaction_clusters)), dtype=np.float64)
     numba_parallel = (
         (np.prod(res.shape) >= 2**20 or clustering.shape[0] >= 2**15) if numba_parallel is None else numba_parallel  # type: ignore[assignment]
-        (np.prod(res.shape) >= 2**20 or clustering.shape[0] >= 2**15) if numba_parallel is None else numba_parallel  # type: ignore[assignment]
     )
 
     fn_key = f"_test_{n_cls}_{int(return_means)}_{bool(numba_parallel)}"
     if fn_key not in globals():
         exec(
-            compile(_create_template(n_cls, return_means=return_means, parallel=numba_parallel), "", "exec"), globals()  # type: ignore[arg-type]
             compile(_create_template(n_cls, return_means=return_means, parallel=numba_parallel), "", "exec"), globals()  # type: ignore[arg-type]
         )
     _test = globals()[fn_key]

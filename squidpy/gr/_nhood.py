@@ -333,7 +333,6 @@ def interaction_matrix(
     g_data = g.data if weights else np.broadcast_to(1, shape=len(g.data))
     dtype = int if pd.api.types.is_bool_dtype(g.dtype) or pd.api.types.is_integer_dtype(g.dtype) else float
     output = np.zeros((n_cats, n_cats), dtype=dtype)  # type: ignore[var-annotated]
-    output = np.zeros((n_cats, n_cats), dtype=dtype)  # type: ignore[var-annotated]
 
     _interaction_matrix(g_data, g.indices, g.indptr, cats.cat.codes.to_numpy(), output)
 
