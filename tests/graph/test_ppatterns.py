@@ -1,3 +1,5 @@
+from typing import Any, Literal
+
 import numpy as np
 import pytest
 from anndata import AnnData
@@ -56,7 +58,7 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
     df_2 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
 
     idx_df = df_1.index.values
-    idx_adata = dummy_adata[:, dummy_adata.var.highly_variable.values].var_names.values
+    idx_adata = dummy_adata[:, dummy_adata.var["highly_variable"].values].var_names.values
 
     if mode == "moran":
         UNS_KEY = MORAN_K
@@ -78,6 +80,35 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
     np.testing.assert_array_equal(sorted(idx_df), sorted(idx_adata))
     # check parallel gives same results
     assert_frame_equal(df_1, df_2)
+
+
+@pytest.mark.parametrize(
+    "attr,layer,genes",
+    [
+        ("X", None, None),
+        ("obs", None, None),
+        ("obs", None, "foo"),
+        ("obsm", "spatial", None),
+        ("obsm", "spatial", [1, 0]),
+    ],
+)
+def test_spatial_autocorr_attr(dummy_adata: AnnData, attr: Literal["X", "obs", "obsm"], layer: str, genes: Any):
+    if attr == "obs":
+        if isinstance(genes, str):
+            dummy_adata.obs[genes] = np.random.RandomState(42).normal(size=(dummy_adata.n_obs,))
+            index = [genes]
+        else:
+            index = dummy_adata.obs.select_dtypes(include=np.number).columns
+    elif attr == "X":
+        index = dummy_adata.var_names if genes is None else genes
+    elif attr == "obsm":
+        index = np.arange(dummy_adata.obsm[layer].shape[1]) if genes is None else genes
+
+    spatial_autocorr(dummy_adata, attr=attr, mode="moran", layer=layer, genes=genes)
+
+    df = dummy_adata.uns[MORAN_K]
+    np.testing.assert_array_equal(np.isfinite(df), True)
+    np.testing.assert_array_equal(sorted(df.index), sorted(index))
 
 
 def test_co_occurrence(adata: AnnData):

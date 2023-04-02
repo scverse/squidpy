@@ -176,7 +176,7 @@ def nhood_enrichment(
 
     perms = parallelize(
         _nhood_enrichment_helper,
-        collection=np.arange(n_perms),  # type: ignore[arg-type]
+        collection=np.arange(n_perms).tolist(),
         extractor=np.vstack,
         n_jobs=n_jobs,
         backend=backend,
@@ -332,6 +332,7 @@ def interaction_matrix(
 
     g_data = g.data if weights else np.broadcast_to(1, shape=len(g.data))
     dtype = int if pd.api.types.is_bool_dtype(g.dtype) or pd.api.types.is_integer_dtype(g.dtype) else float
+    output = np.zeros((n_cats, n_cats), dtype=dtype)  # type: ignore[var-annotated]
     output = np.zeros((n_cats, n_cats), dtype=dtype)  # type: ignore[var-annotated]
 
     _interaction_matrix(g_data, g.indices, g.indptr, cats.cat.codes.to_numpy(), output)
