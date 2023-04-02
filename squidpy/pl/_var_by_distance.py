@@ -43,7 +43,7 @@ def var_by_distance(
     scatterplot_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> Union[Axes, None]:
     """
-    Plot var expression by distance to anchor point.
+    Plot a variable using a smooth regression line with increasing distance to an anchor point.
 
     Parameters
     ----------
@@ -62,8 +62,6 @@ def var_by_distance(
         Order of the polynomial fit for :func:`seaborn.regplot`.
     show_scatter
         Whether to show a scatter plot underlying the regression line.
-    %(plotting_dpi)s
-    %(plotting_figsize)s
     line_palette
         Categorical color palette used in case a covariate is specified.
     scatter_palette

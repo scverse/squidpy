@@ -32,7 +32,7 @@ def var_by_distance(
     copy: bool = False,
 ) -> AnnData:
     """
-    Build a design matrix consisting of gene expression by distance to selected anchor point(s).
+    Build a design matrix consisting of distance measurements to selected anchor point(s) for each observation.
 
     Parameters
     ----------
