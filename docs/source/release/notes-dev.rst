@@ -13,6 +13,10 @@ Bugfixes
   `@michalk8 <https://github.com/michalk8>`__
   `#665 <https://github.com/scverse/squidpy/pull/665>`__
 
+
+Squidpy dev (2023-04-01)
+========================
+
 Miscellaneous
 -------------
 
