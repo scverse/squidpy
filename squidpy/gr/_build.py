@@ -142,7 +142,7 @@ def spatial_neighbors(
 
     if library_key is not None:
         mats: List[Tuple[spmatrix, spmatrix]] = []
-        ixs = []
+        ixs = []  # type: ignore[var-annotated]
         for lib in libs:
             ixs.extend(np.where(adata.obs[library_key] == lib)[0])
             mats.append(_build_fun(adata[adata.obs[library_key] == lib]))
