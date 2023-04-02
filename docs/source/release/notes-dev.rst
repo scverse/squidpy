@@ -25,7 +25,7 @@ Miscellaneous
   `@michalk8 <https://github.com/michalk8>`__
   `#672 <https://github.com/scverse/squidpy/pull/672>`__
 
-  
+
 Squidpy dev (2023-04-02)
 ========================
 
