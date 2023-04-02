@@ -36,25 +36,21 @@ def var_by_distance(
 
     Parameters
     ----------
-    adata
-        Annotated data matrix.
+    %(adata)s
     groups
         Anchor points to calculate distances from, can be a single gene,
         a list of genes or a set of coordinates.
     cluster_key
-        Annotation column in `.obs` to take anchor point(s) from.
-    library_key
-        specify slide location in '.obs' which contain identical anchor points.
+        Annotation column in `.obs` that is used as anchor.
+    %(library_key)s
     design_matrix_key
-        Name of the design matrix saved to `.obsm`, defaults to "design_matrix".
+        Name of the design matrix saved to `.obsm`.
     covariates
         Additional covariates from `.obs` to include in the design matrix.
     metric
         Distance metric, defaults to "euclidean".
-    spatial_key:
-        Source of spatial coordinates for each observation.
-    copy
-        Whether to modify copied input object.
+    %(spatial_key)s
+    %(copy)s
 
     Returns
     -------
