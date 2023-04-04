@@ -33,11 +33,13 @@ def var_by_distance(
     covariate: str | None = None,
     order: int = 5,
     show_scatter: bool = True,
-    dpi: int | None = None,
-    figsize: Tuple[int, int] | None = None,
     line_palette: Union[str, Sequence[str], Cycler, None] = None,
     scatter_palette: Union[str, Sequence[str], Cycler, None] = "viridis",
+    dpi: int | None = None,
+    figsize: Tuple[int, int] | None = None,
     save: str | Path | None = None,
+    title: str | None = None,
+    axis_label: str | None = None,
     return_ax: Optional[bool] = None,
     regplot_kwargs: Mapping[str, Any] = MappingProxyType({}),
     scatterplot_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -67,7 +69,10 @@ def var_by_distance(
     scatter_palette
         Color palette for the scatter plot underlying the `sns.regplot`
     %(plotting_save)s
-    %(cat_plotting_return_ax)s
+    title
+        Panel titles.
+    axis_label
+        Panel axis labels.
     regplot_kwargs
         Kwargs for `sns.regplot`
     scatterplot_kwargs
@@ -156,7 +161,12 @@ def var_by_distance(
             # if variable to plot on color palette is not categorical
             else:
                 plt.scatter(data=df, x=anchor_key, y=v, c=color, cmap=scatter_palette, **scatterplot_kwargs)
-        ax.set(xlabel=f"distance to {anchor_key}")
+        if title is not None:
+            ax.set(title=title)
+        if axis_label is None:
+            ax.set(xlabel=f"distance to {anchor_key}")
+        else:
+            ax.set(xlabel=axis_label)
 
     # remove line palette if it was made earlier in function
     if f"{covariate}_colors" in adata.uns:
