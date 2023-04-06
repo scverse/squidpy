@@ -71,6 +71,11 @@ def adata_mibitof() -> AnnData:
     return sq.datasets.mibitof().copy()
 
 
+@pytest.fixture(scope="session")
+def adata_seqfish() -> AnnData:
+    return sq.datasets.seqfish().copy()
+
+
 @pytest.fixture()
 def adata() -> AnnData:
     return _adata.copy()

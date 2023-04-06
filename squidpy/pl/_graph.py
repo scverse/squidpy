@@ -33,10 +33,16 @@ from squidpy.pl._utils import _heatmap, save_fig
 __all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "ripley", "co_occurrence"]
 
 
-def _get_data(adata: AnnData, cluster_key: str, func_name: str, **kwargs: Any) -> Any:
+def _get_data(adata: AnnData, cluster_key: str, func_name: str, attr: str = "uns", **kwargs: Any) -> Any:
     key = getattr(Key.uns, func_name)(cluster_key, **kwargs)
+
     try:
-        return adata.uns[key]
+        if attr == "uns":
+            return adata.uns[key]
+        elif attr == "obsm":
+            return adata.obsm[key]
+        else:
+            raise ValueError(f"attr must be either 'uns' or 'obsm', got {attr}")
     except KeyError:
         raise KeyError(
             f"Unable to get the data from `adata.uns[{key!r}]`. "
