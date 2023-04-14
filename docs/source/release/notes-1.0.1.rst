@@ -6,7 +6,7 @@ Bugfixes
 - Fix complex handling in :func:`squidpy.gr.ligrec`.
   `#310 <https://github.com/scverse/squidpy/pull/310>`__
   `@michalk8 <https://github.com/michalk8>`__
-  
+
 - Various minor documentation fixes.
 
 Features
