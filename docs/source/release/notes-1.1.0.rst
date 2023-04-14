@@ -14,9 +14,11 @@ Bugfixes
 - Fix Z-dimension in :meth:`squidpy.im.ImageContainer.interactive`.
   `#351 <https://github.com/scverse/squidpy/pull/351>`__
   `@hspitzer <https://github.com/hspitzer>`__
+  
 - Fix plotting bug in :func:`squidpy.pl.ripley`.
   `#352 <https://github.com/scverse/squidpy/pull/352>`__
   `@giovp <https://github.com/giovp>`__
+
 - Fix handling of NaNs in :func:`squidpy.gr.ligrec`.
   `#362 <https://github.com/scverse/squidpy/pull/362>`__
   `@michalk8 <https://github.com/michalk8>`__
@@ -24,6 +26,7 @@ Bugfixes
 Features
 --------
 - Add many new tutorials and examples.
+  
 - Add :func:`squidpy.gr.sepal` :cite:`andersson2021`
   `#313 <https://github.com/scverse/squidpy/pull/313>`__
   `@giovp <https://github.com/giovp>`__
@@ -67,6 +70,7 @@ Features
 - Expose ``canvas_only`` in :meth:`squidpy.pl.Interactive.screenshot`.
   `#363 <https://github.com/scverse/squidpy/pull/363>`__
   `@giovp <https://github.com/giovp>`__
+
 - Various minor improvements to the documentation.
   `#356 <https://github.com/scverse/squidpy/pull/356>`__
   `@michalk8 <https://github.com/michalk8>`__
