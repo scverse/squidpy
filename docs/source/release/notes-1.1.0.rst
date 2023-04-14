@@ -16,11 +16,11 @@ Bugfixes
   `@hspitzer <https://github.com/hspitzer>`__
 <<<<<<< HEAD
 
-- Fix plotting bug in :func:`squidpy.pl.ripley` 
+- Fix plotting bug in :func:`squidpy.pl.ripley`
   `#352 <https://github.com/scverse/squidpy/pull/352>`__
   `@giovp <https://github.com/giovp>`__
-  
-- Fix handling of NaNs in :func:`squidpy.gr.ligrec` 
+
+- Fix handling of NaNs in :func:`squidpy.gr.ligrec`
 =======
 - Fix plotting bug in :func:`squidpy.pl.ripley`
   `#352 <https://github.com/scverse/squidpy/pull/352>`__
@@ -34,8 +34,8 @@ Features
 --------
 - Add many new tutorials and examples
 <<<<<<< HEAD
-  
-- Add :func:`squidpy.gr.sepal` :cite:`andersson2021` 
+
+- Add :func:`squidpy.gr.sepal` :cite:`andersson2021`
 =======
 - Add :func:`squidpy.gr.sepal` :cite:`andersson2021`
 >>>>>>> e2ad575eb5db8c031e6bc86d3b88f553c811d739
@@ -52,7 +52,7 @@ Features
   `@MxMstrmn <https://github.com/MxMstrmn>`__
 <<<<<<< HEAD
 
-- Add lazy computation using :mod:`dask` for :mod:`squidpy.im` 
+- Add lazy computation using :mod:`dask` for :mod:`squidpy.im`
 =======
 - Add lazy computation using :mod:`dask` for :mod:`squidpy.im`
 >>>>>>> e2ad575eb5db8c031e6bc86d3b88f553c811d739
@@ -64,7 +64,7 @@ Features
   `@hspitzer <https://github.com/hspitzer>`__
 <<<<<<< HEAD
 
-- Replace ``squidpy.gr.ripley_k`` with :func:`squidpy.gr.ripley` 
+- Replace ``squidpy.gr.ripley_k`` with :func:`squidpy.gr.ripley`
 =======
 - Replace ``squidpy.gr.ripley_k`` with :func:`squidpy.gr.ripley`
 >>>>>>> e2ad575eb5db8c031e6bc86d3b88f553c811d739
@@ -91,7 +91,7 @@ Features
   `@giovp <https://github.com/giovp>`__
 <<<<<<< HEAD
 
-- Various minor improvements to the documentation 
+- Various minor improvements to the documentation
 =======
 - Various minor improvements to the documentation
 >>>>>>> e2ad575eb5db8c031e6bc86d3b88f553c811d739
