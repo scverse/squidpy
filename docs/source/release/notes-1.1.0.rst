@@ -36,7 +36,7 @@ Features
 - Add option to compute graph from Delaunay triangulation in :func:`squidpy.gr.spatial_neighbors`.
   `#322 <https://github.com/scverse/squidpy/pull/322>`__
   `@MxMstrmn <https://github.com/MxMstrmn>`__
-  
+
 - Add lazy computation using :mod:`dask` for :mod:`squidpy.im`.
   `#324 <https://github.com/scverse/squidpy/pull/324>`__
   `@michalk8 <https://github.com/michalk8>`__
