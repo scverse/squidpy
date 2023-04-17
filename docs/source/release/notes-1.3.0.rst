@@ -1,0 +1,52 @@
+Squidpy 1.2.2 (2022-)
+==========================
+
+Features
+--------
+- Add :func:`squidpy.tl.var_by_distance` to calculate distances to anchor points and store results in a design matrix.
+- Add :func:`squidpy.pl.var_by_distance` to visualize variables such as gene expression by distance to an anchor point.
+  `@LLehner <https://github.com/LLehner>`__
+  `#591 <https://github.com/scverse/squidpy/pull/591>`__
+
+Bugfixes
+--------
+
+- Fix :mod:`pandas` inf :func:`squidpy.pl.ligrec`.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#625 <https://github.com/scverse/squidpy/pull/625>`__
+
+- Remove column assignment to improve compatibility with new cell metadata.
+  `@cornhundred <https://github.com/cornhundred>`__
+  `#648 <https://github.com/scverse/squidpy/pull/648>`__
+
+- Fix :func:`squidpy.pl.extract` on views.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#663 <https://github.com/scverse/squidpy/pull/663>`__
+
+- Set coordinates' index type to same as in :attr:`anndata.AnnData.obs` in :func:`squidpy.read.vizgen`
+  and :func:`squidpy.read.visium`.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#665 <https://github.com/scverse/squidpy/pull/665>`__
+
+Miscellaneous
+-------------
+
+- Update pre-commits and unpin numba and numpy.
+  `@giovp <https://github.com/giovp>`__
+  `#643 <https://github.com/scverse/squidpy/pull/643>`__
+
+- Add :attr: option to :func:`squidpy.gr.spatial_autocorr` to select values from :attr:`anndata.AnnData.obs` or :attr:`anndata.AnnData.obsm`.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#664 <https://github.com/scverse/squidpy/pull/664>`__
+
+- Add :attr:`attr` option to :func:`squidpy.gr.spatial_autocorr` to select values from :attr:`anndata.AnnData.obs`
+  or :attr:`anndata.AnnData.obsm.`
+  `@michalk8 <https://github.com/michalk8>`__
+  `#672 <https://github.com/scverse/squidpy/pull/672>`__
+
+Documentation
+-------------
+
+- Fix CI badges and tox.
+  `@michalk8 <https://github.com/michalk8>`__
+  `#627 <https://github.com/scverse/squidpy/pull/627>`__
