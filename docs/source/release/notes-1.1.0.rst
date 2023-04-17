@@ -14,7 +14,7 @@ Bugfixes
 - Fix Z-dimension in :meth:`squidpy.im.ImageContainer.interactive`.
   `#351 <https://github.com/scverse/squidpy/pull/351>`__
   `@hspitzer <https://github.com/hspitzer>`__
-  
+
 - Fix plotting bug in :func:`squidpy.pl.ripley`.
   `#352 <https://github.com/scverse/squidpy/pull/352>`__
   `@giovp <https://github.com/giovp>`__
@@ -26,7 +26,7 @@ Bugfixes
 Features
 --------
 - Add many new tutorials and examples.
-  
+
 - Add :func:`squidpy.gr.sepal` :cite:`andersson2021`
   `#313 <https://github.com/scverse/squidpy/pull/313>`__
   `@giovp <https://github.com/giovp>`__

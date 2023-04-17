@@ -9,17 +9,17 @@ to a diverse set of different spatial datasets.
 
 .. nbgallery::
 
-    auto_tutorials/tutorial_imc
-    auto_tutorials/tutorial_seqfish
-    auto_tutorials/tutorial_slideseqv2
-    auto_tutorials/tutorial_visium_fluo
-    auto_tutorials/tutorial_visium_hne
-    auto_tutorials/tutorial_mibitof
-    auto_tutorials/tutorial_fouri
-    external_tutorials/tutorial_nanostring
-    external_tutorials/tutorial_vizgen
-    external_tutorials/tutorial_vizgen_mouse_liver
-    external_tutorials/tutorial_xenium
+    tutorials/tutorial_imc
+    tutorials/tutorial_seqfish
+    tutorials/tutorial_slideseqv2
+    tutorials/tutorial_visium_fluo
+    tutorials/tutorial_visium_hne
+    tutorials/tutorial_mibitof
+    tutorials/tutorial_fouri
+    tutorials/tutorial_nanostring
+    tutorials/tutorial_vizgen
+    tutorials/tutorial_vizgen_mouse_liver
+    tutorials/tutorial_xenium
 
 Advanced Tutorials
 ------------------
@@ -31,10 +31,10 @@ This section contains tutorials showcasing advanced :mod:`squidpy` functionaliti
 
 .. nbgallery::
 
-    auto_tutorials/tutorial_read_spatial
-    auto_tutorials/tutorial_image_container
-    external_tutorials/tutorial_napari
-    auto_tutorials/tutorial_image_container_zstacks
+    tutorials/tutorial_read_spatial
+    tutorials/tutorial_image_container
+    tutorials/tutorial_napari
+    tutorials/tutorial_image_container_zstacks
 
 External tutorials
 ------------------
@@ -42,8 +42,8 @@ This section contains tutorials showcasing how :mod:`squidpy` can interface with
 
 .. nbgallery::
 
-    external_tutorials/tutorial_tf
-    external_tutorials/tutorial_tangram
-    external_tutorials/tutorial_cellpose_segmentation
-    external_tutorials/tutorial_stardist
-    external_tutorials/tutorial_cellprofiler
+    tutorials/tutorial_tf
+    tutorials/tutorial_tangram
+    tutorials/tutorial_cellpose_segmentation
+    tutorials/tutorial_stardist
+    tutorials/tutorial_cellprofiler
