@@ -24,21 +24,6 @@ Bugfixes
   `@giovp <https://github.com/giovp>`__
   `#609 <https://github.com/scverse/squidpy/pull/609>`__
 
-- Fix :mod:`pandas` inf :func:`squidpy.pl.ligrec`.
-  `@michalk8 <https://github.com/michalk8>`__
-  `#625 <https://github.com/scverse/squidpy/pull/625>`__
-
-Documentation
--------------
-
-- New tutorial for 10x Genomics Xenium data.
-  `@LLehner <https://github.com/LLehner>`__
-  `#615 <https://github.com/scverse/squidpy/pull/615>`__
-
-- Fix CI badges and tox.
-  `@michalk8 <https://github.com/michalk8>`__
-  `#627 <https://github.com/scverse/squidpy/pull/627>`__
-
 Miscellaneous
 -------------
 
@@ -66,6 +51,9 @@ Miscellaneous
   `@giovp <https://github.com/giovp>`__
   `#617 <https://github.com/scverse/squidpy/pull/617>`__
 
-- Update pre-commits and unpin numba and numpy.
-  `@giovp <https://github.com/giovp>`__
-  `#643 <https://github.com/scverse/squidpy/pull/643>`__
+Documentation
+-------------
+
+- New tutorial for 10x Genomics Xenium data.
+  `@LLehner <https://github.com/LLehner>`__
+  `#615 <https://github.com/scverse/squidpy/pull/615>`__
