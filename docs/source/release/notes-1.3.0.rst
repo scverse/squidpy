@@ -50,3 +50,15 @@ Documentation
 - Fix CI badges and tox.
   `@michalk8 <https://github.com/michalk8>`__
   `#627 <https://github.com/scverse/squidpy/pull/627>`__
+
+- Changed tutorial directory structure.
+  `@LLehner <https://github.com/LLehner>`__
+   `#113 <https://github.com/scverse/squidpy_notebooks/pull/113>`__
+
+- Updated the quality control tutorials for Vizgen, Xenium and Nanostring.
+  `@pakiessling <https://github.com/pakiessling>`__
+   `#110 <https://github.com/scverse/squidpy_notebooks/pull/110>`__
+
+- Improved example for :func:`squidpy.tl.var_by_distance` and :func:`squidpy.pl.var_by_distance`.
+  `@LLehner <https://github.com/LLehner>`__
+   `#115 <https://github.com/scverse/squidpy_notebooks/pull/115>`__
