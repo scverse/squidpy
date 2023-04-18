@@ -54,6 +54,7 @@ Miscellaneous
 Documentation
 -------------
 
+<<<<<<< HEAD
 - Added a squidpy tutorial for Xenium data.
   `@LLehner <https://github.com/LLehner>`__
    `#102 <https://github.com/scverse/squidpy_notebooks/pull/102>`__
@@ -69,3 +70,8 @@ Documentation
 - Added tutorial notebook for vizgen mouse liver data.
   `@giovp <https://github.com/giovp>`__
   `#106 <https://github.com/scverse/squidpy_notebooks/pull/106>`__
+=======
+- New tutorial for 10x Genomics Xenium data.
+  `@LLehner <https://github.com/LLehner>`__
+  `#615 <https://github.com/scverse/squidpy/pull/615>`__
+>>>>>>> ad26b5695cca5e390b43f3cbf9306b561013cd4c

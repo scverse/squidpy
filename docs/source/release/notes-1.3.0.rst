@@ -62,3 +62,7 @@ Documentation
 - Improved example for :func:`squidpy.tl.var_by_distance` and :func:`squidpy.pl.var_by_distance`.
   `@LLehner <https://github.com/LLehner>`__
    `#115 <https://github.com/scverse/squidpy_notebooks/pull/115>`__
+
+- Improved example for :func:`squidpy.tl.var_by_distance` and :func:`squidpy.pl.var_by_distance`.
+  `@LLehner <https://github.com/LLehner>`__
+   `#115 <https://github.com/scverse/squidpy_notebooks/pull/115>`__
