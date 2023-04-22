@@ -11,7 +11,7 @@ matplotlib-scalebar>=0.8.0
 networkx>=2.6.0
 numba>=0.56.4
 numpy>=1.23.0
-omnipath @ git+https://github.com/owner/omnipath@master
+omnipath @ git+https://github.com/saezlab/omnipath@master
 pandas>=1.5.0
 Pillow>=8.0.0
 scanpy>=1.9.2
