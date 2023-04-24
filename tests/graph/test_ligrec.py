@@ -33,7 +33,9 @@ class TestInvalidBehavior:
 
     def test_raw_has_different_n_obs(self, adata: AnnData):
         adata.raw = blobs(n_observations=adata.n_obs + 1)
-        with pytest.raises(ValueError, match=rf"Expected `{adata.n_obs}` cells in `.raw`"):
+        # raise below happend with anndata < 0.9
+        # with pytest.raises(ValueError, match=rf"Expected `{adata.n_obs}` cells in `.raw`"):
+        with pytest.raises(ValueError, match=rf"Index length mismatch: {adata.n_obs} vs. {adata.n_obs + 1}"):
             ligrec(adata, _CK)
 
     def test_invalid_cluster_key(self, adata: AnnData, interactions: Interactions_t):
