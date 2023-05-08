@@ -156,7 +156,7 @@ class TestContainerIO:
         fname = tmpdir / f"tmp.{ext}"
         imageio.imsave(str(fname), img_orig)
 
-        gt = imageio.imread(str(fname))  # because of compression, we load again
+        gt = imageio.v2.imread(str(fname))  # because of compression, we load again
         cont = ImageContainer(str(fname))
 
         np.testing.assert_array_equal(cont["image"].values.squeeze(), gt.squeeze())
