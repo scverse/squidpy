@@ -8,12 +8,12 @@ from typing import Any, List, Optional, Sequence, Set, Tuple, Union
 import anndata as ad
 import dask.array as da
 import imageio.v3 as iio
-from PIL import Image
 import numpy as np
 import pytest
 import tifffile
 import xarray as xr
 from anndata import AnnData
+from PIL import Image
 from pytest_mock import MockerFixture
 
 import squidpy as sq
