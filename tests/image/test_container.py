@@ -154,9 +154,9 @@ class TestContainerIO:
     def test_load_ext(self, shape: Tuple[int, ...], ext: str, tmpdir):
         img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
         fname = tmpdir / f"tmp.{ext}"
-        imageio.imsave(str(fname), img_orig)
+        imageio.v3.imwrite(str(fname), img_orig)
 
-        gt = imageio.v2.imread(str(fname))  # because of compression, we load again
+        gt = imageio.v3.imread(str(fname))  # because of compression, we load again
         cont = ImageContainer(str(fname))
 
         np.testing.assert_array_equal(cont["image"].values.squeeze(), gt.squeeze())
