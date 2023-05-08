@@ -152,7 +152,10 @@ class TestContainerIO:
     @pytest.mark.parametrize("ext", ["jpg", "png"])
     @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1)])
     def test_load_ext(self, shape: Tuple[int, ...], ext: str, tmpdir):
-        img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
+        if shape == (100, 200, 1):
+            img_orig = np.random.randint(256, size=(100, 200), dtype=np.uint8)
+        else:
+            img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
         fname = tmpdir / f"tmp.{ext}"
         iio.imwrite(str(fname), img_orig)
 
