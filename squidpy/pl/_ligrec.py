@@ -267,6 +267,15 @@ def ligrec(
         target_groups = adata["pvalues"].columns.get_level_values(1)
     if isinstance(target_groups, str):
         target_groups = (target_groups,)
+
+    if not isinstance(adata, AnnData):
+        for s in source_groups:
+            if s not in adata["means"].columns.get_level_values(0):
+                raise ValueError(f"Invalid cluster in source group: {s}.")
+        for t in target_groups:
+            if t not in adata["means"].columns.get_level_values(1):
+                raise ValueError(f"Invalid cluster in target group: {t}.")
+
     if title is None:
         title = "Receptor-ligand test"
 
