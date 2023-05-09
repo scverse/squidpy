@@ -52,7 +52,7 @@ class ABCEnumMeta(EnumMeta, ABCMeta):
         cls, clsname: str, bases: Tuple[EnumMeta, ...], namespace: Mapping[str, Any]
     ) -> "ABCEnumMeta":
         res = super().__new__(cls, clsname, bases, namespace)  # type: ignore[arg-type]
-        res.__new__ = _pretty_raise_enum(res, res.__new__)  # type: ignore[assignment,arg-type]
+        res.__new__ = _pretty_raise_enum(res, res.__new__)  # type: ignore[method-assign,arg-type]
         return res
 
 
