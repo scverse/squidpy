@@ -2,7 +2,7 @@ adata
 Aldh
 AnnData
 artifactual
-attr:
+attr
 autocorrelation
 Axin
 backend
@@ -48,7 +48,7 @@ DL
 dotplot
 erythroid
 frac
-func:
+func
 Furo
 geary
 Geary
