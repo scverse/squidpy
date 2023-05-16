@@ -199,7 +199,8 @@ def _spatial_neighbor(
         else:
             raise NotImplementedError(f"Coordinate type `{coord_type}` is not yet implemented.")
 
-    if not apply_percentile and coord_type == CoordType.GENERIC and isinstance(radius, Iterable):
+    radius_filtered = False
+    if coord_type == CoordType.GENERIC and isinstance(radius, Iterable):
         minn, maxx = sorted(radius)[:2]  # type: ignore[var-annotated]
         mask = (Dst.data < minn) | (Dst.data > maxx)
         a_diag = Adj.diagonal()
@@ -207,8 +208,9 @@ def _spatial_neighbor(
         Dst.data[mask] = 0.0
         Adj.data[mask] = 0.0
         Adj.setdiag(a_diag)
+        radius_filtered = True
 
-    if apply_percentile:
+    if apply_percentile and not radius_filtered:
         threshold = np.percentile(np.array(Dst[Dst != 0]).squeeze(), percentile)
         Adj[Dst > threshold] = 0.0
         Dst[Dst > threshold] = 0.0
