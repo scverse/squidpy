@@ -51,6 +51,8 @@ def spatial_neighbors(
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
+    apply_percentile: bool = False,
+    percentile: float = 0.99,
 ) -> tuple[csr_matrix, csr_matrix] | None:
     """
     Create a graph from spatial coordinates.
@@ -138,6 +140,8 @@ def spatial_neighbors(
         n_rings=n_rings,
         transform=transform,
         set_diag=set_diag,
+        apply_percentile=apply_percentile,
+        percentile=percentile,
     )
 
     if library_key is not None:
@@ -180,6 +184,8 @@ def _spatial_neighbor(
     n_rings: int = 1,
     transform: str | Transform | None = None,
     set_diag: bool = False,
+    apply_percentile: bool = False,
+    percentile: float = 0.99,
 ) -> tuple[csr_matrix, csr_matrix]:
     coords = adata.obsm[spatial_key]
     with warnings.catch_warnings():
@@ -193,7 +199,7 @@ def _spatial_neighbor(
         else:
             raise NotImplementedError(f"Coordinate type `{coord_type}` is not yet implemented.")
 
-    if coord_type == CoordType.GENERIC and isinstance(radius, Iterable):
+    if not apply_percentile and coord_type == CoordType.GENERIC and isinstance(radius, Iterable):
         minn, maxx = sorted(radius)[:2]  # type: ignore[var-annotated]
         mask = (Dst.data < minn) | (Dst.data > maxx)
         a_diag = Adj.diagonal()
@@ -201,6 +207,11 @@ def _spatial_neighbor(
         Dst.data[mask] = 0.0
         Adj.data[mask] = 0.0
         Adj.setdiag(a_diag)
+
+    if apply_percentile:
+        threshold = np.percentile(np.array(Dst[Dst != 0]).squeeze(), percentile)
+        Adj[Dst > threshold] = 0.0
+        Dst[Dst > threshold] = 0.0
 
     Adj.eliminate_zeros()
     Dst.eliminate_zeros()
