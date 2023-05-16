@@ -140,4 +140,4 @@ def _fwd_ref_init(
         pass
 
 
-ForwardRef.__init__ = _fwd_ref_init  # type: ignore[assignment]
+ForwardRef.__init__ = _fwd_ref_init  # type: ignore[method-assign]
