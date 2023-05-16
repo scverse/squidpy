@@ -29,7 +29,7 @@ Bugfixes
   `#665 <https://github.com/scverse/squidpy/pull/665>`__
 
 - Update cell metadata index conversion.
-  `@djlee1 <https://github.com/djlee1>__`
+  `@djlee1 <https://github.com/djlee1>`__
   `#679 <https://github.com/scverse/squidpy/pull/679>`__
 
 Miscellaneous
