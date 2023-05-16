@@ -60,6 +60,8 @@ gyrus
 heatmap
 hypothalamic
 ImageNet
+img
+immunofluorescence
 intercellular
 interpretable
 KNN
@@ -85,6 +87,7 @@ Moran's I
 morphologies
 Nanostring
 Napari
+NegPrb
 NEUN
 neutrophil
 Neutrophils
@@ -101,6 +104,7 @@ pre
 pre-trained
 preoptic
 prepend
+qc
 Qt
 quantile
 quantiles
@@ -136,6 +140,7 @@ tori
 transcriptomics
 uncommenting
 Visium
+vizgen
 Vizgen
 Vwf
 Xenium
