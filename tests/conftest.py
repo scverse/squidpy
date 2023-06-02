@@ -49,6 +49,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
 def adata_hne() -> AnnData:
     return sq.datasets.visium_hne_adata_crop()
 
+
 @pytest.fixture(scope="session")
 def adata_fluo() -> AnnData:
     return sq.datasets.visium_fluo_adata()

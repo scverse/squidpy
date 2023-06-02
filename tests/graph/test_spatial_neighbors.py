@@ -193,9 +193,7 @@ class TestSpatialNeighbors:
         assert not ((conn!=conn_filtered).nnz==0)
         assert dist.max() > dist_filtered.max()
 
-        Adj, Dst = _build_connectivity(
-                adata_fluo.obsm["spatial"], n_neighs=6, return_distance=True, set_diag=False
-            )
+        Adj, Dst = _build_connectivity(adata_fluo.obsm["spatial"], n_neighs=6, return_distance=True, set_diag=False)
         threshold = np.percentile(Dst.data, percentile)
         Adj[Dst > threshold] = 0.0
         Dst[Dst > threshold] = 0.0
@@ -203,5 +201,3 @@ class TestSpatialNeighbors:
         Dst.eliminate_zeros()
 
         assert dist_filtered.max() == Dst.max()
-
-

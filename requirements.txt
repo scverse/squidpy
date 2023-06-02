@@ -1,5 +1,5 @@
 aiohttp>=3.8.1
-anndata>=0.8
+anndata>=0.9
 cycler>=0.11.0
 dask-image>=0.5.0
 dask[array]>=2021.02.0
@@ -11,10 +11,10 @@ matplotlib-scalebar>=0.8.0
 networkx>=2.6.0
 numba>=0.56.4
 numpy>=1.23.0
-omnipath>=1.0.5
+omnipath @ git+https://github.com/saezlab/omnipath@master
 pandas>=1.5.0
 Pillow>=8.0.0
-scanpy>=1.9.2
+scanpy>=1.9.3
 scikit-image>=0.19
 scikit-learn>=0.24.0
 statsmodels>=0.12.0
