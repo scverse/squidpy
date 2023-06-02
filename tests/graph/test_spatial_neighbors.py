@@ -187,7 +187,9 @@ class TestSpatialNeighbors:
     @pytest.mark.parametrize("percentile", [99.0, 95.0])
     def test_percentile_filtering(self, adata_hne: AnnData, percentile: float, coord_type="generic"):
         conn, dist = spatial_neighbors(adata_hne, coord_type=coord_type, copy=True)
-        conn_filtered, dist_filtered = spatial_neighbors(adata_hne, coord_type=coord_type, percentile=percentile, copy=True)
+        conn_filtered, dist_filtered = spatial_neighbors(
+            adata_hne, coord_type=coord_type, percentile=percentile, copy=True
+        )
 
         # check whether there are less connectivities in the filtered graph and whether the max distance is smaller
         assert not ((conn != conn_filtered).nnz == 0)
