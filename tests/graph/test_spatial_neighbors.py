@@ -8,6 +8,7 @@ from scipy.sparse import isspmatrix_csr
 
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_neighbors
+from squidpy.gr._build import _build_connectivity
 
 
 class TestSpatialNeighbors:
@@ -182,3 +183,23 @@ class TestSpatialNeighbors:
         assert Key.obsp.spatial_dist() not in non_visium_adata.obsp
         np.testing.assert_allclose(dist.A, self._gt_ddist)
         np.testing.assert_allclose(conn.A, self._gt_dgraph)
+
+    @pytest.mark.parametrize("percentile", [99.0, 95.0])
+    def test_percentile_filtering(self, adata_hne: AnnData, percentile: float, coord_type="generic"):
+        conn, dist = spatial_neighbors(adata_hne, coord_type=coord_type, copy=True)
+        conn_filtered, dist_filtered = spatial_neighbors(
+            adata_hne, coord_type=coord_type, percentile=percentile, copy=True
+        )
+
+        # check whether there are less connectivities in the filtered graph and whether the max distance is smaller
+        assert not ((conn != conn_filtered).nnz == 0)
+        assert dist.max() > dist_filtered.max()
+
+        Adj, Dst = _build_connectivity(adata_hne.obsm["spatial"], n_neighs=6, return_distance=True, set_diag=False)
+        threshold = np.percentile(Dst.data, percentile)
+        Adj[Dst > threshold] = 0.0
+        Dst[Dst > threshold] = 0.0
+        Adj.eliminate_zeros()
+        Dst.eliminate_zeros()
+
+        assert dist_filtered.max() == Dst.max()

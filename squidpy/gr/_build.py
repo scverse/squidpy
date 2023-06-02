@@ -47,6 +47,7 @@ def spatial_neighbors(
     radius: float | tuple[float, float] | None = None,
     delaunay: bool = False,
     n_rings: int = 1,
+    percentile: float | None = None,
     transform: str | Transform | None = None,
     set_diag: bool = False,
     key_added: str = "spatial",
@@ -81,6 +82,8 @@ def spatial_neighbors(
         Whether to compute the graph from Delaunay triangulation. Only used when ``coord_type = {c.GENERIC.s!r}``.
     n_rings
         Number of rings of neighbors for grid data. Only used when ``coord_type = {c.GRID.s!r}``.
+    percentile
+        Percentile of the distances to use as threshold. Only used when ``coord_type = {c.GENERIC.s!r}``.
     transform
         Type of adjacency matrix transform. Valid options are:
 
@@ -138,6 +141,7 @@ def spatial_neighbors(
         n_rings=n_rings,
         transform=transform,
         set_diag=set_diag,
+        percentile=percentile,
     )
 
     if library_key is not None:
@@ -180,6 +184,7 @@ def _spatial_neighbor(
     n_rings: int = 1,
     transform: str | Transform | None = None,
     set_diag: bool = False,
+    percentile: float | None = None,
 ) -> tuple[csr_matrix, csr_matrix]:
     coords = adata.obsm[spatial_key]
     with warnings.catch_warnings():
@@ -201,6 +206,11 @@ def _spatial_neighbor(
         Dst.data[mask] = 0.0
         Adj.data[mask] = 0.0
         Adj.setdiag(a_diag)
+
+    if percentile is not None and coord_type == CoordType.GENERIC:
+        threshold = np.percentile(Dst.data, percentile)
+        Adj[Dst > threshold] = 0.0
+        Dst[Dst > threshold] = 0.0
 
     Adj.eliminate_zeros()
     Dst.eliminate_zeros()
