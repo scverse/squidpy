@@ -17,8 +17,8 @@ from squidpy.gr import ligrec
 from squidpy.gr._ligrec import PermutationTest
 
 _CK = "leiden"
-Interactions_t = Tuple[Sequence[str], Sequence[str]]
-Complexes_t = Sequence[Tuple[str, str]]
+Interactions_t = tuple[Sequence[str], Sequence[str]]
+Complexes_t = Sequence[tuple[str, str]]
 
 
 class TestInvalidBehavior:

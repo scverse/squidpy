@@ -14,7 +14,7 @@ from squidpy.im._io import _get_image_shape_dtype, _infer_dimensions, _lazy_load
 
 class TestIO:
     @staticmethod
-    def _create_image(path: str, shape: Tuple[int, ...]):
+    def _create_image(path: str, shape: tuple[int, ...]):
         dtype = np.uint8 if len(shape) <= 3 else np.float32
         img = np.random.randint(0, 255, size=shape).astype(dtype)
         # set `photometric` to remove warnings
@@ -34,7 +34,7 @@ class TestIO:
             (3, 101, 64, 4),
         ],
     )
-    def test_get_shape(self, shape: Tuple[int, ...], tmpdir):
+    def test_get_shape(self, shape: tuple[int, ...], tmpdir):
         path = str(tmpdir / "img.tiff")
         img = self._create_image(path, shape)
 
@@ -46,7 +46,7 @@ class TestIO:
     @pytest.mark.parametrize(
         "shape", [(101, 64), (101, 64, 3), (3, 64, 101), (1, 101, 64, 3), (1, 101, 64, 1), (3, 101, 64, 1)]
     )
-    def test_infer_dimensions(self, shape: Tuple[int, ...], infer_dim: str, mocker: MockerFixture):
+    def test_infer_dimensions(self, shape: tuple[int, ...], infer_dim: str, mocker: MockerFixture):
         mocker.patch("squidpy.im._io._get_image_shape_dtype", return_value=(shape, np.uint8))
         infer_dim = InferDimensions(infer_dim)
         actual_shape, actual_dims, _, _ = _infer_dimensions("non_existent", infer_dim)
@@ -82,7 +82,7 @@ class TestIO:
             np.testing.assert_array_equal(actual_shape, shape)
 
     @pytest.mark.parametrize("chunks", [100, (1, 100, 100, 3), "auto", None, {"y": 100, "x": 100}])
-    def test_lazy_load_image(self, chunks: Optional[Union[int, Tuple[int, ...], str, Dict[str, int]]], tmpdir):
+    def test_lazy_load_image(self, chunks: Optional[Union[int, tuple[int, ...], str, dict[str, int]]], tmpdir):
         path = str(tmpdir / "img.tiff")
         img = self._create_image(path, (256, 256, 3))
 

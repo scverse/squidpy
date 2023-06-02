@@ -22,11 +22,11 @@ __all__ = ["var_by_distance"]
 @d.dedent
 def var_by_distance(
     adata: AnnData,
-    groups: str | List[str] | NDArrayA,
+    groups: str | list[str] | NDArrayA,
     cluster_key: str,
     library_key: str | None = None,
     design_matrix_key: str = "design_matrix",
-    covariates: str | List[str] | None = None,
+    covariates: str | list[str] | None = None,
     metric: str = "euclidean",
     spatial_key: str = "spatial",
     copy: bool = False,
@@ -67,7 +67,7 @@ def var_by_distance(
         )
 
     if isinstance(groups, str) or isinstance(groups, np.ndarray):
-        anchor: List[Any] = [groups]
+        anchor: list[Any] = [groups]
     elif isinstance(groups, list):
         anchor = groups
     else:
@@ -173,11 +173,11 @@ def var_by_distance(
 
 def _add_metadata(
     cluster_key: str,
-    groups: str | List[str] | NDArrayA,
+    groups: str | list[str] | NDArrayA,
     library_key: str | None = None,
-    covariates: str | List[str] | None = None,
+    covariates: str | list[str] | None = None,
     metric: str = "euclidean",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Add metadata to adata.uns."""
     metadata = {}
     if isinstance(groups, np.ndarray):
@@ -223,7 +223,7 @@ def _init_design_matrix(
     return df
 
 
-def _get_coordinates(adata: AnnData, anchor: str, annotation: str, spatial_key: str) -> Tuple[Any, Any, Any]:
+def _get_coordinates(adata: AnnData, anchor: str, annotation: str, spatial_key: str) -> tuple[Any, Any, Any]:
     """Get anchor point coordinates and coordinates of all observations, excluding nan values."""
     # since amount of distances have to match n_obs, the nan id's are stored an inserted after KDTree construction
     nan_ids, _ = np.split(np.argwhere(np.isnan(adata.obsm[spatial_key])), 2, axis=1)
@@ -244,10 +244,10 @@ def _get_coordinates(adata: AnnData, anchor: str, annotation: str, spatial_key: 
 
 
 def _normalize_distances(
-    mapping_design_matrix: Dict[Tuple[str | None, str], pd.DataFrame],
-    anchor: str | List[str],
-    slides: List[str] | List[None],
-    mapping_max_distances: Dict[Tuple[str | None, str], float],
+    mapping_design_matrix: dict[tuple[str | None, str], pd.DataFrame],
+    anchor: str | list[str],
+    slides: list[str] | list[None],
+    mapping_max_distances: dict[tuple[str | None, str], float],
 ) -> pd.DataFrame:
     """Normalize distances to anchor."""
     if not isinstance(anchor, list):

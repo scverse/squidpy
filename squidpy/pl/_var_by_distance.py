@@ -26,24 +26,24 @@ __all__ = ["var_by_distance"]
 @d.dedent
 def var_by_distance(
     adata: AnnData,
-    var: str | List[str],
-    anchor_key: str | List[str],
+    var: str | list[str],
+    anchor_key: str | list[str],
     design_matrix_key: str = "design_matrix",
     color: str | None = None,
     covariate: str | None = None,
     order: int = 5,
     show_scatter: bool = True,
-    line_palette: Union[str, Sequence[str], Cycler, None] = None,
-    scatter_palette: Union[str, Sequence[str], Cycler, None] = "viridis",
+    line_palette: str | Sequence[str] | Cycler | None = None,
+    scatter_palette: str | Sequence[str] | Cycler | None = "viridis",
     dpi: int | None = None,
-    figsize: Tuple[int, int] | None = None,
+    figsize: tuple[int, int] | None = None,
     save: str | Path | None = None,
     title: str | None = None,
     axis_label: str | None = None,
-    return_ax: Optional[bool] = None,
+    return_ax: bool | None = None,
     regplot_kwargs: Mapping[str, Any] = MappingProxyType({}),
     scatterplot_kwargs: Mapping[str, Any] = MappingProxyType({}),
-) -> Union[Axes, None]:
+) -> Axes | None:
     """
     Plot a variable using a smooth regression line with increasing distance to an anchor point.
 

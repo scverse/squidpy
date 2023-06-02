@@ -40,9 +40,9 @@ from squidpy.gr._utils import (
 __all__ = ["ligrec", "PermutationTest"]
 
 StrSeq = Sequence[str]
-SeqTuple = Sequence[Tuple[str, str]]
-Interaction_t = Union[pd.DataFrame, Mapping[str, StrSeq], StrSeq, Tuple[StrSeq, StrSeq], SeqTuple]
-Cluster_t = Union[StrSeq, Tuple[StrSeq, StrSeq], SeqTuple]
+SeqTuple = Sequence[tuple[str, str]]
+Interaction_t = Union[pd.DataFrame, Mapping[str, StrSeq], StrSeq, tuple[StrSeq, StrSeq], SeqTuple]
+Cluster_t = Union[StrSeq, tuple[StrSeq, StrSeq], SeqTuple]
 
 SOURCE = "source"
 TARGET = "target"

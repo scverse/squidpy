@@ -5,7 +5,7 @@ from anndata import AnnData
 from squidpy.datasets._utils import PathLike
 
 class Dataset(Protocol):
-    def __call__(self, path: Union[PathLike, None] = ..., **kwargs: Any) -> AnnData: ...
+    def __call__(self, path: PathLike | None = ..., **kwargs: Any) -> AnnData: ...
 
 four_i: Dataset
 imc: Dataset

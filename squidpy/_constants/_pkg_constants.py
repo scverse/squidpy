@@ -21,12 +21,12 @@ class cprop:
 class Key:
     class img:
         @classmethod
-        def segment(cls, backend: Union[str, SegmentationBackend], layer_added: Optional[str] = None) -> str:
+        def segment(cls, backend: str | SegmentationBackend, layer_added: str | None = None) -> str:
             return f"segmented_{SegmentationBackend(backend).s}" if layer_added is None else layer_added
 
         @classmethod
         def process(
-            cls, method: Union[str, Processing, Callable[[Any], Any]], img_id: str, layer_added: Optional[str] = None
+            cls, method: str | Processing | Callable[[Any], Any], img_id: str, layer_added: str | None = None
         ) -> str:
             if layer_added is not None:
                 return layer_added
@@ -91,11 +91,11 @@ class Key:
             return "spot_diameter_fullres"
 
         @classmethod
-        def spatial_neighs(cls, value: Optional[str] = None) -> str:
+        def spatial_neighs(cls, value: str | None = None) -> str:
             return f"{Key.obsm.spatial}_neighbors" if value is None else f"{value}_neighbors"
 
         @classmethod
-        def ligrec(cls, cluster: str, value: Optional[str] = None) -> str:
+        def ligrec(cls, cluster: str, value: str | None = None) -> str:
             return f"{cluster}_ligrec" if value is None else value
 
         @classmethod
@@ -127,7 +127,7 @@ class Key:
             cls,
             adata: AnnData,
             spatial_key: str,
-            library_id: Optional[str] = None,
+            library_id: str | None = None,
             spot_diameter_key: str = "spot_diameter_fullres",
         ) -> float:
             try:
@@ -174,7 +174,7 @@ class Key:
             adata: AnnData,
             spatial_key: str,
             library_id: Sequence[str] | str | None = None,
-            sub_key: Optional[str] = None,
+            sub_key: str | None = None,
         ) -> Sequence[str] | None:
             if spatial_key not in adata.uns:
                 raise KeyError(f"Spatial key {spatial_key!r} not found in `adata.uns`.")
@@ -195,9 +195,9 @@ class Key:
 
     class obsp:
         @classmethod
-        def spatial_dist(cls, value: Optional[str] = None) -> str:
+        def spatial_dist(cls, value: str | None = None) -> str:
             return f"{Key.obsm.spatial}_distances" if value is None else f"{value}_distances"
 
         @classmethod
-        def spatial_conn(cls, value: Optional[str] = None) -> str:
+        def spatial_conn(cls, value: str | None = None) -> str:
             return f"{Key.obsm.spatial}_connectivities" if value is None else f"{value}_connectivities"

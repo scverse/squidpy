@@ -15,9 +15,9 @@ def _process_return(lines: Iterable[str]) -> Iterator[str]:
             yield line
 
 
-def _parse_returns_section(self: NumpyDocstring, section: str) -> List[str]:
+def _parse_returns_section(self: NumpyDocstring, section: str) -> list[str]:
     lines_raw = list(_process_return(self._dedent(self._consume_to_next_section())))
-    lines: List[str] = self._format_block(":returns: ", lines_raw)
+    lines: list[str] = self._format_block(":returns: ", lines_raw)
     if lines and lines[-1]:
         lines.append("")
     return lines

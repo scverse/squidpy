@@ -17,9 +17,9 @@ from squidpy.datasets._utils import PathLike
 def _read_counts(
     path: str | Path,
     count_file: str,
-    library_id: Optional[str] = None,
+    library_id: str | None = None,
     **kwargs: Any,
-) -> Tuple[AnnData, str]:
+) -> tuple[AnnData, str]:
     path = Path(path)
     if count_file.endswith(".h5"):
         adata: AnnData = read_10x_h5(path / count_file, **kwargs)
