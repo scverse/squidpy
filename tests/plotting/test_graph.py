@@ -143,8 +143,10 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
             pl.ligrec(ligrec_result, means_range=[0, 1, 2])
 
     def test_invalid_clusters(self, ligrec_result: Mapping[str, pd.DataFrame]):
-        with pytest.raises(ValueError, match=r"No valid clusters have been selected."):
-            pl.ligrec(ligrec_result, source_groups="foo", target_groups="bar")
+        source_groups = "foo"
+        target_groups = "bar"
+        with pytest.raises(ValueError, match=r"Invalid cluster in .*"):
+            pl.ligrec(ligrec_result, source_groups=source_groups, target_groups=target_groups)
 
     def test_all_interactions_empty(self, ligrec_result: Mapping[str, pd.DataFrame]):
         empty = pd.DataFrame(np.nan, index=ligrec_result["pvalues"].index, columns=ligrec_result["pvalues"].columns)

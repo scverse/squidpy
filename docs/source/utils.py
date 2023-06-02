@@ -17,7 +17,7 @@ def _fetch_notebooks(repo_url: str) -> None:
     def copy_files(repo_path: Union[str, Path]) -> None:
         repo_path = Path(repo_path)
 
-        for dirname in ["external_tutorials", "auto_examples", "auto_tutorials", "gen_modules"]:
+        for dirname in ["tutorials", "auto_examples", "gen_modules"]:
             rmtree(dirname, ignore_errors=True)  # locally re-cloning
             copytree(repo_path / "docs" / "source" / dirname, dirname)
 
@@ -140,4 +140,4 @@ def _fwd_ref_init(
         pass
 
 
-ForwardRef.__init__ = _fwd_ref_init  # type: ignore[assignment]
+ForwardRef.__init__ = _fwd_ref_init  # type: ignore[method-assign]
