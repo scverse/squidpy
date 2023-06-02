@@ -8,6 +8,7 @@ from scipy.sparse import isspmatrix_csr
 
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_neighbors
+from squidpy.gr._build import _build_connectivity
 
 
 class TestSpatialNeighbors:
@@ -182,3 +183,24 @@ class TestSpatialNeighbors:
         assert Key.obsp.spatial_dist() not in non_visium_adata.obsp
         np.testing.assert_allclose(dist.A, self._gt_ddist)
         np.testing.assert_allclose(conn.A, self._gt_dgraph)
+
+    @pytest.mark.parametrize("percentile", [99.0, 95.0])
+    def test_percentile_filtering(self, adata_fluo: AnnData, percentile: float):
+        conn, dist = spatial_neighbors(adata_fluo, coord_type="generic")
+        conn_filtered, dist_filtered = spatial_neighbors(adata_fluo, coord_type="generic", percentile=percentile)
+
+        assert (conn!=conn_filtered).nnz==0 
+        assert dist.max() > dist_filtered.max()
+
+        Adj, Dst = _build_connectivity(
+                adata_fluo.obsm["spatial"], n_neighs=6, return_distance=True, set_diag=False
+            )
+        threshold = np.percentile(Dst.data, percentile)
+        Adj[Dst > threshold] = 0.0
+        Dst[Dst > threshold] = 0.0
+        Adj.eliminate_zeros()
+        Dst.eliminate_zeros()
+
+        assert dist_filtered.max() == Dst.max()
+
+
