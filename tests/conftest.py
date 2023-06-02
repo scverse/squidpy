@@ -51,11 +51,6 @@ def adata_hne() -> AnnData:
 
 
 @pytest.fixture(scope="session")
-def adata_fluo() -> AnnData:
-    return sq.datasets.visium_fluo_adata()
-
-
-@pytest.fixture(scope="session")
 def adata_hne_concat() -> AnnData:
     adata1 = sq.datasets.visium_hne_adata_crop()
     spatial_neighbors(adata1)
