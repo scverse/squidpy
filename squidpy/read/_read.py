@@ -89,7 +89,7 @@ def visium(
     )
     coords.columns = ["in_tissue", "array_row", "array_col", "pxl_col_in_fullres", "pxl_row_in_fullres"]
     # https://github.com/scverse/squidpy/issues/657
-    coords.set_index(coords.index.astype("str"), inplace=True)
+    coords.set_index(coords.index.astype(adata.obs.index.dtype), inplace=True)
 
     adata.obs = pd.merge(adata.obs, coords, how="left", left_index=True, right_index=True)
     adata.obsm[Key.obsm.spatial] = adata.obs[["pxl_row_in_fullres", "pxl_col_in_fullres"]].values
@@ -161,7 +161,7 @@ def vizgen(
 
     coords = pd.read_csv(path / meta_file, header=0, index_col=0)
     # https://github.com/scverse/squidpy/issues/657
-    coords.set_index(coords.index.astype(adata.obs.index.dtype), inplace=True)
+    coords.set_index(coords.index.astype("str"), inplace=True)
 
     adata.obs = pd.merge(adata.obs, coords, how="left", left_index=True, right_index=True)
     adata.obsm[Key.obsm.spatial] = adata.obs[["center_x", "center_y"]].values
