@@ -1,7 +1,9 @@
+Accomodate
 adata
 Aldh
 AnnData
 artifactual
+attr
 autocorrelation
 Axin
 backend
@@ -9,6 +11,8 @@ barcode
 binarize
 boolean
 Bugfixes
+cbf
+cca
 Cellpose
 centralities
 centroid
@@ -45,6 +49,8 @@ DL
 dotplot
 erythroid
 frac
+func
+Furo
 geary
 Geary
 GFAP
@@ -55,6 +61,8 @@ gyrus
 heatmap
 hypothalamic
 ImageNet
+img
+immunofluorescence
 intercellular
 interpretable
 KNN
@@ -62,6 +70,7 @@ kwargs
 leiden
 ligand
 ligands
+ligrec
 Linnarson
 lobules
 localizations
@@ -79,6 +88,7 @@ Moran's I
 morphologies
 Nanostring
 Napari
+NegPrb
 NEUN
 neutrophil
 Neutrophils
@@ -95,6 +105,7 @@ pre
 pre-trained
 preoptic
 prepend
+qc
 Qt
 quantile
 quantiles
@@ -108,6 +119,7 @@ scalability
 scalebar
 scalebars
 Scanpy
+scRNA
 seg
 segmentations
 semibold
@@ -129,6 +141,7 @@ tori
 transcriptomics
 uncommenting
 Visium
+vizgen
 Vizgen
 Vwf
 Xenium

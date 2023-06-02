@@ -9,7 +9,7 @@ This section contains various examples from the :mod:`squidpy.gr` module.
 .. nbgallery::
     :glob:
 
-    auto_examples/graph/compute_*
+    examples/graph/compute_*
 
 Image
 -----
@@ -17,29 +17,29 @@ This section contains various examples from the :mod:`squidpy.im` module.
 
 .. nbgallery::
 
-    auto_examples/image/compute_process_hires
-    auto_examples/image/compute_gray
-    auto_examples/image/compute_smooth
-    auto_examples/image/compute_segment_fluo
-    auto_examples/image/compute_segment_hne
-    auto_examples/image/compute_features
-    auto_examples/image/compute_summary_features
-    auto_examples/image/compute_histogram_features
-    auto_examples/image/compute_texture_features
-    auto_examples/image/compute_segmentation_features
-    auto_examples/image/compute_custom_features
-    auto_examples/plotting/compute_extract
+    examples/image/compute_process_hires
+    examples/image/compute_gray
+    examples/image/compute_smooth
+    examples/image/compute_segment_fluo
+    examples/image/compute_segment_hne
+    examples/image/compute_features
+    examples/image/compute_summary_features
+    examples/image/compute_histogram_features
+    examples/image/compute_texture_features
+    examples/image/compute_segmentation_features
+    examples/image/compute_custom_features
+    examples/plotting/compute_extract
 
 ImageContainer
 --------------
 This section contains various examples for the :class:`squidpy.im.ImageContainer` class, which is the underlying
-data structure for the :mod:`squidpy.im` module. See :ref:`sphx_glr_auto_tutorials_tutorial_image_container.py`
+data structure for the :mod:`squidpy.im` module. See :ref:`tutorials_tutorial_image_container.ipynb`
 for an entry point to the :class:`squidpy.im.ImageContainer`.
 
 .. nbgallery::
 
-    auto_examples/image/compute_show
-    auto_examples/image/compute_crops
+    examples/image/compute_show
+    examples/image/compute_crops
 
 Plotting
 --------
@@ -48,4 +48,4 @@ This section contains various examples from the :mod:`squidpy.pl` module.
 .. nbgallery::
     :glob:
 
-    auto_examples/plotting/plot_*
+    examples/plotting/plot_*
