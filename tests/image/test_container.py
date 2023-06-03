@@ -135,7 +135,7 @@ class TestContainerIO:
             ((100, 200, 3), (100, 200)),
         ],
     )
-    def test_add_img(self, shape1: tuple[int, ...], shape2: tuple[int, ...]):
+    def test_add_img(self, shape1: Tuple[int, ...], shape2: Tuple[int, ...]):
         img_orig = np.random.randint(low=0, high=255, size=shape1, dtype=np.uint8)
         cont = ImageContainer(img_orig, layer="img_orig")
 
@@ -152,7 +152,7 @@ class TestContainerIO:
 
     @pytest.mark.parametrize("ext", ["jpg", "png"])
     @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1)])
-    def test_load_ext(self, shape: tuple[int, ...], ext: str, tmpdir):
+    def test_load_ext(self, shape: Tuple[int, ...], ext: str, tmpdir):
         fname = tmpdir / f"tmp.{ext}"
 
         if shape == (100, 200, 1):
@@ -168,7 +168,7 @@ class TestContainerIO:
         np.testing.assert_array_equal(cont["image"].values.squeeze(), gt.squeeze())
 
     @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1), (10, 100, 200, 1)])
-    def test_load_tiff(self, shape: tuple[int, ...], tmpdir):
+    def test_load_tiff(self, shape: Tuple[int, ...], tmpdir):
         img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
         fname = tmpdir / "tmp.tiff"
         tifffile.imwrite(fname, img_orig)
@@ -181,7 +181,7 @@ class TestContainerIO:
             np.testing.assert_array_equal(np.squeeze(cont["image"]), np.squeeze(img_orig))
 
     @pytest.mark.parametrize("dims", [("y", "x", "z", "c"), ("foo", "bar", "faa", "baz")])
-    def test_load_netcdf(self, tmpdir, dims: tuple[str, ...]):
+    def test_load_netcdf(self, tmpdir, dims: Tuple[str, ...]):
         arr = np.random.normal(size=(100, 10, 1, 4))
         ds = xr.Dataset({"quux": xr.DataArray(arr, dims=dims)})
         fname = tmpdir / "tmp.nc"
@@ -431,7 +431,7 @@ class TestContainerCropping:
         np.testing.assert_array_equal(crop["image"].data[-10:, -10:], cval)
 
     @pytest.mark.parametrize("size", [(10, 10), (10, 11)])
-    def test_crop_corner_mask_circle(self, small_cont_1c: ImageContainer, size: tuple[int, int]):
+    def test_crop_corner_mask_circle(self, small_cont_1c: ImageContainer, size: Tuple[int, int]):
         if size[0] != size[1]:
             with pytest.raises(ValueError, match=r"Masking circle is only"):
                 small_cont_1c.crop_corner(0, 0, size=size, mask_circle=True, cval=np.nan)
@@ -718,7 +718,7 @@ class TestContainerUtils:
             np.testing.assert_allclose(data.values[..., 0], orig["image"].values[..., channel] + 42)
 
     @pytest.mark.parametrize("depth", [None, (30, 30, 0)])
-    def test_apply_overlap(self, small_cont: ImageContainer, mocker: MockerFixture, depth: Optional[tuple[int, ...]]):
+    def test_apply_overlap(self, small_cont: ImageContainer, mocker: MockerFixture, depth: Optional[Tuple[int, ...]]):
         if depth is None:
             kwargs = {}
             spy = mocker.spy(da, "map_blocks")
@@ -733,7 +733,7 @@ class TestContainerUtils:
     @pytest.mark.parametrize("chunks", [25, (50, 50, 1, 3), "auto"])
     @pytest.mark.parametrize("lazy", [False, True])
     def test_apply_dask(
-        self, small_cont: ImageContainer, copy: bool, chunks: Union[int, tuple[int, ...], str], lazy: bool
+        self, small_cont: ImageContainer, copy: bool, chunks: Union[int, Tuple[int, ...], str], lazy: bool
     ):
         def func(chunk: np.ndarray) -> np.ndarray:
             if isinstance(chunks, tuple):
@@ -978,7 +978,7 @@ class TestZStacks:
 
 class TestExplicitDims:
     @pytest.mark.parametrize("dims", list(permutations(["y", "x", "z", "c"])))
-    def test_explicit_dims(self, dims: tuple[str, str, str, str]):
+    def test_explicit_dims(self, dims: Tuple[str, str, str, str]):
         shape = (2, 3, 4, 5)
         img = ImageContainer(np.random.normal(size=shape), dims=dims)
 
