@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pickle
 import sys
 import warnings
@@ -14,7 +16,6 @@ import numpy as np
 import pandas as pd
 import pytest
 import scanpy as sc
-from __future_ import annotations
 from anndata import AnnData, OldFormatWarning
 from matplotlib.testing.compare import compare_images
 from scipy.sparse import csr_matrix
@@ -364,7 +365,7 @@ class PlotTesterMeta(ABCMeta):
 # but for some reason, pytest erases the metaclass info
 class PlotTester(ABC):
     @classmethod
-    def compare(cls, basename: str, tolerance: Optional[float] = None):
+    def compare(cls, basename: str, tolerance: float | None = None):
         ACTUAL.mkdir(parents=True, exist_ok=True)
         out_path = ACTUAL / f"{basename}.png"
 
