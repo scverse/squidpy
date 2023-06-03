@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 from abc import ABC, ABCMeta
 from enum import Enum, EnumMeta
 from functools import wraps
-from typing import Any, Callable, Mapping, Tuple, Type
+from typing import Any, Callable, Mapping, Tuple
 
 
-def _pretty_raise_enum(cls: Type["ModeEnum"], fun: Callable[..., Any]) -> Callable[..., Any]:
+def _pretty_raise_enum(cls: type[ModeEnum], fun: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(fun)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
@@ -50,7 +52,7 @@ class ABCEnumMeta(EnumMeta, ABCMeta):
 
     def __new__(  # noqa: D102
         cls, clsname: str, bases: tuple[EnumMeta, ...], namespace: Mapping[str, Any]
-    ) -> "ABCEnumMeta":
+    ) -> ABCEnumMeta:
         res = super().__new__(cls, clsname, bases, namespace)  # type: ignore[arg-type]
         res.__new__ = _pretty_raise_enum(res, res.__new__)  # type: ignore[method-assign,arg-type]
         return res

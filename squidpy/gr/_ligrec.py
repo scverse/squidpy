@@ -6,16 +6,7 @@ from collections import namedtuple
 from functools import partial
 from itertools import product
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Iterable,
-    Literal,
-    Mapping,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Iterable, Literal, Mapping, Sequence, Union
 
 import numpy as np
 import pandas as pd
