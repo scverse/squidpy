@@ -1,3 +1,5 @@
+from importlib.metadata import version
+
 from packaging.version import parse
 
 from squidpy import datasets, gr, im, pl, read, tl
@@ -10,11 +12,6 @@ __email__ = ", ".join(
     ]
 )
 __version__ = "1.2.3"
-
-try:
-    from importlib_metadata import version  # Python < 3.8
-except ImportError:
-    from importlib.metadata import version  # Python = 3.8
 
 
 try:
