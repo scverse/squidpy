@@ -638,8 +638,8 @@ class TestContainerCropping:
         c2 = c1.crop_corner(10, 0, (50, 50), scale=2)
         img2 = ImageContainer.uncrop([c2], small_cont_seg.shape)
         # test that the points are in the right place after down + upscaling + cropping
-        assert img2["segmented"][55, 35] == 0
-        assert img2["segmented"][25, 15] == 0
+        assert img2["segmented"][55, 35] == 2
+        assert img2["segmented"][25, 15] == 1
 
 
 class TestContainerUtils:

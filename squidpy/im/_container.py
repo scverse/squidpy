@@ -579,6 +579,7 @@ class ImageContainer(FeatureMixin):
         def _rescale(arr: xr.DataArray) -> xr.DataArray:
             scaling_fn = partial(
                 rescale,
+                preserve_range=True,
                 scale=[scale, scale, 1],
                 order=1,
                 channel_axis=-1,
