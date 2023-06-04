@@ -1,23 +1,13 @@
-from importlib.metadata import version
-
-from packaging.version import parse
+from importlib import metadata
 
 from squidpy import datasets, gr, im, pl, read, tl
 
-__author__ = __maintainer__ = "Theislab"
-__email__ = ", ".join(
-    [
-        "giovanni.palla@helmholtz-muenchen.de",
-        "hannah.spitzer@helmholtz-muenchen.de",
-    ]
-)
-__version__ = "1.2.3"
-
-
 try:
-    __full_version__ = parse(version(__name__))
-    __full_version__ = f"{__version__}+{__full_version__.local}" if __full_version__.local else __version__
+    md = metadata.metadata(__name__)
+    __version__ = md.get("version", "")
+    __author__ = md.get("Author", "")
+    __maintainer__ = md.get("Maintainer-email", "")
 except ImportError:
-    __full_version__ = __version__
+    md = None  # type: ignore[assignment]
 
-del version, parse
+del metadata, md
