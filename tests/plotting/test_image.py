@@ -3,11 +3,11 @@ import numpy as np
 import pandas as pd
 import pytest
 import scanpy as sc
+import squidpy as sq
 from anndata import AnnData
 from matplotlib.testing.compare import compare_images
-
-import squidpy as sq
 from squidpy.im import ImageContainer
+
 from tests.conftest import ACTUAL, DPI, EXPECTED, TOL, PlotTester, PlotTesterMeta
 
 

@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 import scanpy as sc
 from anndata import AnnData
-
 from squidpy import gr, pl
+
 from tests.conftest import DPI, PlotTester, PlotTesterMeta
 
 C_KEY = "leiden"
