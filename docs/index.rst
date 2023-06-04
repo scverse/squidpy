@@ -27,7 +27,7 @@ Squidpy's key applications
 
 Getting started with Squidpy
 ----------------------------
-- Browse :doc:`notebooks/tutorials/index>` and :doc:`notebooks/examples/index>`.
+- Browse :doc:`notebooks/tutorials/index` and :doc:`notebooks/examples/index`.
 - Discuss usage on `discourse`_ and development on `github`_.
 
 Contributing to Squidpy
