@@ -10,9 +10,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
-sys.path.insert(0, os.path.abspath("_ext"))
+# HERE = Path(__file__).parent
+# sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
+# sys.path.insert(0, os.path.abspath("_ext"))
+
+sys.path.insert(0, str(Path(__file__).parent / "_ext"))
 
 import squidpy  # noqa: E402
 
