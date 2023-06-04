@@ -33,7 +33,7 @@ This section contains various examples from the :mod:`squidpy.im` module.
 ImageContainer
 --------------
 This section contains various examples for the :class:`squidpy.im.ImageContainer` class, which is the underlying
-data structure for the :mod:`squidpy.im` module. See :ref:`tutorials_tutorial_image_container.ipynb`
+data structure for the :mod:`squidpy.im` module. See :ref:`notebooks/tutorials/tutorial_image_container.ipynb`
 for an entry point to the :class:`squidpy.im.ImageContainer`.
 
 .. nbgallery::

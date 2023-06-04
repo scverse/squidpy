@@ -8,29 +8,37 @@
 import os
 import sys
 from datetime import datetime
+from importlib.metadata import metadata
 from pathlib import Path
 
-# HERE = Path(__file__).parent
+HERE = Path(__file__).parent
 # sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
 # sys.path.insert(0, os.path.abspath("_ext"))
 
-sys.path.insert(0, str(Path(__file__).parent / "_ext"))
+sys.path.insert(0, str(HERE / "_ext"))
 
-import squidpy  # noqa: E402
+# import squidpy  # noqa: E402
 
 # -- Project information -----------------------------------------------------
 
-project = "Squidpy"
-author = squidpy.__author__
-copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
+info = metadata("squidpy")
+project_name = info["Name"]
+author = info["Author"]
+copyright = f"{datetime.now():%Y}, {author}."
+version = info["Version"]
+release = info["Version"]
+
+# project = squidpy.__name__
+# author = squidpy.__author__
+# copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
 
 github_org = "scverse"
 github_repo = "squidpy"
 github_ref = "main"
 
 # The full version, including alpha/beta/rc tags
-release = github_ref
-version = f"{release} ({squidpy.__version__})"
+# release = github_ref
+# version = f"{release} ({squidpy.__version__})"
 
 # -- General configuration ---------------------------------------------------
 
@@ -74,16 +82,25 @@ intersphinx_mapping = dict(  # noqa: C408
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
-source_suffix = [".rst", ".ipynb"]
+source_suffix = {".rst": "restructuredtext", ".ipynb": "myst-nb"}
 master_doc = "index"
 pygments_style = "sphinx"
+
+# myst
+nb_execution_mode = "off"
+myst_enable_extensions = [
+    "colon_fence",
+    "dollarmath",
+    "amsmath",
+]
+myst_heading_anchors = 2
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = [
-    "notebooks/tutorials/index.rst",
-    "notebooks/examples/index.rst",
+    "notebooks/README.rst",
+    "notebooks/CONTRIBUTING.rst",
     "release/changelog/*",
     "**.ipynb_checkpoints",
     "build",
