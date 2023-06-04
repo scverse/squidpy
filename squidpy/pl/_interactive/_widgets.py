@@ -301,20 +301,20 @@ class CBarWidget(QtWidgets.QWidget):
         self._colorbar.cmap = self._create_colormap(value)
         self._colorbar._colorbar._update()
 
-    def setClim(self, value: Tuple[float, float]) -> None:
+    def setClim(self, value: tuple[float, float]) -> None:
         if value == self._clim:
             return
 
         self._clim = value
         self.climChanged.emit(*value)
 
-    def getClim(self) -> Tuple[float, float]:
+    def getClim(self) -> tuple[float, float]:
         return self._clim
 
-    def getOclim(self) -> Tuple[float, float]:
+    def getOclim(self) -> tuple[float, float]:
         return self._oclim
 
-    def setOclim(self, value: Tuple[float, float]) -> None:
+    def setOclim(self, value: tuple[float, float]) -> None:
         # original color limit used for 0-1 normalization
         self._oclim = value
 
@@ -354,7 +354,7 @@ class RangeSlider(QRangeSlider):
 
         self.valueChanged.connect(self._onValueChange)
 
-    def _onValueChange(self, percentile: Tuple[float, float]) -> None:
+    def _onValueChange(self, percentile: tuple[float, float]) -> None:
         # TODO(michalk8): use constants
         v = self._layer.metadata["data"]
         clipped = np.clip(v, *np.percentile(v, percentile))

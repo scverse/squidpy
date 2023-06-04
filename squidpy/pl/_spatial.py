@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 from pathlib import Path
 from types import MappingProxyType
@@ -43,76 +45,76 @@ from squidpy.pl._utils import sanitize_anndata, save_fig
 @d.dedent
 def _spatial_plot(
     adata: AnnData,
-    shape: Optional[_AvailShapes] = None,
-    color: Optional[Union[str, Sequence[Optional[str]]]] = None,
-    groups: Optional[_SeqStr] = None,
-    library_id: Optional[_SeqStr] = None,
-    library_key: Optional[str] = None,
+    shape: _AvailShapes | None = None,
+    color: str | Sequence[str | None] | None = None,
+    groups: _SeqStr | None = None,
+    library_id: _SeqStr | None = None,
+    library_key: str | None = None,
     spatial_key: str = Key.obsm.spatial,
     # image
-    img: Optional[Union[bool, _SeqArray]] = True,
-    img_res_key: Optional[str] = Key.uns.image_res_key,
-    img_alpha: Optional[float] = None,
-    img_cmap: Union[Colormap, Optional[str]] = None,
-    img_channel: Optional[Union[int, List[int]]] = None,
+    img: bool | _SeqArray | None = True,
+    img_res_key: str | None = Key.uns.image_res_key,
+    img_alpha: float | None = None,
+    img_cmap: Colormap | str | None = None,
+    img_channel: int | list[int] | None = None,
     # segment
-    seg: Optional[Union[bool, _SeqArray]] = None,
-    seg_key: Optional[str] = Key.uns.image_seg_key,
-    seg_cell_id: Optional[str] = None,
-    seg_contourpx: Optional[int] = None,
+    seg: bool | _SeqArray | None = None,
+    seg_key: str | None = Key.uns.image_seg_key,
+    seg_cell_id: str | None = None,
+    seg_contourpx: int | None = None,
     seg_outline: bool = False,
     # features
-    use_raw: Optional[bool] = None,
-    layer: Optional[str] = None,
-    alt_var: Optional[str] = None,
+    use_raw: bool | None = None,
+    layer: str | None = None,
+    alt_var: str | None = None,
     # size, coords, cmap, palette
-    size: Optional[_SeqFloat] = None,
-    size_key: Optional[str] = Key.uns.size_key,
-    scale_factor: Optional[_SeqFloat] = None,
-    crop_coord: Optional[Union[_CoordTuple, Sequence[_CoordTuple]]] = None,
-    cmap: Optional[Union[str, Colormap]] = None,
+    size: _SeqFloat | None = None,
+    size_key: str | None = Key.uns.size_key,
+    scale_factor: _SeqFloat | None = None,
+    crop_coord: _CoordTuple | Sequence[_CoordTuple] | None = None,
+    cmap: str | Colormap | None = None,
     palette: Palette_t = None,
     alpha: float = 1.0,
-    norm: Optional[_Normalize] = None,
-    na_color: Union[str, Tuple[float, ...]] = (0, 0, 0, 0),
+    norm: _Normalize | None = None,
+    na_color: str | tuple[float, ...] = (0, 0, 0, 0),
     # edges
-    connectivity_key: Optional[str] = None,
+    connectivity_key: str | None = None,
     edges_width: float = 1.0,
-    edges_color: Union[str, Sequence[str], Sequence[float]] = "grey",
+    edges_color: str | Sequence[str] | Sequence[float] = "grey",
     # panels
     library_first: bool = True,
-    frameon: Optional[bool] = None,
-    wspace: Optional[float] = None,
+    frameon: bool | None = None,
+    wspace: float | None = None,
     hspace: float = 0.25,
     ncols: int = 4,
     # outline
     outline: bool = False,
-    outline_color: Tuple[str, str] = ("black", "white"),
-    outline_width: Tuple[float, float] = (0.3, 0.05),
+    outline_color: tuple[str, str] = ("black", "white"),
+    outline_width: tuple[float, float] = (0.3, 0.05),
     # legend
-    legend_loc: Optional[str] = "right margin",
-    legend_fontsize: Optional[Union[int, float, _FontSize]] = None,
-    legend_fontweight: Union[int, _FontWeight] = "bold",
-    legend_fontoutline: Optional[int] = None,
+    legend_loc: str | None = "right margin",
+    legend_fontsize: int | float | _FontSize | None = None,
+    legend_fontweight: int | _FontWeight = "bold",
+    legend_fontoutline: int | None = None,
     legend_na: bool = True,
     colorbar: bool = True,
     # scalebar
-    scalebar_dx: Optional[_SeqFloat] = None,
-    scalebar_units: Optional[_SeqStr] = None,
+    scalebar_dx: _SeqFloat | None = None,
+    scalebar_units: _SeqStr | None = None,
     # title and axis
-    title: Optional[_SeqStr] = None,
-    axis_label: Optional[_SeqStr] = None,
-    fig: Optional[Figure] = None,
-    ax: Optional[Union[Axes, Sequence[Axes]]] = None,
+    title: _SeqStr | None = None,
+    axis_label: _SeqStr | None = None,
+    fig: Figure | None = None,
+    ax: Axes | Sequence[Axes] | None = None,
     return_ax: bool = False,
-    figsize: Optional[Tuple[float, float]] = None,
-    dpi: Optional[int] = None,
-    save: Optional[Union[str, Path]] = None,
+    figsize: tuple[float, float] | None = None,
+    dpi: int | None = None,
+    save: str | Path | None = None,
     # kwargs
     scalebar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     edges_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs: Any,
-) -> Optional[Union[Axes, Sequence[Axes]]]:
+) -> Axes | Sequence[Axes] | None:
     """
     Plot spatial omics data.
 
@@ -377,9 +379,9 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
 @_wrap_signature
 def spatial_scatter(
     adata: AnnData,
-    shape: Optional[_AvailShapes] = ScatterShape.CIRCLE.v,
+    shape: _AvailShapes | None = ScatterShape.CIRCLE.v,
     **kwargs: Any,
-) -> Optional[Union[Axes, Sequence[Axes]]]:
+) -> Axes | Sequence[Axes] | None:
     """
     Plot spatial omics data with data overlayed on top.
 
@@ -422,12 +424,12 @@ def spatial_scatter(
 def spatial_segment(
     adata: AnnData,
     seg_cell_id: str,
-    seg: Optional[Union[bool, _SeqArray]] = True,
+    seg: bool | _SeqArray | None = True,
     seg_key: str = Key.uns.image_seg_key,
-    seg_contourpx: Optional[int] = None,
+    seg_contourpx: int | None = None,
     seg_outline: bool = False,
     **kwargs: Any,
-) -> Optional[Union[Axes, Sequence[Axes]]]:
+) -> Axes | Sequence[Axes] | None:
     """
     Plot spatial omics data with segmentation masks on top.
 

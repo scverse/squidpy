@@ -23,7 +23,7 @@ from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_non_empty_sequence
 from squidpy.im._coords import _NULL_PADDING, CropCoords
 
-Feature_t = Dict[str, Any]
+Feature_t = dict[str, Any]
 Channel_t = Union[int, Sequence[int]]
 
 
@@ -378,7 +378,7 @@ class FeatureMixin:
         else:
             channels = ()
 
-        features: Dict[str, Any] = {}
+        features: dict[str, Any] = {}
         label_arr = self[label_layer].sel(z=library_id)
         label_arr_0 = label_arr[..., 0].values
         # calculate features that do not depend on the intensity image

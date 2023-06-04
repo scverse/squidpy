@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pickle
 import sys
 import warnings
@@ -234,12 +236,12 @@ def napari_cont() -> ImageContainer:
 
 
 @pytest.fixture()
-def interactions(adata: AnnData) -> Tuple[Sequence[str], Sequence[str]]:
+def interactions(adata: AnnData) -> tuple[Sequence[str], Sequence[str]]:
     return tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))  # type: ignore
 
 
 @pytest.fixture()
-def complexes(adata: AnnData) -> Sequence[Tuple[str, str]]:
+def complexes(adata: AnnData) -> Sequence[tuple[str, str]]:
     g = adata.raw.var_names
     return [
         (g[0], g[1]),
@@ -332,7 +334,7 @@ def non_visium_adata():
     return adata
 
 
-def _decorate(fn: Callable, clsname: str, name: Optional[str] = None) -> Callable:
+def _decorate(fn: Callable, clsname: str, name: str | None = None) -> Callable:
     @wraps(fn)
     def save_and_compare(self, *args, **kwargs):
         fn(self, *args, **kwargs)
@@ -363,7 +365,7 @@ class PlotTesterMeta(ABCMeta):
 # but for some reason, pytest erases the metaclass info
 class PlotTester(ABC):
     @classmethod
-    def compare(cls, basename: str, tolerance: Optional[float] = None):
+    def compare(cls, basename: str, tolerance: float | None = None):
         ACTUAL.mkdir(parents=True, exist_ok=True)
         out_path = ACTUAL / f"{basename}.png"
 

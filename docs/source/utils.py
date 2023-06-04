@@ -55,7 +55,7 @@ def _fetch_notebooks(repo_url: str) -> None:
 
 
 class MaybeMiniGallery(MiniGallery):
-    def run(self) -> List[str]:
+    def run(self) -> list[str]:
         config = self.state.document.settings.env.config
         backreferences_dir = config.sphinx_gallery_conf["backreferences_dir"]
         obj_list = self.arguments[0].split()
@@ -75,7 +75,7 @@ class MaybeMiniGallery(MiniGallery):
             return []
 
 
-def _get_thumbnails(root: Union[str, Path]) -> Dict[str, str]:
+def _get_thumbnails(root: Union[str, Path]) -> dict[str, str]:
     res = {}
     root = Path(root)
     thumb_path = Path(__file__).parent.parent.parent / "docs" / "source"

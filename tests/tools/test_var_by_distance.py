@@ -17,10 +17,10 @@ class TestVarDist:
     def test_design_matrix_several_slides(
         self,
         adata_mibitof: AnnData,
-        groups: str | List[str],
+        groups: str | list[str],
         cluster_key: str,
         library_key: str | None,
-        covariates: str | List[str] | None,
+        covariates: str | list[str] | None,
     ):
         df = var_by_distance(
             adata_mibitof,

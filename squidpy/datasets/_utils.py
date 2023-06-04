@@ -24,7 +24,7 @@ class Metadata(ABC):
 
     doc_header: Optional[str] = field(default=None, repr=False)
     path: Optional[PathLike] = field(default=None, repr=False)
-    shape: Optional[Tuple[int, int]] = field(default=None, repr=False)
+    shape: Optional[tuple[int, int]] = field(default=None, repr=False)
     library_id: Optional[Union[str, Sequence[str]]] = field(default=None, repr=False)
 
     _DOC_FMT = ""
@@ -48,7 +48,7 @@ class Metadata(ABC):
     def _create_signature(self) -> Signature:
         pass
 
-    def _create_function(self, name: str, glob_ns: Dict[str, Any]) -> None:
+    def _create_function(self, name: str, glob_ns: dict[str, Any]) -> None:
         if name in globals():
             raise KeyError(f"Function name `{name}` is already present in `{sorted(globals().keys())}`.")
 

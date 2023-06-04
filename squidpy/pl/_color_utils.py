@@ -32,7 +32,7 @@ def _maybe_set_colors(
 
 def _get_palette(
     adata: AnnData,
-    cluster_key: Optional[str],
+    cluster_key: str | None,
     categories: Sequence[Any],
     palette: Palette_t = None,
     alpha: float = 1.0,

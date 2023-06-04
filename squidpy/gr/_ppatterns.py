@@ -461,8 +461,8 @@ def _p_value_calc(
     score: NDArrayA,
     sims: NDArrayA | None,
     weights: spmatrix | NDArrayA,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     """
     Handle p-value calculation for spatial autocorrelation function.
 
@@ -515,7 +515,7 @@ def _p_value_calc(
     return results
 
 
-def _analytic_pval(score: NDArrayA, g: spmatrix | NDArrayA, params: Dict[str, Any]) -> tuple[NDArrayA, float]:
+def _analytic_pval(score: NDArrayA, g: spmatrix | NDArrayA, params: dict[str, Any]) -> tuple[NDArrayA, float]:
     """
     Analytic p-value computation.
 

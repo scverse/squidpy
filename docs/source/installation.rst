@@ -1,6 +1,6 @@
 Installation
 ============
-Squidpy requires Python version >= 3.8 to run.
+Squidpy requires Python version >= 9 to run.
 
 PyPI
 ----
