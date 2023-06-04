@@ -32,6 +32,10 @@ Bugfixes
   `@djlee1 <https://github.com/djlee1>`__
   `#679 <https://github.com/scverse/squidpy/pull/679>`__
 
+- Fix previously updated cell metadata index conversion.
+  `@dfhannum <https://github.com/dfhannum>`__
+  `#692 <https://github.com/scverse/squidpy/pull/692>`__
+
 Miscellaneous
 -------------
 
@@ -48,6 +52,10 @@ Miscellaneous
   `@michalk8 <https://github.com/michalk8>`__
   `#672 <https://github.com/scverse/squidpy/pull/672>`__
 
+- Add :attr:`percentile` option to :func:`squidpy.gr.spatial_neighbors` to filter neighbor graph using percentile of distances threshold.
+  `@LLehner <https://github.com/LLehner>`__
+  `#690 <https://github.com/scverse/squidpy/pull/690>`__
+
 Documentation
 -------------
 
@@ -62,10 +70,6 @@ Documentation
 - Updated the quality control tutorials for Vizgen, Xenium and Nanostring.
   `@pakiessling <https://github.com/pakiessling>`__
    `#110 <https://github.com/scverse/squidpy_notebooks/pull/110>`__
-
-- Improved example for :func:`squidpy.tl.var_by_distance` and :func:`squidpy.pl.var_by_distance`.
-  `@LLehner <https://github.com/LLehner>`__
-   `#115 <https://github.com/scverse/squidpy_notebooks/pull/115>`__
 
 - Improved example for :func:`squidpy.tl.var_by_distance` and :func:`squidpy.pl.var_by_distance`.
   `@LLehner <https://github.com/LLehner>`__
