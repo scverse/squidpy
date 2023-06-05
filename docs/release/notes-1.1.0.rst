@@ -33,8 +33,8 @@ Features
 
 - Replace ``squidpy.gr.moran`` with :func:`squidpy.gr.spatial_autocorr`, which implements both Moran's I and
   Geary's C.
- `#317 <https://github.com/scverse/squidpy/pull/317>`__
- `@giovp <https://github.com/giovp>`__
+  `#317 <https://github.com/scverse/squidpy/pull/317>`__
+  `@giovp <https://github.com/giovp>`__
 
 - Add option to compute graph from Delaunay triangulation in :func:`squidpy.gr.spatial_neighbors`.
   `#322 <https://github.com/scverse/squidpy/pull/322>`__
