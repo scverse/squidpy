@@ -11,6 +11,8 @@ from datetime import datetime
 from importlib.metadata import metadata
 from pathlib import Path
 
+from sphinx.application import Sphinx
+
 HERE = Path(__file__).parent
 # sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
 # sys.path.insert(0, os.path.abspath("_ext"))
@@ -159,3 +161,10 @@ html_static_path = ["_static"]
 html_logo = "_static/img/squidpy_horizontal.png"
 html_theme_options = {"navigation_depth": 4, "logo_only": True}
 html_show_sphinx = False
+
+
+def setup(app: Sphinx) -> None:
+    app.add_css_file("css/custom.css")
+    app.add_css_file("css/sphinx_gallery.css")
+    app.add_css_file("css/nbsphinx.css")
+    app.add_css_file("css/dataframe.css")  # had to add this manually
