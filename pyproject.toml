@@ -79,8 +79,8 @@ interactive = [
     "napari[pyqt5]==0.4.15"
 ]
 dev = [
-    "pre-commit>=2.9.0",
-    "tox>=3.26.0",
+    "pre-commit>=3.0.0",
+    "tox>=4.0.0",
 ]
 test = [
     "pytest>=7",
@@ -92,7 +92,7 @@ test = [
 docs = [
     "ipython",
     "ipywidgets>=8.0.0",
-    "sphinx>=5.1.1",
+    "sphinx>=5.3",
     "sphinx-autodoc-annotation",
     "sphinx-autodoc-typehints>=1.10.3",
     "sphinx_rtd_theme",

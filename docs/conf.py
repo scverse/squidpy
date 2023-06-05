@@ -8,7 +8,8 @@
 import os
 import sys
 from datetime import datetime
-from importlib.metadata import metadata
+
+# from importlib.metadata import metadata
 from pathlib import Path
 
 from sphinx.application import Sphinx
@@ -23,24 +24,35 @@ sys.path.insert(0, str(HERE / "_ext"))
 
 # -- Project information -----------------------------------------------------
 
-info = metadata("squidpy")
-project_name = info["Name"]
-author = info["Author"]
-copyright = f"{datetime.now():%Y}, {author}."
-version = info["Version"]
-release = info["Version"]
+import squidpy  # noqa: E402
 
-# project = squidpy.__name__
-# author = squidpy.__author__
-# copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
+sys.path.insert(0, str(Path(__file__).parent / "_ext"))
 
-github_org = "scverse"
-github_repo = "squidpy"
-github_ref = "main"
+# -- Project information -----------------------------------------------------
 
-# The full version, including alpha/beta/rc tags
-# release = github_ref
-# version = f"{release} ({squidpy.__version__})"
+project = squidpy.__name__
+author = squidpy.__author__
+version = squidpy.__version__
+copyright = f"{datetime.now():%Y}, scverse"
+
+# info = metadata("squidpy")
+# project_name = info["Name"]
+# author = info["Author"]
+# copyright = f"{datetime.now():%Y}, {author}."
+# version = info["Version"]
+# release = info["Version"]
+
+# # project = squidpy.__name__
+# # author = squidpy.__author__
+# # copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
+
+# github_org = "scverse"
+# github_repo = "squidpy"
+# github_ref = "main"
+
+# # The full version, including alpha/beta/rc tags
+# # release = github_ref
+# # version = f"{release} ({squidpy.__version__})"
 
 # -- General configuration ---------------------------------------------------
 
