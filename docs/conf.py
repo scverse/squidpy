@@ -20,8 +20,6 @@ HERE = Path(__file__).parent
 
 sys.path.insert(0, str(HERE / "_ext"))
 
-# import squidpy  # noqa: E402
-
 # -- Project information -----------------------------------------------------
 
 import squidpy  # noqa: E402
