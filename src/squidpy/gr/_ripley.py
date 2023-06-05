@@ -61,15 +61,15 @@ def ripley(
 
     `{rp.L.s!r}` we first need to compute {math}`K(t)`, which is defined as:
 
-    .. math::
-
+    ```{glue:math}
         K(t) = \frac{{1}}{{\lambda}} \sum_{{i \ne j}} \frac{{I(d_{{i,j}}<t)}}{{n}}
+    ```
 
     and then we apply a variance-stabilizing transformation:
 
-    .. math::
-
+    ```{glue:math}
         L(t) = (\frac{{K(t)}}{{\pi}})^{{1/2}}
+    ```
 
     Parameters
     ----------
