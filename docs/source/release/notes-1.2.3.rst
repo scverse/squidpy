@@ -1,4 +1,4 @@
-Squidpy 1.2.2 (2022-10-18)
+Squidpy 1.2.3 (2022-10-18)
 ==========================
 
 Bugfixes
@@ -23,6 +23,7 @@ Bugfixes
 - Fix ligrec from pandas update.
   `@giovp <https://github.com/giovp>`__
   `#609 <https://github.com/scverse/squidpy/pull/609>`__
+
 
 Miscellaneous
 -------------
@@ -50,19 +51,10 @@ Miscellaneous
 - Fix release notes and misc.
   `@giovp <https://github.com/giovp>`__
   `#617 <https://github.com/scverse/squidpy/pull/617>`__
+  
 
 Documentation
 -------------
-
-<<<<<<< HEAD
-- Added a squidpy tutorial for Xenium data.
-  `@LLehner <https://github.com/LLehner>`__
-   `#102 <https://github.com/scverse/squidpy_notebooks/pull/102>`__
-
-- Added a squidpy tutorial for Xenium data.
-  `@LLehner <https://github.com/LLehner>`__
-   `#102 <https://github.com/scverse/squidpy_notebooks/pull/102>`__
-
 - New tutorial for 10x Genomics Xenium data.
   `@LLehner <https://github.com/LLehner>`__
   `#615 <https://github.com/scverse/squidpy/pull/615>`__
@@ -70,8 +62,3 @@ Documentation
 - Added tutorial notebook for vizgen mouse liver data.
   `@giovp <https://github.com/giovp>`__
   `#106 <https://github.com/scverse/squidpy_notebooks/pull/106>`__
-=======
-- New tutorial for 10x Genomics Xenium data.
-  `@LLehner <https://github.com/LLehner>`__
-  `#615 <https://github.com/scverse/squidpy/pull/615>`__
->>>>>>> ad26b5695cca5e390b43f3cbf9306b561013cd4c

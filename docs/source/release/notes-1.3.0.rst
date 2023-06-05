@@ -1,12 +1,14 @@
-Squidpy 1.2.2 (2022-)
+Squidpy 1.3.0 (2022-)
 ==========================
 
 Features
 --------
+
 - Add :func:`squidpy.tl.var_by_distance` to calculate distances to anchor points and store results in a design matrix.
 - Add :func:`squidpy.pl.var_by_distance` to visualize variables such as gene expression by distance to an anchor point.
   `@LLehner <https://github.com/LLehner>`__
   `#591 <https://github.com/scverse/squidpy/pull/591>`__
+
 
 Bugfixes
 --------
@@ -36,6 +38,7 @@ Bugfixes
   `@dfhannum <https://github.com/dfhannum>`__
   `#692 <https://github.com/scverse/squidpy/pull/692>`__
 
+
 Miscellaneous
 -------------
 
@@ -55,6 +58,7 @@ Miscellaneous
 - Add :attr:`percentile` option to :func:`squidpy.gr.spatial_neighbors` to filter neighbor graph using percentile of distances threshold.
   `@LLehner <https://github.com/LLehner>`__
   `#690 <https://github.com/scverse/squidpy/pull/690>`__
+  
 
 Documentation
 -------------
