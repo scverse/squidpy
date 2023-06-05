@@ -90,7 +90,7 @@ def ripley(
     n_observations
         How many observations to generate for the Spatial Poisson Point Process.
     max_dist
-        Maximum distances for the support. If `None`, `max_dist=`{math}`\sqrt{{area \over 2}}`.
+        Maximum distances for the support. If `None`, `max_dist=`:math:`\sqrt{{area \over 2}}`.
     n_steps
         Number of steps for the support.
     %(seed)s

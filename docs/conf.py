@@ -162,6 +162,7 @@ linkcheck_ignore = [
     "https://doi.org/10.1126/science.aau5324",
     "https://doi.org/10.1093/bioinformatics/btab164",
     "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2716260/",
+    "https://raw.githubusercontent.com/scverse/squidpy/main/docs/_static/img/figure1.png",
 ]
 
 # Add any paths that contain custom static files (such as style sheets) here,
