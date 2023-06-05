@@ -51,7 +51,7 @@ Miscellaneous
 - Fix release notes and misc.
   `@giovp <https://github.com/giovp>`__
   `#617 <https://github.com/scverse/squidpy/pull/617>`__
-  
+
 
 Documentation
 -------------

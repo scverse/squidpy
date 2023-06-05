@@ -58,7 +58,7 @@ Miscellaneous
 - Add :attr:`percentile` option to :func:`squidpy.gr.spatial_neighbors` to filter neighbor graph using percentile of distances threshold.
   `@LLehner <https://github.com/LLehner>`__
   `#690 <https://github.com/scverse/squidpy/pull/690>`__
-  
+
 
 Documentation
 -------------
