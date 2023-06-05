@@ -207,8 +207,8 @@ class FeatureMixin:
         for different combinations of distance and angle.
 
         The distance defines the pixel difference of co-occurrence. The angle define the direction along which
-        we check for co-occurrence. The GLCM includes the number of times that gray-level {math}`j` occurs at a distance
-        {math}`d` and at an angle theta from gray-level {math}`i`.
+        we check for co-occurrence. The GLCM includes the number of times that gray-level :math:`j` occurs at a distance
+        :math:`d` and at an angle theta from gray-level :math:`i`.
 
         Parameters
         ----------

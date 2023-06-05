@@ -37,7 +37,7 @@ _template = """
 @njit(dt[:, :](dt[:], dt[:], dt[:]), parallel={parallel}, fastmath=True)
 def _nenrich_{n_cls}_{parallel}(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA) -> np.ndarray:
     '''
-    Count how many times clusters {math}`i` and {math}`j` are connected.
+    Count how many times clusters :math:`i` and :math:`j` are connected.
 
     Parameters
     ----------

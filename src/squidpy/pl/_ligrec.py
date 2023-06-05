@@ -150,8 +150,8 @@ def ligrec(
 
     The result was computed by :func:`squidpy.gr.ligrec`.
 
-    {math}`molecule_1` belongs to the source clusters displayed on the top (or on the right, if ``swap_axes = True``,
-    whereas {math}`molecule_2` belongs to the target clusters.
+    :math:`molecule_1` belongs to the source clusters displayed on the top (or on the right, if ``swap_axes = True``,
+    whereas :math:`molecule_2` belongs to the target clusters.
 
     Parameters
     ----------
