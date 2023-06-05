@@ -54,22 +54,24 @@ def ripley(
 
         F(t),G(t)=P( d_{{i,j}} \le t )
 
-    Where {math}`d_{{i,j}}` represents:
+    Where :math:`d_{{i,j}}` represents:
 
         - distances to a random Spatial Poisson Point Process for `{rp.F.s!r}`.
         - distances to any other point of the dataset for `{rp.G.s!r}`.
 
-    `{rp.L.s!r}` we first need to compute {math}`K(t)`, which is defined as:
+    `{rp.L.s!r}` we first need to compute :math:`K(t)`, which is defined as:
 
-    ```{glue:math}
+    .. math::
+
         K(t) = \frac{{1}}{{\lambda}} \sum_{{i \ne j}} \frac{{I(d_{{i,j}}<t)}}{{n}}
-    ```
+
 
     and then we apply a variance-stabilizing transformation:
 
-    ```{glue:math}
+    .. math::
+
         L(t) = (\frac{{K(t)}}{{\pi}})^{{1/2}}
-    ```
+
 
     Parameters
     ----------
