@@ -64,6 +64,7 @@ extensions = [
     "sphinx_autodoc_typehints",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
+    "sphinx.ext.mathjax",
     "sphinxcontrib.bibtex",
     "sphinx_copybutton",
     "myst_nb",
