@@ -1,4 +1,4 @@
-Squidpy 1.2.2 (2022-10-18)
+Squidpy 1.2.3 (2022-10-18)
 ==========================
 
 Bugfixes
@@ -23,6 +23,7 @@ Bugfixes
 - Fix ligrec from pandas update.
   `@giovp <https://github.com/giovp>`__
   `#609 <https://github.com/scverse/squidpy/pull/609>`__
+
 
 Miscellaneous
 -------------
@@ -51,12 +52,9 @@ Miscellaneous
   `@giovp <https://github.com/giovp>`__
   `#617 <https://github.com/scverse/squidpy/pull/617>`__
 
+
 Documentation
 -------------
-
-- Added a squidpy tutorial for Xenium data.
-  `@LLehner <https://github.com/LLehner>`__
-  `#102 <https://github.com/scverse/squidpy_notebooks/pull/102>`__
 
 - Added a squidpy tutorial for Xenium data.
   `@LLehner <https://github.com/LLehner>`__
