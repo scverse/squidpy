@@ -21,6 +21,8 @@ from scipy.sparse import (
 from scipy.spatial import Delaunay
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 from sklearn.neighbors import NearestNeighbors
+from spatialdata import SpatialData
+from spatialdata_io.utils import get_table
 
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
@@ -39,7 +41,7 @@ __all__ = ["spatial_neighbors"]
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)
 def spatial_neighbors(
-    adata: AnnData,
+    adata: AnnData | SpatialData,
     spatial_key: str = Key.obsm.spatial,
     library_key: str | None = None,
     coord_type: str | CoordType | None = None,
@@ -106,6 +108,8 @@ def spatial_neighbors(
         - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - the spatial distances.
         - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - :class:`dict` containing parameters.
     """
+    if isinstance(adata, SpatialData):
+        adata = get_table(adata)
     _assert_positive(n_rings, name="n_rings")
     _assert_positive(n_neighs, name="n_neighs")
     _assert_spatial_basis(adata, spatial_key)

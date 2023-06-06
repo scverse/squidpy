@@ -26,6 +26,8 @@ from scipy import stats
 from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
+from spatialdata import SpatialData
+from spatialdata_io.utils import get_table
 from statsmodels.stats.multitest import multipletests
 
 from squidpy._constants._constants import SpatialAutocorr
@@ -54,7 +56,7 @@ fp = np.float32
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
 def spatial_autocorr(
-    adata: AnnData,
+    adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: str | int | Sequence[str] | Sequence[int] | None = None,
     mode: Literal["moran", "geary"] = SpatialAutocorr.MORAN.s,  # type: ignore[assignment]
@@ -136,6 +138,8 @@ def spatial_autocorr(
         - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe, if ``mode = {sp.MORAN.s!r}``.
         - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
+    if isinstance(adata, SpatialData):
+        adata = get_table(adata)
     _assert_connectivity_key(adata, connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
@@ -335,7 +339,7 @@ def _co_occurrence_helper(
 
 @d.dedent
 def co_occurrence(
-    adata: AnnData,
+    adata: AnnData | SpatialData,
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
@@ -373,6 +377,8 @@ def co_occurrence(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
           computed at ``interval``.
     """
+    if isinstance(adata, SpatialData):
+        adata = get_table(adata)
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
 

@@ -16,6 +16,8 @@ from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.distance import pdist
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import LabelEncoder
+from spatialdata import SpatialData
+from spatialdata_io.utils import get_table
 
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
@@ -29,7 +31,7 @@ __all__ = ["ripley"]
 @d.dedent
 @inject_docs(key=Key.obsm.spatial, rp=RipleyStat)
 def ripley(
-    adata: AnnData,
+    adata: AnnData | SpatialData,
     cluster_key: str,
     mode: Literal["F", "G", "L"] = "F",
     spatial_key: str = Key.obsm.spatial,
@@ -104,6 +106,8 @@ def ripley(
     `Wikipedia <https://en.wikipedia.org/wiki/Spatial_descriptive_statistics#Ripley's_K_and_L_functions>`_
     or :cite:`Baddeley2015-lm`.
     """
+    if isinstance(adata, SpatialData):
+        adata = get_table(adata)
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
     coordinates = adata.obsm[spatial_key]
