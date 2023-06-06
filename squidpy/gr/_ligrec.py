@@ -15,7 +15,7 @@ from numba import njit, prange  # noqa: F401
 from scanpy import logging as logg
 from scipy.sparse import csc_matrix
 from spatialdata import SpatialData
-from spatialdata_io.utils import get_table
+
 
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
@@ -650,7 +650,7 @@ def ligrec(
     %(ligrec_test_returns)s
     """  # noqa: D400
     if isinstance(adata, SpatialData):
-        adata = get_table(adata)
+        adata = adata.table
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)

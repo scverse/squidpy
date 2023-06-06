@@ -27,7 +27,7 @@ from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
-from spatialdata_io.utils import get_table
+
 from statsmodels.stats.multitest import multipletests
 
 from squidpy._constants._constants import SpatialAutocorr
@@ -139,7 +139,7 @@ def spatial_autocorr(
         - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
     if isinstance(adata, SpatialData):
-        adata = get_table(adata)
+        adata = adata.table
     _assert_connectivity_key(adata, connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
@@ -378,7 +378,7 @@ def co_occurrence(
           computed at ``interval``.
     """
     if isinstance(adata, SpatialData):
-        adata = get_table(adata)
+        adata = adata.table
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
 

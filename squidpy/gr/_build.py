@@ -22,7 +22,7 @@ from scipy.spatial import Delaunay
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 from sklearn.neighbors import NearestNeighbors
 from spatialdata import SpatialData
-from spatialdata_io.utils import get_table
+
 
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
@@ -109,7 +109,7 @@ def spatial_neighbors(
         - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - :class:`dict` containing parameters.
     """
     if isinstance(adata, SpatialData):
-        adata = get_table(adata)
+        adata = adata.table
     _assert_positive(n_rings, name="n_rings")
     _assert_positive(n_neighs, name="n_neighs")
     _assert_spatial_basis(adata, spatial_key)

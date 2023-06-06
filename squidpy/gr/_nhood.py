@@ -18,7 +18,7 @@ from anndata import AnnData
 from numba import njit, prange  # noqa: F401
 from scanpy import logging as logg
 from spatialdata import SpatialData
-from spatialdata_io.utils import get_table
+
 
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
@@ -158,7 +158,7 @@ def nhood_enrichment(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
     """
     if isinstance(adata, SpatialData):
-        adata = get_table(adata)
+        adata = adata.table
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -241,7 +241,7 @@ def centrality_scores(
           as mentioned above.
     """
     if isinstance(adata, SpatialData):
-        adata = get_table(adata)
+        adata = adata.table
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -323,7 +323,7 @@ def interaction_matrix(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_interactions']`` - the interaction matrix.
     """
     if isinstance(adata, SpatialData):
-        adata = get_table(adata)
+        adata = adata.table
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)

@@ -15,7 +15,7 @@ from scanpy import logging as logg
 from scipy.sparse import csr_matrix, issparse, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData
-from spatialdata_io.utils import get_table
+
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -99,7 +99,7 @@ def sepal(
     consider re-running the function with increased ``n_iter``.
     """
     if isinstance(adata, SpatialData):
-        adata = get_table(adata)
+        adata = adata.table
     _assert_connectivity_key(adata, connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
     if max_neighs not in (4, 6):

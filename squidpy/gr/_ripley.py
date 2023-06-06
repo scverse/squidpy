@@ -17,7 +17,7 @@ from scipy.spatial.distance import pdist
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import LabelEncoder
 from spatialdata import SpatialData
-from spatialdata_io.utils import get_table
+
 
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
@@ -107,7 +107,7 @@ def ripley(
     or :cite:`Baddeley2015-lm`.
     """
     if isinstance(adata, SpatialData):
-        adata = get_table(adata)
+        adata = adata.table
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
     coordinates = adata.obsm[spatial_key]
