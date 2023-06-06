@@ -19,7 +19,6 @@ from numba import njit, prange  # noqa: F401
 from scanpy import logging as logg
 from spatialdata import SpatialData
 
-
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs

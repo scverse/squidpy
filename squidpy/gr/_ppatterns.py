@@ -27,7 +27,6 @@ from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
-
 from statsmodels.stats.multitest import multipletests
 
 from squidpy._constants._constants import SpatialAutocorr
