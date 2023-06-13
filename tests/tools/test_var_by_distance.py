@@ -4,7 +4,6 @@ from typing import List
 
 import pytest
 from anndata import AnnData
-
 from squidpy.tl import var_by_distance
 from squidpy.tl._var_by_distance import _normalize_distances
 

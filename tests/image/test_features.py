@@ -5,7 +5,6 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from pytest_mock import MockerFixture
-
 from squidpy._constants._constants import ImageFeature
 from squidpy.im._container import ImageContainer
 from squidpy.im._feature import calculate_image_features

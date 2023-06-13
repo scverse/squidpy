@@ -1,7 +1,6 @@
 import numpy as np
 from anndata import AnnData
 from pandas.testing import assert_frame_equal
-
 from squidpy.gr import sepal, spatial_neighbors
 
 UNS_KEY = "sepal_score"

@@ -8,39 +8,49 @@
 import os
 import sys
 from datetime import datetime
+
+# from importlib.metadata import metadata
 from pathlib import Path
 
 from sphinx.application import Sphinx
-from sphinx_gallery.gen_gallery import DEFAULT_GALLERY_CONF
 
 HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
-sys.path.insert(0, os.path.abspath("_ext"))
+# sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
+# sys.path.insert(0, os.path.abspath("_ext"))
 
-import squidpy  # noqa: E402
-from docs.source.utils import (  # noqa: E402
-    MaybeMiniGallery,
-    _fetch_notebooks,
-    _get_thumbnails,
-)
-
-needs_sphinx = "4.0"
+sys.path.insert(0, str(HERE / "_ext"))
 
 # -- Project information -----------------------------------------------------
 
-project = "Squidpy"
+import squidpy  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).parent / "_ext"))
+
+# -- Project information -----------------------------------------------------
+
+project = squidpy.__name__
 author = squidpy.__author__
-copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
+version = squidpy.__version__
+copyright = f"{datetime.now():%Y}, scverse"
 
-github_org = "scverse"
-github_repo = "squidpy"
-github_ref = "main"
-github_nb_repo = "squidpy_notebooks"
-_fetch_notebooks(repo_url=f"https://github.com/{github_org}/{github_nb_repo}")
+# info = metadata("squidpy")
+# project_name = info["Name"]
+# author = info["Author"]
+# copyright = f"{datetime.now():%Y}, {author}."
+# version = info["Version"]
+# release = info["Version"]
 
-# The full version, including alpha/beta/rc tags
-release = github_ref
-version = f"{release} ({squidpy.__version__})"
+# # project = squidpy.__name__
+# # author = squidpy.__author__
+# # copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
+
+# github_org = "scverse"
+# github_repo = "squidpy"
+# github_ref = "main"
+
+# # The full version, including alpha/beta/rc tags
+# # release = github_ref
+# # version = f"{release} ({squidpy.__version__})"
 
 # -- General configuration ---------------------------------------------------
 
@@ -54,9 +64,11 @@ extensions = [
     "sphinx_autodoc_typehints",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
-    "sphinx_gallery.load_style",
-    "nbsphinx",
+    "sphinx.ext.mathjax",
     "sphinxcontrib.bibtex",
+    "sphinx_copybutton",
+    "myst_nb",
+    "nbsphinx",
     "typed_returns",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
@@ -83,20 +95,28 @@ intersphinx_mapping = dict(  # noqa: C408
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
-source_suffix = [".rst", ".ipynb"]
+source_suffix = {".rst": "restructuredtext", ".ipynb": "myst-nb"}
 master_doc = "index"
 pygments_style = "sphinx"
+
+# myst
+nb_execution_mode = "off"
+myst_enable_extensions = [
+    "colon_fence",
+    "dollarmath",
+    "amsmath",
+]
+myst_heading_anchors = 2
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = [
-    "auto_*/**.ipynb",
-    "auto_*/**.md5",
-    "auto_*/**.py",
-    "auto_*/**/index.rst",
+    "notebooks/README.rst",
+    "notebooks/CONTRIBUTING.rst",
     "release/changelog/*",
     "**.ipynb_checkpoints",
+    "build",
 ]
 suppress_warnings = ["download.not_readable", "git.too_shallow"]
 
@@ -142,6 +162,7 @@ linkcheck_ignore = [
     "https://doi.org/10.1126/science.aau5324",
     "https://doi.org/10.1093/bioinformatics/btab164",
     "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2716260/",
+    "https://raw.githubusercontent.com/scverse/squidpy/main/docs/_static/img/figure1.png",
 ]
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -153,35 +174,8 @@ html_logo = "_static/img/squidpy_horizontal.png"
 html_theme_options = {"navigation_depth": 4, "logo_only": True}
 html_show_sphinx = False
 
-nbsphinx_thumbnails = {**_get_thumbnails("auto_tutorials"), **_get_thumbnails("auto_examples")}
-nbsphinx_execute_arguments = [
-    "--InlineBackend.figure_formats={'png', 'pdf'}",  # correct figure resize
-    "--InlineBackend.rc={'figure.dpi': 96}",
-]
-nbsphinx_prolog = r"""
-{% set docname = 'docs/source/' + env.doc2path(env.docname, base=None) %}
-.. raw:: html
-
-    <div class="binder-badge docutils container">
-        <a class="reference external image-reference"
-           href="https://mybinder.org/v2/gh/scverse/squidpy_notebooks/{{ env.config.release|e }}?filepath={{ docname|e }}">
-        <img alt="Launch binder" src="https://mybinder.org/badge_logo.svg" width="150px">
-        </a>
-    </div>
-"""  # noqa: E501
-
 
 def setup(app: Sphinx) -> None:
-    DEFAULT_GALLERY_CONF["src_dir"] = str(HERE)
-    DEFAULT_GALLERY_CONF["backreferences_dir"] = "gen_modules/backreferences"
-    DEFAULT_GALLERY_CONF["download_all_examples"] = False
-    DEFAULT_GALLERY_CONF["show_signature"] = False
-    DEFAULT_GALLERY_CONF["log_level"] = {"backreference_missing": "info"}
-    DEFAULT_GALLERY_CONF["gallery_dirs"] = ["auto_examples", "auto_tutorials"]
-    DEFAULT_GALLERY_CONF["default_thumb_file"] = "docs/source/_static/img/squidpy_vertical.png"
-
-    app.add_config_value("sphinx_gallery_conf", DEFAULT_GALLERY_CONF, "html")
-    app.add_directive("minigallery", MaybeMiniGallery)
     app.add_css_file("css/custom.css")
     app.add_css_file("css/sphinx_gallery.css")
     app.add_css_file("css/nbsphinx.css")
