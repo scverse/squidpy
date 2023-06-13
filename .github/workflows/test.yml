@@ -32,9 +32,9 @@ jobs:
             PYTHON: ${{ matrix.python }}
 
         steps:
-            - uses: actions/checkout@v2
+            - uses: actions/checkout@v3
             - name: Set up Python ${{ matrix.python }}
-              uses: actions/setup-python@v2
+              uses: actions/setup-python@v4
               with:
                   python-version: ${{ matrix.python }}
 
@@ -44,7 +44,7 @@ jobs:
                   echo "::set-output name=dir::$(pip cache dir)"
 
             - name: Restore pip cache
-              uses: actions/cache@v2
+              uses: actions/cache@v3
               with:
                   path: ${{ steps.pip-cache-dir.outputs.dir }}
                   key: pip-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}
@@ -62,7 +62,7 @@ jobs:
 
             - name: Restore data cache
               id: data-cache
-              uses: actions/cache@v2
+              uses: actions/cache@v3
               with:
                   path: |
                       ~/.cache/squidpy/*.h5ad
@@ -76,7 +76,7 @@ jobs:
             # caching .tox is not encouraged, but since we're private and this shaves off ~1min from the step
             # if any problems occur and/or once the package is public, this can be removed
             - name: Restore tox cache
-              uses: actions/cache@v2
+              uses: actions/cache@v3
               with:
                   path: .tox
                   key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}

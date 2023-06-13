@@ -65,11 +65,13 @@ def ripley(
 
         K(t) = \frac{{1}}{{\lambda}} \sum_{{i \ne j}} \frac{{I(d_{{i,j}}<t)}}{{n}}
 
+
     and then we apply a variance-stabilizing transformation:
 
     .. math::
 
         L(t) = (\frac{{K(t)}}{{\pi}})^{{1/2}}
+
 
     Parameters
     ----------

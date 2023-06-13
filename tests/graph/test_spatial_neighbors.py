@@ -5,7 +5,6 @@ import numpy as np
 import pytest
 from anndata import AnnData
 from scipy.sparse import isspmatrix_csr
-
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_neighbors
 from squidpy.gr._build import _build_connectivity

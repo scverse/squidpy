@@ -8,7 +8,7 @@ It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity 
 It provides analysis tools that leverages the spatial coordinates of the data, as well as
 tissue images if available.
 
-.. image:: https://raw.githubusercontent.com/scverse/squidpy/main/docs/source/_static/img/figure1.png
+.. image:: https://raw.githubusercontent.com/scverse/squidpy/main/docs/_static/img/figure1.png
     :alt: Squidpy title figure
     :width: 400px
     :align: center
@@ -27,7 +27,7 @@ Squidpy's key applications
 
 Getting started with Squidpy
 ----------------------------
-- Browse :doc:`tutorials </tutorials>` and :doc:`examples </examples>`.
+- Browse :doc:`notebooks/tutorials/index` and :doc:`notebooks/examples/index`.
 - Discuss usage on `discourse`_ and development on `github`_.
 
 Contributing to Squidpy
@@ -50,8 +50,8 @@ We are happy about any contributions! Before you start, check out our `contribut
     :maxdepth: 2
     :hidden:
 
-    tutorials
-    examples
+    notebooks/tutorials/index
+    notebooks/examples/index
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/squidpy.svg
     :target: https://pypi.org/project/squidpy/

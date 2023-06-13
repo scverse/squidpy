@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 from anndata.tests.helpers import assert_adata_equal
 from scanpy._settings import settings
-
 from squidpy.datasets import visium
 
 

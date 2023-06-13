@@ -1,6 +1,119 @@
 [build-system]
-requires = ['setuptools', 'setuptools_scm']
-build-backend = 'setuptools.build_meta'
+requires = ["setuptools>=61", "setuptools-scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "squidpy"
+dynamic = ["version"]
+description = "Spatial Single Cell Analysis in Python"
+readme = "README.rst"
+requires-python = ">=3.9"
+license = {file = "LICENSE"}
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Typing :: Typed",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Environment :: Console",
+    "Framework :: Jupyter",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+keywords = [
+    "single-cell",
+    "bio-informatics",
+    "spatial transcriptomics",
+    "spatial data analysis",
+    "image analysis",
+    "spatial data analysis",
+]
+authors = [
+    {name = "Giovanni Palla"},
+    {name = "Michal Klein"},
+    {name = "Hannah Spitzer"},
+]
+maintainers = [
+    {name = "Giovanni Palla", email = "giovanni.palla@helmholtz-muenchen.de"},
+    {name = "Michal Klein", email = "michal.klein@helmholtz-muenchen.de"}
+]
+
+dependencies = [
+   "aiohttp>=3.8.1",
+   "anndata>=0.9",
+   "cycler>=0.11.0",
+   "dask-image>=0.5.0",
+   "dask[array]>=2021.02.0",
+   "docrep>=0.3.1",
+   "fsspec>=2021.11.0",
+   "leidenalg>=0.8.2",
+   "matplotlib>=3.3",
+   "matplotlib-scalebar>=0.8.0",
+   "networkx>=2.6.0",
+   "numba>=0.56.4",
+   "numpy>=1.23.0",
+   "omnipath>=1.0.7",
+   "pandas>=1.5.0",
+   "Pillow>=8.0.0",
+   "scanpy>=1.9.3",
+   "scikit-image>=0.19,<=0.20",
+   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
+   "scikit-learn>=0.24.0",
+   "statsmodels>=0.12.0",
+   # https://github.com/scverse/squidpy/issues/526
+   "tifffile!=2022.4.22",
+   "tqdm>=4.50.2",
+   "validators>=0.18.2",
+   "xarray>=0.16.1",
+   "zarr>=2.6.1",
+]
+
+[project.optional-dependencies]
+interactive = [
+    "napari[pyqt5]==0.4.15"
+]
+dev = [
+    "pre-commit>=3.0.0",
+    "tox>=4.0.0",
+]
+test = [
+    "pytest>=7",
+    "pytest-xdist>=3",
+    "pytest-mock>=3.5.0",
+    "pytest-cov>=4",
+    "coverage[toml]>=7",
+]
+docs = [
+    "ipython",
+    "ipywidgets>=8.0.0",
+    "sphinx>=5.3",
+    "sphinx-autodoc-annotation",
+    "sphinx-autodoc-typehints>=1.10.3",
+    "sphinx_rtd_theme",
+    "sphinxcontrib-bibtex>=2.3.0",
+    "sphinxcontrib-spelling>=7.6.2",
+    "nbsphinx>=0.8.1",
+    "myst-nb>=0.17.1",
+    "sphinx_copybutton>=0.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/scverse/squidpy"
+"Bug Tracker" = "https://github.com/scverse/squidpy/issues"
+Documentation = "https://squidpy.readthedocs.io/en/stable"
+"Source Code" = "https://github.com/scverse/squidpy"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools_scm]
 
 [tool.black]
 line-length = 120
