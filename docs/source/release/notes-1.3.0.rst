@@ -48,6 +48,10 @@ Miscellaneous
   `@michalk8 <https://github.com/michalk8>`__
   `#672 <https://github.com/scverse/squidpy/pull/672>`__
 
+- Add :attr:`spatialdata.SpatialData` as possible input for graph functions.
+  `@LLehner <https://github.com/LLehner>`__
+  `´701 <https://github.com/scverse/squidpy/pull/701>`__
+
 Documentation
 -------------
 
