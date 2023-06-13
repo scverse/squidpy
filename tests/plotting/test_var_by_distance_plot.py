@@ -1,7 +1,7 @@
 import scanpy as sc
 from anndata import AnnData
-
 from squidpy import pl, tl
+
 from tests.conftest import PlotTester, PlotTesterMeta
 
 sc.pl.set_rcParams_defaults()

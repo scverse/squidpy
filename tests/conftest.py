@@ -16,11 +16,10 @@ import numpy as np
 import pandas as pd
 import pytest
 import scanpy as sc
+import squidpy as sq
 from anndata import AnnData, OldFormatWarning
 from matplotlib.testing.compare import compare_images
 from scipy.sparse import csr_matrix
-
-import squidpy as sq
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_neighbors
 from squidpy.im._container import ImageContainer
