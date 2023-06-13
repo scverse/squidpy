@@ -80,7 +80,7 @@ class TestContainerIO:
         np.testing.assert_array_equal(img.data.values(), dataset.values)
         assert img.data.attrs == dataset.attrs
 
-    @pytest.skip("Sometimes fails to load image")
+    @pytest.mark.skip(reason="Sometimes fails to load image")
     def test_save_load_zarr(self, tmpdir):
         img = ImageContainer(np.random.normal(size=(100, 100, 1)))
         img.data.attrs["scale"] = 42
