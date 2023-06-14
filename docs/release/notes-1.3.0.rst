@@ -1,4 +1,4 @@
-Squidpy 1.3.0 (2022-)
+Squidpy 1.3.0 (2022-06-18)
 ==========================
 
 Features
@@ -57,6 +57,10 @@ Miscellaneous
 - Add :attr:`percentile` option to :func:`squidpy.gr.spatial_neighbors` to filter neighbor graph using percentile of distances threshold.
   `@LLehner <https://github.com/LLehner>`__
   `#690 <https://github.com/scverse/squidpy/pull/690>`__
+
+- Add :class:`spatialdata.SpatialData` as possible input for graph functions.
+  `@LLehner <https://github.com/LLehner>`__
+  `´701 <https://github.com/scverse/squidpy/pull/701>`__
 
 
 Documentation
