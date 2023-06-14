@@ -3,22 +3,29 @@
 Squidpy - Spatial Single Cell Analysis in Python
 ================================================
 
-.. image:: https://raw.githubusercontent.com/scverse/squidpy/main/docs/source/_static/img/squidpy_horizontal.png
-    :alt: Squidpy logo
-    :width: 400px
-    :align: center
-    :target: https://squidpy.readthedocs.io/en/stable/
+.. image:: html
+
+    <p align="center">
+        <a href="https://squidpy.readthedocs.io/en/stable/">
+            <img src="https://raw.githubusercontent.com/scverse/squidpy/main/docs/source/_static/img/squidpy_horizontal.png"
+             width="400px" alt="Squidpy logo">
+        </a>
+    </p>
+
 
 **Squidpy** is a tool for the analysis and visualization of spatial molecular data.
 It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity and scalability.
 It provides analysis tools that leverages the spatial coordinates of the data, as well as
 tissue images if available.
 
-.. image:: https://raw.githubusercontent.com/scverse/squidpy/main/docs/source/_static/img/figure1.png
-    :alt: Squidpy title figure
-    :width: 400px
-    :align: center
-    :target: https://doi.org/10.1038/s41592-021-01358-2
+.. image:: html
+
+    <p align="center">
+        <a href="https://doi.org/10.1038/s41592-021-01358-2">
+            <img src="https://raw.githubusercontent.com/scverse/squidpy/main/docs/source/_static/img/figure1.png"
+             width="400px" alt="Squidpy title figure">
+        </a>
+    </p>
 
 Visit our `documentation`_ for installation, tutorials, examples and more.
 
