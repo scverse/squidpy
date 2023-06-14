@@ -60,7 +60,7 @@ Miscellaneous
 
 - Add :class:`spatialdata.SpatialData` as possible input for graph functions.
   `@LLehner <https://github.com/LLehner>`__
-  `´701 <https://github.com/scverse/squidpy/pull/701>`__
+  `701 <https://github.com/scverse/squidpy/pull/701>`__
 
 
 Documentation
