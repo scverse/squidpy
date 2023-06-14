@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
-
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import (
     centrality_scores,

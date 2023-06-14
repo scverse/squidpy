@@ -14,6 +14,7 @@ from numba import njit
 from scanpy import logging as logg
 from scipy.sparse import csr_matrix, issparse, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
+from spatialdata import SpatialData
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -32,7 +33,7 @@ __all__ = ["sepal"]
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
 def sepal(
-    adata: AnnData,
+    adata: AnnData | SpatialData,
     max_neighs: Literal[4, 6],
     genes: str | Sequence[str] | None = None,
     n_iter: int | None = 30000,
@@ -96,6 +97,8 @@ def sepal(
     If some genes in :attr:`anndata.AnnData.uns` ``['sepal_score']`` are `NaN`,
     consider re-running the function with increased ``n_iter``.
     """
+    if isinstance(adata, SpatialData):
+        adata = adata.table
     _assert_connectivity_key(adata, connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
     if max_neighs not in (4, 6):

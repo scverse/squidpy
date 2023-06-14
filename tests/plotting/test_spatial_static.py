@@ -11,11 +11,11 @@ import pytest
 import scanpy as sc
 from anndata import AnnData
 from matplotlib.colors import ListedColormap
-
 from squidpy import pl
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_neighbors
 from squidpy.pl._spatial_utils import _get_library_id
+
 from tests.conftest import PlotTester, PlotTesterMeta
 
 sc.set_figure_params(dpi=40, color_map="viridis")

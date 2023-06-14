@@ -11,7 +11,6 @@ from anndata import AnnData
 from pandas.testing import assert_frame_equal
 from scanpy import settings as s
 from scanpy.datasets import blobs
-
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import ligrec
 from squidpy.gr._ligrec import PermutationTest

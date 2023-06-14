@@ -7,7 +7,6 @@ import tifffile
 import xarray as xr
 from pytest_mock import MockerFixture
 from skimage.io import imread
-
 from squidpy._constants._constants import InferDimensions
 from squidpy.im._io import _get_image_shape_dtype, _infer_dimensions, _lazy_load_image
 
