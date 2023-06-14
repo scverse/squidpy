@@ -1,4 +1,4 @@
-|PyPI| |Downloads| |CI| |Notebooks| |Docs| |Coverage| |Discourse| |Zulip|
+|PyPI| |Downloads| |CI| |Docs| |Coverage| |Discourse| |Zulip|
 
 Squidpy - Spatial Single Cell Analysis in Python
 ================================================
@@ -48,10 +48,6 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. |Pre-commit| image:: https://results.pre-commit.ci/badge/github/scverse/squidpy/main.svg
    :target: https://results.pre-commit.ci/latest/github/scverse/squidpy/main
    :alt: pre-commit.ci status
-
-.. |Notebooks| image:: https://img.shields.io/github/workflow/status/scverse/squidpy_notebooks/CI/main?label=notebooks
-    :target: https://github.com/scverse/squidpy_notebooks/actions
-    :alt: Notebooks CI
 
 .. |Docs| image:: https://img.shields.io/readthedocs/squidpy
     :target: https://squidpy.readthedocs.io/en/stable/
