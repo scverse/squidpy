@@ -7,10 +7,10 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/heads/release/v') }}
         runs-on: ubuntu-latest
         steps:
-            - name: Set up Python 3.9
+            - name: Set up Python 3.10
               uses: actions/setup-python@v4
               with:
-                  python-version: 3.9
+                  python-version: "3.10"
 
             - name: Extract the tag
               id: vars
@@ -28,7 +28,7 @@ jobs:
                   sudo apt install pandoc
                   python -m pip install --upgrade pip
                   pip install tox bump2version
-                  pip install -e'.'
+                  pip install -e '.'
 
             - name: Check generated docs
               run: |
