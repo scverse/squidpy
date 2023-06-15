@@ -7,11 +7,6 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/heads/release/v') }}
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v3
-              with:
-                  token: ${{ secrets.TOWNCRIER_TOKEN }}
-                  fetch-depth: 0
-
             - name: Set up Python 3.9
               uses: actions/setup-python@v4
               with:
@@ -35,23 +30,9 @@ jobs:
                   pip install tox bump2version
                   pip install -e'.'
 
-            - name: Generate release notes
-              env:
-                  VERSION: ${{ steps.vars.outputs.tag }}
-              run: |
-                  tox -e build-release-notes -- --version "${VERSION/v/}"
-
             - name: Check generated docs
               run: |
                   tox -e check-docs
-
-            - name: Commit release notes
-              uses: stefanzweifel/git-auto-commit-action@v4
-              with:
-                  file_pattern: docs/source/release/**
-                  commit_user_name: CI
-                  commit_message: ${{ format('[auto][ci skip] Generate {0} release notes', steps.vars.outputs.tag) }}
-                  skip_dirty_check: false
 
             - name: Bump the version
               # the part (patch) doesn't matter when supplying --new-version

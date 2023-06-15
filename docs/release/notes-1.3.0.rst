@@ -1,4 +1,4 @@
-Squidpy 1.3.0 (2022-06-18)
+Squidpy 1.3.0 (2022-06-16)
 ==========================
 
 Features
@@ -60,7 +60,7 @@ Miscellaneous
 
 - Add :class:`spatialdata.SpatialData` as possible input for graph functions.
   `@LLehner <https://github.com/LLehner>`__
-  `´701 <https://github.com/scverse/squidpy/pull/701>`__
+  `701 <https://github.com/scverse/squidpy/pull/701>`__
 
 
 Documentation

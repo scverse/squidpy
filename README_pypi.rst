@@ -1,24 +1,12 @@
-|PyPI| |Downloads| |CI| |Notebooks| |Docs| |Coverage| |Discourse| |Zulip|
+|PyPI| |Downloads| |CI| |Docs| |Coverage| |Discourse| |Zulip|
 
 Squidpy - Spatial Single Cell Analysis in Python
 ================================================
-
-.. image:: https://raw.githubusercontent.com/scverse/squidpy/main/docs/source/_static/img/squidpy_horizontal.png
-    :alt: Squidpy logo
-    :width: 400px
-    :align: center
-    :target: https://squidpy.readthedocs.io/en/stable/
 
 **Squidpy** is a tool for the analysis and visualization of spatial molecular data.
 It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity and scalability.
 It provides analysis tools that leverages the spatial coordinates of the data, as well as
 tissue images if available.
-
-.. image:: https://raw.githubusercontent.com/scverse/squidpy/main/docs/source/_static/img/figure1.png
-    :alt: Squidpy title figure
-    :width: 400px
-    :align: center
-    :target: https://doi.org/10.1038/s41592-021-01358-2
 
 Visit our `documentation`_ for installation, tutorials, examples and more.
 
@@ -60,10 +48,6 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. |Pre-commit| image:: https://results.pre-commit.ci/badge/github/scverse/squidpy/main.svg
    :target: https://results.pre-commit.ci/latest/github/scverse/squidpy/main
    :alt: pre-commit.ci status
-
-.. |Notebooks| image:: https://img.shields.io/github/workflow/status/scverse/squidpy_notebooks/CI/main?label=notebooks
-    :target: https://github.com/scverse/squidpy_notebooks/actions
-    :alt: Notebooks CI
 
 .. |Docs| image:: https://img.shields.io/readthedocs/squidpy
     :target: https://squidpy.readthedocs.io/en/stable/

@@ -95,28 +95,3 @@ jobs:
               with:
                   name: coverage
                   verbose: true
-
-    regenerate-notebooks:
-        needs: test
-        if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release') }}
-        runs-on: ubuntu-latest
-        steps:
-            - name: Rebuild tutorials/examples
-              uses: peter-evans/repository-dispatch@v1
-              with:
-                  token: ${{ secrets.NOTEBOOKS_ACCESS_TOKEN }}
-                  repository: scverse/squidpy_notebooks
-                  event-type: rebuild
-                  client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
-
-    release:
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.reason == 'release' }}
-        needs: test
-        runs-on: ubuntu-latest
-        steps:
-            - name: Invoke deployment workflow
-              uses: benc-uk/workflow-dispatch@v1
-              with:
-                  workflow: Deployment
-                  token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
-                  inputs: '{ "reason": "release" }'
