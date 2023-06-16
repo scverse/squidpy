@@ -7,10 +7,11 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/heads/release/v') }}
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v2
+            - uses: actions/checkout@v3
               with:
                   token: ${{ secrets.TOWNCRIER_TOKEN }}
                   fetch-depth: 0
+                  submodules: true
 
             - name: Set up Python 3.10
               uses: actions/setup-python@v4
