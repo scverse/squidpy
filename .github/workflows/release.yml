@@ -50,7 +50,7 @@ jobs:
             - name: Commit version bump
               uses: stefanzweifel/git-auto-commit-action@v4
               with:
-                  file_pattern: setup.py squidpy/__init__.py .bumpversion.cfg
+                  file_pattern: .bumpversion.cfg
                   commit_user_name: CI
                   commit_message: ${{ format('[auto][ci skip] Release {0}', steps.vars.outputs.tag) }}
                   tagging_message: ${{ steps.vars.outputs.tag }}
