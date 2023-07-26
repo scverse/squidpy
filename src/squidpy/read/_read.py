@@ -169,6 +169,8 @@ def vizgen(
 
     if transformation_file is not None:
         matrix = pd.read_csv(path / f"images/{transformation_file}", sep=" ", header=None)
+        # https://github.com/scverse/squidpy/issues/727
+        matrix.columns = matrix.columns.astype(str)
         adata.uns[Key.uns.spatial][library_id]["scalefactors"] = {"transformation_matrix": matrix}
 
     return adata
