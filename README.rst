@@ -1,4 +1,4 @@
-|PyPI| |Downloads| |CI| |Docs| |Coverage| |Discourse| |Zulip|
+|PyPI| |Downloads| |CI| |Docs| |Coverage| |Discourse| |Zulip| |NumFOCUS|
 
 Squidpy - Spatial Single Cell Analysis in Python
 ================================================
@@ -9,6 +9,13 @@ It provides analysis tools that leverages the spatial coordinates of the data, a
 tissue images if available.
 
 Visit our `documentation`_ for installation, tutorials, examples and more.
+
+Squidpy is part of the scverse project ([website](https://scverse.org), [governance](https://scverse.org/about/roles)) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/).
+Please consider making a tax-deductible [donation](https://numfocus.org/donate-to-scverse) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
+
+image:: https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png
+:target: https://numfocus.org/project/scverse
+:width: 200
 
 Manuscript
 ----------
@@ -68,6 +75,10 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. |Zulip| image:: https://img.shields.io/badge/zulip-join_chat-%2367b08f.svg
     :target: https://scverse.zulipchat.com
     :alt: Zulip
+
+.. |NumFOCUS| image:: https://img.shields.io/badge/powered%20by-NumFOCUS-orange.svg?style=flat&colorA=E1523D&colorB=007D8A
+    :target: http://numfocus.org
+    :alt: NumFOCUS
 
 .. _Palla, Spitzer et al. (2022): https://doi.org/10.1038/s41592-021-01358-2
 .. _scanpy: https://scanpy.readthedocs.io/en/stable/
