@@ -10,8 +10,14 @@ tissue images if available.
 
 Visit our `documentation`_ for installation, tutorials, examples and more.
 
-Squidpy is part of the scverse project `website`, `governance` and is fiscally sponsored by `NumFOCUS`.
-Please consider making a tax-deductible `donation` to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
+Squidpy is part of the scverse project `website_`, `governance_` and is fiscally sponsored by `NumFOCUS_`.
+Please consider making a tax-deductible `donation_` to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
+
+
+image:: https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png
+:target: https://numfocus.org/project/scverse
+:width: 200
+
 
 Manuscript
 ----------
