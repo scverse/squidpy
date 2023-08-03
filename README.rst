@@ -13,11 +13,7 @@ Visit our `documentation`_ for installation, tutorials, examples and more.
 Squidpy is part of the scverse project `website`_, `governance`_ and is fiscally sponsored by `NumFOCUS`_.
 Please consider making a tax-deductible `donation`_ to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
 
-
-image:: https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png
-:target: https://numfocus.org/project/scverse
-:width: 200
-
+|NumFOCUS logo|
 
 Manuscript
 ----------
@@ -81,6 +77,10 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. |NumFOCUS| image:: https://img.shields.io/badge/powered%20by-NumFOCUS-orange.svg?style=flat&colorA=E1523D&colorB=007D8A
     :target: http://numfocus.org
     :alt: NumFOCUS
+
+.. |NumFOCUS logo| image:: https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png
+    :target: https://numfocus.org/project/scverse
+    :width: 200
 
 .. _Palla, Spitzer et al. (2022): https://doi.org/10.1038/s41592-021-01358-2
 .. _scanpy: https://scanpy.readthedocs.io/en/stable/
