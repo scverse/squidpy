@@ -7,6 +7,7 @@ from typing import (
 
 import matplotlib.pyplot as plt
 from anndata import AnnData
+from deprecated import deprecated
 from scanpy import logging as logg
 
 from squidpy._docs import d
@@ -42,6 +43,7 @@ class Interactive:
 
         self._controller = ImageController(adata, img, **kwargs)
 
+    @deprecated
     def show(self, restore: bool = False) -> Interactive:
         """
         Launch the :class:`napari.Viewer`.

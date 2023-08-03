@@ -6,6 +6,7 @@ from typing import Any, Iterable, Tuple
 
 import numpy as np
 import pandas as pd
+from deprecated import deprecated
 from napari.layers import Points
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import Qt
@@ -341,6 +342,7 @@ class CBarWidget(QtWidgets.QWidget):
         self._colorbar._colorbar._colorbar._update()
 
 
+@deprecated
 class RangeSlider(QRangeSlider):
     def __init__(self, *args: Any, layer: Points, colorbar: CBarWidget, **kwargs: Any):
         super().__init__(*args, **kwargs)
