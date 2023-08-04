@@ -27,6 +27,7 @@ __all__ = ["Interactive"]
 
 
 @d.dedent
+@deprecated
 class Interactive:
     """
     Interactive viewer for spatial data.
@@ -43,7 +44,6 @@ class Interactive:
 
         self._controller = ImageController(adata, img, **kwargs)
 
-    @deprecated
     def show(self, restore: bool = False) -> Interactive:
         """
         Launch the :class:`napari.Viewer`.

@@ -56,7 +56,6 @@ class ImageController:
 
         self.view._init_UI()
 
-    @deprecated
     def add_image(self, layer: str) -> bool:
         """
         Add a new :mod:`napari` image layer.
@@ -110,7 +109,6 @@ class ImageController:
 
         return True
 
-    @deprecated
     def add_labels(self, layer: str) -> bool:
         """
         Add a new :mod:`napari` labels layer.
@@ -148,7 +146,6 @@ class ImageController:
 
         return True
 
-    @deprecated
     def add_points(self, vec: NDArrayA | pd.Series, layer_name: str, key: str | None = None) -> bool:
         """
         Add a new :mod:`napari` points layer.
@@ -190,7 +187,6 @@ class ImageController:
 
         return True
 
-    @deprecated
     def export(self, _: Viewer) -> None:
         """Export shapes into :class:`AnnData` object."""
         for layer in self.view.layers:
@@ -206,7 +202,6 @@ class ImageController:
             self._save_shapes(layer, key=key)
             self._update_obs_items(key)
 
-    @deprecated
     def show(self, restore: bool = False) -> None:
         """
         Launch the :class:`napari.Viewer`.
@@ -229,7 +224,6 @@ class ImageController:
             else:
                 logg.error("The viewer has already been closed. Try specifying `restore=True`")
 
-    @deprecated
     @d.get_full_description(base="cont_close")
     def close(self) -> None:
         """Close the :class:`napari.Viewer` or do nothing, if it's already closed."""
@@ -238,7 +232,6 @@ class ImageController:
         except RuntimeError:
             pass
 
-    @deprecated
     def screenshot(self, path: str | Path | None = None, canvas_only: bool = True) -> NDArrayA:
         """
         Take a screenshot of the viewer's canvas.
@@ -256,12 +249,10 @@ class ImageController:
         """
         return np.asarray(self.view.viewer.screenshot(path, canvas_only=canvas_only))
 
-    @deprecated
     def _handle_already_present(self, layer_name: str) -> None:
         logg.debug(f"Layer `{layer_name}` is already loaded")
         self.view.viewer.layers.selection.select_only(self.view.layers[layer_name])
 
-    @deprecated
     def _save_shapes(self, layer: Shapes, key: str) -> None:
         shape_list = layer._data_view
         triangles = shape_list._mesh.vertices[shape_list._mesh.displayed_triangles]
@@ -304,7 +295,6 @@ class ImageController:
             "metadata": None,
         }
 
-    @deprecated
     def _hide_points_controls(self, layer: Points, is_categorical: bool) -> None:
         try:
             # TODO(michalk8): find a better way: https://github.com/napari/napari/issues/3066
