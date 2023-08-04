@@ -4,10 +4,10 @@ from typing import Any
 
 import napari
 import numpy as np
+from deprecated import deprecated
 from napari.layers import Points
 from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QLabel, QWidget
 from scanpy import logging as logg
-from deprecated import deprecated
 
 from squidpy.pl._interactive._model import ImageModel
 from squidpy.pl._interactive._widgets import (  # type: ignore[attr-defined]
@@ -36,7 +36,7 @@ class ImageView:
     def __init__(self, model: ImageModel, controller: ImageController):  # type: ignore[name-defined] # noqa: F821
         self._model = model
         self._controller = controller
-    
+
     def _init_UI(self) -> None:
         def update_library(event: Any) -> None:
             value = tuple(event.value)
