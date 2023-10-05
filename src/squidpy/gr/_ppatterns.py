@@ -418,7 +418,7 @@ def co_occurrence(
     labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))  # type: ignore[arg-type]
     # create idx array including unique combinations and self-comparison
     x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))  # type: ignore[arg-type]
-    idx_splits = [(i, j) for i, j in zip(x, y)]
+    idx_splits = list(zip(x, y))
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(
