@@ -117,7 +117,7 @@ class TestHeatmap(PlotTester, metaclass=PlotTesterMeta):
         gr.spatial_neighbors(adata)
         gr.nhood_enrichment(adata, cluster_key=C_KEY)
 
-        pl.nhood_enrichment(adata, cluster_key=C_KEY, cbar_kwargs={"label": "FOOBARBAZQUUX", "filled": False})
+        pl.nhood_enrichment(adata, cluster_key=C_KEY, cbar_kwargs={"label": "FOOBARBAZQUUX"})
 
 
 class TestLigrec(PlotTester, metaclass=PlotTesterMeta):

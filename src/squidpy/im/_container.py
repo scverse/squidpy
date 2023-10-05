@@ -883,7 +883,7 @@ class ImageContainer(FeatureMixin):
 
         scales.discard(None)
         if len(scales) != 1:
-            raise ValueError(f"Unable to uncrop images of different scales `{sorted((scales))}`.")
+            raise ValueError(f"Unable to uncrop images of different scales `{sorted(scales)}`.")
         scale, *_ = scales
 
         if shape is None:
