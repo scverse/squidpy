@@ -508,8 +508,13 @@ class PermutationTestABC(ABC):
                 return complexes[0]
 
             df = self._data[complexes].mean()
-
-            return str(df.index[df.argmin()])
+            try:
+                return str(df.index[df.argmin()])
+            except ValueError as e:
+                if "attempt to get argmin of an empty sequence" in str(e):
+                    return str(df.index[0])
+                else:
+                    logg.error(e)
 
         if TYPE_CHECKING:
             assert isinstance(self._interactions, pd.DataFrame)
