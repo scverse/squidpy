@@ -1,0 +1,23 @@
+{
+    "template": "https://github.com/scverse/cookiecutter-scverse",
+    "commit": "605f95714130c960bce12eab98a4e023e8932249",
+    "checkout": "v0.2.22",
+    "context": {
+        "cookiecutter": {
+            "project_name": "squidpy",
+            "package_name": "squidpy",
+            "project_description": "Spatial Single Cell Analysis in Python",
+            "author_full_name": "Giovanni Palla",
+            "author_email": "giovanni.palla@helmholtz-muenchen.de",
+            "github_user": "giovp",
+            "project_repo": "https://github.com/scverse/squidpy",
+            "license": "BSD 3-Clause License",
+            "_copy_without_render": [
+                ".github/workflows/**.yaml",
+                "docs/_templates/autosummary/**.rst"
+            ],
+            "_template": "https://github.com/scverse/cookiecutter-scverse"
+        }
+    },
+    "directory": null
+}
