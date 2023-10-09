@@ -73,6 +73,7 @@ dependencies = [
    "xarray>=0.16.1",
    "zarr>=2.6.1",
    "spatialdata",
+   "deprecated"
 ]
 
 [project.optional-dependencies]
