@@ -10,7 +10,7 @@ from anndata import AnnData
 from scanpy import logging as logg
 
 from squidpy._docs import d
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, deprecated
 from squidpy.im import ImageContainer  # type: ignore[attr-defined]
 from squidpy.pl._utils import save_fig
 
@@ -36,6 +36,9 @@ class Interactive:
     %(_interactive.parameters)s
     """
 
+    @deprecated(
+        reason="The squidpy napari plugin is deprecated, please use https://github.com/scverse/napari-spatialdata",
+    )
     def __init__(self, img: ImageContainer, adata: AnnData, **kwargs: Any):
         if _error is not None:
             raise ImportError(f"Unable to import the interactive viewer. Reason `{_error}`.")
