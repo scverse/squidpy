@@ -1114,7 +1114,7 @@ class ImageContainer(FeatureMixin):
         """
         from squidpy.pl import Interactive  # type: ignore[attr-defined]
 
-        return Interactive(  # type: ignore[return-value]
+        return Interactive(  # type: ignore[no-any-return]
             img=self,
             adata=adata,
             spatial_key=spatial_key,

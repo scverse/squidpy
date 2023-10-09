@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from anndata import AnnData
-from deprecated import deprecated
 from napari import Viewer
 from napari.layers import Points, Shapes
 from pandas.core.dtypes.common import is_categorical_dtype

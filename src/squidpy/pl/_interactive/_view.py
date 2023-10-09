@@ -4,7 +4,6 @@ from typing import Any
 
 import napari
 import numpy as np
-from deprecated import deprecated
 from napari.layers import Points
 from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QLabel, QWidget
 from scanpy import logging as logg
