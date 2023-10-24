@@ -186,7 +186,7 @@ def nanostring(
     """
     Read *Nanostring* formatted dataset.
 
-    In addition to reading the regular *Nanostring* output, it loads the metadata file, *CellComposite* and *CellLabels*
+    In addition to reading the regular *Nanostring* output, it loads the metadata file, if present *CellComposite* and *CellLabels*
     directories containing the images and optionally the field of view file.
 
     .. seealso::
@@ -252,11 +252,16 @@ def nanostring(
 
     pat = re.compile(r".*_F(\d+)")
     for subdir in ["CellComposite", "CellLabels"]:
-        kind = "hires" if subdir == "CellComposite" else "segmentation"
-        for fname in os.listdir(path / subdir):
-            if fname.endswith(file_extensions):
-                fov = str(int(pat.findall(fname)[0]))
-                adata.uns[Key.uns.spatial][fov]["images"][kind] = _load_image(path / subdir / fname)
+        if os.path.exists(path / subdir) and os.path.isdir(path / subdir):
+            kind = "hires" if subdir == "CellComposite" else "segmentation"
+            for fname in os.listdir(path / subdir):
+                if fname.endswith(file_extensions):
+                    fov = str(int(pat.findall(fname)[0]))
+                    try:
+                        adata.uns[Key.uns.spatial][fov]["images"][kind] = _load_image(path / subdir / fname)
+                    except KeyError:
+                        logg.warning(f"FOV `{str(fov)}` does not exist in {subdir} folder, skipping it.")
+                        continue
 
     if fov_file is not None:
         fov_positions = pd.read_csv(path / fov_file, header=0, index_col=fov_key)
