@@ -77,7 +77,8 @@ dependencies = [
 
 [project.optional-dependencies]
 interactive = [
-    "napari[pyqt5]==0.4.15"
+    "napari[pyqt5]==0.4.15",
+    "pydantic==1.10.13"
 ]
 dev = [
     "pre-commit>=3.0.0",
