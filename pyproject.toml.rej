@@ -1,6 +1,6 @@
 diff a/pyproject.toml b/pyproject.toml	(rejected hunks)
 @@ -26,7 +26,6 @@ dependencies = [
- 
+
  [project.optional-dependencies]
  dev = [
 -    # CLI for bumping the version number
@@ -18,5 +18,5 @@ diff a/pyproject.toml b/pyproject.toml	(rejected hunks)
 -    "pytest-cov",
 +    "coverage",
  ]
- 
+
  [tool.coverage.run]

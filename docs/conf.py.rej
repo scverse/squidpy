@@ -6,14 +6,14 @@ diff a/docs/conf.py b/docs/conf.py	(rejected hunks)
 +html_css_files = ["css/custom.css"]
 +
  html_title = project_name
- 
+
  html_theme_options = {
      "repository_url": repository_url,
      "use_repository_button": True,
      "path_to_docs": "docs/",
 +    "navigation_with_keys": False,
  }
- 
+
  pygments_style = "default"
 @@ -124,18 +127,3 @@ nitpick_ignore = [
      # you can add an exception to this list.
