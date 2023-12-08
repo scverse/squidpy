@@ -323,7 +323,7 @@ def _shuffle_group(
     -------
     Shuffled annotations.
     """
-    cluster_annotation_output = np.empty(libraries.shape)
+    cluster_annotation_output = np.empty(libraries.shape, dtype=cluster_annotation.dtype)
     for c in libraries.cat.categories:
         idx = np.where(libraries == c)[0]
         arr_group = cluster_annotation[idx].copy()
