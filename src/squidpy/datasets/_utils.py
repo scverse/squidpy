@@ -11,7 +11,7 @@ from scanpy import logging as logg
 from scanpy import read
 from scanpy._utils import check_presence_download
 
-PathLike = Union[os.PathLike, str]
+PathLike = Union[os.PathLike[str], str]
 Function_t = Callable[..., Union[AnnData, Any]]
 
 
