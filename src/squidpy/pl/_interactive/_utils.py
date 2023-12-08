@@ -24,7 +24,7 @@ def _get_categorical(
     vec: pd.Series | None = None,
 ) -> NDArrayA:
     if vec is not None:
-        if not isinstance(vec, CategoricalDtype):
+        if not isinstance(vec.dtype, CategoricalDtype):
             raise TypeError(f"Expected a `categorical` type, found `{infer_dtype(vec)}`.")
         if key in adata.obs:
             logg.debug(f"Overwriting `adata.obs[{key!r}]`")
@@ -40,7 +40,7 @@ def _get_categorical(
 
 
 def _position_cluster_labels(coords: NDArrayA, clusters: pd.Series, colors: NDArrayA) -> dict[str, NDArrayA]:
-    if not isinstance(clusters, CategoricalDtype):
+    if not isinstance(clusters.dtype, CategoricalDtype):
         raise TypeError(f"Expected `clusters` to be `categorical`, found `{infer_dtype(clusters)}`.")
 
     coords = coords[:, 1:]  # TODO(michalk8): account for current Z-dim?

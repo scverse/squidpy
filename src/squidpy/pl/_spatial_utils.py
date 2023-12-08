@@ -385,7 +385,7 @@ def _subs(
     ) -> tuple[AnnData, NDArrayA]:
         if key is None or values is None:
             return adata, coords
-        if key not in adata.obs or not isinstance(adata.obs[key], CategoricalDtype):
+        if key not in adata.obs or not isinstance(adata.obs[key].dtype, CategoricalDtype):
             return adata, coords
         try:
             mask = adata.obs[key].isin(values).values
@@ -468,7 +468,7 @@ def _set_color_source_vec(
     else:
         color_source_vector = adata.obs_vector(value_to_plot, layer=layer)
 
-    if not isinstance(color_source_vector, CategoricalDtype):
+    if not isinstance(color_source_vector.dtype, CategoricalDtype):
         return None, color_source_vector, False
 
     color_source_vector = pd.Categorical(color_source_vector)  # convert, e.g., `pd.Series`
@@ -646,7 +646,7 @@ def _decorate_axs(
             path_effect = []
 
         # Adding legends
-        if isinstance(color_source_vector, CategoricalDtype):
+        if isinstance(color_source_vector.dtype, CategoricalDtype):
             clusters = color_source_vector.categories
             palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette, alpha=alpha)
             _add_categorical_legend(
@@ -691,11 +691,11 @@ def _map_color_seg(
 ) -> NDArrayA:
     cell_id = np.array(cell_id)
 
-    if isinstance(color_vector, CategoricalDtype):
+    if isinstance(color_vector.dtype, CategoricalDtype):
         if isinstance(na_color, tuple) and len(na_color) == 4 and np.any(color_source_vector.isna()):
             cell_id[color_source_vector.isna()] = 0
-        val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)
-        cols = colors.to_rgba_array(color_vector.categories)
+        val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)  # type: ignore[union-attr]
+        cols = colors.to_rgba_array(color_vector.categories)  # type: ignore[union-attr]
     else:
         val_im = map_array(seg, cell_id, cell_id)  # replace with same seg id to remove missing segs
         try:
@@ -744,7 +744,7 @@ def _prepare_args_plot(
 
     # set palette if missing
     for c in color:
-        if c is not None and c in adata.obs and isinstance(adata.obs[c], CategoricalDtype):
+        if c is not None and c in adata.obs and isinstance(adata.obs[c].dtype, CategoricalDtype):
             _maybe_set_colors(source=adata, target=adata, key=c, palette=palette)
 
     # check raw

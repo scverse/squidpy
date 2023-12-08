@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit, prange  # noqa: F401
+from pandas import CategoricalDtype
 from scanpy import logging as logg
 from spatialdata import SpatialData
 
@@ -405,7 +406,7 @@ def _nhood_enrichment_helper(
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
-    libraries: pd.Series | None,
+    libraries: pd.Series[CategoricalDtype] | None,
     n_cls: int,
     seed: int | None = None,
     queue: SigQueue | None = None,

@@ -139,7 +139,7 @@ def _assert_categorical_obs(adata: AnnData, key: str) -> None:
     if key not in adata.obs:
         raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
 
-    if not isinstance(adata.obs[key], CategoricalDtype):
+    if not isinstance(adata.obs[key].dtype, CategoricalDtype):
         raise TypeError(f"Expected `adata.obs[{key!r}]` to be `categorical`, found `{infer_dtype(adata.obs[key])}`.")
 
 
@@ -304,7 +304,7 @@ def _genesymbols(
 
 def _shuffle_group(
     cluster_annotation: NDArrayA,
-    libraries: pd.Series,
+    libraries: pd.Series[CategoricalDtype],
     rs: np.random.RandomState,
 ) -> NDArrayA:
     """

@@ -182,7 +182,7 @@ class ImageController:
             **properties,
         )
         # TODO(michalk8): add contrasting fg/bg color once https://github.com/napari/napari/issues/2019 is done
-        self._hide_points_controls(layer, is_categorical=isinstance(vec, CategoricalDtype))
+        self._hide_points_controls(layer, is_categorical=isinstance(vec.dtype, CategoricalDtype))
         layer.editable = False
 
         return True
