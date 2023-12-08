@@ -124,6 +124,7 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, 
 def nhood_enrichment(
     adata: AnnData | SpatialData,
     cluster_key: str,
+    library_key: str | None = None,
     connectivity_key: str | None = None,
     n_perms: int = 1000,
     numba_parallel: bool = False,
@@ -140,6 +141,7 @@ def nhood_enrichment(
     ----------
     %(adata)s
     %(cluster_key)s
+    %(library_key)s
     %(conn_key)s
     %(n_perms)s
     %(numba_parallel)s
@@ -167,6 +169,13 @@ def nhood_enrichment(
     original_clust = adata.obs[cluster_key]
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}  # map categories
     int_clust = np.array([clust_map[c] for c in original_clust], dtype=ndt)
+
+    if library_key is not None:
+        _assert_categorical_obs(adata, key=library_key)
+        libs: list[Any] | None = adata.obs[library_key].cat.categories
+    else:
+        libs = None
+    print(libs)
 
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
     n_cls = len(clust_map)
