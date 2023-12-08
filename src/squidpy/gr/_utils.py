@@ -300,3 +300,33 @@ def _genesymbols(
             # in principle we assume the callee doesn't change the index
             # otherwise, would need to check whether it has been changed and add an option to determine what to do
             adata.var.index = var_names
+
+
+def _shuffle_group(
+    cluster_annotation: NDArrayA,
+    libraries: pd.Series,
+    rs: np.random.RandomState,
+) -> NDArrayA:
+    """
+    Shuffle values in ``arr`` for each category in ``categories``.
+
+    Useful when the shuffling of categories is used in permutation tests where the order of values in ``arr`` matters (e.g. you only want to shuffle cluster annotations for the same slide/library_key, and not across slides
+
+    Parameters
+    ----------
+    cluster_annotation
+        Array to shuffle.
+    libraries
+        Categories (e.g. libraries) to subset for shuffling.
+
+    Returns
+    -------
+    Shuffled annotations.
+    """
+    cluster_annotation_output = np.empty(libraries.shape)
+    for c in libraries.cat.categories:
+        idx = np.where(libraries == c)[0]
+        arr_group = cluster_annotation[idx].copy()
+        rs.shuffle(arr_group)  # it's done in place hence copy before
+        cluster_annotation_output[idx] = arr_group
+    return cluster_annotation_output

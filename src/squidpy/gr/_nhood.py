@@ -28,6 +28,7 @@ from squidpy.gr._utils import (
     _assert_connectivity_key,
     _assert_positive,
     _save_data,
+    _shuffle_group,
 )
 
 __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
@@ -427,17 +428,3 @@ def _nhood_enrichment_helper(
         queue.put(Signal.FINISH)
 
     return perms
-
-
-def _shuffle_group(
-    arr: NDArrayA,
-    categories: pd.Series,
-    rs: np.random.RandomState,
-) -> NDArrayA:
-    categories_output = np.empty(categories.shape)
-    for c in categories.cat.categories:
-        idx = np.where(categories == c)[0]
-        arr_group = arr[idx].copy()
-        rs.shuffle(arr_group)
-        categories_output[idx] = arr_group
-    return categories_output
