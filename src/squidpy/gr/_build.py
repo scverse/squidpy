@@ -202,7 +202,7 @@ def _spatial_neighbor(
             raise NotImplementedError(f"Coordinate type `{coord_type}` is not yet implemented.")
 
     if coord_type == CoordType.GENERIC and isinstance(radius, Iterable):
-        minn, maxx = sorted(radius)[:2]  # type: ignore[var-annotated]
+        minn, maxx = sorted(radius)[:2]
         mask = (Dst.data < minn) | (Dst.data > maxx)
         a_diag = Adj.diagonal()
 

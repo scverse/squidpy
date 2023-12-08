@@ -244,10 +244,10 @@ def _get_coordinates(adata: AnnData, anchor: str, annotation: str, spatial_key: 
 
 
 def _normalize_distances(
-    mapping_design_matrix: dict[tuple[str | None, str], pd.DataFrame],
+    mapping_design_matrix: dict[tuple[Any | None, Any], pd.DataFrame],
     anchor: str | list[str],
     slides: list[str] | list[None],
-    mapping_max_distances: dict[tuple[str | None, str], float],
+    mapping_max_distances: dict[tuple[Any | None, Any], float],
 ) -> pd.DataFrame:
     """Normalize distances to anchor."""
     if not isinstance(anchor, list):
