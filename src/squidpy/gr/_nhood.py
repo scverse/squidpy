@@ -172,10 +172,9 @@ def nhood_enrichment(
 
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
-        libs: list[Any] | None = adata.obs[library_key].cat.categories
+        libraries: pd.Series | None = adata.obs[library_key]
     else:
-        libs = None
-    print(libs)
+        libraries = None
 
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
     n_cls = len(clust_map)
@@ -193,7 +192,7 @@ def nhood_enrichment(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(callback=_test, indices=indices, indptr=indptr, int_clust=int_clust, n_cls=n_cls, seed=seed)
+    )(callback=_test, indices=indices, indptr=indptr, int_clust=int_clust, libraries=libraries, n_cls=n_cls, seed=seed)
     zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
     if copy:
@@ -405,6 +404,7 @@ def _nhood_enrichment_helper(
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
+    libraries: pd.Series | None,
     n_cls: int,
     seed: int | None = None,
     queue: SigQueue | None = None,
@@ -414,7 +414,10 @@ def _nhood_enrichment_helper(
     rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])
 
     for i in range(len(ixs)):
-        rs.shuffle(int_clust)
+        if libraries is not None:
+            int_clust = _shuffle_group(int_clust, libraries, rs)
+        else:
+            rs.shuffle(int_clust)
         perms[i, ...] = callback(indices, indptr, int_clust)
 
         if queue is not None:
@@ -424,3 +427,17 @@ def _nhood_enrichment_helper(
         queue.put(Signal.FINISH)
 
     return perms
+
+
+def _shuffle_group(
+    arr: NDArrayA,
+    categories: pd.Series,
+    rs: np.random.RandomState,
+) -> NDArrayA:
+    categories_output = np.empty(categories.shape)
+    for c in categories.cat.categories:
+        idx = np.where(categories == c)[0]
+        arr_group = arr[idx].copy()
+        rs.shuffle(arr_group)
+        categories_output[idx] = arr_group
+    return categories_output

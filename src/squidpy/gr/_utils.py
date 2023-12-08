@@ -16,6 +16,7 @@ import pandas as pd
 from anndata import AnnData
 from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
 from anndata.utils import make_index_unique
+from pandas import CategoricalDtype
 from pandas.api.types import infer_dtype, is_categorical_dtype
 from scanpy import logging as logg
 from scipy.sparse import csc_matrix, csr_matrix, issparse, spmatrix
@@ -138,7 +139,7 @@ def _assert_categorical_obs(adata: AnnData, key: str) -> None:
     if key not in adata.obs:
         raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
 
-    if not is_categorical_dtype(adata.obs[key]):
+    if not isinstance(adata.obs[key], CategoricalDtype):
         raise TypeError(f"Expected `adata.obs[{key!r}]` to be `categorical`, found `{infer_dtype(adata.obs[key])}`.")
 
 
