@@ -1,7 +1,7 @@
 {
     "template": "https://github.com/scverse/cookiecutter-scverse",
-    "commit": "8e96abb5c3e2d5078c44713958da672711cf2a48",
-    "checkout": "v0.3.0",
+    "commit": "605f95714130c960bce12eab98a4e023e8932249",
+    "checkout": "v0.2.22",
     "context": {
         "cookiecutter": {
             "project_name": "squidpy",
@@ -16,11 +16,6 @@
                 ".github/workflows/**.yaml",
                 "docs/_templates/autosummary/**.rst"
             ],
-            "_render_devdocs": false,
-            "_jinja2_env_vars": {
-                "lstrip_blocks": true,
-                "trim_blocks": true
-            },
             "_template": "https://github.com/scverse/cookiecutter-scverse"
         }
     },
