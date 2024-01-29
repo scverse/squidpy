@@ -1,4 +1,5 @@
 """Functions for building graphs from spatial coordinates."""
+
 from __future__ import annotations
 
 import warnings

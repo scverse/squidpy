@@ -1,4 +1,5 @@
 """Permutation test function as described in CellPhoneDB 2.0."""
+
 from __future__ import annotations
 
 from abc import ABC
