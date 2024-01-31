@@ -202,3 +202,15 @@ class TestSpatialNeighbors:
         Dst.eliminate_zeros()
 
         assert dist_filtered.max() == Dst.max()
+
+    @pytest.mark.parametrize("n_neighs", [5, 10, 20])
+    def test_spatial_neighbors_generic(self, n_neighs: int):
+        rng = np.random.default_rng(42)
+        adata = ad.AnnData(shape=(512, 1))
+        adata.obsm["spatial"] = rng.random(size=(512, 2))
+
+        spatial_neighbors(adata, n_neighs=n_neighs, coord_type="generic", radius=None)
+        graph = adata.obsp[Key.obsp.spatial_conn()]
+        actual = np.array(graph.sum(axis=1)).flatten()
+
+        np.testing.assert_array_equal(actual, n_neighs)
