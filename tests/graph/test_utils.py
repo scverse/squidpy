@@ -22,7 +22,6 @@ class TestUtils:
             cluster_annotations = rng.choice([1, 2, 3, 4], size=(size,))
         else:
             cluster_annotations = rng.choice(["X", "Y", "Z"], size=(size,))
-        rs = np.random.RandomState(seed)
-        out = _shuffle_group(cluster_annotations, libraries, rs)
+        out = _shuffle_group(cluster_annotations, libraries, rng)
         for c in libraries.cat.categories:
             assert set(out[libraries == c]) == set(cluster_annotations[libraries == c])
