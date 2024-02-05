@@ -311,7 +311,8 @@ def _shuffle_group(
     """
     Shuffle values in ``arr`` for each category in ``categories``.
 
-    Useful when the shuffling of categories is used in permutation tests where the order of values in ``arr`` matters (e.g. you only want to shuffle cluster annotations for the same slide/library_key, and not across slides
+    Useful when the shuffling of categories is used in permutation tests where the order of values in ``arr`` matters
+    (e.g. you only want to shuffle cluster annotations for the same slide/library_key, and not across slides)
 
     Parameters
     ----------
