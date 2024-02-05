@@ -5,7 +5,7 @@ Bugfixes
 --------
 
 - Fix building graph in ``knn`` and ``delaunay`` mode.
-  `@giovp <https://github.com/michalk8>`__
+  `@michalk8 <https://github.com/michalk8>`__
   `#792 <https://github.com/scverse/squidpy/pull/792>`__
 
 - Correct shuffling of annotations in ``sq.gr.nhood_enrichment``.
