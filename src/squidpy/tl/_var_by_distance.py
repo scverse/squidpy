@@ -164,6 +164,9 @@ def var_by_distance(
         if isinstance(covariates, str):
             covariates = [covariates]
         df[covariates] = adata.obs[covariates].copy()
+    # match index with .obs
+    if isinstance(groups, list):
+        df = df.reindex(adata.obs.index)
     if copy:
         logg.info("Finish", time=start)
         return df
