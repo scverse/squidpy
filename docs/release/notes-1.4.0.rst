@@ -8,6 +8,10 @@ Bugfixes
   `@giovp <https://github.com/michalk8>`__
   `#792 <https://github.com/scverse/squidpy/pull/792>`__
 
+- Correct shuffling of annotations in ``sq.gr.nhood_enrichment``.
+  `@giovp <https://github.com/giovp>`__
+  `#775 <hhttps://github.com/scverse/squidpy/pull/775>`__
+
 
 Miscellaneous
 -------------
