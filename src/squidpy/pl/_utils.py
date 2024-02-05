@@ -30,6 +30,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from numba import njit, prange
+from pandas import CategoricalDtype
 from pandas._libs.lib import infer_dtype
 from pandas.core.dtypes.common import (
     is_bool_dtype,
@@ -232,7 +233,7 @@ def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vect
             return None, None
 
         if isinstance(res, pd.Series):
-            if is_categorical_dtype(res):
+            if isinstance(res, CategoricalDtype):
                 return res, fmt
             if is_string_dtype(res) or is_object_dtype(res) or is_bool_dtype(res):
                 return res.astype("category"), fmt
