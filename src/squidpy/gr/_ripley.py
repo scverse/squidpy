@@ -1,4 +1,5 @@
 """Functions for point patterns spatial statistics."""
+
 from __future__ import annotations
 
 from typing import (
