@@ -39,7 +39,7 @@ from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpec
 from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib_scalebar.scalebar import ScaleBar
-from pandas.api.types import CategoricalDtype
+from pandas import CategoricalDtype
 from pandas.core.dtypes.common import is_categorical_dtype
 from scanpy import logging as logg
 from scanpy._settings import settings as sc_settings
@@ -694,8 +694,8 @@ def _map_color_seg(
     if is_categorical_dtype(color_vector):
         if isinstance(na_color, tuple) and len(na_color) == 4 and np.any(color_source_vector.isna()):
             cell_id[color_source_vector.isna()] = 0
-        val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)  # type: ignore
-        cols = colors.to_rgba_array(color_vector.categories)  # type: ignore
+        val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)  # type: ignore[union-attr]
+        cols = colors.to_rgba_array(color_vector.categories)  # type: ignore[union-attr]
     else:
         val_im = map_array(seg, cell_id, cell_id)  # replace with same seg id to remove missing segs
         try:
@@ -744,7 +744,7 @@ def _prepare_args_plot(
 
     # set palette if missing
     for c in color:
-        if c is not None and c in adata.obs and is_categorical_dtype(adata.obs[c]):
+        if c is not None and c in adata.obs and isinstance(adata.obs[c].dtype, CategoricalDtype):
             _maybe_set_colors(source=adata, target=adata, key=c, palette=palette)
 
     # check raw

@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit, prange  # noqa: F401
+from pandas import CategoricalDtype
 from scanpy import logging as logg
 from spatialdata import SpatialData
 
@@ -29,6 +30,7 @@ from squidpy.gr._utils import (
     _assert_connectivity_key,
     _assert_positive,
     _save_data,
+    _shuffle_group,
 )
 
 __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
@@ -125,6 +127,7 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, 
 def nhood_enrichment(
     adata: AnnData | SpatialData,
     cluster_key: str,
+    library_key: str | None = None,
     connectivity_key: str | None = None,
     n_perms: int = 1000,
     numba_parallel: bool = False,
@@ -141,6 +144,7 @@ def nhood_enrichment(
     ----------
     %(adata)s
     %(cluster_key)s
+    %(library_key)s
     %(conn_key)s
     %(n_perms)s
     %(numba_parallel)s
@@ -169,6 +173,12 @@ def nhood_enrichment(
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}  # map categories
     int_clust = np.array([clust_map[c] for c in original_clust], dtype=ndt)
 
+    if library_key is not None:
+        _assert_categorical_obs(adata, key=library_key)
+        libraries: pd.Series | None = adata.obs[library_key]
+    else:
+        libraries = None
+
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
     n_cls = len(clust_map)
 
@@ -185,7 +195,7 @@ def nhood_enrichment(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(callback=_test, indices=indices, indptr=indptr, int_clust=int_clust, n_cls=n_cls, seed=seed)
+    )(callback=_test, indices=indices, indptr=indptr, int_clust=int_clust, libraries=libraries, n_cls=n_cls, seed=seed)
     zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
     if copy:
@@ -397,6 +407,7 @@ def _nhood_enrichment_helper(
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
+    libraries: pd.Series[CategoricalDtype] | None,
     n_cls: int,
     seed: int | None = None,
     queue: SigQueue | None = None,
@@ -406,7 +417,10 @@ def _nhood_enrichment_helper(
     rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])
 
     for i in range(len(ixs)):
-        rs.shuffle(int_clust)
+        if libraries is not None:
+            int_clust = _shuffle_group(int_clust, libraries, rs)
+        else:
+            rs.shuffle(int_clust)
         perms[i, ...] = callback(indices, indptr, int_clust)
 
         if queue is not None:

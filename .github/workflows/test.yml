@@ -20,13 +20,13 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                python: [3.9, "3.10"]
+                python: [3.9, "3.10", "3.11"]
                 os: [ubuntu-latest]
                 include:
                     - python: 3.9
                       os: macos-latest
                     - python: "3.10"
-                      os: macos-latest
+                      os: macos-14
         env:
             OS: ${{ matrix.os }}
             PYTHON: ${{ matrix.python }}
