@@ -1,4 +1,5 @@
 """Functions for neighborhood enrichment analysis (permutation test, centralities measures etc.)."""
+
 from __future__ import annotations
 
 from functools import partial
