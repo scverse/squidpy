@@ -26,7 +26,7 @@ jobs:
                     - python: 3.9
                       os: macos-latest
                     - python: "3.10"
-                      os: macos-14
+                      os: macos-latest
         env:
             OS: ${{ matrix.os }}
             PYTHON: ${{ matrix.python }}
