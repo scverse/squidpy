@@ -584,6 +584,7 @@ class ImageContainer(FeatureMixin):
                 order=1,
                 channel_axis=-1,
                 cval=cval,
+                clip=False,
             )
             dtype = arr.dtype
 
@@ -595,7 +596,6 @@ class ImageContainer(FeatureMixin):
                     da.from_delayed(delayed(lambda arr: scaling_fn(arr).astype(dtype))(arr), shape=shape, dtype=dtype),
                     dims=arr.dims,
                 )
-
             return xr.DataArray(scaling_fn(arr).astype(dtype), dims=arr.dims)
 
         if scale != 1:
