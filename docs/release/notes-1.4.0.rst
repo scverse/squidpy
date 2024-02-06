@@ -10,7 +10,7 @@ Bugfixes
 
 - Correct shuffling of annotations in ``sq.gr.nhood_enrichment``.
   `@giovp <https://github.com/giovp>`__
-  `#775 <hhttps://github.com/scverse/squidpy/pull/775>`__
+  `#775 <https://github.com/scverse/squidpy/pull/775>`__
 
 
 Miscellaneous
