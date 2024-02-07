@@ -55,7 +55,7 @@ def var_by_distance(
     Returns
     -------
     If ``copy = True``, returns the design_matrix with the distances to an anchor point
-    Otherwise, stores design_matrix in .obsm
+    Otherwise, stores design_matrix in `.obsm`.
     """
     start = logg.info(f"Creating {design_matrix_key}")
     # list of columns which will be categorical later on
@@ -73,7 +73,7 @@ def var_by_distance(
     else:
         raise TypeError(f"Invalid type for groups: {type(groups)}.")
 
-    # prepare batch key for iteration (Nonetype alone in product will result in neutral element)
+    # prepare batch key for iteration (None alone in product will result in neutral element)
     if library_key is None:
         batch = [None]
     else:
@@ -106,7 +106,7 @@ def var_by_distance(
         )  # build KDTree of anchor point coordinates
         mindist, _ = tree.query(
             batch_coord
-        )  # calculate closest distance from any observation to an observation within anchor point
+        )  # calculate the closest distance from any observation to an observation within anchor point
 
         if isinstance(anchor_var, np.ndarray):  # adjust anchor column name if it is a numpy array
             anchor_var = "custom_anchor"
@@ -228,7 +228,7 @@ def _init_design_matrix(
 
 def _get_coordinates(adata: AnnData, anchor: str, annotation: str, spatial_key: str) -> tuple[Any, Any, Any]:
     """Get anchor point coordinates and coordinates of all observations, excluding nan values."""
-    # since amount of distances have to match n_obs, the nan id's are stored an inserted after KDTree construction
+    # since amount of distances have to match n_obs, the nan ids are stored an inserted after KDTree construction
     nan_ids, _ = np.split(np.argwhere(np.isnan(adata.obsm[spatial_key])), 2, axis=1)
 
     if nan_ids.size != 0:
@@ -238,12 +238,11 @@ def _get_coordinates(adata: AnnData, anchor: str, annotation: str, spatial_key: 
 
     if isinstance(anchor, np.ndarray):
         anchor_coord = anchor[~np.isnan(anchor).any(axis=1)]
-        return (anchor, batch_coord, nan_ids)
+        return anchor_coord, batch_coord, nan_ids
 
-    else:
-        anchor_arr = np.array(adata[adata.obs[annotation] == anchor].obsm["spatial"])
-        anchor_coord = anchor_arr[~np.isnan(anchor_arr).any(axis=1)]
-        return (anchor_coord, batch_coord, nan_ids)
+    anchor_arr = np.array(adata[adata.obs[annotation] == anchor].obsm["spatial"])
+    anchor_coord = anchor_arr[~np.isnan(anchor_arr).any(axis=1)]
+    return anchor_coord, batch_coord, nan_ids
 
 
 def _normalize_distances(
@@ -251,7 +250,7 @@ def _normalize_distances(
     anchor: str | list[str],
     slides: list[str] | list[None],
     mapping_max_distances: dict[tuple[Any | None, Any], float],
-) -> pd.DataFrame:
+) -> list[pd.DataFrame]:
     """Normalize distances to anchor."""
     if not isinstance(anchor, list):
         anchor = [anchor]
@@ -259,7 +258,7 @@ def _normalize_distances(
     # save raw distances, set 0 distances to NaN and smallest non-zero distance to 0 for scaling
     for (_, anchor_point), design_matrix in mapping_design_matrix.items():  # (slide, anchor_point) , design_matrix
         design_matrix[f"{anchor_point}_raw"] = design_matrix[anchor_point]
-        design_matrix[anchor_point].replace(0, np.nan, inplace=True)
+        design_matrix.replace({anchor_point: 0}, np.nan, inplace=True)
         design_matrix.loc[design_matrix[anchor_point].idxmin(), anchor_point] = 0
 
     # for each anchor point, get the slide with the highest maximum distance
