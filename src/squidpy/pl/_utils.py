@@ -553,7 +553,7 @@ def _heatmap(
         row_order = col_order = np.arange(len(adata.uns[Key.uns.colors(key)])).tolist()
 
     row_order = row_order[::-1]
-    row_labels = adata.obs[key][row_order]
+    row_labels = adata.obs[key].iloc[row_order]
     data = adata[row_order, col_order].X
 
     row_cmap, col_cmap, row_norm, col_norm, n_cls = _get_cmap_norm(adata, key, order=(row_order, col_order))
