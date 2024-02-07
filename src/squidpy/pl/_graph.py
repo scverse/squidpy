@@ -315,7 +315,7 @@ def ripley(
         **kwargs,
     )
     if plot_sims:
-        sns.lineplot(y="stats", x="bins", ci="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)
+        sns.lineplot(y="stats", x="bins", errorbar="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)
     ax.legend(**legend_kwargs)
     ax.set_ylabel("value")
     ax.set_title(f"Ripley's {mode.s}")
