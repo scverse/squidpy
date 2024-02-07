@@ -67,16 +67,23 @@ def var_by_distance(
     line_palette
         Categorical color palette used in case a covariate is specified.
     scatter_palette
-        Color palette for the scatter plot underlying the `sns.regplot`
-    %(plotting_save)s
+        Color palette for the scatter plot underlying the :func:`seaborn.regplot`.
+    dpi
+        Dots per inch.
+    figsize
+        Size of the figure in inches.
+    save
+        Whether to save the plot.
     title
         Panel titles.
     axis_label
         Panel axis labels.
+    return_ax
+        Whether to return :class:`matplotlib.axes.Axes` object(s).
     regplot_kwargs
-        Kwargs for `sns.regplot`
+        Kwargs for :func:`seaborn.regplot`.
     scatterplot_kwargs
-        Kwargs for `sns.scatter`
+        Kwargs for :func:`matplotlib.pyplot.scatter`.
 
     Returns
     -------
@@ -84,7 +91,7 @@ def var_by_distance(
     """
     dpi = rcParams["figure.dpi"] if dpi is None else dpi
     regplot_kwargs = dict(regplot_kwargs)
-    scatterplot_kwargs = dict(regplot_kwargs)
+    scatterplot_kwargs = dict(scatterplot_kwargs)
 
     df = adata.obsm[design_matrix_key]  # get design matrix
     df[var] = np.array(adata[:, var].X.A) if issparse(adata[:, var].X) else np.array(adata[:, var].X)  # add var column
