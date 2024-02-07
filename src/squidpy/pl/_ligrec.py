@@ -322,7 +322,7 @@ def ligrec(
     var = pd.DataFrame(pvals.columns)
     var = var.set_index(var.columns[0])
 
-    adata = AnnData(pvals.values, obs={"groups": pd.Categorical(pvals.index)}, var=var, dtype=pvals.values.dtype)
+    adata = AnnData(pvals.values, obs={"groups": pd.Categorical(pvals.index)}, var=var)
     adata.obs_names = pvals.index
     minn = np.nanmin(adata.X)
     delta = np.nanmax(adata.X) - minn

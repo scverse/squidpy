@@ -159,7 +159,7 @@ def interaction_matrix(
     _assert_categorical_obs(adata, key=cluster_key)
     array = _get_data(adata, cluster_key=cluster_key, func_name="interaction_matrix")
 
-    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)}, dtype=array.dtype)
+    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
     _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
     if title is None:
         title = "Interaction matrix"
@@ -224,7 +224,7 @@ def nhood_enrichment(
     _assert_categorical_obs(adata, key=cluster_key)
     array = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")[mode]
 
-    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)}, dtype=array.dtype)
+    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
     _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
     if title is None:
         title = "Neighborhood enrichment"

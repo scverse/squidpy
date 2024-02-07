@@ -886,14 +886,12 @@ class TestZStacks:
             np.zeros((len(crop_coords), 1)),
             uns={"spatial": {"1": {"scalefactors": {"spot_diameter_fullres": 5}}}},
             obsm={"spatial": crop_coords},
-            dtype=float,
         )
         # for library_id 2 (with larger scalefactor)
         adata2 = AnnData(
             np.zeros((len(crop_coords), 1)),
             uns={"spatial": {"2": {"scalefactors": {"spot_diameter_fullres": 7}}}},
             obsm={"spatial": crop_coords},
-            dtype=float,
         )
         # concatenate
         adata = ad.concat({"1": adata1, "2": adata2}, uns_merge="unique", label="library_id")

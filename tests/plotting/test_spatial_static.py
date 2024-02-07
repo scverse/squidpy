@@ -212,9 +212,8 @@ class TestSpatialStaticUtils:
         if library_id is not None:
             obs = pd.DataFrame(library_id * 2, columns=[library_key])
             uns = {Key.uns.spatial: {k: None for k in library_id}}
-            return AnnData(X, obs=obs, uns=uns, dtype=X.dtype)
-        else:
-            return AnnData(X, dtype=X.dtype)
+            return AnnData(X, obs=obs, uns=uns)
+        return AnnData(X)
 
     @pytest.mark.parametrize("shape", ["circle", None])
     @pytest.mark.parametrize("library_id", [None, "1", ["1"], ["1", "2"]])
