@@ -303,7 +303,7 @@ def ligrec(
         pvals = pvals.T
         means = means.T
 
-    for cls, size in (pvals.groupby(level=0, axis=1)).size().to_dict().items():
+    for cls, size in (pvals.T.groupby(level=0)).size().to_dict().items():
         label_ranges[cls] = (start, start + size - 1)
         start += size
     label_ranges = {k: label_ranges[k] for k in sorted(label_ranges.keys())}
