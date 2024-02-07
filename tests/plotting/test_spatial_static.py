@@ -196,7 +196,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
 
     def test_tol_plot_palette_listed_cmap(self, adata_hne: AnnData):
         del adata_hne.uns["cluster_colors"]
-        palette = plt.get_cmap("Set3")
+        palette = plt.colormaps["Set3"]
         assert isinstance(palette, ListedColormap)
         pl.spatial_scatter(adata_hne, color="cluster", palette=palette, legend_loc=None)
         self.compare("SpatialStatic_palette_listed_cmap", tolerance=70)
