@@ -789,7 +789,7 @@ class ImageContainer(FeatureMixin):
                     raise e
         else:
             try:
-                obs_library_ids = adata.obs[library_id]
+                obs_library_ids = list(adata.obs[library_id])
             except KeyError:
                 logg.debug(
                     f"Unable to find library ids in `adata.obs[{library_id!r}]`. "
