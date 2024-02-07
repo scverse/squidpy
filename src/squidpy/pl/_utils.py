@@ -34,7 +34,6 @@ from pandas import CategoricalDtype
 from pandas._libs.lib import infer_dtype
 from pandas.core.dtypes.common import (
     is_bool_dtype,
-    is_categorical_dtype,
     is_integer_dtype,
     is_numeric_dtype,
     is_object_dtype,
