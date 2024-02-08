@@ -479,7 +479,7 @@ def _set_color_source_vec(
     if color_map is None:
         raise ValueError("Unable to create color palette.")
     # do not rename categories, as colors need not be unique
-    color_vector = color_source_vector.map(color_map)
+    color_vector = color_source_vector.map(color_map, na_action=None)
     if color_vector.isna().any():
         color_vector = color_vector.add_categories([to_hex(na_color)])
         color_vector = color_vector.fillna(to_hex(na_color))
