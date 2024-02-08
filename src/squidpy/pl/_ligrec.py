@@ -107,7 +107,7 @@ class CustomDotplot(sc.pl.DotPlot):
             ax.set_position([l + w, b, w, h])
 
     def _plot_colorbar(self, color_legend_ax: Axes, normalize: bool) -> None:
-        cmap = plt.get_cmap(self.cmap)
+        cmap = plt.colormaps[self.cmap]
 
         ColorbarBase(
             color_legend_ax,

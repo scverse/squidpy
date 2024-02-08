@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from copy import copy
 from functools import wraps
 from inspect import signature
 from pathlib import Path
@@ -481,7 +480,7 @@ def _annotate_heatmap(
 ) -> None:
     # modified from matplotlib's site
     if isinstance(cmap, str):
-        cmap = plt.get_cmap(cmap)
+        cmap = plt.colormaps[cmap]
 
     data = im.get_array()
     kw = {"ha": "center", "va": "center"}
@@ -562,7 +561,8 @@ def _heatmap(
     col_sm = mpl.cm.ScalarMappable(cmap=col_cmap, norm=col_norm)
 
     norm = mpl.colors.Normalize(vmin=kwargs.pop("vmin", np.nanmin(data)), vmax=kwargs.pop("vmax", np.nanmax(data)))
-    cont_cmap = copy(plt.get_cmap(cont_cmap))
+    if isinstance(cont_cmap, str):
+        cont_cmap = plt.colormaps[cont_cmap]
     cont_cmap.set_bad(color="grey")
 
     im = ax.imshow(data[::-1], cmap=cont_cmap, norm=norm)

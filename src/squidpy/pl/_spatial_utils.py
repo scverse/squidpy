@@ -26,7 +26,6 @@ from anndata import AnnData
 from matplotlib import colors, patheffects, rcParams
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
-from matplotlib.cm import get_cmap
 from matplotlib.collections import Collection, PatchCollection
 from matplotlib.colors import (
     ColorConverter,
@@ -821,7 +820,10 @@ def _prepare_params_plot(
             fig, ax = plt.subplots(figsize=figsize, dpi=dpi, constrained_layout=True)
 
     # set cmap and norm
-    cmap = copy(get_cmap(cmap))
+    if cmap is None:
+        cmap = plt.rcParams["image.cmap"]
+    if isinstance(cmap, str):
+        cmap = plt.colormaps[cmap]
     cmap.set_bad("lightgray" if na_color is None else na_color)
 
     if isinstance(norm, Normalize):
