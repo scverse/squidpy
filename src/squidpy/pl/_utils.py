@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from copy import copy
 from functools import wraps
 from inspect import signature
 from pathlib import Path
@@ -34,7 +33,6 @@ from pandas import CategoricalDtype
 from pandas._libs.lib import infer_dtype
 from pandas.core.dtypes.common import (
     is_bool_dtype,
-    is_categorical_dtype,
     is_integer_dtype,
     is_numeric_dtype,
     is_object_dtype,
@@ -482,7 +480,7 @@ def _annotate_heatmap(
 ) -> None:
     # modified from matplotlib's site
     if isinstance(cmap, str):
-        cmap = plt.get_cmap(cmap)
+        cmap = plt.colormaps[cmap]
 
     data = im.get_array()
     kw = {"ha": "center", "va": "center"}
@@ -554,7 +552,7 @@ def _heatmap(
         row_order = col_order = np.arange(len(adata.uns[Key.uns.colors(key)])).tolist()
 
     row_order = row_order[::-1]
-    row_labels = adata.obs[key][row_order]
+    row_labels = adata.obs[key].iloc[row_order]
     data = adata[row_order, col_order].X
 
     row_cmap, col_cmap, row_norm, col_norm, n_cls = _get_cmap_norm(adata, key, order=(row_order, col_order))
@@ -563,7 +561,8 @@ def _heatmap(
     col_sm = mpl.cm.ScalarMappable(cmap=col_cmap, norm=col_norm)
 
     norm = mpl.colors.Normalize(vmin=kwargs.pop("vmin", np.nanmin(data)), vmax=kwargs.pop("vmax", np.nanmax(data)))
-    cont_cmap = copy(plt.get_cmap(cont_cmap))
+    if isinstance(cont_cmap, str):
+        cont_cmap = plt.colormaps[cont_cmap]
     cont_cmap.set_bad(color="grey")
 
     im = ax.imshow(data[::-1], cmap=cont_cmap, norm=norm)

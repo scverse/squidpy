@@ -107,7 +107,7 @@ class CustomDotplot(sc.pl.DotPlot):
             ax.set_position([l + w, b, w, h])
 
     def _plot_colorbar(self, color_legend_ax: Axes, normalize: bool) -> None:
-        cmap = plt.get_cmap(self.cmap)
+        cmap = plt.colormaps[self.cmap]
 
         ColorbarBase(
             color_legend_ax,
@@ -303,7 +303,7 @@ def ligrec(
         pvals = pvals.T
         means = means.T
 
-    for cls, size in (pvals.groupby(level=0, axis=1)).size().to_dict().items():
+    for cls, size in (pvals.T.groupby(level=0)).size().to_dict().items():
         label_ranges[cls] = (start, start + size - 1)
         start += size
     label_ranges = {k: label_ranges[k] for k in sorted(label_ranges.keys())}
@@ -322,7 +322,7 @@ def ligrec(
     var = pd.DataFrame(pvals.columns)
     var = var.set_index(var.columns[0])
 
-    adata = AnnData(pvals.values, obs={"groups": pd.Categorical(pvals.index)}, var=var, dtype=pvals.values.dtype)
+    adata = AnnData(pvals.values, obs={"groups": pd.Categorical(pvals.index)}, var=var)
     adata.obs_names = pvals.index
     minn = np.nanmin(adata.X)
     delta = np.nanmax(adata.X) - minn

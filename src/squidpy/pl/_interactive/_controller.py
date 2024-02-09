@@ -10,7 +10,6 @@ from anndata import AnnData
 from napari import Viewer
 from napari.layers import Points, Shapes
 from pandas import CategoricalDtype
-from pandas.core.dtypes.common import is_categorical_dtype
 from PyQt5.QtWidgets import QGridLayout, QLabel, QWidget
 from scanpy import logging as logg
 

@@ -84,9 +84,7 @@ def adata() -> AnnData:
 
 @pytest.fixture()
 def adata_palette() -> AnnData:
-    from matplotlib.cm import get_cmap
-
-    cmap = get_cmap("Set1")
+    cmap = plt.colormaps["Set1"]
 
     adata_palette = _adata.copy()
     adata_palette.uns[f"{C_KEY_PALETTE}_colors"] = cmap(range(adata_palette.obs[C_KEY_PALETTE].unique().shape[0]))
@@ -106,7 +104,7 @@ def nhood_data(adata: AnnData) -> AnnData:
 @pytest.fixture()
 def dummy_adata() -> AnnData:
     r = np.random.RandomState(100)
-    adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)}, dtype=float)
+    adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
 
     adata.obsm[Key.obsm.spatial] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
     sq.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
@@ -131,16 +129,13 @@ def adata_intmat() -> AnnData:
         np.zeros((5, 5)),
         obs={"cat": pd.Categorical.from_codes([0, 0, 0, 1, 1], ("a", "b"))},
         obsp={"spatial_connectivities": graph},
-        dtype=float,
     )
 
 
 @pytest.fixture()
 def adata_ripley() -> AnnData:
-    from matplotlib.cm import get_cmap
-
     adata = _adata[_adata.obs.leiden.isin(["0", "2"])].copy()
-    cmap = get_cmap("Set1")
+    cmap = plt.colormaps["Set1"]
 
     adata.uns[f"{C_KEY_PALETTE}_colors"] = cmap(range(adata.obs[C_KEY_PALETTE].unique().shape[0]))
     return adata
@@ -152,7 +147,7 @@ def adata_squaregrid() -> AnnData:
     coord = rng.integers(0, 10, size=(400, 2))
     coord = np.unique(coord, axis=0)
     counts = rng.integers(0, 10, size=(coord.shape[0], 10))
-    adata = AnnData(counts, dtype=counts.dtype)
+    adata = AnnData(counts)
     adata.obsm["spatial"] = coord
     sc.pp.scale(adata)
     return adata
@@ -319,7 +314,7 @@ def visium_adata():
             [4400, 7729],
         ]
     )
-    adata = AnnData(X=np.ones((visium_coords.shape[0], 3)), dtype=float)
+    adata = AnnData(X=np.ones((visium_coords.shape[0], 3)))
     adata.obsm[Key.obsm.spatial] = visium_coords
     adata.uns[Key.uns.spatial] = {}
     return adata
@@ -328,7 +323,7 @@ def visium_adata():
 @pytest.fixture()
 def non_visium_adata():
     non_visium_coords = np.array([[1, 0], [3, 0], [5, 6], [0, 4]])
-    adata = AnnData(X=non_visium_coords, dtype=int)
+    adata = AnnData(X=non_visium_coords)
     adata.obsm[Key.obsm.spatial] = non_visium_coords
     return adata
 

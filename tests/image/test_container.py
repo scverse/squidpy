@@ -886,14 +886,12 @@ class TestZStacks:
             np.zeros((len(crop_coords), 1)),
             uns={"spatial": {"1": {"scalefactors": {"spot_diameter_fullres": 5}}}},
             obsm={"spatial": crop_coords},
-            dtype=float,
         )
         # for library_id 2 (with larger scalefactor)
         adata2 = AnnData(
             np.zeros((len(crop_coords), 1)),
             uns={"spatial": {"2": {"scalefactors": {"spot_diameter_fullres": 7}}}},
             obsm={"spatial": crop_coords},
-            dtype=float,
         )
         # concatenate
         adata = ad.concat({"1": adata1, "2": adata2}, uns_merge="unique", label="library_id")
@@ -983,7 +981,7 @@ class TestExplicitDims:
         img = ImageContainer(np.random.normal(size=shape), dims=dims)
 
         for d, s in zip(dims, shape):
-            assert img.data.dims[d] == s
+            assert img.data.sizes[d] == s
 
     @pytest.mark.parametrize("missing", ["y", "x", "z"])
     @pytest.mark.parametrize("ndim", [2, 3, 4])
@@ -1004,8 +1002,8 @@ class TestExplicitDims:
         if ndim in (2, 3) and missing == "z":
             img = ImageContainer(np.random.normal(size=shape), dims=dims)
             for d, s in zip(dims, shape):
-                assert img.data.dims[d] == s
-            assert img.data.dims["z"] == 1
+                assert img.data.sizes[d] == s
+            assert img.data.sizes["z"] == 1
         else:
             with pytest.raises(ValueError, match=rf"Expected to find `\[{missing!r}\]` dimension\(s\)"):
                 _ = ImageContainer(np.random.normal(size=shape), dims=dims)
@@ -1019,7 +1017,7 @@ class TestExplicitDims:
             dims = ("channels", "z", "y", "x")
             shape = (1, 1) + shape
         for d, s in zip(dims, shape):
-            assert img.data.dims[d] == s
+            assert img.data.sizes[d] == s
 
     @pytest.mark.parametrize("dims", ["z_last", "channels_last", ("x", "y", "z"), ("y", "x", "c")])
     def test_3D_array(self, dims: str):
@@ -1030,7 +1028,7 @@ class TestExplicitDims:
             dims = (("channels", "z") if dims == "z_last" else ("z", "channels")) + ("y", "x")
             shape = (1,) + shape
         for d, s in zip(dims, shape):
-            assert img.data.dims[d] == s
+            assert img.data.sizes[d] == s
 
     @pytest.mark.parametrize("dims", ["z_last", "channels_last", ("z", "y", "x", "c")])
     def test_4D_array(self, dims: str):
@@ -1040,7 +1038,7 @@ class TestExplicitDims:
         if isinstance(dims, str):
             dims = (("channels", "z") if dims == "z_last" else ("z", "channels")) + ("y", "x")
         for d, s in zip(dims, shape):
-            assert img.data.dims[d] == s
+            assert img.data.sizes[d] == s
 
 
 class TestLibraryIds:
@@ -1259,4 +1257,4 @@ class TestPileLine:
                 _ = ImageContainer.load(str(tmpdir))
         else:
             img = ImageContainer.load(str(tmpdir))
-            assert img.data.dims == {"x": 64, "y": 64, "z": 1, dim_name: 3}
+            assert img.data.sizes == {"x": 64, "y": 64, "z": 1, dim_name: 3}

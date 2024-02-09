@@ -26,7 +26,6 @@ from anndata import AnnData
 from matplotlib import colors, patheffects, rcParams
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
-from matplotlib.cm import get_cmap
 from matplotlib.collections import Collection, PatchCollection
 from matplotlib.colors import (
     ColorConverter,
@@ -40,7 +39,6 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib_scalebar.scalebar import ScaleBar
 from pandas import CategoricalDtype
-from pandas.core.dtypes.common import is_categorical_dtype
 from scanpy import logging as logg
 from scanpy._settings import settings as sc_settings
 from scanpy.plotting._tools.scatterplots import _add_categorical_legend
@@ -385,7 +383,7 @@ def _subs(
     ) -> tuple[AnnData, NDArrayA]:
         if key is None or values is None:
             return adata, coords
-        if key not in adata.obs or not is_categorical_dtype(adata.obs[key]):
+        if key not in adata.obs or not isinstance(adata.obs[key].dtype, CategoricalDtype):
             return adata, coords
         try:
             mask = adata.obs[key].isin(values).values
@@ -468,7 +466,7 @@ def _set_color_source_vec(
     else:
         color_source_vector = adata.obs_vector(value_to_plot, layer=layer)
 
-    if not is_categorical_dtype(color_source_vector):
+    if not isinstance(color_source_vector.dtype, CategoricalDtype):
         return None, color_source_vector, False
 
     color_source_vector = pd.Categorical(color_source_vector)  # convert, e.g., `pd.Series`
@@ -480,7 +478,7 @@ def _set_color_source_vec(
     if color_map is None:
         raise ValueError("Unable to create color palette.")
     # do not rename categories, as colors need not be unique
-    color_vector = color_source_vector.map(color_map)
+    color_vector = color_source_vector.map(color_map, na_action=None)
     if color_vector.isna().any():
         color_vector = color_vector.add_categories([to_hex(na_color)])
         color_vector = color_vector.fillna(to_hex(na_color))
@@ -613,7 +611,7 @@ def _decorate_axs(
     adata: AnnData,
     coords: NDArrayA,
     value_to_plot: str,
-    color_source_vector: pd.Series[CategoricalDtype],
+    color_source_vector: pd.Series[CategoricalDtype] | None,
     img: NDArrayA | None = None,
     img_cmap: str | None = None,
     img_alpha: float | None = None,
@@ -646,7 +644,7 @@ def _decorate_axs(
             path_effect = []
 
         # Adding legends
-        if is_categorical_dtype(color_source_vector):
+        if color_source_vector is not None and isinstance(color_source_vector.dtype, CategoricalDtype):
             clusters = color_source_vector.categories
             palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette, alpha=alpha)
             _add_categorical_legend(
@@ -691,7 +689,7 @@ def _map_color_seg(
 ) -> NDArrayA:
     cell_id = np.array(cell_id)
 
-    if is_categorical_dtype(color_vector):
+    if isinstance(color_vector.dtype, CategoricalDtype):
         if isinstance(na_color, tuple) and len(na_color) == 4 and np.any(color_source_vector.isna()):
             cell_id[color_source_vector.isna()] = 0
         val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)  # type: ignore[union-attr]
@@ -822,7 +820,10 @@ def _prepare_params_plot(
             fig, ax = plt.subplots(figsize=figsize, dpi=dpi, constrained_layout=True)
 
     # set cmap and norm
-    cmap = copy(get_cmap(cmap))
+    if cmap is None:
+        cmap = plt.rcParams["image.cmap"]
+    if isinstance(cmap, str):
+        cmap = plt.colormaps[cmap]
     cmap.set_bad("lightgray" if na_color is None else na_color)
 
     if isinstance(norm, Normalize):

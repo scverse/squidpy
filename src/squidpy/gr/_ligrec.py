@@ -730,7 +730,7 @@ def _analysis(
 
         return TempResult(means=means, pvalues=pvalues)
 
-    groups = data.groupby("clusters")
+    groups = data.groupby("clusters", observed=True)
     clustering = np.array(data["clusters"].values, dtype=np.int32)
 
     mean = groups.mean().values.T  # (n_genes, n_clusters)

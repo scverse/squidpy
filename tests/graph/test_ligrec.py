@@ -150,7 +150,7 @@ class TestValidBehavior:
                     [g[12], g[13]],
                 ]
             )
-            .applymap(str.upper)
+            .map(str.upper)
             .values,
         )
 

@@ -53,7 +53,7 @@ def _get_palette(
 
     len_cat = len(categories)
     if isinstance(palette, str):
-        cmap = plt.get_cmap(palette)
+        cmap = plt.colormaps[palette]
         palette = [to_hex(x, keep_alpha=True) for x in cmap(np.linspace(0, 1, len_cat), alpha=alpha)]
     elif isinstance(palette, ListedColormap):
         palette = [to_hex(x, keep_alpha=True) for x in palette(np.linspace(0, 1, len_cat), alpha=alpha)]
