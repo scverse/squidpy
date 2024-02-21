@@ -48,7 +48,7 @@ def _read_counts(
 
     if count_file.endswith((".csv", ".txt")):
         adata = read_text(path / count_file, **kwargs)
-    elif count_file.endswith(".mtx"):
+    elif count_file.endswith(".mtx.gz"):
         adata = read_10x_mtx(path, **kwargs)
     else:
         raise NotImplementedError("TODO")
