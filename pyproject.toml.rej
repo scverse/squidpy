@@ -6,7 +6,7 @@ diff a/pyproject.toml b/pyproject.toml	(rejected hunks)
 -    "session-info"
 +    "session-info",
  ]
- 
+
  [project.optional-dependencies]
  dev = [
      "pre-commit",
@@ -18,7 +18,7 @@ diff a/pyproject.toml b/pyproject.toml	(rejected hunks)
 @@ -61,12 +61,15 @@ addopts = [
      "--import-mode=importlib",  # allow using test files with same name
  ]
- 
+
 -[tool.black]
 -line-length = 120
 -
@@ -47,11 +47,11 @@ diff a/pyproject.toml b/pyproject.toml	(rejected hunks)
 @@ -108,10 +111,10 @@ ignore = [
      "D213",
  ]
- 
+
 -[tool.ruff.pydocstyle]
 +[tool.ruff.lint.pydocstyle]
  convention = "numpy"
- 
+
 -[tool.ruff.per-file-ignores]
 +[tool.ruff.lint.per-file-ignores]
  "docs/*" = ["I"]

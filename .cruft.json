@@ -1,29 +1,29 @@
 {
-  "template": "https://github.com/scverse/cookiecutter-scverse",
-  "commit": "586b1652162ff7994b0070a034023d64289ae416",
-  "checkout": "v0.3.1",
-  "context": {
-    "cookiecutter": {
-      "project_name": "squidpy",
-      "package_name": "squidpy",
-      "project_description": "Spatial Single Cell Analysis in Python",
-      "author_full_name": "Giovanni Palla",
-      "author_email": "giovanni.palla@helmholtz-muenchen.de",
-      "github_user": "giovp",
-      "project_repo": "https://github.com/scverse/squidpy",
-      "license": "BSD 3-Clause License",
-      "_copy_without_render": [
-        ".github/workflows/build.yaml",
-        ".github/workflows/test.yaml",
-        "docs/_templates/autosummary/**.rst"
-      ],
-      "_render_devdocs": false,
-      "_jinja2_env_vars": {
-        "lstrip_blocks": true,
-        "trim_blocks": true
-      },
-      "_template": "https://github.com/scverse/cookiecutter-scverse"
-    }
-  },
-  "directory": null
+    "template": "https://github.com/scverse/cookiecutter-scverse",
+    "commit": "586b1652162ff7994b0070a034023d64289ae416",
+    "checkout": "v0.3.1",
+    "context": {
+        "cookiecutter": {
+            "project_name": "squidpy",
+            "package_name": "squidpy",
+            "project_description": "Spatial Single Cell Analysis in Python",
+            "author_full_name": "Giovanni Palla",
+            "author_email": "giovanni.palla@helmholtz-muenchen.de",
+            "github_user": "giovp",
+            "project_repo": "https://github.com/scverse/squidpy",
+            "license": "BSD 3-Clause License",
+            "_copy_without_render": [
+                ".github/workflows/build.yaml",
+                ".github/workflows/test.yaml",
+                "docs/_templates/autosummary/**.rst"
+            ],
+            "_render_devdocs": false,
+            "_jinja2_env_vars": {
+                "lstrip_blocks": true,
+                "trim_blocks": true
+            },
+            "_template": "https://github.com/scverse/cookiecutter-scverse"
+        }
+    },
+    "directory": null
 }
