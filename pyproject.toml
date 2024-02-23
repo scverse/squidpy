@@ -117,39 +117,6 @@ include-package-data = true
 
 [tool.setuptools_scm]
 
-[tool.isort]
-profile = "black"
-py_version = "38"
-skip = "docs/source/conf.py,.tox,build"
-line_length = 88
-multi_line_output = 3
-include_trailing_comma = true
-use_parentheses = true
-known_stdlib = "joblib"
-known_bio = "anndata,scanpy"
-known_num = "numpy,numba,scipy,sklearn,statsmodels,pandas,xarray,dask"
-known_plot = "matplotlib,seaborn,napari"
-known_gui = "PyQt5,superqt"
-known_img = "skimage,tifffile,dask_image"
-known_graph = "networkx"
-sections = "FUTURE,STDLIB,THIRDPARTY,BIO,NUM,GUI,PLOT,IMG,GRAPH,FIRSTPARTY,LOCALFOLDER"
-no_lines_before="LOCALFOLDER"
-balanced_wrapping = true
-force_grid_wrap = 0
-length_sort = "1"
-indent = "    "
-from_first = true
-order_by_type = true
-atomic = true
-combine_star = true
-combine_as_imports = true
-honor_noqa = true
-remove_redundant_aliases = true
-only_modified = true
-group_by_package = true
-force_alphabetical_sort_within_sections = true
-lexicographical = true
-
 [tool.hatch.version]
 source = "vcs"
 
@@ -239,6 +206,9 @@ select = [
     "BLE", # flake8-blind-except
 ]
 unfixable = ["B", "C4", "BLE"]
+
+[tool.ruff.lint.isort]
+required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.per-file-ignores]
 "*/__init__.py" = ["D104", "F401"]
