@@ -1,4 +1,4 @@
-from typing import Tuple
+from __future__ import annotations
 
 import anndata as ad
 import numpy as np

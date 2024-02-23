@@ -1,23 +1,12 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Mapping, Sequence
 from copy import copy
 from functools import partial
 from numbers import Number
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    List,
-    Literal,
-    Mapping,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, Union
 
 import dask.array as da
 import numpy as np
@@ -60,7 +49,7 @@ _Normalize = Union[Normalize, Sequence[Normalize]]
 _SeqStr = Union[str, Sequence[str]]
 _SeqFloat = Union[float, Sequence[float]]
 _SeqArray = Union[NDArrayA, Sequence[NDArrayA]]
-_CoordTuple = Tuple[int, int, int, int]
+_CoordTuple = tuple[int, int, int, int]
 _FontWeight = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
 _FontSize = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
 

@@ -2,6 +2,8 @@
 Tests to make sure the Visium example datasets load.
 """
 
+from __future__ import annotations
+
 import subprocess
 from pathlib import Path
 

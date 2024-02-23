@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Hashable, Iterable, Sequence
 from contextlib import contextmanager
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Hashable,
-    Iterable,
-    Sequence,
-    Union,  # noqa: F401
-)
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd

@@ -238,7 +238,7 @@ select = [
     "B", # flake8-bugbear
     "BLE", # flake8-blind-except
 ]
-unfixable = ["B", "UP", "C4", "BLE"]
+unfixable = ["B", "C4", "BLE"]
 
 [tool.ruff.lint.per-file-ignores]
 "*/__init__.py" = ["D104", "F401"]

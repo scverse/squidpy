@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import re
-from typing import Iterable, Iterator, List
+from collections.abc import Iterable, Iterator
 
 from sphinx.application import Sphinx
 from sphinx.ext.napoleon import NumpyDocstring

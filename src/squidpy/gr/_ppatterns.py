@@ -2,16 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Iterable,
-    Literal,  # < 3.8
-    Sequence,
-    Union,  # noqa: F401
-)
+from typing import TYPE_CHECKING, Any, Literal
 
 import numba.types as nt
 import numpy as np

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Iterable  # noqa: F401
 from functools import partial
 from itertools import chain
-from typing import Iterable, List, Tuple, Union  # noqa: F401
 
 import numpy as np
 from anndata import AnnData

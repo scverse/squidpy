@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-from typing import (
-    Callable,
-    Literal,  # < 3.8
-    Sequence,
-    Union,  # noqa: F401
-)
+from collections.abc import Sequence
+from typing import Callable, Literal
 
 import numpy as np
 import pandas as pd

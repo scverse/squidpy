@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import scanpy as sc
 from anndata import AnnData
 from squidpy import pl, tl

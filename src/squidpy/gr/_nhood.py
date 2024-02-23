@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from functools import partial
-from typing import (
-    Any,
-    Callable,
-    Iterable,
-    Sequence,
-    Union,  # noqa: F401
-)
+from typing import Any, Callable
 
 import networkx as nx
 import numba.types as nt

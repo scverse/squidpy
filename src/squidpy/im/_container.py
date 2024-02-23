@@ -1,23 +1,13 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from copy import copy, deepcopy
 from functools import partial
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Iterable,
-    Iterator,
-    Literal,
-    Mapping,
-    Sequence,
-    TypeVar,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Literal, TypeVar, Union
 
 import dask.array as da
 import matplotlib as mpl

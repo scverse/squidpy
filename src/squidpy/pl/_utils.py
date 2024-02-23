@@ -1,21 +1,12 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping, Sequence
 from functools import wraps
 from inspect import signature
 from pathlib import Path
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 import matplotlib as mpl
 import numpy as np

@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import platform
 import sys
-from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np

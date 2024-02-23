@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 from http.client import RemoteDisconnected
 from pathlib import Path

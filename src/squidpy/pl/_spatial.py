@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable
 
 from anndata import AnnData
 from matplotlib.axes import Axes
