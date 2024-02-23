@@ -117,65 +117,11 @@ include-package-data = true
 
 [tool.setuptools_scm]
 
-[tool.black]
-line-length = 120
-target-version = ['py39']
-include = '\.pyi?$'
-exclude = '''
-(
-  /(
-      \.eggs
-    | \.git
-    | \.hg
-    | \.mypy_cache
-    | \.tox
-    | \.venv
-    | _build
-    | buck-out
-    | build
-    | dist
-  )/
-
-)
-'''
-
-[tool.isort]
-profile = "black"
-py_version = "38"
-skip = "docs/source/conf.py,.tox,build"
-line_length = 88
-multi_line_output = 3
-include_trailing_comma = true
-use_parentheses = true
-known_stdlib = "joblib"
-known_bio = "anndata,scanpy"
-known_num = "numpy,numba,scipy,sklearn,statsmodels,pandas,xarray,dask"
-known_plot = "matplotlib,seaborn,napari"
-known_gui = "PyQt5,superqt"
-known_img = "skimage,tifffile,dask_image"
-known_graph = "networkx"
-sections = "FUTURE,STDLIB,THIRDPARTY,BIO,NUM,GUI,PLOT,IMG,GRAPH,FIRSTPARTY,LOCALFOLDER"
-no_lines_before="LOCALFOLDER"
-balanced_wrapping = true
-force_grid_wrap = 0
-length_sort = "1"
-indent = "    "
-from_first = true
-order_by_type = true
-atomic = true
-combine_star = true
-combine_as_imports = true
-honor_noqa = true
-remove_redundant_aliases = true
-only_modified = true
-group_by_package = true
-force_alphabetical_sort_within_sections = true
-lexicographical = true
-
 [tool.hatch.version]
 source = "vcs"
 
 [tool.ruff]
+line-length = 120
 exclude = [
     ".git",
     ".tox",
@@ -185,8 +131,13 @@ exclude = [
     "dist",
     "setup.py"
 ]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
 ignore = [
-    # line too long -> we accept long comment lines; black gets rid of long code lines
+    # line too long -> we accept long comment lines; formatter gets rid of long code lines
     "E501",
     # Do not assign a lambda expression, use a def -> lambda expression assignments are convenient
     "E731",
@@ -243,7 +194,6 @@ ignore = [
     # "E111",
     # "E114",
 ]
-line-length = 120
 select = [
     "I", # isort
     "E", # pycodestyle
@@ -255,19 +205,22 @@ select = [
     "B", # flake8-bugbear
     "BLE", # flake8-blind-except
 ]
-unfixable = ["B", "UP", "C4", "BLE"]
-target-version = "py38"
-[tool.ruff.per-file-ignores]
-    "*/__init__.py" = ["D104", "F401"]
-    "tests/*"= ["D"]
-    "docs/*"= ["D","B"]
-    "squidpy/pl/_ligrec.py"= ["D","B"]
-    "squidpy/_constants/_pkg_constants.py"= ["D101","D102","D106"]
-    "squidpy/_constants/_constants.py"= ["D101"]
-    "squidpy/pl/_interactive/_widgets.py"= ["D"]
-    ".scripts/ci/download_data.py"= ["D","B"]
-    # "squidpy/*.py"= ["RST303"]
+unfixable = ["B", "C4", "BLE"]
 
-[tool.ruff.flake8-tidy-imports]
+[tool.ruff.lint.isort]
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.per-file-ignores]
+"*/__init__.py" = ["D104", "F401"]
+"tests/*"= ["D"]
+"docs/*"= ["D","B"]
+"squidpy/pl/_ligrec.py"= ["D","B"]
+"squidpy/_constants/_pkg_constants.py"= ["D101","D102","D106"]
+"squidpy/_constants/_constants.py"= ["D101"]
+"squidpy/pl/_interactive/_widgets.py"= ["D"]
+".scripts/ci/download_data.py"= ["D","B"]
+# "squidpy/*.py"= ["RST303"]
+
+[tool.ruff.lint.flake8-tidy-imports]
 # Disallow all relative imports.
 ban-relative-imports = "all"

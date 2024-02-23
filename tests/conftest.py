@@ -4,10 +4,10 @@ import pickle
 import sys
 import warnings
 from abc import ABC, ABCMeta
+from collections.abc import Callable, Mapping, Sequence
 from functools import wraps
 from itertools import product
 from pathlib import Path
-from typing import Callable, Mapping, Optional, Sequence, Tuple
 
 import anndata as ad
 import matplotlib

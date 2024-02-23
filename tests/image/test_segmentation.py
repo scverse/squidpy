@@ -1,4 +1,6 @@
-from typing import Callable, Optional, Sequence, Tuple, Union
+from __future__ import annotations
+
+from collections.abc import Callable, Sequence
 
 import dask.array as da
 import numpy as np
@@ -59,7 +61,7 @@ class TestGeneral:
 
 class TestWatershed:
     @pytest.mark.parametrize("thresh", [None, 0.1, 0.5, 1.0])
-    def test_threshold(self, thresh: Optional[float], mocker: MockerFixture):
+    def test_threshold(self, thresh: float | None, mocker: MockerFixture):
         img = np.zeros((100, 200), dtype=np.float64)
         img[2:10, 2:10] = 1.0
         img[30:34, 10:16] = 1.0
@@ -83,7 +85,7 @@ class TestHighLevel:
             segment(small_cont, layer="foobar")
 
     @pytest.mark.parametrize("method", ["watershed", dummy_segment])
-    def test_method(self, small_cont: ImageContainer, method: Union[str, Callable]):
+    def test_method(self, small_cont: ImageContainer, method: str | Callable):
         res = segment(small_cont, method=method, copy=True)
 
         assert isinstance(res, ImageContainer)
@@ -99,7 +101,7 @@ class TestHighLevel:
 
     @pytest.mark.parametrize("dy", [11, 0.5, None])
     @pytest.mark.parametrize("dx", [15, 0.1, None])
-    def test_size(self, small_cont: ImageContainer, dy: Optional[Union[int, float]], dx: Optional[Union[int, float]]):
+    def test_size(self, small_cont: ImageContainer, dy: int | float | None, dx: int | float | None):
         res = segment(small_cont, size=(dy, dx), copy=True)
 
         assert isinstance(res, ImageContainer)
@@ -127,7 +129,7 @@ class TestHighLevel:
         assert small_cont["seg"].dtype == _SEG_DTYPE
 
     @pytest.mark.parametrize("key_added", [None, "foo"])
-    def test_key_added(self, small_cont: ImageContainer, key_added: Optional[str]):
+    def test_key_added(self, small_cont: ImageContainer, key_added: str | None):
         res = segment(small_cont, copy=False, layer="image", layer_added=key_added)
 
         assert res is None
@@ -148,7 +150,7 @@ class TestHighLevel:
     @pytest.mark.parametrize("chunks", [25, (50, 50, 1), "auto"])
     @pytest.mark.parametrize("lazy", [False, True])
     def test_dask_segment(
-        self, small_cont: ImageContainer, dask_input: bool, chunks: Union[int, tuple[int, ...], str], lazy: bool
+        self, small_cont: ImageContainer, dask_input: bool, chunks: int | tuple[int, ...] | str, lazy: bool
     ):
         def func(chunk: np.ndarray):
             if isinstance(chunks, tuple):
@@ -216,7 +218,7 @@ class TestHighLevel:
         np.testing.assert_array_equal(small_cont["bar"].values, expected)
 
     @pytest.mark.parametrize("size", [None, 11])
-    def test_watershed_works(self, size: Optional[int]):
+    def test_watershed_works(self, size: int | None):
         img_orig = np.zeros((100, 200, 30), dtype=np.float64)
         img_orig[2:10, 2:10] = 1.0
         img_orig[30:34, 10:16] = 1.0
@@ -239,7 +241,7 @@ class TestHighLevel:
         # but outside, the assertion fails, as it should
 
     @pytest.mark.parametrize("library_id", [None, "3", ["1", "2"]])
-    def test_library_id(self, cont_4d: ImageContainer, library_id: Optional[Union[str, Sequence[str]]]):
+    def test_library_id(self, cont_4d: ImageContainer, library_id: str | Sequence[str] | None):
         def func(arr: np.ndarray):
             assert arr.shape == cont_4d.shape + (1,)
             return np.ones(arr[..., 0].shape, dtype=_SEG_DTYPE)

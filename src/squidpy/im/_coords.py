@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Hashable
 from dataclasses import dataclass
-from typing import (
-    Any,
-    Hashable,
-    Union,  # noqa: F401
-)
+from typing import Any
 
 import numpy as np
 

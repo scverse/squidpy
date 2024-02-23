@@ -1,5 +1,7 @@
 """The graph module."""
 
+from __future__ import annotations
+
 from squidpy.gr._build import spatial_neighbors
 from squidpy.gr._ligrec import ligrec
 from squidpy.gr._nhood import centrality_scores, interaction_matrix, nhood_enrichment

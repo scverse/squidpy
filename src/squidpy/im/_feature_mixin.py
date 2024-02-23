@@ -1,15 +1,7 @@
 from __future__ import annotations
 
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    Protocol,
-    Sequence,
-    Union,
-)
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Protocol, Union
 
 import numpy as np
 import skimage.measure
@@ -74,15 +66,18 @@ _valid_seg_prop = sorted(
 class HasGetItemProtocol(Protocol):
     """Protocol for FeatureMixin to have correct definition of ImageContainer."""
 
-    def __getitem__(self, key: str) -> xr.DataArray: ...
+    def __getitem__(self, key: str) -> xr.DataArray:
+        ...
 
     @property
     def data(self) -> xr.Dataset:  # noqa: D102
         ...
 
-    def _get_layer(self, layer: str | None) -> str: ...
+    def _get_layer(self, layer: str | None) -> str:
+        ...
 
-    def _get_library_id(self, library_id: str | None) -> str: ...
+    def _get_library_id(self, library_id: str | None) -> str:
+        ...
 
 
 class FeatureMixin:

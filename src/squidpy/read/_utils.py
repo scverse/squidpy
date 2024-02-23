@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import numpy as np
 from anndata import AnnData, read_text

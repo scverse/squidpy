@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import subprocess
 from collections import defaultdict
+from collections.abc import Sequence, Set
 from html.parser import HTMLParser
 from itertools import permutations
 from pathlib import Path
-from typing import Any, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any
 
 import anndata as ad
 import dask.array as da
@@ -135,7 +138,7 @@ class TestContainerIO:
             ((100, 200, 3), (100, 200)),
         ],
     )
-    def test_add_img(self, shape1: Tuple[int, ...], shape2: Tuple[int, ...]):
+    def test_add_img(self, shape1: tuple[int, ...], shape2: tuple[int, ...]):
         img_orig = np.random.randint(low=0, high=255, size=shape1, dtype=np.uint8)
         cont = ImageContainer(img_orig, layer="img_orig")
 
@@ -152,7 +155,7 @@ class TestContainerIO:
 
     @pytest.mark.parametrize("ext", ["jpg", "png"])
     @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1)])
-    def test_load_ext(self, shape: Tuple[int, ...], ext: str, tmpdir):
+    def test_load_ext(self, shape: tuple[int, ...], ext: str, tmpdir):
         fname = tmpdir / f"tmp.{ext}"
 
         if shape == (100, 200, 1):
@@ -168,7 +171,7 @@ class TestContainerIO:
         np.testing.assert_array_equal(cont["image"].values.squeeze(), gt.squeeze())
 
     @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1), (10, 100, 200, 1)])
-    def test_load_tiff(self, shape: Tuple[int, ...], tmpdir):
+    def test_load_tiff(self, shape: tuple[int, ...], tmpdir):
         img_orig = np.random.randint(low=0, high=255, size=shape, dtype=np.uint8)
         fname = tmpdir / "tmp.tiff"
         tifffile.imwrite(fname, img_orig)
@@ -181,7 +184,7 @@ class TestContainerIO:
             np.testing.assert_array_equal(np.squeeze(cont["image"]), np.squeeze(img_orig))
 
     @pytest.mark.parametrize("dims", [("y", "x", "z", "c"), ("foo", "bar", "faa", "baz")])
-    def test_load_netcdf(self, tmpdir, dims: Tuple[str, ...]):
+    def test_load_netcdf(self, tmpdir, dims: tuple[str, ...]):
         arr = np.random.normal(size=(100, 10, 1, 4))
         ds = xr.Dataset({"quux": xr.DataArray(arr, dims=dims)})
         fname = tmpdir / "tmp.nc"
@@ -200,7 +203,7 @@ class TestContainerIO:
     @pytest.mark.parametrize(
         "array", [np.zeros((10, 10, 3), dtype=np.uint8), np.random.rand(10, 10, 1).astype(np.float32)]
     )
-    def test_array_dtypes(self, array: Union[np.ndarray, xr.DataArray]):
+    def test_array_dtypes(self, array: np.ndarray | xr.DataArray):
         img = ImageContainer(array)
         np.testing.assert_array_equal(np.squeeze(img["image"].data), np.squeeze(array))
         assert img["image"].data.dtype == array.dtype
@@ -284,7 +287,7 @@ class TestContainerIO:
             del small_cont_1c["image"]
 
     @pytest.mark.parametrize("img_key", [None, "hires", "lowres"])
-    def test_read_from_adata(self, adata: AnnData, img_key: Optional[str]):
+    def test_read_from_adata(self, adata: AnnData, img_key: str | None):
         img = sq.im.ImageContainer.from_adata(adata, img_key=img_key)
         if img_key is None:
             img_key = "hires"
@@ -296,7 +299,7 @@ class TestContainerIO:
         np.testing.assert_array_equal(img[img_key].shape, shape)
 
     @pytest.mark.parametrize("scale", [None, 42])
-    def test_read_from_adata_scalefactor(self, adata: AnnData, scale: Optional[int]):
+    def test_read_from_adata_scalefactor(self, adata: AnnData, scale: int | None):
         img_key = "lowres"
         library_id = Key.uns.library_id(adata, Key.uns.spatial)
         del adata.uns[Key.uns.spatial][library_id]["scalefactors"][f"tissue_{img_key}_scalef"]
@@ -393,9 +396,7 @@ class TestContainerCropping:
 
     @pytest.mark.parametrize("dy", [-10, 25, 0.3])
     @pytest.mark.parametrize("dx", [-10, 30, 0.5])
-    def test_crop_corner_size(
-        self, small_cont_1c: ImageContainer, dy: Optional[Union[int, float]], dx: Optional[Union[int, float]]
-    ):
+    def test_crop_corner_size(self, small_cont_1c: ImageContainer, dy: int | float | None, dx: int | float | None):
         crop = small_cont_1c.crop_corner(dy, dx, size=20)
         # original coordinates
         ody, odx = max(dy, 0), max(dx, 0)
@@ -431,7 +432,7 @@ class TestContainerCropping:
         np.testing.assert_array_equal(crop["image"].data[-10:, -10:], cval)
 
     @pytest.mark.parametrize("size", [(10, 10), (10, 11)])
-    def test_crop_corner_mask_circle(self, small_cont_1c: ImageContainer, size: Tuple[int, int]):
+    def test_crop_corner_mask_circle(self, small_cont_1c: ImageContainer, size: tuple[int, int]):
         if size[0] != size[1]:
             with pytest.raises(ValueError, match=r"Masking circle is only"):
                 small_cont_1c.crop_corner(0, 0, size=size, mask_circle=True, cval=np.nan)
@@ -444,9 +445,7 @@ class TestContainerCropping:
 
     @pytest.mark.parametrize("ry", [23, 1.0])
     @pytest.mark.parametrize("rx", [30, 0.5])
-    def test_crop_center_radius(
-        self, small_cont_1c: ImageContainer, ry: Optional[Union[int, float]], rx: Optional[Union[int, float]]
-    ):
+    def test_crop_center_radius(self, small_cont_1c: ImageContainer, ry: int | float | None, rx: int | float | None):
         crop = small_cont_1c.crop_center(0, 0, radius=(ry, rx))
         sy = int(ry * small_cont_1c.shape[0]) if isinstance(ry, float) else ry
         sx = int(rx * small_cont_1c.shape[1]) if isinstance(rx, float) else rx
@@ -456,7 +455,7 @@ class TestContainerCropping:
     @pytest.mark.parametrize("squeeze", [False, True])
     @pytest.mark.parametrize("as_array", [False, True, "image", ["image", "baz"]])
     def test_equal_crops_as_array(self, small_cont: ImageContainer, as_array: bool, squeeze: bool):
-        def assert_shape(expected: xr.DataArray, actual: Union[np.ndarray, xr.DataArray]):
+        def assert_shape(expected: xr.DataArray, actual: np.ndarray | xr.DataArray):
             expected_shape = list(expected.shape)
             expected_shape[:2] = [11, 11]  # because crop is 11x11
             if squeeze:
@@ -517,7 +516,7 @@ class TestContainerCropping:
                 assert crop.shape == size
 
     @pytest.mark.parametrize("n_names", [None, 4])
-    def test_spot_crops_obs_names(self, adata: AnnData, cont: ImageContainer, n_names: Optional[int]):
+    def test_spot_crops_obs_names(self, adata: AnnData, cont: ImageContainer, n_names: int | None):
         obs = adata.obs_names[:n_names] if isinstance(n_names, int) else adata.obs_names
         crops = list(cont.generate_spot_crops(adata, obs_names=obs))
 
@@ -678,7 +677,7 @@ class TestContainerUtils:
 
     @pytest.mark.parametrize("sx", [-1, -1.0, 0.5, 10])
     @pytest.mark.parametrize("sy", [-1, -1.0, 0.5, 10])
-    def test_to_pixel_space(self, sy: Union[int, float], sx: Union[int, float]):
+    def test_to_pixel_space(self, sy: int | float, sx: int | float):
         cont = ImageContainer(np.empty((10, 10)))
 
         if (isinstance(sy, float) and sy < 0) or (isinstance(sx, float) and sx < 0):
@@ -698,7 +697,7 @@ class TestContainerUtils:
 
     @pytest.mark.parametrize("channel", [None, 0])
     @pytest.mark.parametrize("copy", [False, True])
-    def test_apply(self, copy: bool, channel: Optional[int]):
+    def test_apply(self, copy: bool, channel: int | None):
         cont = ImageContainer(np.random.normal(size=(100, 100, 3)))
         orig = cont.copy()
 
@@ -718,7 +717,7 @@ class TestContainerUtils:
             np.testing.assert_allclose(data.values[..., 0], orig["image"].values[..., channel] + 42)
 
     @pytest.mark.parametrize("depth", [None, (30, 30, 0)])
-    def test_apply_overlap(self, small_cont: ImageContainer, mocker: MockerFixture, depth: Optional[Tuple[int, ...]]):
+    def test_apply_overlap(self, small_cont: ImageContainer, mocker: MockerFixture, depth: tuple[int, ...] | None):
         if depth is None:
             kwargs = {}
             spy = mocker.spy(da, "map_blocks")
@@ -732,9 +731,7 @@ class TestContainerUtils:
     @pytest.mark.parametrize("copy", [False, True])
     @pytest.mark.parametrize("chunks", [25, (50, 50, 1, 3), "auto"])
     @pytest.mark.parametrize("lazy", [False, True])
-    def test_apply_dask(
-        self, small_cont: ImageContainer, copy: bool, chunks: Union[int, Tuple[int, ...], str], lazy: bool
-    ):
+    def test_apply_dask(self, small_cont: ImageContainer, copy: bool, chunks: int | tuple[int, ...] | str, lazy: bool):
         def func(chunk: np.ndarray) -> np.ndarray:
             if isinstance(chunks, tuple):
                 np.testing.assert_array_equal(chunk.shape, chunks)
@@ -758,7 +755,7 @@ class TestContainerUtils:
 
     @pytest.mark.parametrize("as_dask", [False, True])
     def test_apply_passes_correct_array_type(self, as_dask: bool):
-        def func(arr: Union[np.ndarray, da.Array]):
+        def func(arr: np.ndarray | da.Array):
             if as_dask:
                 assert isinstance(arr, da.Array)
             else:
@@ -933,7 +930,7 @@ class TestZStacks:
     @pytest.mark.parametrize("channel", [None, 0])
     @pytest.mark.parametrize("copy", [False, True])
     @pytest.mark.parametrize("library_id", [["l1"], ["l2"], ["l1", "l2", "l3"], None])
-    def test_apply(self, copy: bool, channel: Optional[int], library_id: Optional[Union[list[str], str]]):
+    def test_apply(self, copy: bool, channel: int | None, library_id: list[str] | str | None):
         cont = ImageContainer(
             np.random.normal(size=(100, 100, 3, 2)), dims=("y", "x", "z", "channels"), library_id=["l1", "l2", "l3"]
         )
@@ -976,7 +973,7 @@ class TestZStacks:
 
 class TestExplicitDims:
     @pytest.mark.parametrize("dims", list(permutations(["y", "x", "z", "c"])))
-    def test_explicit_dims(self, dims: Tuple[str, str, str, str]):
+    def test_explicit_dims(self, dims: tuple[str, str, str, str]):
         shape = (2, 3, 4, 5)
         img = ImageContainer(np.random.normal(size=shape), dims=dims)
 
@@ -1087,7 +1084,7 @@ class TestLibraryIds:
 
     @pytest.mark.parametrize("library_id", ["a", ["b", "a"], ["c"]])
     @pytest.mark.parametrize("empty", [False, True])
-    def test_get_library_ids(self, empty: bool, library_id: Union[str, Sequence[str]]):
+    def test_get_library_ids(self, empty: bool, library_id: str | Sequence[str]):
         img = ImageContainer()
         if not empty:
             img.add_img(np.random.normal(size=(2, 3, 4, 5)), dims=["z", "y", "x", "c"], library_id=["a", "b"])

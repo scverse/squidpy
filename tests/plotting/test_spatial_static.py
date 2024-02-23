@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import platform
+from collections.abc import Sequence
 from functools import partial
-from typing import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any
 
 import matplotlib.cm as cm
 import matplotlib.colors as colors
@@ -97,7 +98,7 @@ def var_by_distance(
     df[var] = np.array(adata[:, var].X.A) if issparse(adata[:, var].X) else np.array(adata[:, var].X)  # add var column
 
     # if several variables are plotted, make a panel grid
-    if isinstance(var, List):
+    if isinstance(var, list):
         fig, grid = _panel_grid(
             hspace=0.25, wspace=0.75 / rcParams["figure.figsize"][0] + 0.02, ncols=4, num_panels=len(var)
         )

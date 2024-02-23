@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from anndata.tests.helpers import assert_adata_equal
 from squidpy._constants._pkg_constants import Key
 from squidpy.read import visium

@@ -1,13 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Mapping,
-    Sequence,
-    Union,  # noqa: F401
-)
+from typing import TYPE_CHECKING, Any
 
 import matplotlib.pyplot as plt
 import numpy as np
