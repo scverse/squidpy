@@ -33,7 +33,9 @@ class ErrorFormatterABC(ABC):
     @classmethod
     def _format(cls, value: Enum) -> str:
         return cls.__error_format__.format(
-            value, cls.__name__, [m.value for m in cls.__members__.values()]  # type: ignore[attr-defined]
+            value,
+            cls.__name__,
+            [m.value for m in cls.__members__.values()],  # type: ignore[attr-defined]
         )
 
 
