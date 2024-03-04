@@ -17,7 +17,7 @@ __all__ = ["var_embeddings"]
 @d.dedent
 def var_embeddings(
     adata: AnnData,
-    cluster_key: str,
+    group: str,
     design_matrix_key: str = "design_matrix",
     n_bins: int = 100,
     include_anchor: bool = False,
@@ -28,7 +28,7 @@ def var_embeddings(
     Parameters
     ----------
     %(adata)s
-    cluster_key
+    group
         Annotation column in `.obs` that is used as anchor.
     design_matrix_key
         Name of the design matrix saved to `.obsm`.
@@ -49,7 +49,7 @@ def var_embeddings(
     df = adata.obsm[design_matrix_key].copy()
 
     # bin the data by distance
-    df["bins"] = pd.cut(df[cluster_key], bins=n_bins)
+    df["bins"] = pd.cut(df[group], bins=n_bins)
 
     # get median value of each interval
     df["median_value"] = df["bins"].apply(calculate_median)
