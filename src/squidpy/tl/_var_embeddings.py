@@ -4,7 +4,6 @@ from typing import Any
 
 import pandas as pd
 import umap
-import umap
 from anndata import AnnData
 from scanpy import logging as logg
 from sklearn.preprocessing import StandardScaler
@@ -77,7 +76,6 @@ def var_embeddings(
         result = result.drop(result.columns[0], axis=1)
 
     reducer = umap.UMAP()
-
 
     # scale the data and reduce dimensionality
     scaled_exp = StandardScaler().fit_transform(result.values)
