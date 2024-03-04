@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-
 import pandas as pd
+import umap
 from anndata import AnnData
 from scanpy import logging as logg
 from sklearn.preprocessing import StandardScaler
-import umap
 
 from squidpy._docs import d
 
@@ -50,10 +49,10 @@ def var_embeddings(
     df["bins"] = pd.cut(df[cluster_key], bins=n_bins)
 
     # get median value of each interval
-    df['median_value'] = df['bins'].apply(calculate_median)
+    df["median_value"] = df["bins"].apply(calculate_median)
 
     # turn categorical NaNs into float 0s
-    df['median_value'] = pd.to_numeric(df['median_value'], errors='coerce').fillna(0).astype(float)
+    df["median_value"] = pd.to_numeric(df["median_value"], errors="coerce").fillna(0).astype(float)
 
     # get count matrix and add binned distance to each .obs
     X_df = adata.to_df()
@@ -65,14 +64,14 @@ def var_embeddings(
     # aggregate the transposed count matrix by the distances and remove the distance row
     mth_row_values = X_df_T.iloc[-1]
     result = X_df_T.groupby(mth_row_values, axis=1).sum()
-    result.drop(result.tail(1).index,inplace=True)
+    result.drop(result.tail(1).index, inplace=True)
 
     # optionally include or remove variable values for distance 0 (anchro point)
     if not include_anchor:
         result = result.drop(result.columns[0], axis=1)
 
     reducer = umap.UMAP()
-    
+
     # scale the data and reduce dimensionality
     scaled_exp = StandardScaler().fit_transform(result.values)
     scaled_exp_df = pd.DataFrame(scaled_exp, index=result.index, columns=result.columns)
@@ -85,8 +84,8 @@ def var_embeddings(
 
     return
 
+
 def calculate_median(interval):
     median = interval.mid
 
     return median
-
