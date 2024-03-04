@@ -4,6 +4,7 @@ from typing import Any
 
 import pandas as pd
 import umap
+import umap
 from anndata import AnnData
 from scanpy import logging as logg
 from sklearn.preprocessing import StandardScaler
@@ -52,8 +53,10 @@ def var_embeddings(
 
     # get median value of each interval
     df["median_value"] = df["bins"].apply(calculate_median)
+    df["median_value"] = df["bins"].apply(calculate_median)
 
     # turn categorical NaNs into float 0s
+    df["median_value"] = pd.to_numeric(df["median_value"], errors="coerce").fillna(0).astype(float)
     df["median_value"] = pd.to_numeric(df["median_value"], errors="coerce").fillna(0).astype(float)
 
     # get count matrix and add binned distance to each .obs
@@ -67,12 +70,14 @@ def var_embeddings(
     mth_row_values = X_df_T.iloc[-1]
     result = X_df_T.groupby(mth_row_values, axis=1).sum()
     result.drop(result.tail(1).index, inplace=True)
+    result.drop(result.tail(1).index, inplace=True)
 
     # optionally include or remove variable values for distance 0 (anchro point)
     if not include_anchor:
         result = result.drop(result.columns[0], axis=1)
 
     reducer = umap.UMAP()
+
 
     # scale the data and reduce dimensionality
     scaled_exp = StandardScaler().fit_transform(result.values)
