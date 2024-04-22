@@ -72,17 +72,17 @@ def var_embeddings(
     if not include_anchor:
         result = result.drop(result.columns[0], axis=1)
 
-    #reducer = umap.UMAP()
+    # reducer = umap.UMAP()
 
     # scale the data and reduce dimensionality
-    #scaled_exp = StandardScaler().fit_transform(result.values)
-    #scaled_exp_df = pd.DataFrame(scaled_exp, index=result.index, columns=result.columns)
-    #embedding = reducer.fit_transform(scaled_exp_df)
+    # scaled_exp = StandardScaler().fit_transform(result.values)
+    # scaled_exp_df = pd.DataFrame(scaled_exp, index=result.index, columns=result.columns)
+    # embedding = reducer.fit_transform(scaled_exp_df)
 
     adata.varm[f"{n_bins}_bins_distance_aggregation"] = result
-    #embedding_df = pd.DataFrame(embedding, index=result.index)
-    #embedding_df["var"] = result.index
-    #adata.uns[f"{n_bins}_bins_distance_embeddings"] = embedding_df
+    # embedding_df = pd.DataFrame(embedding, index=result.index)
+    # embedding_df["var"] = result.index
+    # adata.uns[f"{n_bins}_bins_distance_embeddings"] = embedding_df
 
     return
 
