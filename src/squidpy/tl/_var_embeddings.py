@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from anndata import AnnData
 import scanpy as sc
+from anndata import AnnData
 from scanpy import logging as logg
-import time
 
 from squidpy._docs import d
 
@@ -72,7 +72,7 @@ def var_embeddings(
     # set genes x bins to .obs (required for plotting counts by distance)
     var_by_bins.obs = result
     # rename column names for plotting
-    var_by_bins.obs.columns = range(start_bin,101)
+    var_by_bins.obs.columns = range(start_bin, 101)
     # create genes x genes identity matrix
     identity_df = pd.DataFrame(np.eye(len(var_by_bins.obs)), columns=var_by_bins.obs.index, dtype="category")
     # append identity matrix to obs column wise (required for highlighting genes in plot)
