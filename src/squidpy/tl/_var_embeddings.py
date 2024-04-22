@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import pandas as pd
-import umap
+import scanpy as sc
 from anndata import AnnData
 from scanpy import logging as logg
-from sklearn.preprocessing import StandardScaler
 
 from squidpy._docs import d
 
@@ -46,45 +46,39 @@ def var_embeddings(
     logg.info("Calculating embeddings for distance aggregations by gene.")
 
     df = adata.obsm[design_matrix_key].copy()
-
     # bin the data by distance
     df["bins"] = pd.cut(df[group], bins=n_bins)
-
     # get median value of each interval
     df["median_value"] = df["bins"].apply(calculate_median)
-
     # turn categorical NaNs into float 0s
     df["median_value"] = pd.to_numeric(df["median_value"], errors="coerce").fillna(0).astype(float)
-
     # get count matrix and add binned distance to each .obs
     X_df = adata.to_df()
-    X_df["distance"] = df["median_value"].copy()
-
+    X_df["distance"] = df["median_value"]
+    # aggregate the count matrix by the bins
+    aggregated_df = X_df.groupby(["distance"]).sum()
     # transpose the count matrix
-    X_df_T = X_df.T
-
-    # aggregate the transposed count matrix by the distances and remove the distance row
-    mth_row_values = X_df_T.iloc[-1]
-    result = X_df_T.groupby(mth_row_values, axis=1).sum()
-    result.drop(result.tail(1).index, inplace=True)
+    result = aggregated_df.T
 
     # optionally include or remove variable values for distance 0 (anchor point)
+    start_bin = 0
     if not include_anchor:
         result = result.drop(result.columns[0], axis=1)
+        start_bin = 1
 
-    #reducer = umap.UMAP()
+    # set genes x bins to count matrix (required for embeddings and clustering)
+    var_by_bins = sc.AnnData(result)
+    # set genes x bins to .obs (required for plotting counts by distance)
+    var_by_bins.obs = result
+    # rename column names for plotting
+    var_by_bins.obs.columns = range(start_bin, 101)
+    # create genes x genes identity matrix
+    identity_df = pd.DataFrame(np.eye(len(var_by_bins.obs)), columns=var_by_bins.obs.index, dtype="category")
+    # append identity matrix to obs column wise (required for highlighting genes in plot)
+    identity_df.index = var_by_bins.obs.index
+    var_by_bins.obs = pd.concat([var_by_bins.obs, identity_df], axis=1)
 
-    # scale the data and reduce dimensionality
-    #scaled_exp = StandardScaler().fit_transform(result.values)
-    #scaled_exp_df = pd.DataFrame(scaled_exp, index=result.index, columns=result.columns)
-    #embedding = reducer.fit_transform(scaled_exp_df)
-
-    adata.varm[f"{n_bins}_bins_distance_aggregation"] = result
-    #embedding_df = pd.DataFrame(embedding, index=result.index)
-    #embedding_df["var"] = result.index
-    #adata.uns[f"{n_bins}_bins_distance_embeddings"] = embedding_df
-
-    return
+    return var_by_bins
 
 
 def calculate_median(interval: pd.Interval) -> Any:
