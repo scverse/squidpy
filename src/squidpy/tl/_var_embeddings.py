@@ -52,10 +52,8 @@ def var_embeddings(
 
     # get median value of each interval
     df["median_value"] = df["bins"].apply(calculate_median)
-    df["median_value"] = df["bins"].apply(calculate_median)
 
     # turn categorical NaNs into float 0s
-    df["median_value"] = pd.to_numeric(df["median_value"], errors="coerce").fillna(0).astype(float)
     df["median_value"] = pd.to_numeric(df["median_value"], errors="coerce").fillna(0).astype(float)
 
     # get count matrix and add binned distance to each .obs
@@ -69,23 +67,22 @@ def var_embeddings(
     mth_row_values = X_df_T.iloc[-1]
     result = X_df_T.groupby(mth_row_values, axis=1).sum()
     result.drop(result.tail(1).index, inplace=True)
-    result.drop(result.tail(1).index, inplace=True)
 
-    # optionally include or remove variable values for distance 0 (anchro point)
+    # optionally include or remove variable values for distance 0 (anchor point)
     if not include_anchor:
         result = result.drop(result.columns[0], axis=1)
 
-    reducer = umap.UMAP()
+    #reducer = umap.UMAP()
 
     # scale the data and reduce dimensionality
-    scaled_exp = StandardScaler().fit_transform(result.values)
-    scaled_exp_df = pd.DataFrame(scaled_exp, index=result.index, columns=result.columns)
-    embedding = reducer.fit_transform(scaled_exp_df)
+    #scaled_exp = StandardScaler().fit_transform(result.values)
+    #scaled_exp_df = pd.DataFrame(scaled_exp, index=result.index, columns=result.columns)
+    #embedding = reducer.fit_transform(scaled_exp_df)
 
     adata.varm[f"{n_bins}_bins_distance_aggregation"] = result
-    embedding_df = pd.DataFrame(embedding, index=result.index)
-    embedding_df["var"] = result.index
-    adata.uns[f"{n_bins}_bins_distance_embeddings"] = embedding_df
+    #embedding_df = pd.DataFrame(embedding, index=result.index)
+    #embedding_df["var"] = result.index
+    #adata.uns[f"{n_bins}_bins_distance_embeddings"] = embedding_df
 
     return
 
