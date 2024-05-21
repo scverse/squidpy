@@ -1,6 +1,6 @@
 diff a/docs/conf.py b/docs/conf.py	(rejected hunks)
 @@ -36,10 +36,10 @@ needs_sphinx = "4.0"
- 
+
  html_context = {
      "display_github": True,  # Integrate GitHub
 -    "github_user": "giovp",  # Username
@@ -12,5 +12,5 @@ diff a/docs/conf.py b/docs/conf.py	(rejected hunks)
 +    "github_version": "main",
 +    "conf_py_path": "/docs/",
  }
- 
+
  # -- General configuration ---------------------------------------------------
