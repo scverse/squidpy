@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import time
-from typing import Any
+from typing import Any, Union
 
 import numpy as np
 import pandas as pd
@@ -21,7 +20,8 @@ def var_embeddings(
     design_matrix_key: str = "design_matrix",
     n_bins: int = 100,
     include_anchor: bool = False,
-) -> AnnData:
+    copy: bool = False,
+) -> Union[AnnData, (pd.DataFrame, pd.DataFrame)]:
     """
     Cluster variables by previously calculated distance to an anchor point.
 
@@ -38,8 +38,8 @@ def var_embeddings(
         Whether to include the variable counts belonging to the anchor point in the aggregation.
     Returns
     -------
-    If ``copy = True``, returns the design_matrix with the distances to an anchor point
-    Otherwise, stores design_matrix in `.obsm`.
+    If ``copy = True``, returns var by distance matrices.
+    Otherwise, stores var by distance bin matrices in `.obsm`.
     """
     if design_matrix_key not in adata.obsm.keys():
         raise ValueError(f"`.obsm['{design_matrix_key}']` does not exist. Aborting.")
@@ -67,19 +67,17 @@ def var_embeddings(
         result = result.drop(result.columns[0], axis=1)
         start_bin = 1
 
-    # set genes x bins to count matrix (required for embeddings and clustering)
-    var_by_bins = sc.AnnData(result)
-    # set genes x bins to .obs (required for plotting counts by distance)
-    var_by_bins.obs = result
     # rename column names for plotting
-    var_by_bins.obs.columns = range(start_bin, 101)
+    result.columns = range(start_bin, 101)
     # create genes x genes identity matrix
-    identity_df = pd.DataFrame(np.eye(len(var_by_bins.obs)), columns=var_by_bins.obs.index, dtype="category")
+    obs = pd.DataFrame(np.eye(len(result)), columns=result.index, dtype="category")
     # append identity matrix to obs column wise (required for highlighting genes in plot)
-    identity_df.index = var_by_bins.obs.index
-    var_by_bins.obs = pd.concat([var_by_bins.obs, identity_df], axis=1)
+    obs.index = result.index
+    adata.obsm["var_by_distance_X"] = result
+    adata.obsm["var_by_distance_obs"] = obs
 
-    return var_by_bins
+    if copy:
+        return (result, obs)
 
 
 def calculate_median(interval: pd.Interval) -> Any:
