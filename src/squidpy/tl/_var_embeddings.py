@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Union
+from typing import Any, Union, Tuple
 
 import numpy as np
 import pandas as pd
@@ -21,7 +21,7 @@ def var_embeddings(
     n_bins: int = 100,
     include_anchor: bool = False,
     copy: bool = False,
-) -> Union[AnnData, (pd.DataFrame, pd.DataFrame)]:
+) -> Union[AnnData, Tuple[pd.DataFrame, pd.DataFrame]]:
     """
     Cluster variables by previously calculated distance to an anchor point.
 
