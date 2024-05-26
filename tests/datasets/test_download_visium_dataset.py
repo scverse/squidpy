@@ -1,4 +1,4 @@
-""""
+""" "
 Tests to make sure the Visium example datasets load.
 """
 
