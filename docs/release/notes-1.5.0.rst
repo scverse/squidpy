@@ -12,6 +12,6 @@ Bugfixes
   `@michalk8 <https://github.com/michalk8>`__
   `#798 <https://github.com/scverse/squidpy/pull/798>`__
 
-- Improved ``squidpy.gr.co_occurrence`` calculation.
+- Improved :func:`squidpy.gr.co_occurrence` calculation.
   `@DPLemonade <https://github.com/DPLemonade>`__
   `#816 <https://github.com/scverse/squidpy/pull/816>`__
