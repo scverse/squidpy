@@ -1,27 +1,31 @@
-from spatialdata import SpatialData
-from anndata import AnnData
-import pandas as pd
+from __future__ import annotations
+
+from typing import Any
+
 import numpy as np
+import pandas as pd
 import scanpy as sc
-from typing import Union, List
-from sklearn.neighbors import KDTree
+from anndata import AnnData
 from scipy.spatial import cKDTree
+from sklearn.neighbors import KDTree
+from spatialdata import SpatialData
+
 from squidpy._docs import d
 
-__all__ = ["niche"]
+__all__ = ["calculate_niche"]
+
 
 @d.dedent
 def calculate_niche(
-    adata: Union[AnnData, SpatialData],
+    adata: AnnData | SpatialData,
     groups: str,
     flavor: str,
-    radius: Union[float, None],
-    n_neighbors: Union[int, None],
-    limit_to: Union[str, List, None] = None,
-    table_key: Union[str, None] = None,
+    radius: float | None,
+    n_neighbors: int | None,
+    limit_to: str | list[Any] | None = None,
+    table_key: str | None = None,
     spatial_key: str = "spatial",
-)-> Union[AnnData, SpatialData]:
-    
+) -> AnnData | SpatialData:
     # check whether anndata or spatialdata is provided and if spatialdata, check whether a table with the provided groups is present
     is_sdata = False
     if isinstance(adata, SpatialData):
@@ -42,11 +46,11 @@ def calculate_niche(
                 elif count == 0:
                     raise ValueError(
                         f"Group `{groups}` not found in any table in `spatialdata`. Please specify a valid group in `groups`."
-                        )
-                else: 
+                    )
+                else:
                     table = adata.tables[table_key]
             else:
-                (key, table), = adata.tables.items()
+                ((key, table),) = adata.tables.items()
                 if groups not in table.obs:
                     raise ValueError(
                         f"Group {groups} not found in table in `spatialdata`. Please specify a valid group in `groups`."
@@ -67,9 +71,11 @@ def calculate_niche(
         table_subset = table[table.obs[groups].isin([limit_to])]
     else:
         table_subset = table
-        
+
     if flavor == "neighborhood":
-        rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(table, radius, n_neighbors, table_subset, spatial_key)
+        rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
+            table, groups, radius, n_neighbors, table_subset, spatial_key
+        )
         nhood_table = _df_to_adata(rel_nhood_profile, table_subset.obs.index)
         sc.pp.neighbors(nhood_table, use_rep="X")
         sc.tl.leiden(nhood_table)
@@ -79,18 +85,16 @@ def calculate_niche(
         else:
             rel_nhood_profile = rel_nhood_profile.reindex(table.obs.index)
             table.obsm[f"{flavor}_niche"] = rel_nhood_profile
-    
-    return 
+
 
 def _calculate_neighborhood_profile(
-        adata: Union[AnnData, SpatialData],
-        groups: str,
-        radius: float,
-        n_neighbors: Union[int, None],
-        subset: AnnData,
-        spatial_key: str,
-)-> tuple[pd.DataFrame, pd.DataFrame]:
-    
+    adata: AnnData | SpatialData,
+    groups: str,
+    radius: float | None,
+    n_neighbors: int | None,
+    subset: AnnData,
+    spatial_key: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     # reset index
     adata.obs = adata.obs.reset_index()
 
@@ -123,6 +127,7 @@ def _calculate_neighborhood_profile(
     rel_freq = abs_freq / k
 
     return rel_freq, abs_freq
+
 
 def _df_to_adata(df: pd.DataFrame, index: pd.core.indexes.base.Index) -> AnnData:
     adata = AnnData(X=df.values)
