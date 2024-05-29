@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -9,23 +9,23 @@ from anndata import AnnData
 from scipy.spatial import cKDTree
 from sklearn.neighbors import KDTree
 from spatialdata import SpatialData
-
-from squidpy._docs import d
+from utag import utag
 
 __all__ = ["calculate_niche"]
 
 
-@d.dedent
 def calculate_niche(
     adata: AnnData | SpatialData,
     groups: str,
-    flavor: str,
-    radius: float | None,
-    n_neighbors: int | None,
+    flavor: str = "neighborhood",
+    library_key: str | None = None,
+    radius: float | None = None,
+    n_neighbors: int | None = None,
     limit_to: str | list[Any] | None = None,
     table_key: str | None = None,
     spatial_key: str = "spatial",
-) -> AnnData | SpatialData:
+    copy: bool = False,
+)-> AnnData | pd.DataFrame:
     # check whether anndata or spatialdata is provided and if spatialdata, check whether a table with the provided groups is present
     is_sdata = False
     if isinstance(adata, SpatialData):
@@ -76,15 +76,39 @@ def calculate_niche(
         rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
             table, groups, radius, n_neighbors, table_subset, spatial_key
         )
-        nhood_table = _df_to_adata(rel_nhood_profile, table_subset.obs.index)
-        sc.pp.neighbors(nhood_table, use_rep="X")
+        df = pd.DataFrame(rel_nhood_profile, index=table_subset.obs.index)
+        nhood_table = _df_to_adata(df)
+        sc.pp.neighbors(nhood_table, n_neighbors=n_neighbors, use_rep="X")
         sc.tl.leiden(nhood_table)
         table.obs["niche"] = nhood_table.obs["leiden"]
         if is_sdata:
+            if copy:
+                return nhood_table
             adata.tables[f"{flavor}_niche"] = nhood_table
         else:
-            rel_nhood_profile = rel_nhood_profile.reindex(table.obs.index)
-            table.obsm[f"{flavor}_niche"] = rel_nhood_profile
+            if copy:
+                return df
+            df = df.reindex(table.obs.index)
+            table.obsm[f"{flavor}_niche"] = df
+
+    elif flavor == "utag":
+        result = utag(
+            table_subset, 
+            slide_key=library_key, 
+            max_dist=10, 
+            normalization_mode="l1_norm", 
+            apply_clustering=True, 
+            clustering_method="leiden",
+            resolutions=1.0)
+        if is_sdata:
+            if copy:
+                return result
+            adata.tables[f"{flavor}_niche"] = result
+        else:
+            if copy:
+                return result
+            df = df.reindex(table.obs.index)
+            table.obsm[f"{flavor}_niche"] = df
 
 
 def _calculate_neighborhood_profile(
@@ -100,12 +124,12 @@ def _calculate_neighborhood_profile(
 
     if n_neighbors is not None:
         # get k-nearest neighbors for each observation
-        tree = KDTree(adata[spatial_key])
-        _, indices = tree.query(subset[spatial_key], k=n_neighbors)
+        tree = KDTree(adata.obsm[spatial_key])
+        _, indices = tree.query(subset.obsm[spatial_key], k=n_neighbors)
     else:
         # get neighbors within a given radius for each observation
-        tree = cKDTree(adata[spatial_key])
-        indices = tree.query_ball_point(subset[spatial_key], r=radius)
+        tree = cKDTree(adata.obsm[spatial_key])
+        indices = tree.query_ball_point(subset.obsm[spatial_key], r=radius)
 
     # get unique categories
     category_arr = adata.obs[groups].values
@@ -129,7 +153,8 @@ def _calculate_neighborhood_profile(
     return rel_freq, abs_freq
 
 
-def _df_to_adata(df: pd.DataFrame, index: pd.core.indexes.base.Index) -> AnnData:
-    adata = AnnData(X=df.values)
-    adata.obs.index = index
+def _df_to_adata(df: pd.DataFrame) -> AnnData:
+    df.index = df.index.map(str)
+    adata = AnnData(X=df)
+    adata.obs.index = df.index
     return adata
