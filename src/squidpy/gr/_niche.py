@@ -25,7 +25,7 @@ def calculate_niche(
     table_key: str | None = None,
     spatial_key: str = "spatial",
     copy: bool = False,
-)-> AnnData | pd.DataFrame:
+) -> AnnData | pd.DataFrame:
     # check whether anndata or spatialdata is provided and if spatialdata, check whether a table with the provided groups is present
     is_sdata = False
     if isinstance(adata, SpatialData):
@@ -89,17 +89,19 @@ def calculate_niche(
             if copy:
                 return df
             df = df.reindex(table.obs.index)
+            print(df.head())
             table.obsm[f"{flavor}_niche"] = df
 
     elif flavor == "utag":
         result = utag(
-            table_subset, 
-            slide_key=library_key, 
-            max_dist=10, 
-            normalization_mode="l1_norm", 
-            apply_clustering=True, 
+            table_subset,
+            slide_key=library_key,
+            max_dist=10,
+            normalization_mode="l1_norm",
+            apply_clustering=True,
             clustering_method="leiden",
-            resolutions=1.0)
+            resolutions=1.0,
+        )
         if is_sdata:
             if copy:
                 return result
