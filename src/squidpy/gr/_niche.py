@@ -14,6 +14,7 @@ from sklearn import metrics
 from sklearn.decomposition import PCA
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score, fowlkes_mallows_score
 from spatialdata import SpatialData
 from utag import utag
 
@@ -174,8 +175,13 @@ def pairwise_niche_comparison(
     adata: AnnData,
     niche_key: str,
 ) -> pd.DataFrame:
+    """Do a simple pairwise DE test on the 99th percentile of each gene for each niche.
+    Can be used to plot heatmap showing similar (large p-value) or different (small p-value) niches.
+    For validating niche results, the niche pairs that are similar in expression are the ones of interest because
+    it could hint at niches not being well defined in those cases."""
     niches = adata.obs[niche_key].unique().tolist()
     niche_dict = {}
+    # for each niche, calculate the 99th percentile of each gene
     for niche in adata.obs[niche_key].unique():
         niche_adata = adata[adata.obs[niche_key] == niche]
         n_cols = niche_adata.X.shape[1]
@@ -185,9 +191,12 @@ def pairwise_niche_comparison(
             percentile_99 = np.percentile(col_data, 99)
             arr[i] = percentile_99
         niche_dict[niche] = arr
+    # create 99th percentile count x niche matrix
     var_by_niche = pd.DataFrame(niche_dict)
     result = pd.DataFrame(index=niches, columns=niches, data=None, dtype=float)
+    # construct all pairs (unordered and with pairs of the same niche)
     combinations = list(itertools.combinations_with_replacement(niches, 2))
+    # create a p-value matrix for all niche pairs
     for pair in combinations:
         p_val = ranksums(var_by_niche[pair[0]], var_by_niche[pair[1]], alternative="two-sided")[1]
         result.at[pair[0], pair[1]] = p_val
@@ -290,3 +299,14 @@ def _iter_uid(adatas: AnnData | list[AnnData], slide_key: str | None, obs_key: s
                 yield adata[adata.obs[slide_key] == slide_id]
         else:
             yield adata
+
+def _compare_niche_definitions(adata: AnnData, niche_definitions: list) -> dict[str, pd.DataFrame]:
+    result = pd.DataFrame(index=niche_definitions, columns=niche_definitions, data=None, dtype=float)
+    combinations = list(itertools.combinations_with_replacement(niche_definitions, 2))
+    scores = {"ARI:": adjusted_rand_score, "NMI": normalized_mutual_info_score, "FMI": fowlkes_mallows_score}
+    for score_name, score_func in scores.items():
+        for pair in combinations:
+            score = score_func(adata.obs[pair[0]], adata.obs[pair[1]])
+            result.at[pair[0], pair[1]] = score
+            result.at[pair[1], pair[0]] = score
+        adata.uns[f"niche_definition_comparison_{score_name}"] = result
