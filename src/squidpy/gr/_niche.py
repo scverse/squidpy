@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 from collections.abc import Iterator
 from typing import Any, Optional
 
@@ -8,14 +9,13 @@ import pandas as pd
 import scanpy as sc
 from anndata import AnnData
 from scipy.spatial import cKDTree
+from scipy.stats import ranksums
 from sklearn import metrics
 from sklearn.decomposition import PCA
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import StandardScaler
 from spatialdata import SpatialData
 from utag import utag
-import itertools
-from scipy.stats import ranksums
 
 from squidpy._utils import NDArrayA
 
@@ -169,9 +169,10 @@ def _df_to_adata(df: pd.DataFrame) -> AnnData:
     adata.obs.index = df.index
     return adata
 
+
 def pairwise_niche_comparison(
-        adata: AnnData,
-        niche_key: str,
+    adata: AnnData,
+    niche_key: str,
 ) -> pd.DataFrame:
     niches = adata.obs[niche_key].unique().tolist()
     niche_dict = {}
@@ -192,6 +193,7 @@ def pairwise_niche_comparison(
         result.at[pair[0], pair[1]] = p_val
         result.at[pair[1], pair[0]] = p_val
     return result
+
 
 def mean_fide_score(
     adatas: AnnData | list[AnnData],
