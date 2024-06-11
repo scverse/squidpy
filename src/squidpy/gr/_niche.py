@@ -14,6 +14,8 @@ from sklearn.neighbors import KDTree
 from sklearn.preprocessing import StandardScaler
 from spatialdata import SpatialData
 from utag import utag
+import itertools
+from scipy.stats import ranksums
 
 from squidpy._utils import NDArrayA
 
@@ -167,6 +169,29 @@ def _df_to_adata(df: pd.DataFrame) -> AnnData:
     adata.obs.index = df.index
     return adata
 
+def pairwise_niche_comparison(
+        adata: AnnData,
+        niche_key: str,
+) -> pd.DataFrame:
+    niches = adata.obs[niche_key].unique().tolist()
+    niche_dict = {}
+    for niche in adata.obs[niche_key].unique():
+        niche_adata = adata[adata.obs[niche_key] == niche]
+        n_cols = niche_adata.X.shape[1]
+        arr = np.ones(n_cols)
+        for i in range(n_cols):
+            col_data = niche_adata.X.getcol(i).data
+            percentile_99 = np.percentile(col_data, 99)
+            arr[i] = percentile_99
+        niche_dict[niche] = arr
+    var_by_niche = pd.DataFrame(niche_dict)
+    result = pd.DataFrame(index=niches, columns=niches, data=None)
+    combinations = list(itertools.combinations_with_replacement(niches, 2))
+    for pair in combinations:
+        p_val = ranksums(var_by_niche[pair[0]], var_by_niche[pair[1]], alternative="two-sided")[1]
+        result.at[pair[0], pair[1]] = p_val
+        result.at[pair[1], pair[0]] = p_val
+    return result
 
 def mean_fide_score(
     adatas: AnnData | list[AnnData],
