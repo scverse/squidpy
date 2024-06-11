@@ -28,13 +28,41 @@ def calculate_niche(
     groups: str,
     flavor: str = "neighborhood",
     library_key: str | None = None,
-    radius: float | None = None,
-    n_neighbors: int | None = None,
+    radius: float | None = None, #deprecate, use spatial graph instead
+    n_neighbors: int | None = None, #deprecate, use spatial graph instead
     limit_to: str | list[Any] | None = None,
     table_key: str | None = None,
     spatial_key: str = "spatial",
     copy: bool = False,
 ) -> AnnData | pd.DataFrame:
+    """Calculate niches (spatial clusters) based on a user-defined method in 'flavor'. 
+    The resulting niche labels with be stored in 'adata.obs'. If flavor = 'all' then all available methods
+    will be applied and additionally compared using cluster validation scores.
+    
+    Parameters
+    ----------
+    %(adata)s
+    groups
+        groups based on which to calculate neighborhood profile.
+    flavor
+        Method to use for niche calculation. Available options are:
+
+            - `{c.NEIGHBORHOOD.s!r}` - cluster the neighborhood profile.
+            - `{c.SPOT.s!r}` - calculate niches using optimal transport.
+            - `{c.BANKSY.s!r}`- use Banksy algorithm.
+            - `{c.CELLCHARTER.s!r}` - use cellcharter.
+            - `{c.UTAG.s!r}` - use utag algorithm (matrix multiplication).
+            - `{c.ALL.s!r}` - apply all available methods and compare them using cluster validation scores.
+    %(library_key)s
+    limit_to
+        Restrict niche calculation to a subset of the data.
+    table_key
+        Key in `spatialdata.tables` to specify an 'anndata' table. Only necessary if 'sdata' is passed.
+    spatial_key
+        Location of spatial coordinates in `adata.obsm`.
+    %(copy)s
+    """
+
     # check whether anndata or spatialdata is provided and if spatialdata, check whether a table with the provided groups is present
     is_sdata = False
     if isinstance(adata, SpatialData):
@@ -173,17 +201,17 @@ def _df_to_adata(df: pd.DataFrame) -> AnnData:
 
 def pairwise_niche_comparison(
     adata: AnnData,
-    niche_key: str,
+    library_key: str,
 ) -> pd.DataFrame:
     """Do a simple pairwise DE test on the 99th percentile of each gene for each niche.
     Can be used to plot heatmap showing similar (large p-value) or different (small p-value) niches.
     For validating niche results, the niche pairs that are similar in expression are the ones of interest because
     it could hint at niches not being well defined in those cases."""
-    niches = adata.obs[niche_key].unique().tolist()
+    niches = adata.obs[library_key].unique().tolist()
     niche_dict = {}
     # for each niche, calculate the 99th percentile of each gene
-    for niche in adata.obs[niche_key].unique():
-        niche_adata = adata[adata.obs[niche_key] == niche]
+    for niche in adata.obs[library_key].unique():
+        niche_adata = adata[adata.obs[library_key] == niche]
         n_cols = niche_adata.X.shape[1]
         arr = np.ones(n_cols)
         for i in range(n_cols):
@@ -206,15 +234,17 @@ def pairwise_niche_comparison(
 
 def mean_fide_score(
     adatas: AnnData | list[AnnData],
-    obs_key: str,
+    library_key: str,
     slide_key: str | None = None,
     n_classes: int | None = None,
 ) -> float:
     """Mean FIDE score over all slides. A low score indicates a great domain continuity."""
-    return float(np.mean([fide_score(adata, obs_key, n_classes=n_classes) for adata in _iter_uid(adatas, slide_key)]))
+    return float(np.mean([fide_score(adata, library_key, n_classes=n_classes) for adata in _iter_uid(adatas, slide_key)]))
 
 
-def fide_score(adata: AnnData, obs_key: str, n_classes: int | None = None) -> float:
+def fide_score(adata: AnnData, 
+               library_key: str, 
+               n_classes: int | None = None) -> float:
     """
     F1-score of intra-domain edges (FIDE). A high score indicates a great domain continuity.
 
@@ -223,8 +253,8 @@ def fide_score(adata: AnnData, obs_key: str, n_classes: int | None = None) -> fl
     """
     i_left, i_right = adata.obsp["spatial_connectivities"].nonzero()
     classes_left, classes_right = (
-        adata.obs.iloc[i_left][obs_key],
-        adata.obs.iloc[i_right][obs_key],
+        adata.obs.iloc[i_left][library_key],
+        adata.obs.iloc[i_right][library_key],
     )
 
     f1_scores = metrics.f1_score(classes_left, classes_right, average=None)
@@ -237,19 +267,11 @@ def fide_score(adata: AnnData, obs_key: str, n_classes: int | None = None) -> fl
     return float(np.pad(f1_scores, (0, n_classes - len(f1_scores))).mean())
 
 
-def jensen_shannon_divergence(adatas: AnnData | list[AnnData], obs_key: str, slide_key: str | None = None) -> float:
-    """Jensen-Shannon divergence (JSD) over all slides
-
-    Args:
-        adata: One or a list of AnnData object(s)
-        obs_key: The key containing the clusters
-        slide_key: The slide ID obs key
-
-    Returns:
-        A float corresponding to the JSD
-    """
+def jensen_shannon_divergence(adatas: AnnData | list[AnnData],
+                              library_key: str, slide_key: str | None = None) -> float:
+    """Jensen-Shannon divergence (JSD) over all slides"""
     distributions = [
-        adata.obs[obs_key].value_counts(sort=False).values for adata in _iter_uid(adatas, slide_key, obs_key)
+        adata.obs[library_key].value_counts(sort=False).values for adata in _iter_uid(adatas, slide_key, library_key)
     ]
 
     return _jensen_shannon_divergence(np.array(distributions))
@@ -257,14 +279,15 @@ def jensen_shannon_divergence(adatas: AnnData | list[AnnData], obs_key: str, sli
 
 def _jensen_shannon_divergence(distributions: NDArrayA) -> float:
     """Compute the Jensen-Shannon divergence (JSD) for a multiple probability distributions.
-
     The lower the score, the better distribution of clusters among the different batches.
 
-    Args:
-        distributions: An array of shape (B x C), where B is the number of batches, and C is the number of clusters. For each batch, it contains the percentage of each cluster among cells.
+    Parameters
+    ----------
+    distributions
+        An array of shape (B x C), where B is the number of batches, and C is the number of clusters. For each batch, it contains the percentage of each cluster among cells.
 
-    Returns:
-        A float corresponding to the JSD
+    Returns
+        JSD (float)
     """
     distributions = distributions / distributions.sum(1)[:, None]
     mean_distribution = np.mean(distributions, 0)
@@ -275,35 +298,43 @@ def _jensen_shannon_divergence(distributions: NDArrayA) -> float:
 def _entropy(distribution: NDArrayA) -> float:
     """Shannon entropy
 
-    Args:
+    Parameters
+    ----------
         distribution: An array of probabilities (should sum to one)
 
-    Returns:
+    Returns
         The Shannon entropy
     """
     return float(-(distribution * np.log(distribution + 1e-8)).sum())
 
 
-def _iter_uid(adatas: AnnData | list[AnnData], slide_key: str | None, obs_key: str | None = None) -> Iterator[AnnData]:
+def _iter_uid(adatas: AnnData | list[AnnData],
+              slide_key: str | None,
+              library_key: str | None = None) -> Iterator[AnnData]:
     if isinstance(adatas, AnnData):
         adatas = [adatas]
 
-    if obs_key is not None:
-        categories = set.union(*[set(adata.obs[obs_key].unique().dropna()) for adata in adatas])
+    if library_key is not None:
+        categories = set.union(*[set(adata.obs[library_key].unique().dropna()) for adata in adatas])
         for adata in adatas:
-            adata.obs[obs_key] = adata.obs[obs_key].astype("category").cat.set_categories(categories)
+            adata.obs[library_key] = adata.obs[library_key].astype("category").cat.set_categories(categories)
 
     for adata in adatas:
         if slide_key is not None:
-            for slide_id in adata.obs[slide_key].unique():
-                yield adata[adata.obs[slide_key] == slide_id]
+            for slide in adata.obs[slide_key].unique():
+                yield adata[adata.obs[slide_key] == slide]
         else:
             yield adata
 
-def _compare_niche_definitions(adata: AnnData, niche_definitions: list) -> dict[str, pd.DataFrame]:
+def _compare_niche_definitions(adata: AnnData,
+                               niche_definitions: list):
+    """Given different clustering results, compare them using different scores."""
+
     result = pd.DataFrame(index=niche_definitions, columns=niche_definitions, data=None, dtype=float)
     combinations = list(itertools.combinations_with_replacement(niche_definitions, 2))
     scores = {"ARI:": adjusted_rand_score, "NMI": normalized_mutual_info_score, "FMI": fowlkes_mallows_score}
+
+    # for each score, apply it on all pairs of niche definitions
     for score_name, score_func in scores.items():
         for pair in combinations:
             score = score_func(adata.obs[pair[0]], adata.obs[pair[1]])
