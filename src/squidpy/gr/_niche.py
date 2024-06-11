@@ -28,17 +28,17 @@ def calculate_niche(
     groups: str,
     flavor: str = "neighborhood",
     library_key: str | None = None,
-    radius: float | None = None, #deprecate, use spatial graph instead
-    n_neighbors: int | None = None, #deprecate, use spatial graph instead
+    radius: float | None = None,  # deprecate, use spatial graph instead
+    n_neighbors: int | None = None,  # deprecate, use spatial graph instead
     limit_to: str | list[Any] | None = None,
     table_key: str | None = None,
     spatial_key: str = "spatial",
     copy: bool = False,
 ) -> AnnData | pd.DataFrame:
-    """Calculate niches (spatial clusters) based on a user-defined method in 'flavor'. 
+    """Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
     The resulting niche labels with be stored in 'adata.obs'. If flavor = 'all' then all available methods
     will be applied and additionally compared using cluster validation scores.
-    
+
     Parameters
     ----------
     %(adata)s
@@ -239,12 +239,12 @@ def mean_fide_score(
     n_classes: int | None = None,
 ) -> float:
     """Mean FIDE score over all slides. A low score indicates a great domain continuity."""
-    return float(np.mean([fide_score(adata, library_key, n_classes=n_classes) for adata in _iter_uid(adatas, slide_key)]))
+    return float(
+        np.mean([fide_score(adata, library_key, n_classes=n_classes) for adata in _iter_uid(adatas, slide_key)])
+    )
 
 
-def fide_score(adata: AnnData, 
-               library_key: str, 
-               n_classes: int | None = None) -> float:
+def fide_score(adata: AnnData, library_key: str, n_classes: int | None = None) -> float:
     """
     F1-score of intra-domain edges (FIDE). A high score indicates a great domain continuity.
 
@@ -267,8 +267,7 @@ def fide_score(adata: AnnData,
     return float(np.pad(f1_scores, (0, n_classes - len(f1_scores))).mean())
 
 
-def jensen_shannon_divergence(adatas: AnnData | list[AnnData],
-                              library_key: str, slide_key: str | None = None) -> float:
+def jensen_shannon_divergence(adatas: AnnData | list[AnnData], library_key: str, slide_key: str | None = None) -> float:
     """Jensen-Shannon divergence (JSD) over all slides"""
     distributions = [
         adata.obs[library_key].value_counts(sort=False).values for adata in _iter_uid(adatas, slide_key, library_key)
@@ -308,9 +307,9 @@ def _entropy(distribution: NDArrayA) -> float:
     return float(-(distribution * np.log(distribution + 1e-8)).sum())
 
 
-def _iter_uid(adatas: AnnData | list[AnnData],
-              slide_key: str | None,
-              library_key: str | None = None) -> Iterator[AnnData]:
+def _iter_uid(
+    adatas: AnnData | list[AnnData], slide_key: str | None, library_key: str | None = None
+) -> Iterator[AnnData]:
     if isinstance(adatas, AnnData):
         adatas = [adatas]
 
@@ -326,8 +325,8 @@ def _iter_uid(adatas: AnnData | list[AnnData],
         else:
             yield adata
 
-def _compare_niche_definitions(adata: AnnData,
-                               niche_definitions: list):
+
+def _compare_niche_definitions(adata: AnnData, niche_definitions: list):
     """Given different clustering results, compare them using different scores."""
 
     result = pd.DataFrame(index=niche_definitions, columns=niche_definitions, data=None, dtype=float)
