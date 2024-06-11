@@ -12,9 +12,9 @@ from scipy.spatial import cKDTree
 from scipy.stats import ranksums
 from sklearn import metrics
 from sklearn.decomposition import PCA
+from sklearn.metrics import adjusted_rand_score, fowlkes_mallows_score, normalized_mutual_info_score
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score, fowlkes_mallows_score
 from spatialdata import SpatialData
 from utag import utag
 
