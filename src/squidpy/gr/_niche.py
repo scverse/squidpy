@@ -185,7 +185,7 @@ def pairwise_niche_comparison(
             arr[i] = percentile_99
         niche_dict[niche] = arr
     var_by_niche = pd.DataFrame(niche_dict)
-    result = pd.DataFrame(index=niches, columns=niches, data=None)
+    result = pd.DataFrame(index=niches, columns=niches, data=None, dtype=float)
     combinations = list(itertools.combinations_with_replacement(niches, 2))
     for pair in combinations:
         p_val = ranksums(var_by_niche[pair[0]], var_by_niche[pair[1]], alternative="two-sided")[1]
