@@ -3,10 +3,11 @@ from __future__ import annotations
 import anndata as ad
 import numpy as np
 import pytest
+import spatialdata as sd
 from anndata import AnnData
 from scipy.sparse import isspmatrix_csr
 from squidpy._constants._pkg_constants import Key
-from squidpy.gr import spatial_neighbors
+from squidpy.gr import mask_graph, spatial_neighbors
 from squidpy.gr._build import _build_connectivity
 
 
@@ -21,7 +22,14 @@ class TestSpatialNeighbors:
         ]
     )
     # ground-truth Delaunay graph
-    _gt_dgraph = np.array([[0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0], [1.0, 1.0, 1.0, 0.0]])
+    _gt_dgraph = np.array(
+        [
+            [0.0, 1.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0, 1.0],
+            [0.0, 1.0, 0.0, 1.0],
+            [1.0, 1.0, 1.0, 0.0],
+        ]
+    )
 
     @staticmethod
     def _adata_concat(adata1, adata2):
@@ -76,7 +84,13 @@ class TestSpatialNeighbors:
         adata2 = adata.copy()
         adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(adata, adata2)
         spatial_neighbors(adata2, n_neighs=n_neigh, n_rings=n_rings, coord_type="grid")
-        spatial_neighbors(adata_concat, library_key="library_id", n_neighs=n_neigh, n_rings=n_rings, coord_type="grid")
+        spatial_neighbors(
+            adata_concat,
+            library_key="library_id",
+            n_neighs=n_neigh,
+            n_rings=n_rings,
+            coord_type="grid",
+        )
         assert np.diff(adata_concat.obsp[Key.obsp.spatial_conn()].indptr).max() == sum_neigh
         np.testing.assert_array_equal(
             adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].A,
@@ -166,7 +180,13 @@ class TestSpatialNeighbors:
             ixs = np.arange(len(gt_dgraph))
             gt_dgraph[ixs, ixs] = 1.0
 
-        spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None, radius=radius, set_diag=set_diag)
+        spatial_neighbors(
+            non_visium_adata,
+            delaunay=True,
+            coord_type=None,
+            radius=radius,
+            set_diag=set_diag,
+        )
         spatial_dist = non_visium_adata.obsp[Key.obsp.spatial_dist()].A
         spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].A
 
@@ -214,3 +234,58 @@ class TestSpatialNeighbors:
         actual = np.array(graph.sum(axis=1)).flatten()
 
         np.testing.assert_array_equal(actual, n_neighs)
+
+    @pytest.mark.parametrize("key_added", ["mask", "mask2"])
+    @pytest.mark.parametrize("delaunay", [True, False])
+    def test_mask_graph(
+        self,
+        sdata_mask_graph: sd.SpatialData,
+        key_added: str,
+        delaunay: bool,
+    ):
+        sdata = sdata_mask_graph
+
+        neighs_key = Key.uns.spatial_neighs("spatial")
+        conns_key = Key.obsp.spatial_conn("spatial")
+        dists_key = Key.obsp.spatial_dist("spatial")
+
+        mask_conns_key = f"{key_added}_{conns_key}"
+        mask_dists_key = f"{key_added}_{dists_key}"
+        mask_neighs_key = f"{key_added}_{neighs_key}"
+
+        spatial_neighbors(
+            sdata,
+            elements_to_coordinate_systems={"circles": "global"},
+            table_key="table",
+            delaunay=delaunay,
+        )
+
+        mask_graph(
+            sdata,
+            "table",
+            "polygon",
+            negative_mask=False,
+            key_added=key_added,
+        )
+
+        graph_original = sdata["table"].obsp[conns_key].copy()
+        graph_positive_filter = sdata["table"].obsp[mask_conns_key].copy()
+        mask_graph(
+            sdata,
+            "table",
+            "polygon",
+            negative_mask=True,
+            key_added=key_added,
+        )
+
+        graph_negative_filter = sdata["table"].obsp[mask_conns_key].copy()
+
+        assert graph_original.A.sum() == sum([graph_positive_filter.A.sum(), graph_negative_filter.A.sum()])
+        assert mask_conns_key in sdata["table"].obsp
+        assert mask_dists_key in sdata["table"].obsp
+        assert mask_neighs_key in sdata["table"].uns
+        uns = sdata["table"].uns
+        assert uns[mask_neighs_key]["distances_key"] == mask_dists_key
+        assert uns[mask_neighs_key]["connectivities_key"] == mask_conns_key
+        assert uns[mask_neighs_key]["params"]["negative_mask"]
+        assert uns[mask_neighs_key]["params"]["polygon_mask"] == "polygon"
