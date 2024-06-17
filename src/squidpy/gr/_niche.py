@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import scanpy as sc
 from anndata import AnnData
-from scipy.spatial import cKDTree
 from scipy.stats import ranksums
 from sklearn import metrics
 from sklearn.decomposition import PCA
@@ -16,7 +15,6 @@ from sklearn.metrics import adjusted_rand_score, fowlkes_mallows_score, normaliz
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import StandardScaler
 from spatialdata import SpatialData
-from utag import utag
 
 from squidpy._utils import NDArrayA
 
@@ -28,11 +26,12 @@ def calculate_niche(
     groups: str,
     flavor: str = "neighborhood",
     library_key: str | None = None,
-    radius: float | None = None,  # deprecate, use spatial graph instead
-    n_neighbors: int | None = None,  # deprecate, use spatial graph instead
+    radius: float | None = None,
+    n_neighbors: int | None = None,
     limit_to: str | list[Any] | None = None,
     table_key: str | None = None,
     spatial_key: str = "spatial",
+    spatial_connectivities_key: str = "spatial_connectivities",
     copy: bool = False,
 ) -> AnnData | pd.DataFrame:
     """Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
@@ -111,71 +110,44 @@ def calculate_niche(
 
     if flavor == "neighborhood":
         rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
-            table, groups, radius, n_neighbors, table_subset, spatial_key
+            table, groups, radius, n_neighbors, table_subset, spatial_connectivities_key
         )
         df = pd.DataFrame(rel_nhood_profile, index=table_subset.obs.index)
         nhood_table = _df_to_adata(df)
         sc.pp.neighbors(nhood_table, n_neighbors=n_neighbors, use_rep="X")
         sc.tl.leiden(nhood_table)
         table.obs["niche"] = nhood_table.obs["leiden"]
-        if is_sdata:
-            if copy:
-                return nhood_table
-            adata.tables[f"{flavor}_niche"] = nhood_table
+        if copy:
+            return nhood_table
         else:
-            if copy:
-                return df
-            df = df.reindex(table.obs.index)
-            print(df.head())
-            table.obsm[f"{flavor}_niche"] = df
-
-    elif flavor == "utag":
-        result = utag(
-            table_subset,
-            slide_key=library_key,
-            max_dist=10,
-            normalization_mode="l1_norm",
-            apply_clustering=True,
-            clustering_method="leiden",
-            resolutions=1.0,
-        )
-        if is_sdata:
-            if copy:
-                return result
-            adata.tables[f"{flavor}_niche"] = result
-        else:
-            if copy:
-                return result
-            df = df.reindex(table.obs.index)
-            table.obsm[f"{flavor}_niche"] = df
+            if is_sdata:
+                adata.tables[f"{flavor}_niche"] = nhood_table
+            else:
+                df = df.reindex(table.obs.index)
+                print(df.head())
+                table.obsm[f"{flavor}_niche"] = df
 
 
 def _calculate_neighborhood_profile(
     adata: AnnData | SpatialData,
     groups: str,
-    radius: float | None,
-    n_neighbors: int | None,
     subset: AnnData,
-    spatial_key: str,
+    spatial_connectivities_key: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     # reset index
     adata.obs = adata.obs.reset_index()
 
-    if n_neighbors is not None:
-        # get k-nearest neighbors for each observation
-        tree = KDTree(adata.obsm[spatial_key])
-        _, indices = tree.query(subset.obsm[spatial_key], k=n_neighbors)
-    else:
-        # get neighbors within a given radius for each observation
-        tree = cKDTree(adata.obsm[spatial_key])
-        indices = tree.query_ball_point(subset.obsm[spatial_key], r=radius)
+    # get obs x neighbor matrix from sparse matrix
+    matrix = adata.obsp[spatial_connectivities_key].tocoo()
+    nonzero_indices = np.split(matrix.col, matrix.row.searchsorted(np.arange(1, matrix.shape[0])))
+    neighbor_matrix = pd.DataFrame(nonzero_indices)
 
     # get unique categories
     category_arr = adata.obs[groups].values
     unique_categories = np.unique(category_arr)
 
     # get obs x k matrix where each column is the category of the k-th neighbor
-    cat_by_id = np.take(category_arr, indices)
+    cat_by_id = np.take(category_arr, neighbor_matrix)
 
     # in obs x k matrix convert categorical values to numerical values
     cat_indices = {category: index for index, category in enumerate(unique_categories)}
