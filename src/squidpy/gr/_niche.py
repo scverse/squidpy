@@ -110,7 +110,7 @@ def calculate_niche(
 
     if flavor == "neighborhood":
         rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
-            table, groups, radius, n_neighbors, table_subset, spatial_connectivities_key
+            table, groups, table_subset, spatial_connectivities_key
         )
         df = pd.DataFrame(rel_nhood_profile, index=table_subset.obs.index)
         nhood_table = _df_to_adata(df)
@@ -298,7 +298,7 @@ def _iter_uid(
             yield adata
 
 
-def _compare_niche_definitions(adata: AnnData, niche_definitions: list):
+def _compare_niche_definitions(adata: AnnData, niche_definitions: list[str]) -> pd.DataFrame:
     """Given different clustering results, compare them using different scores."""
 
     result = pd.DataFrame(index=niche_definitions, columns=niche_definitions, data=None, dtype=float)
