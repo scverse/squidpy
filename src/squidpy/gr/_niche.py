@@ -10,10 +10,8 @@ import scanpy as sc
 from anndata import AnnData
 from scipy.stats import ranksums
 from sklearn import metrics
-from sklearn.decomposition import PCA
 from sklearn.metrics import adjusted_rand_score, fowlkes_mallows_score, normalized_mutual_info_score
-from sklearn.neighbors import KDTree
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 
 from squidpy._utils import NDArrayA
@@ -92,7 +90,7 @@ def calculate_niche(
                         f"Group {groups} not found in table in `spatialdata`. Please specify a valid group in `groups`."
                     )
     else:
-        table = adata
+        table = adata.copy()
 
     # check whether to use radius or knn for neighborhood profile calculation
     if radius is None and n_neighbors is None:
@@ -126,6 +124,17 @@ def calculate_niche(
                 df = df.reindex(table.obs.index)
                 print(df.head())
                 table.obsm[f"{flavor}_niche"] = df
+
+    elif flavor == "utag":
+        new_feature_matrix = _utag(table, normalize_adj=True, spatial_connectivity_key=spatial_connectivities_key)
+        table.X = new_feature_matrix
+        if copy:
+            return table
+        else:
+            if is_sdata:
+                adata.tables[f"{flavor}_niche"] = table
+            else:
+                table.obsm[f"{flavor}_niche"] = table.X
 
 
 def _calculate_neighborhood_profile(
@@ -162,6 +171,25 @@ def _calculate_neighborhood_profile(
     rel_freq = abs_freq / k
 
     return rel_freq, abs_freq
+
+
+def _utag(adata: AnnData, normalize_adj: bool, spatial_connectivity_key: str) -> AnnData:
+    """Performas inner product of adjacency matrix and feature matrix,
+    such that each observation inherits features from its immediate neighbors as described in UTAG paper.
+
+    Parameters
+    ----------
+    adata
+        Annotated data matrix.
+    normalize
+        If 'True', aggregate by the mean, else aggregate by the sum."""
+
+    adjacency_matrix = adata.obsp[spatial_connectivity_key]
+
+    if normalize_adj:
+        return normalize(adjacency_matrix, norm="l1", axis=1) @ adata.X
+    else:
+        return adjacency_matrix @ adata.X
 
 
 def _df_to_adata(df: pd.DataFrame) -> AnnData:
