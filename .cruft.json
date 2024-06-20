@@ -1,7 +1,7 @@
 {
     "template": "https://github.com/scverse/cookiecutter-scverse",
-    "commit": "586b1652162ff7994b0070a034023d64289ae416",
-    "checkout": "v0.3.1",
+    "commit": "87a407a65408d75a949c0b54b19fd287475a56f8",
+    "checkout": "v0.4.0",
     "context": {
         "cookiecutter": {
             "project_name": "squidpy",
