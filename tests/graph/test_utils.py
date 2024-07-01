@@ -20,7 +20,7 @@ class TestUtils:
         else:
             libraries = pd.Series(rng.choice(["a", "b", "c"], size=(size,)), dtype="category")
 
-        if isinstance(library_annotations_type):
+        if isinstance(library_annotations_type, int):
             cluster_annotations = rng.choice([1, 2, 3, 4], size=(size,))
         else:
             cluster_annotations = rng.choice(["X", "Y", "Z"], size=(size,))
