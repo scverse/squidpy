@@ -182,8 +182,8 @@ def _score_helper(
 
     score, sparse = [], issparse(vals)
     for i in ixs:
-        conc = vals[:, i].A.flatten() if sparse else vals[:, i].copy()  # type: ignore[union-attr]
-        conc = vals[:, i].A.flatten() if sparse else vals[:, i].copy()  # type: ignore[union-attr]
+        conc = vals[:, i].toarray().flatten() if sparse else vals[:, i].copy()  # type: ignore[union-attr]
+        conc = vals[:, i].toarray().flatten() if sparse else vals[:, i].copy()  # type: ignore[union-attr]
         time_iter = _diffusion(conc, fun, n_iter, sat, sat_idx, unsat, unsat_idx, dt=dt, thresh=thresh)
         score.append(dt * time_iter)
 
