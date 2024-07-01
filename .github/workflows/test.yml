@@ -23,10 +23,13 @@ jobs:
                 python: [3.9, "3.10", "3.11"]
                 os: [ubuntu-latest]
                 include:
-                    - python: 3.9
-                      os: macos-latest
                     - python: "3.10"
                       os: macos-latest
+                    - python: "3.12"
+                      os: macos-latest
+                      pip-flags: "--pre"
+                      name: "Python 3.12 (pre-release)"
+
         env:
             OS: ${{ matrix.os }}
             PYTHON: ${{ matrix.python }}
