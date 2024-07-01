@@ -100,7 +100,7 @@ def sepal(
     if max_neighs not in (4, 6):
         raise ValueError(f"Expected `max_neighs` to be either `4` or `6`, found `{max_neighs}`.")
 
-    spatial = adata.obsm[spatial_key].astype(np.float_)
+    spatial = adata.obsm[spatial_key].astype(np.float64)
 
     if genes is None:
         genes = adata.var_names.values
@@ -169,8 +169,8 @@ def _score_helper(
     sat_idx: NDArrayA,
     unsat: NDArrayA,
     unsat_idx: NDArrayA,
-    dt: np.float_,
-    thresh: np.float_,
+    dt: float,
+    thresh: float,
     queue: SigQueue | None = None,
 ) -> NDArrayA:
     if max_neighs == 4:
@@ -199,7 +199,7 @@ def _score_helper(
 @njit(fastmath=True)
 def _diffusion(
     conc: NDArrayA,
-    laplacian: Callable[[NDArrayA, NDArrayA, NDArrayA], np.float_],
+    laplacian: Callable[[NDArrayA, NDArrayA, NDArrayA], float],
     n_iter: int,
     sat: NDArrayA,
     sat_idx: NDArrayA,
@@ -320,7 +320,11 @@ def _get_sat_unsat_idx(g_indptr: NDArrayA, g_shape: int, sat_thresh: int) -> tup
 
 @njit
 def _get_nhood_idx(
-    sat: NDArrayA, unsat: NDArrayA, g_indptr: NDArrayA, g_indices: NDArrayA, sat_thresh: int
+    sat: NDArrayA,
+    unsat: NDArrayA,
+    g_indptr: NDArrayA,
+    g_indices: NDArrayA,
+    sat_thresh: int,
 ) -> tuple[NDArrayA, NDArrayA, NDArrayA]:
     """Get saturated and unsaturated neighborhood indices."""
     # get saturated nhood indices
