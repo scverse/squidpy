@@ -10,16 +10,20 @@ from itertools import product
 from pathlib import Path
 
 import anndata as ad
+import geopandas as gpd
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
 import scanpy as sc
+import spatialdata as sd
 import squidpy as sq
 from anndata import AnnData, OldFormatWarning
+from geopandas import GeoDataFrame
 from matplotlib.testing.compare import compare_images
 from scipy.sparse import csr_matrix
+from shapely import LineString, Point, Polygon, distance
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_neighbors
 from squidpy.im._container import ImageContainer
@@ -184,13 +188,19 @@ def small_cont() -> ImageContainer:
 def small_cont_4d() -> ImageContainer:
     np.random.seed(42)
     return ImageContainer(
-        np.random.uniform(size=(100, 50, 2, 3), low=0, high=1), dims=["y", "x", "z", "channels"], layer="image"
+        np.random.uniform(size=(100, 50, 2, 3), low=0, high=1),
+        dims=["y", "x", "z", "channels"],
+        layer="image",
     )
 
 
 @pytest.fixture()
 def cont_4d() -> ImageContainer:
-    arrs = [np.linspace(0, 1, 10 * 10 * 3).reshape(10, 10, 3), np.zeros((10, 10, 3)) + 0.5, np.zeros((10, 10, 3))]
+    arrs = [
+        np.linspace(0, 1, 10 * 10 * 3).reshape(10, 10, 3),
+        np.zeros((10, 10, 3)) + 0.5,
+        np.zeros((10, 10, 3)),
+    ]
     arrs[1][4:6, 4:6] = 0.8
     arrs[2][2:8, 2:8, 0] = 0.5
     arrs[2][2:8, 2:8, 1] = 0.1
@@ -201,7 +211,10 @@ def cont_4d() -> ImageContainer:
 @pytest.fixture()
 def small_cont_seg() -> ImageContainer:
     np.random.seed(42)
-    img = ImageContainer(np.random.randint(low=0, high=255, size=(100, 100, 3), dtype=np.uint8), layer="image")
+    img = ImageContainer(
+        np.random.randint(low=0, high=255, size=(100, 100, 3), dtype=np.uint8),
+        layer="image",
+    )
     mask = np.zeros((100, 100), dtype="uint8")
     mask[20:30, 10:20] = 1
     mask[50:60, 30:40] = 2
@@ -226,7 +239,11 @@ def cont_dot() -> ImageContainer:
 
 @pytest.fixture()
 def napari_cont() -> ImageContainer:
-    return ImageContainer("tests/_data/test_img.jpg", layer="V1_Adult_Mouse_Brain", library_id="V1_Adult_Mouse_Brain")
+    return ImageContainer(
+        "tests/_data/test_img.jpg",
+        layer="V1_Adult_Mouse_Brain",
+        library_id="V1_Adult_Mouse_Brain",
+    )
 
 
 @pytest.fixture()
@@ -258,7 +275,14 @@ def ligrec_result() -> Mapping[str, pd.DataFrame]:
     adata = _adata.copy()
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
     return sq.gr.ligrec(
-        adata, "leiden", interactions=interactions, n_perms=25, n_jobs=1, show_progress_bar=False, copy=True, seed=0
+        adata,
+        "leiden",
+        interactions=interactions,
+        n_perms=25,
+        n_jobs=1,
+        show_progress_bar=False,
+        copy=True,
+        seed=0,
     )
 
 
@@ -326,6 +350,38 @@ def non_visium_adata():
     adata = AnnData(X=non_visium_coords)
     adata.obsm[Key.obsm.spatial] = non_visium_coords
     return adata
+
+
+@pytest.fixture()
+def sdata_mask_graph():
+    rng = np.random.default_rng(42)
+    points1 = rng.uniform((3.2, 4.2), (3.8, 5.2), (3, 2))
+    points2 = rng.uniform((0.2, 4.2), (0.8, 5.2), (3, 2))
+    points3 = rng.uniform((1, 0.5), (3, 1.5), (3, 2))
+    points4 = rng.uniform((1, 5), (2, 6), (3, 2))
+    points = np.concatenate([points1, points2, points3, points4], axis=0)
+    points_df = gpd.GeoDataFrame(geometry=[Point(*point) for point in points])
+    polygon_coords = [(0, 0), (4, 0), (4, 8), (2, 1.5), (0, 8)]
+    concave_polygon = Polygon(polygon_coords)
+    polygon_df = gpd.GeoDataFrame(geometry=[concave_polygon])
+    points_df["radius"] = 0.5
+    adata = ad.AnnData(rng.normal(size=(len(points), 20)))
+    adata.obs["annotation"] = pd.Categorical(rng.choice(["a", "b", "c"], size=(len(points))))
+    adata.obs["region"] = "circles"
+    adata.obs["region"] = pd.Categorical(adata.obs["region"])
+    adata.obs["instance_id"] = points_df.index
+    adata.uns["spatialdata_attrs"] = {
+        "region": "circles",
+        "region_key": "region",
+        "instance_key": "instance_id",
+    }
+    return sd.SpatialData.from_elements_dict(
+        {
+            "circles": sd.models.ShapesModel().parse(points_df),
+            "polygon": sd.models.ShapesModel().parse(polygon_df),
+            "table": sd.models.TableModel().parse(adata),
+        }
+    )
 
 
 def _decorate(fn: Callable, clsname: str, name: str | None = None) -> Callable:
