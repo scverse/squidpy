@@ -34,6 +34,18 @@ from spatialdata._core.query.relational_query import (
     match_element_to_table,
 )
 from spatialdata.models import SpatialElement, get_table_keys
+from spatialdata.models.models import (
+    Image2DModel,
+    Image3DModel,
+    Labels2DModel,
+    Labels3DModel,
+    PointsModel,
+    RasterSchema,
+    ShapesModel,
+    TableModel,
+    get_axes_names,
+    get_model,
+)
 
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
@@ -144,8 +156,22 @@ def spatial_neighbors(
         ), "The spatialdata table must annotate all elements keys. Some elements are missing, please check the `elements_to_coordinate_systems` dictionary."
         regions, region_key, instance_key = get_table_keys(adata.tables[table_key])
         regions = [regions] if isinstance(regions, str) else regions
-        element_instances = pd.concat([get_element_instances(elements[e]).to_series() for e in regions])
         ordered_regions_in_table = adata.tables[table_key].obs[region_key].unique()
+
+        # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
+        remove_centroids = {}
+        elem_instances = []
+        for e in regions:
+            schema = get_model(elements[e])
+            element_instances = get_element_instances(elements[e]).to_series()
+            if np.isin(0, element_instances.values) and (schema in (Labels2DModel, Labels3DModel)):
+                element_instances = element_instances.drop(index=0)
+                remove_centroids[e] = True
+            else:
+                remove_centroids[e] = False
+            elem_instances.append(element_instances)
+
+        element_instances = pd.concat(elem_instances)
         if (not np.all(element_instances.values == adata.tables[table_key].obs[instance_key].values)) or (
             not np.all(ordered_regions_in_table == regions)
         ):
@@ -155,7 +181,11 @@ def spatial_neighbors(
         centroids = []
         for region_ in ordered_regions_in_table:
             cs = elements_to_coordinate_systems[region_]
-            centroid = get_centroids(adata[region_], coordinate_system=cs)[["x", "y"]].compute().to_numpy()
+            centroid = get_centroids(adata[region_], coordinate_system=cs)[["x", "y"]].compute()
+
+            # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
+            if remove_centroids[region_]:
+                centroid = centroid[1:].copy()
             centroids.append(centroid)
 
         adata.tables[table_key].obsm[spatial_key] = np.concatenate(centroids)

@@ -5,7 +5,9 @@ import numpy as np
 import pytest
 import spatialdata as sd
 from anndata import AnnData
+from numpy.random import default_rng
 from scipy.sparse import isspmatrix_csr
+from spatialdata.datasets import blobs
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import mask_graph, spatial_neighbors
 from squidpy.gr._build import _build_connectivity
@@ -235,6 +237,52 @@ class TestSpatialNeighbors:
 
         np.testing.assert_array_equal(actual, n_neighs)
 
+    @pytest.mark.parametrize("n_neighs", [2, 3, 4])
+    def test_spatial_neighbors_sdata(self, n_neighs: int):
+        TABLE_NAME = "table"
+        REGION_NAME = "blobs_labels"
+        sdata = blobs()
+
+        spatial_neighbors(
+            sdata,
+            table_key=TABLE_NAME,
+            elements_to_coordinate_systems={REGION_NAME: "global"},
+            n_neighs=n_neighs,
+            coord_type="generic",
+        )
+        graph = sdata.tables[TABLE_NAME].obsp[Key.obsp.spatial_conn()]
+        actual = np.array(graph.sum(axis=1)).flatten()
+
+        np.testing.assert_array_equal(actual, n_neighs)
+
+        TABLE_NAME = "table_circles"
+        REGION_NAME = "blobs_circles"
+        rng = default_rng(42)
+        X = rng.normal(size=(len(sdata.shapes[REGION_NAME]), 2))
+        adata_circles = AnnData(X)
+        adata_circles.obs["region"] = REGION_NAME
+        adata_circles.obs["instance_id"] = sdata[REGION_NAME].index.values
+
+        sdata[TABLE_NAME] = adata_circles
+        sdata.set_table_annotates_spatialelement(
+            TABLE_NAME,
+            REGION_NAME,
+            region_key="region",
+            instance_key="instance_id",
+        )
+
+        spatial_neighbors(
+            sdata,
+            table_key=TABLE_NAME,
+            elements_to_coordinate_systems={REGION_NAME: "global"},
+            n_neighs=n_neighs,
+            coord_type="generic",
+        )
+        graph = sdata.tables[TABLE_NAME].obsp[Key.obsp.spatial_conn()]
+        actual = np.array(graph.sum(axis=1)).flatten()
+
+        np.testing.assert_array_equal(actual, n_neighs)
+
     @pytest.mark.parametrize("key_added", ["mask", "mask2"])
     @pytest.mark.parametrize("delaunay", [True, False])
     def test_mask_graph(
@@ -294,3 +342,23 @@ class TestSpatialNeighbors:
         assert uns[mask_neighs_key]["connectivities_key"] == mask_conns_key
         assert uns[mask_neighs_key]["params"]["negative_mask"]
         assert uns[mask_neighs_key]["params"]["polygon_mask"] == "polygon"
+
+
+# %%
+
+sdata = blobs()
+
+# %%
+
+rng = default_rng(42)
+
+X = rng.normal(size=(len(sdata.shapes["blobs_circles"]), 2))
+adata_circles = AnnData(X)
+adata_circles.obs["region"] = "blobs_circles"
+adata_circles.obs["instance_id"] = sdata["blobs_circles"].index.values
+
+sdata["table_circles"] = adata_circles
+sdata.set_table_annotates_spatialelement(
+    "table_circles", "blobs_circles", region_key="region", instance_key="instance_id"
+)
+# %%
