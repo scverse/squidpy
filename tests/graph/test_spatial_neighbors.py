@@ -280,7 +280,12 @@ class TestSpatialNeighbors:
 
         graph_negative_filter = sdata["table"].obsp[mask_conns_key].copy()
 
-        assert graph_original.A.sum() == sum([graph_positive_filter.A.sum(), graph_negative_filter.A.sum()])
+        assert graph_original.toarray().sum() == sum(
+            [
+                graph_positive_filter.toarray().sum(),
+                graph_negative_filter.toarray().sum(),
+            ]
+        )
         assert mask_conns_key in sdata["table"].obsp
         assert mask_dists_key in sdata["table"].obsp
         assert mask_neighs_key in sdata["table"].uns
