@@ -1060,9 +1060,9 @@ class TestLibraryIds:
     @pytest.mark.parametrize("typ", [list, dict])
     def test_set(self, typ: type, unique: bool):
         if unique:
-            new_ids = ["0", "1"] if typ == list else {"a": "0", "b": "1"}
+            new_ids = ["0", "1"] if isinstance(typ, list) else {"a": "0", "b": "1"}
         else:
-            new_ids = ["0", "0"] if typ == list else {"a": "b"}
+            new_ids = ["0", "0"] if isinstance(typ, list) else {"a": "b"}
         img = ImageContainer(np.random.normal(size=(2, 3, 4, 5)), dims=["z", "y", "x", "c"], library_id=["a", "b"])
 
         if not unique:
