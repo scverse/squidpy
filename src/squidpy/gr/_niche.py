@@ -24,9 +24,6 @@ def calculate_niche(
     groups: str,
     flavor: str = "neighborhood",
     library_key: str | None = None,
-    radius: float | None = None,
-    n_neighbors: int | None = None,
-    limit_to: str | list[Any] | None = None,
     table_key: str | None = None,
     spatial_key: str = "spatial",
     spatial_connectivities_key: str = "spatial_connectivities",
@@ -51,7 +48,7 @@ def calculate_niche(
             - `{c.UTAG.s!r}` - use utag algorithm (matrix multiplication).
             - `{c.ALL.s!r}` - apply all available methods and compare them using cluster validation scores.
     %(library_key)s
-    limit_to
+    subset
         Restrict niche calculation to a subset of the data.
     table_key
         Key in `spatialdata.tables` to specify an 'anndata' table. Only necessary if 'sdata' is passed.
@@ -65,14 +62,15 @@ def calculate_niche(
     if isinstance(adata, SpatialData):
         is_sdata = True
         if table_key is not None:
-            table = adata.tables[table_key]
+            sdata = adata
+            adata = adata.tables[table_key].copy()
         else:
             if len(adata.tables) > 1:
                 count = 0
-                for key in adata.tables.keys():
+                for table in adata.tables.keys():
                     if groups in table.obs:
                         count += 1
-                        table_key = key
+                        table_key = table
                 if count > 1:
                     raise ValueError(
                         f"Multiple tables in `spatialdata` with group `{groups}` detected. Please specify which table to use in `table_key`."
@@ -82,70 +80,44 @@ def calculate_niche(
                         f"Group `{groups}` not found in any table in `spatialdata`. Please specify a valid group in `groups`."
                     )
                 else:
-                    table = adata.tables[table_key]
+                    adata = adata.tables[table_key].copy()
             else:
-                ((key, table),) = adata.tables.items()
-                if groups not in table.obs:
+                ((key, adata),) = adata.tables.items()
+                if groups not in adata.obs:
                     raise ValueError(
                         f"Group {groups} not found in table in `spatialdata`. Please specify a valid group in `groups`."
                     )
-    else:
-        table = adata.copy()
-
-    # check whether to use radius or knn for neighborhood profile calculation
-    if radius is None and n_neighbors is None:
-        raise ValueError("Either `radius` or `n_neighbors` must be provided, but both are `None`.")
-    if radius is not None and n_neighbors is not None:
-        raise ValueError("Either `radius` and `n_neighbors` must be provided, but both were provided.")
-
-    # subset adata if only observations within specified groups are to be considered
-    if limit_to is not None:
-        if isinstance(limit_to, str):
-            limit_to = [limit_to]
-        table_subset = table[table.obs[groups].isin([limit_to])]
-    else:
-        table_subset = table
 
     if flavor == "neighborhood":
         rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
-            table, groups, table_subset, spatial_connectivities_key
+            adata, groups, spatial_connectivities_key
         )
-        df = pd.DataFrame(rel_nhood_profile, index=table_subset.obs.index)
+        df = pd.DataFrame(rel_nhood_profile, index=adata.obs.index)
         nhood_table = _df_to_adata(df)
-        sc.pp.neighbors(nhood_table, n_neighbors=n_neighbors, use_rep="X")
-        sc.tl.leiden(nhood_table)
-        table.obs["niche"] = nhood_table.obs["leiden"]
         if copy:
-            return nhood_table
+            return df
         else:
             if is_sdata:
-                adata.tables[f"{flavor}_niche"] = nhood_table
+                sdata.tables[f"{flavor}_niche"] = nhood_table
             else:
-                df = df.reindex(table.obs.index)
-                print(df.head())
-                table.obsm[f"{flavor}_niche"] = df
+                adata.obsm["neighborhood_profile"] = df
 
     elif flavor == "utag":
-        new_feature_matrix = _utag(table, normalize_adj=True, spatial_connectivity_key=spatial_connectivities_key)
-        table.X = new_feature_matrix
+        new_feature_matrix = _utag(adata, normalize_adj=True, spatial_connectivity_key=spatial_connectivities_key)
         if copy:
-            return table
+            return new_feature_matrix
         else:
             if is_sdata:
-                adata.tables[f"{flavor}_niche"] = table
+                sdata.tables[f"{flavor}_niche"] = new_feature_matrix
             else:
-                table.obsm[f"{flavor}_niche"] = table.X
+                adata.obsm[f"{flavor}_niche"] = new_feature_matrix
 
 
 def _calculate_neighborhood_profile(
     adata: AnnData | SpatialData,
     groups: str,
-    subset: AnnData,
     spatial_connectivities_key: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    # reset index
-    adata.obs = adata.obs.reset_index()
-
     # get obs x neighbor matrix from sparse matrix
     matrix = adata.obsp[spatial_connectivities_key].tocoo()
     nonzero_indices = np.split(matrix.col, matrix.row.searchsorted(np.arange(1, matrix.shape[0])))
