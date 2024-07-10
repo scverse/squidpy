@@ -110,7 +110,7 @@ def calculate_niche(
             if is_sdata:
                 sdata.tables[f"{flavor}_niche"] = new_feature_matrix
             else:
-                adata.obsm[f"{flavor}_niche"] = new_feature_matrix
+                adata.layers["utag"] = new_feature_matrix
 
 
 def _calculate_neighborhood_profile(
