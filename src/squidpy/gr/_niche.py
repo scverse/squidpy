@@ -4,10 +4,12 @@ import itertools
 from collections.abc import Iterator
 from typing import Any, Optional
 
+import anndata as ad
 import numpy as np
 import pandas as pd
 import scanpy as sc
 from anndata import AnnData
+from scipy.sparse import csr_matrix, vstack
 from scipy.stats import ranksums
 from sklearn import metrics
 from sklearn.metrics import adjusted_rand_score, fowlkes_mallows_score, normalized_mutual_info_score
@@ -26,7 +28,10 @@ def calculate_niche(
     library_key: str | None = None,
     table_key: str | None = None,
     spatial_key: str = "spatial",
+    adj_subsets: list[int] | None = None,
+    aggregation: str = "mean",
     spatial_connectivities_key: str = "spatial_connectivities",
+    spatial_distances_key: str = "spatial_distances",
     copy: bool = False,
 ) -> AnnData | pd.DataFrame:
     """Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
@@ -112,6 +117,38 @@ def calculate_niche(
             else:
                 adata.layers["utag"] = new_feature_matrix
 
+    elif flavor == "cellcharter":
+        adj_matrix_subsets = []
+        if isinstance(adj_subsets, list):
+            for k in adj_subsets:
+                adj_matrix_subsets.append(
+                    _get_adj_matrix_subsets(
+                        adata.obsp[spatial_connectivities_key], adata.obsp[spatial_distances_key], k
+                    )
+                )
+            if aggregation == "mean":
+                inner_products = [adata.X.dot(adj_subset) for adj_subset in adj_matrix_subsets]
+            elif aggregation == "variance":
+                inner_products = [
+                    _aggregate_var(matrix, adata.obsp[spatial_connectivities_key], adata) for matrix in inner_products
+                ]
+            else:
+                raise ValueError(
+                    f"Invalid aggregation method '{aggregation}'. Please choose either 'mean' or 'variance'."
+                )
+            concatenated_matrix = vstack(inner_products)
+            if copy:
+                return concatenated_matrix
+            else:
+                if is_sdata:
+                    sdata.tables[f"{flavor}_niche"] = ad.AnnData(concatenated_matrix)
+                else:
+                    adata.obsm[f"{flavor}_niche"] = concatenated_matrix
+        else:
+            raise ValueError(
+                "Flavor 'cellcharter' requires list of neighbors to build adjacency matrices. Please provide a list of k_neighbors for 'adj_subsets'."
+            )
+
 
 def _calculate_neighborhood_profile(
     adata: AnnData | SpatialData,
@@ -164,11 +201,41 @@ def _utag(adata: AnnData, normalize_adj: bool, spatial_connectivity_key: str) ->
         return adjacency_matrix @ adata.X
 
 
+def _get_adj_matrix_subsets(connectivities: csr_matrix, distances: csr_matrix, k_neighbors: int) -> csr_matrix:
+    # Convert the distance matrix to a dense format for easier manipulation
+    dist_dense = distances.todense()
+
+    # Find the indices of the k closest neighbors for each row
+    closest_neighbors_indices = np.argsort(dist_dense, axis=1)[:, :k_neighbors]
+
+    # Initialize lists to collect data for the new sparse matrix
+    rows = []
+    cols = []
+    data = []
+
+    # Iterate over each row to construct the new adjacency matrix
+    for row in range(dist_dense.shape[0]):
+        for col in closest_neighbors_indices[row].flat:
+            rows.append(row)
+            cols.append(col)
+            data.append(connectivities[row, col])
+
+    # Create the new sparse matrix with the reduced neighbors
+    new_adj_matrix = csr_matrix((data, (rows, cols)), shape=connectivities.shape)
+
+    return new_adj_matrix
+
+
 def _df_to_adata(df: pd.DataFrame) -> AnnData:
     df.index = df.index.map(str)
     adata = AnnData(X=df)
     adata.obs.index = df.index
     return adata
+
+
+def _aggregate_var(product: csr_matrix, connectivities: csr_matrix, adata: AnnData) -> csr_matrix:
+    mean_squared = connectivities.dot(adata.X.multiply(adata.X))
+    return mean_squared - (product.multiply(product))
 
 
 def pairwise_niche_comparison(
