@@ -121,13 +121,16 @@ def calculate_niche(
         adj_matrix_subsets = []
         if isinstance(adj_subsets, list):
             for k in adj_subsets:
-                adj_matrix_subsets.append(
-                    _get_adj_matrix_subsets(
-                        adata.obsp[spatial_connectivities_key], adata.obsp[spatial_distances_key], k
+                if k == 0:
+                    adj_matrix_subsets.append(adata.obsp[spatial_connectivities_key])
+                else:
+                    adj_matrix_subsets.append(
+                        _get_adj_matrix_subsets(
+                            adata.obsp[spatial_connectivities_key], adata.obsp[spatial_distances_key], k
+                        )
                     )
-                )
             if aggregation == "mean":
-                inner_products = [adata.X.dot(adj_subset) for adj_subset in adj_matrix_subsets]
+                inner_products = [adj_subset.dot(adata.X) for adj_subset in adj_matrix_subsets]
             elif aggregation == "variance":
                 inner_products = [
                     _aggregate_var(matrix, adata.obsp[spatial_connectivities_key], adata) for matrix in inner_products
@@ -222,7 +225,7 @@ def _get_adj_matrix_subsets(connectivities: csr_matrix, distances: csr_matrix, k
 
     # Create the new sparse matrix with the reduced neighbors
     new_adj_matrix = csr_matrix((data, (rows, cols)), shape=connectivities.shape)
-
+    print(new_adj_matrix.shape)
     return new_adj_matrix
 
 
