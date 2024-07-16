@@ -140,7 +140,7 @@ def calculate_niche(
                     f"Invalid aggregation method '{aggregation}'. Please choose either 'mean' or 'variance'."
                 )
             concatenated_matrix = hstack(inner_products)
-            
+
             # create df from sparse matrix
             arr = concatenated_matrix.toarray()
             df = pd.DataFrame(arr, index=adata.obs.index)
