@@ -27,9 +27,9 @@ def calculate_niche(
     flavor: str = "neighborhood",
     library_key: str | None = None,
     table_key: str | None = None,
-    spatial_key: str = "spatial",
     adj_subsets: list[int] | None = None,
     aggregation: str = "mean",
+    spatial_key: str = "spatial",
     spatial_connectivities_key: str = "spatial_connectivities",
     spatial_distances_key: str = "spatial_distances",
     copy: bool = False,
@@ -174,11 +174,14 @@ def _calculate_neighborhood_profile(
     neighbor_matrix = pd.DataFrame(nonzero_indices)
 
     # get unique categories
-    category_arr = adata.obs[groups].values
-    unique_categories = np.unique(category_arr)
+    unique_categories = np.unique(adata.obs[groups].values)
 
     # get obs x k matrix where each column is the category of the k-th neighbor
-    cat_by_id = np.take(category_arr, neighbor_matrix)
+    indices_with_nan = neighbor_matrix.to_numpy()
+    valid_indices = neighbor_matrix.fillna(-1).astype(int).to_numpy()
+    cat_by_id = adata.obs[groups].values[valid_indices]
+    cat_by_id[indices_with_nan == -1] = np.nan
+    # cat_by_id = np.take(category_arr, neighbor_matrix)
 
     # in obs x k matrix convert categorical values to numerical values
     cat_indices = {category: index for index, category in enumerate(unique_categories)}
