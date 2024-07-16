@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import scanpy as sc
 from anndata import AnnData
-from scipy.sparse import csr_matrix, vstack
+from scipy.sparse import csr_matrix, hstack
 from scipy.stats import ranksums
 from sklearn import metrics
 from sklearn.metrics import adjusted_rand_score, fowlkes_mallows_score, normalized_mutual_info_score
@@ -139,14 +139,24 @@ def calculate_niche(
                 raise ValueError(
                     f"Invalid aggregation method '{aggregation}'. Please choose either 'mean' or 'variance'."
                 )
-            concatenated_matrix = vstack(inner_products)
+            concatenated_matrix = hstack(inner_products)
+            
+            # create df from sparse matrix
+            arr = concatenated_matrix.toarray()
+            df = pd.DataFrame(arr, index=adata.obs.index)
+            col_names = []
+            for A_i in adj_subsets:
+                for var in adata.var_names:
+                    col_names.append(f"{var}_Adj_{A_i}")
+            df.columns = col_names
+
             if copy:
                 return concatenated_matrix
             else:
                 if is_sdata:
                     sdata.tables[f"{flavor}_niche"] = ad.AnnData(concatenated_matrix)
                 else:
-                    adata.obsm[f"{flavor}_niche"] = concatenated_matrix
+                    adata.obsm[f"{flavor}_niche"] = df
         else:
             raise ValueError(
                 "Flavor 'cellcharter' requires list of neighbors to build adjacency matrices. Please provide a list of k_neighbors for 'adj_subsets'."
@@ -225,7 +235,6 @@ def _get_adj_matrix_subsets(connectivities: csr_matrix, distances: csr_matrix, k
 
     # Create the new sparse matrix with the reduced neighbors
     new_adj_matrix = csr_matrix((data, (rows, cols)), shape=connectivities.shape)
-    print(new_adj_matrix.shape)
     return new_adj_matrix
 
 
