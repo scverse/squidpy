@@ -24,7 +24,7 @@ from scipy.sparse import (
     spmatrix,
 )
 from scipy.spatial import Delaunay
-from shapely import LineString, Point, Polygon, distance
+from shapely import LineString, MultiPolygon, Point, Polygon, distance
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 from sklearn.neighbors import NearestNeighbors
 from spatialdata import SpatialData
@@ -90,13 +90,14 @@ def spatial_neighbors(
         If `adata` is a :class:`spatialdata.SpatialData`, the coordinates of the centroids will be stored in the
         `adata` with this key.
     elements_to_coordinate_systems
-        A dictionary mapping region names to coordinate systems. For compatibility, the spatialdata table must annotate
+        A dictionary mapping element names of the SpatialData object to coordinate systems.
+        The elements can be either Shapes or Labels. For compatibility, the spatialdata table must annotate
         all regions keys. Must not be `None` if `adata` is a :class:`spatialdata.SpatialData`.
     table_key
         Key in :attr:`spatialdata.SpatialData.tables` where the spatialdata table is stored. Must not be `None` if
         `adata` is a :class:`spatialdata.SpatialData`.
     mask_polygon
-        The polygon
+        The Polygon or MultiPolygon element.
     %(library_key)s
     coord_type
         Type of coordinate system. Valid options are:
@@ -470,7 +471,7 @@ def _transform_a_cosine(a: spmatrix) -> spmatrix:
 def mask_graph(
     sdata: SpatialData,
     table_key: str,
-    polygon_mask: GeoDataFrame,
+    polygon_mask: Polygon | MultiPolygon,
     negative_mask: bool = False,
     spatial_key: str = Key.obsm.spatial,
     key_added: str = "mask",
@@ -488,7 +489,7 @@ def mask_graph(
     table_key:
         The key of the table containing the spatial data.
     polygon_mask
-        The polygon mask.
+        The :class:`shapely.Polygon` or :class:`shapely.MultiPolygon` to be used as mask.
     negative_mask
         Whether to keep the edges within the polygon mask or outside.
         Note that when ``negative_mask = True``, only the edges fully contained in the polygon are removed.
@@ -514,6 +515,10 @@ def mask_graph(
     conns_key = Key.obsp.spatial_conn(spatial_key)
     dists_key = Key.obsp.spatial_dist(spatial_key)
 
+    # check polygon type
+    if not isinstance(polygon_mask, (Polygon, MultiPolygon)):
+        raise ValueError(f"`polygon_mask` should be of type `Polygon` or `MultiPolygon`, got {type(polygon_mask)}")
+
     # get elements
     table = sdata.tables[table_key]
     coords = table.obsm[spatial_key]
@@ -524,10 +529,9 @@ def mask_graph(
     lines_coords, idx_out = _get_lines_coords(Adj.indices, Adj.indptr, coords)
     lines_coords, idx_out = np.array(lines_coords), np.array(idx_out)
     lines_df = gpd.GeoDataFrame(geometry=list(map(LineString, lines_coords)))
-    mask_polygon = sdata[polygon_mask]
 
     # check that lines overlap with the polygon
-    filt_lines = lines_df.geometry.within(mask_polygon.geometry[0]).values
+    filt_lines = lines_df.geometry.within(polygon_mask).values
 
     # ~ within index, and set that to 0
     if not negative_mask:
@@ -554,7 +558,6 @@ def mask_graph(
         "params": {
             "negative_mask": negative_mask,
             "table_key": table_key,
-            "polygon_mask": polygon_mask,
         },
     }
 

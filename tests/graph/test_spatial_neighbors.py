@@ -7,6 +7,7 @@ import spatialdata as sd
 from anndata import AnnData
 from numpy.random import default_rng
 from scipy.sparse import isspmatrix_csr
+from shapely import Point
 from spatialdata.datasets import blobs
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import mask_graph, spatial_neighbors
@@ -292,6 +293,7 @@ class TestSpatialNeighbors:
         delaunay: bool,
     ):
         sdata = sdata_mask_graph
+        mask_polygon = sdata["polygon"].geometry[0]
 
         neighs_key = Key.uns.spatial_neighs("spatial")
         conns_key = Key.obsp.spatial_conn("spatial")
@@ -311,7 +313,7 @@ class TestSpatialNeighbors:
         mask_graph(
             sdata,
             "table",
-            "polygon",
+            mask_polygon,
             negative_mask=False,
             key_added=key_added,
         )
@@ -321,7 +323,7 @@ class TestSpatialNeighbors:
         mask_graph(
             sdata,
             "table",
-            "polygon",
+            mask_polygon,
             negative_mask=True,
             key_added=key_added,
         )
@@ -341,24 +343,16 @@ class TestSpatialNeighbors:
         assert uns[mask_neighs_key]["distances_key"] == mask_dists_key
         assert uns[mask_neighs_key]["connectivities_key"] == mask_conns_key
         assert uns[mask_neighs_key]["params"]["negative_mask"]
-        assert uns[mask_neighs_key]["params"]["polygon_mask"] == "polygon"
 
-
-# %%
-
-sdata = blobs()
-
-# %%
-
-rng = default_rng(42)
-
-X = rng.normal(size=(len(sdata.shapes["blobs_circles"]), 2))
-adata_circles = AnnData(X)
-adata_circles.obs["region"] = "blobs_circles"
-adata_circles.obs["instance_id"] = sdata["blobs_circles"].index.values
-
-sdata["table_circles"] = adata_circles
-sdata.set_table_annotates_spatialelement(
-    "table_circles", "blobs_circles", region_key="region", instance_key="instance_id"
-)
-# %%
+        mask_polygon = sdata["polygon"]
+        with pytest.raises(
+            ValueError,
+            match="`polygon_mask` should be of type `Polygon` or `MultiPolygon`, got",
+        ):
+            mask_graph(
+                sdata,
+                "table",
+                Point((0, 1)),
+                negative_mask=True,
+                key_added=key_added,
+            )
