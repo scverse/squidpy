@@ -509,6 +509,9 @@ def mask_graph(
         - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_{{spatial_key}}_distances']`` - the spatial distances.
         - :attr:`anndata.AnnData.uns`  ``['{{key_added}}_{{spatial_key}}']`` - :class:`dict` containing parameters.
 
+    Notes
+    -----
+    The `polygon_mask` must be in the same `coordinate_systems` of the spatial graph, but no check is performed to assess this.
     """
     # we could add this to arg, but I don't see use case for now
     neighs_key = Key.uns.spatial_neighs(spatial_key)
