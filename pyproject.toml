@@ -72,7 +72,7 @@ dependencies = [
    "validators>=0.18.2",
    "xarray>=0.16.1",
    "zarr>=2.6.1",
-   "spatialdata",
+   "spatialdata>=0.2.0",
 ]
 
 [project.optional-dependencies]

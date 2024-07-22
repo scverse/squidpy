@@ -94,6 +94,7 @@ intersphinx_mapping = dict(  # noqa: C408
     omnipath=("https://omnipath.readthedocs.io/en/latest", None),
     napari=("https://napari.org/", None),
     spatialdata=("https://spatialdata.scverse.org/en/latest", None),
+    shapely=("https://shapely.readthedocs.io/en/stable", None),
 )
 
 # Add any paths that contain templates here, relative to this directory.
