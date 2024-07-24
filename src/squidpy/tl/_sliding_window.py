@@ -73,12 +73,12 @@ def sliding_window(
     sliding_window_df = pd.DataFrame(index=adata.obs.index)
 
     if overlap == 0:
-        sliding_window_df[sliding_window_key] = "NaN"
+        sliding_window_df[sliding_window_key] = np.nan
     else:
         grid_len = math.ceil(window_size / overlap)
         num_grid_systems = grid_len**2
         for i in range(num_grid_systems):
-            sliding_window_df[f"{sliding_window_key}_{i+1}"] = "NaN"
+            sliding_window_df[f"{sliding_window_key}_{i+1}"] = np.nan
 
     for lib in libraries:
         if library_key is not None:
