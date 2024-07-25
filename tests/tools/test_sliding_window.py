@@ -9,7 +9,6 @@ from squidpy.tl._sliding_window import _sliding_window_stats
 
 
 class TestSlidingWindow:
-
     @pytest.mark.parametrize("library_key", ["point"])
     @pytest.mark.parametrize("window_size", [10])
     @pytest.mark.parametrize("overlap", [0, 2])
