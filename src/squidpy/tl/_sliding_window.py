@@ -26,8 +26,9 @@ def sliding_window(
     library_key: str | None = None,
     window_size: int = 2500,
     overlap: int = 0,
-    coord_columns: tuple[str, str] = ("globalX", "globalY"),
+    coord_columns: tuple[str, str] = ('globalX', 'globalY'),
     sliding_window_key: str = "sliding_window",
+    spatial_key: str = "spatial",
     copy: bool = False,
 ) -> AnnData:
     """
@@ -42,11 +43,12 @@ def sliding_window(
         library_key: str
             Only cells with the same library_key in `adata.obs` are assigned to the same window
         coord_columns: Tuple[str, str]
-            Tuple of column names in `adata.obs` that specify the coordinates (x, y).
+            Tuple of column names in `adata.obs` that specify the coordinates (x, y), e.i. ('globalX', 'globalY')
         sliding_window_key: str
             Base name for sliding window columns.
         overlap: int
             Overlap size between consecutive windows.
+        %(spatial_key)s
         copy: bool
             Whether to return a copy of the AnnData object.
 
@@ -58,6 +60,10 @@ def sliding_window(
     start = logg.info(f"Creating {sliding_window_key}")
 
     x, y = coord_columns
+
+    if x not in adata.obs or y not in adata.obs:
+        adata.obs[x] = adata.obsm[spatial_key][:,0]
+        adata.obs[y] = adata.obsm[spatial_key][:,1]
 
     if library_key is not None and library_key not in adata.obs:
         raise ValueError(f"Library key '{library_key}' not found in adata.obs")
