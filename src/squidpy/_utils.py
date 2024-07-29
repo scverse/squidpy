@@ -1,24 +1,17 @@
 """Spatial tools general utility functions."""
+
 from __future__ import annotations
 
 import functools
 import inspect
 import warnings
+from collections.abc import Generator, Hashable, Iterable, Sequence
 from contextlib import contextmanager
 from enum import Enum
 from multiprocessing import Manager, cpu_count
 from queue import Queue
 from threading import Thread
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Generator,
-    Hashable,
-    Iterable,
-    Sequence,
-    Union,  # noqa: F401
-)
+from typing import TYPE_CHECKING, Any, Callable
 
 import joblib as jl
 import numpy as np

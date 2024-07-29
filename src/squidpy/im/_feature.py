@@ -1,13 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Mapping,
-    Sequence,
-    Union,  # noqa: F401
-)
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from anndata import AnnData

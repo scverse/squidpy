@@ -1,16 +1,10 @@
 """Functions for point patterns spatial statistics."""
+
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Iterable,
-    Literal,  # < 3.8
-    Sequence,
-    Union,  # noqa: F401
-)
+from typing import TYPE_CHECKING, Any, Literal
 
 import numba.types as nt
 import numpy as np
@@ -50,6 +44,7 @@ ft = nt.float32
 tt = nt.UniTuple
 ip = np.int32
 fp = np.float32
+bl = nt.boolean
 
 
 @d.dedent
@@ -270,7 +265,7 @@ def _score_helper(
 
 
 @njit(
-    ft[:, :, :](tt(it[:], 2), ft[:, :], it[:], ft[:]),
+    ft[:, :, :](tt(it[:], 2), ft[:, :], it[:], ft[:], bl),
     parallel=False,
     fastmath=True,
 )
@@ -279,6 +274,7 @@ def _occur_count(
     pw_dist: NDArrayA,
     labs_unique: NDArrayA,
     interval: NDArrayA,
+    same_split: bool,
 ) -> NDArrayA:
     num = labs_unique.shape[0]
     out = np.zeros((num, num, interval.shape[0] - 1), dtype=ft)
@@ -287,22 +283,37 @@ def _occur_count(
         co_occur = np.zeros((num, num), dtype=ft)
         probs_con = np.zeros((num, num), dtype=ft)
 
-        thres_min = interval[idx]
         thres_max = interval[idx + 1]
         clust_x, clust_y = clust
 
-        idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > thres_min))
+        # Modified to compute co-occurrence probability ratio over increasing radii sizes as opposed to discrete interval bins
+        # Need pw_dist > 0 to avoid counting a cell with itself as co-occurrence
+        idx_x, idx_y = np.nonzero((pw_dist <= thres_max) & (pw_dist > 0))
         x = clust_x[idx_x]
         y = clust_y[idx_y]
+        # Treat computing co-occurrence using the same split and different splits differently
+        # Pairwise distance matrix for between the same split is symmetric and therefore only needs to be counted once
         for i, j in zip(x, y):
-            co_occur[i, j] += 1
+            if same_split:
+                co_occur[i, j] += 1
+            else:
+                co_occur[i, j] += 1
+                co_occur[j, i] += 1
 
-        probs_matrix = co_occur / np.sum(co_occur)
-        probs = np.sum(probs_matrix, axis=1)
+        # Prevent divison by zero errors when we have low cell counts/small intervals
+        probs_matrix = co_occur / np.sum(co_occur) if np.sum(co_occur) != 0 else np.zeros((num, num), dtype=ft)
+        probs = np.sum(probs_matrix, axis=0)
 
         for c in labs_unique:
-            probs_conditional = co_occur[c] / np.sum(co_occur[c])
-            probs_con[c, :] = probs_conditional / probs
+            probs_conditional = (
+                co_occur[c] / np.sum(co_occur[c]) if np.sum(co_occur[c]) != 0 else np.zeros(num, dtype=ft)
+            )
+            probs_con[c, :] = np.zeros(num, dtype=ft)
+            for i in range(num):
+                if probs[i] == 0:
+                    probs_con[c, i] = 0
+                else:
+                    probs_con[c, i] = probs_conditional[i] / probs[i]
 
         out[:, :, idx] = probs_con
 
@@ -324,7 +335,7 @@ def _co_occurrence_helper(
         labs_y = labs_splits[idx_y]
         dist = pairwise_distances(spatial_splits[idx_x], spatial_splits[idx_y])
 
-        out = _occur_count((labs_x, labs_y), dist, labs_unique, interval)
+        out = _occur_count((labs_x, labs_y), dist, labs_unique, interval, idx_x == idx_y)
         out_lst.append(out)
 
         if queue is not None:

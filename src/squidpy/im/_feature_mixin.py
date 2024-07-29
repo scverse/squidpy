@@ -1,15 +1,7 @@
 from __future__ import annotations
 
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    Protocol,
-    Sequence,
-    Union,
-)
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Protocol, Union
 
 import numpy as np
 import skimage.measure
@@ -74,18 +66,15 @@ _valid_seg_prop = sorted(
 class HasGetItemProtocol(Protocol):
     """Protocol for FeatureMixin to have correct definition of ImageContainer."""
 
-    def __getitem__(self, key: str) -> xr.DataArray:
-        ...
+    def __getitem__(self, key: str) -> xr.DataArray: ...
 
     @property
     def data(self) -> xr.Dataset:  # noqa: D102
         ...
 
-    def _get_layer(self, layer: str | None) -> str:
-        ...
+    def _get_layer(self, layer: str | None) -> str: ...
 
-    def _get_library_id(self, library_id: str | None) -> str:
-        ...
+    def _get_library_id(self, library_id: str | None) -> str: ...
 
 
 class FeatureMixin:
@@ -333,9 +322,9 @@ class FeatureMixin:
                 return np.array([[]], dtype=np.float64)
 
             if self.data.attrs.get("mask_circle", False):
-                if self.data.dims["y"] != self.data.dims["x"]:
-                    raise ValueError(f"Crop is not a square: `{self.data.dims}`.")
-                c = self.data.dims["x"] // 2  # center
+                if self.data.sizes["y"] != self.data.sizes["x"]:
+                    raise ValueError(f"Crop is not a square: `{self.data.sizes}`.")
+                c = self.data.sizes["x"] // 2  # center
                 mask = (x - c) ** 2 + (y - c) ** 2 <= c**2
                 y = y[mask]
                 x = x[mask]
@@ -344,7 +333,7 @@ class FeatureMixin:
                 return np.array([[]], dtype=np.float64)  # because of masking, should not happen
 
             coord = self.data.attrs.get(
-                Key.img.coords, CropCoords(x0=0, y0=0, x1=self.data.dims["x"], y1=self.data.dims["y"])
+                Key.img.coords, CropCoords(x0=0, y0=0, x1=self.data.sizes["x"], y1=self.data.sizes["y"])
             )  # fall back to default (i.e no crop) coordinates
             padding = self.data.attrs.get(Key.img.padding, _NULL_PADDING)  # fallback to no padding
             y_slc, x_slc = coord.to_image_coordinates(padding).slice

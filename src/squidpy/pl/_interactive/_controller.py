@@ -9,7 +9,7 @@ import xarray as xr
 from anndata import AnnData
 from napari import Viewer
 from napari.layers import Points, Shapes
-from pandas.core.dtypes.common import is_categorical_dtype
+from pandas import CategoricalDtype
 from PyQt5.QtWidgets import QGridLayout, QLabel, QWidget
 from scanpy import logging as logg
 
@@ -181,7 +181,7 @@ class ImageController:
             **properties,
         )
         # TODO(michalk8): add contrasting fg/bg color once https://github.com/napari/napari/issues/2019 is done
-        self._hide_points_controls(layer, is_categorical=is_categorical_dtype(vec))
+        self._hide_points_controls(layer, is_categorical=isinstance(vec.dtype, CategoricalDtype))
         layer.editable = False
 
         return True

@@ -1,23 +1,13 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from copy import copy, deepcopy
 from functools import partial
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Iterable,
-    Iterator,
-    Literal,
-    Mapping,
-    Sequence,
-    TypeVar,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Literal, TypeVar, Union
 
 import dask.array as da
 import matplotlib as mpl
@@ -151,7 +141,7 @@ class ImageContainer(FeatureMixin):
         # check that imgs are not already 3d
         imgs = list(imgs)
         for img in imgs:
-            if img.data.dims["z"] > 1:
+            if img.data.sizes["z"] > 1:
                 raise ValueError(
                     f"Currently, can concatenate only images with 1 Z-dimension, found `{img.data.dims['z']}`."
                 )
@@ -584,6 +574,7 @@ class ImageContainer(FeatureMixin):
                 order=1,
                 channel_axis=-1,
                 cval=cval,
+                clip=False,
             )
             dtype = arr.dtype
 
@@ -595,7 +586,6 @@ class ImageContainer(FeatureMixin):
                     da.from_delayed(delayed(lambda arr: scaling_fn(arr).astype(dtype))(arr), shape=shape, dtype=dtype),
                     dims=arr.dims,
                 )
-
             return xr.DataArray(scaling_fn(arr).astype(dtype), dims=arr.dims)
 
         if scale != 1:
@@ -605,10 +595,10 @@ class ImageContainer(FeatureMixin):
             data.attrs = _update_attrs_scale(attrs, scale)
 
         if mask_circle:
-            if data.dims["y"] != data.dims["x"]:
+            if data.sizes["y"] != data.sizes["x"]:
                 raise ValueError(
                     f"Masking circle is only available for square crops, "
-                    f"found crop of shape `{(data.dims['y'], data.dims['x'])}`."
+                    f"found crop of shape `{(data.sizes['y'], data.sizes['x'])}`."
                 )
             c = data.x.shape[0] // 2
             # manually reassign coordinates
@@ -789,7 +779,7 @@ class ImageContainer(FeatureMixin):
                     raise e
         else:
             try:
-                obs_library_ids = adata.obs[library_id]
+                obs_library_ids = list(adata.obs[library_id])
             except KeyError:
                 logg.debug(
                     f"Unable to find library ids in `adata.obs[{library_id!r}]`. "
@@ -1368,7 +1358,7 @@ class ImageContainer(FeatureMixin):
         """Image shape ``(y, x)``."""
         if not len(self):
             return 0, 0
-        return self.data.dims["y"], self.data.dims["x"]
+        return self.data.sizes["y"], self.data.sizes["x"]
 
     def copy(self, deep: bool = False) -> ImageContainer:
         """
@@ -1596,8 +1586,7 @@ class ImageContainer(FeatureMixin):
         for i, layer in enumerate(self.data.keys()):
             s += f"<p style={style!r}><strong>{html.escape(str(layer))}</strong>: "
             s += ", ".join(
-                f"<em>{html.escape(str(dim))}</em> ({shape})"
-                for dim, shape in zip(self.data[layer].dims, self.data[layer].shape)
+                f"<em>{html.escape(str(dim))}</em> ({shape})" for dim, shape in self.data[layer].sizes.items()
             )
             s += "</p>"
             if i == 9 and i < len(self) - 1:  # show only first 10 layers

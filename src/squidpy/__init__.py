@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from importlib import metadata
 
 from squidpy import datasets, gr, im, pl, read, tl

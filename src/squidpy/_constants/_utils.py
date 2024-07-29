@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, ABCMeta
+from collections.abc import Mapping
 from enum import Enum, EnumMeta
 from functools import wraps
-from typing import Any, Callable, Mapping, Tuple
+from typing import Any, Callable
 
 
 def _pretty_raise_enum(cls: type[ModeEnum], fun: Callable[..., Any]) -> Callable[..., Any]:
@@ -33,7 +34,9 @@ class ErrorFormatterABC(ABC):
     @classmethod
     def _format(cls, value: Enum) -> str:
         return cls.__error_format__.format(
-            value, cls.__name__, [m.value for m in cls.__members__.values()]  # type: ignore[attr-defined]
+            value,
+            cls.__name__,
+            [m.value for m in cls.__members__.values()],  # type: ignore[attr-defined]
         )
 
 

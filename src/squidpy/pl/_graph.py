@@ -1,16 +1,11 @@
 """Plotting for graph functions."""
+
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Literal,
-    Mapping,
-    Sequence,
-    Union,  # noqa: F401
-)
+from typing import TYPE_CHECKING, Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -158,7 +153,7 @@ def interaction_matrix(
     _assert_categorical_obs(adata, key=cluster_key)
     array = _get_data(adata, cluster_key=cluster_key, func_name="interaction_matrix")
 
-    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)}, dtype=array.dtype)
+    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
     _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
     if title is None:
         title = "Interaction matrix"
@@ -223,7 +218,7 @@ def nhood_enrichment(
     _assert_categorical_obs(adata, key=cluster_key)
     array = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")[mode]
 
-    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)}, dtype=array.dtype)
+    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
     _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
     if title is None:
         title = "Neighborhood enrichment"
@@ -314,7 +309,7 @@ def ripley(
         **kwargs,
     )
     if plot_sims:
-        sns.lineplot(y="stats", x="bins", ci="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)
+        sns.lineplot(y="stats", x="bins", errorbar="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)
     ax.legend(**legend_kwargs)
     ax.set_ylabel("value")
     ax.set_title(f"Ripley's {mode.s}")

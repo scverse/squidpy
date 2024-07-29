@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import sys
+from collections.abc import Mapping, Sequence
 from itertools import product
 from time import time
-from typing import TYPE_CHECKING, Mapping, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -150,7 +153,7 @@ class TestValidBehavior:
                     [g[12], g[13]],
                 ]
             )
-            .applymap(str.upper)
+            .map(str.upper)
             .values,
         )
 
@@ -223,7 +226,7 @@ class TestValidBehavior:
         assert isinstance(r["metadata"], pd.DataFrame)
 
     @pytest.mark.parametrize("fdr_method", [None, "fdr_bh"])
-    def test_pvals_in_correct_range(self, adata: AnnData, interactions: Interactions_t, fdr_method: Optional[str]):
+    def test_pvals_in_correct_range(self, adata: AnnData, interactions: Interactions_t, fdr_method: str | None):
         r = ligrec(
             adata,
             _CK,

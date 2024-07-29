@@ -1,23 +1,12 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Mapping, Sequence
 from copy import copy
 from functools import partial
 from numbers import Number
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    List,
-    Literal,
-    Mapping,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, Union
 
 import dask.array as da
 import numpy as np
@@ -26,7 +15,6 @@ from anndata import AnnData
 from matplotlib import colors, patheffects, rcParams
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
-from matplotlib.cm import get_cmap
 from matplotlib.collections import Collection, PatchCollection
 from matplotlib.colors import (
     ColorConverter,
@@ -39,8 +27,7 @@ from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpec
 from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib_scalebar.scalebar import ScaleBar
-from pandas.api.types import CategoricalDtype
-from pandas.core.dtypes.common import is_categorical_dtype
+from pandas import CategoricalDtype
 from scanpy import logging as logg
 from scanpy._settings import settings as sc_settings
 from scanpy.plotting._tools.scatterplots import _add_categorical_legend
@@ -62,7 +49,7 @@ _Normalize = Union[Normalize, Sequence[Normalize]]
 _SeqStr = Union[str, Sequence[str]]
 _SeqFloat = Union[float, Sequence[float]]
 _SeqArray = Union[NDArrayA, Sequence[NDArrayA]]
-_CoordTuple = Tuple[int, int, int, int]
+_CoordTuple = tuple[int, int, int, int]
 _FontWeight = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
 _FontSize = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
 
@@ -93,9 +80,9 @@ class OutlineParams(NamedTuple):
 
     outline: bool
     gap_size: float
-    gap_color: str
+    gap_color: NDArrayA | str
     bg_size: float
-    bg_color: str
+    bg_color: NDArrayA | str
 
 
 class ScalebarParams(NamedTuple):
@@ -300,7 +287,11 @@ def _image_spatial_attrs(
         return img is True or len(img)  # type: ignore
 
     library_id = _get_library_id(
-        adata=adata, shape=shape, spatial_key=spatial_key, library_id=library_id, library_key=library_key
+        adata=adata,
+        shape=shape,
+        spatial_key=spatial_key,
+        library_id=library_id,
+        library_key=library_key,
     )
     if len(library_id) > 1 and library_key is None:
         raise ValueError(
@@ -355,7 +346,12 @@ def _set_coords_crops(
     if crop_coord is None:
         crops = [None] * len(spatial_params.library_id)
     else:
-        crop_coord = _get_list(crop_coord, _type=tuple, ref_len=len(spatial_params.library_id), name="crop_coord")
+        crop_coord = _get_list(
+            crop_coord,
+            _type=tuple,
+            ref_len=len(spatial_params.library_id),
+            name="crop_coord",
+        )
         crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor)]  # type: ignore[misc]
 
     coords = adata.obsm[spatial_key]
@@ -385,7 +381,7 @@ def _subs(
     ) -> tuple[AnnData, NDArrayA]:
         if key is None or values is None:
             return adata, coords
-        if key not in adata.obs or not is_categorical_dtype(adata.obs[key]):
+        if key not in adata.obs or not isinstance(adata.obs[key].dtype, CategoricalDtype):
             return adata, coords
         try:
             mask = adata.obs[key].isin(values).values
@@ -395,7 +391,10 @@ def _subs(
             raise KeyError(f"Unable to find `{key!r}` in `adata.obs`.") from None
 
     def subset_by_coords(
-        adata: AnnData, coords: NDArrayA, img: NDArrayA | None, crop_coords: CropCoords | None
+        adata: AnnData,
+        coords: NDArrayA,
+        img: NDArrayA | None,
+        crop_coords: CropCoords | None,
     ) -> tuple[AnnData, NDArrayA, NDArrayA | None]:
         if crop_coords is None:
             return adata, coords, img
@@ -468,7 +467,7 @@ def _set_color_source_vec(
     else:
         color_source_vector = adata.obs_vector(value_to_plot, layer=layer)
 
-    if not is_categorical_dtype(color_source_vector):
+    if not isinstance(color_source_vector.dtype, CategoricalDtype):
         return None, color_source_vector, False
 
     color_source_vector = pd.Categorical(color_source_vector)  # convert, e.g., `pd.Series`
@@ -476,11 +475,17 @@ def _set_color_source_vec(
     if groups is not None:
         color_source_vector = color_source_vector.remove_categories(categories.difference(groups))
 
-    color_map = _get_palette(adata, cluster_key=value_to_plot, categories=categories, palette=palette, alpha=alpha)
+    color_map = _get_palette(
+        adata,
+        cluster_key=value_to_plot,
+        categories=categories,
+        palette=palette,
+        alpha=alpha,
+    )
     if color_map is None:
         raise ValueError("Unable to create color palette.")
     # do not rename categories, as colors need not be unique
-    color_vector = color_source_vector.map(color_map)
+    color_vector = color_source_vector.map(color_map, na_action=None)
     if color_vector.isna().any():
         color_vector = color_vector.add_categories([to_hex(na_color)])
         color_vector = color_vector.fillna(to_hex(na_color))
@@ -559,7 +564,13 @@ def _plot_edges(
     if not len(g.edges):
         return None
     edge_collection = draw_networkx_edges(
-        g, coords, width=edges_width, edge_color=edges_color, arrows=False, ax=ax, **kwargs
+        g,
+        coords,
+        width=edges_width,
+        edge_color=edges_color,
+        arrows=False,
+        ax=ax,
+        **kwargs,
     )
     edge_collection.set_rasterized(sc_settings._vector_friendly)
     ax.add_collection(edge_collection)
@@ -613,7 +624,7 @@ def _decorate_axs(
     adata: AnnData,
     coords: NDArrayA,
     value_to_plot: str,
-    color_source_vector: pd.Series[CategoricalDtype],
+    color_source_vector: pd.Series[CategoricalDtype] | None,
     img: NDArrayA | None = None,
     img_cmap: str | None = None,
     img_alpha: float | None = None,
@@ -646,9 +657,15 @@ def _decorate_axs(
             path_effect = []
 
         # Adding legends
-        if is_categorical_dtype(color_source_vector):
+        if color_source_vector is not None and isinstance(color_source_vector.dtype, CategoricalDtype):
             clusters = color_source_vector.categories
-            palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette, alpha=alpha)
+            palette = _get_palette(
+                adata,
+                cluster_key=value_to_plot,
+                categories=clusters,
+                palette=palette,
+                alpha=alpha,
+            )
             _add_categorical_legend(
                 ax,
                 color_source_vector,
@@ -691,11 +708,11 @@ def _map_color_seg(
 ) -> NDArrayA:
     cell_id = np.array(cell_id)
 
-    if is_categorical_dtype(color_vector):
+    if isinstance(color_vector.dtype, CategoricalDtype):
         if isinstance(na_color, tuple) and len(na_color) == 4 and np.any(color_source_vector.isna()):
             cell_id[color_source_vector.isna()] = 0
-        val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)  # type: ignore
-        cols = colors.to_rgba_array(color_vector.categories)  # type: ignore
+        val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)  # type: ignore[union-attr]
+        cols = colors.to_rgba_array(color_vector.categories)  # type: ignore[union-attr]
     else:
         val_im = map_array(seg, cell_id, cell_id)  # replace with same seg id to remove missing segs
         try:
@@ -744,7 +761,7 @@ def _prepare_args_plot(
 
     # set palette if missing
     for c in color:
-        if c is not None and c in adata.obs and is_categorical_dtype(adata.obs[c]):
+        if c is not None and c in adata.obs and isinstance(adata.obs[c].dtype, CategoricalDtype):
             _maybe_set_colors(source=adata, target=adata, key=c, palette=palette)
 
     # check raw
@@ -805,7 +822,12 @@ def _prepare_params_plot(
     dpi = rcParams["figure.dpi"] if dpi is None else dpi
     if num_panels > 1 and ax is None:
         fig, grid = _panel_grid(
-            num_panels=num_panels, hspace=hspace, wspace=wspace, ncols=ncols, dpi=dpi, figsize=figsize
+            num_panels=num_panels,
+            hspace=hspace,
+            wspace=wspace,
+            ncols=ncols,
+            dpi=dpi,
+            figsize=figsize,
         )
         axs: Sequence[Axes] | None = [plt.subplot(grid[c]) for c in range(num_panels)]
     elif num_panels > 1 and ax is not None:
@@ -822,7 +844,10 @@ def _prepare_params_plot(
             fig, ax = plt.subplots(figsize=figsize, dpi=dpi, constrained_layout=True)
 
     # set cmap and norm
-    cmap = copy(get_cmap(cmap))
+    if cmap is None:
+        cmap = plt.rcParams["image.cmap"]
+    if isinstance(cmap, str):
+        cmap = plt.colormaps[cmap]
     cmap.set_bad("lightgray" if na_color is None else na_color)
 
     if isinstance(norm, Normalize):
@@ -935,7 +960,7 @@ def _plot_scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.bg_size,
-            c=outline_params.bg_color,
+            c=outline_params.bg_color,  # type: ignore[arg-type]
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,
@@ -946,7 +971,7 @@ def _plot_scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.gap_size,
-            c=outline_params.gap_color,
+            c=outline_params.gap_color,  # type: ignore[arg-type]
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,

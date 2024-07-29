@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any
 
 import matplotlib.cm as cm
 import matplotlib.colors as colors
@@ -67,16 +68,23 @@ def var_by_distance(
     line_palette
         Categorical color palette used in case a covariate is specified.
     scatter_palette
-        Color palette for the scatter plot underlying the `sns.regplot`
-    %(plotting_save)s
+        Color palette for the scatter plot underlying the :func:`seaborn.regplot`.
+    dpi
+        Dots per inch.
+    figsize
+        Size of the figure in inches.
+    save
+        Whether to save the plot.
     title
         Panel titles.
     axis_label
         Panel axis labels.
+    return_ax
+        Whether to return :class:`matplotlib.axes.Axes` object(s).
     regplot_kwargs
-        Kwargs for `sns.regplot`
+        Kwargs for :func:`seaborn.regplot`.
     scatterplot_kwargs
-        Kwargs for `sns.scatter`
+        Kwargs for :func:`matplotlib.pyplot.scatter`.
 
     Returns
     -------
@@ -84,15 +92,20 @@ def var_by_distance(
     """
     dpi = rcParams["figure.dpi"] if dpi is None else dpi
     regplot_kwargs = dict(regplot_kwargs)
-    scatterplot_kwargs = dict(regplot_kwargs)
+    scatterplot_kwargs = dict(scatterplot_kwargs)
 
     df = adata.obsm[design_matrix_key]  # get design matrix
-    df[var] = np.array(adata[:, var].X.A) if issparse(adata[:, var].X) else np.array(adata[:, var].X)  # add var column
+    df[var] = (
+        np.array(adata[:, var].X.toarray()) if issparse(adata[:, var].X) else np.array(adata[:, var].X)
+    )  # add var column
 
     # if several variables are plotted, make a panel grid
-    if isinstance(var, List):
+    if isinstance(var, list):
         fig, grid = _panel_grid(
-            hspace=0.25, wspace=0.75 / rcParams["figure.figsize"][0] + 0.02, ncols=4, num_panels=len(var)
+            hspace=0.25,
+            wspace=0.75 / rcParams["figure.figsize"][0] + 0.02,
+            ncols=4,
+            num_panels=len(var),
         )
         axs = []
     else:
@@ -160,7 +173,14 @@ def var_by_distance(
                     )
             # if variable to plot on color palette is not categorical
             else:
-                plt.scatter(data=df, x=anchor_key, y=v, c=color, cmap=scatter_palette, **scatterplot_kwargs)
+                plt.scatter(
+                    data=df,
+                    x=anchor_key,
+                    y=v,
+                    c=color,
+                    cmap=scatter_palette,
+                    **scatterplot_kwargs,
+                )
         if title is not None:
             ax.set(title=title)
         if axis_label is None:

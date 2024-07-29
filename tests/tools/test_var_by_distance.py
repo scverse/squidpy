@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List
-
 import pytest
 from anndata import AnnData
 from squidpy.tl import var_by_distance

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import numpy as np
-from anndata import AnnData, read_mtx, read_text
+from anndata import AnnData, read_text
 from h5py import File
 from PIL import Image
-from scanpy import read_10x_h5
+from scanpy import read_10x_h5, read_10x_mtx
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
@@ -48,8 +48,8 @@ def _read_counts(
 
     if count_file.endswith((".csv", ".txt")):
         adata = read_text(path / count_file, **kwargs)
-    elif count_file.endswith(".mtx"):
-        adata = read_mtx(path / count_file, **kwargs)
+    elif count_file.endswith(".mtx.gz"):
+        adata = read_10x_mtx(path, **kwargs)
     else:
         raise NotImplementedError("TODO")
 

@@ -1,4 +1,7 @@
 """The plotting module."""
+
+from __future__ import annotations
+
 from squidpy.pl._graph import (
     centrality_scores,
     co_occurrence,

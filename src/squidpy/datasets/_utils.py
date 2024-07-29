@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from inspect import Parameter, Signature, signature
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Union
 
 import anndata
 from anndata import AnnData
@@ -11,7 +14,7 @@ from scanpy import logging as logg
 from scanpy import read
 from scanpy._utils import check_presence_download
 
-PathLike = Union[os.PathLike, str]
+PathLike = Union[os.PathLike[str], str]
 Function_t = Callable[..., Union[AnnData, Any]]
 
 
@@ -22,10 +25,10 @@ class Metadata(ABC):
     name: str
     url: str
 
-    doc_header: Optional[str] = field(default=None, repr=False)
-    path: Optional[PathLike] = field(default=None, repr=False)
-    shape: Optional[tuple[int, int]] = field(default=None, repr=False)
-    library_id: Optional[Union[str, Sequence[str]]] = field(default=None, repr=False)
+    doc_header: str | None = field(default=None, repr=False)
+    path: PathLike | None = field(default=None, repr=False)
+    shape: tuple[int, int] | None = field(default=None, repr=False)
+    library_id: str | Sequence[str] | None = field(default=None, repr=False)
 
     _DOC_FMT = ""
 
@@ -66,7 +69,7 @@ class Metadata(ABC):
             glob_ns,
         )
 
-    def download(self, fpath: Optional[PathLike] = None, **kwargs: Any) -> Any:
+    def download(self, fpath: PathLike | None = None, **kwargs: Any) -> Any:
         """Download the dataset into ``fpath``."""
         fpath = str(self.path if fpath is None else fpath)
         if not fpath.endswith(self._extension):

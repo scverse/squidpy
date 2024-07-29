@@ -232,7 +232,6 @@ def nanostring(
 
     adata = AnnData(
         csr_matrix(counts.loc[common_index, :].values),
-        dtype=counts.values.dtype,
         obs=obs.loc[common_index, :],
         uns={Key.uns.spatial: {}},
     )
