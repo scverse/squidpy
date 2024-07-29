@@ -1,8 +1,10 @@
 # Configuration file for the Sphinx documentation builder.
-#
+
 # This file only contains a selection of the most common options. For a full
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
+
+from __future__ import annotations
 
 # -- Path setup --------------------------------------------------------------
 import os
@@ -92,6 +94,7 @@ intersphinx_mapping = dict(  # noqa: C408
     omnipath=("https://omnipath.readthedocs.io/en/latest", None),
     napari=("https://napari.org/", None),
     spatialdata=("https://spatialdata.scverse.org/en/latest", None),
+    shapely=("https://shapely.readthedocs.io/en/stable", None),
 )
 
 # Add any paths that contain templates here, relative to this directory.

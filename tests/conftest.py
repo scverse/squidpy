@@ -4,22 +4,26 @@ import pickle
 import sys
 import warnings
 from abc import ABC, ABCMeta
+from collections.abc import Callable, Mapping, Sequence
 from functools import wraps
 from itertools import product
 from pathlib import Path
-from typing import Callable, Mapping, Optional, Sequence, Tuple
 
 import anndata as ad
+import geopandas as gpd
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
 import scanpy as sc
+import spatialdata as sd
 import squidpy as sq
 from anndata import AnnData, OldFormatWarning
+from geopandas import GeoDataFrame
 from matplotlib.testing.compare import compare_images
 from scipy.sparse import csr_matrix
+from shapely import LineString, Point, Polygon, distance
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_neighbors
 from squidpy.im._container import ImageContainer
@@ -84,9 +88,7 @@ def adata() -> AnnData:
 
 @pytest.fixture()
 def adata_palette() -> AnnData:
-    from matplotlib.cm import get_cmap
-
-    cmap = get_cmap("Set1")
+    cmap = plt.colormaps["Set1"]
 
     adata_palette = _adata.copy()
     adata_palette.uns[f"{C_KEY_PALETTE}_colors"] = cmap(range(adata_palette.obs[C_KEY_PALETTE].unique().shape[0]))
@@ -106,7 +108,7 @@ def nhood_data(adata: AnnData) -> AnnData:
 @pytest.fixture()
 def dummy_adata() -> AnnData:
     r = np.random.RandomState(100)
-    adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)}, dtype=float)
+    adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
 
     adata.obsm[Key.obsm.spatial] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
     sq.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
@@ -131,16 +133,13 @@ def adata_intmat() -> AnnData:
         np.zeros((5, 5)),
         obs={"cat": pd.Categorical.from_codes([0, 0, 0, 1, 1], ("a", "b"))},
         obsp={"spatial_connectivities": graph},
-        dtype=float,
     )
 
 
 @pytest.fixture()
 def adata_ripley() -> AnnData:
-    from matplotlib.cm import get_cmap
-
     adata = _adata[_adata.obs.leiden.isin(["0", "2"])].copy()
-    cmap = get_cmap("Set1")
+    cmap = plt.colormaps["Set1"]
 
     adata.uns[f"{C_KEY_PALETTE}_colors"] = cmap(range(adata.obs[C_KEY_PALETTE].unique().shape[0]))
     return adata
@@ -152,7 +151,7 @@ def adata_squaregrid() -> AnnData:
     coord = rng.integers(0, 10, size=(400, 2))
     coord = np.unique(coord, axis=0)
     counts = rng.integers(0, 10, size=(coord.shape[0], 10))
-    adata = AnnData(counts, dtype=counts.dtype)
+    adata = AnnData(counts)
     adata.obsm["spatial"] = coord
     sc.pp.scale(adata)
     return adata
@@ -189,13 +188,19 @@ def small_cont() -> ImageContainer:
 def small_cont_4d() -> ImageContainer:
     np.random.seed(42)
     return ImageContainer(
-        np.random.uniform(size=(100, 50, 2, 3), low=0, high=1), dims=["y", "x", "z", "channels"], layer="image"
+        np.random.uniform(size=(100, 50, 2, 3), low=0, high=1),
+        dims=["y", "x", "z", "channels"],
+        layer="image",
     )
 
 
 @pytest.fixture()
 def cont_4d() -> ImageContainer:
-    arrs = [np.linspace(0, 1, 10 * 10 * 3).reshape(10, 10, 3), np.zeros((10, 10, 3)) + 0.5, np.zeros((10, 10, 3))]
+    arrs = [
+        np.linspace(0, 1, 10 * 10 * 3).reshape(10, 10, 3),
+        np.zeros((10, 10, 3)) + 0.5,
+        np.zeros((10, 10, 3)),
+    ]
     arrs[1][4:6, 4:6] = 0.8
     arrs[2][2:8, 2:8, 0] = 0.5
     arrs[2][2:8, 2:8, 1] = 0.1
@@ -206,7 +211,10 @@ def cont_4d() -> ImageContainer:
 @pytest.fixture()
 def small_cont_seg() -> ImageContainer:
     np.random.seed(42)
-    img = ImageContainer(np.random.randint(low=0, high=255, size=(100, 100, 3), dtype=np.uint8), layer="image")
+    img = ImageContainer(
+        np.random.randint(low=0, high=255, size=(100, 100, 3), dtype=np.uint8),
+        layer="image",
+    )
     mask = np.zeros((100, 100), dtype="uint8")
     mask[20:30, 10:20] = 1
     mask[50:60, 30:40] = 2
@@ -231,7 +239,11 @@ def cont_dot() -> ImageContainer:
 
 @pytest.fixture()
 def napari_cont() -> ImageContainer:
-    return ImageContainer("tests/_data/test_img.jpg", layer="V1_Adult_Mouse_Brain", library_id="V1_Adult_Mouse_Brain")
+    return ImageContainer(
+        "tests/_data/test_img.jpg",
+        layer="V1_Adult_Mouse_Brain",
+        library_id="V1_Adult_Mouse_Brain",
+    )
 
 
 @pytest.fixture()
@@ -263,7 +275,14 @@ def ligrec_result() -> Mapping[str, pd.DataFrame]:
     adata = _adata.copy()
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
     return sq.gr.ligrec(
-        adata, "leiden", interactions=interactions, n_perms=25, n_jobs=1, show_progress_bar=False, copy=True, seed=0
+        adata,
+        "leiden",
+        interactions=interactions,
+        n_perms=25,
+        n_jobs=1,
+        show_progress_bar=False,
+        copy=True,
+        seed=0,
     )
 
 
@@ -319,7 +338,7 @@ def visium_adata():
             [4400, 7729],
         ]
     )
-    adata = AnnData(X=np.ones((visium_coords.shape[0], 3)), dtype=float)
+    adata = AnnData(X=np.ones((visium_coords.shape[0], 3)))
     adata.obsm[Key.obsm.spatial] = visium_coords
     adata.uns[Key.uns.spatial] = {}
     return adata
@@ -328,9 +347,41 @@ def visium_adata():
 @pytest.fixture()
 def non_visium_adata():
     non_visium_coords = np.array([[1, 0], [3, 0], [5, 6], [0, 4]])
-    adata = AnnData(X=non_visium_coords, dtype=int)
+    adata = AnnData(X=non_visium_coords)
     adata.obsm[Key.obsm.spatial] = non_visium_coords
     return adata
+
+
+@pytest.fixture()
+def sdata_mask_graph():
+    rng = np.random.default_rng(42)
+    points1 = rng.uniform((3.2, 4.2), (3.8, 5.2), (3, 2))
+    points2 = rng.uniform((0.2, 4.2), (0.8, 5.2), (3, 2))
+    points3 = rng.uniform((1, 0.5), (3, 1.5), (3, 2))
+    points4 = rng.uniform((1, 5), (2, 6), (3, 2))
+    points = np.concatenate([points1, points2, points3, points4], axis=0)
+    points_df = gpd.GeoDataFrame(geometry=[Point(*point) for point in points])
+    polygon_coords = [(0, 0), (4, 0), (4, 8), (2, 1.5), (0, 8)]
+    concave_polygon = Polygon(polygon_coords)
+    polygon_df = gpd.GeoDataFrame(geometry=[concave_polygon])
+    points_df["radius"] = 0.5
+    adata = ad.AnnData(rng.normal(size=(len(points), 20)))
+    adata.obs["annotation"] = pd.Categorical(rng.choice(["a", "b", "c"], size=(len(points))))
+    adata.obs["region"] = "circles"
+    adata.obs["region"] = pd.Categorical(adata.obs["region"])
+    adata.obs["instance_id"] = points_df.index
+    adata.uns["spatialdata_attrs"] = {
+        "region": "circles",
+        "region_key": "region",
+        "instance_key": "instance_id",
+    }
+    return sd.SpatialData.from_elements_dict(
+        {
+            "circles": sd.models.ShapesModel().parse(points_df),
+            "polygon": sd.models.ShapesModel().parse(polygon_df),
+            "table": sd.models.TableModel().parse(adata),
+        }
+    )
 
 
 def _decorate(fn: Callable, clsname: str, name: str | None = None) -> Callable:

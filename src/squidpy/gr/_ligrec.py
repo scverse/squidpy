@@ -1,12 +1,14 @@
 """Permutation test function as described in CellPhoneDB 2.0."""
+
 from __future__ import annotations
 
 from abc import ABC
 from collections import namedtuple
+from collections.abc import Iterable, Mapping, Sequence
 from functools import partial
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Iterable, Literal, Mapping, Sequence, Union
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 import numpy as np
 import pandas as pd
@@ -729,7 +731,7 @@ def _analysis(
 
         return TempResult(means=means, pvalues=pvalues)
 
-    groups = data.groupby("clusters")
+    groups = data.groupby("clusters", observed=True)
     clustering = np.array(data["clusters"].values, dtype=np.int32)
 
     mean = groups.mean().values.T  # (n_genes, n_clusters)
@@ -821,7 +823,8 @@ def _analysis_helper(
     fn_key = f"_test_{n_cls}_{int(return_means)}_{bool(numba_parallel)}"
     if fn_key not in globals():
         exec(
-            compile(_create_template(n_cls, return_means=return_means, parallel=numba_parallel), "", "exec"), globals()  # type: ignore[arg-type]
+            compile(_create_template(n_cls, return_means=return_means, parallel=numba_parallel), "", "exec"),  # type: ignore[arg-type]
+            globals(),
         )
     _test = globals()[fn_key]
 

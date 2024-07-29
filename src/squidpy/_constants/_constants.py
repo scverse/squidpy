@@ -1,4 +1,7 @@
 """Constants that user deals with."""
+
+from __future__ import annotations
+
 from enum import unique
 
 from squidpy._constants._utils import ModeEnum

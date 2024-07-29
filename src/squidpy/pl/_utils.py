@@ -1,22 +1,12 @@
 from __future__ import annotations
 
 import os
-from copy import copy
+from collections.abc import Mapping, Sequence
 from functools import wraps
 from inspect import signature
 from pathlib import Path
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 import matplotlib as mpl
 import numpy as np
@@ -30,10 +20,10 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from numba import njit, prange
+from pandas import CategoricalDtype
 from pandas._libs.lib import infer_dtype
 from pandas.core.dtypes.common import (
     is_bool_dtype,
-    is_categorical_dtype,
     is_integer_dtype,
     is_numeric_dtype,
     is_object_dtype,
@@ -232,7 +222,7 @@ def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vect
             return None, None
 
         if isinstance(res, pd.Series):
-            if is_categorical_dtype(res):
+            if isinstance(res, CategoricalDtype):
                 return res, fmt
             if is_string_dtype(res) or is_object_dtype(res) or is_bool_dtype(res):
                 return res.astype("category"), fmt
@@ -481,7 +471,7 @@ def _annotate_heatmap(
 ) -> None:
     # modified from matplotlib's site
     if isinstance(cmap, str):
-        cmap = plt.get_cmap(cmap)
+        cmap = plt.colormaps[cmap]
 
     data = im.get_array()
     kw = {"ha": "center", "va": "center"}
@@ -553,7 +543,7 @@ def _heatmap(
         row_order = col_order = np.arange(len(adata.uns[Key.uns.colors(key)])).tolist()
 
     row_order = row_order[::-1]
-    row_labels = adata.obs[key][row_order]
+    row_labels = adata.obs[key].iloc[row_order]
     data = adata[row_order, col_order].X
 
     row_cmap, col_cmap, row_norm, col_norm, n_cls = _get_cmap_norm(adata, key, order=(row_order, col_order))
@@ -562,7 +552,8 @@ def _heatmap(
     col_sm = mpl.cm.ScalarMappable(cmap=col_cmap, norm=col_norm)
 
     norm = mpl.colors.Normalize(vmin=kwargs.pop("vmin", np.nanmin(data)), vmax=kwargs.pop("vmax", np.nanmax(data)))
-    cont_cmap = copy(plt.get_cmap(cont_cmap))
+    if isinstance(cont_cmap, str):
+        cont_cmap = plt.colormaps[cont_cmap]
     cont_cmap.set_bad(color="grey")
 
     im = ax.imshow(data[::-1], cmap=cont_cmap, norm=norm)

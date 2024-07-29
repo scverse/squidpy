@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import platform
+from collections.abc import Sequence
 from functools import partial
-from typing import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -196,7 +196,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
 
     def test_tol_plot_palette_listed_cmap(self, adata_hne: AnnData):
         del adata_hne.uns["cluster_colors"]
-        palette = plt.get_cmap("Set3")
+        palette = plt.colormaps["Set3"]
         assert isinstance(palette, ListedColormap)
         pl.spatial_scatter(adata_hne, color="cluster", palette=palette, legend_loc=None)
         self.compare("SpatialStatic_palette_listed_cmap", tolerance=70)
@@ -212,9 +212,8 @@ class TestSpatialStaticUtils:
         if library_id is not None:
             obs = pd.DataFrame(library_id * 2, columns=[library_key])
             uns = {Key.uns.spatial: {k: None for k in library_id}}
-            return AnnData(X, obs=obs, uns=uns, dtype=X.dtype)
-        else:
-            return AnnData(X, dtype=X.dtype)
+            return AnnData(X, obs=obs, uns=uns)
+        return AnnData(X)
 
     @pytest.mark.parametrize("shape", ["circle", None])
     @pytest.mark.parametrize("library_id", [None, "1", ["1"], ["1", "2"]])

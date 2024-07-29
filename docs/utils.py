@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import os
 import re
 from logging import info, warning
 from pathlib import Path
 from shutil import copytree, rmtree
 from tempfile import TemporaryDirectory
-from typing import Any, Dict, ForwardRef, List, Union
+from typing import Any, ForwardRef
 
 from enchant.tokenize import Filter
 from git import Repo
@@ -14,7 +16,7 @@ HERE = Path(__file__).parent
 
 
 def _fetch_notebooks(repo_url: str) -> None:
-    def copy_files(repo_path: Union[str, Path]) -> None:
+    def copy_files(repo_path: str | Path) -> None:
         repo_path = Path(repo_path)
 
         for dirname in ["tutorials", "auto_examples", "gen_modules"]:
@@ -30,7 +32,7 @@ def _fetch_notebooks(repo_url: str) -> None:
 
             copy_files(repo_dir)
 
-    def fetch_local(repo_path: Union[str, Path]) -> None:
+    def fetch_local(repo_path: str | Path) -> None:
         info(f"Fetching notebooks from local path `{repo_path}`")
         repo_path = Path(repo_path)
         if not repo_path.is_dir():
@@ -75,7 +77,7 @@ class MaybeMiniGallery(MiniGallery):
             return []
 
 
-def _get_thumbnails(root: Union[str, Path]) -> dict[str, str]:
+def _get_thumbnails(root: str | Path) -> dict[str, str]:
     res = {}
     root = Path(root)
     thumb_path = Path(__file__).parent.parent.parent / "docs" / "source"

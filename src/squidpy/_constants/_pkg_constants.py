@@ -1,7 +1,9 @@
 """Internal constants not exposed to the user."""
+
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, Optional, Sequence, Union
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
 from anndata import AnnData
 

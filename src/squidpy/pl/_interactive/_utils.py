@@ -6,8 +6,8 @@ import pandas as pd
 from anndata import AnnData
 from matplotlib.colors import to_hex, to_rgb
 from numba import njit
+from pandas import CategoricalDtype
 from pandas._libs.lib import infer_dtype
-from pandas.core.dtypes.common import is_categorical_dtype
 from scanpy import logging as logg
 from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 from scipy.spatial import KDTree
@@ -23,7 +23,7 @@ def _get_categorical(
     vec: pd.Series | None = None,
 ) -> NDArrayA:
     if vec is not None:
-        if not is_categorical_dtype(vec):
+        if not isinstance(vec.dtype, CategoricalDtype):
             raise TypeError(f"Expected a `categorical` type, found `{infer_dtype(vec)}`.")
         if key in adata.obs:
             logg.debug(f"Overwriting `adata.obs[{key!r}]`")
@@ -39,7 +39,7 @@ def _get_categorical(
 
 
 def _position_cluster_labels(coords: NDArrayA, clusters: pd.Series, colors: NDArrayA) -> dict[str, NDArrayA]:
-    if not is_categorical_dtype(clusters):
+    if not isinstance(clusters.dtype, CategoricalDtype):
         raise TypeError(f"Expected `clusters` to be `categorical`, found `{infer_dtype(clusters)}`.")
 
     coords = coords[:, 1:]  # TODO(michalk8): account for current Z-dim?
