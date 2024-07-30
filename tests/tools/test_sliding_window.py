@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List
+from typing import Any, Literal
 
 import pytest
 from anndata import AnnData
