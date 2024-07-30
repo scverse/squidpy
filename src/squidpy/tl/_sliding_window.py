@@ -2,16 +2,12 @@ from __future__ import annotations
 
 import math
 from functools import reduce
-from itertools import product
-from typing import Any, Dict, List, Tuple, Union  # noqa: F401
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, Union
 
 import numpy as np
 import pandas as pd
 from anndata import AnnData
 from scanpy import logging as logg
-from sklearn.metrics import DistanceMetric
-from sklearn.neighbors import KDTree
-from sklearn.preprocessing import MinMaxScaler
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
