@@ -15,12 +15,12 @@ class TestUtils:
     def test_shuffle_group(self, cluster_annotations_type: type, library_annotations_type: type, seed: int):
         size = 6
         rng = np.random.default_rng(seed)
-        if cluster_annotations_type == int:
+        if isinstance(cluster_annotations_type, int):
             libraries = pd.Series(rng.choice([1, 2, 3, 4], size=(size,)), dtype="category")
         else:
             libraries = pd.Series(rng.choice(["a", "b", "c"], size=(size,)), dtype="category")
 
-        if library_annotations_type == int:
+        if isinstance(library_annotations_type, int):
             cluster_annotations = rng.choice([1, 2, 3, 4], size=(size,))
         else:
             cluster_annotations = rng.choice(["X", "Y", "Z"], size=(size,))

@@ -80,9 +80,9 @@ class OutlineParams(NamedTuple):
 
     outline: bool
     gap_size: float
-    gap_color: str
+    gap_color: NDArrayA | str
     bg_size: float
-    bg_color: str
+    bg_color: NDArrayA | str
 
 
 class ScalebarParams(NamedTuple):
@@ -287,7 +287,11 @@ def _image_spatial_attrs(
         return img is True or len(img)  # type: ignore
 
     library_id = _get_library_id(
-        adata=adata, shape=shape, spatial_key=spatial_key, library_id=library_id, library_key=library_key
+        adata=adata,
+        shape=shape,
+        spatial_key=spatial_key,
+        library_id=library_id,
+        library_key=library_key,
     )
     if len(library_id) > 1 and library_key is None:
         raise ValueError(
@@ -342,7 +346,12 @@ def _set_coords_crops(
     if crop_coord is None:
         crops = [None] * len(spatial_params.library_id)
     else:
-        crop_coord = _get_list(crop_coord, _type=tuple, ref_len=len(spatial_params.library_id), name="crop_coord")
+        crop_coord = _get_list(
+            crop_coord,
+            _type=tuple,
+            ref_len=len(spatial_params.library_id),
+            name="crop_coord",
+        )
         crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor)]  # type: ignore[misc]
 
     coords = adata.obsm[spatial_key]
@@ -382,7 +391,10 @@ def _subs(
             raise KeyError(f"Unable to find `{key!r}` in `adata.obs`.") from None
 
     def subset_by_coords(
-        adata: AnnData, coords: NDArrayA, img: NDArrayA | None, crop_coords: CropCoords | None
+        adata: AnnData,
+        coords: NDArrayA,
+        img: NDArrayA | None,
+        crop_coords: CropCoords | None,
     ) -> tuple[AnnData, NDArrayA, NDArrayA | None]:
         if crop_coords is None:
             return adata, coords, img
@@ -463,7 +475,13 @@ def _set_color_source_vec(
     if groups is not None:
         color_source_vector = color_source_vector.remove_categories(categories.difference(groups))
 
-    color_map = _get_palette(adata, cluster_key=value_to_plot, categories=categories, palette=palette, alpha=alpha)
+    color_map = _get_palette(
+        adata,
+        cluster_key=value_to_plot,
+        categories=categories,
+        palette=palette,
+        alpha=alpha,
+    )
     if color_map is None:
         raise ValueError("Unable to create color palette.")
     # do not rename categories, as colors need not be unique
@@ -546,7 +564,13 @@ def _plot_edges(
     if not len(g.edges):
         return None
     edge_collection = draw_networkx_edges(
-        g, coords, width=edges_width, edge_color=edges_color, arrows=False, ax=ax, **kwargs
+        g,
+        coords,
+        width=edges_width,
+        edge_color=edges_color,
+        arrows=False,
+        ax=ax,
+        **kwargs,
     )
     edge_collection.set_rasterized(sc_settings._vector_friendly)
     ax.add_collection(edge_collection)
@@ -635,7 +659,13 @@ def _decorate_axs(
         # Adding legends
         if color_source_vector is not None and isinstance(color_source_vector.dtype, CategoricalDtype):
             clusters = color_source_vector.categories
-            palette = _get_palette(adata, cluster_key=value_to_plot, categories=clusters, palette=palette, alpha=alpha)
+            palette = _get_palette(
+                adata,
+                cluster_key=value_to_plot,
+                categories=clusters,
+                palette=palette,
+                alpha=alpha,
+            )
             _add_categorical_legend(
                 ax,
                 color_source_vector,
@@ -792,7 +822,12 @@ def _prepare_params_plot(
     dpi = rcParams["figure.dpi"] if dpi is None else dpi
     if num_panels > 1 and ax is None:
         fig, grid = _panel_grid(
-            num_panels=num_panels, hspace=hspace, wspace=wspace, ncols=ncols, dpi=dpi, figsize=figsize
+            num_panels=num_panels,
+            hspace=hspace,
+            wspace=wspace,
+            ncols=ncols,
+            dpi=dpi,
+            figsize=figsize,
         )
         axs: Sequence[Axes] | None = [plt.subplot(grid[c]) for c in range(num_panels)]
     elif num_panels > 1 and ax is not None:
@@ -925,7 +960,7 @@ def _plot_scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.bg_size,
-            c=outline_params.bg_color,
+            c=outline_params.bg_color,  # type: ignore[arg-type]
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,
@@ -936,7 +971,7 @@ def _plot_scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.gap_size,
-            c=outline_params.gap_color,
+            c=outline_params.gap_color,  # type: ignore[arg-type]
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,
