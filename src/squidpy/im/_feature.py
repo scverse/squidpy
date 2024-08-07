@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from anndata import AnnData
+from spatialdata import SpatialData
 from scanpy import logging as logg
 
 from squidpy._constants._constants import ImageFeature
@@ -14,7 +15,94 @@ from squidpy._utils import Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import _save_data
 from squidpy.im._container import ImageContainer
 
-__all__ = ["calculate_image_features"]
+import xarray as xr
+import numpy as np
+from collections.abc import Generator
+from typing import Tuple, List
+import matplotlib.pyplot as plt
+from skimage.measure import label, perimeter, regionprops
+
+__all__ = ["calculate_image_features", "quantify_morphology"]
+
+
+def circularity(regionmask) -> float:
+    """
+    Calculate the circularity of the region.
+
+    :param region: Region properties object
+    :return: circularity of the region
+    """
+    perim = perimeter(regionmask)
+    if perim == 0:
+        return 0
+    area = np.sum(regionmask)
+    return float((4 * np.pi * area) / (perim**2))
+
+
+def _get_region_props(
+    label_element: xr.DataArray,
+    image_element: xr.DataArray,
+    props: List[str] | None = None,
+) -> pd.DataFrame:
+
+    if props is None:
+        # if we didn't get any properties, we'll do the bare minimum
+        props = ["label"]
+
+    np_bitmap = label_element.values
+    np_rgb_image = image_element.values.transpose(1, 2, 0)  # (c, y, x) -> (y, x, c)
+
+    labeled_image = label(np_bitmap)
+    # can't use regionprops_table because it only returns int
+    regions = regionprops(
+        label_image=labeled_image,
+        intensity_image=np_rgb_image,
+        extra_properties=(circularity,),
+    )
+    # dynamically extract specified properties and create a df
+    extracted_props = {prop: [] for prop in props}
+    for region in regions:
+        for prop in props:
+            try:
+                extracted_props[prop].append(getattr(region, prop))
+            except AttributeError as e:
+                # Handle custom properties or missing attributes
+                if prop == "circularity":
+                    extracted_props[prop].append(circularity(region))
+                else:
+                    raise ValueError(
+                        f"Property '{prop}' is not available in the region properties."
+                    ) from e
+
+    return pd.DataFrame(extracted_props)
+
+
+def _subset_image_using_label(
+    label_element: xr.DataArray, image_element: xr.DataArray
+) -> Generator[Tuple[int, xr.DataArray], None, None]:
+    """
+    A generator that extracts subsets of the RGB image based on the bitmap.
+
+    :param label: xarray.DataArray with cell identifiers
+    :param image: xarray.DataArray with RGB image data
+    :yield: Subsets of the RGB image corresponding to each cell in the bitmap
+    """
+    unique_cells = np.unique(label_element.values)
+
+    for cell_id in unique_cells:
+        if cell_id == 0:
+            # Assuming 0 is the background or non-cell area, skip it
+            continue
+
+        cell_mask = xr.DataArray(
+            label_element.values == cell_id,
+            dims=label_element.dims,
+            coords=label_element.coords,
+        )
+
+        subset = image_element.where(cell_mask, drop=True)
+
+        yield cell_id, subset
 
 
 @d.dedent
@@ -85,7 +173,9 @@ def calculate_image_features(
     features = sorted({ImageFeature(f).s for f in features})
 
     n_jobs = _get_n_cores(n_jobs)
-    start = logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
+    start = logg.info(
+        f"Calculating features `{list(features)}` using `{n_jobs}` core(s)"
+    )
 
     res = parallelize(
         _calculate_image_features_helper,
@@ -94,13 +184,70 @@ def calculate_image_features(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(adata, img, layer=layer, library_id=library_id, features=features, features_kwargs=features_kwargs, **kwargs)
+    )(
+        adata,
+        img,
+        layer=layer,
+        library_id=library_id,
+        features=features,
+        features_kwargs=features_kwargs,
+        **kwargs,
+    )
 
     if copy:
         logg.info("Finish", time=start)
         return res
 
     _save_data(adata, attr="obsm", key=key_added, data=res, time=start)
+
+
+def quantify_morphology(
+    sdata: SpatialData,
+    label: str | None = None,
+    image: str | None = None,
+    methods: list[str] | str = None,
+    **kwargs: Any,
+) -> pd.DataFrame | None:
+
+    if label is None and image is None:
+        raise ValueError("Either `label` or `image` must be provided.")
+
+    if image is not None and label is None:
+        raise ValueError(
+            "If `image` is provided, a `label` with matching segmentation borders must be provided."
+        )
+
+    if methods is None:
+        # default case but without mutable argument as default value
+        methods = ["label", "area", "eccentricity", "perimeter", "sphericity"]
+    elif isinstance(methods, str):
+        methods = [methods]
+
+    if not isinstance(methods, list):
+        raise ValueError("Argument `methods` must be a list of strings.")
+
+    if not all(isinstance(method, str) for method in methods):
+        raise ValueError("All elements in `methods` must be strings.")
+
+    for element in [label, image]:
+        if element is not None and element not in sdata:
+            raise KeyError(f"Key `{element}` not found in `sdata`.")
+
+    # from here on we should be certain that we have a label
+    label_element = sdata[label]
+    image_element = sdata[image] if image is not None else None
+
+    # cell_generator = _subset_image_using_label(label_element, image_element)
+
+    # for cell_id, subset in cell_generator:
+    #     print(f"Cell ID: {cell_id}")
+    #     print(subset)
+    # plt.imshow(subset.transpose("y", "x", "c"))
+
+    props = _get_region_props(label_element, image_element, props=methods)
+
+    # Print some properties for each region
+    return props
 
 
 def _calculate_image_features_helper(
@@ -116,7 +263,12 @@ def _calculate_image_features_helper(
 ) -> pd.DataFrame:
     features_list = []
     for crop in img.generate_spot_crops(
-        adata, obs_names=obs_ids, library_id=library_id, return_obs=False, as_array=False, **kwargs
+        adata,
+        obs_names=obs_ids,
+        library_id=library_id,
+        return_obs=False,
+        as_array=False,
+        **kwargs,
     ):
         if TYPE_CHECKING:
             assert isinstance(crop, ImageContainer)
@@ -135,12 +287,16 @@ def _calculate_image_features_helper(
             elif feature == ImageFeature.SUMMARY:
                 res = crop.features_summary(layer=layer, **feature_kwargs)
             elif feature == ImageFeature.SEGMENTATION:
-                res = crop.features_segmentation(intensity_layer=layer, **feature_kwargs)
+                res = crop.features_segmentation(
+                    intensity_layer=layer, **feature_kwargs
+                )
             elif feature == ImageFeature.CUSTOM:
                 res = crop.features_custom(layer=layer, **feature_kwargs)
             else:
                 # should never get here
-                raise NotImplementedError(f"Feature `{feature}` is not yet implemented.")
+                raise NotImplementedError(
+                    f"Feature `{feature}` is not yet implemented."
+                )
 
             features_dict.update(res)
         features_list.append(features_dict)
