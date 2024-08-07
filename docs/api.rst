@@ -14,6 +14,7 @@ Graph
     :toctree: api
 
     gr.spatial_neighbors
+    gr.mask_graph
     gr.nhood_enrichment
     gr.co_occurrence
     gr.centrality_scores

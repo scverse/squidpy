@@ -3,10 +3,14 @@ from __future__ import annotations
 import anndata as ad
 import numpy as np
 import pytest
+import spatialdata as sd
 from anndata import AnnData
+from numpy.random import default_rng
 from scipy.sparse import isspmatrix_csr
+from shapely import Point
+from spatialdata.datasets import blobs
 from squidpy._constants._pkg_constants import Key
-from squidpy.gr import spatial_neighbors
+from squidpy.gr import mask_graph, spatial_neighbors
 from squidpy.gr._build import _build_connectivity
 
 
@@ -233,3 +237,122 @@ class TestSpatialNeighbors:
         actual = np.array(graph.sum(axis=1)).flatten()
 
         np.testing.assert_array_equal(actual, n_neighs)
+
+    @pytest.mark.parametrize("n_neighs", [2, 3, 4])
+    def test_spatial_neighbors_sdata(self, n_neighs: int):
+        TABLE_NAME = "table"
+        REGION_NAME = "blobs_labels"
+        sdata = blobs()
+
+        spatial_neighbors(
+            sdata,
+            table_key=TABLE_NAME,
+            elements_to_coordinate_systems={REGION_NAME: "global"},
+            n_neighs=n_neighs,
+            coord_type="generic",
+        )
+        graph = sdata.tables[TABLE_NAME].obsp[Key.obsp.spatial_conn()]
+        actual = np.array(graph.sum(axis=1)).flatten()
+
+        np.testing.assert_array_equal(actual, n_neighs)
+
+        TABLE_NAME = "table_circles"
+        REGION_NAME = "blobs_circles"
+        rng = default_rng(42)
+        X = rng.normal(size=(len(sdata.shapes[REGION_NAME]), 2))
+        adata_circles = AnnData(X)
+        adata_circles.obs["region"] = REGION_NAME
+        adata_circles.obs["instance_id"] = sdata[REGION_NAME].index.values
+
+        sdata[TABLE_NAME] = adata_circles
+        sdata.set_table_annotates_spatialelement(
+            TABLE_NAME,
+            REGION_NAME,
+            region_key="region",
+            instance_key="instance_id",
+        )
+
+        spatial_neighbors(
+            sdata,
+            table_key=TABLE_NAME,
+            elements_to_coordinate_systems={REGION_NAME: "global"},
+            n_neighs=n_neighs,
+            coord_type="generic",
+        )
+        graph = sdata.tables[TABLE_NAME].obsp[Key.obsp.spatial_conn()]
+        actual = np.array(graph.sum(axis=1)).flatten()
+
+        np.testing.assert_array_equal(actual, n_neighs)
+
+    @pytest.mark.parametrize("key_added", ["mask", "mask2"])
+    @pytest.mark.parametrize("delaunay", [True, False])
+    def test_mask_graph(
+        self,
+        sdata_mask_graph: sd.SpatialData,
+        key_added: str,
+        delaunay: bool,
+    ):
+        sdata = sdata_mask_graph
+        mask_polygon = sdata["polygon"].geometry[0]
+
+        neighs_key = Key.uns.spatial_neighs("spatial")
+        conns_key = Key.obsp.spatial_conn("spatial")
+        dists_key = Key.obsp.spatial_dist("spatial")
+
+        mask_conns_key = f"{key_added}_{conns_key}"
+        mask_dists_key = f"{key_added}_{dists_key}"
+        mask_neighs_key = f"{key_added}_{neighs_key}"
+
+        spatial_neighbors(
+            sdata,
+            elements_to_coordinate_systems={"circles": "global"},
+            table_key="table",
+            delaunay=delaunay,
+        )
+
+        mask_graph(
+            sdata,
+            "table",
+            mask_polygon,
+            negative_mask=False,
+            key_added=key_added,
+        )
+
+        graph_original = sdata["table"].obsp[conns_key].copy()
+        graph_positive_filter = sdata["table"].obsp[mask_conns_key].copy()
+        mask_graph(
+            sdata,
+            "table",
+            mask_polygon,
+            negative_mask=True,
+            key_added=key_added,
+        )
+
+        graph_negative_filter = sdata["table"].obsp[mask_conns_key].copy()
+
+        assert graph_original.toarray().sum() == sum(
+            [
+                graph_positive_filter.toarray().sum(),
+                graph_negative_filter.toarray().sum(),
+            ]
+        )
+        assert mask_conns_key in sdata["table"].obsp
+        assert mask_dists_key in sdata["table"].obsp
+        assert mask_neighs_key in sdata["table"].uns
+        uns = sdata["table"].uns
+        assert uns[mask_neighs_key]["distances_key"] == mask_dists_key
+        assert uns[mask_neighs_key]["connectivities_key"] == mask_conns_key
+        assert uns[mask_neighs_key]["params"]["negative_mask"]
+
+        mask_polygon = sdata["polygon"]
+        with pytest.raises(
+            ValueError,
+            match="`polygon_mask` should be of type `Polygon` or `MultiPolygon`, got",
+        ):
+            mask_graph(
+                sdata,
+                "table",
+                Point((0, 1)),
+                negative_mask=True,
+                key_added=key_added,
+            )
