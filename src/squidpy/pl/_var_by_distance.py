@@ -94,11 +94,6 @@ def var_by_distance(
     regplot_kwargs = dict(regplot_kwargs)
     scatterplot_kwargs = dict(scatterplot_kwargs)
 
-    df = adata.obsm[design_matrix_key]  # get design matrix
-    df[var] = (
-        np.array(adata[:, var].X.toarray()) if issparse(adata[:, var].X) else np.array(adata[:, var].X)
-    )  # add var column
-
     # if several variables are plotted, make a panel grid
     if isinstance(var, list):
         fig, grid = _panel_grid(
@@ -110,6 +105,20 @@ def var_by_distance(
         axs = []
     else:
         var = [var]
+
+    df = adata.obsm[design_matrix_key]  # get design matrix
+
+    # add var column to design matrix
+    for name in var:
+        print(name)
+        if name in adata.var_names:
+            df[name] = (
+                np.array(adata[:, name].X.toarray()) if issparse(adata[:, name].X) else np.array(adata[:, name].X)
+            ) 
+        elif name in adata.obs:
+            df[name] = adata.obs[name].values
+        else:
+            raise ValueError(f"Variable {name} not found in `adata.var` or `adata.obs`.")
 
     # iterate over the variables to plot
     for i, v in enumerate(var):
