@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Generator, Mapping, Sequence
 from types import MappingProxyType
-
 from typing import TYPE_CHECKING, Any, Callable, List, Tuple
-
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -50,7 +48,9 @@ def _get_region_props(
 
     np_bitmap = label_element.values
     np_rgb_image = image_element.values.transpose(1, 2, 0)  # (c, y, x) -> (y, x, c)
-    a = [circularity,] + extra_methods
+    a = [
+        circularity,
+    ] + extra_methods
     labeled_image = label(np_bitmap)
     # can't use regionprops_table because it only returns int
     regions = regionprops(
@@ -251,9 +251,7 @@ def quantify_morphology(
                 # are all lists of the length of the channel list?
                 if all(len(val) == len(channels) for val in region_props[col].values):
                     for i, channel in enumerate(channels):
-                        region_props[f"{col}_ch{channel}"] = [
-                            val[i] for val in region_props[col].values
-                        ]
+                        region_props[f"{col}_ch{channel}"] = [val[i] for val in region_props[col].values]
                     region_props.drop(columns=[col], inplace=True)
 
     return region_props
