@@ -114,7 +114,7 @@ def var_by_distance(
         if name in adata.var_names:
             df[name] = (
                 np.array(adata[:, name].X.toarray()) if issparse(adata[:, name].X) else np.array(adata[:, name].X)
-            ) 
+            )
         elif name in adata.obs:
             df[name] = adata.obs[name].values
         else:
