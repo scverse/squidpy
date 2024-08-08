@@ -20,7 +20,6 @@ from squidpy._utils import NDArrayA
 
 __all__ = ["calculate_niche"]
 
-
 def calculate_niche(
     adata: AnnData | SpatialData,
     groups: str,
