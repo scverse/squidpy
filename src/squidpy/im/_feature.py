@@ -1,26 +1,25 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable
 
+from typing import TYPE_CHECKING, Any, Callable, List, Tuple
+
+
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import xarray as xr
 from anndata import AnnData
-from spatialdata import SpatialData
 from scanpy import logging as logg
+from skimage.measure import label, perimeter, regionprops
+from spatialdata import SpatialData
 
 from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import _save_data
 from squidpy.im._container import ImageContainer
-
-import xarray as xr
-import numpy as np
-from collections.abc import Generator
-from typing import Tuple, List
-import matplotlib.pyplot as plt
-from skimage.measure import label, perimeter, regionprops
 
 __all__ = ["calculate_image_features", "quantify_morphology"]
 
@@ -45,7 +44,6 @@ def _get_region_props(
     props: List[str] | None = None,
     extra_methods: List[Callable] = [],
 ) -> pd.DataFrame:
-
     if props is None:
         # if we didn't get any properties, we'll do the bare minimum
         props = ["label"]
@@ -71,9 +69,7 @@ def _get_region_props(
                 if prop == "circularity":
                     extracted_props[prop].append(circularity(region))
                 else:
-                    raise ValueError(
-                        f"Property '{prop}' is not available in the region properties."
-                    ) from e
+                    raise ValueError(f"Property '{prop}' is not available in the region properties.") from e
 
     return pd.DataFrame(extracted_props)
 
@@ -174,9 +170,7 @@ def calculate_image_features(
     features = sorted({ImageFeature(f).s for f in features})
 
     n_jobs = _get_n_cores(n_jobs)
-    start = logg.info(
-        f"Calculating features `{list(features)}` using `{n_jobs}` core(s)"
-    )
+    start = logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
 
     res = parallelize(
         _calculate_image_features_helper,
@@ -210,14 +204,11 @@ def quantify_morphology(
     split_by_channels: bool = False,
     **kwargs: Any,
 ) -> pd.DataFrame | None:
-
     if label is None and image is None:
         raise ValueError("Either `label` or `image` must be provided.")
 
     if image is not None and label is None:
-        raise ValueError(
-            "If `image` is provided, a `label` with matching segmentation borders must be provided."
-        )
+        raise ValueError("If `image` is provided, a `label` with matching segmentation borders must be provided.")
 
     if methods is None:
         # default case but without mutable argument as default value
@@ -305,16 +296,12 @@ def _calculate_image_features_helper(
             elif feature == ImageFeature.SUMMARY:
                 res = crop.features_summary(layer=layer, **feature_kwargs)
             elif feature == ImageFeature.SEGMENTATION:
-                res = crop.features_segmentation(
-                    intensity_layer=layer, **feature_kwargs
-                )
+                res = crop.features_segmentation(intensity_layer=layer, **feature_kwargs)
             elif feature == ImageFeature.CUSTOM:
                 res = crop.features_custom(layer=layer, **feature_kwargs)
             else:
                 # should never get here
-                raise NotImplementedError(
-                    f"Feature `{feature}` is not yet implemented."
-                )
+                raise NotImplementedError(f"Feature `{feature}` is not yet implemented.")
 
             features_dict.update(res)
         features_list.append(features_dict)
