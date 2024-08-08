@@ -20,7 +20,6 @@ def var_embeddings(
     design_matrix_key: str = "design_matrix",
     n_bins: int = 100,
     include_anchor: bool = False,
-    copy: bool = False,
 ) -> AnnData | pd.DataFrame:
     """
     Cluster variables by previously calculated distance to an anchor point.
@@ -60,7 +59,6 @@ def var_embeddings(
     aggregated_df = X_df.groupby(["distance"]).sum()
     # transpose the count matrix
     result = aggregated_df.T
-
     # optionally include or remove variable values for distance 0 (anchor point)
     start_bin = 0
     if not include_anchor:
@@ -69,15 +67,15 @@ def var_embeddings(
 
     # rename column names for plotting
     result.columns = range(start_bin, 101)
-    # create genes x genes identity matrix
-    obs = pd.DataFrame(np.eye(len(result)), columns=result.index, dtype="category")
-    # append identity matrix to obs column wise (required for highlighting genes in plot)
+    # create genes x genes identity matrix (required for highlighting genes in plot)
+    obs = pd.DataFrame(np.eye(len(result)), columns=result.index)
+    obs.replace(1.0, pd.Series(obs.columns, obs.columns), inplace=True)
+    obs.replace(0.0, "other", inplace=True)
+    obs = obs.astype("category")
     obs.index = result.index
-    adata.obsm["var_by_distance_X"] = result
-    adata.obsm["var_by_distance_obs"] = obs
+    adata_new = AnnData(X=result, obs=obs, var=pd.DataFrame(index=result.columns))
 
-    if copy:
-        return (result, obs)
+    return adata_new
 
 
 def calculate_median(interval: pd.Interval) -> Any:
