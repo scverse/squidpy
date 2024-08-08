@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 import pandas as pd
 from anndata import AnnData
@@ -43,6 +43,7 @@ def _get_region_props(
     label_element: xr.DataArray,
     image_element: xr.DataArray,
     props: List[str] | None = None,
+    extra_methods: List[Callable] = [],
 ) -> pd.DataFrame:
 
     if props is None:
@@ -51,18 +52,18 @@ def _get_region_props(
 
     np_bitmap = label_element.values
     np_rgb_image = image_element.values.transpose(1, 2, 0)  # (c, y, x) -> (y, x, c)
-
+    a = [circularity,] + extra_methods
     labeled_image = label(np_bitmap)
     # can't use regionprops_table because it only returns int
     regions = regionprops(
         label_image=labeled_image,
         intensity_image=np_rgb_image,
-        extra_properties=(circularity,),
+        extra_properties=a,
     )
     # dynamically extract specified properties and create a df
-    extracted_props = {prop: [] for prop in props}
+    extracted_props = {prop: [] for prop in props + [e.__name__ for e in extra_methods]}
     for region in regions:
-        for prop in props:
+        for prop in props + [e.__name__ for e in extra_methods]:
             try:
                 extracted_props[prop].append(getattr(region, prop))
             except AttributeError as e:
@@ -205,7 +206,8 @@ def quantify_morphology(
     sdata: SpatialData,
     label: str | None = None,
     image: str | None = None,
-    methods: list[str] | str = None,
+    methods: list[str | Callable] | str | Callable = None,
+    split_by_channels: bool = False,
     **kwargs: Any,
 ) -> pd.DataFrame | None:
 
@@ -220,14 +222,20 @@ def quantify_morphology(
     if methods is None:
         # default case but without mutable argument as default value
         methods = ["label", "area", "eccentricity", "perimeter", "sphericity"]
-    elif isinstance(methods, str):
+    elif isinstance(methods, (str, Callable)):
         methods = [methods]
 
     if not isinstance(methods, list):
         raise ValueError("Argument `methods` must be a list of strings.")
 
-    if not all(isinstance(method, str) for method in methods):
-        raise ValueError("All elements in `methods` must be strings.")
+    if not all(isinstance(method, (str, Callable)) for method in methods):
+        raise ValueError("All elements in `methods` must be strings or callables.")
+
+    extra_methods = []
+    for method in methods:
+        if callable(method):
+            extra_methods.append(method)
+            methods.remove(method)
 
     for element in [label, image]:
         if element is not None and element not in sdata:
@@ -237,17 +245,27 @@ def quantify_morphology(
     label_element = sdata[label]
     image_element = sdata[image] if image is not None else None
 
-    # cell_generator = _subset_image_using_label(label_element, image_element)
+    region_props = _get_region_props(
+        label_element,
+        image_element,
+        props=methods,
+        extra_methods=extra_methods,
+    )
 
-    # for cell_id, subset in cell_generator:
-    #     print(f"Cell ID: {cell_id}")
-    #     print(subset)
-    # plt.imshow(subset.transpose("y", "x", "c"))
+    if split_by_channels:
+        channels = image_element.c.values
+        for col in region_props.columns:
+            # did the method return a list of values?
+            if isinstance(region_props[col].values[0], (list, tuple, np.ndarray)):
+                # are all lists of the length of the channel list?
+                if all(len(val) == len(channels) for val in region_props[col].values):
+                    for i, channel in enumerate(channels):
+                        region_props[f"{col}_ch{channel}"] = [
+                            val[i] for val in region_props[col].values
+                        ]
+                    region_props.drop(columns=[col], inplace=True)
 
-    props = _get_region_props(label_element, image_element, props=methods)
-
-    # Print some properties for each region
-    return props
+    return region_props
 
 
 def _calculate_image_features_helper(
