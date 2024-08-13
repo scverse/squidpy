@@ -110,7 +110,6 @@ def var_by_distance(
 
     # add var column to design matrix
     for name in var:
-        print(name)
         if name in adata.var_names:
             df[name] = (
                 np.array(adata[:, name].X.toarray()) if issparse(adata[:, name].X) else np.array(adata[:, name].X)
