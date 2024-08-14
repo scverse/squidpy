@@ -38,10 +38,10 @@ def var_by_distance(
     ----------
     %(adata)s
     groups
-        Anchor point(s) to calculate distances to. Can be a single or multiple observations as long as they are annotated in column `cluster_key`.
-        Alternatively a numpy array of coordinates can be passed.
+        Anchor point(s) to calculate distances to. Can be a single or multiple observations as long as they are annotated in an .obs column with name given by `cluster_key`.
+        Alternatively, a numpy array of coordinates can be passed.
     cluster_key
-        Annotation column in `.obs` that is used as anchor.
+        Name of annotation column in `.obs` where the observation used as anchor points are located.
     %(library_key)s
     design_matrix_key
         Name of the design matrix saved to `.obsm`.
