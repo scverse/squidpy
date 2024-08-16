@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
+import warnings
 from collections.abc import Generator, Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable, List, Tuple
+from typing import TYPE_CHECKING, Any, Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,7 +12,7 @@ import pandas as pd
 import xarray as xr
 from anndata import AnnData
 from scanpy import logging as logg
-from skimage.measure import label, perimeter, regionprops
+from skimage.measure import perimeter, regionprops
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import ImageFeature
@@ -22,7 +24,7 @@ from squidpy.im._container import ImageContainer
 __all__ = ["calculate_image_features", "quantify_morphology"]
 
 
-def circularity(regionmask) -> float:
+def circularity(regionmask: np.ndarray) -> float:
     """
     Calculate the circularity of the region.
 
@@ -39,26 +41,30 @@ def circularity(regionmask) -> float:
 def _get_region_props(
     label_element: xr.DataArray,
     image_element: xr.DataArray,
-    props: List[str] | None = None,
-    extra_methods: List[Callable] = [],
+    props: list[str] | None = None,
+    extra_methods: list[Callable[[np.ndarray, np.ndarray], int | float | list[int | float]]] | None = None,
 ) -> pd.DataFrame:
+    if not extra_methods:
+        extra_methods = []
     if props is None:
         # if we didn't get any properties, we'll do the bare minimum
         props = ["label"]
 
-    np_bitmap = label_element.values
     np_rgb_image = image_element.values.transpose(1, 2, 0)  # (c, y, x) -> (y, x, c)
     a = [
         circularity,
     ] + extra_methods
-    labeled_image = label(np_bitmap)
     # can't use regionprops_table because it only returns int
     regions = regionprops(
-        label_image=labeled_image,
+        label_image=label_element.values,
         intensity_image=np_rgb_image,
         extra_properties=a,
     )
     # dynamically extract specified properties and create a df
+    # if np.any(label_element.values == 0):
+    #     # initialize with label 0 because regionprops drops label 0
+    #     extracted_props = {prop: [0] for prop in props + [e.__name__ for e in extra_methods]}
+    # else:
     extracted_props = {prop: [] for prop in props + [e.__name__ for e in extra_methods]}
     for region in regions:
         for prop in props + [e.__name__ for e in extra_methods]:
@@ -76,7 +82,7 @@ def _get_region_props(
 
 def _subset_image_using_label(
     label_element: xr.DataArray, image_element: xr.DataArray
-) -> Generator[Tuple[int, xr.DataArray], None, None]:
+) -> Generator[tuple[int, xr.DataArray], None, None]:
     """
     A generator that extracts subsets of the RGB image based on the bitmap.
 
@@ -253,6 +259,35 @@ def quantify_morphology(
                     for i, channel in enumerate(channels):
                         region_props[f"{col}_ch{channel}"] = [val[i] for val in region_props[col].values]
                     region_props.drop(columns=[col], inplace=True)
+
+    if len(sdata.tables) > 1:
+        warnings.warn(
+            "Multiple tables detected in `sdata`, "
+            "using first table to store regionprops from sq.im.quantify_morphology",
+            stacklevel=1,
+        )
+
+    table_key = next(iter(sdata.tables))
+    # columns = sdata[table_key].obs.columns
+    # id_regex = re.compile(".*id.*", re.IGNORECASE)
+    #
+    # matches = []
+    # for column in columns:
+    #     match = id_regex.match(column)
+    #     if match:
+    #         matches.append(match.group(0))
+    #
+    # if len(matches) != 1:
+    #     raise AttributeError("Unable to find ID column in `sdata`.")
+    #
+    # else:
+    #     id_column = matches[0]
+
+    # df = region_props.set_index("label", drop=False)
+    # df.index.name = id_column
+    # df.rename({"label": id_column}, axis="columns", inplace=True)
+
+    sdata[table_key].obsm["morphology"] = region_props.to_numpy()
 
     return region_props
 
