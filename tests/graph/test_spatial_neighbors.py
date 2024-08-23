@@ -9,6 +9,7 @@ from numpy.random import default_rng
 from scipy.sparse import isspmatrix_csr
 from shapely import Point
 from spatialdata.datasets import blobs
+
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import mask_graph, spatial_neighbors
 from squidpy.gr._build import _build_connectivity

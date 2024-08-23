@@ -30,8 +30,9 @@ def _maybe_download_data(func_name: str, path: Path) -> Any:
 
 
 def main(args: argparse.Namespace) -> None:
-    import squidpy as sq
     from anndata import AnnData
+
+    import squidpy as sq
 
     all_datasets = sq.datasets._dataset.__all__ + sq.datasets._image.__all__
     all_extensions = ["h5ad"] * len(sq.datasets._dataset.__all__) + ["tiff"] * len(sq.datasets._image.__all__)
