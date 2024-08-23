@@ -15,7 +15,7 @@ tissue images if available.
     :target: https://doi.org/10.1038/s41592-021-01358-2
 
 .. warning::
-    ## 🚨🚨🚨 **Warning!** 🚨🚨🚨
+    🚨🚨🚨 **Warning!** 🚨🚨🚨
 
     The original napari-plugin of Squidpy has been moved to `napari-spatialdata <https://github.com/scverse/napari-spatialdata>`_.
 
