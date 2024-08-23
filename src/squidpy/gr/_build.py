@@ -233,11 +233,11 @@ def spatial_neighbors(
 
     if library_key is not None:
         mats: list[tuple[spmatrix, spmatrix]] = []
-        ixs = []  # type: ignore[var-annotated]
+        ixs = []
         for lib in libs:
             ixs.extend(np.where(adata.obs[library_key] == lib)[0])
             mats.append(_build_fun(adata[adata.obs[library_key] == lib]))
-        ixs = np.argsort(ixs)  # type: ignore[assignment] # invert
+        ixs = np.argsort(ixs)  # invert
         Adj = block_diag([m[0] for m in mats], format="csr")[ixs, :][:, ixs]
         Dst = block_diag([m[1] for m in mats], format="csr")[ixs, :][:, ixs]
     else:
