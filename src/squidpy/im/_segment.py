@@ -96,7 +96,7 @@ class SegmentationModel(ABC):
     def _(self, img: NDArrayA, **kwargs: Any) -> NDArrayA:
         chunks = kwargs.pop("chunks", None)
         if chunks is not None:
-            return self.segment(da.asarray(img).rechunk(chunks), **kwargs)
+            return self.segment(da.asarray(img).rechunk(chunks), **kwargs)  # type: ignore[no-any-return]
 
         img = SegmentationModel._precondition(img)
         img = self._segment(img, **kwargs)

@@ -983,12 +983,12 @@ class ImageContainer(FeatureMixin):
         arr = arr.sel(z=library_ids)
 
         if channel is not None:
-            channel = np.asarray([channel]).ravel()
+            channel = np.asarray([channel]).ravel()  # type: ignore[assignment]
             if not len(channel):  # type: ignore[arg-type]
                 raise ValueError("No channels have been selected.")
             arr = arr[{arr.dims[-1]: channel}]
         else:
-            channel = np.arange(arr.shape[-1])
+            channel = np.arange(arr.shape[-1])  # type: ignore[assignment]
         if TYPE_CHECKING:
             assert isinstance(channel, Sequence)
 

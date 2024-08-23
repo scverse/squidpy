@@ -711,8 +711,8 @@ def _map_color_seg(
     if isinstance(color_vector.dtype, CategoricalDtype):
         if isinstance(na_color, tuple) and len(na_color) == 4 and np.any(color_source_vector.isna()):
             cell_id[color_source_vector.isna()] = 0
-        val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)
-        cols = colors.to_rgba_array(color_vector.categories)
+        val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)  # type: ignore[union-attr]
+        cols = colors.to_rgba_array(color_vector.categories)  # type: ignore[union-attr]
     else:
         val_im = map_array(seg, cell_id, cell_id)  # replace with same seg id to remove missing segs
         try:
@@ -960,7 +960,7 @@ def _plot_scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.bg_size,
-            c=outline_params.bg_color,
+            c=outline_params.bg_color,  # type: ignore[arg-type]
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,
@@ -971,7 +971,7 @@ def _plot_scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.gap_size,
-            c=outline_params.gap_color,
+            c=outline_params.gap_color,  # type: ignore[arg-type]
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,
