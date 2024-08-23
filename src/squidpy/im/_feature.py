@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import re
 import warnings
 from collections.abc import Generator, Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
 
-import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
+import spatialdata as sd
 import xarray as xr
 from anndata import AnnData
 from scanpy import logging as logg
@@ -23,12 +23,18 @@ from squidpy.im._container import ImageContainer
 
 __all__ = ["calculate_image_features", "quantify_morphology"]
 
+IntegerNDArrayType = TypeVar("IntegerNDArrayType", bound=npt.NDArray[np.integer[Any]])
+FloatNDArrayType = TypeVar("FloatNDArrayType", bound=npt.NDArray[np.floating[Any]])
+RegionPropsCallableType = Callable[
+    [IntegerNDArrayType, FloatNDArrayType], Union[Union[int, float, list[Union[int, float]]]]
+]
 
-def circularity(regionmask: np.ndarray) -> float:
+
+def circularity(regionmask: IntegerNDArrayType) -> float:
     """
     Calculate the circularity of the region.
 
-    :param region: Region properties object
+    :param regionmask: Region properties object
     :return: circularity of the region
     """
     perim = perimeter(regionmask)
@@ -42,7 +48,7 @@ def _get_region_props(
     label_element: xr.DataArray,
     image_element: xr.DataArray,
     props: list[str] | None = None,
-    extra_methods: list[Callable[[np.ndarray, np.ndarray], int | float | list[int | float]]] | None = None,
+    extra_methods: list[RegionPropsCallableType] | None = None,
 ) -> pd.DataFrame:
     if not extra_methods:
         extra_methods = []
@@ -61,11 +67,7 @@ def _get_region_props(
         extra_properties=a,
     )
     # dynamically extract specified properties and create a df
-    # if np.any(label_element.values == 0):
-    #     # initialize with label 0 because regionprops drops label 0
-    #     extracted_props = {prop: [0] for prop in props + [e.__name__ for e in extra_methods]}
-    # else:
-    extracted_props = {prop: [] for prop in props + [e.__name__ for e in extra_methods]}
+    extracted_props = {prop: [] for prop in props + [e.__name__ for e in extra_methods]}  # type: dict[str, list[int | float]]
     for region in regions:
         for prop in props + [e.__name__ for e in extra_methods]:
             try:
@@ -86,8 +88,8 @@ def _subset_image_using_label(
     """
     A generator that extracts subsets of the RGB image based on the bitmap.
 
-    :param label: xarray.DataArray with cell identifiers
-    :param image: xarray.DataArray with RGB image data
+    :param label_element: xarray.DataArray with cell identifiers
+    :param image_element: xarray.DataArray with RGB image data
     :yield: Subsets of the RGB image corresponding to each cell in the bitmap
     """
     unique_cells = np.unique(label_element.values)
@@ -206,7 +208,7 @@ def quantify_morphology(
     sdata: SpatialData,
     label: str | None = None,
     image: str | None = None,
-    methods: list[str | Callable] | str | Callable = None,
+    methods: list[str | Callable] | None = None,
     split_by_channels: bool = False,
     **kwargs: Any,
 ) -> pd.DataFrame | None:
@@ -227,6 +229,9 @@ def quantify_morphology(
 
     if not all(isinstance(method, (str, Callable)) for method in methods):
         raise ValueError("All elements in `methods` must be strings or callables.")
+
+    if "label" not in methods:
+        methods = ["label"].extend(methods)
 
     extra_methods = []
     for method in methods:
@@ -267,27 +272,13 @@ def quantify_morphology(
             stacklevel=1,
         )
 
-    table_key = next(iter(sdata.tables))
-    # columns = sdata[table_key].obs.columns
-    # id_regex = re.compile(".*id.*", re.IGNORECASE)
-    #
-    # matches = []
-    # for column in columns:
-    #     match = id_regex.match(column)
-    #     if match:
-    #         matches.append(match.group(0))
-    #
-    # if len(matches) != 1:
-    #     raise AttributeError("Unable to find ID column in `sdata`.")
-    #
-    # else:
-    #     id_column = matches[0]
+    table_key = next(iter(sd.get_element_annotators(sdata, "blobs_labels")))
 
-    # df = region_props.set_index("label", drop=False)
-    # df.index.name = id_column
-    # df.rename({"label": id_column}, axis="columns", inplace=True)
+    region_props = region_props.set_index("label", drop=True)
+    region_props.index.name = None
+    region_props.index = region_props.index.astype(str)
 
-    sdata[table_key].obsm["morphology"] = region_props.to_numpy()
+    sdata[table_key].obsm["morphology"] = region_props
 
     return region_props
 

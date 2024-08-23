@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.testing as npt
+import pandas as pd
 import pytest
 import skimage.measure
 import squidpy as sq
@@ -52,3 +53,4 @@ class TestMorphology:
         )
 
         assert "morphology" in sdata_blobs["table"].obsm.keys()
+        assert isinstance(sdata_blobs["table"].obsm["morphology"], pd.DataFrame)
