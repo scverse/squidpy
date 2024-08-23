@@ -6,12 +6,6 @@ default_stages:
     - push
 minimum_pre_commit_version: 2.9.3
 repos:
-    - repo: https://github.com/pre-commit/mirrors-mypy
-      rev: v1.11.1
-      hooks:
-          - id: mypy
-            additional_dependencies: [numpy, pandas, types-requests]
-            exclude: .scripts/ci/download_data.py|squidpy/datasets/_(dataset|image).py # See https://github.com/
     - repo: https://github.com/astral-sh/ruff-pre-commit
       rev: v0.6.2
       hooks:
@@ -24,3 +18,9 @@ repos:
       rev: 1.18.0
       hooks:
           - id: blacken-docs
+    - repo: https://github.com/pre-commit/mirrors-mypy
+      rev: v1.11.1
+      hooks:
+          - id: mypy
+            additional_dependencies: [numpy, pandas, types-requests]
+            exclude: .scripts/ci/download_data.py|squidpy/datasets/_(dataset|image).py # See https://github.com/
