@@ -26,7 +26,7 @@ from skimage.util import img_as_float
 from squidpy._constants._constants import InferDimensions
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, singledispatchmethod
+from squidpy._utils import NDArrayA, deprecated, singledispatchmethod
 from squidpy.gr._utils import (
     _assert_in_range,
     _assert_non_empty_sequence,
@@ -166,7 +166,12 @@ class ImageContainer(FeatureMixin):
             prep_imgs.append(prep_img)
 
         return cls._from_dataset(
-            xr.concat([img.data for img in prep_imgs], dim="z", combine_attrs=combine_attrs, **kwargs)
+            xr.concat(
+                [img.data for img in prep_imgs],
+                dim="z",
+                combine_attrs=combine_attrs,
+                **kwargs,
+            )
         )
 
     @classmethod
@@ -519,7 +524,10 @@ class ImageContainer(FeatureMixin):
 
         ymin, xmin = self.shape
         coords = CropCoords(
-            x0=min(max(x, 0), xmin), y0=min(max(y, 0), ymin), x1=min(x + xs, xmin), y1=min(y + ys, ymin)
+            x0=min(max(x, 0), xmin),
+            y0=min(max(y, 0), ymin),
+            x1=min(x + xs, xmin),
+            y1=min(y + ys, ymin),
         )
 
         if not coords.dy:
@@ -553,7 +561,11 @@ class ImageContainer(FeatureMixin):
             crop.attrs[Key.img.padding] = _NULL_PADDING
         return self._from_dataset(
             self._post_process(
-                data=crop, scale=scale, cval=cval, mask_circle=mask_circle, preserve_dtypes=preserve_dtypes
+                data=crop,
+                scale=scale,
+                cval=cval,
+                mask_circle=mask_circle,
+                preserve_dtypes=preserve_dtypes,
             )
         )
 
@@ -583,7 +595,11 @@ class ImageContainer(FeatureMixin):
                 shape[-1] = arr.shape[-1]
                 shape[-2] = arr.shape[-2]
                 return xr.DataArray(
-                    da.from_delayed(delayed(lambda arr: scaling_fn(arr).astype(dtype))(arr), shape=shape, dtype=dtype),
+                    da.from_delayed(
+                        delayed(lambda arr: scaling_fn(arr).astype(dtype))(arr),
+                        shape=shape,
+                        dtype=dtype,
+                    ),
                     dims=arr.dims,
                 )
             return xr.DataArray(scaling_fn(arr).astype(dtype), dims=arr.dims)
@@ -803,7 +819,10 @@ class ImageContainer(FeatureMixin):
             # get spot diameter of current obs (might be different library ids)
             diameter = (
                 Key.uns.spot_diameter(
-                    adata, spatial_key=spatial_key, library_id=lid, spot_diameter_key=spot_diameter_key
+                    adata,
+                    spatial_key=spatial_key,
+                    library_id=lid,
+                    spot_diameter_key=spot_diameter_key,
                 )
                 * scale
             )
@@ -893,7 +912,9 @@ class ImageContainer(FeatureMixin):
             img = crop.data[key]
             # get shape for this DataArray
             dataset[key] = xr.DataArray(
-                np.zeros(shape + tuple(img.shape[2:]), dtype=img.dtype), dims=img.dims, coords=img.coords
+                np.zeros(shape + tuple(img.shape[2:]), dtype=img.dtype),
+                dims=img.dims,
+                coords=img.coords,
             )
             # fill data with crops
             for crop in crops:
@@ -1050,6 +1071,9 @@ class ImageContainer(FeatureMixin):
 
     @d.get_sections(base="_interactive", sections=["Parameters"])
     @d.dedent
+    @deprecated(
+        reason="The squidpy napari plugin is deprecated, please use https://github.com/scverse/napari-spatialdata",
+    )
     def interactive(
         self,
         adata: AnnData,
