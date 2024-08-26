@@ -27,6 +27,7 @@ def calculate_niche(
     flavor: str = "neighborhood",
     library_key: str | None = None,
     table_key: str | None = None,
+    abs_nhood: bool = False,
     adj_subsets: list[int] | None = None,
     aggregation: str = "mean",
     spatial_key: str = "spatial",
@@ -37,7 +38,6 @@ def calculate_niche(
     """Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
     The resulting niche labels with be stored in 'adata.obs'. If flavor = 'all' then all available methods
     will be applied and additionally compared using cluster validation scores.
-
     Parameters
     ----------
     %(adata)s
@@ -45,7 +45,6 @@ def calculate_niche(
         groups based on which to calculate neighborhood profile.
     flavor
         Method to use for niche calculation. Available options are:
-
             - `{c.NEIGHBORHOOD.s!r}` - cluster the neighborhood profile.
             - `{c.SPOT.s!r}` - calculate niches using optimal transport.
             - `{c.BANKSY.s!r}`- use Banksy algorithm.
@@ -97,7 +96,11 @@ def calculate_niche(
         rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
             adata, groups, spatial_connectivities_key
         )
-        df = pd.DataFrame(rel_nhood_profile, index=adata.obs.index)
+        if not abs_nhood:
+            nhood_profile = rel_nhood_profile
+        else:
+            nhood_profile = abs_nhood_profile
+        df = pd.DataFrame(nhood_profile, index=adata.obs.index)
         nhood_table = _df_to_adata(df)
         if copy:
             return df
@@ -198,6 +201,7 @@ def _calculate_neighborhood_profile(
     return rel_freq, abs_freq
 
 
+
 def _utag(adata: AnnData, normalize_adj: bool, spatial_connectivity_key: str) -> AnnData:
     """Performas inner product of adjacency matrix and feature matrix,
     such that each observation inherits features from its immediate neighbors as described in UTAG paper.
@@ -218,7 +222,7 @@ def _utag(adata: AnnData, normalize_adj: bool, spatial_connectivity_key: str) ->
 
 
 def _get_adj_matrix_subsets(connectivities: csr_matrix, distances: csr_matrix, k_neighbors: int) -> csr_matrix:
-    # Convert the distance matrix to a dense format for easier manipulation
+    # Convert the distance matrix to a dense format
     dist_dense = distances.todense()
 
     # Find the indices of the k closest neighbors for each row
