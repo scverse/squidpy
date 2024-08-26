@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
 import scanpy as sc
 from anndata import AnnData
 from scanpy import logging as logg
+from spatialdata import SpatialData
 
 from squidpy._docs import d
 
@@ -15,20 +16,23 @@ __all__ = ["var_embeddings"]
 
 @d.dedent
 def var_embeddings(
-    adata: AnnData,
+    sdata: SpatialData,
+    table: str,
     group: str,
     design_matrix_key: str = "design_matrix",
     n_bins: int = 100,
     include_anchor: bool = False,
 ) -> AnnData | pd.DataFrame:
     """
-    Cluster variables by previously calculated distance to an anchor point.
+    Bin variables by previously calculated distance to an anchor point.
 
     Parameters
     ----------
     %(adata)s
+    table
+        Name of the table in `SpatialData` object.
     group
-        Annotation column in `.obs` that is used as anchor.
+        Annotation column in design matrix, given by `design_matrix_key`, that is used as anchor.
     design_matrix_key
         Name of the design matrix saved to `.obsm`.
     n_bins
@@ -40,6 +44,9 @@ def var_embeddings(
     If ``copy = True``, returns var by distance matrices.
     Otherwise, stores var by distance bin matrices in `.obsm`.
     """
+
+    adata = sdata.tables[table]
+
     if design_matrix_key not in adata.obsm.keys():
         raise ValueError(f"`.obsm['{design_matrix_key}']` does not exist. Aborting.")
 
@@ -75,7 +82,7 @@ def var_embeddings(
     obs.index = result.index
     adata_new = AnnData(X=result, obs=obs, var=pd.DataFrame(index=result.columns))
 
-    return adata_new
+    sdata.tables["var_by_dist_bins"] = adata_new
 
 
 def calculate_median(interval: pd.Interval) -> Any:
