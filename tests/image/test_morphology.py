@@ -48,9 +48,13 @@ class TestMorphology:
             sdata=sdata_blobs,
             label="blobs_labels",
             image="blobs_image",
-            methods=["label", "area", "eccentricity"],
+            methods=["label", "area", "eccentricity", "circularity", "granularity"],
             split_by_channels=True,
         )
 
         assert "morphology" in sdata_blobs["table"].obsm.keys()
         assert isinstance(sdata_blobs["table"].obsm["morphology"], pd.DataFrame)
+        assert "circularity" in sdata_blobs["table"].obsm["morphology"].columns
+        assert "granularity_ch0" in sdata_blobs["table"].obsm["morphology"].columns
+        assert "granularity_ch1" in sdata_blobs["table"].obsm["morphology"].columns
+        assert "granularity_ch2" in sdata_blobs["table"].obsm["morphology"].columns

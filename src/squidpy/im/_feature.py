@@ -20,6 +20,7 @@ from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import _save_data
 from squidpy.im._container import ImageContainer
+from squidpy.im import _measurements
 
 __all__ = ["calculate_image_features", "quantify_morphology"]
 
@@ -57,14 +58,18 @@ def _get_region_props(
         props = ["label"]
 
     np_rgb_image = image_element.values.transpose(1, 2, 0)  # (c, y, x) -> (y, x, c)
-    a = [
+
+    # Add custom extra methods here
+    rp_extra_methods = [
         circularity,
+        _measurements.granularity,
     ] + extra_methods
+
     # can't use regionprops_table because it only returns int
     regions = regionprops(
         label_image=label_element.values,
         intensity_image=np_rgb_image,
-        extra_properties=a,
+        extra_properties=rp_extra_methods,
     )
     # dynamically extract specified properties and create a df
     extracted_props = {prop: [] for prop in props + [e.__name__ for e in extra_methods]}  # type: dict[str, list[int | float]]
@@ -73,11 +78,11 @@ def _get_region_props(
             try:
                 extracted_props[prop].append(getattr(region, prop))
             except AttributeError as e:
-                # Handle custom properties or missing attributes
-                if prop == "circularity":
-                    extracted_props[prop].append(circularity(region))
-                else:
-                    raise ValueError(f"Property '{prop}' is not available in the region properties.") from e
+                # # Handle custom properties or missing attributes
+                # if prop == "circularity":
+                #     extracted_props[prop].append(circularity(region))
+                # else:
+                raise ValueError(f"Property '{prop}' is not available in the region properties.") from e
 
     return pd.DataFrame(extracted_props)
 
@@ -265,14 +270,14 @@ def quantify_morphology(
                         region_props[f"{col}_ch{channel}"] = [val[i] for val in region_props[col].values]
                     region_props.drop(columns=[col], inplace=True)
 
-    if len(sdata.tables) > 1:
+    tables = sd.get_element_annotators(sdata, label)
+    if len(tables) > 1:
         warnings.warn(
-            "Multiple tables detected in `sdata`, "
+            f"Multiple tables detected in `sdata` matching , {label}"
             "using first table to store regionprops from sq.im.quantify_morphology",
             stacklevel=1,
         )
-
-    table_key = next(iter(sd.get_element_annotators(sdata, "blobs_labels")))
+    table_key = next(iter(tables))
 
     region_props = region_props.set_index("label", drop=True)
     region_props.index.name = None
