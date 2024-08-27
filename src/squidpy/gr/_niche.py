@@ -417,14 +417,14 @@ def _find_best_match(subset: set[str], other_subsets: dict[str, set[str]], exclu
 
 def _get_initial_niches(niche_definitions: list[dict[str, set[str]]]) -> dict[str, set[str]]:
     min_niches = {}
-    min_niche_count = float('inf')
+    min_niche_count = float("inf")
 
     for niches in niche_definitions:
         niche_count = len(niches)
 
-        if niche_count < min_niche_count: 
-            min_niches = niches  
-            min_niche_count = niche_count 
+        if niche_count < min_niche_count:
+            min_niches = niches
+            min_niche_count = niche_count
 
     return min_niches
 
