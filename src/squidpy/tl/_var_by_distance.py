@@ -38,10 +38,10 @@ def var_by_distance(
     ----------
     %(adata)s
     groups
-        Anchor points to calculate distances from, can be a single gene,
-        a list of genes or a set of coordinates.
+        Anchor point(s) to calculate distances to. Can be a single or multiple observations as long as they are annotated in an .obs column with name given by `cluster_key`.
+        Alternatively, a numpy array of coordinates can be passed.
     cluster_key
-        Annotation column in `.obs` that is used as anchor.
+        Name of annotation column in `.obs` where the observation used as anchor points are located.
     %(library_key)s
     design_matrix_key
         Name of the design matrix saved to `.obsm`.
@@ -238,10 +238,9 @@ def _get_coordinates(adata: AnnData, anchor: str, annotation: str, spatial_key: 
 
     if isinstance(anchor, np.ndarray):
         anchor_coord = anchor[~np.isnan(anchor).any(axis=1)]
-        return anchor_coord, batch_coord, nan_ids
-
-    anchor_arr = np.array(adata[adata.obs[annotation] == anchor].obsm["spatial"])
-    anchor_coord = anchor_arr[~np.isnan(anchor_arr).any(axis=1)]
+    else:
+        anchor_arr = np.array(adata[adata.obs[annotation] == anchor].obsm["spatial"])
+        anchor_coord = anchor_arr[~np.isnan(anchor_arr).any(axis=1)]
     return anchor_coord, batch_coord, nan_ids
 
 
