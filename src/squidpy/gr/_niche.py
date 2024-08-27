@@ -403,6 +403,9 @@ def _get_subset_indices(df: pd.DataFrame, column: str) -> pd.Series:
 
 
 def _find_best_match(subset: set[str], other_subsets: dict[str, set[str]], exclude: set[str]) -> tuple[str, float]:
+    """Find best matching niche pair between two sets of niche definitions.
+    Niches which have already been matched, are excluded from further comparisons."""
+
     best_match = ""
     max_overlap = 0.0
     for other_subset, indices in other_subsets.items():
@@ -416,6 +419,8 @@ def _find_best_match(subset: set[str], other_subsets: dict[str, set[str]], exclu
 
 
 def _get_initial_niches(niche_definitions: list[dict[str, set[str]]]) -> dict[str, set[str]]:
+    """Select the niche definition with the fewest amount of unique niches."""
+
     min_niches = {}
     min_niche_count = float('inf')
 
@@ -430,20 +435,34 @@ def _get_initial_niches(niche_definitions: list[dict[str, set[str]]]) -> dict[st
 
 
 def _filter_overlap(initial_consensus: dict[str, set[str]]) -> dict[str, str]:
+    """"Remove labels which are present in multiple niches. Labels are always kept in the niche with higher average jaccard index."""
+
     filtered_consensus = {}
     processed_elements: set[str] = set()
 
     for key, values in initial_consensus.items():
         unique_values = values - processed_elements  # Remove already processed elements
         for value in unique_values:
-            filtered_consensus[value] = key  # Add the value as the new key, with the original key as its value
-        processed_elements.update(unique_values)  # Mark these values as processed
+            filtered_consensus[value] = key  # Swap key and value to make further processing easier
+        processed_elements.update(unique_values)  # Mark value as processed
 
     return filtered_consensus
 
 
 def build_consensus_niche(adata: AnnData, niche_definitions: list[str], merge: str = "union") -> AnnData:
-    """Given multiple niche definitions, construct a consensus niche using set matching."""
+    """Given multiple niche definitions, construct a consensus niche using set matching.
+    Each niche definition is treated as a set of subsets. For each subset in set A we look for the best matching subset in set B.
+    Once a match has been found, these sets are merged either by union or intersection. This merged set is then used as the new set A for the next iteration.
+    The final consensus niches are filtered for overlapping labels and stored as a new column in `adata.obs`.
+    Parameters
+    ----------
+    %(adata)s
+    niche_definitions
+        Name of columns in `adata.obs` where previously calculated niches are stored.
+    merge
+        - `{c.union.s!r}`- merge niche matches via union join.
+        - `{c.intersection.s!r}` - merge niche matches by their intersection.
+    """
 
     list_of_sets = []
     for definition in niche_definitions:
@@ -451,7 +470,7 @@ def build_consensus_niche(adata: AnnData, niche_definitions: list[str], merge: s
 
     union_of_matches = _get_initial_niches(list_of_sets)
 
-    avg_jaccard = np.zeros(len(union_of_matches))
+    avg_jaccard = np.zeros(len(union_of_matches)) # the jaccard index is tracked to order the consensus niches later on
 
     for set_of_sets in range(len(list_of_sets) - 1):
         current_matches = {}
