@@ -422,20 +422,20 @@ def _get_initial_niches(niche_definitions: list[dict[str, set[str]]]) -> dict[st
     """Select the niche definition with the fewest amount of unique niches."""
 
     min_niches = {}
-    min_niche_count = float('inf')
+    min_niche_count = float("inf")
 
     for niches in niche_definitions:
         niche_count = len(niches)
 
-        if niche_count < min_niche_count: 
-            min_niches = niches  
-            min_niche_count = niche_count 
+        if niche_count < min_niche_count:
+            min_niches = niches
+            min_niche_count = niche_count
 
     return min_niches
 
 
 def _filter_overlap(initial_consensus: dict[str, set[str]]) -> dict[str, str]:
-    """"Remove labels which are present in multiple niches. Labels are always kept in the niche with higher average jaccard index."""
+    """ "Remove labels which are present in multiple niches. Labels are always kept in the niche with higher average jaccard index."""
 
     filtered_consensus = {}
     processed_elements: set[str] = set()
@@ -470,7 +470,7 @@ def build_consensus_niche(adata: AnnData, niche_definitions: list[str], merge: s
 
     union_of_matches = _get_initial_niches(list_of_sets)
 
-    avg_jaccard = np.zeros(len(union_of_matches)) # the jaccard index is tracked to order the consensus niches later on
+    avg_jaccard = np.zeros(len(union_of_matches))  # the jaccard index is tracked to order the consensus niches later on
 
     for set_of_sets in range(len(list_of_sets) - 1):
         current_matches = {}
