@@ -41,8 +41,7 @@ def var_embeddings(
         Whether to include the variable counts belonging to the anchor point in the aggregation.
     Returns
     -------
-    If ``copy = True``, returns var by distance matrices.
-    Otherwise, stores var by distance bin matrices in `.obsm`.
+    Stores binned count matrices in `sdata.tables["var_by_dist_bins"]`.
     """
 
     adata = sdata.tables[table]
