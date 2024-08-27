@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Iterator
-from typing import Any, Optional
 
 import anndata as ad
 import numpy as np
@@ -418,14 +417,14 @@ def _find_best_match(subset: set[str], other_subsets: dict[str, set[str]], exclu
 
 def _get_initial_niches(niche_definitions: list[dict[str, set[str]]]) -> dict[str, set[str]]:
     min_niches = {}
-    min_niche_count = 0
+    min_niche_count = float('inf')
 
     for niches in niche_definitions:
         niche_count = len(niches)
 
-        if niche_count < min_niche_count:  # If this dictionary has fewer keys
-            min_niches = niches  # Update the dictionary with the fewest keys
-            min_niche_count = niche_count  # Update the minimum key count
+        if niche_count < min_niche_count: 
+            min_niches = niches  
+            min_niche_count = niche_count 
 
     return min_niches
 
@@ -494,9 +493,7 @@ def build_consensus_niche(adata: AnnData, niche_definitions: list[str], merge: s
     sorted_by_jaccard = dict(
         sorted(consensus_by_jaccard.items(), key=lambda item: item[1], reverse=True),
     )
-
     sorted_consensus = {key: consensus[key] for key in sorted_by_jaccard}
-
     filtered_consensus = _filter_overlap(sorted_consensus)
 
     adata.obs["consensus_niche"] = adata.obs.index.map(filtered_consensus).fillna("None")
