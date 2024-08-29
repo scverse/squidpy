@@ -30,6 +30,10 @@ RegionPropsCallableType = Callable[
     [IntegerNDArrayType, FloatNDArrayType], Union[Union[int, float, list[Union[int, float]]]]
 ]
 
+RegionPropsImageCallableType = Callable[
+    [IntegerNDArrayType, FloatNDArrayType], dict[str, Union[int, float]]
+]
+
 
 def circularity(regionmask: IntegerNDArrayType) -> float:
     """
@@ -62,8 +66,14 @@ def _get_region_props(
     # Add custom extra methods here
     rp_extra_methods = [
         circularity,
-        _measurements.granularity,
+        _measurements.granularity,  # <--- Add additional measurements here that handle individual regions
     ] + extra_methods
+
+    image_extra_methods = [
+        _measurements.border_occupied_factor  # <--- Add additional measurements here that calculate on the entire label image
+    ] # type: list[RegionPropsImageCallableType]
+    image_extra_methods = {method.__name__: method for method in image_extra_methods}
+
 
     # can't use regionprops_table because it only returns int
     regions = regionprops(
@@ -73,15 +83,17 @@ def _get_region_props(
     )
     # dynamically extract specified properties and create a df
     extracted_props = {prop: [] for prop in props + [e.__name__ for e in extra_methods]}  # type: dict[str, list[int | float]]
-    for region in regions:
-        for prop in props + [e.__name__ for e in extra_methods]:
+    for prop in props + [e.__name__ for e in extra_methods]:
+        if prop in image_extra_methods:
+            im_extra_result = image_extra_methods[prop](label_element.values, np_rgb_image)
+            for region in regions:
+                extracted_props[prop].append(im_extra_result.get(region.label))
+            continue
+
+        for region in regions:
             try:
                 extracted_props[prop].append(getattr(region, prop))
             except AttributeError as e:
-                # # Handle custom properties or missing attributes
-                # if prop == "circularity":
-                #     extracted_props[prop].append(circularity(region))
-                # else:
                 raise ValueError(f"Property '{prop}' is not available in the region properties.") from e
 
     return pd.DataFrame(extracted_props)

@@ -1,8 +1,99 @@
-# Copied from https://github.com/afermg/cp_measurements/blob/main/src/cp_measure/minimal/measuregranularity.py
-
 import numpy
+import numpy as np
 import scipy.ndimage
 import skimage.morphology
+
+def border_occupied_factor(
+    mask: numpy.ndarray,
+    *args,
+    **kwargs
+) -> dict[int, float]:
+    """
+    Calculates the percentage of border pixels that are in a 4-connected neighborhood of another label
+    Takes ~1.7s/megapixels to calculate
+
+    Parameters
+    ----------
+    mask: numpy.ndarray integer grayscale image with the labels
+    args None
+    kwargs None
+
+    Returns
+    -------
+    Dict of percentages for each label key
+
+    """
+    n_border_pixels = {}
+    n_border_occupied_pixels = {}
+
+    adjacent_indices = [
+        [-1, 0],
+        [0, -1],
+        [1, 0],
+        [0, 1],
+    ]
+
+    for coordinates, pixel in np.ndenumerate(mask):
+        if pixel == 0:
+            continue
+        is_border = False
+        is_occupied = False
+
+        for adjacent_index in adjacent_indices:
+            try:
+                adjacent_pixel = mask[
+                    coordinates[0] + adjacent_index[0],
+                    coordinates[1] + adjacent_index[1]
+                ]
+            except IndexError:
+                # At image border, don't count image borders
+                continue
+            if adjacent_pixel == pixel:
+                continue
+
+            is_border = True
+            if adjacent_pixel != 0:
+                is_occupied = True
+
+        if is_border:
+            try:
+                n_border_pixels[pixel] += 1
+            except KeyError:
+                n_border_pixels[pixel] = 1
+                n_border_occupied_pixels[pixel] = 0
+        if is_occupied:
+            n_border_occupied_pixels[pixel] += 1
+
+    result = {key: n_border_occupied_pixels[key] / n_border_pixels[key] for key in n_border_pixels.keys()}
+
+    return result
+
+
+if __name__ == '__main__':
+    import time
+    from spatialdata.datasets import blobs
+    # label_image = np.array([
+    #     [0, 0, 0, 0, 0, 0, 0, 0],
+    #     [0, 1, 1, 1, 0, 0, 0, 0],
+    #     [0, 1, 1, 1, 2, 2, 2, 0],
+    #     [0, 1, 1, 1, 2, 2, 2, 0],
+    #     [0, 0, 3, 3, 2, 2, 2, 0],
+    #     [0, 0, 3, 3, 0, 0, 0, 0],
+    #     [0, 0, 0, 0, 0, 0, 0, 0],
+    # ])
+    label_image = blobs(length=512).labels["blobs_labels"].values
+
+    start_time = time.perf_counter()
+    actual = border_occupied_factor(label_image)
+    end_time = time.perf_counter()
+    print(end_time - start_time)
+    assert len(actual) == len(np.unique(label_image)) - 1
+    # for idx, actual_value in enumerate(actual):
+    #     assert actual_value == expected[idx]
+
+
+# Copied from https://github.com/afermg/cp_measurements/blob/main/src/cp_measure/minimal/measuregranularity.py
+
 
 __doc__ = """\
 MeasureGranularity
@@ -199,24 +290,29 @@ def granularity(
     back_pixels_mask = numpy.zeros_like(back_pixels)
     back_pixels_mask[back_mask == True] = back_pixels[back_mask == True]
     back_pixels = skimage.morphology.dilation(back_pixels_mask, footprint=footprint)
-    if image_sample_size < 1:
-        if pixels.ndim == 2:
-            i, j = numpy.mgrid[0 : new_shape[0], 0 : new_shape[1]].astype(float)
-            #
-            # Make sure the mapping only references the index range of
-            # back_pixels.
-            #
-            i *= float(back_shape[0] - 1) / float(new_shape[0] - 1)
-            j *= float(back_shape[1] - 1) / float(new_shape[1] - 1)
-            back_pixels = scipy.ndimage.map_coordinates(back_pixels, (i, j), order=1)
-        else:
-            k, i, j = numpy.mgrid[
-                0 : new_shape[0], 0 : new_shape[1], 0 : new_shape[2]
-            ].astype(float)
-            k *= float(back_shape[0] - 1) / float(new_shape[0] - 1)
-            i *= float(back_shape[1] - 1) / float(new_shape[1] - 1)
-            j *= float(back_shape[2] - 1) / float(new_shape[2] - 1)
-            back_pixels = scipy.ndimage.map_coordinates(back_pixels, (k, i, j), order=1)
+    try:
+        if image_sample_size < 1:
+            if pixels.ndim == 2:
+                i, j = numpy.mgrid[0 : new_shape[0], 0 : new_shape[1]].astype(float)
+                #
+                # Make sure the mapping only references the index range of
+                # back_pixels.
+                #
+                i *= float(back_shape[0] - 1) / float(new_shape[0] - 1)
+                j *= float(back_shape[1] - 1) / float(new_shape[1] - 1)
+                back_pixels = scipy.ndimage.map_coordinates(back_pixels, (i, j), order=1)
+            else:
+                k, i, j = numpy.mgrid[
+                    0 : new_shape[0], 0 : new_shape[1], 0 : new_shape[2]
+                ].astype(float)
+                k *= float(back_shape[0] - 1) / float(new_shape[0] - 1)
+                i *= float(back_shape[1] - 1) / float(new_shape[1] - 1)
+                j *= float(back_shape[2] - 1) / float(new_shape[2] - 1)
+                back_pixels = scipy.ndimage.map_coordinates(back_pixels, (k, i, j), order=1)
+    # TODO Debug the reason for the ZeroDivisionError when using MIBI-TOF dataeset
+    # from https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/technology_mibitof.html
+    except ZeroDivisionError:
+        return -1
     pixels -= back_pixels
     pixels[pixels < 0] = 0
 
@@ -262,23 +358,30 @@ def granularity(
         # original image so we can match against object labels
         #
         orig_shape = pixels.shape
-        if pixels.ndim == 2:
-            i, j = numpy.mgrid[0 : orig_shape[0], 0 : orig_shape[1]].astype(float)
-            #
-            # Make sure the mapping only references the index range of
-            # back_pixels.
-            #
-            i *= float(new_shape[0] - 1) / float(orig_shape[0] - 1)
-            j *= float(new_shape[1] - 1) / float(orig_shape[1] - 1)
-            rec = scipy.ndimage.map_coordinates(rec, (i, j), order=1)
-        else:
-            k, i, j = numpy.mgrid[
-                0 : orig_shape[0], 0 : orig_shape[1], 0 : orig_shape[2]
-            ].astype(float)
-            k *= float(new_shape[0] - 1) / float(orig_shape[0] - 1)
-            i *= float(new_shape[1] - 1) / float(orig_shape[1] - 1)
-            j *= float(new_shape[2] - 1) / float(orig_shape[2] - 1)
-            rec = scipy.ndimage.map_coordinates(rec, (k, i, j), order=1)
+        try:
+            if pixels.ndim == 2:
+                i, j = numpy.mgrid[0 : orig_shape[0], 0 : orig_shape[1]].astype(float)
+                #
+                # Make sure the mapping only references the index range of
+                # back_pixels.
+                #
+                i *= float(new_shape[0] - 1) / float(orig_shape[0] - 1)
+                j *= float(new_shape[1] - 1) / float(orig_shape[1] - 1)
+                rec = scipy.ndimage.map_coordinates(rec, (i, j), order=1)
+            else:
+                k, i, j = numpy.mgrid[
+                    0 : orig_shape[0], 0 : orig_shape[1], 0 : orig_shape[2]
+                ].astype(float)
+                k *= float(new_shape[0] - 1) / float(orig_shape[0] - 1)
+                i *= float(new_shape[1] - 1) / float(orig_shape[1] - 1)
+                j *= float(new_shape[2] - 1) / float(orig_shape[2] - 1)
+                rec = scipy.ndimage.map_coordinates(rec, (k, i, j), order=1)
+
+        # TODO Debug the reason for the ZeroDivisionError when using MIBI-TOF dataeset
+        # from https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/technology_mibitof.html
+        except ZeroDivisionError:
+            return -1
+
         # TODO check if this is necessary
         # Calculate the means for the objects
         #
