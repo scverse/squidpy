@@ -1,13 +1,12 @@
+from __future__ import annotations
+
 import numpy
 import numpy as np
 import scipy.ndimage
 import skimage.morphology
 
-def border_occupied_factor(
-    mask: numpy.ndarray,
-    *args,
-    **kwargs
-) -> dict[int, float]:
+
+def border_occupied_factor(mask: numpy.ndarray, *args, **kwargs) -> dict[int, float]:
     """
     Calculates the percentage of border pixels that are in a 4-connected neighborhood of another label
     Takes ~1.7s/megapixels to calculate
@@ -41,10 +40,7 @@ def border_occupied_factor(
 
         for adjacent_index in adjacent_indices:
             try:
-                adjacent_pixel = mask[
-                    coordinates[0] + adjacent_index[0],
-                    coordinates[1] + adjacent_index[1]
-                ]
+                adjacent_pixel = mask[coordinates[0] + adjacent_index[0], coordinates[1] + adjacent_index[1]]
             except IndexError:
                 # At image border, don't count image borders
                 continue
@@ -69,9 +65,11 @@ def border_occupied_factor(
     return result
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import time
+
     from spatialdata.datasets import blobs
+
     # label_image = np.array([
     #     [0, 0, 0, 0, 0, 0, 0, 0],
     #     [0, 1, 1, 1, 0, 0, 0, 0],
@@ -234,19 +232,11 @@ def granularity(
     if subsample_size < 1:
         new_shape = new_shape * subsample_size
         if pixels.ndim == 2:
-            i, j = (
-                numpy.mgrid[0 : new_shape[0], 0 : new_shape[1]].astype(float)
-                / subsample_size
-            )
+            i, j = numpy.mgrid[0 : new_shape[0], 0 : new_shape[1]].astype(float) / subsample_size
             pixels = scipy.ndimage.map_coordinates(pixels, (i, j), order=1)
             mask = scipy.ndimage.map_coordinates(mask.astype(float), (i, j)) > 0.9
         else:
-            k, i, j = (
-                numpy.mgrid[
-                    0 : new_shape[0], 0 : new_shape[1], 0 : new_shape[2]
-                ].astype(float)
-                / subsample_size
-            )
+            k, i, j = numpy.mgrid[0 : new_shape[0], 0 : new_shape[1], 0 : new_shape[2]].astype(float) / subsample_size
             pixels = scipy.ndimage.map_coordinates(pixels, (k, i, j), order=1)
             mask = scipy.ndimage.map_coordinates(mask.astype(float), (k, i, j)) > 0.9
     else:
@@ -258,23 +248,13 @@ def granularity(
     if image_sample_size < 1:
         back_shape = new_shape * image_sample_size
         if pixels.ndim == 2:
-            i, j = (
-                numpy.mgrid[0 : back_shape[0], 0 : back_shape[1]].astype(float)
-                / image_sample_size
-            )
+            i, j = numpy.mgrid[0 : back_shape[0], 0 : back_shape[1]].astype(float) / image_sample_size
             back_pixels = scipy.ndimage.map_coordinates(pixels, (i, j), order=1)
             back_mask = scipy.ndimage.map_coordinates(mask.astype(float), (i, j)) > 0.9
         else:
-            k, i, j = (
-                numpy.mgrid[
-                    0 : new_shape[0], 0 : new_shape[1], 0 : new_shape[2]
-                ].astype(float)
-                / subsample_size
-            )
+            k, i, j = numpy.mgrid[0 : new_shape[0], 0 : new_shape[1], 0 : new_shape[2]].astype(float) / subsample_size
             back_pixels = scipy.ndimage.map_coordinates(pixels, (k, i, j), order=1)
-            back_mask = (
-                scipy.ndimage.map_coordinates(mask.astype(float), (k, i, j)) > 0.9
-            )
+            back_mask = scipy.ndimage.map_coordinates(mask.astype(float), (k, i, j)) > 0.9
     else:
         back_pixels = pixels
         back_mask = mask
@@ -302,9 +282,7 @@ def granularity(
                 j *= float(back_shape[1] - 1) / float(new_shape[1] - 1)
                 back_pixels = scipy.ndimage.map_coordinates(back_pixels, (i, j), order=1)
             else:
-                k, i, j = numpy.mgrid[
-                    0 : new_shape[0], 0 : new_shape[1], 0 : new_shape[2]
-                ].astype(float)
+                k, i, j = numpy.mgrid[0 : new_shape[0], 0 : new_shape[1], 0 : new_shape[2]].astype(float)
                 k *= float(back_shape[0] - 1) / float(new_shape[0] - 1)
                 i *= float(back_shape[1] - 1) / float(new_shape[1] - 1)
                 j *= float(back_shape[2] - 1) / float(new_shape[2] - 1)
@@ -369,9 +347,7 @@ def granularity(
                 j *= float(new_shape[1] - 1) / float(orig_shape[1] - 1)
                 rec = scipy.ndimage.map_coordinates(rec, (i, j), order=1)
             else:
-                k, i, j = numpy.mgrid[
-                    0 : orig_shape[0], 0 : orig_shape[1], 0 : orig_shape[2]
-                ].astype(float)
+                k, i, j = numpy.mgrid[0 : orig_shape[0], 0 : orig_shape[1], 0 : orig_shape[2]].astype(float)
                 k *= float(new_shape[0] - 1) / float(orig_shape[0] - 1)
                 i *= float(new_shape[1] - 1) / float(orig_shape[1] - 1)
                 j *= float(new_shape[2] - 1) / float(orig_shape[2] - 1)

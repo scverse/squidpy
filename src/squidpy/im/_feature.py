@@ -19,8 +19,8 @@ from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import _save_data
-from squidpy.im._container import ImageContainer
 from squidpy.im import _measurements
+from squidpy.im._container import ImageContainer
 
 __all__ = ["calculate_image_features", "quantify_morphology"]
 
@@ -30,9 +30,7 @@ RegionPropsCallableType = Callable[
     [IntegerNDArrayType, FloatNDArrayType], Union[Union[int, float, list[Union[int, float]]]]
 ]
 
-RegionPropsImageCallableType = Callable[
-    [IntegerNDArrayType, FloatNDArrayType], dict[str, Union[int, float]]
-]
+RegionPropsImageCallableType = Callable[[IntegerNDArrayType, FloatNDArrayType], dict[str, Union[int, float]]]
 
 
 def circularity(regionmask: IntegerNDArrayType) -> float:
@@ -71,9 +69,8 @@ def _get_region_props(
 
     image_extra_methods = [
         _measurements.border_occupied_factor  # <--- Add additional measurements here that calculate on the entire label image
-    ] # type: list[RegionPropsImageCallableType]
+    ]  # type: list[RegionPropsImageCallableType]
     image_extra_methods = {method.__name__: method for method in image_extra_methods}
-
 
     # can't use regionprops_table because it only returns int
     regions = regionprops(

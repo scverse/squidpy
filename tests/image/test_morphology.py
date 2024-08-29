@@ -7,13 +7,14 @@ import numpy.testing as npt
 import pandas as pd
 import pytest
 import skimage.measure
+import spatialdata as sd
 import squidpy as sq
 from spatialdata import SpatialData
 from spatialdata.datasets import blobs, raccoon
-import spatialdata as sd
 
 # noinspection PyProtectedMember
 from squidpy.im._feature import _get_region_props
+
 # noinspection PyProtectedMember
 from squidpy.im._measurements import border_occupied_factor
 
@@ -104,16 +105,18 @@ class TestMorphologyPerformance:
 
 class TestMeasurements:
     def test_border_occupied_factor(self):
-        label_image = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 1, 1, 1, 0, 0, 0, 0],
-            [0, 1, 1, 1, 2, 2, 2, 0],
-            [0, 1, 1, 1, 2, 2, 2, 0],
-            [0, 0, 3, 3, 2, 2, 2, 0],
-            [0, 0, 3, 3, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-        ])
+        label_image = np.array(
+            [
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 1, 1, 1, 0, 0, 0, 0],
+                [0, 1, 1, 1, 2, 2, 2, 0],
+                [0, 1, 1, 1, 2, 2, 2, 0],
+                [0, 0, 3, 3, 2, 2, 2, 0],
+                [0, 0, 3, 3, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+            ]
+        )
 
-        expected = {1: 3/8, 2: 3/8, 3: 2/4}
+        expected = {1: 3 / 8, 2: 3 / 8, 3: 2 / 4}
         actual = border_occupied_factor(label_image)
         assert actual == expected
