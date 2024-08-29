@@ -114,9 +114,6 @@ class TestMeasurements:
             [0, 0, 0, 0, 0, 0, 0, 0],
         ])
 
-        expected = [3/8, 3/8, 2/4]
+        expected = {1: 3/8, 2: 3/8, 3: 2/4}
         actual = border_occupied_factor(label_image)
-        assert len(actual) == len(expected)
-        for idx, actual_value in enumerate(actual):
-            assert actual_value == expected[idx]
-
+        assert actual == expected
