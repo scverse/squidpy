@@ -260,9 +260,38 @@ def quantify_morphology(
         if element is not None and element not in sdata:
             raise KeyError(f"Key `{element}` not found in `sdata`.")
 
+    table_key = kwargs.get("table_key", None)
+    if table_key is None:
+        tables = sd.get_element_annotators(sdata, label)
+        if len(tables) > 1:
+            raise ValueError(
+                f"Multiple tables detected in `sdata` for {label}, "
+                f"please specify a specific table with the `table_key` parameter"
+            )
+        table_key = next(iter(tables))
+
+    region_key = sdata[table_key].uns["spatialdata_attrs"]["region_key"]
+    if not np.any(sdata[table_key].obs[region_key] == label):
+        raise ValueError(f"Label {label} not found in region key ({region_key}) column of sdata table `{table_key}`")
+
+    instance_key = sdata[table_key].uns["spatialdata_attrs"]["instance_key"]
+
+    label_transform = sdata[label].transform
+    image_transform = sdata[image].transform
+
+    for transform in [label_transform, image_transform]:
+        if len(transform) != 1:
+            raise ValueError("More than one coordinate system detected")
+
+    coord_sys_label = next(iter(label_transform))
+    coord_sys_image = next(iter(image_transform))
+
+    if coord_sys_label != coord_sys_image:
+        raise ValueError(f"Coordinate system do not match! label: {coord_sys_label}, image: {coord_sys_image}")
+
     # from here on we should be certain that we have a label
-    label_element = sdata[label]
-    image_element = sdata[image] if image is not None else None
+    label_element = sdata.transform_element_to_coordinate_system(label, coord_sys_label)
+    image_element = sdata.transform_element_to_coordinate_system(image, coord_sys_image) if image is not None else None
 
     region_props = _get_region_props(
         label_element,
@@ -282,20 +311,18 @@ def quantify_morphology(
                         region_props[f"{col}_ch{channel}"] = [val[i] for val in region_props[col].values]
                     region_props.drop(columns=[col], inplace=True)
 
-    tables = sd.get_element_annotators(sdata, label)
-    if len(tables) > 1:
-        warnings.warn(
-            f"Multiple tables detected in `sdata` matching , {label}"
-            "using first table to store regionprops from sq.im.quantify_morphology",
-            stacklevel=1,
-        )
-    table_key = next(iter(tables))
+    region_props.rename(columns={"label": instance_key}, inplace=True)
+    region_props[region_key] = label
+    region_props.set_index([region_key, instance_key], inplace=True)
 
-    region_props = region_props.set_index("label", drop=True)
-    region_props.index.name = None
-    region_props.index = region_props.index.astype(str)
+    results = sdata[table_key].obs[[region_key, instance_key]]
+    results = results.join(region_props, how="left", on=[region_key, instance_key])
 
-    sdata[table_key].obsm["morphology"] = region_props
+    # region_props = region_props.set_index("label", drop=True)
+    # region_props.index.name = None
+    # region_props.index = region_props.index.astype(str)
+
+    sdata[table_key].obsm["morphology"] = results
 
     return region_props
 
