@@ -359,7 +359,7 @@ class FeatureMixin:
             y = coord.slice[0].start + (y_slc.stop - y_slc.start) * y
             x = coord.slice[1].start + (x_slc.stop - x_slc.start) * x
 
-            return np.c_[x, y]  # type: ignore[no-any-return]
+            return np.c_[x, y]
 
         label_layer = self._get_layer(label_layer)
         library_id = self._get_library_id(library_id)
