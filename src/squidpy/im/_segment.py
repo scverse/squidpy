@@ -103,7 +103,12 @@ class SegmentationModel(ABC):
         return SegmentationModel._postcondition(img)
 
     @segment.register(da.Array)
-    def _(self, img: da.Array, chunks: str | int | tuple[int, ...] | None = None, **kwargs: Any) -> NDArrayA:
+    def _(
+        self,
+        img: da.Array,
+        chunks: str | int | tuple[int, ...] | None = None,
+        **kwargs: Any,
+    ) -> NDArrayA:
         img = SegmentationModel._precondition(img)
         if chunks is not None:
             img = img.rechunk(chunks)
