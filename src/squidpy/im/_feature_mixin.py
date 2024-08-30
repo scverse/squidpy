@@ -352,8 +352,8 @@ class FeatureMixin:
             y_slc, x_slc = coord.to_image_coordinates(padding).slice
 
             # relative coordinates
-            y = (y - np.min(y)) / (np.max(y) - np.min(y))
-            x = (x - np.min(x)) / (np.max(x) - np.min(x))
+            y = (y - np.min(y)) / (np.max(y) - np.min(y))  # type:ignore[operator]
+            x = (x - np.min(x)) / (np.max(x) - np.min(x))  # type:ignore[operator]
 
             # coordinates in the uncropped image
             y = coord.slice[0].start + (y_slc.stop - y_slc.start) * y
