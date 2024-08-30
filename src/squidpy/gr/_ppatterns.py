@@ -53,7 +53,7 @@ def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: str | int | Sequence[str] | Sequence[int] | None = None,
-    mode: Literal["moran", "geary"] = SpatialAutocorr.MORAN.s,  # type: ignore[assignment]
+    mode: SpatialAutocorr | Literal["moran", "geary"] = "moran",
     transformation: bool = True,
     n_perms: int | None = None,
     two_tailed: bool = False,
@@ -164,22 +164,20 @@ def spatial_autocorr(
         if layer not in adata.obsm:
             raise KeyError(f"Key `{layer!r}` not found in `adata.obsm`.")
         if ixs is None:
-            ixs = np.arange(adata.obsm[layer].shape[1])  # type: ignore[assignment]
+            ixs = list(np.arange(adata.obsm[layer].shape[1]))
         ixs = list(np.ravel([ixs]))
         return adata.obsm[layer][:, ixs].T, ixs
 
     if attr == "X":
-        vals, index = extract_X(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_X(adata, genes)  # type: ignore
     elif attr == "obs":
-        vals, index = extract_obs(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_obs(adata, genes)  # type: ignore
     elif attr == "obsm":
-        vals, index = extract_obsm(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_obsm(adata, genes)  # type: ignore
     else:
         raise NotImplementedError(f"Extracting from `adata.{attr}` is not yet implemented.")
 
-    mode = SpatialAutocorr(mode)  # type: ignore[assignment]
-    if TYPE_CHECKING:
-        assert isinstance(mode, SpatialAutocorr)
+    mode = SpatialAutocorr(mode)
     params = {"mode": mode.s, "transformation": transformation, "two_tailed": two_tailed}
 
     if mode == SpatialAutocorr.MORAN:
@@ -199,7 +197,7 @@ def spatial_autocorr(
     if transformation:  # row-normalize
         normalize(g, norm="l1", axis=1, copy=False)
 
-    score = params["func"](g, vals)
+    score = params["func"](g, vals)  # type: ignore
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
@@ -425,10 +423,10 @@ def co_occurrence(
     n_splits = max(min(n_splits, n_obs), 1)
 
     # split array and labels
-    spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))  # type: ignore[arg-type]
-    labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))  # type: ignore[arg-type]
+    spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))
+    labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))
     # create idx array including unique combinations and self-comparison
-    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))  # type: ignore[arg-type]
+    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))
     idx_splits = list(zip(x, y))
 
     n_jobs = _get_n_cores(n_jobs)

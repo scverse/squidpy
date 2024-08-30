@@ -37,13 +37,9 @@ except ImportError:
         return wrapper
 
 
-try:
-    from numpy.typing import NDArray
+from numpy.typing import NDArray
 
-    NDArrayA = NDArray[Any]
-except (ImportError, TypeError):
-    NDArray = np.ndarray  # type: ignore[misc]
-    NDArrayA = np.ndarray  # type: ignore[misc]
+NDArrayA = NDArray[Any]
 
 
 class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]

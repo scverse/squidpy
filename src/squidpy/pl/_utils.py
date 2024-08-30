@@ -206,11 +206,10 @@ def _min_max_norm(vec: spmatrix | NDArrayA) -> NDArrayA:
     if vec.ndim != 1:
         raise ValueError(f"Expected `1` dimension, found `{vec.ndim}`.")
 
-    maxx, minn = np.nanmax(vec), np.nanmin(vec)
+    maxx: float = np.nanmax(vec)
+    minn: float = np.nanmin(vec)
 
-    return (  # type: ignore[no-any-return]
-        np.ones_like(vec) if np.isclose(minn, maxx) else ((vec - minn) / (maxx - minn))
-    )
+    return np.ones_like(vec) if np.isclose(minn, maxx) else ((vec - minn) / (maxx - minn))
 
 
 def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vector_name_t]:
