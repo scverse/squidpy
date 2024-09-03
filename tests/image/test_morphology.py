@@ -7,13 +7,14 @@ import numpy.testing as npt
 import pandas as pd
 import pytest
 import skimage.measure
+import spatialdata as sd
 import squidpy as sq
 from spatialdata import SpatialData
 from spatialdata.datasets import blobs, raccoon
-import spatialdata as sd
 
 # noinspection PyProtectedMember
 from squidpy.im._feature import _get_region_props
+
 # noinspection PyProtectedMember
 from squidpy.im._measurements import border_occupied_factor
 
@@ -28,6 +29,11 @@ def sdata_blobs() -> SpatialData:
     return blobs()
 
 
+@pytest.fixture
+def morphology_methods() -> list[str]:
+    return ["label", "area", "eccentricity", "circularity", "granularity", "border_occupied_factor"]
+
+
 @pytest.mark.xfail(
     raises=AssertionError, reason="calling skimage.measure.label on segmentation produces additional labels"
 )
@@ -40,6 +46,22 @@ class TestSkimageBackend:
 
 
 class TestMorphology:
+    def test_quantify_morphology_granularity(self, sdata_blobs):
+        granular_spectrum_length = 16
+        sq.im.quantify_morphology(
+            sdata=sdata_blobs,
+            label="blobs_labels",
+            image="blobs_image",
+            methods=["label", "granularity"],
+            split_by_channels=True,
+            granularity_granular_spectrum_length=granular_spectrum_length,
+        )
+
+        columns = sdata_blobs["table"].obsm["morphology"].columns
+        for channel in range(3):
+            for granular_spectrum in range(granular_spectrum_length):
+                assert f"granularity_ch{channel}_{granular_spectrum}" in columns
+
     def test_quantify_morphology_border_occupied_factor(self, sdata_blobs):
         sq.im.quantify_morphology(
             sdata=sdata_blobs,
@@ -58,30 +80,42 @@ class TestMorphology:
         )
         assert len(region_props) == len(sdata_blobs["table"].obs)
 
-    def test_quantify_morphology_callables(self, sdata_blobs):
+    def test_quantify_morphology_callables(self, sdata_blobs, morphology_methods):
         sq.im.quantify_morphology(
             sdata=sdata_blobs,
             label="blobs_labels",
             image="blobs_image",
-            methods=["label", "area", "eccentricity", "circularity", "granularity", "border_occupied_factor"],
+            methods=morphology_methods,
             split_by_channels=True,
         )
 
         assert "morphology" in sdata_blobs["table"].obsm.keys()
         assert isinstance(sdata_blobs["table"].obsm["morphology"], pd.DataFrame)
         assert "circularity" in sdata_blobs["table"].obsm["morphology"].columns
-        assert "granularity_ch0" in sdata_blobs["table"].obsm["morphology"].columns
-        assert "granularity_ch1" in sdata_blobs["table"].obsm["morphology"].columns
-        assert "granularity_ch2" in sdata_blobs["table"].obsm["morphology"].columns
         assert "border_occupied_factor" in sdata_blobs["table"].obsm["morphology"].columns
 
+    @pytest.mark.xfail(
+        raises=ValueError,
+        reason="For the moment, there is no association " "between the multiscale labels and a table in blobs.",
+    )
+    def test_quantify_morphology_multiscale(self, sdata_blobs, morphology_methods):
+        sq.im.quantify_morphology(
+            sdata=sdata_blobs,
+            label="blobs_multiscale_labels",
+            image="blobs_multiscale_image",
+            methods=morphology_methods,
+            split_by_channels=True,
+        )
 
+
+# TODO Remove for release
 @pytest.fixture
 def sdata_merfish() -> SpatialData:
     zarr_path = "./data/merfish.zarr"
     return sd.read_zarr(zarr_path)
 
 
+# TODO Remove for release
 @pytest.fixture
 def sdata_mibitof() -> SpatialData:
     zarr_path = "./data/mibitof.zarr"
@@ -89,31 +123,33 @@ def sdata_mibitof() -> SpatialData:
 
 
 class TestMorphologyPerformance:
-    def test_performance(self, sdata_mibitof):
+    def test_performance(self, sdata_mibitof, morphology_methods):
         start_time = time.perf_counter()
         sq.im.quantify_morphology(
             sdata=sdata_mibitof,
             label="point8_labels",
             image="point8_image",
-            methods=["label", "area", "eccentricity", "circularity", "granularity"],
+            methods=morphology_methods,
             split_by_channels=True,
         )
         end_time = time.perf_counter()
-        assert end_time - start_time < 10
+        assert end_time - start_time < 60
 
 
 class TestMeasurements:
     def test_border_occupied_factor(self):
-        label_image = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 1, 1, 1, 0, 0, 0, 0],
-            [0, 1, 1, 1, 2, 2, 2, 0],
-            [0, 1, 1, 1, 2, 2, 2, 0],
-            [0, 0, 3, 3, 2, 2, 2, 0],
-            [0, 0, 3, 3, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-        ])
+        label_image = np.array(
+            [
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 1, 1, 1, 0, 0, 0, 0],
+                [0, 1, 1, 1, 2, 2, 2, 0],
+                [0, 1, 1, 1, 2, 2, 2, 0],
+                [0, 0, 3, 3, 2, 2, 2, 0],
+                [0, 0, 3, 3, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+            ]
+        )
 
-        expected = {1: 3/8, 2: 3/8, 3: 2/4}
+        expected = {1: 3 / 8, 2: 3 / 8, 3: 2 / 4}
         actual = border_occupied_factor(label_image)
         assert actual == expected

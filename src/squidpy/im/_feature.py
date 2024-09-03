@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import typing
 import warnings
 from collections.abc import Generator, Mapping, Sequence
 from types import MappingProxyType
@@ -19,8 +20,8 @@ from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import _save_data
-from squidpy.im._container import ImageContainer
 from squidpy.im import _measurements
+from squidpy.im._container import ImageContainer
 
 __all__ = ["calculate_image_features", "quantify_morphology"]
 
@@ -30,9 +31,7 @@ RegionPropsCallableType = Callable[
     [IntegerNDArrayType, FloatNDArrayType], Union[Union[int, float, list[Union[int, float]]]]
 ]
 
-RegionPropsImageCallableType = Callable[
-    [IntegerNDArrayType, FloatNDArrayType], dict[str, Union[int, float]]
-]
+RegionPropsImageCallableType = Callable[[IntegerNDArrayType, FloatNDArrayType], dict[str, Union[int, float]]]
 
 
 def circularity(regionmask: IntegerNDArrayType) -> float:
@@ -71,9 +70,8 @@ def _get_region_props(
 
     image_extra_methods = [
         _measurements.border_occupied_factor  # <--- Add additional measurements here that calculate on the entire label image
-    ] # type: list[RegionPropsImageCallableType]
+    ]  # type: list[RegionPropsImageCallableType]
     image_extra_methods = {method.__name__: method for method in image_extra_methods}
-
 
     # can't use regionprops_table because it only returns int
     regions = regionprops(
@@ -260,19 +258,11 @@ def quantify_morphology(
         if element is not None and element not in sdata:
             raise KeyError(f"Key `{element}` not found in `sdata`.")
 
-    table_key = kwargs.get("table_key", None)
-    if table_key is None:
-        tables = sd.get_element_annotators(sdata, label)
-        if len(tables) > 1:
-            raise ValueError(
-                f"Multiple tables detected in `sdata` for {label}, "
-                f"please specify a specific table with the `table_key` parameter"
-            )
-        table_key = next(iter(tables))
+    table_key = _get_table_key(sdata, label, kwargs)
 
     region_key = sdata[table_key].uns["spatialdata_attrs"]["region_key"]
     if not np.any(sdata[table_key].obs[region_key] == label):
-        raise ValueError(f"Label {label} not found in region key ({region_key}) column of sdata table `{table_key}`")
+        raise ValueError(f"Label '{label}' not found in region key ({region_key}) column of sdata table '{table_key}'")
 
     instance_key = sdata[table_key].uns["spatialdata_attrs"]["instance_key"]
 
@@ -304,12 +294,32 @@ def quantify_morphology(
         channels = image_element.c.values
         for col in region_props.columns:
             # did the method return a list of values?
-            if isinstance(region_props[col].values[0], (list, tuple, np.ndarray)):
+            if isinstance(region_props[col].values[0], (list, tuple)):
                 # are all lists of the length of the channel list?
                 if all(len(val) == len(channels) for val in region_props[col].values):
                     for i, channel in enumerate(channels):
                         region_props[f"{col}_ch{channel}"] = [val[i] for val in region_props[col].values]
                     region_props.drop(columns=[col], inplace=True)
+            if isinstance(region_props[col].values[0], np.ndarray):
+                shape = region_props[col].values[0].shape
+
+                if not all(val.shape == shape for val in region_props[col].values):
+                    raise ValueError(
+                        f"The results of the morphology method {col} have different shapes, " f"this cannot be handled"
+                    )
+                if not shape[1] == len(channels):
+                    raise ValueError(
+                        f"Number of channels {len(channels)} do not match "
+                        f"the shape of the returned numpy arrays {shape} of the morphology method {col}. "
+                        f"It is expected that shape[1] should be equal to number of channels."
+                    )
+
+                for channel_idx, channel in enumerate(channels):
+                    for prop_idx in range(shape[0]):
+                        region_props[f"{col}_ch{channel_idx}_{prop_idx}"] = [
+                            val[prop_idx, channel_idx] for val in region_props[col].values
+                        ]
+                region_props.drop(columns=[col], inplace=True)
 
     region_props.rename(columns={"label": instance_key}, inplace=True)
     region_props[region_key] = label
@@ -325,6 +335,24 @@ def quantify_morphology(
     sdata[table_key].obsm["morphology"] = results
 
     return region_props
+
+
+def _get_table_key(sdata: sd.SpatialData, label: str, kwargs: dict[str, typing.Any]) -> str:
+    table_key = kwargs.get("table_key", None)
+    if table_key is None:
+        tables = sd.get_element_annotators(sdata, label)
+        if len(tables) > 1:
+            raise ValueError(
+                f"Multiple tables detected in `sdata` for {label}, "
+                f"please specify a specific table with the `table_key` parameter"
+            )
+        if len(tables) == 0:
+            raise ValueError(
+                f"No tables automatically detected in `sdata` for {label}, "
+                f"please specify a specific table with the `table_key` parameter"
+            )
+        table_key = next(iter(tables))
+    return table_key
 
 
 def _calculate_image_features_helper(
