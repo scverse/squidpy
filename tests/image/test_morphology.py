@@ -8,9 +8,10 @@ import pandas as pd
 import pytest
 import skimage.measure
 import spatialdata as sd
-import squidpy as sq
 from spatialdata import SpatialData
 from spatialdata.datasets import blobs, raccoon
+
+import squidpy as sq
 
 # noinspection PyProtectedMember
 from squidpy.im._feature import _get_region_props
