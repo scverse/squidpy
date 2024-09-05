@@ -221,21 +221,16 @@ def calculate_image_features(
 
 def quantify_morphology(
     sdata: SpatialData,
-    label: str | None = None,
-    image: str | None = None,
+    label: str,
+    image: str,
     methods: list[str | Callable] | None = None,
-    split_by_channels: bool = False,
+    split_by_channels: bool = True,
     **kwargs: Any,
 ) -> pd.DataFrame | None:
-    if label is None and image is None:
-        raise ValueError("Either `label` or `image` must be provided.")
-
-    if image is not None and label is None:
-        raise ValueError("If `image` is provided, a `label` with matching segmentation borders must be provided.")
-
     if methods is None:
         # default case but without mutable argument as default value
-        methods = ["label", "area", "eccentricity", "perimeter", "sphericity"]
+        # noinspection PyProtectedMember
+        methods = _measurements._all_regionprops_names()
     elif isinstance(methods, (str, Callable)):
         methods = [methods]
 
@@ -246,7 +241,7 @@ def quantify_morphology(
         raise ValueError("All elements in `methods` must be strings or callables.")
 
     if "label" not in methods:
-        methods = ["label"].extend(methods)
+        methods.append("label")
 
     extra_methods = []
     for method in methods:
@@ -293,33 +288,74 @@ def quantify_morphology(
     if split_by_channels:
         channels = image_element.c.values
         for col in region_props.columns:
+            if isinstance(region_props[col].values[0], (int, float, np.integer, np.floating)):
+                continue  # ignore single value returns
+
+            is_processed = False
+
             # did the method return a list of values?
             if isinstance(region_props[col].values[0], (list, tuple)):
                 # are all lists of the length of the channel list?
-                if all(len(val) == len(channels) for val in region_props[col].values):
+                length = len(region_props[col].values[0])
+                if not all(len(val) == length for val in region_props[col].values):
+                    raise ValueError(
+                        f"The results of the morphology method {col} have different lengths, this cannot be handled"
+                    )
+
+                if length == len(channels):
                     for i, channel in enumerate(channels):
                         region_props[f"{col}_ch{channel}"] = [val[i] for val in region_props[col].values]
-                    region_props.drop(columns=[col], inplace=True)
+                    is_processed = True
+
+                if length != len(channels):
+                    for prop_idx in range(length):
+                        region_props[f"{col}_{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
+                    is_processed = True
+
             if isinstance(region_props[col].values[0], np.ndarray):
                 shape = region_props[col].values[0].shape
 
                 if not all(val.shape == shape for val in region_props[col].values):
                     raise ValueError(
-                        f"The results of the morphology method {col} have different shapes, " f"this cannot be handled"
-                    )
-                if not shape[1] == len(channels):
-                    raise ValueError(
-                        f"Number of channels {len(channels)} do not match "
-                        f"the shape of the returned numpy arrays {shape} of the morphology method {col}. "
-                        f"It is expected that shape[1] should be equal to number of channels."
+                        f"The results of the morphology method {col} have different shapes, this cannot be handled"
                     )
 
-                for channel_idx, channel in enumerate(channels):
+                # Handle cases like centroids which return coordinates for each region
+                if len(shape) == 1 and shape[0] != len(channels):
                     for prop_idx in range(shape[0]):
-                        region_props[f"{col}_ch{channel_idx}_{prop_idx}"] = [
-                            val[prop_idx, channel_idx] for val in region_props[col].values
-                        ]
+                        region_props[f"{col}_{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
+                    is_processed = True
+
+                # Handle cases like intensity which return one value per channel for each region
+                if len(shape) == 1 and shape[0] == len(channels):
+                    for prop_idx in range(shape[0]):
+                        region_props[f"{col}_ch{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
+                    is_processed = True
+
+                # Handle cases like granularity which return many values for each channel for each region
+                if len(shape) == 2:
+                    if not shape[1] == len(channels):
+                        raise ValueError(
+                            f"Number of channels {len(channels)} do not match "
+                            f"the shape of the returned numpy arrays {shape} of the morphology method {col}. "
+                            f"It is expected that shape[1] should be equal to number of channels."
+                        )
+
+                    for channel_idx, channel in enumerate(channels):
+                        for prop_idx in range(shape[0]):
+                            region_props[f"{col}_ch{channel_idx}_{prop_idx}"] = [
+                                val[prop_idx, channel_idx] for val in region_props[col].values
+                            ]
+
+                    is_processed = True
+            if is_processed:
                 region_props.drop(columns=[col], inplace=True)
+            else:
+                raise NotImplementedError(
+                    f"Result of morphology method '{col}' cannot be interpreted, "
+                    f"as its dtype ({type(region_props[col].values[0])} and shape "
+                    f"does not conform to the expected shapes and dtypes."
+                )
 
     region_props.rename(columns={"label": instance_key}, inplace=True)
     region_props[region_key] = label

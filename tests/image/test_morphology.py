@@ -12,6 +12,7 @@ from spatialdata import SpatialData
 from spatialdata.datasets import blobs, raccoon
 
 import squidpy as sq
+from squidpy.im import _measurements
 
 # noinspection PyProtectedMember
 from squidpy.im._feature import _get_region_props
@@ -94,6 +95,19 @@ class TestMorphology:
         assert isinstance(sdata_blobs["table"].obsm["morphology"], pd.DataFrame)
         assert "circularity" in sdata_blobs["table"].obsm["morphology"].columns
         assert "border_occupied_factor" in sdata_blobs["table"].obsm["morphology"].columns
+
+    def test_quantify_morphology_all(self, sdata_blobs):
+        sq.im.quantify_morphology(
+            sdata=sdata_blobs,
+            label="blobs_labels",
+            image="blobs_image",
+            split_by_channels=True,
+        )
+
+        for name in _measurements._all_regionprops_names():
+            assert any([column.startswith(name) for column in sdata_blobs["table"].obsm["morphology"].columns])
+        # for column in sdata_blobs["table"].obsm["morphology"].columns:
+        #     assert any(column.startswith(name) for name in _measurements._all_regionprops_names())
 
     @pytest.mark.xfail(
         raises=ValueError,

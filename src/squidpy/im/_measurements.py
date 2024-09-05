@@ -6,6 +6,40 @@ import scipy.ndimage
 import skimage.morphology
 
 
+def _all_regionprops_names() -> list[str]:
+    names = [
+        "area",
+        "area_bbox",
+        "area_convex",
+        "area_filled",
+        "axis_major_length",
+        "axis_minor_length",
+        "centroid",  # TODO might drop centroids
+        "centroid_local",
+        "centroid_weighted_local",
+        "eccentricity",
+        "equivalent_diameter_area",
+        "euler_number",
+        "extent",
+        "feret_diameter_max",
+        # "inertia_tensor",
+        "inertia_tensor_eigvals",
+        "intensity_max",
+        "intensity_min",
+        "intensity_mean",
+        "intensity_std",
+        # "moments",  # TODO evaluate if more moments necessary
+        "moments_hu",
+        # "moments_normalized",
+        "num_pixels",
+        "orientation",
+        "perimeter",
+        "perimeter_crofton",
+        "solidity",
+    ]
+    return names
+
+
 def border_occupied_factor(mask: numpy.ndarray, *args, **kwargs) -> dict[int, float]:
     """
     Calculates the percentage of border pixels that are in a 4-connected neighborhood of another label
@@ -88,7 +122,6 @@ if __name__ == "__main__":
     assert len(actual) == len(np.unique(label_image)) - 1
     # for idx, actual_value in enumerate(actual):
     #     assert actual_value == expected[idx]
-
 
 # Copied from https://github.com/afermg/cp_measurements/blob/main/src/cp_measure/minimal/measuregranularity.py
 
