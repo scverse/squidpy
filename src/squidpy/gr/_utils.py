@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
+from anndata._core.views import ArrayView, SparseCSCMatrixView, SparseCSRMatrixView
 from anndata.utils import make_index_unique
 from pandas import CategoricalDtype
 from pandas.api.types import infer_dtype
@@ -233,7 +233,7 @@ def _extract_expression(
     # handle views
     if isinstance(res, ArrayView):
         return np.asarray(res), genes
-    if isinstance(res, (SparseCSRView, SparseCSCView)):
+    if isinstance(res, (SparseCSRMatrixView, SparseCSCMatrixView)):
         mro = type(res).mro()
         if csr_matrix in mro:
             return csr_matrix(res), genes
