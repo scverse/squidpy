@@ -36,6 +36,8 @@ def _all_regionprops_names() -> list[str]:
         "perimeter",
         "perimeter_crofton",
         "solidity",
+        "border_occupied_factor",
+        "granularity",
     ]
     return names
 
