@@ -9,7 +9,8 @@ from squidpy.pl._graph import (
     nhood_enrichment,
     ripley,
 )
-from squidpy.pl._interactive import Interactive  # type: ignore[attr-defined]
+
+# from squidpy.pl._interactive import Interactive  # type: ignore[attr-defined] # deprecated
 from squidpy.pl._ligrec import ligrec
 from squidpy.pl._spatial import spatial_scatter, spatial_segment
 from squidpy.pl._utils import extract

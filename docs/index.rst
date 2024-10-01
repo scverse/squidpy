@@ -14,6 +14,17 @@ tissue images if available.
     :align: center
     :target: https://doi.org/10.1038/s41592-021-01358-2
 
+.. warning::
+    🚨🚨🚨 **Warning!** 🚨🚨🚨
+
+    The original napari-plugin of Squidpy has been moved to `napari-spatialdata <https://github.com/scverse/napari-spatialdata>`_.
+
+    All the functionalities previously available are also implemented in the new plugin, which also has many additional new features.
+
+    You can find a rich set of `documentation and examples <https://spatialdata.scverse.org/projects/napari/en/latest/index.html>`_, and we suggest starting with this `tutorial <https://spatialdata.scverse.org/projects/napari/en/latest/notebooks/spatialdata.html>`_.
+
+    If you are new to SpatialData, we invite you to take a look at the documentation `here <https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks.html>`_.
+
 Manuscript
 ----------
 Please see our manuscript :cite:`palla:22` in **Nature Methods** to learn more.

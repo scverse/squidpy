@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from anndata import AnnData
+
 from squidpy._constants._constants import RipleyStat
 from squidpy.gr import ripley
 

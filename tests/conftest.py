@@ -18,12 +18,13 @@ import pandas as pd
 import pytest
 import scanpy as sc
 import spatialdata as sd
-import squidpy as sq
 from anndata import AnnData, OldFormatWarning
 from geopandas import GeoDataFrame
 from matplotlib.testing.compare import compare_images
 from scipy.sparse import csr_matrix
 from shapely import LineString, Point, Polygon, distance
+
+import squidpy as sq
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_neighbors
 from squidpy.im._container import ImageContainer

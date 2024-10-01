@@ -20,7 +20,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                python: [3.9, "3.10", "3.11"]
+                python: ["3.10", "3.11", "3.12"]
                 os: [ubuntu-latest]
                 include:
                     - python: "3.12"
@@ -92,7 +92,8 @@ jobs:
                   tox -vv
 
             - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v3.1.1
+              uses: codecov/codecov-action@v4
               with:
                   name: coverage
                   verbose: true
+                  token: ${{ secrets.CODECOV_TOKEN }} # required
