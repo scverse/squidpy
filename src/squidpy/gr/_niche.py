@@ -27,6 +27,8 @@ def calculate_niche(
     library_key: str | None = None,
     table_key: str | None = None,
     abs_nhood: bool = False,
+    n_neighbors: int = 15,
+    resolutions: int | list[float] | None = None,
     adj_subsets: list[int] | None = None,
     aggregation: str = "mean",
     spatial_key: str = "spatial",
@@ -57,10 +59,16 @@ def calculate_niche(
         Key in `spatialdata.tables` to specify an 'anndata' table. Only necessary if 'sdata' is passed.
     spatial_key
         Location of spatial coordinates in `adata.obsm`.
+    n_neighbors
+        Number of neighbors to use for 'scanpy.pp.neighbors' before clustering using leiden algorithm.
+        Required if flavor == 'neighborhood' or flavor == 'UTAG'.
+    resolutions
+        List of resolutions to use for leiden clustering.
+        Required if flavor == 'neighborhood' or flavor == 'UTAG'.
     %(copy)s
     """
 
-    # check whether anndata or spatialdata is provided and if spatialdata, check whether a table with the provided groups is present
+    # check whether anndata or spatialdata is provided and if spatialdata, check whether a table with the provided groups is present if no table is specified
     is_sdata = False
     if isinstance(adata, SpatialData):
         is_sdata = True
@@ -111,13 +119,19 @@ def calculate_niche(
 
     elif flavor == "utag":
         new_feature_matrix = _utag(adata, normalize_adj=True, spatial_connectivity_key=spatial_connectivities_key)
-        if copy:
-            return new_feature_matrix
+        adata_utag = ad.AnnData(X=new_feature_matrix)
+        sc.tl.pca(adata_utag)
+        sc.pp.neighbors(adata_utag, n_neighbors=n_neighbors, use_rep="X_pca")
+
+        if resolutions is not None:
+            if not isinstance(resolutions, list):
+                resolutions = [resolutions]
         else:
-            if is_sdata:
-                sdata.tables[f"{flavor}_niche"] = new_feature_matrix
-            else:
-                adata.layers["utag"] = new_feature_matrix
+            raise ValueError("Please provide resolutions for leiden clustering.")
+
+        for res in resolutions:
+            sc.tl.leiden(adata_utag, resolution=res, key_added=f"utag_res={res}")
+            adata.obs[f"utag_res={res}"] = adata_utag.obs[f"utag_res={res}"].values
 
     elif flavor == "cellcharter":
         adj_matrix_subsets = []
@@ -201,7 +215,7 @@ def _calculate_neighborhood_profile(
 
 
 def _utag(adata: AnnData, normalize_adj: bool, spatial_connectivity_key: str) -> AnnData:
-    """Performas inner product of adjacency matrix and feature matrix,
+    """Performs inner product of adjacency matrix and feature matrix,
     such that each observation inherits features from its immediate neighbors as described in UTAG paper.
 
     Parameters
