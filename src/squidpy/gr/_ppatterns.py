@@ -164,7 +164,7 @@ def spatial_autocorr(
         if layer not in adata.obsm:
             raise KeyError(f"Key `{layer!r}` not found in `adata.obsm`.")
         if ixs is None:
-            ixs = np.arange(adata.obsm[layer].shape[1])  # type: ignore[assignment]
+            ixs = np.arange(adata.obsm[layer].shape[1])
         ixs = list(np.ravel([ixs]))
         return adata.obsm[layer][:, ixs].T, ixs
 
@@ -180,7 +180,11 @@ def spatial_autocorr(
     mode = SpatialAutocorr(mode)  # type: ignore[assignment]
     if TYPE_CHECKING:
         assert isinstance(mode, SpatialAutocorr)
-    params = {"mode": mode.s, "transformation": transformation, "two_tailed": two_tailed}
+    params = {
+        "mode": mode.s,
+        "transformation": transformation,
+        "two_tailed": two_tailed,
+    }
 
     if mode == SpatialAutocorr.MORAN:
         params["func"] = _morans_i
@@ -425,10 +429,10 @@ def co_occurrence(
     n_splits = max(min(n_splits, n_obs), 1)
 
     # split array and labels
-    spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))  # type: ignore[arg-type]
-    labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))  # type: ignore[arg-type]
+    spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))
+    labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))
     # create idx array including unique combinations and self-comparison
-    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))  # type: ignore[arg-type]
+    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))
     idx_splits = list(zip(x, y))
 
     n_jobs = _get_n_cores(n_jobs)
@@ -457,7 +461,11 @@ def co_occurrence(
         return out, interval
 
     _save_data(
-        adata, attr="uns", key=Key.uns.co_occurrence(cluster_key), data={"occ": out, "interval": interval}, time=start
+        adata,
+        attr="uns",
+        key=Key.uns.co_occurrence(cluster_key),
+        data={"occ": out, "interval": interval},
+        time=start,
     )
 
 
@@ -570,7 +578,7 @@ def _g_moments(w: spmatrix | NDArrayA) -> tuple[float, float, float]:
 
     # s1
     t = w.transpose() + w
-    t2 = t.multiply(t)  # type: ignore[union-attr]
+    t2 = t.multiply(t)
     s1 = t2.sum() / 2.0
 
     # s2

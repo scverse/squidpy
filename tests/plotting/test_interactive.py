@@ -10,8 +10,8 @@ from anndata import AnnData
 from matplotlib.testing.compare import compare_images
 from scanpy import settings as s
 from scipy.sparse import issparse
-from squidpy.im import ImageContainer
 
+from squidpy.im import ImageContainer
 from tests.conftest import ACTUAL, DPI, EXPECTED, TOL, PlotTester, PlotTesterMeta
 
 

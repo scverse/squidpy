@@ -37,20 +37,18 @@ except ImportError:
         return wrapper
 
 
-try:
-    from numpy.typing import NDArray
+from numpy.typing import NDArray
 
-    NDArrayA = NDArray[Any]
-except (ImportError, TypeError):
-    NDArray = np.ndarray  # type: ignore[misc]
-    NDArrayA = np.ndarray  # type: ignore[misc]
+NDArrayA = NDArray[Any]
 
 
 class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
     """Signalling queue."""
 
 
-def _unique_order_preserving(iterable: Iterable[Hashable]) -> tuple[list[Hashable], set[Hashable]]:
+def _unique_order_preserving(
+    iterable: Iterable[Hashable],
+) -> tuple[list[Hashable], set[Hashable]]:
     """Remove items from an iterable while preserving the order."""
     seen: set[Hashable] = set()
     seen_add = seen.add
@@ -124,7 +122,12 @@ def parallelize(
     else:
         tqdm = None
 
-    def runner(iterable: Iterable[Any], *args: Any, queue: SigQueue | None = None, **kwargs: Any) -> list[Any]:
+    def runner(
+        iterable: Iterable[Any],
+        *args: Any,
+        queue: SigQueue | None = None,
+        **kwargs: Any,
+    ) -> list[Any]:
         result: list[Any] = []
 
         for it in iterable:
@@ -200,7 +203,10 @@ def parallelize(
         col_len = len(collection)
         step = int(np.ceil(len(collection) / n_split))
         collections = list(
-            filter(len, (collection[i * step : (i + 1) * step] for i in range(int(np.ceil(col_len / step)))))
+            filter(
+                len,
+                (collection[i * step : (i + 1) * step] for i in range(int(np.ceil(col_len / step)))),
+            )
         )
 
     if use_runner:
@@ -289,7 +295,9 @@ def deprecated(reason: str) -> Any:
             def new_func1(*args: Any, **kwargs: Any) -> Any:
                 warnings.simplefilter("always", DeprecationWarning)
                 warnings.warn(
-                    fmt1.format(name=func1.__name__, reason=reason), category=DeprecationWarning, stacklevel=2
+                    fmt1.format(name=func1.__name__, reason=reason),
+                    category=DeprecationWarning,
+                    stacklevel=2,
                 )
                 warnings.simplefilter("default", DeprecationWarning)
                 return func1(*args, **kwargs)
@@ -317,7 +325,11 @@ def deprecated(reason: str) -> Any:
         @functools.wraps(func2)
         def new_func2(*args: Any, **kwargs: Any) -> Any:
             warnings.simplefilter("always", DeprecationWarning)
-            warnings.warn(fmt2.format(name=func2.__name__), category=DeprecationWarning, stacklevel=2)
+            warnings.warn(
+                fmt2.format(name=func2.__name__),
+                category=DeprecationWarning,
+                stacklevel=2,
+            )
             warnings.simplefilter("default", DeprecationWarning)
             return func2(*args, **kwargs)
 
