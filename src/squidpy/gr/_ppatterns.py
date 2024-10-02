@@ -455,7 +455,11 @@ def co_occurrence(
         return out, interval
 
     _save_data(
-        adata, attr="uns", key=Key.uns.co_occurrence(cluster_key), data={"occ": out, "interval": interval}, time=start
+        adata,
+        attr="uns",
+        key=Key.uns.co_occurrence(cluster_key),
+        data={"occ": out, "interval": interval},
+        time=start,
     )
 
 
@@ -568,7 +572,7 @@ def _g_moments(w: spmatrix | NDArrayA) -> tuple[float, float, float]:
 
     # s1
     t = w.transpose() + w
-    t2 = t.multiply(t)  # type: ignore[union-attr]
+    t2 = t.multiply(t)
     s1 = t2.sum() / 2.0
 
     # s2

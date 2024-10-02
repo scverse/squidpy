@@ -18,8 +18,9 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
     "Typing :: Typed",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Environment :: Console",
     "Framework :: Jupyter",
     "Intended Audience :: Science/Research",
@@ -76,10 +77,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-interactive = [
-    "napari[pyqt5]==0.4.15",
-    "pydantic==1.10.13"
-]
 dev = [
     "pre-commit>=3.0.0",
     "tox>=4.0.0",
@@ -214,10 +211,11 @@ required-imports = ["from __future__ import annotations"]
 "*/__init__.py" = ["D104", "F401"]
 "tests/*"= ["D"]
 "docs/*"= ["D","B"]
-"squidpy/pl/_ligrec.py"= ["D","B"]
-"squidpy/_constants/_pkg_constants.py"= ["D101","D102","D106"]
-"squidpy/_constants/_constants.py"= ["D101"]
-"squidpy/pl/_interactive/_widgets.py"= ["D"]
+"src/squidpy/pl/_ligrec.py"= ["D","B"]
+"src/squidpy/_constants/_pkg_constants.py"= ["D101","D102","D106"]
+"src/squidpy/_constants/_constants.py"= ["D101"]
+"src/squidpy/pl/_interactive/_widgets.py"= ["D"]
+"src/squidpy/pl/_interactive/interactive.py"= ["F","E"]
 ".scripts/ci/download_data.py"= ["D","B"]
 # "squidpy/*.py"= ["RST303"]
 

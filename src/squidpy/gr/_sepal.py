@@ -186,7 +186,6 @@ def _score_helper(
             conc = vals[:, i].toarray().flatten()  # Safe to call toarray()
         else:
             conc = vals[:, i].copy()  # vals is assumed to be a NumPy array here
-
         time_iter = _diffusion(conc, fun, n_iter, sat, sat_idx, unsat, unsat_idx, dt=dt, thresh=thresh)
         score.append(dt * time_iter)
 
@@ -289,7 +288,7 @@ def _entropy(
 ) -> float:
     """Get entropy of an array."""
     xnz = xx[xx > 0]
-    xs = np.sum(xnz)
+    xs: np.float64 = np.sum(xnz)
     xn = xnz / xs
     xl = np.log(xn)
     return float((-xl * xn).sum())
