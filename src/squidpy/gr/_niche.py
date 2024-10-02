@@ -73,6 +73,7 @@ def calculate_niche(
     subset_groups
         Groups (e.g. cell type categories) to ignore when calculating the neighborhood profile.
         Optional if flavor == 'neighborhood'.
+        Optional if flavor == 'neighborhood'.
     min_niche_size
         Minimum required size of a niche. Niches with fewer cells will be labeled as 'not_a_niche'.
         Optional if flavor == 'neighborhood'.
@@ -152,8 +153,6 @@ def calculate_niche(
                 resolutions = [resolutions]
         else:
             raise ValueError("Please provide resolutions for leiden clustering.")
-
-        # adata_neighborhood.index = subset_index
 
         for res in resolutions:
             sc.tl.leiden(adata_neighborhood, resolution=res, key_added=f"neighborhood_niche_res={res}")
@@ -238,6 +237,7 @@ def _calculate_neighborhood_profile(
     if subset_groups:
         adjacency_matrix = adata.obsp[spatial_connectivities_key].tocsc()
         obs_mask = ~adata.obs[groups].isin(subset_groups)
+        adata = adata[obs_mask]
         adata = adata[obs_mask]
 
         # Update adjacency matrix such that it only contains connections to filtered observations
