@@ -72,7 +72,7 @@ def calculate_niche(
         Required if flavor == 'neighborhood' or flavor == 'UTAG'.
     subset_groups
         Groups (e.g. cell type categories) to ignore when calculating the neighborhood profile.
-        Optional if flavor == 'neighborhood'. 
+        Optional if flavor == 'neighborhood'.
     min_niche_size
         Minimum required size of a niche. Niches with fewer cells will be labeled as 'not_a_niche'.
         Optional if flavor == 'neighborhood'.
@@ -126,12 +126,12 @@ def calculate_niche(
 
         if scale:
             sc.pp.scale(adata_neighborhood, zero_center=True)
-        
+
         if mask is not None:
             if subset_groups is not None:
                 mask = mask[mask.index.isin(adata_neighborhood.obs.index)]
             adata_neighborhood = adata_neighborhood[mask]
-        
+
         sc.pp.neighbors(adata_neighborhood, n_neighbors=n_neighbors, use_rep="X")
 
         if resolutions is not None:
@@ -139,18 +139,21 @@ def calculate_niche(
                 resolutions = [resolutions]
         else:
             raise ValueError("Please provide resolutions for leiden clustering.")
-        
-        #adata_neighborhood.index = subset_index
+
+        # adata_neighborhood.index = subset_index
 
         for res in resolutions:
             sc.tl.leiden(adata_neighborhood, resolution=res, key_added=f"neighborhood_niche_res={res}")
             print(adata_neighborhood.obs)
-            adata.obs[f"neighborhood_niche_res={res}"] = adata.obs.index.map(adata_neighborhood.obs[f"neighborhood_niche_res={res}"]).fillna('not_a_niche')
+            adata.obs[f"neighborhood_niche_res={res}"] = adata.obs.index.map(
+                adata_neighborhood.obs[f"neighborhood_niche_res={res}"]
+            ).fillna("not_a_niche")
             if min_niche_size is not None:
                 counts_by_niche = adata.obs[f"neighborhood_niche_res={res}"].value_counts()
                 to_filter = counts_by_niche[counts_by_niche < min_niche_size].index
-                adata.obs[f"neighborhood_niche_res={res}"] = adata.obs[f"neighborhood_niche_res={res}"].apply(lambda x: 'not_a_niche' if x in to_filter else x)
-
+                adata.obs[f"neighborhood_niche_res={res}"] = adata.obs[f"neighborhood_niche_res={res}"].apply(
+                    lambda x: "not_a_niche" if x in to_filter else x
+                )
 
     elif flavor == "utag":
         new_feature_matrix = _utag(adata, normalize_adj=True, spatial_connectivity_key=spatial_connectivities_key)
@@ -220,16 +223,15 @@ def _calculate_neighborhood_profile(
     subset_groups: list[str] | None,
     spatial_connectivities_key: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    
     if subset_groups:
         adjacency_matrix = adata.obsp[spatial_connectivities_key].tocsc()
         obs_mask = ~adata.obs[groups].isin(subset_groups)
-        adata = adata[obs_mask] 
+        adata = adata[obs_mask]
 
         # Update adjacency matrix such that it only contains connections to filtered observations
         adjacency_matrix = adjacency_matrix[obs_mask, :][:, obs_mask]
         adata.obsp[spatial_connectivities_key] = adjacency_matrix.tocsr()
-    
+
     # get obs x neighbor matrix from sparse matrix
     matrix = adata.obsp[spatial_connectivities_key].tocoo()
     nonzero_indices = np.split(matrix.col, matrix.row.searchsorted(np.arange(1, matrix.shape[0])))
@@ -258,7 +260,6 @@ def _calculate_neighborhood_profile(
     rel_freq = abs_freq / k
 
     return pd.DataFrame(rel_freq, index=adata.obs.index), pd.DataFrame(abs_freq, index=adata.obs.index)
-
 
 
 def _utag(adata: AnnData, normalize_adj: bool, spatial_connectivity_key: str) -> AnnData:
