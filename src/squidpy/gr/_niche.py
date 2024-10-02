@@ -26,9 +26,13 @@ def calculate_niche(
     flavor: str = "neighborhood",
     library_key: str | None = None,
     table_key: str | None = None,
-    abs_nhood: bool = False,
+    mask: pd.core.series.Series = None,
     n_neighbors: int = 15,
     resolutions: int | list[float] | None = None,
+    subset_groups: list[str] | None = None,
+    min_niche_size: int | None = None,
+    scale: bool = True,
+    abs_nhood: bool = False,
     adj_subsets: list[int] | None = None,
     aggregation: str = "mean",
     spatial_key: str = "spatial",
@@ -57,14 +61,26 @@ def calculate_niche(
         Restrict niche calculation to a subset of the data.
     table_key
         Key in `spatialdata.tables` to specify an 'anndata' table. Only necessary if 'sdata' is passed.
-    spatial_key
-        Location of spatial coordinates in `adata.obsm`.
+    mask
+        Boolean array to filter cells which won't get assigned to a niche.
+        Note that if you want to exclude these cells during neighborhood calculation already, you should subset your AnnData table before running 'sq.gr.spatial_neigbors'.
     n_neighbors
         Number of neighbors to use for 'scanpy.pp.neighbors' before clustering using leiden algorithm.
         Required if flavor == 'neighborhood' or flavor == 'UTAG'.
     resolutions
         List of resolutions to use for leiden clustering.
         Required if flavor == 'neighborhood' or flavor == 'UTAG'.
+    subset_groups
+        Groups (e.g. cell type categories) to ignore when calculating the neighborhood profile.
+        Optional if flavor == 'neighborhood'. 
+    min_niche_size
+        Minimum required size of a niche. Niches with fewer cells will be labeled as 'not_a_niche'.
+        Optional if flavor == 'neighborhood'.
+    scale
+        If 'True', compute z-scores of neighborhood profiles.
+        Optional if flavor == 'neighborhood'.
+    spatial_key
+        Location of spatial coordinates in `adata.obsm`.
     %(copy)s
     """
 
@@ -101,21 +117,40 @@ def calculate_niche(
 
     if flavor == "neighborhood":
         rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
-            adata, groups, spatial_connectivities_key
+            adata, groups, subset_groups, spatial_connectivities_key
         )
         if not abs_nhood:
-            nhood_profile = rel_nhood_profile
+            adata_neighborhood = ad.AnnData(X=rel_nhood_profile)
         else:
-            nhood_profile = abs_nhood_profile
-        df = pd.DataFrame(nhood_profile, index=adata.obs.index)
-        nhood_table = _df_to_adata(df)
-        if copy:
-            return df
+            adata_neighborhood = ad.AnnData(X=abs_nhood_profile)
+
+        if scale:
+            sc.pp.scale(adata_neighborhood, zero_center=True)
+        
+        if mask is not None:
+            if subset_groups is not None:
+                mask = mask[mask.index.isin(adata_neighborhood.obs.index)]
+            adata_neighborhood = adata_neighborhood[mask]
+        
+        sc.pp.neighbors(adata_neighborhood, n_neighbors=n_neighbors, use_rep="X")
+
+        if resolutions is not None:
+            if not isinstance(resolutions, list):
+                resolutions = [resolutions]
         else:
-            if is_sdata:
-                sdata.tables[f"{flavor}_niche"] = nhood_table
-            else:
-                adata.obsm["neighborhood_profile"] = df
+            raise ValueError("Please provide resolutions for leiden clustering.")
+        
+        #adata_neighborhood.index = subset_index
+
+        for res in resolutions:
+            sc.tl.leiden(adata_neighborhood, resolution=res, key_added=f"neighborhood_niche_res={res}")
+            print(adata_neighborhood.obs)
+            adata.obs[f"neighborhood_niche_res={res}"] = adata.obs.index.map(adata_neighborhood.obs[f"neighborhood_niche_res={res}"]).fillna('not_a_niche')
+            if min_niche_size is not None:
+                counts_by_niche = adata.obs[f"neighborhood_niche_res={res}"].value_counts()
+                to_filter = counts_by_niche[counts_by_niche < min_niche_size].index
+                adata.obs[f"neighborhood_niche_res={res}"] = adata.obs[f"neighborhood_niche_res={res}"].apply(lambda x: 'not_a_niche' if x in to_filter else x)
+
 
     elif flavor == "utag":
         new_feature_matrix = _utag(adata, normalize_adj=True, spatial_connectivity_key=spatial_connectivities_key)
@@ -180,10 +215,21 @@ def calculate_niche(
 
 
 def _calculate_neighborhood_profile(
-    adata: AnnData | SpatialData,
+    adata: AnnData,
     groups: str,
+    subset_groups: list[str] | None,
     spatial_connectivities_key: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    
+    if subset_groups:
+        adjacency_matrix = adata.obsp[spatial_connectivities_key].tocsc()
+        obs_mask = ~adata.obs[groups].isin(subset_groups)
+        adata = adata[obs_mask] 
+
+        # Update adjacency matrix such that it only contains connections to filtered observations
+        adjacency_matrix = adjacency_matrix[obs_mask, :][:, obs_mask]
+        adata.obsp[spatial_connectivities_key] = adjacency_matrix.tocsr()
+    
     # get obs x neighbor matrix from sparse matrix
     matrix = adata.obsp[spatial_connectivities_key].tocoo()
     nonzero_indices = np.split(matrix.col, matrix.row.searchsorted(np.arange(1, matrix.shape[0])))
@@ -203,7 +249,7 @@ def _calculate_neighborhood_profile(
     cat_indices = {category: index for index, category in enumerate(unique_categories)}
     cat_values = np.vectorize(cat_indices.get)(cat_by_id)
 
-    # For each obs calculate absolute frequency for all (not just k) categories, given the subset of categories present in obs x k matrix
+    # get obx x category matrix where each column is the absolute amount of a category in the neighborhood
     m, k = cat_by_id.shape
     abs_freq = np.zeros((m, len(unique_categories)), dtype=int)
     np.add.at(abs_freq, (np.arange(m)[:, None], cat_values), 1)
@@ -211,7 +257,8 @@ def _calculate_neighborhood_profile(
     # normalize by n_neighbors to get relative frequency of each category
     rel_freq = abs_freq / k
 
-    return rel_freq, abs_freq
+    return pd.DataFrame(rel_freq, index=adata.obs.index), pd.DataFrame(abs_freq, index=adata.obs.index)
+
 
 
 def _utag(adata: AnnData, normalize_adj: bool, spatial_connectivity_key: str) -> AnnData:
