@@ -1,3 +1,12 @@
+"""
+interactive.py
+
+WARNING: This module is deprecated and will be removed in a future version.
+Please use `https://github.com/scverse/napari-spatialdata` instead.
+"""
+
+raise ImportError("The squidpy napari plugin is deprecated, please use https://github.com/scverse/napari-spatialdata")
+
 from __future__ import annotations
 
 from typing import (
