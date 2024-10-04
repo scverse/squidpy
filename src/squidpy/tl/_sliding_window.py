@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from scanpy import logging as logg
+from spatialdata import SpatialData
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
@@ -18,7 +19,7 @@ __all__ = ["sliding_window"]
 
 @d.dedent
 def sliding_window(
-    adata: AnnData,
+    adata: AnnData | SpatialData,
     library_key: str | None = None,
     window_size: int = 2500,
     overlap: int = 0,
@@ -26,34 +27,36 @@ def sliding_window(
     sliding_window_key: str = "sliding_window",
     spatial_key: str = "spatial",
     copy: bool = False,
-) -> AnnData:
+) -> pd.DataFrame | None:
     """
     Divide a tissue slice into regulary shaped spatially contiguous regions (windows).
 
     Parameters
-        ----------
-        adata: AnnData
-            Annotated data matrix.
-        window_size: int
-            Size of the sliding window.
-        library_key: str
-            Only cells with the same library_key in `adata.obs` are assigned to the same window
-        coord_columns: Tuple[str, str]
-            Tuple of column names in `adata.obs` that specify the coordinates (x, y), e.i. ('globalX', 'globalY')
-        sliding_window_key: str
-            Base name for sliding window columns.
-        overlap: int
-            Overlap size between consecutive windows.
-        %(spatial_key)s
-        copy: bool
-            Whether to return a copy of the AnnData object.
+    ----------
+    %(adata)s
+    window_size: int
+        Size of the sliding window.
+    %(library_key)s
+    coord_columns: Tuple[str, str]
+        Tuple of column names in `adata.obs` that specify the coordinates (x, y), e.i. ('globalX', 'globalY')
+    sliding_window_key: str
+        Base name for sliding window columns.
+    overlap: int
+        Overlap size between consecutive windows. (0 = no overlap)
+    %(spatial_key)s
+    copy: bool
+        Whether to return a copy of the AnnData object.
 
-        Returns
-        -------
-        If ``copy = True``, returns the design_matrix
-        Otherwise, stores design_matrix in .obs
+    Returns
+    -------
+    If ``copy = True``, returns the sliding window annotation(s) as pandas dataframe
+    Otherwise, stores the sliding window annotation(s) in .obs.
     """
-    start = logg.info(f"Creating {sliding_window_key}")
+    assert window_size > 0  # window size must be non-negative and bigger than 0
+    assert overlap >= 0
+
+    if isinstance(adata, SpatialData):
+        adata = adata.table
 
     x, y = coord_columns
 
@@ -108,11 +111,9 @@ def sliding_window(
                 ).astype("category")
 
     if copy:
-        logg.info("Finish", time=start)
         return sliding_window_df
-    else:
-        for col_name, col_data in sliding_window_df.items():
-            _save_data(adata, attr="obs", key=col_name, data=col_data, time=start)
+    for col_name, col_data in sliding_window_df.items():
+        _save_data(adata, attr="obs", key=col_name, data=col_data)
 
 
 def _sliding_window_stats(adata: AnnData, sliding_window_key: str = "sliding_window") -> None:
@@ -125,5 +126,5 @@ def _sliding_window_stats(adata: AnnData, sliding_window_key: str = "sliding_win
     """
     cells_per_window = adata.obs.groupby(sliding_window_key).size()
     print(
-        f"Cells per window stats: Max: {cells_per_window.max()}, MIN: {cells_per_window.min()}, mean: {cells_per_window.mean()}, nr. of windows: {len(cells_per_window)}"
+        f"Cells per window stats: MAX: {cells_per_window.max()}, MIN: {cells_per_window.min()}, mean: {cells_per_window.mean()}, nr. of windows: {len(cells_per_window)}"
     )
