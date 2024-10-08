@@ -45,7 +45,7 @@ def circularity(regionmask: IntegerNDArrayType) -> float:
     if perim == 0:
         return 0
     area = np.sum(regionmask)
-    return float((4 * np.pi * area) / (perim**2))
+    return float((4 * np.pi * area) / (perim ** 2))
 
 
 def _get_region_props(
@@ -63,13 +63,16 @@ def _get_region_props(
     np_rgb_image = image_element.values.transpose(1, 2, 0)  # (c, y, x) -> (y, x, c)
 
     # Add custom extra methods here
+    # Add additional measurements here that handle individual regions
     rp_extra_methods = [
         circularity,
-        _measurements.granularity,  # <--- Add additional measurements here that handle individual regions
+        _measurements.granularity,
     ] + extra_methods
 
+    # Add additional measurements here that calculate on the entire label image
     image_extra_methods = [
-        _measurements.border_occupied_factor  # <--- Add additional measurements here that calculate on the entire label image
+        _measurements.border_occupied_factor,
+        _measurements.zernike,
     ]  # type: list[RegionPropsImageCallableType]
     image_extra_methods = {method.__name__: method for method in image_extra_methods}
 
@@ -227,27 +230,7 @@ def quantify_morphology(
     split_by_channels: bool = True,
     **kwargs: Any,
 ) -> pd.DataFrame | None:
-    if methods is None:
-        # default case but without mutable argument as default value
-        # noinspection PyProtectedMember
-        methods = _measurements._all_regionprops_names()
-    elif isinstance(methods, (str, Callable)):
-        methods = [methods]
-
-    if not isinstance(methods, list):
-        raise ValueError("Argument `methods` must be a list of strings.")
-
-    if not all(isinstance(method, (str, Callable)) for method in methods):
-        raise ValueError("All elements in `methods` must be strings or callables.")
-
-    if "label" not in methods:
-        methods.append("label")
-
-    extra_methods = []
-    for method in methods:
-        if callable(method):
-            extra_methods.append(method)
-            methods.remove(method)
+    extra_methods, methods = _validate_methods(methods)
 
     for element in [label, image]:
         if element is not None and element not in sdata:
@@ -261,22 +244,7 @@ def quantify_morphology(
 
     instance_key = sdata[table_key].uns["spatialdata_attrs"]["instance_key"]
 
-    label_transform = sdata[label].transform
-    image_transform = sdata[image].transform
-
-    for transform in [label_transform, image_transform]:
-        if len(transform) != 1:
-            raise ValueError("More than one coordinate system detected")
-
-    coord_sys_label = next(iter(label_transform))
-    coord_sys_image = next(iter(image_transform))
-
-    if coord_sys_label != coord_sys_image:
-        raise ValueError(f"Coordinate system do not match! label: {coord_sys_label}, image: {coord_sys_image}")
-
-    # from here on we should be certain that we have a label
-    label_element = sdata.transform_element_to_coordinate_system(label, coord_sys_label)
-    image_element = sdata.transform_element_to_coordinate_system(image, coord_sys_image) if image is not None else None
+    image_element, label_element = _apply_transformations(image, label, sdata)
 
     region_props = _get_region_props(
         label_element,
@@ -295,59 +263,10 @@ def quantify_morphology(
 
             # did the method return a list of values?
             if isinstance(region_props[col].values[0], (list, tuple)):
-                # are all lists of the length of the channel list?
-                length = len(region_props[col].values[0])
-                if not all(len(val) == length for val in region_props[col].values):
-                    raise ValueError(
-                        f"The results of the morphology method {col} have different lengths, this cannot be handled"
-                    )
-
-                if length == len(channels):
-                    for i, channel in enumerate(channels):
-                        region_props[f"{col}_ch{channel}"] = [val[i] for val in region_props[col].values]
-                    is_processed = True
-
-                if length != len(channels):
-                    for prop_idx in range(length):
-                        region_props[f"{col}_{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
-                    is_processed = True
+                is_processed = _extract_from_list_like(channels, col, is_processed, region_props)
 
             if isinstance(region_props[col].values[0], np.ndarray):
-                shape = region_props[col].values[0].shape
-
-                if not all(val.shape == shape for val in region_props[col].values):
-                    raise ValueError(
-                        f"The results of the morphology method {col} have different shapes, this cannot be handled"
-                    )
-
-                # Handle cases like centroids which return coordinates for each region
-                if len(shape) == 1 and shape[0] != len(channels):
-                    for prop_idx in range(shape[0]):
-                        region_props[f"{col}_{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
-                    is_processed = True
-
-                # Handle cases like intensity which return one value per channel for each region
-                if len(shape) == 1 and shape[0] == len(channels):
-                    for prop_idx in range(shape[0]):
-                        region_props[f"{col}_ch{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
-                    is_processed = True
-
-                # Handle cases like granularity which return many values for each channel for each region
-                if len(shape) == 2:
-                    if not shape[1] == len(channels):
-                        raise ValueError(
-                            f"Number of channels {len(channels)} do not match "
-                            f"the shape of the returned numpy arrays {shape} of the morphology method {col}. "
-                            f"It is expected that shape[1] should be equal to number of channels."
-                        )
-
-                    for channel_idx, channel in enumerate(channels):
-                        for prop_idx in range(shape[0]):
-                            region_props[f"{col}_ch{channel_idx}_{prop_idx}"] = [
-                                val[prop_idx, channel_idx] for val in region_props[col].values
-                            ]
-
-                    is_processed = True
+                is_processed = _extract_from_ndarray(channels, col, is_processed, region_props)
             if is_processed:
                 region_props.drop(columns=[col], inplace=True)
             else:
@@ -371,6 +290,96 @@ def quantify_morphology(
     sdata[table_key].obsm["morphology"] = results
 
     return region_props
+
+
+def _apply_transformations(image, label, sdata):
+    label_transform = sdata[label].transform
+    image_transform = sdata[image].transform
+    for transform in [label_transform, image_transform]:
+        if len(transform) != 1:
+            raise ValueError("More than one coordinate system detected")
+    coord_sys_label = next(iter(label_transform))
+    coord_sys_image = next(iter(image_transform))
+    if coord_sys_label != coord_sys_image:
+        raise ValueError(f"Coordinate system do not match! label: {coord_sys_label}, image: {coord_sys_image}")
+    # from here on we should be certain that we have a label
+    label_element = sdata.transform_element_to_coordinate_system(label, coord_sys_label)
+    image_element = sdata.transform_element_to_coordinate_system(image, coord_sys_image) if image is not None else None
+    return image_element, label_element
+
+
+def _validate_methods(methods):
+    if methods is None:
+        # default case but without mutable argument as default value
+        # noinspection PyProtectedMember
+        methods = _measurements._all_regionprops_names()
+    elif isinstance(methods, (str, Callable)):
+        methods = [methods]
+    if not isinstance(methods, list):
+        raise ValueError("Argument `methods` must be a list of strings.")
+    if not all(isinstance(method, (str, Callable)) for method in methods):
+        raise ValueError("All elements in `methods` must be strings or callables.")
+    if "label" not in methods:
+        methods.append("label")
+    extra_methods = []
+    for method in methods:
+        if callable(method):
+            extra_methods.append(method)
+            methods.remove(method)
+    return extra_methods, methods
+
+
+def _extract_from_ndarray(channels, col, is_processed, region_props):
+    shape = region_props[col].values[0].shape
+    if not all(val.shape == shape for val in region_props[col].values):
+        raise ValueError(
+            f"The results of the morphology method {col} have different shapes, this cannot be handled"
+        )
+    # Handle cases like centroids which return coordinates for each region
+    if len(shape) == 1 and shape[0] != len(channels):
+        for prop_idx in range(shape[0]):
+            region_props[f"{col}_{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
+        is_processed = True
+    # Handle cases like intensity which return one value per channel for each region
+    if len(shape) == 1 and shape[0] == len(channels):
+        for prop_idx in range(shape[0]):
+            region_props[f"{col}_ch{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
+        is_processed = True
+    # Handle cases like granularity which return many values for each channel for each region
+    if len(shape) == 2:
+        if not shape[1] == len(channels):
+            raise ValueError(
+                f"Number of channels {len(channels)} do not match "
+                f"the shape of the returned numpy arrays {shape} of the morphology method {col}. "
+                f"It is expected that shape[1] should be equal to number of channels."
+            )
+
+        for channel_idx, channel in enumerate(channels):
+            for prop_idx in range(shape[0]):
+                region_props[f"{col}_ch{channel_idx}_{prop_idx}"] = [
+                    val[prop_idx, channel_idx] for val in region_props[col].values
+                ]
+
+        is_processed = True
+    return is_processed
+
+
+def _extract_from_list_like(channels, col, is_processed, region_props):
+    # are all lists of the length of the channel list?
+    length = len(region_props[col].values[0])
+    if not all(len(val) == length for val in region_props[col].values):
+        raise ValueError(
+            f"The results of the morphology method {col} have different lengths, this cannot be handled"
+        )
+    if length == len(channels):
+        for i, channel in enumerate(channels):
+            region_props[f"{col}_ch{channel}"] = [val[i] for val in region_props[col].values]
+        is_processed = True
+    if length != len(channels):
+        for prop_idx in range(length):
+            region_props[f"{col}_{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
+        is_processed = True
+    return is_processed
 
 
 def _get_table_key(sdata: sd.SpatialData, label: str, kwargs: dict[str, typing.Any]) -> str:

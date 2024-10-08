@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import typing
 
 import numpy as np
 import numpy.testing as npt
@@ -15,7 +16,7 @@ import squidpy as sq
 from squidpy.im import _measurements
 
 # noinspection PyProtectedMember
-from squidpy.im._feature import _get_region_props
+from squidpy.im._feature import _get_region_props, _get_table_key
 
 # noinspection PyProtectedMember
 from squidpy.im._measurements import border_occupied_factor
@@ -47,7 +48,79 @@ class TestSkimageBackend:
         )
 
 
+def dummy_callable():
+    pass
+
+
+@pytest.fixture
+def malformed_morphology_methods() -> dict[str, typing.Any]:
+    methods = {
+        "wrong_container": [
+            ("label", "area"),
+            "label,area"
+        ],
+        "wrong_method_type": [
+            ["test", dummy_callable, 42.42],
+            ["test", dummy_callable, 42]
+        ]
+    }
+    return methods
+
+
 class TestMorphology:
+    # @pytest.mark.parametrize(
+    #     "sdata,methods",
+    #     pytest.param(
+    #         sdata_blobs, ("label", "area"), id="tuple"
+    #     ),
+    #     pytest.param(
+    #         sdata_blobs, "label,area", id="string"
+    #     ),
+    # )
+    def test_sanity_method_list(self, sdata_blobs, malformed_morphology_methods):
+        with pytest.raises(ValueError, match="Argument `methods` must be a list of strings."):
+            for methods in malformed_morphology_methods["wrong_container"]:
+                sq.im.quantify_morphology(
+                    sdata=sdata_blobs,
+                    label="blobs_labels",
+                    image="blobs_image",
+                    methods=methods
+                )
+
+    # @pytest.mark.parametrize(
+    #     "sdata,methods",
+    #     pytest.param(sdata_blobs, ["test", dummy_callable, 42.42], id="float"),
+    #     pytest.param(sdata_blobs, ["test", dummy_callable, 42], id="int"),
+    # )
+    def test_sanity_method_list_types(self, sdata_blobs, malformed_morphology_methods):
+        with pytest.raises(ValueError, match="All elements in `methods` must be strings or callables."):
+            for methods in malformed_morphology_methods["wrong_method_type"]:
+                sq.im.quantify_morphology(
+                    sdata=sdata_blobs,
+                    label="blobs_labels",
+                    image="blobs_image",
+                    methods=methods
+                )
+
+    def test_get_table_key_no_annotators(self, sdata_blobs):
+        label = "blobs_multiscale_labels"
+        with pytest.raises(ValueError, match=f"No tables automatically detected in `sdata` for {label}"):
+            _get_table_key(
+                sdata=sdata_blobs,
+                label=label,
+                kwargs={}
+            )
+
+    def test_get_table_key_multiple_annotators(self, sdata_blobs):
+        sdata_blobs.tables["multi_table"] = sd.deepcopy(sdata_blobs["table"])
+        label = "blobs_labels"
+        with pytest.raises(ValueError, match=f"Multiple tables detected in `sdata` for {label}"):
+            _get_table_key(
+                sdata=sdata_blobs,
+                label=label,
+                kwargs={}
+            )
+
     def test_quantify_morphology_granularity(self, sdata_blobs):
         granular_spectrum_length = 16
         sq.im.quantify_morphology(
@@ -56,7 +129,6 @@ class TestMorphology:
             image="blobs_image",
             methods=["label", "granularity"],
             split_by_channels=True,
-            granularity_granular_spectrum_length=granular_spectrum_length,
         )
 
         columns = sdata_blobs["table"].obsm["morphology"].columns
@@ -144,7 +216,7 @@ class TestMorphologyPerformance:
             sdata=sdata_mibitof,
             label="point8_labels",
             image="point8_image",
-            methods=morphology_methods,
+            methods=None,
             split_by_channels=True,
         )
         end_time = time.perf_counter()
