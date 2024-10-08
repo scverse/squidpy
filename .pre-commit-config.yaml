@@ -2,8 +2,8 @@ fail_fast: false
 default_language_version:
     python: python3
 default_stages:
-    - Nonepre-commitNone
-    - Nonepre-pushNone
+    - pre-commit
+    - pre-push
 minimum_pre_commit_version: 2.9.3
 repos:
     - repo: https://github.com/astral-sh/ruff-pre-commit
