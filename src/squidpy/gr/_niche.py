@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Iterator
+from typing import Any
 
 import anndata as ad
 import numpy as np
 import pandas as pd
 import scanpy as sc
+import scipy.sparse as sps
 from anndata import AnnData
-from scipy.sparse import csr_matrix, hstack
+from scipy.sparse import csr_matrix, hstack, issparse, spdiags
 from scipy.stats import ranksums
 from sklearn import metrics
 from sklearn.metrics import adjusted_rand_score, fowlkes_mallows_score, normalized_mutual_info_score
-from sklearn.preprocessing import normalize
+from sklearn.mixture import GaussianMixture
+from sklearn.preprocessing import StandardScaler, normalize
 from spatialdata import SpatialData
 
 from squidpy._utils import NDArrayA
@@ -33,8 +36,10 @@ def calculate_niche(
     min_niche_size: int | None = None,
     scale: bool = True,
     abs_nhood: bool = False,
-    adj_subsets: list[int] | None = None,
+    adj_subsets: int | list[int] | None = None,
     aggregation: str = "mean",
+    n_components: int = 3,
+    random_state: int = 42,
     spatial_key: str = "spatial",
     spatial_connectivities_key: str = "spatial_connectivities",
     spatial_distances_key: str = "spatial_distances",
@@ -53,9 +58,8 @@ def calculate_niche(
             - `{c.NEIGHBORHOOD.s!r}` - cluster the neighborhood profile.
             - `{c.SPOT.s!r}` - calculate niches using optimal transport.
             - `{c.BANKSY.s!r}`- use Banksy algorithm.
-            - `{c.CELLCHARTER.s!r}` - use cellcharter.
+            - `{c.CELLCHARTER.s!r}` - cluster adjacency matrix with Gaussian Mixture Model (GMM) using CellCharter's approach.
             - `{c.UTAG.s!r}` - use utag algorithm (matrix multiplication).
-            - `{c.ALL.s!r}` - apply all available methods and compare them using cluster validation scores.
     %(library_key)s
     subset
         Restrict niche calculation to a subset of the data.
@@ -89,6 +93,12 @@ def calculate_niche(
     aggregation
         How to aggregate count matrices. Either 'mean' or 'variance'.
         Required if flavor == 'cellcharter'.
+    n_components
+        Number of components to use for GMM.
+        Required if flavor == 'cellcharter'.
+    random_state
+        Random state to use for GMM.
+        Required if flavor == 'cellcharter'.
     spatial_key
         Location of spatial coordinates in `adata.obsm`.
     spatial_connectivities_key
@@ -99,11 +109,8 @@ def calculate_niche(
     """
 
     # check whether anndata or spatialdata is provided and if spatialdata, check whether a table with the provided groups is present if no table is specified
-    is_sdata = False
     if isinstance(adata, SpatialData):
-        is_sdata = True
         if table_key is not None:
-            sdata = adata
             adata = adata.tables[table_key].copy()
         else:
             if len(adata.tables) > 1:
@@ -183,49 +190,40 @@ def calculate_niche(
             adata.obs[f"utag_res={res}"] = adata_utag.obs[f"utag_res={res}"].values
 
     elif flavor == "cellcharter":
-        adj_matrix_subsets = []
-        if isinstance(adj_subsets, list):
-            for k in adj_subsets:
-                if k == 0:
-                    adj_matrix_subsets.append(adata.obsp[spatial_connectivities_key])
-                else:
-                    adj_matrix_subsets.append(
-                        _get_adj_matrix_subsets(
-                            adata.obsp[spatial_connectivities_key], adata.obsp[spatial_distances_key], k
-                        )
-                    )
-            if aggregation == "mean":
-                inner_products = [adj_subset.dot(adata.X) for adj_subset in adj_matrix_subsets]
-            elif aggregation == "variance":
-                inner_products = [
-                    _aggregate_var(matrix, adata.obsp[spatial_connectivities_key], adata) for matrix in inner_products
-                ]
+        adjacency_matrix = adata.obsp[spatial_connectivities_key]
+        if not isinstance(adj_subsets, list):
+            if adj_subsets is not None:
+                adj_subsets = list(range(adj_subsets + 1))
             else:
                 raise ValueError(
-                    f"Invalid aggregation method '{aggregation}'. Please choose either 'mean' or 'variance'."
+                    "flavor 'cellcharter' requires adj_subsets to not be None. Specify list of values or maximum value of neighbors to use."
                 )
-            concatenated_matrix = hstack(inner_products)
 
-            # create df from sparse matrix
-            arr = concatenated_matrix.toarray()
-            df = pd.DataFrame(arr, index=adata.obs.index)
-            col_names = []
-            for A_i in adj_subsets:
-                for var in adata.var_names:
-                    col_names.append(f"{var}_Adj_{A_i}")
-            df.columns = col_names
-
-            if copy:
-                return concatenated_matrix
+        aggregated_matrices = []
+        adj_hop = _setdiag(adjacency_matrix, 0)  # Remove self-loops, set diagonal to 0
+        adj_visited = _setdiag(adjacency_matrix.copy(), 1)  # Track visited neighbors
+        for k in adj_subsets:
+            if k == 0:
+                # If k == 0, we're using the original cell features (no neighbors)
+                aggregated_matrices.append(adata.X)
             else:
-                if is_sdata:
-                    sdata.tables[f"{flavor}_niche"] = ad.AnnData(concatenated_matrix)
-                else:
-                    adata.obsm[f"{flavor}_niche"] = df
-        else:
-            raise ValueError(
-                "Flavor 'cellcharter' requires list of neighbors to build adjacency matrices. Please provide a list of k_neighbors for 'adj_subsets'."
-            )
+                if k > 1:
+                    adj_hop, adj_visited = _hop(adj_hop, adjacency_matrix, adj_visited)
+
+                adj_hop_norm = _normalize(adj_hop)  # Normalize adjacency matrix for current hop
+
+                # Apply aggregation, default to "mean" unless specified otherwise
+                aggregated_matrix = _aggregate(adata, adj_hop_norm, aggregation)
+
+                # Collect the aggregated matrices
+                aggregated_matrices.append(aggregated_matrix)
+
+        concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
+        arr = concatenated_matrix.toarray()  # Densify the sparse matrix
+
+        niches = _get_GMM_clusters(arr, n_components, random_state)
+
+        adata.obs[f"{flavor}_niche"] = pd.Categorical(niches)
 
 
 def _calculate_neighborhood_profile(
@@ -293,28 +291,120 @@ def _utag(adata: AnnData, normalize_adj: bool, spatial_connectivity_key: str) ->
         return adjacency_matrix @ adata.X
 
 
-def _get_adj_matrix_subsets(connectivities: csr_matrix, distances: csr_matrix, k_neighbors: int) -> csr_matrix:
-    # Convert the distance matrix to a dense format
-    dist_dense = distances.todense()
+def _setdiag(adjacency_matrix: sps.spmatrix, value: int) -> sps.spmatrix:
+    if issparse(adjacency_matrix):
+        adjacency_matrix = adjacency_matrix.tolil()
+    adjacency_matrix.setdiag(value)
+    adjacency_matrix = adjacency_matrix.tocsr()
+    if value == 0:
+        adjacency_matrix.eliminate_zeros()
+    return adjacency_matrix
 
-    # Find the indices of the k closest neighbors for each row
-    closest_neighbors_indices = np.argsort(dist_dense, axis=1)[:, :k_neighbors]
 
-    # Initialize lists to collect data for the new sparse matrix
-    rows = []
-    cols = []
-    data = []
+def _hop(
+    adj_hop: sps.spmatrix, adj: sps.spmatrix, adj_visited: sps.spmatrix = None
+) -> tuple[sps.spmatrix, sps.spmatrix]:
+    adj_hop = adj_hop @ adj
 
-    # Iterate over each row to construct the new adjacency matrix
-    for row in range(dist_dense.shape[0]):
-        for col in closest_neighbors_indices[row].flat:
-            rows.append(row)
-            cols.append(col)
-            data.append(connectivities[row, col])
+    if adj_visited is not None:
+        adj_hop = adj_hop > adj_visited
+        adj_visited = adj_visited + adj_hop
 
-    # Create the new sparse matrix with the reduced neighbors
-    new_adj_matrix = csr_matrix((data, (rows, cols)), shape=connectivities.shape)
-    return new_adj_matrix
+    return adj_hop, adj_visited
+
+
+def _normalize(adj: sps.spmatrix) -> sps.spmatrix:
+    deg = np.array(np.sum(adj, axis=1)).squeeze()
+    with np.errstate(divide="ignore"):
+        deg_inv = 1 / deg
+    deg_inv[deg_inv == float("inf")] = 0
+
+    return spdiags(deg_inv, 0, len(deg_inv), len(deg_inv)) * adj
+
+
+def _aggregate(adata: AnnData, normalized_adjacency_matrix: sps.spmatrix, aggregation: str = "mean") -> Any:
+    if aggregation == "mean":
+        aggregated_matrix = normalized_adjacency_matrix @ adata.X
+    elif aggregation == "variance":
+        mean_matrix = normalized_adjacency_matrix @ adata.X
+        mean_squared_matrix = normalized_adjacency_matrix @ (adata.X * adata.X)
+        aggregated_matrix = mean_squared_matrix - mean_matrix * mean_matrix
+    else:
+        raise ValueError(f"Invalid aggregation method '{aggregation}'. Please choose either 'mean' or 'variance'.")
+
+    return aggregated_matrix
+
+
+def _get_GMM_clusters(A: np.ndarray[float, Any], n_components: int, random_state: int) -> Any:
+    """Returns niche labels generated by GMM clustering.
+    Compared to cellcharter this approach is simplified by using sklearn's GaussianMixture model without stability analysis."""
+
+    gmm = GaussianMixture(n_components=n_components, random_state=random_state, init_params="random_from_data")
+    gmm.fit(A)
+    labels = gmm.predict(A)
+
+    return labels
+    # scaler = StandardScaler()
+    # A = scaler.fit_transform(A)
+
+    # results = {}
+
+    # for k in range(k_min, k_max + 1):
+    #     fmi_k_minus_1 = []
+    #     fmi_k_plus_1 = []
+
+    #     previous_fmi_diff = np.inf
+
+    #     for r in range(R):
+    #         # Clustering with K-1, K, and K+1 clusters respectively
+    #         gmm_k_minus_1 = GaussianMixture(n_components=k-1, random_state=r, n_init=10, init_params="random_from_data").fit(A) if k > 1 else None
+    #         gmm_k = GaussianMixture(n_components=k, random_state=r, n_init=10, init_params="random_from_data").fit(A)
+    #         gmm_k_plus_1 = GaussianMixture(n_components=k+1, random_state=r, n_init=10, init_params="random_from_data").fit(A)
+
+    #         labels_k_minus_1 = gmm_k_minus_1.predict(A) if k > 1 else None
+    #         labels_k = gmm_k.predict(A)
+    #         labels_k_plus_1 = gmm_k_plus_1.predict(A)
+
+    #         # Calculate FMI between K-1 and K, and K and K+1
+    #         if k > 1:
+    #             fmi_k_minus_1.append(fowlkes_mallows_score(labels_k_minus_1, labels_k))
+    #         fmi_k_plus_1.append(fowlkes_mallows_score(labels_k, labels_k_plus_1))
+
+    #         # Compute mean FMIs
+    #         mean_fmi_k_minus_1 = np.mean(fmi_k_minus_1) if fmi_k_minus_1 else None
+    #         mean_fmi_k_plus_1 = np.mean(fmi_k_plus_1)
+
+    #         # Check convergence (mean average percentage error)
+    #         current_fmi_diff = abs(mean_fmi_k_plus_1 - (mean_fmi_k_minus_1 or 0))
+    #         if r > 0 and previous_fmi_diff - current_fmi_diff < tolerance:
+    #             print(f"Converged for K={k} after {r+1} runs.")
+    #             break
+
+    #         previous_fmi_diff = current_fmi_diff
+
+    #     # Store the results for this K
+    #     results[k] = {
+    #         "fmi_k_minus_1": mean_fmi_k_minus_1,
+    #         "fmi_k_plus_1": mean_fmi_k_plus_1,
+    #         "best_model": gmm_k
+    #     }
+
+    # # Now find the K with the most stable clustering (highest average FMI)
+    # optimal_k = None
+    # best_model = None
+    # best_stability = -np.inf
+
+    # for k in range(k_min, k_max + 1):
+    #     if k > 1:
+    #         avg_fmi = np.mean([results[k]["fmi_k_minus_1"], results[k]["fmi_k_plus_1"]])
+    #         if avg_fmi > best_stability:
+    #             best_stability = avg_fmi
+    #             optimal_k = k
+    #             best_model = results[k]["best_model"]
+
+    # k_labels = best_model.predict(A)
+
+    # return optimal_k, k_labels
 
 
 def _df_to_adata(df: pd.DataFrame) -> AnnData:
