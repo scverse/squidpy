@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import centrosome.zernike
 import numpy
 import numpy as np
 import scipy.ndimage
@@ -27,7 +28,7 @@ def _all_regionprops_names() -> list[str]:
         "intensity_max",
         "intensity_min",
         "intensity_mean",
-        "intensity_std",
+        # "intensity_std",  # TODO either bump version for skimage to >=0.23 for intensity_std to be included in regionprops or drop std
         # "moments",  # TODO evaluate if more moments necessary
         "moments_hu",
         # "moments_normalized",
@@ -38,6 +39,7 @@ def _all_regionprops_names() -> list[str]:
         "solidity",
         "border_occupied_factor",
         "granularity",
+        "zernike",
     ]
     return names
 
@@ -422,3 +424,31 @@ def granularity(
 
 def _handle_granularity_error(granular_spectrum_length: int):
     return [None for _ in range(granular_spectrum_length)]
+
+
+# Copied from https://github.com/afermg/cp_measure/blob/main/src/cp_measure/fast/measureobjectsizeshape.py
+def zernike(masks: numpy.ndarray, pixels: numpy.ndarray, zernike_numbers: int = 9) -> dict[int, numpy.ndarray]:
+    unique_indices = numpy.unique(masks)
+    unique_indices = unique_indices[unique_indices != 0]
+    res = centrosome.zernike.zernike(
+        zernike_indexes=centrosome.zernike.get_zernike_indexes(zernike_numbers + 1),
+        labels=masks,
+        indexes=unique_indices,
+    )
+    return {orig_idx: res[res_idx] for orig_idx, res_idx in zip(unique_indices, range(res.shape[0]))}
+
+    # #
+    # # Zernike features
+    # #
+    # unique_indices = numpy.unique(masks)
+    # unique_indices = unique_indices[unique_indices>0]
+    # indices = list(range(1,len(unique_indices) + 1))
+    # labels = masks
+    # zernike_numbers = centrosome.zernike.get_zernike_indexes(zernike_numbers + 1)
+    #
+    # zf_l = centrosome.zernike.zernike(zernike_numbers, labels, indices)
+    # results = {}
+    # for (n, m), z in zip(zernike_numbers, zf_l.transpose()):
+    #     results[f"Zernike_{n}_{m}"] = z
+
+    # return results
