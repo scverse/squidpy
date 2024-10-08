@@ -344,67 +344,6 @@ def _get_GMM_clusters(A: np.ndarray[float, Any], n_components: int, random_state
     labels = gmm.predict(A)
 
     return labels
-    # scaler = StandardScaler()
-    # A = scaler.fit_transform(A)
-
-    # results = {}
-
-    # for k in range(k_min, k_max + 1):
-    #     fmi_k_minus_1 = []
-    #     fmi_k_plus_1 = []
-
-    #     previous_fmi_diff = np.inf
-
-    #     for r in range(R):
-    #         # Clustering with K-1, K, and K+1 clusters respectively
-    #         gmm_k_minus_1 = GaussianMixture(n_components=k-1, random_state=r, n_init=10, init_params="random_from_data").fit(A) if k > 1 else None
-    #         gmm_k = GaussianMixture(n_components=k, random_state=r, n_init=10, init_params="random_from_data").fit(A)
-    #         gmm_k_plus_1 = GaussianMixture(n_components=k+1, random_state=r, n_init=10, init_params="random_from_data").fit(A)
-
-    #         labels_k_minus_1 = gmm_k_minus_1.predict(A) if k > 1 else None
-    #         labels_k = gmm_k.predict(A)
-    #         labels_k_plus_1 = gmm_k_plus_1.predict(A)
-
-    #         # Calculate FMI between K-1 and K, and K and K+1
-    #         if k > 1:
-    #             fmi_k_minus_1.append(fowlkes_mallows_score(labels_k_minus_1, labels_k))
-    #         fmi_k_plus_1.append(fowlkes_mallows_score(labels_k, labels_k_plus_1))
-
-    #         # Compute mean FMIs
-    #         mean_fmi_k_minus_1 = np.mean(fmi_k_minus_1) if fmi_k_minus_1 else None
-    #         mean_fmi_k_plus_1 = np.mean(fmi_k_plus_1)
-
-    #         # Check convergence (mean average percentage error)
-    #         current_fmi_diff = abs(mean_fmi_k_plus_1 - (mean_fmi_k_minus_1 or 0))
-    #         if r > 0 and previous_fmi_diff - current_fmi_diff < tolerance:
-    #             print(f"Converged for K={k} after {r+1} runs.")
-    #             break
-
-    #         previous_fmi_diff = current_fmi_diff
-
-    #     # Store the results for this K
-    #     results[k] = {
-    #         "fmi_k_minus_1": mean_fmi_k_minus_1,
-    #         "fmi_k_plus_1": mean_fmi_k_plus_1,
-    #         "best_model": gmm_k
-    #     }
-
-    # # Now find the K with the most stable clustering (highest average FMI)
-    # optimal_k = None
-    # best_model = None
-    # best_stability = -np.inf
-
-    # for k in range(k_min, k_max + 1):
-    #     if k > 1:
-    #         avg_fmi = np.mean([results[k]["fmi_k_minus_1"], results[k]["fmi_k_plus_1"]])
-    #         if avg_fmi > best_stability:
-    #             best_stability = avg_fmi
-    #             optimal_k = k
-    #             best_model = results[k]["best_model"]
-
-    # k_labels = best_model.predict(A)
-
-    # return optimal_k, k_labels
 
 
 def _df_to_adata(df: pd.DataFrame) -> AnnData:
