@@ -220,7 +220,7 @@ def spatial_autocorr(
     with np.errstate(divide="ignore"):
         pval_results = _p_value_calc(score, score_perms, g, params)
 
-    data_dict: dict[str, dict[str, Any]] = {params["stat"]: score, **pval_results}
+    data_dict: dict[str, Any] = {params["stat"]: score, **pval_results}
     df = pd.DataFrame(data_dict, index=index)
 
     if corr_method is not None:
