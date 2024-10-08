@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Literal, Dict
+from typing import TYPE_CHECKING, Any, Dict, Literal
 
 import numba.types as nt
 import numpy as np
@@ -219,7 +219,7 @@ def spatial_autocorr(
 
     with np.errstate(divide="ignore"):
         pval_results = _p_value_calc(score, score_perms, g, params)
-    
+
     data_dict: Dict[str, Dict[str, Any]] = {params["stat"]: score, **pval_results}
     df = pd.DataFrame(data_dict, index=index)
 
@@ -227,7 +227,7 @@ def spatial_autocorr(
         for pv in filter(lambda x: "pval" in x, df.columns):
             _, pvals_adj, _, _ = multipletests(df[pv].values, alpha=0.05, method=corr_method)
             df[f"{pv}_{corr_method}"] = pvals_adj
-    
+
     df.sort_values(by=params["stat"], ascending=params["ascending"], inplace=True)
 
     if copy:
