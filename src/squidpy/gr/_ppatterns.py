@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Dict
 
 import numba.types as nt
 import numpy as np
@@ -219,21 +219,24 @@ def spatial_autocorr(
 
     with np.errstate(divide="ignore"):
         pval_results = _p_value_calc(score, score_perms, g, params)
-
-    df = pd.DataFrame({params["stat"]: score, **pval_results}, index=index)
+    
+    data_dict: Dict[str, Dict[str, Any]] = {params["stat"]: score, **pval_results}
+    df = pd.DataFrame(data_dict, index=index)
 
     if corr_method is not None:
         for pv in filter(lambda x: "pval" in x, df.columns):
             _, pvals_adj, _, _ = multipletests(df[pv].values, alpha=0.05, method=corr_method)
             df[f"{pv}_{corr_method}"] = pvals_adj
-
+    
     df.sort_values(by=params["stat"], ascending=params["ascending"], inplace=True)
 
     if copy:
         logg.info("Finish", time=start)
         return df
 
-    _save_data(adata, attr="uns", key=params["mode"] + params["stat"], data=df, time=start)
+    mode_str = str(params["mode"])
+    stat_str = str(params["stat"])
+    _save_data(adata, attr="uns", key=mode_str + stat_str, data=df, time=start)
 
 
 def _score_helper(
