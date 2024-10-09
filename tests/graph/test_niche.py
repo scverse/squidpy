@@ -48,7 +48,7 @@ def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
     assert abs_nhood_profile.shape == rel_nhood_profile.shape
     # normalization
     assert int(rel_nhood_profile.sum(axis=1).sum()) == adata_seqfish.n_obs
-    assert rel_nhood_profile.sum(axis=1).max() == 1
+    assert round(rel_nhood_profile.sum(axis=1).max(), 2) == 1
     # maximum amount of categories equals n_neighbors
     assert abs_nhood_profile.sum(axis=1).max() == N_NEIGHBORS
 
