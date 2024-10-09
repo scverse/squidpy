@@ -35,7 +35,10 @@ def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
             assert len(niches[niches == label]) >= 100
 
     rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
-        adata_seqfish, groups="celltype_mapped_refined", spatial_connectivities_key=SPATIAL_CONNECTIVITIES_KEY
+        adata_seqfish,
+        groups="celltype_mapped_refined",
+        subset_groups=None,
+        spatial_connectivities_key=SPATIAL_CONNECTIVITIES_KEY,
     )
     # assert shape obs x groups
     assert rel_nhood_profile.shape == (
@@ -55,8 +58,8 @@ def test_utag(adata_seqfish: AnnData):
     spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
     calculate_niche(adata_seqfish, flavor="utag", n_neighbors=N_NEIGHBORS, resolutions=[0.1, 1.0])
 
-    niches = adata_seqfish.obs["utag_niche_res=1.0"]
-    niches_low_res = adata_seqfish.obs["utag_niche_res=0.1"]
+    niches = adata_seqfish.obs["utag_res=1.0"]
+    niches_low_res = adata_seqfish.obs["utag_res=0.1"]
 
     assert niches.isna().sum() == 0
     assert niches.nunique() > niches_low_res.nunique()
@@ -96,7 +99,7 @@ def test_cellcharter_approach(adata_seqfish: AnnData):
     adj_hop = _setdiag(adj, value=0)
     assert adj_hop.shape == adj.shape
     assert issparse(adj_hop)
-    assert isinstance(adj_hop, scipy.sparse.csrmatrix)
+    assert isinstance(adj_hop, scipy.sparse.csr_matrix)
 
     adj_visited = _setdiag(adj.copy(), 1)  # Track visited neighbors
     adj_hop, adj_visited = _hop(adj_hop, adj, adj_visited)
