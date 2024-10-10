@@ -47,7 +47,7 @@ maintainers = [
 
 dependencies = [
    "aiohttp>=3.8.1",
-   "anndata>=0.11.0rc1",
+   "anndata>=0.9",
    "cycler>=0.11.0",
    "dask-image>=0.5.0",
    "dask[array]>=2021.02.0",
