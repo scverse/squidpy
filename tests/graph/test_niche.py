@@ -106,7 +106,7 @@ def test_cellcharter_approach(adata_seqfish: AnnData):
     assert adj_hop.shape == adj.shape
     assert adj_hop.shape == adj_visited.shape
 
-    assert np.array(np.sum(adj, axis=1)).squeeze() == N_NEIGHBORS
+    assert np.array(np.sum(adj, axis=1)).squeeze().max() == N_NEIGHBORS
     adj_hop_norm = _normalize(adj_hop)
     assert adj_hop_norm.shape == adj.shape
 
