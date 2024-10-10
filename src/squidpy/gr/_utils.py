@@ -6,11 +6,12 @@ from collections.abc import Hashable, Iterable, Sequence
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
+import anndata
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from anndata._core.views import ArrayView, SparseCSCMatrixView, SparseCSRMatrixView
 from anndata.utils import make_index_unique
+from packaging.version import Version
 from pandas import CategoricalDtype
 from pandas.api.types import infer_dtype
 from scanpy import logging as logg
@@ -18,6 +19,14 @@ from scipy.sparse import csc_matrix, csr_matrix, issparse, spmatrix
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, _unique_order_preserving
+
+CAN_USE_SPARSE_ARRAY = Version(anndata.__version__) >= Version("0.11.0")
+if not CAN_USE_SPARSE_ARRAY:
+    from anndata._core.views import ArrayView
+    from anndata._core.views import SparseCSCMatrixView as SparseCSCView
+    from anndata._core.views import SparseCSRMatrixView as SparseCSRView
+else:
+    from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
 
 
 def _check_tuple_needles(
@@ -233,7 +242,7 @@ def _extract_expression(
     # handle views
     if isinstance(res, ArrayView):
         return np.asarray(res), genes
-    if isinstance(res, (SparseCSRMatrixView, SparseCSCMatrixView)):
+    if isinstance(res, (SparseCSRView, SparseCSCView)):
         mro = type(res).mro()
         if csr_matrix in mro:
             return csr_matrix(res), genes
