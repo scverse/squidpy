@@ -317,8 +317,9 @@ def _aggregate(adata: AnnData, normalized_adjacency_matrix: sps.spmatrix, aggreg
     if aggregation == "mean":
         aggregated_matrix = normalized_adjacency_matrix @ adata.X
     elif aggregation == "variance":
-        mean_matrix = normalized_adjacency_matrix @ adata.X
-        mean_squared_matrix = normalized_adjacency_matrix @ (adata.X * adata.X)
+        mean_matrix = (normalized_adjacency_matrix @ adata.X).toarray()
+        X_to_arr = adata.X.toarray()
+        mean_squared_matrix = normalized_adjacency_matrix @ (X_to_arr * X_to_arr)
         aggregated_matrix = mean_squared_matrix - mean_matrix * mean_matrix
     else:
         raise ValueError(f"Invalid aggregation method '{aggregation}'. Please choose either 'mean' or 'variance'.")
