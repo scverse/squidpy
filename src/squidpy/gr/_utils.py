@@ -20,7 +20,7 @@ from scipy.sparse import csc_matrix, csr_matrix, issparse, spmatrix
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, _unique_order_preserving
 
-CAN_USE_SPARSE_ARRAY = Version(anndata.__version__) >= Version("0.11.0")
+CAN_USE_SPARSE_ARRAY = Version(anndata.__version__) >= Version("0.11.0rc1")
 if CAN_USE_SPARSE_ARRAY:
     from anndata._core.views import ArrayView
     from anndata._core.views import SparseCSCMatrixView as SparseCSCView
