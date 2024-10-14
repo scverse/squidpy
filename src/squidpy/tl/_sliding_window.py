@@ -52,8 +52,10 @@ def sliding_window(
     If ``copy = True``, returns the sliding window annotation(s) as pandas dataframe
     Otherwise, stores the sliding window annotation(s) in .obs.
     """
-    assert window_size > 0  # window size must be non-negative and bigger than 0
-    assert overlap >= 0
+    if window_size <= 0:
+        raise ValueError("Window size must be larger than 0.")
+    if overlap < 0:
+        raise ValueError("Overlap must be non-negative.")
 
     if isinstance(adata, SpatialData):
         adata = adata.table
@@ -95,6 +97,7 @@ def sliding_window(
         if overlap == 0:
             xgrid, ygrid = (lib_data[x] - min_x) // window_size, (lib_data[y] - min_y) // window_size
             xrows = xgrid.max()
+            sliding_window_df[sliding_window_key] = sliding_window_df[sliding_window_key].astype("object")
             sliding_window_df.loc[lib_mask, sliding_window_key] = (
                 str(lib) + "_" + ((ygrid * (xrows + 1)) + xgrid).astype(int).astype(str)
             )
@@ -106,9 +109,10 @@ def sliding_window(
                 y_grid_start = min_y + (overlap * row)
                 xgrid, ygrid = (lib_data[x] - x_grid_start) // window_size, (lib_data[y] - y_grid_start) // window_size
                 xrows = xgrid.max()
+                sliding_window_df[grid_col_name] = sliding_window_df[grid_col_name].astype("object")
                 sliding_window_df.loc[lib_mask, grid_col_name] = (
                     str(lib) + "_" + f"{1+i}_" + ((ygrid * (xrows + 1)) + xgrid).astype(int).astype(str)
-                ).astype("category")
+                )
 
     if copy:
         return sliding_window_df
