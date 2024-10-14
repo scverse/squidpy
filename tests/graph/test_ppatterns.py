@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from anndata import AnnData
 from pandas.testing import assert_frame_equal
+
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import co_occurrence, spatial_autocorr
 from squidpy.gr._ppatterns import _find_min_max

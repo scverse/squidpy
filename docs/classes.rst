@@ -7,6 +7,6 @@ Classes
     :toctree: classes
 
     im.ImageContainer
-    pl.Interactive
     im.SegmentationWatershed
     im.SegmentationCustom
+    .. pl.Interactive
