@@ -118,17 +118,3 @@ def sliding_window(
         return sliding_window_df
     for col_name, col_data in sliding_window_df.items():
         _save_data(adata, attr="obs", key=col_name, data=col_data)
-
-
-def _sliding_window_stats(adata: AnnData, sliding_window_key: str = "sliding_window") -> None:
-    """
-    Calculates statistics (mean, max, min) for the sliding windows.
-
-    Parameters
-    ----------
-
-    """
-    cells_per_window = adata.obs.groupby(sliding_window_key).size()
-    print(
-        f"Cells per window stats: MAX: {cells_per_window.max()}, MIN: {cells_per_window.min()}, mean: {cells_per_window.mean()}, nr. of windows: {len(cells_per_window)}"
-    )
