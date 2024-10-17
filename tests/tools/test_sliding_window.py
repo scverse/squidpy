@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Literal
 
 import pytest
@@ -41,7 +42,7 @@ class TestSlidingWindow:
             assert len(sliding_window_columns) == 1  # only one sliding window
             assert df[sliding_window_key].isnull().sum() == 0  # no unassigned cells
         else:
-            grid_len = window_size // overlap
+            grid_len = math.ceil(window_size / overlap)
             num_grid_systems = grid_len**2
             for i in range(num_grid_systems):
                 assert (
