@@ -6,7 +6,6 @@ import pytest
 from anndata import AnnData
 
 from squidpy.tl import sliding_window
-from squidpy.tl._sliding_window import _sliding_window_stats
 
 
 class TestSlidingWindow:
