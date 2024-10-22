@@ -16,6 +16,7 @@ import pytest
 import tifffile
 import xarray as xr
 from anndata import AnnData
+from packaging import version
 from PIL import Image
 from pytest_mock import MockerFixture
 
@@ -1110,9 +1111,17 @@ class TestCroppingExtra:
         )
 
         np.testing.assert_array_equal(crop.data["image_0"].shape, (301, 301, 1, 10))
-        # check that values outside of img are padded with 5
-        np.testing.assert_array_equal(crop.data["image_0"][0, 0, 0, 0], 5)
-        np.testing.assert_array_equal(crop.data["image_0"][-1, -1, 0, 0], 5)
+
+        # check that values outside of img are padded with 5 or 0, depending on NEP 50
+        # see https://numpy.org/neps/nep-0050-scalar-promotion.html
+        numpy_version = version.parse(np.__version__)
+        if numpy_version >= version.parse("1.7"):
+            np.testing.assert_array_equal(crop.data["image_0"][0, 0, 0, 0], 0)
+            np.testing.assert_array_equal(crop.data["image_0"][-1, -1, 0, 0], 0)
+        else:
+            np.testing.assert_array_equal(crop.data["image_0"][0, 0, 0, 0], 5)
+            np.testing.assert_array_equal(crop.data["image_0"][-1, -1, 0, 0], 5)
+
         assert crop.data["image_0"].dtype == np.uint8
 
         # compare with crop_corner

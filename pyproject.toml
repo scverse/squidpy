@@ -7,7 +7,7 @@ name = "squidpy"
 dynamic = ["version"]
 description = "Spatial Single Cell Analysis in Python"
 readme = "README.rst"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {file = "LICENSE"}
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -42,7 +42,8 @@ authors = [
 ]
 maintainers = [
     {name = "Giovanni Palla", email = "giovanni.palla@helmholtz-muenchen.de"},
-    {name = "Michal Klein", email = "michal.klein@helmholtz-muenchen.de"}
+    {name = "Michal Klein", email = "michal.klein@helmholtz-muenchen.de"},
+    {name = "Tim Treis", email = "tim.treis@helmholtz-muenchen.de"}
 ]
 
 dependencies = [
@@ -58,7 +59,7 @@ dependencies = [
    "matplotlib-scalebar>=0.8.0",
    "networkx>=2.6.0",
    "numba>=0.56.4",
-   "numpy>=1.23.0",
+   "numpy>=1.23.0, <2.0",
    "omnipath>=1.0.7",
    "pandas>=2.1.0",
    "Pillow>=8.0.0",
@@ -73,7 +74,7 @@ dependencies = [
    "validators>=0.18.2",
    "xarray>=0.16.1",
    "zarr>=2.6.1",
-   "spatialdata>=0.2.0",
+   "spatialdata>=0.2.4",
 ]
 
 [project.optional-dependencies]

@@ -546,7 +546,8 @@ class ImageContainer(FeatureMixin):
             # because padding does not change dtype by itself
             for key, arr in crop.items():
                 if preserve_dtypes:
-                    if not np.can_cast(cval, arr.dtype, casting="safe"):
+                    cval_dtype = np.asarray(cval).dtype
+                    if not np.can_cast(cval_dtype, arr.dtype, casting="safe"):
                         cval = 0
                 else:
                     crop[key] = crop[key].astype(np.dtype(type(cval)), copy=False)
