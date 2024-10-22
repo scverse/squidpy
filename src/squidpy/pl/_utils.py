@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from functools import wraps
 from inspect import signature
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import matplotlib as mpl
 import numpy as np
@@ -41,7 +41,7 @@ from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_categorical_obs
 
-Vector_name_t = tuple[Optional[Union[pd.Series, NDArrayA]], Optional[str]]
+Vector_name_t = tuple[pd.Series | NDArrayA | None, str | None]
 
 
 @d.dedent

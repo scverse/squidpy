@@ -44,7 +44,7 @@ from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
 
 _AvailShapes = Literal["circle", "square", "hex"]
-Palette_t = Optional[Union[str, ListedColormap]]
+Palette_t = Optional[str | ListedColormap]
 _Normalize = Union[Normalize, Sequence[Normalize]]
 _SeqStr = Union[str, Sequence[str]]
 _SeqFloat = Union[float, Sequence[float]]
