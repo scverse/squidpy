@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, Union, TypeAlias
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, Union
 
 import numpy as np
 import skimage.measure
