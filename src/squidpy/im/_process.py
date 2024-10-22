@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import Any, Callable
+from typing import Any
 
 import dask.array as da
 from dask_image.ndfilters import gaussian_filter as dask_gf

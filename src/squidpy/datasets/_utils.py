@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from inspect import Parameter, Signature, signature
 from pathlib import Path
-from typing import Any, Callable, Union
+from typing import Any, Union
 
 import anndata
 from anndata import AnnData
@@ -15,7 +15,7 @@ from scanpy import read
 from scanpy._utils import check_presence_download
 
 PathLike = Union[os.PathLike[str], str]
-Function_t = Callable[..., Union[AnnData, Any]]
+Function_t = Callable[..., AnnData | Any]
 
 
 @dataclass(frozen=True)
