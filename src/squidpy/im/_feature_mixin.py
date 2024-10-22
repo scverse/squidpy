@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, Union
+from typing import TYPE_CHECKING, Any, Protocol, Union, TypeAlias
 
 import numpy as np
 import skimage.measure
@@ -15,8 +15,8 @@ from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_non_empty_sequence
 from squidpy.im._coords import _NULL_PADDING, CropCoords
 
-Feature_t = dict[str, Any]
-Channel_t = Union[int, Sequence[int]]
+Feature_t: TypeAlias = dict[str, Any]
+Channel_t: TypeAlias = int | Sequence[int]
 
 
 def _get_channels(xr_img: NDArrayA | xr.DataArray, channels: Channel_t | None) -> list[int]:
@@ -352,8 +352,8 @@ class FeatureMixin:
             y_slc, x_slc = coord.to_image_coordinates(padding).slice
 
             # relative coordinates
-            y = (y - np.min(y)) / (np.max(y) - np.min(y))  # type:ignore[operator]
-            x = (x - np.min(x)) / (np.max(x) - np.min(x))  # type:ignore[operator]
+            y = (y - np.min(y)) / (np.max(y) - np.min(y))
+            x = (x - np.min(x)) / (np.max(x) - np.min(x))
 
             # coordinates in the uncropped image
             y = coord.slice[0].start + (y_slc.stop - y_slc.start) * y

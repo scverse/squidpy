@@ -245,7 +245,7 @@ def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vect
             if TYPE_CHECKING:
                 assert isinstance(res, spmatrix)
             res = res.toarray()
-        elif not isinstance(res, (np.ndarray, Sequence)):
+        elif not isinstance(res, np.ndarray | Sequence):
             raise TypeError(f"Unable to process result of type `{type(res).__name__}`.")
 
         res = np.asarray(np.squeeze(res))
@@ -292,7 +292,7 @@ class ALayer:
 
         self._adata = adata
         self._library_id = library_ids[0]
-        self._ix_to_group = dict(zip(range(len(library_ids)), library_ids))
+        self._ix_to_group = dict(zip(range(len(library_ids)), library_ids, strict=False))
         self._layer: str | None = None
         self._previous_layer: str | None = None
         self._raw = is_raw

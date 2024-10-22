@@ -400,7 +400,7 @@ def _build_connectivity(
             Dst = csr_matrix((dists, indices, indptr), shape=(N, N))
             # fmt: on
     else:
-        r = 1 if radius is None else radius if isinstance(radius, (int, float)) else max(radius)
+        r = 1 if radius is None else radius if isinstance(radius, int | float) else max(radius)
         tree = NearestNeighbors(n_neighbors=n_neighs, radius=r, metric="euclidean")
         tree.fit(coords)
 
@@ -519,7 +519,7 @@ def mask_graph(
     dists_key = Key.obsp.spatial_dist(spatial_key)
 
     # check polygon type
-    if not isinstance(polygon_mask, (Polygon, MultiPolygon)):
+    if not isinstance(polygon_mask, Polygon | MultiPolygon):
         raise ValueError(f"`polygon_mask` should be of type `Polygon` or `MultiPolygon`, got {type(polygon_mask)}")
 
     # get elements
