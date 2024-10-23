@@ -386,7 +386,7 @@ def _interaction_matrix(
         cur_row = cats[i]
         cur_indices = indices_list[i]
         cur_data = data_list[i]
-        for j, val in zip(cur_indices, cur_data, strict=False):
+        for j, val in zip(cur_indices, cur_data):  # noqa: B905
             cur_col = cats[j]
             output[cur_row, cur_col] += val
     return output

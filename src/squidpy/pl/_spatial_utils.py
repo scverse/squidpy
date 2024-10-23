@@ -698,8 +698,8 @@ def _decorate_axs(
 def _map_color_seg(
     seg: NDArrayA,
     cell_id: NDArrayA,
-    color_vector: NDArrayA | pd.Series[CategoricalDtype],
-    color_source_vector: pd.Series[CategoricalDtype],
+    color_vector: NDArrayA | pd.Categorical,
+    color_source_vector: pd.Categorical,
     cmap_params: CmapParams,
     seg_erosionpx: int | None = None,
     seg_boundaries: bool = False,
@@ -707,7 +707,7 @@ def _map_color_seg(
 ) -> NDArrayA:
     cell_id = np.array(cell_id)
 
-    if isinstance(color_vector, pd.Series) and isinstance(color_vector.dtype, pd.CategoricalDtype):
+    if isinstance(color_vector, pd.Categorical):
         if isinstance(na_color, tuple) and len(na_color) == 4 and np.any(color_source_vector.isna()):
             cell_id[color_source_vector.isna()] = 0
         val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)

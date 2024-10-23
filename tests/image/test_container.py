@@ -505,7 +505,7 @@ class TestContainerCropping:
                 if not as_array:
                     assert Key.img.obs in crop.data.attrs
 
-            if as_array:
+            if as_array is True:  # cannot do 'if as_array' because the string would also be true
                 assert isinstance(crop, dict), type(crop)
                 for key in cont:
                     assert key in crop
