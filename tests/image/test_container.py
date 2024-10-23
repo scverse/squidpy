@@ -479,7 +479,7 @@ class TestContainerCropping:
                 else:
                     assert isinstance(crop, tuple)
                     assert len(crop) == len(as_array)
-                    for key, data in zip(as_array, crop):
+                    for key, data in zip(as_array, crop, strict=False):
                         assert isinstance(data, np.ndarray)
                         assert_shape(small_cont[key].data, data)
             else:
@@ -505,7 +505,7 @@ class TestContainerCropping:
                 if not as_array:
                     assert Key.img.obs in crop.data.attrs
 
-            if as_array is True:
+            if as_array:
                 assert isinstance(crop, dict), type(crop)
                 for key in cont:
                     assert key in crop
@@ -523,7 +523,7 @@ class TestContainerCropping:
         crops = list(cont.generate_spot_crops(adata, obs_names=obs))
 
         assert len(crops) == len(obs)
-        for crop, o in zip(crops, obs):
+        for crop, o in zip(crops, obs, strict=False):
             assert crop.data.attrs[Key.img.obs] == o
 
     @pytest.mark.parametrize("spot_scale", [1, 0.5, 2])
@@ -545,7 +545,7 @@ class TestContainerCropping:
         gen4 = cont.crop_corner(0, 0, cont.shape, scale=0.5).generate_spot_crops(adata, scale=0.5)
 
         # check that coords of generated crops are the same
-        for c1, c2, c3, c4 in zip(gen1, gen2, gen3, gen4):
+        for c1, c2, c3, c4 in zip(gen1, gen2, gen3, gen4, strict=False):
             # upscale c4
             c4 = c4.crop_corner(0, 0, c4.shape, scale=2)
             # need int here, because when generating spot crops from scaled images,
@@ -562,7 +562,7 @@ class TestContainerCropping:
         # crops should be the same when cropping from cropped cont or original cont
         # (as long as cropped cont contains all spots)
         cont_cropped = cont.crop_corner(100, 100, cont.shape)
-        for c1, c2 in zip(cont.generate_spot_crops(adata), cont_cropped.generate_spot_crops(adata)):
+        for c1, c2 in zip(cont.generate_spot_crops(adata), cont_cropped.generate_spot_crops(adata), strict=False):
             assert np.all(c1["image"].data == c2["image"].data)
 
     @pytest.mark.parametrize("preserve", [False, True])
@@ -833,7 +833,7 @@ class TestContainerUtils:
             cont.add_img(np.empty((10, 10)))
 
         validator = SimpleHTMLValidator(
-            n_expected_rows=min(size, 10), expected_tags=set() if not size else {"p", "em", "strong"}
+            n_expected_rows=min(size, 10), expected_tags={"p", "em", "strong"} if size else set()
         )
         validator.feed(cont._repr_html_())
         validator.validate()
@@ -979,7 +979,7 @@ class TestExplicitDims:
         shape = (2, 3, 4, 5)
         img = ImageContainer(np.random.normal(size=shape), dims=dims)
 
-        for d, s in zip(dims, shape):
+        for d, s in zip(dims, shape, strict=False):
             assert img.data.sizes[d] == s
 
     @pytest.mark.parametrize("missing", ["y", "x", "z"])
@@ -1000,7 +1000,7 @@ class TestExplicitDims:
 
         if ndim in (2, 3) and missing == "z":
             img = ImageContainer(np.random.normal(size=shape), dims=dims)
-            for d, s in zip(dims, shape):
+            for d, s in zip(dims, shape, strict=False):
                 assert img.data.sizes[d] == s
             assert img.data.sizes["z"] == 1
         else:
@@ -1015,7 +1015,7 @@ class TestExplicitDims:
         if isinstance(dims, str):
             dims = ("channels", "z", "y", "x")
             shape = (1, 1) + shape
-        for d, s in zip(dims, shape):
+        for d, s in zip(dims, shape, strict=False):
             assert img.data.sizes[d] == s
 
     @pytest.mark.parametrize("dims", ["z_last", "channels_last", ("x", "y", "z"), ("y", "x", "c")])
@@ -1026,7 +1026,7 @@ class TestExplicitDims:
         if isinstance(dims, str):
             dims = (("channels", "z") if dims == "z_last" else ("z", "channels")) + ("y", "x")
             shape = (1,) + shape
-        for d, s in zip(dims, shape):
+        for d, s in zip(dims, shape, strict=False):
             assert img.data.sizes[d] == s
 
     @pytest.mark.parametrize("dims", ["z_last", "channels_last", ("z", "y", "x", "c")])
@@ -1036,7 +1036,7 @@ class TestExplicitDims:
 
         if isinstance(dims, str):
             dims = (("channels", "z") if dims == "z_last" else ("z", "channels")) + ("y", "x")
-        for d, s in zip(dims, shape):
+        for d, s in zip(dims, shape, strict=False):
             assert img.data.sizes[d] == s
 
 
@@ -1244,13 +1244,13 @@ class TestPileLine:
         assert len(c1) == 1
         assert len(c2) == 1
 
-        for key, cont in zip(["foo", "bar", "baz"], [c1, c2, c3]):
+        for key, cont in zip(["foo", "bar", "baz"], [c1, c2, c3], strict=False):
             if lazy:
                 assert isinstance(cont[key].data, da.Array)
             else:
                 assert isinstance(cont[key].data, np.ndarray)
 
-        for key, cont in zip(["foo", "bar", "baz"], [c1, c2, c3]):
+        for key, cont in zip(["foo", "bar", "baz"], [c1, c2, c3], strict=False):
             cont.compute()
             assert isinstance(cont[key].data, np.ndarray)
 

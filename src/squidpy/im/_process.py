@@ -77,7 +77,7 @@ def process(
     from squidpy.pl._utils import _to_grayscale
 
     layer = img._get_layer(layer)
-    method = Processing(method) if isinstance(method, (str, Processing)) else method  # type: ignore[assignment]
+    method = Processing(method) if isinstance(method, str | Processing) else method  # type: ignore[assignment]
     apply_kwargs = dict(apply_kwargs)
     apply_kwargs["lazy"] = lazy
 

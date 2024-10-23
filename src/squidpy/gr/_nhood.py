@@ -259,7 +259,7 @@ def centrality_scores(
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
 
-    if isinstance(score, (str, Centrality)):
+    if isinstance(score, str | Centrality):
         centrality = [score]
     elif score is None:
         centrality = [c.s for c in Centrality]
@@ -386,7 +386,7 @@ def _interaction_matrix(
         cur_row = cats[i]
         cur_indices = indices_list[i]
         cur_data = data_list[i]
-        for j, val in zip(cur_indices, cur_data):
+        for j, val in zip(cur_indices, cur_data, strict=False):
             cur_col = cats[j]
             output[cur_row, cur_col] += val
     return output

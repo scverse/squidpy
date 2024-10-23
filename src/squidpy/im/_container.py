@@ -7,7 +7,7 @@ from functools import partial
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypeVar, Union
 
 import dask.array as da
 import matplotlib as mpl
@@ -46,11 +46,11 @@ from squidpy.im._coords import (
 from squidpy.im._feature_mixin import FeatureMixin
 from squidpy.im._io import _assert_dims_present, _infer_dimensions, _lazy_load_image
 
-FoI_t = Union[int, float]
-Pathlike_t = Union[str, Path]
-Arraylike_t = Union[NDArrayA, xr.DataArray]
-InferDims_t = Union[Literal["default", "prefer_channels", "prefer_z"], Sequence[str]]
-Input_t = Union[Pathlike_t, Arraylike_t, "ImageContainer"]
+FoI_t: TypeAlias = int | float
+Pathlike_t: TypeAlias = str | Path
+Arraylike_t: TypeAlias = NDArrayA | xr.DataArray
+InferDims_t: TypeAlias = Literal["default", "prefer_channels", "prefer_z"] | Sequence[str]
+Input_t: TypeAlias = Pathlike_t | Arraylike_t | "ImageContainer"
 Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependencies
 _ERROR_NOTIMPLEMENTED_LIBID = f"It seems there are multiple `library_id` in `adata.uns[{Key.uns.spatial!r}]`.\n \
                                 Loading multiple images is not implemented (yet), please specify a `library_id`."
@@ -153,14 +153,17 @@ class ImageContainer(FeatureMixin):
             raise ValueError(f"Expected library ids to be of length `{len(imgs)}`, found `{len(library_ids)}`.")
 
         _library_ids = np.concatenate(
-            [img._get_library_ids(library_id, allow_new=True) for img, library_id in zip(imgs, library_ids)]
+            [
+                img._get_library_ids(library_id, allow_new=True)
+                for img, library_id in zip(imgs, library_ids, strict=False)
+            ]
         )
         if len(set(_library_ids)) != len(_library_ids):
             raise ValueError(f"Found non-unique library ids `{list(_library_ids)}`.")
 
         # add library_id to z dim
         prep_imgs = []
-        for lid, img in zip(_library_ids, imgs):
+        for lid, img in zip(_library_ids, imgs, strict=False):
             prep_img = img.copy()
             prep_img._data = prep_img.data.assign_coords(z=[lid])
             prep_imgs.append(prep_img)
@@ -399,8 +402,8 @@ class ImageContainer(FeatureMixin):
             # `axes` is always of length 0, 1 or 2
             if len(expand_axes):
                 dimnames = ("z", "channels") if len(expand_axes) == 2 else (("channels",) if "z" in dims else ("z",))
-                img = img.expand_dims([d for _, d in zip(expand_axes, dimnames)], axis=expand_axes)
-            img = img.rename(dict(zip(img.dims, dims)))
+                img = img.expand_dims([d for _, d in zip(expand_axes, dimnames, strict=False)], axis=expand_axes)
+            img = img.rename(dict(zip(img.dims, dims, strict=False)))
 
         return img.transpose("y", "x", "z", ...)
 
@@ -715,7 +718,7 @@ class ImageContainer(FeatureMixin):
         ycoords = np.repeat(unique_ycoord, len(unique_xcoord))
         xcoords = np.tile(unique_xcoord, len(unique_ycoord))
 
-        for y, x in zip(ycoords, xcoords):
+        for y, x in zip(ycoords, xcoords, strict=False):
             yield self.crop_corner(y=y, x=x, size=(ys, xs), **kwargs)._maybe_as_array(
                 as_array, squeeze=squeeze, lazy=True
             )
@@ -816,7 +819,7 @@ class ImageContainer(FeatureMixin):
         if adata.n_obs != len(obs_library_ids):
             raise ValueError(f"Expected library ids to be of length `{adata.n_obs}`, found `{len(obs_library_ids)}`.")
 
-        for i, (obs, lid) in enumerate(zip(adata.obs_names, obs_library_ids)):
+        for i, (obs, lid) in enumerate(zip(adata.obs_names, obs_library_ids, strict=False)):
             # get spot diameter of current obs (might be different library ids)
             diameter = (
                 Key.uns.spot_diameter(
@@ -984,12 +987,16 @@ class ImageContainer(FeatureMixin):
         arr = arr.sel(z=library_ids)
 
         if channel is not None:
-            channel = np.asarray([channel]).ravel()
-            if not len(channel):  # type: ignore[arg-type]
+            if isinstance(channel, int):
+                channel = [channel]
+            else:
+                channel = list(channel)
+            if not channel:
                 raise ValueError("No channels have been selected.")
             arr = arr[{arr.dims[-1]: channel}]
         else:
-            channel = np.arange(arr.shape[-1])
+            channel = list(range(arr.shape[-1]))
+
         if TYPE_CHECKING:
             assert isinstance(channel, Sequence)
 
@@ -1585,7 +1592,7 @@ class ImageContainer(FeatureMixin):
         return self.data[key]
 
     def __setitem__(self, key: str, value: NDArrayA | xr.DataArray | da.Array) -> None:
-        if not isinstance(value, (np.ndarray, xr.DataArray, da.Array)):
+        if not isinstance(value, np.ndarray | xr.DataArray | da.Array):
             raise NotImplementedError(f"Adding `{type(value).__name__}` is not yet implemented.")
         self.add_img(value, layer=key, copy=True)
 

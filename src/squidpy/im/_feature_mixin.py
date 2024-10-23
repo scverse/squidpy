@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, Union, TypeAlias
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, Union
 
 import numpy as np
 import skimage.measure
@@ -359,7 +359,8 @@ class FeatureMixin:
             y = coord.slice[0].start + (y_slc.stop - y_slc.start) * y
             x = coord.slice[1].start + (x_slc.stop - x_slc.start) * x
 
-            return np.c_[x, y]
+            # return np.c_[x, y]
+            return np.column_stack((x, y))
 
         label_layer = self._get_layer(label_layer)
         library_id = self._get_library_id(library_id)
