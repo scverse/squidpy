@@ -301,7 +301,7 @@ def _occur_count(
         y = clust_y[idx_y]
         # Treat computing co-occurrence using the same split and different splits differently
         # Pairwise distance matrix for between the same split is symmetric and therefore only needs to be counted once
-        for i, j in zip(x, y, strict=False):
+        for i, j in zip(x, y):  # noqa: B905 # cannot use strict=False because of numba
             co_occur[i, j] += 1
             if not same_split:
                 co_occur[j, i] += 1
