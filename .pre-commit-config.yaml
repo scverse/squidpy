@@ -1,6 +1,4 @@
 fail_fast: false
-default_language_version:
-    python: python3
 default_stages:
     - pre-commit
     - pre-push
@@ -24,3 +22,4 @@ repos:
           - id: mypy
             additional_dependencies: [numpy, pandas, types-requests]
             exclude: .scripts/ci/download_data.py|squidpy/datasets/_(dataset|image).py # See https://github.com/
+  

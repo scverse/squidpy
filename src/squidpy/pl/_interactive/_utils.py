@@ -33,7 +33,9 @@ def _get_categorical(
     add_colors_for_categorical_sample_annotation(
         adata, key=key, force_update_colors=palette is not None, palette=palette
     )
-    col_dict = dict(zip(adata.obs[key].cat.categories, [to_rgb(i) for i in adata.uns[Key.uns.colors(key)]]))
+    col_dict = dict(
+        zip(adata.obs[key].cat.categories, [to_rgb(i) for i in adata.uns[Key.uns.colors(key)]], strict=False)
+    )
 
     return np.array([col_dict[v] for v in adata.obs[key]])
 
@@ -53,7 +55,7 @@ def _position_cluster_labels(coords: NDArrayA, clusters: pd.Series, colors: NDAr
     # index consists of the categories that need not be string
     clusters[kdtree.query(df.values)[1]] = df.index.astype(str)
     # napari v0.4.9 - properties must be 1-D in napari/layers/points/points.py:581
-    colors = np.array([to_hex(col if cl != "" else (0, 0, 0)) for cl, col in zip(clusters, colors)])
+    colors = np.array([to_hex(col if cl != "" else (0, 0, 0)) for cl, col in zip(clusters, colors, strict=False)])
 
     return {"clusters": clusters, "colors": colors}
 
@@ -68,7 +70,7 @@ def _not_in_01(arr: NDArrayA | da.Array) -> bool:
         return False
 
     if isinstance(arr, da.Array):
-        return bool(np.min(arr) < 0) or bool(np.max(arr) > 1)
+        return bool(np.min(arr) < 0 or np.max(arr) > 1)  # cast needed
 
     return bool(_helper_arr(np.asarray(arr)))
 
@@ -79,7 +81,4 @@ def _display_channelwise(arr: NDArrayA | da.Array) -> bool:
         return n_channels != 1
     if np.issubdtype(arr.dtype, np.uint8):
         return False  # assume RGB(A)
-    if not np.issubdtype(arr.dtype, np.floating):
-        return True
-
-    return _not_in_01(arr)
+    return _not_in_01(arr) if np.issubdtype(arr.dtype, np.floating) else True

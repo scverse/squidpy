@@ -96,7 +96,7 @@ def _create_sparse_df(
     )
 
     if not issparse(data):
-        pred = (lambda col: ~np.isnan(col)) if fill_value is np.nan else (lambda col: ~np.isclose(col, fill_value))
+        pred = (lambda col: ~np.isnan(col)) if np.isnan(fill_value) else (lambda col: ~np.isclose(col, fill_value))
         dtype = SparseDtype(data.dtype, fill_value=fill_value)
         n_rows, n_cols = data.shape
         arrays = []
@@ -236,13 +236,13 @@ def _extract_expression(
             res = adata[:, genes].layers[layer]
             if isinstance(res, AnnData):
                 res = res.X
-            elif not isinstance(res, (np.ndarray, spmatrix)):
+            elif not isinstance(res, np.ndarray | spmatrix):
                 raise TypeError(f"Invalid expression type `{type(res).__name__}`.")
 
     # handle views
     if isinstance(res, ArrayView):
         return np.asarray(res), genes
-    if isinstance(res, (SparseCSRView, SparseCSCView)):
+    if isinstance(res, SparseCSRView | SparseCSCView):
         mro = type(res).mro()
         if csr_matrix in mro:
             return csr_matrix(res), genes

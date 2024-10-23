@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from functools import wraps
 from inspect import signature
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import matplotlib as mpl
 import numpy as np
@@ -41,7 +41,7 @@ from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_categorical_obs
 
-Vector_name_t = tuple[Optional[Union[pd.Series, NDArrayA]], Optional[str]]
+Vector_name_t = tuple[pd.Series | NDArrayA | None, str | None]
 
 
 @d.dedent
@@ -245,7 +245,7 @@ def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vect
             if TYPE_CHECKING:
                 assert isinstance(res, spmatrix)
             res = res.toarray()
-        elif not isinstance(res, (np.ndarray, Sequence)):
+        elif not isinstance(res, np.ndarray | Sequence):
             raise TypeError(f"Unable to process result of type `{type(res).__name__}`.")
 
         res = np.asarray(np.squeeze(res))
@@ -292,7 +292,7 @@ class ALayer:
 
         self._adata = adata
         self._library_id = library_ids[0]
-        self._ix_to_group = dict(zip(range(len(library_ids)), library_ids))
+        self._ix_to_group = dict(zip(range(len(library_ids)), library_ids, strict=False))
         self._layer: str | None = None
         self._previous_layer: str | None = None
         self._raw = is_raw
