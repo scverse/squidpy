@@ -28,9 +28,9 @@ class TestSlidingWindow:
         def _count_total_assignments():
             total_cells = 0
             for lib_key in ["point8", "point16", "point23"]:
-                cols_in_lib = adata_mibitof.obs.columns[adata_mibitof.obs.columns.str.contains(lib_key)]
+                cols_in_lib = df.columns[df.columns.str.contains(lib_key)]
                 for col in cols_in_lib:
-                    total_cells += adata_mibitof.obs[col].sum()
+                    total_cells += df[col].sum()
             return total_cells
 
         window_size, overlap, drop_partial_windows = windowsize_overlap_drop
@@ -51,7 +51,7 @@ class TestSlidingWindow:
             assert df[sliding_window_key].isnull().sum() == 0  # no unassigned cells
             assert len(df) == adata_mibitof.n_obs  # correct amount of rows
         else:
-            sliding_window_cols = adata_mibitof.obs.columns[adata_mibitof.obs.columns.str.contains("sliding_window")]
+            sliding_window_cols = df.columns[df.columns.str.contains("sliding_window")]
 
             if drop_partial_windows:
                 assert len(sliding_window_cols) == 27
