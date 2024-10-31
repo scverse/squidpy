@@ -527,7 +527,7 @@ def _shaped_scatter(
     collection = PatchCollection(patches, snap=False, **kwargs)
 
     if isinstance(c, np.ndarray) and np.issubdtype(c.dtype, np.number):
-        collection.set_array(np.ma.masked_invalid(c))
+        collection.set_array(np.ma.masked_invalid(c).ravel())
         collection.set_norm(norm)
     else:
         alpha = ColorConverter().to_rgba_array(c)[..., -1]
@@ -976,7 +976,7 @@ def _plot_scatter(
     _cax = scatter(
         coords[:, 0],
         coords[:, 1],
-        c=color_vector,
+        c=np.array(color_vector),
         s=size,
         rasterized=sc_settings._vector_friendly,
         cmap=cmap_params.cmap,
