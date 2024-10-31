@@ -6,7 +6,7 @@ from typing import Any, Literal
 import pytest
 from anndata import AnnData
 
-from squidpy.tl import sliding_window, _calculate_window_corners
+from squidpy.tl import _calculate_window_corners, sliding_window
 
 
 class TestSlidingWindow:
