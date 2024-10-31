@@ -74,7 +74,7 @@ dependencies = [
    "validators>=0.18.2",
    "xarray>=0.16.1",
    "zarr>=2.6.1",
-   "spatialdata>=0.2.4",
+   "spatialdata@git+https://github.com/scverse/spatialdata",
 ]
 
 [project.optional-dependencies]
@@ -117,6 +117,9 @@ include-package-data = true
 
 [tool.hatch.version]
 source = "vcs"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.ruff]
 line-length = 120
