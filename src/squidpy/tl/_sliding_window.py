@@ -85,7 +85,7 @@ def sliding_window(
             coords[y_col].max() - coords[y_col].min(),
         )
         # mostly arbitrary choice, except that full integers usually generate windows with 1-2 cells at the borders
-        window_size = max(int(coord_range // 3.95), 1)
+        window_size = max(int(np.floor(coord_range // 3.95)), 1)
 
     if window_size <= 0:
         raise ValueError("Window size must be larger than 0.")
@@ -136,9 +136,9 @@ def sliding_window(
 
             mask = (
                 (lib_coords[x_col] >= x_start)
-                & (lib_coords[x_col] < x_end)
+                & (lib_coords[x_col] <= x_end)
                 & (lib_coords[y_col] >= y_start)
-                & (lib_coords[y_col] < y_end)
+                & (lib_coords[y_col] <= y_end)
             )
             obs_indices = lib_coords.index[mask]
 
@@ -149,18 +149,9 @@ def sliding_window(
         # assign observations to windows
         if overlap == 0:
             window_labels = {obs_idx: labels[0] if labels else None for obs_idx, labels in obs_window_map.items()}
+
             sliding_window_series = pd.Series(window_labels)
             sliding_window_df.loc[sliding_window_series.index, sliding_window_key] = sliding_window_series
-
-            # create categorical variable for ordered windows
-            sliding_window_df[sliding_window_key] = pd.Categorical(
-                sliding_window_df[sliding_window_key],
-                ordered=True,
-                categories=sorted(
-                    windows["window_label"].unique(),
-                    key=lambda x: int(x.split("_")[-1]),
-                ),
-            )
 
             logg.info(f"Created column '{sliding_window_key}' which maps obs to windows.")
 
@@ -187,6 +178,19 @@ def sliding_window(
                 logg.info(
                     f"Created {len(windows['window_label'].unique())} columns '{sliding_window_key}_*' which map obs to overlapping windows."
                 )
+
+    if overlap == 0:
+        # create categorical variable for ordered windows
+        sliding_window_df[sliding_window_key] = pd.Categorical(
+            sliding_window_df[sliding_window_key],
+            ordered=True,
+            categories=sorted(
+                windows["window_label"].unique(),
+                key=lambda x: int(x.split("_")[-1]),
+            ),
+        )
+    sliding_window_df[x_col] = coords[x_col]
+    sliding_window_df[y_col] = coords[y_col]
 
     if copy:
         return sliding_window_df

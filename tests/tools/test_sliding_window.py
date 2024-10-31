@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import math
 from typing import Any, Literal
 
+import numpy as np
 import pytest
 from anndata import AnnData
 
@@ -10,9 +10,9 @@ from squidpy.tl import _calculate_window_corners, sliding_window
 
 
 class TestSlidingWindow:
-    @pytest.mark.parametrize("library_key", ["point"])
-    @pytest.mark.parametrize("window_size", [10])
-    @pytest.mark.parametrize("overlap", [0, 2])
+    @pytest.mark.parametrize("library_key", ["library_id"])
+    @pytest.mark.parametrize("window_size", [200])
+    @pytest.mark.parametrize("overlap", [0, 20])
     @pytest.mark.parametrize("sliding_window_key", ["sliding_window", "sliding_window_v2"])
     def test_sliding_window_several_slices(
         self,
@@ -42,7 +42,7 @@ class TestSlidingWindow:
             assert len(sliding_window_columns) == 1  # only one sliding window
             assert df[sliding_window_key].isnull().sum() == 0  # no unassigned cells
         else:
-            grid_len = math.ceil(window_size / overlap)
+            grid_len = np.ceil(window_size / overlap)
             num_grid_systems = grid_len**2
             for i in range(num_grid_systems):
                 assert (
@@ -50,9 +50,10 @@ class TestSlidingWindow:
                 )  # correct number of columns; multiple sliding windows
 
             for col in df.columns:
-                lib_windows = []
-                for lib in adata_mibitof.obs[library_key].unique():
-                    lib_windows.append(set(df[adata_mibitof.obs[library_key] == lib][col]))
+                lib_windows = [
+                    set(df[adata_mibitof.obs[library_key] == lib][col])
+                    for lib in adata_mibitof.obs[library_key].unique()
+                ]
                 assert (
                     len(set.intersection(*lib_windows)) == 0
                 )  # no intersection of sliding windows across library_keys
