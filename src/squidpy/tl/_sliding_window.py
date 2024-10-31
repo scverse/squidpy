@@ -123,16 +123,14 @@ def sliding_window(
             drop_partial_windows=drop_partial_windows,
         )
 
-        windows["window_label"] = [f"window_{i}" for i in range(len(windows))]
+        lib_key = f"{lib}_" if lib is not None else ""
 
-        # for each window, find observations that fall into it
-        obs_window_map = defaultdict(list)
-        for _, window in windows.iterrows():
+        # assign observations to windows
+        for idx, window in windows.iterrows():
             x_start = window["x_start"]
             x_end = window["x_end"]
             y_start = window["y_start"]
             y_end = window["y_end"]
-            window_label = window["window_label"]
 
             mask = (
                 (lib_coords[x_col] >= x_start)
@@ -142,42 +140,20 @@ def sliding_window(
             )
             obs_indices = lib_coords.index[mask]
 
-            # assign the window label to the observations
-            for obs_idx in obs_indices:
-                obs_window_map[obs_idx].append(window_label)
-
-        # assign observations to windows
-        if overlap == 0:
-            window_labels = {obs_idx: labels[0] if labels else None for obs_idx, labels in obs_window_map.items()}
-
-            sliding_window_series = pd.Series(window_labels)
-            sliding_window_df.loc[sliding_window_series.index, sliding_window_key] = sliding_window_series
-
-            logg.info(f"Created column '{sliding_window_key}' which maps obs to windows.")
-
-        else:
-            # create a column for each window, indicating whether each observation belongs to it
-            for idx, window in windows.iterrows():
-                x_start, x_end = window["x_start"], window["x_end"]
-                y_start, y_end = window["y_start"], window["y_end"]
-
-                # initialise column with False ...
-                col_name = f"{sliding_window_key}_window_{idx}"
-                sliding_window_df.loc[:, col_name] = False
-
-                obs_in_window = lib_coords[
+            if overlap == 0:
+                mask = (
                     (lib_coords[x_col] >= x_start)
-                    & (lib_coords[x_col] < x_end)
+                    & (lib_coords[x_col] <= x_end)
                     & (lib_coords[y_col] >= y_start)
-                    & (lib_coords[y_col] < y_end)
-                ].index
-
-                # ... and assign membership
-                sliding_window_df.loc[obs_in_window, col_name] = True
-
-                logg.info(
-                    f"Created {len(windows['window_label'].unique())} columns '{sliding_window_key}_*' which map obs to overlapping windows."
+                    & (lib_coords[y_col] <= y_end)
                 )
+                obs_indices = lib_coords.index[mask]
+                sliding_window_df.loc[obs_indices, sliding_window_key] = f"{lib_key}window_{idx}"
+
+            else:
+                col_name = f"{sliding_window_key}_{lib_key}window_{idx}"
+                sliding_window_df.loc[obs_indices, col_name] = True
+                sliding_window_df.loc[:, col_name].fillna(False, inplace=True)
 
     if overlap == 0:
         # create categorical variable for ordered windows
@@ -185,10 +161,11 @@ def sliding_window(
             sliding_window_df[sliding_window_key],
             ordered=True,
             categories=sorted(
-                windows["window_label"].unique(),
+                sliding_window_df[sliding_window_key].unique(),
                 key=lambda x: int(x.split("_")[-1]),
             ),
         )
+
     sliding_window_df[x_col] = coords[x_col]
     sliding_window_df[y_col] = coords[y_col]
 
@@ -260,8 +237,4 @@ def _calculate_window_corners(
         windows = windows[valid_windows]
 
     windows = windows.reset_index(drop=True)
-    windows.sort_values(
-        by=["y_start", "y_end", "x_start", "x_end"],
-        inplace=True,
-    )
     return windows[["x_start", "x_end", "y_start", "y_end"]]

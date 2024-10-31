@@ -10,15 +10,30 @@ from squidpy.tl import _calculate_window_corners, sliding_window
 
 
 class TestSlidingWindow:
-    @pytest.mark.parametrize("overlap", [0, 20])
+    @pytest.mark.parametrize(
+        "windowsize_overlap_drop",
+        [
+            (300, 0, False),
+            (300, 50, False),
+            (300, 50, True),
+        ],
+    )
     def test_sliding_window_several_slices(
         self,
         adata_mibitof: AnnData,
-        overlap: int,
+        windowsize_overlap_drop: tuple[int, int, bool],
         sliding_window_key: str = "sliding_window_key",
-        window_size: int = 200,
         library_key: str = "library_id",
     ):
+        def _count_total_assignments():
+            total_cells = 0
+            for lib_key in ["point8", "point16", "point23"]:
+                cols_in_lib = adata_mibitof.obs.columns[adata_mibitof.obs.columns.str.contains(lib_key)]
+                for col in cols_in_lib:
+                    total_cells += adata_mibitof.obs[col].sum()
+            return total_cells
+
+        window_size, overlap, drop_partial_windows = windowsize_overlap_drop
         df = sliding_window(
             adata_mibitof,
             library_key=library_key,
@@ -27,19 +42,23 @@ class TestSlidingWindow:
             coord_columns=("globalX", "globalY"),
             sliding_window_key=sliding_window_key,
             copy=True,
+            drop_partial_windows=drop_partial_windows,
         )
-
-        assert len(df) == adata_mibitof.n_obs  # correct amount of rows
 
         if overlap == 0:
             sliding_window_columns = [col for col in df.columns if sliding_window_key in col]
             assert len(sliding_window_columns) == 1  # only one sliding window
             assert df[sliding_window_key].isnull().sum() == 0  # no unassigned cells
+            assert len(df) == adata_mibitof.n_obs  # correct amount of rows
         else:
-            for i in range(36):  # we expect 36 windows
-                assert (
-                    f"{sliding_window_key}_window_{i}" in df.columns
-                )  # correct number of columns; multiple sliding windows
+            sliding_window_cols = adata_mibitof.obs.columns[adata_mibitof.obs.columns.str.contains("sliding_window")]
+
+            if drop_partial_windows:
+                assert len(sliding_window_cols) == 27
+                assert _count_total_assignments() == 2536
+            else:
+                assert len(sliding_window_cols) == 70
+                assert _count_total_assignments() == 4569
 
     @pytest.mark.parametrize("overlap", [0, 2])
     def test_sliding_window_square_grid(
