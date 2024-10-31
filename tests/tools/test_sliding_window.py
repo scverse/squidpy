@@ -6,7 +6,7 @@ from typing import Any, Literal
 import pytest
 from anndata import AnnData
 
-from squidpy.tl import sliding_window
+from squidpy.tl import sliding_window, _calculate_window_corners
 
 
 class TestSlidingWindow:
@@ -109,3 +109,69 @@ class TestSlidingWindow:
                 sliding_window_key="sliding_window",
                 copy=True,
             )
+
+    def test_calculate_window_corners_overlap(self):
+        min_x = 0
+        max_x = 200
+        min_y = 0
+        max_y = 200
+        window_size = 100
+        overlap = 20
+
+        windows = _calculate_window_corners(
+            min_x=min_x,
+            max_x=max_x,
+            min_y=min_y,
+            max_y=max_y,
+            window_size=window_size,
+            overlap=overlap,
+            drop_partial_windows=False,
+        )
+
+        assert windows.shape == (9, 4)
+        assert windows.iloc[0].values.tolist() == [0, 100, 0, 100]
+        assert windows.iloc[-1].values.tolist() == [160, 200, 160, 200]
+
+    def test_calculate_window_corners_no_overlap(self):
+        min_x = 0
+        max_x = 200
+        min_y = 0
+        max_y = 200
+        window_size = 100
+        overlap = 0
+
+        windows = _calculate_window_corners(
+            min_x=min_x,
+            max_x=max_x,
+            min_y=min_y,
+            max_y=max_y,
+            window_size=window_size,
+            overlap=overlap,
+            drop_partial_windows=False,
+        )
+
+        assert windows.shape == (4, 4)
+        assert windows.iloc[0].values.tolist() == [0, 100, 0, 100]
+        assert windows.iloc[-1].values.tolist() == [100, 200, 100, 200]
+
+    def test_calculate_window_corners_drop_partial_windows(self):
+        min_x = 0
+        max_x = 200
+        min_y = 0
+        max_y = 200
+        window_size = 100
+        overlap = 20
+
+        windows = _calculate_window_corners(
+            min_x=min_x,
+            max_x=max_x,
+            min_y=min_y,
+            max_y=max_y,
+            window_size=window_size,
+            overlap=overlap,
+            drop_partial_windows=True,
+        )
+
+        assert windows.shape == (4, 4)
+        assert windows.iloc[0].values.tolist() == [0, 100, 0, 100]
+        assert windows.iloc[-1].values.tolist() == [80, 180, 80, 180]
