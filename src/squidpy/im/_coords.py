@@ -33,12 +33,11 @@ class TupleSerializer(ABC):  # noqa: D101
         """Transpose self."""  # currently unused
 
     def __mul__(self, other: int | float) -> TupleSerializer:
-        if not isinstance(other, (int, float)):
+        if not isinstance(other, int | float):
             return NotImplemented
 
         a, b, c, d = self.to_tuple()
-        res = type(self)(a * other, b * other, c * other, d * other)  # type: ignore[call-arg]
-        return res
+        return type(self)(a * other, b * other, c * other, d * other)  # type: ignore[call-arg]
 
     def __rmul__(self, other: int | float) -> TupleSerializer:
         return self * other
