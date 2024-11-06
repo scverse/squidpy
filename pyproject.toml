@@ -72,9 +72,9 @@ dependencies = [
    "tifffile!=2022.4.22",
    "tqdm>=4.50.2",
    "validators>=0.18.2",
-   "xarray>=0.16.1",
+   "xarray>=0.16.1,<2024.10.0",
    "zarr>=2.6.1",
-   "spatialdata@git+https://github.com/scverse/spatialdata",
+   "spatialdata>=0.2.5",
 ]
 
 [project.optional-dependencies]
