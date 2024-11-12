@@ -182,7 +182,7 @@ def _score_helper(
 
     score = []
     for i in ixs:
-        if sparse and isinstance(vals, spmatrix):
+        if isinstance(vals, spmatrix):
             conc = vals[:, i].toarray().flatten()  # Safe to call toarray()
         else:
             conc = vals[:, i].copy()  # vals is assumed to be a NumPy array here
