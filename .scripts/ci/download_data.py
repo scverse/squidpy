@@ -51,7 +51,7 @@ def main(args: argparse.Namespace) -> None:
         obj = _maybe_download_data(func_name, path)
 
         # we could do without the AnnData check as well (1 less req. in tox.ini), but it's better to be safe
-        assert isinstance(obj, (AnnData, sq.im.ImageContainer)), type(obj)
+        assert isinstance(obj, AnnData | sq.im.ImageContainer), type(obj)
         assert path.is_file(), path
 
 

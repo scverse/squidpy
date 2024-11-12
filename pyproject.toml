@@ -7,7 +7,7 @@ name = "squidpy"
 dynamic = ["version"]
 description = "Spatial Single Cell Analysis in Python"
 readme = "README.rst"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {file = "LICENSE"}
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -42,7 +42,8 @@ authors = [
 ]
 maintainers = [
     {name = "Giovanni Palla", email = "giovanni.palla@helmholtz-muenchen.de"},
-    {name = "Michal Klein", email = "michal.klein@helmholtz-muenchen.de"}
+    {name = "Michal Klein", email = "michal.klein@helmholtz-muenchen.de"},
+    {name = "Tim Treis", email = "tim.treis@helmholtz-muenchen.de"}
 ]
 
 dependencies = [
@@ -71,9 +72,9 @@ dependencies = [
    "tifffile!=2022.4.22",
    "tqdm>=4.50.2",
    "validators>=0.18.2",
-   "xarray>=0.16.1",
+   "xarray>=0.16.1,<2024.10.0",
    "zarr>=2.6.1",
-   "spatialdata>=0.2.0",
+   "spatialdata>=0.2.5",
 ]
 
 [project.optional-dependencies]
@@ -116,6 +117,9 @@ include-package-data = true
 
 [tool.hatch.version]
 source = "vcs"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.ruff]
 line-length = 120

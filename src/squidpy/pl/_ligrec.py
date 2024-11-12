@@ -42,7 +42,7 @@ class CustomDotplot(sc.pl.DotPlot):
         y = self.BASE ** -((self.dot_max * self._delta) + self._minn)
         x = self.BASE ** -((self.dot_min * self._delta) + self._minn)
         size_range = -(np.logspace(x, y, self.DEFAULT_NUM_LEGEND_DOTS + 1, base=10).astype(np.float64))
-        size_range = (size_range - np.min(size_range)) / (np.max(size_range) - np.min(size_range))  # type:ignore[operator]
+        size_range = (size_range - np.min(size_range)) / (np.max(size_range) - np.min(size_range))
         # no point in showing dot of size 0
         size_range = size_range[1:]
 
