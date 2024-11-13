@@ -6,11 +6,12 @@ from collections.abc import Hashable, Iterable, Sequence
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
+import anndata
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
 from anndata.utils import make_index_unique
+from packaging.version import Version
 from pandas import CategoricalDtype
 from pandas.api.types import infer_dtype
 from scanpy import logging as logg
@@ -18,6 +19,14 @@ from scipy.sparse import csc_matrix, csr_matrix, issparse, spmatrix
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, _unique_order_preserving
+
+CAN_USE_SPARSE_ARRAY = Version(anndata.__version__) >= Version("0.11.0rc1")
+if CAN_USE_SPARSE_ARRAY:
+    from anndata._core.views import ArrayView
+    from anndata._core.views import SparseCSCMatrixView as SparseCSCView
+    from anndata._core.views import SparseCSRMatrixView as SparseCSRView
+else:
+    from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
 
 
 def _check_tuple_needles(
@@ -87,7 +96,7 @@ def _create_sparse_df(
     )
 
     if not issparse(data):
-        pred = (lambda col: ~np.isnan(col)) if fill_value is np.nan else (lambda col: ~np.isclose(col, fill_value))
+        pred = (lambda col: ~np.isnan(col)) if np.isnan(fill_value) else (lambda col: ~np.isclose(col, fill_value))
         dtype = SparseDtype(data.dtype, fill_value=fill_value)
         n_rows, n_cols = data.shape
         arrays = []
@@ -227,13 +236,13 @@ def _extract_expression(
             res = adata[:, genes].layers[layer]
             if isinstance(res, AnnData):
                 res = res.X
-            elif not isinstance(res, (np.ndarray, spmatrix)):
+            elif not isinstance(res, np.ndarray | spmatrix):
                 raise TypeError(f"Invalid expression type `{type(res).__name__}`.")
 
     # handle views
     if isinstance(res, ArrayView):
         return np.asarray(res), genes
-    if isinstance(res, (SparseCSRView, SparseCSCView)):
+    if isinstance(res, SparseCSRView | SparseCSCView):
         mro = type(res).mro()
         if csr_matrix in mro:
             return csr_matrix(res), genes
