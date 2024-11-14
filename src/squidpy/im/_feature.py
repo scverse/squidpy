@@ -16,6 +16,7 @@ from scanpy import logging as logg
 from skimage.measure import perimeter, regionprops
 from spatialdata import SpatialData
 
+import squidpy._utils
 from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, _get_n_cores, parallelize
@@ -45,7 +46,7 @@ def circularity(regionmask: IntegerNDArrayType) -> float:
     if perim == 0:
         return 0
     area = np.sum(regionmask)
-    return float((4 * np.pi * area) / (perim ** 2))
+    return float((4 * np.pi * area) / (perim**2))
 
 
 def _get_region_props(
@@ -67,6 +68,7 @@ def _get_region_props(
     rp_extra_methods = [
         circularity,
         _measurements.granularity,
+        _measurements.radial_distribution,
     ] + extra_methods
 
     # Add additional measurements here that calculate on the entire label image
@@ -130,6 +132,7 @@ def _subset_image_using_label(
 
 @d.dedent
 @inject_docs(f=ImageFeature)
+@squidpy._utils.deprecated
 def calculate_image_features(
     adata: AnnData,
     img: ImageContainer,
@@ -220,6 +223,23 @@ def calculate_image_features(
         return res
 
     _save_data(adata, attr="obsm", key=key_added, data=res, time=start)
+
+
+def _sdata_image_features_helper(
+    adata: AnnData,
+    img: ImageContainer,
+    layer: str | None = None,
+    library_id: str | Sequence[str] | None = None,
+    features: str | Sequence[str] = ImageFeature.SUMMARY.s,
+    features_kwargs: Mapping[str, Mapping[str, Any]] = MappingProxyType({}),
+    key_added: str = "img_features",
+    copy: bool = False,
+    n_jobs: int | None = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
+    **kwargs: Any,
+) -> pd.DataFrame | None:
+    return None
 
 
 def quantify_morphology(
@@ -332,9 +352,7 @@ def _validate_methods(methods):
 def _extract_from_ndarray(channels, col, is_processed, region_props):
     shape = region_props[col].values[0].shape
     if not all(val.shape == shape for val in region_props[col].values):
-        raise ValueError(
-            f"The results of the morphology method {col} have different shapes, this cannot be handled"
-        )
+        raise ValueError(f"The results of the morphology method {col} have different shapes, this cannot be handled")
     # Handle cases like centroids which return coordinates for each region
     if len(shape) == 1 and shape[0] != len(channels):
         for prop_idx in range(shape[0]):
@@ -343,6 +361,8 @@ def _extract_from_ndarray(channels, col, is_processed, region_props):
     # Handle cases like intensity which return one value per channel for each region
     if len(shape) == 1 and shape[0] == len(channels):
         for prop_idx in range(shape[0]):
+            if region_props[col]:
+                pass
             region_props[f"{col}_ch{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
         is_processed = True
     # Handle cases like granularity which return many values for each channel for each region
@@ -368,9 +388,7 @@ def _extract_from_list_like(channels, col, is_processed, region_props):
     # are all lists of the length of the channel list?
     length = len(region_props[col].values[0])
     if not all(len(val) == length for val in region_props[col].values):
-        raise ValueError(
-            f"The results of the morphology method {col} have different lengths, this cannot be handled"
-        )
+        raise ValueError(f"The results of the morphology method {col} have different lengths, this cannot be handled")
     if length == len(channels):
         for i, channel in enumerate(channels):
             region_props[f"{col}_ch{channel}"] = [val[i] for val in region_props[col].values]
@@ -400,6 +418,7 @@ def _get_table_key(sdata: sd.SpatialData, label: str, kwargs: dict[str, typing.A
     return table_key
 
 
+@squidpy._utils.deprecated
 def _calculate_image_features_helper(
     obs_ids: Sequence[str],
     adata: AnnData,
@@ -437,6 +456,7 @@ def _calculate_image_features_helper(
             elif feature == ImageFeature.SUMMARY:
                 res = crop.features_summary(layer=layer, **feature_kwargs)
             elif feature == ImageFeature.SEGMENTATION:
+                # TODO: Potential bug here, should be label_layer and intensity layer must be specified via feature_kwargs
                 res = crop.features_segmentation(intensity_layer=layer, **feature_kwargs)
             elif feature == ImageFeature.CUSTOM:
                 res = crop.features_custom(layer=layer, **feature_kwargs)

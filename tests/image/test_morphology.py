@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 import typing
+from pyexpat import features
 
 import numpy as np
 import numpy.testing as npt
@@ -9,17 +10,31 @@ import pandas as pd
 import pytest
 import skimage.measure
 import spatialdata as sd
+from anndata import AnnData
+from skimage.measure import regionprops
 from spatialdata import SpatialData
 from spatialdata.datasets import blobs, raccoon
 
 import squidpy as sq
-from squidpy.im import _measurements
 
 # noinspection PyProtectedMember
-from squidpy.im._feature import _get_region_props, _get_table_key
+from squidpy.im import ImageContainer, _measurements, quantify_morphology
 
 # noinspection PyProtectedMember
-from squidpy.im._measurements import border_occupied_factor
+from squidpy.im._feature import (
+    _get_region_props,
+    _get_table_key,
+    _sdata_image_features_helper,
+    calculate_image_features,
+)
+
+# noinspection PyProtectedMember
+from squidpy.im._measurements import (
+    border_occupied_factor,
+    calculate_histogram,
+    calculate_image_feature,
+    calculate_quantiles,
+)
 
 
 @pytest.fixture
@@ -55,14 +70,8 @@ def dummy_callable():
 @pytest.fixture
 def malformed_morphology_methods() -> dict[str, typing.Any]:
     methods = {
-        "wrong_container": [
-            ("label", "area"),
-            "label,area"
-        ],
-        "wrong_method_type": [
-            ["test", dummy_callable, 42.42],
-            ["test", dummy_callable, 42]
-        ]
+        "wrong_container": [("label", "area"), "label,area"],
+        "wrong_method_type": [["test", dummy_callable, 42.42], ["test", dummy_callable, 42]],
     }
     return methods
 
@@ -80,12 +89,7 @@ class TestMorphology:
     def test_sanity_method_list(self, sdata_blobs, malformed_morphology_methods):
         with pytest.raises(ValueError, match="Argument `methods` must be a list of strings."):
             for methods in malformed_morphology_methods["wrong_container"]:
-                sq.im.quantify_morphology(
-                    sdata=sdata_blobs,
-                    label="blobs_labels",
-                    image="blobs_image",
-                    methods=methods
-                )
+                sq.im.quantify_morphology(sdata=sdata_blobs, label="blobs_labels", image="blobs_image", methods=methods)
 
     # @pytest.mark.parametrize(
     #     "sdata,methods",
@@ -95,31 +99,18 @@ class TestMorphology:
     def test_sanity_method_list_types(self, sdata_blobs, malformed_morphology_methods):
         with pytest.raises(ValueError, match="All elements in `methods` must be strings or callables."):
             for methods in malformed_morphology_methods["wrong_method_type"]:
-                sq.im.quantify_morphology(
-                    sdata=sdata_blobs,
-                    label="blobs_labels",
-                    image="blobs_image",
-                    methods=methods
-                )
+                sq.im.quantify_morphology(sdata=sdata_blobs, label="blobs_labels", image="blobs_image", methods=methods)
 
     def test_get_table_key_no_annotators(self, sdata_blobs):
         label = "blobs_multiscale_labels"
         with pytest.raises(ValueError, match=f"No tables automatically detected in `sdata` for {label}"):
-            _get_table_key(
-                sdata=sdata_blobs,
-                label=label,
-                kwargs={}
-            )
+            _get_table_key(sdata=sdata_blobs, label=label, kwargs={})
 
     def test_get_table_key_multiple_annotators(self, sdata_blobs):
         sdata_blobs.tables["multi_table"] = sd.deepcopy(sdata_blobs["table"])
         label = "blobs_labels"
         with pytest.raises(ValueError, match=f"Multiple tables detected in `sdata` for {label}"):
-            _get_table_key(
-                sdata=sdata_blobs,
-                label=label,
-                kwargs={}
-            )
+            _get_table_key(sdata=sdata_blobs, label=label, kwargs={})
 
     def test_quantify_morphology_granularity(self, sdata_blobs):
         granular_spectrum_length = 16
@@ -194,6 +185,17 @@ class TestMorphology:
             split_by_channels=True,
         )
 
+    def test_quantify_morphology_cp_measure(self, sdata_blobs):
+        sq.im.quantify_morphology(
+            sdata=sdata_blobs,
+            label="blobs_labels",
+            image="blobs_image",
+            split_by_channels=True,
+            methods=["label", "radial_distribution"],
+        )
+
+        print(sdata_blobs["table"].obsm["morphology"].columns)
+
 
 # TODO Remove for release
 @pytest.fixture
@@ -240,3 +242,201 @@ class TestMeasurements:
         expected = {1: 3 / 8, 2: 3 / 8, 3: 2 / 4}
         actual = border_occupied_factor(label_image)
         assert actual == expected
+
+    def test_radial_distribution(self, sdata_mibitof):
+        pixels = np.random.randint(100, size=64**2).reshape((64, 64))
+        mask = np.zeros_like(pixels, dtype=bool)
+        mask[2:-3, 2:-3] = True
+
+        result = _measurements.radial_distribution(
+            labels=pixels,
+            pixels=mask,
+        )
+
+        # result = _measurements.radial_distribution(
+        #     labels=np.array(sdata_mibitof["point8_labels"]),
+        #     pixels=np.array(sdata_mibitof["point8_image"]),
+        # )
+
+        print(result)
+
+    def test_cp_measure(self, sdata_blobs):
+        from cp_measure.bulk import get_fast_measurements
+
+        measurements = get_fast_measurements()
+
+        size = 200
+        rng = np.random.default_rng(42)
+        pixels = rng.integers(low=0, high=10, size=(size, size))
+
+        masks = np.zeros_like(pixels)
+        masks[5:-6, 5:-6] = 1
+
+        results = {}
+        for measurement_name, measurement in measurements.items():
+            results[measurement_name] = measurement(masks, pixels)
+
+        print(results)
+
+
+@pytest.fixture()
+def blobs_as_image_container(sdata_blobs: SpatialData) -> ImageContainer:
+    img_layer_name = "blobs_image"
+    seg_layer_name = "blobs_labels"
+    img = ImageContainer(sdata_blobs[img_layer_name].to_numpy(), layer=img_layer_name)
+    img.add_img(sdata_blobs[seg_layer_name].to_numpy(), layer=seg_layer_name)
+
+    return img
+
+
+@pytest.fixture()
+def blobs_as_adata(sdata_blobs: SpatialData) -> AnnData:
+    s_adata = sdata_blobs.tables["table"]
+    # print(s_adata.uns)
+    return s_adata
+
+
+@pytest.fixture()
+def mibitof_as_image_container(sdata_mibitof: SpatialData) -> ImageContainer:
+    img_layer_name = "point8_image"
+    seg_layer_name = "point8_labels"
+    img = ImageContainer(sdata_mibitof[img_layer_name].to_numpy(), layer=img_layer_name)
+    img.add_img(sdata_mibitof[seg_layer_name].to_numpy(), layer=seg_layer_name)
+    return img
+
+
+@pytest.fixture()
+def mibitof_as_adata(sdata_mibitof: SpatialData) -> AnnData:
+    s_adata = sdata_mibitof.tables["table"]
+    s_adata.uns["spatial"] = {"point8_labels": {"scalefactors": {"spot_diameter_fullres": 7.0}}}
+    return s_adata
+
+
+@pytest.fixture()
+def visium_adata() -> AnnData:
+    return sq.datasets.visium_fluo_adata_crop()
+
+
+@pytest.fixture()
+def visium_img() -> ImageContainer:
+    img = sq.datasets.visium_fluo_image_crop()
+    sq.im.segment(
+        img=img,
+        layer="image",
+        layer_added="segmented_watershed",
+        method="watershed",
+        channel=0,
+    )
+    return img
+
+
+@pytest.fixture()
+def calc_im_features_kwargs() -> dict[str, typing.Any]:
+    kwargs = {
+        # "adata": visium_adata,
+        # "img": visium_img,
+        # "features": features,
+        "layer": "image",
+        # "library_id": "point8_labels",
+        "key_added": "segmentation_features",
+        "features_kwargs": {
+            "segmentation": {
+                "label_layer": "segmented_watershed",
+                "props": ["label", "area", "mean_intensity"],
+                "channels": [1, 2],
+            }
+        },
+        "copy": True,
+        "mask_circle": True,
+    }
+    return kwargs
+
+
+class TestMorphologyImageFeaturesCompatibility:
+    def test_quantiles(
+        self, calc_im_features_kwargs: dict[str, typing.Any], visium_adata: AnnData, visium_img: ImageContainer
+    ):
+        calc_im_features_kwargs.update(
+            {
+                "features": ["summary"],
+                "adata": visium_adata,
+                "img": visium_img,
+            }
+        )
+
+        # expected = calculate_image_features(
+        #     **calc_im_features_kwargs
+        # )
+        actual = calculate_quantiles(
+            mask=visium_img["segmented_watershed"].to_numpy(), pixels=visium_img["image"].to_numpy()
+        )
+        print(actual)
+
+    def test_calculate_image_features(self, visium_adata: AnnData, visium_img: ImageContainer):
+        actual = calculate_image_feature(
+            feature=calculate_histogram,
+            mask=visium_img["segmented_watershed"].to_numpy(),
+            pixels=visium_img["image"].to_numpy(),
+        )
+        print(actual)
+
+    def test_calculate_image_features_performance(self, visium_adata: AnnData, visium_img: ImageContainer):
+        start_time = time.perf_counter()
+        props = regionprops(
+            label_image=visium_img["segmented_watershed"].to_numpy()[:, :, 0, 0],
+            intensity_image=visium_img["image"].to_numpy()[:, :, 0, 0],
+            extra_properties=calculate_histogram,
+        )
+        actual = {prop.label: prop.calculate_histogram for prop in props}
+        end_time = time.perf_counter()
+        # calc_im_features_result = calculate_image_feature(
+        #     feature=calculate_histogram,
+        #     mask=visium_img["segmented_watershed"].to_numpy(),
+        #     pixels=visium_img["image"].to_numpy()
+        # )
+        # end_time = time.perf_counter()
+        # assert end_time - start_time < 60
+
+        print(end_time - start_time)
+
+    def test_im_features_morphology_equivalence(
+        self,
+        # blobs_as_adata: AnnData, blobs_as_image_container: ImageContainer,
+        # mibitof_as_adata: AnnData, mibitof_as_image_container: ImageContainer,
+        calc_im_features_kwargs: dict[str, typing.Any],
+        visium_adata: AnnData,
+        visium_img: ImageContainer,
+        # adata: AnnData
+    ):
+        # print(adata.uns.spatial)
+        # expected = calculate_image_features(
+        #     adata=mibitof_as_adata,
+        #     img=mibitof_as_image_container,
+        #     layer="point8_labels",
+        #     library_id="point8_labels",
+        #     features=features,
+        #     key_added="foo",
+        #     copy=True,
+        #     features_kwargs={"segmentation": {"label_layer": "point8_labels", "intensity_layer": "point8_image"}},
+        # )
+
+        calc_im_features_kwargs.update(
+            {
+                "features": ["texture", "summary", "histogram", "segmentation"],
+                "adata": visium_adata,
+                "img": visium_img,
+            }
+        )
+
+        expected = calculate_image_features(**calc_im_features_kwargs)
+
+        actual = _sdata_image_features_helper(**calc_im_features_kwargs)
+        # morphology = quantify_morphology()
+
+        pd.testing.assert_frame_equal(actual, expected)
+
+    # def test_helper_equivalence(self, adata: AnnData, cont: ImageContainer):
+    #     expected = _calculate_image_features_helper(
+    #         adata=adata,
+    #         img=cont["image"],
+    #     )

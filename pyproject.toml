@@ -74,7 +74,8 @@ dependencies = [
    "xarray>=0.16.1",
    "zarr>=2.6.1",
    "spatialdata>=0.2.0",
-   "centrosome>=1.2.3"
+   "centrosome>=1.2.3",
+   "cp-measure>=0.1.4"
 ]
 
 [project.optional-dependencies]
