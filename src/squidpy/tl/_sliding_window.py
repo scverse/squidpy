@@ -58,7 +58,6 @@ def sliding_window(
 
     if isinstance(adata, SpatialData):
         adata = adata.table
-
     # we don't want to modify the original adata in case of copy=True
     if copy:
         adata = adata.copy()
@@ -218,9 +217,13 @@ def _calculate_window_corners(
     x_step = window_size - overlap
     y_step = window_size - overlap
 
-    # Generate starting points
-    x_starts = np.arange(min_x, max_x, x_step)
-    y_starts = np.arange(min_y, max_y, y_step)
+    # Align min_x and min_y to ensure that the first window starts properly
+    aligned_min_x = min_x - (min_x % window_size) if min_x % window_size != 0 else min_x
+    aligned_min_y = min_y - (min_y % window_size) if min_y % window_size != 0 else min_y
+
+    # Generate starting points starting from the aligned minimum values
+    x_starts = np.arange(aligned_min_x, max_x, x_step)
+    y_starts = np.arange(aligned_min_y, max_y, y_step)
 
     # Create all combinations of x and y starting points
     starts = list(product(x_starts, y_starts))
