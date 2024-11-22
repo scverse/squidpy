@@ -69,6 +69,9 @@ def _get_region_props(
         circularity,
         _measurements.granularity,
         _measurements.radial_distribution,
+        _measurements.calculate_image_texture,
+        _measurements.calculate_histogram,
+        _measurements.calculate_quantiles,
     ] + extra_methods
 
     # Add additional measurements here that calculate on the entire label image
@@ -361,9 +364,13 @@ def _extract_from_ndarray(channels, col, is_processed, region_props):
     # Handle cases like intensity which return one value per channel for each region
     if len(shape) == 1 and shape[0] == len(channels):
         for prop_idx in range(shape[0]):
-            if region_props[col]:
-                pass
-            region_props[f"{col}_ch{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
+            if all(isinstance(val[prop_idx], dict) for val in region_props[col].values):
+                for key in region_props[col][0][prop_idx].keys():
+                    region_props[f"{col}_ch{prop_idx}_{key}"] = [
+                        float(val[prop_idx][key]) for val in region_props[col].values
+                    ]
+            else:
+                region_props[f"{col}_ch{prop_idx}"] = [val[prop_idx] for val in region_props[col].values]
         is_processed = True
     # Handle cases like granularity which return many values for each channel for each region
     if len(shape) == 2:

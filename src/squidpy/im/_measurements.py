@@ -9,6 +9,8 @@ import centrosome.zernike
 import numpy as np
 import scipy.ndimage
 import skimage.morphology
+from skimage.feature import graycomatrix, graycoprops
+from skimage.util import img_as_ubyte
 
 from squidpy.im import ImageContainer
 
@@ -47,6 +49,9 @@ def _all_regionprops_names() -> list[str]:
         "granularity",
         "zernike",
         "radial_distribution",
+        "calculate_image_texture",
+        "calculate_histogram",
+        "calculate_quantiles",
     ]
     return names
 
@@ -68,9 +73,34 @@ def calculate_image_feature(feature: typing.Callable, mask: np.ndarray, pixels: 
                 )
         else:
             result[label] = feature(mask=mask, pixels=pixels[mask == label], **kwargs)
-            # result[label] = {quantile: np.quantile(pixels[mask == label], quantile) for quantile in quantiles}
 
     return result
+
+
+def calculate_image_texture(mask: np.ndarray, pixels: np.ndarray, **kwargs) -> dict:
+    distances = kwargs.get("image_texture_distances", (1,))
+    angles = kwargs.get("image_texture_angles", (0, np.pi / 4, np.pi / 2, 3 * np.pi / 4))
+    props = kwargs.get(
+        "image_texture_graycoprops",
+        (
+            "contrast",
+            "dissimilarity",
+            "homogeneity",
+            "correlation",
+            "ASM",
+        ),
+    )
+    if not np.issubdtype(pixels.dtype, np.uint8):
+        pixels = img_as_ubyte(pixels, force_copy=False)  # values must be in [0, 255]
+
+    features = {}
+    comatrix = graycomatrix(pixels, distances=distances, angles=angles, levels=256)
+    for prop in props:
+        tmp_features = graycoprops(comatrix, prop=prop)
+        for distance_idx, dist in enumerate(distances):
+            for angle_idx, a in enumerate(angles):
+                features[f"{prop}_dist-{dist}_angle-{a:.2f}"] = tmp_features[distance_idx, angle_idx]
+    return features
 
 
 def calculate_histogram(mask: np.ndarray, pixels: np.ndarray, **kwargs) -> dict:

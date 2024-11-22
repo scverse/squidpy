@@ -33,6 +33,7 @@ from squidpy.im._measurements import (
     border_occupied_factor,
     calculate_histogram,
     calculate_image_feature,
+    calculate_image_texture,
     calculate_quantiles,
 )
 
@@ -374,7 +375,8 @@ class TestMorphologyImageFeaturesCompatibility:
 
     def test_calculate_image_features(self, visium_adata: AnnData, visium_img: ImageContainer):
         actual = calculate_image_feature(
-            feature=calculate_histogram,
+            # feature=calculate_histogram,
+            feature=calculate_image_texture,
             mask=visium_img["segmented_watershed"].to_numpy(),
             pixels=visium_img["image"].to_numpy(),
         )
