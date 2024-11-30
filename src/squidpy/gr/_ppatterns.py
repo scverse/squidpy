@@ -204,7 +204,7 @@ def spatial_autocorr(
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
         _assert_positive(n_perms, name="n_perms")
-        perms = np.arange(n_perms)
+        perms = list(np.arange(n_perms))
 
         score_perms = parallelize(
             _score_helper,
