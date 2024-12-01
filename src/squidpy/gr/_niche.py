@@ -11,7 +11,7 @@ import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
 from numpy.typing import NDArray
-from scipy.sparse import hstack, issparse, spdiags
+from scipy.sparse import coo_matrix, hstack, issparse, spdiags
 from scipy.spatial import distance
 from sklearn.metrics import f1_score
 from sklearn.mixture import GaussianMixture
@@ -26,7 +26,7 @@ __all__ = ["calculate_niche"]
 
 
 @d.dedent
-@inject_docs(m=NicheDefinitions)
+# @inject_docs(m=NicheDefinitions)
 def calculate_niche(
     adata: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter"] = "neighborhood",
@@ -40,7 +40,8 @@ def calculate_niche(
     min_niche_size: int | None = None,
     scale: bool = True,
     abs_nhood: bool = False,
-    adj_subsets: int | list[int] | None = None,
+    distance: int = 1,
+    n_hop_weights: list[float] | None = None,
     aggregation: str = "mean",
     n_components: int | None = None,
     random_state: int = 42,
@@ -87,9 +88,13 @@ def calculate_niche(
     abs_nhood
         If 'True', calculate niches based on absolute neighborhood profile.
         Optional if flavor == `{c.NEIGHBORHOOD.s!r}`.
-    adj_subsets
-        List of adjacency matrices to use e.g. [1,2,3] for 1-hop,2-hop,3-hop neighbors respectively or "5" for 1-hop,...,5-hop neighbors. 0 (self) is always included.
+    distance
+        n-hop neighbor adjacency matrices to use e.g. [1,2,3] for 1-hop,2-hop,3-hop neighbors respectively or "5" for 1-hop,...,5-hop neighbors. 0 (self) is always included.
         Required if flavor == `{c.CELLCHARTER.s!r}`.
+        Optional if flavor == `{c.NEIGHBORHOOD.s!r}`.
+    n_hop_weights
+        How to weight subsequent n-hop adjacency matrices. E.g. [1, 0.5, 0.25] for weights of 1-hop, 2-hop, 3-hop adjacency matrices respectively.
+        Optional if flavor == `{c.NEIGHBORHOOD.s!r}` and `distance` > 1.
     aggregation
         How to aggregate count matrices. Either 'mean' or 'variance'.
         Required if flavor == `{c.CELLCHARTER.s!r}`.
@@ -129,7 +134,8 @@ def calculate_niche(
         min_niche_size,
         scale,
         abs_nhood,
-        adj_subsets,
+        distance,
+        n_hop_weights,
         aggregation,
         n_components,
         random_state,
@@ -140,27 +146,54 @@ def calculate_niche(
 def _get_nhood_profile_niches(
     adata: AnnData,
     mask: pd.core.series.Series | None,
-    groups: str | None,
+    groups: str,
     n_neighbors: int,
     resolutions: float | list[float],
     subset_groups: list[str] | None,
     min_niche_size: int | None,
     scale: bool,
     abs_nhood: bool,
+    distance: int,
+    n_hop_weights: list[float] | None,
     spatial_connectivities_key: str,
 ) -> None:
     """
     adapted from https://github.com/immunitastx/monkeybread/blob/main/src/monkeybread/calc/_neighborhood_profile.py
     """
-    # calculate the neighborhood profile for each cell (relative and absolute proportion of e.g. each cell type in the neighborhood)
-    rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
-        adata, groups, subset_groups, spatial_connectivities_key
-    )
+    # If subsetting, filter connections from adjacency matrix
+    if subset_groups:
+        adjacency_matrix = adata.obsp[spatial_connectivities_key].tocsc()
+        obs_mask = ~adata.obs[groups].isin(subset_groups)
+        adata = adata[obs_mask]
+
+        adjacency_matrix = adjacency_matrix[obs_mask, :][:, obs_mask]
+        adata.obsp[spatial_connectivities_key] = adjacency_matrix.tocsr()
+
+    # get obs x neighbor matrix from sparse matrix
+    matrix = adata.obsp[spatial_connectivities_key].tocoo()
+
+    # get obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
+    nhood_profile = _calculate_neighborhood_profile(adata, groups, matrix, abs_nhood)
+
+    # Additionally use n-hop neighbors if distance > 1. This sums up the (weighted) neighborhood profiles of all n-hop neighbors.
+    if distance > 1:
+        n_hop_adjacency_matrix = adata.obsp[spatial_connectivities_key].copy()
+        # if no weights are provided, use 1 for all n_hop neighbors
+        if n_hop_weights is None:
+            n_hop_weights = [1] * distance
+        # if weights are provided, start with applying weight to the original neighborhood profile
+        else:
+            nhood_profile = n_hop_weights[0] * nhood_profile
+        # get n_hop neighbor adjacency matrices by multiplying the original adjacency matrix with itself n times and get corresponding neighborhood profiles.
+        for n_hop in range(distance - 1):
+            n_hop_adjacency_matrix = n_hop_adjacency_matrix @ adata.obsp[spatial_connectivities_key]
+            matrix = n_hop_adjacency_matrix.tocoo()
+            nhood_profile += n_hop_weights[n_hop + 1] * _calculate_neighborhood_profile(
+                adata, groups, matrix, abs_nhood
+            )
+
     # create AnnData object from neighborhood profile to perform scanpy functions
-    if not abs_nhood:
-        adata_neighborhood = ad.AnnData(X=rel_nhood_profile)
-    else:
-        adata_neighborhood = ad.AnnData(X=abs_nhood_profile)
+    adata_neighborhood = ad.AnnData(X=nhood_profile)
 
     # reason for scaling see https://monkeybread.readthedocs.io/en/latest/notebooks/tutorial.html#niche-analysis
     if scale:
@@ -226,7 +259,7 @@ def _get_utag_niches(
 def _get_cellcharter_niches(
     adata: AnnData,
     subset_groups: list[str] | None,
-    adj_subsets: int | list[int] | None,
+    distance: int,
     aggregation: str,
     n_components: int,
     random_state: int,
@@ -236,23 +269,12 @@ def _get_cellcharter_niches(
     and https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/tl/_gmm.py"""
 
     adjacency_matrix = adata.obsp[spatial_connectivities_key]
-    if not isinstance(adj_subsets, list):
-        if adj_subsets is not None:
-            adj_subsets = list(range(adj_subsets + 1))
-        else:
-            raise ValueError(
-                "flavor 'cellcharter' requires adj_subsets to not be None. Specify list of values or maximum value of neighbors to use."
-            )
-    else:
-        if 0 not in adj_subsets:
-            adj_subsets.insert(0, 0)
-    if any(x < 0 for x in adj_subsets):
-        raise ValueError("adj_subsets must contain non-negative integers.")
+    layers = list(range(distance + 1))
 
     aggregated_matrices = []
     adj_hop = _setdiag(adjacency_matrix, 0)  # Remove self-loops, set diagonal to 0
     adj_visited = _setdiag(adjacency_matrix.copy(), 1)  # Track visited neighbors
-    for k in adj_subsets:
+    for k in layers:
         if k == 0:
             # get original count matrix (not aggregated)
             aggregated_matrices.append(adata.X)
@@ -276,25 +298,14 @@ def _get_cellcharter_niches(
 
 def _calculate_neighborhood_profile(
     adata: AnnData,
-    groups: str | None,
-    subset_groups: list[str] | None,
-    spatial_connectivities_key: str,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """returns an obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood"""
+    groups: str,
+    matrix: coo_matrix,
+    abs_nhood: bool,
+) -> pd.DataFrame:
+    """
+    Returns an obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
+    """
 
-    if groups is None:
-        raise ValueError("Please specify 'groups' based on which to calculate neighborhood profile.")
-    if subset_groups:
-        adjacency_matrix = adata.obsp[spatial_connectivities_key].tocsc()
-        obs_mask = ~adata.obs[groups].isin(subset_groups)
-        adata = adata[obs_mask]
-
-        # Update adjacency matrix such that it only contains connections to filtered observations
-        adjacency_matrix = adjacency_matrix[obs_mask, :][:, obs_mask]
-        adata.obsp[spatial_connectivities_key] = adjacency_matrix.tocsr()
-
-    # get obs x neighbor matrix from sparse matrix
-    matrix = adata.obsp[spatial_connectivities_key].tocoo()
     nonzero_indices = np.split(matrix.col, matrix.row.searchsorted(np.arange(1, matrix.shape[0])))
     neighbor_matrix = pd.DataFrame(nonzero_indices)
 
@@ -320,7 +331,10 @@ def _calculate_neighborhood_profile(
     # normalize by n_neighbors to get relative frequency of each category
     rel_freq = abs_freq / k
 
-    return pd.DataFrame(rel_freq, index=adata.obs.index), pd.DataFrame(abs_freq, index=adata.obs.index)
+    if abs_nhood:
+        return pd.DataFrame(abs_freq, index=adata.obs.index)
+    else:
+        return pd.DataFrame(rel_freq, index=adata.obs.index)
 
 
 def _utag(adata: AnnData, normalize_adj: bool, spatial_connectivity_key: str) -> AnnData:
@@ -449,7 +463,8 @@ def _validate_args(
     min_niche_size: int | None,
     scale: bool,
     abs_nhood: bool,
-    adj_subsets: int | list[int] | None,
+    distance: int,
+    n_hop_weights: list[float] | None,
     aggregation: str,
     n_components: int | None,
     random_state: int,
@@ -474,6 +489,8 @@ def _validate_args(
                 min_niche_size,
                 scale,
                 abs_nhood,
+                distance,
+                n_hop_weights,
                 spatial_connectivities_key,
             )
         else:
@@ -496,13 +513,13 @@ def _validate_args(
                 "param 'groups', 'subset_groups', 'min_niche_size', 'scale', 'abs_nhood' are not used for cellcharter flavor.",
                 stacklevel=2,
             )
-        if adj_subsets is not None and aggregation is not None and n_components is not None:
+        if distance is not None and aggregation is not None and n_components is not None:
             _get_cellcharter_niches(
-                adata, subset_groups, adj_subsets, aggregation, n_components, random_state, spatial_connectivities_key
+                adata, subset_groups, distance, aggregation, n_components, random_state, spatial_connectivities_key
             )
         else:
             raise ValueError(
-                "One of required args 'adj_subsets', 'aggregation' and 'n_components' for flavor 'cellcharter' is 'None'."
+                "One of required args 'distance', 'aggregation' and 'n_components' for flavor 'cellcharter' is 'None'."
             )
     else:
         raise ValueError(f"Invalid flavor '{flavor}'. Please choose one of 'neighborhood', 'utag', 'cellcharter'.")
