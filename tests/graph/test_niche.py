@@ -35,10 +35,7 @@ def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
             assert len(niches[niches == label]) >= 100
 
     rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
-        adata_seqfish,
-        groups="celltype_mapped_refined",
-        subset_groups=None,
-        spatial_connectivities_key=SPATIAL_CONNECTIVITIES_KEY,
+        adata_seqfish, groups="celltype_mapped_refined", spatial_connectivities_key=SPATIAL_CONNECTIVITIES_KEY
     )
     # assert shape obs x groups
     assert rel_nhood_profile.shape == (
@@ -87,9 +84,7 @@ def test_cellcharter_approach(adata_seqfish: AnnData):
     """Check whether niche calculation using CellCharter approach works as intended."""
 
     spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
-    calculate_niche(
-        adata_seqfish, groups="celltype_mapped_refined", flavor="cellcharter", adj_subsets=3, n_components=5
-    )
+    calculate_niche(adata_seqfish, groups="celltype_mapped_refined", flavor="cellcharter", distance=3, n_components=5)
     niches = adata_seqfish.obs["cellcharter_niche"]
 
     assert niches.nunique() == 5
