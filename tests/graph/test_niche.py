@@ -35,7 +35,7 @@ def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
             assert len(niches[niches == label]) >= 100
 
     rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
-        adata_seqfish, groups="celltype_mapped_refined", spatial_connectivities_key=SPATIAL_CONNECTIVITIES_KEY
+        adata_seqfish, groups="celltype_mapped_refined"
     )
     # assert shape obs x groups
     assert rel_nhood_profile.shape == (
