@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Iterator
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
 import anndata as ad
 import numpy as np
@@ -20,13 +19,12 @@ from spatialdata import SpatialData
 
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA
 
 __all__ = ["calculate_niche"]
 
 
 @d.dedent
-# @inject_docs(m=NicheDefinitions)
+@inject_docs(fla=NicheDefinitions)
 def calculate_niche(
     adata: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter"] = "neighborhood",
@@ -56,11 +54,11 @@ def calculate_niche(
     %(adata)s
     flavor
         Method to use for niche calculation. Available options are:
-            - `{c.NEIGHBORHOOD.s!r}` - cluster the neighborhood profile.
-            - `{c.UTAG.s!r}` - use utag algorithm (matrix multiplication).
-            - `{c.CELLCHARTER.s!r}` - cluster adjacency matrix with Gaussian Mixture Model (GMM) using CellCharter's approach.
-            - `{c.SPOT.s!r}` - calculate niches using optimal transport. (coming soon)
-            - `{c.BANKSY.s!r}`- use Banksy algorithm. (coming soon)
+            - `{fla.NEIGHBORHOOD.s!r}` - cluster the neighborhood profile.
+            - `{fla.UTAG.s!r}` - use utag algorithm (matrix multiplication).
+            - `{fla.CELLCHARTER.s!r}` - cluster adjacency matrix with Gaussian Mixture Model (GMM) using CellCharter's approach.
+            - `{fla.SPOT.s!r}` - calculate niches using optimal transport. (coming soon)
+            - `{fla.BANKSY.s!r}`- use Banksy algorithm. (coming soon)
     %(library_key)s
     table_key
         Key in `spatialdata.tables` to specify an 'anndata' table. Only necessary if 'sdata' is passed.
@@ -69,41 +67,41 @@ def calculate_niche(
         Note that if you want to exclude these cells during neighborhood calculation already, you should subset your AnnData table before running 'sq.gr.spatial_neigbors'.
     groups
         Groups based on which to calculate neighborhood profile (E.g. columns of cell type annotations in adata.obs).
-        Required if flavor == `{c.NEIGHBORHOOD.s!r}`.
+        Required if flavor == `{fla.NEIGHBORHOOD.s!r}`.
     n_neighbors
         Number of neighbors to use for 'scanpy.pp.neighbors' before clustering using leiden algorithm.
-        Required if flavor == `{c.NEIGHBORHOOD.s!r}` or flavor == `{c.UTAG.s!r}`.
+        Required if flavor == `{fla.NEIGHBORHOOD.s!r}` or flavor == `{fla.UTAG.s!r}`.
     resolutions
         List of resolutions to use for leiden clustering.
-        Required if flavor == `{c.NEIGHBORHOOD.s!r}` or flavor == `{c.UTAG.s!r}`.
+        Required if flavor == `{fla.NEIGHBORHOOD.s!r}` or flavor == `{fla.UTAG.s!r}`.
     subset_groups
         Groups (e.g. cell type categories) to ignore when calculating the neighborhood profile.
-        Optional if flavor == `{c.NEIGHBORHOOD.s!r}`.
+        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
     min_niche_size
         Minimum required size of a niche. Niches with fewer cells will be labeled as 'not_a_niche'.
-        Optional if flavor == `{c.NEIGHBORHOOD.s!r}`.
+        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
     scale
         If 'True', compute z-scores of neighborhood profiles.
-        Optional if flavor == `{c.NEIGHBORHOOD.s!r}`.
+        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
     abs_nhood
         If 'True', calculate niches based on absolute neighborhood profile.
-        Optional if flavor == `{c.NEIGHBORHOOD.s!r}`.
+        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
     distance
         n-hop neighbor adjacency matrices to use e.g. [1,2,3] for 1-hop,2-hop,3-hop neighbors respectively or "5" for 1-hop,...,5-hop neighbors. 0 (self) is always included.
-        Required if flavor == `{c.CELLCHARTER.s!r}`.
-        Optional if flavor == `{c.NEIGHBORHOOD.s!r}`.
+        Required if flavor == `{fla.CELLCHARTER.s!r}`.
+        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
     n_hop_weights
         How to weight subsequent n-hop adjacency matrices. E.g. [1, 0.5, 0.25] for weights of 1-hop, 2-hop, 3-hop adjacency matrices respectively.
-        Optional if flavor == `{c.NEIGHBORHOOD.s!r}` and `distance` > 1.
+        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}` and `distance` > 1.
     aggregation
         How to aggregate count matrices. Either 'mean' or 'variance'.
-        Required if flavor == `{c.CELLCHARTER.s!r}`.
+        Required if flavor == `{fla.CELLCHARTER.s!r}`.
     n_components
         Number of components to use for GMM.
-        Required if flavor == `{c.CELLCHARTER.s!r}`.
+        Required if flavor == `{fla.CELLCHARTER.s!r}`.
     random_state
         Random state to use for GMM.
-        Optional if flavor == `{c.CELLCHARTER.s!r}`.
+        Optional if flavor == `{fla.CELLCHARTER.s!r}`.
     spatial_connectivities_key
         Key in `adata.obsp` where spatial connectivities are stored.
     """
@@ -123,7 +121,7 @@ def calculate_niche(
             f"Key '{spatial_connectivities_key}' not found in `adata.obsp`. If you haven't computed a spatial neighborhood graph yet, use `sq.gr.spatial_neighbors`."
         )
 
-    _validate_args(
+    _validate_niche_args(
         adata,
         mask,
         flavor,
@@ -191,6 +189,8 @@ def _get_nhood_profile_niches(
             nhood_profile += n_hop_weights[n_hop + 1] * _calculate_neighborhood_profile(
                 adata, groups, matrix, abs_nhood
             )
+        if not abs_nhood:
+            nhood_profile = nhood_profile / sum(n_hop_weights)
 
     # create AnnData object from neighborhood profile to perform scanpy functions
     adata_neighborhood = ad.AnnData(X=nhood_profile)
@@ -452,7 +452,7 @@ def _jensen_shannon_divergence(adata: AnnData, niche_key: str, library_key: str)
     return distance.jensenshannon(np.array(label_distributions))
 
 
-def _validate_args(
+def _validate_niche_args(
     adata: AnnData,
     mask: pd.core.series.Series | None,
     flavor: Literal["neighborhood", "utag", "cellcharter"],
