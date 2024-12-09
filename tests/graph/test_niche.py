@@ -120,7 +120,7 @@ def test_cellcharter_approach(adata_seqfish: AnnData):
 def test_nhop(adjacency_matrix: np.array, n_hop_matrix: np.array):
     """Test if n-hop neighbor computation works as expected."""
 
-    assert np.array_equal(adjacency_matrix @ adjacency_matrix , n_hop_matrix)
+    assert np.array_equal(adjacency_matrix @ adjacency_matrix, n_hop_matrix)
     adj_sparse = scipy.sparse.csr_matrix(adjacency_matrix)
     nhop_sparse = scipy.sparse.csr_matrix(n_hop_matrix)
     assert (adj_sparse @ adj_sparse != nhop_sparse).nnz == 0
