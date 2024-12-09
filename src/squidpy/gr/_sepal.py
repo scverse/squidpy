@@ -183,9 +183,10 @@ def _score_helper(
     score = []
     for i in ixs:
         if isinstance(vals, spmatrix):
-            conc = vals[:, i].toarray().flatten()
+            conc = vals[:, i].toarray().flatten()  # Safe to call toarray()
         else:
-            conc = vals[:, i].copy()
+            conc = vals[:, i].copy()  # vals is assumed to be a NumPy array here
+
         time_iter = _diffusion(conc, fun, n_iter, sat, sat_idx, unsat, unsat_idx, dt=dt, thresh=thresh)
         score.append(dt * time_iter)
 
