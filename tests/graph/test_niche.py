@@ -12,6 +12,7 @@ from squidpy.gr._niche import _aggregate, _calculate_neighborhood_profile, _hop,
 
 SPATIAL_CONNECTIVITIES_KEY = "spatial_connectivities"
 N_NEIGHBORS = 20
+GROUPS = "celltype_mapped_refined"
 
 
 def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
@@ -19,7 +20,7 @@ def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
     spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
     calculate_niche(
         adata_seqfish,
-        groups="celltype_mapped_refined",
+        groups=GROUPS,
         flavor="neighborhood",
         n_neighbors=N_NEIGHBORS,
         resolutions=[0.1],
@@ -34,13 +35,16 @@ def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
         if label != "not_a_niche":
             assert len(niches[niches == label]) >= 100
 
-    rel_nhood_profile, abs_nhood_profile = _calculate_neighborhood_profile(
-        adata_seqfish, groups="celltype_mapped_refined"
-    )
+    # get obs x neighbor matrix from sparse matrix
+    matrix = adata_seqfish.obsp[SPATIAL_CONNECTIVITIES_KEY].tocoo()
+
+    # get obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
+    rel_nhood_profile = _calculate_neighborhood_profile(adata_seqfish, groups=GROUPS, matrix=matrix, abs_nhood=True)
+    abs_nhood_profile = _calculate_neighborhood_profile(adata_seqfish, groups=GROUPS, matrix=matrix, abs_nhood=False)
     # assert shape obs x groups
     assert rel_nhood_profile.shape == (
         adata_seqfish.n_obs,
-        len(adata_seqfish.obs["celltype_mapped_refined"].cat.categories),
+        len(adata_seqfish.obs[GROUPS].cat.categories),
     )
     assert abs_nhood_profile.shape == rel_nhood_profile.shape
     # normalization
@@ -84,7 +88,7 @@ def test_cellcharter_approach(adata_seqfish: AnnData):
     """Check whether niche calculation using CellCharter approach works as intended."""
 
     spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
-    calculate_niche(adata_seqfish, groups="celltype_mapped_refined", flavor="cellcharter", distance=3, n_components=5)
+    calculate_niche(adata_seqfish, groups=GROUPS, flavor="cellcharter", distance=3, n_components=5)
     niches = adata_seqfish.obs["cellcharter_niche"]
 
     assert niches.nunique() == 5
@@ -111,6 +115,15 @@ def test_cellcharter_approach(adata_seqfish: AnnData):
     assert var_aggr_matrix.shape == adata_seqfish.X.shape
 
     # TODO: add test for GMM
+
+
+def test_nhop(adjacency_matrix: np.array, n_hop_matrix: np.array):
+    """Test if n-hop neighbor computation works as expected."""
+
+    assert adjacency_matrix**2 == n_hop_matrix
+    adj_sparse = scipy.sparse.csr_matrix(adjacency_matrix)
+    nhop_sparse = scipy.sparse.csr_matrix(n_hop_matrix)
+    assert (adj_sparse.dot(adj_sparse)) == nhop_sparse
 
 
 # TODO: comppare results to previously calculated niches
