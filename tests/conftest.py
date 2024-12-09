@@ -463,5 +463,5 @@ def adjacency_matrix():
 
 
 @pytest.fixture()
-def nhop_matrix():
+def n_hop_matrix():
     return np.array([[2, 1, 1, 1], [1, 2, 1, 1], [1, 1, 3, 0], [1, 1, 0, 1]])
