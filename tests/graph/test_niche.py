@@ -39,8 +39,8 @@ def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
     matrix = adata_seqfish.obsp[SPATIAL_CONNECTIVITIES_KEY].tocoo()
 
     # get obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
-    rel_nhood_profile = _calculate_neighborhood_profile(adata_seqfish, groups=GROUPS, matrix=matrix, abs_nhood=True)
-    abs_nhood_profile = _calculate_neighborhood_profile(adata_seqfish, groups=GROUPS, matrix=matrix, abs_nhood=False)
+    rel_nhood_profile = _calculate_neighborhood_profile(adata_seqfish, groups=GROUPS, matrix=matrix, abs_nhood=False)
+    abs_nhood_profile = _calculate_neighborhood_profile(adata_seqfish, groups=GROUPS, matrix=matrix, abs_nhood=True)
     # assert shape obs x groups
     assert rel_nhood_profile.shape == (
         adata_seqfish.n_obs,
