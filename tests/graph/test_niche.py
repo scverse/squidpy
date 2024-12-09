@@ -123,7 +123,7 @@ def test_nhop(adjacency_matrix: np.array, n_hop_matrix: np.array):
     assert np.array_equal(adjacency_matrix**2, n_hop_matrix)
     adj_sparse = scipy.sparse.csr_matrix(adjacency_matrix)
     nhop_sparse = scipy.sparse.csr_matrix(n_hop_matrix)
-    assert (adj_sparse.dot(adj_sparse)) != nhop_sparse).nnz == 0
+    assert (adj_sparse.dot(adj_sparse) != nhop_sparse).nnz == 0
 
 
 # TODO: comppare results to previously calculated niches
