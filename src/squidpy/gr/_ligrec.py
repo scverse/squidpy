@@ -441,8 +441,7 @@ class PermutationTestABC(ABC):
 
         if corr_method is not None:
             logg.info(
-                f"Performing FDR correction across the `{corr_axis.v}` "
-                f"using method `{corr_method}` at level `{alpha}`"
+                f"Performing FDR correction across the `{corr_axis.v}` using method `{corr_method}` at level `{alpha}`"
             )
             res["pvalues"] = _fdr_correct(res["pvalues"], corr_method, corr_axis, alpha=alpha)
 

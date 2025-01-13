@@ -145,16 +145,16 @@ def spatial_neighbors(
         - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - :class:`dict` containing parameters.
     """
     if isinstance(adata, SpatialData):
-        assert (
-            elements_to_coordinate_systems is not None
-        ), "Since `adata` is a :class:`spatialdata.SpatialData`, `elements_to_coordinate_systems` must not be `None`."
-        assert (
-            table_key is not None
-        ), "Since `adata` is a :class:`spatialdata.SpatialData`, `table_key` must not be `None`."
+        assert elements_to_coordinate_systems is not None, (
+            "Since `adata` is a :class:`spatialdata.SpatialData`, `elements_to_coordinate_systems` must not be `None`."
+        )
+        assert table_key is not None, (
+            "Since `adata` is a :class:`spatialdata.SpatialData`, `table_key` must not be `None`."
+        )
         elements, table = match_element_to_table(adata, list(elements_to_coordinate_systems), table_key)
-        assert table.obs_names.equals(
-            adata.tables[table_key].obs_names
-        ), "The spatialdata table must annotate all elements keys. Some elements are missing, please check the `elements_to_coordinate_systems` dictionary."
+        assert table.obs_names.equals(adata.tables[table_key].obs_names), (
+            "The spatialdata table must annotate all elements keys. Some elements are missing, please check the `elements_to_coordinate_systems` dictionary."
+        )
         regions, region_key, instance_key = get_table_keys(adata.tables[table_key])
         regions = [regions] if isinstance(regions, str) else regions
         ordered_regions_in_table = adata.tables[table_key].obs[region_key].unique()
