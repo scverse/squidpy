@@ -802,8 +802,7 @@ class ImageContainer(FeatureMixin):
                 obs_library_ids = list(adata.obs[library_id])
             except KeyError:
                 logg.debug(
-                    f"Unable to find library ids in `adata.obs[{library_id!r}]`. "
-                    f"Trying in `adata.uns[{spatial_key!r}]`"
+                    f"Unable to find library ids in `adata.obs[{library_id!r}]`. Trying in `adata.uns[{spatial_key!r}]`"
                 )
                 library_id = Key.uns.library_id(adata, spatial_key=spatial_key, library_id=library_id)
                 if not isinstance(library_id, str):
@@ -1622,7 +1621,7 @@ class ImageContainer(FeatureMixin):
             )
             s += "</p>"
             if i == 9 and i < len(self) - 1:  # show only first 10 layers
-                s += f"<p style={style!r}>and {len(self) - i  - 1} more...</p>"
+                s += f"<p style={style!r}>and {len(self) - i - 1} more...</p>"
                 break
 
         return s

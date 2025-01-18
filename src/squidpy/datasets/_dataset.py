@@ -74,8 +74,7 @@ _merfish = AMetadata(
 )
 _slideseqv2 = AMetadata(
     name="slideseqv2",
-    doc_header="Pre-processed SlideseqV2 dataset from `Stickles et al "
-    "<https://doi.org/10.1038/s41587-020-0739-1>`__.",
+    doc_header="Pre-processed SlideseqV2 dataset from `Stickles et al <https://doi.org/10.1038/s41587-020-0739-1>`__.",
     shape=(41786, 4000),
     url="https://ndownloader.figshare.com/files/28242783",
 )
