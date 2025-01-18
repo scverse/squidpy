@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from functools import reduce
 from itertools import product
-from typing import Any, Union
+from typing import Any, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -67,7 +67,10 @@ def var_by_distance(
     elif isinstance(groups, list):
         anchor = groups
     elif isinstance(groups, np.ndarray):
-        anchor = groups.tolist()
+        # can't be a 2D array
+        if groups.ndim != 1:
+            raise ValueError(f"Expected a 1D array for 'groups', but got shape {groups.shape}.")
+        anchor = cast(list[str], groups.astype(str).tolist())
     else:
         raise TypeError(f"Invalid type for groups: {type(groups)}.")
 
