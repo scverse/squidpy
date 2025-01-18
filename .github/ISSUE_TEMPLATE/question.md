@@ -3,7 +3,7 @@ name: Question
 about: Ask a question about Squidpy
 title:
 labels: question
-assignees: "giovp"
+assignees:
 ---
 
 <!-- Put your question regarding Squidpy below: -->
