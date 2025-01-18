@@ -74,9 +74,9 @@ def sliding_window(
     if isinstance(adata, SpatialData):
         adata = adata.table
 
-    assert (
-        max_n_cells is None or n_splits is None
-    ), "You can specify only one from the parameters 'n_split' and 'max_n_cells' "
+    assert max_n_cells is None or n_splits is None, (
+        "You can specify only one from the parameters 'n_split' and 'max_n_cells' "
+    )
 
     # we don't want to modify the original adata in case of copy=True
     if copy:
