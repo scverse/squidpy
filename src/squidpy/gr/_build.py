@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Iterable  # noqa: F401
 from functools import partial
 from itertools import chain
-from typing import Any
+from typing import Any, cast
 
 import geopandas as gpd
 import numpy as np
@@ -237,7 +237,7 @@ def spatial_neighbors(
         for lib in libs:
             ixs.extend(np.where(adata.obs[library_key] == lib)[0])
             mats.append(_build_fun(adata[adata.obs[library_key] == lib]))
-        ixs = np.argsort(ixs).tolist()  # invert
+        ixs = cast(list[int], np.argsort(ixs).tolist())
         Adj = block_diag([m[0] for m in mats], format="csr")[ixs, :][:, ixs]
         Dst = block_diag([m[1] for m in mats], format="csr")[ixs, :][:, ixs]
     else:
