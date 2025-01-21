@@ -24,8 +24,8 @@ from squidpy.im import ImageContainer, _measurements, quantify_morphology
 from squidpy.im._feature import (
     _get_region_props,
     _get_table_key,
-    _sdata_image_features_helper,
     calculate_image_features,
+    sdata_image_features_helper,
 )
 
 # noinspection PyProtectedMember
@@ -432,13 +432,103 @@ class TestMorphologyImageFeaturesCompatibility:
 
         expected = calculate_image_features(**calc_im_features_kwargs)
 
-        actual = _sdata_image_features_helper(**calc_im_features_kwargs)
+        actual = sdata_image_features_helper(**calc_im_features_kwargs)
         # morphology = quantify_morphology()
 
         pd.testing.assert_frame_equal(actual, expected)
 
-    # def test_helper_equivalence(self, adata: AnnData, cont: ImageContainer):
-    #     expected = _calculate_image_features_helper(
-    #         adata=adata,
-    #         img=cont["image"],
-    #     )
+
+class TestImageContainerSDataCompatibility:
+    @pytest.mark.xfail(
+        raises=AssertionError,
+        reason="There cannot exist two xarray datasets in one ImageContainer "
+        "with the same 'channel' name, while SpatialData enforces that dimensions "
+        "must be named ('c', 'z', 'y', 'x')",
+    )
+    def test_image_container_enforcing_unique_channel_naming(
+        self, calc_im_features_kwargs: dict[str, typing.Any], visium_img: ImageContainer
+    ):
+        from spatialdata.models._utils import _validate_dims
+
+        label_layer = calc_im_features_kwargs["features_kwargs"]["segmentation"]["label_layer"]
+        image_layer = calc_im_features_kwargs["layer"]
+
+        visium_img[label_layer] = visium_img[label_layer].rename({"channels:0": "c"})
+        visium_img[image_layer] = visium_img[image_layer].rename({"channels": "c"})
+
+        assert visium_img[label_layer].dims[-1] == "c"
+        assert visium_img[label_layer].dims[-1] == visium_img[image_layer].dims[-1]
+        # "WARNING: Channel dimension cannot be aligned with an existing one, using `c_0`"
+        # "c_0"
+
+
+class TestSdataHelper:
+    def test_sdata_helper_copy(
+        self,
+        calc_im_features_kwargs: dict[str, typing.Any],
+        visium_adata: AnnData,
+        visium_img: ImageContainer,
+    ):
+        calc_im_features_kwargs.update(
+            {
+                "features": ["texture", "summary", "histogram", "segmentation"],
+                "adata": visium_adata,
+                "img": visium_img,
+            }
+        )
+
+        # label_layer = calc_im_features_kwargs["features_kwargs"]["segmentation"]["label_layer"]
+        # image_layer = calc_im_features_kwargs["layer"]
+        #
+        # visium_img[label_layer] = visium_img[label_layer].rename({"channels:0": "c"})
+        # visium_img[label_layer] = visium_img[label_layer].transpose("c", "z", "y", "x")
+        #
+        # visium_img[image_layer] = visium_img[image_layer].rename({"channels": "c"})
+        # visium_img[image_layer] = visium_img[image_layer].transpose("c", "z", "y", "x")
+
+        actual = sdata_image_features_helper(**calc_im_features_kwargs)
+        assert isinstance(actual, pd.DataFrame)
+        for name in _measurements._all_regionprops_names():
+            assert any([column.startswith(name) for column in actual.columns])
+
+    def test_sdata_helper_obsm(
+        self,
+        calc_im_features_kwargs: dict[str, typing.Any],
+        visium_adata: AnnData,
+        visium_img: ImageContainer,
+    ):
+        calc_im_features_kwargs.update(
+            {
+                "features": ["texture", "summary", "histogram", "segmentation"],
+                "adata": visium_adata,
+                "img": visium_img,
+                "copy": False,
+            }
+        )
+
+        actual = sdata_image_features_helper(**calc_im_features_kwargs)
+        assert actual is None
+        for name in _measurements._all_regionprops_names():
+            assert any(
+                [column.startswith(name) for column in visium_adata.obsm[calc_im_features_kwargs["key_added"]].columns]
+            )
+
+    def test_sdata_helper_adata(
+        self,
+        calc_im_features_kwargs: dict[str, typing.Any],
+        visium_adata: AnnData,
+        visium_img: ImageContainer,
+    ):
+        calc_im_features_kwargs.update(
+            {
+                "features": ["texture", "summary", "histogram", "segmentation"],
+                "adata": visium_adata,
+                "img": visium_img,
+                "copy": False,
+            }
+        )
+
+        actual = sdata_image_features_helper(**calc_im_features_kwargs)
+        assert isinstance(actual, AnnData)
+        for name in _measurements._all_regionprops_names():
+            assert any([column.startswith(name) for column in actual.var_names])

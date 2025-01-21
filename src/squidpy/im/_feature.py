@@ -15,6 +15,7 @@ from anndata import AnnData
 from scanpy import logging as logg
 from skimage.measure import perimeter, regionprops
 from spatialdata import SpatialData
+from spatialdata.models import Image2DModel, Labels2DModel, TableModel
 
 import squidpy._utils
 from squidpy._constants._constants import ImageFeature
@@ -228,7 +229,7 @@ def calculate_image_features(
     _save_data(adata, attr="obsm", key=key_added, data=res, time=start)
 
 
-def _sdata_image_features_helper(
+def sdata_image_features_helper(
     adata: AnnData,
     img: ImageContainer,
     layer: str | None = None,
@@ -240,9 +241,75 @@ def _sdata_image_features_helper(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    return_results_as_new_adata: bool = False,
     **kwargs: Any,
-) -> pd.DataFrame | None:
-    return None
+) -> pd.DataFrame | AnnData | None:
+    segmentation_kwargs = features_kwargs.get("segmentation", None)
+    if segmentation_kwargs is None:
+        raise ValueError(
+            "A segmentation layer with its "
+            "`features_kwargs['segmentation']['label_layer']` "
+            "is necessary for the morphology quantification"
+        )
+
+    label_layer = segmentation_kwargs.get("label_layer", None)
+    if label_layer is None:
+        raise ValueError(
+            "`features_kwargs['segmentation']['label_layer']` " "is necessary for the morphology quantification"
+        )
+
+    image_layer = layer
+    if image_layer is None:
+        raise ValueError(
+            "A `layer` name for the image layer in the ImageContainer " "is necessary for the morphology quantification"
+        )
+
+    adata.uns.update(
+        {"spatialdata_attrs": {"region": label_layer, "region_key": "region", "instance_key": "instance_id"}}
+    )
+
+    adata.obs["region"] = label_layer
+    adata.obs["instance_id"] = -1
+    # adata.uns["spatialdata_attrs"]["region"] = label_layer
+    # adata.uns["spatialdata_attrs"]["region_key"] = "region"
+    # adata.uns["spatialdata_attrs"]["instance_key"] = "instance_id"
+
+    try:
+        sdata = SpatialData(
+            images={
+                image_layer: Image2DModel.parse(
+                    data=img[image_layer].rename({"channels": "c"}).transpose("z", "c", "y", "x")[0, ...]
+                ),
+            },
+            labels={
+                label_layer: Labels2DModel.parse(
+                    data=img[label_layer].rename({"channels:0": "c"}).transpose("z", "c", "y", "x")[0, 0, ...]
+                ),
+            },
+            tables={"table": TableModel.parse(adata)},
+        )
+    except ValueError as exc:
+        raise ValueError(
+            "Failed to create SpatialData object, "
+            "possibly due to dimensions in xarray not being named "
+            "('c', 'z', 'y', 'x') or them not being in this particular order"
+        ) from exc
+
+    start = logg.info("Calculating features")
+
+    res = quantify_morphology(
+        sdata,
+        label=label_layer,
+        image=image_layer,
+    )
+
+    if copy:
+        return res
+
+    if return_results_as_new_adata:
+        return AnnData(res)
+
+    _save_data(adata, attr="obsm", key=key_added, data=res, time=start)
 
 
 def quantify_morphology(
