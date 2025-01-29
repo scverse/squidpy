@@ -448,3 +448,20 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(scope="session")
 def _test_napari(pytestconfig):
     _ = pytestconfig.getoption("--test-napari", skip=True)
+
+
+@pytest.fixture()
+def adjacency_matrix():
+    return np.array(
+        [
+            [0, 1, 1, 0],
+            [1, 0, 1, 0],
+            [1, 1, 0, 1],
+            [0, 0, 1, 0],
+        ]
+    )
+
+
+@pytest.fixture()
+def n_hop_matrix():
+    return np.array([[2, 1, 1, 1], [1, 2, 1, 1], [1, 1, 3, 0], [1, 1, 0, 1]])
