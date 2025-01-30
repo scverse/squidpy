@@ -8,10 +8,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import spatialdata as sd
 from anndata.tests.helpers import assert_adata_equal
 from scanpy._settings import settings
 
-import spatialdata as sd
 from squidpy.datasets import visium, visium_hne_sdata
 
 
@@ -39,18 +39,14 @@ def test_visium_datasets(tmpdir, sample):
     # Test that downloading tissue image works
     sample_dataset = visium(sample, include_hires_tiff=True)
     expected_image_path = settings.datasetdir / sample / "image.tif"
-    image_path = Path(
-        sample_dataset.uns["spatial"][sample]["metadata"]["source_image_path"]
-    )
+    image_path = Path(sample_dataset.uns["spatial"][sample]["metadata"]["source_image_path"])
     assert image_path == expected_image_path
 
     # Test that tissue image exists and is a valid image file
     assert image_path.exists()
 
     # Test that tissue image is a tif image file (using `file`)
-    process = subprocess.run(
-        ["file", "--mime-type", image_path], stdout=subprocess.PIPE
-    )
+    process = subprocess.run(["file", "--mime-type", image_path], stdout=subprocess.PIPE)
     output = process.stdout.strip().decode()  # make process output string
     assert output == str(image_path) + ": image/tiff"
 
