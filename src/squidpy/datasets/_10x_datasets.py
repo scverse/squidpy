@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import shutil
 import tarfile
 from pathlib import Path
 from typing import (
@@ -8,9 +10,13 @@ from typing import (
     Union,  # noqa: F401
 )
 
+import spatialdata as sd
 from anndata import AnnData
 from scanpy import _utils
+from scanpy import logging as logg
 from scanpy._settings import settings
+from scanpy._utils import check_presence_download
+from spatialdata import SpatialData
 
 from squidpy._constants._constants import TenxVersions
 from squidpy.datasets._utils import PathLike
@@ -106,7 +112,9 @@ def visium(
 
     url_prefix = f"https://cf.10xgenomics.com/samples/spatial-exp/{spaceranger_version}/{sample_id}/"
     visium_files = VisiumFiles(
-        f"{sample_id}_filtered_feature_bc_matrix.h5", f"{sample_id}_spatial.tar.gz", f"{sample_id}_image.tif"
+        f"{sample_id}_filtered_feature_bc_matrix.h5",
+        f"{sample_id}_spatial.tar.gz",
+        f"{sample_id}_image.tif",
     )
 
     # download spatial data
@@ -134,3 +142,34 @@ def visium(
         )
 
     return read_visium(base_dir / sample_id)
+
+
+def visium_hne_sdata(filename: Path | str | None = None) -> SpatialData:
+    backup_url = "https://ndownloader.figshare.com/files/52048571"
+
+    if filename is None:
+        filename = Path("~/.cache/squidpy/visium_hne_sdata.zip").expanduser()
+    else:
+        if not isinstance(filename, Path | str):
+            raise TypeError(f"Expected `filename` to be of type `Path` or `str`, found `{type(filename).__name__}`.")
+        if isinstance(filename, str):
+            filename = Path(filename)
+
+        suffix = filename.suffix
+        if not suffix:  # user gave directory
+            filename = Path(filename) / "visium_hne_sdata.zip"
+        else:  # user gave filename
+            if suffix not in (".zip", ".zarr"):
+                raise ValueError(f"Expected `filename` to have suffix `.zip` or `.zarr`, found `{suffix}`.")
+            if suffix == ".zarr":
+                filename = filename.with_suffix(".zip")  # download zip file, extract later
+
+    filename = filename.expanduser().absolute()
+
+    logg.info(f"Downloading Visium H&E SpatialData to {filename}.")
+
+    if not filename.with_suffix(".zarr").exists():
+        check_presence_download(filename=filename, backup_url=backup_url)
+        shutil.unpack_archive(str(filename), str(filename.with_suffix(".zarr")))
+
+    return sd.read_zarr(filename.with_suffix(".zarr"))
