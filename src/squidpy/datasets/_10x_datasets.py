@@ -145,31 +145,58 @@ def visium(
 
 
 def visium_hne_sdata(filename: Path | str | None = None) -> SpatialData:
-    backup_url = "https://ndownloader.figshare.com/files/52048571"
+    """
+    Downloads a Visium H&E dataset and provides it as a `SpatialData` object.
 
+    This function combines the outputs from `squidpy.datasets.visium_hne_adata()`
+    and `squidpy.datasets.visium_hne_image()` into a `SpatialData` object containing:
+      - A multi-scale representation of the H&E image.
+      - The spots as a shapes layer.
+      - Gene expression data as an AnnData object.
+
+    If no filename is provided, it defaults to `~/.cache/squidpy/visium_hne_sdata.zip`.
+
+    Parameters
+    ----------
+    filename : Path | str | None, optional
+        Path to save the dataset. If a directory is provided, the default filename
+        `visium_hne_sdata.zip` will be used inside that directory. If a `.zarr` filename
+        is provided, it will be converted to `.zip` for downloading.
+
+    Returns
+    -------
+    SpatialData
+        The downloaded and extracted Visium H&E dataset as a `SpatialData` object.
+    """
     if filename is None:
-        filename = Path("~/.cache/squidpy/visium_hne_sdata.zip").expanduser()
+        filename = Path.home() / ".cache/squidpy/visium_hne_sdata.zip"
     else:
         if not isinstance(filename, Path | str):
             raise TypeError(f"Expected `filename` to be of type `Path` or `str`, found `{type(filename).__name__}`.")
-        if isinstance(filename, str):
-            filename = Path(filename)
 
-        suffix = filename.suffix
-        if not suffix:  # user gave directory
-            filename = Path(filename) / "visium_hne_sdata.zip"
-        else:  # user gave filename
-            if suffix not in (".zip", ".zarr"):
-                raise ValueError(f"Expected `filename` to have suffix `.zip` or `.zarr`, found `{suffix}`.")
-            if suffix == ".zarr":
-                filename = filename.with_suffix(".zip")  # download zip file, extract later
+        filename = Path(filename).expanduser()
 
-    filename = filename.expanduser().absolute()
+        if filename.is_dir():
+            filename = filename / "visium_hne_sdata.zip"
+        elif filename.suffix not in {".zip", ".zarr"}:
+            raise ValueError(f"Expected `filename` to have suffix `.zip` or `.zarr`, found `{filename.suffix}`.")
+        elif filename.suffix == ".zarr":
+            filename = filename.with_suffix(".zip")  # Ensure zip download
 
-    logg.info(f"Downloading Visium H&E SpatialData to {filename}.")
+    filename = filename.absolute()
+    extracted_path = filename.with_suffix(".zarr")
 
-    if not filename.with_suffix(".zarr").exists():
-        check_presence_download(filename=filename, backup_url=backup_url)
-        shutil.unpack_archive(str(filename), str(filename.with_suffix(".zarr")))
+    if not extracted_path.exists():
+        try:
+            logg.info(f"Downloading Visium H&E SpatialData to {filename}")
+            check_presence_download(
+                filename=filename,
+                backup_url="https://ndownloader.figshare.com/files/52048571",
+            )
+            logg.info(f"Extracting dataset from {filename} to {extracted_path}")
+            shutil.unpack_archive(str(filename), str(extracted_path))
+        except Exception as e:
+            logg.error(f"Failed to download or extract dataset: {e}")
+            raise
 
-    return sd.read_zarr(filename.with_suffix(".zarr"))
+    return sd.read_zarr(extracted_path)
