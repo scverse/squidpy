@@ -162,20 +162,22 @@ def _get_nhood_profile_niches(
     if subset_groups:
         adjacency_matrix = adata.obsp[spatial_connectivities_key].tocsc()
         obs_mask = ~adata.obs[groups].isin(subset_groups)
-        adata = adata[obs_mask]
+        adata_masked = adata[obs_mask]
 
         adjacency_matrix = adjacency_matrix[obs_mask, :][:, obs_mask]
-        adata.obsp[spatial_connectivities_key] = adjacency_matrix.tocsr()
+        adata_masked.obsp[spatial_connectivities_key] = adjacency_matrix.tocsr()
+    else:
+        adata_masked = adata
 
     # get obs x neighbor matrix from sparse matrix
-    matrix = adata.obsp[spatial_connectivities_key].tocoo()
+    matrix = adata_masked.obsp[spatial_connectivities_key].tocoo()
 
     # get obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
-    nhood_profile = _calculate_neighborhood_profile(adata, groups, matrix, abs_nhood)
+    nhood_profile = _calculate_neighborhood_profile(adata_masked, groups, matrix, abs_nhood)
 
     # Additionally use n-hop neighbors if distance > 1. This sums up the (weighted) neighborhood profiles of all n-hop neighbors.
     if distance > 1:
-        n_hop_adjacency_matrix = adata.obsp[spatial_connectivities_key].copy()
+        n_hop_adjacency_matrix = adata_masked.obsp[spatial_connectivities_key].copy()
         # if no weights are provided, use 1 for all n_hop neighbors
         if n_hop_weights is None:
             n_hop_weights = [1] * distance
@@ -184,10 +186,10 @@ def _get_nhood_profile_niches(
             nhood_profile = n_hop_weights[0] * nhood_profile
         # get n_hop neighbor adjacency matrices by multiplying the original adjacency matrix with itself n times and get corresponding neighborhood profiles.
         for n_hop in range(distance - 1):
-            n_hop_adjacency_matrix = n_hop_adjacency_matrix @ adata.obsp[spatial_connectivities_key]
+            n_hop_adjacency_matrix = n_hop_adjacency_matrix @ adata_masked.obsp[spatial_connectivities_key]
             matrix = n_hop_adjacency_matrix.tocoo()
             nhood_profile += n_hop_weights[n_hop + 1] * _calculate_neighborhood_profile(
-                adata, groups, matrix, abs_nhood
+                adata_masked, groups, matrix, abs_nhood
             )
         if not abs_nhood:
             nhood_profile = nhood_profile / sum(n_hop_weights)
@@ -210,19 +212,21 @@ def _get_nhood_profile_niches(
     resolutions = [resolutions] if not isinstance(resolutions, list) else resolutions
 
     # For each resolution, apply leiden on neighborhood profile. Each cluster label equals to a niche label
+    df = pd.DataFrame(index=adata.obs.index)
     for res in resolutions:
         sc.tl.leiden(adata_neighborhood, resolution=res, key_added=f"neighborhood_niche_res={res}")
-        adata.obs[f"neighborhood_niche_res={res}"] = adata.obs.index.map(
+        adata_masked.obs[f"neighborhood_niche_res={res}"] = adata_masked.obs.index.map(
             adata_neighborhood.obs[f"neighborhood_niche_res={res}"]
         ).fillna("not_a_niche")
 
         # filter niches with n_cells < min_niche_size
         if min_niche_size is not None:
-            counts_by_niche = adata.obs[f"neighborhood_niche_res={res}"].value_counts()
+            counts_by_niche = adata_masked.obs[f"neighborhood_niche_res={res}"].value_counts()
             to_filter = counts_by_niche[counts_by_niche < min_niche_size].index
-            adata.obs[f"neighborhood_niche_res={res}"] = adata.obs[f"neighborhood_niche_res={res}"].apply(
+            adata_masked.obs[f"neighborhood_niche_res={res}"] = adata_masked.obs[f"neighborhood_niche_res={res}"].apply(
                 lambda x, to_filter=to_filter: "not_a_niche" if x in to_filter else x
             )
+            adata.obs[f"neighborhood_niche_res={res}"] = adata.obs.index.map(adata_masked.obs[f"neighborhood_niche_res={res}"]).fillna("not_a_niche")
 
     return
 
