@@ -226,7 +226,9 @@ def _get_nhood_profile_niches(
             adata_masked.obs[f"neighborhood_niche_res={res}"] = adata_masked.obs[f"neighborhood_niche_res={res}"].apply(
                 lambda x, to_filter=to_filter: "not_a_niche" if x in to_filter else x
             )
-            adata.obs[f"neighborhood_niche_res={res}"] = adata.obs.index.map(adata_masked.obs[f"neighborhood_niche_res={res}"]).fillna("not_a_niche")
+            adata.obs[f"neighborhood_niche_res={res}"] = adata.obs.index.map(
+                adata_masked.obs[f"neighborhood_niche_res={res}"]
+            ).fillna("not_a_niche")
 
     return
 
