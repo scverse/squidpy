@@ -288,9 +288,11 @@ def _get_cellcharter_niches(
 
     concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
     arr = concatenated_matrix.toarray()  # Densify
+    arr_ad = ad.AnnData(X=arr)
+    sc.tl.pca(arr_ad)
 
     # cluster concatenated matrix with GMM, each cluster label equals to a niche label
-    niches = _get_GMM_clusters(arr, n_components, random_state)
+    niches = _get_GMM_clusters(arr_ad.obsm["X_pca"], n_components, random_state)
 
     adata.obs["cellcharter_niche"] = pd.Categorical(niches)
     return
