@@ -202,4 +202,5 @@ def visium_hne_sdata(filename: Path | str | None = None) -> SpatialData:
             logg.error(f"Failed to download or extract dataset: {e}")
             raise
 
+    print(filename, extracted_path)
     return sd.read_zarr(extracted_path)
