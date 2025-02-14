@@ -278,7 +278,11 @@ def _spatial_plot(
 
         if _seg is None and _cell_id is None:
             outline_params, kwargs = _set_outline(
-                size=_size, outline=outline, outline_width=outline_width, outline_color=outline_color, **kwargs
+                size=_size,
+                outline=outline,
+                outline_width=outline_width,
+                outline_color=outline_color,
+                **kwargs,
             )
 
             ax, cax = _plot_scatter(
@@ -350,11 +354,23 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
     wrapper_params = wrapper_sig.parameters.copy()
 
     if name == "spatial_scatter":
-        params_remove = ["seg", "seg_cell_id", "seg_key", "seg_contourpx", "seg_outline"]
+        params_remove = [
+            "seg",
+            "seg_cell_id",
+            "seg_key",
+            "seg_contourpx",
+            "seg_outline",
+        ]
         wrapper_remove = ["shape"]
     elif name == "spatial_segment":
         params_remove = ["shape", "size", "size_key", "scale_factor"]
-        wrapper_remove = ["seg_cell_id", "seg", "seg_key", "seg_contourpx", "seg_outline"]
+        wrapper_remove = [
+            "seg_cell_id",
+            "seg",
+            "seg_key",
+            "seg_contourpx",
+            "seg_outline",
+        ]
     else:
         raise NotImplementedError(f"Docstring interpolation not implemented for `{name}`.")
 
@@ -420,8 +436,8 @@ def spatial_scatter(
     return _spatial_plot(adata, shape=shape, seg=None, seg_key=None, **kwargs)
 
 
-@d.dedent  # type: ignore[arg-type]
-@_wrap_signature
+@d.dedent
+@_wrap_signature  # type: ignore[arg-type]
 def spatial_segment(
     adata: AnnData,
     seg_cell_id: str,
