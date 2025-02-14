@@ -228,7 +228,9 @@ def _spatial_plot(
         **kwargs,
     )
 
-    for count, (_lib_count, value_to_plot) in enumerate(itertools.product(*fig_params.iter_panels)):
+    for count, (_lib_count, value_to_plot) in enumerate(
+        itertools.product(*fig_params.iter_panels)
+    ):
         if not library_first:
             _lib_count, value_to_plot = value_to_plot, _lib_count
 
@@ -238,7 +240,9 @@ def _spatial_plot(
         _cell_id = spatial_params.cell_id[_lib_count]
         _crops = crops[_lib_count]
         _lib = spatial_params.library_id[_lib_count]
-        _coords = coords[_lib_count]  # TODO: do we want to order points? for now no, skip
+        _coords = coords[
+            _lib_count
+        ]  # TODO: do we want to order points? for now no, skip
         adata_sub, coords_sub, image_sub = _subs(
             adata,
             _coords,
@@ -278,7 +282,11 @@ def _spatial_plot(
 
         if _seg is None and _cell_id is None:
             outline_params, kwargs = _set_outline(
-                size=_size, outline=outline, outline_width=outline_width, outline_color=outline_color, **kwargs
+                size=_size,
+                outline=outline,
+                outline_width=outline_width,
+                outline_color=outline_color,
+                **kwargs,
             )
 
             ax, cax = _plot_scatter(
@@ -350,13 +358,27 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
     wrapper_params = wrapper_sig.parameters.copy()
 
     if name == "spatial_scatter":
-        params_remove = ["seg", "seg_cell_id", "seg_key", "seg_contourpx", "seg_outline"]
+        params_remove = [
+            "seg",
+            "seg_cell_id",
+            "seg_key",
+            "seg_contourpx",
+            "seg_outline",
+        ]
         wrapper_remove = ["shape"]
     elif name == "spatial_segment":
         params_remove = ["shape", "size", "size_key", "scale_factor"]
-        wrapper_remove = ["seg_cell_id", "seg", "seg_key", "seg_contourpx", "seg_outline"]
+        wrapper_remove = [
+            "seg_cell_id",
+            "seg",
+            "seg_key",
+            "seg_contourpx",
+            "seg_outline",
+        ]
     else:
-        raise NotImplementedError(f"Docstring interpolation not implemented for `{name}`.")
+        raise NotImplementedError(
+            f"Docstring interpolation not implemented for `{name}`."
+        )
 
     for key in params_remove:
         params.pop(key)
@@ -364,7 +386,11 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
         wrapper_params.pop(key)
 
     params.update(wrapper_params)
-    annotations = {k: v.annotation for k, v in params.items() if v.annotation != inspect.Parameter.empty}
+    annotations = {
+        k: v.annotation
+        for k, v in params.items()
+        if v.annotation != inspect.Parameter.empty
+    }
     if wrapper_sig.return_annotation is not inspect.Signature.empty:
         annotations["return"] = wrapper_sig.return_annotation
 
@@ -420,8 +446,8 @@ def spatial_scatter(
     return _spatial_plot(adata, shape=shape, seg=None, seg_key=None, **kwargs)
 
 
-@d.dedent  # type: ignore[arg-type]
-@_wrap_signature
+@d.dedent
+@_wrap_signature  # type: ignore[arg-type]
 def spatial_segment(
     adata: AnnData,
     seg_cell_id: str,
