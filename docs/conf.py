@@ -144,6 +144,10 @@ bibtex_bibfiles = ["references.bib"]
 bibtex_reference_style = "author_year"
 bibtex_default_style = "alpha"
 
+# sphinx linktime checkouts (esp bioRxiv is spotty)
+linkcheck_timeout = 90
+linkcheck_retries = 2
+
 # spelling
 spelling_lang = "en_US"
 spelling_warning = True
