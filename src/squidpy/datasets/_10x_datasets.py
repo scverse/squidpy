@@ -168,6 +168,9 @@ def visium_hne_sdata(filename: Path | str | None = None) -> SpatialData:
     SpatialData
         The downloaded and extracted Visium H&E dataset as a `SpatialData` object.
     """
+
+    FIGSHARE_ID = "52370645"
+
     if filename is None:
         filename = Path.home() / ".cache/squidpy/visium_hne_sdata.zip"
     else:
@@ -191,7 +194,7 @@ def visium_hne_sdata(filename: Path | str | None = None) -> SpatialData:
             logg.info(f"Downloading Visium H&E SpatialData to {filename}")
             check_presence_download(
                 filename=filename,
-                backup_url="https://ndownloader.figshare.com/files/52048571",
+                backup_url=f"https://ndownloader.figshare.com/files/{FIGSHARE_ID}",
             )
             logg.info(f"Extracting dataset from {filename} to {extracted_path}")
             shutil.unpack_archive(str(filename), str(extracted_path))
