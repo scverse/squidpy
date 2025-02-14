@@ -212,8 +212,8 @@ def _min_max_norm(vec: spmatrix | NDArrayA) -> NDArrayA:
     if vec.ndim != 1:
         raise ValueError(f"Expected `1` dimension, found `{vec.ndim}`.")
 
-    maxx: np.float64 = np.nanmax(vec)
-    minn: np.float64 = np.nanmin(vec)
+    maxx: float = np.nanmax(vec)
+    minn: float = np.nanmin(vec)
 
     return np.ones_like(vec) if np.isclose(minn, maxx) else ((vec - minn) / (maxx - minn))
 
