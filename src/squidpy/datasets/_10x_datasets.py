@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import shutil
 import tarfile
 from pathlib import Path
 from typing import (
@@ -8,9 +10,13 @@ from typing import (
     Union,  # noqa: F401
 )
 
+import spatialdata as sd
 from anndata import AnnData
 from scanpy import _utils
+from scanpy import logging as logg
 from scanpy._settings import settings
+from scanpy._utils import check_presence_download
+from spatialdata import SpatialData
 
 from squidpy._constants._constants import TenxVersions
 from squidpy.datasets._utils import PathLike
@@ -106,7 +112,9 @@ def visium(
 
     url_prefix = f"https://cf.10xgenomics.com/samples/spatial-exp/{spaceranger_version}/{sample_id}/"
     visium_files = VisiumFiles(
-        f"{sample_id}_filtered_feature_bc_matrix.h5", f"{sample_id}_spatial.tar.gz", f"{sample_id}_image.tif"
+        f"{sample_id}_filtered_feature_bc_matrix.h5",
+        f"{sample_id}_spatial.tar.gz",
+        f"{sample_id}_image.tif",
     )
 
     # download spatial data
@@ -134,3 +142,65 @@ def visium(
         )
 
     return read_visium(base_dir / sample_id)
+
+
+def visium_hne_sdata(filename: Path | str | None = None) -> SpatialData:
+    """
+    Downloads a Visium H&E dataset and provides it as a `SpatialData` object.
+
+    This function combines the outputs from `squidpy.datasets.visium_hne_adata()`
+    and `squidpy.datasets.visium_hne_image()` into a `SpatialData` object containing:
+      - A multi-scale representation of the H&E image.
+      - The spots as a shapes layer.
+      - Gene expression data as an AnnData object.
+
+    If no filename is provided, it defaults to `~/.cache/squidpy/visium_hne_sdata.zip`.
+
+    Parameters
+    ----------
+    filename : Path | str | None, optional
+        Path to save the dataset. If a directory is provided, the default filename
+        `visium_hne_sdata.zip` will be used inside that directory. If a `.zarr` filename
+        is provided, it will be converted to `.zip` for downloading.
+
+    Returns
+    -------
+    SpatialData
+        The downloaded and extracted Visium H&E dataset as a `SpatialData` object.
+    """
+
+    FIGSHARE_ID = "52370645"
+
+    if filename is None:
+        filename = Path.home() / ".cache/squidpy/visium_hne_sdata.zip"
+    else:
+        if not isinstance(filename, Path | str):
+            raise TypeError(f"Expected `filename` to be of type `Path` or `str`, found `{type(filename).__name__}`.")
+
+        filename = Path(filename).expanduser()
+
+        if filename.is_dir():
+            filename = filename / "visium_hne_sdata.zip"
+        elif filename.suffix not in {".zip", ".zarr"}:
+            raise ValueError(f"Expected `filename` to have suffix `.zip` or `.zarr`, found `{filename.suffix}`.")
+        elif filename.suffix == ".zarr":
+            filename = filename.with_suffix(".zip")  # Ensure zip download
+
+    filename = filename.absolute()
+    extracted_path = filename.with_suffix(".zarr")
+
+    if not extracted_path.exists():
+        try:
+            logg.info(f"Downloading Visium H&E SpatialData to {filename}")
+            check_presence_download(
+                filename=filename,
+                backup_url=f"https://ndownloader.figshare.com/files/{FIGSHARE_ID}",
+            )
+            logg.info(f"Extracting dataset from {filename} to {extracted_path}")
+            shutil.unpack_archive(str(filename), str(extracted_path))
+        except Exception as e:
+            logg.error(f"Failed to download or extract dataset: {e}")
+            raise
+
+    print(filename, extracted_path)
+    return sd.read_zarr(extracted_path)

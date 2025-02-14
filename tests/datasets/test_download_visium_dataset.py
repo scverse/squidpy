@@ -8,16 +8,22 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import spatialdata as sd
 from anndata.tests.helpers import assert_adata_equal
 from scanpy._settings import settings
 
-from squidpy.datasets import visium
+from squidpy.datasets import visium, visium_hne_sdata
 
 
 @pytest.mark.timeout(120)
 @pytest.mark.internet()
 @pytest.mark.parametrize(
-    "sample", ["V1_Mouse_Kidney", "Targeted_Visium_Human_SpinalCord_Neuroscience", "Visium_FFPE_Human_Breast_Cancer"]
+    "sample",
+    [
+        "V1_Mouse_Kidney",
+        "Targeted_Visium_Human_SpinalCord_Neuroscience",
+        "Visium_FFPE_Human_Breast_Cancer",
+    ],
 )
 def test_visium_datasets(tmpdir, sample):
     # Tests that reading / downloading datasets works and it does not have any global effects
@@ -43,3 +49,12 @@ def test_visium_datasets(tmpdir, sample):
     process = subprocess.run(["file", "--mime-type", image_path], stdout=subprocess.PIPE)
     output = process.stdout.strip().decode()  # make process output string
     assert output == str(image_path) + ": image/tiff"
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.internet()
+def test_visium_sdata_dataset(tmpdir):
+    sdata = visium_hne_sdata(Path(tmpdir))
+    assert isinstance(sdata, sd.SpatialData)
+    assert list(sdata.shapes.keys()) == ["spots"]
+    assert list(sdata.images.keys()) == ["hne"]
