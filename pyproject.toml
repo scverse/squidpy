@@ -72,7 +72,7 @@ dependencies = [
    "tifffile!=2022.4.22",
    "tqdm>=4.50.2",
    "validators>=0.18.2",
-   "xarray>=0.16.1,<2024.10.0",
+   "xarray>=2024.10.0",
    "zarr>=2.6.1,<3.0.0",
    "spatialdata>=0.2.5",
 ]
