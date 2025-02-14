@@ -90,6 +90,7 @@ __all__ = [  # noqa: F822
     "seqfish",
     "visium_hne_adata",
     "visium_hne_adata_crop",
+    "visium_hne_sdata",
     "visium_fluo_adata",
     "visium_fluo_adata_crop",
     "sc_mouse_cortex",
