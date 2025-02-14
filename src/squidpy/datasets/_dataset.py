@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import copy
 
+from squidpy.datasets._10x_datasets import visium_hne_sdata
 from squidpy.datasets._utils import AMetadata
 
 _4i = AMetadata(
