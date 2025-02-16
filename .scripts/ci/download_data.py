@@ -54,7 +54,7 @@ def main(args: argparse.Namespace) -> None:
             path = _ROOT / f"{func_name}.{ext}"
 
             _print_message(func_name, path)
-            obj = visium_hne_sdata(path)
+            obj = visium_hne_sdata(_ROOT)
 
             assert path.is_dir(), f"Expected a .zarr folder at {path}"
             continue
