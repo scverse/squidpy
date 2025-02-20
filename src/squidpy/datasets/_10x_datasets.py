@@ -19,7 +19,7 @@ from scanpy._utils import check_presence_download
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import TenxVersions
-from squidpy.datasets._utils import PathLike
+from squidpy.datasets._utils import DEFAULT_CACHE_DIR, PathLike, _get_zipped_dataset
 
 __all__ = ["visium"]
 
@@ -144,7 +144,7 @@ def visium(
     return read_visium(base_dir / sample_id)
 
 
-def visium_hne_sdata(folderpath: Path | str) -> sd.SpatialData:
+def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
     """
     Downloads a Visium H&E dataset into a specified folder and returns it as a `SpatialData` object.
 
@@ -165,31 +165,15 @@ def visium_hne_sdata(folderpath: Path | str) -> sd.SpatialData:
     """
 
     FIGSHARE_ID = "52370645"
+    DATASET_NAME = "visium_hne_sdata"
 
-    folderpath = Path(folderpath).expanduser().absolute()
-    if not folderpath.is_dir():
-        raise ValueError(f"Expected a directory path for `folderpath`, found: {folderpath}")
+    if folderpath is None:
+        folderpath = DEFAULT_CACHE_DIR
+    else:
+        folderpath = Path(folderpath).expanduser().absolute()
 
-    download_zip = folderpath / "visium_hne_sdata.zip"
-    extracted_path = folderpath / "visium_hne_sdata.zarr"
-
-    if not download_zip.exists():
-        try:
-            logg.info(f"Downloading Visium H&E SpatialData to {download_zip}")
-            check_presence_download(
-                filename=download_zip,
-                backup_url=f"https://ndownloader.figshare.com/files/{FIGSHARE_ID}",
-            )
-            logg.info(f"Extracting dataset from {download_zip} to {extracted_path}")
-        except Exception as e:
-            logg.error(f"Failed to download or extract dataset: {e}")
-            raise
-
-    if not extracted_path.exists():
-        try:
-            shutil.unpack_archive(str(download_zip), folderpath)
-        except Exception as e:
-            logg.error(f"Failed to extract dataset: {e}")
-            raise
-
-    return sd.read_zarr(extracted_path)
+    return _get_zipped_dataset(
+        folderpath=folderpath,
+        dataset_name=DATASET_NAME,
+        figshare_id=FIGSHARE_ID,
+    )
