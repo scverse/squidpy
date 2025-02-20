@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import copy
 
+from squidpy.datasets._10x_datasets import visium_hne_sdata
 from squidpy.datasets._utils import AMetadata
 
 _4i = AMetadata(
@@ -90,6 +91,7 @@ __all__ = [  # noqa: F822
     "seqfish",
     "visium_hne_adata",
     "visium_hne_adata_crop",
+    "visium_hne_sdata",
     "visium_fluo_adata",
     "visium_fluo_adata_crop",
     "sc_mouse_cortex",
