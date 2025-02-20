@@ -5,6 +5,8 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+from squidpy.datasets import visium_hne_sdata
+
 _CNT = 0  # increment this when you want to rebuild the CI cache
 _ROOT = Path.home() / ".cache" / "squidpy"
 
@@ -39,14 +41,25 @@ def main(args: argparse.Namespace) -> None:
 
     if args.dry_run:
         for func_name, ext in zip(all_datasets, all_extensions):
+            if func_name == "visium_hne_sdata":
+                ext = "zarr"
             path = _ROOT / f"{func_name}.{ext}"
             _print_message(func_name, path, dry_run=True)
         return
 
     # could be parallelized, but on CI it largely does not matter (usually limited to 2 cores + bandwidth limit)
     for func_name, ext in zip(all_datasets, all_extensions):
-        path = _ROOT / f"{func_name}.{ext}"
+        if func_name == "visium_hne_sdata":
+            ext = "zarr"
+            path = _ROOT / f"{func_name}.{ext}"
 
+            _print_message(func_name, path)
+            obj = visium_hne_sdata(_ROOT)
+
+            assert path.is_dir(), f"Expected a .zarr folder at {path}"
+            continue
+
+        path = _ROOT / f"{func_name}.{ext}"
         _print_message(func_name, path)
         obj = _maybe_download_data(func_name, path)
 
