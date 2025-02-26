@@ -466,7 +466,6 @@ def _set_color_source_vec(
         color_source_vector = adata.raw.obs_vector(value_to_plot)
     else:
         color_source_vector = adata.obs_vector(value_to_plot, layer=layer)
-
     if not isinstance(color_source_vector.dtype, CategoricalDtype):
         return None, color_source_vector, False
 
@@ -474,7 +473,6 @@ def _set_color_source_vec(
     categories = color_source_vector.categories
     if groups is not None:
         color_source_vector = color_source_vector.remove_categories(categories.difference(groups))
-
     color_map = _get_palette(
         adata,
         cluster_key=value_to_plot,
