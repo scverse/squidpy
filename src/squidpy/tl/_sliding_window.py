@@ -26,9 +26,9 @@ def sliding_window(
     spatial_key: str = "spatial",
     sliding_window_key: str = "sliding_window_assignment",
     overlap: int = 0,
-    max_n_cells=None,
+    max_n_cells: int = None,
     split_line: str = "h",
-    n_splits=None,
+    n_splits: int = None,
     drop_partial_windows: bool = False,
     square: bool = False,
     window_size_per_library_key: str = "equal",
@@ -43,25 +43,29 @@ def sliding_window(
     %(library_key)s
     coord_columns: Tuple[str, str]
         Tuple of column names in `adata.obs` that specify the coordinates (x, y), e.i. ('globalX', 'globalY')
-    window_size: int
+    window_size: int | Tuple[str, str]
         Size of the sliding window.
     %(spatial_key)s
     sliding_window_key: str
         Base name for sliding window columns.
-    drop_partial_windows: bool
-        If True, drop windows that are smaller than the window size at the borders.
     overlap: int
         Overlap size between consecutive windows. (0 = no overlap)
     max_n_cells: int
         If window_size is None, either 'n_split' or 'max_n_cells' can be set.
         max_n_cells sets an upper limit for the number of cells within each region.
-    n_splits: int
-        This can be used to split the entire region to some splits.
-    copy: bool
-        If True, return the result, otherwise save it to the adata object.
     split_line: str
         If 'square' is False, this set's the orientation for rectanglular regions. `h` : Horizontal, `v`: Vertical
-
+    n_splits: int
+        This can be used to split the entire region to some splits.
+    drop_partial_windows: bool
+        If True, drop windows that are smaller than the window size at the borders.
+    square: bool
+        If True, the windows will be square.
+    window_size_per_library_key: str
+        If 'equal', the window size will be the same for all libraries. If 'different', the window size will be optimized
+        for each library based on the number of cells in the library.
+    copy: bool
+        If True, return the result, otherwise save it to the adata object.
     Returns
     -------
     If ``copy = True``, returns the sliding window annotation(s) as pandas dataframe
@@ -70,19 +74,19 @@ def sliding_window(
 
     if overlap < 0:
         raise ValueError("Overlap must be non-negative.")
-
     if isinstance(adata, SpatialData):
         adata = adata.table
 
     assert max_n_cells is None or n_splits is None, (
         "You can specify only one from the parameters 'n_split' and 'max_n_cells' "
     )
-
     # we don't want to modify the original adata in case of copy=True
     if copy:
         adata = adata.copy()
+
     if "sliding_window_assignment_colors" in adata.uns:
         del adata.uns["sliding_window_assignment_colors"]
+
     # extract coordinates of observations
     x_col, y_col = coord_columns
     if x_col in adata.obs and y_col in adata.obs:
@@ -101,17 +105,18 @@ def sliding_window(
     if library_key is not None and library_key not in adata.obs:
         raise ValueError(f"Library key '{library_key}' not found in adata.obs")
 
-    if library_key is None and "fov" not in adata.obs.columns:
-        adata.obs["fov"] = "fov1"
+    if library_key is None:
+        library_key = 'temp_fov'
+        adata.obs[library_key] = 'fov1'
 
     libraries = adata.obs[library_key].unique()
 
     fovs_x_range = [
-        (adata.obs[adata.obs[library_key] == key][x_col].max(), adata.obs[adata.obs[library_key] == key][x_col].min())
+        (coords[adata.obs[library_key] == key][x_col].max(), coords[adata.obs[library_key] == key][x_col].min())
         for key in libraries
     ]
     fovs_y_range = [
-        (adata.obs[adata.obs[library_key] == key][y_col].max(), adata.obs[adata.obs[library_key] == key][y_col].min())
+        (coords[adata.obs[library_key] == key][y_col].max(), coords[adata.obs[library_key] == key][y_col].min())
         for key in libraries
     ]
     fovs_width = [i - j for (i, j) in fovs_x_range]
@@ -120,29 +125,40 @@ def sliding_window(
     fovs_area = [i * j for i, j in zip(fovs_width, fovs_height)]
     fovs_density = [i / j for i, j in zip(fovs_n_cell, fovs_area)]
     window_sizes = []
-
+    
     if window_size is None:
-        if max_n_cells is None and n_splits is None:
-            n_splits = 2
-
         if window_size_per_library_key == "equal":
-            if max_n_cells is not None:
-                n_splits = max(2, int(max(fovs_n_cell) / max_n_cells))
+            if max_n_cells:
+                n_splits = max(2, int(min(fovs_n_cell) / max_n_cells))
+                min_n_cells = max(int(.2 * max_n_cells), 1)
+            elif n_splits is None:
+                n_splits = 2
+                max_n_cells = int(min(fovs_n_cell) / n_splits)
+                min_n_cells = max(int(.2 * max_n_cells), 1)
             else:
-                max_n_cells = int(max(fovs_n_cell) / n_splits)
-            min_n_cells = int(min(fovs_n_cell) / n_splits)
+                max_n_cells = int(min(fovs_n_cell) / n_splits)
+                min_n_cells = max_n_cells - 1
+            
             maximum_region_area = max_n_cells / max(fovs_density)
             minimum_region_area = min_n_cells / max(fovs_density)
+
             window_size = _optimize_tile_size(
                 min(fovs_width), min(fovs_height), minimum_region_area, maximum_region_area, square, split_line
             )
             window_sizes = [window_size] * len(libraries)
         else:
             for i, lib in enumerate(libraries):
-                if max_n_cells is not None:
+                if max_n_cells:
                     n_splits = max(2, int(fovs_n_cell[i] / max_n_cells))
-                else:
+                    min_n_cells = max(int(.2 * max_n_cells), 1)
+                elif n_splits is None:
+                    n_splits = 2
                     max_n_cells = int(fovs_n_cell[i] / n_splits)
+                    min_n_cells = max(int(.2 * max_n_cells), 1)
+                else:
+                    max_n_cells = int(fovs_n_cell[i]/ n_splits)
+                    min_n_cells = max_n_cells - 1
+
                 min_n_cells = int(fovs_n_cell[i] / n_splits)
                 minimum_region_area = min_n_cells / max(fovs_density)
                 maximum_region_area = fovs_area[i] / fovs_density[i]
@@ -152,7 +168,7 @@ def sliding_window(
                     )
                 )
     else:
-        assert split_line is None, logg.warning("'split'  ignored as window_size is specified for square regions")
+        # assert split_line is None, logg.warning("'split'  ignored as window_size is specified for square regions")
         assert n_splits is None, logg.warning("'n_split'  ignored as window_size is specified for square regions")
         assert max_n_cells is None, logg.warning("'max_n_cells' ignored as window_size is specified")
         if isinstance(window_size, (int, float)):
@@ -171,12 +187,9 @@ def sliding_window(
     sliding_window_df = pd.DataFrame(index=adata.obs.index)
     if sliding_window_key in adata.obs:
         logg.warning(f"Overwriting existing column '{sliding_window_key}' in adata.obs.")
-    adata.obs[sliding_window_key] = "window_0"
-
     for i, lib in enumerate(libraries):
         lib_mask = adata.obs[library_key] == lib
         lib_coords = coords.loc[lib_mask]
-
         # precalculate windows
         windows = _calculate_window_corners(
             fovs_x_range[i],
@@ -216,7 +229,7 @@ def sliding_window(
                 )
                 obs_indices = lib_coords.index[mask]
                 sliding_window_df.loc[obs_indices, sliding_window_key] = f"{lib_key}window_{idx}"
-
+                sliding_window_df.loc[:, sliding_window_key].fillna("out_of_window_0", inplace=True)
             else:
                 col_name = f"{sliding_window_key}_{lib_key}window_{idx}"
                 sliding_window_df.loc[obs_indices, col_name] = True
@@ -230,13 +243,15 @@ def sliding_window(
             ordered=True,
             categories=sorted(
                 sliding_window_df[sliding_window_key].unique(),
-                key=lambda x: int(x.split("_")[-1]),
+                key=lambda x: int(str(x).split("_")[-1]),
             ),
         )
 
     if copy:
         return sliding_window_df
     sliding_window_df = sliding_window_df.loc[adata.obs.index]
+    if 'temp_fov' in adata.obs.columns:
+        del(adata.obs['temp_fov'])
     _save_data(adata, attr="obs", key=sliding_window_key, data=sliding_window_df[sliding_window_key])
 
 
@@ -300,17 +315,6 @@ def _calculate_window_corners(
     windows["x_end"] = windows["x_start"] + x_window_size
     windows["y_end"] = windows["y_start"] + y_window_size
 
-    # Adjust windows that extend beyond the bounds
-    # if drop_partial_windows:
-    #     # Remove windows that go beyond the max_x or max_y
-    #     windows = windows[
-    #         (windows["x_end"] <= max_x) & (windows["y_end"] <= max_y)
-    #     ]
-    # else:
-    #     # If not dropping partial windows, clip the end points to max_x and max_y
-    #     windows["x_end"] = windows["x_end"].clip(upper=max_x)
-    #     windows["y_end"] = windows["y_end"].clip(upper=max_y)
-
     if not drop_partial_windows:
         windows["x_end"] = windows["x_end"].clip(upper=max_x)
         windows["y_end"] = windows["y_end"].clip(upper=max_y)
@@ -321,7 +325,14 @@ def _calculate_window_corners(
     return windows[["x_start", "x_end", "y_start", "y_end"]]
 
 
-def _optimize_tile_size(L, W, A_min=None, A_max=None, square=False, split_line="v"):
+def _optimize_tile_size(
+        L: int, 
+        W: int, 
+        A_min: float | None = None, 
+        A_max: float | None = None, 
+        square: bool = False, 
+        split_line: str = "v"
+    ) -> tuple:
     """
     This function optimizes the tile size for covering a rectangle of dimensions LxW.
     It returns a tuple (x, y) where x and y are the dimensions of the optimal tile.
@@ -338,9 +349,10 @@ def _optimize_tile_size(L, W, A_min=None, A_max=None, square=False, split_line="
     """
     best_tile_size = None
     min_uncovered_area = float("inf")
+    area = L * W
     if square:
         # Calculate square tiles
-        max_side = int(math.sqrt(A_max)) if A_max else int(min(L, W))
+        max_side = min(int(math.sqrt(A_max)), int(min(L, W))) if A_max else int(min(L, W))
         min_side = int(math.sqrt(A_min)) if A_min else 1
         # Try all square tile sizes from min_side to max_side
         for side in range(min_side, max_side + 1):
@@ -348,9 +360,9 @@ def _optimize_tile_size(L, W, A_min=None, A_max=None, square=False, split_line="
                 continue  # Skip sizes that are out of the area limits
 
             # Calculate number of tiles that fit in the rectangle
-            num_tiles_x = L // side
-            num_tiles_y = W // side
-            uncovered_area = L * W - (num_tiles_x * num_tiles_y * side * side)
+            num_tiles_x = max(L // side, 1)
+            num_tiles_y = max(W // side, 1)
+            uncovered_area = area - (num_tiles_x * num_tiles_y * side * side)
 
             # Track the best tile size
             if uncovered_area < min_uncovered_area:
@@ -373,15 +385,12 @@ def _optimize_tile_size(L, W, A_min=None, A_max=None, square=False, split_line="
             for height in range(int(min_tile_length), int(max_tile_length) + 1):
                 if (A_min and width * height < A_min) or (A_max and width * height > A_max):
                     continue  # Skip sizes that are out of the area limits
-
                 # Calculate number of tiles that fit in the rectangle
-                num_tiles_x = L // width
-                num_tiles_y = W // height
-                uncovered_area = L * W - (num_tiles_x * num_tiles_y * width * height)
-
+                num_tiles_x = max(L // width, 1)
+                num_tiles_y = max(W // height, 1)
+                uncovered_area = area - (num_tiles_x * num_tiles_y * width * height)
                 # Track the best tile size (minimizing uncovered area)
                 if uncovered_area < min_uncovered_area:
                     min_uncovered_area = uncovered_area
                     best_tile_size = (height, width)
-
     return best_tile_size
