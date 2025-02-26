@@ -106,8 +106,8 @@ def sliding_window(
         raise ValueError(f"Library key '{library_key}' not found in adata.obs")
 
     if library_key is None:
-        library_key = 'temp_fov'
-        adata.obs[library_key] = 'fov1'
+        library_key = "temp_fov"
+        adata.obs[library_key] = "fov1"
 
     libraries = adata.obs[library_key].unique()
 
@@ -125,20 +125,20 @@ def sliding_window(
     fovs_area = [i * j for i, j in zip(fovs_width, fovs_height)]
     fovs_density = [i / j for i, j in zip(fovs_n_cell, fovs_area)]
     window_sizes = []
-    
+
     if window_size is None:
         if window_size_per_library_key == "equal":
             if max_n_cells:
                 n_splits = max(2, int(min(fovs_n_cell) / max_n_cells))
-                min_n_cells = max(int(.2 * max_n_cells), 1)
+                min_n_cells = max(int(0.2 * max_n_cells), 1)
             elif n_splits is None:
                 n_splits = 2
                 max_n_cells = int(min(fovs_n_cell) / n_splits)
-                min_n_cells = max(int(.2 * max_n_cells), 1)
+                min_n_cells = max(int(0.2 * max_n_cells), 1)
             else:
                 max_n_cells = int(min(fovs_n_cell) / n_splits)
                 min_n_cells = max_n_cells - 1
-            
+
             maximum_region_area = max_n_cells / max(fovs_density)
             minimum_region_area = min_n_cells / max(fovs_density)
 
@@ -150,13 +150,13 @@ def sliding_window(
             for i, lib in enumerate(libraries):
                 if max_n_cells:
                     n_splits = max(2, int(fovs_n_cell[i] / max_n_cells))
-                    min_n_cells = max(int(.2 * max_n_cells), 1)
+                    min_n_cells = max(int(0.2 * max_n_cells), 1)
                 elif n_splits is None:
                     n_splits = 2
                     max_n_cells = int(fovs_n_cell[i] / n_splits)
-                    min_n_cells = max(int(.2 * max_n_cells), 1)
+                    min_n_cells = max(int(0.2 * max_n_cells), 1)
                 else:
-                    max_n_cells = int(fovs_n_cell[i]/ n_splits)
+                    max_n_cells = int(fovs_n_cell[i] / n_splits)
                     min_n_cells = max_n_cells - 1
 
                 min_n_cells = int(fovs_n_cell[i] / n_splits)
@@ -250,8 +250,8 @@ def sliding_window(
     if copy:
         return sliding_window_df
     sliding_window_df = sliding_window_df.loc[adata.obs.index]
-    if 'temp_fov' in adata.obs.columns:
-        del(adata.obs['temp_fov'])
+    if "temp_fov" in adata.obs.columns:
+        del adata.obs["temp_fov"]
     _save_data(adata, attr="obs", key=sliding_window_key, data=sliding_window_df[sliding_window_key])
 
 
@@ -326,13 +326,8 @@ def _calculate_window_corners(
 
 
 def _optimize_tile_size(
-        L: int, 
-        W: int, 
-        A_min: float | None = None, 
-        A_max: float | None = None, 
-        square: bool = False, 
-        split_line: str = "v"
-    ) -> tuple:
+    L: int, W: int, A_min: float | None = None, A_max: float | None = None, square: bool = False, split_line: str = "v"
+) -> tuple:
     """
     This function optimizes the tile size for covering a rectangle of dimensions LxW.
     It returns a tuple (x, y) where x and y are the dimensions of the optimal tile.
