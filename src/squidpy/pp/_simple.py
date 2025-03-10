@@ -6,10 +6,10 @@ import pandas as pd
 import scanpy as sc
 import spatialdata as sd
 import xarray as xr
-from xarray import DataTree
 from spatialdata._logging import logger as logg
 from spatialdata.models import Labels2DModel, PointsModel, ShapesModel, get_model
 from spatialdata.transformations import get_transformation
+from xarray import DataTree
 
 
 def filter_cells(
@@ -37,24 +37,16 @@ def filter_cells(
     if isinstance(data, sd.SpatialData) and table is None:
         tables_to_use = list(data.tables.keys())
 
-    if (
-        not isinstance(data, ad.AnnData)
-        and tables_to_use is not None
-        and not tables_to_use
-    ):
+    if not isinstance(data, ad.AnnData) and tables_to_use is not None and not tables_to_use:
         raise ValueError("Expected at least one table to be filtered, found `0`")
 
     if any(t not in data.tables for t in tables_to_use):
         raise ValueError(f"Expected all tables to be in `{data.tables.keys()}`.`")
 
     # mimic scanpy's behavior in only allowing one filtering parameter per call
-    n_given_options = sum(
-        option is not None for option in [min_genes, min_counts, max_genes, max_counts]
-    )
+    n_given_options = sum(option is not None for option in [min_genes, min_counts, max_genes, max_counts])
     if n_given_options > 1:
-        raise ValueError(
-            "Only one filtering parameter can be provided per call (scanpy behavior)."
-        )
+        raise ValueError("Only one filtering parameter can be provided per call (scanpy behavior).")
 
     for param_name, param_value in [
         ("min_counts", min_counts),
@@ -63,9 +55,7 @@ def filter_cells(
         ("max_genes", max_genes),
     ]:
         if param_value is not None and not isinstance(param_value, int):
-            raise ValueError(
-                f"Expected `{param_name}` to be an integer, found `{type(param_value)}`"
-            )
+            raise ValueError(f"Expected `{param_name}` to be an integer, found `{type(param_value)}`")
 
     if not isinstance(inplace, bool):
         raise ValueError(f"Expected `inplace` to be a boolean, found `{type(inplace)}`")
@@ -76,7 +66,6 @@ def filter_cells(
 
     # we need to filter the adata object either way
     for t in tables_to_use:
-
         filter_params = {
             "min_counts": min_counts,
             "min_genes": min_genes,
@@ -92,24 +81,21 @@ def filter_cells(
         for param_name, param_value in filter_params.items():
             if param_value is not None:
                 if inplace and isinstance(data, ad.AnnData):
-                    sc.pp.filter_cells(
-                        table_old, **{param_name: param_value}, inplace=True
-                    )
+                    sc.pp.filter_cells(table_old, **{param_name: param_value}, inplace=True)
                 elif not inplace:
                     # inplace=False gives us boolean vector of which rows to remove
-                    mask_to_remove, _ = sc.pp.filter_cells(
-                        table_old, **{param_name: param_value}, inplace=False
-                    )
+                    mask_to_remove, _ = sc.pp.filter_cells(table_old, **{param_name: param_value}, inplace=False)
 
                     if isinstance(data, ad.AnnData):
-
                         return table_old[~mask_to_remove]
 
                     # we're SpatialData now
                     assert isinstance(data, sd.SpatialData)
 
                     if not inplace:
-                        logg.warning("Creating a deepcopy of the SpatialData object, depending on the size of the object this can take a while.")
+                        logg.warning(
+                            "Creating a deepcopy of the SpatialData object, depending on the size of the object this can take a while."
+                        )
                         data_out = sd.deepcopy(data)
 
                         # elements_dict = {}
@@ -123,9 +109,7 @@ def filter_cells(
 
                     table_filtered = table_old[~mask_to_remove]
                     if table_filtered.n_obs == 0 or table_filtered.n_vars == 0:
-                        raise ValueError(
-                            f"Filter results in empty table when filtering table `{t}`."
-                        )
+                        raise ValueError(f"Filter results in empty table when filtering table `{t}`.")
                     data_out.tables[t] = table_filtered
 
                     # if this doesn't exist, the table doesn't annotate anything
@@ -134,9 +118,7 @@ def filter_cells(
                             f"Table `{t}` does not have 'spatialdata_attrs' to indicate what it annotates."
                         )
 
-                    instance_key = data.tables[t].uns["spatialdata_attrs"][
-                        "instance_key"
-                    ]
+                    instance_key = data.tables[t].uns["spatialdata_attrs"]["instance_key"]
                     region_key = data.tables[t].uns["spatialdata_attrs"]["region_key"]
 
                     # region can annotate one (dtype str) or multiple (dtype list[str])
@@ -144,17 +126,13 @@ def filter_cells(
                     if isinstance(region, str):
                         region = [region]
 
-                    removed_obs = table_old.obs[mask_to_remove][
-                        [instance_key, region_key]
-                    ]
+                    removed_obs = table_old.obs[mask_to_remove][[instance_key, region_key]]
 
                     # iterate over all elements that the table annotates (region var)
                     for r in region:
                         element_model = get_model(data_out[r])
 
-                        ids_to_remove = removed_obs.query(f"{region_key} == '{r}'")[
-                            instance_key
-                        ].tolist()
+                        ids_to_remove = removed_obs.query(f"{region_key} == '{r}'")[instance_key].tolist()
                         if element_model == ShapesModel:
                             data_out.shapes[r] = _filter_ShapesModel_by_instance_ids(
                                 element=data_out.shapes[r], ids_to_remove=ids_to_remove
@@ -175,20 +153,12 @@ def filter_cells(
         return data_out
 
 
-def _filter_ShapesModel_by_instance_ids(
-    element: ShapesModel, ids_to_remove: list[str]
-) -> ShapesModel:
-
+def _filter_ShapesModel_by_instance_ids(element: ShapesModel, ids_to_remove: list[str]) -> ShapesModel:
     return element[~element.index.isin(ids_to_remove)]
 
 
-def _filter_Labels2DModel_by_instance_ids(
-    element: Labels2DModel, ids_to_remove: list[str]
-) -> Labels2DModel:
-
-    def set_ids_in_label_to_zero(
-        image: xr.DataArray, ids_to_remove: list[int]
-    ) -> xr.DataArray:
+def _filter_Labels2DModel_by_instance_ids(element: Labels2DModel, ids_to_remove: list[str]) -> Labels2DModel:
+    def set_ids_in_label_to_zero(image: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:
         # Use apply_ufunc for efficient processing
         def _mask_block(block):
             # Create a copy to avoid modifying read-only array
@@ -236,7 +206,6 @@ def _filter_Labels2DModel_by_instance_ids(
 
 
 def _get_scale_factors(labels_element: Labels2DModel) -> list[tuple[float, float]]:
-
     scales = list(labels_element.keys())
 
     # Calculate relative scale factors between consecutive scales
