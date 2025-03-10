@@ -193,7 +193,7 @@ def _filter_Labels2DModel_by_instance_ids(
         def _mask_block(block):
             # Create a copy to avoid modifying read-only array
             result = block.copy()
-            result[np.isin(result, masks)] = 0
+            result[np.isin(result, ids_to_remove)] = 0
             return result
 
         processed = xr.apply_ufunc(
