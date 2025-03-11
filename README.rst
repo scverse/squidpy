@@ -10,11 +10,6 @@ tissue images if available.
 
 Visit our `documentation`_ for installation, tutorials, examples and more.
 
-Squidpy is part of the scverse project (`website`_, `governance`_) and is fiscally sponsored by `NumFOCUS`_.
-Please consider making a tax-deductible `donation`_ to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
-
-|NumFOCUS logo|
-
 Manuscript
 ----------
 Please see our manuscript `Palla, Spitzer et al. (2022)`_ in **Nature Methods** to learn more.
@@ -82,6 +77,7 @@ We are happy about any contributions! Before you start, check out our `contribut
     :target: https://numfocus.org/project/scverse
     :width: 200
 
+
 .. _Palla, Spitzer et al. (2022): https://doi.org/10.1038/s41592-021-01358-2
 .. _scanpy: https://scanpy.readthedocs.io/en/stable/
 .. _anndata: https://anndata.readthedocs.io/en/stable/
@@ -92,3 +88,15 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. _governance: https://scverse.org/about/roles/
 .. _NumFOCUS: https://numfocus.org/
 .. _donation: https://numfocus.org/donate-to-scverse/
+
+Squidpy is part of the scverse® project (`website`_, `governance`_) and is fiscally sponsored by `NumFOCUS`_.
+Please consider making a tax-deductible `donation`_ to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
+
+.. raw:: html
+
+   <p align="center">
+       <a href="https://numfocus.org/project/scverse">
+           <img src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png" width="200">
+       </a>
+   </p>
+
