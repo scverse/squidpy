@@ -111,4 +111,5 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. _skimage: https://scikit-image.org/
 .. _contributing guide: https://github.com/scverse/squidpy/blob/main/CONTRIBUTING.rst
 .. _discourse: https://discourse.scverse.org/
+
 .. _github: https://github.com/scverse/squidpy
