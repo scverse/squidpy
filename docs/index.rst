@@ -40,6 +40,7 @@ Please consider making a tax-deductible `donation`_ to help the project pay for 
 Manuscript
 ----------
 .. _Palla, Spitzer et al. (2022): https://doi.org/10.1038/s41592-021-01358-2
+
 Please see our manuscript `Palla, Spitzer et al. (2022)`_ in **Nature Methods** to learn more.
 
 Squidpy's key applications
