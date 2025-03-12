@@ -32,17 +32,15 @@ tissue images if available.
 Squidpy is part of the scverse® project (`website`_, `governance`_) and is fiscally sponsored by `NumFOCUS`_.
 Please consider making a tax-deductible `donation`_ to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
 
-.. raw:: html
-
-   <p align="center">
-       <a href="https://numfocus.org/project/scverse">
-           <img src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png" width="200">
-       </a>
-   </p>
+.. image:: https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png
+   :width: 200
+   :target: https://numfocus.org/project/scverse
+   :align: center
 
 Manuscript
 ----------
 .. _Palla, Spitzer et al. (2022): https://doi.org/10.1038/s41592-021-01358-2
+
 Please see our manuscript `Palla, Spitzer et al. (2022)`_ in **Nature Methods** to learn more.
 
 Squidpy's key applications
@@ -114,4 +112,5 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. _skimage: https://scikit-image.org/
 .. _contributing guide: https://github.com/scverse/squidpy/blob/main/CONTRIBUTING.rst
 .. _discourse: https://discourse.scverse.org/
+
 .. _github: https://github.com/scverse/squidpy
