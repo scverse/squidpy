@@ -16,6 +16,7 @@ from sklearn.metrics import f1_score
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
+from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
@@ -26,29 +27,29 @@ __all__ = ["calculate_niche"]
 @d.dedent
 @inject_docs(fla=NicheDefinitions)
 def calculate_niche(
-    adata: AnnData | SpatialData,
-    flavor: Literal["neighborhood", "utag", "cellcharter"] = "neighborhood",
-    library_key: str | None = None,  # TODO: calculate niches on a per-slide basis
+    data: AnnData | SpatialData,
+    flavor: Literal["neighborhood", "utag", "cellcharter"],
+    library_key: str | None = None,
     table_key: str | None = None,
     mask: pd.core.series.Series = None,
     groups: str | None = None,
     n_neighbors: int | None = None,
     resolutions: float | list[float] | None = None,
-    subset_groups: list[str] | None = None,
     min_niche_size: int | None = None,
     scale: bool = True,
     abs_nhood: bool = False,
-    distance: int = 1,
+    distance: int | None = None,
     n_hop_weights: list[float] | None = None,
-    aggregation: str = "mean",
+    aggregation: str | None = None,
     n_components: int | None = None,
     random_state: int = 42,
     spatial_connectivities_key: str = "spatial_connectivities",
-) -> AnnData | pd.DataFrame:
+    inplace: bool = True,
+) -> AnnData:
     """
     Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
-    The resulting niche labels with be stored in 'adata.obs'. If flavor = 'all' then all available methods
-    will be applied and additionally compared using cluster validation scores.
+    The resulting niche labels with be stored in 'adata.obs'.
+
     Parameters
     ----------
     %(adata)s
@@ -57,9 +58,9 @@ def calculate_niche(
             - `{fla.NEIGHBORHOOD.s!r}` - cluster the neighborhood profile.
             - `{fla.UTAG.s!r}` - use utag algorithm (matrix multiplication).
             - `{fla.CELLCHARTER.s!r}` - cluster adjacency matrix with Gaussian Mixture Model (GMM) using CellCharter's approach.
-            - `{fla.SPOT.s!r}` - calculate niches using optimal transport. (coming soon)
-            - `{fla.BANKSY.s!r}`- use Banksy algorithm. (coming soon)
     %(library_key)s
+        If provided, niches will be calculated separately for each unique value in this column.
+        Each niche will be prefixed with the library identifier.
     table_key
         Key in `spatialdata.tables` to specify an 'anndata' table. Only necessary if 'sdata' is passed.
     mask
@@ -74,9 +75,6 @@ def calculate_niche(
     resolutions
         List of resolutions to use for leiden clustering.
         Required if flavor == `{fla.NEIGHBORHOOD.s!r}` or flavor == `{fla.UTAG.s!r}`.
-    subset_groups
-        Groups (e.g. cell type categories) to ignore when calculating the neighborhood profile.
-        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
     min_niche_size
         Minimum required size of a niche. Niches with fewer cells will be labeled as 'not_a_niche'.
         Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
@@ -104,31 +102,22 @@ def calculate_niche(
         Optional if flavor == `{fla.CELLCHARTER.s!r}`.
     spatial_connectivities_key
         Key in `adata.obsp` where spatial connectivities are stored.
+    inplace
+        If 'True', perform the operation in place.
+        If 'False', return a new AnnData object with the niche labels.
     """
 
-    # check whether anndata or spatialdata is provided and if spatialdata, check whether table_key is provided
-    if isinstance(adata, SpatialData):
-        if table_key is not None:
-            adata = adata.tables[table_key].copy()
-        else:
-            raise ValueError("Please specify which table to use with `table_key`.")
-    else:
-        adata = adata
-
-    # check whether neighborhood graph exists
-    if spatial_connectivities_key not in adata.obsp.keys():
-        raise KeyError(
-            f"Key '{spatial_connectivities_key}' not found in `adata.obsp`. If you haven't computed a spatial neighborhood graph yet, use `sq.gr.spatial_neighbors`."
-        )
+    if flavor == "cellcharter" and aggregation is None:
+        aggregation = "mean"
 
     _validate_niche_args(
-        adata,
-        mask,
+        data,
         flavor,
+        library_key,
+        table_key,
         groups,
         n_neighbors,
         resolutions,
-        subset_groups,
         min_niche_size,
         scale,
         abs_nhood,
@@ -137,17 +126,199 @@ def calculate_niche(
         aggregation,
         n_components,
         random_state,
-        spatial_connectivities_key,
+        inplace,
     )
+
+    if resolutions is None:
+        resolutions = [0.5]
+
+    if distance is None:
+        distance = 1
+
+    if isinstance(data, SpatialData):
+        orig_adata = data.tables[table_key]
+        adata = orig_adata.copy()
+    else:
+        orig_adata = data
+        adata = data.copy()
+
+    if spatial_connectivities_key not in adata.obsp.keys():
+        raise KeyError(
+            f"Key '{spatial_connectivities_key}' not found in `adata.obsp`. "
+            "If you haven't computed a spatial neighborhood graph yet, use `sq.gr.spatial_neighbors`."
+        )
+
+    if library_key is not None:
+        if library_key not in adata.obs.columns:
+            raise KeyError(f"'{library_key}' not found in `adata.obs`.")
+
+        logg.info(f"Stratifying by library_key '{library_key}'")
+
+        result_columns = _get_result_columns(
+            flavor=flavor,
+            resolutions=resolutions,
+            library_key=None,
+            libraries=None,
+        )
+
+        for col in result_columns:
+            adata.obs[col] = "not_a_niche"
+
+        for lib_id in adata.obs[library_key].unique():
+            logg.info(f"Processing library '{lib_id}'")
+
+            lib_indices = adata.obs[adata.obs[library_key] == lib_id].index
+
+            if len(lib_indices) == 0:
+                logg.warning(f"Library '{lib_id}' contains no cells, skipping")
+                continue
+
+            lib_adata = adata[lib_indices].copy()
+
+            lib_mask = None
+            if mask is not None:
+                lib_mask = mask[mask.index.isin(lib_indices)]
+
+            lib_result = calculate_niche(
+                lib_adata,
+                flavor=flavor,
+                library_key=None,
+                mask=lib_mask,
+                groups=groups,
+                n_neighbors=n_neighbors,
+                resolutions=None if flavor == "cellcharter" else resolutions,
+                min_niche_size=min_niche_size,
+                scale=scale,
+                abs_nhood=abs_nhood,
+                distance=None if flavor == "utag" else distance,
+                n_hop_weights=n_hop_weights,
+                aggregation=aggregation,
+                n_components=n_components,
+                random_state=random_state,
+                spatial_connectivities_key=spatial_connectivities_key,
+                inplace=False,
+            )
+
+            for col in result_columns:
+                if col in lib_result.obs.columns:
+                    prefixed_values = lib_result.obs[col].apply(
+                        lambda x, lib=lib_id: (f"lib={lib}_{x}" if x != "not_a_niche" else x)
+                    )
+
+                    adata.obs.loc[lib_indices, col] = prefixed_values.values
+
+    else:
+        _calculate_niches(
+            adata,
+            mask,
+            flavor,
+            groups,
+            n_neighbors,
+            resolutions,
+            min_niche_size,
+            scale,
+            abs_nhood,
+            distance,
+            n_hop_weights,
+            aggregation,
+            n_components,
+            random_state,
+            spatial_connectivities_key,
+        )
+
+    if inplace:
+        if isinstance(data, SpatialData):
+            data.tables[table_key] = adata
+        else:
+            for col in adata.obs.columns:
+                if "niche" in col and col not in orig_adata.obs.columns:
+                    orig_adata.obs[col] = adata.obs[col]
+
+    return adata if not inplace else orig_adata
+
+
+def _get_result_columns(
+    flavor: str,
+    resolutions: float | list[float],
+    library_key: str | None,
+    libraries: list[str] | None,
+) -> list[str]:
+    """Get the column names that will be populated based on flavor and resolutions."""
+
+    library_str = f"_{library_key}" if library_key is not None else ""
+
+    if flavor == "cellcharter":
+        base_column = "cellcharter_niche"
+        if library_key is None:
+            return [base_column]
+        elif libraries is not None and len(libraries) > 0:
+            return [f"{base_column}_{lib}" for lib in libraries]
+
+    # For neighborhood and utag, we need to handle resolutions
+    if not isinstance(resolutions, list):
+        resolutions = [resolutions]
+
+    prefix = f"nhood_niche{library_str}" if flavor == "neighborhood" else f"utag_niche{library_str}"
+    if library_key is None:
+        return [f"{prefix}_res={res}" for res in resolutions]
+    else:
+        assert isinstance(libraries, list)  # for mypy
+        return [f"{prefix}_{lib}_res={res}" for lib in libraries for res in resolutions]
+
+
+def _calculate_niches(
+    adata: AnnData,
+    mask: pd.core.series.Series | None,
+    flavor: str,
+    groups: str | None,
+    n_neighbors: int | None,
+    resolutions: float | list[float],
+    min_niche_size: int | None,
+    scale: bool,
+    abs_nhood: bool,
+    distance: int,
+    n_hop_weights: list[float] | None,
+    aggregation: str | None,
+    n_components: int | None,
+    random_state: int,
+    spatial_connectivities_key: str,
+) -> None:
+    """Calculate niches using the specified flavor and parameters."""
+    if flavor == "neighborhood":
+        _get_nhood_profile_niches(
+            adata,
+            mask,
+            groups,
+            n_neighbors,
+            resolutions,
+            min_niche_size,
+            scale,
+            abs_nhood,
+            distance,
+            n_hop_weights,
+            spatial_connectivities_key,
+        )
+    elif flavor == "utag":
+        _get_utag_niches(adata, n_neighbors, resolutions, spatial_connectivities_key)
+    elif flavor == "cellcharter":
+        assert isinstance(aggregation, str)  # for mypy
+        assert isinstance(n_components, int)  # for mypy
+        _get_cellcharter_niches(
+            adata,
+            distance,
+            aggregation,
+            n_components,
+            random_state,
+            spatial_connectivities_key,
+        )
 
 
 def _get_nhood_profile_niches(
     adata: AnnData,
     mask: pd.core.series.Series | None,
-    groups: str,
-    n_neighbors: int,
+    groups: str | None,
+    n_neighbors: int | None,
     resolutions: float | list[float],
-    subset_groups: list[str] | None,
     min_niche_size: int | None,
     scale: bool,
     abs_nhood: bool,
@@ -158,16 +329,8 @@ def _get_nhood_profile_niches(
     """
     adapted from https://github.com/immunitastx/monkeybread/blob/main/src/monkeybread/calc/_neighborhood_profile.py
     """
-    # If subsetting, filter connections from adjacency matrix
-    if subset_groups:
-        adjacency_matrix = adata.obsp[spatial_connectivities_key].tocsc()
-        obs_mask = ~adata.obs[groups].isin(subset_groups)
-        adata_masked = adata[obs_mask]
 
-        adjacency_matrix = adjacency_matrix[obs_mask, :][:, obs_mask]
-        adata_masked.obsp[spatial_connectivities_key] = adjacency_matrix.tocsr()
-    else:
-        adata_masked = adata
+    adata_masked = adata
 
     # get obs x neighbor matrix from sparse matrix
     matrix = adata_masked.obsp[spatial_connectivities_key].tocoo()
@@ -209,25 +372,28 @@ def _get_nhood_profile_niches(
     # required for leiden clustering (note: no dim reduction performed in original implementation)
     sc.pp.neighbors(adata_neighborhood, n_neighbors=n_neighbors, use_rep="X")
 
-    resolutions = [resolutions] if not isinstance(resolutions, list) else resolutions
+    resolutions = resolutions if isinstance(resolutions, list) else [resolutions]
 
     # For each resolution, apply leiden on neighborhood profile. Each cluster label equals to a niche label
-    df = pd.DataFrame(index=adata.obs.index)
     for res in resolutions:
-        sc.tl.leiden(adata_neighborhood, resolution=res, key_added=f"neighborhood_niche_res={res}")
-        adata_masked.obs[f"neighborhood_niche_res={res}"] = adata_masked.obs.index.map(
-            adata_neighborhood.obs[f"neighborhood_niche_res={res}"]
+        sc.tl.leiden(
+            adata_neighborhood,
+            resolution=res,
+            key_added=f"nhood_niche_res={res}",
+        )
+        adata_masked.obs[f"nhood_niche_res={res}"] = adata_masked.obs.index.map(
+            adata_neighborhood.obs[f"nhood_niche_res={res}"]
         ).fillna("not_a_niche")
 
         # filter niches with n_cells < min_niche_size
         if min_niche_size is not None:
-            counts_by_niche = adata_masked.obs[f"neighborhood_niche_res={res}"].value_counts()
+            counts_by_niche = adata_masked.obs[f"nhood_niche_res={res}"].value_counts()
             to_filter = counts_by_niche[counts_by_niche < min_niche_size].index
-            adata_masked.obs[f"neighborhood_niche_res={res}"] = adata_masked.obs[f"neighborhood_niche_res={res}"].apply(
+            adata_masked.obs[f"nhood_niche_res={res}"] = adata_masked.obs[f"nhood_niche_res={res}"].apply(
                 lambda x, to_filter=to_filter: "not_a_niche" if x in to_filter else x
             )
-            adata.obs[f"neighborhood_niche_res={res}"] = adata.obs.index.map(
-                adata_masked.obs[f"neighborhood_niche_res={res}"]
+            adata.obs[f"nhood_niche_res={res}"] = adata.obs.index.map(
+                adata_masked.obs[f"nhood_niche_res={res}"]
             ).fillna("not_a_niche")
 
     return
@@ -235,9 +401,8 @@ def _get_nhood_profile_niches(
 
 def _get_utag_niches(
     adata: AnnData,
-    subset_groups: list[str] | None,
-    n_neighbors: int,
-    resolutions: float | list[float] | None,
+    n_neighbors: int | None,
+    resolutions: float | list[float],
     spatial_connectivities_key: str,
 ) -> None:
     """
@@ -249,22 +414,18 @@ def _get_utag_niches(
     sc.tl.pca(adata_utag)  # note: unlike with flavor 'neighborhood' dim reduction is performed here
     sc.pp.neighbors(adata_utag, n_neighbors=n_neighbors, use_rep="X_pca")
 
-    if resolutions is not None:
-        if not isinstance(resolutions, list):
-            resolutions = [resolutions]
-    else:
-        raise ValueError("Please provide resolutions for leiden clustering.")
-
+    if not isinstance(resolutions, list):
+        resolutions = [resolutions]
     # For each resolution, apply leiden on neighborhood profile. Each cluster label equals to a niche label
     for res in resolutions:
-        sc.tl.leiden(adata_utag, resolution=res, key_added=f"utag_res={res}")
-        adata.obs[f"utag_res={res}"] = adata_utag.obs[f"utag_res={res}"].values
+        sc.tl.leiden(adata_utag, resolution=res, key_added=f"utag_niche_res={res}")
+        adata.obs[f"utag_niche_res={res}"] = adata_utag.obs[f"utag_niche_res={res}"].values
+
     return
 
 
 def _get_cellcharter_niches(
     adata: AnnData,
-    subset_groups: list[str] | None,
     distance: int,
     aggregation: str,
     n_components: int,
@@ -306,7 +467,7 @@ def _get_cellcharter_niches(
 
 def _calculate_neighborhood_profile(
     adata: AnnData,
-    groups: str,
+    groups: str | None,
     matrix: coo_matrix,
     abs_nhood: bool,
 ) -> pd.DataFrame:
@@ -414,9 +575,14 @@ def _aggregate(adata: AnnData, normalized_adjacency_matrix: sps.spmatrix, aggreg
 
 def _get_GMM_clusters(A: NDArray[np.float64], n_components: int, random_state: int) -> Any:
     """Returns niche labels generated by GMM clustering.
-    Compared to cellcharter this approach is simplified by using sklearn's GaussianMixture model without stability analysis."""
+    Compared to cellcharter this approach is simplified by using sklearn's GaussianMixture model without stability analysis.
+    """
 
-    gmm = GaussianMixture(n_components=n_components, random_state=random_state, init_params="random_from_data")
+    gmm = GaussianMixture(
+        n_components=n_components,
+        random_state=random_state,
+        init_params="random_from_data",
+    )
     gmm.fit(A)
     labels = gmm.predict(A)
 
@@ -461,73 +627,206 @@ def _jensen_shannon_divergence(adata: AnnData, niche_key: str, library_key: str)
 
 
 def _validate_niche_args(
-    adata: AnnData,
-    mask: pd.core.series.Series | None,
+    data: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter"],
+    library_key: str | None,
+    table_key: str | None,
     groups: str | None,
     n_neighbors: int | None,
     resolutions: float | list[float] | None,
-    subset_groups: list[str] | None,
     min_niche_size: int | None,
     scale: bool,
     abs_nhood: bool,
-    distance: int,
+    distance: int | None,
     n_hop_weights: list[float] | None,
-    aggregation: str,
+    aggregation: str | None,
     n_components: int | None,
     random_state: int,
-    spatial_connectivities_key: str,
-) -> str | None:
+    inplace: bool,
+) -> None:
     """
     Validate whether necessary arguments are provided for a given niche flavor.
-    If required arguments are provided, run respective niche calculation function.
     Also warns whether unnecessary optional arguments are supplied.
+
+    Raises
+    ------
+    ValueError
+        If required arguments for the specified flavor are missing or have incorrect values.
+    TypeError
+        If arguments are of incorrect type.
     """
-    if flavor == "neighborhood":
-        if any(arg is not None for arg in ([random_state])):
-            warnings.warn("param 'random_state' is not used for neighborhood flavor.", stacklevel=2)
-        if groups is not None and n_neighbors is not None and resolutions is not None:
-            _get_nhood_profile_niches(
-                adata,
-                mask,
-                groups,
-                n_neighbors,
-                resolutions,
-                subset_groups,
-                min_niche_size,
-                scale,
-                abs_nhood,
-                distance,
-                n_hop_weights,
-                spatial_connectivities_key,
-            )
-        else:
-            raise ValueError(
-                "One of required args 'groups', 'n_neighbors' and 'resolutions' for flavor 'neighborhood' is 'None'."
-            )
-    elif flavor == "utag":
-        if any(arg is not None for arg in (subset_groups, min_niche_size, scale, abs_nhood, random_state)):
-            warnings.warn(
-                "param 'subset_groups', 'min_niche_size', 'scale', 'abs_nhood', 'random_state' are not used for utag flavor.",
-                stacklevel=2,
-            )
-        if n_neighbors is not None and resolutions is not None:
-            _get_utag_niches(adata, subset_groups, n_neighbors, resolutions, spatial_connectivities_key)
-        else:
-            raise ValueError("One of required args 'n_neighbors' and 'resolutions' for flavor 'utag' is 'None'.")
-    elif flavor == "cellcharter":
-        if any(arg is not None for arg in (groups, subset_groups, min_niche_size, scale, abs_nhood)):
-            warnings.warn(
-                "param 'groups', 'subset_groups', 'min_niche_size', 'scale', 'abs_nhood' are not used for cellcharter flavor.",
-                stacklevel=2,
-            )
-        if distance is not None and aggregation is not None and n_components is not None:
-            _get_cellcharter_niches(
-                adata, subset_groups, distance, aggregation, n_components, random_state, spatial_connectivities_key
-            )
-        else:
-            raise ValueError(
-                "One of required args 'distance', 'aggregation' and 'n_components' for flavor 'cellcharter' is 'None'."
-            )
-    else:
+    if not isinstance(data, AnnData | SpatialData):
+        raise TypeError(f"'data' must be an AnnData or SpatialData object, got {type(data).__name__}")
+
+    if flavor not in ["neighborhood", "utag", "cellcharter"]:
         raise ValueError(f"Invalid flavor '{flavor}'. Please choose one of 'neighborhood', 'utag', 'cellcharter'.")
+
+    if library_key is not None:
+        if not isinstance(library_key, str):
+            raise TypeError(f"'library_key' must be a string, got {type(library_key).__name__}")
+        if isinstance(data, AnnData):
+            if library_key not in data.obs.columns:
+                raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
+        elif isinstance(data, SpatialData):
+            if table_key is None:
+                raise ValueError("'table_key' is required when 'data' is a SpatialData object")
+            if table_key not in data.tables:
+                raise ValueError(f"'table_key' must be a valid table key in 'data', got {table_key}")
+            if library_key not in data.tables[table_key].obs.columns:
+                raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
+
+    if n_neighbors is not None and not isinstance(n_neighbors, int):
+        raise TypeError(f"'n_neighbors' must be an integer, got {type(n_neighbors).__name__}")
+
+    if resolutions is not None:
+        if not isinstance(resolutions, float | list):
+            raise TypeError(f"'resolutions' must be a float or list of floats, got {type(resolutions).__name__}")
+        if isinstance(resolutions, list) and not all(isinstance(res, float) for res in resolutions):
+            raise TypeError("All elements in 'resolutions' list must be floats")
+
+    if n_hop_weights is not None and not isinstance(n_hop_weights, list):
+        raise TypeError(f"'n_hop_weights' must be a list of floats, got {type(n_hop_weights).__name__}")
+
+    if not isinstance(scale, bool):
+        raise TypeError(f"'scale' must be a boolean, got {type(scale).__name__}")
+
+    if not isinstance(abs_nhood, bool):
+        raise TypeError(f"'abs_nhood' must be a boolean, got {type(abs_nhood).__name__}")
+
+    # Define parameters used by each flavor
+    flavor_param_specs = {
+        "neighborhood": {
+            "required": ["groups", "n_neighbors", "resolutions"],
+            "optional": [
+                "min_niche_size",
+                "scale",
+                "abs_nhood",
+                "distance",
+                "n_hop_weights",
+            ],
+            "unused": ["aggregation", "n_components", "random_state"],
+        },
+        "utag": {
+            "required": ["n_neighbors", "resolutions"],
+            "optional": [],
+            "unused": [
+                "groups",
+                "min_niche_size",
+                "scale",
+                "abs_nhood",
+                "distance",
+                "n_hop_weights",
+                "aggregation",
+                "n_components",
+                "random_state",
+            ],
+        },
+        "cellcharter": {
+            "required": ["distance", "aggregation", "n_components", "random_state"],
+            "optional": [],
+            "unused": [
+                "groups",
+                "min_niche_size",
+                "scale",
+                "abs_nhood",
+                "n_neighbors",
+                "resolutions",
+                "n_hop_weights",
+            ],
+        },
+    }
+
+    for param_name in flavor_param_specs[flavor]["required"]:
+        param_value = locals()[param_name]
+        if param_value is None:
+            raise ValueError(f"'{param_name}' is required for flavor '{flavor}'")
+
+    _check_unnecessary_args(
+        flavor,
+        {
+            "groups": groups,
+            "n_neighbors": n_neighbors,
+            "resolutions": resolutions,
+            "min_niche_size": min_niche_size,
+            "scale": scale,
+            "abs_nhood": abs_nhood,
+            "distance": distance,
+            "n_hop_weights": n_hop_weights,
+            "aggregation": aggregation,
+            "n_components": n_components,
+            "random_state": random_state,
+        },
+        flavor_param_specs[flavor],
+    )
+
+    # Flavor-specific validations
+    if flavor == "neighborhood":
+        if not isinstance(groups, str):
+            raise TypeError(f"'groups' must be a string, got {type(groups).__name__}")
+
+        if min_niche_size is not None and not isinstance(min_niche_size, int):
+            raise TypeError(f"'min_niche_size' must be an integer, got {type(min_niche_size).__name__}")
+
+        if distance is not None and isinstance(distance, int) and distance < 1:
+            raise ValueError(f"'distance' must be at least 1, got {distance}")
+
+    elif flavor == "cellcharter":
+        if distance is not None and not isinstance(distance, int):
+            raise TypeError(f"'distance' must be an integer, got {type(distance).__name__}")
+        if distance is not None and distance < 1:
+            raise ValueError(f"'distance' must be at least 1, got {distance}")
+
+        if aggregation is not None and not isinstance(aggregation, str):
+            raise TypeError(f"'aggregation' must be a string, got {type(aggregation).__name__}")
+        if aggregation not in ["mean", "variance"]:
+            raise ValueError(f"'aggregation' must be one of 'mean' or 'variance', got {aggregation}")
+
+        if not isinstance(n_components, int):
+            raise TypeError(f"'n_components' must be an integer, got {type(n_components).__name__}")
+        if n_components < 1:
+            raise ValueError(f"'n_components' must be at least 1, got {n_components}")
+
+        if not isinstance(random_state, int):
+            raise TypeError(f"'random_state' must be an integer, got {type(random_state).__name__}")
+
+        # for mypy
+        if resolutions is None:
+            resolutions = [0.0]
+
+    if not isinstance(inplace, bool):
+        raise TypeError(f"'inplace' must be a boolean, got {type(inplace).__name__}")
+
+
+def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs: dict[str, Any]) -> None:
+    """
+    Check for unnecessary arguments that were provided but not used by the given flavor.
+
+    Parameters
+    ----------
+    flavor
+        The flavor being used ('neighborhood', 'utag', or 'cellcharter')
+    param_dict
+        Dictionary of parameter names to their values
+    param_specs
+        Dictionary with 'required', 'optional', and 'unused' parameter lists for the flavor
+    """
+    unnecessary_args = []
+
+    for param_name in param_specs["unused"]:
+        param_value = param_dict.get(param_name)
+
+        # Special handling for boolean parameters with default values
+        if param_name == "scale" and param_value is True:
+            continue
+        if param_name == "abs_nhood" and param_value is False:
+            continue
+        if param_name == "random_state" and param_value == 42:
+            continue
+
+        if param_value is not None:
+            unnecessary_args.append(param_name)
+
+    if unnecessary_args:
+        logg.warn(
+            f"Parameters {', '.join([f'{arg}' for arg in unnecessary_args])} are not used for flavor '{flavor}'.",
+        )
