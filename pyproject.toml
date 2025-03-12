@@ -54,7 +54,6 @@ dependencies = [
    "dask[array]>=2021.02.0,<=2024.11.2",
    "docrep>=0.3.1",
    "fsspec>=2021.11.0",
-   "leidenalg>=0.8.2",
    "matplotlib>=3.3",
    "matplotlib-scalebar>=0.8.0",
    "networkx>=2.6.0",
@@ -83,6 +82,7 @@ dev = [
     "tox>=4.0.0",
 ]
 test = [
+    "scanpy[leiden]",
     "pytest>=7",
     "pytest-xdist>=3",
     "pytest-mock>=3.5.0",
