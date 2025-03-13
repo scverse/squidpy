@@ -7,8 +7,17 @@ from anndata import AnnData
 from pandas.testing import assert_frame_equal
 from scipy.sparse import issparse
 
+import squidpy as sq
 from squidpy.gr import calculate_niche, spatial_neighbors
-from squidpy.gr._niche import _aggregate, _calculate_neighborhood_profile, _hop, _normalize, _setdiag, _utag
+from squidpy.gr._niche import (
+    _aggregate,
+    _calculate_neighborhood_profile,
+    _hop,
+    _normalize,
+    _setdiag,
+    _utag,
+)
+from tests.conftest import PlotTester, PlotTesterMeta
 
 SPATIAL_CONNECTIVITIES_KEY = "spatial_connectivities"
 N_NEIGHBORS = 20
@@ -26,7 +35,7 @@ def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
         resolutions=[0.1],
         min_niche_size=100,
     )
-    niches = adata_seqfish.obs["neighborhood_niche_res=0.1"]
+    niches = adata_seqfish.obs["nhood_niche_res=0.1"]
 
     # assert no nans, more niche labels than non-niche labels, and at least 100 obs per niche
     assert niches.isna().sum() == 0
@@ -59,20 +68,26 @@ def test_utag(adata_seqfish: AnnData):
     spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
     calculate_niche(adata_seqfish, flavor="utag", n_neighbors=N_NEIGHBORS, resolutions=[0.1, 1.0])
 
-    niches = adata_seqfish.obs["utag_res=1.0"]
-    niches_low_res = adata_seqfish.obs["utag_res=0.1"]
+    niches = adata_seqfish.obs["utag_niche_res=1.0"]
+    niches_low_res = adata_seqfish.obs["utag_niche_res=0.1"]
 
     assert niches.isna().sum() == 0
     assert niches.nunique() > niches_low_res.nunique()
 
     # assert shape obs x var and sparsity in new feature matrix
-    new_feature_matrix = _utag(adata_seqfish, normalize_adj=True, spatial_connectivity_key=SPATIAL_CONNECTIVITIES_KEY)
+    new_feature_matrix = _utag(
+        adata_seqfish,
+        normalize_adj=True,
+        spatial_connectivity_key=SPATIAL_CONNECTIVITIES_KEY,
+    )
     assert new_feature_matrix.shape == adata_seqfish.X.shape
     assert issparse(new_feature_matrix)
 
     spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=40)
     new_feature_matrix_more_neighs = _utag(
-        adata_seqfish, normalize_adj=True, spatial_connectivity_key=SPATIAL_CONNECTIVITIES_KEY
+        adata_seqfish,
+        normalize_adj=True,
+        spatial_connectivity_key=SPATIAL_CONNECTIVITIES_KEY,
     )
 
     # matrix products should differ when using different amount of neighbors
@@ -126,4 +141,41 @@ def test_nhop(adjacency_matrix: np.array, n_hop_matrix: np.array):
     assert (adj_sparse @ adj_sparse != nhop_sparse).nnz == 0
 
 
-# TODO: comppare results to previously calculated niches
+class TestNiches(PlotTester, metaclass=PlotTesterMeta):
+    def test_plot_utag_niche(self, adata_seqfish: AnnData):
+        spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
+        calculate_niche(adata_seqfish, flavor="utag", n_neighbors=N_NEIGHBORS, resolutions=0.5)
+
+        sq.pl.spatial_scatter(
+            adata_seqfish,
+            color="utag_niche_res=0.5",
+            shape=None,
+        )
+
+    def test_plot_neighborhood_niche(self, adata_seqfish: AnnData):
+        spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
+
+        calculate_niche(
+            adata_seqfish,
+            groups=GROUPS,
+            flavor="neighborhood",
+            n_neighbors=N_NEIGHBORS,
+            resolutions=0.5,
+            min_niche_size=100,
+        )
+
+        sq.pl.spatial_scatter(
+            adata_seqfish,
+            color="nhood_niche_res=0.5",
+            shape=None,
+        )
+
+    def test_plot_cellcharter_niche(self, adata_seqfish: AnnData):
+        spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
+        calculate_niche(adata_seqfish, groups=GROUPS, flavor="cellcharter", distance=3, n_components=5)
+
+        sq.pl.spatial_scatter(
+            adata_seqfish,
+            color="cellcharter_niche",
+            shape=None,
+        )
