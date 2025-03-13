@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import warnings
 from typing import Any, Literal
 
@@ -148,18 +149,18 @@ def calculate_niche(
             "If you haven't computed a spatial neighborhood graph yet, use `sq.gr.spatial_neighbors`."
         )
 
+    result_columns = _get_result_columns(
+        flavor=flavor,
+        resolutions=resolutions,
+        library_key=None,
+        libraries=None,
+    )
+
     if library_key is not None:
         if library_key not in adata.obs.columns:
             raise KeyError(f"'{library_key}' not found in `adata.obs`.")
 
         logg.info(f"Stratifying by library_key '{library_key}'")
-
-        result_columns = _get_result_columns(
-            flavor=flavor,
-            resolutions=resolutions,
-            library_key=None,
-            libraries=None,
-        )
 
         for col in result_columns:
             adata.obs[col] = "not_a_niche"
@@ -226,15 +227,25 @@ def calculate_niche(
             spatial_connectivities_key,
         )
 
-    if inplace:
-        if isinstance(data, SpatialData):
-            data.tables[table_key] = adata
-        else:
-            for col in adata.obs.columns:
-                if "niche" in col and col not in orig_adata.obs.columns:
-                    orig_adata.obs[col] = adata.obs[col]
+    if not inplace:
+        return adata
+    # For SpatialData, update the table directly
+    if isinstance(data, SpatialData):
+        data.tables[table_key] = adata
+    else:
+        # For AnnData, copy results back to original object
+        for col in result_columns:
+            if col in orig_adata.obs.columns:
+                logg.info(f"Overwriting existing column '{col}'")
+                with contextlib.suppress(KeyError):
+                    del orig_adata.obs[col]
+            if f"{col}_colors" in orig_adata.uns.keys():
+                with contextlib.suppress(KeyError):
+                    del orig_adata.uns[f"{col}_colors"]
 
-    return adata if not inplace else orig_adata
+            orig_adata.obs[col] = adata.obs[col]
+
+    return None
 
 
 def _get_result_columns(
@@ -345,17 +356,32 @@ def _get_nhood_profile_niches(
         if n_hop_weights is None:
             n_hop_weights = [1] * distance
         # if weights are provided, start with applying weight to the original neighborhood profile
-        else:
-            nhood_profile = n_hop_weights[0] * nhood_profile
+        elif len(n_hop_weights) < distance:
+            # Extend weights if too few provided
+            n_hop_weights = n_hop_weights + [n_hop_weights[-1]] * (distance - len(n_hop_weights))
+            logg.debug(f"Extended weights to match distance: {n_hop_weights}")
+
+        # Apply first weight to base profile
+        weighted_profile = n_hop_weights[0] * nhood_profile
+
+        # Calculate higher-order hop profiles
+        n_hop_adjacency_matrix = adata_masked.obsp[spatial_connectivities_key].copy()
+
         # get n_hop neighbor adjacency matrices by multiplying the original adjacency matrix with itself n times and get corresponding neighborhood profiles.
-        for n_hop in range(distance - 1):
+        for n_hop in range(1, distance):
+            logg.debug(f"Calculating {n_hop + 1}-hop neighbors")
+            # Multiply adjacency matrix by itself to get n+1 hop adjacency
             n_hop_adjacency_matrix = n_hop_adjacency_matrix @ adata_masked.obsp[spatial_connectivities_key]
             matrix = n_hop_adjacency_matrix.tocoo()
-            nhood_profile += n_hop_weights[n_hop + 1] * _calculate_neighborhood_profile(
-                adata_masked, groups, matrix, abs_nhood
-            )
+
+            # Calculate and add weighted profile
+            hop_profile = _calculate_neighborhood_profile(adata_masked, groups, matrix, abs_nhood)
+            weighted_profile += n_hop_weights[n_hop] * hop_profile
+
         if not abs_nhood:
-            nhood_profile = nhood_profile / sum(n_hop_weights)
+            weighted_profile = weighted_profile / sum(n_hop_weights)
+
+        nhood_profile = weighted_profile
 
     # create AnnData object from neighborhood profile to perform scanpy functions
     adata_neighborhood = ad.AnnData(X=nhood_profile)
@@ -376,25 +402,38 @@ def _get_nhood_profile_niches(
 
     # For each resolution, apply leiden on neighborhood profile. Each cluster label equals to a niche label
     for res in resolutions:
+        niche_key = f"nhood_niche_res={res}"
+
+        if niche_key in adata_masked.obs.columns:
+            del adata_masked.obs[niche_key]
+
+        if f"{niche_key}_colors" in adata_masked.uns.keys():
+            del adata_masked.uns[f"{niche_key}_colors"]
+        # print(adata_masked.obs[niche_key])
+
         sc.tl.leiden(
             adata_neighborhood,
             resolution=res,
-            key_added=f"nhood_niche_res={res}",
+            key_added=niche_key,
         )
-        adata_masked.obs[f"nhood_niche_res={res}"] = adata_masked.obs.index.map(
-            adata_neighborhood.obs[f"nhood_niche_res={res}"]
-        ).fillna("not_a_niche")
+
+        adata_masked.obs[niche_key] = "not_a_niche"
+
+        neighborhood_clusters = dict(zip(adata_neighborhood.obs.index, adata_neighborhood.obs[niche_key], strict=False))
+
+        mask_indices = adata_masked.obs.index
+        adata_masked.obs.loc[mask_indices, niche_key] = [
+            neighborhood_clusters.get(idx, "not_a_niche") for idx in mask_indices
+        ]
 
         # filter niches with n_cells < min_niche_size
         if min_niche_size is not None:
-            counts_by_niche = adata_masked.obs[f"nhood_niche_res={res}"].value_counts()
+            counts_by_niche = adata_masked.obs[niche_key].value_counts()
             to_filter = counts_by_niche[counts_by_niche < min_niche_size].index
-            adata_masked.obs[f"nhood_niche_res={res}"] = adata_masked.obs[f"nhood_niche_res={res}"].apply(
+            adata_masked.obs[niche_key] = adata_masked.obs[niche_key].apply(
                 lambda x, to_filter=to_filter: "not_a_niche" if x in to_filter else x
             )
-            adata.obs[f"nhood_niche_res={res}"] = adata.obs.index.map(
-                adata_masked.obs[f"nhood_niche_res={res}"]
-            ).fillna("not_a_niche")
+            adata_masked.obs[niche_key] = adata_masked.obs.index.map(adata_masked.obs[niche_key]).fillna("not_a_niche")
 
     return
 
