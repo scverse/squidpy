@@ -91,6 +91,14 @@ jobs:
               run: |
                   tox -vv
 
+
+            - name: Archive figures generated during testing
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: visual_test_results_${{ matrix.os }}-python${{ matrix.python }}
+                  path: /home/runner/work/squidpy/squidpy/tests/figures/*
+
             - name: Upload coverage to Codecov
               uses: codecov/codecov-action@v4
               with:
