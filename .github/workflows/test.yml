@@ -92,6 +92,7 @@ jobs:
                   tox -vv
 
             - name: List figures for potential debugging
+              run: |
                   ls -alh /home/runner/work/squidpy/squidpy/tests/figures
 
             - name: Archive figures generated during testing
