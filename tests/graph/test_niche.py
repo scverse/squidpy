@@ -24,9 +24,11 @@ N_NEIGHBORS = 20
 GROUPS = "celltype_mapped_refined"
 
 
-def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
+def test_niche_calc_nhood(adata_seqfish: AnnData):
     """Check whether niche calculation using neighborhood profile approach works as intended."""
-    spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
+    spatial_neighbors(
+        adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS
+    )
     calculate_niche(
         adata_seqfish,
         groups=GROUPS,
@@ -48,8 +50,12 @@ def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
     matrix = adata_seqfish.obsp[SPATIAL_CONNECTIVITIES_KEY].tocoo()
 
     # get obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
-    rel_nhood_profile = _calculate_neighborhood_profile(adata_seqfish, groups=GROUPS, matrix=matrix, abs_nhood=False)
-    abs_nhood_profile = _calculate_neighborhood_profile(adata_seqfish, groups=GROUPS, matrix=matrix, abs_nhood=True)
+    rel_nhood_profile = _calculate_neighborhood_profile(
+        adata_seqfish, groups=GROUPS, matrix=matrix, abs_nhood=False
+    )
+    abs_nhood_profile = _calculate_neighborhood_profile(
+        adata_seqfish, groups=GROUPS, matrix=matrix, abs_nhood=True
+    )
     # assert shape obs x groups
     assert rel_nhood_profile.shape == (
         adata_seqfish.n_obs,
@@ -63,10 +69,14 @@ def test_neighborhood_profile_calculation(adata_seqfish: AnnData):
     assert abs_nhood_profile.sum(axis=1).max() == N_NEIGHBORS
 
 
-def test_utag(adata_seqfish: AnnData):
+def test_niche_calc_utag(adata_seqfish: AnnData):
     """Check whether niche calculation using UTAG approach works as intended."""
-    spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
-    calculate_niche(adata_seqfish, flavor="utag", n_neighbors=N_NEIGHBORS, resolutions=[0.1, 1.0])
+    spatial_neighbors(
+        adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS
+    )
+    calculate_niche(
+        adata_seqfish, flavor="utag", n_neighbors=N_NEIGHBORS, resolutions=[0.1, 1.0]
+    )
 
     niches = adata_seqfish.obs["utag_niche_res=1.0"]
     niches_low_res = adata_seqfish.obs["utag_niche_res=0.1"]
@@ -99,11 +109,15 @@ def test_utag(adata_seqfish: AnnData):
         raise AssertionError
 
 
-def test_cellcharter_approach(adata_seqfish: AnnData):
+def test_niche_calc_cellcharter(adata_seqfish: AnnData):
     """Check whether niche calculation using CellCharter approach works as intended."""
 
-    spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
-    calculate_niche(adata_seqfish, groups=GROUPS, flavor="cellcharter", distance=3, n_components=5)
+    spatial_neighbors(
+        adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS
+    )
+    calculate_niche(
+        adata_seqfish, groups=GROUPS, flavor="cellcharter", distance=3, n_components=5
+    )
     niches = adata_seqfish.obs["cellcharter_niche"]
 
     assert niches.nunique() == 5
@@ -132,19 +146,14 @@ def test_cellcharter_approach(adata_seqfish: AnnData):
     # TODO: add test for GMM
 
 
-def test_nhop(adjacency_matrix: np.array, n_hop_matrix: np.array):
-    """Test if n-hop neighbor computation works as expected."""
-
-    assert np.array_equal(adjacency_matrix @ adjacency_matrix, n_hop_matrix)
-    adj_sparse = scipy.sparse.csr_matrix(adjacency_matrix)
-    nhop_sparse = scipy.sparse.csr_matrix(n_hop_matrix)
-    assert (adj_sparse @ adj_sparse != nhop_sparse).nnz == 0
-
-
 class TestNiches(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_utag_niche(self, adata_seqfish: AnnData):
-        spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
-        calculate_niche(adata_seqfish, flavor="utag", n_neighbors=N_NEIGHBORS, resolutions=0.5)
+        spatial_neighbors(
+            adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS
+        )
+        calculate_niche(
+            adata_seqfish, flavor="utag", n_neighbors=N_NEIGHBORS, resolutions=0.5
+        )
 
         sq.pl.spatial_scatter(
             adata_seqfish,
@@ -153,7 +162,9 @@ class TestNiches(PlotTester, metaclass=PlotTesterMeta):
         )
 
     def test_plot_neighborhood_niche(self, adata_seqfish: AnnData):
-        spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
+        spatial_neighbors(
+            adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS
+        )
 
         calculate_niche(
             adata_seqfish,
@@ -171,8 +182,16 @@ class TestNiches(PlotTester, metaclass=PlotTesterMeta):
         )
 
     def test_plot_cellcharter_niche(self, adata_seqfish: AnnData):
-        spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
-        calculate_niche(adata_seqfish, groups=GROUPS, flavor="cellcharter", distance=3, n_components=5)
+        spatial_neighbors(
+            adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS
+        )
+        calculate_niche(
+            adata_seqfish,
+            groups=GROUPS,
+            flavor="cellcharter",
+            distance=3,
+            n_components=5,
+        )
 
         sq.pl.spatial_scatter(
             adata_seqfish,
