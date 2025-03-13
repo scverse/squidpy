@@ -97,4 +97,3 @@ def test_niche_calc_utag(adata_seqfish: AnnData):
         pass
     else:
         raise AssertionError
-
