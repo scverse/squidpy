@@ -92,6 +92,14 @@ jobs:
                   tox -vv
 
 
+            - name: Debug: List generated figures
+              run: |
+                  ls -alh /home/runner/work/
+                  ls -alh /home/runner/work/squidpy/
+                  ls -alh /home/runner/work/squidpy/squidpy/
+                  ls -alh /home/runner/work/squidpy/squidpy/tests
+                  ls -alh /home/runner/work/squidpy/squidpy/tests/figures
+
             - name: Archive figures generated during testing
               if: always()
               uses: actions/upload-artifact@v4
