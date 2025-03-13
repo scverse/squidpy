@@ -91,8 +91,7 @@ jobs:
               run: |
                   tox -vv
 
-
-            - name: Debug: List generated figures
+            - name: Debug List generated figures
               run: |
                   ls -alh /home/runner/work/
                   ls -alh /home/runner/work/squidpy/
