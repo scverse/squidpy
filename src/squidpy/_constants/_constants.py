@@ -123,3 +123,12 @@ class TenxVersions(str, ModeEnum):
     V1 = "1.1.0"
     V2 = "1.2.0"
     V3 = "1.3.0"
+
+
+@unique
+class NicheDefinitions(ModeEnum):
+    NEIGHBORHOOD = "neighborhood"
+    UTAG = "utag"
+    CELLCHARTER = "cellcharter"
+    SPOT = "spot"
+    BANKSY = "banksy"

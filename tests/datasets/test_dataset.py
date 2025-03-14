@@ -6,8 +6,9 @@ from pathlib import Path
 from types import FunctionType
 
 import pytest
-import squidpy as sq
 from anndata import AnnData, OldFormatWarning
+
+import squidpy as sq
 
 
 class TestDatasetsImports:

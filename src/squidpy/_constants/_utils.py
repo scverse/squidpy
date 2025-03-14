@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, ABCMeta
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from enum import Enum, EnumMeta
 from functools import wraps
-from typing import Any, Callable
+from typing import Any
 
 
 def _pretty_raise_enum(cls: type[ModeEnum], fun: Callable[..., Any]) -> Callable[..., Any]:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import dask.array as da
 import numpy as np
@@ -93,17 +93,22 @@ class SegmentationModel(ABC):
         return img.astype(_SEG_DTYPE)
 
     @segment.register(np.ndarray)
-    def _(self, img: NDArrayA, **kwargs: Any) -> NDArrayA:
+    def _(self, img: NDArrayA, **kwargs: Any) -> NDArrayA | da.Array:
         chunks = kwargs.pop("chunks", None)
         if chunks is not None:
-            return self.segment(da.asarray(img).rechunk(chunks), **kwargs)  # type: ignore[no-any-return]
+            return self.segment(da.asarray(img).rechunk(chunks), **kwargs)
 
         img = SegmentationModel._precondition(img)
         img = self._segment(img, **kwargs)
         return SegmentationModel._postcondition(img)
 
     @segment.register(da.Array)
-    def _(self, img: da.Array, chunks: str | int | tuple[int, ...] | None = None, **kwargs: Any) -> NDArrayA:
+    def _(
+        self,
+        img: da.Array,
+        chunks: str | int | tuple[int, ...] | None = None,
+        **kwargs: Any,
+    ) -> NDArrayA:
         img = SegmentationModel._precondition(img)
         if chunks is not None:
             img = img.rechunk(chunks)

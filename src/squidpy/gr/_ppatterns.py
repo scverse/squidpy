@@ -53,7 +53,7 @@ def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: str | int | Sequence[str] | Sequence[int] | None = None,
-    mode: Literal["moran", "geary"] = SpatialAutocorr.MORAN.s,  # type: ignore[assignment]
+    mode: SpatialAutocorr | Literal["moran", "geary"] = "moran",
     transformation: bool = True,
     n_perms: int | None = None,
     two_tailed: bool = False,
@@ -164,22 +164,21 @@ def spatial_autocorr(
         if layer not in adata.obsm:
             raise KeyError(f"Key `{layer!r}` not found in `adata.obsm`.")
         if ixs is None:
-            ixs = np.arange(adata.obsm[layer].shape[1])  # type: ignore[assignment]
+            ixs = list(np.arange(adata.obsm[layer].shape[1]))
         ixs = list(np.ravel([ixs]))
+
         return adata.obsm[layer][:, ixs].T, ixs
 
     if attr == "X":
-        vals, index = extract_X(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_X(adata, genes)  # type: ignore
     elif attr == "obs":
-        vals, index = extract_obs(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_obs(adata, genes)  # type: ignore
     elif attr == "obsm":
-        vals, index = extract_obsm(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_obsm(adata, genes)  # type: ignore
     else:
         raise NotImplementedError(f"Extracting from `adata.{attr}` is not yet implemented.")
 
-    mode = SpatialAutocorr(mode)  # type: ignore[assignment]
-    if TYPE_CHECKING:
-        assert isinstance(mode, SpatialAutocorr)
+    mode = SpatialAutocorr(mode)
     params = {"mode": mode.s, "transformation": transformation, "two_tailed": two_tailed}
 
     if mode == SpatialAutocorr.MORAN:
@@ -199,13 +198,13 @@ def spatial_autocorr(
     if transformation:  # row-normalize
         normalize(g, norm="l1", axis=1, copy=False)
 
-    score = params["func"](g, vals)
+    score = params["func"](g, vals)  # type: ignore
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
         _assert_positive(n_perms, name="n_perms")
-        perms = np.arange(n_perms)
+        perms = list(np.arange(n_perms))
 
         score_perms = parallelize(
             _score_helper,
@@ -222,7 +221,8 @@ def spatial_autocorr(
     with np.errstate(divide="ignore"):
         pval_results = _p_value_calc(score, score_perms, g, params)
 
-    df = pd.DataFrame({params["stat"]: score, **pval_results}, index=index)
+    data_dict: dict[str, Any] = {str(params["stat"]): score, **pval_results}
+    df = pd.DataFrame(data_dict, index=index)
 
     if corr_method is not None:
         for pv in filter(lambda x: "pval" in x, df.columns):
@@ -235,7 +235,9 @@ def spatial_autocorr(
         logg.info("Finish", time=start)
         return df
 
-    _save_data(adata, attr="uns", key=params["mode"] + params["stat"], data=df, time=start)
+    mode_str = str(params["mode"])
+    stat_str = str(params["stat"])
+    _save_data(adata, attr="uns", key=mode_str + stat_str, data=df, time=start)
 
 
 def _score_helper(
@@ -293,11 +295,9 @@ def _occur_count(
         y = clust_y[idx_y]
         # Treat computing co-occurrence using the same split and different splits differently
         # Pairwise distance matrix for between the same split is symmetric and therefore only needs to be counted once
-        for i, j in zip(x, y):
-            if same_split:
-                co_occur[i, j] += 1
-            else:
-                co_occur[i, j] += 1
+        for i, j in zip(x, y):  # noqa: B905 # cannot use strict=False because of numba
+            co_occur[i, j] += 1
+            if not same_split:
                 co_occur[j, i] += 1
 
         # Prevent divison by zero errors when we have low cell counts/small intervals
@@ -412,24 +412,22 @@ def co_occurrence(
     n_obs = spatial.shape[0]
     if n_splits is None:
         size_arr = (n_obs**2 * spatial.itemsize) / 1024 / 1024  # calc expected mem usage
+        n_splits = 1
         if size_arr > 2000:
-            n_splits = 1
-            while 2048 < (n_obs / n_splits):
+            while (n_obs / n_splits) > 2048:
                 n_splits += 1
             logg.warning(
                 f"`n_splits` was automatically set to `{n_splits}` to "
                 f"prevent `{n_obs}x{n_obs}` distance matrix from being created"
             )
-        else:
-            n_splits = 1
-    n_splits = max(min(n_splits, n_obs), 1)
+    n_splits = int(max(min(n_splits, n_obs), 1))
 
     # split array and labels
-    spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))  # type: ignore[arg-type]
-    labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))  # type: ignore[arg-type]
+    spatial_splits = tuple(s for s in np.array_split(spatial, n_splits, axis=0) if len(s))
+    labs_splits = tuple(s for s in np.array_split(labs, n_splits, axis=0) if len(s))
     # create idx array including unique combinations and self-comparison
-    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))  # type: ignore[arg-type]
-    idx_splits = list(zip(x, y))
+    x, y = np.triu_indices_from(np.empty((n_splits, n_splits)))
+    idx_splits = list(zip(x, y, strict=False))
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(
@@ -457,7 +455,11 @@ def co_occurrence(
         return out, interval
 
     _save_data(
-        adata, attr="uns", key=Key.uns.co_occurrence(cluster_key), data={"occ": out, "interval": interval}, time=start
+        adata,
+        attr="uns",
+        key=Key.uns.co_occurrence(cluster_key),
+        data={"occ": out, "interval": interval},
+        time=start,
     )
 
 
@@ -570,7 +572,7 @@ def _g_moments(w: spmatrix | NDArrayA) -> tuple[float, float, float]:
 
     # s1
     t = w.transpose() + w
-    t2 = t.multiply(t)  # type: ignore[union-attr]
+    t2 = t.multiply(t) if isinstance(t, spmatrix) else t * t
     s1 = t2.sum() / 2.0
 
     # s2

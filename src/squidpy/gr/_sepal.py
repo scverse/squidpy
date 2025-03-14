@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Callable, Literal
+from collections.abc import Callable, Sequence
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -151,7 +151,7 @@ def sepal(
 
     if sepal_score[key_added].isna().any():
         logg.warning("Found `NaN` in sepal scores, consider increasing `n_iter` to a higher value")
-    sepal_score.sort_values(by=key_added, ascending=False, inplace=True)
+    sepal_score = sepal_score.sort_values(by=key_added, ascending=False)
 
     if copy:
         logg.info("Finish", time=start)
@@ -180,10 +180,13 @@ def _score_helper(
     else:
         raise NotImplementedError(f"Laplacian for `{max_neighs}` neighbors is not yet implemented.")
 
-    score, sparse = [], issparse(vals)
+    score = []
     for i in ixs:
-        conc = vals[:, i].toarray().flatten() if sparse else vals[:, i].copy()  # type: ignore[union-attr]
-        conc = vals[:, i].toarray().flatten() if sparse else vals[:, i].copy()  # type: ignore[union-attr]
+        if isinstance(vals, spmatrix):
+            conc = vals[:, i].toarray().flatten()  # Safe to call toarray()
+        else:
+            conc = vals[:, i].copy()  # vals is assumed to be a NumPy array here
+
         time_iter = _diffusion(conc, fun, n_iter, sat, sat_idx, unsat, unsat_idx, dt=dt, thresh=thresh)
         score.append(dt * time_iter)
 
@@ -286,7 +289,7 @@ def _entropy(
 ) -> float:
     """Get entropy of an array."""
     xnz = xx[xx > 0]
-    xs = np.sum(xnz)
+    xs: np.float64 = np.sum(xnz)
     xn = xnz / xs
     xl = np.log(xn)
     return float((-xl * xn).sum())

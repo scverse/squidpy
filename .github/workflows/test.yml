@@ -20,7 +20,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                python: [3.9, "3.10", "3.11"]
+                python: ["3.10", "3.11", "3.12"]
                 os: [ubuntu-latest]
                 include:
                     - python: "3.12"
@@ -91,8 +91,19 @@ jobs:
               run: |
                   tox -vv
 
+            - name: List figures for potential debugging
+                  ls -alh /home/runner/work/squidpy/squidpy/tests/figures
+
+            - name: Archive figures generated during testing
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: visual_test_results_${{ matrix.os }}-python${{ matrix.python }}
+                  path: /home/runner/work/squidpy/squidpy/tests/figures/*
+
             - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v3.1.1
+              uses: codecov/codecov-action@v4
               with:
                   name: coverage
                   verbose: true
+                  token: ${{ secrets.CODECOV_TOKEN }} # required

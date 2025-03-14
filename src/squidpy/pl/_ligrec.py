@@ -41,8 +41,9 @@ class CustomDotplot(sc.pl.DotPlot):
     def _plot_size_legend(self, size_legend_ax: Axes) -> None:
         y = self.BASE ** -((self.dot_max * self._delta) + self._minn)
         x = self.BASE ** -((self.dot_min * self._delta) + self._minn)
-        size_range = -(np.logspace(x, y, self.DEFAULT_NUM_LEGEND_DOTS + 1, base=10).astype(np.float64))
-        size_range = (size_range - np.min(size_range)) / (np.max(size_range) - np.min(size_range))
+        size_range = -np.logspace(x, y, self.DEFAULT_NUM_LEGEND_DOTS + 1, base=10, dtype=np.float64)
+        size_range = ((size_range - np.min(size_range)) / (np.max(size_range) - np.min(size_range))).astype(np.float64)
+
         # no point in showing dot of size 0
         size_range = size_range[1:]
 
@@ -89,7 +90,13 @@ class CustomDotplot(sc.pl.DotPlot):
                 zorder=100,
             )
             ax.scatter(
-                [0.65], [0], s=0.33 * mult, color="white", edgecolor="black", linewidth=self.dot_edge_lw, zorder=100
+                [0.65],
+                [0],
+                s=0.33 * mult,
+                color="white",
+                edgecolor="black",
+                linewidth=self.dot_edge_lw,
+                zorder=100,
             )
             ax.set_xlim([0, 1])
             ax.set_xticks([0.35, 0.65])
@@ -319,14 +326,17 @@ def ligrec(
 
     adata = AnnData(pvals.values, obs={"groups": pd.Categorical(pvals.index)}, var=var)
     adata.obs_names = pvals.index
-    minn = np.nanmin(adata.X)
+    minn: float = np.nanmin(adata.X)
     delta = np.nanmax(adata.X) - minn
     adata.X = (adata.X - minn) / delta
 
     try:
         if dendrogram == DendrogramAxis.BOTH:
             row_order, col_order, _, _ = _dendrogram(
-                adata.X, method="complete", metric="correlation", optimal_ordering=adata.n_obs <= 1500
+                adata.X,
+                method="complete",
+                metric="correlation",
+                optimal_ordering=adata.n_obs <= 1500,
             )
             adata = adata[row_order, :][:, col_order]
             pvals = pvals.iloc[row_order, :].iloc[:, col_order]
@@ -356,8 +366,8 @@ def ligrec(
             dot_color_df=means,
             dot_size_df=pvals,
             title=title,
-            var_group_labels=None if dendrogram == DendrogramAxis.BOTH else list(label_ranges.keys()),
-            var_group_positions=None if dendrogram == DendrogramAxis.BOTH else list(label_ranges.values()),
+            var_group_labels=(None if dendrogram == DendrogramAxis.BOTH else list(label_ranges.keys())),
+            var_group_positions=(None if dendrogram == DendrogramAxis.BOTH else list(label_ranges.values())),
             standard_scale=None,
             figsize=figsize,
         )
@@ -370,7 +380,10 @@ def ligrec(
             **_filter_kwargs(sc.pl.DotPlot.legend, kwargs),
         )
     )
-    if dendrogram in (DendrogramAxis.INTERACTING_MOLS, DendrogramAxis.INTERACTING_CLUSTERS):
+    if dendrogram in (
+        DendrogramAxis.INTERACTING_MOLS,
+        DendrogramAxis.INTERACTING_CLUSTERS,
+    ):
         # ignore the warning about mismatching groups
         with verbosity(0):
             dp.add_dendrogram(size=1.6, dendrogram_key="dendrogram")

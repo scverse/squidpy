@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from typing import TYPE_CHECKING, Any, Callable, Protocol, Union
+from collections.abc import Callable, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, Union
 
 import numpy as np
 import skimage.measure
@@ -15,8 +15,8 @@ from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_non_empty_sequence
 from squidpy.im._coords import _NULL_PADDING, CropCoords
 
-Feature_t = dict[str, Any]
-Channel_t = Union[int, Sequence[int]]
+Feature_t: TypeAlias = dict[str, Any]
+Channel_t: TypeAlias = int | Sequence[int]
 
 
 def _get_channels(xr_img: NDArrayA | xr.DataArray, channels: Channel_t | None) -> list[int]:
@@ -172,7 +172,13 @@ class FeatureMixin:
 
         features = {}
         for c in channels:
-            hist, _ = np.histogram(arr[..., c].values, bins=bins, range=v_range, weights=None, density=False)
+            hist, _ = np.histogram(
+                arr[..., c].values,
+                bins=bins,
+                range=v_range,
+                weights=None,
+                density=False,
+            )
             for i, count in enumerate(hist):
                 features[f"{feature_name}_ch-{c}_bin-{i}"] = count
 
@@ -185,7 +191,13 @@ class FeatureMixin:
         library_id: str | None = None,
         feature_name: str = "texture",
         channels: Channel_t | None = None,
-        props: Sequence[str] = ("contrast", "dissimilarity", "homogeneity", "correlation", "ASM"),
+        props: Sequence[str] = (
+            "contrast",
+            "dissimilarity",
+            "homogeneity",
+            "correlation",
+            "ASM",
+        ),
         distances: Sequence[int] = (1,),
         angles: Sequence[float] = (0, np.pi / 4, np.pi / 2, 3 * np.pi / 4),
     ) -> Feature_t:
@@ -333,7 +345,8 @@ class FeatureMixin:
                 return np.array([[]], dtype=np.float64)  # because of masking, should not happen
 
             coord = self.data.attrs.get(
-                Key.img.coords, CropCoords(x0=0, y0=0, x1=self.data.sizes["x"], y1=self.data.sizes["y"])
+                Key.img.coords,
+                CropCoords(x0=0, y0=0, x1=self.data.sizes["x"], y1=self.data.sizes["y"]),
             )  # fall back to default (i.e no crop) coordinates
             padding = self.data.attrs.get(Key.img.padding, _NULL_PADDING)  # fallback to no padding
             y_slc, x_slc = coord.to_image_coordinates(padding).slice
@@ -346,7 +359,8 @@ class FeatureMixin:
             y = coord.slice[0].start + (y_slc.stop - y_slc.start) * y
             x = coord.slice[1].start + (x_slc.stop - x_slc.start) * x
 
-            return np.c_[x, y]  # type: ignore[no-any-return]
+            # return np.c_[x, y]
+            return np.column_stack((x, y))
 
         label_layer = self._get_layer(label_layer)
         library_id = self._get_library_id(library_id)

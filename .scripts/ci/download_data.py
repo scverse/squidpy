@@ -5,6 +5,8 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+from squidpy.datasets import visium_hne_sdata
+
 _CNT = 0  # increment this when you want to rebuild the CI cache
 _ROOT = Path.home() / ".cache" / "squidpy"
 
@@ -30,27 +32,39 @@ def _maybe_download_data(func_name: str, path: Path) -> Any:
 
 
 def main(args: argparse.Namespace) -> None:
-    import squidpy as sq
     from anndata import AnnData
+
+    import squidpy as sq
 
     all_datasets = sq.datasets._dataset.__all__ + sq.datasets._image.__all__
     all_extensions = ["h5ad"] * len(sq.datasets._dataset.__all__) + ["tiff"] * len(sq.datasets._image.__all__)
 
     if args.dry_run:
         for func_name, ext in zip(all_datasets, all_extensions):
+            if func_name == "visium_hne_sdata":
+                ext = "zarr"
             path = _ROOT / f"{func_name}.{ext}"
             _print_message(func_name, path, dry_run=True)
         return
 
     # could be parallelized, but on CI it largely does not matter (usually limited to 2 cores + bandwidth limit)
     for func_name, ext in zip(all_datasets, all_extensions):
-        path = _ROOT / f"{func_name}.{ext}"
+        if func_name == "visium_hne_sdata":
+            ext = "zarr"
+            path = _ROOT / f"{func_name}.{ext}"
 
+            _print_message(func_name, path)
+            obj = visium_hne_sdata(_ROOT)
+
+            assert path.is_dir(), f"Expected a .zarr folder at {path}"
+            continue
+
+        path = _ROOT / f"{func_name}.{ext}"
         _print_message(func_name, path)
         obj = _maybe_download_data(func_name, path)
 
         # we could do without the AnnData check as well (1 less req. in tox.ini), but it's better to be safe
-        assert isinstance(obj, (AnnData, sq.im.ImageContainer)), type(obj)
+        assert isinstance(obj, AnnData | sq.im.ImageContainer), type(obj)
         assert path.is_file(), path
 
 

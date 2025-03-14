@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from functools import partial
-from typing import Any, Callable
+from typing import Any
 
 import networkx as nx
 import numba.types as nt
@@ -190,7 +190,15 @@ def nhood_enrichment(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(callback=_test, indices=indices, indptr=indptr, int_clust=int_clust, libraries=libraries, n_cls=n_cls, seed=seed)
+    )(
+        callback=_test,
+        indices=indices,
+        indptr=indptr,
+        int_clust=int_clust,
+        libraries=libraries,
+        n_cls=n_cls,
+        seed=seed,
+    )
     zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
     if copy:
@@ -251,7 +259,7 @@ def centrality_scores(
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
 
-    if isinstance(score, (str, Centrality)):
+    if isinstance(score, str | Centrality):
         centrality = [score]
     elif score is None:
         centrality = [c.s for c in Centrality]
@@ -293,7 +301,13 @@ def centrality_scores(
 
     if copy:
         return df
-    _save_data(adata, attr="uns", key=Key.uns.centrality_scores(cluster_key), data=df, time=start)
+    _save_data(
+        adata,
+        attr="uns",
+        key=Key.uns.centrality_scores(cluster_key),
+        data=df,
+        time=start,
+    )
 
 
 @d.dedent
@@ -345,7 +359,7 @@ def interaction_matrix(
 
     g_data = g.data if weights else np.broadcast_to(1, shape=len(g.data))
     dtype = int if pd.api.types.is_bool_dtype(g.dtype) or pd.api.types.is_integer_dtype(g.dtype) else float
-    output = np.zeros((n_cats, n_cats), dtype=dtype)  # type: ignore[var-annotated]
+    output: NDArrayA = np.zeros((n_cats, n_cats), dtype=dtype)
 
     _interaction_matrix(g_data, g.indices, g.indptr, cats.cat.codes.to_numpy(), output)
 
@@ -360,7 +374,11 @@ def interaction_matrix(
 
 @njit
 def _interaction_matrix(
-    data: NDArrayA, indices: NDArrayA, indptr: NDArrayA, cats: NDArrayA, output: NDArrayA
+    data: NDArrayA,
+    indices: NDArrayA,
+    indptr: NDArrayA,
+    cats: NDArrayA,
+    output: NDArrayA,
 ) -> NDArrayA:
     indices_list = np.split(indices, indptr[1:-1])
     data_list = np.split(data, indptr[1:-1])
@@ -368,7 +386,7 @@ def _interaction_matrix(
         cur_row = cats[i]
         cur_indices = indices_list[i]
         cur_data = data_list[i]
-        for j, val in zip(cur_indices, cur_data):
+        for j, val in zip(cur_indices, cur_data):  # noqa: B905
             cur_col = cats[j]
             output[cur_row, cur_col] += val
     return output

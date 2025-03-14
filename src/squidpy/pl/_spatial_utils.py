@@ -6,7 +6,7 @@ from copy import copy
 from functools import partial
 from numbers import Number
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, TypeAlias, Union
 
 import dask.array as da
 import numpy as np
@@ -43,15 +43,15 @@ from squidpy.im._coords import CropCoords
 from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
 
-_AvailShapes = Literal["circle", "square", "hex"]
-Palette_t = Optional[Union[str, ListedColormap]]
-_Normalize = Union[Normalize, Sequence[Normalize]]
-_SeqStr = Union[str, Sequence[str]]
-_SeqFloat = Union[float, Sequence[float]]
-_SeqArray = Union[NDArrayA, Sequence[NDArrayA]]
-_CoordTuple = tuple[int, int, int, int]
-_FontWeight = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
-_FontSize = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
+_AvailShapes: TypeAlias = Literal["circle", "square", "hex"]
+Palette_t: TypeAlias = str | ListedColormap | None
+_Normalize: TypeAlias = Normalize | Sequence[Normalize]
+_SeqStr: TypeAlias = str | Sequence[str]
+_SeqFloat: TypeAlias = float | Sequence[float]
+_SeqArray: TypeAlias = NDArrayA | Sequence[NDArrayA]
+_CoordTuple: TypeAlias = tuple[int, int, int, int]
+_FontWeight: TypeAlias = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
+_FontSize: TypeAlias = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
 
 
 # named tuples
@@ -161,7 +161,7 @@ def _get_image(
 ) -> Sequence[NDArrayA] | tuple[None, ...]:
     from squidpy.pl._utils import _to_grayscale
 
-    if isinstance(img, (list, np.ndarray, da.Array)):
+    if isinstance(img, list | np.ndarray | da.Array):
         img = _get_list(img, _type=(np.ndarray, da.Array), ref_len=len(library_id), name="img")
     else:
         image_mapping = Key.uns.library_mapping(adata, spatial_key, Key.uns.image_key, library_id)
@@ -205,7 +205,7 @@ def _get_segment(
         raise ValueError(f"Invalid type `{cell_id_vec.dtype}` for `adata.obs[{seg_cell_id!r}]`.")
     cell_id_vec = [cell_id_vec[adata.obs[library_key] == lib] for lib in library_id]
 
-    if isinstance(seg, (list, np.ndarray, da.Array)):
+    if isinstance(seg, list | np.ndarray | da.Array):
         img_seg = _get_list(seg, _type=(np.ndarray, da.Array), ref_len=len(library_id), name="img_seg")
     else:
         img_seg = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][seg_key] for i in library_id]
@@ -252,7 +252,7 @@ def _get_scalefactor_size(
             raise ValueError("Len of `size`, `library_id` and `scale_factor` do not match.")
         size = [
             adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][size_key] * s * sf * 0.5
-            for i, s, sf in zip(library_id, size, scale_factor)
+            for i, s, sf in zip(library_id, size, scale_factor, strict=False)
         ]
         return scale_factor, size
 
@@ -352,7 +352,7 @@ def _set_coords_crops(
             ref_len=len(spatial_params.library_id),
             name="crop_coord",
         )
-        crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor)]  # type: ignore[misc]
+        crops = [CropCoords(*cr) * sf for cr, sf in zip(crop_coord, spatial_params.scale_factor, strict=False)]  # type: ignore[misc]
 
     coords = adata.obsm[spatial_key]
     return [coords * sf for sf in spatial_params.scale_factor], crops  # TODO(giovp): refactor with _subs
@@ -527,7 +527,7 @@ def _shaped_scatter(
     collection = PatchCollection(patches, snap=False, **kwargs)
 
     if isinstance(c, np.ndarray) and np.issubdtype(c.dtype, np.number):
-        collection.set_array(np.ma.masked_invalid(c))
+        collection.set_array(np.ma.masked_invalid(c).ravel())
         collection.set_norm(norm)
     else:
         alpha = ColorConverter().to_rgba_array(c)[..., -1]
@@ -579,14 +579,13 @@ def _plot_edges(
 def _get_title_axlabels(
     title: _SeqStr | None, axis_label: _SeqStr | None, spatial_key: str, n_plots: int
 ) -> tuple[_SeqStr | None, Sequence[str]]:
-    if title is not None:
-        if isinstance(title, (tuple, list)) and len(title) != n_plots:
-            raise ValueError(f"Expected `{n_plots}` titles, found `{len(title)}`.")
-        elif isinstance(title, str):
-            title = [title] * n_plots
-    else:
+    if title is None:
         title = None
 
+    elif isinstance(title, tuple | list) and len(title) != n_plots:
+        raise ValueError(f"Expected `{n_plots}` titles, found `{len(title)}`.")
+    elif isinstance(title, str):
+        title = [title] * n_plots
     axis_label = spatial_key if axis_label is None else axis_label
     if isinstance(axis_label, list):
         if len(axis_label) != 2:
@@ -699,8 +698,8 @@ def _decorate_axs(
 def _map_color_seg(
     seg: NDArrayA,
     cell_id: NDArrayA,
-    color_vector: NDArrayA | pd.Series[CategoricalDtype],
-    color_source_vector: pd.Series[CategoricalDtype],
+    color_vector: NDArrayA | pd.Categorical,
+    color_source_vector: pd.Categorical,
     cmap_params: CmapParams,
     seg_erosionpx: int | None = None,
     seg_boundaries: bool = False,
@@ -708,11 +707,11 @@ def _map_color_seg(
 ) -> NDArrayA:
     cell_id = np.array(cell_id)
 
-    if isinstance(color_vector.dtype, CategoricalDtype):
+    if isinstance(color_vector, pd.Categorical):
         if isinstance(na_color, tuple) and len(na_color) == 4 and np.any(color_source_vector.isna()):
             cell_id[color_source_vector.isna()] = 0
-        val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)  # type: ignore[union-attr]
-        cols = colors.to_rgba_array(color_vector.categories)  # type: ignore[union-attr]
+        val_im: NDArrayA = map_array(seg, cell_id, color_vector.codes + 1)
+        cols = colors.to_rgba_array(color_vector.categories)
     else:
         val_im = map_array(seg, cell_id, cell_id)  # replace with same seg id to remove missing segs
         try:
@@ -754,9 +753,8 @@ def _prepare_args_plot(
 
     # make colors and groups as list
     groups = [groups] if isinstance(groups, str) else groups
-    if isinstance(color, list):
-        if not len(color):
-            color = None
+    if isinstance(color, list) and not len(color):
+        color = None
     color = [color] if isinstance(color, str) or color is None else color
 
     # set palette if missing
@@ -902,10 +900,7 @@ def _panel_grid(
 
 
 def _set_ax_title(fig_params: FigParams, count: int, value_to_plot: str | None = None) -> Axes:
-    if fig_params.axs is not None:
-        ax = fig_params.axs[count]
-    else:
-        ax = fig_params.ax
+    ax = fig_params.axs[count] if fig_params.axs is not None else fig_params.ax
     if not (sc_settings._frameon if fig_params.frameon is None else fig_params.frameon):
         ax.axis("off")
 
@@ -960,7 +955,7 @@ def _plot_scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.bg_size,
-            c=outline_params.bg_color,  # type: ignore[arg-type]
+            c=colors.to_rgba_array(outline_params.bg_color),
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,
@@ -971,7 +966,7 @@ def _plot_scatter(
             coords[:, 0],
             coords[:, 1],
             s=outline_params.gap_size,
-            c=outline_params.gap_color,  # type: ignore[arg-type]
+            c=colors.to_rgba_array(outline_params.gap_color),
             rasterized=sc_settings._vector_friendly,
             cmap=cmap_params.cmap,
             norm=norm,
@@ -981,7 +976,7 @@ def _plot_scatter(
     _cax = scatter(
         coords[:, 0],
         coords[:, 1],
-        c=color_vector,
+        c=np.array(color_vector),
         s=size,
         rasterized=sc_settings._vector_friendly,
         cmap=cmap_params.cmap,
@@ -1021,8 +1016,8 @@ def _plot_segment(
     _cax = ax.imshow(
         img,
         rasterized=True,
-        cmap=cmap_params.cmap if not categorical else None,
-        norm=cmap_params.norm if not categorical else None,
+        cmap=None if categorical else cmap_params.cmap,
+        norm=None if categorical else cmap_params.norm,
         alpha=color_params.alpha,
         origin="lower",
         zorder=3,

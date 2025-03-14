@@ -7,6 +7,7 @@ import tifffile
 import xarray as xr
 from pytest_mock import MockerFixture
 from skimage.io import imread
+
 from squidpy._constants._constants import InferDimensions
 from squidpy.im._io import _get_image_shape_dtype, _infer_dimensions, _lazy_load_image
 
@@ -16,8 +17,15 @@ class TestIO:
     def _create_image(path: str, shape: tuple[int, ...]):
         dtype = np.uint8 if len(shape) <= 3 else np.float32
         img = np.random.randint(0, 255, size=shape).astype(dtype)
-        # set `photometric` to remove warnings
-        tifffile.imwrite(path, img, photometric=tifffile.TIFF.PHOTOMETRIC.MINISBLACK)
+
+        try:
+            # Old usage (works up to tifffile<2025.2.18)
+            photometric = tifffile.TIFF.PHOTOMETRIC.MINISBLACK
+        except AttributeError:
+            # New usage (works on tifffile >=2025.2.18)
+            photometric = "MINISBLACK"
+
+        tifffile.imwrite(path, img, photometric=photometric)
 
         return img
 

@@ -2,6 +2,10 @@
 
 Squidpy - Spatial Single Cell Analysis in Python
 ================================================
+.. _website: https://scverse.org/
+.. _governance: https://scverse.org/about/roles/
+.. _NumFOCUS: https://numfocus.org/
+.. _donation: https://numfocus.org/donate-to-scverse/
 
 **Squidpy** is a tool for the analysis and visualization of spatial molecular data.
 It builds on top of `scanpy`_ and `anndata`_, from which it inherits modularity and scalability.
@@ -14,9 +18,30 @@ tissue images if available.
     :align: center
     :target: https://doi.org/10.1038/s41592-021-01358-2
 
+.. warning::
+    🚨🚨🚨 **Warning!** 🚨🚨🚨
+
+    The original napari-plugin of Squidpy has been moved to `napari-spatialdata <https://github.com/scverse/napari-spatialdata>`_.
+
+    All the functionalities previously available are also implemented in the new plugin, which also has many additional new features.
+
+    You can find a rich set of `documentation and examples <https://spatialdata.scverse.org/projects/napari/en/latest/index.html>`_, and we suggest starting with this `tutorial <https://spatialdata.scverse.org/projects/napari/en/latest/notebooks/spatialdata.html>`_.
+
+    If you are new to SpatialData, we invite you to take a look at the documentation `here <https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks.html>`_.
+
+Squidpy is part of the scverse® project (`website`_, `governance`_) and is fiscally sponsored by `NumFOCUS`_.
+Please consider making a tax-deductible `donation`_ to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
+
+.. image:: https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png
+   :width: 200
+   :target: https://numfocus.org/project/scverse
+   :align: center
+
 Manuscript
 ----------
-Please see our manuscript :cite:`palla:22` in **Nature Methods** to learn more.
+.. _Palla, Spitzer et al. (2022): https://doi.org/10.1038/s41592-021-01358-2
+
+Please see our manuscript `Palla, Spitzer et al. (2022)`_ in **Nature Methods** to learn more.
 
 Squidpy's key applications
 --------------------------
@@ -87,4 +112,5 @@ We are happy about any contributions! Before you start, check out our `contribut
 .. _skimage: https://scikit-image.org/
 .. _contributing guide: https://github.com/scverse/squidpy/blob/main/CONTRIBUTING.rst
 .. _discourse: https://discourse.scverse.org/
+
 .. _github: https://github.com/scverse/squidpy

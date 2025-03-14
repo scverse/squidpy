@@ -16,14 +16,14 @@ from squidpy.datasets._utils import PathLike
 
 def _read_counts(
     path: str | Path,
-    count_file: str,
+    counts_file: str,
     library_id: str | None = None,
     **kwargs: Any,
 ) -> tuple[AnnData, str]:
     path = Path(path)
-    if count_file.endswith(".h5"):
-        adata: AnnData = read_10x_h5(path / count_file, **kwargs)
-        with File(path / count_file, mode="r") as f:
+    if counts_file.endswith(".h5"):
+        adata: AnnData = read_10x_h5(path / counts_file, **kwargs)
+        with File(path / counts_file, mode="r") as f:
             attrs = dict(f.attrs)
             if library_id is None:
                 try:
@@ -46,9 +46,9 @@ def _read_counts(
     if library_id is None:
         raise ValueError("Please explicitly specify library id.")
 
-    if count_file.endswith((".csv", ".txt")):
-        adata = read_text(path / count_file, **kwargs)
-    elif count_file.endswith(".mtx.gz"):
+    if counts_file.endswith((".csv", ".txt")):
+        adata = read_text(path / counts_file, **kwargs)
+    elif counts_file.endswith(".mtx.gz"):
         adata = read_10x_mtx(path, **kwargs)
     else:
         raise NotImplementedError("TODO")

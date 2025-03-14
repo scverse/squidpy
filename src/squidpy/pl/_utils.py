@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from functools import wraps
 from inspect import signature
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import matplotlib as mpl
 import numpy as np
@@ -41,11 +41,17 @@ from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _assert_categorical_obs
 
-Vector_name_t = tuple[Optional[Union[pd.Series, NDArrayA]], Optional[str]]
+Vector_name_t = tuple[pd.Series | NDArrayA | None, str | None]
 
 
 @d.dedent
-def save_fig(fig: Figure, path: str | Path, make_dir: bool = True, ext: str = "png", **kwargs: Any) -> None:
+def save_fig(
+    fig: Figure,
+    path: str | Path,
+    make_dir: bool = True,
+    ext: str = "png",
+    **kwargs: Any,
+) -> None:
     """
     Save a figure.
 
@@ -172,9 +178,9 @@ def extract(
 @njit(cache=True, fastmath=True)
 def _point_inside_triangles(triangles: NDArrayA) -> np.bool_:
     # modified from napari
-    AB = triangles[:, 1, :] - triangles[:, 0, :]
-    AC = triangles[:, 2, :] - triangles[:, 0, :]
-    BC = triangles[:, 2, :] - triangles[:, 1, :]
+    AB: NDArrayA = triangles[:, 1, :] - triangles[:, 0, :]
+    AC: NDArrayA = triangles[:, 2, :] - triangles[:, 0, :]
+    BC: NDArrayA = triangles[:, 2, :] - triangles[:, 1, :]
 
     s_AB = -AB[:, 0] * triangles[:, 0, 1] + AB[:, 1] * triangles[:, 0, 0] >= 0
     s_AC = -AC[:, 0] * triangles[:, 0, 1] + AC[:, 1] * triangles[:, 0, 0] >= 0
@@ -206,11 +212,10 @@ def _min_max_norm(vec: spmatrix | NDArrayA) -> NDArrayA:
     if vec.ndim != 1:
         raise ValueError(f"Expected `1` dimension, found `{vec.ndim}`.")
 
-    maxx, minn = np.nanmax(vec), np.nanmin(vec)
+    maxx: float = np.nanmax(vec)
+    minn: float = np.nanmin(vec)
 
-    return (  # type: ignore[no-any-return]
-        np.ones_like(vec) if np.isclose(minn, maxx) else ((vec - minn) / (maxx - minn))
-    )
+    return np.ones_like(vec) if np.isclose(minn, maxx) else ((vec - minn) / (maxx - minn))
 
 
 def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vector_name_t]:
@@ -240,7 +245,7 @@ def _ensure_dense_vector(fn: Callable[..., Vector_name_t]) -> Callable[..., Vect
             if TYPE_CHECKING:
                 assert isinstance(res, spmatrix)
             res = res.toarray()
-        elif not isinstance(res, (np.ndarray, Sequence)):
+        elif not isinstance(res, np.ndarray | Sequence):
             raise TypeError(f"Unable to process result of type `{type(res).__name__}`.")
 
         res = np.asarray(np.squeeze(res))
@@ -287,7 +292,7 @@ class ALayer:
 
         self._adata = adata
         self._library_id = library_ids[0]
-        self._ix_to_group = dict(zip(range(len(library_ids)), library_ids))
+        self._ix_to_group = dict(zip(range(len(library_ids)), library_ids, strict=False))
         self._layer: str | None = None
         self._previous_layer: str | None = None
         self._raw = is_raw
@@ -438,7 +443,12 @@ class ALayer:
 
         return (res if res.ndim == 1 else res[:, index]), pretty_name
 
-    def _format_key(self, key: str | int, layer_modifier: bool = False, index: int | str | None = None) -> str:
+    def _format_key(
+        self,
+        key: str | int,
+        layer_modifier: bool = False,
+        index: int | str | None = None,
+    ) -> str:
         if not layer_modifier:
             return str(key) + (f":{index}" if index is not None else "")
 
@@ -467,7 +477,10 @@ def _get_black_or_white(value: float, cmap: mcolors.Colormap) -> str:
 
 
 def _annotate_heatmap(
-    im: mpl.image.AxesImage, valfmt: str = "{x:.2f}", cmap: mpl.colors.Colormap | str = "viridis", **kwargs: Any
+    im: mpl.image.AxesImage,
+    valfmt: str = "{x:.2f}",
+    cmap: mpl.colors.Colormap | str = "viridis",
+    **kwargs: Any,
 ) -> None:
     # modified from matplotlib's site
     if isinstance(cmap, str):
@@ -495,7 +508,13 @@ def _get_cmap_norm(
     adata: AnnData,
     key: str,
     order: tuple[list[int], list[int]] | None | None = None,
-) -> tuple[mcolors.ListedColormap, mcolors.ListedColormap, mcolors.BoundaryNorm, mcolors.BoundaryNorm, int]:
+) -> tuple[
+    mcolors.ListedColormap,
+    mcolors.ListedColormap,
+    mcolors.BoundaryNorm,
+    mcolors.BoundaryNorm,
+    int,
+]:
     n_cls = adata.obs[key].nunique()
 
     colors = adata.uns[Key.uns.colors(key)]
@@ -551,7 +570,10 @@ def _heatmap(
     row_sm = mpl.cm.ScalarMappable(cmap=row_cmap, norm=row_norm)
     col_sm = mpl.cm.ScalarMappable(cmap=col_cmap, norm=col_norm)
 
-    norm = mpl.colors.Normalize(vmin=kwargs.pop("vmin", np.nanmin(data)), vmax=kwargs.pop("vmax", np.nanmax(data)))
+    norm = mpl.colors.Normalize(
+        vmin=kwargs.pop("vmin", np.nanmin(data)),
+        vmax=kwargs.pop("vmax", np.nanmax(data)),
+    )
     if isinstance(cont_cmap, str):
         cont_cmap = plt.colormaps[cont_cmap]
     cont_cmap.set_bad(color="grey")
@@ -572,7 +594,13 @@ def _heatmap(
     cax = divider.append_axes("right", size="1%", pad=0.1)
     if method is not None:  # cluster rows but don't plot dendrogram
         col_ax = divider.append_axes("top", size="5%")
-        sch.dendrogram(col_link, no_labels=True, ax=col_ax, color_threshold=0, above_threshold_color="black")
+        sch.dendrogram(
+            col_link,
+            no_labels=True,
+            ax=col_ax,
+            color_threshold=0,
+            above_threshold_color="black",
+        )
         col_ax.axis("off")
 
     _ = fig.colorbar(
