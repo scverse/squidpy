@@ -90,9 +90,9 @@ jobs:
                   DISPLAY: :42
               run: |
                   tox -vv
-
-            - name: List figures for potential debugging
-                  ls -alh /home/runner/work/squidpy/squidpy/tests/figures
+            # check if this can be deprecated
+            #- name: List figures for potential debugging
+            #      ls -alh /home/runner/work/squidpy/squidpy/tests/figures
 
             - name: Archive figures generated during testing
               if: always()
