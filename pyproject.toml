@@ -103,7 +103,7 @@ docs = [
     "sphinx_copybutton>=0.5.0",
 ]
 co_occurrence = [
-    "ststat-rs",
+    "scstat-rs",
 ]
 
 [project.urls]

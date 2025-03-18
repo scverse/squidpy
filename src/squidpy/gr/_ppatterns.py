@@ -427,7 +427,7 @@ def _co_occurrence_rs(
     interval: NDArrayA
 ) -> NDArrayA | None:
 
-    from ststat_rs import co_occur_count
+    from scstat_rs import co_occur_count
 
     clust = original_clust.cat.codes.astype(np.int32)
 
