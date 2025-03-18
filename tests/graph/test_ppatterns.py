@@ -130,6 +130,24 @@ def test_co_occurrence(adata: AnnData):
     assert arr.shape[2] == 49
     assert arr.shape[1] == arr.shape[0] == adata.obs["leiden"].unique().shape[0]
 
+def test_co_occurrence_rs(adata: AnnData):
+    """
+    check co_occurrence score and shape (rust implementation)
+    """
+    co_occurrence(adata, cluster_key="leiden", use_rust=True)
+
+    # assert occurrence in adata.uns
+    assert "leiden_co_occurrence" in adata.uns.keys()
+    assert "occ" in adata.uns["leiden_co_occurrence"].keys()
+    assert "interval" in adata.uns["leiden_co_occurrence"].keys()
+
+    # assert shapes
+    arr = adata.uns["leiden_co_occurrence"]["occ"]
+    assert arr.ndim == 3
+    assert arr.shape[2] == 49
+    assert arr.shape[1] == arr.shape[0] == adata.obs["leiden"].unique().shape[0]
+
+
 
 # @pytest.mark.parametrize(("ys", "xs"), [(10, 10), (None, None), (10, 20)])
 @pytest.mark.parametrize(("n_jobs", "n_splits"), [(1, 2), (2, 2)])
@@ -151,6 +169,19 @@ def test_co_occurrence_explicit_interval(adata: AnnData, size: int):
             _ = co_occurrence(adata, cluster_key="leiden", copy=True, interval=interval)
     else:
         _, interval_1 = co_occurrence(adata, cluster_key="leiden", copy=True, interval=interval)
+
+        assert interval is not interval_1
+        np.testing.assert_allclose(interval, interval_1)  # allclose because in the func, we use f32
+
+@pytest.mark.parametrize("size", [1, 3])
+def test_co_occurrence_rs_explicit_interval(adata: AnnData, size: int):
+    minn, maxx = _find_min_max(adata.obsm[Key.obsm.spatial])
+    interval = np.linspace(minn, maxx, size)
+    if size == 1:
+        with pytest.raises(ValueError, match=r"Expected interval to be of length"):
+            _ = co_occurrence(adata, cluster_key="leiden", copy=True, interval=interval, use_rust=True)
+    else:
+        _, interval_1 = co_occurrence_rs(adata, cluster_key="leiden", copy=True, interval=interval, use_rust=True)
 
         assert interval is not interval_1
         np.testing.assert_allclose(interval, interval_1)  # allclose because in the func, we use f32

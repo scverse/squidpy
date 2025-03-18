@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from importlib.util import find_spec
+
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Literal
@@ -325,81 +327,16 @@ def _occur_count(
 
     return out
 
-
-def _co_occurrence_helper(
-    idx_splits: Iterable[tuple[int, int]],
-    spatial_splits: Sequence[NDArrayA],
-    labs_splits: Sequence[NDArrayA],
-    labs_unique: NDArrayA,
+def _co_occurrence_origin (
+    spatial: NDArrayA,
+    original_clust: pd.Series,
     interval: NDArrayA,
-    queue: SigQueue | None = None,
-) -> pd.DataFrame:
-    out_lst = []
-    for t in idx_splits:
-        idx_x, idx_y = t
-        labs_x = labs_splits[idx_x]
-        labs_y = labs_splits[idx_y]
-        dist = pairwise_distances(spatial_splits[idx_x], spatial_splits[idx_y])
-
-        out = _occur_count((labs_x, labs_y), dist, labs_unique, interval, idx_x == idx_y)
-        out_lst.append(out)
-
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    return out_lst
-
-
-@d.dedent
-def co_occurrence(
-    adata: AnnData | SpatialData,
-    cluster_key: str,
-    spatial_key: str = Key.obsm.spatial,
-    interval: int | NDArrayA = 50,
     copy: bool = False,
     n_splits: int | None = None,
     n_jobs: int | None = None,
     backend: str = "loky",
-    show_progress_bar: bool = True,
-) -> tuple[NDArrayA, NDArrayA] | None:
-    """
-    Compute co-occurrence probability of clusters.
-
-    Parameters
-    ----------
-    %(adata)s
-    %(cluster_key)s
-    %(spatial_key)s
-    interval
-        Distances interval at which co-occurrence is computed. If :class:`int`, uniformly spaced interval
-        of the given size will be used.
-    %(copy)s
-    n_splits
-        Number of splits in which to divide the spatial coordinates in
-        :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
-    %(parallelize)s
-
-    Returns
-    -------
-    If ``copy = True``, returns the co-occurrence probability and the distance thresholds intervals.
-
-    Otherwise, modifies the ``adata`` with the following keys:
-
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['occ']`` - the co-occurrence probabilities
-          across interval thresholds.
-        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
-          computed at ``interval``.
-    """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
-    _assert_categorical_obs(adata, key=cluster_key)
-    _assert_spatial_basis(adata, key=spatial_key)
-
-    spatial = adata.obsm[spatial_key].astype(fp)
-    original_clust = adata.obs[cluster_key]
+    show_progress_bar: bool = True
+) -> NDArrayA:
 
     # annotate cluster idx
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
@@ -456,6 +393,178 @@ def co_occurrence(
     )
     out = list(out_lst)[0] if len(idx_splits) == 1 else sum(list(out_lst)) / len(idx_splits)
 
+    return out
+
+def _co_occurrence_helper(
+    idx_splits: Iterable[tuple[int, int]],
+    spatial_splits: Sequence[NDArrayA],
+    labs_splits: Sequence[NDArrayA],
+    labs_unique: NDArrayA,
+    interval: NDArrayA,
+    queue: SigQueue | None = None,
+) -> pd.DataFrame:
+    out_lst = []
+    for t in idx_splits:
+        idx_x, idx_y = t
+        labs_x = labs_splits[idx_x]
+        labs_y = labs_splits[idx_y]
+        dist = pairwise_distances(spatial_splits[idx_x], spatial_splits[idx_y])
+
+        out = _occur_count((labs_x, labs_y), dist, labs_unique, interval, idx_x == idx_y)
+        out_lst.append(out)
+
+        if queue is not None:
+            queue.put(Signal.UPDATE)
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return out_lst
+
+def _co_occurrence_rs(
+    spatial: NDArrayA,
+    original_clust: pd.Series,
+    interval: NDArrayA
+) -> NDArrayA | None:
+
+    from ststat_rs import co_occur_count
+
+    clust = original_clust.cat.codes.astype(np.int32)
+
+    co_occur_3d = co_occur_count(
+        spatial[:, 0],
+        spatial[:, 1],
+        interval, clust
+    )
+
+    ## for each dimension
+    # for i in range(co_occur.shape[2]):
+    num = co_occur_3d.shape[0]
+    labs_unique = range(co_occur_3d.shape[0])
+    out = np.zeros((num, num, interval.shape[0] - 1), dtype=fp)
+
+    interval_seq = np.arange(interval.shape[0] - 2, -1, -1)
+    interval_seq.shape[0]
+
+
+    for i_interval in interval_seq:
+        # print(i_interval)
+        co_occur = co_occur_3d[:, :, i_interval]
+
+        probs_matrix = co_occur / np.sum(co_occur) if np.sum(co_occur) != 0 else np.zeros((num, num), dtype=fp)
+        probs = np.sum(probs_matrix, axis=0)
+        probs_con = np.zeros((num, num), dtype=fp)
+
+        for c in labs_unique:
+            probs_conditional = (
+                co_occur[c] / np.sum(co_occur[c]) if np.sum(co_occur[c]) != 0 else np.zeros(num, dtype=fp)
+            )
+            probs_con[c, :] = np.zeros(num, dtype=fp)
+            for i in range(num):
+                if probs[i] == 0:
+                    probs_con[c, i] = 0
+                else:
+                    probs_con[c, i] = probs_conditional[i] / probs[i]
+
+        # print(interval_seq.shape[0] - 1 - i_interval)
+        out[:, :, interval_seq.shape[0] - 1 - i_interval] = probs_con
+
+    return out
+
+@d.dedent
+def co_occurrence(
+    adata: AnnData | SpatialData,
+    cluster_key: str,
+    spatial_key: str = Key.obsm.spatial,
+    interval: int | NDArrayA = 50,
+    copy: bool = False,
+    n_splits: int | None = None,
+    n_jobs: int | None = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
+    use_rust: bool = False
+) -> tuple[NDArrayA, NDArrayA] | None:
+    """
+    Compute co-occurrence probability of clusters.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(cluster_key)s
+    %(spatial_key)s
+    interval
+        Distances interval at which co-occurrence is computed. If :class:`int`, uniformly spaced interval
+        of the given size will be used.
+    %(copy)s
+    n_splits
+        Number of splits in which to divide the spatial coordinates in
+        :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
+    %(parallelize)s
+    use_rust
+        Whether to use the rust implementation of the function. If ``True``, the rust implementation will be used.
+        If ``False``, the python implementation will.
+
+    Returns
+    -------
+    If ``copy = True``, returns the co-occurrence probability and the distance thresholds intervals.
+
+    Otherwise, modifies the ``adata`` with the following keys:
+
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['occ']`` - the co-occurrence probabilities
+          across interval thresholds.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
+          computed at ``interval``.
+    """
+
+
+    if use_rust and not find_spec("ststat_rs"):
+        ## issue an error and ask user to install ststat_rs
+        raise ImportError("ststat_rs not found. Please install ststat_rs to use the rust version of co-occurrence function: `pip install ststat-rs`")
+
+    if isinstance(adata, SpatialData):
+        adata = adata.table
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_spatial_basis(adata, key=spatial_key)
+
+    spatial = adata.obsm[spatial_key].astype(fp)
+    original_clust = adata.obs[cluster_key]
+
+    # create intervals thresholds
+    if isinstance(interval, int):
+        thresh_min, thresh_max = _find_min_max(spatial)
+        interval = np.linspace(thresh_min, thresh_max, num=interval, dtype=fp)
+    else:
+        interval = np.array(sorted(interval), dtype=fp, copy=True)
+    if len(interval) <= 1:
+        raise ValueError(f"Expected interval to be of length `>= 2`, found `{len(interval)}`.")
+
+    if use_rust:
+        out = _co_occurrence_rs(
+            spatial,
+            original_clust,
+            interval
+        )
+        start = logg.info(
+            f"Calculating co-occurrence probabilities for `{len(interval)}` intervals"
+        )
+    else:
+        # logg.info("Using python implementation of co-occurrence function. For faster computation, consider using the rust implementation by setting `use_rust=True`")
+        print("Using python implementation of co-occurrence function. For faster computation, consider using the rust implementation by setting `use_rust=True`")
+
+        out = _co_occurrence_origin(
+            spatial,
+            original_clust,
+            interval,
+            copy=copy,
+            n_splits=n_splits,
+            n_jobs=n_jobs,
+            backend=backend,
+            show_progress_bar=show_progress_bar
+        )
+        start = logg.info(
+            f"Calculating co-occurrence probabilities for `{len(interval)}` intervals using `{n_jobs}` core(s) and `{n_splits}` splits"
+        )
+
     if copy:
         logg.info("Finish", time=start)
         return out, interval
@@ -465,7 +574,7 @@ def co_occurrence(
         attr="uns",
         key=Key.uns.co_occurrence(cluster_key),
         data={"occ": out, "interval": interval},
-        time=start,
+        time=start
     )
 
 
