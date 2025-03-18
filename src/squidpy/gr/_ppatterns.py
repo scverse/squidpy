@@ -274,6 +274,7 @@ def _score_helper(
     return score_perms
 
 
+## The _occur_count() function is needed for the _co_occurrence_origin implementation
 @njit(
     ft[:, :, :](tt(it[:], 2), ft[:, :], it[:], ft[:], bl),
     parallel=False,
@@ -395,6 +396,8 @@ def _co_occurrence_origin (
 
     return out
 
+
+## The _co_occurrence_helper() function is needed for the _co_occurrence_origin implementation
 def _co_occurrence_helper(
     idx_splits: Iterable[tuple[int, int]],
     spatial_splits: Sequence[NDArrayA],
@@ -501,8 +504,11 @@ def co_occurrence(
         :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
     %(parallelize)s
     use_rust
-        Whether to use the rust implementation of the function. If ``True``, the rust implementation will be used.
-        If ``False``, the python implementation will.
+        Whether to use the rust implementation of the co-occurrence probability.
+        If ``True``, the rust implementation will be used.
+        If ``False``, the python implementation will be used.
+        For rust implementation, the `scstat-rs` package is required.
+        You can install it via `pip install scstat-rs`.
 
     Returns
     -------
@@ -517,9 +523,9 @@ def co_occurrence(
     """
 
 
-    if use_rust and not find_spec("ststat_rs"):
-        ## issue an error and ask user to install ststat_rs
-        raise ImportError("ststat_rs not found. Please install ststat_rs to use the rust version of co-occurrence function: `pip install ststat-rs`")
+    if use_rust and not find_spec("scstat_rs"):
+        ## issue an error and ask user to install scstat_rs
+        raise ImportError("scstat_rs not found. Please install scstat_rs to use the rust version of co-occurrence function: `pip install scstat-rs`")
 
     if isinstance(adata, SpatialData):
         adata = adata.table
