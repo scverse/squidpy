@@ -130,6 +130,7 @@ def test_co_occurrence(adata: AnnData):
     assert arr.shape[2] == 49
     assert arr.shape[1] == arr.shape[0] == adata.obs["leiden"].unique().shape[0]
 
+
 def test_co_occurrence_rs(adata: AnnData):
     """
     check co_occurrence score and shape (rust implementation)
@@ -146,7 +147,6 @@ def test_co_occurrence_rs(adata: AnnData):
     assert arr.ndim == 3
     assert arr.shape[2] == 49
     assert arr.shape[1] == arr.shape[0] == adata.obs["leiden"].unique().shape[0]
-
 
 
 # @pytest.mark.parametrize(("ys", "xs"), [(10, 10), (None, None), (10, 20)])
@@ -172,6 +172,7 @@ def test_co_occurrence_explicit_interval(adata: AnnData, size: int):
 
         assert interval is not interval_1
         np.testing.assert_allclose(interval, interval_1)  # allclose because in the func, we use f32
+
 
 @pytest.mark.parametrize("size", [1, 3])
 def test_co_occurrence_rs_explicit_interval(adata: AnnData, size: int):
