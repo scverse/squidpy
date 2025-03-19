@@ -275,14 +275,8 @@ def _score_helper(
 
 @njit(parallel=True, fastmath=True)
 def _occur_count(
-    spatial_x: NDArrayA,
-    spatial_y:NDArrayA,
-    thresholds: NDArrayA,
-    label_idx: NDArrayA,
-    n: int,
-    k: int,
-    l_val: int
-)-> NDArrayA:
+    spatial_x: NDArrayA, spatial_y: NDArrayA, thresholds: NDArrayA, label_idx: NDArrayA, n: int, k: int, l_val: int
+) -> NDArrayA:
     # Allocate a 2D array to store a flat local result per point.
     local_results = np.zeros((n, l_val * k * k), dtype=np.int32)
     for i in prange(n):
@@ -327,12 +321,7 @@ def _occur_count(
     return result
 
 
-def _co_occurrence_helper(
-    v_x: NDArrayA,
-    v_y: NDArrayA,
-    v_radium: NDArrayA,
-    labs: NDArrayA
-)-> NDArrayA:
+def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs: NDArrayA) -> NDArrayA:
     """
     Fast co-occurrence probability computation using the new numba-accelerated counting.
 
@@ -412,6 +401,7 @@ def _co_occurrence_helper(
 
     return occ_prob
 
+
 @d.dedent
 def co_occurrence(
     adata: AnnData | SpatialData,
@@ -422,7 +412,7 @@ def co_occurrence(
     n_splits: int | None = None,
     n_jobs: int | None = None,
     backend: str = "loky",
-    show_progress_bar: bool = True
+    show_progress_bar: bool = True,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
