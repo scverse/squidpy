@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from importlib.util import find_spec
-
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Literal
@@ -276,12 +274,12 @@ def _score_helper(
 
 @njit(parallel=True, fastmath=True)
 def _occur_count(
-    spatial_x: NDArrayA, 
-    spatial_y:NDArrayA, 
-    thresholds: NDArrayA, 
-    label_idx: NDArrayA, 
-    n: int, 
-    k: int, 
+    spatial_x: NDArrayA,
+    spatial_y:NDArrayA,
+    thresholds: NDArrayA,
+    label_idx: NDArrayA,
+    n: int,
+    k: int,
     l_val: int
 )-> NDArrayA:
 
@@ -304,7 +302,7 @@ def _occur_count(
                 #    break  # If this threshold fails, smaller ones will also fail.
         for m in range(l_val * k * k):
             local_results[i, m] = local_counts[m]
-    
+
     # Reduce over all points: sum the local counts.
     result_flat = np.zeros(l_val * k * k, dtype=np.int32)
     for m in range(l_val * k * k):
@@ -319,7 +317,7 @@ def _occur_count(
         for i in range(k):
             for j in range(k):
                 counts[r, i, j] = result_flat[r * (k * k) + i * k + j]
-    
+
     # Rearrange axes to match the original convention: (k, k, interval)
     result = np.empty((k, k, l_val), dtype=np.int32)
     for i in range(k):
@@ -332,14 +330,14 @@ def _occur_count(
 
 
 def _co_occurrence_helper(
-    v_x: NDArrayA, 
-    v_y: NDArrayA, 
-    v_radium: NDArrayA, 
+    v_x: NDArrayA,
+    v_y: NDArrayA,
+    v_radium: NDArrayA,
     labs: NDArrayA
 )-> NDArrayA:
     """
     Fast co-occurrence probability computation using the new numba-accelerated counting.
-    
+
     Parameters
     ----------
     v_x : np.ndarray, float64
@@ -350,7 +348,7 @@ def _co_occurrence_helper(
          Distance thresholds (in ascending order).
     labs : np.ndarray
          Cluster labels (as integers).
-    
+
     Returns
     -------
     occ_prob : np.ndarray
@@ -365,35 +363,35 @@ def _co_occurrence_helper(
     l_val = len(v_radium) - 1
     # Compute squared thresholds from the interval (skip the first value)
     thresholds = (v_radium[1:]) ** 2
-    
+
     # Compute cco-occurence ounts.
     counts = _occur_count(v_x, v_y, thresholds, labs, n, k, l_val)
-    
+
     # Compute co-occurrence probabilities for each threshold bin.
     occ_prob = np.empty((k, k, l_val), dtype=np.float32)
     for r in range(l_val):
         co_occur = counts[:, :, r].astype(np.float32)
-        
+
         # Compute the total count for this threshold.
         total = 0.0
         for i in range(k):
             for j in range(k):
                 total += co_occur[i, j]
-        
+
         # Compute the normalized probability matrix.
         probs_matrix = np.zeros((k, k), dtype=np.float32)
         if total != 0.0:
             for i in range(k):
                 for j in range(k):
                     probs_matrix[i, j] = co_occur[i, j] / total
-        
+
         probs = np.zeros(k, dtype=np.float32)
         for j in range(k):
             s = 0.0
             for i in range(k):
                 s += probs_matrix[i, j]
             probs[j] = s
-        
+
         # Compute conditional probabilities.
         probs_con = np.zeros((k, k), dtype=np.float32)
         for c in range(k):
@@ -408,62 +406,13 @@ def _co_occurrence_helper(
                     probs_con[c, i] = 0.0
                 else:
                     probs_con[c, i] = cond / probs[i]
-        
+
         # Transpose to match (k, k, interval).
         for i in range(k):
             for c in range(k):
                 occ_prob[i, c, r] = probs_con[c, i]
-    
+
     return occ_prob
-
-def _co_occurrence_rs(
-    spatial: NDArrayA,
-    original_clust: pd.Series,
-    interval: NDArrayA
-) -> NDArrayA | None:
-
-    from scstat_rs import co_occur_count
-
-    clust = original_clust.cat.codes.astype(np.int32)
-
-    co_occur_3d = co_occur_count(
-        spatial[:, 0],
-        spatial[:, 1],
-        interval, clust
-    )
-
-    ## for each dimension
-    # for i in range(co_occur.shape[2]):
-    num = co_occur_3d.shape[0]
-    labs_unique = range(co_occur_3d.shape[0])
-    out = np.zeros((num, num, interval.shape[0] - 1), dtype=fp)
-
-    interval_seq = np.arange(interval.shape[0] - 2, -1, -1)
-    interval_seq.shape[0]
-
-
-    for i_interval in interval_seq:
-        co_occur = co_occur_3d[:, :, i_interval]
-
-        probs_matrix = co_occur / np.sum(co_occur) if np.sum(co_occur) != 0 else np.zeros((num, num), dtype=fp)
-        probs = np.sum(probs_matrix, axis=0)
-        probs_con = np.zeros((num, num), dtype=fp)
-
-        for c in labs_unique:
-            probs_conditional = (
-                co_occur[c] / np.sum(co_occur[c]) if np.sum(co_occur[c]) != 0 else np.zeros(num, dtype=fp)
-            )
-            probs_con[c, :] = np.zeros(num, dtype=fp)
-            for i in range(num):
-                if probs[i] == 0:
-                    probs_con[c, i] = 0
-                else:
-                    probs_con[c, i] = probs_conditional[i] / probs[i]
-
-        # print(interval_seq.shape[0] - 1 - i_interval)
-        out[:, :, interval_seq.shape[0] - 1 - i_interval] = probs_con
-
-    return out, labs_unique
 
 @d.dedent
 def co_occurrence(
@@ -475,8 +424,7 @@ def co_occurrence(
     n_splits: int | None = None,
     n_jobs: int | None = None,
     backend: str = "loky",
-    show_progress_bar: bool = True,
-    use_rust: bool = False
+    show_progress_bar: bool = True
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -494,12 +442,6 @@ def co_occurrence(
         Number of splits in which to divide the spatial coordinates in
         :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
     %(parallelize)s
-    use_rust
-        Whether to use the rust implementation of the co-occurrence probability.
-        If ``True``, the rust implementation will be used.
-        If ``False``, the python implementation will be used.
-        For rust implementation, the `scstat-rs` package is required.
-        You can install it via `pip install scstat-rs`.
 
     Returns
     -------
@@ -514,10 +456,6 @@ def co_occurrence(
     """
 
 
-    if use_rust and not find_spec("scstat_rs"):
-        ## issue an error and ask user to install scstat_rs
-        raise ImportError("scstat_rs not found. Please install scstat_rs to use the rust version of co-occurrence function: `pip install scstat-rs`")
-
     if isinstance(adata, SpatialData):
         adata = adata.table
     _assert_categorical_obs(adata, key=cluster_key)
@@ -527,7 +465,7 @@ def co_occurrence(
     original_clust = adata.obs[cluster_key]
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
     labs = np.array([clust_map[c] for c in original_clust], dtype=ip)
-    
+
     # create intervals thresholds
     if isinstance(interval, int):
         thresh_min, thresh_max = _find_min_max(spatial)
@@ -537,26 +475,14 @@ def co_occurrence(
     if len(interval) <= 1:
         raise ValueError(f"Expected interval to be of length `>= 2`, found `{len(interval)}`.")
 
-    if use_rust:
-        out = _co_occurrence_rs(
-            spatial,
-            original_clust,
-            interval
-        )
-        start = logg.info(
-            f"Calculating co-occurrence probabilities for `{len(interval)}` intervals"
-        )
-    else:
-        # logg.info("Using python implementation of co-occurrence function. For faster computation, consider using the rust implementation by setting `use_rust=True`")
-        print("Using python implementation of co-occurrence function. For faster computation, consider using the rust implementation by setting `use_rust=True`")
-        spatial_x = spatial[:, 0]
-        spatial_y = spatial[:, 1]
+    spatial_x = spatial[:, 0]
+    spatial_y = spatial[:, 1]
 
-        # Compute co-occurrence probabilities using the fast numba routine.
-        out = _co_occurrence_helper(spatial_x, spatial_y, interval, labs)
-        start = logg.info(
-            f"Calculating co-occurrence probabilities for `{len(interval)}` intervals using `{n_jobs}` core(s) and `{n_splits}` splits"
-        )
+    # Compute co-occurrence probabilities using the fast numba routine.
+    out = _co_occurrence_helper(spatial_x, spatial_y, interval, labs)
+    start = logg.info(
+        f"Calculating co-occurrence probabilities for `{len(interval)}` intervals using `{n_jobs}` core(s) and `{n_splits}` splits"
+    )
 
     if copy:
         logg.info("Finish", time=start)

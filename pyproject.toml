@@ -102,9 +102,6 @@ docs = [
     "myst-nb>=0.17.1",
     "sphinx_copybutton>=0.5.0",
 ]
-co_occurrence = [
-    "scstat-rs",
-]
 
 [project.urls]
 Homepage = "https://github.com/scverse/squidpy"
