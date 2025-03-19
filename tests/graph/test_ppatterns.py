@@ -155,7 +155,6 @@ def test_co_occurrence_explicit_interval(adata: AnnData, size: int):
         assert interval is not interval_1
         np.testing.assert_allclose(interval, interval_1)  # allclose because in the func, we use f32
 
-
 def test_use_raw(dummy_adata: AnnData):
     var_names = [str(i) for i in range(10)]
     raw = dummy_adata[:, dummy_adata.var_names[: len(var_names)]].copy()

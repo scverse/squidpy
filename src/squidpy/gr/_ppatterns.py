@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from importlib.util import find_spec
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -282,7 +283,6 @@ def _occur_count(
     k: int,
     l_val: int
 )-> NDArrayA:
-
     # Allocate a 2D array to store a flat local result per point.
     local_results = np.zeros((n, l_val * k * k), dtype=np.int32)
     for i in prange(n):
@@ -298,7 +298,7 @@ def _occur_count(
                 if dist_sq <= thresh:
                     index = r * (k * k) + label_idx[i] * k + label_idx[j]
                     local_counts[index] += 1
-                #else:
+                # else:
                 #    break  # If this threshold fails, smaller ones will also fail.
         for m in range(l_val * k * k):
             local_results[i, m] = local_counts[m]
@@ -325,8 +325,6 @@ def _occur_count(
             for r in range(l_val):
                 result[i, j, r] = counts[r, i, j]
     return result
-
-
 
 
 def _co_occurrence_helper(
@@ -455,7 +453,6 @@ def co_occurrence(
           computed at ``interval``.
     """
 
-
     if isinstance(adata, SpatialData):
         adata = adata.table
     _assert_categorical_obs(adata, key=cluster_key)
@@ -489,11 +486,7 @@ def co_occurrence(
         return out, interval
 
     _save_data(
-        adata,
-        attr="uns",
-        key=Key.uns.co_occurrence(cluster_key),
-        data={"occ": out, "interval": interval},
-        time=start
+        adata, attr="uns", key=Key.uns.co_occurrence(cluster_key), data={"occ": out, "interval": interval}, time=start
     )
 
 
