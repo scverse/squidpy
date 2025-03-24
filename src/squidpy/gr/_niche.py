@@ -698,7 +698,9 @@ def _validate_niche_args(
         raise TypeError(f"'data' must be an AnnData or SpatialData object, got {type(data).__name__}")
 
     if flavor not in ["neighborhood", "utag", "cellcharter_simple"]:
-        raise ValueError(f"Invalid flavor '{flavor}'. Please choose one of 'neighborhood', 'utag', 'cellcharter_simple'.")
+        raise ValueError(
+            f"Invalid flavor '{flavor}'. Please choose one of 'neighborhood', 'utag', 'cellcharter_simple'."
+        )
 
     if library_key is not None:
         if not isinstance(library_key, str):
