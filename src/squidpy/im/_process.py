@@ -115,11 +115,17 @@ def process(
 
     # to which library_ids should this function be applied?
     if library_id is not None:
-        callback = {lid: callback for lid in img._get_library_ids(library_id)}  # type: ignore[assignment]
+        callback = dict.fromkeys(img._get_library_ids(library_id), callback)  # type: ignore[assignment]
 
     start = logg.info(f"Processing image using `{method}` method")
     res: ImageContainer = img.apply(
-        callback, layer=layer, copy=True, drop=copy, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs
+        callback,
+        layer=layer,
+        copy=True,
+        drop=copy,
+        chunks=chunks,
+        fn_kwargs=kwargs,
+        **apply_kwargs,
     )
 
     # if the method changes the number of channels

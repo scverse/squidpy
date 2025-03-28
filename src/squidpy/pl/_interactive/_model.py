@@ -11,7 +11,7 @@ from squidpy._constants._constants import Symbol
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA, _unique_order_preserving
 from squidpy.gr._utils import _assert_categorical_obs, _assert_spatial_basis
-from squidpy.im import ImageContainer  # type: ignore[attr-defined]
+from squidpy.im import ImageContainer
 from squidpy.im._coords import _NULL_COORDS, _NULL_PADDING, CropCoords, CropPadding
 from squidpy.pl._utils import ALayer
 

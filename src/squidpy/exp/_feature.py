@@ -11,6 +11,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import xarray as xr
+import xarray as xr
 from cp_measure.bulk import get_core_measurements, get_correlation_measurements
 from scipy import ndimage
 from skimage import measure
@@ -374,38 +375,23 @@ def _calculate_features_helper(
                     if name in uint8_features:
                         mask = cell_mask_cropped.astype(np.uint8)
                         img1 = image1_cropped.astype(np.uint8)
-                        img2 = (
-                            None
-                            if image2_cropped is None
-                            else image2_cropped.astype(np.uint8)
-                        )
+                        img2 = None if image2_cropped is None else image2_cropped.astype(np.uint8)
                     elif name == "texture":
                         mask = cell_mask_cropped.astype(np.uint8)
-                        img1 = (
-                            image1_cropped.astype(np.float32) - img1_min
-                        ) / img1_range
+                        img1 = (image1_cropped.astype(np.float32) - img1_min) / img1_range
                         img2 = (
                             None
                             if image2_cropped is None
-                            else (image2_cropped.astype(np.float32) - img2_min)
-                            / img2_range
+                            else (image2_cropped.astype(np.float32) - img2_min) / img2_range
                         )
                     elif name in float_features:
                         mask = cell_mask_cropped.astype(np.float32)
                         img1 = image1_cropped.astype(np.float32)
-                        img2 = (
-                            None
-                            if image2_cropped is None
-                            else image2_cropped.astype(np.float32)
-                        )
+                        img2 = None if image2_cropped is None else image2_cropped.astype(np.float32)
                     else:
                         mask = cell_mask_cropped.astype(np.float32)
                         img1 = image1_cropped.astype(np.float32)
-                        img2 = (
-                            None
-                            if image2_cropped is None
-                            else image2_cropped.astype(np.float32)
-                        )
+                        img2 = None if image2_cropped is None else image2_cropped.astype(np.float32)
 
                     feature_dict = _measurement_wrapper(func, mask, img1, img2)
 
@@ -417,21 +403,14 @@ def _calculate_features_helper(
 
                     # Append channel names efficiently
                     if image2 is None:
-                        feature_dict = {
-                            f"{k}_ch{channel1_name}": v for k, v in feature_dict.items()
-                        }
+                        feature_dict = {f"{k}_ch{channel1_name}": v for k, v in feature_dict.items()}
                     else:
-                        feature_dict = {
-                            f"{k}_ch{channel1_name}_ch{channel2_name}": v
-                            for k, v in feature_dict.items()
-                        }
+                        feature_dict = {f"{k}_ch{channel1_name}_ch{channel2_name}": v for k, v in feature_dict.items()}
 
                     cell_features.update(feature_dict)
             except Exception as e:
                 if verbose:
-                    logg.warning(
-                        f"Failed to calculate '{name}' features for cell {cell_id}: {str(e)}"
-                    )
+                    logg.warning(f"Failed to calculate '{name}' features for cell {cell_id}: {str(e)}")
 
         features_dict[cell_id] = cell_features
 
@@ -541,10 +520,7 @@ def calculate_image_features(
 
     # Get channel names if available
     channel_names = None
-    if (
-        hasattr(sdata.images[image_key], "coords")
-        and "c" in sdata.images[image_key].coords
-    ):
+    if hasattr(sdata.images[image_key], "coords") and "c" in sdata.images[image_key].coords:
         channel_names = sdata.images[image_key].coords["c"].values
 
     # Handle image dimensions
