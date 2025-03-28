@@ -22,11 +22,5 @@ repos:
       rev: v1.15.0
       hooks:
           - id: mypy
-            additional_dependencies: [numpy, pandas, types-requests]
-            args: [--files]
-            exclude: >
-                .scripts/ci/download_data.py|
-                squidpy/datasets/_(dataset|image).py|
-                squidpy/datasets/_(dataset|image).pyi|
-                tests/|
-                docs/
+            additional_dependencies: [numpy, types-requests]
+            exclude: tests/|docs/
