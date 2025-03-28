@@ -8,7 +8,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from functools import partial
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, Union
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, Union
 
 import numpy as np
 import pandas as pd
@@ -33,10 +33,11 @@ from squidpy.gr._utils import (
 
 __all__ = ["ligrec", "PermutationTest"]
 
-StrSeq = Sequence[str]
-SeqTuple = Sequence[tuple[str, str]]
-Interaction_t = Union[pd.DataFrame, Mapping[str, StrSeq], StrSeq, tuple[StrSeq, StrSeq], SeqTuple]
-Cluster_t = Union[StrSeq, tuple[StrSeq, StrSeq], SeqTuple]
+StrSeq: TypeAlias = Sequence[str]
+SeqTuple: TypeAlias = Sequence[tuple[str, str]]
+Interaction_t: TypeAlias = pd.DataFrame | Mapping[str, StrSeq] | StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
+
+Cluster_t: TypeAlias = StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
 
 SOURCE = "source"
 TARGET = "target"
@@ -263,7 +264,7 @@ class PermutationTestABC(ABC):
             if isinstance(interactions[0], str):
                 interactions = list(product(interactions, repeat=2))
             elif len(interactions) == 2:
-                interactions = tuple(zip(*interactions))
+                interactions = tuple(zip(*interactions, strict=False))
 
             if not all(len(i) == 2 for i in interactions):
                 raise ValueError("Not all interactions are of length `2`.")
@@ -392,8 +393,8 @@ class PermutationTestABC(ABC):
         data["clusters"] = data["clusters"].cat.remove_unused_categories()
         cat = data["clusters"].cat
 
-        cluster_mapper = dict(zip(cat.categories, range(len(cat.categories))))
-        gene_mapper = dict(zip(data.columns[:-1], range(len(data.columns) - 1)))  # -1 for 'clusters'
+        cluster_mapper = dict(zip(cat.categories, range(len(cat.categories)), strict=False))
+        gene_mapper = dict(zip(data.columns[:-1], range(len(data.columns) - 1), strict=False))  # -1 for 'clusters'
 
         data.columns = [gene_mapper[c] if c != "clusters" else c for c in data.columns]
         clusters_ = np.array([[cluster_mapper[c1], cluster_mapper[c2]] for c1, c2 in clusters], dtype=np.uint32)
@@ -440,8 +441,7 @@ class PermutationTestABC(ABC):
 
         if corr_method is not None:
             logg.info(
-                f"Performing FDR correction across the `{corr_axis.v}` "
-                f"using method `{corr_method}` at level `{alpha}`"
+                f"Performing FDR correction across the `{corr_axis.v}` using method `{corr_method}` at level `{alpha}`"
             )
             res["pvalues"] = _fdr_correct(res["pvalues"], corr_method, corr_axis, alpha=alpha)
 

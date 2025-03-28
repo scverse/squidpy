@@ -3,7 +3,7 @@ name: Bug Report
 about: Report a bug to help us improve Squidpy
 title: ""
 labels: bug
-assignees: "michalk8"
+assignees: ""
 ---
 
 ## Description

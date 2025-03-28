@@ -4,10 +4,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import (
-    Any,
-    Union,  # noqa: F401
-)
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -64,7 +61,7 @@ def visium(
         - :attr:`anndata.AnnData.uns` ``['spatial']['{library_id}']['metadata']`` - various metadata.
     """  # noqa: E501
     path = Path(path)
-    adata, library_id = _read_counts(path, count_file=counts_file, library_id=library_id, **kwargs)
+    adata, library_id = _read_counts(path, counts_file=counts_file, library_id=library_id, **kwargs)
 
     if not load_images:
         return adata
@@ -149,7 +146,7 @@ def vizgen(
     """
     path = Path(path)
     adata, library_id = _read_counts(
-        path=path, count_file=counts_file, library_id=library_id, delimiter=",", first_column_names=True, **kwargs
+        path=path, counts_file=counts_file, library_id=library_id, delimiter=",", first_column_names=True, **kwargs
     )
     blank_genes = np.array(["Blank" in v for v in adata.var_names])
     adata.obsm["blank_genes"] = pd.DataFrame(
