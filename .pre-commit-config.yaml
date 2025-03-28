@@ -1,11 +1,17 @@
 fail_fast: false
+default_language_version:
+    python: python3
 default_stages:
     - pre-commit
     - pre-push
-minimum_pre_commit_version: 2.9.3
+minimum_pre_commit_version: 2.16.0
 repos:
+    - repo: https://github.com/rbubley/mirrors-prettier
+      rev: v3.5.1
+      hooks:
+          - id: prettier
     - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.9.10
+      rev: v0.11.2
       hooks:
           - id: ruff
             types_or: [python, pyi, jupyter]
@@ -18,4 +24,3 @@ repos:
           - id: mypy
             additional_dependencies: [numpy, pandas, types-requests]
             exclude: .scripts/ci/download_data.py|squidpy/datasets/_(dataset|image).py # See https://github.com/
-  
