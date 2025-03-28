@@ -2,24 +2,23 @@
 
 from __future__ import annotations
 
+import itertools
 import warnings
 from collections.abc import Callable, Sequence
 from typing import Any
 
 import anndata as ad
-import itertools
 import numpy as np
 import pandas as pd
-import xarray as xr
 import xarray as xr
 from cp_measure.bulk import get_core_measurements, get_correlation_measurements
 from scipy import ndimage
 from skimage import measure
+from skimage.measure import label
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
 
-from skimage.measure import label
 from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, _get_n_cores, parallelize
@@ -115,12 +114,8 @@ def _get_regionprops_features(
                                 for i, v in enumerate(value):
                                     cell_features[f"{prop}_{i}"] = float(v)
                             elif value.ndim == 2:
-                                for i, j in itertools.product(
-                                    range(value.shape[0]), range(value.shape[1])
-                                ):
-                                    cell_features[f"{prop}_{i}x{j}"] = float(
-                                        value[i, j]
-                                    )
+                                for i, j in itertools.product(range(value.shape[0]), range(value.shape[1])):
+                                    cell_features[f"{prop}_{i}x{j}"] = float(value[i, j])
                             else:
                                 cell_features[prop] = value
                         else:
@@ -171,12 +166,8 @@ def _get_regionprops_features(
                                 for i, v in enumerate(value):
                                     cell_features[f"{prop}_{i}"] = float(v)
                             elif value.ndim == 2:
-                                for i, j in itertools.product(
-                                    range(value.shape[0]), range(value.shape[1])
-                                ):
-                                    cell_features[f"{prop}_{i}x{j}"] = float(
-                                        value[i, j]
-                                    )
+                                for i, j in itertools.product(range(value.shape[0]), range(value.shape[1])):
+                                    cell_features[f"{prop}_{i}x{j}"] = float(value[i, j])
                             else:
                                 cell_features[prop] = value
                         else:
@@ -278,9 +269,7 @@ def _get_cell_crops(
     x_max += x_pad_max
 
     # Warn if cell is at border and padding is asymmetric
-    if verbose and (
-        y_pad_min != pad or y_pad_max != pad or x_pad_min != pad or x_pad_max != pad
-    ):
+    if verbose and (y_pad_min != pad or y_pad_max != pad or x_pad_min != pad or x_pad_max != pad):
         logg.warning(
             f"Cell {cell_id} is at image border. Padding is asymmetric: "
             f"y: {y_pad_min}/{pad} top, {y_pad_max}/{pad} bottom, "
@@ -350,20 +339,15 @@ def _calculate_features_helper(
                     image1_cropped if image2 is None else None,
                 )
             if image2 is None:
-                regionprops_features = {
-                    f"{k}_ch{channel1_name}": v for k, v in regionprops_features.items()
-                }
+                regionprops_features = {f"{k}_ch{channel1_name}": v for k, v in regionprops_features.items()}
             else:
                 regionprops_features = {
-                    f"{k}_ch{channel1_name}_ch{channel2_name}": v
-                    for k, v in regionprops_features.items()
+                    f"{k}_ch{channel1_name}_ch{channel2_name}": v for k, v in regionprops_features.items()
                 }
             cell_features.update(regionprops_features)
         except Exception as e:
             if verbose:
-                logg.warning(
-                    f"Failed to calculate regionprops features for cell {cell_id}: {str(e)}"
-                )
+                logg.warning(f"Failed to calculate regionprops features for cell {cell_id}: {str(e)}")
 
         # Calculate all available cp-measure features
         for name, func in measurements.items():
@@ -472,8 +456,7 @@ def calculate_image_features(
     """
 
     if (
-        isinstance(sdata.images[image_key], xr.DataTree)
-        or isinstance(sdata.labels[labels_key], xr.DataTree)
+        isinstance(sdata.images[image_key], xr.DataTree) or isinstance(sdata.labels[labels_key], xr.DataTree)
     ) and scale is None:
         raise ValueError("When using multi-scale data, please specify the scale.")
 
@@ -501,13 +484,10 @@ def calculate_image_features(
         measurements = [measurements]
 
     if isinstance(measurements, list):
-        invalid_measurements = [
-            m for m in measurements if m not in available_measurements
-        ]
+        invalid_measurements = [m for m in measurements if m not in available_measurements]
         if invalid_measurements:
             raise ValueError(
-                f"Invalid measurement(s): {invalid_measurements}, "
-                f"available measurements: {available_measurements}"
+                f"Invalid measurement(s): {invalid_measurements}, available measurements: {available_measurements}"
             )
 
     # Check if labels are empty
@@ -531,9 +511,7 @@ def calculate_image_features(
 
     # Check if image and labels have matching dimensions
     if image.shape[1:] != labels.shape:
-        raise ValueError(
-            f"Image and labels have mismatched dimensions: image {image.shape[1:]}, labels {labels.shape}"
-        )
+        raise ValueError(f"Image and labels have mismatched dimensions: image {image.shape[1:]}, labels {labels.shape}")
 
     if "cpmeasure:correlation" in measurements:
         measurements_corr = get_correlation_measurements()
@@ -565,10 +543,7 @@ def calculate_image_features(
     # skimage features that need a mask and an image
     if "skimage:label+image" in measurements:
         for ch_idx in range(n_channels):
-
-            ch_name = (
-                channel_names[ch_idx] if channel_names is not None else f"ch{ch_idx}"
-            )
+            ch_name = channel_names[ch_idx] if channel_names is not None else f"ch{ch_idx}"
             ch_image = image[ch_idx]
 
             logg.info(f"Calculating 'skimage' image features for channel '{ch_idx}'.")
@@ -588,15 +563,10 @@ def calculate_image_features(
         measurements_core = get_core_measurements()
 
         for ch_idx in range(n_channels):
-
-            ch_name = (
-                channel_names[ch_idx] if channel_names is not None else f"ch{ch_idx}"
-            )
+            ch_name = channel_names[ch_idx] if channel_names is not None else f"ch{ch_idx}"
             ch_image = image[ch_idx]
             if "cpmeasure:core" in measurements:
-                logg.info(
-                    f"Calculating 'cpmeasure' core features for channel '{ch_idx}'."
-                )
+                logg.info(f"Calculating 'cpmeasure' core features for channel '{ch_idx}'.")
 
                 res = parallelize(
                     _calculate_features_helper,
@@ -613,20 +583,10 @@ def calculate_image_features(
     if "cpmeasure:correlation" in measurements:
         for ch1_idx in range(n_channels):
             for ch2_idx in range(ch1_idx + 1, n_channels):
-                ch1_name = (
-                    channel_names[ch1_idx]
-                    if channel_names is not None
-                    else f"ch{ch1_idx}"
-                )
-                ch2_name = (
-                    channel_names[ch2_idx]
-                    if channel_names is not None
-                    else f"ch{ch2_idx}"
-                )
+                ch1_name = channel_names[ch1_idx] if channel_names is not None else f"ch{ch1_idx}"
+                ch2_name = channel_names[ch2_idx] if channel_names is not None else f"ch{ch2_idx}"
 
-                logg.info(
-                    f"Calculating correlation features between channels '{ch1_name}' and '{ch2_name}'."
-                )
+                logg.info(f"Calculating correlation features between channels '{ch1_name}' and '{ch2_name}'.")
 
                 ch1_image = image[ch1_idx]
                 ch2_image = image[ch2_idx]
