@@ -47,7 +47,9 @@ class SegmentationModel(ABC):
     @d.get_full_description(base="segment")
     @d.get_sections(base="segment", sections=["Parameters", "Returns"])
     @d.dedent
-    def segment(self, img: NDArrayA | ImageContainer, **kwargs: Any) -> NDArrayA | ImageContainer:
+    def segment(
+        self, img: NDArrayA | ImageContainer, **kwargs: Any
+    ) -> NDArrayA | ImageContainer:
         """
         Segment an image.
 
@@ -70,7 +72,9 @@ class SegmentationModel(ABC):
         NotImplementedError
             If trying to segment a type for which the segmentation has not been registered.
         """
-        raise NotImplementedError(f"Segmentation of `{type(img).__name__}` is not yet implemented.")
+        raise NotImplementedError(
+            f"Segmentation of `{type(img).__name__}` is not yet implemented."
+        )
 
     @staticmethod
     def _precondition(img: NDArrayA | da.Array) -> NDArrayA | da.Array:
@@ -86,9 +90,13 @@ class SegmentationModel(ABC):
         if img.ndim == 2:
             img = img[..., np.newaxis]
         if img.ndim != 3:
-            raise ValueError(f"Expected segmentation to return `2` or `3` dimensional array, found `{img.ndim}`.")
+            raise ValueError(
+                f"Expected segmentation to return `2` or `3` dimensional array, found `{img.ndim}`."
+            )
         if not np.issubdtype(img.dtype, np.integer):
-            raise TypeError(f"Expected segmentation to be of integer type, found `{img.dtype}`.")
+            raise TypeError(
+                f"Expected segmentation to be of integer type, found `{img.dtype}`."
+            )
 
         return img.astype(_SEG_DTYPE)
 
@@ -160,13 +168,15 @@ class SegmentationModel(ABC):
         if isinstance(library_id, str):
             func = {library_id: self.segment}
         elif isinstance(library_id, Sequence):
-            func = {lid: self.segment for lid in library_id}
+            func = dict.fromkeys(library_id, self.segment)
         else:
             raise TypeError(
                 f"Expected library id to be `None` or of type `str` or `sequence`, found `{type(library_id).__name__}`."
             )
 
-        res: ImageContainer = img.apply(func, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs)
+        res: ImageContainer = img.apply(
+            func, layer=layer, channel=channel, fn_kwargs=fn_kwargs, copy=True, **kwargs
+        )
         res._data = res.data.rename({channel_dim: new_channel_dim})
 
         for k in res:
@@ -189,15 +199,23 @@ class SegmentationModel(ABC):
         if len(num_blocks) == 2:
             block_num = block_id[0] * num_blocks[1] + block_id[1]
         elif len(num_blocks) == 3:
-            block_num = block_id[0] * (num_blocks[1] * num_blocks[2]) + block_id[1] * num_blocks[2]
+            block_num = (
+                block_id[0] * (num_blocks[1] * num_blocks[2])
+                + block_id[1] * num_blocks[2]
+            )
         elif len(num_blocks) == 4:
             if num_blocks[-1] != 1:
                 raise ValueError(
                     f"Expected the number of blocks in the Z-dimension to be `1`, found `{num_blocks[-1]}`."
                 )
-            block_num = block_id[0] * (num_blocks[1] * num_blocks[2]) + block_id[1] * num_blocks[2]
+            block_num = (
+                block_id[0] * (num_blocks[1] * num_blocks[2])
+                + block_id[1] * num_blocks[2]
+            )
         else:
-            raise ValueError(f"Expected either `2`, `3` or `4` dimensional chunks, found `{len(num_blocks)}`.")
+            raise ValueError(
+                f"Expected either `2`, `3` or `4` dimensional chunks, found `{len(num_blocks)}`."
+            )
 
         labels = self._segment(block, **kwargs).astype(_SEG_DTYPE)
         mask: NDArrayA = labels > 0
@@ -319,7 +337,9 @@ def segment(
         - :class:`squidpy.im.ImageContainer` ``['{{layer_added}}']`` - the segmented image.
     """
     layer = img._get_layer(layer)
-    kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
+    kind = (
+        SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
+    )
     layer_new = Key.img.segment(kind, layer_added=layer_added)
     kwargs["chunks"] = chunks
     library_id = img._get_library_ids(library_id)
@@ -327,11 +347,15 @@ def segment(
     if not isinstance(method, SegmentationModel):
         if kind == SegmentationBackend.WATERSHED:
             if channel is None and img[layer].shape[-1] > 1:
-                raise ValueError("Watershed segmentation does not work with multiple channels.")
+                raise ValueError(
+                    "Watershed segmentation does not work with multiple channels."
+                )
             method: SegmentationModel = SegmentationWatershed()  # type: ignore[no-redef]
         elif kind == SegmentationBackend.CUSTOM:
             if not callable(method):
-                raise TypeError(f"Expected `method` to be a callable, found `{type(method)}`.")
+                raise TypeError(
+                    f"Expected `method` to be a callable, found `{type(method)}`."
+                )
             method = SegmentationCustom(func=method)
         else:
             raise NotImplementedError(f"Model `{kind}` is not yet implemented.")
@@ -339,7 +363,9 @@ def segment(
     if TYPE_CHECKING:
         assert isinstance(method, SegmentationModel)
 
-    start = logg.info(f"Segmenting an image of shape `{img[layer].shape}` using `{method}`")
+    start = logg.info(
+        f"Segmenting an image of shape `{img[layer].shape}` using `{method}`"
+    )
     res: ImageContainer = method.segment(
         img,
         layer=layer,

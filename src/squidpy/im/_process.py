@@ -99,12 +99,16 @@ def process(
         if isinstance(sigma, int):
             kwargs["sigma"] = sigma = [sigma, sigma] + [0] * (expected_ndim - 2)
         if len(sigma) != expected_ndim:
-            raise ValueError(f"Expected `sigma` to be of length `{expected_ndim}`, found `{len(sigma)}`.")
+            raise ValueError(
+                f"Expected `sigma` to be of length `{expected_ndim}`, found `{len(sigma)}`."
+            )
 
         if chunks is not None:
             # dask_image already handles map_overlap
             chunks_, chunks = chunks, None
-            callback = lambda arr, **kwargs: dask_gf(da.asarray(arr).rechunk(chunks_), **kwargs)  # noqa: E731
+            callback = lambda arr, **kwargs: dask_gf(
+                da.asarray(arr).rechunk(chunks_), **kwargs
+            )  # noqa: E731
         else:
             callback = scipy_gf
     elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
@@ -115,16 +119,24 @@ def process(
 
     # to which library_ids should this function be applied?
     if library_id is not None:
-        callback = {lid: callback for lid in img._get_library_ids(library_id)}  # type: ignore[assignment]
+        callback = dict.fromkeys(img._get_library_ids(library_id), callback)  # type: ignore[assignment]
 
     start = logg.info(f"Processing image using `{method}` method")
     res: ImageContainer = img.apply(
-        callback, layer=layer, copy=True, drop=copy, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs
+        callback,
+        layer=layer,
+        copy=True,
+        drop=copy,
+        chunks=chunks,
+        fn_kwargs=kwargs,
+        **apply_kwargs,
     )
 
     # if the method changes the number of channels
     if res[layer].shape[-1] != img[layer].shape[-1]:
-        modifier = "_".join(layer_new.split("_")[1:]) if layer_added is None else layer_added
+        modifier = (
+            "_".join(layer_new.split("_")[1:]) if layer_added is None else layer_added
+        )
         channel_dim = f"{channel_dim}_{modifier}"
 
     res._data = res.data.rename({res[layer].dims[-1]: channel_dim})
