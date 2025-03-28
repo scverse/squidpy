@@ -16,6 +16,8 @@ from scanpy import logging as logg
 from scanpy import read
 from scanpy._utils import check_presence_download
 
+from squidpy.im import ImageContainer
+
 PathLike: TypeAlias = os.PathLike[str] | str
 Function_t: TypeAlias = Callable[..., AnnData | Any]
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "squidpy"
@@ -168,8 +170,6 @@ class ImgMetadata(Metadata):
         )
 
     def _download(self, fpath: PathLike, backup_url: str, **kwargs: Any) -> Any:
-        from squidpy.im import ImageContainer  # type: ignore[attr-defined]
-
         check_presence_download(Path(fpath), backup_url)
 
         img = ImageContainer()
