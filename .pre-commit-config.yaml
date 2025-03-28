@@ -26,5 +26,6 @@ repos:
             exclude: >
                 .scripts/ci/download_data.py|
                 squidpy/datasets/_(dataset|image).py|
+                squidpy/datasets/_(dataset|image).pyi|
                 tests/|
                 docs/
