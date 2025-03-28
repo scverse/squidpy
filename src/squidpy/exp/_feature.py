@@ -2,23 +2,197 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, Callable
 import warnings
+from collections.abc import Callable, Sequence
+from typing import Any
+
 import anndata as ad
+import itertools
 import numpy as np
 import pandas as pd
-from cp_measure.bulk import get_core_measurements, get_correlation_measurements
-from spatialdata._logging import logger as logg
-from spatialdata import SpatialData
 import xarray as xr
+from cp_measure.bulk import get_core_measurements, get_correlation_measurements
+from scipy import ndimage
+from skimage import measure
+from spatialdata import SpatialData
+from spatialdata._logging import logger as logg
+from spatialdata.models import TableModel
 
+from skimage.measure import label
 from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, _get_n_cores, parallelize
-from spatialdata.models import TableModel
 
 __all__ = ["calculate_image_features"]
+
+
+def _get_regionprops_features(
+    cell_ids: Sequence[int],
+    labels: np.ndarray,
+    intensity_image: np.ndarray | None = None,
+    queue: Any | None = None,
+) -> dict[str, float]:
+    """Calculate regionprops features for a cell.
+
+    Parameters
+    ----------
+    cell_id
+        The ID of the cell to process
+    labels
+        The labels array containing cell masks
+    intensity_image
+        Optional intensity image for intensity-based features
+    queue
+        Optional queue for progress tracking. If provided, will send update signals.
+
+    Returns
+    -------
+    Dictionary of regionprops features
+    """
+    # Define channel-independent properties (only need mask)
+    mask_props = {
+        "area",
+        "area_filled",
+        "area_convex",
+        "num_pixels",
+        "axis_major_length",
+        "axis_minor_length",
+        "eccentricity",
+        "equivalent_diameter",
+        "extent",
+        "feret_diameter_max",
+        "solidity",
+        "euler_number",
+        "centroid",
+        "centroid_local",
+        "perimeter",
+        "perimeter_crofton",
+        "inertia_tensor",
+        "inertia_tensor_eigvals",
+    }
+
+    # Define channel-dependent properties (need intensity image)
+    intensity_props = {
+        "intensity_max",
+        "intensity_mean",
+        "intensity_min",
+        "intensity_std",
+    }
+
+    features = {}
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+
+        # labels only (channel independent)
+        if intensity_image is None:
+            for cell_id in cell_ids:
+                cell_mask_cropped, _, _ = _get_cell_crops(
+                    cell_id=cell_id,
+                    labels=labels,
+                )
+
+                if cell_mask_cropped is None:
+                    continue
+
+                region_prop = measure.regionprops(label_image=label(cell_mask_cropped))
+
+                if not region_prop:
+                    continue
+
+                cell_features = {}
+
+                # Calculate regionprops features while ignoring warnings
+                for prop in mask_props:
+                    try:
+                        value = getattr(region_prop, prop)
+
+                        # Handle array-like properties
+                        if isinstance(value, (np.ndarray, list, tuple)):
+                            value = np.array(value)
+                            if value.ndim == 1:
+                                for i, v in enumerate(value):
+                                    cell_features[f"{prop}_{i}"] = float(v)
+                            elif value.ndim == 2:
+                                for i, j in itertools.product(
+                                    range(value.shape[0]), range(value.shape[1])
+                                ):
+                                    cell_features[f"{prop}_{i}x{j}"] = float(
+                                        value[i, j]
+                                    )
+                            else:
+                                cell_features[prop] = value
+                        else:
+                            cell_features[prop] = float(value)
+                    except Exception:
+                        continue
+
+                if queue is not None:
+                    queue.put(Signal.UPDATE)
+
+                features[cell_id] = cell_features
+
+        # Calculate intensity-dependent properties if intensity image is provided
+        else:
+            for cell_id in cell_ids:
+                cell_mask_cropped, intensity_image_cropped, _ = _get_cell_crops(
+                    cell_id=cell_id,
+                    labels=labels,
+                    image1=intensity_image,
+                )
+
+                if cell_mask_cropped is None:
+                    continue
+
+                intensity_props_obj = measure.regionprops(
+                    label_image=label(cell_mask_cropped),
+                    intensity_image=intensity_image_cropped,
+                )
+
+                if not intensity_props_obj:
+                    continue
+
+                cell_features = {}
+
+                for prop in intensity_props:
+                    try:
+                        value = getattr(intensity_props_obj, prop)
+
+                        # Skip callable properties
+                        if callable(value):
+                            continue
+
+                        # Handle array properties
+                        if isinstance(value, (np.ndarray, list, tuple)):
+                            value = np.array(value)
+
+                            if value.ndim == 1:
+                                for i, v in enumerate(value):
+                                    cell_features[f"{prop}_{i}"] = float(v)
+                            elif value.ndim == 2:
+                                for i, j in itertools.product(
+                                    range(value.shape[0]), range(value.shape[1])
+                                ):
+                                    cell_features[f"{prop}_{i}x{j}"] = float(
+                                        value[i, j]
+                                    )
+                            else:
+                                cell_features[prop] = value
+                        else:
+                            cell_features[prop] = float(value)
+
+                    except Exception:
+                        continue
+
+                if queue is not None:
+                    queue.put(Signal.UPDATE)
+
+                features[cell_id] = cell_features
+
+    if queue is not None:
+        queue.put(Signal.FINISH)
+
+    return pd.DataFrame.from_dict(features, orient="index")
 
 
 def _measurement_wrapper(
@@ -46,6 +220,79 @@ def _measurement_wrapper(
     Dictionary of feature values
     """
     return func(mask, image1) if image2 is None else func(image1, image2, mask)
+
+
+def _get_cell_crops(
+    cell_id: int,
+    labels: np.ndarray,
+    image1: np.ndarray | None = None,
+    image2: np.ndarray | None = None,
+    pad: int = 1,
+    verbose: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None] | None:
+    """Generator function to get cropped arrays for a cell.
+
+    Parameters
+    ----------
+    cell_id
+        The ID of the cell to process
+    labels
+        The labels array containing cell masks
+    image1
+        First image to crop
+    image2
+        Optional second image to crop
+    pad
+        Amount of padding to add around the cell
+    verbose
+        Whether to print warning messages
+
+    Returns
+    -------
+    Tuple of (cell_mask_cropped, image1_cropped, image2_cropped) or None if cell is empty
+    """
+    # Get cell mask and find bounding box in one step
+    cell_mask = labels == cell_id
+    y_indices, x_indices = np.where(cell_mask)
+    if len(y_indices) == 0:  # Skip empty cells
+        return None
+
+    # Get bounding box
+    y_min, y_max = y_indices.min(), y_indices.max()
+    x_min, x_max = x_indices.min(), x_indices.max()
+
+    # Get image dimensions
+    height, width = labels.shape
+
+    # Calculate desired padding
+    y_pad_min = min(pad, y_min)  # How much we can pad to the top
+    y_pad_max = min(pad, height - y_max - 1)  # How much we can pad to the bottom
+    x_pad_min = min(pad, x_min)  # How much we can pad to the left
+    x_pad_max = min(pad, width - x_max - 1)  # How much we can pad to the right
+
+    # Apply symmetric padding where possible
+    y_min -= y_pad_min
+    y_max += y_pad_max
+    x_min -= x_pad_min
+    x_max += x_pad_max
+
+    # Warn if cell is at border and padding is asymmetric
+    if verbose and (
+        y_pad_min != pad or y_pad_max != pad or x_pad_min != pad or x_pad_max != pad
+    ):
+        logg.warning(
+            f"Cell {cell_id} is at image border. Padding is asymmetric: "
+            f"y: {y_pad_min}/{pad} top, {y_pad_max}/{pad} bottom, "
+            f"x: {x_pad_min}/{pad} left, {x_pad_max}/{pad} right"
+        )
+
+    # Crop all arrays at once
+    cell_mask_cropped = cell_mask[y_min:y_max, x_min:x_max]
+
+    image1_cropped = None if image1 is None else image1[y_min:y_max, x_min:x_max]
+    image2_cropped = None if image2 is None else image2[y_min:y_max, x_min:x_max]
+
+    return cell_mask_cropped, image1_cropped, image2_cropped
 
 
 def _calculate_features_helper(
@@ -84,42 +331,40 @@ def _calculate_features_helper(
             img2_range = img2_max - img2_min + 1e-10
 
     for cell_id in cell_ids:
-        # Get cell mask and find bounding box in one step
-        cell_mask = labels == cell_id
-        y_indices, x_indices = np.where(cell_mask)
-        if len(y_indices) == 0:  # Skip empty cells
+        # Get cropped arrays for this cell
+        result = _get_cell_crops(cell_id, labels, image1, image2, verbose=verbose)
+        if result is None:
             continue
 
-        # Get bounding box with padding
-        y_min, y_max = y_indices.min(), y_indices.max()
-        x_min, x_max = x_indices.min(), x_indices.max()
-        pad = 5
-        y_min = max(0, y_min - pad)
-        y_max = min(labels.shape[0], y_max + pad)
-        x_min = max(0, x_min - pad)
-        x_max = min(labels.shape[1], x_max + pad)
+        cell_mask_cropped, image1_cropped, image2_cropped = result
+        cell_features = {}
 
-        # Crop all arrays at once
-        cell_mask_cropped = cell_mask[y_min:y_max, x_min:x_max]
-        image1_cropped = image1[y_min:y_max, x_min:x_max]
-        image2_cropped = None if image2 is None else image2[y_min:y_max, x_min:x_max]
-
-        # Quick shape check
-        if cell_mask_cropped.shape != image1_cropped.shape or (
-            image2_cropped is not None
-            and cell_mask_cropped.shape != image2_cropped.shape
-        ):
+        # Calculate regionprops features first
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                regionprops_features = _get_regionprops_features(
+                    cell_mask_cropped,
+                    image1_cropped,
+                    image1_cropped if image2 is None else None,
+                )
+            if image2 is None:
+                regionprops_features = {
+                    f"{k}_ch{channel1_name}": v for k, v in regionprops_features.items()
+                }
+            else:
+                regionprops_features = {
+                    f"{k}_ch{channel1_name}_ch{channel2_name}": v
+                    for k, v in regionprops_features.items()
+                }
+            cell_features.update(regionprops_features)
+        except Exception as e:
             if verbose:
                 logg.warning(
-                    f"Shape mismatch for cell {cell_id}: "
-                    f"mask {cell_mask_cropped.shape}, "
-                    f"image1 {image1_cropped.shape}, "
-                    f"image2 {image2_cropped.shape if image2_cropped is not None else 'None'}"
+                    f"Failed to calculate regionprops features for cell {cell_id}: {str(e)}"
                 )
-            continue
 
-        cell_features = {}
-        # Calculate all available features
+        # Calculate all available cp-measure features
         for name, func in measurements.items():
             try:
                 with warnings.catch_warnings():
@@ -206,6 +451,7 @@ def calculate_image_features(
     labels_key: str,
     image_key: str,
     scale: str | None = None,
+    measurements: list[str] | str | None = None,
     adata_key_added: str = "morphology",
     invalid_as_zero: bool = True,
     n_jobs: int | None = None,
@@ -247,10 +493,9 @@ def calculate_image_features(
     """
 
     if (
-        (isinstance(sdata.images[image_key], xr.DataTree)
-        or isinstance(sdata.labels[labels_key], xr.DataTree))
-        and scale is None
-    ):
+        isinstance(sdata.images[image_key], xr.DataTree)
+        or isinstance(sdata.labels[labels_key], xr.DataTree)
+    ) and scale is None:
         raise ValueError("When using multi-scale data, please specify the scale.")
 
     if scale is not None and not isinstance(scale, str):
@@ -262,6 +507,29 @@ def calculate_image_features(
     else:
         image = np.asarray(sdata.images[image_key].compute())
         labels = np.asarray(sdata.labels[labels_key].compute())
+
+    available_measurements = [
+        "skimage:label",
+        "skimage:label+image",
+        "cpmeasure:core",
+        "cpmeasure:correlation",
+    ]
+
+    if measurements is None:
+        measurements = available_measurements
+
+    if isinstance(measurements, str):
+        measurements = [measurements]
+
+    if isinstance(measurements, list):
+        invalid_measurements = [
+            m for m in measurements if m not in available_measurements
+        ]
+        if invalid_measurements:
+            raise ValueError(
+                f"Invalid measurement(s): {invalid_measurements}, "
+                f"available measurements: {available_measurements}"
+            )
 
     # Check if labels are empty
     if labels.size == 0:
@@ -288,13 +556,11 @@ def calculate_image_features(
     # Check if image and labels have matching dimensions
     if image.shape[1:] != labels.shape:
         raise ValueError(
-            f"Image and labels have mismatched dimensions: "
-            f"image {image.shape[1:]}, labels {labels.shape}"
+            f"Image and labels have mismatched dimensions: image {image.shape[1:]}, labels {labels.shape}"
         )
 
-    # Get core measurements from cp_measure
-    measurements_core = get_core_measurements()
-    measurements_corr = get_correlation_measurements()
+    if "cpmeasure:correlation" in measurements:
+        measurements_corr = get_correlation_measurements()
 
     # Get unique cell IDs from labels, excluding background (0)
     cell_ids = np.unique(labels)
@@ -307,58 +573,103 @@ def calculate_image_features(
 
     logg.info(f"Using '{n_jobs}' core(s).")
 
-    # First process core measurements for each channel
-    for ch_idx in range(n_channels):
-        logg.info(f"Calculating core features for channel '{ch_idx}'.")
-
-        ch_name = channel_names[ch_idx] if channel_names is not None else f"ch{ch_idx}"
-        ch_image = image[ch_idx]
-
+    if "skimage:label" in measurements:
+        logg.info("Calculating 'skimage' label features.")
         res = parallelize(
-            _calculate_features_helper,
+            _get_regionprops_features,
             collection=cell_ids,
             extractor=pd.concat,
             n_jobs=n_jobs,
             backend=backend,
             show_progress_bar=show_progress_bar,
             verbose=verbose,
-        )(labels, ch_image, None, measurements_core, ch_name)
-
+        )(labels=labels, intensity_image=None)
         all_features.append(res)
 
-    # Then process correlation measurements between channels
-    for ch1_idx in range(n_channels):
-        for ch2_idx in range(ch1_idx + 1, n_channels):
-            ch1_name = (
-                channel_names[ch1_idx] if channel_names is not None else f"ch{ch1_idx}"
-            )
-            ch2_name = (
-                channel_names[ch2_idx] if channel_names is not None else f"ch{ch2_idx}"
-            )
+    # skimage features that need a mask and an image
+    if "skimage:label+image" in measurements:
+        for ch_idx in range(n_channels):
 
-            logg.info(
-                f"Calculating correlation features between channels "
-                f"'{ch1_name}' and '{ch2_name}'."
+            ch_name = (
+                channel_names[ch_idx] if channel_names is not None else f"ch{ch_idx}"
             )
+            ch_image = image[ch_idx]
 
-            ch1_image = image[ch1_idx]
-            ch2_image = image[ch2_idx]
-
-            # Parallelize feature calculation
+            logg.info(f"Calculating 'skimage' image features for channel '{ch_idx}'.")
             res = parallelize(
-                _calculate_features_helper,
+                _get_regionprops_features,
                 collection=cell_ids,
                 extractor=pd.concat,
                 n_jobs=n_jobs,
                 backend=backend,
                 show_progress_bar=show_progress_bar,
                 verbose=verbose,
-            )(labels, ch1_image, ch2_image, measurements_corr, ch1_name, ch2_name)
-
+            )(labels=labels, intensity_image=ch_image)
             all_features.append(res)
+
+    # cpmeasure features that need a mask and an image
+    if "cpmeasure:core" in measurements:
+        measurements_core = get_core_measurements()
+
+        for ch_idx in range(n_channels):
+
+            ch_name = (
+                channel_names[ch_idx] if channel_names is not None else f"ch{ch_idx}"
+            )
+            ch_image = image[ch_idx]
+            if "cpmeasure:core" in measurements:
+                logg.info(
+                    f"Calculating 'cpmeasure' core features for channel '{ch_idx}'."
+                )
+
+                res = parallelize(
+                    _calculate_features_helper,
+                    collection=cell_ids,
+                    extractor=pd.concat,
+                    n_jobs=n_jobs,
+                    backend=backend,
+                    show_progress_bar=show_progress_bar,
+                    verbose=verbose,
+                )(labels, ch_image, None, measurements_core, ch_name)
+                all_features.append(res)
+
+    # cpmeasure features that correlate two channels
+    if "cpmeasure:correlation" in measurements:
+        for ch1_idx in range(n_channels):
+            for ch2_idx in range(ch1_idx + 1, n_channels):
+                ch1_name = (
+                    channel_names[ch1_idx]
+                    if channel_names is not None
+                    else f"ch{ch1_idx}"
+                )
+                ch2_name = (
+                    channel_names[ch2_idx]
+                    if channel_names is not None
+                    else f"ch{ch2_idx}"
+                )
+
+                logg.info(
+                    f"Calculating correlation features between channels '{ch1_name}' and '{ch2_name}'."
+                )
+
+                ch1_image = image[ch1_idx]
+                ch2_image = image[ch2_idx]
+
+                # Parallelize feature calculation
+                res = parallelize(
+                    _calculate_features_helper,
+                    collection=cell_ids,
+                    extractor=pd.concat,
+                    n_jobs=n_jobs,
+                    backend=backend,
+                    show_progress_bar=show_progress_bar,
+                    verbose=verbose,
+                )(labels, ch1_image, ch2_image, measurements_corr, ch1_name, ch2_name)
+                all_features.append(res)
 
     # Create AnnData object from results
     combined_features = pd.concat(all_features, axis=1)
+
     if invalid_as_zero:
         combined_features = combined_features.replace([np.inf, -np.inf], 0)
         combined_features = combined_features.fillna(0)
