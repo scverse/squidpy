@@ -2,21 +2,22 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, Callable
 import warnings
+from collections.abc import Callable, Sequence
+from typing import Any
+
 import anndata as ad
 import numpy as np
 import pandas as pd
-from cp_measure.bulk import get_core_measurements, get_correlation_measurements
-from spatialdata._logging import logger as logg
-from spatialdata import SpatialData
 import xarray as xr
+from cp_measure.bulk import get_core_measurements, get_correlation_measurements
+from spatialdata import SpatialData
+from spatialdata._logging import logger as logg
+from spatialdata.models import TableModel
 
 from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, _get_n_cores, parallelize
-from spatialdata.models import TableModel
 
 __all__ = ["calculate_image_features"]
 
@@ -106,8 +107,7 @@ def _calculate_features_helper(
 
         # Quick shape check
         if cell_mask_cropped.shape != image1_cropped.shape or (
-            image2_cropped is not None
-            and cell_mask_cropped.shape != image2_cropped.shape
+            image2_cropped is not None and cell_mask_cropped.shape != image2_cropped.shape
         ):
             if verbose:
                 logg.warning(
@@ -129,38 +129,23 @@ def _calculate_features_helper(
                     if name in uint8_features:
                         mask = cell_mask_cropped.astype(np.uint8)
                         img1 = image1_cropped.astype(np.uint8)
-                        img2 = (
-                            None
-                            if image2_cropped is None
-                            else image2_cropped.astype(np.uint8)
-                        )
+                        img2 = None if image2_cropped is None else image2_cropped.astype(np.uint8)
                     elif name == "texture":
                         mask = cell_mask_cropped.astype(np.uint8)
-                        img1 = (
-                            image1_cropped.astype(np.float32) - img1_min
-                        ) / img1_range
+                        img1 = (image1_cropped.astype(np.float32) - img1_min) / img1_range
                         img2 = (
                             None
                             if image2_cropped is None
-                            else (image2_cropped.astype(np.float32) - img2_min)
-                            / img2_range
+                            else (image2_cropped.astype(np.float32) - img2_min) / img2_range
                         )
                     elif name in float_features:
                         mask = cell_mask_cropped.astype(np.float32)
                         img1 = image1_cropped.astype(np.float32)
-                        img2 = (
-                            None
-                            if image2_cropped is None
-                            else image2_cropped.astype(np.float32)
-                        )
+                        img2 = None if image2_cropped is None else image2_cropped.astype(np.float32)
                     else:
                         mask = cell_mask_cropped.astype(np.float32)
                         img1 = image1_cropped.astype(np.float32)
-                        img2 = (
-                            None
-                            if image2_cropped is None
-                            else image2_cropped.astype(np.float32)
-                        )
+                        img2 = None if image2_cropped is None else image2_cropped.astype(np.float32)
 
                     feature_dict = _measurement_wrapper(func, mask, img1, img2)
 
@@ -172,21 +157,14 @@ def _calculate_features_helper(
 
                     # Append channel names efficiently
                     if image2 is None:
-                        feature_dict = {
-                            f"{k}_ch{channel1_name}": v for k, v in feature_dict.items()
-                        }
+                        feature_dict = {f"{k}_ch{channel1_name}": v for k, v in feature_dict.items()}
                     else:
-                        feature_dict = {
-                            f"{k}_ch{channel1_name}_ch{channel2_name}": v
-                            for k, v in feature_dict.items()
-                        }
+                        feature_dict = {f"{k}_ch{channel1_name}_ch{channel2_name}": v for k, v in feature_dict.items()}
 
                     cell_features.update(feature_dict)
             except Exception as e:
                 if verbose:
-                    logg.warning(
-                        f"Failed to calculate '{name}' features for cell {cell_id}: {str(e)}"
-                    )
+                    logg.warning(f"Failed to calculate '{name}' features for cell {cell_id}: {str(e)}")
 
         features_dict[cell_id] = cell_features
 
@@ -247,10 +225,8 @@ def calculate_image_features(
     """
 
     if (
-        (isinstance(sdata.images[image_key], xr.DataTree)
-        or isinstance(sdata.labels[labels_key], xr.DataTree))
-        and scale is None
-    ):
+        isinstance(sdata.images[image_key], xr.DataTree) or isinstance(sdata.labels[labels_key], xr.DataTree)
+    ) and scale is None:
         raise ValueError("When using multi-scale data, please specify the scale.")
 
     if scale is not None and not isinstance(scale, str):
@@ -273,10 +249,7 @@ def calculate_image_features(
 
     # Get channel names if available
     channel_names = None
-    if (
-        hasattr(sdata.images[image_key], "coords")
-        and "c" in sdata.images[image_key].coords
-    ):
+    if hasattr(sdata.images[image_key], "coords") and "c" in sdata.images[image_key].coords:
         channel_names = sdata.images[image_key].coords["c"].values
 
     # Handle image dimensions
@@ -287,10 +260,7 @@ def calculate_image_features(
 
     # Check if image and labels have matching dimensions
     if image.shape[1:] != labels.shape:
-        raise ValueError(
-            f"Image and labels have mismatched dimensions: "
-            f"image {image.shape[1:]}, labels {labels.shape}"
-        )
+        raise ValueError(f"Image and labels have mismatched dimensions: image {image.shape[1:]}, labels {labels.shape}")
 
     # Get core measurements from cp_measure
     measurements_core = get_core_measurements()
@@ -329,17 +299,10 @@ def calculate_image_features(
     # Then process correlation measurements between channels
     for ch1_idx in range(n_channels):
         for ch2_idx in range(ch1_idx + 1, n_channels):
-            ch1_name = (
-                channel_names[ch1_idx] if channel_names is not None else f"ch{ch1_idx}"
-            )
-            ch2_name = (
-                channel_names[ch2_idx] if channel_names is not None else f"ch{ch2_idx}"
-            )
+            ch1_name = channel_names[ch1_idx] if channel_names is not None else f"ch{ch1_idx}"
+            ch2_name = channel_names[ch2_idx] if channel_names is not None else f"ch{ch2_idx}"
 
-            logg.info(
-                f"Calculating correlation features between channels "
-                f"'{ch1_name}' and '{ch2_name}'."
-            )
+            logg.info(f"Calculating correlation features between channels '{ch1_name}' and '{ch2_name}'.")
 
             ch1_image = image[ch1_idx]
             ch2_image = image[ch2_idx]
