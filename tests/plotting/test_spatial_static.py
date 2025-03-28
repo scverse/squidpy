@@ -211,7 +211,7 @@ class TestSpatialStaticUtils:
             library_id = [library_id]
         if library_id is not None:
             obs = pd.DataFrame(library_id * 2, columns=[library_key])
-            uns = {Key.uns.spatial: {k: None for k in library_id}}
+            uns = {Key.uns.spatial: dict.fromkeys(library_id, None)}
             return AnnData(X, obs=obs, uns=uns)
         return AnnData(X)
 

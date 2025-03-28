@@ -160,7 +160,7 @@ class SegmentationModel(ABC):
         if isinstance(library_id, str):
             func = {library_id: self.segment}
         elif isinstance(library_id, Sequence):
-            func = {lid: self.segment for lid in library_id}
+            func = dict.fromkeys(library_id, self.segment)
         else:
             raise TypeError(
                 f"Expected library id to be `None` or of type `str` or `sequence`, found `{type(library_id).__name__}`."

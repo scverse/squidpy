@@ -20,7 +20,7 @@ from scanpy import logging as logg
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, deprecated
-from squidpy.im import ImageContainer  # type: ignore[attr-defined]
+from squidpy.im import ImageContainer
 from squidpy.pl._utils import save_fig
 
 try:
