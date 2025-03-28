@@ -23,7 +23,7 @@ repos:
       hooks:
           - id: mypy
             additional_dependencies: [numpy, pandas, types-requests]
-            args: [--package, squidpy]
+            args: [--files]
             exclude: >
                 .scripts/ci/download_data.py|
                 squidpy/datasets/_(dataset|image).py|
