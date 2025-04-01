@@ -108,26 +108,19 @@ def calculate_image_features(
     """
 
     if image_key not in sdata.images.keys():
-        raise ValueError(
-            f"Image key '{image_key}' not found, valid keys: {list(sdata.images.keys())}"
-        )
+        raise ValueError(f"Image key '{image_key}' not found, valid keys: {list(sdata.images.keys())}")
 
     if labels_key is not None and shapes_key is not None:
         raise ValueError("Use either `labels_key` or `shapes_key`, not both.")
 
     if labels_key is not None and labels_key not in sdata.labels.keys():
-        raise ValueError(
-            f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}"
-        )
+        raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
 
     if shapes_key is not None and shapes_key not in sdata.shapes.keys():
-        raise ValueError(
-            f"Shapes key '{shapes_key}' not found, valid keys: {list(sdata.shapes.keys())}"
-        )
+        raise ValueError(f"Shapes key '{shapes_key}' not found, valid keys: {list(sdata.shapes.keys())}")
 
     if (
-        isinstance(sdata.images[image_key], xr.DataTree)
-        or isinstance(sdata.labels[labels_key], xr.DataTree)
+        isinstance(sdata.images[image_key], xr.DataTree) or isinstance(sdata.labels[labels_key], xr.DataTree)
     ) and scale is None:
         raise ValueError("When using multi-scale data, please specify the scale.")
 
@@ -135,11 +128,7 @@ def calculate_image_features(
         raise ValueError("Scale must be a string.")
 
     image = _get_array_from_DataTree_or_DataArray(sdata.images[image_key], scale)
-    labels = (
-        _get_array_from_DataTree_or_DataArray(sdata.labels[labels_key], scale)
-        if labels_key is not None
-        else None
-    )
+    labels = _get_array_from_DataTree_or_DataArray(sdata.labels[labels_key], scale) if labels_key is not None else None
 
     if labels is not None and image.shape[1:] != labels.shape:
         raise ValueError(
@@ -178,9 +167,7 @@ def calculate_image_features(
         measurements = [measurements]
 
     if isinstance(measurements, list):
-        invalid_measurements = [
-            m for m in measurements if m not in available_measurements
-        ]
+        invalid_measurements = [m for m in measurements if m not in available_measurements]
         if invalid_measurements:
             raise ValueError(
                 f"Invalid measurement(s): {invalid_measurements}, available measurements: {available_measurements}"
@@ -194,10 +181,7 @@ def calculate_image_features(
         raise ValueError("No cells found in labels (max label is 0)")
 
     channel_names = None
-    if (
-        hasattr(sdata.images[image_key], "coords")
-        and "c" in sdata.images[image_key].coords
-    ):
+    if hasattr(sdata.images[image_key], "coords") and "c" in sdata.images[image_key].coords:
         channel_names = sdata.images[image_key].coords["c"].values
 
     if image.ndim == 2:
@@ -206,9 +190,7 @@ def calculate_image_features(
         raise ValueError(f"Expected 2D or 3D image, got shape {image.shape}")
 
     if image.shape[1:] != labels.shape:
-        raise ValueError(
-            f"Image and labels have mismatched dimensions: image {image.shape[1:]}, labels {labels.shape}"
-        )
+        raise ValueError(f"Image and labels have mismatched dimensions: image {image.shape[1:]}, labels {labels.shape}")
 
     if "cpmeasure:correlation" in measurements:
         measurements_corr = get_correlation_measurements()
@@ -239,9 +221,7 @@ def calculate_image_features(
 
     if "skimage:label+image" in measurements:
         for ch_idx in range(n_channels):
-            ch_name = (
-                channel_names[ch_idx] if channel_names is not None else f"{ch_idx}"
-            )
+            ch_name = channel_names[ch_idx] if channel_names is not None else f"{ch_idx}"
             ch_image = image[ch_idx]
             logg.info(f"Calculating 'skimage' image features for channel '{ch_idx}'.")
             res = parallelize(
@@ -260,9 +240,7 @@ def calculate_image_features(
     if "cpmeasure:core" in measurements:
         measurements_core = get_core_measurements()
         for ch_idx in range(n_channels):
-            ch_name = (
-                channel_names[ch_idx] if channel_names is not None else f"{ch_idx}"
-            )
+            ch_name = channel_names[ch_idx] if channel_names is not None else f"{ch_idx}"
             ch_image = image[ch_idx]
             logg.info(f"Calculating 'cpmeasure' core features for channel '{ch_idx}'.")
             res = parallelize(
@@ -279,16 +257,8 @@ def calculate_image_features(
     if "cpmeasure:correlation" in measurements:
         for ch1_idx in range(n_channels):
             for ch2_idx in range(ch1_idx + 1, n_channels):
-                ch1_name = (
-                    channel_names[ch1_idx]
-                    if channel_names is not None
-                    else f"{ch1_idx}"
-                )
-                ch2_name = (
-                    channel_names[ch2_idx]
-                    if channel_names is not None
-                    else f"{ch2_idx}"
-                )
+                ch1_name = channel_names[ch1_idx] if channel_names is not None else f"{ch1_idx}"
+                ch2_name = channel_names[ch2_idx] if channel_names is not None else f"{ch2_idx}"
                 logg.info(
                     f"Calculating 'cpmeasure' correlation features between channels '{ch1_name}' and '{ch2_name}'."
                 )
@@ -354,9 +324,7 @@ def _extract_features_from_regionprops(
                     for i, v in enumerate(value):
                         cell_features[f"{prop}_{i}"] = float(v)
                 elif value.ndim == 2:
-                    for i, j in itertools.product(
-                        range(value.shape[0]), range(value.shape[1])
-                    ):
+                    for i, j in itertools.product(range(value.shape[0]), range(value.shape[1])):
                         cell_features[f"{prop}_{i}x{j}"] = float(value[i, j])
                 else:
                     cell_features[prop] = value
@@ -389,14 +357,10 @@ def _calculate_regionprops_from_crop(
         )
         if not region_props:
             return {}
-        return _extract_features_from_regionprops(
-            region_props[0], _INTENSITY_PROPS, cell_id, skip_callable=True
-        )
+        return _extract_features_from_regionprops(region_props[0], _INTENSITY_PROPS, cell_id, skip_callable=True)
 
 
-def _append_channel_names(
-    features: dict, channel1: str, channel2: str | None = None
-) -> dict:
+def _append_channel_names(features: dict, channel1: str, channel2: str | None = None) -> dict:
     """Append channel name(s) to all keys in the feature dictionary."""
     if channel2 is None:
         return {f"{k}_{channel1}": v for k, v in features.items()}
@@ -420,14 +384,9 @@ def _prepare_images_for_measurement(
         image2_prepared = None if img2 is None else img2.astype(np.uint8)
     elif name == "texture":
         mask = cell_mask.astype(np.uint8)
-        image1_prepared = (
-            img1.astype(np.float32) - conv_params["img1_min"]
-        ) / conv_params["img1_range"]
+        image1_prepared = (img1.astype(np.float32) - conv_params["img1_min"]) / conv_params["img1_range"]
         image2_prepared = (
-            None
-            if img2 is None
-            else (img2.astype(np.float32) - conv_params["img2_min"])
-            / conv_params["img2_range"]
+            None if img2 is None else (img2.astype(np.float32) - conv_params["img2_min"]) / conv_params["img2_range"]
         )
     elif name in conv_params.get("float_features", []):
         mask = cell_mask.astype(np.float32)
@@ -488,9 +447,7 @@ def _get_cell_crops(
     x_min -= x_pad_min
     x_max += x_pad_max
 
-    if verbose and (
-        y_pad_min != pad or y_pad_max != pad or x_pad_min != pad or x_pad_max != pad
-    ):
+    if verbose and (y_pad_min != pad or y_pad_max != pad or x_pad_min != pad or x_pad_max != pad):
         logg.warning(
             f"Cell {cell_id} is at image border. Padding is asymmetric: "
             f"y: {y_pad_min}/{pad} top, {y_pad_max}/{pad} bottom, "
@@ -522,9 +479,7 @@ def _get_regionprops_features(
             if crop is None:
                 continue
             cell_mask_cropped, intensity_image_cropped, _ = crop
-            cell_features = _calculate_regionprops_from_crop(
-                cell_mask_cropped, intensity_image_cropped, cell_id
-            )
+            cell_features = _calculate_regionprops_from_crop(cell_mask_cropped, intensity_image_cropped, cell_id)
             features[cell_id] = cell_features
             if queue is not None:
                 queue.put(Signal.UPDATE)
@@ -625,15 +580,11 @@ def _calculate_features_helper(
             if image2 is None:
                 region_features = _append_channel_names(region_features, channel1_name)
             else:
-                region_features = _append_channel_names(
-                    region_features, channel1_name, channel2_name
-                )
+                region_features = _append_channel_names(region_features, channel1_name, channel2_name)
             cell_features.update(region_features)
         except Exception as e:
             if verbose:
-                logg.warning(
-                    f"Failed to calculate regionprops features for cell {cell_id}: {str(e)}"
-                )
+                logg.warning(f"Failed to calculate regionprops features for cell {cell_id}: {str(e)}")
 
         # Calculate cp-measure features for each measurement
         for name, func in measurements.items():
@@ -647,9 +598,7 @@ def _calculate_features_helper(
                         image2_cropped,
                         conv_params,
                     )
-                    feature_dict = _measurement_wrapper(
-                        func, mask_conv, img1_conv, img2_conv
-                    )
+                    feature_dict = _measurement_wrapper(func, mask_conv, img1_conv, img2_conv)
                     # Ensure each feature returns a single value
                     for k, v in feature_dict.items():
                         if len(v) > 1:
@@ -657,19 +606,13 @@ def _calculate_features_helper(
                         else:
                             feature_dict[k] = float(v[0])
                     if image2 is None:
-                        feature_dict = _append_channel_names(
-                            feature_dict, channel1_name
-                        )
+                        feature_dict = _append_channel_names(feature_dict, channel1_name)
                     else:
-                        feature_dict = _append_channel_names(
-                            feature_dict, channel1_name, channel2_name
-                        )
+                        feature_dict = _append_channel_names(feature_dict, channel1_name, channel2_name)
                     cell_features.update(feature_dict)
             except Exception as e:
                 if verbose:
-                    logg.warning(
-                        f"Failed to calculate '{name}' features for cell {cell_id}: {str(e)}"
-                    )
+                    logg.warning(f"Failed to calculate '{name}' features for cell {cell_id}: {str(e)}")
 
         features_dict[cell_id] = cell_features
 
@@ -686,9 +629,7 @@ def _calculate_features_helper(
     return df
 
 
-def _get_array_from_DataTree_or_DataArray(
-    data: xr.DataTree | xr.DataArray, scale: str | None = None
-) -> np.ndarray:
+def _get_array_from_DataTree_or_DataArray(data: xr.DataTree | xr.DataArray, scale: str | None = None) -> np.ndarray:
     """
     Returns a NumPy array for the given data and scale.
     If data is an xr.DataTree, it checks for the scale key and computes the image.
@@ -711,7 +652,5 @@ def _get_array_from_DataTree_or_DataArray(
     if scale is None:
         raise ValueError("Scale must be provided for DataTree data")
     if scale not in data:
-        raise ValueError(
-            f"Scale '{scale}' not found. Available scales: {list(data.keys())}"
-        )
+        raise ValueError(f"Scale '{scale}' not found. Available scales: {list(data.keys())}")
     return np.asarray(data[scale].image.compute())
