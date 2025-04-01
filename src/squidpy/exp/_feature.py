@@ -326,7 +326,11 @@ def calculate_image_features(
     adata.obs["region"] = pd.Categorical(
         [labels_key if labels_key is not None else shapes_key] * len(adata)
     )
-    adata.obs["label_id"] = cell_ids
+    # here we either use the cell_ids or the index of the shapes. Needed 
+    # because when converting the shapes to labels, a potential index 0
+    # in the shapes is set to 1 in the labels and therefore we'd otherwise 
+    # be off-by-one in the label_id.
+    adata.obs["label_id"] = sdata.shapes[shapes_key].index.values if shapes_key is not None else cell_ids
 
     if inplace:
         sdata.tables[adata_key_added] = TableModel.parse(adata)
