@@ -293,12 +293,10 @@ def calculate_image_features(
         "region_key": "region",
         "instance_key": "label_id",
     }
-    adata.obs["region"] = pd.Categorical(
-        [labels_key if labels_key is not None else shapes_key] * len(adata)
-    )
-    # here we either use the cell_ids or the index of the shapes. Needed 
+    adata.obs["region"] = pd.Categorical([labels_key if labels_key is not None else shapes_key] * len(adata))
+    # here we either use the cell_ids or the index of the shapes. Needed
     # because when converting the shapes to labels, a potential index 0
-    # in the shapes is set to 1 in the labels and therefore we'd otherwise 
+    # in the shapes is set to 1 in the labels and therefore we'd otherwise
     # be off-by-one in the label_id.
     adata.obs["label_id"] = sdata.shapes[shapes_key].index.values if shapes_key is not None else cell_ids
 
