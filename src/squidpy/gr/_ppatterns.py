@@ -53,7 +53,7 @@ def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: str | int | Sequence[str] | Sequence[int] | None = None,
-    mode: Literal["moran", "geary"] = SpatialAutocorr.MORAN.s,  # type: ignore[assignment]
+    mode: SpatialAutocorr | Literal["moran", "geary"] = "moran",
     transformation: bool = True,
     n_perms: int | None = None,
     two_tailed: bool = False,
@@ -164,31 +164,22 @@ def spatial_autocorr(
         if layer not in adata.obsm:
             raise KeyError(f"Key `{layer!r}` not found in `adata.obsm`.")
         if ixs is None:
-            ixs = list(range(adata.obsm[layer].shape[1]))
-        elif isinstance(ixs, int):
-            ixs = [ixs]
-        else:
-            ixs = list(ixs)
+            ixs = list(np.arange(adata.obsm[layer].shape[1]))
+        ixs = list(np.ravel([ixs]))
 
         return adata.obsm[layer][:, ixs].T, ixs
 
     if attr == "X":
-        vals, index = extract_X(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_X(adata, genes)  # type: ignore
     elif attr == "obs":
-        vals, index = extract_obs(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_obs(adata, genes)  # type: ignore
     elif attr == "obsm":
-        vals, index = extract_obsm(adata, genes)  # type: ignore[arg-type]
+        vals, index = extract_obsm(adata, genes)  # type: ignore
     else:
         raise NotImplementedError(f"Extracting from `adata.{attr}` is not yet implemented.")
 
-    mode = SpatialAutocorr(mode)  # type: ignore[assignment]
-    if TYPE_CHECKING:
-        assert isinstance(mode, SpatialAutocorr)
-    params = {
-        "mode": mode.s,
-        "transformation": transformation,
-        "two_tailed": two_tailed,
-    }
+    mode = SpatialAutocorr(mode)
+    params = {"mode": mode.s, "transformation": transformation, "two_tailed": two_tailed}
 
     if mode == SpatialAutocorr.MORAN:
         params["func"] = _morans_i
@@ -207,13 +198,13 @@ def spatial_autocorr(
     if transformation:  # row-normalize
         normalize(g, norm="l1", axis=1, copy=False)
 
-    score = params["func"](g, vals)
+    score = params["func"](g, vals)  # type: ignore
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
         _assert_positive(n_perms, name="n_perms")
-        perms = np.arange(n_perms)
+        perms = list(np.arange(n_perms))
 
         score_perms = parallelize(
             _score_helper,
@@ -230,7 +221,8 @@ def spatial_autocorr(
     with np.errstate(divide="ignore"):
         pval_results = _p_value_calc(score, score_perms, g, params)
 
-    df = pd.DataFrame({params["stat"]: score, **pval_results}, index=index)
+    data_dict: dict[str, Any] = {str(params["stat"]): score, **pval_results}
+    df = pd.DataFrame(data_dict, index=index)
 
     if corr_method is not None:
         for pv in filter(lambda x: "pval" in x, df.columns):
@@ -243,7 +235,9 @@ def spatial_autocorr(
         logg.info("Finish", time=start)
         return df
 
-    _save_data(adata, attr="uns", key=params["mode"] + params["stat"], data=df, time=start)
+    mode_str = str(params["mode"])
+    stat_str = str(params["stat"])
+    _save_data(adata, attr="uns", key=mode_str + stat_str, data=df, time=start)
 
 
 def _score_helper(

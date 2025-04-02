@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 from copy import copy
+from typing import Any, Protocol, Union
+
+from anndata import AnnData
 
 from squidpy.datasets._10x_datasets import visium_hne_sdata
-from squidpy.datasets._utils import AMetadata
+from squidpy.datasets._utils import AMetadata, PathLike
+
+
+class Dataset(Protocol):
+    def __call__(self, path: PathLike | None = ..., **kwargs: Any) -> AnnData: ...
+
 
 _4i = AMetadata(
     name="four_i",

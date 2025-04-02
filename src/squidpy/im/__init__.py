@@ -11,3 +11,11 @@ from squidpy.im._segment import (
     SegmentationWatershed,
     segment,
 )
+
+__all__ = [
+    "ImageContainer",
+    "calculate_image_features",
+    "process",
+    "SegmentationCustom",
+    "SegmentationModel",
+]

@@ -1,25 +1,26 @@
 fail_fast: false
+default_language_version:
+    python: python3
 default_stages:
     - pre-commit
     - pre-push
-minimum_pre_commit_version: 2.9.3
+minimum_pre_commit_version: 2.16.0
 repos:
+    - repo: https://github.com/rbubley/mirrors-prettier
+      rev: v3.5.1
+      hooks:
+          - id: prettier
     - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.9.7
+      rev: v0.11.2
       hooks:
           - id: ruff
             types_or: [python, pyi, jupyter]
             args: [--fix, --exit-non-zero-on-fix]
           - id: ruff-format
             types_or: [python, pyi, jupyter]
-    - repo: https://github.com/asottile/blacken-docs
-      rev: 1.19.1
-      hooks:
-          - id: blacken-docs
     - repo: https://github.com/pre-commit/mirrors-mypy
       rev: v1.15.0
       hooks:
           - id: mypy
-            additional_dependencies: [numpy, pandas, types-requests]
-            exclude: .scripts/ci/download_data.py|squidpy/datasets/_(dataset|image).py # See https://github.com/
-  
+            additional_dependencies: [numpy, types-requests]
+            exclude: tests/|docs/

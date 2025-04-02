@@ -3,7 +3,7 @@
 }
 
 div.version {
-    color: #FFD92C!important;
+    color: #ffd92c !important;
 }
 
 .wy-nav-side {
@@ -15,7 +15,7 @@ div.version {
 }
 
 .wy-side-nav-search input[type="text"] {
-    border-radius: 6px!important;
+    border-radius: 6px !important;
 }
 
 .wy-nav-content {
@@ -51,7 +51,7 @@ div.version {
 }
 
 a {
-    color: #5B64B1;
+    color: #5b64b1;
 }
 
 .rst-content .viewcode-link {
@@ -59,7 +59,7 @@ a {
 }
 
 .highlight {
-    background: #f1f5fb!important;
+    background: #f1f5fb !important;
 }
 
 .rst-content div[class^="highlight"] {
@@ -67,25 +67,36 @@ a {
 }
 
 .wy-menu-vertical p.caption {
-    color: #FFD92C;
+    color: #ffd92c;
 }
 
-div.output_subarea.output_html.rendered_html.output_result{
+div.output_subarea.output_html.rendered_html.output_result {
     overflow: auto;
 }
 
 /* function/class top bar */
-html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple) > dt {
+html.writer-html5
+    .rst-content
+    dl[class]:not(.option-list):not(.field-list):not(.footnote):not(
+        .glossary
+    ):not(.simple)
+    > dt {
     color: #404040;
     border-top: solid 4px #7013e1d9;
-    background: #FFD833A8;
+    background: #ffd833a8;
 }
 
 /* class params */
-html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple) dl:not(.field-list) > dt {
+html.writer-html5
+    .rst-content
+    dl[class]:not(.option-list):not(.field-list):not(.footnote):not(
+        .glossary
+    ):not(.simple)
+    dl:not(.field-list)
+    > dt {
     color: #404040;
     border-left: solid 4px #7013e1d9;
-    background: #FFD8338F;
+    background: #ffd8338f;
 }
 
 /* the other elements, but more specific - leave them be */
@@ -104,9 +115,9 @@ code.docutils.literal.notranslate > span[class="pre"] {
 }
 
 .rst-content .seealso {
-    background: #fafae2!important;
+    background: #fafae2 !important;
 }
 
 .rst-content .seealso .admonition-title {
-    background: #7013e1d9!important;
+    background: #7013e1d9 !important;
 }
