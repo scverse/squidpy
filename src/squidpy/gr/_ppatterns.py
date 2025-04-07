@@ -10,7 +10,7 @@ import numba.types as nt
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numba import njit
+from numba import get_num_threads, njit, set_num_threads
 from numpy.random import default_rng
 from scanpy import logging as logg
 from scanpy.get import _get_obs_rep
@@ -206,15 +206,20 @@ def spatial_autocorr(
         _assert_positive(n_perms, name="n_perms")
         perms = list(np.arange(n_perms))
 
-        score_perms = parallelize(
-            _score_helper,
-            collection=perms,
-            extractor=np.concatenate,
-            use_ixs=True,
-            n_jobs=n_jobs,
-            backend=backend,
-            show_progress_bar=show_progress_bar,
-        )(mode=mode, g=g, vals=vals, seed=seed)
+        old_n_jobs = get_num_threads()
+        set_num_threads(n_jobs)
+        try:
+            score_perms = parallelize(
+                _score_helper,
+                collection=perms,
+                extractor=np.concatenate,
+                use_ixs=True,
+                n_jobs=n_jobs,
+                backend=backend,
+                show_progress_bar=show_progress_bar,
+            )(mode=mode, g=g, vals=vals, seed=seed)
+        finally:
+            set_num_threads(old_n_jobs)
     else:
         score_perms = None
 
