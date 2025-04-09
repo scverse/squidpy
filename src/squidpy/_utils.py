@@ -88,7 +88,9 @@ def parallelize(
     collection
         Sequence of items to split into chunks.
     n_jobs
-        Number of parallel jobs.
+        Number of parallel jobs to use. If the function uses numba compiled functions, numba may
+        may use cores depending on the number of threads set in the environment regardless of this argument.
+        This argument will be removed in the future.
     n_split
         Split ``collection`` into ``n_split`` chunks.
         If <= 0, ``collection`` is assumed to be already split into chunks.
