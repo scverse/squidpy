@@ -93,6 +93,9 @@ def _create_template(n_cls: int, return_means: bool = False, parallel: bool = Tr
     g{i} = np.zeros((data.shape[1],), dtype=np.float64); s{i} = 0"""
         for i in rng
     )
+    init += """
+    error = False
+    """
 
     loop_body = """
         if cl == 0:
@@ -110,7 +113,7 @@ def _create_template(n_cls: int, return_means: bool = False, parallel: bool = Tr
         cl = clustering[row]
         {loop_body}
         else:
-            assert False, "Unhandled case."
+            error = True
     """
     finalize = ", ".join(f"g{i} / s{i}" for i in rng)
     finalize = f"groups = np.stack(({finalize}))"
@@ -731,6 +734,7 @@ def _analysis(
 
         return TempResult(means=means, pvalues=pvalues)
 
+    data = data.astype(np.float64, copy=False)
     groups = data.groupby("clusters", observed=True)
     clustering = np.array(data["clusters"].values, dtype=np.int32)
 
@@ -739,7 +743,6 @@ def _analysis(
     # (n_cells, n_genes)
     data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
     # all 3 should be C contiguous
-
     return parallelize(  # type: ignore[no-any-return]
         _analysis_helper,
         np.arange(n_perms, dtype=np.int32).tolist(),
@@ -837,8 +840,9 @@ def _analysis_helper(
 
     for _ in perms:
         rs.shuffle(clustering)
-        test(interactions, interaction_clusters, data, clustering, mean, mask, res=res)
-
+        error = test(interactions, interaction_clusters, data, clustering, mean, mask, res=res)
+        if error:
+            raise ValueError("An error occurred during numba parallelization.")
         if queue is not None:
             queue.put(Signal.UPDATE)
 
