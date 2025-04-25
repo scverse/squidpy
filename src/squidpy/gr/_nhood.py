@@ -216,7 +216,6 @@ def nhood_enrichment(
 
         # Normalize true count matrix
         count_normalized = count / cond_counts
-        # print("Cond count normalized:", count_normalized)
 
     elif normalization == "none":
         count_normalized = count.copy()
@@ -246,7 +245,7 @@ def nhood_enrichment(
     )
 
     zscore = (count_normalized - perms.mean(axis=0)) / perms.std(axis=0)
-    print(f"version 2")
+    
     if copy:
         return zscore, count_normalized
 
