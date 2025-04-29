@@ -375,7 +375,7 @@ def _extract_features_from_regionprops(
                     cell_features[f"{prop}_{i}"] = float(v)
             else:
                 # Fallback for any other properties
-                if isinstance(value, (np.ndarray, list, tuple)):
+                if isinstance(value, np.ndarray | list | tuple):
                     value = np.asarray(value)
                     if value.ndim == 1:
                         for i, v in enumerate(value):
@@ -466,11 +466,11 @@ def _prepare_images_for_measurement(
 @njit(fastmath=True)
 def _get_cell_crops_numba(
     cell_id: int,
-    labels: np.ndarray,
-    image1: np.ndarray,
-    image2: np.ndarray,
+    labels: npt.NDArray[np.int_],
+    image1: npt.NDArray[np.float32],
+    image2: npt.NDArray[np.float32],
     pad: int = 1,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[npt.NDArray[np.bool_], npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Numba-accelerated version of _get_cell_crops.
 
     Note: image1 and image2 should be passed as empty arrays (np.zeros((0,0))) if not used.
@@ -553,7 +553,6 @@ def _get_cell_crops(
         cell_id, labels, image1_np, image2_np, pad
     )
 
-    # Return None if no cell found
     if cell_mask_cropped.size == 0:
         return None
 
@@ -634,7 +633,7 @@ def _measurement_wrapper(
                 dummy_img = np.ones((2, 2), dtype=image1.dtype)
                 feature_names = func(dummy_img, dummy_img, dummy_mask).keys()
                 # Return dictionary with NaN values for all features
-                return {name: np.nan for name in feature_names}
+                return dict.fromkeys(feature_names, np.nan)
             return func(image1, image2, mask)
     except (IndexError, ValueError) as e:
         # Handle cases where correlation calculation fails
@@ -644,7 +643,7 @@ def _measurement_wrapper(
             dummy_img = np.ones((2, 2), dtype=image1.dtype)
             feature_names = func(dummy_img, dummy_img, dummy_mask).keys()
             # Return dictionary with NaN values for all features
-            return {name: np.nan for name in feature_names}
+            return dict.fromkeys(feature_names, np.nan)
         raise  # Re-raise other errors
 
 
