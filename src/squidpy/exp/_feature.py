@@ -62,6 +62,18 @@ FloatArray = npt.NDArray[np.float32]  # Float32 array
 IntArray = npt.NDArray[np.int_]  # Integer array
 BoolArray = npt.NDArray[np.bool_]  # Boolean array
 
+# Define property sets at module level for better performance
+_SCALAR_PROPS = frozenset({
+    "area", "area_filled", "area_convex", "num_pixels",
+    "axis_major_length", "axis_minor_length", "eccentricity",
+    "equivalent_diameter", "extent", "feret_diameter_max",
+    "solidity", "euler_number", "perimeter", "perimeter_crofton"
+})
+
+_ARRAY_1D_PROPS = frozenset({"centroid", "centroid_local"})
+_ARRAY_2D_PROPS = frozenset({"inertia_tensor"})
+_SPECIAL_PROPS = frozenset({"inertia_tensor_eigvals"})
+
 
 @d.dedent
 @inject_docs(f=ImageFeature)
@@ -323,20 +335,7 @@ def _extract_features_from_regionprops(
     skip_callable: bool = False,
 ) -> dict[str, float]:
     """Extract features from a regionprops object given a list of properties."""
-    # Pre-allocate arrays for common cases
-    max_1d_features = 10  # Adjust based on typical usage
-    max_2d_features = 10  # Adjust based on typical usage
-    
-    # Initialize arrays for batch processing
-    names_1d = np.empty(max_1d_features, dtype=object)
-    values_1d = np.empty(max_1d_features, dtype=float)
-    names_2d = np.empty(max_2d_features, dtype=object)
-    values_2d = np.empty(max_2d_features, dtype=float)
-    
-    # Initialize counters
-    count_1d = 0
-    count_2d = 0
-    scalar_features = {}
+    cell_features = {}
     
     for prop in props:
         try:
@@ -344,41 +343,43 @@ def _extract_features_from_regionprops(
             if skip_callable and callable(value):
                 continue
                 
-            if isinstance(value, np.ndarray | list | tuple):
-                value = np.array(value)
-                if value.ndim == 1:
-                    # Vectorized operation for 1D arrays
-                    n = len(value)
-                    if count_1d + n <= max_1d_features:
-                        indices = np.arange(n)
-                        names_1d[count_1d:count_1d+n] = [f"{prop}_{i}" for i in indices]
-                        values_1d[count_1d:count_1d+n] = value.astype(float)
-                        count_1d += n
-                elif value.ndim == 2:
-                    # Vectorized operation for 2D arrays
-                    rows, cols = value.shape
-                    n = rows * cols
-                    if count_2d + n <= max_2d_features:
-                        i, j = np.meshgrid(range(rows), range(cols), indexing='ij')
-                        names_2d[count_2d:count_2d+n] = [f"{prop}_{i_}_{j_}" for i_, j_ in zip(i.ravel(), j.ravel())]
-                        values_2d[count_2d:count_2d+n] = value.ravel().astype(float)
-                        count_2d += n
-                else:
-                    scalar_features[prop] = float(value.flatten()[0])
+            if prop in _SCALAR_PROPS:
+                cell_features[prop] = float(value)
+            elif prop in _ARRAY_1D_PROPS:
+                # Convert to array only once
+                value = np.asarray(value)
+                for i, v in enumerate(value):
+                    cell_features[f"{prop}_{i}"] = float(v)
+            elif prop in _ARRAY_2D_PROPS:
+                # Convert to array only once
+                value = np.asarray(value)
+                for i in range(value.shape[0]):
+                    for j in range(value.shape[1]):
+                        cell_features[f"{prop}_{i}x{j}"] = float(value[i, j])
+            elif prop in _SPECIAL_PROPS:
+                # Convert to array only once
+                value = np.asarray(value)
+                for i, v in enumerate(value):
+                    cell_features[f"{prop}_{i}"] = float(v)
             else:
-                scalar_features[prop] = float(value)
+                # Fallback for any other properties
+                if isinstance(value, (np.ndarray, list, tuple)):
+                    value = np.asarray(value)
+                    if value.ndim == 1:
+                        for i, v in enumerate(value):
+                            cell_features[f"{prop}_{i}"] = float(v)
+                    elif value.ndim == 2:
+                        for i in range(value.shape[0]):
+                            for j in range(value.shape[1]):
+                                cell_features[f"{prop}_{i}x{j}"] = float(value[i, j])
+                    else:
+                        cell_features[prop] = float(value.flatten()[0])
+                else:
+                    cell_features[prop] = float(value)
                 
         except (ValueError, TypeError, AttributeError) as e:
             logg.warning(f"Error calculating {prop} for cell {cell_id}: {str(e)}")
             continue
-    
-    # Combine all features
-    cell_features = {}
-    if count_1d > 0:
-        cell_features.update(dict(zip(names_1d[:count_1d], values_1d[:count_1d])))
-    if count_2d > 0:
-        cell_features.update(dict(zip(names_2d[:count_2d], values_2d[:count_2d])))
-    cell_features.update(scalar_features)
     
     return cell_features
 
