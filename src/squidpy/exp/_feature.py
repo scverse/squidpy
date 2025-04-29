@@ -23,6 +23,8 @@ from spatialdata.models import TableModel
 from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, _get_n_cores, parallelize
+from numba import njit, prange
+import os
 
 __all__ = ["calculate_image_features"]
 
@@ -321,27 +323,63 @@ def _extract_features_from_regionprops(
     skip_callable: bool = False,
 ) -> dict[str, float]:
     """Extract features from a regionprops object given a list of properties."""
-    cell_features = {}
+    # Pre-allocate arrays for common cases
+    max_1d_features = 10  # Adjust based on typical usage
+    max_2d_features = 10  # Adjust based on typical usage
+    
+    # Initialize arrays for batch processing
+    names_1d = np.empty(max_1d_features, dtype=object)
+    values_1d = np.empty(max_1d_features, dtype=float)
+    names_2d = np.empty(max_2d_features, dtype=object)
+    values_2d = np.empty(max_2d_features, dtype=float)
+    
+    # Initialize counters
+    count_1d = 0
+    count_2d = 0
+    scalar_features = {}
+    
     for prop in props:
         try:
             value = getattr(region_obj, prop)
             if skip_callable and callable(value):
                 continue
+                
             if isinstance(value, np.ndarray | list | tuple):
                 value = np.array(value)
                 if value.ndim == 1:
-                    for i, v in enumerate(value):
-                        cell_features[f"{prop}_{i}"] = float(v)
+                    # Vectorized operation for 1D arrays
+                    n = len(value)
+                    if count_1d + n <= max_1d_features:
+                        indices = np.arange(n)
+                        names_1d[count_1d:count_1d+n] = [f"{prop}_{i}" for i in indices]
+                        values_1d[count_1d:count_1d+n] = value.astype(float)
+                        count_1d += n
                 elif value.ndim == 2:
-                    for i, j in itertools.product(range(value.shape[0]), range(value.shape[1])):
-                        cell_features[f"{prop}_{i}x{j}"] = float(value[i, j])
+                    # Vectorized operation for 2D arrays
+                    rows, cols = value.shape
+                    n = rows * cols
+                    if count_2d + n <= max_2d_features:
+                        i, j = np.meshgrid(range(rows), range(cols), indexing='ij')
+                        names_2d[count_2d:count_2d+n] = [f"{prop}_{i_}_{j_}" for i_, j_ in zip(i.ravel(), j.ravel())]
+                        values_2d[count_2d:count_2d+n] = value.ravel().astype(float)
+                        count_2d += n
                 else:
-                    cell_features[prop] = float(value.flatten()[0])  # Convert to float
+                    scalar_features[prop] = float(value.flatten()[0])
             else:
-                cell_features[prop] = float(value)
+                scalar_features[prop] = float(value)
+                
         except (ValueError, TypeError, AttributeError) as e:
             logg.warning(f"Error calculating {prop} for cell {cell_id}: {str(e)}")
             continue
+    
+    # Combine all features
+    cell_features = {}
+    if count_1d > 0:
+        cell_features.update(dict(zip(names_1d[:count_1d], values_1d[:count_1d])))
+    if count_2d > 0:
+        cell_features.update(dict(zip(names_2d[:count_2d], values_2d[:count_2d])))
+    cell_features.update(scalar_features)
+    
     return cell_features
 
 
@@ -412,6 +450,62 @@ def _prepare_images_for_measurement(
     return mask, image1_prepared, image2_prepared
 
 
+@njit(fastmath=True)
+def _get_cell_crops_numba(
+    cell_id: int,
+    labels: np.ndarray,
+    image1: np.ndarray,
+    image2: np.ndarray,
+    pad: int = 1,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Numba-accelerated version of _get_cell_crops.
+    
+    Note: image1 and image2 should be passed as empty arrays (np.zeros((0,0))) if not used.
+    """
+    # Find cell boundaries
+    cell_mask = labels == cell_id
+    y_indices, x_indices = np.where(cell_mask)
+    if len(y_indices) == 0:
+        # Return empty arrays if no cell found
+        return np.zeros((0, 0), dtype=np.bool_), np.zeros((0, 0), dtype=image1.dtype), np.zeros((0, 0), dtype=image2.dtype)
+
+    y_min, y_max = y_indices.min(), y_indices.max()
+    x_min, x_max = x_indices.min(), x_indices.max()
+    height, width = labels.shape
+
+    # Calculate padding
+    y_pad_min = min(pad, y_min)
+    y_pad_max = min(pad, height - y_max - 1)
+    x_pad_min = min(pad, x_min)
+    x_pad_max = min(pad, width - x_max - 1)
+
+    # Apply padding
+    y_min -= y_pad_min
+    y_max += y_pad_max
+    x_min -= x_pad_min
+    x_max += x_pad_max
+
+    # Calculate crop dimensions
+    y_size = y_max - y_min
+    x_size = x_max - x_min
+
+    # Create output arrays
+    cell_mask_cropped = np.zeros((y_size, x_size), dtype=np.bool_)
+    image1_cropped = np.zeros((y_size, x_size), dtype=image1.dtype)
+    image2_cropped = np.zeros((y_size, x_size), dtype=image2.dtype)
+
+    # Copy data
+    for i in range(y_size):
+        for j in range(x_size):
+            cell_mask_cropped[i, j] = cell_mask[y_min + i, x_min + j]
+            if image1.size > 0:  # Only copy if image1 is not empty
+                image1_cropped[i, j] = image1[y_min + i, x_min + j]
+            if image2.size > 0:  # Only copy if image2 is not empty
+                image2_cropped[i, j] = image2[y_min + i, x_min + j]
+
+    return cell_mask_cropped, image1_cropped, image2_cropped
+
+
 def _get_cell_crops(
     cell_id: int,
     labels: NDArray,
@@ -420,57 +514,25 @@ def _get_cell_crops(
     pad: int = 1,
     verbose: bool = False,
 ) -> tuple[NDArray, NDArray | None, NDArray | None] | None:
-    """Generator function to get cropped arrays for a cell.
-
-    Parameters
-    ----------
-    cell_id
-        The ID of the cell to process
-    labels
-        The labels array containing cell masks
-    image1
-        First image to crop
-    image2
-        Optional second image to crop
-    pad
-        Amount of padding to add around the cell
-    verbose
-        Whether to print warning messages
-
-    Returns
-    -------
-    Tuple of (cell_mask_cropped, image1_cropped, image2_cropped) or None if cell is empty
-    """
-    cell_mask = labels == cell_id
-    y_indices, x_indices = np.where(cell_mask)
-    if len(y_indices) == 0:  # Skip empty cells
+    """Generator function to get cropped arrays for a cell."""
+    # Create empty arrays for unused images
+    empty_image = np.zeros((0, 0), dtype=np.float32)
+    image1_np = image1 if image1 is not None else empty_image
+    image2_np = image2 if image2 is not None else empty_image
+    
+    # Use Numba-accelerated version
+    cell_mask_cropped, image1_cropped, image2_cropped = _get_cell_crops_numba(
+        cell_id, labels, image1_np, image2_np, pad
+    )
+    
+    # Return None if no cell found
+    if cell_mask_cropped.size == 0:
         return None
-
-    y_min, y_max = y_indices.min(), y_indices.max()
-    x_min, x_max = x_indices.min(), x_indices.max()
-    height, width = labels.shape
-
-    y_pad_min = min(pad, y_min)
-    y_pad_max = min(pad, height - y_max - 1)
-    x_pad_min = min(pad, x_min)
-    x_pad_max = min(pad, width - x_max - 1)
-
-    y_min -= y_pad_min
-    y_max += y_pad_max
-    x_min -= x_pad_min
-    x_max += x_pad_max
-
-    if verbose and (y_pad_min != pad or y_pad_max != pad or x_pad_min != pad or x_pad_max != pad):
-        logg.warning(
-            f"Cell {cell_id} is at image border. Padding is asymmetric: "
-            f"y: {y_pad_min}/{pad} top, {y_pad_max}/{pad} bottom, "
-            f"x: {x_pad_min}/{pad} left, {x_pad_max}/{pad} right"
-        )
-
-    cell_mask_cropped = cell_mask[y_min:y_max, x_min:x_max]
-    image1_cropped = None if image1 is None else image1[y_min:y_max, x_min:x_max]
-    image2_cropped = None if image2 is None else image2[y_min:y_max, x_min:x_max]
-
+        
+    # Convert back to None for unused images
+    image1_cropped = image1_cropped if image1 is not None else None
+    image2_cropped = image2_cropped if image2 is not None else None
+    
     return cell_mask_cropped, image1_cropped, image2_cropped
 
 
