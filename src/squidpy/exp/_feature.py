@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import os
 import warnings
 from collections.abc import Callable, Sequence
 from typing import Any
@@ -13,6 +14,7 @@ import numpy.typing as npt
 import pandas as pd
 import xarray as xr
 from cp_measure.bulk import get_core_measurements, get_correlation_measurements
+from numba import njit, prange
 from scipy import ndimage
 from skimage import measure
 from skimage.measure import label
@@ -23,8 +25,6 @@ from spatialdata.models import TableModel
 from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, _get_n_cores, parallelize
-from numba import njit, prange
-import os
 
 __all__ = ["calculate_image_features"]
 
@@ -63,12 +63,24 @@ IntArray = npt.NDArray[np.int_]  # Integer array
 BoolArray = npt.NDArray[np.bool_]  # Boolean array
 
 # Define property sets at module level for better performance
-_SCALAR_PROPS = frozenset({
-    "area", "area_filled", "area_convex", "num_pixels",
-    "axis_major_length", "axis_minor_length", "eccentricity",
-    "equivalent_diameter", "extent", "feret_diameter_max",
-    "solidity", "euler_number", "perimeter", "perimeter_crofton"
-})
+_SCALAR_PROPS = frozenset(
+    {
+        "area",
+        "area_filled",
+        "area_convex",
+        "num_pixels",
+        "axis_major_length",
+        "axis_minor_length",
+        "eccentricity",
+        "equivalent_diameter",
+        "extent",
+        "feret_diameter_max",
+        "solidity",
+        "euler_number",
+        "perimeter",
+        "perimeter_crofton",
+    }
+)
 
 _ARRAY_1D_PROPS = frozenset({"centroid", "centroid_local"})
 _ARRAY_2D_PROPS = frozenset({"inertia_tensor"})
@@ -336,13 +348,13 @@ def _extract_features_from_regionprops(
 ) -> dict[str, float]:
     """Extract features from a regionprops object given a list of properties."""
     cell_features = {}
-    
+
     for prop in props:
         try:
             value = getattr(region_obj, prop)
             if skip_callable and callable(value):
                 continue
-                
+
             if prop in _SCALAR_PROPS:
                 cell_features[prop] = float(value)
             elif prop in _ARRAY_1D_PROPS:
@@ -376,11 +388,11 @@ def _extract_features_from_regionprops(
                         cell_features[prop] = float(value.flatten()[0])
                 else:
                     cell_features[prop] = float(value)
-                
+
         except (ValueError, TypeError, AttributeError) as e:
             logg.warning(f"Error calculating {prop} for cell {cell_id}: {str(e)}")
             continue
-    
+
     return cell_features
 
 
@@ -460,19 +472,23 @@ def _get_cell_crops_numba(
     pad: int = 1,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Numba-accelerated version of _get_cell_crops.
-    
+
     Note: image1 and image2 should be passed as empty arrays (np.zeros((0,0))) if not used.
     """
     # Find cell boundaries using vectorized operations
     cell_mask = labels == cell_id
     if not np.any(cell_mask):
-        return np.zeros((0, 0), dtype=np.bool_), np.zeros((0, 0), dtype=image1.dtype), np.zeros((0, 0), dtype=image2.dtype)
+        return (
+            np.zeros((0, 0), dtype=np.bool_),
+            np.zeros((0, 0), dtype=image1.dtype),
+            np.zeros((0, 0), dtype=image2.dtype),
+        )
 
     # Get non-zero indices efficiently
     y_indices, x_indices = np.nonzero(cell_mask)
     y_min, y_max = y_indices.min(), y_indices.max()
     x_min, x_max = x_indices.min(), x_indices.max()
-    
+
     # Get image dimensions
     height, width = labels.shape
 
@@ -491,13 +507,13 @@ def _get_cell_crops_numba(
     # Create output arrays with exact size
     y_size = y_end - y_start
     x_size = x_end - x_start
-    
+
     # Create cell mask crop
     cell_mask_cropped = np.zeros((y_size, x_size), dtype=np.bool_)
     for i in range(y_size):
         for j in range(x_size):
             cell_mask_cropped[i, j] = cell_mask[y_start + i, x_start + j]
-    
+
     # Handle image crops efficiently
     if image1.size > 0:
         image1_cropped = np.zeros((y_size, x_size), dtype=image1.dtype)
@@ -506,7 +522,7 @@ def _get_cell_crops_numba(
                 image1_cropped[i, j] = image1[y_start + i, x_start + j]
     else:
         image1_cropped = np.zeros((0, 0), dtype=image1.dtype)
-        
+
     if image2.size > 0:
         image2_cropped = np.zeros((y_size, x_size), dtype=image2.dtype)
         for i in range(y_size):
@@ -531,20 +547,20 @@ def _get_cell_crops(
     empty_image = np.zeros((0, 0), dtype=np.float32)
     image1_np = image1 if image1 is not None else empty_image
     image2_np = image2 if image2 is not None else empty_image
-    
+
     # Use Numba-accelerated version
     cell_mask_cropped, image1_cropped, image2_cropped = _get_cell_crops_numba(
         cell_id, labels, image1_np, image2_np, pad
     )
-    
+
     # Return None if no cell found
     if cell_mask_cropped.size == 0:
         return None
-        
+
     # Convert back to None for unused images
     image1_cropped = image1_cropped if image1 is not None else None
     image2_cropped = image2_cropped if image2 is not None else None
-    
+
     return cell_mask_cropped, image1_cropped, image2_cropped
 
 
@@ -606,7 +622,7 @@ def _measurement_wrapper(
     """
     if image1 is None:
         return {}  # Return empty dict if no image data
-        
+
     try:
         if image2 is None:
             return func(mask, image1)
