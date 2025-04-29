@@ -463,46 +463,57 @@ def _get_cell_crops_numba(
     
     Note: image1 and image2 should be passed as empty arrays (np.zeros((0,0))) if not used.
     """
-    # Find cell boundaries
+    # Find cell boundaries using vectorized operations
     cell_mask = labels == cell_id
-    y_indices, x_indices = np.where(cell_mask)
-    if len(y_indices) == 0:
-        # Return empty arrays if no cell found
+    if not np.any(cell_mask):
         return np.zeros((0, 0), dtype=np.bool_), np.zeros((0, 0), dtype=image1.dtype), np.zeros((0, 0), dtype=image2.dtype)
 
+    # Get non-zero indices efficiently
+    y_indices, x_indices = np.nonzero(cell_mask)
     y_min, y_max = y_indices.min(), y_indices.max()
     x_min, x_max = x_indices.min(), x_indices.max()
+    
+    # Get image dimensions
     height, width = labels.shape
 
-    # Calculate padding
+    # Calculate padding with boundary checks in one step
     y_pad_min = min(pad, y_min)
     y_pad_max = min(pad, height - y_max - 1)
     x_pad_min = min(pad, x_min)
     x_pad_max = min(pad, width - x_max - 1)
 
-    # Apply padding
-    y_min -= y_pad_min
-    y_max += y_pad_max
-    x_min -= x_pad_min
-    x_max += x_pad_max
+    # Calculate crop dimensions with padding
+    y_start = y_min - y_pad_min
+    y_end = y_max + y_pad_max + 1
+    x_start = x_min - x_pad_min
+    x_end = x_max + x_pad_max + 1
 
-    # Calculate crop dimensions
-    y_size = y_max - y_min
-    x_size = x_max - x_min
-
-    # Create output arrays
+    # Create output arrays with exact size
+    y_size = y_end - y_start
+    x_size = x_end - x_start
+    
+    # Create cell mask crop
     cell_mask_cropped = np.zeros((y_size, x_size), dtype=np.bool_)
-    image1_cropped = np.zeros((y_size, x_size), dtype=image1.dtype)
-    image2_cropped = np.zeros((y_size, x_size), dtype=image2.dtype)
-
-    # Copy data
     for i in range(y_size):
         for j in range(x_size):
-            cell_mask_cropped[i, j] = cell_mask[y_min + i, x_min + j]
-            if image1.size > 0:  # Only copy if image1 is not empty
-                image1_cropped[i, j] = image1[y_min + i, x_min + j]
-            if image2.size > 0:  # Only copy if image2 is not empty
-                image2_cropped[i, j] = image2[y_min + i, x_min + j]
+            cell_mask_cropped[i, j] = cell_mask[y_start + i, x_start + j]
+    
+    # Handle image crops efficiently
+    if image1.size > 0:
+        image1_cropped = np.zeros((y_size, x_size), dtype=image1.dtype)
+        for i in range(y_size):
+            for j in range(x_size):
+                image1_cropped[i, j] = image1[y_start + i, x_start + j]
+    else:
+        image1_cropped = np.zeros((0, 0), dtype=image1.dtype)
+        
+    if image2.size > 0:
+        image2_cropped = np.zeros((y_size, x_size), dtype=image2.dtype)
+        for i in range(y_size):
+            for j in range(x_size):
+                image2_cropped[i, j] = image2[y_start + i, x_start + j]
+    else:
+        image2_cropped = np.zeros((0, 0), dtype=image2.dtype)
 
     return cell_mask_cropped, image1_cropped, image2_cropped
 
@@ -595,7 +606,30 @@ def _measurement_wrapper(
     """
     if image1 is None:
         return {}  # Return empty dict if no image data
-    return func(mask, image1) if image2 is None else func(image1, image2, mask)
+        
+    try:
+        if image2 is None:
+            return func(mask, image1)
+        else:
+            # Check if we have valid data for correlation
+            if not np.any(mask) or not np.any(image1) or not np.any(image2):
+                # Get feature names from a successful call to maintain structure
+                dummy_mask = np.ones((2, 2), dtype=bool)
+                dummy_img = np.ones((2, 2), dtype=image1.dtype)
+                feature_names = func(dummy_img, dummy_img, dummy_mask).keys()
+                # Return dictionary with NaN values for all features
+                return {name: np.nan for name in feature_names}
+            return func(image1, image2, mask)
+    except (IndexError, ValueError) as e:
+        # Handle cases where correlation calculation fails
+        if "index 0 is out of bounds" in str(e) or "size 0" in str(e):
+            # Get feature names from a successful call to maintain structure
+            dummy_mask = np.ones((2, 2), dtype=bool)
+            dummy_img = np.ones((2, 2), dtype=image1.dtype)
+            feature_names = func(dummy_img, dummy_img, dummy_mask).keys()
+            # Return dictionary with NaN values for all features
+            return {name: np.nan for name in feature_names}
+        raise  # Re-raise other errors
 
 
 def _calculate_features_helper(
