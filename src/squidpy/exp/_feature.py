@@ -9,6 +9,7 @@ from typing import Any
 
 import anndata as ad
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import xarray as xr
 from cp_measure.bulk import get_core_measurements, get_correlation_measurements
@@ -52,6 +53,12 @@ _INTENSITY_PROPS = {
     "intensity_min",
     "intensity_std",
 }
+
+# Define array types using modern syntax
+NDArray = npt.NDArray[Any]  # Generic array
+FloatArray = npt.NDArray[np.float32]  # Float32 array
+IntArray = npt.NDArray[np.int_]  # Integer array
+BoolArray = npt.NDArray[np.bool_]  # Boolean array
 
 
 @d.dedent
@@ -199,6 +206,7 @@ def calculate_image_features(
     cell_ids = cell_ids[cell_ids != 0]
     # Sort cell_ids to ensure consistent order
     cell_ids = np.sort(cell_ids)
+    cell_ids_list = cell_ids.tolist()  # Convert to list for parallelize
 
     all_features = []
     n_channels = image.shape[0]
@@ -210,7 +218,7 @@ def calculate_image_features(
         logg.info("Calculating 'skimage' label features.")
         res = parallelize(
             _get_regionprops_features,
-            collection=cell_ids,
+            collection=cell_ids_list,
             extractor=pd.concat,
             n_jobs=n_jobs,
             backend=backend,
@@ -226,7 +234,7 @@ def calculate_image_features(
             logg.info(f"Calculating 'skimage' image features for channel '{ch_idx}'.")
             res = parallelize(
                 _get_regionprops_features,
-                collection=cell_ids,
+                collection=cell_ids_list,
                 extractor=pd.concat,
                 n_jobs=n_jobs,
                 backend=backend,
@@ -234,7 +242,7 @@ def calculate_image_features(
                 verbose=verbose,
             )(labels=labels, intensity_image=ch_image)
             # Append channel names to each feature column
-            res = res.rename(columns=lambda col: f"{col}_{ch_name}")
+            res = res.rename(columns=lambda col, ch_name=ch_name: f"{col}_{ch_name}")
             all_features.append(res)
 
     if "cpmeasure:core" in measurements:
@@ -245,7 +253,7 @@ def calculate_image_features(
             logg.info(f"Calculating 'cpmeasure' core features for channel '{ch_idx}'.")
             res = parallelize(
                 _calculate_features_helper,
-                collection=cell_ids,
+                collection=cell_ids_list,
                 extractor=pd.concat,
                 n_jobs=n_jobs,
                 backend=backend,
@@ -266,7 +274,7 @@ def calculate_image_features(
                 ch2_image = image[ch2_idx]
                 res = parallelize(
                     _calculate_features_helper,
-                    collection=cell_ids,
+                    collection=cell_ids_list,
                     extractor=pd.concat,
                     n_jobs=n_jobs,
                     backend=backend,
@@ -307,7 +315,10 @@ def calculate_image_features(
 
 
 def _extract_features_from_regionprops(
-    region_obj: Any, props: set[str], cell_id: int, skip_callable: bool = False
+    region_obj: Any,
+    props: set[str],
+    cell_id: int,
+    skip_callable: bool = False,
 ) -> dict[str, float]:
     """Extract features from a regionprops object given a list of properties."""
     cell_features = {}
@@ -325,18 +336,18 @@ def _extract_features_from_regionprops(
                     for i, j in itertools.product(range(value.shape[0]), range(value.shape[1])):
                         cell_features[f"{prop}_{i}x{j}"] = float(value[i, j])
                 else:
-                    cell_features[prop] = value
+                    cell_features[prop] = float(value.flatten()[0])  # Convert to float
             else:
                 cell_features[prop] = float(value)
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError) as e:
             logg.warning(f"Error calculating {prop} for cell {cell_id}: {str(e)}")
             continue
     return cell_features
 
 
 def _calculate_regionprops_from_crop(
-    cell_mask_cropped: np.ndarray,
-    intensity_image_cropped: np.ndarray | None,
+    cell_mask_cropped: NDArray,
+    intensity_image_cropped: NDArray | None,
     cell_id: int,
 ) -> dict[str, float]:
     """
@@ -358,7 +369,11 @@ def _calculate_regionprops_from_crop(
         return _extract_features_from_regionprops(region_props[0], _INTENSITY_PROPS, cell_id, skip_callable=True)
 
 
-def _append_channel_names(features: dict, channel1: str, channel2: str | None = None) -> dict:
+def _append_channel_names(
+    features: dict[str, Any],
+    channel1: str | None,
+    channel2: str | None = None,
+) -> dict[str, Any]:
     """Append channel name(s) to all keys in the feature dictionary."""
     if channel2 is None:
         return {f"{k}_{channel1}": v for k, v in features.items()}
@@ -368,11 +383,11 @@ def _append_channel_names(features: dict, channel1: str, channel2: str | None = 
 
 def _prepare_images_for_measurement(
     name: str,
-    cell_mask: np.ndarray,
-    img1: np.ndarray,
-    img2: np.ndarray | None,
-    conv_params: dict,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    cell_mask: NDArray,
+    img1: NDArray,
+    img2: NDArray | None,
+    conv_params: dict[str, Any],
+) -> tuple[NDArray, NDArray | None, NDArray | None]:
     """
     Convert inputs to the appropriate dtype based on the measurement type.
     """
@@ -399,12 +414,12 @@ def _prepare_images_for_measurement(
 
 def _get_cell_crops(
     cell_id: int,
-    labels: np.ndarray,
-    image1: np.ndarray | None = None,
-    image2: np.ndarray | None = None,
+    labels: NDArray,
+    image1: NDArray | None = None,
+    image2: NDArray | None = None,
     pad: int = 1,
     verbose: bool = False,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray | None] | None:
+) -> tuple[NDArray, NDArray | None, NDArray | None] | None:
     """Generator function to get cropped arrays for a cell.
 
     Parameters
@@ -461,13 +476,13 @@ def _get_cell_crops(
 
 def _get_regionprops_features(
     cell_ids: Sequence[int],
-    labels: np.ndarray,
-    intensity_image: np.ndarray | None = None,
+    labels: NDArray,
+    intensity_image: NDArray | None = None,
     queue: Any | None = None,
 ) -> pd.DataFrame:
     """Calculate regionprops features for each cell from the full label image."""
     # Initialize features dictionary with None values to preserve order
-    features = {cell_id: None for cell_id in cell_ids}
+    features = dict.fromkeys(cell_ids, None)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -492,10 +507,10 @@ def _get_regionprops_features(
 
 
 def _measurement_wrapper(
-    func: Callable,
-    mask: np.ndarray,
-    image1: np.ndarray,
-    image2: np.ndarray | None = None,
+    func: Callable[..., dict[str, Any]],
+    mask: NDArray,
+    image1: NDArray | None,
+    image2: NDArray | None = None,
 ) -> dict[str, Any]:
     """Wrapper function to handle both core and correlation measurements.
 
@@ -515,14 +530,16 @@ def _measurement_wrapper(
     -------
     Dictionary of feature values
     """
+    if image1 is None:
+        return {}  # Return empty dict if no image data
     return func(mask, image1) if image2 is None else func(image1, image2, mask)
 
 
 def _calculate_features_helper(
     cell_ids: Sequence[int],
-    labels: np.ndarray,
-    image1: np.ndarray,
-    image2: np.ndarray | None,
+    labels: NDArray,
+    image1: NDArray,
+    image2: NDArray | None,
     measurements: dict[str, Any],
     channel1_name: str | None = None,
     channel2_name: str | None = None,
@@ -531,7 +548,7 @@ def _calculate_features_helper(
 ) -> pd.DataFrame:
     """Helper function to calculate features for a subset of cells."""
     # Initialize features dictionary with None values to preserve order
-    features_dict = {cell_id: None for cell_id in cell_ids}
+    features_dict = dict.fromkeys(cell_ids, None)
 
     # Pre-allocate lists for type conversion
     uint8_features = [
@@ -580,7 +597,7 @@ def _calculate_features_helper(
             else:
                 region_features = _append_channel_names(region_features, channel1_name, channel2_name)
             cell_features.update(region_features)
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError) as e:
             if verbose:
                 logg.warning(f"Failed to calculate regionprops features for cell {cell_id}: {str(e)}")
 
@@ -589,6 +606,8 @@ def _calculate_features_helper(
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
+                    if image1_cropped is None:
+                        continue
                     mask_conv, img1_conv, img2_conv = _prepare_images_for_measurement(
                         name,
                         cell_mask_cropped,
@@ -608,7 +627,7 @@ def _calculate_features_helper(
                     else:
                         feature_dict = _append_channel_names(feature_dict, channel1_name, channel2_name)
                     cell_features.update(feature_dict)
-            except Exception as e:
+            except (ValueError, TypeError, AttributeError) as e:
                 if verbose:
                     logg.warning(f"Failed to calculate '{name}' features for cell {cell_id}: {str(e)}")
 
@@ -627,7 +646,10 @@ def _calculate_features_helper(
     return df
 
 
-def _get_array_from_DataTree_or_DataArray(data: xr.DataTree | xr.DataArray, scale: str | None = None) -> np.ndarray:
+def _get_array_from_DataTree_or_DataArray(
+    data: xr.DataTree | xr.DataArray,
+    scale: str | None = None,
+) -> NDArray:
     """
     Returns a NumPy array for the given data and scale.
     If data is an xr.DataTree, it checks for the scale key and computes the image.
