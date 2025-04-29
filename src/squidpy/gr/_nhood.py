@@ -148,10 +148,19 @@ def nhood_enrichment(
     %(seed)s
     %(copy)s
     %(parallelize)s
+    normalization
+        Normalization mode to use:
+        - ``'none'``: No normalization of neighbor counts (raw counts)
+        - ``'total'``: Normalize neighbor counts by total number of cells per cluster (SEA)
+        - ``'conditional'``: Normalize neighbor counts by number of cells with at least one neighbor of given type (COZI)
+    handle_nan
+        How to handle NaN values in z-scores:
+        - ``'zero'``: Replace NaN values with 0
+        - ``'keep'``: Keep NaN values (undefined enrichment)
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`tuple` with the z-score and the enrichment count.
+    If ``copy = True``, returns a :class:`tuple` with the z-score and the (normalized) enrichment count.
 
     Otherwise, modifies the ``adata`` with the following keys:
 
