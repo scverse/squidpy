@@ -142,3 +142,65 @@ def test_interaction_matrix_nan_values(adata_intmat: AnnData):
 
     np.testing.assert_array_equal(expected_weighted, result_weighted)
     np.testing.assert_array_equal(expected_unweighted, result_unweighted)
+
+@pytest.mark.parametrize("normalization", ["none", "total", "conditional"])
+def test_nhood_enrichment_normalization_modes(adata: AnnData, normalization: str):
+    spatial_neighbors(adata)
+    z, count = nhood_enrichment(
+        adata,
+        cluster_key=_CK,
+        normalization=normalization,
+        n_jobs=1,
+        n_perms=20,
+        copy=True
+    )
+
+    assert isinstance(z, np.ndarray)
+    assert isinstance(count, np.ndarray)
+    assert z.shape == count.shape
+    assert z.shape[0] == adata.obs[_CK].cat.categories.shape[0]
+
+def test_conditional_normalization_zero_division(adata: AnnData):
+    adata = adata.copy()
+    if _CK not in adata.obs:
+        raise ValueError(f"Cluster key '{_CK}' not in adata.obs")
+    if not pd.api.types.is_categorical_dtype(adata.obs[_CK]):
+        adata.obs[_CK] = adata.obs[_CK].astype("category")
+    adata.obs[_CK] = adata.obs[_CK].cat.add_categories("isolated")
+    adata.obs.loc[adata.obs.index[0], _CK] = "isolated"
+    spatial_neighbors(adata)
+
+    result = nhood_enrichment(
+        adata,
+        cluster_key=_CK,
+        normalization="conditional",
+        copy=True)
+    assert result is not None
+    zscore, count = result
+    assert not np.any(np.isinf(zscore))
+    assert not np.any(np.isnan(zscore))
+    assert not np.any(np.isinf(count))
+    assert not np.any(np.isnan(count))
+
+@pytest.mark.parametrize("normalization, expected_dtype", [
+    ("none", np.uint32),
+    ("total", np.float64),
+    ("conditional", np.float64),
+])
+def test_output_dtype(adata: AnnData, normalization: str, expected_dtype):
+    spatial_neighbors(adata)
+    _, count = nhood_enrichment(
+        adata,
+        cluster_key=_CK,
+        normalization=normalization,
+        n_jobs=1,
+        n_perms=20,
+        copy=True,
+    )
+    assert count.dtype == expected_dtype
+
+def test_invalid_normalization_raises(adata: AnnData):
+    spatial_neighbors(adata)
+    with pytest.raises(ValueError, match="Invalid normalization mode"):
+        nhood_enrichment(adata, cluster_key=_CK, normalization="invalid_mode", copy=True)
+
