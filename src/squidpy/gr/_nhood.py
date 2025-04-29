@@ -131,6 +131,7 @@ def nhood_enrichment(
     n_jobs: int | None = None,
     backend: str = "loky",
     normalization: str = "none",
+    handle_nan: str = "zero",  # or "keep"
     show_progress_bar: bool = True,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
@@ -201,6 +202,9 @@ def nhood_enrichment(
         # Create boolean matrix: cell i has at least one neighbor of type b
         per_cell_neighbor_matrix = res > 0
 
+        # Ensure per_cell_neighbor_matrix is the correct shape
+        assert per_cell_neighbor_matrix.shape == (len(int_clust), n_cls)
+
         # Compute how many type A cells have at least one neighbor of type B
         cond_counts = np.zeros((n_cls, n_cls), dtype=np.float64)
         for a in range(n_cls):
@@ -244,8 +248,17 @@ def nhood_enrichment(
         normalization = normalization
     )
 
-    zscore = (count_normalized - perms.mean(axis=0)) / perms.std(axis=0)
-    
+    std = perms.std(axis=0)
+    std[std == 0] = np.nan  # Or np.inf if you prefer to get 0 z-score
+    zscore = (count_normalized - perms.mean(axis=0)) / std
+
+    if handle_nan == "zero":
+        zscore = np.nan_to_num(zscore, nan=0.0)
+    elif handle_nan == "keep":
+        pass  # keep NaN
+    else:
+        raise ValueError("handle_nan must be 'keep' or 'zero'")
+
     if copy:
         return zscore, count_normalized
 
