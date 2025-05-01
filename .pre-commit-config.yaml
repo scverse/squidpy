@@ -7,11 +7,11 @@ default_stages:
 minimum_pre_commit_version: 2.16.0
 repos:
     - repo: https://github.com/rbubley/mirrors-prettier
-      rev: v3.5.1
+      rev: v3.5.3
       hooks:
           - id: prettier
     - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.11.2
+      rev: v0.11.7
       hooks:
           - id: ruff
             types_or: [python, pyi, jupyter]
