@@ -132,6 +132,7 @@ def nhood_enrichment(
     backend: str = "loky",
     normalization: str = "none",
     handle_nan: str = "zero",  # or "keep"
+    min_cond_count: int = 5,
     show_progress_bar: bool = True,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
@@ -150,7 +151,7 @@ def nhood_enrichment(
     %(parallelize)s
     normalization
         Normalization mode to use:
-        - ``'none'``: No normalization of neighbor counts (raw counts)
+        - ``'none'``: No normalization of neighbor counts
         - ``'total'``: Normalize neighbor counts by total number of cells per cluster (SEA)
         - ``'conditional'``: Normalize neighbor counts by number of cells with at least one neighbor of given type (COZI)
     handle_nan
@@ -216,19 +217,26 @@ def nhood_enrichment(
 
         # Compute how many type A cells have at least one neighbor of type B
         cond_counts = np.zeros((n_cls, n_cls), dtype=np.float64)
+        cluster_sizes = np.zeros(n_cls, dtype=np.float64)  # Track cluster sizes NEW
         for a in range(n_cls):
             a_cells = (int_clust == a)
+            cluster_sizes[a] = a_cells.sum() #NEW
             if not np.any(a_cells):
                 continue
             for b in range(n_cls):
                 has_b_neighbor = per_cell_neighbor_matrix[a_cells, b]
                 cond_counts[a, b] = has_b_neighbor.sum()
 
+        # identify pairs with insuffiecient conditional counts
+        low_count_mask = cond_counts < min_cond_count
+        
         # Avoid division by zero
-        cond_counts[cond_counts == 0] = 1.0
+        #cond_counts[cond_counts == 0] = 1.0
 
         # Normalize true count matrix
         count_normalized = count / cond_counts
+
+        count_normalized[low_count_mask] = np.nan
 
     elif normalization == "none":
         count_normalized = count.copy()
@@ -496,6 +504,7 @@ def _nhood_enrichment_helper(
     seed: int | None = None,
     queue: SigQueue | None = None,
     normalization: str = "none",  # NEW
+    min_cond_count: int = 5,
 ) -> NDArrayA:
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
     int_clust = int_clust.copy()  # threading
@@ -530,8 +539,10 @@ def _nhood_enrichment_helper(
 
             # For each pair (A, B), count how many A cells have at least one B neighbor
             cond_counts = np.zeros((n_cls, n_cls), dtype=np.float64)
+            cluster_sizes = np.zeros(n_cls, dtype=np.float64)  # Track cluster sizes NEW
             for a in range(n_cls):
                 a_cells = (int_clust == a)
+                cluster_sizes[a] = a_cells.sum() #NEW
                 if not np.any(a_cells):
                     continue
                 for b in range(n_cls):
@@ -539,18 +550,15 @@ def _nhood_enrichment_helper(
                     cond_counts[a, b] = has_b_neighbor.sum()
 
             # Avoid division by zero
-            cond_counts[cond_counts == 0] = 1.0
+            low_count_mask = cond_counts < min_cond_count
+            #cond_counts[cond_counts == 0] = 1.0
 
             # Normalize
             count_perms = count_perms / cond_counts
-
+            count_perms[low_count_mask] = np.nan
 
         elif normalization == "none":
             pass
-        else:
-            raise ValueError(
-                f"Invalid normalization mode `{normalization}`. Choose from 'none', 'total', 'conditional'."
-            )
 
         perms[i, ...] = count_perms
 
