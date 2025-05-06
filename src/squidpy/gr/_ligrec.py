@@ -731,6 +731,7 @@ def _analysis(
 
         return TempResult(means=means, pvalues=pvalues)
 
+    data = data.astype(np.float64, copy=False)
     groups = data.groupby("clusters", observed=True)
     clustering = np.array(data["clusters"].values, dtype=np.int32)
 
@@ -739,7 +740,6 @@ def _analysis(
     # (n_cells, n_genes)
     data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
     # all 3 should be C contiguous
-
     return parallelize(  # type: ignore[no-any-return]
         _analysis_helper,
         np.arange(n_perms, dtype=np.int32).tolist(),
