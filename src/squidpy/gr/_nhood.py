@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
 from typing import Any
+import warnings
 
 import networkx as nx
 import numba.types as nt
@@ -133,6 +134,7 @@ def nhood_enrichment(
     normalization: str = "none",
     handle_nan: str = "zero",  # or "keep"
     min_cond_count: int = 5,
+    smooth_cond_counts: bool = True,
     show_progress_bar: bool = True,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
@@ -214,7 +216,16 @@ def nhood_enrichment(
 
         # Ensure per_cell_neighbor_matrix is the correct shape
         assert per_cell_neighbor_matrix.shape == (len(int_clust), n_cls)
-
+        cluster_sizes = np.bincount(int_clust)
+        small_clusters = np.where(cluster_sizes < min_cond_count)[0]
+        if len(small_clusters) > 0:
+            small_cluster_names = original_clust.cat.categories[small_clusters].tolist()
+            warnings.warn(
+                f"Clusters {small_cluster_names} have fewer than {min_cond_count} cells. "
+                "Results may be unreliable.",
+                UserWarning,
+                stacklevel=2
+            )
         # Compute how many type A cells have at least one neighbor of type B
         cond_counts = np.zeros((n_cls, n_cls), dtype=np.float64)
         cluster_sizes = np.zeros(n_cls, dtype=np.float64)  # Track cluster sizes NEW
@@ -231,12 +242,24 @@ def nhood_enrichment(
         low_count_mask = cond_counts < min_cond_count
         
         # Avoid division by zero
-        #cond_counts[cond_counts == 0] = 1.0
+        cond_counts[cond_counts == 0] = 1.0
 
         # Normalize true count matrix
         count_normalized = count / cond_counts
 
         count_normalized[low_count_mask] = np.nan
+
+        invalid_pairs = cond_counts < min_cond_count
+        if np.any(invalid_pairs):
+            frac_invalid = np.mean(invalid_pairs) * 100
+            if frac_invalid > 10:  # Warn if >10% of pairs are masked
+                warnings.warn(
+                    f"{frac_invalid:.1f}% of cluster pairs have fewer than {min_cond_count} "
+                    "cells with neighbors of the given type. These pairs will be masked. "
+                    "Interpret results with caution.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
     elif normalization == "none":
         count_normalized = count.copy()
@@ -551,7 +574,7 @@ def _nhood_enrichment_helper(
 
             # Avoid division by zero
             low_count_mask = cond_counts < min_cond_count
-            #cond_counts[cond_counts == 0] = 1.0
+            cond_counts[cond_counts == 0] = 1.0
 
             # Normalize
             count_perms = count_perms / cond_counts
