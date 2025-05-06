@@ -473,5 +473,5 @@ class TestValidBehavior:
             copy=True,
         )
         expected_num_nans_upper = 500_000
-        num_nans = np.isnan(res['pvalues'].values).sum()
+        num_nans = np.isnan(res["pvalues"].values).sum()
         assert num_nans < expected_num_nans_upper
