@@ -461,3 +461,17 @@ class TestValidBehavior:
         )
         assert isinstance(pt.interactions, pd.DataFrame)
         assert len(pt.interactions) == 1
+
+    def test_pvalues_nans(self, adata_hne: AnnData):
+        res = ligrec(
+            adata_hne,
+            _CK,
+            seed=42,
+            n_perms=5,
+            show_progress_bar=False,
+            use_raw=False,
+            copy=True,
+        )
+        expected_num_nans_upper = 500_000
+        num_nans = np.isnan(res['pvalues'].values).sum()
+        assert num_nans < expected_num_nans_upper
