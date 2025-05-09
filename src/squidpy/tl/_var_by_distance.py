@@ -12,9 +12,10 @@ from scanpy import logging as logg
 from sklearn.metrics import DistanceMetric
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import MinMaxScaler
+from spatialdata import SpatialData
 
 from squidpy._docs import d
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, _get_adata_from_input
 from squidpy.gr._utils import _save_data
 
 __all__ = ["var_by_distance"]
@@ -22,11 +23,15 @@ __all__ = ["var_by_distance"]
 
 @d.dedent
 def var_by_distance(
-    adata: AnnData,
+    data: AnnData | SpatialData,
     groups: str | list[str] | NDArrayA,
     cluster_key: str | None = None,
     library_key: str | None = None,
+<<<<<<< HEAD
+    table: str | None = None,
+=======
     library_id: str | list[str] | None = None,
+>>>>>>> e76e147e021fb06922cc63c189f4db6bab4c4103
     design_matrix_key: str = "design_matrix",
     covariates: str | list[str] | None = None,
     metric: str = "euclidean",
@@ -60,10 +65,26 @@ def var_by_distance(
     If ``copy = True``, returns the design_matrix with the distances to an anchor point
     Otherwise, stores design_matrix in `.obsm`.
     """
+    # potentially extract table from SpatialData object
+    adata = _get_adata_from_input(data, table)
+
     start = logg.info(f"Creating {design_matrix_key}")
+<<<<<<< HEAD
+    # list of columns which will be categorical later on
+    # categorical_columns = [cluster_key]
+    # save initial metadata to adata.uns if copy == False
+    if not copy:
+        adata.uns[design_matrix_key] = _add_metadata(
+            cluster_key, groups, metric=metric, library_key=library_key, covariates=covariates
+        )
+
+    if isinstance(groups, str | np.ndarray):
+        anchor: list[Any] = [groups]
+=======
 
     if isinstance(groups, str):
         anchor = [groups]
+>>>>>>> e76e147e021fb06922cc63c189f4db6bab4c4103
     elif isinstance(groups, list):
         anchor = groups
     elif isinstance(groups, np.ndarray):
@@ -89,7 +110,12 @@ def var_by_distance(
         else:
             batch = adata.obs[library_key].unique().tolist()
     else:
+<<<<<<< HEAD
+        batch = adata.obs[library_key].unique()
+        # categorical_columns.append(library_key)
+=======
         raise TypeError(f"Invalid type for library_key: {type(library_key)}.")
+>>>>>>> e76e147e021fb06922cc63c189f4db6bab4c4103
 
     batch_design_matrices = {}
     max_distances = {}
@@ -200,6 +226,45 @@ def var_by_distance(
         _save_data(adata, attr="obsm", key=design_matrix_key, data=df, time=start)
 
 
+<<<<<<< HEAD
+def _add_metadata(
+    cluster_key: str,
+    groups: str | list[str] | NDArrayA,
+    library_key: str | None = None,
+    covariates: str | list[str] | None = None,
+    metric: str = "euclidean",
+) -> dict[str, Any]:
+    """Add metadata to adata.uns."""
+    metadata = {}
+    if isinstance(groups, np.ndarray):
+        metadata["anchor_scaled"] = "custom_anchor"
+        metadata["anchor_raw"] = "custom_anchor_raw"
+    elif isinstance(groups, list):
+        for i, anchor in enumerate(groups):
+            metadata[f"anchor_scaled_{str(i)}"] = anchor
+            metadata[f"anchor_raw_{str(i)}"] = anchor + "_raw"
+    else:
+        metadata["anchor_scaled"] = groups
+        metadata["anchor_raw"] = groups + "_raw"
+
+    metadata["annotation"] = cluster_key
+
+    if library_key is not None:
+        metadata["library_key"] = library_key
+
+    metadata["metric"] = metric
+
+    if covariates is not None:
+        if isinstance(covariates, str):
+            covariates = [covariates]
+        for i, covariate in enumerate(covariates):
+            metadata[f"covariate_{str(i)}"] = covariate
+
+    return metadata
+
+
+=======
+>>>>>>> e76e147e021fb06922cc63c189f4db6bab4c4103
 def _init_design_matrix(
     adata: AnnData,
     cluster_key: str | None,
