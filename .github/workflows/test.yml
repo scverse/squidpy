@@ -35,7 +35,7 @@ jobs:
         steps:
             - uses: actions/checkout@v3
             - name: Set up Python ${{ matrix.python }}
-              uses: actions/setup-python@v4
+              uses: actions/setup-python@v5
               with:
                   python-version: ${{ matrix.python }}
 
@@ -90,6 +90,16 @@ jobs:
                   DISPLAY: :42
               run: |
                   tox -vv
+            # check if this can be deprecated
+            #- name: List figures for potential debugging
+            #      ls -alh /home/runner/work/squidpy/squidpy/tests/figures
+
+            - name: Archive figures generated during testing
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: visual_test_results_${{ matrix.os }}-python${{ matrix.python }}
+                  path: /home/runner/work/squidpy/squidpy/tests/figures/*
 
             - name: Upload coverage to Codecov
               uses: codecov/codecov-action@v4

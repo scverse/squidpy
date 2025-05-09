@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import shutil
 import tarfile
 from pathlib import Path
 from typing import (
@@ -8,12 +10,16 @@ from typing import (
     Union,  # noqa: F401
 )
 
+import spatialdata as sd
 from anndata import AnnData
 from scanpy import _utils
+from scanpy import logging as logg
 from scanpy._settings import settings
+from scanpy._utils import check_presence_download
+from spatialdata import SpatialData
 
 from squidpy._constants._constants import TenxVersions
-from squidpy.datasets._utils import PathLike
+from squidpy.datasets._utils import DEFAULT_CACHE_DIR, PathLike, _get_zipped_dataset
 
 __all__ = ["visium"]
 
@@ -106,7 +112,9 @@ def visium(
 
     url_prefix = f"https://cf.10xgenomics.com/samples/spatial-exp/{spaceranger_version}/{sample_id}/"
     visium_files = VisiumFiles(
-        f"{sample_id}_filtered_feature_bc_matrix.h5", f"{sample_id}_spatial.tar.gz", f"{sample_id}_image.tif"
+        f"{sample_id}_filtered_feature_bc_matrix.h5",
+        f"{sample_id}_spatial.tar.gz",
+        f"{sample_id}_image.tif",
     )
 
     # download spatial data
@@ -134,3 +142,38 @@ def visium(
         )
 
     return read_visium(base_dir / sample_id)
+
+
+def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
+    """
+    Downloads a Visium H&E dataset into a specified folder and returns it as a `SpatialData` object.
+
+    It downloads and extracts the dataset into:
+      - `<folderpath>/visium_hne_sdata.zip` for the compressed file
+      - `<folderpath>/visium_hne_sdata.zarr` for the extracted dataset
+
+    Parameters
+    ----------
+    folderpath : Path | str
+        A folder path where the dataset will be downloaded and extracted. The resulting `.zarr`
+        folder is used to load the `SpatialData` object.
+
+    Returns
+    -------
+    SpatialData
+        The downloaded and extracted Visium H&E dataset as a `SpatialData` object.
+    """
+
+    FIGSHARE_ID = "52370645"
+    DATASET_NAME = "visium_hne_sdata"
+
+    if folderpath is None:
+        folderpath = DEFAULT_CACHE_DIR
+    else:
+        folderpath = Path(folderpath).expanduser().absolute()
+
+    return _get_zipped_dataset(
+        folderpath=folderpath,
+        dataset_name=DATASET_NAME,
+        figshare_id=FIGSHARE_ID,
+    )
