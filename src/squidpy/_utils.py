@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import joblib as jl
 import numpy as np
+from anndata import AnnData
+from spatialdata import SpatialData
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
 
@@ -337,3 +339,15 @@ def deprecated(reason: str) -> Any:
 
     else:
         raise TypeError(repr(type(reason)))
+
+def _get_adata_from_input(data: AnnData | SpatialData, table: str | None = None) -> None:
+    if isinstance(data, AnnData):
+        return data
+    elif isinstance(data, SpatialData):
+        if table is None:
+            raise ValueError("If using a SpatialData object, a table name must be provided with `table`.")
+        if table not in data.tables.keys():
+            raise ValueError(f"Table `{table}` not found in `SpatialData` object.")
+        return data.tables[table]
+    else:
+        raise TypeError(f"Expected `data` to be of type `AnnData` or `SpatialData`, found `{type(data).__name__}`.")

@@ -11,9 +11,10 @@ from scanpy import logging as logg
 from sklearn.metrics import DistanceMetric
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import MinMaxScaler
+from spatialdata import SpatialData
 
 from squidpy._docs import d
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, _get_adata_from_input
 from squidpy.gr._utils import _save_data
 
 __all__ = ["var_by_distance"]
@@ -21,10 +22,11 @@ __all__ = ["var_by_distance"]
 
 @d.dedent
 def var_by_distance(
-    adata: AnnData,
+    data: AnnData | SpatialData,
     groups: str | list[str] | NDArrayA,
     cluster_key: str,
     library_key: str | None = None,
+    table: str | None = None,
     design_matrix_key: str = "design_matrix",
     covariates: str | list[str] | None = None,
     metric: str = "euclidean",
@@ -57,16 +59,19 @@ def var_by_distance(
     If ``copy = True``, returns the design_matrix with the distances to an anchor point
     Otherwise, stores design_matrix in `.obsm`.
     """
+    # potentially extract table from SpatialData object
+    adata = _get_adata_from_input(data, table)
+
     start = logg.info(f"Creating {design_matrix_key}")
     # list of columns which will be categorical later on
-    categorical_columns = [cluster_key]
+    # categorical_columns = [cluster_key]
     # save initial metadata to adata.uns if copy == False
     if not copy:
         adata.uns[design_matrix_key] = _add_metadata(
             cluster_key, groups, metric=metric, library_key=library_key, covariates=covariates
         )
 
-    if isinstance(groups, str) or isinstance(groups, np.ndarray):
+    if isinstance(groups, str | np.ndarray):
         anchor: list[Any] = [groups]
     elif isinstance(groups, list):
         anchor = groups
@@ -78,7 +83,7 @@ def var_by_distance(
         batch = [None]
     else:
         batch = adata.obs[library_key].unique()
-        categorical_columns.append(library_key)
+        # categorical_columns.append(library_key)
 
     batch_design_matrices = {}
     max_distances = {}
@@ -188,8 +193,8 @@ def _add_metadata(
         metadata["anchor_raw"] = "custom_anchor_raw"
     elif isinstance(groups, list):
         for i, anchor in enumerate(groups):
-            metadata["anchor_scaled_" + str(i)] = anchor
-            metadata["anchor_raw_" + str(i)] = anchor + "_raw"
+            metadata[f"anchor_scaled_{str(i)}"] = anchor
+            metadata[f"anchor_raw_{str(i)}"] = anchor + "_raw"
     else:
         metadata["anchor_scaled"] = groups
         metadata["anchor_raw"] = groups + "_raw"
@@ -205,7 +210,7 @@ def _add_metadata(
         if isinstance(covariates, str):
             covariates = [covariates]
         for i, covariate in enumerate(covariates):
-            metadata["covariate_" + str(i)] = covariate
+            metadata[f"covariate_{str(i)}"] = covariate
 
     return metadata
 
