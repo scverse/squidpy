@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import Any, Callable
+from typing import Any
 
 import dask.array as da
 from dask_image.ndfilters import gaussian_filter as dask_gf
@@ -77,7 +77,7 @@ def process(
     from squidpy.pl._utils import _to_grayscale
 
     layer = img._get_layer(layer)
-    method = Processing(method) if isinstance(method, (str, Processing)) else method  # type: ignore[assignment]
+    method = Processing(method) if isinstance(method, str | Processing) else method  # type: ignore[assignment]
     apply_kwargs = dict(apply_kwargs)
     apply_kwargs["lazy"] = lazy
 
@@ -115,11 +115,17 @@ def process(
 
     # to which library_ids should this function be applied?
     if library_id is not None:
-        callback = {lid: callback for lid in img._get_library_ids(library_id)}  # type: ignore[assignment]
+        callback = dict.fromkeys(img._get_library_ids(library_id), callback)  # type: ignore[assignment]
 
     start = logg.info(f"Processing image using `{method}` method")
     res: ImageContainer = img.apply(
-        callback, layer=layer, copy=True, drop=copy, chunks=chunks, fn_kwargs=kwargs, **apply_kwargs
+        callback,
+        layer=layer,
+        copy=True,
+        drop=copy,
+        chunks=chunks,
+        fn_kwargs=kwargs,
+        **apply_kwargs,
     )
 
     # if the method changes the number of channels

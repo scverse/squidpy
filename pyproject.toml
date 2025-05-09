@@ -7,7 +7,7 @@ name = "squidpy"
 dynamic = ["version"]
 description = "Spatial Single Cell Analysis in Python"
 readme = "README.rst"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {file = "LICENSE"}
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -42,7 +42,8 @@ authors = [
 ]
 maintainers = [
     {name = "Giovanni Palla", email = "giovanni.palla@helmholtz-muenchen.de"},
-    {name = "Michal Klein", email = "michal.klein@helmholtz-muenchen.de"}
+    {name = "Michal Klein", email = "michal.klein@helmholtz-muenchen.de"},
+    {name = "Tim Treis", email = "tim.treis@helmholtz-muenchen.de"}
 ]
 
 dependencies = [
@@ -50,10 +51,9 @@ dependencies = [
    "anndata>=0.9",
    "cycler>=0.11.0",
    "dask-image>=0.5.0",
-   "dask[array]>=2021.02.0",
+   "dask[array]>=2021.02.0,<=2024.11.2",
    "docrep>=0.3.1",
    "fsspec>=2021.11.0",
-   "leidenalg>=0.8.2",
    "matplotlib>=3.3",
    "matplotlib-scalebar>=0.8.0",
    "networkx>=2.6.0",
@@ -71,9 +71,9 @@ dependencies = [
    "tifffile!=2022.4.22",
    "tqdm>=4.50.2",
    "validators>=0.18.2",
-   "xarray>=0.16.1",
-   "zarr>=2.6.1",
-   "spatialdata>=0.2.0",
+   "xarray>=2024.10.0",
+   "zarr>=2.6.1,<3.0.0",
+   "spatialdata>=0.2.5",
 ]
 
 [project.optional-dependencies]
@@ -82,6 +82,7 @@ dev = [
     "tox>=4.0.0",
 ]
 test = [
+    "scanpy[leiden]",
     "pytest>=7",
     "pytest-xdist>=3",
     "pytest-mock>=3.5.0",
@@ -116,6 +117,9 @@ include-package-data = true
 
 [tool.hatch.version]
 source = "vcs"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.ruff]
 line-length = 120

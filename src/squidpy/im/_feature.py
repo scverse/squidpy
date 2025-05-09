@@ -80,7 +80,7 @@ def calculate_image_features(
         If a feature is not known.
     """
     layer = img._get_layer(layer)
-    if isinstance(features, (str, ImageFeature)):
+    if isinstance(features, str | ImageFeature):
         features = [features]
     features = sorted({ImageFeature(f).s for f in features})
 

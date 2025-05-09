@@ -15,7 +15,7 @@ from scanpy import logging as logg
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, singledispatchmethod
-from squidpy.im import ImageContainer  # type: ignore[attr-defined]
+from squidpy.im import ImageContainer
 from squidpy.pl._interactive._model import ImageModel
 from squidpy.pl._interactive._utils import (
     _display_channelwise,

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import dask.array as da
 import numpy as np
@@ -93,7 +93,7 @@ class SegmentationModel(ABC):
         return img.astype(_SEG_DTYPE)
 
     @segment.register(np.ndarray)
-    def _(self, img: NDArrayA, **kwargs: Any) -> NDArrayA:
+    def _(self, img: NDArrayA, **kwargs: Any) -> NDArrayA | da.Array:
         chunks = kwargs.pop("chunks", None)
         if chunks is not None:
             return self.segment(da.asarray(img).rechunk(chunks), **kwargs)
@@ -160,7 +160,7 @@ class SegmentationModel(ABC):
         if isinstance(library_id, str):
             func = {library_id: self.segment}
         elif isinstance(library_id, Sequence):
-            func = {lid: self.segment for lid in library_id}
+            func = dict.fromkeys(library_id, self.segment)
         else:
             raise TypeError(
                 f"Expected library id to be `None` or of type `str` or `sequence`, found `{type(library_id).__name__}`."

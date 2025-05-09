@@ -1,21 +1,26 @@
 from __future__ import annotations
 
 import os
+import shutil
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from inspect import Parameter, Signature, signature
 from pathlib import Path
-from typing import Any, Callable, Union
+from typing import Any, TypeAlias, Union
 
 import anndata
+import spatialdata as sd
 from anndata import AnnData
 from scanpy import logging as logg
 from scanpy import read
 from scanpy._utils import check_presence_download
 
-PathLike = Union[os.PathLike[str], str]
-Function_t = Callable[..., Union[AnnData, Any]]
+from squidpy.im import ImageContainer
+
+PathLike: TypeAlias = os.PathLike[str] | str
+Function_t: TypeAlias = Callable[..., AnnData | Any]
+DEFAULT_CACHE_DIR = Path.home() / ".cache" / "squidpy"
 
 
 @dataclass(frozen=True)
@@ -165,8 +170,6 @@ class ImgMetadata(Metadata):
         )
 
     def _download(self, fpath: PathLike, backup_url: str, **kwargs: Any) -> Any:
-        from squidpy.im import ImageContainer  # type: ignore[attr-defined]
-
         check_presence_download(Path(fpath), backup_url)
 
         img = ImageContainer()
@@ -177,3 +180,42 @@ class ImgMetadata(Metadata):
     @property
     def _extension(self) -> str:
         return ".tiff"
+
+
+def _get_zipped_dataset(folderpath: Path, dataset_name: str, figshare_id: str) -> sd.SpatialData:
+    """Returns a specific dataset as SpatialData object. If the file is not present on disk, it will be downloaded and extracted."""
+
+    if not folderpath.is_dir():
+        raise ValueError(f"Expected a directory path for `folderpath`, found: {folderpath}")
+
+    download_zip = folderpath / f"{dataset_name}.zip"
+    extracted_path = folderpath / f"{dataset_name}.zarr"
+
+    # Return early if data is already extracted
+    if extracted_path.exists():
+        logg.info(f"Loading existing dataset from {extracted_path}")
+        return sd.read_zarr(extracted_path)
+
+    # Download if necessary
+    if not download_zip.exists():
+        logg.info(f"Downloading Visium H&E SpatialData to {download_zip}")
+        try:
+            check_presence_download(
+                filename=download_zip,
+                backup_url=f"https://ndownloader.figshare.com/files/{figshare_id}",
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to download dataset: {e}") from e
+
+    # Extract if necessary
+    if not extracted_path.exists():
+        logg.info(f"Extracting dataset from {download_zip} to {extracted_path}")
+        try:
+            shutil.unpack_archive(str(download_zip), folderpath)
+        except Exception as e:
+            raise RuntimeError(f"Failed to extract dataset: {e}") from e
+
+    if not extracted_path.exists():
+        raise RuntimeError(f"Expected extracted data at {extracted_path}, but not found")
+
+    return sd.read_zarr(extracted_path)

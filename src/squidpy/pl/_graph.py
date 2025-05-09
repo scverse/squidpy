@@ -96,7 +96,7 @@ def centrality_scores(
 
     fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
-    for g, ax in zip(score, axs):
+    for g, ax in zip(score, axs, strict=False):
         sns.scatterplot(
             x=g,
             y=cluster_key,
@@ -378,7 +378,7 @@ def co_occurrence(
     )
     axs = np.ravel(axs)  # make into iterable
 
-    for g, ax in zip(clusters, axs):
+    for g, ax in zip(clusters, axs, strict=False):
         idx = np.where(categories == g)[0][0]
         df = pd.DataFrame(out[idx, :, :].T, columns=categories).melt(var_name=cluster_key, value_name="probability")
         df["distance"] = np.tile(interval, len(categories))

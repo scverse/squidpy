@@ -1,8 +1,17 @@
 from __future__ import annotations
 
 from copy import copy
+from typing import Any, Protocol, Union
 
-from squidpy.datasets._utils import AMetadata
+from anndata import AnnData
+
+from squidpy.datasets._10x_datasets import visium_hne_sdata
+from squidpy.datasets._utils import AMetadata, PathLike
+
+
+class Dataset(Protocol):
+    def __call__(self, path: PathLike | None = ..., **kwargs: Any) -> AnnData: ...
+
 
 _4i = AMetadata(
     name="four_i",
@@ -74,8 +83,7 @@ _merfish = AMetadata(
 )
 _slideseqv2 = AMetadata(
     name="slideseqv2",
-    doc_header="Pre-processed SlideseqV2 dataset from `Stickles et al "
-    "<https://doi.org/10.1038/s41587-020-0739-1>`__.",
+    doc_header="Pre-processed SlideseqV2 dataset from `Stickles et al <https://doi.org/10.1038/s41587-020-0739-1>`__.",
     shape=(41786, 4000),
     url="https://ndownloader.figshare.com/files/28242783",
 )
@@ -91,6 +99,7 @@ __all__ = [  # noqa: F822
     "seqfish",
     "visium_hne_adata",
     "visium_hne_adata_crop",
+    "visium_hne_sdata",
     "visium_fluo_adata",
     "visium_fluo_adata_crop",
     "sc_mouse_cortex",

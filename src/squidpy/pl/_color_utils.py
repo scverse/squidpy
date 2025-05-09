@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Union
+from typing import Any, TypeAlias, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,7 +15,7 @@ from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
 from squidpy._constants._pkg_constants import Key
 
-Palette_t = Union[str, ListedColormap, None]
+Palette_t: TypeAlias = str | ListedColormap | None
 
 
 def _maybe_set_colors(
@@ -47,7 +47,10 @@ def _get_palette(
                     f"Expected palette to be of length `{len(categories)}`, found `{len(palette)}`. "
                     + f"Removing the colors in `adata.uns` with `adata.uns.pop('{cluster_key}_colors')` may help."
                 )
-            return {cat: to_hex(to_rgba(col)[:3] + (alpha,), keep_alpha=True) for cat, col in zip(categories, palette)}
+            return {
+                cat: to_hex(to_rgba(col)[:3] + (alpha,), keep_alpha=True)
+                for cat, col in zip(categories, palette, strict=False)
+            }
         except KeyError as e:
             logg.error(f"Unable to fetch palette, reason: {e}. Using `None`.")
             return None
@@ -61,4 +64,4 @@ def _get_palette(
     else:
         raise TypeError(f"Palette is {type(palette)} but should be string or `ListedColormap`.")
 
-    return dict(zip(categories, palette))
+    return dict(zip(categories, palette, strict=False))
