@@ -340,6 +340,7 @@ def deprecated(reason: str) -> Any:
     else:
         raise TypeError(repr(type(reason)))
 
+
 def _get_adata_from_input(data: AnnData | SpatialData, table: str | None = None) -> None:
     if isinstance(data, AnnData):
         return data

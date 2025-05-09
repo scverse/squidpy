@@ -55,14 +55,17 @@ def var_embeddings(
     adata = _get_adata_from_input(data, table)
 
     if design_matrix_key not in adata.obsm:
-        raise KeyError(f"Design matrix key '{design_matrix_key}' not found in .obsm. Available keys are: {list(adata.obsm.keys())}")
+        raise KeyError(
+            f"Design matrix key '{design_matrix_key}' not found in .obsm. Available keys are: {list(adata.obsm.keys())}"
+        )
 
     design_matrix = adata.obsm[design_matrix_key].copy()
     if group not in design_matrix.columns:
-        raise KeyError(f"Group column '{group}' not found in design matrix. Available columns: {list(design_matrix.columns)}")
+        raise KeyError(
+            f"Group column '{group}' not found in design matrix. Available columns: {list(design_matrix.columns)}"
+        )
     if not pd.api.types.is_numeric_dtype(design_matrix[group]):
         raise TypeError(f"The group column '{group}' must be numeric.")
-
 
     logg.info("Calculating embeddings for distance aggregations by gene.")
 
@@ -70,12 +73,15 @@ def var_embeddings(
     intervals = pd.cut(design_matrix[group], bins=n_bins)
 
     # Extract the interval bounds as tuples and midpoints in a single pass
-    design_matrix["bins"] = [(interval.left, interval.right) if pd.notnull(interval) else (0.0, 0.0) for interval in intervals]
+    design_matrix["bins"] = [
+        (interval.left, interval.right) if pd.notnull(interval) else (0.0, 0.0) for interval in intervals
+    ]
     design_matrix["median_value"] = [interval.mid if pd.notnull(interval) else 0.0 for interval in intervals]
 
-
     # turn categorical NaNs into float 0s
-    design_matrix["median_value"] = pd.to_numeric(design_matrix["median_value"], errors="coerce").fillna(0).astype(float)
+    design_matrix["median_value"] = (
+        pd.to_numeric(design_matrix["median_value"], errors="coerce").fillna(0).astype(float)
+    )
 
     # get count matrix and add binned distance to each .obs
     X_df = adata.to_df()
@@ -106,4 +112,3 @@ def var_embeddings(
         else:
             data.tables["var_by_dist_bins"] = adata_new
             return None
-
