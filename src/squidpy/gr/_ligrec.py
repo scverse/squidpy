@@ -731,12 +731,12 @@ def _analysis(
 
         return TempResult(means=means, pvalues=pvalues)
 
-    data = data.astype(np.float64, copy=False)
     groups = data.groupby("clusters", observed=True)
     clustering = np.array(data["clusters"].values, dtype=np.int32)
 
     mean = groups.mean().values.T  # (n_genes, n_clusters)
-    mask = groups.apply(lambda c: ((c > 0).sum() / len(c)) >= threshold).values.T  # (n_genes, n_clusters)
+    mask = groups.apply(lambda c: ((c > 0).astype(int).sum() / len(c)) >= threshold).values.T  # (n_genes, n_clusters)
+
     # (n_cells, n_genes)
     data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
     # all 3 should be C contiguous

@@ -14,6 +14,7 @@ from anndata import AnnData
 from pandas.testing import assert_frame_equal
 from scanpy import settings as s
 from scanpy.datasets import blobs
+from scipy.sparse import csc_matrix
 
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import ligrec
@@ -462,16 +463,72 @@ class TestValidBehavior:
         assert isinstance(pt.interactions, pd.DataFrame)
         assert len(pt.interactions) == 1
 
-    def test_pvalues_nans(self, adata_hne: AnnData):
-        res = ligrec(
-            adata_hne,
-            _CK,
-            seed=42,
-            n_perms=5,
-            show_progress_bar=False,
-            use_raw=False,
-            copy=True,
+    def test_ligrec_nan_counts(self):
+        """
+        For the test case with 2 clusters (A, B) and 3 gene pairs (Gene1→Gene2, Gene2→Gene3, Gene3→Gene1):
+
+        Expression fractions per cluster (computed as fraction of cells with value > 0):
+        Cluster A:
+        - Gene1: 1/3 = 0.33 (only A1 has value > 0)
+        - Gene2: 2/3 = 0.67 (A2 and A3 have value > 0)
+        - Gene3: 0/3 = 0.00 (none have value > 0)
+
+        Cluster B:
+        - Gene1: 1/3 = 0.33 (only B1 has value > 0)
+        - Gene2: 0/3 = 0.00 (none have value > 0)
+        - Gene3: 3/3 = 1.00 (all have value > 0)
+
+        The mask is computed for each gene in each cluster as:
+        mask[gene, cluster] = (number of cells with value > 0) / (total cells in cluster) >= threshold
+
+        With threshold=0.8, the mask is:
+        Cluster A: [False, False, False]  # All genes < 0.8 expression fraction
+        Cluster B: [False, False, True]   # Only Gene3 >= 0.8 expression fraction
+
+        A value in the result becomes NaN if either:
+        - The ligand's mask is False in the source cluster, OR
+        - The receptor's mask is False in the target cluster
+
+        For each cluster pair (A→A, A→B, B→A, B→B) and each gene pair:
+        A→A: All NaN (all genes have mask=False in A)
+        A→B: All NaN (all genes have mask=False in A)
+        B→A: All NaN (all genes have mask=False in A)
+        B→B: Only Gene2→Gene3 is non-NaN (Gene3 has mask=True in B)
+
+        Total NaNs = 4 cluster pairs x 3 gene pairs - 1 = 11 NaNs
+        (The -1 is because B→B for Gene2→Gene3 is the only non-NaN case, where Gene3 has mask=True in B)
+        """
+
+        expected_nans = 11
+        # Setup test data
+        threshold = 0.8
+        interactions = pd.DataFrame({"source": ["Gene1", "Gene2", "Gene3"], "target": ["Gene2", "Gene3", "Gene1"]})
+
+        # Create sparse matrix with test data
+        X = csc_matrix(
+            [
+                [1.0, 0.1, 0.0],  # A1
+                [0.0, 1.0, 0.0],  # A2
+                [0.0, 1.0, 0.0],  # A3
+                [0.1, 0.0, 1.0],  # B1
+                [0.0, 0.0, 1.0],  # B2
+                [0.0, 0.0, 1.0],  # B3
+            ]
         )
-        expected_num_nans_upper = 500_000
-        num_nans = np.isnan(res["pvalues"].values).sum()
-        assert num_nans < expected_num_nans_upper
+
+        # Create AnnData object
+        adata = AnnData(
+            X=X,
+            obs=pd.DataFrame({"cluster": ["A"] * 3 + ["B"] * 3}, index=[f"cell{i}" for i in range(1, 7)]),
+            var=pd.DataFrame(index=["Gene1", "Gene2", "Gene3"]),
+        )
+        adata.obs["cluster"] = adata.obs["cluster"].astype("category")
+
+        # Run ligrec and compare NaN counts
+        res = ligrec(
+            adata, cluster_key="cluster", interactions=interactions, threshold=threshold, use_raw=False, copy=True
+        )
+
+        actual_nans = np.sum(np.isnan(res["pvalues"].values))
+
+        assert actual_nans == expected_nans, f"NaN count mismatch: expected {expected_nans}, got {actual_nans}"
