@@ -737,7 +737,9 @@ def _analysis(
     mean = groups.mean().values.T  # (n_genes, n_clusters)
     # see https://github.com/scverse/squidpy/pull/991#issuecomment-2888506296
     # for why we need to cast to int64 here
-    mask = groups.apply(lambda c: ((c > 0).astype(np.int64).sum() / len(c)) >= threshold).values.T  # (n_genes, n_clusters)
+    mask = groups.apply(
+        lambda c: ((c > 0).astype(np.int64).sum() / len(c)) >= threshold
+    ).values.T  # (n_genes, n_clusters)
 
     # (n_cells, n_genes)
     data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
