@@ -846,10 +846,7 @@ def _analysis_helper(
         rs.shuffle(clustering)
         error = test(interactions, interaction_clusters, data, clustering, mean, mask, res=res)
         if error:
-            raise ValueError(
-                "In the execution of the numba function, "
-                "an unhandled case was encountered. "
-            )
+            raise ValueError("In the execution of the numba function, an unhandled case was encountered. ")
             # This is mainly to avoid a numba warning
             # Otherwise, the numba function wouldn't be
             # executed in parallel
