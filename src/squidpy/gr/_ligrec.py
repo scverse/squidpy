@@ -735,11 +735,15 @@ def _analysis(
     clustering = np.array(data["clusters"].values, dtype=np.int32)
 
     mean = groups.mean().values.T  # (n_genes, n_clusters)
-    mask = groups.apply(lambda c: ((c > 0).sum() / len(c)) >= threshold).values.T  # (n_genes, n_clusters)
+    # see https://github.com/scverse/squidpy/pull/991#issuecomment-2888506296
+    # for why we need to cast to int64 here
+    mask = groups.apply(
+        lambda c: ((c > 0).astype(np.int64).sum() / len(c)) >= threshold
+    ).values.T  # (n_genes, n_clusters)
+
     # (n_cells, n_genes)
     data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
     # all 3 should be C contiguous
-
     return parallelize(  # type: ignore[no-any-return]
         _analysis_helper,
         np.arange(n_perms, dtype=np.int32).tolist(),
