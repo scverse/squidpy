@@ -866,6 +866,6 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
             unnecessary_args.append(param_name)
 
     if unnecessary_args:
-        logg.warn(
+        logg.warning(
             f"Parameters {', '.join([f'{arg}' for arg in unnecessary_args])} are not used for flavor '{flavor}'.",
         )
