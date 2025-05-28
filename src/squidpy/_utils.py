@@ -14,6 +14,7 @@ from threading import Thread
 from typing import TYPE_CHECKING, Any
 
 import joblib as jl
+import numba
 import numpy as np
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
@@ -163,17 +164,22 @@ def parallelize(
         if pbar is not None:
             pbar.close()
 
+    def callback_wrapper(*args: Any, **kwargs: Any) -> Any:
+        numba.set_num_threads(1)
+        return (runner if use_runner else callback)(*args, **kwargs)
+
     def wrapper(*args: Any, **kwargs: Any) -> Any:
+        numba.set_num_threads(1)
         if pass_queue and show_progress_bar:
             pbar = None if tqdm is None else tqdm(total=col_len, unit=unit)
             queue = Manager().Queue()
-            thread = Thread(target=update, args=(pbar, queue, len(collections)))
+            thread = Thread(target=update, args=(pbar, queue, len(collections)), name="ParallelizeUpdateThread")
             thread.start()
         else:
             pbar, queue, thread = None, None, None
 
         res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
-            jl.delayed(runner if use_runner else callback)(
+            jl.delayed(callback_wrapper)(
                 *((i, cs) if use_ixs else (cs,)),
                 *args,
                 **kwargs,
