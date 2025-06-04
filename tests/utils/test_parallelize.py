@@ -2,34 +2,39 @@
 
 from __future__ import annotations
 
-import numpy as np
-import pytest  # type: ignore[import]
-import numba
-import dask.array as da
-from typing import Callable
+from collections.abc import Callable
 from functools import partial
 
-from squidpy._utils import parallelize, Signal
+import dask.array as da
+import numba
+import numpy as np
+import pytest  # type: ignore[import]
 
-
+from squidpy._utils import Signal, parallelize
 
 # Functions to be parallelized
+
 
 @numba.njit(parallel=True)
 def numba_parallel_func(x, y) -> np.ndarray:
     return x * 2 + y
 
+
 @numba.njit(parallel=False)
 def numba_serial_func(x, y) -> np.ndarray:
     return x * 2 + y
 
+
 def dask_func(x, y) -> np.ndarray:
     return (da.from_array(x) * 2 + y).compute()
+
 
 def vanilla_func(x, y) -> np.ndarray:
     return x * 2 + y
 
+
 # Mock runner function
+
 
 def mock_runner(x, y, queue, func):
     for i in range(len(x)):
