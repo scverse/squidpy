@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import numpy as np
-import pytest  # type: ignore[import]
-import numba
-import dask.array as da
 from collections.abc import Callable
 from functools import partial
+
+import dask.array as da
+import numba
+import numpy as np
 import psutil
+import pytest  # type: ignore[import]
 
-from squidpy._utils import parallelize, Signal
-
+from squidpy._utils import Signal, parallelize
 
 # Functions to be parallelized
 
@@ -66,7 +66,11 @@ def test_parallelize_loky(func, n_jobs):
     arr1 = [rng.randint(0, 100, n) for _ in range(n)]
     arr2 = np.arange(n)
     runner = partial(mock_runner, func=func)
+    # this is the expected result of the function
     expected = [func(arr1[i], arr2) for i in range(len(arr1))]
+    # this will be set to something other than 1,2,8
+    # we want to check if setting the threads works
+    # then after the function is run if the numba cores are set back to 1
     old_num_threads = 3
     numba.set_num_threads(old_num_threads)
     # Get initial state
