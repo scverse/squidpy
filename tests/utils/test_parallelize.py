@@ -58,7 +58,7 @@ def func(request) -> Callable:
     }[request.param]
 
 
-@pytest.mark.isolate
+@pytest.mark.timeout(60)
 @pytest.mark.parametrize("n_jobs", [1, 2, 8])
 def test_parallelize_loky(func, n_jobs):
     start_time = time.time()
