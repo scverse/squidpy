@@ -89,6 +89,7 @@ test = [
     "pytest-cov>=4",
     "coverage[toml]>=7",
     "psutil",
+    "pytest-isolate",
 ]
 docs = [
     "ipython",
