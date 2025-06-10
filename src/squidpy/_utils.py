@@ -56,6 +56,11 @@ def _unique_order_preserving(
     return [i for i in iterable if not (i in seen or seen_add(i))], seen
 
 
+def _callback_wrapper(chosen_runner: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    numba.set_num_threads(1)
+    return chosen_runner(*args, **kwargs)
+
+
 class Signal(Enum):
     """Signaling values when informing parallelizer."""
 
@@ -164,9 +169,7 @@ def parallelize(
         if pbar is not None:
             pbar.close()
 
-    def callback_wrapper(*args: Any, **kwargs: Any) -> Any:
-        numba.set_num_threads(1)
-        return (runner if use_runner else callback)(*args, **kwargs)
+    chosen_runner = runner if use_runner else callback
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         numba.set_num_threads(1)
@@ -179,8 +182,8 @@ def parallelize(
             pbar, queue, thread = None, None, None
 
         res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
-            jl.delayed(callback_wrapper)(
-                *((i, cs) if use_ixs else (cs,)),
+            jl.delayed(_callback_wrapper)(
+                *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
                 *args,
                 **kwargs,
                 queue=queue,
