@@ -226,3 +226,8 @@ required-imports = ["from __future__ import annotations"]
 [tool.ruff.lint.flake8-tidy-imports]
 # Disallow all relative imports.
 ban-relative-imports = "all"
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error::numba.NumbaPerformanceWarning"
+]
