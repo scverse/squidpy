@@ -229,5 +229,5 @@ ban-relative-imports = "all"
 
 [tool.pytest.ini_options]
 filterwarnings = [
-    "error::NumbaPerformanceWarning"
+    "error::numba.NumbaPerformanceWarning"
 ]
