@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from functools import partial
-import time
 
 import dask.array as da
 import numba
