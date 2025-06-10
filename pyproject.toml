@@ -232,3 +232,4 @@ ban-relative-imports = "all"
 filterwarnings = [
     "error::numba.NumbaPerformanceWarning"
 ]
+addopts = "-n auto"
