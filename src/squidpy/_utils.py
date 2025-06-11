@@ -57,8 +57,12 @@ def _unique_order_preserving(
 
 
 def _callback_wrapper(chosen_runner: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    original_num_threads = numba.get_num_threads()
     numba.set_num_threads(1)
-    return chosen_runner(*args, **kwargs)
+    try:
+        return chosen_runner(*args, **kwargs)
+    finally:
+        numba.set_num_threads(original_num_threads)
 
 
 class Signal(Enum):
@@ -172,29 +176,38 @@ def parallelize(
     chosen_runner = runner if use_runner else callback
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
+        original_num_threads = numba.get_num_threads()
+        # setting it also here but will
+        # also set inside the callback wrapper because
+        # it's not entirely clear in numba documentation
+        # whether this thread number mask will be applied
+        # to other processes spawned by joblib.
         numba.set_num_threads(1)
-        if pass_queue and show_progress_bar:
-            pbar = None if tqdm is None else tqdm(total=col_len, unit=unit)
-            queue = Manager().Queue()
-            thread = Thread(target=update, args=(pbar, queue, len(collections)), name="ParallelizeUpdateThread")
-            thread.start()
-        else:
-            pbar, queue, thread = None, None, None
+        try:
+            if pass_queue and show_progress_bar:
+                pbar = None if tqdm is None else tqdm(total=col_len, unit=unit)
+                queue = Manager().Queue()
+                thread = Thread(target=update, args=(pbar, queue, len(collections)), name="ParallelizeUpdateThread")
+                thread.start()
+            else:
+                pbar, queue, thread = None, None, None
 
-        res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
-            jl.delayed(_callback_wrapper)(
-                *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
-                *args,
-                **kwargs,
-                queue=queue,
+            res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
+                jl.delayed(_callback_wrapper)(
+                    *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
+                    *args,
+                    **kwargs,
+                    queue=queue,
+                )
+                for i, cs in enumerate(collections)
             )
-            for i, cs in enumerate(collections)
-        )
 
-        if thread is not None:
-            thread.join()
+            if thread is not None:
+                thread.join()
 
-        return res if extractor is None else extractor(res)
+            return res if extractor is None else extractor(res)
+        finally:
+            numba.set_num_threads(original_num_threads)
 
     if n_jobs is None:
         n_jobs = 1

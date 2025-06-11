@@ -88,7 +88,7 @@ test = [
     "pytest-mock>=3.5.0",
     "pytest-cov>=4",
     "coverage[toml]>=7",
-    "psutil",
+    "pytest-timeout>=2.1.0",
 ]
 docs = [
     "ipython",
@@ -232,4 +232,3 @@ ban-relative-imports = "all"
 filterwarnings = [
     "error::numba.NumbaPerformanceWarning"
 ]
-addopts = "-n auto"
