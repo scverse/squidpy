@@ -43,8 +43,8 @@ def vanilla_func(x, y) -> np.ndarray:
 
 
 def mock_runner(x, y, queue, function):
-    for i in range(len(x)):
-        x[i] = function(x[i], y, check_threads=True)
+    for i, xi in enumerate(x):
+        x[i] = function(xi, y, check_threads=True)
         if queue is not None:
             queue.put(Signal.UPDATE)
     if queue is not None:
@@ -72,7 +72,7 @@ def test_parallelize_loky(func, n_jobs):
     arr2 = np.arange(n)
     runner = partial(mock_runner, function=func)
     # this is the expected result of the function
-    expected = [func(arr1[i], arr2, check_threads=False) for i in range(len(arr1))]
+    expected = [func(a1, arr2, check_threads=False) for a1 in arr1]
     # this will be set to something other than 1,2,8
     # we want to check if setting the threads works
     # then after the function is run if the numba cores are set back to 1
