@@ -57,12 +57,8 @@ def _unique_order_preserving(
 
 
 def _callback_wrapper(chosen_runner: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-    original_num_threads = numba.get_num_threads()
     numba.set_num_threads(1)
-    try:
-        return chosen_runner(*args, **kwargs)
-    finally:
-        numba.set_num_threads(original_num_threads)
+    return chosen_runner(*args, **kwargs)
 
 
 class Signal(Enum):
