@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from importlib.util import find_spec
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Literal, cast
-from numpy.typing import NDArray
+from typing import TYPE_CHECKING, Any, Literal
 
 import numba.types as nt
 import numpy as np
@@ -297,9 +296,7 @@ def _occur_count(
 
     # reduction and reshape stay the same
     result_flat = local_results.sum(axis=0)
-    result = result_flat.reshape(k, k, l_val)
-
-    return cast(NDArray[np.int32], result)
+    return result_flat.reshape(k, k, l_val).copy()
 
 
 @njit(parallel=True, fastmath=True, cache=True)
@@ -337,9 +334,9 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
     counts = _occur_count(v_x, v_y, thresholds, labs, n, k, l_val)
 
     # Compute co-occurrence probabilities for each threshold bin.
-    occ_prob = np.empty((k, k, l_val), dtype=np.float32)
+    occ_prob = np.empty((k, k, l_val), dtype=np.float64)
     for r in prange(l_val):
-        co_occur = counts[:, :, r].astype(np.float32)
+        co_occur = counts[:, :, r].astype(np.float64)
 
         # Compute the total count for this threshold.
         total = 0.0
@@ -348,7 +345,7 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
                 total += co_occur[i, j]
 
         # Compute the normalized probability matrix.
-        probs_matrix = np.zeros((k, k), dtype=np.float32)
+        probs_matrix = np.zeros((k, k), dtype=np.float64)
         if total != 0.0:
             for i in range(k):
                 for j in range(k):
