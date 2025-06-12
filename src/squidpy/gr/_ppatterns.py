@@ -6,7 +6,6 @@ from collections.abc import Iterable, Sequence
 from importlib.util import find_spec
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Literal, cast
-from numpy.typing import NDArray
 
 import numba.types as nt
 import numpy as np
@@ -14,6 +13,7 @@ import pandas as pd
 from anndata import AnnData
 from numba import njit, prange
 from numpy.random import default_rng
+from numpy.typing import NDArray
 from scanpy import logging as logg
 from scanpy.get import _get_obs_rep
 from scanpy.metrics._gearys_c import _gearys_c
