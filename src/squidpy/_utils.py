@@ -14,6 +14,7 @@ from threading import Thread
 from typing import TYPE_CHECKING, Any
 
 import joblib as jl
+import numba
 import numpy as np
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
@@ -55,6 +56,11 @@ def _unique_order_preserving(
     return [i for i in iterable if not (i in seen or seen_add(i))], seen
 
 
+def _callback_wrapper(chosen_runner: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    numba.set_num_threads(1)
+    return chosen_runner(*args, **kwargs)
+
+
 class Signal(Enum):
     """Signaling values when informing parallelizer."""
 
@@ -88,7 +94,8 @@ def parallelize(
     collection
         Sequence of items to split into chunks.
     n_jobs
-        Number of parallel jobs.
+        Number of parallel jobs to use. If the function uses numba compiled functions, numba may
+        use cores depending on the number of threads set in the environment regardless of this argument.
     n_split
         Split ``collection`` into ``n_split`` chunks.
         If <= 0, ``collection`` is assumed to be already split into chunks.
@@ -162,18 +169,21 @@ def parallelize(
         if pbar is not None:
             pbar.close()
 
+    chosen_runner = runner if use_runner else callback
+
     def wrapper(*args: Any, **kwargs: Any) -> Any:
+        numba.set_num_threads(1)
         if pass_queue and show_progress_bar:
             pbar = None if tqdm is None else tqdm(total=col_len, unit=unit)
             queue = Manager().Queue()
-            thread = Thread(target=update, args=(pbar, queue, len(collections)))
+            thread = Thread(target=update, args=(pbar, queue, len(collections)), name="ParallelizeUpdateThread")
             thread.start()
         else:
             pbar, queue, thread = None, None, None
 
         res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
-            jl.delayed(runner if use_runner else callback)(
-                *((i, cs) if use_ixs else (cs,)),
+            jl.delayed(_callback_wrapper)(
+                *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
                 *args,
                 **kwargs,
                 queue=queue,

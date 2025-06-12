@@ -107,7 +107,8 @@ Nothing, just plots the figure and optionally saves the plot.
 """
 _parallelize = """\
 n_jobs
-    Number of parallel jobs.
+    Number of parallel jobs to use. The number of cores used by numba will be set to 1 regardless of this argument
+    since the backend will create a new process or thread for each job.
 backend
     Parallelization backend to use. See :class:`joblib.Parallel` for available options.
 show_progress_bar
