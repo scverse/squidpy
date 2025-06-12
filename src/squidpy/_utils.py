@@ -187,8 +187,8 @@ def parallelize(
                 thread.start()
             else:
                 pbar, queue, thread = None, None, None
-            kwargs = {} if backend != "loky" else {"inner_max_num_threads": 1}
-            with jl.parallel_backend(backend=backend, **kwargs):
+            jl_kwargs = {} if backend != "loky" else {"inner_max_num_threads": 1}
+            with jl.parallel_backend(backend=backend, **jl_kwargs):
                 res = jl.Parallel(n_jobs=n_jobs)(
                     jl.delayed(_callback_wrapper)(
                         *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
