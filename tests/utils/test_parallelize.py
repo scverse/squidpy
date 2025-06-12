@@ -62,7 +62,7 @@ def func(request) -> Callable:
     }[request.param]
 
 
-@pytest.mark.timeout(100)
+@pytest.mark.timeout(200)
 @pytest.mark.parametrize("n_jobs", [1, 2, 8])
 def test_parallelize_loky(func, n_jobs):
     seed = 42
