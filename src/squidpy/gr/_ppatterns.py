@@ -266,7 +266,7 @@ def _score_helper(
 
     return score_perms
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=True, fastmath=True, cache=True)
 def _occur_count(
     spatial_x: NDArrayA,
     spatial_y: NDArrayA,
@@ -296,10 +296,8 @@ def _occur_count(
             for r in range(l_val):
                 if d2 <= thresholds[r]:
                     local_counts[base + r] += 1
-        local_results[i, :] = local_counts
 
-        # for m in range(l_val * k * k):
-            # local_results[i, m] = local_counts[m]
+        local_results[i, :] = local_counts
 
     # reduction and reshape stay the same
     result_flat = local_results.sum(axis=0)
@@ -307,7 +305,12 @@ def _occur_count(
 
     return result
 
-def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs: NDArrayA) -> NDArrayA:
+@njit(parallel=True, fastmath=True, cache=True)
+def _co_occurrence_helper(
+        v_x: NDArrayA,
+        v_y: NDArrayA,
+        v_radium: NDArrayA,
+        labs: NDArrayA) -> NDArrayA:
     """
     Fast co-occurrence probability computation using the new numba-accelerated counting.
 
@@ -342,7 +345,7 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
     # Compute co-occurrence probabilities for each threshold bin.
     occ_prob = np.empty((k, k, l_val), dtype=np.float32)
-    for r in range(l_val):
+    for r in prange(l_val):
         co_occur = counts[:, :, r].astype(np.float32)
 
         # Compute the total count for this threshold.
