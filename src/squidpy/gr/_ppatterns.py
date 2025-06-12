@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from importlib.util import find_spec
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
+from numpy.typing import NDArray
 
 import numba.types as nt
 import numpy as np
@@ -303,7 +304,7 @@ def _occur_count(
     result_flat = local_results.sum(axis=0)
     result = result_flat.reshape(k, k, l_val)
 
-    return result
+    return cast(NDArray[np.int32], result)
 
 @njit(parallel=True, fastmath=True, cache=True)
 def _co_occurrence_helper(
