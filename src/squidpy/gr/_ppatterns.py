@@ -266,54 +266,46 @@ def _score_helper(
 
     return score_perms
 
-
 @njit(parallel=True, fastmath=True)
 def _occur_count(
-    spatial_x: NDArrayA, spatial_y: NDArrayA, thresholds: NDArrayA, label_idx: NDArrayA, n: int, k: int, l_val: int
+    spatial_x: NDArrayA,
+    spatial_y: NDArrayA,
+    thresholds: NDArrayA,
+    label_idx: NDArrayA,
+    n: int,
+    k: int,
+    l_val: int
 ) -> NDArrayA:
     # Allocate a 2D array to store a flat local result per point.
-    local_results = np.zeros((n, l_val * k * k), dtype=np.int32)
+    k2 = k * k
+    local_results = np.zeros((n, l_val * k2), dtype=np.int32)
+
     for i in prange(n):
-        local_counts = np.zeros(l_val * k * k, dtype=np.int32)
+        local_counts = np.zeros(l_val * k2, dtype=np.int32)
+
         for j in range(n):
             if i == j:
                 continue
             dx = spatial_x[i] - spatial_x[j]
             dy = spatial_y[i] - spatial_y[j]
-            dist_sq = dx * dx + dy * dy
+            d2 = dx * dx + dy * dy
+
+            pair = label_idx[i] * k + label_idx[j]   # fixed in r–loop
+            base = pair * l_val                      # first cell for that pair
+
             for r in range(l_val):
-                thresh = thresholds[r]
-                if dist_sq <= thresh:
-                    index = r * (k * k) + label_idx[i] * k + label_idx[j]
-                    local_counts[index] += 1
-                # else:
-                #    break  # If this threshold fails, smaller ones will also fail.
-        for m in range(l_val * k * k):
-            local_results[i, m] = local_counts[m]
+                if d2 <= thresholds[r]:
+                    local_counts[base + r] += 1
+        local_results[i, :] = local_counts
 
-    # Reduce over all points: sum the local counts.
-    result_flat = np.zeros(l_val * k * k, dtype=np.int32)
-    for m in range(l_val * k * k):
-        s = 0
-        for i in range(n):
-            s += local_results[i, m]
-        result_flat[m] = s
+        # for m in range(l_val * k * k):
+            # local_results[i, m] = local_counts[m]
 
-    # Reshape to a 3D array with shape (interval, k, k)
-    counts = np.empty((l_val, k, k), dtype=np.int32)
-    for r in range(l_val):
-        for i in range(k):
-            for j in range(k):
-                counts[r, i, j] = result_flat[r * (k * k) + i * k + j]
+    # reduction and reshape stay the same
+    result_flat = local_results.sum(axis=0)
+    result = result_flat.reshape(k, k, l_val)
 
-    # Rearrange axes to match the original convention: (k, k, interval)
-    result = np.empty((k, k, l_val), dtype=np.int32)
-    for i in range(k):
-        for j in range(k):
-            for r in range(l_val):
-                result[i, j, r] = counts[r, i, j]
     return result
-
 
 def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs: NDArrayA) -> NDArrayA:
     """
