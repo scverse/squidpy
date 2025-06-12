@@ -296,7 +296,9 @@ def _occur_count(
 
     # reduction and reshape stay the same
     result_flat = local_results.sum(axis=0)
-    return result_flat.reshape(k, k, l_val).copy()
+    result = result_flat.reshape(k, k, l_val).astype(np.int32)
+
+    return result
 
 
 @njit(parallel=True, fastmath=True, cache=True)
