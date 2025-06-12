@@ -187,22 +187,20 @@ def parallelize(
                 thread.start()
             else:
                 pbar, queue, thread = None, None, None
-            jl_kwargs = {} if backend != "loky" else {"inner_max_num_threads": 1}
-            with jl.parallel_backend(backend=backend, **jl_kwargs):
-                res = jl.Parallel(n_jobs=n_jobs)(
-                    jl.delayed(_callback_wrapper)(
-                        *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
-                        *args,
-                        **kwargs,
-                        queue=queue,
-                    )
-                    for i, cs in enumerate(collections)
+            res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
+                jl.delayed(_callback_wrapper)(
+                    *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
+                    *args,
+                    **kwargs,
+                    queue=queue,
                 )
+                for i, cs in enumerate(collections)
+            )
 
-                if thread is not None:
-                    thread.join()
+            if thread is not None:
+                thread.join()
 
-                return res if extractor is None else extractor(res)
+            return res if extractor is None else extractor(res)
         finally:
             numba.set_num_threads(original_num_threads)
 
