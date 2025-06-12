@@ -108,7 +108,9 @@ Nothing, just plots the figure and optionally saves the plot.
 _parallelize = """\
 n_jobs
     Number of parallel jobs to use. The number of cores used by numba will be set to 1 regardless of this argument
-    since the backend will create a new process or thread for each job.
+    since the backend will create a new process or thread for each job by calling :func:`numba.set_num_threads`.
+    To set the absolute maximum number of threads to 1, set the environment variable ``NUMBA_NUM_THREADS`` to 1
+    before the first numba import.
 backend
     Parallelization backend to use. See :class:`joblib.Parallel` for available options.
 show_progress_bar
