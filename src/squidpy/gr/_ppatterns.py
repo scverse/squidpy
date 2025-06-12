@@ -266,15 +266,10 @@ def _score_helper(
 
     return score_perms
 
+
 @njit(parallel=True, fastmath=True, cache=True)
 def _occur_count(
-    spatial_x: NDArrayA,
-    spatial_y: NDArrayA,
-    thresholds: NDArrayA,
-    label_idx: NDArrayA,
-    n: int,
-    k: int,
-    l_val: int
+    spatial_x: NDArrayA, spatial_y: NDArrayA, thresholds: NDArrayA, label_idx: NDArrayA, n: int, k: int, l_val: int
 ) -> NDArrayA:
     # Allocate a 2D array to store a flat local result per point.
     k2 = k * k
@@ -290,8 +285,8 @@ def _occur_count(
             dy = spatial_y[i] - spatial_y[j]
             d2 = dx * dx + dy * dy
 
-            pair = label_idx[i] * k + label_idx[j]   # fixed in r–loop
-            base = pair * l_val                      # first cell for that pair
+            pair = label_idx[i] * k + label_idx[j]  # fixed in r–loop
+            base = pair * l_val  # first cell for that pair
 
             for r in range(l_val):
                 if d2 <= thresholds[r]:
@@ -305,12 +300,9 @@ def _occur_count(
 
     return result
 
+
 @njit(parallel=True, fastmath=True, cache=True)
-def _co_occurrence_helper(
-        v_x: NDArrayA,
-        v_y: NDArrayA,
-        v_radium: NDArrayA,
-        labs: NDArrayA) -> NDArrayA:
+def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs: NDArrayA) -> NDArrayA:
     """
     Fast co-occurrence probability computation using the new numba-accelerated counting.
 
