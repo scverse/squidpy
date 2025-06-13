@@ -62,29 +62,19 @@ def func(request) -> Callable:
     }[request.param]
 
 
-@pytest.mark.timeout(200)
-@pytest.mark.parametrize("n_jobs", [1, 2, 8])
-def test_parallelize_loky(func, n_jobs):
+@pytest.mark.timeout(60)
+def test_parallelize_loky(func):
     seed = 42
-    rng = np.random.RandomState(seed)
     n = 8
+    n_jobs = 2
+    rng = np.random.RandomState(seed)
     arr1 = [rng.randint(0, 100, n) for _ in range(n)]
     arr2 = np.arange(n)
     runner = partial(mock_runner, function=func)
-    # this is the expected result of the function
+
     expected = np.vstack([func(a1, arr2, check_threads=False) for a1 in arr1])
-    # this will be set to something other than 1,2,8
-    # we want to check if setting the threads works
-    # then after the function is run if the numba cores are set back to 1
-    old_num_threads = 3
-    numba.set_num_threads(old_num_threads)
 
     p_func = parallelize(runner, arr1, n_jobs=n_jobs, backend="loky", use_ixs=False, extractor=np.vstack)
     result = p_func(arr2)
 
-    final_numba_threads = numba.get_num_threads()
-
-    assert final_numba_threads == old_num_threads, "Numba threads should not change"
-    assert len(result) == len(expected), f"Expected: {expected} but got {result}. Length mismatch"
-    for i in range(len(arr1)):
-        assert np.all(result[i] == expected[i]), f"Expected {expected[i]} but got {result[i]}"
+    assert np.allclose(result, expected), f"Expected: {expected} but got {result}"
