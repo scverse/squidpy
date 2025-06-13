@@ -108,7 +108,7 @@ Nothing, just plots the figure and optionally saves the plot.
 _parallelize = """\
 n_jobs
     Number of parallel jobs to use.
-    For `backend="loky"`, the number of cores used by numba for
+    For ``backend="loky"``, the number of cores used by numba for
     each job spawned by the backend will be set to 1 in order to
     overcome the oversubscription issue in case you run
     numba in your function to parallelize.
