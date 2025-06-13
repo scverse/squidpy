@@ -88,6 +88,7 @@ jobs:
                   MPLBACKEND: agg
                   PLATFORM: ${{ matrix.os }}
                   DISPLAY: :42
+                  PYTEST_ADDOPTS: "-n auto"
               run: |
                   tox -vv
             # check if this can be deprecated
