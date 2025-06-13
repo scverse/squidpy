@@ -172,21 +172,15 @@ def parallelize(
     chosen_runner = runner if use_runner else callback
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        original_num_threads = numba.get_num_threads()
-        # setting it also here but will
-        # also set inside the callback wrapper because
-        # it's not entirely clear in numba documentation
-        # whether this thread number mask will be applied
-        # to other processes spawned by joblib.
-        numba.set_num_threads(1)
-        try:
-            if pass_queue and show_progress_bar:
-                pbar = None if tqdm is None else tqdm(total=col_len, unit=unit)
-                queue = Manager().Queue()
-                thread = Thread(target=update, args=(pbar, queue, len(collections)), name="ParallelizeUpdateThread")
-                thread.start()
-            else:
-                pbar, queue, thread = None, None, None
+        if pass_queue and show_progress_bar:
+            pbar = None if tqdm is None else tqdm(total=col_len, unit=unit)
+            queue = Manager().Queue()
+            thread = Thread(target=update, args=(pbar, queue, len(collections)), name="ParallelizeUpdateThread")
+            thread.start()
+        else:
+            pbar, queue, thread = None, None, None
+        jl_kwargs = {"inner_max_num_threads": 1} if backend == "loky" else {}
+        with jl.parallel_config(backend, n_jobs=n_jobs, **jl_kwargs):
             res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
                 jl.delayed(_callback_wrapper)(
                     *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
@@ -201,8 +195,6 @@ def parallelize(
                 thread.join()
 
             return res if extractor is None else extractor(res)
-        finally:
-            numba.set_num_threads(original_num_threads)
 
     if n_jobs is None:
         n_jobs = 1
