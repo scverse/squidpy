@@ -276,7 +276,7 @@ def _occur_count(
     local_results = np.zeros((n, l_val * k2), dtype=np.int32)
 
     for i in prange(n):
-        local_counts = np.zeros(l_val * k2, dtype=np.int32)
+        local_counts: NDArrayA = np.zeros(l_val * k2, dtype=np.int32)
 
         for j in range(n):
             if i == j:
@@ -292,11 +292,11 @@ def _occur_count(
                 if d2 <= thresholds[r]:
                     local_counts[base + r] += 1
 
-        local_results[i, :] = local_counts
+        local_results[i] = local_counts
 
     # reduction and reshape stay the same
     result_flat = local_results.sum(axis=0)
-    result = result_flat.reshape(k, k, l_val).astype(np.int32)
+    result = result_flat.reshape(k, k, l_val).copy()
 
     return result
 
