@@ -296,7 +296,7 @@ def _occur_count(
 
     # reduction and reshape stay the same
     result_flat = local_results.sum(axis=0)
-    result = result_flat.reshape(k, k, l_val).copy()
+    result: NDArrayA = result_flat.reshape(k, k, l_val).copy()
 
     return result
 
