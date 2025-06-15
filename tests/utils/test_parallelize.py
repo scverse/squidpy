@@ -65,6 +65,7 @@ def func(request) -> Callable:
 # Timeouts are also useful because some processes don't return in
 # in case of failure.
 
+
 @pytest.mark.parametrize("backend", ["loky", "multiprocessing"])
 @pytest.mark.timeout(30)
 def test_parallelize(func, backend):
