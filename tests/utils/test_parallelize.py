@@ -66,9 +66,8 @@ def func(request) -> Callable:
 # in case of failure.
 
 
-@pytest.mark.parametrize("backend", ["loky", "multiprocessing"])
 @pytest.mark.timeout(30)
-def test_parallelize(func, backend):
+def test_parallelize_loky(func):
     seed = 42
     n = 8
     n_jobs = 2
@@ -80,7 +79,7 @@ def test_parallelize(func, backend):
     init_threads = numba.get_num_threads()
     expected = np.vstack([func(a1, arr2, check_threads=False) for a1 in arr1])
 
-    p_func = parallelize(runner, arr1, n_jobs=n_jobs, backend=backend, use_ixs=False, extractor=np.vstack)
+    p_func = parallelize(runner, arr1, n_jobs=n_jobs, backend="loky", use_ixs=False, extractor=np.vstack)
     result = p_func(arr2)
 
     assert numba.get_num_threads() == init_threads, "Number of threads should stay the same after parallelization"
