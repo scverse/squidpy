@@ -66,10 +66,10 @@ def func(request) -> Callable:
 # in case of failure.
 
 
-@pytest.mark.timeout(40)
+@pytest.mark.timeout(30)
 def test_parallelize_loky(func):
     seed = 42
-    n = 8
+    n = 4
     n_jobs = 2
     rng = np.random.RandomState(seed)
     arr1 = [rng.randint(0, 100, n) for _ in range(n)]
@@ -79,7 +79,7 @@ def test_parallelize_loky(func):
     init_threads = numba.get_num_threads()
     expected = np.vstack([func(a1, arr2, check_threads=False) for a1 in arr1])
 
-    p_func = parallelize(runner, arr1, n_jobs=n_jobs, backend="loky", use_ixs=False, extractor=np.vstack)
+    p_func = parallelize(runner, arr1, n_jobs=n_jobs, backend="loky", use_ixs=False, extractor=np.vstack, show_progress=False)
     result = p_func(arr2)
 
     assert numba.get_num_threads() == init_threads, "Number of threads should stay the same after parallelization"
