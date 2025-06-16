@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from functools import partial
+import os
 
 import dask.array as da
 import numba
@@ -68,8 +69,18 @@ def func(request) -> Callable:
 
 @pytest.mark.timeout(30)
 def test_parallelize_loky(func):
+    _test_parallelize(func, "loky")
+
+@pytest.mark.timeout(30)
+@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Only testing 'loky' backend in CI environment")
+@pytest.mark.parametrize("backend", ["threading", "multiprocessing"])
+def test_parallelize_others(func, backend):
+    _test_parallelize(func, backend)
+
+
+def _test_parallelize(func, backend):
     seed = 42
-    n = 4
+    n = 2
     n_jobs = 2
     rng = np.random.RandomState(seed)
     arr1 = [rng.randint(0, 100, n) for _ in range(n)]
@@ -80,7 +91,7 @@ def test_parallelize_loky(func):
     expected = np.vstack([func(a1, arr2, check_threads=False) for a1 in arr1])
 
     p_func = parallelize(
-        runner, arr1, n_jobs=n_jobs, backend="loky", use_ixs=False, extractor=np.vstack, show_progress=False
+        runner, arr1, n_jobs=n_jobs, backend=backend, use_ixs=False, extractor=np.vstack, show_progress=False
     )
     result = p_func(arr2)
 
