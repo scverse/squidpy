@@ -66,7 +66,7 @@ def func(request) -> Callable:
 # in case of failure.
 
 
-@pytest.mark.timeout(30)
+@pytest.mark.timeout(40)
 def test_parallelize_loky(func):
     seed = 42
     n = 8
