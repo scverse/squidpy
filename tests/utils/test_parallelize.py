@@ -68,18 +68,25 @@ def func(request) -> Callable:
 
 
 @pytest.mark.timeout(30)
-def test_parallelize_loky(func):
-    _test_parallelize(func, "loky")
-
-
-@pytest.mark.timeout(30)
-@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Only testing 'loky' backend in CI environment")
-@pytest.mark.parametrize("backend", ["threading", "multiprocessing"])
-def test_parallelize_others(func, backend):
-    _test_parallelize(func, backend)
-
-
-def _test_parallelize(func, backend):
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param(
+            "threading",
+            marks=pytest.mark.skipif(
+                os.environ.get("CI") == "true", reason="Only testing 'loky' backend in CI environment"
+            ),
+        ),
+        pytest.param(
+            "multiprocessing",
+            marks=pytest.mark.skipif(
+                os.environ.get("CI") == "true", reason="Only testing 'loky' backend in CI environment"
+            ),
+        ),
+        "loky",
+    ],
+)
+def test_parallelize(func, backend):
     seed = 42
     n = 2
     n_jobs = 2
