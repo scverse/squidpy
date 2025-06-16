@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from functools import partial
-import os
 
 import dask.array as da
 import numba
@@ -70,6 +70,7 @@ def func(request) -> Callable:
 @pytest.mark.timeout(30)
 def test_parallelize_loky(func):
     _test_parallelize(func, "loky")
+
 
 @pytest.mark.timeout(30)
 @pytest.mark.skipif(os.environ.get("CI") == "true", reason="Only testing 'loky' backend in CI environment")
