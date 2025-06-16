@@ -14,8 +14,10 @@ from spatialdata.models import (
 )
 
 
+
+
 def filter_cells(
-    data: sd.SpatialData,
+    data: ad.AnnData | sd.SpatialData,
     tables: list[str] | str | None = None,
     min_counts: int | None = None,
     min_genes: int | None = None,
