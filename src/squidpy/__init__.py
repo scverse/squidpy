@@ -3,7 +3,7 @@ from __future__ import annotations
 from importlib import metadata
 from importlib.metadata import PackageMetadata
 
-from squidpy import datasets, gr, im, pl, read, tl
+from squidpy import datasets, gr, im, pl, pp, read, tl
 
 try:
     md: PackageMetadata = metadata.metadata(__name__)
