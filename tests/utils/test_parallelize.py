@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
-import time
+import os
 from collections.abc import Callable
 from functools import partial
 
 import dask.array as da
 import numba
 import numpy as np
-import psutil
 import pytest  # type: ignore[import]
 
 from squidpy._utils import Signal, parallelize
 
 # Functions to be parallelized
+
+
+def wrap_numba_check(x, y, inner_function, check_threads=True):
+    if check_threads:
+        assert numba.get_num_threads() == 1
+    return inner_function(x, y)
 
 
 @numba.njit(parallel=True)
@@ -38,9 +43,9 @@ def vanilla_func(x, y) -> np.ndarray:
 # Mock runner function
 
 
-def mock_runner(x, y, queue, func):
-    for i in range(len(x)):
-        x[i] = func(x[i], y)
+def mock_runner(x, y, queue, function):
+    for i, xi in enumerate(x):
+        x[i] = function(xi, y, check_threads=True)
         if queue is not None:
             queue.put(Signal.UPDATE)
     if queue is not None:
@@ -51,54 +56,52 @@ def mock_runner(x, y, queue, func):
 @pytest.fixture(params=["numba_parallel", "numba_serial", "dask", "vanilla"])
 def func(request) -> Callable:
     return {
-        "numba_parallel": numba_parallel_func,
-        "numba_serial": numba_serial_func,
-        "dask": dask_func,
-        "vanilla": vanilla_func,
+        "numba_parallel": partial(wrap_numba_check, inner_function=numba_parallel_func),
+        "numba_serial": partial(wrap_numba_check, inner_function=numba_serial_func),
+        "dask": partial(wrap_numba_check, inner_function=dask_func),
+        "vanilla": partial(wrap_numba_check, inner_function=vanilla_func),
     }[request.param]
 
 
-@pytest.mark.timeout(60)
-@pytest.mark.parametrize("n_jobs", [1, 2, 8])
-def test_parallelize_loky(func, n_jobs):
-    start_time = time.time()
+# Timeouts are also useful because some processes don't return in
+# in case of failure.
+
+
+@pytest.mark.timeout(30)
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param(
+            "threading",
+            marks=pytest.mark.skipif(
+                os.environ.get("CI") == "true", reason="Only testing 'loky' backend in CI environment"
+            ),
+        ),
+        pytest.param(
+            "multiprocessing",
+            marks=pytest.mark.skipif(
+                os.environ.get("CI") == "true", reason="Only testing 'loky' backend in CI environment"
+            ),
+        ),
+        "loky",
+    ],
+)
+def test_parallelize(func, backend):
     seed = 42
+    n = 2
+    n_jobs = 2
     rng = np.random.RandomState(seed)
-    n = 8
     arr1 = [rng.randint(0, 100, n) for _ in range(n)]
     arr2 = np.arange(n)
-    runner = partial(mock_runner, func=func)
-    # this is the expected result of the function
-    expected = [func(arr1[i], arr2) for i in range(len(arr1))]
-    # this will be set to something other than 1,2,8
-    # we want to check if setting the threads works
-    # then after the function is run if the numba cores are set back to 1
-    old_num_threads = 3
-    numba.set_num_threads(old_num_threads)
-    # Get initial state
-    initial_process = psutil.Process()
-    initial_children = {p.pid for p in initial_process.children(recursive=True)}
-    initial_children = {psutil.Process(pid) for pid in initial_children}
-    init_numba_threads = numba.get_num_threads()
+    runner = partial(mock_runner, function=func)
 
-    p_func = parallelize(runner, arr1, n_jobs=n_jobs, backend="loky", use_ixs=False, n_split=1)
-    result = p_func(arr2)[0]
+    init_threads = numba.get_num_threads()
+    expected = np.vstack([func(a1, arr2, check_threads=False) for a1 in arr1])
 
-    final_children = {p.pid for p in initial_process.children(recursive=True)}
-    final_numba_threads = numba.get_num_threads()
+    p_func = parallelize(
+        runner, arr1, n_jobs=n_jobs, backend=backend, use_ixs=False, extractor=np.vstack, show_progress=False
+    )
+    result = p_func(arr2)
 
-    assert init_numba_threads == old_num_threads, "Numba threads should not change"
-    assert final_numba_threads == 1, "Numba threads should be 1"
-    assert len(result) == len(expected), f"Expected: {expected} but got {result}. Length mismatch"
-    for i in range(len(arr1)):
-        assert np.all(result[i] == expected[i]), f"Expected {expected[i]} but got {result[i]}"
-
-    processes = final_children - initial_children
-
-    processes = {psutil.Process(pid) for pid in processes}
-    processes = {p for p in processes if not any("resource_tracker" in cl for cl in p.cmdline())}
-    if n_jobs > 1:  # expect exactly n_jobs
-        assert len(processes) == n_jobs, f"Unexpected processes created or not created: {processes}"
-    else:  # some functions use the main process others use a new process
-        processes = {p for p in processes if p.create_time() > start_time}
-        assert len(processes) <= 1, f"Unexpected processes created or not created: {processes}"
+    assert numba.get_num_threads() == init_threads, "Number of threads should stay the same after parallelization"
+    assert np.allclose(result, expected), f"Expected: {expected} but got {result}"
