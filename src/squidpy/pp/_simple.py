@@ -40,7 +40,6 @@ def filter_cells(
     return _filter_cells_spatialdata(data, tables, min_counts, min_genes, max_counts, max_genes, inplace, filter_labels)
 
 
-
 def _filter_cells_spatialdata(
     data: sd.SpatialData,
     tables: list[str] | str | None = None,
@@ -64,9 +63,7 @@ def _filter_cells_spatialdata(
 
     for t in tables:
         if "spatialdata_attrs" not in data.tables[t].uns:
-            raise ValueError(
-                f"Table `{t}` does not have 'spatialdata_attrs' to indicate what it annotates."
-            )
+            raise ValueError(f"Table `{t}` does not have 'spatialdata_attrs' to indicate what it annotates.")
 
     if inplace:
         logg.warning(
@@ -78,7 +75,14 @@ def _filter_cells_spatialdata(
 
     for t in tables:
         table_old = data_out.tables[t]
-        mask_to_remove, _ = sc.pp.filter_cells(table_old, min_counts=min_counts, min_genes=min_genes, max_counts=max_counts, max_genes=max_genes, inplace=False)
+        mask_to_remove, _ = sc.pp.filter_cells(
+            table_old,
+            min_counts=min_counts,
+            min_genes=min_genes,
+            max_counts=max_counts,
+            max_genes=max_genes,
+            inplace=False,
+        )
 
         table_filtered = table_old[~mask_to_remove]
         if table_filtered.n_obs == 0 or table_filtered.n_vars == 0:
@@ -119,6 +123,7 @@ def _filter_cells_spatialdata(
     if inplace:
         return None
     return data_out
+
 
 def _filter_shapesmodel_by_instance_ids(element: ShapesModel, ids_to_remove: list[str]) -> ShapesModel:
     return element[~element.index.isin(ids_to_remove)]
