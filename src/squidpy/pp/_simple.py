@@ -65,7 +65,7 @@ def _filter_cells_spatialdata(
         if "spatialdata_attrs" not in data.tables[t].uns:
             raise ValueError(f"Table `{t}` does not have 'spatialdata_attrs' to indicate what it annotates.")
 
-    if inplace:
+    if not inplace:
         logg.warning(
             "Creating a deepcopy of the SpatialData object, depending on the size of the object this can take a while."
         )
@@ -84,7 +84,7 @@ def _filter_cells_spatialdata(
             inplace=False,
         )
 
-        table_filtered = table_old[~mask_to_remove]
+        table_filtered = table_old[mask_to_remove]
         if table_filtered.n_obs == 0 or table_filtered.n_vars == 0:
             raise ValueError(f"Filter results in empty table when filtering table `{t}`.")
         data_out.tables[t] = table_filtered
@@ -97,7 +97,7 @@ def _filter_cells_spatialdata(
         if isinstance(region, str):
             region = [region]
 
-        removed_obs = table_old.obs[mask_to_remove][[instance_key, region_key]]
+        removed_obs = table_old.obs[~mask_to_remove][[instance_key, region_key]]
 
         # iterate over all elements that the table annotates (region var)
         for r in region:
