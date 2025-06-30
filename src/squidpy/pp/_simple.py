@@ -75,7 +75,7 @@ def _filter_cells_spatialdata(
 
     for t in tables:
         table_old = data_out.tables[t]
-        mask_to_remove, _ = sc.pp.filter_cells(
+        mask_filtered, _ = sc.pp.filter_cells(
             table_old,
             min_counts=min_counts,
             min_genes=min_genes,
@@ -84,7 +84,7 @@ def _filter_cells_spatialdata(
             inplace=False,
         )
 
-        table_filtered = table_old[mask_to_remove]
+        table_filtered = table_old[mask_filtered]
         if table_filtered.n_obs == 0 or table_filtered.n_vars == 0:
             raise ValueError(f"Filter results in empty table when filtering table `{t}`.")
         data_out.tables[t] = table_filtered
@@ -97,7 +97,7 @@ def _filter_cells_spatialdata(
         if isinstance(region, str):
             region = [region]
 
-        removed_obs = table_old.obs[~mask_to_remove][[instance_key, region_key]]
+        removed_obs = table_old.obs[~mask_filtered][[instance_key, region_key]]
 
         # iterate over all elements that the table annotates (region var)
         for r in region:
@@ -129,10 +129,10 @@ def _filter_shapesmodel_by_instance_ids(element: ShapesModel, ids_to_remove: lis
     return element[~element.index.isin(ids_to_remove)]
 
 
-def _filter_labels2dmodel_by_instance_ids(element: Labels2DModel, ids_to_remove: list[str]) -> Labels2DModel:
+def _filter_labels2dmodel_by_instance_ids(element: Labels2DModel, ids_to_remove: list[int]) -> Labels2DModel:
     def set_ids_in_label_to_zero(image: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:
         # Use apply_ufunc for efficient processing
-        def _mask_block(block):
+        def _mask_block(block: xr.DataArray) -> xr.DataArray:
             # Create a copy to avoid modifying read-only array
             result = block.copy()
             result[np.isin(result, ids_to_remove)] = 0
@@ -146,6 +146,7 @@ def _filter_labels2dmodel_by_instance_ids(element: Labels2DModel, ids_to_remove:
             vectorize=True,
             dask="parallelized",
             output_dtypes=[image.dtype],
+            dataset_fill_value=0,
             dask_gufunc_kwargs={"allow_rechunk": True},
         )
 

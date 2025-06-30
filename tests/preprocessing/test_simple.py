@@ -1,9 +1,12 @@
-import numpy as np
+from __future__ import annotations
+
 import anndata as ad
-from spatialdata.datasets import blobs_annotating_element
-import squidpy as sq
-import scanpy as sc
+import numpy as np
 import pytest
+import scanpy as sc
+from spatialdata.datasets import blobs_annotating_element
+
+import squidpy as sq
 
 
 def _make_sdata(name: str, num_counts: int, count_value: int):
@@ -19,7 +22,7 @@ def _make_sdata(name: str, num_counts: int, count_value: int):
 
     sdata_temp.tables["table"] = ad.AnnData(
         X=X,
-        obs={"cell": ["cell" for _ in range(m)], "instance_id": list(range(m)), "region": [name for _ in range(m)]},
+        obs=sdata_temp.tables["table"].obs,
         var={"gene": ["gene" for _ in range(n)]},
         uns=sdata_temp.tables["table"].uns,
     )
@@ -33,12 +36,9 @@ def test_filter_cells(name: str):
     num_cells = sdata.tables["table"].shape[0]
     adata_copy = sdata.tables["table"].copy()
     sc.pp.filter_cells(adata_copy, max_counts=50, inplace=True)
-    sq.pp.filter_cells(sdata, max_counts=50, inplace=True)
+    sq.pp.filter_cells(sdata, max_counts=50, inplace=True, filter_labels=True)
 
     assert np.all(sdata.tables["table"].X == adata_copy.X), "Filtered cells are not the same as scanpy"
-    assert np.all(sdata.tables["table"].obs["cell"] == adata_copy.obs["cell"]), (
-        "Filtered cells are not the same as scanpy"
-    )
     assert np.all(sdata.tables["table"].obs["instance_id"] == adata_copy.obs["instance_id"]), (
         "Filtered cells are not the same as scanpy"
     )
@@ -49,7 +49,7 @@ def test_filter_cells(name: str):
     if name == "blobs_labels":
         unique_labels = np.unique(adata_copy.obs["instance_id"])
         unique_labels_sdata = np.unique(sdata.labels["blobs_labels"].data.compute())
-        assert np.all(unique_labels == unique_labels_sdata), (
+        assert set(unique_labels) == set(unique_labels_sdata).difference([0]), (
             f"Filtered labels {unique_labels} are not the same as scanpy {unique_labels_sdata}"
         )
 
