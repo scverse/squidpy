@@ -15,7 +15,7 @@ declare -a notebooks=(
     "$base_dir/examples/plotting/*.ipynb"
     "$base_dir/examples/image/*.ipynb"
     "$base_dir/examples/graph/*.ipynb"
-    "$base_dir/tutorials/*.ipynb"
+    # "$base_dir/tutorials/*.ipynb" don't include because it contains many external modules
 )
 
 # Initialize an array to hold valid notebook paths
