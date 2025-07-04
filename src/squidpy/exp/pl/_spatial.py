@@ -25,6 +25,7 @@ from squidpy.exp.pl._spatial_utils import (
     _FontWeight,
     _get_image,
     _get_library_id,
+    _get_title_axlabels,
     _image_spatial_attrs,
     _Normalize,
     _plot_edges,
@@ -167,72 +168,11 @@ def _spatial_plot(
     scalebar_kwargs = dict(scalebar_kwargs)
     edges_kwargs = dict(edges_kwargs)
 
-    # color_params = _prepare_args_plot(
-    #     sdata=sdata,
-    #     shape=shape,
-    #     color=color,
-    #     groups=groups,
-    #     alpha=alpha,
-    #     img_alpha=img_alpha,
-    #     use_raw=use_raw,
-    #     layer=layer,
-    #     palette=palette,
-    # )
-
-    # spatial_params = _image_spatial_attrs(
-    #     sdata=sdata,
-    #     shape=shape,
-    #     spatial_key=spatial_key,
-    #     library_id=library_id,
-    #     library_key=library_key,
-    #     img=img,
-    #     img_res_key=img_res_key,
-    #     img_channel=img_channel,
-    #     seg=seg,
-    #     seg_key=seg_key,
-    #     cell_id_key=seg_cell_id,
-    #     scale_factor=scale_factor,
-    #     size=size,
-    #     size_key=size_key,
-    #     img_cmap=img_cmap,
-    # )  # we need the library_id portion of this!!!
-
-    # coords, crops = _set_coords_crops(
-    #     sdata=sdata,
-    #     spatial_params=spatial_params,
-    #     spatial_key=spatial_key,
-    #     crop_coord=crop_coord,
-    # )
-
-    # fig_params, cmap_params, scalebar_params, kwargs = _prepare_params_plot(
-    #     color_params=color_params,
-    #     spatial_params=spatial_params,
-    #     spatial_key=spatial_key,
-    #     wspace=wspace,
-    #     hspace=hspace,
-    #     ncols=ncols,
-    #     cmap=cmap,
-    #     norm=norm,
-    #     library_first=library_first,
-    #     img_cmap=img_cmap,
-    #     frameon=frameon,
-    #     na_color=na_color,
-    #     title=title,
-    #     axis_label=axis_label,
-    #     scalebar_dx=scalebar_dx,
-    #     scalebar_units=scalebar_units,
-    #     dpi=dpi,
-    #     figsize=figsize,
-    #     fig=fig,
-    #     ax=ax,
-    #     **kwargs,
-    # )
-
-    if color is not None and not isinstance(color, str):  #  TODO: different condition ?!
+    if color is not None and not isinstance(color, str):  #  TODO: different condition ?! (multiple library ids?)
         # > 1 plot to do (multiple panels), need multiple calls
         # TODO
         pass
-    else:
+    else:  # TODO: make a wrapper function for this whole part (single panel)
         # crop image if necessary
         if crop_coord is not None:  # TODO: what if this is a sequence of coords? only for multiple plots though
             sdata = sd.bounding_box_query(
@@ -277,7 +217,7 @@ def _spatial_plot(
         )
 
     # finally: call pl.show()
-    return sdata.pl.show(
+    result = sdata.pl.show(
         # coordinate_systems, TODO: needs to be an input argument???
         legend_fontsize=legend_fontsize,
         legend_fontweight=legend_fontweight,
@@ -296,125 +236,26 @@ def _spatial_plot(
         # share_extent: bool = True, TODO: extra input?
         # pad_extent: int | float = 0, TODO: "
         ax=ax,
-        return_ax=return_ax,
+        return_ax=True,
         save=save,
     )
 
-    # for count, (_lib_count, value_to_plot) in enumerate(itertools.product(*fig_params.iter_panels)):
-    #     if not library_first:
-    #         _lib_count, value_to_plot = value_to_plot, _lib_count
+    # set title and axis labels (potential TODO: outsource to spatialdata-plot?)
+    title, ax_labels = _get_title_axlabels(title, axis_label, spatial_key, n_plots=1)  # TODO: n_plots!!!
+    if title is not None:
+        result.set_title(title)
+    elif color is not None and isinstance(color, str):
+        result.set_title(color)  # TODO: adapt for multiple panels...
+    else:
+        result.set_title(None)
+    result.set_xlabel(ax_labels[0])
+    result.set_ylabel(ax_labels[1])
+    # TODO: possibly remove later, squidpy originally doesn't show ticks
+    result.set_xticks([])
+    result.set_yticks([])
 
-    #     _size = spatial_params.size[_lib_count]
-    #     _img = spatial_params.img[_lib_count]
-    #     _seg = spatial_params.segment[_lib_count]
-    #     _cell_id = spatial_params.cell_id[_lib_count]
-    #     _crops = crops[_lib_count]
-    #     _lib = spatial_params.library_id[_lib_count]
-    #     _coords = coords[_lib_count]  # TODO: do we want to order points? for now no, skip
-    #     adata_sub, coords_sub, image_sub = _subs(
-    #         adata,
-    #         _coords,
-    #         _img,
-    #         library_key=library_key,
-    #         library_id=_lib,
-    #         crop_coords=_crops,
-    #         groups_key=value_to_plot,
-    #         groups=color_params.groups,
-    #     )
-    #     color_source_vector, color_vector, categorical = _set_color_source_vec(
-    #         adata_sub,
-    #         value_to_plot,
-    #         layer=layer,
-    #         use_raw=color_params.use_raw,
-    #         alt_var=alt_var,
-    #         groups=color_params.groups,
-    #         palette=palette,
-    #         na_color=na_color,
-    #         alpha=color_params.alpha,
-    #     )
-
-    #     # set frame and title
-    #     ax = _set_ax_title(fig_params, count, value_to_plot)
-
-    #     # plot edges and arrows if needed. Do it here cause otherwise image is on top.
-    #     if connectivity_key is not None:
-    #         _plot_edges(
-    #             adata_sub,
-    #             coords_sub,
-    #             connectivity_key,
-    #             ax=ax,
-    #             edges_width=edges_width,
-    #             edges_color=edges_color,
-    #             **edges_kwargs,
-    #         )
-
-    #     if _seg is None and _cell_id is None:
-    #         outline_params, kwargs = _set_outline(
-    #             size=_size,
-    #             outline=outline,
-    #             outline_width=outline_width,
-    #             outline_color=outline_color,
-    #             **kwargs,
-    #         )
-
-    #         ax, cax = _plot_scatter(
-    #             coords=coords_sub,
-    #             ax=ax,
-    #             outline_params=outline_params,
-    #             cmap_params=cmap_params,
-    #             color_params=color_params,
-    #             size=_size,
-    #             color_vector=color_vector,
-    #             na_color=na_color,
-    #             **kwargs,
-    #         )
-    #     elif _seg is not None and _cell_id is not None:
-    #         ax, cax = _plot_segment(
-    #             seg=_seg,
-    #             cell_id=_cell_id,
-    #             color_vector=color_vector,
-    #             color_source_vector=color_source_vector,
-    #             seg_contourpx=seg_contourpx,
-    #             seg_outline=seg_outline,
-    #             na_color=na_color,
-    #             ax=ax,
-    #             cmap_params=cmap_params,
-    #             color_params=color_params,
-    #             categorical=categorical,
-    #             **kwargs,
-    #         )
-
-    #     _ = _decorate_axs(
-    #         ax=ax,
-    #         cax=cax,
-    #         lib_count=_lib_count,
-    #         fig_params=fig_params,
-    #         adata=adata_sub,
-    #         coords=coords_sub,
-    #         value_to_plot=value_to_plot,
-    #         color_source_vector=color_source_vector,
-    #         img=image_sub,
-    #         img_cmap=cmap_params.img_cmap,
-    #         img_alpha=color_params.img_alpha,
-    #         palette=palette,
-    #         alpha=color_params.alpha,
-    #         legend_fontsize=legend_fontsize,
-    #         legend_fontweight=legend_fontweight,
-    #         legend_loc=legend_loc,
-    #         legend_fontoutline=legend_fontoutline,
-    #         na_color=na_color,
-    #         na_in_legend=legend_na,
-    #         colorbar=colorbar,
-    #         scalebar_dx=scalebar_params.scalebar_dx,
-    #         scalebar_units=scalebar_params.scalebar_units,
-    #         scalebar_kwargs=scalebar_kwargs,
-    #     )
-
-    # if fig_params.fig is not None and save is not None:
-    #     save_fig(fig_params.fig, path=save)
-
-    # if return_ax:
-    #     return fig_params.ax if fig_params.axs is None else fig_params.axs
+    if return_ax:
+        return result
 
 
 def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
