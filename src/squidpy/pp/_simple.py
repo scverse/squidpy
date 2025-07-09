@@ -10,6 +10,7 @@ from spatialdata._logging import logger as logg
 from spatialdata.models import Labels2DModel, PointsModel, ShapesModel, get_model
 from spatialdata.transformations import get_transformation
 from xarray import DataTree
+from spatialdata import subset_sdata_by_table_mask
 
 
 def filter_cells(
@@ -21,7 +22,7 @@ def filter_cells(
     max_genes: int | None = None,
     inplace: bool = True,
     filter_labels: bool = True,
-) -> sd.SpatialData:
+) -> sd.SpatialData | None:
     """\
     Squidpy's implementation of :func:`scanpy.pp.filter_cells` for :class:`anndata.AnnData` and :class:`spatialdata.SpatialData` objects.
     For :class:`spatialdata.SpatialData` objects, this function filters the following elements:
@@ -56,10 +57,12 @@ def filter_cells(
 
     Returns
     -------
-    If `inplace` then returns the given `data` object after filtering, otherwise returns a copy of the filtered object.
+    If `inplace` then returns `None`, otherwise returns the filtered :class:`spatialdata.SpatialData` object.
     """
     if not isinstance(data, sd.SpatialData):
-        raise ValueError(f"Expected `SpatialData`, found `{type(data)}` instead. Perhaps you want to use `scanpy.pp.filter_cells` instead.")
+        raise ValueError(
+            f"Expected `SpatialData`, found `{type(data)}` instead. Perhaps you want to use `scanpy.pp.filter_cells` instead."
+        )
 
     return _filter_cells_spatialdata(data, tables, min_counts, min_genes, max_counts, max_genes, inplace, filter_labels)
 
@@ -107,42 +110,17 @@ def _filter_cells_spatialdata(
             max_genes=max_genes,
             inplace=False,
         )
-
-        table_filtered = table_old[mask_filtered]
-        if table_filtered.n_obs == 0 or table_filtered.n_vars == 0:
+        if mask_filtered.sum() == 0:
             raise ValueError(f"Filter results in empty table when filtering table `{t}`.")
-        data_out.tables[t] = table_filtered
-
-        instance_key = data.tables[t].uns["spatialdata_attrs"]["instance_key"]
-        region_key = data.tables[t].uns["spatialdata_attrs"]["region_key"]
-
-        # region can annotate one (dtype str) or multiple (dtype list[str])
-        region = data.tables[t].uns["spatialdata_attrs"]["region"]
-        if isinstance(region, str):
-            region = [region]
-
-        removed_obs = table_old.obs[~mask_filtered][[instance_key, region_key]]
-
-        # iterate over all elements that the table annotates (region var)
-        for r in region:
-            element_model = get_model(data_out[r])
-
-            ids_to_remove = removed_obs.query(f"{region_key} == '{r}'")[instance_key].tolist()
-            if element_model is ShapesModel:
-                data_out.shapes[r] = _filter_shapesmodel_by_instance_ids(
-                    element=data_out.shapes[r], ids_to_remove=ids_to_remove
-                )
-
-            if filter_labels:
-                logg.warning("Filtering labels, this can be slow depending on the resolution.")
-                if element_model is Labels2DModel:
-                    new_label = _filter_labels2dmodel_by_instance_ids(
-                        element=data_out.labels[r], ids_to_remove=ids_to_remove
-                    )
-
-                    del data_out.labels[r]
-
-                    data_out.labels[r] = new_label
+        sdata_filtered = subset_sdata_by_table_mask(sdata=data_out, table_name=t, mask=mask_filtered)
+        data_out.tables[t] = sdata_filtered.tables[t]
+        for k in list(sdata_filtered.points.keys()):
+            data_out.points[k] = sdata_filtered.points[k]
+        for k in list(sdata_filtered.shapes.keys()):
+            data_out.shapes[k] = sdata_filtered.shapes[k]
+        if filter_labels:
+            for k in list(sdata_filtered.labels.keys()):
+                data_out.labels[k] = sdata_filtered.labels[k]
 
     if inplace:
         return None
