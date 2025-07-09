@@ -6,11 +6,11 @@ import pandas as pd
 import scanpy as sc
 import spatialdata as sd
 import xarray as xr
+from spatialdata import subset_sdata_by_table_mask
 from spatialdata._logging import logger as logg
 from spatialdata.models import Labels2DModel, PointsModel, ShapesModel, get_model
 from spatialdata.transformations import get_transformation
 from xarray import DataTree
-from spatialdata import subset_sdata_by_table_mask
 
 
 def filter_cells(
