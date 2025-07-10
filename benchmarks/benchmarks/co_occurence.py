@@ -7,10 +7,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import scanpy as sc
 import squidpy as sq
 
-from ._utils import pbmc68k_reduced
 
 if TYPE_CHECKING:
     from anndata import AnnData

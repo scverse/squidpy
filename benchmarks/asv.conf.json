@@ -78,9 +78,10 @@
         "natsort": [""],
         "pandas": [""],
         "memory_profiler": [""],
-        "zarr": ["2.18.4"],
+        // "zarr": ["2.18.4"],
         "pytest": [""],
-        "scanpy": [""],
+        // "scanpy": [""],
+        "squidpy": [""],
         "python-igraph": [""],
         // "psutil": [""]
         "pooch": [""],

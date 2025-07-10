@@ -1,16 +1,17 @@
-# Scanpy Benchmarks
+# Squidpy Benchmarks
 
-This directory contains code for benchmarking Scanpy using [asv][].
+This directory contains code for benchmarking Squidpy using [asv][].
 
 The functionality is checked using the [`benchmark.yml`][] workflow.
 Benchmarks are run using the [benchmark bot][].
 
 [asv]: https://asv.readthedocs.io/
 [`benchmark.yml`]: ../.github/workflows/benchmark.yml
-[benchmark bot]: https://github.com/apps/scverse-benchmark
+[benchmark bot]: https://github.com/apps/scverse-benchmark # TODO
 
 ## Data processing in benchmarks
 
+# TODO
 Each dataset is processed so it has
 
 - `.layers['counts']` (containing data in C/row-major format) and `.layers['counts-off-axis']` (containing data in FORTRAN/column-major format)
