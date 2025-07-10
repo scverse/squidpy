@@ -1,0 +1,27 @@
+{
+    "co_occurence.peakmem_co_occurrence": {
+        "code": "def peakmem_co_occurrence():\n    sq.gr.co_occurrence(adata, cluster_key=\"cell type\")\n\ndef setup():\n    global adata  # noqa: PLW0603\n    adata = sq.datasets.imc()",
+        "name": "co_occurence.peakmem_co_occurrence",
+        "param_names": [],
+        "params": [],
+        "type": "peakmemory",
+        "unit": "bytes",
+        "version": "8e588751fbcc15d56cfe73dbb3844752d6cac545c868bca1ce1045f0a54e301d"
+    },
+    "co_occurence.time_co_occurrence": {
+        "code": "def time_co_occurrence():\n    sq.gr.co_occurrence(adata, cluster_key=\"cell type\")\n\ndef setup():\n    global adata  # noqa: PLW0603\n    adata = sq.datasets.imc()",
+        "min_run_count": 2,
+        "name": "co_occurence.time_co_occurrence",
+        "number": 0,
+        "param_names": [],
+        "params": [],
+        "repeat": 0,
+        "rounds": 2,
+        "sample_time": 0.01,
+        "type": "time",
+        "unit": "seconds",
+        "version": "e764c1b999e315fffac8cac6708ede350ff254bd0b05a9be580a43ea3689d614",
+        "warmup_time": -1
+    },
+    "version": 2
+}
