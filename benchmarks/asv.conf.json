@@ -73,7 +73,8 @@
     "matrix": {
         "numpy": [""],
         "scipy": [""],
-        "squidpy": [""]
+        "squidpy": [""],
+        "scanpy": [""],
     },
 
     // Combinations of libraries/python versions can be excluded/included
