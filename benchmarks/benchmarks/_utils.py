@@ -17,10 +17,10 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
 
-    C = TypeVar("C", bound=Callable)
+    C = TypeVar("C", bound=Callable)  # type: ignore[type-arg]
 
     class ParamSkipper(Protocol):
-        def __call__(self, **skipped: AbstractSet) -> Callable[[C], C]: ...
+        def __call__(self, **skipped: AbstractSet) -> Callable[[C], C]: ...  # type: ignore[type-arg]
 
     Dataset = Literal["imc"]
     KeyX = Literal[None, "off-axis"]
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 @cache
 def _imc() -> AnnData:
-    adata = sq.datasets.imc()
+    adata = sq.datasets.imc()  # type: ignore[attr-defined]
     assert isinstance(adata.X, np.ndarray)
     assert not np.isfortran(adata.X)
 
@@ -39,7 +39,7 @@ def imc() -> AnnData:
     return _imc().copy()
 
 
-def to_off_axis(x: np.ndarray | csr_matrix | csc_matrix) -> np.ndarray | csc_matrix:
+def to_off_axis(x: np.ndarray | csr_matrix | csc_matrix) -> np.ndarray | csc_matrix:  # type: ignore[type-arg]
     if isinstance(x, csr_matrix):
         return x.tocsc()
     if isinstance(x, np.ndarray):
@@ -87,13 +87,13 @@ def param_skipper(param_names: Sequence[str], params: tuple[Sequence[object], ..
 
     """
 
-    def skip(**skipped: AbstractSet) -> Callable[[C], C]:
+    def skip(**skipped: AbstractSet) -> Callable[[C], C]:  # type: ignore[type-arg]
         skipped_combs = [
             tuple(record.values())
             for record in (dict(zip(param_names, vals, strict=True)) for vals in itertools.product(*params))
             if any(v in skipped.get(n, set()) for n, v in record.items())
         ]
         # print(skipped_combs, file=sys.stderr)
-        return skip_for_params(skipped_combs)
+        return skip_for_params(skipped_combs)  # type: ignore[no-any-return]
 
     return skip
