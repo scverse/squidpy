@@ -69,16 +69,6 @@ def get_dataset(dataset: Dataset, *, layer: KeyX = None) -> tuple[AnnData, str |
     return adata, batch_key
 
 
-def get_count_dataset(dataset: Dataset, *, layer: KeyCount = "counts") -> tuple[AnnData, str | None]:
-    adata, batch_key = _get_dataset_raw(dataset)
-
-    adata.X = adata.layers.pop(layer)
-    # remove indicators that X was transformed
-    adata.uns.pop("log1p", None)
-
-    return adata, batch_key
-
-
 def param_skipper(param_names: Sequence[str], params: tuple[Sequence[object], ...]) -> ParamSkipper:
     """Create a decorator that will skip all combinations that contain any of the given parameters.
 
