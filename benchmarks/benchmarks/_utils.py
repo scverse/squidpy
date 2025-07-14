@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from asv_runner.benchmarks.mark import skip_for_params
-from scanpy._compat import CSCBase, CSRBase
+from scipy.sparse import csc_matrix, csr_matrix
 
 import squidpy as sq
 
@@ -39,8 +39,8 @@ def imc() -> AnnData:
     return _imc().copy()
 
 
-def to_off_axis(x: np.ndarray | CSRBase) -> np.ndarray | CSCBase:
-    if isinstance(x, CSRBase):
+def to_off_axis(x: np.ndarray | csr_matrix | csc_matrix) -> np.ndarray | csc_matrix:
+    if isinstance(x, csr_matrix):
         return x.tocsc()
     if isinstance(x, np.ndarray):
         assert not np.isfortran(x)
