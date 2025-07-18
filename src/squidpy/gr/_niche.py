@@ -19,7 +19,6 @@ from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 
-import leidenalg as la
 import spatialleiden as sl
 
 from squidpy._constants._constants import NicheDefinitions
@@ -49,10 +48,9 @@ def calculate_niche(
     random_state: int = 42,
     spatial_connectivities_key: str = "spatial_connectivities",
     latent_connectivities_key: str = "connectivities",
-    layer_ratio: float = 1,
+    layer_ratio: float = 1.0,
     n_iterations: int = -1,
-    # use_weights: bool | tuple[bool, bool] = True,
-    use_weights: bool | tuple[bool, bool] = (True, True),
+    use_weights: bool | tuple[bool, bool] = True,
     inplace: bool = True,
 ) -> AnnData:
     """
@@ -159,13 +157,8 @@ def calculate_niche(
         inplace,
     )
 
-    # if resolutions is None:
-    #     resolutions = [0.5]
     if resolutions is None:
-        if flavor == "spatialleiden":
-            resolutions = (1.0, 1.0)
-        else:
-            resolutions = [0.5]
+        resolutions = [0.5]
 
     if distance is None:
         distance = 1
@@ -313,15 +306,17 @@ def _get_result_columns(
         elif libraries is not None and len(libraries) > 0:
             return [f"{base_column}_{lib}" for lib in libraries]
     
-    if flavor == "spatialleiden":
-        base_column = "spatialleiden"
-        return [base_column]
-
     # For neighborhood and utag, we need to handle resolutions
     if not isinstance(resolutions, list):
         resolutions = [resolutions]
 
-    prefix = f"nhood_niche{library_str}" if flavor == "neighborhood" else f"utag_niche{library_str}"
+    if flavor == "neighborhood":
+        prefix = f"nhood_niche{library_str}"
+    elif flavor == "utag":
+        prefix = f"utag_niche{library_str}"
+    elif flavor == "spatialleiden":
+        prefix = f"spatialleiden{library_str}"
+
     if library_key is None:
         return [f"{prefix}_res={res}" for res in resolutions]
     else:
@@ -695,14 +690,14 @@ def _get_GMM_clusters(A: NDArray[np.float64], n_components: int, random_state: i
     return labels
 
 def _get_spatialleiden_domains(
-    adata,
-    spatial_connectivities_key,
-    latent_connectivities_key,
-    resolutions,
-    layer_ratio,
-    use_weights,
-    n_iterations,
-    random_state,
+    adata: AnnData,
+    spatial_connectivities_key: str,
+    latent_connectivities_key: str,
+    resolutions: float | list[float] | tuple[float, float],
+    layer_ratio: float,
+    use_weights: bool | tuple[bool, bool],
+    n_iterations: int,
+    random_state: int,
 ) -> None:
 
     """
@@ -712,27 +707,24 @@ def _get_spatialleiden_domains(
 
     Adapted from https://github.com/HiDiHlabs/SpatialLeiden/.
     """
-    # sl.spatialleiden(
-    #     adata,
-    #     resolution = resolutions,
-    #     use_weights = use_weights,
-    #     n_iterations = n_iterations,
-    #     layer_ratio = layer_ratio,
-    #     latent_neighbors_key = latent_connectivities_key,
-    #     spatial_neighbors_key = spatial_connectivities_key,
-    #     random_state = random_state,
-    #     )
-    sl.spatialleiden(
-        adata,
-        resolution = resolutions,
-        use_weights = use_weights,
-        n_iterations = n_iterations,
-        layer_ratio = layer_ratio,
-        latent_distance_key = latent_connectivities_key,
-        spatial_distance_key = spatial_connectivities_key,
-        seed = random_state,
-        )
-    
+
+    if not isinstance(resolutions, list):
+        resolutions = [resolutions]
+
+    for res in resolutions:
+        sl.spatialleiden(
+            adata,
+            resolution = res,
+            use_weights = use_weights,
+            n_iterations = n_iterations,
+            layer_ratio = layer_ratio,
+            latent_neighbors_key = latent_connectivities_key,
+            spatial_neighbors_key = spatial_connectivities_key,
+            random_state = random_state,
+            directed = False,
+            key_added=f"spatialleiden_res={res}"
+            )
+   
     return
 
 
@@ -965,24 +957,23 @@ def _validate_niche_args(
             resolutions = [0.0]
     
     elif flavor == "spatialleiden":
-        # if not isinstance(latent_connectivities_key, str):
-        #     raise TypeError(f"'latent_connectivities_key' must be a string, got {type(latent_connectivities_key).__name__}")
-        # if not isinstance(spatial_connectivities_key, str):
-        #     raise TypeError(f"'spatial_connectivities_key' must be a string, got {type(spatial_connectivities_key).__name__}")
+        if not isinstance(latent_connectivities_key, str):
+            raise TypeError(f"'latent_connectivities_key' must be a string, got {type(latent_connectivities_key).__name__}")
+        if not isinstance(spatial_connectivities_key, str):
+            raise TypeError(f"'spatial_connectivities_key' must be a string, got {type(spatial_connectivities_key).__name__}")
 
         if not isinstance(layer_ratio, float | int):
             raise TypeError(f"'layer_ratio' must be a float, got {type(layer_ratio).__name__}")
         if not isinstance(n_iterations, int):
             raise TypeError(f"'n_iterations' must be an integer, got {type(n_iterations).__name__}")
-        if not isinstance(use_weights, tuple) or len(use_weights) != 2 or not all(isinstance(x, bool) for x in use_weights):
-        # if not isinstance(use_weights, tuple) or not all(isinstance(x, bool) for x in use_weights):
-            raise TypeError(f"'use_weights' must be a tuple of two bools, got {use_weights}")
+        if not (isinstance(use_weights, bool) or (
+            isinstance(use_weights, tuple) and len(use_weights) == 2 and all(isinstance(x, bool) for x in use_weights))):
+            raise TypeError(f"'use_weights' must be a bool or a tuple of two bools, got {use_weights!r}")
         if not isinstance(random_state, int):
             raise TypeError(f"'random_state' must be an integer, got {type(random_state).__name__}")
         
         if resolutions is None:
-            resolutions = (1.0, 1.0)
-            # resolutions = [1.0]
+            resolutions = [1.0]
 
     if not isinstance(inplace, bool):
         raise TypeError(f"'inplace' must be a boolean, got {type(inplace).__name__}")
@@ -995,7 +986,7 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
     Parameters
     ----------
     flavor
-        The flavor being used ('neighborhood', 'utag', or 'cellcharter')
+        The flavor being used ('neighborhood', 'utag', 'cellcharter', or 'spatialleiden')
     param_dict
         Dictionary of parameter names to their values
     param_specs
