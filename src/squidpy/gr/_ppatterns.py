@@ -344,6 +344,7 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
     return occ_prob
 
+
 @d.dedent
 def co_occurrence(
     adata: AnnData | SpatialData,
