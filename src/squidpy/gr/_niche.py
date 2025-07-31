@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import scanpy as sc
 import scipy.sparse as sps
-import spatialleiden as sl
 from anndata import AnnData
 from numpy.typing import NDArray
 from scipy.sparse import coo_matrix, hstack, issparse, spdiags
@@ -708,6 +707,11 @@ def _get_spatialleiden_domains(
 
     Adapted from https://github.com/HiDiHlabs/SpatialLeiden/.
     """
+    try:
+        import spatialleiden as sl
+    except ImportError as e:
+        msg = "Please install the spatialleiden algorithm: `conda install bioconda::spatialleiden` or `pip install spatialleiden`."
+        raise ImportError(msg) from e
 
     if not isinstance(resolutions, list):
         resolutions = [resolutions]
