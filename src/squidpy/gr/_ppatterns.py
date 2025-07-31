@@ -276,8 +276,6 @@ def _occur_count(
     local_results = np.zeros((n, l_val * k2), dtype=np.int32)
 
     for i in prange(n):
-        local_counts: NDArrayA = np.zeros(l_val * k2, dtype=np.int32)
-
         for j in range(n):
             if i == j:
                 continue
@@ -290,13 +288,11 @@ def _occur_count(
 
             for r in range(l_val):
                 if d2 <= thresholds[r]:
-                    local_counts[base + r] += 1
-
-        local_results[i] = local_counts
+                    local_results[i][base + r] += 1
 
     # reduction and reshape stay the same
     result_flat = local_results.sum(axis=0)
-    result: NDArrayA = result_flat.reshape(k, k, l_val).copy()
+    result: NDArrayA = result_flat.reshape(k, k, l_val)
 
     return result
 
@@ -332,56 +328,21 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
     # Compute squared thresholds from the interval (skip the first value)
     thresholds = (v_radium[1:]) ** 2
 
-    # Compute cco-occurence ounts.
+    # Compute co-occurence counts.
     counts = _occur_count(v_x, v_y, thresholds, labs, n, k, l_val)
 
-    # Compute co-occurrence probabilities for each threshold bin.
-    occ_prob = np.empty((k, k, l_val), dtype=np.float64)
+    occ_prob = np.zeros((k, k, l_val), dtype=np.float64)
+    row_sums = counts.sum(axis=0)
+    totals = row_sums.sum(axis=0)
+
     for r in prange(l_val):
-        co_occur = counts[:, :, r].astype(np.float64)
-
-        # Compute the total count for this threshold.
-        total = 0.0
-        for i in range(k):
-            for j in range(k):
-                total += co_occur[i, j]
-
-        # Compute the normalized probability matrix.
-        probs_matrix = np.zeros((k, k), dtype=np.float64)
-        if total != 0.0:
-            for i in range(k):
-                for j in range(k):
-                    probs_matrix[i, j] = co_occur[i, j] / total
-
-        probs = np.zeros(k, dtype=np.float32)
-        for j in range(k):
-            s = 0.0
-            for i in range(k):
-                s += probs_matrix[i, j]
-            probs[j] = s
-
-        # Compute conditional probabilities.
-        probs_con = np.zeros((k, k), dtype=np.float32)
+        probs = row_sums[:, r] / totals[r]
         for c in range(k):
-            row_sum = 0.0
-            for j in range(k):
-                row_sum += co_occur[c, j]
             for i in range(k):
-                cond = 0.0
-                if row_sum != 0.0:
-                    cond = co_occur[c, i] / row_sum
-                if probs[i] == 0.0:
-                    probs_con[c, i] = 0.0
-                else:
-                    probs_con[c, i] = cond / probs[i]
-
-        # Transpose to match (k, k, interval).
-        for i in range(k):
-            for c in range(k):
-                occ_prob[i, c, r] = probs_con[c, i]
+                if probs[i] != 0.0 and row_sums[c, r] != 0.0:
+                    occ_prob[i, c, r] = (counts[c, i, r] / row_sums[c, r]) / probs[i]
 
     return occ_prob
-
 
 @d.dedent
 def co_occurrence(
