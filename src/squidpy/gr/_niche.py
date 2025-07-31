@@ -174,7 +174,7 @@ def calculate_niche(
             "If you haven't computed a spatial neighborhood graph yet, use `sq.gr.spatial_neighbors`."
         )
 
-    if latent_connectivities_key not in adata.obsp.keys():
+    if flavor == "spatialleiden" and (latent_connectivities_key not in adata.obsp.keys()):
         raise KeyError(
             f"Key '{latent_connectivities_key}' not found in `adata.obsp`. "
             "If you haven't computed a latent neighborhood graph yet, use `sc.pp.neighbors`."
