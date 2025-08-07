@@ -7,6 +7,7 @@ from squidpy.pl._graph import (
     co_occurrence,
     interaction_matrix,
     nhood_enrichment,
+    nhood_enrichment_dotplot,
     ripley,
 )
 

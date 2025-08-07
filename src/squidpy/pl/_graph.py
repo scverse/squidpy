@@ -216,10 +216,19 @@ def nhood_enrichment(
     %(plotting_returns)s
     """
     _assert_categorical_obs(adata, key=cluster_key)
-    array = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")[mode]
+    array = _get_data(adata,
+                      cluster_key=cluster_key,
+                      func_name="nhood_enrichment")[mode]
 
-    ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
-    _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
+    ad = AnnData(X=array,
+                 obs={
+                     cluster_key:
+                     pd.Categorical(adata.obs[cluster_key].cat.categories)
+                 })
+    _maybe_set_colors(source=adata,
+                      target=ad,
+                      key=cluster_key,
+                      palette=palette)
     if title is None:
         title = "Neighborhood enrichment"
     fig = _heatmap(
@@ -229,7 +238,8 @@ def nhood_enrichment(
         method=method,
         cont_cmap=cmap,
         annotate=annotate,
-        figsize=(2 * ad.n_obs // 3, 2 * ad.n_obs // 3) if figsize is None else figsize,
+        figsize=(2 * ad.n_obs // 3,
+                 2 * ad.n_obs // 3) if figsize is None else figsize,
         dpi=dpi,
         cbar_kwargs=cbar_kwargs,
         ax=ax,
@@ -238,6 +248,152 @@ def nhood_enrichment(
 
     if save is not None:
         save_fig(fig, path=save)
+
+@d.dedent
+def nhood_enrichment_dotplot(
+    adata: AnnData,
+    cluster_key: str,
+    zscore_key: str = "ct_nhood_enrichment",
+    annotate: bool = False,
+    title: str | None = None,
+    cmap: str = "coolwarm",
+    palette: Palette_t = None,
+    cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    figsize: tuple[float, float] | None = None,
+    dpi: int | None = None,
+    size_range: tuple[float, float] = (10, 200),
+    save: str | Path | None = None,
+    ax: Axes | None = None,
+    **kwargs: Any,
+) -> None:
+    """
+    Dot plot of neighborhood enrichment.
+
+    This plots the result of :func:`squidpy.gr.nhood_enrichment`, using:
+        - Color for z-score of enrichment
+        - Dot size for conditional cell ratio (CCR), scaled continuously
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix.
+    cluster_key : str
+        Key in `adata.obs` where the cluster (cell type) annotation is stored.
+    zscore_key : str, optional
+        Key in `adata.uns` where the enrichment results are stored.
+    annotate : bool, optional
+        Whether to annotate dots with CCR values.
+    title : str, optional
+        Title of the plot.
+    cmap : str, optional
+        Colormap used for the z-score values.
+    palette : Palette_t, optional
+        Not used, reserved for compatibility.
+    cbar_kwargs : dict, optional
+        Keyword arguments for `fig.colorbar`.
+    figsize : tuple, optional
+        Figure size.
+    dpi : int, optional
+        Dots per inch for the figure.
+    size_range : tuple of float, optional
+        Min and max dot sizes for conditional cell ratio scaling.
+    save : str | Path, optional
+        Path to save the figure.
+    ax : matplotlib.axes.Axes, optional
+        Axes object to draw the plot onto, otherwise a new figure is created.
+    **kwargs : Any
+        Additional keyword arguments passed to `plt.scatter`.
+
+    Returns
+    -------
+    None
+    """
+    _assert_categorical_obs(adata, key=cluster_key)
+    enrichment = _get_data(
+        adata, cluster_key=cluster_key, func_name="nhood_enrichment"
+    )
+
+    zscore = enrichment["zscore"]
+    ccr = enrichment["conditional_cell_ratio"]
+    cats = adata.obs[cluster_key].cat.categories
+
+    df = pd.DataFrame({
+        "x": np.tile(np.arange(len(cats)), len(cats)),
+        "y": np.repeat(np.arange(len(cats)), len(cats)),
+        "zscore": zscore.flatten(),
+        "ccr": ccr.flatten()
+    })
+
+    size_min, size_max = size_range
+    ccr_norm = (df["ccr"] - df["ccr"].min()) / (df["ccr"].max() - df["ccr"].min() + 1e-10)
+    df["size"] = size_min + ccr_norm * (size_max - size_min)
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi) if ax is None else (ax.figure, ax)
+    cmap = "YlGnBu"
+    sc = ax.scatter(
+        df["x"],
+        df["y"],
+        c=df["zscore"],
+        s=df["size"],
+        cmap=cmap,
+        edgecolors="black",
+        linewidths=0.3,
+        **kwargs,
+    )
+
+    ax.set_xticks(np.arange(len(cats)))
+    ax.set_yticks(np.arange(len(cats)))
+    ax.set_xticklabels(cats, rotation=90)
+    ax.set_yticklabels(cats)
+    ax.set_xlabel("Neighbor cell type")
+    ax.set_ylabel("Index cell type")
+
+    ax.set_title(title or "Neighborhood enrichment (dot plot)")
+
+    # Colorbar
+    cbar = fig.colorbar(sc, ax=ax, **cbar_kwargs)
+    cbar.set_label("Z-score")
+
+    # Continuous CCR legend
+    from matplotlib.lines import Line2D
+    legend_ccr_vals = np.linspace(df["ccr"].min(), df["ccr"].max(), 5)
+    legend_sizes = size_min + (legend_ccr_vals - df["ccr"].min()) / (
+        df["ccr"].max() - df["ccr"].min() + 1e-10
+    ) * (size_max - size_min)
+
+    legend_elements = [
+        Line2D(
+            [0], [0],
+            marker='o',
+            color='w',
+            label=f'{v:.2f}',
+            markerfacecolor='gray',
+            markersize=np.sqrt(s),  # scatter size is area → sqrt for legend
+            markeredgecolor='black'
+        )
+        for v, s in zip(legend_ccr_vals, legend_sizes)
+    ]
+
+    ax.legend(
+        handles=legend_elements,
+        title="CCR",
+        loc='center left',
+        bbox_to_anchor=(1.3, 0.5),
+        borderaxespad=0.,
+        frameon=False
+    )
+
+    if annotate:
+        for _, row in df.iterrows():
+            ax.text(row["x"], row["y"], f"{row['ccr']:.2f}",
+                    ha="center", va="center")
+
+    ax.invert_yaxis()
+    ax.set_aspect("equal")
+
+    if save is not None:
+        save_fig(fig, path=save)
+
 
 
 @d.dedent
