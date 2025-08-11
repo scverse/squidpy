@@ -118,16 +118,13 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, 
     return globals()[fn_key]  # type: ignore[no-any-return]
 
 def filter_clusters_by_min_cell_count(adata, int_clust, connectivity_key, min_cell_count):
-    # Count cells per cluster
     clust_sizes = pd.Series(int_clust).value_counts()
     valid_clusters = clust_sizes[clust_sizes >= min_cell_count].index.to_numpy()
 
-    # Keep only valid cells
     valid_mask = np.isin(int_clust, valid_clusters)
     valid_cells_idx = np.where(valid_mask)[0]
     int_clust = int_clust[valid_mask]
 
-    # Filter adjacency matrix
     adj = adata.obsp[connectivity_key][np.ix_(valid_cells_idx, valid_cells_idx)]
     return int_clust, adj
 
@@ -147,7 +144,7 @@ def nhood_enrichment(
     backend: str = "loky",
     normalization: str = "none",
     min_cell_count: int = 10,
-    handle_nan: str = "keep",  # or "keep"
+    handle_nan: str = "keep",
     show_progress_bar: bool = True,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
@@ -195,10 +192,10 @@ def nhood_enrichment(
     clust_map = {
         v: i
         for i, v in enumerate(original_clust.cat.categories.values)
-    }  # map categories
+    } 
     int_clust = np.array([clust_map[c] for c in original_clust], dtype=ndt)
     n_total_cells = len(int_clust)
-    # Filter clusters by minimum number of cells
+
     int_clust, adj = filter_clusters_by_min_cell_count(
         adata=adata,
         int_clust=int_clust,
@@ -217,15 +214,12 @@ def nhood_enrichment(
     _test = _create_function(n_cls, parallel=numba_parallel)
     count = _test(indices, indptr, int_clust)
     conditional_ratio = None
-    # NEW
-    # introduce normalization by number of cells first
-    # Count how many cells there are per cluster (type A in A-B interaction)
+
     if normalization == "total":
         row_sums = count.sum(axis=1, keepdims=True)
-        row_sums[row_sums == 0] = 1  # avoid division by zero
+        row_sums[row_sums == 0] = 1
         count_normalized = count / row_sums
     elif normalization == "conditional":
-        # Reconstruct per-cell neighbor counts: res = (n_cells, n_cls)
         res = np.zeros((len(int_clust), n_cls), dtype=np.uint32)
         for i in range(len(int_clust)):
             xs, xe = indptr[i], indptr[i + 1]
@@ -233,13 +227,11 @@ def nhood_enrichment(
             for n in neighbors:
                 res[i, int_clust[n]] += 1
 
-        # Create boolean matrix: cell i has at least one neighbor of type b
         per_cell_neighbor_matrix = res > 0
 
-        # Compute how many type A cells have at least one neighbor of type B
         cond_counts = np.zeros((n_cls, n_cls), dtype=np.float64)
         conditional_ratio = np.full((n_cls, n_cls), np.nan,
-                                    dtype=np.float64)  # new
+                                    dtype=np.float64)
 
         for a in range(n_cls):
             a_cells = (int_clust == a)
@@ -251,12 +243,10 @@ def nhood_enrichment(
                 cond_counts[a, b] = has_b_neighbor.sum()
             conditional_ratio[a, :] = cond_counts[a, :] / n_type_a_cells
 
-        # Avoid division by zero by setting denominator to 1 only for normalization
         safe_cond_counts = cond_counts.copy()
         safe_cond_counts[safe_cond_counts ==
-                         0] = 1.0  # Only avoids division error
+                         0] = 1.0 
 
-        # Normalize counts without setting to NaN — allows avoidance to be detected
         count_normalized = count / safe_cond_counts
 
         n_retained_cells = len(int_clust)
@@ -276,7 +266,6 @@ def nhood_enrichment(
         raise ValueError(
             f"Invalid normalization mode `{normalization}`. Choose from 'none', 'all_type_A', 'type_A_with_B_neighbor'."
         )
-    ###
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(
@@ -299,13 +288,13 @@ def nhood_enrichment(
       normalization=normalization)
 
     std = perms.std(axis=0)
-    std[std == 0] = np.nan  # Or np.inf if you prefer to get 0 z-score
+    std[std == 0] = np.nan
     zscore = (count_normalized - perms.mean(axis=0)) / std
 
     if handle_nan == "zero":
         zscore = np.nan_to_num(zscore, nan=0.0)
     elif handle_nan == "keep":
-        pass  # keep NaN
+        pass
     else:
         raise ValueError("handle_nan must be 'keep' or 'zero'")
 
@@ -315,7 +304,6 @@ def nhood_enrichment(
         else:
             return zscore, count_normalized
 
-    # Build the data dictionary
     enrichment_data = {
         "zscore": zscore,
         "count": count_normalized,
@@ -543,11 +531,11 @@ def _nhood_enrichment_helper(
     n_cls: int,
     seed: int | None = None,
     queue: SigQueue | None = None,
-    normalization: str = "none",  # NEW
+    normalization: str = "none",
     min_cond_count: int = 5,
 ) -> NDArrayA:
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
-    int_clust = int_clust.copy()  # threading
+    int_clust = int_clust.copy() 
     rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])
 
     for i in range(len(ixs)):
@@ -558,15 +546,11 @@ def _nhood_enrichment_helper(
 
         count_perms = callback(indices, indptr, int_clust)
 
-        # NEW: normalize permuted count matrix
         if normalization == "total":
             row_sums = count_perms.sum(axis=1, keepdims=True)
-            row_sums[row_sums == 0] = 1  # avoid division by zero
+            row_sums[row_sums == 0] = 1  
             count_perms = count_perms / row_sums
-    # Conditional normalization
         elif normalization == "conditional":
-            # Reconstruct per-cell neighbor counts: res = (n_cells, n_cls)
-            # Build the neighbor matrix: (n_cells, n_cls)
             res = np.zeros((len(int_clust), n_cls), dtype=np.uint32)
             for i_cell in range(len(int_clust)):
                 xs, xe = indptr[i_cell], indptr[i_cell + 1]
@@ -574,10 +558,8 @@ def _nhood_enrichment_helper(
                 for n in neighbors:
                     res[i_cell, int_clust[n]] += 1
 
-            # Create a boolean matrix: cell i has at least one neighbor of type b
             per_cell_neighbor_matrix = res > 0
 
-            # For each pair (A, B), count how many A cells have at least one B neighbor
             cond_counts = np.zeros((n_cls, n_cls), dtype=np.float64)
             cluster_sizes = np.zeros(n_cls, dtype=np.float64) 
             for a in range(n_cls):
@@ -589,7 +571,6 @@ def _nhood_enrichment_helper(
                     has_b_neighbor = per_cell_neighbor_matrix[a_cells, b]
                     cond_counts[a, b] = has_b_neighbor.sum()
 
-            # Avoid division by zero
             low_count_mask = cond_counts < min_cond_count
             cond_counts[cond_counts == 0] = 1.0
             count_perms = count_perms / cond_counts
