@@ -147,7 +147,7 @@ def nhood_enrichment(
     backend: str = "loky",
     normalization: str = "none",
     min_cell_count: int = 10,
-    handle_nan: str = "zero",  # or "keep"
+    handle_nan: str = "keep",  # or "keep"
     show_progress_bar: bool = True,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
