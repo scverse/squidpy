@@ -143,17 +143,11 @@ def test_interaction_matrix_nan_values(adata_intmat: AnnData):
     np.testing.assert_array_equal(expected_weighted, result_weighted)
     np.testing.assert_array_equal(expected_unweighted, result_unweighted)
 
+
 @pytest.mark.parametrize("normalization", ["none", "total", "conditional"])
 def test_nhood_enrichment_normalization_modes(adata: AnnData, normalization: str):
     spatial_neighbors(adata)
-    result = nhood_enrichment(
-        adata,
-        cluster_key=_CK,
-        normalization=normalization,
-        n_jobs=1,
-        n_perms=20,
-        copy=True
-    )
+    result = nhood_enrichment(adata, cluster_key=_CK, normalization=normalization, n_jobs=1, n_perms=20, copy=True)
 
     if normalization == "conditional":
         z, count, ccr = result
@@ -166,6 +160,7 @@ def test_nhood_enrichment_normalization_modes(adata: AnnData, normalization: str
     assert z.shape == count.shape
     assert z.shape[0] == adata.obs[_CK].cat.categories.shape[0]
 
+
 def test_conditional_normalization_zero_division(adata: AnnData):
     adata = adata.copy()
     min_cells = 10
@@ -176,16 +171,10 @@ def test_conditional_normalization_zero_division(adata: AnnData):
     adata.obs[_CK] = adata.obs[_CK].cat.add_categories("isolated")
     adata.obs.loc[adata.obs.index[0], _CK] = "isolated"
     spatial_neighbors(adata)
-    valid_clusters = [
-    c for c, count in adata.obs[_CK].value_counts().items() if count >= min_cells
-    ]
+    valid_clusters = [c for c, count in adata.obs[_CK].value_counts().items() if count >= min_cells]
     valid_idx = [i for i, cat in enumerate(adata.obs[_CK].cat.categories) if cat in valid_clusters]
 
-    result = nhood_enrichment(
-        adata,
-        cluster_key=_CK,
-        normalization="conditional",
-        copy=True)
+    result = nhood_enrichment(adata, cluster_key=_CK, normalization="conditional", copy=True)
     assert result is not None
     zscore, count_normalized, conditional_ratio = result
     assert not np.any(np.isinf(zscore))
@@ -194,13 +183,16 @@ def test_conditional_normalization_zero_division(adata: AnnData):
     assert not np.isnan(zscore[np.ix_(valid_idx, valid_idx)]).any()
     assert not np.isnan(count_normalized[np.ix_(valid_idx, valid_idx)]).any()
     assert not np.isnan(conditional_ratio[np.ix_(valid_idx, valid_idx)]).any()
-    
 
-@pytest.mark.parametrize("normalization, expected_dtype", [
-    ("none", np.uint32),
-    ("total", np.float64),
-    ("conditional", np.float64),
-])
+
+@pytest.mark.parametrize(
+    "normalization, expected_dtype",
+    [
+        ("none", np.uint32),
+        ("total", np.float64),
+        ("conditional", np.float64),
+    ],
+)
 def test_output_dtype(adata: AnnData, normalization: str, expected_dtype):
     spatial_neighbors(adata)
     result = nhood_enrichment(
@@ -224,4 +216,3 @@ def test_invalid_normalization_raises(adata: AnnData):
     spatial_neighbors(adata)
     with pytest.raises(ValueError, match="Invalid normalization mode"):
         nhood_enrichment(adata, cluster_key=_CK, normalization="invalid_mode", copy=True)
-

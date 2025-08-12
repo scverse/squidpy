@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
 from typing import Any
-import warnings
 
 import networkx as nx
 import numba.types as nt
@@ -117,6 +117,7 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, 
 
     return globals()[fn_key]  # type: ignore[no-any-return]
 
+
 def filter_clusters_by_min_cell_count(adata, int_clust, connectivity_key, min_cell_count):
     clust_sizes = pd.Series(int_clust).value_counts()
     valid_clusters = clust_sizes[clust_sizes >= min_cell_count].index.to_numpy()
@@ -189,10 +190,7 @@ def nhood_enrichment(
 
     adj = adata.obsp[connectivity_key]
     original_clust = adata.obs[cluster_key]
-    clust_map = {
-        v: i
-        for i, v in enumerate(original_clust.cat.categories.values)
-    } 
+    clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
     int_clust = np.array([clust_map[c] for c in original_clust], dtype=ndt)
     n_total_cells = len(int_clust)
 
@@ -230,11 +228,10 @@ def nhood_enrichment(
         per_cell_neighbor_matrix = res > 0
 
         cond_counts = np.zeros((n_cls, n_cls), dtype=np.float64)
-        conditional_ratio = np.full((n_cls, n_cls), np.nan,
-                                    dtype=np.float64)
+        conditional_ratio = np.full((n_cls, n_cls), np.nan, dtype=np.float64)
 
         for a in range(n_cls):
-            a_cells = (int_clust == a)
+            a_cells = int_clust == a
             if not np.any(a_cells):
                 continue
             n_type_a_cells = a_cells.sum()
@@ -244,8 +241,7 @@ def nhood_enrichment(
             conditional_ratio[a, :] = cond_counts[a, :] / n_type_a_cells
 
         safe_cond_counts = cond_counts.copy()
-        safe_cond_counts[safe_cond_counts ==
-                         0] = 1.0 
+        safe_cond_counts[safe_cond_counts == 0] = 1.0
 
         count_normalized = count / safe_cond_counts
 
@@ -268,8 +264,7 @@ def nhood_enrichment(
         )
 
     n_jobs = _get_n_cores(n_jobs)
-    start = logg.info(
-        f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
+    start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
 
     perms = parallelize(
         _nhood_enrichment_helper,
@@ -278,14 +273,16 @@ def nhood_enrichment(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(callback=_test,
-      indices=indices,
-      indptr=indptr,
-      int_clust=int_clust,
-      libraries=libraries,
-      n_cls=n_cls,
-      seed=seed,
-      normalization=normalization)
+    )(
+        callback=_test,
+        indices=indices,
+        indptr=indptr,
+        int_clust=int_clust,
+        libraries=libraries,
+        n_cls=n_cls,
+        seed=seed,
+        normalization=normalization,
+    )
 
     std = perms.std(axis=0)
     std[std == 0] = np.nan
@@ -535,7 +532,7 @@ def _nhood_enrichment_helper(
     min_cond_count: int = 5,
 ) -> NDArrayA:
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
-    int_clust = int_clust.copy() 
+    int_clust = int_clust.copy()
     rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])
 
     for i in range(len(ixs)):
@@ -548,7 +545,7 @@ def _nhood_enrichment_helper(
 
         if normalization == "total":
             row_sums = count_perms.sum(axis=1, keepdims=True)
-            row_sums[row_sums == 0] = 1  
+            row_sums[row_sums == 0] = 1
             count_perms = count_perms / row_sums
         elif normalization == "conditional":
             res = np.zeros((len(int_clust), n_cls), dtype=np.uint32)
@@ -561,9 +558,9 @@ def _nhood_enrichment_helper(
             per_cell_neighbor_matrix = res > 0
 
             cond_counts = np.zeros((n_cls, n_cls), dtype=np.float64)
-            cluster_sizes = np.zeros(n_cls, dtype=np.float64) 
+            cluster_sizes = np.zeros(n_cls, dtype=np.float64)
             for a in range(n_cls):
-                a_cells = (int_clust == a)
+                a_cells = int_clust == a
                 cluster_sizes[a] = a_cells.sum()
                 if not np.any(a_cells):
                     continue
