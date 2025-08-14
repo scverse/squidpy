@@ -39,7 +39,7 @@ def imc() -> AnnData:
     return _imc().copy()
 
 
-def to_off_axis(x: np.ndarray | csr_matrix | csc_matrix) -> np.ndarray | csc_matrix:  # type: ignore[type-arg]
+def to_off_axis(x: np.ndarray | csr_matrix | csc_matrix) -> np.ndarray | csc_matrix:
     if isinstance(x, csr_matrix):
         return x.tocsc()
     if isinstance(x, np.ndarray):
