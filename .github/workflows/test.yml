@@ -46,8 +46,7 @@ jobs:
           ./.scripts/ci/install_dependencies.sh
 
       - name: Install pip dependencies
-        run: |
-          uv pip install tox tox-gh-actions
+        run: uv tool install tox --with=tox-uv --with=tox-gh-actions
 
       - name: Restore data cache
         id: data-cache
