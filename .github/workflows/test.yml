@@ -25,12 +25,13 @@ jobs:
         include:
           - python: "3.12"
             os: macos-latest
-            pip-flags: "--pre"
+            pre-release: "allow"
             name: "Python 3.12 (pre-release)"
 
     env:
       OS: ${{ matrix.os }}
       PYTHON: ${{ matrix.python }}
+      UV_PRERELEASE: ${{ matrix.pre-release || 'disallow' }}
 
     steps:
       - uses: actions/checkout@v5
