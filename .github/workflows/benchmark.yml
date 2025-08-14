@@ -52,7 +52,7 @@ jobs:
 
       - name: Install dependencies
         # https://github.com/airspeed-velocity/asv/issues/1493
-        run: pip install 'asv@git+https://github.com/airspeed-velocity/asv.git' py-rattler
+        run: pip install 'asv@git+https://github.com/airspeed-velocity/asv.git' virtualenv
 
       - name: Configure ASV
         working-directory: ${{ env.ASV_DIR }}

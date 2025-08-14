@@ -21,12 +21,12 @@
     // Customizable commands for building, installing, and
     // uninstalling the project. See asv.conf.json documentation.
     //
-    "install_command": ["python -m uv pip install {wheel_file}"],
-    // "uninstall_command": ["return-code=any python -mpip uninstall -y {project}"],
     "build_command": [
-        "python -m uv pip install build",
+        "python -m pip install uv build",
         "python -m build --wheel -o {build_cache_dir} {build_dir}",
     ],
+    "install_command": ["python -m uv pip install {wheel_file}"],
+    // "uninstall_command": ["return-code=any python -mpip uninstall -y {project}"],
 
     // List of branches to benchmark. If not provided, defaults to "master"
     // (for git) or "default" (for mercurial).
@@ -43,7 +43,7 @@
     // If missing or the empty string, the tool will be automatically
     // determined by looking for tools on the PATH environment
     // variable.
-    "environment_type": "rattler",
+    "environment_type": "virtualenv",
 
     // timeout in seconds for installing any dependencies in environment
     // defaults to 10 min
