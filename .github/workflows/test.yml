@@ -39,7 +39,6 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
-          activate-environment: true
 
       - name: Install dependencies
         run: |
