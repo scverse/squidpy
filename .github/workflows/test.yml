@@ -25,45 +25,32 @@ jobs:
         include:
           - python: "3.12"
             os: macos-latest
-            pip-flags: "--pre"
+            pre-release: "allow"
             name: "Python 3.12 (pre-release)"
 
     env:
       OS: ${{ matrix.os }}
       PYTHON: ${{ matrix.python }}
+      UV_PRERELEASE: ${{ matrix.pre-release || 'disallow' }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v5
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python }}
-
-      - name: Get pip cache dir
-        id: pip-cache-dir
-        run: |
-          echo "::set-output name=dir::$(pip cache dir)"
-
-      - name: Restore pip cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.pip-cache-dir.outputs.dir }}
-          key: pip-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            pip-${{ runner.os }}-${{ env.pythonLocation }}-
+          enable-cache: true
 
       - name: Install dependencies
         run: |
           ./.scripts/ci/install_dependencies.sh
 
       - name: Install pip dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install tox tox-gh-actions
+        run: uv tool install tox --with=tox-uv --with=tox-gh-actions
 
       - name: Restore data cache
         id: data-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/squidpy/*.h5ad
@@ -77,10 +64,10 @@ jobs:
       # caching .tox is not encouraged, but since we're private and this shaves off ~1min from the step
       # if any problems occur and/or once the package is public, this can be removed
       - name: Restore tox cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .tox
-          key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}
+          key: tox-${{ runner.os }}-${{ matrix.python }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}
 
       - name: Test
         timeout-minutes: 60
@@ -103,8 +90,17 @@ jobs:
           path: /home/runner/work/squidpy/squidpy/tests/figures/*
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           name: coverage
           verbose: true
           token: ${{ secrets.CODECOV_TOKEN }} # required
+
+  check:
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
