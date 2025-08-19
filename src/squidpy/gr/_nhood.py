@@ -169,7 +169,7 @@ def nhood_enrichment(
     n_jobs: int | None = None,
     backend: str = "loky",
     normalization: str = "none",
-    min_cell_count: int = 10,
+    min_cell_count: int = 0,
     handle_nan: str = "keep",
     show_progress_bar: bool = True,
 ) -> tuple[NDArrayA, NDArrayA] | tuple[NDArrayA, NDArrayA, NDArrayA] | None:
