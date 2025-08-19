@@ -50,7 +50,7 @@ n_perms
     Number of permutations for the permutation test."""
 _normalization = """\
 normalization
-    Normalization of neighbor counts either `None`, `total` (divide by total number of index cell types) or `conditional` (divided byt number of index cell types with at least one neighbor of neighbor cell type)."""
+    Normalization of neighbor counts either `None`, `total` (divide by total number of index cell types) or `conditional` (divide by number of index cell types with at least one neighbor of neighbor cell type)."""
 _min_cell_count = """\
 min_cell_count
     Minimum number of cells that have to be in a cluster to be included in analysis. If count > min_cell_count, peir will be set to NA."""
