@@ -118,7 +118,32 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, 
     return globals()[fn_key]  # type: ignore[no-any-return]
 
 
-def filter_clusters_by_min_cell_count(adata, int_clust, connectivity_key, min_cell_count):
+def filter_clusters_by_min_cell_count(
+    adata: AnnData,
+    int_clust: NDArrayA,
+    connectivity_key: str,
+    min_cell_count: int,
+) -> tuple[NDArrayA, NDArrayA]:
+    """
+    Filter clusters by minimum cell count.
+
+    Parameters
+    ----------
+    %(adata)s
+    int_clust
+        Array of cluster labels per cell
+    connectivity_key
+        Key in adata.obsp with adjacency matrix
+    min_cell_count
+        Minimum number of cells required to keep a cluster
+
+    Returns
+    -------
+    int_clust_filtered
+        Filtered cluster labels
+    adj
+        Adjacency matrix corresponding to filtered cells
+    """
     clust_sizes = pd.Series(int_clust).value_counts()
     valid_clusters = clust_sizes[clust_sizes >= min_cell_count].index.to_numpy()
 
@@ -147,7 +172,7 @@ def nhood_enrichment(
     min_cell_count: int = 10,
     handle_nan: str = "keep",
     show_progress_bar: bool = True,
-) -> tuple[NDArrayA, NDArrayA] | None:
+) -> tuple[NDArrayA, NDArrayA] | tuple[NDArrayA, NDArrayA, NDArrayA] | None:
     """
     Compute neighborhood enrichment by permutation test.
 
@@ -211,7 +236,7 @@ def nhood_enrichment(
 
     _test = _create_function(n_cls, parallel=numba_parallel)
     count = _test(indices, indptr, int_clust)
-    conditional_ratio = None
+    conditional_ratio = np.full((n_cls, n_cls), np.nan, dtype=np.float64)
 
     if normalization == "total":
         row_sums = count.sum(axis=1, keepdims=True)
@@ -568,7 +593,6 @@ def _nhood_enrichment_helper(
                     has_b_neighbor = per_cell_neighbor_matrix[a_cells, b]
                     cond_counts[a, b] = has_b_neighbor.sum()
 
-            low_count_mask = cond_counts < min_cond_count
             cond_counts[cond_counts == 0] = 1.0
             count_perms = count_perms / cond_counts
 

@@ -364,7 +364,7 @@ def nhood_enrichment_dotplot(
             markersize=np.sqrt(s),  # scatter size is area → sqrt for legend
             markeredgecolor="black",
         )
-        for v, s in zip(legend_ccr_vals, legend_sizes)
+        for v, s in zip(legend_ccr_vals, legend_sizes, strict=True)
     ]
 
     ax.legend(
