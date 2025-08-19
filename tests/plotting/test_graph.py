@@ -66,19 +66,11 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
         fig, ax = plt.subplots(figsize=(2, 2), constrained_layout=True)
         pl.nhood_enrichment(adata, cluster_key=C_KEY, ax=ax)
 
-    ### TODO How can I create test data?
-    # def test_plot_nhood_enrichment_dotplot(self, adata: AnnData):
-    #    gr.spatial_neighbors(adata)
-    #    gr.nhood_enrichment(adata, cluster_key=C_KEY, normalization = "conditional")
+    def test_plot_nhood_enrichment_dotplot(self, adata: AnnData):
+        gr.spatial_neighbors(adata)
+        gr.nhood_enrichment(adata, cluster_key=C_KEY, normalization="conditional")
 
-    #    pl.nhood_enrichment_dotplot(adata, cluster_key=C_KEY)
-
-    # def test_plot_nhood_enrichment_dotplot_ax(self, adata: AnnData):
-    #    gr.spatial_neighbors(adata)
-    #    gr.nhood_enrichment(adata, cluster_key=C_KEY, normalization = "conditional")
-
-    #    fig, ax = plt.subplots(figsize=(2, 2), constrained_layout=True)
-    #    pl.nhood_enrichment_dotplot(adata, cluster_key=C_KEY, ax=ax)
+        pl.nhood_enrichment_dotplot(adata, cluster_key=C_KEY)
 
     def test_plot_nhood_enrichment_dendro(self, adata: AnnData):
         gr.spatial_neighbors(adata)
