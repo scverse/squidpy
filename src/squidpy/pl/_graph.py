@@ -13,6 +13,7 @@ import pandas as pd
 import seaborn as sns
 from anndata import AnnData
 from matplotlib.axes import Axes
+from matplotlib.lines import Line2D
 
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
@@ -344,9 +345,6 @@ def nhood_enrichment_dotplot(
     # Colorbar
     cbar = fig.colorbar(sc, ax=ax, **cbar_kwargs)
     cbar.set_label("Z-score")
-
-    # Continuous CCR legend
-    from matplotlib.lines import Line2D
 
     legend_ccr_vals = np.linspace(df["ccr"].min(), df["ccr"].max(), 5)
     legend_sizes = size_min + (legend_ccr_vals - df["ccr"].min()) / (df["ccr"].max() - df["ccr"].min() + 1e-10) * (
