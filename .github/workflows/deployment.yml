@@ -17,21 +17,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
+      - name: Set up Python 3.12
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.10"
-
-      - name: Install hatch
-        run: pip install hatch
+          python-version: "3.12"
 
       # this will fail if the last commit is not tagged
       - name: Build project for distribution
-        run: hatch build
+        run: uvx hatch build
 
       - name: Publish on PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -46,14 +43,14 @@ jobs:
     needs: deploy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Extract branch name
         id: vars
         run: |
           echo ::set-output name=branch::${GITHUB_REF#refs/*/}
 
       - name: Merge release into main
-        uses: everlytic/branch-merge@1.1.2
+        uses: everlytic/branch-merge@1.1.5
         with:
           github_token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
           target_branch: main
