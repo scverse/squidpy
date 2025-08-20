@@ -11,6 +11,12 @@ from spatialdata._logging import logger as logg
 from spatialdata.models import Labels2DModel, PointsModel, ShapesModel, get_model
 from spatialdata.transformations import get_transformation
 from xarray import DataTree
+from spatialdata import SpatialData
+from spatialdata.models import get_table_keys
+from spatialdata.models import points_dask_dataframe_to_geopandas, points_geopandas_to_dask_dataframe
+
+from dask.dataframe import DataFrame as DaskDataFrame
+import geopandas as gpd
 
 
 def filter_cells(
@@ -67,6 +73,37 @@ def filter_cells(
     return _filter_cells_spatialdata(data, tables, min_counts, min_genes, max_counts, max_genes, inplace, filter_labels)
 
 
+def _get_only_annotated_shape(sdata: sd.SpatialData, table_name: str) -> str | None:
+    table = sdata.tables[table_name]
+
+    # only one shape needs to be annotated to filter points within it
+    # other annotations can't be points
+
+    regions, _, _ = get_table_keys(table)
+    if len(regions) == 0:
+        return None
+
+    if isinstance(regions, str):
+        regions = [regions]
+
+    res = None
+    for r in regions:
+        if r in sdata.points:
+            return None
+        if r in sdata.shapes:
+            if res is not None:
+                return None
+            res = r
+
+    return res
+
+
+def _filter_points_within_shape_geopandas(points_df: DaskDataFrame, shape_df: gpd.GeoDataFrame) -> DaskDataFrame:
+    points_gdf = points_dask_dataframe_to_geopandas(points_df)
+    res = points_gdf.sjoin(shape_df, how="left", predicate="within")
+    return points_geopandas_to_dask_dataframe(res)
+
+
 def _filter_cells_spatialdata(
     data: sd.SpatialData,
     tables: list[str] | str | None = None,
@@ -121,7 +158,12 @@ def _filter_cells_spatialdata(
         if filter_labels:
             for k in list(sdata_filtered.labels.keys()):
                 data_out.labels[k] = sdata_filtered.labels[k]
-
+        shape_name = _get_only_annotated_shape(data_out, t)
+        if shape_name is not None:
+            for p in data_out.points:
+                data_out.points[p] = _filter_points_within_shape_geopandas(
+                    data_out.points[p], data_out.shapes[shape_name]
+                )
     if inplace:
         return None
     return data_out
