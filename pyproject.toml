@@ -239,3 +239,22 @@ ban-relative-imports = "all"
 filterwarnings = [
     "error::numba.NumbaPerformanceWarning"
 ]
+
+[tool.hatch.envs.notebooks]
+installer = "uv"
+extra-dependencies = [
+    "ipykernel",
+    "jupytext",
+    "nbconvert",
+    "leidenalg",
+    "watermark",
+    "napari-spatialdata",
+]
+extras = ["docs"]
+
+[tool.hatch.envs.notebooks.scripts]
+install-kernel = "python -m ipykernel install --user --name=squidpy"
+run = [
+    "install-kernel",
+    "python {root}/.run_notebooks.py {root}/docs/notebooks"
+]

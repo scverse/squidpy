@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
 import argparse
 import glob
@@ -13,7 +14,7 @@ Examples:
 """
 
 
-def main():
+def main() -> None:
     # Set up argument parser
     parser = argparse.ArgumentParser(
         description="Run Jupyter notebooks in specified directories using jupytext",
