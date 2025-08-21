@@ -57,6 +57,18 @@ Plotting
     pl.extract
     pl.var_by_distance
 
+Preprocessing
+~~~~~~~~~~~~~
+
+.. module:: squidpy.pp
+.. currentmodule:: squidpy
+
+.. autosummary::
+    :toctree: api
+
+    pp.filter_cells
+    
+
 Reading
 ~~~~~~~
 
