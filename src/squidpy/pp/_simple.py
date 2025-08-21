@@ -1,22 +1,17 @@
 from __future__ import annotations
 
-import anndata as ad
+import geopandas as gpd
 import numpy as np
-import pandas as pd
 import scanpy as sc
 import spatialdata as sd
-import xarray as xr
-from spatialdata import subset_sdata_by_table_mask
-from spatialdata._logging import logger as logg
-from spatialdata.models import Labels2DModel, PointsModel, ShapesModel, get_model
-from spatialdata.transformations import get_transformation
-from xarray import DataTree
-from spatialdata import SpatialData
-from spatialdata.models import get_table_keys
-from spatialdata.models import points_dask_dataframe_to_geopandas, points_geopandas_to_dask_dataframe
-
 from dask.dataframe import DataFrame as DaskDataFrame
-import geopandas as gpd
+from spatialdata import SpatialData, subset_sdata_by_table_mask
+from spatialdata._logging import logger as logg
+from spatialdata.models import (
+    get_table_keys,
+    points_dask_dataframe_to_geopandas,
+    points_geopandas_to_dask_dataframe,
+)
 
 
 def filter_cells(
@@ -98,9 +93,30 @@ def _get_only_annotated_shape(sdata: sd.SpatialData, table_name: str) -> str | N
     return res
 
 
-def _filter_points_within_shape_geopandas(points_df: DaskDataFrame, shape_df: gpd.GeoDataFrame) -> DaskDataFrame:
-    points_gdf = points_dask_dataframe_to_geopandas(points_df)
-    res = points_gdf.sjoin(shape_df, how="left", predicate="within")
+def _annotated_points_by_shape_membership(
+    sdata: SpatialData,
+    point_key: str,
+    shape_key: str,
+) -> DaskDataFrame:
+    """Annotate points by shape membership.
+
+    Parameters
+    ----------
+    sdata
+        The SpatialData object to annotate.
+    point_key
+        The key of the points to annotate.
+    shape_key
+        The key of the shapes to annotate.
+
+    Returns
+    -------
+    The annotated points.
+    """
+    points = sdata.points[point_key]
+    shapes = sdata.shapes[shape_key]
+    points_gdf = points_dask_dataframe_to_geopandas(points)
+    res = points_gdf.sjoin(shapes, how="left", predicate="within")
     return points_geopandas_to_dask_dataframe(res)
 
 
@@ -161,9 +177,21 @@ def _filter_cells_spatialdata(
         shape_name = _get_only_annotated_shape(data_out, t)
         if shape_name is not None:
             for p in data_out.points:
-                data_out.points[p] = _filter_points_within_shape_geopandas(
-                    data_out.points[p], data_out.shapes[shape_name]
+                _, _, instance_key = get_table_keys(table_old)
+                shape_index_name = data_out.shapes[shape_name].index.name
+                new_points = _annotated_points_by_shape_membership(
+                    sdata=data_out,
+                    shape_key=shape_name,
+                    point_key=p,
                 )
+                shape_index_name += "_right"
+                removed_instance_ids = list(np.unique(table_old.obs[instance_key][~mask_filtered]))
+                # drop points that are not in any shape
+                new_points = new_points.dropna()
+                # drop points that are in the removed_instance_ids
+                new_points = new_points[~new_points[shape_index_name].isin(removed_instance_ids)]
+                data_out.points[p] = new_points
+
     if inplace:
         return None
     return data_out
