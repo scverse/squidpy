@@ -90,7 +90,6 @@ jobs:
           fail_ci_if_error: true
           files: test-data/coverage.xml
 
-
   build:
     runs-on: ubuntu-latest
     steps:
