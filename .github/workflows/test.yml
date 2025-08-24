@@ -25,13 +25,10 @@ jobs:
         include:
           - python: "3.12"
             os: macos-latest
-            pre-release: "allow"
-            name: "Python 3.12 (pre-release)"
 
     env:
       OS: ${{ matrix.os }}
       PYTHON: ${{ matrix.python }}
-      UV_PRERELEASE: ${{ matrix.pre-release || 'disallow' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -90,7 +87,7 @@ jobs:
         with:
           name: coverage
           verbose: true
-          token: ${{ secrets.CODECOV_TOKEN }} # required
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   check:
     if: always()
