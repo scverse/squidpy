@@ -41,16 +41,10 @@ extra-dependencies = [
 ]
 
 
-overrides.matrix.deps.python = [
-    { if = ["ubuntu"], value = "3.11" },
-    { if = ["ubuntu"], value = "3.12" },
-    { if = ["ubuntu"], value = "3.13" },
-    { if = ["macos"], value = "3.11" },
-]
 
 [[envs.hatch-test.matrix]]
-deps = ["ubuntu", "macos"]
-
+python = ["3.11", "3.12", "3.13"]
+deps = ["stable]
 
 [envs.hatch-test.scripts]
 run = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
