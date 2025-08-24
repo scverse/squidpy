@@ -34,19 +34,27 @@ jobs:
       UV_PRERELEASE: ${{ matrix.pre-release || 'disallow' }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Set up Python ${{ matrix.python }}
-        uses: astral-sh/setup-uv@v6
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
           enable-cache: true
+
+      - name: Install hatch
+        run: uv tool install hatch
 
       - name: Install dependencies
         run: |
           ./.scripts/ci/install_dependencies.sh
 
-      - name: Install pip dependencies
-        run: uv tool install tox --with=tox-uv --with=tox-gh-actions
 
       - name: Restore data cache
         id: data-cache
@@ -59,15 +67,7 @@ jobs:
       - name: Download datasets
         if: steps.data-cache.outputs.cache-hit != 'true'
         run: |
-          tox -e download-data
-
-      # caching .tox is not encouraged, but since we're private and this shaves off ~1min from the step
-      # if any problems occur and/or once the package is public, this can be removed
-      - name: Restore tox cache
-        uses: actions/cache@v4
-        with:
-          path: .tox
-          key: tox-${{ runner.os }}-${{ matrix.python }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}
+          hatch run data:download
 
       - name: Test
         timeout-minutes: 60
@@ -77,10 +77,7 @@ jobs:
           DISPLAY: :42
           PYTEST_ADDOPTS: "-n auto"
         run: |
-          tox -vv
-      # check if this can be deprecated
-      #- name: List figures for potential debugging
-      #      ls -alh /home/runner/work/squidpy/squidpy/tests/figures
+          hatch test --python ${{ matrix.python }} --randomize --parallel --cover --all
 
       - name: Archive figures generated during testing
         if: always()
