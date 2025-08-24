@@ -51,7 +51,7 @@ jobs:
     strategy:
       matrix:
         env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
-    env:  # environment variable for use in codecov's env_vars tagging
+    env: # environment variable for use in codecov's env_vars tagging
       ENV_NAME: ${{ matrix.env.name }}
     steps:
       - uses: actions/checkout@v4
@@ -116,7 +116,7 @@ jobs:
           filter: blob:none
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"  # Changed from 3.13 to match squidpy's Python support
+          python-version: "3.12" # Changed from 3.13 to match squidpy's Python support
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: false
@@ -131,6 +131,6 @@ jobs:
       - build
     runs-on: ubuntu-latest
     steps:
-        - uses: re-actors/alls-green@release/v1
-          with:
-            jobs: ${{ toJSON(needs) }}
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
