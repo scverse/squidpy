@@ -81,6 +81,13 @@ jobs:
         if: matrix.env.test-type == 'coverage'
         run: uvx hatch run ${{ matrix.env.name }}:run-cov --cov --cov-report=xml
 
+      - name: Archive figures generated during testing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual_test_results_${{ matrix.env.name }}
+          path: /home/runner/work/squidpy/squidpy/tests/figures/*
+
       - name: Upload coverage data
         uses: codecov/codecov-action@v5
         if: matrix.env.test-type == 'coverage'
@@ -89,6 +96,7 @@ jobs:
           env_vars: ENV_NAME
           fail_ci_if_error: true
           files: test-data/coverage.xml
+        
 
   build:
     runs-on: ubuntu-latest
