@@ -80,7 +80,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: visual_test_results_${{ matrix.os }}-python${{ matrix.python }}
-          path: /home/runner/work/squidpy/squidpy/tests/figures/*
+          path: tests/figures/*
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
