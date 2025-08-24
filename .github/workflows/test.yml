@@ -8,7 +8,7 @@ on:
   pull_request:
 
 env:
-  PYTEST_ADDOPTS: "-v --color=yes -n auto --junitxml=test-data/test-results.xml"
+  PYTEST_ADDOPTS: "-v --color=yes -n auto"
   FORCE_COLOR: "1"
   MPLBACKEND: agg
   # It's impossible to ignore SyntaxWarnings for a single module,
@@ -106,7 +106,7 @@ jobs:
           filter: blob:none
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12" # Changed from 3.13 to match squidpy's Python support
+          python-version: "3.13"
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: false

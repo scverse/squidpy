@@ -2,19 +2,6 @@
 installer = "uv"
 features = ["dev"]
 
-[envs.test]
-features = ["test"]
-extra-dependencies = [
-    "pytest",
-    "pytest-xdist", 
-    "pytest-cov",
-    "pytest-mock",
-    "pytest-timeout",
-]
-
-[envs.test.scripts]
-test = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
-
 [envs.coverage]
 extra-dependencies = [
     "coverage[toml]",
