@@ -96,7 +96,6 @@ jobs:
           env_vars: ENV_NAME
           fail_ci_if_error: true
           files: test-data/coverage.xml
-        
 
   build:
     runs-on: ubuntu-latest
