@@ -457,7 +457,9 @@ def _transform_a_spectral(a: spmatrix) -> spmatrix:
         return a
 
     degrees = np.squeeze(np.array(np.sqrt(1.0 / a.sum(axis=0))))
-    a = a.multiply(outer(a.indices, a.indptr, degrees))
+    o = outer(a.indices, a.indptr, degrees)
+    o = csr_matrix((o, a.indices, a.indptr))
+    a = a.multiply(o)
     a.eliminate_zeros()
 
     return a
