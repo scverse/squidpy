@@ -49,3 +49,28 @@ check = "make -C docs linkcheck {args}"
 [envs.data]
 [envs.data.scripts]
 download = "python ./.scripts/ci/download_data.py {args}"
+
+
+# Matrix-based test environments (like scanpy)
+[envs.hatch-test]
+features = ["test"]
+extra-dependencies = [
+    "pytest",
+    "pytest-xdist", 
+    "pytest-cov",
+    "pytest-mock",
+    "pytest-timeout",
+]
+
+[[envs.hatch-test.matrix]]
+python = ["3.10", "3.11", "3.12"]
+deps = ["stable"]
+
+[envs.hatch-test.overrides]
+matrix.deps.python = [
+    { if = ["stable"], value = "3.12" },
+]
+
+[envs.hatch-test.scripts]
+run = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
+run-cov = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
