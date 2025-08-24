@@ -1,9 +1,7 @@
-# Default environment - what gets installed when you do "hatch shell"
 [envs.default]
 installer = "uv"
 features = ["dev"]
 
-# Test environment - for running tests
 [envs.test]
 features = ["test"]
 extra-dependencies = [
@@ -14,44 +12,37 @@ extra-dependencies = [
     "pytest-timeout",
 ]
 
-# What you can run in the test environment
 [envs.test.scripts]
 test = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
 
-# Coverage environment - for coverage reports
 [envs.coverage]
 extra-dependencies = [
     "coverage[toml]",
     "diff_cover",
 ]
 
-# What you can run in the coverage environment
 [envs.coverage.scripts]
 clean = "coverage erase"
 report = "coverage report --omit='tox/*'"
 xml = "coverage xml --omit='tox/*' -o coverage.xml"
 diff = "diff-cover --compare-branch origin/main coverage.xml"
 
-# Docs environment - for building documentation
 [envs.docs]
 features = ["docs"]
 extra-dependencies = [
     "setuptools",
 ]
 
-# What you can run in the docs environment
 [envs.docs.scripts]
 build = "make -C docs html {args}"
 clean = "make -C docs clean"
 check = "make -C docs linkcheck {args}"
 
-# Data environment - for downloading data
 [envs.data]
 [envs.data.scripts]
 download = "python ./.scripts/ci/download_data.py {args}"
 
 
-# Matrix-based test environments (like scanpy)
 [envs.hatch-test]
 features = ["test"]
 extra-dependencies = [
@@ -73,6 +64,5 @@ matrix.deps.python = [
 
 
 [envs.hatch-test.scripts]
-# Simplified commands - PYTEST_ADDOPTS will add the junitxml flag
 run = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
 run-cov = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
