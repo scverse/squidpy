@@ -90,22 +90,6 @@ jobs:
           fail_ci_if_error: true
           files: test-data/coverage.xml
 
-      - name: Upload test results
-        # yaml strings can't start with "!", so using explicit substitution
-        if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          env_vars: ENV_NAME
-          fail_ci_if_error: true
-          file: test-data/test-results.xml
-
-      - name: Publish debug artifacts
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-data-${{ matrix.env.name }}
-          path: .pytest_cache/d/debug
 
   build:
     runs-on: ubuntu-latest
