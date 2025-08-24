@@ -53,14 +53,13 @@ extra-dependencies = [
     "pytest-timeout",
 ]
 
-[[envs.hatch-test.matrix]]
-python = ["3.10", "3.11", "3.12"]
-deps = ["stable"]
-
-[envs.hatch-test.overrides]
-matrix.deps.python = [
-    { if = ["stable"], value = "3.12" },
+overrides.matrix.deps.python = [
+    { if = ["ubuntu"], value = ["3.11", "3.12", "3.13"] },
+    { if = ["macos"], value = ["3.11"] },
 ]
+
+[[envs.hatch-test.matrix]]
+deps = ["ubuntu", "macos"]
 
 
 [envs.hatch-test.scripts]
