@@ -71,6 +71,8 @@ matrix.deps.python = [
     { if = ["stable"], value = "3.12" },
 ]
 
+
 [envs.hatch-test.scripts]
+# Simplified commands - PYTEST_ADDOPTS will add the junitxml flag
 run = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
 run-cov = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
