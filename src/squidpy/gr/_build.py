@@ -439,7 +439,26 @@ def _build_connectivity(
 
 
 @njit
-def outer(indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA) -> NDArrayA:
+def _didj_factors_csr(indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA) -> NDArrayA:
+    """
+    Return an array F aligned with CSR nonzeros such that
+    F[k] = d[i] * d[j] for the k-th nonzero (i, j) in CSR order.
+
+    Parameters
+    ----------
+    indices : array of int
+        CSR `indices` (column indices).
+    indptr : array of int
+        CSR `indptr` (row pointer).
+    degrees : array of float, shape (n,)
+        Diagonal scaling vector.
+
+    Returns
+    -------
+    array of float
+        Length equals len(indices). Entry-wise factors d_i * d_j.
+    """
+
     res = np.empty_like(indices, dtype=np.float64)
     start = 0
     for i in range(len(indptr) - 1):
@@ -450,19 +469,60 @@ def outer(indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA) -> NDArrayA:
     return res
 
 
+def csr_bilateral_diag_scale(A: spmatrix, degrees: NDArrayA) -> csr_matrix:
+    """
+    Return D * A * D where D = diag(d) and A is CSR.
+
+    For every stored nonzero (i, j):
+        (D A D)_{ij} = d[i] * A_{ij} * d[j].
+
+    Parameters
+    ----------
+    A : scipy.sparse.csr_matrix
+        Input sparse matrix. Converted to CSR if needed.
+    degrees : array_like, shape (n,)
+        Diagonal vector. len(degrees) must equal A.shape[0].
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Matrix with same sparsity pattern as A.
+    """
+    if A.shape[0] != len(degrees):
+        raise ValueError("len(d) must equal number of rows of A")
+    factors = _didj_factors_csr(A.indices, A.indptr, degrees)
+    F = csr_matrix((factors, A.indices, A.indptr), shape=A.shape)
+    B = A.multiply(F)
+    B.eliminate_zeros()
+    return B
+
+
+def symmetric_normalize_csr(A: spmatrix) -> csr_matrix:
+    """
+    Return D^{-1/2} * A * D^{-1/2}, where D = diag(degrees).
+
+    degrees[i] = sum_j A_{ij}  (row degree).
+    Zeros in degree are left as-is to avoid division by zero.
+
+    Parameters
+    ----------
+    A : scipy.sparse.csr_matrix
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+    """
+    degrees = np.squeeze(np.array(np.sqrt(1.0 / A.sum(axis=0))))
+    return csr_bilateral_diag_scale(A, degrees)
+
+
 def _transform_a_spectral(a: spmatrix) -> spmatrix:
     if not isspmatrix_csr(a):
         a = a.tocsr()
     if not a.nnz:
         return a
 
-    degrees = np.squeeze(np.array(np.sqrt(1.0 / a.sum(axis=0))))
-    o = outer(a.indices, a.indptr, degrees)
-    o = csr_matrix((o, a.indices, a.indptr))
-    a = a.multiply(o)
-    a.eliminate_zeros()
-
-    return a
+    return symmetric_normalize_csr(a)
 
 
 def _transform_a_cosine(a: spmatrix) -> spmatrix:

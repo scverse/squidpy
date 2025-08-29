@@ -14,6 +14,9 @@ from squidpy._constants._pkg_constants import Key
 from squidpy.gr import mask_graph, spatial_neighbors
 from squidpy.gr._build import _build_connectivity
 
+@pytest.fixture(params=[None, "spectral", "cosine"])
+def transform(request):
+    return request.param
 
 class TestSpatialNeighbors:
     # ground-truth Delaunay distances
@@ -49,11 +52,11 @@ class TestSpatialNeighbors:
     # TODO: add edge cases
     # TODO(giovp): test with reshuffling
     @pytest.mark.parametrize(("n_rings", "n_neigh", "sum_dist"), [(1, 6, 0), (2, 18, 30), (3, 36, 84)])
-    def test_spatial_neighbors_visium(self, visium_adata: AnnData, n_rings: int, n_neigh: int, sum_dist: int):
+    def test_spatial_neighbors_visium(self, visium_adata: AnnData, n_rings: int, n_neigh: int, sum_dist: int, transform: str | None):
         """
         check correctness of neighborhoods for visium coordinates
         """
-        spatial_neighbors(visium_adata, n_rings=n_rings)
+        spatial_neighbors(visium_adata, n_rings=n_rings, transform=transform)
         assert visium_adata.obsp[Key.obsp.spatial_conn()][0].sum() == n_neigh
         assert visium_adata.uns[Key.uns.spatial_neighs()]["distances_key"] == Key.obsp.spatial_dist()
         if n_rings > 1:
@@ -62,8 +65,8 @@ class TestSpatialNeighbors:
         # test for library_key
         visium_adata2 = visium_adata.copy()
         adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(visium_adata, visium_adata2)
-        spatial_neighbors(visium_adata2, n_rings=n_rings)
-        spatial_neighbors(adata_concat, library_key="library_id", n_rings=n_rings)
+        spatial_neighbors(visium_adata2, n_rings=n_rings, transform=transform)
+        spatial_neighbors(adata_concat, library_key="library_id", n_rings=n_rings, transform=transform)
         assert adata_concat.obsp[Key.obsp.spatial_conn()][0].sum() == n_neigh
         np.testing.assert_array_equal(
             adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].toarray(),
@@ -116,7 +119,7 @@ class TestSpatialNeighbors:
         np.testing.assert_array_equal(G.diagonal(), float(set_diag))
         np.testing.assert_array_equal(D.diagonal(), 0.0)
 
-    def test_spatial_neighbors_non_visium(self, non_visium_adata: AnnData):
+    def test_spatial_neighbors_non_visium(self, non_visium_adata: AnnData, transform: str | None):
         """
         check correctness of neighborhoods for non-visium coordinates
         """
@@ -138,17 +141,17 @@ class TestSpatialNeighbors:
             ]
         )
 
-        spatial_neighbors(non_visium_adata, n_neighs=3, coord_type=None)
+        spatial_neighbors(non_visium_adata, n_neighs=3, coord_type=None, transform=transform)
         spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
 
         np.testing.assert_array_equal(spatial_graph, correct_knn_graph)
 
-        spatial_neighbors(non_visium_adata, radius=5.0, coord_type=None)
+        spatial_neighbors(non_visium_adata, radius=5.0, coord_type=None, transform=transform)
         spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
 
         np.testing.assert_array_equal(spatial_graph, correct_radius_graph)
 
-        spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None)
+        spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None, transform=transform)
         spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
         spatial_dist = non_visium_adata.obsp[Key.obsp.spatial_dist()].toarray()
 
@@ -158,8 +161,8 @@ class TestSpatialNeighbors:
         # test for library_key
         non_visium_adata2 = non_visium_adata.copy()
         adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(non_visium_adata, non_visium_adata2)
-        spatial_neighbors(adata_concat, library_key="library_id", delaunay=True, coord_type=None)
-        spatial_neighbors(non_visium_adata2, delaunay=True, coord_type=None)
+        spatial_neighbors(adata_concat, library_key="library_id", delaunay=True, coord_type=None, transform=transform)
+        spatial_neighbors(non_visium_adata2, delaunay=True, coord_type=None, transform=transform)
 
         np.testing.assert_array_equal(
             adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].toarray(),
