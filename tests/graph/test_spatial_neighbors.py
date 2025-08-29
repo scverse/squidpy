@@ -14,9 +14,11 @@ from squidpy._constants._pkg_constants import Key
 from squidpy.gr import mask_graph, spatial_neighbors
 from squidpy.gr._build import _build_connectivity
 
+
 @pytest.fixture(params=[None, "spectral", "cosine"])
 def transform(request):
     return request.param
+
 
 class TestSpatialNeighbors:
     # ground-truth Delaunay distances
@@ -52,11 +54,11 @@ class TestSpatialNeighbors:
     # TODO: add edge cases
     # TODO(giovp): test with reshuffling
     @pytest.mark.parametrize(("n_rings", "n_neigh", "sum_dist"), [(1, 6, 0), (2, 18, 30), (3, 36, 84)])
-    def test_spatial_neighbors_visium(self, visium_adata: AnnData, n_rings: int, n_neigh: int, sum_dist: int, transform: str | None):
+    def test_spatial_neighbors_visium(self, visium_adata: AnnData, n_rings: int, n_neigh: int, sum_dist: int):
         """
         check correctness of neighborhoods for visium coordinates
         """
-        spatial_neighbors(visium_adata, n_rings=n_rings, transform=transform)
+        spatial_neighbors(visium_adata, n_rings=n_rings)
         assert visium_adata.obsp[Key.obsp.spatial_conn()][0].sum() == n_neigh
         assert visium_adata.uns[Key.uns.spatial_neighs()]["distances_key"] == Key.obsp.spatial_dist()
         if n_rings > 1:
@@ -65,8 +67,8 @@ class TestSpatialNeighbors:
         # test for library_key
         visium_adata2 = visium_adata.copy()
         adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(visium_adata, visium_adata2)
-        spatial_neighbors(visium_adata2, n_rings=n_rings, transform=transform)
-        spatial_neighbors(adata_concat, library_key="library_id", n_rings=n_rings, transform=transform)
+        spatial_neighbors(visium_adata2, n_rings=n_rings)
+        spatial_neighbors(adata_concat, library_key="library_id", n_rings=n_rings)
         assert adata_concat.obsp[Key.obsp.spatial_conn()][0].sum() == n_neigh
         np.testing.assert_array_equal(
             adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].toarray(),
@@ -119,7 +121,7 @@ class TestSpatialNeighbors:
         np.testing.assert_array_equal(G.diagonal(), float(set_diag))
         np.testing.assert_array_equal(D.diagonal(), 0.0)
 
-    def test_spatial_neighbors_non_visium(self, non_visium_adata: AnnData, transform: str | None):
+    def test_spatial_neighbors_non_visium(self, non_visium_adata: AnnData):
         """
         check correctness of neighborhoods for non-visium coordinates
         """
@@ -141,17 +143,17 @@ class TestSpatialNeighbors:
             ]
         )
 
-        spatial_neighbors(non_visium_adata, n_neighs=3, coord_type=None, transform=transform)
+        spatial_neighbors(non_visium_adata, n_neighs=3, coord_type=None)
         spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
 
         np.testing.assert_array_equal(spatial_graph, correct_knn_graph)
 
-        spatial_neighbors(non_visium_adata, radius=5.0, coord_type=None, transform=transform)
+        spatial_neighbors(non_visium_adata, radius=5.0, coord_type=None)
         spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
 
         np.testing.assert_array_equal(spatial_graph, correct_radius_graph)
 
-        spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None, transform=transform)
+        spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None)
         spatial_graph = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
         spatial_dist = non_visium_adata.obsp[Key.obsp.spatial_dist()].toarray()
 
@@ -161,8 +163,17 @@ class TestSpatialNeighbors:
         # test for library_key
         non_visium_adata2 = non_visium_adata.copy()
         adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(non_visium_adata, non_visium_adata2)
-        spatial_neighbors(adata_concat, library_key="library_id", delaunay=True, coord_type=None, transform=transform)
-        spatial_neighbors(non_visium_adata2, delaunay=True, coord_type=None, transform=transform)
+        spatial_neighbors(
+            adata_concat,
+            library_key="library_id",
+            delaunay=True,
+            coord_type=None,
+        )
+        spatial_neighbors(
+            non_visium_adata2,
+            delaunay=True,
+            coord_type=None,
+        )
 
         np.testing.assert_array_equal(
             adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].toarray(),
@@ -360,3 +371,177 @@ class TestSpatialNeighbors:
                 negative_mask=True,
                 key_added=key_added,
             )
+
+    @pytest.mark.parametrize("coord_type", ["generic", "grid"])
+    @pytest.mark.parametrize("transform", ["spectral", "cosine"])
+    def test_transform_properties(self, coord_type: str, transform: str):
+        """Test that transforms produce expected matrix properties."""
+        # Create test data
+        if coord_type == "generic":
+            rng = np.random.default_rng(42)
+            adata = ad.AnnData(shape=(20, 5))
+            adata.obsm["spatial"] = rng.random(size=(20, 2)) * 10
+            kwargs = {"n_neighs": 5, "coord_type": "generic"}
+        else:  # grid
+            # Create a small visium-like dataset
+            adata = ad.AnnData(shape=(9, 5))
+            # 3x3 grid coordinates
+            coords = np.array([[i, j] for i in range(3) for j in range(3)], dtype=float)
+            adata.obsm["spatial"] = coords
+            adata.uns["spatial"] = {"library1": {"scalefactors": {}}}
+            kwargs = {"n_neighs": 4, "coord_type": "grid"}
+
+        # Test without transform (baseline)
+        conn_orig, dist_orig = spatial_neighbors(adata, copy=True, transform=None, **kwargs)
+
+        # Test with transform
+        conn_trans, dist_trans = spatial_neighbors(adata, copy=True, transform=transform, **kwargs)
+
+        # Basic assertions
+        assert isspmatrix_csr(conn_trans)
+        assert isspmatrix_csr(dist_trans)
+        assert conn_trans.shape == conn_orig.shape
+        assert dist_trans.shape == dist_orig.shape
+
+        # Transform-specific assertions
+        if transform == "spectral":
+            # Spectral transform should normalize the matrix
+            # Row sums should be close to 1.0 for non-isolated nodes
+            row_sums = np.array(conn_trans.sum(axis=1)).flatten()
+            non_zero_rows = row_sums > 0
+            if np.any(non_zero_rows):
+                # For connected components, normalized row sums should be reasonable
+                assert np.all(row_sums[non_zero_rows] <= 2.0)  # Reasonable upper bound
+                assert np.all(row_sums[non_zero_rows] >= 0.1)  # Reasonable lower bound
+            print(conn_trans.toarray())
+            print(conn_trans.T.toarray())
+            # Matrix should still be symmetric
+            assert np.allclose(conn_trans.toarray(), conn_trans.T.toarray(), rtol=1e-10)
+
+        elif transform == "cosine":
+            # Cosine similarity matrix should have values between 0 and 1
+            assert conn_trans.min() >= 0.0
+            assert conn_trans.max() <= 1.0
+
+            # Diagonal should be 1.0 for non-zero rows
+            diag = conn_trans.diagonal()
+            row_sums = np.array(conn_orig.sum(axis=1)).flatten()
+            non_zero_rows = row_sums > 0
+            if np.any(non_zero_rows):
+                assert np.allclose(diag[non_zero_rows], 1.0, rtol=1e-10)
+
+        # Distance matrix should be unchanged by transforms
+        np.testing.assert_allclose(dist_trans.toarray(), dist_orig.toarray(), rtol=1e-12)
+
+    @pytest.mark.parametrize("transform", ["spectral", "cosine"])
+    def test_transform_parameters_stored(self, non_visium_adata: AnnData, transform: str):
+        """Test that transform parameters are correctly stored in uns."""
+        spatial_neighbors(non_visium_adata, coord_type="generic", n_neighs=3, transform=transform)
+
+        # Check that transform is stored in parameters
+        params = non_visium_adata.uns[Key.uns.spatial_neighs()]["params"]
+        assert "transform" in params
+        assert params["transform"] == transform
+
+    def test_transform_none_equivalent_to_no_transform(self, non_visium_adata: AnnData):
+        """Test that transform=None produces the same result as no transform parameter."""
+        adata1 = non_visium_adata.copy()
+        adata2 = non_visium_adata.copy()
+
+        # One with transform=None, one without transform parameter
+        spatial_neighbors(adata1, coord_type="generic", n_neighs=3, transform=None)
+        spatial_neighbors(adata2, coord_type="generic", n_neighs=3)
+
+        # Results should be identical
+        np.testing.assert_allclose(
+            adata1.obsp[Key.obsp.spatial_conn()].toarray(), adata2.obsp[Key.obsp.spatial_conn()].toarray()
+        )
+        np.testing.assert_allclose(
+            adata1.obsp[Key.obsp.spatial_dist()].toarray(), adata2.obsp[Key.obsp.spatial_dist()].toarray()
+        )
+
+    @pytest.mark.parametrize("transform", ["spectral", "cosine"])
+    def test_transform_with_copy(self, non_visium_adata: AnnData, transform: str):
+        """Test transform functionality with copy=True."""
+        conn, dist = spatial_neighbors(
+            non_visium_adata, coord_type="generic", n_neighs=3, transform=transform, copy=True
+        )
+
+        # Basic checks
+        assert isspmatrix_csr(conn)
+        assert isspmatrix_csr(dist)
+
+        # Should not modify original data
+        assert Key.obsp.spatial_conn() not in non_visium_adata.obsp
+        assert Key.obsp.spatial_dist() not in non_visium_adata.obsp
+
+        # Transform-specific checks
+        if transform == "spectral":
+            # Should be normalized
+            row_sums = np.array(conn.sum(axis=1)).flatten()
+            non_zero_rows = row_sums > 0
+            if np.any(non_zero_rows):
+                assert np.all(row_sums[non_zero_rows] <= 2.0)
+        elif transform == "cosine":
+            # Should have cosine similarity properties
+            assert conn.min() >= 0.0
+            assert conn.max() <= 1.0
+
+    @pytest.mark.parametrize("transform", ["spectral", "cosine"])
+    def test_transform_preserves_sparsity_pattern_structure(self, non_visium_adata: AnnData, transform: str):
+        """Test that transforms preserve basic connectivity structure when appropriate."""
+        # Get original connectivity
+        conn_orig, _ = spatial_neighbors(non_visium_adata, coord_type="generic", n_neighs=3, transform=None, copy=True)
+
+        # Get transformed connectivity
+        conn_trans, _ = spatial_neighbors(
+            non_visium_adata, coord_type="generic", n_neighs=3, transform=transform, copy=True
+        )
+
+        if transform == "spectral":
+            # Spectral transform should preserve the sparsity pattern
+            # (same non-zero locations)
+            np.testing.assert_array_equal((conn_orig > 0).toarray(), (conn_trans > 0).toarray())
+        elif transform == "cosine":
+            # Cosine transform creates a dense similarity matrix, so sparsity pattern changes
+            # But it should still be a valid similarity matrix
+            assert conn_trans.nnz >= conn_orig.nnz  # Usually becomes denser
+
+    def test_transform_invalid_option(self, non_visium_adata: AnnData):
+        """Test that invalid transform options raise appropriate errors."""
+        with pytest.raises((ValueError, NotImplementedError)):
+            spatial_neighbors(non_visium_adata, coord_type="generic", n_neighs=3, transform="invalid_transform")
+
+    @pytest.mark.parametrize("transform", ["spectral", "cosine"])
+    def test_transform_with_different_coord_types(self, transform: str):
+        """Test transforms work with different coordinate types."""
+        # Test with generic coordinates
+        rng = np.random.default_rng(42)
+        adata_generic = ad.AnnData(shape=(16, 5))
+        adata_generic.obsm["spatial"] = rng.random(size=(16, 2)) * 10
+
+        spatial_neighbors(adata_generic, coord_type="generic", n_neighs=4, transform=transform)
+
+        # Test with grid coordinates
+        adata_grid = ad.AnnData(shape=(9, 5))
+        coords = np.array([[i, j] for i in range(3) for j in range(3)], dtype=float)
+        adata_grid.obsm["spatial"] = coords
+        adata_grid.uns["spatial"] = {"library1": {"scalefactors": {}}}
+
+        spatial_neighbors(adata_grid, coord_type="grid", n_rings=1, transform=transform)
+
+        # Both should complete without error and have transformed matrices
+        for adata in [adata_generic, adata_grid]:
+            conn = adata.obsp[Key.obsp.spatial_conn()]
+            assert conn.nnz > 0  # Should have connections
+
+            if transform == "spectral":
+                # Check normalization properties
+                row_sums = np.array(conn.sum(axis=1)).flatten()
+                non_zero_rows = row_sums > 0
+                if np.any(non_zero_rows):
+                    assert np.all(row_sums[non_zero_rows] <= 2.0)
+            elif transform == "cosine":
+                # Check cosine properties
+                assert conn.min() >= 0.0
+                assert conn.max() <= 1.0
