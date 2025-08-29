@@ -49,7 +49,9 @@ class TestSpatialNeighbors:
     # TODO: add edge cases
     # TODO(giovp): test with reshuffling
     @pytest.mark.parametrize(("n_rings", "n_neigh", "sum_dist"), [(1, 6, 0), (2, 18, 30), (3, 36, 84)])
-    def test_spatial_neighbors_visium(self, visium_adata: AnnData, n_rings: int, n_neigh: int, sum_dist: int):
+    def test_spatial_neighbors_visium(
+        self, visium_adata: AnnData, n_rings: int, n_neigh: int, sum_dist: int, transform: str | None
+    ):
         """
         check correctness of neighborhoods for visium coordinates
         """
