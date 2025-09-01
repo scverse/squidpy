@@ -64,7 +64,7 @@ jobs:
           key: pytest
 
       - name: System dependencies (Linux)
-        if: runner.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest'
         run: |
           set -u # fail on unset variables
 
@@ -76,7 +76,7 @@ jobs:
           sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
 
       - name: System dependencies (macOS)
-        if: runner.os == 'macos-latest'
+        if: matrix.os == 'macos-latest'
         run: brew install automake
 
       - name: Install dependencies
