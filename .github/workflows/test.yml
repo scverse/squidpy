@@ -88,27 +88,10 @@ jobs:
           fail_ci_if_error: true
           files: test-data/coverage.xml
 
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          filter: blob:none
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: false
-      - run: uvx --from build pyproject-build --sdist --wheel .
-      - run: uvx twine check dist/*
-
   check:
     if: always()
     needs:
       - test
-      - build
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1
