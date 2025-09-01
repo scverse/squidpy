@@ -83,7 +83,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: ENV_NAME
           fail_ci_if_error: true
-          files: coverage.xml
+          files: test-data/coverage.xml
 
   check:
     if: always()
