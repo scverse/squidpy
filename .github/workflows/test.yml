@@ -20,39 +20,29 @@ defaults:
     shell: bash -e {0} # -e to fail on error
 
 jobs:
-  get-environments:
-    runs-on: ubuntu-latest
-    outputs:
-      envs: ${{ steps.get-envs.outputs.envs }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          filter: blob:none
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: false
-      - id: get-envs
-        run: |
-          ENVS_JSON=$(NO_COLOR=1 uvx hatch env show --json | jq -c 'to_entries
-            | map(
-              select(.key | startswith("hatch-test"))
-              | {
-                name: .key,
-                "test-type": (if (.key | test("pre|min")) then "coverage" else null end),
-                python: .value.python | sub("3[.]13"; "3.13.3"),  # https://github.com/numba/numba/issues/10101
-              }
-            )')
-          echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
-
   test:
-    needs: get-environments
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
+        include:
+          - name: hatch-test-py310
+            os: ubuntu-latest
+            python: "3.10"
+          - name: hatch-test-py311
+            os: ubuntu-latest
+            python: "3.11"
+          - name: hatch-test-py312
+            os: ubuntu-latest
+            python: "3.12"
+          - name: hatch-test-py312-pre
+            os: macos-latest
+            python: "3.12"
+            prerelease: "allow"
+            test-type: coverage
     env: # environment variable for use in codecov's env_vars tagging
-      ENV_NAME: ${{ matrix.env.name }}
+      ENV_NAME: ${{ matrix.name }}
+      UV_PRERELEASE: ${{ matrix.prerelease || 'disallow' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,7 +52,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          python-version: ${{ matrix.env.python }}
+          python-version: ${{ matrix.python }}
           cache-dependency-glob: pyproject.toml
 
       - name: Cache downloaded data
@@ -75,22 +65,22 @@ jobs:
         run: uvx hatch -v env create ${{ matrix.env.name }}
 
       - name: Run tests
-        if: matrix.env.test-type == null
-        run: uvx hatch run ${{ matrix.env.name }}:run
+        if: matrix.test-type == null
+        run: uvx hatch run ${{ matrix.name }}:run
       - name: Run tests (coverage)
-        if: matrix.env.test-type == 'coverage'
-        run: uvx hatch run ${{ matrix.env.name }}:run-cov --cov --cov-report=xml
+        if: matrix.test-type == 'coverage'
+        run: uvx hatch run ${{ matrix.name }}:run-cov --cov --cov-report=xml
 
       - name: Archive figures generated during testing
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: visual_test_results_${{ matrix.env.name }}
+          name: visual_test_results_${{ matrix.name }}
           path: /home/runner/work/squidpy/squidpy/tests/figures/*
 
       - name: Upload coverage data
         uses: codecov/codecov-action@v5
-        if: matrix.env.test-type == 'coverage'
+        if: matrix.test-type == 'coverage'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: ENV_NAME
@@ -116,7 +106,6 @@ jobs:
   check:
     if: always()
     needs:
-      - get-environments
       - test
       - build
     runs-on: ubuntu-latest
