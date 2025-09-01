@@ -62,11 +62,12 @@ jobs:
           key: pytest
 
       - name: Install dependencies
-        run: uvx hatch -v env create ${{ matrix.env.name }}
+        run: uvx hatch -v env create ${{ matrix.name }}
 
       - name: Run tests
         if: matrix.test-type == null
         run: uvx hatch run ${{ matrix.name }}:run
+
       - name: Run tests (coverage)
         if: matrix.test-type == 'coverage'
         run: uvx hatch run ${{ matrix.name }}:run-cov --cov --cov-report=xml
@@ -79,8 +80,8 @@ jobs:
           path: /home/runner/work/squidpy/squidpy/tests/figures/*
 
       - name: Upload coverage data
-        uses: codecov/codecov-action@v5
         if: matrix.test-type == 'coverage'
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: ENV_NAME
