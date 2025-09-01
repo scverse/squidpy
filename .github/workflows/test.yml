@@ -63,6 +63,22 @@ jobs:
           path: .pytest_cache/d/squidpy-data
           key: pytest
 
+      - name: System dependencies (Linux)
+        if: runner.os == 'ubuntu-latest'
+        run: |
+          set -u # fail on unset variables
+
+          sudo apt-get update -y
+          sudo apt-get install automake -y
+
+          # PyQt5 related
+          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
+          sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
+
+      - name: System dependencies (macOS)
+        if: runner.os == 'macos-latest'
+        run: brew install automake
+
       - name: Install dependencies
         run: uvx hatch -v env create ${{ matrix.name }}
 
