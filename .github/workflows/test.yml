@@ -55,6 +55,9 @@ jobs:
           python-version: ${{ matrix.python }}
           cache-dependency-glob: pyproject.toml
 
+      - name: Ensure figure directory exists
+        run: mkdir -p "$GITHUB_WORKSPACE/tests/figures"
+
       - name: Cache downloaded data
         uses: actions/cache@v4
         with:
@@ -77,7 +80,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: visual_test_results_${{ matrix.name }}
-          path: /home/runner/work/squidpy/squidpy/tests/figures/*
+          path: ${{ github.workspace }}/tests/figures/*
 
       - name: Upload coverage data
         if: matrix.test-type == 'coverage'
