@@ -39,7 +39,6 @@ jobs:
             os: macos-latest
             python: "3.13"
             prerelease: "allow"
-            test-type: coverage
     env: # environment variable for use in codecov's env_vars tagging
       ENV_NAME: ${{ matrix.name }}
       UV_PRERELEASE: ${{ matrix.prerelease || 'disallow' }}
@@ -67,10 +66,6 @@ jobs:
       - name: Install dependencies
         run: uvx hatch -v env create ${{ matrix.name }}
 
-      - name: Run tests
-        if: matrix.test-type == null
-        run: uvx hatch run ${{ matrix.name }}:run
-
       - name: Run tests (coverage)
         if: matrix.test-type == 'coverage'
         run: uvx hatch run ${{ matrix.name }}:run-cov --cov --cov-report=xml
@@ -83,13 +78,12 @@ jobs:
           path: ${{ github.workspace }}/tests/figures/*
 
       - name: Upload coverage data
-        if: matrix.test-type == 'coverage'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: ENV_NAME
           fail_ci_if_error: true
-          files: test-data/coverage.xml
+          files: coverage.xml
 
   check:
     if: always()
