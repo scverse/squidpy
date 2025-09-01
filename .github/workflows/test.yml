@@ -67,7 +67,6 @@ jobs:
         run: uvx hatch -v env create ${{ matrix.name }}
 
       - name: Run tests (coverage)
-        if: matrix.test-type == 'coverage'
         run: uvx hatch run ${{ matrix.name }}:run-cov --cov --cov-report=xml
 
       - name: Archive figures generated during testing
@@ -83,7 +82,6 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: ENV_NAME
           fail_ci_if_error: true
-          files: test-data/coverage.xml
 
   check:
     if: always()
