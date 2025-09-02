@@ -64,8 +64,6 @@ jobs:
       - name: System dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          set -u # fail on unset variables
-
           sudo apt-get update -y
           sudo apt-get install automake -y
 
