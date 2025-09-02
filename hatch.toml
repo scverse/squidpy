@@ -44,7 +44,7 @@ extra-dependencies = [
 
 [[envs.hatch-test.matrix]]
 deps = ["stable"]
-python = ["3.10", "3.11", "3.12"]
+python = ["3.10", "3.11"]
 
 # Test the newest supported Python version also with pre-release deps
 [[envs.hatch-test.matrix]]

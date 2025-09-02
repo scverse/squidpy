@@ -113,6 +113,7 @@ jobs:
           path: ${{ github.workspace }}/tests/figures/*
 
       - name: Upload coverage data
+        if: matrix.env.test-type == 'coverage'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
