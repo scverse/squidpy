@@ -40,8 +40,12 @@ jobs:
                 "test-type": (if (.key | test("pre|min")) then "coverage" else null end),
                 python: .value.python | sub("3[.]13"; "3.13.3"),  # https://github.com/numba/numba/issues/10101
               }
-              | [.[] as $e | ($e + { "os": "ubuntu-latest" }), ($e + { "os": "macos-latest" })]
-            )')
+            )
+            | map(
+              . as $env | 
+              [$env + {"os": "ubuntu-latest"}, $env + {"os": "macos-latest"}]
+            )
+            | flatten')
           echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
   test:
     needs: get-environments
