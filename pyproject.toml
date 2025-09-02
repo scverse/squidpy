@@ -249,6 +249,7 @@ testpaths = ["tests/"]
 xfail_strict = true
 addopts = [
     "--ignore=tests/plotting/test_interactive.py",
+    "--ignore=docs",
 ]
 
 

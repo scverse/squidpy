@@ -45,7 +45,3 @@ extra-dependencies = [
 [[envs.hatch-test.matrix]]
 python = ["3.10", "3.11", "3.12"]
 deps = ["stable"]
-
-[envs.hatch-test.scripts]
-run = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
-run-cov = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
