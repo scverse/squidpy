@@ -17,29 +17,43 @@ env:
   # so because leidenalg 0.10.0 has them, we pre-compile things: https://github.com/vtraag/leidenalg/issues/173
   UV_COMPILE_BYTECODE: "1"
 
+
+
 jobs:
+  get-environments:
+    runs-on: ubuntu-latest
+    outputs:
+      envs: ${{ steps.get-envs.outputs.envs }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          filter: blob:none
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - id: get-envs
+        run: |
+          ENVS_JSON=$(NO_COLOR=1 uvx hatch env show --json | jq -c 'to_entries
+            | map(
+              select(.key | startswith("hatch-test"))
+              | {
+                name: .key,
+                "test-type": (if (.key | test("pre|min")) then "coverage" else null end),
+                python: .value.python | sub("3[.]13"; "3.13.3"),  # https://github.com/numba/numba/issues/10101
+              }
+              | [.[] as $e | ($e + { "os": "ubuntu-latest" }), ($e + { "os": "macos-latest" })]
+            )')
+          echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
   test:
+    needs: get-environments
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: hatch-test.py3.10-stable
-            os: ubuntu-latest
-            python: "3.10"
-          - name: hatch-test.py3.11-stable
-            os: ubuntu-latest
-            python: "3.11"
-          - name: hatch-test.py3.12-stable
-            os: ubuntu-latest
-            python: "3.12"
-          - name: hatch-test.py3.12-stable
-            os: macos-latest
-            python: "3.12"
-            prerelease: "allow"
+        include: ${{ fromJson(needs.get-environments.outputs.envs) }}
     env: # environment variable for use in codecov's env_vars tagging
       ENV_NAME: ${{ matrix.name }}
-      UV_PRERELEASE: ${{ matrix.prerelease || 'disallow' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -75,10 +89,11 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: brew install automake
 
-      - name: Install dependencies
-        run: uvx hatch -v env create ${{ matrix.name }}
-
+      - name: Run tests
+        if: matrix.env.test-type == null
+        run: uvx hatch run ${{ matrix.env.name }}:run
       - name: Run tests (coverage)
+        if: matrix.env.test-type == 'coverage'
         run: uvx hatch run ${{ matrix.name }}:run-cov --cov --cov-report=xml
 
       - name: Archive figures generated during testing
