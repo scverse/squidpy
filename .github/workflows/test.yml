@@ -49,23 +49,23 @@ jobs:
           echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
   test:
     needs: get-environments
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.get-environments.outputs.envs) }}
+        env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
     env: # environment variable for use in codecov's env_vars tagging
-      ENV_NAME: ${{ matrix.name }}
+      ENV_NAME: ${{ matrix.env.name }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           filter: blob:none
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          python-version: ${{ matrix.python }}
+          python-version: ${{ matrix.env.python }}
           cache-dependency-glob: pyproject.toml
 
       - name: Ensure figure directory exists
@@ -78,7 +78,7 @@ jobs:
           key: pytest
 
       - name: System dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.env.os == 'ubuntu-latest'
         run: |
           sudo apt-get update -y
           sudo apt-get install automake -y
@@ -88,7 +88,7 @@ jobs:
           sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
 
       - name: System dependencies (macOS)
-        if: matrix.os == 'macos-latest'
+        if: matrix.env.os == 'macos-latest'
         run: brew install automake
 
       - name: Run tests
@@ -96,13 +96,13 @@ jobs:
         run: uvx hatch run ${{ matrix.env.name }}:run
       - name: Run tests (coverage)
         if: matrix.env.test-type == 'coverage'
-        run: uvx hatch run ${{ matrix.name }}:run-cov --cov --cov-report=xml
+        run: uvx hatch run ${{ matrix.env.name }}:run-cov --cov --cov-report=xml
 
       - name: Archive figures generated during testing
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: visual_test_results_${{ runner.os }}_py${{ matrix.name }}
+          name: visual_test_results_${{ runner.os }}_py${{ matrix.env.name }}
           path: ${{ github.workspace }}/tests/figures/*
 
       - name: Upload coverage data
