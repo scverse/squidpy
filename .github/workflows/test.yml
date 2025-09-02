@@ -71,11 +71,18 @@ jobs:
       - name: Ensure figure directory exists
         run: mkdir -p "$GITHUB_WORKSPACE/tests/figures"
 
-      - name: Cache downloaded data
+      - name: Restore data cache
+        id: data-cache
         uses: actions/cache@v4
         with:
-          path: .pytest_cache/d/squidpy-data
-          key: pytest
+          path: |
+            ~/.cache/squidpy/*.h5ad
+          key: data-${{ hashFiles('**/download_data.py') }}
+
+      - name: Download datasets
+        if: steps.data-cache.outputs.cache-hit != 'true'
+        run: |
+          uvx hatch run ${{ matrix.env.name }}:download
 
       - name: System dependencies (Linux)
         if: matrix.env.os == 'ubuntu-latest'
