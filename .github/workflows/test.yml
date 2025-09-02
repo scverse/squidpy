@@ -2,7 +2,7 @@ name: CI
 
 on:
   schedule:
-  - cron: 00 00 * * 1 # every Monday at 00:00
+    - cron: 00 00 * * 1 # every Monday at 00:00
   push:
     branches:
       - main
@@ -16,10 +16,6 @@ env:
   # It's impossible to ignore SyntaxWarnings for a single module,
   # so because leidenalg 0.10.0 has them, we pre-compile things: https://github.com/vtraag/leidenalg/issues/173
   UV_COMPILE_BYTECODE: "1"
-
-defaults:
-  run:
-    shell: bash -e {0} # -e to fail on error
 
 jobs:
   test:
