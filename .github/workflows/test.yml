@@ -53,21 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: hatch-test.py3.10-stable
-            os: ubuntu-latest
-            python: "3.10"
-          - name: hatch-test.py3.11-stable
-            os: ubuntu-latest
-            python: "3.11"
-          - name: hatch-test.py3.12-stable
-            os: ubuntu-latest
-            python: "3.12"
-          - name: hatch-test.py3.12-stable
-            os: macos-latest
-            python: "3.12"
-            prerelease: "allow"
-            test-type: "coverage"
+        include: ${{ fromJSON(needs.get-environments.outputs.envs) }}
     env: # environment variable for use in codecov's env_vars tagging
       ENV_NAME: ${{ matrix.name }}
     steps:
@@ -111,6 +97,9 @@ jobs:
       - name: System dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: brew install automake
+
+      - name: Install dependencies
+        run: uvx hatch -v env create ${{ matrix.name }}
 
       - name: Run tests
         if: matrix.test-type == null
