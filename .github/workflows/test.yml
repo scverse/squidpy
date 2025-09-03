@@ -55,19 +55,19 @@ jobs:
       matrix:
         include:
           - env:
-            - name: hatch-test.py3.10-stable
-              os: ubuntu-latest
-              python: "3.10"
-            - name: hatch-test.py3.11-stable
-              os: ubuntu-latest
-              python: "3.11"
-            - name: hatch-test.py3.12-stable
-              os: ubuntu-latest
-              python: "3.12"
-            - name: hatch-test.py3.12-stable
-              os: macos-latest
-              python: "3.12"
-              prerelease: "allow"
+              - name: hatch-test.py3.10-stable
+                os: ubuntu-latest
+                python: "3.10"
+              - name: hatch-test.py3.11-stable
+                os: ubuntu-latest
+                python: "3.11"
+              - name: hatch-test.py3.12-stable
+                os: ubuntu-latest
+                python: "3.12"
+              - name: hatch-test.py3.12-stable
+                os: macos-latest
+                python: "3.12"
+                prerelease: "allow"
     env: # environment variable for use in codecov's env_vars tagging
       ENV_NAME: ${{ matrix.env.name }}
     steps:
