@@ -110,7 +110,10 @@ jobs:
         run: uvx hatch run ${{ matrix.name }}:run
       - name: Run tests (coverage)
         if: matrix.test-type == 'coverage'
-        run: uvx hatch run ${{ matrix.name }}:run-cov --cov --cov-report=xml
+        run: |
+          uvx hatch run ${{ matrix.name }}:run-cov
+          uvx hatch run ${{ matrix.name }}:coverage combine
+          uvx hatch run ${{ matrix.name }}:coverage xml
 
       - name: Archive figures generated during testing
         if: always()
