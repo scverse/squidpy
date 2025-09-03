@@ -38,10 +38,6 @@ extra-dependencies = [
     "pytest-cov",
     "pytest-mock",
     "pytest-timeout",
-     # check if this causes float precision issues
-    "numpy==2.2.6",
-    "numba==0.61.2",
-    "llvmlite==0.44",
 ]
 
 
