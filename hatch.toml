@@ -38,14 +38,26 @@ extra-dependencies = [
     "pytest-cov",
     "pytest-mock",
     "pytest-timeout",
+     # check if this causes float precision issues
+    "numpy==2.2.6",
+    "numba==0.61.2",
+    "llvmlite==0.44",
 ]
 
 
 
 [[envs.hatch-test.matrix]]
-python = ["3.10", "3.11", "3.12"]
 deps = ["stable"]
+python = ["3.11", "3.12", ]
 
-[envs.hatch-test.scripts]
-run = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
-run-cov = "python -m pytest --color=yes --cov --cov-append --cov-report=xml --cov-config=pyproject.toml --ignore docs/ {args:-vv}"
+# Test the newest supported Python version also with pre-release deps
+[[envs.hatch-test.matrix]]
+deps = [ "pre" ]
+python = [ "3.13" ]
+
+[envs.hatch-test.overrides]
+# If the matrix variable `deps` is set to "pre",
+# set the environment variable `UV_PRERELEASE` to "allow".
+matrix.deps.env-vars = [
+  { key = "UV_PRERELEASE", value = "allow", if = [ "pre" ] },
+]

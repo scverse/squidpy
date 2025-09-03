@@ -84,6 +84,7 @@ test = [
     "pytest>=7",
     "pytest-xdist>=3",
     "pytest-mock>=3.5.0",
+    # Just for VS Code
     "pytest-cov>=4",
     "coverage[toml]>=7",
     "pytest-timeout>=2.1.0",
@@ -249,6 +250,7 @@ testpaths = ["tests/"]
 xfail_strict = true
 addopts = [
     "--ignore=tests/plotting/test_interactive.py",
+    "--ignore=docs",
 ]
 
 

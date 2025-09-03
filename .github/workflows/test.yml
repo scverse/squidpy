@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  schedule:
+    - cron: 00 00 * * 1 # every Monday at 00:00
   push:
     branches:
       - main
@@ -15,40 +17,56 @@ env:
   # so because leidenalg 0.10.0 has them, we pre-compile things: https://github.com/vtraag/leidenalg/issues/173
   UV_COMPILE_BYTECODE: "1"
 
-defaults:
-  run:
-    shell: bash -e {0} # -e to fail on error
-
 jobs:
+  get-environments:
+    runs-on: ubuntu-latest
+    outputs:
+      envs: ${{ steps.get-envs.outputs.envs }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          filter: blob:none
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - id: get-envs
+        run: |
+          ENVS_JSON=$(NO_COLOR=1 uvx hatch env show --json | jq -c 'to_entries
+            | map(
+              select(.key | startswith("hatch-test"))
+              | {
+                name: .key,
+                "test-type": (if (.key | test("pre|min")) then "coverage" else null end),
+                python: .value.python | sub("3[.]13"; "3.13.3"),  # https://github.com/numba/numba/issues/10101
+              }
+            )
+            | map(
+              . as $env | 
+              if $env.python == "3.12" then
+                [$env + {"os": "ubuntu-latest"}, $env + {"os": "macos-latest"}]
+              else
+                [$env + {"os": "ubuntu-latest"}]
+              end
+            )
+            | flatten')
+          echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
   test:
+    needs: get-environments
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: hatch-test.py3.10-stable
-            os: ubuntu-latest
-            python: "3.10"
-          - name: hatch-test.py3.11-stable
-            os: ubuntu-latest
-            python: "3.11"
-          - name: hatch-test.py3.12-stable
-            os: ubuntu-latest
-            python: "3.12"
-          - name: hatch-test.py3.12-stable
-            os: macos-latest
-            python: "3.12"
-            prerelease: "allow"
+        include: ${{ fromJSON(needs.get-environments.outputs.envs) }}
     env: # environment variable for use in codecov's env_vars tagging
       ENV_NAME: ${{ matrix.name }}
-      UV_PRERELEASE: ${{ matrix.prerelease || 'disallow' }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           filter: blob:none
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
           python-version: ${{ matrix.python }}
@@ -57,17 +75,45 @@ jobs:
       - name: Ensure figure directory exists
         run: mkdir -p "$GITHUB_WORKSPACE/tests/figures"
 
-      - name: Cache downloaded data
+      - name: Restore data cache
+        id: data-cache
         uses: actions/cache@v4
         with:
-          path: .pytest_cache/d/squidpy-data
-          key: pytest
+          path: |
+            ~/.cache/squidpy/*.h5ad
+          key: data-${{ hashFiles('**/download_data.py') }}
+
+      - name: Download datasets
+        if: steps.data-cache.outputs.cache-hit != 'true'
+        run: |
+          uvx hatch run ${{ matrix.name }}:download
+
+      - name: System dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install automake -y
+
+          # PyQt5 related
+          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
+          sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
+
+      - name: System dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install automake
 
       - name: Install dependencies
         run: uvx hatch -v env create ${{ matrix.name }}
 
+      - name: Run tests
+        if: matrix.test-type == null
+        run: uvx hatch run ${{ matrix.name }}:run
       - name: Run tests (coverage)
-        run: uvx hatch run ${{ matrix.name }}:run-cov --cov --cov-report=xml
+        if: matrix.test-type == 'coverage'
+        run: |
+          uvx hatch run ${{ matrix.name }}:run-cov
+          uvx hatch run ${{ matrix.name }}:coverage combine
+          uvx hatch run ${{ matrix.name }}:coverage xml
 
       - name: Archive figures generated during testing
         if: always()
@@ -77,6 +123,7 @@ jobs:
           path: ${{ github.workspace }}/tests/figures/*
 
       - name: Upload coverage data
+        if: matrix.test-type == 'coverage'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
