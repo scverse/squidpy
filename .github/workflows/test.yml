@@ -43,7 +43,11 @@ jobs:
             )
             | map(
               . as $env | 
-              [$env + {"os": "ubuntu-latest"}, $env + {"os": "macos-latest"}]
+              if $env.python == "3.12" then
+                [$env + {"os": "ubuntu-latest"}, $env + {"os": "macos-latest"}]
+              else
+                [$env + {"os": "ubuntu-latest"}]
+              end
             )
             | flatten')
           echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
