@@ -49,27 +49,27 @@ jobs:
           echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
   test:
     needs: get-environments
-    runs-on: ${{ matrix.env.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - env:
-              - name: hatch-test.py3.10-stable
-                os: ubuntu-latest
-                python: "3.10"
-              - name: hatch-test.py3.11-stable
-                os: ubuntu-latest
-                python: "3.11"
-              - name: hatch-test.py3.12-stable
-                os: ubuntu-latest
-                python: "3.12"
-              - name: hatch-test.py3.12-stable
-                os: macos-latest
-                python: "3.12"
-                prerelease: "allow"
+            - name: hatch-test.py3.10-stable
+              os: ubuntu-latest
+              python: "3.10"
+            - name: hatch-test.py3.11-stable
+              os: ubuntu-latest
+              python: "3.11"
+            - name: hatch-test.py3.12-stable
+              os: ubuntu-latest
+              python: "3.12"
+            - name: hatch-test.py3.12-stable
+              os: macos-latest
+              python: "3.12"
+              prerelease: "allow"
+              test-type: "coverage"
     env: # environment variable for use in codecov's env_vars tagging
-      ENV_NAME: ${{ matrix.env.name }}
+      ENV_NAME: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,7 +79,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          python-version: ${{ matrix.env.python }}
+          python-version: ${{ matrix.python }}
           cache-dependency-glob: pyproject.toml
 
       - name: Ensure figure directory exists
@@ -96,10 +96,10 @@ jobs:
       - name: Download datasets
         if: steps.data-cache.outputs.cache-hit != 'true'
         run: |
-          uvx hatch run ${{ matrix.env.name }}:download
+          uvx hatch run ${{ matrix.name }}:download
 
       - name: System dependencies (Linux)
-        if: matrix.env.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update -y
           sudo apt-get install automake -y
@@ -109,25 +109,25 @@ jobs:
           sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
 
       - name: System dependencies (macOS)
-        if: matrix.env.os == 'macos-latest'
+        if: matrix.os == 'macos-latest'
         run: brew install automake
 
       - name: Run tests
-        if: matrix.env.test-type == null
-        run: uvx hatch run ${{ matrix.env.name }}:run
+        if: matrix.test-type == null
+        run: uvx hatch run ${{ matrix.name }}:run
       - name: Run tests (coverage)
-        if: matrix.env.test-type == 'coverage'
-        run: uvx hatch run ${{ matrix.env.name }}:run-cov --cov --cov-report=xml
+        if: matrix.test-type == 'coverage'
+        run: uvx hatch run ${{ matrix.name }}:run-cov --cov --cov-report=xml
 
       - name: Archive figures generated during testing
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: visual_test_results_${{ runner.os }}_py${{ matrix.env.name }}
+          name: visual_test_results_${{ runner.os }}_py${{ matrix.name }}
           path: ${{ github.workspace }}/tests/figures/*
 
       - name: Upload coverage data
-        if: matrix.env.test-type == 'coverage'
+        if: matrix.test-type == 'coverage'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
