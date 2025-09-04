@@ -1,0 +1,59 @@
+[envs.default]
+installer = "uv"
+features = ["dev"]
+
+[envs.coverage]
+extra-dependencies = [
+    "coverage[toml]",
+    "diff_cover",
+]
+
+[envs.coverage.scripts]
+clean = "coverage erase"
+report = "coverage report --omit='tox/*'"
+xml = "coverage xml --omit='tox/*' -o coverage.xml"
+diff = "diff-cover --compare-branch origin/main coverage.xml"
+
+[envs.docs]
+features = ["docs"]
+extra-dependencies = [
+    "setuptools",
+]
+
+[envs.docs.scripts]
+build = "make -C docs html {args}"
+clean = "make -C docs clean"
+check = "make -C docs linkcheck {args}"
+
+[envs.data]
+[envs.data.scripts]
+download = "python ./.scripts/ci/download_data.py {args}"
+
+
+[envs.hatch-test]
+features = ["test"]
+extra-dependencies = [
+    "pytest",
+    "pytest-xdist", 
+    "pytest-cov",
+    "pytest-mock",
+    "pytest-timeout",
+]
+
+
+
+[[envs.hatch-test.matrix]]
+deps = ["stable"]
+python = ["3.11", "3.12", "3.13"]
+
+# Test the newest supported Python version also with pre-release deps
+[[envs.hatch-test.matrix]]
+deps = [ "pre" ]
+python = [ "3.13" ]
+
+[envs.hatch-test.overrides]
+# If the matrix variable `deps` is set to "pre",
+# set the environment variable `UV_PRERELEASE` to "allow".
+matrix.deps.env-vars = [
+  { key = "UV_PRERELEASE", value = "allow", if = [ "pre" ] },
+]
