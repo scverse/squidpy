@@ -14,7 +14,7 @@ import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
 from fast_array_utils import stats as fau_stats
-from numba import njit
+from numba import njit, prange
 from scanpy import logging as logg
 from scipy.sparse import (
     SparseEfficiencyWarning,
@@ -438,7 +438,7 @@ def _build_connectivity(
     return Adj
 
 
-@njit
+@njit(parallel=True)
 def _csr_bilateral_diag_scale_helper(
     data: NDArrayA, indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA
 ) -> NDArrayA:
@@ -465,7 +465,7 @@ def _csr_bilateral_diag_scale_helper(
     """
 
     res = np.empty_like(data, dtype=np.float64)
-    for i in range(len(indptr) - 1):
+    for i in prange(len(indptr) - 1):
         ixs = indices[indptr[i] : indptr[i + 1]]
         res[indptr[i] : indptr[i + 1]] = degrees[i] * degrees[ixs] * data[indptr[i] : indptr[i + 1]]
 
