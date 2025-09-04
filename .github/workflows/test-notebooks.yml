@@ -40,4 +40,7 @@ jobs:
           MPLBACKEND: agg
           PLATFORM: ${{ matrix.os }}
           DISPLAY: :42
-        run: uvx hatch run notebooks:run-notebooks
+        
+        run:
+            uvx hatch run notebooks:setup-squidpy-kernel
+            uvx hatch run notebooks:run-notebooks
