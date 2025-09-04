@@ -59,7 +59,6 @@ matrix.deps.env-vars = [
 ]
 
 [envs.notebooks]
-installer = "uv"
 extra-dependencies = [
     "ipykernel",
     "jupytext",
