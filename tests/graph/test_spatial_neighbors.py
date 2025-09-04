@@ -15,8 +15,6 @@ from squidpy.gr import mask_graph, spatial_neighbors
 from squidpy.gr._build import _build_connectivity
 
 
-
-
 class TestSpatialNeighbors:
     # ground-truth Delaunay distances
     _gt_ddist = np.array(
