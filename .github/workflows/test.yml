@@ -18,46 +18,25 @@ env:
   UV_COMPILE_BYTECODE: "1"
 
 jobs:
-  get-environments:
-    runs-on: ubuntu-latest
-    outputs:
-      envs: ${{ steps.get-envs.outputs.envs }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          filter: blob:none
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: false
-      - id: get-envs
-        run: |
-          ENVS_JSON=$(NO_COLOR=1 uvx hatch env show --json | jq -c 'to_entries
-            | map(
-              select(.key | startswith("hatch-test"))
-              | {
-                name: .key,
-                "test-type": (if (.key | test("pre|min")) then "coverage" else null end),
-                python: .value.python | sub("3[.]13"; "3.13.3"),  # https://github.com/numba/numba/issues/10101
-              }
-            )
-            | map(
-              . as $env | 
-              if $env.python == "3.12" then
-                [$env + {"os": "ubuntu-latest"}, $env + {"os": "macos-latest"}]
-              else
-                [$env + {"os": "ubuntu-latest"}]
-              end
-            )
-            | flatten')
-          echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
   test:
-    needs: get-environments
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.get-environments.outputs.envs) }}
+        include:
+          - name: hatch-test.py3.11-stable
+            os: ubuntu-latest
+            python: "3.11"
+          - name: hatch-test.py3.12-stable
+            os: ubuntu-latest
+            python: "3.12"
+          - name: hatch-test.py3.13-stable
+            os: ubuntu-latest
+            python: "3.13"
+            test-type: "coverage"
+          - name: hatch-test.py3.13-pre
+            os: macos-latest
+            python: "3.13"
     env: # environment variable for use in codecov's env_vars tagging
       ENV_NAME: ${{ matrix.name }}
     steps:
