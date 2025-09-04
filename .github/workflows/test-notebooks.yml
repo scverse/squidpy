@@ -40,4 +40,4 @@ jobs:
           MPLBACKEND: agg
           PLATFORM: ${{ matrix.os }}
           DISPLAY: :42
-        run: uvx hatch run notebooks:run
+        run: uvx hatch run notebooks:run-notebooks

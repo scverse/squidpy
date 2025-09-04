@@ -73,4 +73,4 @@ extras = ["docs"]
 [envs.notebooks.scripts]
 
 setup-squidpy-kernel = "python -m ipykernel install --user --name=squidpy"
-run-notebooks = "python ./.scripts/ci/run_notebooks.py {args}"
+run-notebooks = "python ./.scripts/ci/run_notebooks.py docs/notebooks"
