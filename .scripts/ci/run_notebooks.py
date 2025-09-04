@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
 import argparse
 import glob
@@ -8,12 +9,12 @@ import sys
 
 EPILOG = """
 Examples:
-  python .run_notebooks.py docs/notebooks
-  python .run_notebooks.py /path/to/notebooks --kernel my-kernel
+  python run_notebooks.py docs/notebooks
+  python run_notebooks.py /path/to/notebooks --kernel my-kernel
 """
 
 
-def main():
+def main() -> None:
     # Set up argument parser
     parser = argparse.ArgumentParser(
         description="Run Jupyter notebooks in specified directories using jupytext",
