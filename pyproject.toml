@@ -78,13 +78,14 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pre-commit>=3.0.0",
-    "tox>=4.0.0",
+    "hatch>=1.9.0",
 ]
 test = [
     "scanpy[leiden]",
     "pytest>=7",
     "pytest-xdist>=3",
     "pytest-mock>=3.5.0",
+    # Just for VS Code
     "pytest-cov>=4",
     "coverage[toml]>=7",
     "pytest-timeout>=2.1.0",
@@ -102,7 +103,6 @@ docs = [
     "myst-nb>=0.17.1",
     "sphinx_copybutton>=0.5.0",
 ]
-
 [project.urls]
 Homepage = "https://github.com/scverse/squidpy"
 "Bug Tracker" = "https://github.com/scverse/squidpy/issues"
@@ -120,6 +120,9 @@ source = "vcs"
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/squidpy"]
 
 [tool.hatch.metadata.hooks.fancy-pypi-readme]
 content-type = "text/x-rst"
@@ -238,5 +241,45 @@ ban-relative-imports = "all"
 
 [tool.pytest.ini_options]
 filterwarnings = [
-    "error::numba.NumbaPerformanceWarning"
+    "error::numba.NumbaPerformanceWarning",
+    "ignore::UserWarning",
+    "ignore::anndata.OldFormatWarning",
+    "ignore:.*pkg_resources:DeprecationWarning",
 ]
+python_files = "test_*.py"
+testpaths = ["tests/"]
+xfail_strict = true
+addopts = [
+    "--ignore=tests/plotting/test_interactive.py",
+    "--ignore=docs",
+]
+
+
+[tool.coverage.run]
+branch = true
+parallel = true
+source = ["squidpy"]
+omit = [
+    "*/__init__.py",
+    "*/_version.py",
+    "squidpy/pl/_interactive/*",
+]
+
+[tool.coverage.paths]
+source = [
+    "squidpy",
+    "*/site-packages/squidpy",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "\\#.*pragma:\\s*no.?cover",
+    "^if __name__ == .__main__.:$",
+    "^\\s*raise AssertionError\\b",
+    "^\\s*raise NotImplementedError\\b",
+    "^\\s*return NotImplemented\\b",
+]
+show_missing = true
+precision = 2
+skip_empty = true
+sort = "Miss"
