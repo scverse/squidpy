@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
-from geopandas import GeoDataFrame
+from fast_array_utils import stats as fau_stats
 from numba import njit
 from scanpy import logging as logg
 from scipy.sparse import (
@@ -439,13 +439,18 @@ def _build_connectivity(
 
 
 @njit
-def _didj_factors_csr(indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA) -> NDArrayA:
+def _csr_bilateral_diag_scale_helper(
+    data: NDArrayA, indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA
+) -> NDArrayA:
     """
-    Return an array F aligned with CSR nonzeros such that
-    F[k] = d[i] * d[j] for the k-th nonzero (i, j) in CSR order.
+    Return an array F aligned with CSR non-zeros such that
+    F[k] = d[i] * data[k] * d[j] for the k-th non-zero (i, j) in CSR order.
 
     Parameters
     ----------
+
+    data : array of float
+        CSR `data` (non-zero values).
     indices : array of int
         CSR `indices` (column indices).
     indptr : array of int
@@ -456,64 +461,35 @@ def _didj_factors_csr(indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA) ->
     Returns
     -------
     array of float
-        Length equals len(indices). Entry-wise factors d_i * d_j.
+        Length equals len(data). Entry-wise factors d_i * d_j * data[k]
     """
 
-    res = np.empty_like(indices, dtype=np.float64)
-    start = 0
+    res = np.empty_like(data, dtype=np.float64)
     for i in range(len(indptr) - 1):
         ixs = indices[indptr[i] : indptr[i + 1]]
-        res[start : start + len(ixs)] = degrees[i] * degrees[ixs]
-        start += len(ixs)
+        res[indptr[i] : indptr[i + 1]] = degrees[i] * degrees[ixs] * data[indptr[i] : indptr[i + 1]]
 
     return res
 
 
-def csr_bilateral_diag_scale(A: spmatrix, degrees: NDArrayA) -> csr_matrix:
+def symmetric_normalize_csr(adj: spmatrix) -> csr_matrix:
     """
-    Return D * A * D where D = diag(d) and A is CSR.
+    Return D^{-1/2} * A * D^{-1/2}, where D = diag(degrees(A)) and A = adj.
 
-    For every stored nonzero (i, j):
-        (D A D)_{ij} = d[i] * A_{ij} * d[j].
 
     Parameters
     ----------
-    A : scipy.sparse.csr_matrix
-        Input sparse matrix. Converted to CSR if needed.
-    degrees : array_like, shape (n,)
-        Diagonal vector. len(degrees) must equal A.shape[0].
-
-    Returns
-    -------
-    scipy.sparse.csr_matrix
-        Matrix with same sparsity pattern as A.
-    """
-    if A.shape[0] != len(degrees):
-        raise ValueError("len(d) must equal number of rows of A")
-    factors = _didj_factors_csr(A.indices, A.indptr, degrees)
-    F = csr_matrix((factors, A.indices, A.indptr), shape=A.shape)
-    B = A.multiply(F)
-    B.eliminate_zeros()
-    return B
-
-
-def symmetric_normalize_csr(A: spmatrix) -> csr_matrix:
-    """
-    Return D^{-1/2} * A * D^{-1/2}, where D = diag(degrees).
-
-    degrees[i] = sum_j A_{ij}  (row degree).
-    Zeros in degree are left as-is to avoid division by zero.
-
-    Parameters
-    ----------
-    A : scipy.sparse.csr_matrix
+    adj : scipy.sparse.csr_matrix
 
     Returns
     -------
     scipy.sparse.csr_matrix
     """
-    degrees = np.squeeze(np.array(np.sqrt(1.0 / A.sum(axis=0))))
-    return csr_bilateral_diag_scale(A, degrees)
+    degrees = np.squeeze(np.array(np.sqrt(1.0 / fau_stats.sum(adj, axis=0))))
+    if adj.shape[0] != len(degrees):
+        raise ValueError("len(degrees) must equal number of rows of adj")
+    res_data = _csr_bilateral_diag_scale_helper(adj.data, adj.indices, adj.indptr, degrees)
+    return csr_matrix((res_data, adj.indices, adj.indptr), shape=adj.shape)
 
 
 def _transform_a_spectral(a: spmatrix) -> spmatrix:
