@@ -14,7 +14,7 @@ import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
 from fast_array_utils import stats as fau_stats
-from numba import njit, prange
+from numba import njit
 from scanpy import logging as logg
 from scipy.sparse import (
     SparseEfficiencyWarning,
@@ -432,10 +432,9 @@ def _build_connectivity(
     return Adj
 
 
-@njit(parallel=True, cache=True)
+@njit
 def _csr_bilateral_diag_scale_helper(
-    mat: csr_array | csr_matrix,
-    degrees: NDArrayA,
+    data: NDArrayA, indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA
 ) -> NDArrayA:
     """
     Return an array F aligned with CSR non-zeros such that
@@ -483,7 +482,7 @@ def symmetric_normalize_csr(adj: spmatrix) -> csr_matrix:
     degrees = np.squeeze(np.array(np.sqrt(1.0 / fau_stats.sum(adj, axis=0))))
     if adj.shape[0] != len(degrees):
         raise ValueError("len(degrees) must equal number of rows of adj")
-    res_data = _csr_bilateral_diag_scale_helper(adj, degrees)
+    res_data = _csr_bilateral_diag_scale_helper(adj.data, adj.indices, adj.indptr, degrees)
     return csr_matrix((res_data, adj.indices, adj.indptr), shape=adj.shape)
 
 
