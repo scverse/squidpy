@@ -36,7 +36,11 @@ def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
     assert dummy_adata.uns[UNS_KEY].columns.shape == (4,)
     assert df.columns.shape == (9,)
     # test pval_norm same
-    np.testing.assert_array_equal(df["pval_norm"].values, df_parallel["pval_norm"].values)
+    # will need to increase the tolerance because numba parallel computations might not be exactly the same
+    # see the env. when these tests used to be exact
+    # these pval_norms don't use the seed anyway so the difference is not due to the seed
+    # https://github.com/scverse/squidpy/commit/10e5e443e0b0bf9ee08fa0bc0c3c6dc18c4ff497
+    np.testing.assert_allclose(df["pval_norm"].values, df_parallel["pval_norm"].values, atol=1e-12)
     # test highly variable
     assert dummy_adata.uns[UNS_KEY].shape != df.shape
     # assert idx are sorted and contain same elements
@@ -71,8 +75,12 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
     assert "pval_sim_fdr_bh" in df_1
     assert "pval_norm_fdr_bh" in dummy_adata.uns[UNS_KEY]
     # test pval_norm same
-    np.testing.assert_array_equal(df_1["pval_norm"].values, df_2["pval_norm"].values)
-    np.testing.assert_array_equal(df_1["var_norm"].values, df_2["var_norm"].values)
+    # will need to increase the tolerance because numba parallel computations might not be exactly the same
+    # see the env. when these tests used to be exact
+    # https://github.com/scverse/squidpy/commit/10e5e443e0b0bf9ee08fa0bc0c3c6dc18c4ff497
+    # these pval_norms don't use the seed anyway so the difference is not due to the seed
+    np.testing.assert_allclose(df_1["pval_norm"].values, df_2["pval_norm"].values, atol=1e-12)
+    np.testing.assert_allclose(df_1["var_norm"].values, df_2["var_norm"].values, atol=1e-12)
     assert dummy_adata.uns[UNS_KEY].columns.shape == (4,)
     assert df_2.columns.shape == (9,)
     # test highly variable
