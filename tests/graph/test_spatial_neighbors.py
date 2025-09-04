@@ -15,8 +15,6 @@ from squidpy.gr import mask_graph, spatial_neighbors
 from squidpy.gr._build import _build_connectivity
 
 
-
-
 class TestSpatialNeighbors:
     # ground-truth Delaunay distances
     _gt_ddist = np.array(
@@ -64,8 +62,8 @@ class TestSpatialNeighbors:
         # test for library_key
         visium_adata2 = visium_adata.copy()
         adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(visium_adata, visium_adata2)
-        spatial_neighbors(visium_adata2, n_rings=n_rings, transform=transform)
-        spatial_neighbors(adata_concat, library_key="library_id", n_rings=n_rings, transform=transform)
+        spatial_neighbors(visium_adata2, n_rings=n_rings)
+        spatial_neighbors(adata_concat, library_key="library_id", n_rings=n_rings)
         assert adata_concat.obsp[Key.obsp.spatial_conn()][0].sum() == n_neigh
         np.testing.assert_array_equal(
             adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].toarray(),
@@ -359,3 +357,48 @@ class TestSpatialNeighbors:
                 negative_mask=True,
                 key_added=key_added,
             )
+
+    def test_spatial_neighbors_transform_mathematical_properties(self, non_visium_adata: AnnData):
+        """
+        Test mathematical properties of each transform.
+        """
+        # Test spectral transform properties
+        spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None, transform="spectral")
+        adj_spectral = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
+
+        # Spectral transform should be symmetric
+        np.testing.assert_allclose(adj_spectral, adj_spectral.T, atol=1e-10)
+
+        # Spectral transform should have normalized rows (L2 norm <= 1)
+        row_norms = np.sqrt(np.sum(adj_spectral**2, axis=1))
+        np.testing.assert_array_less(row_norms, 1.0 + 1e-10)
+
+        # Test cosine transform properties
+        spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None, transform="cosine")
+        adj_cosine = non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray()
+
+        # Cosine transform should be symmetric
+        np.testing.assert_allclose(adj_cosine, adj_cosine.T, atol=1e-10)
+
+        # Cosine transform should have values in [-1, 1]
+        np.testing.assert_array_less(-1.0 - 1e-10, adj_cosine)
+        np.testing.assert_array_less(adj_cosine, 1.0 + 1e-10)
+
+        # Diagonal of cosine transform should be 1 (self-similarity)
+        np.testing.assert_allclose(np.diag(adj_cosine), 1.0, atol=1e-10)
+
+    def test_spatial_neighbors_transform_edge_cases(self, non_visium_adata: AnnData):
+        """
+        Test transforms with edge cases (empty graph, single node, etc.).
+        """
+        # Test with a very small dataset
+        small_adata = non_visium_adata[:5].copy()  # Only 5 points
+
+        # Test all transforms with small dataset
+        for transform in [None, "spectral", "cosine"]:
+            spatial_neighbors(small_adata, delaunay=True, coord_type=None, transform=transform)
+            assert Key.obsp.spatial_conn() in small_adata.obsp
+            assert Key.obsp.spatial_dist() in small_adata.obsp
+
+            # Verify transform parameter is saved
+            assert small_adata.uns[Key.uns.spatial_neighs()]["params"]["transform"] == transform
