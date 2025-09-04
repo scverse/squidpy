@@ -23,6 +23,7 @@ class TestDatasetsImports:
 # TODO(michalk8): parse the code and xfail iff server issue
 class TestDatasetsDownload:
     @pytest.mark.timeout(120)
+    @pytest.mark.internet()
     def test_download_imc(self, tmp_path: Path):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=OldFormatWarning)
@@ -35,6 +36,7 @@ class TestDatasetsDownload:
                 pytest.xfail(str(e))
 
     @pytest.mark.timeout(120)
+    @pytest.mark.internet()
     def test_download_visium_hne_image_crop(self, tmp_path: Path):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=OldFormatWarning)
