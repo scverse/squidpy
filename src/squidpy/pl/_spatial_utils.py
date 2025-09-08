@@ -171,7 +171,7 @@ def _get_image(
             raise KeyError(
                 f"Image key: `{img_res_key}` does not exist. Available image keys: `{image_mapping.values()}`"
             )
-        img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_res_key] for i in library_id]
+        img = [adata.uns[spatial_key][i][Key.uns.image_key][img_res_key] for i in library_id]
 
     if img_channel is None:
         img = [im[..., :3] for im in img]
