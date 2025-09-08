@@ -234,9 +234,7 @@ def _get_scalefactor_size(
             if not len(scale_factor_key):
                 raise ValueError(f"No `scale_factor` found that could match `img_res_key`: {img_res_key}.")
             _scale_factor_key = scale_factor_key[0]  # get first scale_factor
-            scale_factor = [
-                adata.uns[spatial_key][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id
-            ]
+            scale_factor = [adata.uns[spatial_key][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id]
         else:  # handle case where scale_factor is float or list
             scale_factor = _get_list(scale_factor, _type=float, ref_len=len(library_id), name="scale_factor")
 
