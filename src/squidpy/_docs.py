@@ -107,8 +107,14 @@ Nothing, just plots the figure and optionally saves the plot.
 """
 _parallelize = """\
 n_jobs
-    Number of parallel jobs to use. If the function uses numba compiled functions, numba may
-    use cores depending on the number of threads set in the environment regardless of this argument.
+    Number of parallel jobs to use.
+    For ``backend="loky"``, the number of cores used by numba for
+    each job spawned by the backend will be set to 1 in order to
+    overcome the oversubscription issue in case you run
+    numba in your function to parallelize.
+    To set the absolute maximum number of threads in numba
+    for your python program, set the environment variable:
+    ``NUMBA_NUM_THREADS`` before running the program.
 backend
     Parallelization backend to use. See :class:`joblib.Parallel` for available options.
 show_progress_bar

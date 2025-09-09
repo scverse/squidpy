@@ -93,6 +93,9 @@ def _create_template(n_cls: int, return_means: bool = False, parallel: bool = Tr
     g{i} = np.zeros((data.shape[1],), dtype=np.float64); s{i} = 0"""
         for i in rng
     )
+    init += """
+    error = False
+    """
 
     loop_body = """
         if cl == 0:
@@ -110,7 +113,7 @@ def _create_template(n_cls: int, return_means: bool = False, parallel: bool = Tr
         cl = clustering[row]
         {loop_body}
         else:
-            assert False, "Unhandled case."
+            error = True
     """
     finalize = ", ".join(f"g{i} / s{i}" for i in rng)
     finalize = f"groups = np.stack(({finalize}))"
@@ -841,8 +844,13 @@ def _analysis_helper(
 
     for _ in perms:
         rs.shuffle(clustering)
-        test(interactions, interaction_clusters, data, clustering, mean, mask, res=res)
-
+        error = test(interactions, interaction_clusters, data, clustering, mean, mask, res=res)
+        if error:
+            raise ValueError("In the execution of the numba function, an unhandled case was encountered. ")
+            # This is mainly to avoid a numba warning
+            # Otherwise, the numba function wouldn't be
+            # executed in parallel
+            # See: https://github.com/scverse/squidpy/issues/994
         if queue is not None:
             queue.put(Signal.UPDATE)
 
