@@ -6,10 +6,8 @@ These features may change or be removed in future releases.
 
 from __future__ import annotations
 
-from . import im
+from . import im, pl
 from .im._qc import qc_sharpness
-
-from . import pl
 from .pl._qc import qc_sharpness_metrics
 
 __all__ = ["qc_sharpness", "qc_sharpness_metrics"]
