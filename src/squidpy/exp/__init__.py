@@ -9,4 +9,7 @@ from __future__ import annotations
 from . import im
 from .im._qc import qc_sharpness
 
-__all__ = ["qc_sharpness"]
+from . import pl
+from .pl._qc import qc_sharpness_metrics
+
+__all__ = ["qc_sharpness", "qc_sharpness_metrics"]
