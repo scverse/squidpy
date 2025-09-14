@@ -1,11 +1,11 @@
 import numpy as np
 import dask.array as da
-import itertools
+import enum
 import xarray as xr
 from dask.diagnostics import ProgressBar
 from scipy import ndimage as ndi
-from scipy.stats import entropy
 from scipy.fft import fft2, fftfreq
+import itertools
 from typing import Literal, Optional, Tuple, Union
 from sklearn.preprocessing import StandardScaler
 from spatialdata._logging import logger as logg
@@ -15,6 +15,11 @@ from spatialdata.models import TableModel, ShapesModel
 from shapely.geometry import Polygon
 import geopandas as gpd
 from enum import Enum
+from numba import njit
+import numba
+
+# Disable Numba parallelization globally to avoid conflicts with Dask
+numba.set_num_threads(1)
 
 def _ensure_yxc(img_da: xr.DataArray) -> xr.DataArray:
     """
@@ -24,9 +29,61 @@ def _ensure_yxc(img_da: xr.DataArray) -> xr.DataArray:
     dims = list(img_da.dims)
     if "y" not in dims or "x" not in dims:
         raise ValueError(f"Expected dims to include \"y\" and \"x\". Found dims={dims}")
-    if "c" in dims:
+    
+    # Handle case where dims are (c, y, x) - transpose to (y, x, c)
+    if "c" in dims and dims[0] == "c":
         return img_da.transpose("y", "x", "c")
+    elif "c" in dims:
+        return img_da.transpose("y", "x", "c")
+    
+    # If no "c" dimension, add one
     return img_da.expand_dims({"c": [0]}).transpose("y", "x", "c")
+
+
+def _get_image_data(sdata, image_key: str, scale: str = "scale0"):
+    """
+    Extract image data from SpatialData object, handling both datatree and direct DataArray images.
+    
+    Parameters
+    ----------
+    sdata : SpatialData
+        SpatialData object
+    image_key : str
+        Key in sdata.images
+    scale : str
+        Multiscale level, e.g. "scale0"
+    
+    Returns
+    -------
+    xr.DataArray
+        Image data in (y, x, c) format
+    """
+    img_node = sdata.images[image_key]
+    
+    # Check if the image is a datatree (has multiple scales) or a direct DataArray
+    if hasattr(img_node, 'keys') and len(img_node.keys()) > 1:
+        # It's a datatree with multiple scales
+        available_scales = list(img_node.keys())
+        
+        if scale not in available_scales:
+            logg.warning(f"Scale '{scale}' not found. Available scales: {available_scales}")
+            if available_scales:
+                scale = available_scales[0]  # Use first available scale
+                logg.info(f"Using scale '{scale}' instead")
+            else:
+                raise ValueError(f"No scales available for image '{image_key}'")
+        
+        img_da = img_node[scale].image
+    else:
+        # It's a direct DataArray (single scale)
+        if hasattr(img_node, 'image'):
+            img_da = img_node.image
+        else:
+            # The node itself is the DataArray
+            img_da = img_node
+    
+    # Ensure proper format
+    return _ensure_yxc(img_da)
 
 
 def _to_gray_dask_yx(img_yxc: xr.DataArray, weights=(0.2126, 0.7152, 0.0722)) -> da.Array:
@@ -46,6 +103,53 @@ def _to_gray_dask_yx(img_yxc: xr.DataArray, weights=(0.2126, 0.7152, 0.0722)) ->
     return gray.astype(np.float32, copy=False)
 
 
+@njit(fastmath=True, cache=True, parallel=False)
+def _sobel_energy_numba(block_2d: np.ndarray) -> np.ndarray:
+    """
+    Numba-optimized kernel for Sobel energy (Tenengrad): gx^2 + gy^2.
+    Simplified version for better memory efficiency.
+    Returns per-pixel energy values (not normalized by tile size).
+    """
+    h, w = block_2d.shape
+    out = np.empty_like(block_2d, dtype=np.float32)
+    
+    # Simplified Sobel implementation with boundary handling
+    for i in range(h):
+        for j in range(w):
+            # Calculate Gx (vertical gradient) - simplified
+            gx = 0.0
+            if j > 0 and j < w - 1:
+                # Use central difference for vertical gradient
+                gx = block_2d[i, j+1] - block_2d[i, j-1]
+            elif j == 0:
+                gx = block_2d[i, j+1] - block_2d[i, j]
+            else:  # j == w - 1
+                gx = block_2d[i, j] - block_2d[i, j-1]
+            
+            # Calculate Gy (horizontal gradient) - simplified
+            gy = 0.0
+            if i > 0 and i < h - 1:
+                # Use central difference for horizontal gradient
+                gy = block_2d[i+1, j] - block_2d[i-1, j]
+            elif i == 0:
+                gy = block_2d[i+1, j] - block_2d[i, j]
+            else:  # i == h - 1
+                gy = block_2d[i, j] - block_2d[i-1, j]
+            
+            # Calculate Sobel energy: gx^2 + gy^2
+            energy = gx * gx + gy * gy
+            
+            # Clip to prevent overflow
+            if energy > 1e6:
+                energy = 1e6
+            elif energy < 0.0:
+                energy = 0.0
+                
+            out[i, j] = energy
+    
+    return out
+
+
 def _sobel_energy_np(block_2d: np.ndarray) -> np.ndarray:
     """
     NumPy kernel for Sobel energy (Tenengrad): gx^2 + gy^2.
@@ -56,12 +160,112 @@ def _sobel_energy_np(block_2d: np.ndarray) -> np.ndarray:
     return out
 
 
+@njit(fastmath=True, cache=True, parallel=False)
+def _laplace_square_numba(block_2d: np.ndarray) -> np.ndarray:
+    """
+    Numba-optimized kernel for variance of Laplacian.
+    Calculates the Laplacian at each pixel, then returns the variance of all Laplacian values.
+    """
+    h, w = block_2d.shape
+    n = h * w
+    
+    # First pass: calculate Laplacian at each pixel
+    laplacian_values = np.empty((h, w), dtype=np.float32)
+    
+    for i in range(h):
+        for j in range(w):
+            # Calculate Laplacian using second differences
+            lap = 0.0
+            
+            # Horizontal second difference
+            if j > 0 and j < w - 1:
+                lap += block_2d[i, j+1] - 2.0 * block_2d[i, j] + block_2d[i, j-1]
+            elif j == 0:
+                lap += block_2d[i, j+1] - block_2d[i, j]
+            else:  # j == w - 1
+                lap += block_2d[i, j] - block_2d[i, j-1]
+            
+            # Vertical second difference
+            if i > 0 and i < h - 1:
+                lap += block_2d[i+1, j] - 2.0 * block_2d[i, j] + block_2d[i-1, j]
+            elif i == 0:
+                lap += block_2d[i+1, j] - block_2d[i, j]
+            else:  # i == h - 1
+                lap += block_2d[i, j] - block_2d[i-1, j]
+            
+            laplacian_values[i, j] = lap
+    
+    # Second pass: calculate mean of Laplacian values
+    total = 0.0
+    for i in range(h):
+        for j in range(w):
+            total += laplacian_values[i, j]
+    mean_lap = total / n
+    
+    # Third pass: calculate variance of Laplacian values
+    var_sum = 0.0
+    for i in range(h):
+        for j in range(w):
+            diff = laplacian_values[i, j] - mean_lap
+            var_sum += diff * diff
+    var_lap = var_sum / n
+    
+    # Clip to prevent overflow
+    if var_lap > 1e6:
+        var_lap = 1e6
+    elif var_lap < 0.0:
+        var_lap = 0.0
+    
+    # Fill output array with variance value
+    out = np.empty_like(block_2d, dtype=np.float32)
+    for i in range(h):
+        for j in range(w):
+            out[i, j] = var_lap
+    
+    return out
+
+
 def _laplace_square_np(block_2d: np.ndarray) -> np.ndarray:
     """
-    NumPy kernel for squared Laplacian.
+    NumPy kernel for variance of Laplacian.
     """
     lap = ndi.laplace(block_2d, mode="reflect").astype(np.float32)
-    return lap * lap
+    var_lap = np.var(lap, dtype=np.float32)
+    return np.full_like(block_2d, var_lap, dtype=np.float32)
+
+
+@njit(fastmath=True, cache=True, parallel=False)
+def _variance_numba(block_2d: np.ndarray) -> np.ndarray:
+    """
+    Numba-optimized kernel for variance metric.
+    Returns the variance of the block as a constant array.
+    """
+    h, w = block_2d.shape
+    n = h * w
+    
+    # Calculate mean
+    total = 0.0
+    for i in range(h):
+        for j in range(w):
+            total += block_2d[i, j]
+    mean_val = total / n
+    
+    # Calculate variance
+    var_sum = 0.0
+    for i in range(h):
+        for j in range(w):
+            diff = block_2d[i, j] - mean_val
+            var_sum += diff * diff
+    var_val = var_sum / n
+    
+    
+    # Fill output array with variance value
+    out = np.empty_like(block_2d, dtype=np.float32)
+    for i in range(h):
+        for j in range(w):
+            out[i, j] = var_val
+    
+    return out
 
 
 def _variance_np(block_2d: np.ndarray) -> np.ndarray:
@@ -73,46 +277,23 @@ def _variance_np(block_2d: np.ndarray) -> np.ndarray:
     return np.full_like(block_2d, var_val, dtype=np.float32)
 
 
-def _modified_laplacian_np(block_2d: np.ndarray) -> np.ndarray:
-    """
-    NumPy kernel for Sum of Modified Laplacian.
-    Uses absolute values of second-order derivatives.
-    """
-    # Calculate second-order derivatives
-    dxx = ndi.convolve1d(block_2d, [1, -2, 1], axis=1, mode="reflect")
-    dyy = ndi.convolve1d(block_2d, [1, -2, 1], axis=0, mode="reflect")
-    
-    # Sum of absolute values of second-order derivatives
-    modified_lap = np.abs(dxx) + np.abs(dyy)
-    return modified_lap.astype(np.float32)
-
-
-def _entropy_histogram_np(block_2d: np.ndarray) -> np.ndarray:
-    """
-    NumPy kernel for entropy histogram metric.
-    Returns the entropy of the intensity histogram as a constant array.
-    """
-    # Calculate histogram (256 bins for 8-bit images)
-    hist, _ = np.histogram(block_2d, bins=256, range=(0, 256))
-    hist = hist.astype(np.float32)
-    
-    # Normalize histogram to probabilities
-    hist = hist / np.sum(hist)
-    
-    # Calculate entropy (avoid log(0) by adding small epsilon)
-    hist = hist + 1e-10
-    entropy_val = entropy(hist)
-    
-    return np.full_like(block_2d, entropy_val, dtype=np.float32)
-
-
 def _fft_high_freq_energy_np(block_2d: np.ndarray) -> np.ndarray:
     """
     NumPy kernel for FFT high-frequency energy ratio.
     Calculates ratio of high-frequency energy to total energy.
     """
+    # Normalize input to prevent overflow
+    block_normalized = block_2d.astype(np.float64)  # Use float64 for precision
+    block_mean = np.mean(block_normalized)
+    block_std = np.std(block_normalized)
+    
+    if block_std > 0:
+        block_normalized = (block_normalized - block_mean) / block_std
+    else:
+        block_normalized = block_normalized - block_mean
+    
     # Compute 2D FFT
-    fft_coeffs = fft2(block_2d.astype(np.float32))
+    fft_coeffs = fft2(block_normalized)
     fft_magnitude = np.abs(fft_coeffs)
     
     # Create frequency grids
@@ -126,14 +307,21 @@ def _fft_high_freq_energy_np(block_2d: np.ndarray) -> np.ndarray:
     # Use 10% of Nyquist frequency as threshold
     high_freq_mask = freq_radius > 0.1
     
-    # Calculate energies
-    total_energy = np.sum(fft_magnitude**2)
-    high_freq_energy = np.sum((fft_magnitude**2)[high_freq_mask])
+    # Calculate energies with overflow protection
+    fft_mag_sq = fft_magnitude**2
+    total_energy = np.sum(fft_mag_sq)
+    high_freq_energy = np.sum(fft_mag_sq[high_freq_mask])
     
-    # Calculate ratio (avoid division by zero)
-    if total_energy > 0:
+    # Calculate ratio (avoid division by zero and extreme values)
+    if total_energy > 1e-10 and np.isfinite(total_energy) and np.isfinite(high_freq_energy):
         ratio = high_freq_energy / total_energy
+        # Clip to reasonable range to prevent extreme values
+        ratio = np.clip(ratio, 0.0, 1.0)
     else:
+        ratio = 0.0
+    
+    # Ensure finite value
+    if not np.isfinite(ratio):
         ratio = 0.0
     
     return np.full_like(block_2d, ratio, dtype=np.float32)
@@ -146,9 +334,19 @@ def _haar_wavelet_energy_np(block_2d: np.ndarray) -> np.ndarray:
     Implements manual 2D Haar wavelet transform.
     """
     try:
+        # Normalize input to prevent overflow
+        block_normalized = block_2d.astype(np.float64)  # Use float64 for precision
+        block_mean = np.mean(block_normalized)
+        block_std = np.std(block_normalized)
+        
+        if block_std > 0:
+            block_normalized = (block_normalized - block_mean) / block_std
+        else:
+            block_normalized = block_normalized - block_mean
+        
         # Ensure even dimensions for Haar wavelet
-        h, w = block_2d.shape
-        data = block_2d.astype(np.float32)
+        h, w = block_normalized.shape
+        data = block_normalized.copy()
         
         # Pad to even dimensions if needed
         if h % 2 == 1:
@@ -174,18 +372,31 @@ def _haar_wavelet_energy_np(block_2d: np.ndarray) -> np.ndarray:
         cV = (cH_h[:, ::2] + cH_h[:, 1::2]) / 2  # HL (vertical detail)
         cD = (cH_h[:, ::2] - cH_h[:, 1::2]) / 2  # HH (diagonal detail)
         
-        # Calculate energies
-        total_energy = np.sum(cA**2) + np.sum(cH**2) + np.sum(cV**2) + np.sum(cD**2)
-        detail_energy = np.sum(cH**2) + np.sum(cV**2) + np.sum(cD**2)  # LH, HL, HH bands
+        # Calculate energies with overflow protection
+        cA_sq = cA**2
+        cH_sq = cH**2
+        cV_sq = cV**2
+        cD_sq = cD**2
+        
+        total_energy = np.sum(cA_sq) + np.sum(cH_sq) + np.sum(cV_sq) + np.sum(cD_sq)
+        detail_energy = np.sum(cH_sq) + np.sum(cV_sq) + np.sum(cD_sq)  # LH, HL, HH bands
         
         # Calculate normalized detail energy ratio
-        if total_energy > 0:
+        if (total_energy > 1e-10 and 
+            np.isfinite(total_energy) and 
+            np.isfinite(detail_energy)):
             ratio = detail_energy / total_energy
+            # Clip to reasonable range to prevent extreme values
+            ratio = np.clip(ratio, 0.0, 1.0)
         else:
             ratio = 0.0
             
     except Exception as e:
         # Fallback if wavelet transform fails
+        ratio = 0.0
+    
+    # Ensure finite value
+    if not np.isfinite(ratio):
         ratio = 0.0
     
     return np.full_like(block_2d, ratio, dtype=np.float32)
@@ -338,12 +549,8 @@ def detect_tissue(sdata, image_key: str, scale: str = "scale0", tile_size: Union
     """
     from spatialdata._logging import logger as logg
     
-    # Get image data
-    img_node = sdata.images[image_key][scale]
-    img_da = img_node.image
-    
-    # Ensure image is in (y, x, c) format
-    img_da = _ensure_yxc(img_da)
+    # Get image data using helper function
+    img_da = _get_image_data(sdata, image_key, scale)
     H, W, C = img_da.shape
     
     logg.info(f"Preparing sharpness metrics calculation.")
@@ -413,7 +620,7 @@ def detect_tissue(sdata, image_key: str, scale: str = "scale0", tile_size: Union
     return adata
 
 
-def _detect_sharpness_outliers(X: np.ndarray, method: str = "iqr") -> np.ndarray:
+def _detect_sharpness_outliers(X: np.ndarray, method: str = "iqr", tissue_mask: Optional[np.ndarray] = None, var_names: Optional[list] = None) -> np.ndarray:
     """
     Detect tiles with low sharpness (blurry/out-of-focus) using parameter-free methods.
     
@@ -422,23 +629,70 @@ def _detect_sharpness_outliers(X: np.ndarray, method: str = "iqr") -> np.ndarray
     X : np.ndarray
         Sharpness metrics array of shape (n_tiles, n_metrics)
     method : str
-        Method to use: "iqr" or "zscore" (both parameter-free)
+        Method to use: "iqr", "zscore", "tenengrad_tissue", or "pvalue"
+    tissue_mask : np.ndarray, optional
+        Boolean mask indicating tissue tiles. Required for "tenengrad_tissue" method.
     
     Returns:
     --------
     outlier_labels : np.ndarray
         Array of -1 (low sharpness outlier) or 1 (normal sharpness) labels
     """
+    # Clean the data to prevent infinite values
+    X_clean = _clean_sharpness_data(X)
+    
+    if method == "tenengrad_tissue":
+        return _detect_tenengrad_tissue_outliers(X_clean, tissue_mask, var_names)
+    elif method == "pvalue":
+        return _detect_outliers_pvalue(X_clean, tissue_mask, var_names)
+    
     # Standardize the features
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_scaled = scaler.fit_transform(X_clean)
     
     if method == "iqr":
         return _detect_outliers_iqr(X_scaled)
     elif method == "zscore":
         return _detect_outliers_zscore(X_scaled)
     else:
-        raise ValueError(f"Unknown method: {method}. Use 'iqr' or 'zscore'.")
+        raise ValueError(f"Unknown method: {method}. Use 'iqr', 'zscore', 'tenengrad_tissue', or 'pvalue'.")
+
+
+def _clean_sharpness_data(X: np.ndarray) -> np.ndarray:
+    """
+    Clean sharpness data by handling infinite and extreme values.
+    
+    Parameters:
+    -----------
+    X : np.ndarray
+        Sharpness metrics array of shape (n_tiles, n_metrics)
+    
+    Returns:
+    --------
+    np.ndarray
+        Cleaned array with finite values
+    """
+    X_clean = X.copy()
+    
+    # Replace infinite values with NaN
+    X_clean[np.isinf(X_clean)] = np.nan
+    
+    # For each metric, replace NaN values with the median of that metric
+    for i in range(X_clean.shape[1]):
+        metric_data = X_clean[:, i]
+        if np.any(np.isnan(metric_data)):
+            median_val = np.nanmedian(metric_data)
+            X_clean[np.isnan(metric_data), i] = median_val
+    
+    # Clip extreme values to prevent overflow
+    # Use 99.9th percentile as upper bound
+    for i in range(X_clean.shape[1]):
+        metric_data = X_clean[:, i]
+        upper_bound = np.percentile(metric_data, 99.9)
+        lower_bound = np.percentile(metric_data, 0.1)
+        X_clean[:, i] = np.clip(metric_data, lower_bound, upper_bound)
+    
+    return X_clean
 
 
 def _detect_outliers_iqr(X_scaled: np.ndarray) -> np.ndarray:
@@ -477,6 +731,224 @@ def _detect_outliers_zscore(X_scaled: np.ndarray, threshold: float = 3.0) -> np.
     return outlier_labels
 
 
+def _detect_tenengrad_tissue_outliers(
+    X: np.ndarray, 
+    tissue_mask: Optional[np.ndarray] = None,
+    var_names: Optional[list] = None
+) -> np.ndarray:
+    """
+    Calculate unfocus likelihood scores for tissue tiles using Tenengrad scores with background reference.
+    
+    Logic:
+    1. Use background tiles as reference for "blurry" appearance
+    2. Compare tissue tiles to both background and other tissue tiles
+    3. Calculate continuous scores (0-1) where higher values indicate more likely to be unfocused
+    4. Scores are normalized: 0 = very sharp, 1 = very blurry (background-like)
+    
+    Parameters
+    ----------
+    X : np.ndarray
+        Sharpness scores array of shape (n_tiles, n_metrics)
+    tissue_mask : np.ndarray, optional
+        Boolean mask indicating tissue tiles
+    var_names : list, optional
+        Variable names for the metrics
+        
+    Returns
+    -------
+    np.ndarray
+        Array of unfocus likelihood scores (0-1) for all tiles
+    """
+    from sklearn.mixture import GaussianMixture
+    
+    if tissue_mask is None:
+        # If no tissue mask, fall back to standard zscore method
+        return _detect_outliers_zscore(X)
+    
+    # Get background and tissue tiles
+    background_mask = ~tissue_mask
+    tissue_tiles = X[tissue_mask]
+    background_tiles = X[background_mask]
+    
+    if len(tissue_tiles) == 0 or len(background_tiles) == 0:
+        return np.zeros(len(X))  # No unfocus if no tissue or background
+    
+    # Find Tenengrad metric index
+    tenengrad_idx = None
+    for i, var_name in enumerate(var_names):
+        if "tenengrad" in var_name.lower():
+            tenengrad_idx = i
+            break
+    
+    if tenengrad_idx is None:
+        # Fallback to standard zscore method if Tenengrad not found
+        return _detect_outliers_zscore(X)
+    
+    # Extract Tenengrad scores using the correct index
+    tissue_tenengrad = tissue_tiles[:, tenengrad_idx]
+    background_tenengrad = background_tiles[:, tenengrad_idx]
+    
+    # Step 1: Analyze background distribution
+    background_mean = np.mean(background_tenengrad)
+    background_std = np.std(background_tenengrad)
+    
+    # Step 2: Analyze tissue distribution
+    tissue_mean = np.mean(tissue_tenengrad)
+    tissue_std = np.std(tissue_tenengrad)
+    
+    # Step 3: Determine if tissue has one or two classes
+    # Use Gaussian Mixture Model to test for bimodality
+    if len(tissue_tenengrad) >= 4:  # Need at least 4 samples for GMM
+        # Try 1-component and 2-component models
+        gmm_1 = GaussianMixture(n_components=1, random_state=42)
+        gmm_2 = GaussianMixture(n_components=2, random_state=42)
+        
+        try:
+            gmm_1.fit(tissue_tenengrad.reshape(-1, 1))
+            gmm_2.fit(tissue_tenengrad.reshape(-1, 1))
+            
+            # Use BIC to determine best model
+            bic_1 = gmm_1.bic(tissue_tenengrad.reshape(-1, 1))
+            bic_2 = gmm_2.bic(tissue_tenengrad.reshape(-1, 1))
+            
+            # If 2-component model is significantly better, use it
+            bic_improvement = bic_1 - bic_2
+            use_two_components = bic_improvement > 10  # Threshold for significant improvement
+            
+        except:
+            # If GMM fails, use simple threshold method
+            use_two_components = False
+    else:
+        use_two_components = False
+    
+    # Step 4: Calculate continuous unfocus likelihood scores
+    if use_two_components:
+        # Two-class case: use GMM probabilities
+        gmm_2.fit(tissue_tenengrad.reshape(-1, 1))
+        tissue_probs = gmm_2.predict_proba(tissue_tenengrad.reshape(-1, 1))
+        
+        # Determine which component is "blurry" (closer to background)
+        component_means = gmm_2.means_.flatten()
+        blurry_component = np.argmin(np.abs(component_means - background_mean))
+        
+        # Use probability of belonging to blurry component as unfocus score
+        unfocus_scores = tissue_probs[:, blurry_component]
+        
+    else:
+        # One-class case: calculate distance-based scores
+        # Normalize tissue scores relative to background distribution
+        # Score = 1 - (tissue_score - background_min) / (background_max - background_min)
+        background_min = np.min(background_tenengrad)
+        background_max = np.max(background_tenengrad)
+        background_range = background_max - background_min
+        
+        if background_range > 0:
+            # Normalize tissue scores to [0, 1] where 0 = sharp, 1 = background-like
+            normalized_scores = (tissue_tenengrad - background_min) / background_range
+            # Invert so higher Tenengrad = lower unfocus score
+            unfocus_scores = 1.0 - np.clip(normalized_scores, 0, 1)
+        else:
+            # If background has no variation, use simple threshold
+            tissue_background_ratio = tissue_mean / (background_mean + 1e-10)
+            if tissue_background_ratio > 1.5:
+                # Tissue is sharp - score based on distance from tissue mean
+                unfocus_scores = np.clip((tissue_mean - tissue_tenengrad) / (tissue_std + 1e-10), 0, 1)
+            else:
+                # Tissue is blurry - score based on similarity to background
+                unfocus_scores = np.clip((tissue_tenengrad - background_mean) / (background_std + 1e-10), 0, 1)
+    
+    # Step 5: Create full unfocus scores array
+    full_scores = np.zeros(len(X))  # Start with all sharp (0)
+    tissue_indices = np.where(tissue_mask)[0]
+    full_scores[tissue_indices] = unfocus_scores  # Set tissue unfocus scores
+    
+    return full_scores
+
+
+def _detect_outliers_pvalue(
+    X: np.ndarray, 
+    tissue_mask: Optional[np.ndarray] = None,
+    var_names: Optional[list] = None,
+    alpha: float = 0.05
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Detect outliers using p-value method based on background distribution.
+    
+    For each tile, calculates the p-value of observing its sharpness score
+    given the distribution of background tiles. Tiles with p-values below alpha
+    are considered outliers (unlikely to come from background distribution).
+    
+    Parameters:
+    -----------
+    X : np.ndarray
+        Sharpness metrics array of shape (n_tiles, n_metrics)
+    tissue_mask : np.ndarray, optional
+        Boolean mask indicating tissue tiles. If None, uses all tiles.
+    var_names : list, optional
+        List of metric names. If None, uses all metrics.
+    alpha : float
+        Significance level for outlier detection (default: 0.05)
+    
+    Returns:
+    --------
+    outlier_labels : np.ndarray
+        Array of -1 (outlier) or 1 (normal) labels
+    p_values : np.ndarray
+        Array of p-values for each tile
+    """
+    from scipy import stats
+    
+    if tissue_mask is None:
+        # If no tissue mask, use all tiles
+        tissue_mask = np.ones(len(X), dtype=bool)
+    
+    if var_names is None:
+        var_names = [f"metric_{i}" for i in range(X.shape[1])]
+    
+    # Separate tissue and background tiles
+    tissue_tiles = X[tissue_mask]
+    background_tiles = X[~tissue_mask]
+    
+    if len(background_tiles) < 10:
+        # Not enough background tiles for reliable statistics
+        return np.ones(len(X), dtype=int), np.ones(len(X))
+    
+    # Calculate p-values for each metric
+    p_values = np.ones((len(tissue_tiles), len(var_names)))
+    
+    for i, var_name in enumerate(var_names):
+        tissue_scores = tissue_tiles[:, i]
+        background_scores = background_tiles[:, i]
+        
+        # Fit normal distribution to background scores
+        bg_mean = np.mean(background_scores)
+        bg_std = np.std(background_scores)
+        
+        if bg_std < 1e-10:
+            # No variation in background, skip this metric
+            continue
+        
+        # Calculate p-values for tissue scores
+        # For sharpness metrics, we typically want to detect LOW values (blurry tiles)
+        # So we calculate the probability of observing a value as low or lower
+        p_values[:, i] = stats.norm.cdf(tissue_scores, loc=bg_mean, scale=bg_std)
+    
+    # Combine p-values across metrics using Fisher's method or minimum p-value
+    # Using minimum p-value approach (more conservative)
+    min_p_values = np.min(p_values, axis=1)
+    
+    # Create full p-values array
+    full_p_values = np.ones(len(X))
+    tissue_indices = np.where(tissue_mask)[0]
+    full_p_values[tissue_indices] = min_p_values
+    
+    # Flag outliers: p-value < alpha (unlikely to come from background)
+    outlier_mask = full_p_values < alpha
+    
+    # Convert to -1/1 format
+    outlier_labels = np.where(outlier_mask, -1, 1)
+    
+    return outlier_labels, full_p_values
 
 
 def _calculate_auto_tile_size(height: int, width: int) -> Tuple[int, int]:
@@ -498,19 +970,16 @@ def _calculate_auto_tile_size(height: int, width: int) -> Tuple[int, int]:
     """
     # Calculate how many tiles we want (roughly 100 in the larger dimension)
     target_tiles = 100
-    
+
     # Calculate tile size for each dimension
     tile_size_y = height // target_tiles
     tile_size_x = width // target_tiles
-    
+
     # Use the smaller tile size to ensure both dimensions are covered
     tile_size = min(tile_size_y, tile_size_x)
-    
+
     # Ensure minimum 100x100 pixel tiles
-    if tile_size < 100:
-        return 100, 100
-    
-    return tile_size, tile_size
+    return (100, 100) if tile_size < 100 else (tile_size, tile_size)
 
 
 def _make_tiles(
@@ -654,25 +1123,23 @@ def _create_tile_polygons(
     return np.array(centroids), polygons
 
 class SHARPNESS_METRICS(Enum):
-    TENENGRAD = "tenengrad"
-    LAPLACIAN = "laplacian"
-    VARIANCE = "variance"
-    MODIFIED_LAPLACIAN = "modified_laplacian"
-    ENTROPY_HISTOGRAM = "entropy_histogram"
-    FFT_HIGH_FREQ_ENERGY = "fft_high_freq_energy"
-    HAAR_WAVELET_ENERGY = "haar_wavelet_energy"
-
+    TENENGRAD = enum.auto()
+    VAR_OF_LAPLACIAN = enum.auto()
+    VARIANCE = enum.auto()
+    FFT_HIGH_FREQ_ENERGY = enum.auto()
+    HAAR_WAVELET_ENERGY = enum.auto()
 
 def qc_sharpness(
     sdata,
     image_key: str,
     scale: str = "scale0",
-    metrics: Union[SHARPNESS_METRICS, Literal["all"]] = "all",
+    metrics: SHARPNESS_METRICS | list[SHARPNESS_METRICS] = [SHARPNESS_METRICS.TENENGRAD, SHARPNESS_METRICS.VAR_OF_LAPLACIAN],
     tile_size: Union[Literal["auto"], Tuple[int, int]] = "auto",
-    progress: bool = True,
     detect_outliers: bool = True,
     detect_tissue: bool = True,
-    outlier_method: str = "zscore",
+    outlier_method: str = "pvalue",
+    outlier_cutoff: float = 0.1,
+    progress: bool = True,
 ) -> None:
     """
     Compute tilewise sharpness scores for multiple metrics and print the values.
@@ -690,8 +1157,6 @@ def qc_sharpness(
     tile_size : "auto" or (int, int)
         Tile size dimensions. When "auto", creates roughly 100x100 grid overlay
         with minimum 100x100 pixel tiles.
-    progress : bool
-        Show a Dask progress bar for the compute step.
     detect_outliers : bool
         If True, identify tiles with abnormal sharpness scores. If `detect_tissue=True`,
         outlier detection will only run on tissue tiles. Adds `sharpness_outlier` column
@@ -702,8 +1167,17 @@ def qc_sharpness(
         references. Adds `is_tissue`, `is_background`, `tissue_similarity`, and 
         `background_similarity` columns to the AnnData table.
     outlier_method : str
-        Method for detecting low sharpness tiles: "iqr" or "zscore" (both parameter-free).
-        Default "zscore" uses Z-score method. Only flags tiles with LOW sharpness.
+        Method for detecting low sharpness tiles: "iqr", "zscore", "tenengrad_tissue", or "pvalue".
+        - "iqr": Interquartile Range method (parameter-free)
+        - "zscore": Z-score method (parameter-free) 
+        - "tenengrad_tissue": Tenengrad-based method using background reference (requires detect_tissue=True)
+        - "pvalue": P-value method based on background distribution (requires detect_tissue=True, falls back to zscore if not available)
+        Default "pvalue" uses P-value-based method. Only flags tiles with LOW sharpness.
+    outlier_cutoff : float
+        Threshold for binarizing continuous unfocus scores into outlier labels. 
+        Tiles with unfocus_score >= outlier_cutoff are marked as outliers.
+    progress : bool
+        Show a Dask progress bar for the compute step.
 
     Returns
     -------
@@ -716,9 +1190,10 @@ def qc_sharpness(
         "is_background", "tissue_similarity", and "background_similarity" columns.
         "sharpness_outlier" flags tiles with low sharpness (blurry/out-of-focus).
     """
-    # 1) Get Dask-backed image (no materialization)
-    img_node = sdata.images[image_key][scale]
-    img_da = img_node.image
+    from spatialdata import SpatialData
+
+    # 1) Get image data using helper function
+    img_da = _get_image_data(sdata, image_key, scale)
 
     # 2) Ensure dims and grayscale
     img_yxc = _ensure_yxc(img_da)
@@ -731,7 +1206,7 @@ def qc_sharpness(
     ty, tx = _make_tiles(gray, tile_size)
     logg.info(f"Preparing sharpness metrics calculation.")
     logg.info(f"- Image size (x, y) is ({W}, {H}), using tiles with size (x, y): ({tx}, {ty}).")
-    
+
     # Calculate tile grid dimensions
     tiles_y = (H + ty - 1) // ty
     tiles_x = (W + tx - 1) // tx
@@ -743,58 +1218,59 @@ def qc_sharpness(
 
     print("")
     logg.info(f"Calculating sharpness metrics.")
-    metrics_to_compute = list(SHARPNESS_METRICS) if metrics == "all" else [metrics]
+    metrics_to_compute = metrics if isinstance(metrics, list) else [metrics]
     for metric in metrics_to_compute:
-        metric_name = metric.value if isinstance(metric, SHARPNESS_METRICS) else metric
+        metric_name = metric.name.lower() if isinstance(metric, SHARPNESS_METRICS) else metric
         logg.info(f"- Computing sharpness metric '{metric_name}'.")
+
+        # Force Dask to use smaller chunks that match tile size
+        # This prevents large chunks from creating uniform blocks
+        gray_rechunked = gray.rechunk((ty, tx))
 
         # Per-pixel sharpness via map_overlap (no overlap for adjacent tiles)
         if metric_name == "tenengrad":
             sharp_field = da.map_overlap(
-                _sobel_energy_np, gray, depth=0, boundary="reflect", dtype=np.float32
+                _sobel_energy_numba, gray_rechunked, depth=0, boundary="reflect", dtype=np.float32
             )
-        elif metric_name == "laplacian":
+        elif metric_name == "var_of_laplacian":
             sharp_field = da.map_overlap(
-                _laplace_square_np, gray, depth=0, boundary="reflect", dtype=np.float32
+                _laplace_square_numba, gray_rechunked, depth=0, boundary="reflect", dtype=np.float32
             )
         elif metric_name == "variance":
             sharp_field = da.map_overlap(
-                _variance_np, gray, depth=0, boundary="reflect", dtype=np.float32
-            )
-        elif metric_name == "modified_laplacian":
-            sharp_field = da.map_overlap(
-                _modified_laplacian_np, gray, depth=0, boundary="reflect", dtype=np.float32
-            )
-        elif metric_name == "entropy_histogram":
-            sharp_field = da.map_overlap(
-                _entropy_histogram_np, gray, depth=0, boundary="reflect", dtype=np.float32
+                _variance_numba, gray_rechunked, depth=0, boundary="reflect", dtype=np.float32
             )
         elif metric_name == "fft_high_freq_energy":
             sharp_field = da.map_overlap(
-                    _fft_high_freq_energy_np, gray, depth=0, boundary="reflect", dtype=np.float32
+                    _fft_high_freq_energy_np, gray_rechunked, depth=0, boundary="reflect", dtype=np.float32
             )
         elif metric_name == "haar_wavelet_energy":
             sharp_field = da.map_overlap(
-                    _haar_wavelet_energy_np, gray, depth=0, boundary="reflect", dtype=np.float32
+                    _haar_wavelet_energy_np, gray_rechunked, depth=0, boundary="reflect", dtype=np.float32
             )
         else:
-            raise ValueError(f"- Unknown metric {metric_name}.")
+            raise ValueError(f"- Unknown metric '{metric_name}'.")
 
-        # Use the tile dimensions calculated earlier (lines 716-717)
-        # tiles_y and tiles_x are already calculated and correct
-        
         # Pad the array to make it divisible by tile size
         pad_y = (tiles_y * ty) - sharp_field.shape[0]
         pad_x = (tiles_x * tx) - sharp_field.shape[1]
-        
+
         if pad_y > 0 or pad_x > 0:
             # Pad with edge values
             padded = da.pad(sharp_field, ((0, pad_y), (0, pad_x)), mode='edge')
         else:
             padded = sharp_field
-            
+
         # Now coarsen with trim_excess=False since dimensions are divisible
-        tile_scores = da.coarsen(np.mean, padded, {0: ty, 1: tx}, trim_excess=False)
+        # For additive metrics, we need to normalize by tile area to make them tile-size independent
+        if metric_name in ["tenengrad"]:
+            # Sum across tile, then normalize by tile area
+            tile_scores = da.coarsen(np.sum, padded, {0: ty, 1: tx}, trim_excess=False)
+            tile_area = ty * tx
+            tile_scores = tile_scores / tile_area
+        else:
+            # For other metrics (variance, entropy, fft, haar), use mean (already normalized)
+            tile_scores = da.coarsen(np.mean, padded, {0: ty, 1: tx}, trim_excess=False)
 
         # Compute scores with progress bar if requested
         if progress:
@@ -809,7 +1285,7 @@ def qc_sharpness(
     first_metric = list(all_scores.keys())[0]
     scores = all_scores[first_metric]
     tiles_y, tiles_x = scores.shape
-    
+
     # Use original tile dimensions since padding ensures divisibility
     actual_ty = ty
     actual_tx = tx
@@ -838,74 +1314,98 @@ def qc_sharpness(
     )
 
     # Initialize default values
-    tissue_mask = np.ones(len(X_data), dtype=bool)
-    background_mask = np.zeros(len(X_data), dtype=bool)
-    tissue_similarities = np.zeros(len(X_data), dtype=np.float32)
-    background_similarities = np.zeros(len(X_data), dtype=np.float32)
     outlier_labels = np.ones(len(X_data), dtype=int)  # All normal by default
-    
+
+    adata = AnnData(X=X_data)
+    adata.var_names = var_names
+    adata.obs_names = obs_names
+    adata.obs["centroid_y"] = centroids[:, 0]
+    adata.obs["centroid_x"] = centroids[:, 1]
+    adata.obsm["spatial"] = centroids
+
     # Perform outlier detection if requested
     if detect_outliers:
         print("")
         logg.info(f"Detecting outlier tiles using method '{outlier_method}'...")
-        
+
         if detect_tissue:
             logg.info("- Classifying tiles as tissue vs background.")
+            tissue_mask = np.ones(len(X_data), dtype=bool)
+            background_mask = np.zeros(len(X_data), dtype=bool)
+            tissue_similarities = np.zeros(len(X_data), dtype=np.float32)
+            background_similarities = np.zeros(len(X_data), dtype=np.float32)
+
             # Use the already loaded and processed image data
             img_da = img_yxc  # Already in (y, x, c) format from line 704
-            
+
             # Use shared tissue detection function
             tissue_mask, background_mask, tissue_similarities, background_similarities = _detect_tissue_rgb(
                 img_da, tile_indices, tiles_y, tiles_x, actual_ty, actual_tx
             )
             n_background = np.sum(background_mask)
             n_tissue = np.sum(tissue_mask)
+
             logg.info(f"- Classified {n_background} tiles as background and {n_tissue} tiles as tissue.")
-        
+
+        # Outlier detection
         if detect_tissue and np.sum(tissue_mask) > 0:
             logg.info("- Running outlier detection on tissue tiles only.")
-            tissue_data = X_data[tissue_mask]
-            outlier_labels_tissue = _detect_sharpness_outliers(tissue_data, method=outlier_method)
-            
-            # Map back to all tiles
-            outlier_labels[tissue_mask] = outlier_labels_tissue
+            if outlier_method == "pvalue":
+                # Use p-value method with tissue mask
+                outlier_labels, pvalues = _detect_outliers_pvalue(X_data, tissue_mask=tissue_mask, var_names=var_names)
+                # Convert p-values to unfocus scores (0 = focused, 1 = unfocused)
+                # Lower p-values (more unlikely to be background) = higher unfocus scores
+                unfocus_scores = 1.0 - pvalues
+                min_score = np.min(unfocus_scores)
+                max_score = np.max(unfocus_scores)
+                if max_score > min_score:  # Avoid division by zero
+                    unfocus_scores = (unfocus_scores - min_score) / (max_score - min_score)
+                else:
+                    unfocus_scores = np.zeros_like(unfocus_scores)
+                # Use outlier_cutoff to binarize unfocus scores
+                outlier_labels = np.where(unfocus_scores >= outlier_cutoff, -1, 1)
+            elif outlier_method == "tenengrad_tissue":
+                # Use the new Tenengrad-based method with tissue mask (returns continuous scores)
+                unfocus_scores = _detect_tenengrad_tissue_outliers(X_data, tissue_mask=tissue_mask, var_names=var_names)
+                # Use outlier_cutoff to binarize unfocus scores
+                outlier_labels = np.where(unfocus_scores >= outlier_cutoff, -1, 1)
+            else:
+                # Use standard method on tissue tiles only
+                tissue_data = X_data[tissue_mask]
+                unfocus_scores = _detect_sharpness_outliers(tissue_data, method=outlier_method)
+
+                # Map back to all tiles
+                outlier_labels[tissue_mask] = unfocus_scores
+
             n_outliers = np.sum(outlier_labels == -1)
             logg.info(f"- Classified {n_outliers} tiles as outliers ({n_outliers/np.sum(tissue_mask)*100:.1f}%).")
         else:
             logg.info("- Running outlier detection on all tiles.")
-            outlier_labels = _detect_sharpness_outliers(X_data, method=outlier_method)
+            if outlier_method == "pvalue":
+                # P-value method requires tissue detection, fall back to zscore
+                logg.warning("P-value method requires tissue detection. Falling back to zscore method.")
+                outlier_labels = _detect_sharpness_outliers(X_data, method="zscore", var_names=var_names)
+                unfocus_scores = None
+            else:
+                outlier_labels = _detect_sharpness_outliers(X_data, method=outlier_method, var_names=var_names)
+
             n_outliers = np.sum(outlier_labels == -1)
             logg.info(f"- Classified {n_outliers} tiles as outliers ({n_outliers/len(outlier_labels)*100:.1f}%).")
+            unfocus_scores = None  # No continuous scores for standard methods
 
+        if detect_tissue:
+            adata.obs["is_tissue"] = pd.Categorical(tissue_mask.astype(str), categories=["False", "True"])
+            adata.obs["is_background"] = pd.Categorical(background_mask.astype(str), categories=["False", "True"])
 
-    adata = AnnData(X=X_data)
-    adata.var_names = var_names
-    adata.obs_names = obs_names
-
-    # Add spatial coordinates (centroids) to obs
-    adata.obs["centroid_y"] = centroids[:, 0]
-    adata.obs["centroid_x"] = centroids[:, 1]
-    adata.obsm["spatial"] = centroids
-    
-    # Add tissue/background classification and outlier detection results to obs
-    adata.obs["is_tissue"] = pd.Categorical(tissue_mask.astype(str), categories=["False", "True"])
-    adata.obs["is_background"] = pd.Categorical(background_mask.astype(str), categories=["False", "True"])
-    adata.obs["sharpness_outlier"] = pd.Categorical((outlier_labels == -1).astype(str), categories=["False", "True"])
-    
-    # Add similarity scores if tissue detection was performed
-    if detect_tissue:
         adata.obs["tissue_similarity"] = tissue_similarities
         adata.obs["background_similarity"] = background_similarities
+        adata.obs["sharpness_outlier"] = pd.Categorical((outlier_labels == -1).astype(str), categories=["False", "True"])
 
-    # Add tile grid indices
-    adata.obs["tile_y"] = tile_indices[:, 0]
-    adata.obs["tile_x"] = tile_indices[:, 1]
+        # Add continuous unfocus scores if available
+        if unfocus_scores is not None:
+            adata.obs["unfocus_score"] = unfocus_scores
 
-    # Add tile boundaries in pixels (already calculated by helper function)
-    adata.obs["pixel_y0"] = pixel_bounds[:, 0]
-    adata.obs["pixel_x0"] = pixel_bounds[:, 1]
-    adata.obs["pixel_y1"] = pixel_bounds[:, 2]
-    adata.obs["pixel_x1"] = pixel_bounds[:, 3]
+
 
     # Add metadata
     adata.uns["qc_sharpness"] = {
@@ -925,7 +1425,7 @@ def qc_sharpness(
         "n_outlier_tiles": int(np.sum(outlier_labels == -1)),
     }
 
-    # Create TableModel and add to SpatialData
+    # Add results to SpatialData
     table_model = TableModel.parse(adata)
     sdata.tables[table_key] = table_model
 
@@ -962,19 +1462,15 @@ def qc_sharpness(
 
         tile_data.append(tile_info)
 
-    # Create GeoDataFrame
     tile_gdf = gpd.GeoDataFrame(tile_data, geometry='geometry')
-
-    # Create ShapesModel and add to SpatialData
     shapes_model = ShapesModel.parse(tile_gdf)
     sdata.shapes[shapes_key] = shapes_model
-    
+
     sdata.tables[table_key].uns["spatialdata_attrs"] = {
         "region": shapes_key,
         "region_key": "grid_name", 
         "instance_key": "tile_id", 
     }
-    # all the rows of adata annotate the same element, called "spots" (as we declared above)
     sdata.tables[table_key].obs["grid_name"] = pd.Categorical([shapes_key] * len(sdata.tables[table_key]))
     sdata.tables[table_key].obs["tile_id"] = shapes_model.index
 
