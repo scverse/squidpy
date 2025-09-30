@@ -36,17 +36,18 @@ class NhoodEnrichmentResult(NamedTuple):
 
     Attributes
     ----------
-    zscore
+    zscore : NDArrayA
         Z-score values of enrichment statistic.
-    count
+    count : NDArrayA
         Enrichment count.
     """
 
-    zscore: NDArrayA
-    count: NDArrayA
+    zscore: np.ndarray[Any, np.dtype[Any]]
+    counts: np.ndarray[Any, np.dtype[Any]]  # NamedTuple inherits from tuple so cannot use 'count' as attribute name
 
 
-dt = nt.uint32  # data type aliases (both for numpy and numba should match)
+# data type aliases (both for numpy and numba should match)
+dt = nt.uint32
 ndt = np.uint32
 _template = """
 @njit(dt[:, :](dt[:], dt[:], dt[:]), parallel={parallel}, fastmath=True)
@@ -218,7 +219,7 @@ def nhood_enrichment(
     zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
     if copy:
-        return NhoodEnrichmentResult(zscore=zscore, count=count)
+        return NhoodEnrichmentResult(zscore=zscore, counts=count)
 
     _save_data(
         adata,
