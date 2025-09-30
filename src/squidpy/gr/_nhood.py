@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
-from typing import Any
+from typing import Any, NamedTuple
 
 import networkx as nx
 import numba.types as nt
@@ -29,6 +29,21 @@ from squidpy.gr._utils import (
 )
 
 __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
+
+
+class NhoodEnrichmentResult(NamedTuple):
+    """Result of nhood_enrichment function.
+    
+    Attributes
+    ----------
+    zscore
+        Z-score values of enrichment statistic.
+    count
+        Enrichment count.
+    """
+    zscore: NDArrayA
+    count: NDArrayA
+
 
 dt = nt.uint32  # data type aliases (both for numpy and numba should match)
 ndt = np.uint32
@@ -131,7 +146,7 @@ def nhood_enrichment(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
-) -> tuple[NDArrayA, NDArrayA] | None:
+) -> NhoodEnrichmentResult | None:
     """
     Compute neighborhood enrichment by permutation test.
 
@@ -149,7 +164,7 @@ def nhood_enrichment(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`tuple` with the z-score and the enrichment count.
+    If ``copy = True``, returns a :class:`~squidpy.gr.NhoodEnrichmentResult` with the z-score and the enrichment count.
 
     Otherwise, modifies the ``adata`` with the following keys:
 
@@ -202,7 +217,7 @@ def nhood_enrichment(
     zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
     if copy:
-        return zscore, count
+        return NhoodEnrichmentResult(zscore=zscore, count=count)
 
     _save_data(
         adata,

@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Iterable  # noqa: F401
 from functools import partial
 from itertools import chain
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
 import geopandas as gpd
 import numpy as np
@@ -61,6 +61,20 @@ from squidpy.gr._utils import (
 __all__ = ["spatial_neighbors"]
 
 
+class SpatialNeighborsResult(NamedTuple):
+    """Result of spatial_neighbors function.
+    
+    Attributes
+    ----------
+    connectivities
+        Spatial connectivities matrix.
+    distances
+        Spatial distances matrix.
+    """
+    connectivities: csr_matrix
+    distances: csr_matrix
+
+
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)
 def spatial_neighbors(
@@ -79,7 +93,7 @@ def spatial_neighbors(
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
-) -> tuple[csr_matrix, csr_matrix] | None:
+) -> SpatialNeighborsResult | None:
     """
     Create a graph from spatial coordinates.
 
@@ -136,7 +150,7 @@ def spatial_neighbors(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`tuple` with the spatial connectivities and distances matrices.
+    If ``copy = True``, returns a :class:`~squidpy.gr.SpatialNeighborsResult` with the spatial connectivities and distances matrices.
 
     Otherwise, modifies the ``adata`` with the following keys:
 
@@ -259,7 +273,7 @@ def spatial_neighbors(
     }
 
     if copy:
-        return Adj, Dst
+        return SpatialNeighborsResult(connectivities=Adj, distances=Dst)
 
     _save_data(adata, attr="obsp", key=conns_key, data=Adj)
     _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
