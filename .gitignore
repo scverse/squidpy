@@ -14,6 +14,7 @@ __pycache__/
 # Tests and coverage
 /data/
 /node_modules/
+/.coverage*
 
 # docs
 /docs/generated/

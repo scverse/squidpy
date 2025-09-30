@@ -39,7 +39,7 @@ optional-dependencies.doc = [
   "pandas",
   # Until pybtex >0.24.0 releases: https://bitbucket.org/pybtex-devs/pybtex/issues/169/
   "setuptools",
-  "sphinx>=4",
+  "sphinx>=8.1",
   "sphinx-autodoc-typehints",
   "sphinx-book-theme>=1",
   "sphinx-copybutton",
@@ -48,8 +48,9 @@ optional-dependencies.doc = [
   "sphinxext-opengraph",
 ]
 optional-dependencies.test = [
-  "coverage",
+  "coverage>=7.10",
   "pytest",
+  "pytest-cov",     # For VS Code’s coverage functionality
 ]
 # https://docs.pypi.org/project_metadata/#project-urls
 urls.Documentation = "https://squidpy.readthedocs.io/"
@@ -62,12 +63,29 @@ features = [ "dev" ]
 
 [tool.hatch.envs.docs]
 features = [ "doc" ]
-scripts.build = "sphinx-build -M html docs docs/_build {args}"
+scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
 scripts.open = "python -m webbrowser -t docs/_build/html/index.html"
 scripts.clean = "git clean -fdX -- {args:docs}"
 
+# Test the lowest and highest supported Python versions with normal deps
+[[tool.hatch.envs.hatch-test.matrix]]
+deps = [ "stable" ]
+python = [ "3.10", "3.13" ]
+
+# Test the newest supported Python version also with pre-release deps
+[[tool.hatch.envs.hatch-test.matrix]]
+deps = [ "pre" ]
+python = [ "3.13" ]
+
 [tool.hatch.envs.hatch-test]
-features = [ "test" ]
+features = [ "dev", "test" ]
+
+[tool.hatch.envs.hatch-test.overrides]
+# If the matrix variable `deps` is set to "pre",
+# set the environment variable `UV_PRERELEASE` to "allow".
+matrix.deps.env-vars = [
+  { key = "UV_PRERELEASE", value = "allow", if = [ "pre" ] },
+]
 
 [tool.ruff]
 line-length = 120
@@ -118,6 +136,7 @@ addopts = [
 
 [tool.coverage.run]
 source = [ "squidpy" ]
+patch = [ "subprocess" ]
 omit = [
   "**/test_*.py",
 ]
