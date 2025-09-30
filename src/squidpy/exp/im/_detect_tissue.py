@@ -11,7 +11,7 @@ from dask_image.ndinterp import affine_transform as da_affine
 from scipy import ndimage
 from skimage import filters, measure
 from skimage.filters import gaussian, threshold_otsu
-from skimage.morphology import binary_closing, disk
+from skimage.morphology import binary_closing, disk, remove_small_holes
 from skimage.segmentation import felzenszwalb
 from skimage.util import img_as_float
 from spatialdata._logging import logger as logg
@@ -63,8 +63,9 @@ def detect_tissue(
     sdata: sd.SpatialData,
     image_key: str,
     scale: str = "auto",
-    method: DETECT_TISSUE_METHOD | str = DETECT_TISSUE_METHOD.FELZENSZWALB,
+    method: DETECT_TISSUE_METHOD | str = DETECT_TISSUE_METHOD.OTSU,
     corners_are_background: bool = True,
+    close_holes_smaller_than_frac: float = 0.0001,
     mask_smoothing_cycles: int = 0,
     new_labels_key: str | None = None,
     inplace: bool = True,
@@ -85,10 +86,12 @@ def detect_tissue(
         - If "auto": pick the smallest available scale. If that smallest scale
           exceeds the pixel threshold, it is further downscaled to be under the
           threshold for calculations.
-    method : str or DETECT_TISSUE_METHOD, default FELZENSZWALB
+    method : str or DETECT_TISSUE_METHOD, default OTSU
         Method to use ("otsu" or "felzenszwalb")
     corners_are_background : bool, default True
         Whether all corners should be treated as background
+    close_holes_smaller_than_frac : float, default 0.0001
+        Holes smaller than this fraction of the image area will be closed.
     mask_smoothing_cycles : int, default 0
         Number of cycles of (2D) morphological closing to apply to the mask
     new_labels_key : str | None, default None
@@ -113,10 +116,10 @@ def detect_tissue(
             based on `corners_are_background`.
 
         felzenszwalb_params : FelzenszwalbParams, optional
-            Felzenszwalb segmentation parameters (only used when method="felzenszwalb").
+            Felzenszwalb segmentation parameters (only used when method="FELZENSZWALB").
             Default: FelzenszwalbParams(grid_rows=50, grid_cols=50, ...)
 
-        min_specimen_area_frac : float, default 0.01
+        min_specimen_area_frac : float, default 0.1
             Minimum area of a specimen as fraction of image area.
 
         n_samples : int | None, default None
@@ -197,8 +200,10 @@ def detect_tissue(
         )
     else:
         raise ValueError(f"Method {method} not implemented")
+
     # 3) solidify
-    img_fg_mask = _make_solid(img_fg_mask)
+    if close_holes_smaller_than_frac > 0:
+        img_fg_mask = _make_solid(img_fg_mask, close_holes_smaller_than_frac)
 
     # 4) keep only specimen-sized components (Otsu on areas)
     img_fg_mask = _filter_by_area(
@@ -428,15 +433,26 @@ def _background_is_bright(img_grey: np.ndarray, params: BackgroundDetectionParam
     return corner_mean >= global_median
 
 
-def _make_solid(mask: np.ndarray) -> np.ndarray:
+def _make_solid(mask: np.ndarray, close_holes_smaller_than_frac: float = 0.01) -> np.ndarray:
     """
     Make mask solid by connecting nearby regions and filling enclosed holes.
+
+    Parameters
+    ----------
+    mask : np.ndarray
+        Binary mask to process
+    close_holes_smaller_than_frac : float, default 0.01
+        Maximum hole area as fraction of image area. Holes larger than this
+        will not be filled.
     """
     if mask.dtype != bool:
         mask = mask.astype(bool)
 
-    # fill fully enclosed holes
-    return np.array(ndimage.binary_fill_holes(mask))
+    # Calculate maximum hole area in pixels
+    max_hole_area = int(close_holes_smaller_than_frac * mask.size)
+
+    # Fill holes smaller than the threshold
+    return np.array(remove_small_holes(mask, area_threshold=max_hole_area))
 
 
 def _smooth_mask(mask: np.ndarray, cycles: int) -> np.ndarray:
