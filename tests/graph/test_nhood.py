@@ -52,7 +52,7 @@ class TestNhoodEnrichment:
         # Test that the same seed produces the same results
         np.testing.assert_array_equal(res2.zscore, res1.zscore)
         np.testing.assert_array_equal(res2.count, res1.count)
-        
+
         # Test that different seeds produce different z-scores but same counts
         with pytest.raises(AssertionError):
             np.testing.assert_array_equal(res3.zscore, res2.zscore)

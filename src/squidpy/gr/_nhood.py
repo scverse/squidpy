@@ -33,7 +33,7 @@ __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
 
 class NhoodEnrichmentResult(NamedTuple):
     """Result of nhood_enrichment function.
-    
+
     Attributes
     ----------
     zscore
@@ -41,6 +41,7 @@ class NhoodEnrichmentResult(NamedTuple):
     count
         Enrichment count.
     """
+
     zscore: NDArrayA
     count: NDArrayA
 

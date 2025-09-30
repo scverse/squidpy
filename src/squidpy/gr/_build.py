@@ -63,7 +63,7 @@ __all__ = ["spatial_neighbors"]
 
 class SpatialNeighborsResult(NamedTuple):
     """Result of spatial_neighbors function.
-    
+
     Attributes
     ----------
     connectivities
@@ -71,6 +71,7 @@ class SpatialNeighborsResult(NamedTuple):
     distances
         Spatial distances matrix.
     """
+
     connectivities: csr_matrix
     distances: csr_matrix
 
