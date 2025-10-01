@@ -57,3 +57,19 @@ python = [ "3.13" ]
 matrix.deps.env-vars = [
   { key = "UV_PRERELEASE", value = "allow", if = [ "pre" ] },
 ]
+
+[envs.notebooks]
+extra-dependencies = [
+    "ipykernel",
+    "jupytext",
+    "nbconvert",
+    "leidenalg",
+    "watermark",
+    "napari-spatialdata",
+]
+extras = ["docs"]
+
+[envs.notebooks.scripts]
+
+setup-squidpy-kernel = "python -m ipykernel install --user --name=squidpy"
+run-notebooks = "python ./.scripts/ci/run_notebooks.py docs/notebooks"
