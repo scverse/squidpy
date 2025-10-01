@@ -202,14 +202,13 @@ def _score_helper(
 @njit(fastmath=True)
 def _diffusion(
     conc: NDArrayA,
-    laplacian: Callable[[NDArrayA, NDArrayA, NDArrayA], float],
+    laplacian: Callable[[NDArrayA, NDArrayA], float],
     n_iter: int,
     sat: NDArrayA,
     sat_idx: NDArrayA,
     unsat: NDArrayA,
     unsat_idx: NDArrayA,
     dt: float = 0.001,
-    D: float = 1.0,
     thresh: float = 1e-8,
 ) -> float:
     """Simulate diffusion process on a regular graph."""
@@ -217,15 +216,14 @@ def _diffusion(
     entropy_arr = np.zeros(n_iter)
     prev_ent = 1.0
     nhood = np.zeros(sat_shape)
-    weights = np.ones(sat_shape)
 
     for i in range(n_iter):
         for j in range(sat_shape):
             nhood[j] = np.sum(conc[sat_idx[j]])
-        d2 = laplacian(conc[sat], nhood, weights)
+        d2 = laplacian(conc[sat], nhood)
 
         dcdt = np.zeros(conc_shape)
-        dcdt[sat] = D * d2
+        dcdt[sat] = d2
         conc[sat] += dcdt[sat] * dt
         conc[unsat] += dcdt[unsat_idx] * dt
         # set values below zero to 0
@@ -246,7 +244,6 @@ def _diffusion(
 def _laplacian_rect(
     centers: NDArrayA,
     nbrs: NDArrayA,
-    h: float,
 ) -> NDArrayA:
     """
     Five point stencil approximation on rectilinear grid.
@@ -254,8 +251,6 @@ def _laplacian_rect(
     See `Wikipedia <https://en.wikipedia.org/wiki/Five-point_stencil>`_ for more information.
     """
     d2f: NDArrayA = nbrs - 4 * centers
-    d2f = d2f / h**2
-
     return d2f
 
 
@@ -264,7 +259,6 @@ def _laplacian_rect(
 def _laplacian_hex(
     centers: NDArrayA,
     nbrs: NDArrayA,
-    h: float,
 ) -> NDArrayA:
     """
     Seven point stencil approximation on hexagonal grid.
@@ -275,10 +269,7 @@ def _laplacian_hex(
     Curtis D. Benster, L.V. Kantorovich, V.I. Krylov,
     ISBN-13: 978-0486821603.
     """
-    d2f: NDArrayA = nbrs - 6 * centers
-    d2f = d2f / h**2
-    d2f = (d2f * 2) / 3
-
+    d2f: NDArrayA = (2.0 * nbrs - 12.0 * centers) / 3.0
     return d2f
 
 
