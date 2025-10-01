@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit, prange  # noqa: F401
+from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
 from spatialdata import SpatialData
@@ -36,14 +37,14 @@ class NhoodEnrichmentResult(NamedTuple):
 
     Attributes
     ----------
-    zscore : NDArrayA
+    zscore : NDArray[np.number]
         Z-score values of enrichment statistic.
-    count : NDArrayA
+    count : NDArray[np.number]
         Enrichment count.
     """
 
-    zscore: np.ndarray[Any, np.dtype[Any]]
-    counts: np.ndarray[Any, np.dtype[Any]]  # NamedTuple inherits from tuple so cannot use 'count' as attribute name
+    zscore: NDArray[np.number]
+    counts: NDArray[np.number]  # NamedTuple inherits from tuple so cannot use 'count' as attribute name
 
 
 # data type aliases (both for numpy and numba should match)
