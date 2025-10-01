@@ -290,8 +290,11 @@ def _entropy(
     """Get entropy of an array."""
     xnz = xx[xx > 0]
     xs: np.float64 = np.sum(xnz)
+    if xs == 0:
+        return 0.0
+    eps = np.finfo(np.float64).eps  # ~2.22e-16
     xn = xnz / xs
-    xl = np.log(xn)
+    xl = np.log(np.maximum(xn, eps))
     return float((-xl * xn).sum())
 
 
