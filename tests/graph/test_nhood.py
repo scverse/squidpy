@@ -49,13 +49,14 @@ class TestNhoodEnrichment:
         assert len(res1) == len(res2)
         assert len(res2) == len(res3)
 
-        for key in range(len(res1)):
-            np.testing.assert_array_equal(res2[key], res1[key])
-            if key == 0:  # z-score
-                with pytest.raises(AssertionError):
-                    np.testing.assert_array_equal(res3[key], res2[key])
-            else:  # counts
-                np.testing.assert_array_equal(res3[key], res2[key])
+        # Test that the same seed produces the same results
+        np.testing.assert_array_equal(res2.zscore, res1.zscore)
+        np.testing.assert_array_equal(res2.counts, res1.counts)
+
+        # Test that different seeds produce different z-scores but same counts
+        with pytest.raises(AssertionError):
+            np.testing.assert_array_equal(res3.zscore, res2.zscore)
+        np.testing.assert_array_equal(res3.counts, res2.counts)
 
 
 def test_centrality_scores(nhood_data: AnnData):
