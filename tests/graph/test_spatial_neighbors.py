@@ -198,25 +198,23 @@ class TestSpatialNeighbors:
         np.testing.assert_allclose(spatial_dist, gt_ddist)
 
     def test_copy(self, non_visium_adata: AnnData):
-        conn, dist = spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None, copy=True)
+        result = spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None, copy=True)
 
-        assert isspmatrix_csr(conn)
-        assert isspmatrix_csr(dist)
+        assert isspmatrix_csr(result.connectivities)
+        assert isspmatrix_csr(result.distances)
         assert Key.obsp.spatial_conn() not in non_visium_adata.obsp
         assert Key.obsp.spatial_dist() not in non_visium_adata.obsp
-        np.testing.assert_allclose(dist.toarray(), self._gt_ddist)
-        np.testing.assert_allclose(conn.toarray(), self._gt_dgraph)
+        np.testing.assert_allclose(result.distances.toarray(), self._gt_ddist)
+        np.testing.assert_allclose(result.connectivities.toarray(), self._gt_dgraph)
 
     @pytest.mark.parametrize("percentile", [99.0, 95.0])
     def test_percentile_filtering(self, adata_hne: AnnData, percentile: float, coord_type="generic"):
-        conn, dist = spatial_neighbors(adata_hne, coord_type=coord_type, copy=True)
-        conn_filtered, dist_filtered = spatial_neighbors(
-            adata_hne, coord_type=coord_type, percentile=percentile, copy=True
-        )
+        result = spatial_neighbors(adata_hne, coord_type=coord_type, copy=True)
+        result_filtered = spatial_neighbors(adata_hne, coord_type=coord_type, percentile=percentile, copy=True)
 
         # check whether there are less connectivities in the filtered graph and whether the max distance is smaller
-        assert not ((conn != conn_filtered).nnz == 0)
-        assert dist.max() > dist_filtered.max()
+        assert not ((result.connectivities != result_filtered.connectivities).nnz == 0)
+        assert result.distances.max() > result_filtered.distances.max()
 
         Adj, Dst = _build_connectivity(adata_hne.obsm["spatial"], n_neighs=6, return_distance=True, set_diag=False)
         threshold = np.percentile(Dst.data, percentile)
@@ -225,7 +223,7 @@ class TestSpatialNeighbors:
         Adj.eliminate_zeros()
         Dst.eliminate_zeros()
 
-        assert dist_filtered.max() == Dst.max()
+        assert result_filtered.distances.max() == Dst.max()
 
     @pytest.mark.parametrize("n_neighs", [5, 10, 20])
     def test_spatial_neighbors_generic(self, n_neighs: int):
