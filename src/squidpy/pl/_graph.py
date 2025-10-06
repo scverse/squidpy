@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
@@ -217,7 +218,8 @@ def nhood_enrichment(
     %(plotting_returns)s
     """
     _assert_categorical_obs(adata, key=cluster_key)
-    array = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")[mode]
+    enrichment = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")._asdict()
+    array = enrichment[mode]
 
     ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
     _maybe_set_colors(source=adata, target=ad, key=cluster_key, palette=palette)
@@ -301,10 +303,20 @@ def nhood_enrichment_dotplot(
     None
     """
     _assert_categorical_obs(adata, key=cluster_key)
-    enrichment = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")
+    enrichment = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")._asdict()
 
-    zscore = enrichment["zscore"]
-    ccr = enrichment["conditional_cell_ratio"]
+    zscore = enrichment.get("zscore")
+    ccr = enrichment.get("conditional_ratio")
+
+    if ccr is None:
+        warnings.warn(
+            "'conditional_ratio' is None in nhood_enrichment results. Please run nhood_erichment with normalization = 'conditional'."
+            "Dot size will not reflect conditional cell ratios.",
+            UserWarning,
+            stacklevel=2,
+        )
+        ccr = np.ones_like(zscore)
+
     cats = adata.obs[cluster_key].cat.categories
 
     df = pd.DataFrame(
