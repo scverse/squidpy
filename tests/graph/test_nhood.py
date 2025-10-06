@@ -150,14 +150,14 @@ def test_nhood_enrichment_normalization_modes(adata: AnnData, normalization: str
     spatial_neighbors(adata)
     result = nhood_enrichment(adata, cluster_key=_CK, normalization=normalization, n_jobs=1, n_perms=20, copy=True)
 
-    if normalization == "conditional":
-        z, count, ccr = result
-        assert isinstance(ccr, np.ndarray)
-    else:
-        z, count = result
+    z, count, ccr = result
 
     assert isinstance(z, np.ndarray)
     assert isinstance(count, np.ndarray)
+    if normalization == "conditional":
+        assert isinstance(ccr, np.ndarray)
+        assert z.shape == ccr.shape
+        assert count.shape == ccr.shape
     assert z.shape == count.shape
     assert z.shape[0] == adata.obs[_CK].cat.categories.shape[0]
 
@@ -190,8 +190,8 @@ def test_conditional_normalization_zero_division(adata: AnnData):
     "normalization, expected_dtype",
     [
         ("none", np.uint32),
-        ("total", np.float64),
-        ("conditional", np.float64),
+        ("total", np.uint32),
+        ("conditional", np.uint32),
     ],
 )
 def test_output_dtype(adata: AnnData, normalization: str, expected_dtype):
@@ -205,10 +205,7 @@ def test_output_dtype(adata: AnnData, normalization: str, expected_dtype):
         copy=True,
     )
 
-    if normalization == "conditional":
-        _, count, _ = result
-    else:
-        _, count = result
+    count = result.counts
 
     assert count.dtype == expected_dtype
 
