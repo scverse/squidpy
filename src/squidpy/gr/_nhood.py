@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Optional
 
 import networkx as nx
 import numba.types as nt
@@ -42,10 +42,13 @@ class NhoodEnrichmentResult(NamedTuple):
         Z-score values of enrichment statistic.
     count : NDArray[np.number]
         Enrichment count.
+    conditional_ratio : Optional[NDArray[np.number]]
+        Conditional ratio (only present if normalization='conditional').
     """
 
     zscore: NDArray[np.number]
     counts: NDArray[np.number]  # NamedTuple inherits from tuple so cannot use 'count' as attribute name
+    conditional_ratio: NDArray[np.number] | None = None
 
 
 # data type aliases (both for numpy and numba should match)
@@ -218,11 +221,13 @@ def nhood_enrichment(
     Returns
     -------
     If ``copy = True``, returns a :class:`~squidpy.gr.NhoodEnrichmentResult` with the z-score and the enrichment count.
+    If normalization = "conditional", also contains the conditional ratio, otherwise it is None.
 
     Otherwise, modifies the ``adata`` with the following keys:
 
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - the enrichment z-score.
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['conditional_ratio']`` - the ratio of cells of type A that neighbor type B.
     """
     if isinstance(adata, SpatialData):
         adata = adata.table
@@ -338,14 +343,18 @@ def nhood_enrichment(
     else:
         raise ValueError("handle_nan must be 'keep' or 'zero'")
 
+    result_kwargs = {"zscore": zscore, "counts": count}
+    if normalization == "conditional":
+        result_kwargs["conditional_ratio"] = conditional_ratio
+
     if copy:
-        return NhoodEnrichmentResult(zscore=zscore, counts=count)
+        return NhoodEnrichmentResult(**result_kwargs)
 
     _save_data(
         adata,
         attr="uns",
         key=Key.uns.nhood_enrichment(cluster_key),
-        data=NhoodEnrichmentResult(zscore=zscore, counts=count),
+        data=NhoodEnrichmentResult(**result_kwargs),
         time=start,
     )
 
