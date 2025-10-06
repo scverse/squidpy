@@ -26,7 +26,7 @@ def _assert_dims_present(dims: tuple[str, ...], include_z: bool = True) -> None:
 
 # modification of `skimage`'s `pil_to_ndarray`:
 # https://github.com/scikit-image/scikit-image/blob/main/skimage/io/_plugins/pil_plugin.py#L55
-def _infer_shape_dtype(fname: str) -> tuple[tuple[int, ...], np.dtype[Any]]:
+def _infer_shape_dtype(fname: str) -> tuple[tuple[int, ...], np.dtype[np.generic]]:
     def _palette_is_grayscale(pil_image: Image.Image) -> bool:
         # get palette as an array with R, G, B columns
         palette = np.asarray(pil_image.getpalette()).reshape((256, 3))
@@ -82,7 +82,7 @@ def _infer_shape_dtype(fname: str) -> tuple[tuple[int, ...], np.dtype[Any]]:
     raise ValueError(f"Unable to infer image dtype for image mode `{image.mode}`.")
 
 
-def _get_image_shape_dtype(fname: str) -> tuple[tuple[int, ...], np.dtype[Any]]:
+def _get_image_shape_dtype(fname: str) -> tuple[tuple[int, ...], np.dtype[np.generic]]:
     try:
         return _infer_shape_dtype(fname)
     except Image.UnidentifiedImageError as e:
@@ -102,7 +102,7 @@ def _get_image_shape_dtype(fname: str) -> tuple[tuple[int, ...], np.dtype[Any]]:
 def _infer_dimensions(
     obj: NDArrayA | xr.DataArray | str,
     infer_dimensions: InferDimensions | tuple[str, ...] = InferDimensions.DEFAULT,
-) -> tuple[tuple[int, ...], tuple[str, ...], np.dtype[Any], tuple[int, ...]]:
+) -> tuple[tuple[int, ...], tuple[str, ...], np.dtype[np.generic], tuple[int, ...]]:
     """
     Infer dimension names of an array.
 
