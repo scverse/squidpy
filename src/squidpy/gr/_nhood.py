@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
-from typing import Any, NamedTuple, Optional
+from typing import Any, NamedTuple
 
 import networkx as nx
 import numba.types as nt
@@ -42,7 +42,7 @@ class NhoodEnrichmentResult(NamedTuple):
         Z-score values of enrichment statistic.
     count : NDArray[np.number]
         Enrichment count.
-    conditional_ratio : Optional[NDArray[np.number]]
+    conditional_ratio : NDArray[np.number] | None
         Conditional ratio (only present if normalization='conditional').
     """
 
@@ -307,9 +307,7 @@ def nhood_enrichment(
     elif normalization == "none":
         count_normalized = count.copy()
     else:
-        raise ValueError(
-            f"Invalid normalization mode `{normalization}`. Choose from 'none', 'all_type_A', 'type_A_with_B_neighbor'."
-        )
+        raise ValueError(f"Invalid normalization mode `{normalization}`. Choose from 'none', 'total', 'conditional'.")
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
@@ -343,18 +341,22 @@ def nhood_enrichment(
     else:
         raise ValueError("handle_nan must be 'keep' or 'zero'")
 
-    result_kwargs = {"zscore": zscore, "counts": count}
+    result_kwargs = {"zscore": zscore, "count": count}
     if normalization == "conditional":
         result_kwargs["conditional_ratio"] = conditional_ratio
 
     if copy:
-        return NhoodEnrichmentResult(**result_kwargs)
+        return NhoodEnrichmentResult(
+            zscore=result_kwargs["zscore"],
+            counts=result_kwargs["count"],
+            conditional_ratio=result_kwargs.get("conditional_ratio"),
+        )
 
     _save_data(
         adata,
         attr="uns",
         key=Key.uns.nhood_enrichment(cluster_key),
-        data=NhoodEnrichmentResult(**result_kwargs),
+        data=result_kwargs,
         time=start,
     )
 
@@ -571,7 +573,6 @@ def _nhood_enrichment_helper(
     seed: int | None = None,
     queue: SigQueue | None = None,
     normalization: str = "none",
-    min_cond_count: int = 5,
 ) -> NDArrayA:
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
     int_clust = int_clust.copy()
