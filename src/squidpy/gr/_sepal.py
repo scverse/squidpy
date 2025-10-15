@@ -281,9 +281,13 @@ def _entropy(
     """Compute Shannon entropy of an array of probability values (in nats)."""
     xnz = xx[xx > 0]
     xs: np.float64 = np.sum(xnz)
-    if xs == 0:
-        return 0.0
     eps = np.finfo(np.float64).eps  # ~2.22e-16
+    if xs < eps:
+        # 0 because
+        # xn represents probabilities
+        # and p(x)=0 is taken as 0 entropy
+        # see https://stats.stackexchange.com/a/433096
+        return 0.0
     xn = xnz / xs
     xl = np.log(np.maximum(xn, eps))
     return float((-xl * xn).sum())
