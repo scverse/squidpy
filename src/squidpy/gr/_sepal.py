@@ -278,7 +278,7 @@ def _laplacian_hex(
 def _entropy(
     xx: NDArrayA,
 ) -> float:
-    """Get entropy of an array."""
+    """Compute Shannon entropy of an array of probability values (in nats)."""
     xnz = xx[xx > 0]
     xs: np.float64 = np.sum(xnz)
     if xs == 0:
