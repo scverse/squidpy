@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
-from typing import Any
+from typing import Any, NamedTuple
 
 import networkx as nx
 import numba.types as nt
@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit, prange  # noqa: F401
+from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
 from spatialdata import SpatialData
@@ -30,7 +31,24 @@ from squidpy.gr._utils import (
 
 __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
 
-dt = nt.uint32  # data type aliases (both for numpy and numba should match)
+
+class NhoodEnrichmentResult(NamedTuple):
+    """Result of nhood_enrichment function.
+
+    Attributes
+    ----------
+    zscore : NDArray[np.number]
+        Z-score values of enrichment statistic.
+    count : NDArray[np.number]
+        Enrichment count.
+    """
+
+    zscore: NDArray[np.number]
+    counts: NDArray[np.number]  # NamedTuple inherits from tuple so cannot use 'count' as attribute name
+
+
+# data type aliases (both for numpy and numba should match)
+dt = nt.uint32
 ndt = np.uint32
 _template = """
 @njit(dt[:, :](dt[:], dt[:], dt[:]), parallel={parallel}, fastmath=True)
@@ -131,7 +149,7 @@ def nhood_enrichment(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
-) -> tuple[NDArrayA, NDArrayA] | None:
+) -> NhoodEnrichmentResult | None:
     """
     Compute neighborhood enrichment by permutation test.
 
@@ -149,7 +167,7 @@ def nhood_enrichment(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`tuple` with the z-score and the enrichment count.
+    If ``copy = True``, returns a :class:`~squidpy.gr.NhoodEnrichmentResult` with the z-score and the enrichment count.
 
     Otherwise, modifies the ``adata`` with the following keys:
 
@@ -202,7 +220,7 @@ def nhood_enrichment(
     zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
     if copy:
-        return zscore, count
+        return NhoodEnrichmentResult(zscore=zscore, counts=count)
 
     _save_data(
         adata,
