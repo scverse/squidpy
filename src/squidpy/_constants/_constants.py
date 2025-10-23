@@ -129,6 +129,6 @@ class TenxVersions(str, ModeEnum):
 class NicheDefinitions(ModeEnum):
     NEIGHBORHOOD = "neighborhood"
     UTAG = "utag"
-    CELLCHARTER = "cellcharter_simple"
+    CELLCHARTER = "cellcharter"
     SPOT = "spot"
     BANKSY = "banksy"
