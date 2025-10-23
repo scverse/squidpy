@@ -1,7 +1,7 @@
 include requirements.txt
 include LICENSE
 include README.rst
-include tox.ini
+include hatch.toml
 
 prune tests/_data
 prune tests/_images

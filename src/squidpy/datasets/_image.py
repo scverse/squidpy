@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 from copy import copy
+from typing import Any, Protocol, Union
 
-from squidpy.datasets._utils import ImgMetadata
+from squidpy.datasets._utils import ImgMetadata, PathLike
+from squidpy.im._container import ImageContainer
+
+
+class ImageDataset(Protocol):
+    def __call__(self, path: PathLike | None = ..., **kwargs: Any) -> ImageContainer: ...
+
 
 _vfic = ImgMetadata(
     name="visium_fluo_image_crop",

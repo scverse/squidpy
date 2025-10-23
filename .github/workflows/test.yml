@@ -1,109 +1,120 @@
-name: Test
+name: CI
 
 on:
-    schedule:
-        - cron: 00 00 * * 1 # every Monday at 00:00
-    push:
-        branches: [main]
-    pull_request:
-        branches: [main]
-    workflow_dispatch:
-        inputs:
-            reason:
-                description: Reason for the workflow dispatch. Only "release" is valid.
-                required: true
-                default: release
+  schedule:
+    - cron: 00 00 * * 1 # every Monday at 00:00
+  push:
+    branches:
+      - main
+      - "[0-9]+.[0-9]+.x"
+  pull_request:
+
+env:
+  PYTEST_ADDOPTS: "-v --color=yes -n auto"
+  FORCE_COLOR: "1"
+  MPLBACKEND: agg
+  # It's impossible to ignore SyntaxWarnings for a single module,
+  # so because leidenalg 0.10.0 has them, we pre-compile things: https://github.com/vtraag/leidenalg/issues/173
+  UV_COMPILE_BYTECODE: "1"
 
 jobs:
-    test:
-        runs-on: ${{ matrix.os }}
-        strategy:
-            fail-fast: false
-            matrix:
-                python: ["3.10", "3.11", "3.12"]
-                os: [ubuntu-latest]
-                include:
-                    - python: "3.12"
-                      os: macos-latest
-                      pip-flags: "--pre"
-                      name: "Python 3.12 (pre-release)"
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: hatch-test.py3.11-stable
+            os: ubuntu-latest
+            python: "3.11"
+          - name: hatch-test.py3.12-stable
+            os: ubuntu-latest
+            python: "3.12"
+          - name: hatch-test.py3.13-stable
+            os: ubuntu-latest
+            python: "3.13"
+            test-type: "coverage"
+          - name: hatch-test.py3.13-pre
+            os: macos-latest
+            python: "3.13"
+    env: # environment variable for use in codecov's env_vars tagging
+      ENV_NAME: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
 
-        env:
-            OS: ${{ matrix.os }}
-            PYTHON: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python }}
+          cache-dependency-glob: pyproject.toml
 
-        steps:
-            - uses: actions/checkout@v3
-            - name: Set up Python ${{ matrix.python }}
-              uses: actions/setup-python@v4
-              with:
-                  python-version: ${{ matrix.python }}
+      - name: Ensure figure directory exists
+        run: mkdir -p "$GITHUB_WORKSPACE/tests/figures"
 
-            - name: Get pip cache dir
-              id: pip-cache-dir
-              run: |
-                  echo "::set-output name=dir::$(pip cache dir)"
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/squidpy/*.h5ad
+          key: data-${{ hashFiles('**/download_data.py') }}
 
-            - name: Restore pip cache
-              uses: actions/cache@v3
-              with:
-                  path: ${{ steps.pip-cache-dir.outputs.dir }}
-                  key: pip-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}
-                  restore-keys: |
-                      pip-${{ runner.os }}-${{ env.pythonLocation }}-
+      - name: Download datasets
+        if: steps.data-cache.outputs.cache-hit != 'true'
+        run: |
+          uvx hatch run ${{ matrix.name }}:download
 
-            - name: Install dependencies
-              run: |
-                  ./.scripts/ci/install_dependencies.sh
+      - name: System dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install automake -y
 
-            - name: Install pip dependencies
-              run: |
-                  python -m pip install --upgrade pip
-                  pip install tox tox-gh-actions
+          # PyQt5 related
+          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
+          sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
 
-            - name: Restore data cache
-              id: data-cache
-              uses: actions/cache@v3
-              with:
-                  path: |
-                      ~/.cache/squidpy/*.h5ad
-                  key: data-${{ hashFiles('**/download_data.py') }}
+      - name: System dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install automake
 
-            - name: Download datasets
-              if: steps.data-cache.outputs.cache-hit != 'true'
-              run: |
-                  tox -e download-data
+      - name: Install dependencies
+        run: uvx hatch -v env create ${{ matrix.name }}
 
-            # caching .tox is not encouraged, but since we're private and this shaves off ~1min from the step
-            # if any problems occur and/or once the package is public, this can be removed
-            - name: Restore tox cache
-              uses: actions/cache@v3
-              with:
-                  path: .tox
-                  key: tox-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt', '**/tox.ini') }}
+      - name: Run tests
+        if: matrix.test-type == null
+        run: uvx hatch run ${{ matrix.name }}:run
+      - name: Run tests (coverage)
+        if: matrix.test-type == 'coverage'
+        run: |
+          uvx hatch run ${{ matrix.name }}:run-cov
+          uvx hatch run ${{ matrix.name }}:coverage combine
+          uvx hatch run ${{ matrix.name }}:coverage xml
 
-            - name: Test
-              timeout-minutes: 60
-              env:
-                  MPLBACKEND: agg
-                  PLATFORM: ${{ matrix.os }}
-                  DISPLAY: :42
-              run: |
-                  tox -vv
-            # check if this can be deprecated
-            #- name: List figures for potential debugging
-            #      ls -alh /home/runner/work/squidpy/squidpy/tests/figures
+      - name: Archive figures generated during testing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual_test_results_${{ runner.os }}_py${{ matrix.name }}
+          path: ${{ github.workspace }}/tests/figures/*
 
-            - name: Archive figures generated during testing
-              if: always()
-              uses: actions/upload-artifact@v4
-              with:
-                  name: visual_test_results_${{ matrix.os }}-python${{ matrix.python }}
-                  path: /home/runner/work/squidpy/squidpy/tests/figures/*
+      - name: Upload coverage data
+        if: matrix.test-type == 'coverage'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          env_vars: ENV_NAME
+          fail_ci_if_error: true
 
-            - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v4
-              with:
-                  name: coverage
-                  verbose: true
-                  token: ${{ secrets.CODECOV_TOKEN }} # required
+  check:
+    if: always()
+    needs:
+      - test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}

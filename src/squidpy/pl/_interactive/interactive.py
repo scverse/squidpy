@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 interactive.py
 
@@ -6,8 +8,6 @@ Please use `https://github.com/scverse/napari-spatialdata` instead.
 """
 
 raise ImportError("The squidpy napari plugin is deprecated, please use https://github.com/scverse/napari-spatialdata")
-
-from __future__ import annotations
 
 from typing import (
     Any,
@@ -20,7 +20,7 @@ from scanpy import logging as logg
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, deprecated
-from squidpy.im import ImageContainer  # type: ignore[attr-defined]
+from squidpy.im import ImageContainer
 from squidpy.pl._utils import save_fig
 
 try:
