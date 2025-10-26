@@ -11,7 +11,7 @@ _ = sdp
 
 
 class TestDetectTissue(PlotTester, metaclass=PlotTesterMeta):
-    def test_detect_tissue_otsu(self):
+    def test_plot_detect_tissue_otsu(self):
         """Test OTSU tissue detection on Visium H&E dataset."""
         sdata = sq.datasets.visium_hne_sdata()
 
