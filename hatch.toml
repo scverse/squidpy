@@ -40,7 +40,8 @@ extra-dependencies = [
     "pytest-timeout",
 ]
 
-
+[envs.hatch-test.scripts]
+download = "python ./.scripts/ci/download_data.py {args}"
 
 [[envs.hatch-test.matrix]]
 deps = ["stable"]
