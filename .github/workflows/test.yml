@@ -15,7 +15,7 @@ env:
   COVERAGE_FILE: ${{ github.workspace }}/.coverage
 
 jobs:
-  prep-data:
+  ensure-data-is-cached:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +42,7 @@ jobs:
         run: uvx hatch run data:download
 
   test:
-    needs: [prep-data] # macOS now waits until data is cached
+    needs: [ensure-data-is-cached]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -58,7 +58,6 @@ jobs:
             os: ubuntu-latest
             python: "3.13"
             test-type: "coverage"
-            pytest-addopts: "-v --color=yes"
           - name: hatch-test.py3.13-pre
             os: macos-latest
             python: "3.13"
