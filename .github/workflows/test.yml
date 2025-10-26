@@ -98,11 +98,6 @@ jobs:
         run: |
           uvx hatch run ${{ matrix.name }}:cov-erase
           uvx hatch run ${{ matrix.name }}:run-cov
-
-      - name: Combine and report coverage
-        if: matrix.test-type == 'coverage'
-        run: |
-          uvx hatch run ${{ matrix.name }}:cov-combine
           uvx hatch run ${{ matrix.name }}:cov-xml
 
       - name: Archive figures generated during testing
