@@ -16,6 +16,7 @@ env:
   # It's impossible to ignore SyntaxWarnings for a single module,
   # so because leidenalg 0.10.0 has them, we pre-compile things: https://github.com/vtraag/leidenalg/issues/173
   UV_COMPILE_BYTECODE: "1"
+  COVERAGE_FILE: ${{ github.workspace }}/.coverage
 
 jobs:
   test:
@@ -34,6 +35,7 @@ jobs:
             os: ubuntu-latest
             python: "3.13"
             test-type: "coverage"
+            pytest-addopts: "-v --color=yes"
           - name: hatch-test.py3.13-pre
             os: macos-latest
             python: "3.13"
@@ -91,9 +93,15 @@ jobs:
 
       - name: Run tests (coverage)
         if: matrix.test-type == 'coverage'
+        env:
+          PYTEST_ADDOPTS: ${{ matrix.pytest-addopts }}
         run: |
           uvx hatch run ${{ matrix.name }}:cov-erase
           uvx hatch run ${{ matrix.name }}:run-cov
+
+      - name: Combine and report coverage
+        if: matrix.test-type == 'coverage'
+        run: |
           uvx hatch run ${{ matrix.name }}:cov-combine
           uvx hatch run ${{ matrix.name }}:cov-xml
 
