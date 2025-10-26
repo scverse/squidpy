@@ -2,15 +2,20 @@ name: CI
 
 on:
   schedule:
-    - cron: "00 00 * * 1"
+    - cron: "00 00 * * 1" # every Monday at 00:00
   push:
-    branches: [main, "[0-9]+.[0-9]+.x"]
+    branches:
+      - main
+      - "[0-9]+.[0-9]+.x"
   pull_request:
 
 env:
   PYTEST_ADDOPTS: "-v --color=yes -n auto"
   FORCE_COLOR: "1"
   MPLBACKEND: agg
+  # It's impossible to ignore SyntaxWarnings for a single module,
+  # so because leidenalg 0.10.0 has them, we pre-compile things:
+  # https://github.com/vtraag/leidenalg/issues/173
   UV_COMPILE_BYTECODE: "1"
   COVERAGE_FILE: ${{ github.workspace }}/.coverage
 
@@ -19,7 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0, filter: blob:none }
+        with:
+          fetch-depth: 0
+          filter: blob:none
 
       - uses: astral-sh/setup-uv@v6
         with:
@@ -58,6 +65,7 @@ jobs:
             os: ubuntu-latest
             python: "3.13"
             test-type: "coverage"
+            pytest-addopts: "-v --color=yes -n auto"
           - name: hatch-test.py3.13-pre
             os: macos-latest
             python: "3.13"
@@ -94,9 +102,10 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y automake \
-            libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
-            libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0
+          sudo apt-get install automake -y
+
+          # PyQt5 related
+          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
           sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
 
       - name: System dependencies (macOS)
