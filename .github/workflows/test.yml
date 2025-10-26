@@ -94,10 +94,6 @@ jobs:
           key: data-${{ hashFiles('**/download_data.py') }}
           enableCrossOsArchive: true
 
-      - name: Download datasets
-        if: steps.data-cache.outputs.cache-hit != 'true'
-        run: uvx hatch run ${{ matrix.name }}:download
-
       - name: System dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
