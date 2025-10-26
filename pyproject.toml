@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 license = "BSD-3-Clause"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
-    "Intended Audience :: Science/Research",
+    "Intended Audience :: Science/Research", 
     "Natural Language :: English",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
@@ -76,7 +76,6 @@ dependencies = [
    "xarray>=2024.10.0",
    "imagecodecs>=2025.8.2,<2026",
    "zarr>=2.6.1",
-   "spatialdata>=0.2.5",
 ]
 
 [project.optional-dependencies]
@@ -305,7 +304,6 @@ python = ">=3.11"
 [tool.pixi.pypi-dependencies]
 squidpy = { path = ".", editable = true }
 
-# for gh-actions
 [tool.pixi.feature.py311.dependencies]
 python = "3.11.*"
 
@@ -313,11 +311,9 @@ python = "3.11.*"
 python = "3.13.*"
 
 [tool.pixi.environments]
-# 3.11 lane (for gh-actions)
 dev-py311  = { features = ["dev", "test", "py311"], solve-group = "py311" }
 docs-py311 = { features = ["docs", "py311"],        solve-group = "py311" }
 
-# 3.12 lane
 default    = { features = ["py313"],                 solve-group = "py313" }
 dev-py313  = { features = ["dev", "test", "py313"],  solve-group = "py313" }
 docs-py313 = { features = ["docs", "py313"],         solve-group = "py313" }
