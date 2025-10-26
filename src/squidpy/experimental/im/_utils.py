@@ -115,7 +115,6 @@ def _flatten_channels(
         weights = xr.DataArray([0.299, 0.587, 0.114], dims=["c"], coords={"c": img.coords["c"]})
         return (img * weights).sum(dim="c")
 
-    # Handle explicit RGBA specification
     elif channel_format == "rgba":
         if n_channels != 4:
             raise ValueError(f"Cannot treat {n_channels}-channel image as RGBA (requires exactly 4 channels)")
@@ -123,13 +122,11 @@ def _flatten_channels(
         weights = xr.DataArray([0.299, 0.587, 0.114, 0.0], dims=["c"], coords={"c": img.coords["c"]})
         return (img * weights).sum(dim="c")
 
-    # Infer mode - automatic detection based on channel count
     elif channel_format == "infer":
         if n_channels == 3:
             # 3 channels + infer -> RGB luminance formula
             weights = xr.DataArray([0.299, 0.587, 0.114], dims=["c"], coords={"c": img.coords["c"]})
             return (img * weights).sum(dim="c")
-
         else:
             # 2 channels or 4+ channels + infer -> multichannel
             return img.mean(dim="c")
