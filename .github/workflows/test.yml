@@ -2,24 +2,47 @@ name: CI
 
 on:
   schedule:
-    - cron: 00 00 * * 1 # every Monday at 00:00
+    - cron: "00 00 * * 1"
   push:
-    branches:
-      - main
-      - "[0-9]+.[0-9]+.x"
+    branches: [main, "[0-9]+.[0-9]+.x"]
   pull_request:
 
 env:
   PYTEST_ADDOPTS: "-v --color=yes -n auto"
   FORCE_COLOR: "1"
   MPLBACKEND: agg
-  # It's impossible to ignore SyntaxWarnings for a single module,
-  # so because leidenalg 0.10.0 has them, we pre-compile things: https://github.com/vtraag/leidenalg/issues/173
   UV_COMPILE_BYTECODE: "1"
   COVERAGE_FILE: ${{ github.workspace }}/.coverage
 
 jobs:
+  prep-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, filter: blob:none }
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.13"
+          cache-dependency-glob: pyproject.toml
+
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/squidpy/*.h5ad
+            ~/.cache/squidpy/*.zarr
+          key: data-${{ hashFiles('**/download_data.py') }}
+          enableCrossOsArchive: true
+
+      - name: Download datasets
+        if: steps.data-cache.outputs.cache-hit != 'true'
+        run: uvx hatch run data:download
+
   test:
+    needs: [prep-data] # macOS now waits until data is cached
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -39,13 +62,11 @@ jobs:
           - name: hatch-test.py3.13-pre
             os: macos-latest
             python: "3.13"
-    env: # environment variable for use in codecov's env_vars tagging
+    env:
       ENV_NAME: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          filter: blob:none
+        with: { fetch-depth: 0, filter: blob:none }
 
       - uses: astral-sh/setup-uv@v6
         with:
@@ -64,7 +85,7 @@ jobs:
             ~/.cache/squidpy/*.h5ad
             ~/.cache/squidpy/*.zarr
           key: data-${{ hashFiles('**/download_data.py') }}
-          enableCrossOsArchive: true # Necessary for macOS runners
+          enableCrossOsArchive: true
 
       - name: Download datasets
         if: steps.data-cache.outputs.cache-hit != 'true'
@@ -74,17 +95,16 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update -y
-          sudo apt-get install automake -y
-
-          # PyQt5 related
-          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
+          sudo apt-get install -y automake \
+            libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0
           sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
 
       - name: System dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: brew install automake
 
-      - name: Install dependencies
+      - name: Create env
         run: uvx hatch -v env create ${{ matrix.name }}
 
       - name: Run tests
@@ -117,8 +137,7 @@ jobs:
 
   check:
     if: always()
-    needs:
-      - test
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1
