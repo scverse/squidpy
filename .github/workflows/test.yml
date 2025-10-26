@@ -66,8 +66,7 @@ jobs:
 
       - name: Download datasets
         if: steps.data-cache.outputs.cache-hit != 'true'
-        run: |
-          uvx hatch run ${{ matrix.name }}:download
+        run: uvx hatch run ${{ matrix.name }}:download
 
       - name: System dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -89,12 +88,14 @@ jobs:
       - name: Run tests
         if: matrix.test-type == null
         run: uvx hatch run ${{ matrix.name }}:run
+
       - name: Run tests (coverage)
         if: matrix.test-type == 'coverage'
         run: |
+          uvx hatch run ${{ matrix.name }}:cov-erase
           uvx hatch run ${{ matrix.name }}:run-cov
-          uvx hatch run ${{ matrix.name }}:coverage combine
-          uvx hatch run ${{ matrix.name }}:coverage xml
+          uvx hatch run ${{ matrix.name }}:cov-combine
+          uvx hatch run ${{ matrix.name }}:cov-xml
 
       - name: Archive figures generated during testing
         if: always()

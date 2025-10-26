@@ -11,6 +11,7 @@ extra-dependencies = [
 [envs.coverage.scripts]
 clean = "coverage erase"
 report = "coverage report --omit='tox/*'"
+combine = "coverage combine"
 xml = "coverage xml --omit='tox/*' -o coverage.xml"
 diff = "diff-cover --compare-branch origin/main coverage.xml"
 
@@ -19,7 +20,6 @@ features = ["docs"]
 extra-dependencies = [
     "setuptools",
 ]
-
 [envs.docs.scripts]
 build = "make -C docs html {args}"
 clean = "make -C docs clean"
@@ -39,9 +39,15 @@ extra-dependencies = [
     "pytest-mock",
     "pytest-timeout",
 ]
-
 [envs.hatch-test.scripts]
+run = "pytest {args}"
+run-cov = "pytest --cov --cov-report=term {args}"
+cov-erase = "coverage erase"
+cov-report = "coverage report --omit='tox/*'"
+cov-combine = "coverage combine"
+cov-xml = "coverage xml --omit='tox/*' -o coverage.xml"
 download = "python ./.scripts/ci/download_data.py {args}"
+
 
 [[envs.hatch-test.matrix]]
 deps = ["stable"]
