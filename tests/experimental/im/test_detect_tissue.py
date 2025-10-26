@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import spatialdata_plot as sdp
+
 import squidpy as sq
 from tests.conftest import PlotTester, PlotTesterMeta
+
+_ = sdp
 
 
 class TestDetectTissue(PlotTester, metaclass=PlotTesterMeta):
