@@ -84,9 +84,73 @@ def detect_tissue(
     felzenszwalb_params: FelzenszwalbParams | None = None,
 ) -> np.ndarray | None:
     """
-    Detect tissue. Optionally store an integer-labeled mask in sdata.labels.
-    Returns np.ndarray when inplace=False, else None.
-    Labels are 0=background, 1..K=specimens. Shape is (y, x).
+    Detect tissue regions in an image and optionally store an integer-labeled mask.
+
+    Parameters
+    ----------
+    sdata
+        SpatialData object containing the image.
+    image_key
+        Key of the image in ``sdata.images`` to detect tissue from.
+    scale
+        Scale level to use for processing. If `"auto"`, uses the smallest available scale.
+        Otherwise, must be a valid scale level present in the image.
+    method
+        Tissue detection method. Valid options are:
+
+            - `DETECT_TISSUE_METHOD.OTSU` or `"otsu"` - Otsu thresholding with background detection.
+            - `DETECT_TISSUE_METHOD.FELZENSZWALB` or `"felzenszwalb"` - Felzenszwalb superpixel segmentation.
+
+    channel_format
+        Expected format of image channels. Valid options are:
+
+            - `"infer"` - Automatically infer from image shape.
+            - `"rgb"` - RGB image.
+            - `"rgba"` - RGBA image.
+            - `"multichannel"` - Multi-channel image.
+
+    background_detection_params
+        Parameters for background detection via corner regions. If `None`, uses corners
+        specified by `corners_are_background` for all four corners.
+    corners_are_background
+        Whether corners are considered background regions. Used for orienting threshold
+        if `background_detection_params` is `None`.
+    min_specimen_area_frac
+        Minimum fraction of image area for a region to be considered a specimen.
+    n_samples
+        Maximum number of specimen regions to keep. If `None`, uses Otsu thresholding
+        on log10(area) to separate specimens from artifacts.
+    auto_max_pixels
+        Maximum number of pixels to process automatically. Images larger than this
+        will be downscaled before processing.
+    close_holes_smaller_than_frac
+        Fraction of image area below which holes in the tissue mask are filled.
+    mask_smoothing_cycles
+        Number of morphological closing cycles to apply for boundary smoothing.
+    new_labels_key
+        Key to store the resulting labels in ``sdata.labels``. If `None`, uses
+        `"{image_key}_tissue"`.
+    inplace
+        If `True`, stores labels in ``sdata.labels``. If `False`, returns the mask array.
+    felzenszwalb_params
+        Parameters for Felzenszwalb superpixel segmentation. If `None`, uses default
+        size-aware parameters. Only used when `method` is `"felzenszwalb"`.
+
+    Returns
+    -------
+    If `inplace = False`, returns a NumPy array of shape `(y, x)` with integer labels
+    where `0` represents background and `1..K` represent different specimen regions.
+    Otherwise, returns `None` and stores the labels in ``sdata.labels``.
+
+    Notes
+    -----
+    The function produces an integer-labeled mask where:
+
+        - Label `0` represents background.
+        - Labels `1..K` represent different specimen regions.
+
+    Processing is performed at an appropriate resolution and then upscaled to match
+    the original image dimensions.
     """
     # Normalize method
     if isinstance(method, str):

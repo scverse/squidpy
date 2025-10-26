@@ -59,10 +59,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/squidpy
-          key: squidpy-data-v1
-          restore-keys: |
-            squidpy-data-
+            ~/.cache/squidpy/*.h5ad
+            ~/.cache/squidpy/*.zarr
+          key: data-${{ hashFiles('**/download_data.py') }}
           enableCrossOsArchive: true # Necessary for macOS runners
 
       - name: Download datasets
