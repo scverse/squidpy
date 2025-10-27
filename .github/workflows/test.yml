@@ -121,7 +121,9 @@ jobs:
           PYTEST_ADDOPTS: ${{ matrix.pytest-addopts }}
         run: |
           uvx hatch run ${{ matrix.name }}:cov-erase
-          uvx hatch run ${{ matrix.name }}:run-cov
+          uvx hatch run ${{ matrix.name }}:run-cov -n logical
+          uvx hatch run ${{ matrix.name }}:cov-combine
+          uvx hatch run ${{ matrix.name }}:cov-report
 
       - name: Archive figures generated during testing
         if: always()
