@@ -228,9 +228,7 @@ def _spatial_plot(
         **kwargs,
     )
 
-    for count, (_lib_count, value_to_plot) in enumerate(
-        itertools.product(*fig_params.iter_panels)
-    ):
+    for count, (_lib_count, value_to_plot) in enumerate(itertools.product(*fig_params.iter_panels)):
         if not library_first:
             _lib_count, value_to_plot = value_to_plot, _lib_count
 
@@ -240,9 +238,7 @@ def _spatial_plot(
         _cell_id = spatial_params.cell_id[_lib_count]
         _crops = crops[_lib_count]
         _lib = spatial_params.library_id[_lib_count]
-        _coords = coords[
-            _lib_count
-        ]  # TODO: do we want to order points? for now no, skip
+        _coords = coords[_lib_count]  # TODO: do we want to order points? for now no, skip
         adata_sub, coords_sub, image_sub = _subs(
             adata,
             _coords,
@@ -376,9 +372,7 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
             "seg_outline",
         ]
     else:
-        raise NotImplementedError(
-            f"Docstring interpolation not implemented for `{name}`."
-        )
+        raise NotImplementedError(f"Docstring interpolation not implemented for `{name}`.")
 
     for key in params_remove:
         params.pop(key)
@@ -386,11 +380,7 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
         wrapper_params.pop(key)
 
     params.update(wrapper_params)
-    annotations = {
-        k: v.annotation
-        for k, v in params.items()
-        if v.annotation != inspect.Parameter.empty
-    }
+    annotations = {k: v.annotation for k, v in params.items() if v.annotation != inspect.Parameter.empty}
     if wrapper_sig.return_annotation is not inspect.Signature.empty:
         annotations["return"] = wrapper_sig.return_annotation
 
