@@ -376,7 +376,7 @@ def sdata_mask_graph():
         "region_key": "region",
         "instance_key": "instance_id",
     }
-    return sd.SpatialData.from_elements_dict(
+    return sd.SpatialData.init_from_elements(
         {
             "circles": sd.models.ShapesModel().parse(points_df),
             "polygon": sd.models.ShapesModel().parse(polygon_df),

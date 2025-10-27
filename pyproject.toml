@@ -74,7 +74,8 @@ dependencies = [
    "tqdm>=4.50.2",
    "validators>=0.18.2",
    "xarray>=2024.10.0",
-   "zarr>=2.6.1,<3.0.0", "imagecodecs>=2025.8.2,<2026",
+   "imagecodecs>=2025.8.2,<2026",
+   "zarr>=2.6.1",
 ]
 
 [project.optional-dependencies]
@@ -86,8 +87,6 @@ dev = [
     "ipykernel",
     "ipywidgets",
     "jupytext",
-    "pytest",
-    "pytest-cov",
     "ruff",
 ]
 test = [
@@ -272,6 +271,7 @@ omit = [
     "*/__init__.py",
     "*/_version.py",
     "squidpy/pl/_interactive/*",
+    "tox/*",
 ]
 
 [tool.coverage.paths]
@@ -303,7 +303,6 @@ python = ">=3.11"
 [tool.pixi.pypi-dependencies]
 squidpy = { path = ".", editable = true }
 
-# for gh-actions
 [tool.pixi.feature.py311.dependencies]
 python = "3.11.*"
 
@@ -311,11 +310,9 @@ python = "3.11.*"
 python = "3.13.*"
 
 [tool.pixi.environments]
-# 3.11 lane (for gh-actions)
 dev-py311  = { features = ["dev", "test", "py311"], solve-group = "py311" }
 docs-py311 = { features = ["docs", "py311"],        solve-group = "py311" }
 
-# 3.12 lane
 default    = { features = ["py313"],                 solve-group = "py313" }
 dev-py313  = { features = ["dev", "test", "py313"],  solve-group = "py313" }
 docs-py313 = { features = ["docs", "py313"],         solve-group = "py313" }
@@ -323,9 +320,9 @@ test-py313 = { features = ["test", "py313"],         solve-group = "py313" }
 
 [tool.pixi.tasks]
 lab = "jupyter lab"
-kernel-install = "python -m ipykernel install --user --name pixi-dev --display-name \"sdata-plot (dev)\""
+kernel-install = "python -m ipykernel install --user --name pixi-dev --display-name \"squidpy (dev)\""
 test = "pytest -v --color=yes --tb=short --durations=10"
 lint = "ruff check ."
 format = "ruff format ."
 pre-commit-install = "pre-commit install"
-pre-commit-run = "pre-commit run --all-files"
+pre-commit = "pre-commit run"

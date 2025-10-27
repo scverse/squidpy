@@ -2,7 +2,7 @@ name: CI
 
 on:
   schedule:
-    - cron: 00 00 * * 1 # every Monday at 00:00
+    - cron: "00 00 * * 1" # every Monday at 00:00
   push:
     branches:
       - main
@@ -14,11 +14,42 @@ env:
   FORCE_COLOR: "1"
   MPLBACKEND: agg
   # It's impossible to ignore SyntaxWarnings for a single module,
-  # so because leidenalg 0.10.0 has them, we pre-compile things: https://github.com/vtraag/leidenalg/issues/173
+  # so because leidenalg 0.10.0 has them, we pre-compile things:
+  # https://github.com/vtraag/leidenalg/issues/173
   UV_COMPILE_BYTECODE: "1"
+  COVERAGE_FILE: ${{ github.workspace }}/.coverage
 
 jobs:
+  ensure-data-is-cached:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+          python-version: "3.13"
+          cache-dependency-glob: pyproject.toml
+
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/squidpy/*.h5ad
+            ~/.cache/squidpy/*.zarr
+          key: data-${{ hashFiles('**/download_data.py') }}
+          enableCrossOsArchive: true
+
+      - name: Download datasets
+        if: steps.data-cache.outputs.cache-hit != 'true'
+        run: uvx hatch run data:download
+
   test:
+    needs: [ensure-data-is-cached]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -34,16 +65,15 @@ jobs:
             os: ubuntu-latest
             python: "3.13"
             test-type: "coverage"
+            pytest-addopts: "-v --color=yes -n auto"
           - name: hatch-test.py3.13-pre
             os: macos-latest
             python: "3.13"
-    env: # environment variable for use in codecov's env_vars tagging
+    env:
       ENV_NAME: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          filter: blob:none
+        with: { fetch-depth: 0, filter: blob:none }
 
       - uses: astral-sh/setup-uv@v6
         with:
@@ -60,12 +90,9 @@ jobs:
         with:
           path: |
             ~/.cache/squidpy/*.h5ad
+            ~/.cache/squidpy/*.zarr
           key: data-${{ hashFiles('**/download_data.py') }}
-
-      - name: Download datasets
-        if: steps.data-cache.outputs.cache-hit != 'true'
-        run: |
-          uvx hatch run ${{ matrix.name }}:download
+          enableCrossOsArchive: true
 
       - name: System dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -81,18 +108,22 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: brew install automake
 
-      - name: Install dependencies
+      - name: Create env
         run: uvx hatch -v env create ${{ matrix.name }}
 
       - name: Run tests
         if: matrix.test-type == null
-        run: uvx hatch run ${{ matrix.name }}:run
+        run: uvx hatch run ${{ matrix.name }}:run -n logical
+
       - name: Run tests (coverage)
         if: matrix.test-type == 'coverage'
+        env:
+          PYTEST_ADDOPTS: ${{ matrix.pytest-addopts }}
         run: |
-          uvx hatch run ${{ matrix.name }}:run-cov
-          uvx hatch run ${{ matrix.name }}:coverage combine
-          uvx hatch run ${{ matrix.name }}:coverage xml
+          uvx hatch run ${{ matrix.name }}:cov-erase
+          uvx hatch run ${{ matrix.name }}:run-cov -n logical
+          uvx hatch run ${{ matrix.name }}:cov-combine
+          uvx hatch run ${{ matrix.name }}:cov-report
 
       - name: Archive figures generated during testing
         if: always()
@@ -111,8 +142,7 @@ jobs:
 
   check:
     if: always()
-    needs:
-      - test
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1
