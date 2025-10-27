@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 license = "BSD-3-Clause"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
-    "Intended Audience :: Science/Research", 
+    "Intended Audience :: Science/Research",
     "Natural Language :: English",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
@@ -87,8 +87,6 @@ dev = [
     "ipykernel",
     "ipywidgets",
     "jupytext",
-    "pytest",
-    "pytest-cov",
     "ruff",
 ]
 test = [
@@ -96,6 +94,7 @@ test = [
     "pytest>=7",
     "pytest-xdist>=3",
     "pytest-mock>=3.5.0",
+    # Just for VS Code
     "pytest-cov>=4",
     "coverage[toml]>=7",
     "pytest-timeout>=2.1.0",
@@ -273,6 +272,7 @@ omit = [
     "*/__init__.py",
     "*/_version.py",
     "squidpy/pl/_interactive/*",
+    "tox/*",
 ]
 
 [tool.coverage.paths]

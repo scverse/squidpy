@@ -122,7 +122,6 @@ jobs:
         run: |
           uvx hatch run ${{ matrix.name }}:cov-erase
           uvx hatch run ${{ matrix.name }}:run-cov
-          uvx hatch run ${{ matrix.name }}:cov-xml
 
       - name: Archive figures generated during testing
         if: always()
