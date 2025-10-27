@@ -1,66 +1,25 @@
 name: Release
 
-on: create
+on:
+  release:
+    types: [published]
 
 jobs:
-    release:
-        if: ${{ startsWith(github.ref, 'refs/heads/release/v') }}
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v3
-              with:
-                  token: ${{ secrets.TOWNCRIER_TOKEN }}
-                  fetch-depth: 0
-                  submodules: true
-
-            - name: Set up Python 3.10
-              uses: actions/setup-python@v4
-              with:
-                  python-version: "3.10"
-
-            - name: Extract the tag
-              id: vars
-              run: |
-                  echo "::set-output name=tag::${GITHUB_REF##*/}"
-
-            - name: Check tag validity
-              env:
-                  VERSION: ${{ steps.vars.outputs.tag }}
-              run: |
-                  grep "^v[[:digit:]]\.[[:digit:]]\.[[:digit:]]$" <<< "$VERSION" || (echo "Invalid version: '$VERSION'" && exit 42)
-
-            - name: Install dependencies
-              run: |
-                  sudo apt install pandoc
-                  python -m pip install --upgrade pip
-                  pip install tox bump2version
-                  pip install -e '.'
-
-            - name: Check generated docs
-              run: |
-                  tox -e check-docs
-
-            - name: Bump the version
-              # the part (patch) doesn't matter when supplying --new-version
-              env:
-                  VERSION: ${{ steps.vars.outputs.tag }}
-              run: |
-                  bump2version patch --no-commit --no-tag --verbose --new-version "${VERSION/v/}"
-
-            - name: Commit version bump
-              uses: stefanzweifel/git-auto-commit-action@v4
-              with:
-                  file_pattern: .bumpversion.cfg
-                  commit_user_name: CI
-                  commit_message: ${{ format('[auto][ci skip] Release {0}', steps.vars.outputs.tag) }}
-                  tagging_message: ${{ steps.vars.outputs.tag }}
-                  skip_dirty_check: false
-
-            # `Test` triggers `Deployment`
-            # TODO(michalk8): can't find WD for `Test`
-            - name: Invoke deployment workflow
-              uses: benc-uk/workflow-dispatch@v1
-              with:
-                  workflow: Deployment
-                  token: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
-                  inputs: '{ "reason": "release" }'
+  package_and_release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python 3.12
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Build package
+        run: uvx hatch build
+      - name: Check package
+        run: uvx twine check --strict dist/*.whl
+      - name: Publish a Python distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}

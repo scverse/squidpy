@@ -61,9 +61,6 @@ Tests structure:
 Code style guide
 ----------------
 We rely on ``black`` and ``isort`` to do the most of the formatting - both of them are integrated as pre-commit hooks.
-You can use ``tox`` to check the changes::
-
-    tox -e lint
 
 Furthermore, we also require that:
 
@@ -75,26 +72,28 @@ Furthermore, we also require that:
 
 Testing
 -------
-We use ``tox`` to automate our testing, as well as linting and documentation creation. To run the tests, run::
 
-    tox -e py{38,39,310}-{linux,macos}
+
+We use [pytest][] to test squidpy.
+To run the tests, simply run `hatch test`.
+
+It can take a while to run the whole test suite. There are a few ways to cut down on this while working on a PR:
+
+1. Only run a subset of the tests.
+   This can be done by specifying paths or test name patterns using the `-k` argument (e.g. `hatch test tests/graph/test_nhood.py` or `hatch test -k "test_umap*"`)
+2. Run the tests in parallel using the `-n` argument (e.g. `hatch test -n 8`).
+
 
 depending on the Python version(s) in your ``PATH`` and your operating system. We use ``flake8`` and ``mypy`` to further
 analyze the code. Use ``# noqa: <error1>,<error2>`` to ignore certain ``flake8`` errors and
 ``# type: ignore[error1,error2]`` to ignore specific ``mypy`` errors.
 
-To run only a subset of tests, run::
 
-    tox -e <environment> -- <name>
 
-where ``<name>`` can be a path to a test file/directory or a name of a test function/class.
-For example, to run only the tests in the ``nhood`` module, use::
 
-    tox -e py39-linux -- tests/graph/test_nhood.py
 
-If needed, a specific ``tox`` environment can be recreated as::
+[pytest]: https://docs.pytest.org/en/stable/
 
-    tox -e <environment> --recreate
 
 Writing documentation
 ---------------------
@@ -106,20 +105,25 @@ We use ``numpy``-style docstrings for the documentation with the following addit
 - prefer putting references in the ``references.bib`` instead under the ``References`` sections of the docstring.
 - use ``docrep`` for repeating documentation.
 
-In order to build the documentation, run::
 
-    tox -e docs
+To build the docs, run run::
+    hatch run docs:build
+
+Afterwards, you can run run::
+    hatch run docs:open 
+
+to open {file}`docs/_build/html/index.html`.
 
 Since the tutorials are hosted on a separate repository (see `Writing tutorials/examples`_), we download the newest
 tutorials/examples from there and build the documentation here.
 
 To validate the links inside the documentation, run::
 
-    tox -e check-docs
+    hatch run docs:check
 
 If you need to clean the artifacts from previous documentation builds, run::
 
-    tox -e clean-docs
+    hatch run docs:clean
 
 Writing tutorials/examples
 --------------------------

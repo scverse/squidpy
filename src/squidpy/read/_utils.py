@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from anndata import AnnData, read_text
+from anndata import AnnData
+from anndata.io import read_text
 from h5py import File
 from PIL import Image
 from scanpy import read_10x_h5, read_10x_mtx

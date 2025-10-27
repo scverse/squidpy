@@ -1,26 +1,24 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme"]
 
 [project]
 name = "squidpy"
-dynamic = ["version"]
+dynamic = ["readme", "version"]
 description = "Spatial Single Cell Analysis in Python"
-readme = "README.rst"
-requires-python = ">=3.10"
-license = {file = "LICENSE"}
+requires-python = ">=3.11"
+license = "BSD-3-Clause"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "Natural Language :: English",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
     "Typing :: Typed",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Environment :: Console",
     "Framework :: Jupyter",
     "Intended Audience :: Science/Research",
@@ -39,22 +37,25 @@ authors = [
     {name = "Giovanni Palla"},
     {name = "Michal Klein"},
     {name = "Hannah Spitzer"},
+    {name = "Tim Treis"},
+    {name = "Laurens Lehner"},
+    {name = "Selman Ozleyen"},
 ]
 maintainers = [
-    {name = "Giovanni Palla", email = "giovanni.palla@helmholtz-muenchen.de"},
-    {name = "Michal Klein", email = "michal.klein@helmholtz-muenchen.de"},
-    {name = "Tim Treis", email = "tim.treis@helmholtz-muenchen.de"}
+    {name = "Tim Treis", email = "tim.treis@helmholtz-munich.de"},
+    {name = "Selman Ozleyen", email = "selman.ozleyen@helmholtz-munich.de"}
 ]
 
 dependencies = [
    "aiohttp>=3.8.1",
    "anndata>=0.9",
+   "spatialdata>=0.2.5",
+   "spatialdata-plot",
    "cycler>=0.11.0",
    "dask-image>=0.5.0",
    "dask[array]>=2021.02.0,<=2024.11.2",
    "docrep>=0.3.1",
    "fsspec>=2021.11.0",
-   "leidenalg>=0.8.2",
    "matplotlib>=3.3",
    "matplotlib-scalebar>=0.8.0",
    "networkx>=2.6.0",
@@ -64,7 +65,7 @@ dependencies = [
    "pandas>=2.1.0",
    "Pillow>=8.0.0",
    "scanpy>=1.9.3",
-   "scikit-image>=0.20",
+   "scikit-image>=0.25",
    # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
    "scikit-learn>=0.24.0",
    "statsmodels>=0.12.0",
@@ -72,22 +73,31 @@ dependencies = [
    "tifffile!=2022.4.22",
    "tqdm>=4.50.2",
    "validators>=0.18.2",
-   "xarray>=0.16.1,<2024.10.0",
-   "zarr>=2.6.1,<3.0.0",
-   "spatialdata>=0.2.5",
+   "xarray>=2024.10.0",
+   "imagecodecs>=2025.8.2,<2026",
+   "zarr>=2.6.1",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pre-commit>=3.0.0",
-    "tox>=4.0.0",
+    "hatch>=1.9.0",
+    "jupyterlab",
+    "notebook",
+    "ipykernel",
+    "ipywidgets",
+    "jupytext",
+    "ruff",
 ]
 test = [
+    "scanpy[leiden]",
     "pytest>=7",
     "pytest-xdist>=3",
     "pytest-mock>=3.5.0",
+    # Just for VS Code
     "pytest-cov>=4",
     "coverage[toml]>=7",
+    "pytest-timeout>=2.1.0",
 ]
 docs = [
     "ipython",
@@ -102,7 +112,6 @@ docs = [
     "myst-nb>=0.17.1",
     "sphinx_copybutton>=0.5.0",
 ]
-
 [project.urls]
 Homepage = "https://github.com/scverse/squidpy"
 "Bug Tracker" = "https://github.com/scverse/squidpy/issues"
@@ -120,6 +129,18 @@ source = "vcs"
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/squidpy"]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/x-rst"
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+text = "|PyPI| |Downloads| |CI| |Docs| |Coverage| |Discourse| |Zulip|"
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.rst"
+start-after = "|NumFOCUS|"
+end-before = "Squidpy is part of the scverse® project"
 
 [tool.ruff]
 line-length = 120
@@ -226,3 +247,83 @@ required-imports = ["from __future__ import annotations"]
 [tool.ruff.lint.flake8-tidy-imports]
 # Disallow all relative imports.
 ban-relative-imports = "all"
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error::numba.NumbaPerformanceWarning",
+    "ignore::UserWarning",
+    "ignore::anndata.OldFormatWarning",
+    "ignore:.*pkg_resources:DeprecationWarning",
+]
+python_files = "test_*.py"
+testpaths = ["tests/"]
+xfail_strict = true
+addopts = [
+    "--ignore=tests/plotting/test_interactive.py",
+    "--ignore=docs",
+]
+
+
+[tool.coverage.run]
+branch = true
+parallel = true
+source = ["squidpy"]
+omit = [
+    "*/__init__.py",
+    "*/_version.py",
+    "squidpy/pl/_interactive/*",
+    "tox/*",
+]
+
+[tool.coverage.paths]
+source = [
+    "squidpy",
+    "*/site-packages/squidpy",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "\\#.*pragma:\\s*no.?cover",
+    "^if __name__ == .__main__.:$",
+    "^\\s*raise AssertionError\\b",
+    "^\\s*raise NotImplementedError\\b",
+    "^\\s*return NotImplemented\\b",
+]
+show_missing = true
+precision = 2
+skip_empty = true
+sort = "Miss"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[tool.pixi.dependencies]
+python = ">=3.11"
+
+[tool.pixi.pypi-dependencies]
+squidpy = { path = ".", editable = true }
+
+[tool.pixi.feature.py311.dependencies]
+python = "3.11.*"
+
+[tool.pixi.feature.py313.dependencies]
+python = "3.13.*"
+
+[tool.pixi.environments]
+dev-py311  = { features = ["dev", "test", "py311"], solve-group = "py311" }
+docs-py311 = { features = ["docs", "py311"],        solve-group = "py311" }
+
+default    = { features = ["py313"],                 solve-group = "py313" }
+dev-py313  = { features = ["dev", "test", "py313"],  solve-group = "py313" }
+docs-py313 = { features = ["docs", "py313"],         solve-group = "py313" }
+test-py313 = { features = ["test", "py313"],         solve-group = "py313" }
+
+[tool.pixi.tasks]
+lab = "jupyter lab"
+kernel-install = "python -m ipykernel install --user --name pixi-dev --display-name \"squidpy (dev)\""
+test = "pytest -v --color=yes --tb=short --durations=10"
+lint = "ruff check ."
+format = "ruff format ."
+pre-commit-install = "pre-commit install"
+pre-commit = "pre-commit run"

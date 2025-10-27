@@ -10,11 +10,11 @@ div.nboutput.container div.prompt > div.highlight {
 
 div.nbinput.container div.input_area div[class*="highlight"] > pre,
 div.nboutput.container div.output_area div[class*="highlight"] > pre {
-    padding: 8px!important;
+    padding: 8px !important;
 }
 
 div.nboutput.container div.output_area > div[class^="highlight"] {
-    background-color: #fafae2!important;
+    background-color: #fafae2 !important;
 }
 
 .rst-content .output_area img {
