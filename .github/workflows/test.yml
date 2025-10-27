@@ -113,7 +113,7 @@ jobs:
 
       - name: Run tests
         if: matrix.test-type == null
-        run: uvx hatch run ${{ matrix.name }}:run
+        run: uvx hatch run ${{ matrix.name }}:run -n logical
 
       - name: Run tests (coverage)
         if: matrix.test-type == 'coverage'
