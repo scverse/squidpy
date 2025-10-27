@@ -37,16 +37,20 @@ authors = [
     {name = "Giovanni Palla"},
     {name = "Michal Klein"},
     {name = "Hannah Spitzer"},
+    {name = "Tim Treis"},
+    {name = "Laurens Lehner"},
+    {name = "Selman Ozleyen"},
 ]
 maintainers = [
-    {name = "Giovanni Palla", email = "giovanni.palla@helmholtz-muenchen.de"},
-    {name = "Michal Klein", email = "michal.klein@helmholtz-muenchen.de"},
-    {name = "Tim Treis", email = "tim.treis@helmholtz-muenchen.de"}
+    {name = "Tim Treis", email = "tim.treis@helmholtz-munich.de"},
+    {name = "Selman Ozleyen", email = "selman.ozleyen@helmholtz-munich.de"}
 ]
 
 dependencies = [
    "aiohttp>=3.8.1",
    "anndata>=0.9",
+   "spatialdata>=0.2.5",
+   "spatialdata-plot",
    "cycler>=0.11.0",
    "dask-image>=0.5.0",
    "dask[array]>=2021.02.0,<=2024.11.2",
@@ -61,7 +65,7 @@ dependencies = [
    "pandas>=2.1.0",
    "Pillow>=8.0.0",
    "scanpy>=1.9.3",
-   "scikit-image>=0.20",
+   "scikit-image>=0.25",
    # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
    "scikit-learn>=0.24.0",
    "statsmodels>=0.12.0",
@@ -70,14 +74,20 @@ dependencies = [
    "tqdm>=4.50.2",
    "validators>=0.18.2",
    "xarray>=2024.10.0",
+   "imagecodecs>=2025.8.2,<2026",
    "zarr>=2.6.1",
-   "spatialdata>=0.2.5",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pre-commit>=3.0.0",
     "hatch>=1.9.0",
+    "jupyterlab",
+    "notebook",
+    "ipykernel",
+    "ipywidgets",
+    "jupytext",
+    "ruff",
 ]
 test = [
     "scanpy[leiden]",
@@ -262,6 +272,7 @@ omit = [
     "*/__init__.py",
     "*/_version.py",
     "squidpy/pl/_interactive/*",
+    "tox/*",
 ]
 
 [tool.coverage.paths]
@@ -282,3 +293,37 @@ show_missing = true
 precision = 2
 skip_empty = true
 sort = "Miss"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[tool.pixi.dependencies]
+python = ">=3.11"
+
+[tool.pixi.pypi-dependencies]
+squidpy = { path = ".", editable = true }
+
+[tool.pixi.feature.py311.dependencies]
+python = "3.11.*"
+
+[tool.pixi.feature.py313.dependencies]
+python = "3.13.*"
+
+[tool.pixi.environments]
+dev-py311  = { features = ["dev", "test", "py311"], solve-group = "py311" }
+docs-py311 = { features = ["docs", "py311"],        solve-group = "py311" }
+
+default    = { features = ["py313"],                 solve-group = "py313" }
+dev-py313  = { features = ["dev", "test", "py313"],  solve-group = "py313" }
+docs-py313 = { features = ["docs", "py313"],         solve-group = "py313" }
+test-py313 = { features = ["test", "py313"],         solve-group = "py313" }
+
+[tool.pixi.tasks]
+lab = "jupyter lab"
+kernel-install = "python -m ipykernel install --user --name pixi-dev --display-name \"squidpy (dev)\""
+test = "pytest -v --color=yes --tb=short --durations=10"
+lint = "ruff check ."
+format = "ruff format ."
+pre-commit-install = "pre-commit install"
+pre-commit = "pre-commit run"
