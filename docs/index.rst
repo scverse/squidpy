@@ -77,6 +77,7 @@ We are happy about any contributions! Before you start, check out our `contribut
 
     notebooks/tutorials/index
     notebooks/examples/index
+    notebooks/deprecated_features/index
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/squidpy.svg
     :target: https://pypi.org/project/squidpy/
