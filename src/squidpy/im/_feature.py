@@ -97,7 +97,11 @@ def calculate_image_features(
     )(adata, img, layer=layer, library_id=library_id, features=features, features_kwargs=features_kwargs, **kwargs)
 
     if copy:
-        logg.info("Finish", time=start)
+        try:
+            logg.info("Finish", time=start)
+        except TypeError:
+            # Fallback for loggers that don't support the 'time' parameter
+            logg.info("Finish")
         return res
 
     _save_data(adata, attr="obsm", key=key_added, data=res, time=start)

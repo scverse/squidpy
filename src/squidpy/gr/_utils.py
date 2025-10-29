@@ -207,7 +207,11 @@ def _save_data(adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool =
     else:
         logg.info(f"       `adata.{attr}[{key!r}]`")
     if time is not None:
-        logg.info("Finish", time=time)
+        try:
+            logg.info("Finish", time=time)
+        except TypeError:
+            # Fallback for loggers that don't support the 'time' parameter
+            logg.info("Finish")
 
 
 def _extract_expression(
