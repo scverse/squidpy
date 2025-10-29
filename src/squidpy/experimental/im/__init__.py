@@ -5,5 +5,13 @@ from ._detect_tissue import (
     FelzenszwalbParams,
     detect_tissue,
 )
+from ._qc_sharpness import qc_sharpness
+from ._sharpness_metrics import SharpnessMetric
 
-__all__ = ["detect_tissue", "BackgroundDetectionParams", "FelzenszwalbParams"]
+__all__ = [
+    "qc_sharpness",
+    "detect_tissue",
+    "SharpnessMetric",
+    "BackgroundDetectionParams",
+    "FelzenszwalbParams",
+]

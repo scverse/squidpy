@@ -1,28 +1,33 @@
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.stats import gaussian_kde
+from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 
-from squidpy.exp.im._qc import SHARPNESS_METRICS
+from squidpy.experimental.im._sharpness_metrics import SharpnessMetric
+
+# Alias for backwards compatibility
+SHARPNESS_METRICS = SharpnessMetric
 
 
-def qc_sharpness_metrics(
-    sdata,
+def qc_sharpness(
+    sdata: SpatialData,
     image_key: str,
-    metrics: SHARPNESS_METRICS | list[SHARPNESS_METRICS] | None = None,
+    metrics: SharpnessMetric | list[SharpnessMetric] | None = None,
     figsize: tuple[int, int] | None = None,
     return_fig: bool = False,
-    **kwargs,
+    **kwargs: Any,
 ) -> plt.Figure | None:
     """
     Plot a summary view of raw sharpness metrics from qc_sharpness results.
 
     Automatically scans adata.uns for calculated metrics and plots the raw sharpness values.
     Creates a multi-panel plot: one panel per calculated sharpness metric.
-    Each panel shows: spatial view, histogram, and statistics.
+    Each panel shows: spatial view, KDE plot, and statistics.
 
     Parameters
     ----------
@@ -30,9 +35,9 @@ def qc_sharpness_metrics(
         SpatialData object containing QC results.
     image_key : str
         Image key used in qc_sharpness function.
-    metrics : SHARPNESS_METRICS or list of SHARPNESS_METRICS, optional
+    metrics : SharpnessMetric or list of SharpnessMetric, optional
         Specific metrics to plot. If None, plots all calculated sharpness metrics.
-        Use SHARPNESS_METRICS enum values.
+        Use SharpnessMetric enum values.
     figsize : tuple, optional
         Figure size (width, height). Auto-calculated if None.
     return_fig : bool
@@ -45,7 +50,6 @@ def qc_sharpness_metrics(
     fig : matplotlib.Figure or None
         The matplotlib figure object if return_fig=True, otherwise None.
     """
-    import matplotlib.pyplot as plt
 
     # Expected keys
     table_key = f"qc_img_{image_key}_sharpness"
@@ -73,7 +77,7 @@ def qc_sharpness_metrics(
         # Convert enum to string names using the same logic as main function
         metrics_to_plot = []
         for metric in metrics_list:
-            metric_name = metric.name.lower() if isinstance(metric, SHARPNESS_METRICS) else metric
+            metric_name = metric.name.lower() if isinstance(metric, SharpnessMetric) else metric
             if metric_name not in calculated_metrics:
                 raise ValueError(f"Metric '{metric_name}' not found. Available: {calculated_metrics}")
             metrics_to_plot.append(metric_name)
@@ -122,17 +126,48 @@ def qc_sharpness_metrics(
                     ax=ax_spatial, title=f"{metric_name.replace('_', ' ').title()}"
                 )
             )
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             logg.warning(f"Error plotting spatial view for {metric_name}: {e}")
             ax_spatial.text(
                 0.5, 0.5, f"Error plotting\n{metric_name}", ha="center", va="center", transform=ax_spatial.transAxes
             )
             ax_spatial.set_title(f"{metric_name.replace('_', ' ').title()}")
 
-        # Panel 2: Histogram
-        ax_hist.hist(raw_values, bins=50, alpha=0.7, edgecolor="black")
+        # Panel 2: KDE plot (overlaid if tissue/background classification available)
+        # Create x-axis range for KDE
+        x_min, x_max = float(np.min(raw_values)), float(np.max(raw_values))
+        x_range = np.linspace(x_min, x_max, 200)
+
+        if "is_tissue" in adata.obs:
+            # Convert categorical to boolean for filtering
+            is_tissue = adata.obs["is_tissue"].astype(str) == "True"
+            tissue_values = raw_values[is_tissue]
+            background_values = raw_values[~is_tissue]
+
+            # Create KDE plots for both tissue and background
+            if len(background_values) > 1:
+                kde_background = gaussian_kde(background_values)
+                density_background = kde_background(x_range)
+                ax_hist.plot(x_range, density_background, label="Background", alpha=0.7)
+                ax_hist.fill_between(x_range, density_background, alpha=0.3)
+
+            if len(tissue_values) > 1:
+                kde_tissue = gaussian_kde(tissue_values)
+                density_tissue = kde_tissue(x_range)
+                ax_hist.plot(x_range, density_tissue, label="Tissue", alpha=0.7)
+                ax_hist.fill_between(x_range, density_tissue, alpha=0.3)
+
+            ax_hist.legend()
+        else:
+            # Regular KDE plot if no tissue classification
+            if len(raw_values) > 1:
+                kde = gaussian_kde(raw_values)
+                density = kde(x_range)
+                ax_hist.plot(x_range, density, alpha=0.7)
+                ax_hist.fill_between(x_range, density, alpha=0.3)
+
         ax_hist.set_xlabel(f"{metric_name.replace('_', ' ').title()}")
-        ax_hist.set_ylabel("Count")
+        ax_hist.set_ylabel("Density")
         ax_hist.set_title("Distribution")
         ax_hist.grid(True, alpha=0.3)
 
@@ -140,20 +175,20 @@ def qc_sharpness_metrics(
         ax_stats.axis("off")
         stats_text = f"""
         Raw {metric_name.replace("_", " ").title()} Statistics:
-        
+
         Count: {len(raw_values):,}
         Mean: {np.mean(raw_values):.4f}
         Std: {np.std(raw_values):.4f}
         Min: {np.min(raw_values):.4f}
         Max: {np.max(raw_values):.4f}
-        
+
         Percentiles:
         5%: {np.percentile(raw_values, 5):.4f}
         25%: {np.percentile(raw_values, 25):.4f}
         50%: {np.percentile(raw_values, 50):.4f}
         75%: {np.percentile(raw_values, 75):.4f}
         95%: {np.percentile(raw_values, 95):.4f}
-        
+
         Non-zero: {np.count_nonzero(raw_values):,}
         Zero: {np.sum(raw_values == 0):,}
         """

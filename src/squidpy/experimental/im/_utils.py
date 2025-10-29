@@ -1,67 +1,126 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
+import dask.array as da
+import numpy as np
 import spatialdata as sd
 import xarray as xr
-from spatialdata._logging import logger as logg
+from shapely.geometry import Polygon
+from spatialdata._logging import logger
+
+from squidpy._utils import _ensure_dim_order
 
 
-def _get_image_data(
-    sdata: sd.SpatialData,
-    image_key: str,
-    scale: str,
+class TileGrid:
+    def __init__(
+        self,
+        H: int,
+        W: int,
+        tile_size: Literal["auto"] | tuple[int, int] = "auto",
+        target_tiles: int = 100,
+    ):
+        self.H = int(H)
+        self.W = int(W)
+        if tile_size == "auto":
+            size = max(min(self.H // target_tiles, self.W // target_tiles), 100)
+            self.ty = int(size)
+            self.tx = int(size)
+        else:
+            self.ty = int(tile_size[0])
+            self.tx = int(tile_size[1])
+        self.tiles_y = (self.H + self.ty - 1) // self.ty
+        self.tiles_x = (self.W + self.tx - 1) // self.tx
+
+    def indices(self) -> np.ndarray:
+        return np.array([[iy, ix] for iy in range(self.tiles_y) for ix in range(self.tiles_x)], dtype=int)
+
+    def names(self) -> list[str]:
+        return [f"tile_x{ix}_y{iy}" for iy in range(self.tiles_y) for ix in range(self.tiles_x)]
+
+    def bounds(self) -> np.ndarray:
+        b: list[list[int]] = []
+        for iy in range(self.tiles_y):
+            for ix in range(self.tiles_x):
+                y0, x0 = iy * self.ty, ix * self.tx
+                y1 = (iy + 1) * self.ty if iy < self.tiles_y - 1 else self.H
+                x1 = (ix + 1) * self.tx if ix < self.tiles_x - 1 else self.W
+                b.append([y0, x0, y1, x1])
+        return np.array(b, dtype=int)
+
+    def centroids_and_polygons(self) -> tuple[np.ndarray, list[Polygon]]:
+        cents: list[list[float]] = []
+        polys: list[Polygon] = []
+        for y0, x0, y1, x1 in self.bounds():
+            cy = (y0 + y1) / 2
+            cx = (x0 + x1) / 2
+            cents.append([cy, cx])
+            polys.append(Polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]))
+        return np.array(cents, dtype=float), polys
+
+    def rechunk_and_pad(self, arr_yx: da.Array) -> da.Array:
+        if arr_yx.ndim != 2:
+            raise ValueError("Expected a 2D array shaped (y, x).")
+        pad_y = self.tiles_y * self.ty - int(arr_yx.shape[0])
+        pad_x = self.tiles_x * self.tx - int(arr_yx.shape[1])
+        a = arr_yx.rechunk((self.ty, self.tx))
+        return da.pad(a, ((0, pad_y), (0, pad_x)), mode="edge") if (pad_y > 0 or pad_x > 0) else a
+
+    def coarsen(self, arr_yx: da.Array, reduce: Literal["mean", "sum"] = "mean") -> da.Array:
+        reducer = np.mean if reduce == "mean" else np.sum
+        return da.coarsen(reducer, arr_yx, {0: self.ty, 1: self.tx}, trim_excess=False)
+
+
+def _get_element_data(
+    element_node: Any,
+    scale: str | Literal["auto"],
+    element_type: str = "element",
+    element_key: str = "",
 ) -> xr.DataArray:
     """
-    Extract image data from SpatialData object, handling both datatree and direct DataArray images.
+    Extract data array from a spatialdata element (image or label) node.
+    Supports multiscale and single-scale elements.
 
     Parameters
     ----------
-    sdata : SpatialData
-        SpatialData object
-    image_key : str
-        Key in sdata.images
-    scale : str
-        Multiscale level, e.g. "scale0", or "auto" for the smallest available scale
+    element_node
+        The element node from sdata.images[key] or sdata.labels[key]
+    scale
+        Scale level to use, or "auto" for images (picks coarsest).
+    element_type
+        Type of element for error messages (e.g., "image", "label").
+    element_key
+        Key of the element for error messages.
 
     Returns
     -------
-    xr.DataArray
-        Image data in (c, y, x) format
+    xr.DataArray of the element data.
     """
-    img_node = sdata.images[image_key]
-
-    # Check if the image is a datatree (has multiple scales) or a direct DataArray
-    if hasattr(img_node, "keys"):
-        available_scales = list(img_node.keys())
+    if hasattr(element_node, "keys"):  # multiscale
+        available = list(element_node.keys())
+        if not available:
+            raise ValueError(f"No scales for {element_type} {element_key!r}")
 
         if scale == "auto":
-            scale = available_scales[-1]
-        elif scale not in available_scales:
-            print(scale)
-            print(available_scales)
-            scale = available_scales[-1]
-            logg.warning(f"Scale '{scale}' not found, using available scale. Available scales: {available_scales}")
 
-        img_da = img_node[scale].image
-    else:
-        # It's a direct DataArray (no scales)
-        img_da = img_node.image if hasattr(img_node, "image") else img_node
+            def _idx(k: str) -> int:
+                num = "".join(ch for ch in k if ch.isdigit())
+                return int(num) if num else -1
 
-    return _ensure_cyx(img_da)
+            chosen = max(available, key=_idx)
+        elif scale not in available:
+            logger.warning(f"Scale {scale!r} not found. Available: {available}")
+            # Try scale0 as fallback, otherwise use first available
+            chosen = "scale0" if "scale0" in available else available[0]
+            logger.info(f"Using scale {chosen!r}")
+        else:
+            chosen = scale
 
+        data = element_node[chosen].image
+    else:  # single-scale
+        data = element_node.image if hasattr(element_node, "image") else element_node
 
-def _ensure_cyx(img_da: xr.DataArray) -> xr.DataArray:
-    """Ensure dims are (c, y, x). Adds a length-1 "c" if missing."""
-    dims = list(img_da.dims)
-    if "y" not in dims or "x" not in dims:
-        raise ValueError(f'Expected dims to include "y" and "x". Found dims={dims}')
-
-    # Handle case where dims are (c, y, x) - keep as is
-    if "c" in dims:
-        return img_da if dims[0] == "c" else img_da.transpose("c", "y", "x")
-    # If no "c" dimension, add one
-    return img_da.expand_dims({"c": [0]}).transpose("c", "y", "x")
+    return data
 
 
 def _flatten_channels(
@@ -104,21 +163,21 @@ def _flatten_channels(
 
     # If user explicitly specifies multichannel, always use mean
     if channel_format == "multichannel":
-        logg.info(f"Converting {n_channels}-channel image to greyscale using mean across all channels")
+        logger.info(f"Converting {n_channels}-channel image to greyscale using mean across all channels")
         return img.mean(dim="c")
 
     # Handle explicit RGB specification
     if channel_format == "rgb":
         if n_channels != 3:
             raise ValueError(f"Cannot treat {n_channels}-channel image as RGB (requires exactly 3 channels)")
-        logg.info("Converting RGB image to greyscale using luminance formula")
+        logger.info("Converting RGB image to greyscale using luminance formula")
         weights = xr.DataArray([0.299, 0.587, 0.114], dims=["c"], coords={"c": img.coords["c"]})
         return (img * weights).sum(dim="c")
 
     elif channel_format == "rgba":
         if n_channels != 4:
             raise ValueError(f"Cannot treat {n_channels}-channel image as RGBA (requires exactly 4 channels)")
-        logg.info("Converting RGBA image to greyscale using luminance formula (ignoring alpha)")
+        logger.info("Converting RGBA image to greyscale using luminance formula (ignoring alpha)")
         weights = xr.DataArray([0.299, 0.587, 0.114, 0.0], dims=["c"], coords={"c": img.coords["c"]})
         return (img * weights).sum(dim="c")
 
