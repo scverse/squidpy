@@ -71,6 +71,17 @@ class TileGrid:
         return da.coarsen(reducer, arr_yx, {0: self.ty, 1: self.tx}, trim_excess=False)
 
 
+def _make_tile_grid(
+    sdata: sd.SpatialData,
+    image_key: str,
+    *,
+    image_mask_key: str | None = None,
+    tile_size: tuple[int, int] = (224, 224),
+    center_grid_on_tissue: bool = False,
+) -> TileGrid | None:
+    pass
+
+
 def _get_element_data(
     element_node: Any,
     scale: str | Literal["auto"],
