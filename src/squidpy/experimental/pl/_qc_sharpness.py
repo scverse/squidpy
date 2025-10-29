@@ -10,9 +10,6 @@ from spatialdata._logging import logger as logg
 
 from squidpy.experimental.im._sharpness_metrics import SharpnessMetric
 
-# Alias for backwards compatibility
-SHARPNESS_METRICS = SharpnessMetric
-
 
 def qc_sharpness(
     sdata: SpatialData,
@@ -158,13 +155,12 @@ def qc_sharpness(
                 ax_hist.fill_between(x_range, density_tissue, alpha=0.3)
 
             ax_hist.legend()
-        else:
-            # Regular KDE plot if no tissue classification
-            if len(raw_values) > 1:
-                kde = gaussian_kde(raw_values)
-                density = kde(x_range)
-                ax_hist.plot(x_range, density, alpha=0.7)
-                ax_hist.fill_between(x_range, density, alpha=0.3)
+
+        elif len(raw_values) > 1:
+            kde = gaussian_kde(raw_values)
+            density = kde(x_range)
+            ax_hist.plot(x_range, density, alpha=0.7)
+            ax_hist.fill_between(x_range, density, alpha=0.3)
 
         ax_hist.set_xlabel(f"{metric_name.replace('_', ' ').title()}")
         ax_hist.set_ylabel("Density")
