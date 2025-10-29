@@ -17,9 +17,9 @@ from spatialdata._logging import logger as logg
 from spatialdata.models import Labels2DModel
 from spatialdata.transformations import get_transformation
 
-from squidpy._utils import _get_scale_factors, _yx_from_shape
+from squidpy._utils import _ensure_dim_order, _get_scale_factors, _yx_from_shape
 
-from ._utils import _flatten_channels, _get_image_data
+from ._utils import _flatten_channels, _get_element_data
 
 
 class DETECT_TISSUE_METHOD(enum.Enum):
@@ -170,7 +170,9 @@ def detect_tissue(
     manual_scale = scale.lower() != "auto"
 
     # Load smallest available or explicit scale
-    img_src = _get_image_data(sdata, image_key, scale=scale if manual_scale else "auto")
+    img_node = sdata.images[image_key]
+    img_da = _get_element_data(img_node, scale if manual_scale else "auto", "image", image_key)
+    img_src = _ensure_dim_order(img_da, "yxc")
     src_h, src_w = _yx_from_shape(img_src.shape)
     n_src_px = src_h * src_w
 
