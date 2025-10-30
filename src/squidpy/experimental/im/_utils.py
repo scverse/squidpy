@@ -5,13 +5,17 @@ from typing import Any, Literal
 import dask.array as da
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 import spatialdata as sd
 import xarray as xr
+from anndata import AnnData
 from shapely.geometry import Polygon
 from spatialdata._logging import logger
-from spatialdata.models import ShapesModel
+from spatialdata.models import ShapesModel, TableModel
 
 from squidpy._utils import _ensure_dim_order, _yx_from_shape
+
+__all__ = ["TileGrid", "make_tiles_for_inference"]
 
 
 class TileGrid:
@@ -150,6 +154,430 @@ def _save_tile_grid_to_shapes(
 
     sdata.shapes[shapes_key] = ShapesModel.parse(tile_gdf)
     logger.info(f"- Saved tile grid as 'sdata.shapes[\"{shapes_key}\"]'")
+
+
+def make_tiles_for_inference(
+    sdata: sd.SpatialData,
+    image_key: str,
+    *,
+    image_mask_key: str | None = None,
+    tissue_mask_key: str | None = None,
+    sharpness_table_key: str | None = None,
+    tile_size: tuple[int, int] = (224, 224),
+    center_grid_on_tissue: bool = False,
+    scale: str = "auto",
+    min_tissue_fraction: float = 1.0,
+    min_sharp_fraction: float = 0.95,
+    new_shapes_key: str | None = None,
+    new_table_key: str | None = None,
+    preview: bool = True,
+    **kwargs: Any,
+) -> None:
+    """
+    Create and filter tiles suitable for inference.
+
+    This function combines tile grid generation and filtering based on tissue coverage
+    and sharpness. It creates a tile grid, filters tiles based on tissue and sharpness
+    criteria, and optionally generates a preview plot.
+
+    Parameters
+    ----------
+    sdata
+        SpatialData object containing the image.
+    image_key
+        Key of the image in ``sdata.images``.
+    image_mask_key
+        Optional key of the segmentation mask in ``sdata.labels``.
+        Required if ``center_grid_on_tissue`` is ``True``.
+    tissue_mask_key
+        Key of the tissue mask in ``sdata.labels``. If ``None``, uses ``f"{image_key}_tissue"``.
+    sharpness_table_key
+        Key of the sharpness QC table in ``sdata.tables``. If ``None``, uses
+        ``f"qc_img_{image_key}_sharpness"``.
+    tile_size
+        Size of tiles as (height, width) in pixels.
+    center_grid_on_tissue
+        If ``True`` and ``image_mask_key`` is provided, center the grid
+        on the centroid of the mask.
+    scale
+        Scale level to use for mask processing. The tile grid is always generated
+        based on the largest (finest) scale of the image.
+    min_tissue_fraction
+        Minimum fraction of tile that must be in tissue. Default is 1.0 (exclusively in tissue).
+    min_sharp_fraction
+        Minimum fraction of pixels in the tile that must be sharp (non-outlier).
+        Tiles will be filtered out if the outlier fraction is >= (1 - min_sharp_fraction).
+        For example:
+        - To filter tiles where >= 10% of pixels are outliers, use ``min_sharp_fraction=0.9``
+          (tiles with 10% or more outliers will be flagged)
+        - To filter tiles where >= 5% of pixels are outliers, use ``min_sharp_fraction=0.95``
+          (tiles with 5% or more outliers will be flagged)
+        Default is 0.95 (tiles with >= 5% outliers will be filtered out).
+    new_shapes_key
+        Key to save the tile grid in ``sdata.shapes``. If ``None``, defaults to ``f"{image_key}_tile_grid"``.
+    new_table_key
+        Key to save the tile information table in ``sdata.tables``.
+        If ``None``, defaults to ``f"{image_key}_inference_tiles"``.
+    preview
+        If ``True``, generate a preview plot showing the tile grid colored by classification.
+        Default is ``True``.
+    **kwargs
+        Additional arguments passed to the plotting functions for the preview.
+
+    Returns
+    -------
+    None
+        Results are saved to ``sdata.shapes`` and ``sdata.tables``.
+
+    See Also
+    --------
+    :func:`_make_tile_grid` : Internal function for tile grid generation.
+    :func:`_filter_tiles_for_inference` : Internal function for tile filtering.
+
+    Examples
+    --------
+    >>> import squidpy as sq
+    >>> sdata = sq.datasets.visium_hne_image_crop()
+    >>> sq.experimental.im.make_tiles_for_inference(sdata, image_key="image", preview=True)
+    """
+    # Generate tile grid (without saving first, so we can use it for filtering)
+    shapes_key = new_shapes_key or f"{image_key}_tile_grid"
+    tg = _make_tile_grid(
+        sdata,
+        image_key,
+        image_mask_key=image_mask_key,
+        tile_size=tile_size,
+        center_grid_on_tissue=center_grid_on_tissue,
+        scale=scale,
+        new_shapes_key=shapes_key,
+        inplace=False,
+    )
+
+    # Now save it
+    if tg is not None:
+        _save_tile_grid_to_shapes(sdata, tg, image_key, shapes_key)
+
+    # Filter tiles
+    table_key = new_table_key or f"{image_key}_inference_tiles"
+    if tg is not None:
+        _filter_tiles_for_inference(
+            sdata,
+            tg=tg,
+            image_key=image_key,
+            tissue_mask_key=tissue_mask_key,
+            sharpness_table_key=sharpness_table_key,
+            scale="scale0",
+            min_tissue_fraction=min_tissue_fraction,
+            min_sharp_fraction=min_sharp_fraction,
+            new_table_key=table_key,
+            shapes_key=shapes_key,
+            inplace=True,
+        )
+
+        # Update shapes GeoDataFrame with classification for plotting
+        if shapes_key in sdata.shapes and table_key in sdata.tables:
+            adata_table = sdata.tables[table_key]
+            gdf = sdata.shapes[shapes_key]
+            # Join classification from table to shapes
+            # The table's tile_id corresponds to the GeoDataFrame index
+            if "tile_classification" in adata_table.obs.columns:
+                classification_map = dict(
+                    zip(adata_table.obs["tile_id"], adata_table.obs["tile_classification"], strict=True)
+                )
+                # Map using GeoDataFrame index to match table's tile_id
+                # Convert to categorical to match AnnData format and ensure proper type handling
+                classification_values = gdf.index.to_series().map(classification_map)
+                gdf["tile_classification"] = pd.Categorical(
+                    classification_values,
+                    categories=["background", "partial_tissue", "tissue", "sharpness_outlier"],
+                )
+                # Update the shapes in sdata
+                sdata.shapes[shapes_key] = ShapesModel.parse(gdf)
+
+    # Generate preview plot if requested
+    if preview and shapes_key in sdata.shapes:
+        try:
+            (
+                sdata.pl.render_images(image_key)
+                .pl.render_shapes(shapes_key, color="tile_classification", fill_alpha=0.5, **kwargs)
+                .pl.show()
+            )
+        except (AttributeError, KeyError, ValueError) as e:
+            logger.warning(f"Could not generate preview plot: {e}")
+
+
+def _filter_tiles_for_inference(
+    sdata: sd.SpatialData,
+    tg: TileGrid,
+    image_key: str,
+    *,
+    tissue_mask_key: str | None = None,
+    sharpness_table_key: str | None = None,
+    scale: str = "scale0",
+    min_tissue_fraction: float = 1.0,
+    min_sharp_fraction: float = 0.95,
+    new_table_key: str | None = None,
+    shapes_key: str | None = None,
+    inplace: bool = True,
+) -> np.ndarray | None:
+    """
+    Filter tiles suitable for inference based on tissue coverage and sharpness.
+
+    Filters out tiles that:
+    1. Are not exclusively (100% by default) in tissue
+    2. Have less than 50% (by default) of overlapping sharp area flagged as sharp
+
+    Tiles are classified as:
+    - "background": No tissue pixels in the tile
+    - "partial_tissue": Contains some tissue but below min_tissue_fraction threshold
+    - "tissue": Meets tissue requirements and suitable for inference
+    - "sharpness_outlier": Meets tissue requirements but fails sharpness filtering
+
+    Uses pixel-precise masking: creates a full-size binary mask marking outlier pixels
+    from sharpness analysis, then extracts each inference tile's region and calculates
+    the exact fraction of outlier pixels. This accurately handles different tile dimensions.
+
+    Parameters
+    ----------
+    sdata
+        SpatialData object.
+    tg
+        TileGrid object with tiles to filter.
+    image_key
+        Key of the image in ``sdata.images``.
+    tissue_mask_key
+        Key of the tissue mask in ``sdata.labels``. If ``None``, uses ``f"{image_key}_tissue"``.
+    sharpness_table_key
+        Key of the sharpness QC table in ``sdata.tables``. If ``None``, uses
+        ``f"qc_img_{image_key}_sharpness"``.
+    scale
+        Scale level to use for mask processing.
+    min_tissue_fraction
+        Minimum fraction of tile that must be in tissue. Default is 1.0 (exclusively in tissue).
+    min_sharp_fraction
+        Minimum fraction of pixels in the tile that must be sharp (non-outlier).
+        Tiles will be filtered out if the outlier fraction is >= (1 - min_sharp_fraction).
+        For example:
+        - To filter tiles where >= 10% of pixels are outliers, use ``min_sharp_fraction=0.9``
+          (tiles with 10% or more outliers will be flagged)
+        - To filter tiles where >= 5% of pixels are outliers, use ``min_sharp_fraction=0.95``
+          (tiles with 5% or more outliers will be flagged)
+        Default is 0.95 (tiles with >= 5% outliers will be filtered out).
+    new_table_key
+        Key to save the tile information table in ``sdata.tables`` if ``inplace=True``.
+        If ``None``, defaults to ``f"{image_key}_tile_grid"``.
+    shapes_key
+        Key of the tile grid shapes in ``sdata.shapes``. If ``None``, uses ``f"{image_key}_tile_grid"``.
+    inplace
+        If ``True``, save the tile information as AnnData in ``sdata.tables``.
+
+    Returns
+    -------
+    If ``inplace=False``, returns a boolean array indicating which tiles are suitable for inference
+    (True = suitable). If ``inplace=True``, returns ``None`` (results are saved to ``sdata``).
+    """
+    tile_bounds = tg.bounds()
+    tile_indices = tg.indices()
+    n_tiles = len(tile_bounds)
+    suitable = np.ones(n_tiles, dtype=bool)
+
+    # Track classification info for each tile
+    # Categories: "background", "partial_tissue", "tissue", "sharpness_outlier"
+    tile_classification = np.full(n_tiles, "tissue", dtype=object)
+    sharpness_outlier_fraction = np.full(n_tiles, np.nan, dtype=np.float32)
+
+    # Get tissue mask
+    mask_key = tissue_mask_key or f"{image_key}_tissue"
+    if mask_key not in sdata.labels:
+        logger.warning(f"Tissue mask '{mask_key}' not found. Skipping tissue filtering.")
+    else:
+        from ._qc_sharpness import _get_mask_from_labels
+
+        mask = _get_mask_from_labels(sdata, mask_key, scale)
+        H_mask, W_mask = mask.shape
+
+        # Check tissue coverage for each tile
+        for i, (y0, x0, y1, x1) in enumerate(tile_bounds):
+            # Clamp to mask dimensions
+            y0_clamped = max(0, min(int(y0), H_mask))
+            y1_clamped = max(0, min(int(y1), H_mask))
+            x0_clamped = max(0, min(int(x0), W_mask))
+            x1_clamped = max(0, min(int(x1), W_mask))
+
+            if y1_clamped > y0_clamped and x1_clamped > x0_clamped:
+                tile_region = mask[y0_clamped:y1_clamped, x0_clamped:x1_clamped]
+                tissue_fraction = float(np.mean(tile_region > 0))
+                if tissue_fraction < min_tissue_fraction:
+                    suitable[i] = False
+                    if tissue_fraction == 0.0:
+                        tile_classification[i] = "background"
+                    else:
+                        tile_classification[i] = "partial_tissue"
+                else:
+                    tile_classification[i] = "tissue"
+            else:
+                # Tile is outside mask bounds
+                suitable[i] = False
+                tile_classification[i] = "background"
+
+    logger.info(f"After tissue filtering: {suitable.sum()}/{n_tiles} tiles remaining.")
+
+    # Check sharpness if table exists
+    sharpness_key = sharpness_table_key or f"qc_img_{image_key}_sharpness"
+    has_sharpness = sharpness_key in sdata.tables
+
+    if has_sharpness:
+        adata_sharpness: AnnData = sdata.tables[sharpness_key]
+
+        # Check if sharpness outlier column exists
+        if "sharpness_outlier" not in adata_sharpness.obs.columns:
+            logger.warning("Sharpness outlier labels not found in table. Skipping sharpness filtering.")
+            has_sharpness = False
+        else:
+            # Get sharpness tile grid information
+            sharpness_grid_key = f"qc_img_{image_key}_sharpness_grid"
+            if sharpness_grid_key not in sdata.shapes:
+                logger.warning(f"Sharpness tile grid '{sharpness_grid_key}' not found. Skipping sharpness filtering.")
+                has_sharpness = False
+
+    if has_sharpness:
+        sharpness_gdf = sdata.shapes[sharpness_grid_key]
+        sharpness_outliers = adata_sharpness.obs["sharpness_outlier"].astype(str) == "True"
+
+        # Get sharpness tile bounds
+        sharpness_bounds = np.column_stack(
+            [
+                sharpness_gdf["pixel_y0"].values,
+                sharpness_gdf["pixel_x0"].values,
+                sharpness_gdf["pixel_y1"].values,
+                sharpness_gdf["pixel_x1"].values,
+            ]
+        )
+
+        # Get image dimensions to create full-size outlier mask
+        H, W = _get_largest_scale_dimensions(sdata, image_key)
+
+        # Create pixel-precise mask: 1 where pixels are in outlier tiles, 0 otherwise
+        outlier_mask = np.zeros((H, W), dtype=np.uint8)
+
+        for (sy0, sx0, sy1, sx1), is_outlier in zip(sharpness_bounds, sharpness_outliers, strict=True):
+            if is_outlier:
+                # Mark all pixels in this outlier tile as 1
+                sy0_int = max(0, int(sy0))
+                sy1_int = min(H, int(sy1))
+                sx0_int = max(0, int(sx0))
+                sx1_int = min(W, int(sx1))
+                if sy1_int > sy0_int and sx1_int > sx0_int:
+                    outlier_mask[sy0_int:sy1_int, sx0_int:sx1_int] = 1
+
+        # For each inference tile, extract the mask region and calculate outlier pixel fraction
+        # Calculate for ALL tiles, not just those passing tissue filtering
+        for i in range(n_tiles):
+            y0, x0, y1, x1 = tile_bounds[i]
+
+            # Extract relevant region from outlier mask
+            y0_int = max(0, int(y0))
+            y1_int = min(H, int(y1))
+            x0_int = max(0, int(x0))
+            x1_int = min(W, int(x1))
+
+            if y1_int > y0_int and x1_int > x0_int:
+                tile_mask_region = outlier_mask[y0_int:y1_int, x0_int:x1_int]
+
+                # Calculate fraction of pixels that are outliers (value == 1)
+                outlier_fraction = float(np.mean(tile_mask_region))
+                sharpness_outlier_fraction[i] = outlier_fraction
+
+                # Only apply sharpness filtering to tiles that passed tissue filtering
+                if suitable[i]:
+                    # Filter out tiles where outlier_fraction >= (1 - min_sharp_fraction)
+                    # For example: min_sharp_fraction=0.9 means filter if >= 10% outliers
+                    max_allowed_outlier_fraction = 1.0 - min_sharp_fraction
+                    if outlier_fraction >= max_allowed_outlier_fraction:
+                        suitable[i] = False
+                        # Update classification - only for tiles that passed tissue filtering
+                        if tile_classification[i] == "tissue":
+                            tile_classification[i] = "sharpness_outlier"
+            else:
+                # Tile is outside image bounds
+                # Only update suitable if it was still True (to avoid overwriting tissue filtering)
+                if suitable[i]:
+                    suitable[i] = False
+                    if tile_classification[i] == "tissue":
+                        tile_classification[i] = "background"
+
+    if has_sharpness:
+        logger.info(f"After sharpness filtering: {suitable.sum()}/{n_tiles} tiles suitable for inference.")
+    else:
+        logger.info(f"No sharpness filtering applied. {suitable.sum()}/{n_tiles} tiles suitable for inference.")
+
+    # Save tile information as AnnData if requested
+    if inplace:
+        # Use different keys for shapes and table to avoid conflicts
+        shapes_key_used = shapes_key or f"{image_key}_tile_grid"
+        table_key = new_table_key or f"{image_key}_inference_tiles"
+
+        # Ensure shapes exist
+        if shapes_key_used not in sdata.shapes:
+            logger.warning(f"Tile grid shapes '{shapes_key_used}' not found. Creating shapes first.")
+            _save_tile_grid_to_shapes(sdata, tg, image_key, shapes_key_used)
+
+        # Create AnnData with tile information
+        cents, _ = tg.centroids_and_polygons()
+
+        # Create empty AnnData (no features, just observations)
+        adata = AnnData(obs=pd.DataFrame(index=tg.names()))
+        adata.obs["centroid_y"] = cents[:, 0]
+        adata.obs["centroid_x"] = cents[:, 1]
+        adata.obs["tile_y"] = tile_indices[:, 0]
+        adata.obs["tile_x"] = tile_indices[:, 1]
+        adata.obs["pixel_y0"] = tile_bounds[:, 0]
+        adata.obs["pixel_x0"] = tile_bounds[:, 1]
+        adata.obs["pixel_y1"] = tile_bounds[:, 2]
+        adata.obs["pixel_x1"] = tile_bounds[:, 3]
+        adata.obs["tile_classification"] = pd.Categorical(
+            tile_classification, categories=["background", "partial_tissue", "tissue", "sharpness_outlier"]
+        )
+        adata.obs["sharpness_outlier_fraction"] = sharpness_outlier_fraction
+        adata.obs["suitable_for_inference"] = pd.Categorical(suitable.astype(str), categories=["False", "True"])
+        adata.obsm["spatial"] = cents
+
+        # Link to shapes via spatialdata_attrs
+        adata.uns["spatialdata_attrs"] = {
+            "region": shapes_key_used,
+            "region_key": "grid_name",
+            "instance_key": "tile_id",
+        }
+        adata.obs["grid_name"] = pd.Categorical([shapes_key_used] * len(adata))
+        adata.obs["tile_id"] = sdata.shapes[shapes_key_used].index
+
+        # Store metadata
+        H, W = _get_largest_scale_dimensions(sdata, image_key)
+        adata.uns["tile_grid"] = {
+            "tile_size_y": tg.ty,
+            "tile_size_x": tg.tx,
+            "image_height": H,
+            "image_width": W,
+            "n_tiles_y": tg.tiles_y,
+            "n_tiles_x": tg.tiles_x,
+            "image_key": image_key,
+            "scale": scale,
+            "offset_y": tg.offset_y,
+            "offset_x": tg.offset_x,
+            "min_tissue_fraction": min_tissue_fraction,
+            "min_sharp_fraction": min_sharp_fraction,
+            "n_tissue_tiles": int((tile_classification == "tissue").sum()),
+            "n_background_tiles": int((tile_classification == "background").sum()),
+            "n_partial_tissue_tiles": int((tile_classification == "partial_tissue").sum()),
+            "n_sharpness_outlier_tiles": int((tile_classification == "sharpness_outlier").sum()),
+            "n_suitable_tiles": int(suitable.sum()),
+        }
+
+        sdata.tables[table_key] = TableModel.parse(adata)
+        logger.info(f"- Saved tile information as 'sdata.tables[\"{table_key}\"]'")
+        return None
+
+    return suitable
 
 
 def _make_tile_grid(
