@@ -68,8 +68,8 @@ dependencies = [
    "tqdm>=4.50.2",
    "validators>=0.18.2",
    "xarray>=2024.10.0",
-   "zarr>=2.6.1,<3.0.0",
-   "spatialdata>=0.2.5",
+   "imagecodecs>=2025.8.2,<2026",
+   "zarr>=2.6.1",
    "fast_array_utils",
 ]
 
