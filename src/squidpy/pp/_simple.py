@@ -14,8 +14,6 @@ from spatialdata.models import (
 )
 
 
-
-
 def filter_cells(
     data: ad.AnnData | sd.SpatialData,
     tables: list[str] | str | None = None,
