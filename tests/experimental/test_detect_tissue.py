@@ -1,5 +1,3 @@
-"""Test for experimental tissue detection."""
-
 from __future__ import annotations
 
 import spatialdata_plot as sdp
