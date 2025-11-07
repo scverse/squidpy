@@ -19,12 +19,13 @@ from scanpy import logging as logg
 from scipy.sparse import (
     SparseEfficiencyWarning,
     block_diag,
+    csr_array,
     csr_matrix,
     isspmatrix_csr,
     spmatrix,
 )
 from scipy.spatial import Delaunay
-from shapely import LineString, MultiPolygon, Point, Polygon, distance
+from shapely import LineString, MultiPolygon, Polygon
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 from sklearn.neighbors import NearestNeighbors
 from spatialdata import SpatialData
@@ -33,17 +34,13 @@ from spatialdata._core.query.relational_query import (
     get_element_instances,
     match_element_to_table,
 )
-from spatialdata.models import SpatialElement, get_table_keys
+from spatialdata.models import get_table_keys
 from spatialdata.models.models import (
     Image2DModel,
     Image3DModel,
     Labels2DModel,
     Labels3DModel,
     PointsModel,
-    RasterSchema,
-    ShapesModel,
-    TableModel,
-    get_axes_names,
     get_model,
 )
 
@@ -455,7 +452,8 @@ def _build_connectivity(
 
 @njit(parallel=True, cache=True)
 def _csr_bilateral_diag_scale_helper(
-    data: NDArrayA, indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA
+    mat: csr_array | csr_matrix,
+    degrees: NDArrayA,
 ) -> NDArrayA:
     """
     Return an array F aligned with CSR non-zeros such that
@@ -479,10 +477,10 @@ def _csr_bilateral_diag_scale_helper(
         Length equals len(data). Entry-wise factors d_i * d_j * data[k]
     """
 
-    res = np.empty_like(data, dtype=np.float64)
-    for i in prange(len(indptr) - 1):
-        ixs = indices[indptr[i] : indptr[i + 1]]
-        res[indptr[i] : indptr[i + 1]] = degrees[i] * degrees[ixs] * data[indptr[i] : indptr[i + 1]]
+    res = np.empty_like(mat.data, dtype=np.float64)
+    for i in prange(len(mat.indptr) - 1):
+        ixs = mat.indices[mat.indptr[i] : mat.indptr[i + 1]]
+        res[mat.indptr[i] : mat.indptr[i + 1]] = degrees[i] * degrees[ixs] * mat.data[mat.indptr[i] : mat.indptr[i + 1]]
 
     return res
 
@@ -503,7 +501,7 @@ def symmetric_normalize_csr(adj: spmatrix) -> csr_matrix:
     degrees = np.squeeze(np.array(np.sqrt(1.0 / fau_stats.sum(adj, axis=0))))
     if adj.shape[0] != len(degrees):
         raise ValueError("len(degrees) must equal number of rows of adj")
-    res_data = _csr_bilateral_diag_scale_helper(adj.data, adj.indices, adj.indptr, degrees)
+    res_data = _csr_bilateral_diag_scale_helper(adj, degrees)
     return csr_matrix((res_data, adj.indices, adj.indptr), shape=adj.shape)
 
 
