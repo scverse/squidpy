@@ -403,7 +403,7 @@ def _build_connectivity(
     if delaunay:
         tri = Delaunay(coords)
         indptr, indices = tri.vertex_neighbor_vertices
-        Adj = csr_matrix((np.ones_like(indices, dtype=np.float64), indices, indptr), shape=(N, N))
+        Adj = csr_matrix((np.ones_like(indices, dtype=np.float32), indices, indptr), shape=(N, N))
 
         if return_distance:
             # fmt: off
@@ -438,7 +438,7 @@ def _build_connectivity(
             col_indices = np.concatenate(col_indices)
 
         Adj = csr_matrix(
-            (np.ones_like(row_indices, dtype=np.float64), (row_indices, col_indices)),
+            (np.ones_like(row_indices, dtype=np.float32), (row_indices, col_indices)),
             shape=(N, N),
         )
         if return_distance:
@@ -453,7 +453,7 @@ def _build_connectivity(
     return Adj
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def _csr_bilateral_diag_scale_helper(
     data: NDArrayA, indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA
 ) -> NDArrayA:
@@ -479,7 +479,7 @@ def _csr_bilateral_diag_scale_helper(
         Length equals len(data). Entry-wise factors d_i * d_j * data[k]
     """
 
-    res = np.empty_like(data, dtype=np.float64)
+    res = np.empty_like(data, dtype=np.float32)
     for i in prange(len(indptr) - 1):
         ixs = indices[indptr[i] : indptr[i + 1]]
         res[indptr[i] : indptr[i + 1]] = degrees[i] * degrees[ixs] * data[indptr[i] : indptr[i + 1]]
