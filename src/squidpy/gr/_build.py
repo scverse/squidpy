@@ -30,9 +30,19 @@ from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 from sklearn.neighbors import NearestNeighbors
 from spatialdata import SpatialData
 from spatialdata._core.centroids import get_centroids
-from spatialdata._core.query.relational_query import get_element_instances, match_element_to_table
+from spatialdata._core.query.relational_query import (
+    get_element_instances,
+    match_element_to_table,
+)
 from spatialdata.models import get_table_keys
-from spatialdata.models.models import Labels2DModel, Labels3DModel, get_model
+from spatialdata.models.models import (
+    Image2DModel,
+    Image3DModel,
+    Labels2DModel,
+    Labels3DModel,
+    PointsModel,
+    get_model,
+)
 
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
@@ -434,7 +444,8 @@ def _build_connectivity(
 
 @njit
 def _csr_bilateral_diag_scale_helper(
-    data: NDArrayA, indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA
+    mat: csr_array | csr_matrix,
+    degrees: NDArrayA,
 ) -> NDArrayA:
     """
     Return an array F aligned with CSR non-zeros such that
@@ -482,7 +493,7 @@ def symmetric_normalize_csr(adj: spmatrix) -> csr_matrix:
     degrees = np.squeeze(np.array(np.sqrt(1.0 / fau_stats.sum(adj, axis=0))))
     if adj.shape[0] != len(degrees):
         raise ValueError("len(degrees) must equal number of rows of adj")
-    res_data = _csr_bilateral_diag_scale_helper(adj.data, adj.indices, adj.indptr, degrees)
+    res_data = _csr_bilateral_diag_scale_helper(adj, degrees)
     return csr_matrix((res_data, adj.indices, adj.indptr), shape=adj.shape)
 
 
