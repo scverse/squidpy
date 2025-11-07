@@ -51,6 +51,11 @@ class NhoodEnrichmentResult(NamedTuple):
 dt = nt.uint32
 ndt = np.uint32
 _template = """
+from __future__ import annotations
+
+from numba import njit, prange
+import numpy as np
+
 @njit(dt[:, :](dt[:], dt[:], dt[:]), parallel={parallel}, fastmath=True)
 def _nenrich_{n_cls}_{parallel}(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA) -> np.ndarray:
     '''
