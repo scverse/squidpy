@@ -23,7 +23,7 @@ sys.path.insert(0, str(HERE / "_ext"))
 info = metadata("squidpy")
 project_name = info["Name"]
 author = info["Author"]
-copyright = f"{datetime.now():%Y}, {author}."
+copyright = f"{datetime.now():%Y}, {author}"
 version = info["Version"]
 release = info["Version"]
 
