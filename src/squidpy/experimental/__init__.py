@@ -6,7 +6,6 @@ These features may change or be removed in future releases.
 
 from __future__ import annotations
 
-from . import im
-from .im._detect_tissue import detect_tissue
+from . import im, pl
 
-__all__ = ["detect_tissue", "im"]
+__all__ = ["im", "pl"]

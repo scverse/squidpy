@@ -11,12 +11,13 @@ from enum import Enum
 from multiprocessing import Manager, cpu_count
 from queue import Queue
 from threading import Thread
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import joblib as jl
 import numba
 import numpy as np
 import spatialdata as sd
+import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
@@ -373,3 +374,17 @@ def _yx_from_shape(shape: tuple[int, ...]) -> tuple[int, int]:
         return shape[1], shape[2]
 
     raise ValueError(f"Unsupported shape {shape}. Expected (y, x) or (c, y, x).")
+
+
+def _ensure_dim_order(img_da: xr.DataArray, order: Literal["cyx", "yxc"] = "yxc") -> xr.DataArray:
+    """
+    Ensure dims are in the requested order and that a 'c' dim exists.
+    Only supports images with dims subset of {'y','x','c'}.
+    """
+    dims = list(img_da.dims)
+    if "y" not in dims or "x" not in dims:
+        raise ValueError(f'Expected dims to include "y" and "x". Found dims={dims}')
+    if "c" not in dims:
+        img_da = img_da.expand_dims({"c": [0]})
+    # After possible expand, just transpose to target
+    return img_da.transpose(*tuple(order))
