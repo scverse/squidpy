@@ -6,7 +6,7 @@ from copy import copy
 from functools import partial
 from numbers import Number
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypeAlias
 
 import dask.array as da
 import numpy as np

@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any
 import joblib as jl
 import numba
 import numpy as np
-import spatialdata as sd
 from spatialdata.models import Image2DModel, Labels2DModel
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]

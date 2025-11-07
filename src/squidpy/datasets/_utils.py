@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from inspect import Parameter, Signature, signature
 from pathlib import Path
-from typing import Any, TypeAlias, Union
+from typing import Any, TypeAlias
 
 import anndata
 import spatialdata as sd

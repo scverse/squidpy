@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import warnings
 from typing import Any, Literal
 
 import anndata as ad

@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from typing import Any, Literal
-
-import numpy as np
 import pytest
 from anndata import AnnData
 

@@ -167,8 +167,6 @@ ignore = [
     "E741",
     # Missing docstring in public package
     "D104",
-    # ... imported but unused
-    "F401",
     # Missing docstring in public module
     "D100",
     # Missing docstring in __init__
@@ -227,7 +225,10 @@ select = [
     "B", # flake8-bugbear
     "BLE", # flake8-blind-except
 ]
-unfixable = ["B", "C4", "BLE"]
+unfixable = [
+    "B", "C4", "BLE",
+    "F401", # ... imported but unused
+]
 
 [tool.ruff.lint.isort]
 required-imports = ["from __future__ import annotations"]

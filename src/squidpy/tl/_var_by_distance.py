@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from functools import reduce
 from itertools import product
-from typing import Any, Union, cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd

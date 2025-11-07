@@ -8,12 +8,11 @@ from collections.abc import Iterable, Mapping, Sequence
 from functools import partial
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numba import njit, prange  # noqa: F401
 from scanpy import logging as logg
 from scipy.sparse import csc_matrix
 from spatialdata import SpatialData
@@ -45,15 +44,20 @@ TARGET = "target"
 TempResult = namedtuple("TempResult", ["means", "pvalues"])
 
 _template = """
+from __future__ import annotations
+
+from numba import njit, prange
+import numpy as np
+
 @njit(parallel={parallel}, cache=False, fastmath=False)
 def _test_{n_cls}_{ret_means}_{parallel}(
-    interactions: NDArrayA,  # [np.uint32],
-    interaction_clusters: NDArrayA,  # [np.uint32],
-    data: NDArrayA,  # [np.float64],
-    clustering: NDArrayA,  # [np.uint32],
-    mean: NDArrayA,  # [np.float64],
-    mask: NDArrayA,  # [np.bool_],
-    res: NDArrayA,  # [np.float64],
+    interactions: NDArrayA[np.uint32],
+    interaction_clusters: NDArrayA[np.uint32],
+    data: NDArrayA[np.float64],
+    clustering: NDArrayA[np.uint32],
+    mean: NDArrayA[np.float64],
+    mask: NDArrayA[np.bool_],
+    res: NDArrayA[np.float64],
     {args}
 ) -> None:
 
