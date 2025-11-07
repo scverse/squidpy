@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from importlib.util import find_spec
-from itertools import chain
-from typing import TYPE_CHECKING, Any, Literal
+from collections.abc import Sequence
+from typing import Any, Literal
 
 import numba.types as nt
 import numpy as np
@@ -31,7 +29,6 @@ from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
-    _assert_non_empty_sequence,
     _assert_positive,
     _assert_spatial_basis,
     _save_data,

@@ -11,7 +11,7 @@ import numba.types as nt
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numba import njit, prange  # noqa: F401
+from numba import njit
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg

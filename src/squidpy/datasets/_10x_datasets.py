@@ -1,22 +1,13 @@
 from __future__ import annotations
 
-import os
-import shutil
 import tarfile
 from pathlib import Path
-from typing import (
-    Literal,
-    NamedTuple,
-    Union,  # noqa: F401
-)
+from typing import Literal, NamedTuple
 
 import spatialdata as sd
 from anndata import AnnData
 from scanpy import _utils
-from scanpy import logging as logg
 from scanpy._settings import settings
-from scanpy._utils import check_presence_download
-from spatialdata import SpatialData
 
 from squidpy._constants._constants import TenxVersions
 from squidpy.datasets._utils import DEFAULT_CACHE_DIR, PathLike, _get_zipped_dataset

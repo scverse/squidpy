@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, TypeAlias, Union
+from typing import Any, TypeAlias
 
 import matplotlib.pyplot as plt
 import numpy as np

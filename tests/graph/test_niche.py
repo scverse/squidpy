@@ -1,23 +1,11 @@
 from __future__ import annotations
 
-import numpy as np
-import pytest
-import scipy
 from anndata import AnnData
 from pandas.testing import assert_frame_equal
 from scipy.sparse import issparse
 
-import squidpy as sq
 from squidpy.gr import calculate_niche, spatial_neighbors
-from squidpy.gr._niche import (
-    _aggregate,
-    _calculate_neighborhood_profile,
-    _hop,
-    _normalize,
-    _setdiag,
-    _utag,
-)
-from tests.conftest import PlotTester, PlotTesterMeta
+from squidpy.gr._niche import _calculate_neighborhood_profile, _utag
 
 SPATIAL_CONNECTIVITIES_KEY = "spatial_connectivities"
 N_NEIGHBORS = 20
