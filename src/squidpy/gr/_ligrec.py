@@ -44,15 +44,20 @@ TARGET = "target"
 TempResult = namedtuple("TempResult", ["means", "pvalues"])
 
 _template = """
+from __future__ import annotations
+
+from numba import njit, prange
+import numpy as np
+
 @njit(parallel={parallel}, cache=False, fastmath=False)
 def _test_{n_cls}_{ret_means}_{parallel}(
-    interactions: NDArrayA,  # [np.uint32],
-    interaction_clusters: NDArrayA,  # [np.uint32],
-    data: NDArrayA,  # [np.float64],
-    clustering: NDArrayA,  # [np.uint32],
-    mean: NDArrayA,  # [np.float64],
-    mask: NDArrayA,  # [np.bool_],
-    res: NDArrayA,  # [np.float64],
+    interactions: NDArrayA[np.uint32],
+    interaction_clusters: NDArrayA[np.uint32],
+    data: NDArrayA[np.float64],
+    clustering: NDArrayA[np.uint32],
+    mean: NDArrayA[np.float64],
+    mask: NDArrayA[np.bool_],
+    res: NDArrayA[np.float64],
     {args}
 ) -> None:
 
