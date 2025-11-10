@@ -6,45 +6,26 @@
 
 from __future__ import annotations
 
-# -- Path setup --------------------------------------------------------------
-import os
 import sys
 from datetime import datetime
-
-# from importlib.metadata import metadata
+from importlib.metadata import metadata
 from pathlib import Path
 
 from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-# sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
-# sys.path.insert(0, os.path.abspath("_ext"))
-
 sys.path.insert(0, str(HERE / "_ext"))
 
-# -- Project information -----------------------------------------------------
-
-import squidpy  # noqa: E402
-
-sys.path.insert(0, str(Path(__file__).parent / "_ext"))
 
 # -- Project information -----------------------------------------------------
 
-project = squidpy.__name__
-author = squidpy.__author__
-version = squidpy.__version__
-copyright = f"{datetime.now():%Y}, scverse"
 
-# info = metadata("squidpy")
-# project_name = info["Name"]
-# author = info["Author"]
-# copyright = f"{datetime.now():%Y}, {author}."
-# version = info["Version"]
-# release = info["Version"]
-
-# # project = squidpy.__name__
-# # author = squidpy.__author__
-# # copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
+info = metadata("squidpy")
+project_name = info["Name"]
+author = info["Author"]
+copyright = f"{datetime.now():%Y}, {author}"
+version = info["Version"]
+release = info["Version"]
 
 # github_org = "scverse"
 # github_repo = "squidpy"
@@ -52,7 +33,7 @@ copyright = f"{datetime.now():%Y}, scverse"
 
 # # The full version, including alpha/beta/rc tags
 # # release = github_ref
-# # version = f"{release} ({squidpy.__version__})"
+# # version = f"{release} ({info['Version']})"
 
 # -- General configuration ---------------------------------------------------
 
