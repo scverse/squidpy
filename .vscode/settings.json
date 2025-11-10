@@ -14,5 +14,8 @@
     },
     "python.analysis.typeCheckingMode": "basic",
     "python.testing.pytestEnabled": true,
-    "python.testing.pytestArgs": ["-vv", "--color=yes"],
+    "python.testing.pytestArgs": [
+        "-vv",
+        "--color=yes"
+    ],
 }
