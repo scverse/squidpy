@@ -19,7 +19,6 @@ maintainers = [
   { name = "Tim Treis", email = "tim.treis@helmholtz-munich.de" },
   { name = "Selman Ozleyen", email = "selman.ozleyen@helmholtz-munich.de" },
 ]
-
 authors = [
   { name = "Giovanni Palla" },
   { name = "Michal Klein" },
@@ -110,10 +109,12 @@ optional-dependencies.test = [
   "pytest-xdist>=3",
   "scanpy[leiden]",
 ]
+
 urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
-urls.Documentation = "https://squidpy.readthedocs.io/en/stable"
-urls.Homepage = "https://github.com/scverse/squidpy"
-urls."Source Code" = "https://github.com/scverse/squidpy"
+
+urls.Documentation = "https://squidpy.readthedocs.io"
+urls.Home-page = "https://github.com/scverse/squidpy"
+urls.Source = "https://github.com/scverse/squidpy"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
