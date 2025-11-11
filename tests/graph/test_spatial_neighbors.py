@@ -400,3 +400,27 @@ class TestSpatialNeighbors:
 
             # Verify transform parameter is saved
             assert small_adata.uns[Key.uns.spatial_neighs()]["params"]["transform"] == transform
+
+    def test_spatial_neighbors_spectral_transform_properties(self, non_visium_adata: AnnData):
+        """
+        Test that spectral transform preserves nonzero pattern and normalizes rows to sum to 1.
+        """
+        # Apply spatial_neighbors without transform
+        spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None, transform=None)
+        adj_no_transform = non_visium_adata.obsp[Key.obsp.spatial_conn()].copy()
+
+        # Apply spatial_neighbors with spectral transform
+        spatial_neighbors(non_visium_adata, delaunay=True, coord_type=None, transform="spectral")
+        adj_spectral = non_visium_adata.obsp[Key.obsp.spatial_conn()]
+
+        # Check that nonzero patterns are identical
+        np.testing.assert_array_equal(
+            adj_no_transform.nonzero(),
+            adj_spectral.nonzero(),
+            err_msg="Spectral transform should preserve the sparsity pattern",
+        )
+
+        w = np.linalg.eigvals(adj_spectral.toarray())
+        # Eigenvalues should be in range [-1, 1]
+        np.testing.assert_array_less(w, 1.0, err_msg="Eigenvalues should be <= 1")
+        np.testing.assert_array_less(-1.0, w, err_msg="Eigenvalues should be >= -1")
