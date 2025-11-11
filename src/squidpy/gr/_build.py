@@ -13,11 +13,13 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
-from numba import njit
+from fast_array_utils import stats as fau_stats
+from numba import njit, prange
 from scanpy import logging as logg
 from scipy.sparse import (
     SparseEfficiencyWarning,
     block_diag,
+    csr_array,
     csr_matrix,
     isspmatrix_csr,
     spmatrix,
@@ -388,7 +390,7 @@ def _build_connectivity(
     if delaunay:
         tri = Delaunay(coords)
         indptr, indices = tri.vertex_neighbor_vertices
-        Adj = csr_matrix((np.ones_like(indices, dtype=np.float64), indices, indptr), shape=(N, N))
+        Adj = csr_matrix((np.ones_like(indices, dtype=np.float32), indices, indptr), shape=(N, N))
 
         if return_distance:
             # fmt: off
@@ -423,7 +425,7 @@ def _build_connectivity(
             col_indices = np.concatenate(col_indices)
 
         Adj = csr_matrix(
-            (np.ones_like(row_indices, dtype=np.float64), (row_indices, col_indices)),
+            (np.ones_like(row_indices, dtype=np.float32), (row_indices, col_indices)),
             shape=(N, N),
         )
         if return_distance:
@@ -438,16 +440,59 @@ def _build_connectivity(
     return Adj
 
 
-@njit
-def outer(indices: NDArrayA, indptr: NDArrayA, degrees: NDArrayA) -> NDArrayA:
-    res = np.empty_like(indices, dtype=np.float64)
-    start = 0
-    for i in range(len(indptr) - 1):
-        ixs = indices[indptr[i] : indptr[i + 1]]
-        res[start : start + len(ixs)] = degrees[i] * degrees[ixs]
-        start += len(ixs)
+@njit(parallel=True, cache=True)
+def _csr_bilateral_diag_scale_helper(
+    mat: csr_array | csr_matrix,
+    degrees: NDArrayA,
+) -> NDArrayA:
+    """
+    Return an array F aligned with CSR non-zeros such that
+    F[k] = d[i] * data[k] * d[j] for the k-th non-zero (i, j) in CSR order.
+
+    Parameters
+    ----------
+
+    data : array of float
+        CSR `data` (non-zero values).
+    indices : array of int
+        CSR `indices` (column indices).
+    indptr : array of int
+        CSR `indptr` (row pointer).
+    degrees : array of float, shape (n,)
+        Diagonal scaling vector.
+
+    Returns
+    -------
+    array of float
+        Length equals len(data). Entry-wise factors d_i * d_j * data[k]
+    """
+
+    res = np.empty_like(mat.data, dtype=np.float32)
+    for i in prange(len(mat.indptr) - 1):
+        ixs = mat.indices[mat.indptr[i] : mat.indptr[i + 1]]
+        res[mat.indptr[i] : mat.indptr[i + 1]] = degrees[i] * degrees[ixs] * mat.data[mat.indptr[i] : mat.indptr[i + 1]]
 
     return res
+
+
+def symmetric_normalize_csr(adj: spmatrix) -> csr_matrix:
+    """
+    Return D^{-1/2} * A * D^{-1/2}, where D = diag(degrees(A)) and A = adj.
+
+
+    Parameters
+    ----------
+    adj : scipy.sparse.csr_matrix
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+    """
+    degrees = np.squeeze(np.array(np.sqrt(1.0 / fau_stats.sum(adj, axis=0))))
+    if adj.shape[0] != len(degrees):
+        raise ValueError("len(degrees) must equal number of rows of adj")
+    res_data = _csr_bilateral_diag_scale_helper(adj, degrees)
+    return csr_matrix((res_data, adj.indices, adj.indptr), shape=adj.shape)
 
 
 def _transform_a_spectral(a: spmatrix) -> spmatrix:
@@ -456,11 +501,7 @@ def _transform_a_spectral(a: spmatrix) -> spmatrix:
     if not a.nnz:
         return a
 
-    degrees = np.squeeze(np.array(np.sqrt(1.0 / a.sum(axis=0))))
-    a = a.multiply(outer(a.indices, a.indptr, degrees))
-    a.eliminate_zeros()
-
-    return a
+    return symmetric_normalize_csr(a)
 
 
 def _transform_a_cosine(a: spmatrix) -> spmatrix:
