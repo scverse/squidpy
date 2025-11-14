@@ -35,8 +35,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
+          enable-cache: false
           python-version: "3.13"
-          cache-dependency-glob: pyproject.toml
 
       - name: Restore data cache
         id: data-cache
