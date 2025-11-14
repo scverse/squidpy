@@ -1,5 +1,6 @@
 # Classes
 
+```{eval-rst}
 .. currentmodule:: squidpy
 
 .. autosummary::
@@ -8,4 +9,4 @@
     im.ImageContainer
     im.SegmentationWatershed
     im.SegmentationCustom
-    .. pl.Interactive
+```
