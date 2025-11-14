@@ -1,8 +1,6 @@
-Squidpy 1.2.0 (2022-04-19)
-==========================
+# Squidpy 1.2.0 (2022-04-19)
 
-Features
---------
+## Features
 
 - Add :func:`squidpy.pl.spatial_scatter` and :func:`squidpy.pl.spatial_segment` to statically plot
   spatial omics data.
@@ -38,8 +36,7 @@ Features
   `#516 <https://github.com/scverse/squidpy/pull/516>`__
 
 
-Bugfixes
---------
+## Bugfixes
 
 - Require ``numba>=0.52.0``.
   `@michalk8 <https://github.com/michalk8>`__
@@ -66,8 +63,7 @@ Bugfixes
   `#510 <https://github.com/scverse/squidpy/pull/510>`__
 
 
-Miscellaneous
--------------
+## Miscellaneous
 
 - Change imports in the topmost ``__init__.py`` for correct IDE module resolution.
   `@chaichontat <https://github.com/chaichontat>`__
@@ -82,8 +78,7 @@ Miscellaneous
   `#520 <https://github.com/scverse/squidpy/pull/520>`__
 
 
-Documentation
--------------
+## Documentation
 
 - Add author to automatically generated news fragment.
   `@michalk8 <https://github.com/michalk8>`__

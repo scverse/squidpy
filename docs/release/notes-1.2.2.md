@@ -1,8 +1,6 @@
-Squidpy 1.2.2 (2022-05-17)
-==========================
+# Squidpy 1.2.2 (2022-05-17)
 
-Miscellaneous
--------------
+## Miscellaneous
 
 - Rename organization references and update pre-commit checks.
   `@giovp <https://github.com/giovp>`__

@@ -1,8 +1,6 @@
-Squidpy 1.1.1 (2021-08-16)
-==========================
+# Squidpy 1.1.1 (2021-08-16)
 
-Features
---------
+## Features
 
 - Allow defining cylindrical shells in :func:`squidpy.gr.spatial_neighbors` by using the ``radius`` argument.
   Also rename ``n_neigh``, ``n_neigh_grid`` arguments to ``n_neighs``.
@@ -12,15 +10,13 @@ Features
   `#395 <https://github.com/scverse/squidpy/pull/395>`__
 
 
-Bugfixes
---------
+## Bugfixes
 
 - Fix sometimes incorrectly transposing dimensions when reading TIFF files.
   `#390 <https://github.com/scverse/squidpy/pull/390>`__
 
 
-Miscellaneous
--------------
+## Miscellaneous
 
 - Increase performance of Delaunay graph creation in :func:`squidpy.gr.spatial_neighbors`.
   `#381 <https://github.com/scverse/squidpy/pull/381>`__
@@ -29,8 +25,7 @@ Miscellaneous
   `#396 <https://github.com/scverse/squidpy/pull/396>`__
 
 
-Documentation
--------------
+## Documentation
 
 - Enable ``towncrier`` for release notes generation.
   `#397 <https://github.com/scverse/squidpy/pull/397>`__

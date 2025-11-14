@@ -1,8 +1,6 @@
-Squidpy dev (the-future)
-========================
+# Squidpy dev (the-future)
 
-Features
---------
+## Features
 
 - Fix :attr:`tl.var_by_distance` behaviour when providing :attr:`numpy` arrays of coordinates as anchor point.
 - Update :attr:`pl.var_by_distance` to show multiple variables on same plot.

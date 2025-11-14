@@ -61,6 +61,7 @@ We are happy about any contributions! Before you start, check out our [contribut
     classes
     release_notes
     references
+    contributing
 
 .. toctree::
     :caption: Gallery

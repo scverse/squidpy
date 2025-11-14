@@ -1,16 +1,14 @@
-Squidpy 1.3.0 (2023-06-16)
-==========================
+# Squidpy 1.3.0 (2023-06-16)
 
-Features
---------
+## Features
+
 - Add :func:`squidpy.tl.var_by_distance` to calculate distances to anchor points and store results in a design matrix.
 - Add :func:`squidpy.pl.var_by_distance` to visualize variables such as gene expression by distance to an anchor point.
   `@LLehner <https://github.com/LLehner>`__
   `#591 <https://github.com/scverse/squidpy/pull/591>`__
 
 
-Bugfixes
---------
+## Bugfixes
 
 - Fix :mod:`pandas` inf :func:`squidpy.pl.ligrec`.
   `@michalk8 <https://github.com/michalk8>`__
@@ -38,8 +36,7 @@ Bugfixes
   `#692 <https://github.com/scverse/squidpy/pull/692>`__
 
 
-Miscellaneous
--------------
+## Miscellaneous
 
 - Update pre-commits and unpin numba and numpy.
   `@giovp <https://github.com/giovp>`__
@@ -63,8 +60,7 @@ Miscellaneous
   `#701 <https://github.com/scverse/squidpy/pull/701>`__
 
 
-Documentation
--------------
+## Documentation
 
 - Fix CI badges and tox.
   `@michalk8 <https://github.com/michalk8>`__

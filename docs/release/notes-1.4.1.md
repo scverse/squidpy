@@ -1,8 +1,6 @@
-Squidpy 1.4.1 (2024-02-06)
-==========================
+# Squidpy 1.4.1 (2024-02-06)
 
-Bugfixes
---------
+## Bugfixes
 
 - Unpin ``scikit-image``.
   `@giovp <https://github.com/giovp>`__

@@ -1,16 +1,13 @@
-Squidpy 1.2.1 (2022-05-14)
-==========================
+# Squidpy 1.2.1 (2022-05-14)
 
-Features
---------
+## Features
 
 - Refactor :meth:`squidpy.im.ImageContainer.subset` to return a view.
   `@michalk8 <https://github.com/michalk8>`__
   `#534 <https://github.com/scverse/squidpy/pull/534>`__
 
 
-Bugfixes
---------
+## Bugfixes
 
 - Add discourse, zulip badges and links.
   `@giovp <https://github.com/giovp>`__
@@ -45,8 +42,7 @@ Bugfixes
   `#549 <https://github.com/scverse/squidpy/pull/549>`__
 
 
-Miscellaneous
--------------
+## Miscellaneous
 
 - Fix news fragment generation checks.
   `@michalk8 <https://github.com/michalk8>`__

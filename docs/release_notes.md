@@ -1,5 +1,6 @@
 # Release Notes
 
+```{eval-rst}
 .. toctree::
     :maxdepth: 3
 
@@ -11,3 +12,4 @@
     :reversed:
 
     release/notes-*.*.*
+```

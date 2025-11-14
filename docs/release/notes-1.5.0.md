@@ -1,8 +1,6 @@
-Squidpy 1.5.0 (2024-05-27)
-==========================
+# Squidpy 1.5.0 (2024-05-27)
 
-Bugfixes
---------
+## Bugfixes
 
 - Fixed the reading of 10x formatted mtx files.
   `@LinearParadox <https://github.com/LinearParadox>`__

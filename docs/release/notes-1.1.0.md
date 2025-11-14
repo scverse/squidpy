@@ -1,8 +1,7 @@
-Squidpy 1.1.0 (2021-07-01)
-==========================
+# Squidpy 1.1.0 (2021-07-01)
 
-Bugfixes
---------
+## Bugfixes
+
 - Fix :class:`squidpy.im.ImageContainer` to work with different scaled.
   `#320 <https://github.com/scverse/squidpy/pull/320>`__
   `@hspitzer <https://github.com/hspitzer>`__
@@ -23,8 +22,8 @@ Bugfixes
   `#362 <https://github.com/scverse/squidpy/pull/362>`__
   `@michalk8 <https://github.com/michalk8>`__
 
-Features
---------
+## Features
+
 - Add many new tutorials and examples.
 
 - Add :func:`squidpy.gr.sepal` :cite:`andersson2021`

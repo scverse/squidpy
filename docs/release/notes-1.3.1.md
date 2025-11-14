@@ -1,8 +1,6 @@
-Squidpy 1.3.1 (2023-10-09)
-==========================
+# Squidpy 1.3.1 (2023-10-09)
 
-Miscellaneous
--------------
+## Miscellaneous
 
 - Deprecated napari.
   `@LLehner <https://github.com/LLehner>`__

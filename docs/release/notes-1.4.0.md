@@ -1,8 +1,6 @@
-Squidpy 1.4.0 (2024-02-05)
-==========================
+# Squidpy 1.4.0 (2024-02-05)
 
-Bugfixes
---------
+## Bugfixes
 
 - Fix building graph in ``knn`` and ``delaunay`` mode.
   `@michalk8 <https://github.com/michalk8>`__
@@ -13,8 +11,7 @@ Bugfixes
   `#775 <https://github.com/scverse/squidpy/pull/775>`__
 
 
-Miscellaneous
--------------
+## Miscellaneous
 
 - Fix napari installation.
   `@giovp <https://github.com/giovp>`__

@@ -1,8 +1,6 @@
-Squidpy 1.6.0 (2024-07-23)
-==========================
+# Squidpy 1.6.0 (2024-07-23)
 
-Features
---------
+## Features
 
 - Now :func:`squidpy.gr.spatial_graph` can also be used on :class:`spatialdata.SpatialData` objects.
 

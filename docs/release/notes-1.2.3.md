@@ -1,8 +1,6 @@
-Squidpy 1.2.3 (2022-10-18)
-==========================
+# Squidpy 1.2.3 (2022-10-18)
 
-Bugfixes
---------
+## Bugfixes
 
 - Fix plotting non-unique categorical colors in :func:`squidpy.pl.spatial_scatter`.
   `@michalk8 <https://github.com/michalk8>`__
@@ -25,8 +23,7 @@ Bugfixes
   `#609 <https://github.com/scverse/squidpy/pull/609>`__
 
 
-Miscellaneous
--------------
+## Miscellaneous
 
 - Better error message for handling palette in  :func:`squidpy.pl.spatial_scatter`.
   `@giovp <https://github.com/giovp>`__
@@ -53,8 +50,7 @@ Miscellaneous
   `#617 <https://github.com/scverse/squidpy/pull/617>`__
 
 
-Documentation
--------------
+## Documentation
 
 - Added a squidpy tutorial for Xenium data.
   `@LLehner <https://github.com/LLehner>`__
