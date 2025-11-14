@@ -38,6 +38,8 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinxcontrib.bibtex",
     "sphinx_copybutton",
+    "sphinx_design",
+    "sphinx_tabs.tabs",
     "myst_nb",
     "nbsphinx",
     "typed_returns",

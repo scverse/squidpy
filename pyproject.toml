@@ -95,7 +95,9 @@ optional-dependencies.docs = [
   "sphinx-autodoc-annotation",
   "sphinx-autodoc-typehints>=1.10.3",
   "sphinx-copybutton>=0.5",
+  "sphinx-design",
   "sphinx-rtd-theme",
+  "sphinx-tabs",
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
 ]
