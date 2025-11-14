@@ -1,9 +1,9 @@
-Installation
-============
+# Installation
+
 Squidpy requires Python version >= 3.9 to run.
 
-PyPI
-----
+## PyPI
+
 Install Squidpy by running::
 
     pip install squidpy
@@ -12,14 +12,14 @@ Alternatively, to include all dependencies, such as the interactive image viewer
 
     pip install 'squidpy[interactive]'
 
-Conda
------
+## Conda
+
 Install Squidpy via Conda as::
 
     conda install -c conda-forge squidpy
 
-Development version
--------------------
+## Development version
+
 To install Squidpy from GitHub, run::
 
     pip install git+https://github.com/scverse/squidpy@main

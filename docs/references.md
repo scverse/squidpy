@@ -1,5 +1,4 @@
-References
-==========
+# References
 
 .. bibliography::
    :cited:

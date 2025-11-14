@@ -1,5 +1,4 @@
-Classes
-=======
+# Classes
 
 .. currentmodule:: squidpy
 

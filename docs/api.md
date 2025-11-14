@@ -1,15 +1,14 @@
-API
-===
-Import Squidpy as::
+# API
 
-    import squidpy as sq
+Import Squidpy as:
+```python
+import squidpy as sq
+```
 
-Graph
-~~~~~
-
+## Graph
+```{eval-rst}
 .. module:: squidpy.gr
 .. currentmodule:: squidpy
-
 .. autosummary::
     :toctree: api
 
@@ -23,26 +22,24 @@ Graph
     gr.ligrec
     gr.spatial_autocorr
     gr.sepal
+```
 
-Image
-~~~~~
-
+## Image
+```{eval-rst}
 .. module:: squidpy.im
 .. currentmodule:: squidpy
-
 .. autosummary::
     :toctree: api
 
     im.process
     im.segment
     im.calculate_image_features
+```
 
-Plotting
-~~~~~~~~
-
+## Plotting
+```{eval-rst}
 .. module:: squidpy.pl
 .. currentmodule:: squidpy
-
 .. autosummary::
     :toctree: api
 
@@ -56,37 +53,34 @@ Plotting
     pl.co_occurrence
     pl.extract
     pl.var_by_distance
+```
 
-Reading
-~~~~~~~
-
+## Reading
+```{eval-rst}
 .. module:: squidpy.read
 .. currentmodule:: squidpy
-
 .. autosummary::
     :toctree: api
 
     read.visium
     read.vizgen
     read.nanostring
+```
 
-Tools
-~~~~~~~~
-
+## Tools
+```{eval-rst}
 .. module:: squidpy.tl
 .. currentmodule:: squidpy
-
 .. autosummary::
     :toctree: api
 
     tl.var_by_distance
+```
 
-Datasets
-~~~~~~~~
-
+## Datasets
+```{eval-rst}
 .. module:: squidpy.datasets
 .. currentmodule:: squidpy
-
 .. autosummary::
     :toctree: api
 
@@ -105,3 +99,4 @@ Datasets
     datasets.visium_hne_image
     datasets.visium_hne_image_crop
     datasets.visium_fluo_image_crop
+```
