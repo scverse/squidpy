@@ -86,7 +86,7 @@ optional-dependencies.dev = [
   "pre-commit>=3",
   "ruff",
 ]
-optional-dependencies.doc = [
+optional-dependencies.docs = [
   "ipython",
   "ipywidgets>=8",
   "myst-nb>=0.17.1",
@@ -146,7 +146,7 @@ installer = "uv"
 features = [ "dev" ]
 
 [tool.hatch.envs.docs]
-features = [ "doc" ]
+features = [ "docs" ]
 scripts.build = "sphinx-build -b html docs docs/_build -W {args}"
 scripts.open = "python -m webbrowser -t docs/_build/html/index.html"
 scripts.clean = "git clean -fdX -- {args:docs}"
