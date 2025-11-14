@@ -86,7 +86,7 @@ optional-dependencies.dev = [
   "pre-commit>=3",
   "ruff",
 ]
-optional-dependencies.docs = [
+optional-dependencies.doc = [
   "ipython",
   "ipywidgets>=8",
   "myst-nb>=0.17.1",
@@ -140,6 +140,16 @@ text = "|PyPI| |Downloads| |CI| |Docs| |Coverage| |Discourse| |Zulip|"
 path = "README.rst"
 start-after = "|NumFOCUS|"
 end-before = "Squidpy is part of the scverse® project"
+
+[tool.hatch.envs.default]
+installer = "uv"
+features = [ "dev" ]
+
+[tool.hatch.envs.docs]
+features = [ "doc", "all" ]
+scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
+scripts.open = "python -m webbrowser -t docs/_build/html/index.html"
+scripts.clean = "git clean -fdX -- {args:docs}"
 
 [tool.ruff]
 line-length = 120
