@@ -19,6 +19,7 @@ Graph
     gr.spatial_neighbors
     gr.mask_graph
     gr.nhood_enrichment
+    gr.NhoodEnrichmentResult
     gr.co_occurrence
     gr.centrality_scores
     gr.interaction_matrix
@@ -82,6 +83,7 @@ Tools
 .. autosummary::
     :toctree: api
 
+    tl.sliding_window
     tl.var_by_distance
 
 Datasets

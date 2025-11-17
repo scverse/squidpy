@@ -147,6 +147,9 @@ spelling_filters = [
 
 # Link checking
 nitpicky = True  # this is linkcheck for Sphinx.
+nitpick_ignore = [
+    ("py:func", "numba.prange"),  # no reference docs
+]
 # see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369
 linkcheck_ignore = [
     # 403 Client Error
