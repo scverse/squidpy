@@ -6,8 +6,8 @@ from typing import Literal, NamedTuple
 
 import spatialdata as sd
 from anndata import AnnData
-from scanpy import _utils
-from scanpy._settings import settings
+from scanpy import settings
+from scanpy._utils import check_presence_download
 
 from squidpy._constants._constants import TenxVersions
 from squidpy.datasets._utils import DEFAULT_CACHE_DIR, PathLike, _get_zipped_dataset
@@ -80,7 +80,7 @@ def visium(
         Whether to download the high-resolution tissue section into
         :attr:`anndata.AnnData.uns` ``['spatial']['{sample_id}']['metadata']['source_image_path']``.
     base_dir
-        Directory where to download the data. If `None`, use :attr:`scanpy._settings.ScanpyConfig.datasetdir`.
+        Directory where to download the data. If `None`, use :attr:`scanpy.settings.datasetdir`.
 
     Returns
     -------
@@ -110,20 +110,20 @@ def visium(
 
     # download spatial data
     tar_pth = sample_dir / visium_files.spatial_attrs
-    _utils.check_presence_download(filename=tar_pth, backup_url=url_prefix + visium_files.spatial_attrs)
+    check_presence_download(filename=tar_pth, backup_url=url_prefix + visium_files.spatial_attrs)
     with tarfile.open(tar_pth) as f:
         for el in f:
             if not (sample_dir / el.name).exists():
                 f.extract(el, sample_dir)
 
     # download counts
-    _utils.check_presence_download(
+    check_presence_download(
         filename=sample_dir / "filtered_feature_bc_matrix.h5",
         backup_url=url_prefix + visium_files.feature_matrix,
     )
 
     if include_hires_tiff:  # download image
-        _utils.check_presence_download(
+        check_presence_download(
             filename=sample_dir / "image.tif",
             backup_url=url_prefix + visium_files.tif_image,
         )
