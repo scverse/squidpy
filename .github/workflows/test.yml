@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  schedule:
+    - cron: "00 00 * * 1" # every Monday at 00:00
+  push:
+    branches:
+      - main
+      - "[0-9]+.[0-9]+.x"
+  pull_request:
+
+env:
+  PYTEST_ADDOPTS: "-v --color=yes -n auto"
+  FORCE_COLOR: "1"
+  MPLBACKEND: agg
+  # It's impossible to ignore SyntaxWarnings for a single module,
+  # so because leidenalg 0.10.0 has them, we pre-compile things:
+  # https://github.com/vtraag/leidenalg/issues/173
+  UV_COMPILE_BYTECODE: "1"
+  COVERAGE_FILE: ${{ github.workspace }}/.coverage
+
+jobs:
+  ensure-data-is-cached:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+          python-version: "3.13"
+          cache-dependency-glob: pyproject.toml
+
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/squidpy/*.h5ad
+            ~/.cache/squidpy/*.zarr
+          key: data-${{ hashFiles('**/download_data.py') }}
+          enableCrossOsArchive: true
+
+      - name: Download datasets
+        if: steps.data-cache.outputs.cache-hit != 'true'
+        run: uvx hatch run data:download
+
+  test:
+    needs: [ensure-data-is-cached]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: hatch-test.py3.11-stable
+            os: ubuntu-latest
+            python: "3.11"
+          - name: hatch-test.py3.12-stable
+            os: ubuntu-latest
+            python: "3.12"
+          - name: hatch-test.py3.13-stable
+            os: ubuntu-latest
+            python: "3.13"
+            test-type: "coverage"
+            pytest-addopts: "-v --color=yes -n auto"
+          - name: hatch-test.py3.13-pre
+            os: macos-latest
+            python: "3.13"
+    env:
+      ENV_NAME: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, filter: blob:none }
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python }}
+          cache-dependency-glob: pyproject.toml
+
+      - name: Ensure figure directory exists
+        run: mkdir -p "$GITHUB_WORKSPACE/tests/figures"
+
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/squidpy/*.h5ad
+            ~/.cache/squidpy/*.zarr
+          key: data-${{ hashFiles('**/download_data.py') }}
+          enableCrossOsArchive: true
+
+      - name: System dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install automake -y
+
+          # PyQt5 related
+          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
+          sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
+
+      - name: System dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install automake
+
+      - name: Create env
+        run: uvx hatch -v env create ${{ matrix.name }}
+
+      - name: Run tests
+        if: matrix.test-type == null
+        run: uvx hatch run ${{ matrix.name }}:run -n logical
+
+      - name: Run tests (coverage)
+        if: matrix.test-type == 'coverage'
+        env:
+          PYTEST_ADDOPTS: ${{ matrix.pytest-addopts }}
+        run: |
+          uvx hatch run ${{ matrix.name }}:cov-erase
+          uvx hatch run ${{ matrix.name }}:run-cov -n logical
+          uvx hatch run ${{ matrix.name }}:cov-combine
+          uvx hatch run ${{ matrix.name }}:cov-report
+
+      - name: Archive figures generated during testing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual_test_results_${{ runner.os }}_py${{ matrix.name }}
+          path: ${{ github.workspace }}/tests/figures/*
+
+      - name: Upload coverage data
+        if: matrix.test-type == 'coverage'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          env_vars: ENV_NAME
+          fail_ci_if_error: true
+
+  check:
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}

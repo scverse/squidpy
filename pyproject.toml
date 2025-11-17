@@ -1,122 +1,125 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = [ "hatch-vcs", "hatchling" ]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme"]
 
 [project]
 name = "squidpy"
+dynamic = ["readme", "version"]
 description = "Spatial Single Cell Analysis in Python"
-readme = "README.md"
-keywords = [
-  "bio-informatics",
-  "image analysis",
-  "single-cell",
-  "spatial data analysis",
-  "spatial transcriptomics",
-]
+requires-python = ">=3.11"
 license = "BSD-3-Clause"
-maintainers = [
-  { name = "Tim Treis", email = "tim.treis@scverse.org" },
-  { name = "Selman Ozleyen", email = "selman.ozleyen@helmholtz-munich.de" },
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Typing :: Typed",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Environment :: Console",
+    "Framework :: Jupyter",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+keywords = [
+    "single-cell",
+    "bio-informatics",
+    "spatial transcriptomics",
+    "spatial data analysis",
+    "image analysis",
+    "spatial data analysis",
 ]
 authors = [
-  { name = "scverse" },
+    {name = "Giovanni Palla"},
+    {name = "Michal Klein"},
+    {name = "Hannah Spitzer"},
+    {name = "Tim Treis"},
+    {name = "Laurens Lehner"},
+    {name = "Selman Ozleyen"},
 ]
-requires-python = ">=3.11"
-classifiers = [
-  "Development Status :: 5 - Production/Stable",
-  "Environment :: Console",
-  "Framework :: Jupyter",
-  "Intended Audience :: Science/Research",
-  "Natural Language :: English",
-  "Operating System :: MacOS :: MacOS X",
-  "Operating System :: POSIX :: Linux",
-  "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-  "Topic :: Scientific/Engineering :: Bio-Informatics",
-  "Topic :: Scientific/Engineering :: Visualization",
-  "Typing :: Typed",
+maintainers = [
+    {name = "Tim Treis", email = "tim.treis@helmholtz-munich.de"},
+    {name = "Selman Ozleyen", email = "selman.ozleyen@helmholtz-munich.de"}
 ]
-dynamic = [
-  "version", # allow version to be set by git tags
-]
+
 dependencies = [
-  "aiohttp>=3.8.1",
-  "anndata>=0.9",
-  "cycler>=0.11",
-  "dask[array]>=2021.2,<=2024.11.2",
-  "dask-image>=0.5",
-  "docrep>=0.3.1",
-  "fsspec>=2021.11",
-  "imagecodecs>=2025.8.2,<2026",
-  "matplotlib>=3.3",
-  "matplotlib-scalebar>=0.8",
-  "networkx>=2.6",
-  "numba>=0.56.4",
-  "numpy>=1.23",
-  "omnipath>=1.0.7",
-  "pandas>=2.1",
-  "pillow>=8",
-  "scanpy>=1.9.3",
-  "scikit-image>=0.25",
-  # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
-  "scikit-learn>=0.24",
-  "spatialdata>=0.2.5",
-  "spatialdata-plot",
-  "statsmodels>=0.12",
-  # https://github.com/scverse/squidpy/issues/526
-  "tifffile!=2022.4.22",
-  "tqdm>=4.50.2",
-  "validators>=0.18.2",
-  "xarray>=2024.10",
-  "zarr>=2.6.1",
+   "aiohttp>=3.8.1",
+   "anndata>=0.9",
+   "spatialdata>=0.2.5",
+   "spatialdata-plot",
+   "cycler>=0.11.0",
+   "dask-image>=0.5.0",
+   "dask[array]>=2021.02.0,<=2024.11.2",
+   "docrep>=0.3.1",
+   "fsspec>=2021.11.0",
+   "matplotlib>=3.3",
+   "matplotlib-scalebar>=0.8.0",
+   "networkx>=2.6.0",
+   "numba>=0.56.4",
+   "numpy>=1.23.0",
+   "omnipath>=1.0.7",
+   "pandas>=2.1.0",
+   "Pillow>=8.0.0",
+   "scanpy>=1.9.3",
+   "scikit-image>=0.25",
+   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
+   "scikit-learn>=0.24.0",
+   "statsmodels>=0.12.0",
+   # https://github.com/scverse/squidpy/issues/526
+   "tifffile!=2022.4.22",
+   "tqdm>=4.50.2",
+   "validators>=0.18.2",
+   "xarray>=2024.10.0",
+   "imagecodecs>=2025.8.2,<2026",
+   "zarr>=2.6.1",
 ]
 
-optional-dependencies.dev = [
-  "hatch>=1.9",
-  "ipykernel",
-  "ipywidgets",
-  "jupyterlab",
-  "jupytext",
-  "notebook",
-  "pre-commit>=3",
-  "ruff",
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=3.0.0",
+    "hatch>=1.9.0",
+    "jupyterlab",
+    "notebook",
+    "ipykernel",
+    "ipywidgets",
+    "jupytext",
+    "ruff",
 ]
-optional-dependencies.docs = [
-  "ipython",
-  "ipywidgets>=8",
-  "myst-nb>=0.17.1",
-  "nbsphinx>=0.8.1",
-  "sphinx>=5.3",
-  "sphinx-autodoc-annotation",
-  "sphinx-autodoc-typehints>=1.10.3",
-  "sphinx-copybutton>=0.5",
-  "sphinx-design",
-  "sphinx-rtd-theme",
-  "sphinx-tabs",
-  "sphinxcontrib-bibtex>=2.3",
-  "sphinxcontrib-spelling>=7.6.2",
+test = [
+    "scanpy[leiden]",
+    "pytest>=7",
+    "pytest-xdist>=3",
+    "pytest-mock>=3.5.0",
+    # Just for VS Code
+    "pytest-cov>=4",
+    "coverage[toml]>=7",
+    "pytest-timeout>=2.1.0",
 ]
-optional-dependencies.test = [
-  "coverage[toml]>=7",
-  "pytest>=7",
-  # Just for VS Code
-  "pytest-cov>=4",
-  "pytest-mock>=3.5",
-  "pytest-timeout>=2.1",
-  "pytest-xdist>=3",
-  "scanpy[leiden]",
+docs = [
+    "ipython",
+    "ipywidgets>=8.0.0",
+    "sphinx>=5.3",
+    "sphinx-autodoc-annotation",
+    "sphinx-autodoc-typehints>=1.10.3",
+    "sphinx_rtd_theme",
+    "sphinxcontrib-bibtex>=2.3.0",
+    "sphinxcontrib-spelling>=7.6.2",
+    "nbsphinx>=0.8.1",
+    "myst-nb>=0.17.1",
+    "sphinx_copybutton>=0.5.0",
 ]
-
-urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
-
-urls.Documentation = "https://squidpy.readthedocs.io"
-urls.Home-page = "https://github.com/scverse/squidpy"
-urls.Source = "https://github.com/scverse/squidpy"
+[project.urls]
+Homepage = "https://github.com/scverse/squidpy"
+"Bug Tracker" = "https://github.com/scverse/squidpy/issues"
+Documentation = "https://squidpy.readthedocs.io/en/stable"
+"Source Code" = "https://github.com/scverse/squidpy"
 
 [tool.setuptools]
-package-dir = { "" = "src" }
+package-dir = {"" = "src"}
 include-package-data = true
 
 [tool.setuptools_scm]
@@ -124,158 +127,168 @@ include-package-data = true
 [tool.hatch.version]
 source = "vcs"
 
-[tool.hatch.build.hooks.vcs]
-version-file = "_version.py"
-
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = [ "src/squidpy" ]
+packages = ["src/squidpy"]
 
-[tool.hatch.envs.default]
-installer = "uv"
-features = [ "dev" ]
-
-[tool.hatch.envs.docs]
-features = [ "docs" ]
-scripts.build = "sphinx-build -b html docs docs/_build -W {args}"
-scripts.open = "python -m webbrowser -t docs/_build/html/index.html"
-scripts.clean = "git clean -fdX -- {args:docs}"
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/x-rst"
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+text = "|PyPI| |Downloads| |CI| |Docs| |Coverage| |Discourse| |Zulip|"
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.rst"
+start-after = "|NumFOCUS|"
+end-before = "Squidpy is part of the scverse® project"
 
 [tool.ruff]
 line-length = 120
 exclude = [
-  ".git",
-  ".tox",
-  "__pycache__",
-  "build",
-  "dist",
-  "docs/_build",
-  "setup.py",
+    ".git",
+    ".tox",
+    "__pycache__",
+    "build",
+    "docs/_build",
+    "dist",
+    "setup.py"
 ]
 
-format.docstring-code-format = true
-lint.select = [
-  "B",   # flake8-bugbear
-  "BLE", # flake8-blind-except
-  "C4",  # flake8-comprehensions
-  "E",   # pycodestyle
-  "F",   # pyflakes
-  "I",   # isort
-  # below are not autofixed
-  "UP", # pyupgrade
-  "W",  # pycodestyle
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+ignore = [
+    # line too long -> we accept long comment lines; formatter gets rid of long code lines
+    "E501",
+    # Do not assign a lambda expression, use a def -> lambda expression assignments are convenient
+    "E731",
+    # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
+    "E741",
+    # Missing docstring in public package
+    "D104",
+    # Missing docstring in public module
+    "D100",
+    # Missing docstring in __init__
+    "D107",
+    # Do not perform function calls in argument defaults.
+    "B008",
+    # Missing docstring in magic method
+    "D105",
+    # Missing blank line before section
+    "D411",
+    # D100 Missing docstring in public module
+    "D100",
+    # D107 Missing docstring in __init__,
+    "D107",
+    # B008 Do not perform function calls in argument defaults.
+    "B008",
+    # B024 Do not use `__class__` for string comparisons.
+    "B024",
+    ## Flake8 rules not supported by ruff:
+    # RST201 Block quote ends without a blank line; unexpected unindent.
+    # "RST201",
+    # RST301 Unexpected indentation.
+    # "RST301",
+    # RST306 Unknown target name.
+    # "RST306",
+    # RST203 Definition list ends without a blank line; unexpected unindent.
+    # "RST203",
+    # line break before a binary operator -> black does not adhere to PEP8
+    # "W503",
+    # line break occured after a binary operator -> black does not adhere to PEP8
+    # "W504",
+    # whitespace before : -> black does not adhere to PEP8
+    # "E203",
+    # whitespace before : -> black does not adhere to PEP8
+    # "E203",
+    # missing whitespace after ,', ';', or ':' -> black does not adhere to PEP8
+    # "E231",
+    # continuation line over-indented for hanging indent -> black does not adhere to PEP8
+    # "E126",
+    # inline comment should start with '#' -> Scanpy allows them for specific explanations
+    # "E266",
+    # format string does contain unindexed parameters
+    # "P101",
+    # indentation is not a multiple of 4
+    # "E111",
+    # "E114",
 ]
+select = [
+    "I", # isort
+    "E", # pycodestyle
+    "F", # pyflakes
+    "W", # pycodestyle
+    # below are not autofixed
+    "UP", # pyupgrade
+    "C4", # flake8-comprehensions
+    "B", # flake8-bugbear
+    "BLE", # flake8-blind-except
+]
+unfixable = [
+    "B", "C4", "BLE",
+    "F401", # ... imported but unused
+]
+
+[tool.ruff.lint.isort]
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.per-file-ignores]
+"*/__init__.py" = ["D104", "F401"]
+"tests/*"= ["D"]
+"docs/*"= ["D","B"]
+"src/squidpy/pl/_ligrec.py"= ["D","B"]
+"src/squidpy/_constants/_pkg_constants.py"= ["D101","D102","D106"]
+"src/squidpy/_constants/_constants.py"= ["D101"]
+"src/squidpy/pl/_interactive/_widgets.py"= ["D"]
+"src/squidpy/pl/_interactive/interactive.py"= ["F","E"]
+".scripts/ci/download_data.py"= ["D","B"]
 # "squidpy/*.py"= ["RST303"]
-lint.ignore = [
-  # B008 Do not perform function calls in argument defaults.
-  "B008",
-  # B024 Do not use `__class__` for string comparisons.
-  "B024",
-  # D100 Missing docstring in public module
-  "D100",
-  # Missing docstring in public package
-  "D104",
-  # Missing docstring in magic method
-  "D105",
-  # D107 Missing docstring in __init__,
-  "D107",
-  # Missing blank line before section
-  "D411",
-  # line too long -> we accept long comment lines; formatter gets rid of long code lines
-  "E501",
-  # Do not assign a lambda expression, use a def -> lambda expression assignments are convenient
-  "E731",
-  # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
-  "E741",
-  ## Flake8 rules not supported by ruff:
-  # RST201 Block quote ends without a blank line; unexpected unindent.
-  # "RST201",
-  # RST301 Unexpected indentation.
-  # "RST301",
-  # RST306 Unknown target name.
-  # "RST306",
-  # RST203 Definition list ends without a blank line; unexpected unindent.
-  # "RST203",
-  # line break before a binary operator -> black does not adhere to PEP8
-  # "W503",
-  # line break occured after a binary operator -> black does not adhere to PEP8
-  # "W504",
-  # whitespace before : -> black does not adhere to PEP8
-  # "E203",
-  # whitespace before : -> black does not adhere to PEP8
-  # "E203",
-  # missing whitespace after ,', ';', or ':' -> black does not adhere to PEP8
-  # "E231",
-  # continuation line over-indented for hanging indent -> black does not adhere to PEP8
-  # "E126",
-  # inline comment should start with '#' -> Scanpy allows them for specific explanations
-  # "E266",
-  # format string does contain unindexed parameters
-  # "P101",
-  # indentation is not a multiple of 4
-  # "E111",
-  # "E114",
-]
-lint.per-file-ignores."*/__init__.py" = [ "D104", "F401" ]
-lint.per-file-ignores.".scripts/ci/download_data.py" = [ "B", "D" ]
-lint.per-file-ignores."docs/*" = [ "B", "D" ]
-lint.per-file-ignores."src/squidpy/_constants/_constants.py" = [ "D101" ]
-lint.per-file-ignores."src/squidpy/_constants/_pkg_constants.py" = [ "D101", "D102", "D106" ]
-lint.per-file-ignores."src/squidpy/pl/_interactive/_widgets.py" = [ "D" ]
-lint.per-file-ignores."src/squidpy/pl/_interactive/interactive.py" = [ "E", "F" ]
-lint.per-file-ignores."src/squidpy/pl/_ligrec.py" = [ "B", "D" ]
-lint.per-file-ignores."tests/*" = [ "D" ]
-lint.unfixable = [
-  "B",
-  "BLE",
-  "C4",
-  "F401", # ... imported but unused
-]
+
+[tool.ruff.lint.flake8-tidy-imports]
 # Disallow all relative imports.
-lint.flake8-tidy-imports.ban-relative-imports = "all"
-lint.isort.required-imports = [ "from __future__ import annotations" ]
+ban-relative-imports = "all"
 
 [tool.pytest.ini_options]
 filterwarnings = [
-  "error::numba.NumbaPerformanceWarning",
-  "ignore::UserWarning",
-  "ignore::anndata.OldFormatWarning",
-  "ignore:.*pkg_resources:DeprecationWarning",
+    "error::numba.NumbaPerformanceWarning",
+    "ignore::UserWarning",
+    "ignore::anndata.OldFormatWarning",
+    "ignore:.*pkg_resources:DeprecationWarning",
 ]
 python_files = "test_*.py"
-testpaths = [ "tests/" ]
+testpaths = ["tests/"]
 xfail_strict = true
 addopts = [
-  "--ignore=tests/plotting/test_interactive.py",
-  "--ignore=docs",
+    "--ignore=tests/plotting/test_interactive.py",
+    "--ignore=docs",
 ]
+
 
 [tool.coverage.run]
 branch = true
 parallel = true
-source = [ "squidpy" ]
+source = ["squidpy"]
 omit = [
-  "*/__init__.py",
-  "*/_version.py",
-  "squidpy/pl/_interactive/*",
-  "tox/*",
+    "*/__init__.py",
+    "*/_version.py",
+    "squidpy/pl/_interactive/*",
+    "tox/*",
 ]
 
 [tool.coverage.paths]
 source = [
-  "squidpy",
-  "*/site-packages/squidpy",
+    "squidpy",
+    "*/site-packages/squidpy",
 ]
 
 [tool.coverage.report]
 exclude_lines = [
-  "\\#.*pragma:\\s*no.?cover",
-  "^if __name__ == .__main__.:$",
-  "^\\s*raise AssertionError\\b",
-  "^\\s*raise NotImplementedError\\b",
-  "^\\s*return NotImplemented\\b",
+    "\\#.*pragma:\\s*no.?cover",
+    "^if __name__ == .__main__.:$",
+    "^\\s*raise AssertionError\\b",
+    "^\\s*raise NotImplementedError\\b",
+    "^\\s*return NotImplemented\\b",
 ]
 show_missing = true
 precision = 2
@@ -283,8 +296,8 @@ skip_empty = true
 sort = "Miss"
 
 [tool.pixi.workspace]
-channels = [ "conda-forge" ]
-platforms = [ "osx-arm64", "linux-64" ]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
 
 [tool.pixi.dependencies]
 python = ">=3.11"
@@ -299,13 +312,13 @@ python = "3.11.*"
 python = "3.13.*"
 
 [tool.pixi.environments]
-dev-py311 = { features = [ "dev", "test", "py311" ], solve-group = "py311" }
-docs-py311 = { features = [ "docs", "py311" ], solve-group = "py311" }
+dev-py311  = { features = ["dev", "test", "py311"], solve-group = "py311" }
+docs-py311 = { features = ["docs", "py311"],        solve-group = "py311" }
 
-default = { features = [ "py313" ], solve-group = "py313" }
-dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
-docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
-test-py313 = { features = [ "test", "py313" ], solve-group = "py313" }
+default    = { features = ["py313"],                 solve-group = "py313" }
+dev-py313  = { features = ["dev", "test", "py313"],  solve-group = "py313" }
+docs-py313 = { features = ["docs", "py313"],         solve-group = "py313" }
+test-py313 = { features = ["test", "py313"],         solve-group = "py313" }
 
 [tool.pixi.tasks]
 lab = "jupyter lab"
@@ -315,15 +328,3 @@ lint = "ruff check ."
 format = "ruff format ."
 pre-commit-install = "pre-commit install"
 pre-commit = "pre-commit run"
-
-[tool.cruft]
-skip = [
-  "tests",
-  "src/**/__init__.py",
-  "src/**/basic.py",
-  "docs/api.md",
-  "docs/changelog.md",
-  "docs/references.bib",
-  "docs/references.md",
-  "docs/notebooks/example.ipynb",
-]

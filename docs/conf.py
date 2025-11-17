@@ -1,4 +1,9 @@
-# -- Path setup --------------------------------------------------------------
+# Configuration file for the Sphinx documentation builder.
+
+# This file only contains a selection of the most common options. For a full
+# list see the documentation:
+# https://www.sphinx-doc.org/en/master/usage/configuration.html
+
 from __future__ import annotations
 
 import sys
@@ -9,25 +14,32 @@ from pathlib import Path
 from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE / "extensions"))
+sys.path.insert(0, str(HERE / "_ext"))
 
 
 # -- Project information -----------------------------------------------------
+
+
 info = metadata("squidpy")
 project_name = info["Name"]
 author = info["Author"]
 copyright = f"{datetime.now():%Y}, {author}"
 version = info["Version"]
-urls = dict(pu.split(", ") for pu in info.get_all("Project-URL"))
-repository_url = urls["Source"]
-
-# The full version, including alpha/beta/rc tags
 release = info["Version"]
 
-nitpicky = True  # Warn about broken links
-needs_sphinx = "4.0"
+# github_org = "scverse"
+# github_repo = "squidpy"
+# github_ref = "main"
+
+# # The full version, including alpha/beta/rc tags
+# # release = github_ref
+# # version = f"{release} ({info['Version']})"
 
 # -- General configuration ---------------------------------------------------
+
+# Add any Sphinx extension module names here, as strings. They can be
+# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
+# ones.
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
@@ -38,8 +50,6 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinxcontrib.bibtex",
     "sphinx_copybutton",
-    "sphinx_design",
-    "sphinx_tabs.tabs",
     "myst_nb",
     "nbsphinx",
     "typed_returns",

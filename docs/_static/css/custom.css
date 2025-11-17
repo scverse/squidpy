@@ -1,8 +1,3 @@
-/* Reduce the font size in data frames - See https://github.com/scverse/cookiecutter-scverse/issues/193 */
-div.cell_output table.dataframe {
-    font-size: 0.8em;
-}
-
 .small {
     font-size: 55%;
 }
@@ -80,7 +75,8 @@ div.output_subarea.output_html.rendered_html.output_result {
 }
 
 /* function/class top bar */
-html.writer-html5 .rst-content
+html.writer-html5
+    .rst-content
     dl[class]:not(.option-list):not(.field-list):not(.footnote):not(
         .glossary
     ):not(.simple)
@@ -91,7 +87,8 @@ html.writer-html5 .rst-content
 }
 
 /* class params */
-html.writer-html5 .rst-content
+html.writer-html5
+    .rst-content
     dl[class]:not(.option-list):not(.field-list):not(.footnote):not(
         .glossary
     ):not(.simple)
@@ -109,7 +106,7 @@ code.docutils.literal.notranslate > span[class="pre"] {
 }
 
 /* odd rows in API */
-.rst-content table.docutils:not(.field-list) tr:nth-child(2n - 1) td {
+.rst-content table.docutils:not(.field-list) tr:nth-child(2n-1) td {
     background-color: #f6f6f3;
 }
 

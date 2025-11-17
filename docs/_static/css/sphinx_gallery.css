@@ -26,7 +26,7 @@ div.sphx-glr-example-title div[class="highlight"] {
     border: none;
 }
 
-/* notebook output cell */ .sphx-glr-script-out .highlight pre {
+/ * notebook output cell */ .sphx-glr-script-out .highlight pre {
     background: #fdffd9 !important;
 }
 
@@ -92,7 +92,8 @@ div[class="rendered_html"] + br {
 }
 
 /* remove `Jupyter notebook: <name>` from `Download Jupyter notebook: <name>`*/
-div.sphx-glr-download-jupyter code.xref.download.docutils.literal.notranslate
+div.sphx-glr-download-jupyter
+    code.xref.download.docutils.literal.notranslate
     > span:nth-child(2),
 div.sphx-glr-download-jupyter
     code.xref.download.docutils.literal.notranslate
