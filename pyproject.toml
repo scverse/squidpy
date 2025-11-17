@@ -122,7 +122,7 @@ content-type = "text/x-rst"
 text = "|PyPI| |Downloads| |CI| |Docs| |Coverage| |Discourse| |Zulip|"
 
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
-path = "README.rst"
+path = "README.md"
 start-after = "|NumFOCUS|"
 end-before = "Squidpy is part of the scverse® project"
 
