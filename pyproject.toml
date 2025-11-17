@@ -4,45 +4,25 @@ requires = [ "hatch-fancy-pypi-readme", "hatch-vcs", "hatchling" ]
 
 [project]
 name = "squidpy"
-version = "1.6.5"
 description = "Spatial Single Cell Analysis in Python"
 readme = "README.md"
-keywords = [
-  "bio-informatics",
-  "image analysis",
-  "single-cell",
-  "spatial data analysis",
-  "spatial transcriptomics",
-]
 license = "BSD-3-Clause"
 maintainers = [
-  { name = "Tim Treis", email = "tim.treis@helmholtz-munich.de" },
+  { name = "Tim Treis", email = "tim.treis@scverse.org" },
   { name = "Selman Ozleyen", email = "selman.ozleyen@helmholtz-munich.de" },
 ]
 authors = [
-  { name = "Giovanni Palla" },
-  { name = "Michal Klein" },
-  { name = "Hannah Spitzer" },
-  { name = "Tim Treis" },
-  { name = "Laurens Lehner" },
-  { name = "Selman Ozleyen" },
+  { name = "scverse" },
 ]
 requires-python = ">=3.11"
 classifiers = [
-  "Development Status :: 5 - Production/Stable",
-  "Environment :: Console",
-  "Framework :: Jupyter",
-  "Intended Audience :: Science/Research",
-  "Natural Language :: English",
-  "Operating System :: MacOS :: MacOS X",
-  "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
-  "Topic :: Scientific/Engineering :: Bio-Informatics",
-  "Topic :: Scientific/Engineering :: Visualization",
-  "Typing :: Typed",
+]
+dynamic = [
+  "version", # allow version to be set by git tags
 ]
 dependencies = [
   "aiohttp>=3.8.1",
@@ -126,6 +106,9 @@ include-package-data = true
 
 [tool.hatch.version]
 source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "_version.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
