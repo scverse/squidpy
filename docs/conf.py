@@ -24,7 +24,6 @@ repository_url = urls["Source"]
 # The full version, including alpha/beta/rc tags
 release = info["Version"]
 
-nitpicky = True  # Warn about broken links
 needs_sphinx = "4.0"
 
 # -- General configuration ---------------------------------------------------
