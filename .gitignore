@@ -140,3 +140,7 @@ data
 
 # vscode
 .vscode
+
+# pixi
+.pixi
+pixi.lock
