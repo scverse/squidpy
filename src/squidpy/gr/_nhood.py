@@ -37,9 +37,9 @@ class NhoodEnrichmentResult(NamedTuple):
 
     Attributes
     ----------
-    zscore : NDArray[np.number]
+    zscore
         Z-score values of enrichment statistic.
-    count : NDArray[np.number]
+    count
         Enrichment count.
     """
 

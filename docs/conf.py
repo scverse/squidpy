@@ -64,6 +64,7 @@ intersphinx_mapping = dict(  # noqa: C408
     anndata=("https://anndata.readthedocs.io/en/stable/", None),
     scanpy=("https://scanpy.readthedocs.io/en/stable/", None),
     matplotlib=("https://matplotlib.org/stable/", None),
+    cycler=("https://matplotlib.org/cycler/", None),
     seaborn=("https://seaborn.pydata.org/", None),
     joblib=("https://joblib.readthedocs.io/en/latest/", None),
     networkx=("https://networkx.org/documentation/stable/", None),
@@ -148,7 +149,19 @@ spelling_filters = [
 # Link checking
 nitpicky = True  # this is linkcheck for Sphinx.
 nitpick_ignore = [
-    ("py:func", "numba.prange"),  # no reference docs
+    ("py:func", "numba.prange"),  # no reference for this function
+    ("py:class", "matplotlib_scalebar.ScaleBar"),  # this project has no sphinx docs
+    # TODO: fix using scanpydoc.elegant_typehints
+    ("py:class", "pathlib._local.Path"),
+    ("py:data", "typing.Union"),
+    # there seems to be a bug with autodoc for NamedTuple attributes
+    ("py:class", "NDArray"),
+    ("py:class", "np.number"),
+    ("py:class", "csr_matrix"),
+    # no idea why those aren’t exported
+    ("py:class", "squidpy._constants._constants.SpatialAutocorr"),
+    ("py:class", "squidpy._constants._constants.CoordType"),
+    ("py:class", "squidpy._constants._constants.Transform"),
 ]
 # see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369
 linkcheck_ignore = [

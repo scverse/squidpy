@@ -45,16 +45,11 @@ Miscellaneous
   `@giovp <https://github.com/giovp>`__
   `#643 <https://github.com/scverse/squidpy/pull/643>`__
 
-- Add :attr: option to :func:`squidpy.gr.spatial_autocorr` to select values from :attr:`anndata.AnnData.obs` or :attr:`anndata.AnnData.obsm`.
+- Add `attr`: option to :func:`squidpy.gr.spatial_autocorr` to select values from :attr:`anndata.AnnData.obs` or :attr:`anndata.AnnData.obsm`.
   `@michalk8 <https://github.com/michalk8>`__
-  `#664 <https://github.com/scverse/squidpy/pull/664>`__
+  `#664 <https://github.com/scverse/squidpy/pull/664>`__, `#672 <https://github.com/scverse/squidpy/pull/672>`__
 
-- Add :attr:`attr` option to :func:`squidpy.gr.spatial_autocorr` to select values from :attr:`anndata.AnnData.obs`
-  or :attr:`anndata.AnnData.obsm.`
-  `@michalk8 <https://github.com/michalk8>`__
-  `#672 <https://github.com/scverse/squidpy/pull/672>`__
-
-- Add :attr:`percentile` option to :func:`squidpy.gr.spatial_neighbors` to filter neighbor graph using percentile of distances threshold.
+- Add `percentile` option to :func:`squidpy.gr.spatial_neighbors` to filter neighbor graph using percentile of distances threshold.
   `@LLehner <https://github.com/LLehner>`__
   `#690 <https://github.com/scverse/squidpy/pull/690>`__
 

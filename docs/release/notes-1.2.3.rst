@@ -12,7 +12,7 @@ Bugfixes
   `@giovp <https://github.com/giovp>`__
   `#568 <https://github.com/scverse/squidpy/pull/568>`__
 
-- Convert :attr:`ListedColorMap` to :attr:`Cycler` object.
+- Convert `ListedColorMap` to `Cycler` object.
   `@michalk8 <https://github.com/michalk8>`__
   `#580 <https://github.com/scverse/squidpy/pull/580>`__
 

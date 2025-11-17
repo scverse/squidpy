@@ -7,11 +7,11 @@ Bugfixes
   `#320 <https://github.com/scverse/squidpy/pull/320>`__
   `@hspitzer <https://github.com/hspitzer>`__
 
-- Fix handling of :attr:`anndata.AnnData.obsm` in :meth:`squidpy.im.ImageContainer.interactive`.
+- Fix handling of :attr:`anndata.AnnData.obsm` in `squidpy.im.ImageContainer.interactive`.
   `#335 <https://github.com/scverse/squidpy/pull/335>`__
   `@michalk8 <https://github.com/michalk8>`__
 
-- Fix Z-dimension in :meth:`squidpy.im.ImageContainer.interactive`.
+- Fix Z-dimension in `squidpy.im.ImageContainer.interactive`.
   `#351 <https://github.com/scverse/squidpy/pull/351>`__
   `@hspitzer <https://github.com/hspitzer>`__
 
@@ -40,7 +40,7 @@ Features
   `#322 <https://github.com/scverse/squidpy/pull/322>`__
   `@MxMstrmn <https://github.com/MxMstrmn>`__
 
-- Add lazy computation using :mod:`dask` for :mod:`squidpy.im`.
+- Add lazy computation using :doc:`dask:index` for :mod:`squidpy.im`.
   `#324 <https://github.com/scverse/squidpy/pull/324>`__
   `@michalk8 <https://github.com/michalk8>`__
 
@@ -67,7 +67,7 @@ Features
   `#354 <https://github.com/scverse/squidpy/pull/354>`__
   `@hspitzer <https://github.com/hspitzer>`__
 
-- Expose ``canvas_only`` in :meth:`squidpy.pl.Interactive.screenshot`.
+- Expose ``canvas_only`` in `squidpy.pl.Interactive.screenshot`.
   `#363 <https://github.com/scverse/squidpy/pull/363>`__
   `@giovp <https://github.com/giovp>`__
 

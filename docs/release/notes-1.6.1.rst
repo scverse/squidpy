@@ -4,14 +4,14 @@ Squidpy 1.6.1 (2024-08-23)
 Features
 --------
 
-- Update :func:`pl.var_by_distance` to plot values from :attr:`AnnData.obs` `@LLehner <https://github.com/LLehner>`__
+- Update :func:`squidpy.pl.var_by_distance` to plot values from :attr:`anndata.AnnData.obs` `@LLehner <https://github.com/LLehner>`__
   `#868 <https://github.com/scverse/squidpy/pull/868>`__
 
 
 Documentation
 -------------
 
-- Add Xenium tutorial with :attr:`spatialdata` `@LLehner <https://github.com/LLehner>`__
+- Add Xenium tutorial with :mod:`spatialdata` `@LLehner <https://github.com/LLehner>`__
   `#125 <https://github.com/scverse/squidpy_notebooks/pull/125>`__
 
 

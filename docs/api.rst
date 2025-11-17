@@ -17,6 +17,7 @@ Graph
     :toctree: api
 
     gr.spatial_neighbors
+    gr.SpatialNeighborsResult
     gr.mask_graph
     gr.nhood_enrichment
     gr.NhoodEnrichmentResult
@@ -40,6 +41,7 @@ Image
     im.process
     im.segment
     im.calculate_image_features
+    im.SegmentationModel
 
 Plotting
 ~~~~~~~~
