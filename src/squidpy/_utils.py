@@ -256,7 +256,7 @@ def _get_n_cores(n_cores: int | None) -> int:
 @contextmanager
 def verbosity(level: int) -> Generator[None, None, None]:
     """
-    Temporarily set the verbosity level of :mod:`scanpy`.
+    Temporarily set the verbosity level of :doc:`scanpy <scanpy:index>`.
 
     Parameters
     ----------

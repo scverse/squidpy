@@ -3,9 +3,9 @@
 ## Miscellaneous
 
 - Rename organization references and update pre-commit checks.
-  `@giovp <https://github.com/giovp>`__
-  `#551 <https://github.com/scverse/squidpy/pull/551>`__
+  [@giovp](https://github.com/giovp)
+  [#551](https://github.com/scverse/squidpy/pull/551)
 
 - Fix types.
-  `@giovp <https://github.com/giovp>`__
-  `#554 <https://github.com/scverse/squidpy/pull/554>`__
+  [@giovp](https://github.com/giovp)
+  [#554](https://github.com/scverse/squidpy/pull/554)

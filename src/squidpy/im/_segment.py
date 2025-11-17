@@ -248,7 +248,7 @@ class SegmentationCustom(SegmentationModel):
     func
         Segmentation function to use. Can be any :func:`callable`, as long as it has the following signature:
         :class:`numpy.ndarray` ``(height, width, channels)`` **->** :class:`numpy.ndarray` ``(height, width[, 1])``.
-        The segmentation must be of :class:`numpy.uint32` type, where 0 marks background.
+        The segmentation must be of :attr:`numpy.uint32` type, where 0 marks background.
     """
 
     def __init__(self, func: Callable[..., NDArrayA]):

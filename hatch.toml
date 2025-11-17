@@ -8,9 +8,9 @@ extra-dependencies = [
     "setuptools",
 ]
 [envs.docs.scripts]
-build = "make -C docs html {args}"
-clean = "make -C docs clean"
-check = "make -C docs linkcheck {args}"
+build = "sphinx-build -M html docs docs/_build -W {args}"
+open = "python3 -m webbrowser -t docs/_build/html/index.html"
+clean = "git clean -fdX -- {args:docs}"
 
 [envs.data]
 [envs.data.scripts]

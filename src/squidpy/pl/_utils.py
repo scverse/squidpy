@@ -105,7 +105,7 @@ def extract(
     Create a temporary :class:`anndata.AnnData` object for plotting.
 
     Move columns from :attr:`anndata.AnnData.obsm` ``['{obsm_key}']`` to :attr:`anndata.AnnData.obs` to enable
-    the use of :mod:`scanpy.plotting` functions.
+    the use of :mod:`scanpy.pl` functions.
 
     Parameters
     ----------

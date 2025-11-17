@@ -29,7 +29,7 @@ from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib_scalebar.scalebar import ScaleBar
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scanpy._settings import settings as sc_settings
+from scanpy import settings as sc_settings
 from scanpy.plotting._tools.scatterplots import _add_categorical_legend
 from skimage.color import label2rgb
 from skimage.morphology import erosion, square

@@ -236,7 +236,7 @@ class PermutationTestABC(ABC):
                 - :class:`typing.Sequence` - Either a sequence of :class:`str`, in which case all combinations are
                   produced, or a sequence of :class:`tuple` of 2 :class:`str` or a :class:`tuple` of 2 sequences.
 
-            If `None`, the interactions are extracted from :mod:`omnipath`. Protein complexes can be specified by
+            If `None`, the interactions are extracted from :doc:`omnipath <omnipath:api>`. Protein complexes can be specified by
             delimiting the components with `'_'`, such as `'alpha_beta_gamma'`.
         complex_policy
             Policy on how to handle complexes. Valid options are:
@@ -712,7 +712,7 @@ def _analysis(
     n_jobs
         Number of parallel jobs to launch.
     numba_parallel
-        Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
+        Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
     kwargs
         Keyword arguments for :func:`squidpy._utils.parallelize`, such as ``n_jobs`` or ``backend``.
 
@@ -805,7 +805,7 @@ def _analysis_helper(
     seed
         Random seed for :class:`numpy.random.RandomState`.
     numba_parallel
-        Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
+        Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
     queue
         Signalling queue to update progress bar.
 
