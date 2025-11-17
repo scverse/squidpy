@@ -40,7 +40,7 @@ copy
     If ``True``, return the result, otherwise save it to the image container."""
 _numba_parallel = """\
 numba_parallel
-    Whether to use :class:`numba.prange` or not. If `None`, it is determined automatically.
+    Whether to use :func:`numba.prange` or not. If `None`, it is determined automatically.
     For small datasets or small number of interactions, it's recommended to set this to `False`."""
 _seed = """\
 seed

@@ -144,6 +144,9 @@ spelling_filters = [
     "docs.source.utils.SignatureFilter",
     "enchant.tokenize.MentionFilter",
 ]
+
+# Link checking
+nitpicky = True  # this is linkcheck for Sphinx.
 # see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369
 linkcheck_ignore = [
     # 403 Client Error

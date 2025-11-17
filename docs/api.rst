@@ -1,5 +1,8 @@
 API
 ===
+
+.. module:: squidpy
+
 Import Squidpy as::
 
     import squidpy as sq
