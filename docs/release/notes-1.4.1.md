@@ -3,5 +3,5 @@
 ## Bugfixes
 
 - Unpin ``scikit-image``.
-  `@giovp <https://github.com/giovp>`__
-  `#796 <https://github.com/scverse/squidpy/pull/796>`__
+  [@giovp](https://github.com/giovp)
+  [#796](https://github.com/scverse/squidpy/pull/796)

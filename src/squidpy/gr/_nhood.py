@@ -33,15 +33,7 @@ __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
 
 
 class NhoodEnrichmentResult(NamedTuple):
-    """Result of nhood_enrichment function.
-
-    Attributes
-    ----------
-    zscore
-        Z-score values of enrichment statistic.
-    count
-        Enrichment count.
-    """
+    """Result of nhood_enrichment function."""
 
     zscore: NDArray[np.number]
     counts: NDArray[np.number]  # NamedTuple inherits from tuple so cannot use 'count' as attribute name

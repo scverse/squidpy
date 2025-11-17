@@ -1,6 +1,8 @@
 # API
 
+```{eval-rst}
 .. module:: squidpy
+```
 
 Import Squidpy as:
 
@@ -39,6 +41,8 @@ import squidpy as sq
     im.process
     im.segment
     im.calculate_image_features
+    im.SegmentationModel
+```
 
 ## Plotting
 ```{eval-rst}
