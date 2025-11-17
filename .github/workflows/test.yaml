@@ -99,6 +99,8 @@ jobs:
             env: { name: hatch-test.py3.11-stable }
           - os: macos-latest
             env: { name: hatch-test.py3.12-stable }
+          - os: ubuntu-latest
+            env: { name: hatch-test.py3.13-stable } # skipping because we run this as a coverage job
     name: ${{ matrix.env.label }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     steps:
