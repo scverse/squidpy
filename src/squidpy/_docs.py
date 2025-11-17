@@ -48,6 +48,12 @@ seed
 _n_perms = """\
 n_perms
     Number of permutations for the permutation test."""
+_normalization = """\
+normalization
+    Normalization of neighbor counts either `none`, `total` (divide by total number of index cell types) or `conditional` (divide by number of index cell types with at least one neighbor of neighbor cell type)."""
+_min_cell_count = """\
+min_cell_count
+    Minimum number of cells that have to be in a cluster to be included in analysis. If count > min_cell_count, peir will be set to NA."""
 _img_layer = """\
 layer
     Image layer in ``img`` that should be processed. If `None` and only 1 layer is present, it will be selected."""
@@ -367,6 +373,8 @@ d = DocstringProcessor(
     numba_parallel=_numba_parallel,
     seed=_seed,
     n_perms=_n_perms,
+    normalization=_normalization,
+    min_cell_count=_min_cell_count,
     img_layer=_img_layer,
     feature_name=_feature_name,
     yx=_yx,
