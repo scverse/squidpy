@@ -81,8 +81,7 @@ jobs:
                 | {
                     name: .key,
                     label: (if (.key | contains("pre")) then .key + " (PRE-RELEASE DEPENDENCIES)" else .key end),
-                    python: .value.python,
-                    test_type: (if (.key | contains("py3.13-stable")) then "coverage" else null end)
+                    python: .value.python
                   }
               )')
           echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
@@ -145,30 +144,10 @@ jobs:
         run: uvx hatch env create ${{ matrix.env.name }}
 
       - name: run tests using hatch
-        if: matrix.env.test_type == null
         env:
           PLATFORM: ${{ matrix.os }}
           DISPLAY: :42
         run: uvx hatch run ${{ matrix.env.name }}:run -v --color=yes -n auto
-
-      - name: run tests using hatch (coverage)
-        if: matrix.env.test_type == 'coverage'
-        env:
-          PLATFORM: ${{ matrix.os }}
-          DISPLAY: :42
-        run: |
-          uvx hatch run ${{ matrix.env.name }}:cov-erase
-          uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes
-          uvx hatch run ${{ matrix.env.name }}:cov-combine
-          uvx hatch run ${{ matrix.env.name }}:cov-report
-
-      - name: generate coverage report
-        if: matrix.env.test_type == 'coverage'
-        run: |
-          # See https://coverage.readthedocs.io/en/latest/config.html#run-patch
-          test -f .coverage || uvx hatch run ${{ matrix.env.name }}:cov-combine
-          uvx hatch run ${{ matrix.env.name }}:cov-report   # report visibly
-          uvx hatch run ${{ matrix.env.name }}:coverage xml # create report for upload
 
       - name: Archive figures generated during testing
         if: always()
@@ -177,12 +156,63 @@ jobs:
           name: visual_test_results_${{ runner.os }}_${{ matrix.env.name }}
           path: ${{ github.workspace }}/tests/figures/*
 
+  coverage:
+    name: Coverage (ubuntu-latest, hatch-test.py3.13-stable)
+    needs: [ensure-data-is-cached]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          filter: blob:none
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+          cache-dependency-glob: pyproject.toml
+
+      - name: Ensure figure directory exists
+        run: mkdir -p "$GITHUB_WORKSPACE/tests/figures"
+
+      - name: Restore data cache
+        id: coverage-data-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/squidpy/*.h5ad
+            ~/.cache/squidpy/*.zarr
+          key: data-${{ hashFiles('**/download_data.py') }}
+          enableCrossOsArchive: true
+
+      - name: System dependencies (Linux)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install automake -y
+
+          # PyQt5 related
+          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
+          sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
+
+      - name: create hatch environment
+        run: uvx hatch env create hatch-test.py3.13-stable
+
+      - name: run coverage tests
+        env:
+          PLATFORM: ubuntu-latest
+          DISPLAY: :42
+        run: |
+          uvx hatch run hatch-test.py3.13-stable:cov-erase
+          uvx hatch run hatch-test.py3.13-stable:run-cov -v --color=yes
+          uvx hatch run hatch-test.py3.13-stable:cov-combine
+          uvx hatch run hatch-test.py3.13-stable:cov-report
+
       - name: Upload coverage
-        if: matrix.env.test_type == 'coverage'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+
 
   # Check that all tests defined above pass. This makes it easy to set a single "required" test in branch
   # protection instead of having to update it frequently. See https://github.com/re-actors/alls-green#why.
@@ -192,6 +222,7 @@ jobs:
     needs:
       - get-environments
       - test
+      - coverage
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1

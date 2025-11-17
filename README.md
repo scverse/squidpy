@@ -1,50 +1,78 @@
+[![Build](https://github.com/scverse/squidpy/actions/workflows/build.yaml/badge.svg)](https://github.com/scverse/squidpy/actions/workflows/build.yaml)
+[![Test](https://github.com/scverse/squidpy/actions/workflows/test.yaml/badge.svg)](https://github.com/scverse/squidpy/actions/workflows/test.yaml)
+[![codecov](https://codecov.io/gh/scverse/squidpy/graph/badge.svg)](https://codecov.io/gh/scverse/squidpy)
+[![License](https://img.shields.io/github/license/scverse/squidpy)](https://opensource.org/licenses/BSD-3-Clause)
 [![PyPI](https://img.shields.io/pypi/v/squidpy.svg)](https://pypi.org/project/squidpy/)
-[![Downloads](https://pepy.tech/badge/squidpy)](https://pepy.tech/project/squidpy)
-[![CI](https://img.shields.io/github/actions/workflow/status/scverse/squidpy/test.yml?branch=main)](https://github.com/scverse/squidpy/actions)
-[![Docs](https://img.shields.io/readthedocs/squidpy)](https://squidpy.readthedocs.io/en/stable/)
-[![Coverage](https://codecov.io/gh/scverse/squidpy/branch/main/graph/badge.svg)](https://codecov.io/gh/scverse/squidpy)
-[![Discourse](https://img.shields.io/discourse/posts?color=yellow&logo=discourse&server=https%3A%2F%2Fdiscourse.scverse.org)](https://discourse.scverse.org/)
-[![Zulip](https://img.shields.io/badge/zulip-join_chat-%2367b08f.svg)](https://scverse.zulipchat.com)
-[![NumFOCUS](https://img.shields.io/badge/powered%20by-NumFOCUS-orange.svg?style=flat&colorA=E1523D&colorB=007D8A)](http://numfocus.org)
+[![Python Version](https://img.shields.io/pypi/pyversions/squidpy)](https://pypi.org/project/squidpy/)
+[![Read the Docs](https://img.shields.io/readthedocs/squidpy/latest.svg?label=Read%20the%20Docs)](https://squidpy.readthedocs.io/en/stable)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 
 # Squidpy - Spatial Single Cell Analysis in Python
 
-**Squidpy** is a tool for the analysis and visualization of spatial molecular data.
-It builds on top of [scanpy](https://scanpy.readthedocs.io/en/stable/) and [anndata](https://anndata.readthedocs.io/en/stable/), from which it inherits modularity and scalability.
-It provides analysis tools that leverages the spatial coordinates of the data, as well as tissue images if available.
+Squidpy is the scverse toolkit for scalable analysis and visualization of spatial molecular data.
+It builds on [scanpy](https://scanpy.readthedocs.io/en/stable/) and [anndata](https://anndata.readthedocs.io/en/stable/), providing streamlined APIs for feature extraction, spatial statistics, and interactive exploration of tissue sections together with microscopy images.
 
-Visit our [documentation](https://squidpy.readthedocs.io/en/stable/) for installation, tutorials, examples and more.
+![Squidpy overview](https://raw.githubusercontent.com/scverse/squidpy/main/docs/_static/img/figure1.png)
 
-## Manuscript
+## Documentation
 
-Please see our manuscript [Palla, Spitzer et al. (2022)](https://doi.org/10.1038/s41592-021-01358-2) in **Nature Methods** to learn more.
-
-## Squidpy's key applications
-
-- Build and analyze the neighborhood graph from spatial coordinates.
-- Compute spatial statistics for cell-types and genes.
-- Efficiently store, analyze and visualize large tissue images, leveraging [skimage](https://scikit-image.org/).
-- Interactively explore [anndata](https://anndata.readthedocs.io/en/stable/) and large tissue images in [napari](https://napari.org/).
+Head over to the [documentation](https://squidpy.readthedocs.io/en/stable/) for installation instructions, tutorials, how-to guides, and reference material.
 
 ## Installation
 
-Install Squidpy via PyPI by running:
+We recommend running Squidpy on a recent Linux or macOS system with Python ≥3.11, but it also works on Windows via WSL.
 
-```bash
+Install from [PyPI](https://pypi.org/project/squidpy) with:
+
+```console
 pip install squidpy
-# or with napari included
-pip install 'squidpy[interactive]'
 ```
 
-or via Conda as:
+or from [conda-forge](https://anaconda.org/conda-forge/squidpy):
 
-```bash
+```console
 conda install -c conda-forge squidpy
 ```
 
-## Contributing to Squidpy
+### Interactive visualization
 
-We are happy about any contributions! Before you start, check out our [contributing guide](CONTRIBUTING.rst).
+To get optional dependencies required for the napari-based interactive plotting APIs, install the `interactive` extra:
+
+```console
+pip install 'squidpy[interactive]'
+```
+
+## Key capabilities
+
+- Build and analyze spatial neighbor graphs directly from Visium, Slide-seq, Xenium, and other spatial omics assays.
+- Compute spatial statistics for cell types and genes, including neighborhood enrichment, co-occurrence, and Moran's I.
+- Efficiently store, featurize, and visualize high-resolution tissue microscopy images via [scikit-image](https://scikit-image.org/).
+- Explore annotated datasets interactively with [napari](https://napari.org/) and scverse visualization tooling.
+
+## Contributing
+
+Contributions are welcome! Please read the [contributing guide](CONTRIBUTING.rst) for instructions on setting up your environment, running tests, and submitting pull requests.
+
+## Citation
+
+If you use Squidpy in your research, cite the original publication:
+
+```bibtex
+@article{palla:22,
+    author = {Palla, Giovanni and Spitzer, Hannah and Klein, Michal and Fischer, David and Schaar, Anna Christina
+              and Kuemmerle, Louis Benedikt and Rybakov, Sergei and Ibarra, Ignacio L. and Holmberg, Olle
+              and Virshup, Isaac and Lotfollahi, Mohammad and Richter, Sabrina and Theis, Fabian J.},
+    title = {Squidpy: a scalable framework for spatial omics analysis},
+    journal = {Nature Methods},
+    year = {2022},
+    month = {Feb},
+    volume = {19},
+    number = {2},
+    pages = {171--178},
+    issn = {1548-7105},
+    doi = {10.1038/s41592-021-01358-2},
+}
+```
 
 ---
 
