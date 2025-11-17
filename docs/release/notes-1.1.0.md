@@ -2,80 +2,80 @@
 
 ## Bugfixes
 
-- Fix :class:`squidpy.im.ImageContainer` to work with different scaled.
-  `#320 <https://github.com/scverse/squidpy/pull/320>`__
-  `@hspitzer <https://github.com/hspitzer>`__
+- Fix {class}`squidpy.im.ImageContainer` to work with different scaled.
+  [#320](https://github.com/scverse/squidpy/pull/320)
+  [@hspitzer](https://github.com/hspitzer)
 
-- Fix handling of :attr:`anndata.AnnData.obsm` in :meth:`squidpy.im.ImageContainer.interactive`.
-  `#335 <https://github.com/scverse/squidpy/pull/335>`__
-  `@michalk8 <https://github.com/michalk8>`__
+- Fix handling of :attr:`anndata.AnnData.obsm` in `squidpy.im.ImageContainer.interactive`.
+  [#335](https://github.com/scverse/squidpy/pull/335)
+  [@michalk8](https://github.com/michalk8)
 
-- Fix Z-dimension in :meth:`squidpy.im.ImageContainer.interactive`.
-  `#351 <https://github.com/scverse/squidpy/pull/351>`__
-  `@hspitzer <https://github.com/hspitzer>`__
+- Fix Z-dimension in `squidpy.im.ImageContainer.interactive`.
+  [#351](https://github.com/scverse/squidpy/pull/351)
+  [@hspitzer](https://github.com/hspitzer)
 
-- Fix plotting bug in :func:`squidpy.pl.ripley`.
-  `#352 <https://github.com/scverse/squidpy/pull/352>`__
-  `@giovp <https://github.com/giovp>`__
+- Fix plotting bug in {func}`squidpy.pl.ripley`.
+  [#352](https://github.com/scverse/squidpy/pull/352)
+  [@giovp](https://github.com/giovp)
 
-- Fix handling of NaNs in :func:`squidpy.gr.ligrec`.
-  `#362 <https://github.com/scverse/squidpy/pull/362>`__
-  `@michalk8 <https://github.com/michalk8>`__
+- Fix handling of NaNs in {func}`squidpy.gr.ligrec`.
+  [#362](https://github.com/scverse/squidpy/pull/362)
+  [@michalk8](https://github.com/michalk8)
 
 ## Features
 
 - Add many new tutorials and examples.
 
-- Add :func:`squidpy.gr.sepal` :cite:`andersson2021`
-  `#313 <https://github.com/scverse/squidpy/pull/313>`__
-  `@giovp <https://github.com/giovp>`__
+- Add {func}`squidpy.gr.sepal` :cite:`andersson2021`
+  [#313](https://github.com/scverse/squidpy/pull/313)
+  [@giovp](https://github.com/giovp)
 
-- Replace ``squidpy.gr.moran`` with :func:`squidpy.gr.spatial_autocorr`, which implements both Moran's I and
+- Replace ``squidpy.gr.moran`` with {func}`squidpy.gr.spatial_autocorr`, which implements both Moran's I and
   Geary's C.
-  `#317 <https://github.com/scverse/squidpy/pull/317>`__
-  `@giovp <https://github.com/giovp>`__
+  [#317](https://github.com/scverse/squidpy/pull/317)
+  [@giovp](https://github.com/giovp)
 
-- Add option to compute graph from Delaunay triangulation in :func:`squidpy.gr.spatial_neighbors`.
-  `#322 <https://github.com/scverse/squidpy/pull/322>`__
-  `@MxMstrmn <https://github.com/MxMstrmn>`__
+- Add option to compute graph from Delaunay triangulation in {func}`squidpy.gr.spatial_neighbors`.
+  [#322](https://github.com/scverse/squidpy/pull/322)
+  [@MxMstrmn](https://github.com/MxMstrmn)
 
-- Add lazy computation using :mod:`dask` for :mod:`squidpy.im`.
-  `#324 <https://github.com/scverse/squidpy/pull/324>`__
-  `@michalk8 <https://github.com/michalk8>`__
+- Add lazy computation using :doc:`dask:index` for {mod}`squidpy.im`.
+  [#324](https://github.com/scverse/squidpy/pull/324)
+  [@michalk8](https://github.com/michalk8)
 
-- Allow Z-dimension shared across all layers in :class:`squidpy.im.ImageContainer`.
-  `#329 <https://github.com/scverse/squidpy/pull/329>`__
-  `@hspitzer <https://github.com/hspitzer>`__
+- Allow Z-dimension shared across all layers in {class}`squidpy.im.ImageContainer`.
+  [#329](https://github.com/scverse/squidpy/pull/329)
+  [@hspitzer](https://github.com/hspitzer)
 
-- Replace ``squidpy.gr.ripley_k`` with :func:`squidpy.gr.ripley`.
-  `#331 <https://github.com/scverse/squidpy/pull/331>`__
-  `@giovp <https://github.com/giovp>`__
+- Replace ``squidpy.gr.ripley_k`` with {func}`squidpy.gr.ripley`.
+  [#331](https://github.com/scverse/squidpy/pull/331)
+  [@giovp](https://github.com/giovp)
 
-- Generalize graph building in :func:`squidpy.gr.spatial_neighbors`.
-  `#340 <https://github.com/scverse/squidpy/pull/340>`__
-  `@Koncopd <https://github.com/Koncopd>`__
+- Generalize graph building in {func}`squidpy.gr.spatial_neighbors`.
+  [#340](https://github.com/scverse/squidpy/pull/340)
+  [@Koncopd](https://github.com/Koncopd)
 
 - Add 3 new example datasets:
-  - :func:`squidpy.datasets.merfish`
-  - :func:`squidpy.datasets.mibitof`
-  - :func:`squidpy.datasets.slideseqv2`
-  `#348 <https://github.com/scverse/squidpy/pull/348>`__
-  `@giovp <https://github.com/giovp>`__
+  - {func}`squidpy.datasets.merfish`
+  - {func}`squidpy.datasets.mibitof`
+  - {func}`squidpy.datasets.slideseqv2`
+  [#348](https://github.com/scverse/squidpy/pull/348)
+  [@giovp](https://github.com/giovp)
 
-- Enable additional layer specification in :func:`squidpy.im.calculate_image_features`.
-  `#354 <https://github.com/scverse/squidpy/pull/354>`__
-  `@hspitzer <https://github.com/hspitzer>`__
+- Enable additional layer specification in {func}`squidpy.im.calculate_image_features`.
+  [#354](https://github.com/scverse/squidpy/pull/354)
+  [@hspitzer](https://github.com/hspitzer)
 
-- Expose ``canvas_only`` in :meth:`squidpy.pl.Interactive.screenshot`.
-  `#363 <https://github.com/scverse/squidpy/pull/363>`__
-  `@giovp <https://github.com/giovp>`__
+- Expose ``canvas_only`` in `squidpy.pl.Interactive.screenshot`.
+  [#363](https://github.com/scverse/squidpy/pull/363)
+  [@giovp](https://github.com/giovp)
 
 - Various minor improvements to the documentation.
-  `#356 <https://github.com/scverse/squidpy/pull/356>`__
-  `@michalk8 <https://github.com/michalk8>`__
+  [#356](https://github.com/scverse/squidpy/pull/356)
+  [@michalk8](https://github.com/michalk8)
 
-  `#358 <https://github.com/scverse/squidpy/pull/358>`__
-  `@michalk8 <https://github.com/michalk8>`__
+  [#358](https://github.com/scverse/squidpy/pull/358)
+  [@michalk8](https://github.com/michalk8)
 
-  `#359 <https://github.com/scverse/squidpy/pull/359>`__
-  `@michalk8 <https://github.com/michalk8>`__
+  [#359](https://github.com/scverse/squidpy/pull/359)
+  [@michalk8](https://github.com/michalk8)

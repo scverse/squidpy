@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 import spatialdata as sd
 from anndata.tests.helpers import assert_adata_equal
-from scanpy._settings import settings
+from scanpy import settings
 
 from squidpy.datasets import visium, visium_hne_sdata
 

@@ -1,6 +1,11 @@
 # API
 
+```{eval-rst}
+.. module:: squidpy
+```
+
 Import Squidpy as:
+
 ```python
 import squidpy as sq
 ```
@@ -13,8 +18,10 @@ import squidpy as sq
     :toctree: api
 
     gr.spatial_neighbors
+    gr.SpatialNeighborsResult
     gr.mask_graph
     gr.nhood_enrichment
+    gr.NhoodEnrichmentResult
     gr.co_occurrence
     gr.centrality_scores
     gr.interaction_matrix
@@ -34,6 +41,7 @@ import squidpy as sq
     im.process
     im.segment
     im.calculate_image_features
+    im.SegmentationModel
 ```
 
 ## Plotting
@@ -74,6 +82,7 @@ import squidpy as sq
 .. autosummary::
     :toctree: api
 
+    tl.sliding_window
     tl.var_by_distance
 ```
 

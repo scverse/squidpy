@@ -13,18 +13,22 @@ It builds on top of [scanpy](https://scanpy.readthedocs.io/en/stable/) and [annd
 It provides analysis tools that leverage the spatial coordinates of the data, as well as tissue images if available.
 
 [![Squidpy title figure](https://raw.githubusercontent.com/scverse/squidpy/main/docs/_static/img/figure1.png)](https://doi.org/10.1038/s41592-021-01358-2)
-```{eval-rst}
-.. warning::
-    🚨🚨🚨 **Warning!** 🚨🚨🚨
+```{warning}
+🚨🚨🚨 **Warning!** 🚨🚨🚨
 
-    The original napari-plugin of Squidpy has been moved to `napari-spatialdata <https://github.com/scverse/napari-spatialdata>`_.
+The original napari-plugin of Squidpy has been moved to [napari-spatialdata].
 
-    All the functionalities previously available are also implemented in the new plugin, which also has many additional new features.
+All the functionalities previously available are also implemented in the new plugin, which also has many additional new features.
 
-    You can find a rich set of `documentation and examples <https://spatialdata.scverse.org/projects/napari/en/latest/index.html>`_, and we suggest starting with this `tutorial <https://spatialdata.scverse.org/projects/napari/en/latest/notebooks/spatialdata.html>`_.
+You can find a rich set of [documentation and examples], and we suggest starting with the [napari-spatialdata tutorial].
 
-    If you are new to SpatialData, we invite you to take a look at the documentation `here <https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks.html>`_.
+If you are new to SpatialData, we invite you to take a look at the [spatialdata tutorials].
 ```
+
+[napari-spatialdata]: https://github.com/scverse/napari-spatialdata
+[documentation and examples]: https://spatialdata.scverse.org/projects/napari/en/latest/index.html
+[napari-spatialdata tutorial]: https://spatialdata.scverse.org/projects/napari/en/latest/notebooks/spatialdata.html
+[spatialdata tutorials]: https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks.html
 
 Squidpy is part of the scverse® project ([website](https://scverse.org/), [governance](https://scverse.org/about/roles/)) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/).
 Please consider making a tax-deductible [donation](https://numfocus.org/donate-to-scverse/) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.

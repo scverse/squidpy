@@ -31,7 +31,7 @@ it is still possible to use different tools to manage dependencies, such as `uv`
 ## Installing dev dependencies
 
 In addition to the packages needed to _use_ this package,
-you need additional python packages to [run tests](#writing-tests) and [build the documentation](#docs-building).
+you need additional python packages to {ref}`writing-tests` and {ref}`docs-building`.
 
 :::::{tabs}
 ::::{group-tab} Hatch
@@ -264,7 +264,7 @@ This project uses [sphinx][] with the following features:
 - [Numpy-style docstrings][numpydoc] (through the [napoloen][numpydoc-napoleon] extension).
 - Jupyter notebooks as tutorials through [myst-nb][] (See [Tutorials with myst-nb](#tutorials-with-myst-nb-and-jupyter-notebooks))
 - [sphinx-autodoc-typehints][], to automatically reference annotated input and output types
-- Citations (like {cite:p}`Virshup_2023`) can be included with [sphinxcontrib-bibtex](https://sphinxcontrib-bibtex.readthedocs.io/)
+- Citations (like {cite:p}`palla:22`) can be included with [sphinxcontrib-bibtex](https://sphinxcontrib-bibtex.readthedocs.io/)
 
 See scanpy’s {doc}`scanpy:dev/documentation` for more information on how to write your own.
 

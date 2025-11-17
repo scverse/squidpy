@@ -49,7 +49,7 @@ def visium(
     library_id
         Identifier for the *Visium* library. Useful when concatenating multiple :class:`anndata.AnnData` objects.
     kwargs
-        Keyword arguments for :func:`scanpy.read_10x_h5`, :func:`anndata.read_mtx` or :func:`read_text`.
+        Keyword arguments for :func:`scanpy.read_10x_h5`, :func:`scanpy.read_10x_mtx` or :func:`anndata.io.read_text`.
 
     Returns
     -------
