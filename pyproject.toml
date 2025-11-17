@@ -133,16 +133,6 @@ allow-direct-references = true
 [tool.hatch.build.targets.wheel]
 packages = [ "src/squidpy" ]
 
-[tool.hatch.envs.default]
-installer = "uv"
-features = [ "dev" ]
-
-[tool.hatch.envs.docs]
-features = [ "docs" ]
-scripts.build = "sphinx-build -b html docs docs/_build -W {args}"
-scripts.open = "python -m webbrowser -t docs/_build/html/index.html"
-scripts.clean = "git clean -fdX -- {args:docs}"
-
 [tool.ruff]
 line-length = 120
 exclude = [
