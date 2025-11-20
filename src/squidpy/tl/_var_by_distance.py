@@ -11,7 +11,6 @@ from anndata import AnnData
 from scanpy import logging as logg
 from sklearn.metrics import DistanceMetric
 from sklearn.neighbors import KDTree
-from sklearn.preprocessing import MinMaxScaler
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
@@ -92,7 +91,6 @@ def var_by_distance(
         raise TypeError(f"Invalid type for library_key: {type(library_key)}.")
 
     batch_design_matrices = {}
-    max_distances = {}
     anchor_col_id = 2
     # iterate over slide + anchor combinations (anchor only possible as well)
     combinations: Iterator[tuple[str, str | None]] | zip[tuple[list[int | float], str]]  # mypy
@@ -146,7 +144,7 @@ def var_by_distance(
         else:
             df["obs"] = adata.obs_names
 
-        # store dataframes by (slide, anchor) combination
+        # store dataframes by (slide, anchor) combinationq
         batch_design_matrices[(batch_var, anchor_var)] = df
 
     # normalize euclidean distances by slide
