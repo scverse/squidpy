@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import itertools
 from typing import Literal
 
 import dask.array as da
 import geopandas as gpd
-import itertools
 import numpy as np
 import pandas as pd
 import spatialdata as sd
@@ -338,9 +338,7 @@ def make_tiles(
         if default_mask_key in sdata.labels:
             mask_key_for_grid = default_mask_key
         else:
-            logger.warning(
-                "center_grid_on_tissue=True but no mask key provided/found. Using default grid origin."
-            )
+            logger.warning("center_grid_on_tissue=True but no mask key provided/found. Using default grid origin.")
 
     # Generate tile grid (without saving first, so we can use it for filtering)
     shapes_key = new_shapes_key or f"{image_key}_tiles"
@@ -427,17 +425,14 @@ def make_tiles_from_spots(
         image_cs = _get_primary_coordinate_system(sdata.images[image_key])
         if target_cs and image_cs and target_cs != image_cs:
             logger.warning(
-                "Coordinate system mismatch between mask (%s) and image (%s). "
-                "Tile coverage may be incorrect.",
+                "Coordinate system mismatch between mask (%s) and image (%s). Tile coverage may be incorrect.",
                 target_cs,
                 image_cs,
             )
 
     coords, spot_ids = _get_spot_coordinates(sdata, spots_key)
     derived_tile = _derive_tile_size_from_spots(coords)
-    logger.info(
-        f"Derived tile size {derived_tile} from {len(coords)} Visium spots (key='{spots_key}')."
-    )
+    logger.info(f"Derived tile size {derived_tile} from {len(coords)} Visium spots (key='{spots_key}').")
 
     tg = _SpotTileGrid(centers=coords, tile_size=derived_tile, spot_ids=spot_ids)
     shapes_key = new_shapes_key or f"{spots_key}_tiles"
@@ -609,7 +604,9 @@ def _filter_tiles(
             suitable[i] = False
             tile_classification[i] = "background"
 
-    logger.info(f"After tissue filtering: {suitable.sum()}/{n_tiles} ({suitable.sum()/n_tiles*100:.2f}%) tiles remaining.")
+    logger.info(
+        f"After tissue filtering: {suitable.sum()}/{n_tiles} ({suitable.sum() / n_tiles * 100:.2f}%) tiles remaining."
+    )
 
     # Always persist classification on the GeoDataFrame so users can inspect it directly
     if shapes_key is None:
