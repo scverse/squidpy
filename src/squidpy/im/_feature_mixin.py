@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
 
 import numpy as np
 import skimage.measure
@@ -233,7 +233,7 @@ class FeatureMixin:
 
         Notes
         -----
-        If the image is not of type :class:`numpy.uint8`, it will be converted.
+        If the image is not of type :attr:`numpy.uint8`, it will be converted.
         """
         layer = self._get_layer(layer)
         library_id = self._get_library_id(library_id)

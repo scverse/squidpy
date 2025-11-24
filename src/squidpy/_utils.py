@@ -16,8 +16,6 @@ from typing import TYPE_CHECKING, Any, Literal
 import joblib as jl
 import numba
 import numpy as np
-import spatialdata as sd
-import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
@@ -258,7 +256,7 @@ def _get_n_cores(n_cores: int | None) -> int:
 @contextmanager
 def verbosity(level: int) -> Generator[None, None, None]:
     """
-    Temporarily set the verbosity level of :mod:`scanpy`.
+    Temporarily set the verbosity level of :doc:`scanpy <scanpy:index>`.
 
     Parameters
     ----------

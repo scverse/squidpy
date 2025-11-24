@@ -1,64 +1,32 @@
-# Configuration file for the Sphinx documentation builder.
-
-# This file only contains a selection of the most common options. For a full
-# list see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
-
+# -- Path setup --------------------------------------------------------------
 from __future__ import annotations
 
-# -- Path setup --------------------------------------------------------------
-import os
 import sys
 from datetime import datetime
-
-# from importlib.metadata import metadata
+from importlib.metadata import metadata
 from pathlib import Path
 
 from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-# sys.path.insert(0, str(HERE.parent.parent))  # this way, we don't have to install squidpy
-# sys.path.insert(0, os.path.abspath("_ext"))
+sys.path.insert(0, str(HERE / "extensions"))
 
-sys.path.insert(0, str(HERE / "_ext"))
 
 # -- Project information -----------------------------------------------------
+info = metadata("squidpy")
+project_name = info["Name"]
+author = info["Author"]
+copyright = f"{datetime.now():%Y}, {author}"
+version = info["Version"]
+urls = dict(pu.split(", ") for pu in info.get_all("Project-URL"))
+repository_url = urls["Source"]
 
-import squidpy  # noqa: E402
+# The full version, including alpha/beta/rc tags
+release = info["Version"]
 
-sys.path.insert(0, str(Path(__file__).parent / "_ext"))
-
-# -- Project information -----------------------------------------------------
-
-project = squidpy.__name__
-author = squidpy.__author__
-version = squidpy.__version__
-copyright = f"{datetime.now():%Y}, scverse"
-
-# info = metadata("squidpy")
-# project_name = info["Name"]
-# author = info["Author"]
-# copyright = f"{datetime.now():%Y}, {author}."
-# version = info["Version"]
-# release = info["Version"]
-
-# # project = squidpy.__name__
-# # author = squidpy.__author__
-# # copyright = f"{datetime.now():%Y}, {author}"  # noqa: A001
-
-# github_org = "scverse"
-# github_repo = "squidpy"
-# github_ref = "main"
-
-# # The full version, including alpha/beta/rc tags
-# # release = github_ref
-# # version = f"{release} ({squidpy.__version__})"
+needs_sphinx = "4.0"
 
 # -- General configuration ---------------------------------------------------
-
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
@@ -69,6 +37,8 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinxcontrib.bibtex",
     "sphinx_copybutton",
+    "sphinx_design",
+    "sphinx_tabs.tabs",
     "myst_nb",
     "nbsphinx",
     "typed_returns",
@@ -76,23 +46,24 @@ extensions = [
 ]
 intersphinx_mapping = dict(  # noqa: C408
     python=("https://docs.python.org/3", None),
-    numpy=("https://numpy.org/doc/stable/", None),
-    statsmodels=("https://www.statsmodels.org/stable/", None),
-    scipy=("https://docs.scipy.org/doc/scipy/", None),
-    pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),
-    anndata=("https://anndata.readthedocs.io/en/stable/", None),
-    scanpy=("https://scanpy.readthedocs.io/en/stable/", None),
-    matplotlib=("https://matplotlib.org/stable/", None),
-    seaborn=("https://seaborn.pydata.org/", None),
-    joblib=("https://joblib.readthedocs.io/en/latest/", None),
-    networkx=("https://networkx.org/documentation/stable/", None),
-    dask=("https://docs.dask.org/en/latest/", None),
-    skimage=("https://scikit-image.org/docs/stable/", None),
-    sklearn=("https://scikit-learn.org/stable/", None),
-    numba=("https://numba.readthedocs.io/en/stable/", None),
-    xarray=("https://xarray.pydata.org/en/stable/", None),
+    numpy=("https://numpy.org/doc/stable", None),
+    statsmodels=("https://www.statsmodels.org/stable", None),
+    scipy=("https://docs.scipy.org/doc/scipy", None),
+    pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
+    anndata=("https://anndata.readthedocs.io/en/stable", None),
+    scanpy=("https://scanpy.readthedocs.io/en/stable", None),
+    matplotlib=("https://matplotlib.org/stable", None),
+    cycler=("https://matplotlib.org/cycler", None),
+    seaborn=("https://seaborn.pydata.org", None),
+    joblib=("https://joblib.readthedocs.io/en/latest", None),
+    networkx=("https://networkx.org/documentation/stable", None),
+    dask=("https://docs.dask.org/en/latest", None),
+    skimage=("https://scikit-image.org/docs/stable", None),
+    sklearn=("https://scikit-learn.org/stable", None),
+    numba=("https://numba.readthedocs.io/en/stable", None),
+    xarray=("https://docs.xarray.dev/en/stable", None),
     omnipath=("https://omnipath.readthedocs.io/en/latest", None),
-    napari=("https://napari.org/", None),
+    napari=("https://napari.org", None),
     spatialdata=("https://spatialdata.scverse.org/en/latest", None),
     shapely=("https://shapely.readthedocs.io/en/stable", None),
 )
@@ -162,6 +133,24 @@ spelling_filters = [
     "docs.source.utils.ModnameFilter",
     "docs.source.utils.SignatureFilter",
     "enchant.tokenize.MentionFilter",
+]
+
+# Link checking
+nitpicky = True  # this is linkcheck for Sphinx.
+nitpick_ignore = [
+    ("py:func", "numba.prange"),  # no reference for this function
+    ("py:class", "matplotlib_scalebar.ScaleBar"),  # this project has no sphinx docs
+    # TODO: fix using scanpydoc.elegant_typehints
+    ("py:class", "pathlib._local.Path"),
+    ("py:data", "typing.Union"),
+    # there seems to be a bug with autodoc for NamedTuple attributes
+    ("py:class", "NDArray"),
+    ("py:class", "np.number"),
+    ("py:class", "csr_matrix"),
+    # no idea why those aren’t exported
+    ("py:class", "squidpy._constants._constants.SpatialAutocorr"),
+    ("py:class", "squidpy._constants._constants.CoordType"),
+    ("py:class", "squidpy._constants._constants.Transform"),
 ]
 # see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369
 linkcheck_ignore = [

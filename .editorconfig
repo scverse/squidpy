@@ -8,8 +8,8 @@ charset = utf-8
 trim_trailing_whitespace = true
 insert_final_newline = true
 
+[{*.{yml,yaml,toml},.cruft.json}]
+indent_size = 2
+
 [Makefile]
 indent_style = tab
-
-[*.{yml,yaml}]
-indent_size = 2

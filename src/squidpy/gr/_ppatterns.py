@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from importlib.util import find_spec
-from itertools import chain
-from typing import TYPE_CHECKING, Any, Literal
+from collections.abc import Sequence
+from typing import Any, Literal
 
 import numba.types as nt
 import numpy as np
@@ -14,9 +12,7 @@ from anndata import AnnData
 from numba import njit, prange
 from numpy.random import default_rng
 from scanpy import logging as logg
-from scanpy.get import _get_obs_rep
-from scanpy.metrics._gearys_c import _gearys_c
-from scanpy.metrics._morans_i import _morans_i
+from scanpy.metrics import gearys_c, morans_i
 from scipy import stats
 from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
@@ -31,7 +27,6 @@ from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
-    _assert_non_empty_sequence,
     _assert_positive,
     _assert_spatial_basis,
     _save_data,
@@ -147,7 +142,8 @@ def spatial_autocorr(
             genes = [genes]
 
         if not use_raw:
-            return _get_obs_rep(adata[:, genes], use_raw=False, layer=layer).T, genes
+            subset = adata[:, genes]
+            return (subset.X if layer is None else subset.layers[layer]).T, genes
         if adata.raw is None:
             raise AttributeError("No `.raw` attribute found. Try specifying `use_raw=False`.")
         genes = list(set(genes) & set(adata.raw.var_names))
@@ -183,12 +179,12 @@ def spatial_autocorr(
     params = {"mode": mode.s, "transformation": transformation, "two_tailed": two_tailed}
 
     if mode == SpatialAutocorr.MORAN:
-        params["func"] = _morans_i
+        params["func"] = morans_i
         params["stat"] = "I"
         params["expected"] = -1.0 / (adata.shape[0] - 1)  # expected score
         params["ascending"] = False
     elif mode == SpatialAutocorr.GEARY:
-        params["func"] = _gearys_c
+        params["func"] = gearys_c
         params["stat"] = "C"
         params["expected"] = 1.0
         params["ascending"] = True
@@ -252,7 +248,7 @@ def _score_helper(
 ) -> pd.DataFrame:
     score_perms = np.empty((len(perms), vals.shape[0]))
     rng = default_rng(None if seed is None else ix + seed)
-    func = _morans_i if mode == SpatialAutocorr.MORAN else _gearys_c
+    func = morans_i if mode == SpatialAutocorr.MORAN else gearys_c
 
     for i in range(len(perms)):
         idx_shuffle = rng.permutation(g.shape[0])

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Iterable  # noqa: F401
+from collections.abc import Iterable
 from functools import partial
 from itertools import chain
 from typing import Any, NamedTuple, cast
@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
-from geopandas import GeoDataFrame
 from numba import njit
 from scanpy import logging as logg
 from scipy.sparse import (
@@ -24,28 +23,14 @@ from scipy.sparse import (
     spmatrix,
 )
 from scipy.spatial import Delaunay
-from shapely import LineString, MultiPolygon, Point, Polygon, distance
+from shapely import LineString, MultiPolygon, Polygon
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 from sklearn.neighbors import NearestNeighbors
 from spatialdata import SpatialData
 from spatialdata._core.centroids import get_centroids
-from spatialdata._core.query.relational_query import (
-    get_element_instances,
-    match_element_to_table,
-)
-from spatialdata.models import SpatialElement, get_table_keys
-from spatialdata.models.models import (
-    Image2DModel,
-    Image3DModel,
-    Labels2DModel,
-    Labels3DModel,
-    PointsModel,
-    RasterSchema,
-    ShapesModel,
-    TableModel,
-    get_axes_names,
-    get_model,
-)
+from spatialdata._core.query.relational_query import get_element_instances, match_element_to_table
+from spatialdata.models import get_table_keys
+from spatialdata.models.models import Labels2DModel, Labels3DModel, get_model
 
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
@@ -62,15 +47,7 @@ __all__ = ["spatial_neighbors"]
 
 
 class SpatialNeighborsResult(NamedTuple):
-    """Result of spatial_neighbors function.
-
-    Attributes
-    ----------
-    connectivities
-        Spatial connectivities matrix.
-    distances
-        Spatial distances matrix.
-    """
+    """Result of spatial_neighbors function."""
 
     connectivities: csr_matrix
     distances: csr_matrix

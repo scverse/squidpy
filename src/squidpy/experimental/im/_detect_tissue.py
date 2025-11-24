@@ -324,7 +324,7 @@ def _ensure_dask(da: xr.DataArray) -> xr.DataArray:
     Ensure DataArray is dask-backed. If not, chunk to reasonable tiles.
     """
     try:
-        import dask.array as dask_array  # noqa: F401
+        import dask.array as dask_array
 
         if hasattr(da, "data") and isinstance(da.data, dask_array.Array):
             return da
@@ -338,7 +338,7 @@ def _dask_compute(img_da: xr.DataArray) -> np.ndarray:
     Compute an xarray DataArray (possibly dask-backed) to a NumPy array with a ProgressBar if available.
     """
     try:
-        import dask.array as dask_array  # noqa: F401
+        import dask.array as dask_array
         from dask.diagnostics import ProgressBar
 
         if hasattr(img_da, "data") and isinstance(img_da.data, dask_array.Array):
