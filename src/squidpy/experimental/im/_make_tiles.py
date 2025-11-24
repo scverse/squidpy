@@ -18,10 +18,11 @@ from squidpy._utils import _yx_from_shape
 
 from ._utils import _get_element_data
 
-__all__ = ["TileGrid", "make_tiles", "make_tiles_from_spots"]
+__all__ = ["make_tiles", "make_tiles_from_spots"]
 
 
-class TileGrid:
+class _TileGrid:
+    """Immutable tile grid definition with cached bounds and centroids."""
     def __init__(
         self,
         H: int,
@@ -52,14 +53,22 @@ class TileGrid:
         total_w_needed = self.W - grid_start_x
         self.tiles_y = (total_h_needed + self.ty - 1) // self.ty
         self.tiles_x = (total_w_needed + self.tx - 1) // self.tx
+        # Cache immutable derived values
+        self._indices = np.array([[iy, ix] for iy in range(self.tiles_y) for ix in range(self.tiles_x)], dtype=int)
+        self._names = [f"tile_x{ix}_y{iy}" for iy in range(self.tiles_y) for ix in range(self.tiles_x)]
+        self._bounds = self._compute_bounds()
+        self._centroids_polys = self._compute_centroids_and_polygons()
 
     def indices(self) -> np.ndarray:
-        return np.array([[iy, ix] for iy in range(self.tiles_y) for ix in range(self.tiles_x)], dtype=int)
+        return self._indices
 
     def names(self) -> list[str]:
-        return [f"tile_x{ix}_y{iy}" for iy in range(self.tiles_y) for ix in range(self.tiles_x)]
+        return self._names
 
     def bounds(self) -> np.ndarray:
+        return self._bounds
+
+    def _compute_bounds(self) -> np.ndarray:
         b: list[list[int]] = []
         for iy, ix in itertools.product(range(self.tiles_y), range(self.tiles_x)):
             y0 = iy * self.ty + self.offset_y
@@ -75,9 +84,12 @@ class TileGrid:
         return np.array(b, dtype=int)
 
     def centroids_and_polygons(self) -> tuple[np.ndarray, list[Polygon]]:
+        return self._centroids_polys
+
+    def _compute_centroids_and_polygons(self) -> tuple[np.ndarray, list[Polygon]]:
         cents: list[list[float]] = []
         polys: list[Polygon] = []
-        for y0, x0, y1, x1 in self.bounds():
+        for y0, x0, y1, x1 in self._bounds:
             cy = (y0 + y1) / 2
             cx = (x0 + x1) / 2
             cents.append([cy, cx])
@@ -109,8 +121,15 @@ class _SpotTileGrid:
         if self.tx <= 0 or self.ty <= 0:
             raise ValueError("Derived tile size must be positive in both dimensions.")
         self._spot_ids = spot_ids if spot_ids is not None else np.arange(len(centers))
+        self._bounds = self._compute_bounds()
+        self._indices = np.zeros((len(self.centers), 2), dtype=int)
+        self._names = [f"spot_tile_{spot_id}" for spot_id in self._spot_ids]
+        self._centroids_polys = self._compute_centroids_and_polygons()
 
     def bounds(self) -> np.ndarray:
+        return self._bounds
+
+    def _compute_bounds(self) -> np.ndarray:
         half_h = self.ty / 2.0
         half_w = self.tx / 2.0
         x = self.centers[:, 0]
@@ -123,13 +142,16 @@ class _SpotTileGrid:
 
     def indices(self) -> np.ndarray:
         # Dummy indices; not used downstream but kept for API compatibility.
-        return np.zeros((len(self.centers), 2), dtype=int)
+        return self._indices
 
     def names(self) -> list[str]:
-        return [f"spot_tile_{spot_id}" for spot_id in self._spot_ids]
+        return self._names
 
     def centroids_and_polygons(self) -> tuple[np.ndarray, list[Polygon]]:
-        bounds = self.bounds()
+        return self._centroids_polys
+
+    def _compute_centroids_and_polygons(self) -> tuple[np.ndarray, list[Polygon]]:
+        bounds = self._bounds
         polys: list[Polygon] = []
         cents: list[list[float]] = []
         for y0, x0, y1, x1 in bounds:
@@ -144,20 +166,7 @@ def _get_largest_scale_dimensions(
     sdata: sd.SpatialData,
     image_key: str,
 ) -> tuple[int, int]:
-    """
-    Get the dimensions (H, W) of the largest/finest scale of an image.
-
-    Parameters
-    ----------
-    sdata
-        SpatialData object containing the image.
-    image_key
-        Key of the image in ``sdata.images``.
-
-    Returns
-    -------
-    Tuple of (height, width) in pixels.
-    """
+    """Get the dimensions (H, W) of the largest/finest scale of an image."""
     img_node = sdata.images[image_key]
 
     # Use _get_element_data with "scale0" which is always the largest scale
@@ -173,8 +182,9 @@ def _get_largest_scale_dimensions(
 
 
 def _choose_label_scale_for_image(label_node: Labels2DModel, target_hw: tuple[int, int]) -> str:
+    """Pick the label scale closest to the target image height/width."""
     if not hasattr(label_node, "keys"):
-        return "scale0"
+        return "scale0"  # single-scale labels default to their only scale
     target_h, target_w = target_hw
     best = None
     best_diff = float("inf")
@@ -191,7 +201,7 @@ def _choose_label_scale_for_image(label_node: Labels2DModel, target_hw: tuple[in
 
 def _save_tiles_to_shapes(
     sdata: sd.SpatialData,
-    tg: TileGrid,
+    tg: _TileGrid,
     image_key: str,
     shapes_key: str,
 ) -> None:
@@ -280,12 +290,7 @@ def make_tiles(
     new_shapes_key: str | None = None,
     preview: bool = True,
 ) -> None:
-    """
-    Create and filter tiles suitable for inference.
-
-    This function combines tile grid generation and filtering based on tissue coverage.
-    It creates a tile grid, filters tiles based on tissue criteria, and optionally
-    generates a preview plot.
+    """Create and filter tiles suitable for inference; optionally render a preview.
 
     Parameters
     ----------
@@ -312,8 +317,7 @@ def make_tiles(
     new_shapes_key
         Key to save the tile grid in ``sdata.shapes``. If ``None``, defaults to ``f"{image_key}_tiles"``.
     preview
-        If ``True``, generate a preview plot showing the tile grid colored by classification.
-        Default is ``True``.
+        If ``True``, generate a preview plot showing the tile grid colored by classification. Default is ``True``.
 
     Returns
     -------
@@ -363,22 +367,18 @@ def make_tiles(
             target_hw = _get_largest_scale_dimensions(sdata, image_key)
             scale_for_grid = _choose_label_scale_for_image(label_node, target_hw)
 
-    # Generate tile grid (without saving first, so we can use it for filtering)
+    # Build tile grid (keep locally for filtering)
     shapes_key = new_shapes_key or f"{image_key}_tiles"
     tg = _make_tiles(
         sdata,
-        image_key,
+        image_key=image_key,
         image_mask_key=mask_key_for_grid,
         tile_size=tile_size,
         center_grid_on_tissue=center_grid_on_tissue,
         scale=scale_for_grid,
-        new_shapes_key=shapes_key,
-        inplace=False,
     )
 
-    # Now save it
-    if tg is not None:
-        _save_tiles_to_shapes(sdata, tg, image_key, shapes_key)
+    _save_tiles_to_shapes(sdata, tg, image_key, shapes_key)
 
     # Filter tiles
     if tg is not None:
@@ -557,7 +557,7 @@ def make_tiles_from_spots(
 
 def _filter_tiles(
     sdata: sd.SpatialData,
-    tg: TileGrid,
+    tg: _TileGrid,
     image_key: str | None,
     *,
     tissue_mask_key: str | None = None,
@@ -675,48 +675,7 @@ def _make_tiles(
     tile_size: tuple[int, int] = (224, 224),
     center_grid_on_tissue: bool = False,
     scale: str = "auto",
-    new_shapes_key: str | None = None,
-    inplace: bool = True,
-) -> TileGrid | None:
-    """
-    Create a TileGrid for a spatialdata image.
-
-    Parameters
-    ----------
-    sdata
-        SpatialData object containing the image.
-    image_key
-        Key of the image in ``sdata.images``.
-    image_mask_key
-        Optional key of the segmentation mask in ``sdata.labels``.
-        Required if ``center_grid_on_tissue`` is ``True``.
-    tile_size
-        Size of tiles as (height, width) in pixels.
-    center_grid_on_tissue
-        If ``True`` and ``image_mask_key`` is provided, center the grid
-        on the centroid of the mask.
-    scale
-        Scale level to use for mask processing. The tile grid is always generated
-        based on the largest (finest) scale of the image.
-    new_shapes_key
-        Key to save the tile grid in ``sdata.shapes`` if ``inplace=True``.
-        If ``None``, defaults to ``f"{image_key}_tiles"``.
-    inplace
-        If ``True``, save the tile grid to ``sdata.shapes[new_shapes_key]``.
-        If ``False``, return the TileGrid object without saving.
-
-    Returns
-    -------
-    If ``inplace=True``, returns ``None``. Otherwise, returns a TileGrid object.
-
-    Raises
-    ------
-    KeyError
-        If ``image_key`` is not in ``sdata.images``.
-    KeyError
-        If ``center_grid_on_tissue`` is ``True`` but ``image_mask_key``
-        is not provided or not found in ``sdata.labels``.
-    """
+) -> _TileGrid:
     # Validate image key
     if image_key not in sdata.images:
         raise KeyError(f"Image key '{image_key}' not found in sdata.images")
@@ -728,12 +687,7 @@ def _make_tiles(
 
     # Path 1: Regular grid starting from top-left
     if not center_grid_on_tissue or image_mask_key is None:
-        tg = TileGrid(H, W, tile_size=tile_size)
-        if inplace:
-            shapes_key = new_shapes_key or f"{image_key}_tiles"
-            _save_tiles_to_shapes(sdata, tg, image_key, shapes_key)
-            return None
-        return tg
+        return _TileGrid(H, W, tile_size=tile_size)
 
     # Path 2: Center grid on tissue mask centroid
     if image_mask_key not in sdata.labels:
@@ -766,12 +720,7 @@ def _make_tiles(
     mask_bool = mask > 0
     if not mask_bool.any():
         logger.warning("Mask is empty. Using regular grid starting from top-left.")
-        tg = TileGrid(H, W, tile_size=tile_size)
-        if inplace:
-            shapes_key = new_shapes_key or f"{image_key}_tiles"
-            _save_tiles_to_shapes(sdata, tg, image_key, shapes_key)
-            return None
-        return tg
+        return _TileGrid(H, W, tile_size=tile_size)
 
     # Calculate centroid using center of mass
     y_coords, x_coords = np.where(mask_bool)
@@ -793,33 +742,21 @@ def _make_tiles(
         centroid_x = centroid_x_mask
 
     # Calculate offset to center grid on centroid
-    # We want the centroid to be at the center of a tile
-    # Find which tile index would contain the centroid if grid started at (0,0)
     tile_idx_y_centroid = int(centroid_y // ty)
     tile_idx_x_centroid = int(centroid_x // tx)
-
-    # Calculate the center position of that tile in a standard grid
     tile_center_y_standard = tile_idx_y_centroid * ty + ty / 2
     tile_center_x_standard = tile_idx_x_centroid * tx + tx / 2
-
-    # Calculate offset needed to move that tile center to the centroid
     offset_y = int(round(centroid_y - tile_center_y_standard))
     offset_x = int(round(centroid_x - tile_center_x_standard))
 
-    tg = TileGrid(H, W, tile_size=tile_size, offset_y=offset_y, offset_x=offset_x)
-
-    if inplace:
-        shapes_key = new_shapes_key or f"{image_key}_tiles"
-        _save_tiles_to_shapes(sdata, tg, image_key, shapes_key)
-        return None
-
-    return tg
+    return _TileGrid(H, W, tile_size=tile_size, offset_y=offset_y, offset_x=offset_x)
 
 
 def _get_spot_coordinates(
     sdata: sd.SpatialData,
     spots_key: str,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Extract spot centers (x, y) and IDs from a shapes table."""
     gdf = sdata.shapes[spots_key]
     if "geometry" not in gdf:
         raise ValueError(f"Shapes '{spots_key}' lack geometry column required for spot coordinates.")
@@ -832,6 +769,7 @@ def _get_spot_coordinates(
 
 
 def _get_primary_coordinate_system(element: SpatialElement) -> str | None:
+    """Return the first available coordinate system, preferring 'global'."""
     try:
         transformations = get_transformation(element, get_all=True)
     except (KeyError, ValueError):
@@ -845,21 +783,22 @@ def _get_primary_coordinate_system(element: SpatialElement) -> str | None:
 
 
 def _derive_tile_size_from_spots(coords: np.ndarray) -> tuple[int, int]:
+    """Derive a square tile size from Visium spot spacing."""
     if coords.shape[0] < 2:
-        raise ValueError("Need at least 2 spots to derive tile size.")
+        raise ValueError("Need at least 2 spots to derive tile size; ensure the spots table has multiple entries.")
     # Spots are arranged in rows with constant vertical spacing; use this to set tile size.
     y_coords = np.unique(np.sort(coords[:, 1]))
     if len(y_coords) < 2:
-        raise ValueError("Unable to derive row spacing from spot coordinates.")
+        raise ValueError("Unable to derive row spacing from spot coordinates; check coordinate system and spot positions.")
     diffs = np.diff(y_coords)
     diffs = diffs[diffs > 0]
     if diffs.size == 0:
-        raise ValueError("Spot coordinates do not contain distinct rows.")
+        raise ValueError("Spot coordinates do not contain distinct rows; verify spot grid spacing.")
     # Use the most frequent spacing (mode) to be robust to outliers.
     values, counts = np.unique(np.round(diffs, decimals=6), return_counts=True)
     row_spacing = float(values[np.argmax(counts)])
     if not np.isfinite(row_spacing) or row_spacing <= 0:
-        raise ValueError("Unable to derive a valid spacing from spot coordinates.")
+        raise ValueError("Unable to derive a valid spacing from spot coordinates; ensure spots are in consistent units.")
     side = max(1, int(np.floor(row_spacing)))
     return side, side
 
