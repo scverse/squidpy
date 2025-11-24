@@ -236,6 +236,7 @@ def _save_spot_tiles_to_shapes(
     spot_ids: np.ndarray,
     source_shapes_key: str,
 ) -> None:
+    """Save spot-centered tiles as polygons, copying transformations from the source shapes."""
     tile_bounds = tg.bounds()
     _, polys = tg.centroids_and_polygons()
     tile_gdf = gpd.GeoDataFrame(
@@ -262,6 +263,7 @@ def _save_spot_tiles_to_shapes(
 
 
 def _propagate_spot_classification(sdata: sd.SpatialData, tiles_key: str, spots_key: str) -> None:
+    """Copy tile classifications from a tiles table back to the corresponding spots."""
     if tiles_key not in sdata.shapes or spots_key not in sdata.shapes:
         return
     tiles_gdf = sdata.shapes[tiles_key]
@@ -291,50 +293,64 @@ def make_tiles(
     new_shapes_key: str | None = None,
     preview: bool = True,
 ) -> None:
-    """Create and filter tiles suitable for inference; optionally render a preview.
+    """
+    Create a regular grid of tiles over an image, classify them by tissue coverage, and optionally render a preview.
+
+    Tiles are generated on the highest-resolution image scale and classified into three categories based on the
+    supplied (or automatically derived) tissue mask:
+
+        - ``"background"``: no tissue pixels in the tile.
+        - ``"partial_tissue"``: some tissue but below ``min_tissue_fraction``.
+        - ``"tissue"``: at least ``min_tissue_fraction`` of the tile is tissue.
+
+    The resulting grid is stored in ``sdata.shapes[new_shapes_key]`` (default ``f"{image_key}_tiles"``) with
+    one row per tile and columns such as ``pixel_y0``, ``pixel_x0``, ``pixel_y1``, ``pixel_x1``, and
+    ``tile_classification``.
 
     Parameters
     ----------
     sdata
-        SpatialData object containing the image.
+        SpatialData object containing the image and (optionally) label masks.
     image_key
-        Key of the image in ``sdata.images``.
+        Key of the image in ``sdata.images`` to tile.
     image_mask_key
-        Optional key of the segmentation mask in ``sdata.labels``.
-        Required if ``center_grid_on_tissue`` is ``True`` unless ``tissue_mask_key``
-        (or ``f"{image_key}_tissue"``) already exists in ``sdata.labels``.
+        Optional key of a segmentation or tissue mask in ``sdata.labels`` used purely to position the grid.
+        If ``center_grid_on_tissue`` is ``True`` and this is not provided, the function will fall back to
+        ``tissue_mask_key`` or ``f"{image_key}_tissue"`` if present, or automatically run
+        :func:`~squidpy.experimental.im.detect_tissue` to create one.
     tissue_mask_key
-        Key of the tissue mask in ``sdata.labels``. If ``None``, uses ``f"{image_key}_tissue"``.
+        Key of the tissue mask in ``sdata.labels`` used for classification. If ``None``, the function uses
+        ``f"{image_key}_tissue"`` and will automatically run :func:`detect_tissue` to create this mask if it
+        does not exist.
     tile_size
-        Size of tiles as (height, width) in pixels.
+        Size of tiles as ``(height, width)`` in pixels on the largest image scale.
     center_grid_on_tissue
-        If ``True`` and ``image_mask_key`` is provided, center the grid
-        on the centroid of the mask.
+        If ``True``, center the tile grid on the centroid of the mask given by ``image_mask_key`` /
+        ``tissue_mask_key`` / ``f"{image_key}_tissue"`` (created on the fly if needed). If ``False``, the grid
+        starts at the top-left corner of the image.
     scale
-        Scale level to use for mask processing. The tile grid is always generated
-        based on the largest (finest) scale of the image.
+        Label scale to use when reading the mask for centering and classification. If ``"auto"``, the function
+        chooses the label scale whose shape is closest to the full-resolution image dimensions.
     min_tissue_fraction
-        Minimum fraction of tile that must be in tissue. Default is 1.0 (exclusively in tissue).
+        Minimum fraction of a tile that must be tissue for it to be considered suitable for inference. Tiles
+        below this threshold are classified as ``"background"`` (0%) or ``"partial_tissue"`` (>0%).
     new_shapes_key
-        Key to save the tile grid in ``sdata.shapes``. If ``None``, defaults to ``f"{image_key}_tiles"``.
+        Key under which to store the tile grid in ``sdata.shapes``. Defaults to ``f"{image_key}_tiles"``.
     preview
-        If ``True``, generate a preview plot showing the tile grid colored by classification. Default is ``True``.
+        If ``True``, render a preview using ``sdata.pl.render_images(image_key)`` overlaid with the tiles colored
+        by ``tile_classification``.
 
     Returns
     -------
     None
-        Results are saved to ``sdata.shapes`` with tile classifications attached.
+        All results are written in-place to ``sdata.shapes``.
 
     See Also
     --------
-    :func:`_make_tiles` : Internal function for tile grid generation.
-    :func:`_filter_tiles` : Internal function for tile filtering.
-
-    Examples
-    --------
-    >>> import squidpy as sq
-    >>> sdata = sq.datasets.visium_hne_image_crop()
-    >>> sq.experimental.im.make_tiles(sdata, image_key="image", preview=True)
+    detect_tissue
+        Helper used to automatically derive a tissue mask when none is provided.
+    make_tiles_from_spots
+        Create tiles centered on Visium spots instead of a regular grid.
     """
     # Derive mask key for centering if needed
     mask_key_for_grid = image_mask_key
@@ -446,7 +462,61 @@ def make_tiles_from_spots(
     new_shapes_key: str | None = None,
     preview: bool = True,
 ) -> None:
-    """Create tiles centered on Visium spots using automatically derived tile sizes."""
+    """
+    Create tiles centered on Visium spots, classify them by tissue coverage, and optionally render a preview.
+
+    The function reads spot coordinates from ``sdata.shapes[spots_key]``, infers a square tile size from the
+    vertical spacing between spots, and constructs one tile per spot. Tiles are then classified using a tissue
+    mask in the same way as :func:`make_tiles`.
+
+    Parameters
+    ----------
+    sdata
+        SpatialData object containing Visium spot shapes, images, and (optionally) label masks.
+    spots_key
+        Key of the spot shapes in ``sdata.shapes``. The geometry must be point-like and in the same coordinate
+        system as the image / tissue mask.
+    image_key
+        Optional key of the image in ``sdata.images``. If provided, the function will:
+
+            - use it to choose an appropriate label scale for the tissue mask,
+            - optionally render the preview with the image as a background, and
+            - automatically run :func:`detect_tissue` to create ``f"{image_key}_tissue"`` if
+              neither ``tissue_mask_key`` nor an existing ``f"{image_key}_tissue"`` is found.
+
+        If ``None``, tiles can still be created and classified using an explicit ``tissue_mask_key``, but the
+        preview will render tiles only (no image background).
+    tissue_mask_key
+        Key of the tissue mask in ``sdata.labels`` used for classification. If ``None`` and ``image_key`` is
+        provided, the function falls back to ``f"{image_key}_tissue"`` and will automatically run
+        :func:`detect_tissue` to create it if missing. If both ``image_key`` and ``tissue_mask_key`` are
+        ``None``, tiles are created but not classified.
+    scale
+        Label scale to use when reading the tissue mask. If ``"auto"`` and ``image_key`` is provided, the
+        function picks the label scale whose shape is closest to the full-resolution image dimensions.
+    min_tissue_fraction
+        Minimum fraction of a tile that must be tissue for it to be considered suitable for inference. Tiles
+        below this threshold are classified as ``"background"`` (0%) or ``"partial_tissue"`` (>0%).
+    new_shapes_key
+        Key under which to store the spot-centered tiles in ``sdata.shapes``. Defaults to ``f"{spots_key}_tiles"``.
+    preview
+        If ``True``, render a preview. When ``image_key`` is provided, this uses
+        ``sdata.pl.render_images(image_key)`` and overlays the tiles colored by ``tile_classification``.
+        Otherwise only the tiles are rendered.
+
+    Returns
+    -------
+    None
+        Tiles and their classifications are written in-place to ``sdata.shapes``; spot classifications are copied
+        back to ``sdata.shapes[spots_key]`` via the ``tile_classification`` column.
+
+    See Also
+    --------
+    make_tiles
+        Create a regular grid of tiles over an image instead of spot-centered tiles.
+    detect_tissue
+        Helper used to derive tissue masks automatically when needed.
+    """
 
     if spots_key not in sdata.shapes:
         raise KeyError(f"Spots key '{spots_key}' not found in sdata.shapes")
@@ -677,6 +747,7 @@ def _make_tiles(
     center_grid_on_tissue: bool = False,
     scale: str = "auto",
 ) -> _TileGrid:
+    """Construct a tile grid for an image, optionally centered on a tissue mask."""
     # Validate image key
     if image_key not in sdata.images:
         raise KeyError(f"Image key '{image_key}' not found in sdata.images")
