@@ -333,12 +333,35 @@ def make_tiles(
     """
     # Derive mask key for centering if needed
     mask_key_for_grid = image_mask_key
+    default_mask_key = tissue_mask_key or f"{image_key}_tissue"
+    scale_for_grid = scale
     if center_grid_on_tissue and mask_key_for_grid is None:
-        default_mask_key = tissue_mask_key or f"{image_key}_tissue"
         if default_mask_key in sdata.labels:
             mask_key_for_grid = default_mask_key
         else:
-            logger.warning("center_grid_on_tissue=True but no mask key provided/found. Using default grid origin.")
+            try:
+                from ._detect_tissue import detect_tissue
+
+                detect_tissue(
+                    sdata,
+                    image_key=image_key,
+                    scale=scale,
+                    new_labels_key=default_mask_key,
+                    inplace=True,
+                )
+            except (ImportError, KeyError, ValueError, RuntimeError) as e:  # pragma: no cover - defensive
+                logger.warning(
+                    "center_grid_on_tissue=True but no mask key provided/found; "
+                    "detect_tissue failed (%s). Using default grid origin.",
+                    e,
+                )
+            else:
+                mask_key_for_grid = default_mask_key
+    if center_grid_on_tissue and mask_key_for_grid is not None and scale == "auto":
+        label_node = sdata.labels.get(mask_key_for_grid)
+        if label_node is not None:
+            target_hw = _get_largest_scale_dimensions(sdata, image_key)
+            scale_for_grid = _choose_label_scale_for_image(label_node, target_hw)
 
     # Generate tile grid (without saving first, so we can use it for filtering)
     shapes_key = new_shapes_key or f"{image_key}_tiles"
@@ -348,7 +371,7 @@ def make_tiles(
         image_mask_key=mask_key_for_grid,
         tile_size=tile_size,
         center_grid_on_tissue=center_grid_on_tissue,
-        scale=scale,
+        scale=scale_for_grid,
         new_shapes_key=shapes_key,
         inplace=False,
     )
@@ -615,7 +638,7 @@ def _filter_tiles(
             tile_classification[i] = "background"
 
     logger.info(
-        f"After tissue filtering: {suitable.sum()}/{n_tiles} ({suitable.sum() / n_tiles * 100:.2f}%) tiles remaining."
+        f"After tissue filtering: {suitable.sum()}/{n_tiles} ({suitable.sum() / n_tiles * 100:.2f}%) tiles are fully within tissue."
     )
 
     # Always persist classification on the GeoDataFrame so users can inspect it directly
