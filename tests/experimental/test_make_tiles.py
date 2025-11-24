@@ -42,6 +42,7 @@ class TestMakeTiles(PlotTester, metaclass=PlotTesterMeta):
             min_tissue_fraction=0.00001,  # Basically any non-bg tile is now tissue
         )
 
+
 class TestMakeTilesFromSpots(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_make_tiles_from_spots(self):
         """Test make tiles from spots on Visium H&E dataset."""
