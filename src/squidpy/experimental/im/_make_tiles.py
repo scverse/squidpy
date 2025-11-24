@@ -23,6 +23,7 @@ __all__ = ["make_tiles", "make_tiles_from_spots"]
 
 class _TileGrid:
     """Immutable tile grid definition with cached bounds and centroids."""
+
     def __init__(
         self,
         H: int,
@@ -789,7 +790,9 @@ def _derive_tile_size_from_spots(coords: np.ndarray) -> tuple[int, int]:
     # Spots are arranged in rows with constant vertical spacing; use this to set tile size.
     y_coords = np.unique(np.sort(coords[:, 1]))
     if len(y_coords) < 2:
-        raise ValueError("Unable to derive row spacing from spot coordinates; check coordinate system and spot positions.")
+        raise ValueError(
+            "Unable to derive row spacing from spot coordinates; check coordinate system and spot positions."
+        )
     diffs = np.diff(y_coords)
     diffs = diffs[diffs > 0]
     if diffs.size == 0:
@@ -798,7 +801,9 @@ def _derive_tile_size_from_spots(coords: np.ndarray) -> tuple[int, int]:
     values, counts = np.unique(np.round(diffs, decimals=6), return_counts=True)
     row_spacing = float(values[np.argmax(counts)])
     if not np.isfinite(row_spacing) or row_spacing <= 0:
-        raise ValueError("Unable to derive a valid spacing from spot coordinates; ensure spots are in consistent units.")
+        raise ValueError(
+            "Unable to derive a valid spacing from spot coordinates; ensure spots are in consistent units."
+        )
     side = max(1, int(np.floor(row_spacing)))
     return side, side
 
