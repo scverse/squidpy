@@ -51,7 +51,6 @@ class TestMakeTilesFromSpots(PlotTester, metaclass=PlotTesterMeta):
         sq.experimental.im.detect_tissue(
             sdata,
             image_key="hne",
-            preview=False,
         )
 
         sq.experimental.im.make_tiles_from_spots(

@@ -379,12 +379,22 @@ def make_tiles(
                 logger.warning("detect_tissue failed (%s); tiles will not be classified.", e)
         if classification_mask_key not in sdata.labels:
             raise KeyError(f"Tissue mask '{classification_mask_key}' not found in sdata.labels.")
+        # Use a mask scale that aligns with the full-resolution image; avoid coarsest "auto" selection.
+        if scale == "auto":
+            label_node = sdata.labels.get(classification_mask_key)
+            if label_node is not None:
+                target_hw = _get_largest_scale_dimensions(sdata, image_key)
+                scale_used = _choose_label_scale_for_image(label_node, target_hw)
+            else:
+                scale_used = "scale0"
+        else:
+            scale_used = scale
         _filter_tiles(
             sdata,
             tg=tg,
             image_key=image_key,
             tissue_mask_key=classification_mask_key,
-            scale=scale,
+            scale=scale_used,
             min_tissue_fraction=min_tissue_fraction,
             shapes_key=shapes_key,
         )
