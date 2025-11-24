@@ -375,7 +375,7 @@ def make_tiles(
                     new_labels_key=classification_mask_key,
                     inplace=True,
                 )
-            except Exception as e:  # pragma: no cover - defensive
+            except (ImportError, KeyError, ValueError, RuntimeError) as e:  # pragma: no cover - defensive
                 logger.warning("detect_tissue failed (%s); tiles will not be classified.", e)
         if classification_mask_key not in sdata.labels:
             raise KeyError(f"Tissue mask '{classification_mask_key}' not found in sdata.labels.")
@@ -458,7 +458,7 @@ def make_tiles_from_spots(
                     new_labels_key=classification_mask_key,
                     inplace=True,
                 )
-            except Exception as e:  # pragma: no cover - defensive
+            except (ImportError, KeyError, ValueError, RuntimeError) as e:  # pragma: no cover - defensive
                 logger.warning("detect_tissue failed (%s); tiles will not be classified.", e)
 
     if classification_mask_key is not None:

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import joblib as jl
 import numba
 import numpy as np
+import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
