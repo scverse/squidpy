@@ -74,8 +74,7 @@ dependencies = [
   "zarr>=2.6.1",
 ]
 
-[project.optional-dependencies]
-dev = [
+optional-dependencies.dev = [
   "hatch>=1.9",
   "ipykernel",
   "ipywidgets",
@@ -85,7 +84,7 @@ dev = [
   "pre-commit>=3",
   "ruff",
 ]
-docs = [
+optional-dependencies.docs = [
   "ipython",
   "ipywidgets>=8",
   "myst-nb>=0.17.1",
@@ -100,7 +99,11 @@ docs = [
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
 ]
-test = [
+optional-dependencies.leiden = [
+  "leidenalg",
+  "spatialleiden>=0.3",
+]
+optional-dependencies.test = [
   "coverage[toml]>=7",
   "pytest>=7",
   # Just for VS Code
@@ -110,16 +113,10 @@ test = [
   "pytest-xdist>=3",
   "scanpy[leiden]",
 ]
-leiden = [
-  "leidenalg",
-  "spatialleiden>=0.3.0",
-]
-
-[project.urls]
-"Bug Tracker" = "https://github.com/scverse/squidpy/issues"
-"Documentation" = "https://squidpy.readthedocs.io"
-"Home-page" = "https://github.com/scverse/squidpy"
-"Source" = "https://github.com/scverse/squidpy"
+urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
+urls."Documentation" = "https://squidpy.readthedocs.io"
+urls."Home-page" = "https://github.com/scverse/squidpy"
+urls."Source" = "https://github.com/scverse/squidpy"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
