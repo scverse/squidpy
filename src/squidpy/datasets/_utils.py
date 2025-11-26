@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from inspect import Parameter, Signature, signature
 from pathlib import Path
-from typing import Any, TypeAlias, Union
+from typing import Any, TypeAlias
 
 import anndata
 import spatialdata as sd
@@ -185,7 +185,11 @@ class ImgMetadata(Metadata):
 def _get_zipped_dataset(folderpath: Path, dataset_name: str, figshare_id: str) -> sd.SpatialData:
     """Returns a specific dataset as SpatialData object. If the file is not present on disk, it will be downloaded and extracted."""
 
-    if not folderpath.is_dir():
+    # Create directory if it doesn't exist
+    if not folderpath.exists():
+        logg.info(f"Creating directory `{folderpath}`")
+        folderpath.mkdir(parents=True, exist_ok=True)
+    elif not folderpath.is_dir():
         raise ValueError(f"Expected a directory path for `folderpath`, found: {folderpath}")
 
     download_zip = folderpath / f"{dataset_name}.zip"

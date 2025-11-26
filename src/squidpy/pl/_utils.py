@@ -6,7 +6,7 @@ from functools import wraps
 from inspect import signature
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import matplotlib as mpl
 import numpy as np
@@ -105,7 +105,7 @@ def extract(
     Create a temporary :class:`anndata.AnnData` object for plotting.
 
     Move columns from :attr:`anndata.AnnData.obsm` ``['{obsm_key}']`` to :attr:`anndata.AnnData.obs` to enable
-    the use of :mod:`scanpy.plotting` functions.
+    the use of :mod:`scanpy.pl` functions.
 
     Parameters
     ----------

@@ -1,0 +1,68 @@
+[envs.default]
+installer = "uv"
+features = ["dev"]
+
+[envs.docs]
+features = ["docs"]
+extra-dependencies = [
+    "setuptools",
+]
+[envs.docs.scripts]
+build = "sphinx-build -M html docs docs/_build -W {args}"
+open = "python3 -m webbrowser -t docs/_build/html/index.html"
+clean = "git clean -fdX -- {args:docs}"
+
+[envs.data]
+[envs.data.scripts]
+download = "python ./.scripts/ci/download_data.py {args}"
+
+
+[envs.hatch-test]
+features = ["test"]
+extra-dependencies = ["diff-cover"]
+[envs.hatch-test.scripts]
+# defaults (only `cov-report` is overridden)
+run = "pytest{env:HATCH_TEST_ARGS:} -p no:cov {args}"
+run-cov = "coverage run -m pytest{env:HATCH_TEST_ARGS:} -p no:cov {args}"
+cov-combine = ["coverage combine"]
+cov-report = [
+    "coverage report",
+    "coverage xml -o coverage.xml",
+    "diff-cover --compare-branch origin/main coverage.xml",
+]
+# extra commands
+cov-erase = "coverage erase"
+download = "python ./.scripts/ci/download_data.py {args}"
+
+
+[[envs.hatch-test.matrix]]
+deps = ["stable"]
+python = ["3.11", "3.12", "3.13"]
+
+# Test the newest supported Python version also with pre-release deps
+# [[envs.hatch-test.matrix]]
+# deps = [ "pre" ]
+# python = [ "3.13" ]
+
+# [envs.hatch-test.overrides]
+# If the matrix variable `deps` is set to "pre",
+# set the environment variable `UV_PRERELEASE` to "allow".
+# matrix.deps.env-vars = [
+#   { key = "UV_PRERELEASE", value = "allow", if = [ "pre" ] },
+# ]
+
+[envs.notebooks]
+extra-dependencies = [
+    "ipykernel",
+    "jupytext",
+    "nbconvert",
+    "leidenalg",
+    "watermark",
+    "napari-spatialdata",
+]
+extras = ["docs"]
+
+[envs.notebooks.scripts]
+
+setup-squidpy-kernel = "python -m ipykernel install --user --name=squidpy"
+run-notebooks = "python ./.scripts/ci/run_notebooks.py docs/notebooks"

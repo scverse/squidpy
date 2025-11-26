@@ -7,7 +7,7 @@ from functools import partial
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypeVar
 
 import dask.array as da
 import matplotlib as mpl
@@ -26,7 +26,7 @@ from skimage.util import img_as_float
 from squidpy._constants._constants import InferDimensions
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, deprecated, singledispatchmethod
+from squidpy._utils import NDArrayA, singledispatchmethod
 from squidpy.gr._utils import (
     _assert_in_range,
     _assert_non_empty_sequence,
@@ -67,7 +67,7 @@ class ImageContainer(FeatureMixin):
     Wraps :class:`xarray.Dataset` to store several image layers with the same `x`, `y` and `z` dimensions in one object.
     Dimensions of stored images are ``(y, x, z, channels)``. The channel dimension may vary between image layers.
 
-    This class also allows for lazy loading and processing using :mod:`dask`, and is given to all image
+    This class also allows for lazy loading and processing using :doc:`dask:index`, and is given to all image
     processing functions, along with :class:`anndata.AnnData` instance, if necessary.
 
     Parameters
@@ -131,7 +131,7 @@ class ImageContainer(FeatureMixin):
 
         Returns
         -------
-        Concatenated :class:`squidpy.img.ImageContainer` with ``imgs`` stacks in Z-dimension.
+        Concatenated :class:`squidpy.im.ImageContainer` with ``imgs`` stacks in Z-dimension.
 
         Raises
         ------
@@ -187,9 +187,9 @@ class ImageContainer(FeatureMixin):
         path
             Path to *Zarr* store.
         lazy
-            Whether to use :mod:`dask` to lazily load image.
+            Whether to use :doc:`dask:index` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`. Only used when ``lazy = True``.
+            Chunk size for :doc:`dask:index`. Only used when ``lazy = True``.
 
         Returns
         -------
@@ -259,9 +259,9 @@ class ImageContainer(FeatureMixin):
             Name for each Z-dimension of the image. This should correspond to the ``library_id``
             in :attr:`anndata.AnnData.uns`.
         lazy
-            Whether to use :mod:`dask` to lazily load image.
+            Whether to use :doc:`dask:index` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`. Only used when ``lazy = True``.
+            Chunk size for :doc:`dask:index`. Only used when ``lazy = True``.
         copy
             Whether to copy the underlying data if ``img`` is an in-memory array.
 
@@ -1076,78 +1076,6 @@ class ImageContainer(FeatureMixin):
             if save and fig is not None:
                 save_fig(fig, save)
 
-    @d.get_sections(base="_interactive", sections=["Parameters"])
-    @d.dedent
-    @deprecated(
-        reason="The squidpy napari plugin is deprecated, please use https://github.com/scverse/napari-spatialdata",
-    )
-    def interactive(
-        self,
-        adata: AnnData,
-        spatial_key: str = Key.obsm.spatial,
-        library_key: str | None = None,
-        library_id: str | Sequence[str] | None = None,
-        cmap: str = "viridis",
-        palette: str | None = None,
-        blending: Literal["opaque", "translucent", "additive"] = "opaque",
-        symbol: Literal["disc", "square"] = "disc",
-        key_added: str = "shapes",
-    ) -> Interactive:  # type: ignore[type-var]
-        """
-        Launch :mod:`napari` viewer.
-
-        Parameters
-        ----------
-        %(adata)s
-        %(spatial_key)s
-        library_key
-            Key in :attr:`adata.AnnData.obs` specifying mapping between observations and library ids.
-            Required if the container has more than 1 Z-dimension.
-        library_id
-            Subset of library ids to visualize. If `None`, visualize all library ids.
-        cmap
-            Colormap for continuous variables.
-        palette
-            Colormap for categorical variables in :attr:`anndata.AnnData.obs`. If `None`, use :mod:`scanpy`'s default.
-        blending
-            Method which determines how RGB and alpha values of :class:`napari.layers.Shapes` are mixed.
-        symbol
-            Symbol to use for the spots. Valid options are:
-
-                - `'disc'` - circle.
-                - `'square'`  - square.
-
-        key_added
-            Key where to store :class:`napari.layers.Shapes`, which can be exported by pressing `SHIFT-E`:
-
-                - :attr:`anndata.AnnData.obs` ``['{layer_name}_{key_added}']`` - boolean mask containing the selected
-                  cells.
-                - :attr:`anndata.AnnData.uns` ``['{layer_name}_{key_added}']['meshes']`` - list of :class:`numpy.array`,
-                  defining a mesh in the spatial coordinates.
-
-            See :mod:`napari`'s `tutorial <https://napari.org/howtos/layers/shapes.html>`_ for more
-            information about different mesh types, such as circles, squares etc.
-
-        Returns
-        -------
-        Interactive view of this container. Screenshot of the canvas can be taken by
-        :meth:`squidpy.pl.Interactive.screenshot`.
-        """
-        from squidpy.pl import Interactive  # type: ignore[attr-defined]
-
-        return Interactive(  # type: ignore[no-any-return]
-            img=self,
-            adata=adata,
-            spatial_key=spatial_key,
-            library_key=library_key,
-            library_id=library_id,
-            cmap=cmap,
-            palette=palette,
-            blending=blending,
-            key_added=key_added,
-            symbol=symbol,
-        ).show()
-
     @d.dedent
     def apply(
         self,
@@ -1179,7 +1107,7 @@ class ImageContainer(FeatureMixin):
         channel
             Apply ``func`` only over a specific ``channel``. If `None`, use all channels.
         chunks
-            Chunk size for :mod:`dask`. If `None`, don't use :mod:`dask`.
+            Chunk size for :doc:`dask:index`. If `None`, don't use :doc:`dask:index`.
         %(copy_cont)s
         drop
             Whether to drop Z-dimensions that were not selected by ``func``. Only used when ``copy = True``.

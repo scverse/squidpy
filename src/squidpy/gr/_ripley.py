@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from typing import (
-    TYPE_CHECKING,
-    Literal,
-    Union,  # noqa: F401
-)
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
@@ -84,7 +80,7 @@ def ripley(
     %(spatial_key)s
     metric
         Which metric to use for computing distances.
-        For available metrics, check out :class:`sklearn.neighbors.DistanceMetric`.
+        For available metrics, check out :class:`sklearn.metrics.DistanceMetric`.
     n_neigh
         Number of neighbors to consider for the KNN graph.
     n_simulations

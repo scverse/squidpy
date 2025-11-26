@@ -19,10 +19,9 @@ import pytest
 import scanpy as sc
 import spatialdata as sd
 from anndata import AnnData, OldFormatWarning
-from geopandas import GeoDataFrame
 from matplotlib.testing.compare import compare_images
 from scipy.sparse import csr_matrix
-from shapely import LineString, Point, Polygon, distance
+from shapely import Point, Polygon
 
 import squidpy as sq
 from squidpy._constants._pkg_constants import Key
@@ -376,7 +375,7 @@ def sdata_mask_graph():
         "region_key": "region",
         "instance_key": "instance_id",
     }
-    return sd.SpatialData.from_elements_dict(
+    return sd.SpatialData.init_from_elements(
         {
             "circles": sd.models.ShapesModel().parse(points_df),
             "polygon": sd.models.ShapesModel().parse(polygon_df),

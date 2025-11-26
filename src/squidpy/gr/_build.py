@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Iterable  # noqa: F401
+from collections.abc import Iterable
 from functools import partial
 from itertools import chain
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
-from geopandas import GeoDataFrame
 from numba import njit
 from scanpy import logging as logg
 from scipy.sparse import (
@@ -24,28 +23,14 @@ from scipy.sparse import (
     spmatrix,
 )
 from scipy.spatial import Delaunay
-from shapely import LineString, MultiPolygon, Point, Polygon, distance
+from shapely import LineString, MultiPolygon, Polygon
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 from sklearn.neighbors import NearestNeighbors
 from spatialdata import SpatialData
 from spatialdata._core.centroids import get_centroids
-from spatialdata._core.query.relational_query import (
-    get_element_instances,
-    match_element_to_table,
-)
-from spatialdata.models import SpatialElement, get_table_keys
-from spatialdata.models.models import (
-    Image2DModel,
-    Image3DModel,
-    Labels2DModel,
-    Labels3DModel,
-    PointsModel,
-    RasterSchema,
-    ShapesModel,
-    TableModel,
-    get_axes_names,
-    get_model,
-)
+from spatialdata._core.query.relational_query import get_element_instances, match_element_to_table
+from spatialdata.models import get_table_keys
+from spatialdata.models.models import Labels2DModel, Labels3DModel, get_model
 
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
@@ -59,6 +44,13 @@ from squidpy.gr._utils import (
 )
 
 __all__ = ["spatial_neighbors"]
+
+
+class SpatialNeighborsResult(NamedTuple):
+    """Result of spatial_neighbors function."""
+
+    connectivities: csr_matrix
+    distances: csr_matrix
 
 
 @d.dedent
@@ -79,7 +71,7 @@ def spatial_neighbors(
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
-) -> tuple[csr_matrix, csr_matrix] | None:
+) -> SpatialNeighborsResult | None:
     """
     Create a graph from spatial coordinates.
 
@@ -136,7 +128,7 @@ def spatial_neighbors(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`tuple` with the spatial connectivities and distances matrices.
+    If ``copy = True``, returns a :class:`~squidpy.gr.SpatialNeighborsResult` with the spatial connectivities and distances matrices.
 
     Otherwise, modifies the ``adata`` with the following keys:
 
@@ -259,7 +251,7 @@ def spatial_neighbors(
     }
 
     if copy:
-        return Adj, Dst
+        return SpatialNeighborsResult(connectivities=Adj, distances=Dst)
 
     _save_data(adata, attr="obsp", key=conns_key, data=Adj)
     _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
