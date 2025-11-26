@@ -109,13 +109,12 @@ optional-dependencies.test = [
   "pytest-xdist>=3",
   "scanpy[leiden]",
 ]
-spatialleiden = ["spatialleiden>=0.3.0"]
-
 urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
 
 urls.Documentation = "https://squidpy.readthedocs.io"
 urls.Home-page = "https://github.com/scverse/squidpy"
 urls.Source = "https://github.com/scverse/squidpy"
+spatialleiden = [ "spatialleiden>=0.3.0" ]
 
 [tool.setuptools]
 package-dir = { "" = "src" }
