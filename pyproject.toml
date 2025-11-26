@@ -74,7 +74,8 @@ dependencies = [
   "zarr>=2.6.1",
 ]
 
-optional-dependencies.dev = [
+[project.optional-dependencies]
+dev = [
   "hatch>=1.9",
   "ipykernel",
   "ipywidgets",
@@ -84,7 +85,7 @@ optional-dependencies.dev = [
   "pre-commit>=3",
   "ruff",
 ]
-optional-dependencies.docs = [
+docs = [
   "ipython",
   "ipywidgets>=8",
   "myst-nb>=0.17.1",
@@ -99,7 +100,7 @@ optional-dependencies.docs = [
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
 ]
-optional-dependencies.test = [
+test = [
   "coverage[toml]>=7",
   "pytest>=7",
   # Just for VS Code
@@ -109,7 +110,10 @@ optional-dependencies.test = [
   "pytest-xdist>=3",
   "scanpy[leiden]",
 ]
-spatialleiden = ["spatialleiden>=0.3.0"]
+leiden = [
+  "leidenalg",
+  "spatialleiden>=0.3.0",
+]
 
 urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
 

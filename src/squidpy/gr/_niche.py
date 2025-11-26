@@ -742,7 +742,7 @@ def _get_spatialleiden_domains(
     try:
         import spatialleiden as sl
     except ImportError as e:
-        msg = "Please install the spatialleiden algorithm: `conda install bioconda::spatialleiden` or `pip install spatialleiden`."
+        msg = "Please install the spatialleiden algorithm: `pip install squidpy[leiden]` or `conda install bioconda::spatialleiden` or `pip install spatialleiden`."
         raise ImportError(msg) from e
 
     if not isinstance(resolutions, list):
