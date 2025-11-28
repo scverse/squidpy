@@ -204,10 +204,7 @@ def _get_zipped_dataset(folderpath: Path, dataset_name: str, figshare_id: str) -
     if not download_zip.exists():
         logg.info(f"Downloading Visium H&E SpatialData to {download_zip}")
         try:
-            download_file(
-                filename=download_zip,
-                backup_url=f"https://ndownloader.figshare.com/files/{figshare_id}"
-            )
+            download_file(filename=download_zip, backup_url=f"https://ndownloader.figshare.com/files/{figshare_id}")
         except Exception as e:
             raise RuntimeError(f"Failed to download dataset: {e}") from e
 
@@ -234,5 +231,5 @@ def download_file(filename, backup_url):
         url=backup_url,
         known_hash=None,
         fname=os.path.basename(filename),
-        path=os.path.dirname(filename) or ".", # Handles current dir if no folder
+        path=os.path.dirname(filename) or ".",  # Handles current dir if no folder
     )

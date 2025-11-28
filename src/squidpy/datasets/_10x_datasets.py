@@ -123,10 +123,7 @@ def visium(
     )
 
     if include_hires_tiff:  # download image
-        download_file(
-            filename=sample_dir / "image.tif",
-            backup_url=url_prefix + visium_files.tif_image
-        )
+        download_file(filename=sample_dir / "image.tif", backup_url=url_prefix + visium_files.tif_image)
         return read_visium(
             base_dir / sample_id,
             source_image_path=base_dir / sample_id / "image.tif",
