@@ -4,7 +4,6 @@ import tarfile
 from pathlib import Path
 from typing import Literal, NamedTuple
 
-import pooch
 import spatialdata as sd
 from anndata import AnnData
 from scanpy import settings
