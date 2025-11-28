@@ -3,12 +3,16 @@ from __future__ import annotations
 from importlib.metadata import version
 
 from packaging.version import Version
+from scanpy.plotting._tools.scatterplots import _add_categorical_legend as add_categorical_legend
 from scanpy.plotting._tools.scatterplots import _panel_grid as panel_grid
+from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
 __all__ = [
     # scanpy
     "set_default_colors_for_categorical_obs",
+    "add_categorical_legend",
     "panel_grid",
+    "add_colors_for_categorical_sample_annotation",
     # anndata
     "ArrayView",
     "SparseCSCView",
