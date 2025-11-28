@@ -15,7 +15,7 @@ from cycler import Cycler
 from matplotlib import rcParams
 from matplotlib.axes import Axes
 from scanpy.plotting._tools.scatterplots import _panel_grid
-from scanpy.plotting._utils import _set_default_colors_for_categorical_obs
+from scanpy.plotting._utils import set_default_colors_for_categorical_obs
 from scipy.sparse import issparse
 
 from squidpy._docs import d
@@ -174,7 +174,7 @@ def var_by_distance(
             elif covariate is not None and not stack_vars:
                 # make a categorical color palette if none was specified and there are several regplots to be plotted
                 if isinstance(line_palette, str) or line_palette is None:
-                    _set_default_colors_for_categorical_obs(adata, covariate)
+                    set_default_colors_for_categorical_obs(adata, covariate)
                     line_palette = adata.uns[covariate + "_colors"]
                 covariate_instances = df[covariate].unique()
 
