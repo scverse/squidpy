@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from importlib.metadata import version
+
 from packaging.version import Version
 from scanpy.plotting._tools.scatterplots import _panel_grid as panel_grid
-
 
 __all__ = [
     # scanpy
@@ -22,8 +24,6 @@ else:
     from scanpy.plotting._utils import set_default_colors_for_categorical_obs
 
 
-
-
 CAN_USE_SPARSE_ARRAY = Version(version("anndata")) >= Version("0.11.0rc1")
 if CAN_USE_SPARSE_ARRAY:
     from anndata._core.views import ArrayView
@@ -31,6 +31,3 @@ if CAN_USE_SPARSE_ARRAY:
     from anndata._core.views import SparseCSRMatrixView as SparseCSRView
 else:
     from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
-
-
-
