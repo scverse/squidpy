@@ -4,10 +4,10 @@ import tarfile
 from pathlib import Path
 from typing import Literal, NamedTuple
 
+import pooch
 import spatialdata as sd
 from anndata import AnnData
 from scanpy import settings
-from scanpy._utils import check_presence_download
 
 from squidpy._constants._constants import TenxVersions
 from squidpy.datasets._utils import DEFAULT_CACHE_DIR, PathLike, _get_zipped_dataset
@@ -110,23 +110,21 @@ def visium(
 
     # download spatial data
     tar_pth = sample_dir / visium_files.spatial_attrs
-    check_presence_download(filename=tar_pth, backup_url=url_prefix + visium_files.spatial_attrs)
+    pooch.retrieve(fname=tar_pth, url=url_prefix + visium_files.spatial_attrs, known_hash=None)
     with tarfile.open(tar_pth) as f:
         for el in f:
             if not (sample_dir / el.name).exists():
                 f.extract(el, sample_dir)
 
     # download counts
-    check_presence_download(
-        filename=sample_dir / "filtered_feature_bc_matrix.h5",
-        backup_url=url_prefix + visium_files.feature_matrix,
+    pooch.retrieve(
+        fname=sample_dir / "filtered_feature_bc_matrix.h5",
+        url=url_prefix + visium_files.feature_matrix,
+        known_hash=None,
     )
 
     if include_hires_tiff:  # download image
-        check_presence_download(
-            filename=sample_dir / "image.tif",
-            backup_url=url_prefix + visium_files.tif_image,
-        )
+        pooch.retrieve(fname=sample_dir / "image.tif", url=url_prefix + visium_files.tif_image, known_hash=None)
         return read_visium(
             base_dir / sample_id,
             source_image_path=base_dir / sample_id / "image.tif",

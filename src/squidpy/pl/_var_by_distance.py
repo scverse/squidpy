@@ -14,10 +14,9 @@ from anndata import AnnData
 from cycler import Cycler
 from matplotlib import rcParams
 from matplotlib.axes import Axes
-from scanpy.plotting._tools.scatterplots import _panel_grid
-from scanpy.plotting._utils import set_default_colors_for_categorical_obs
 from scipy.sparse import issparse
 
+from squidpy._compat import panel_grid, set_default_colors_for_categorical_obs
 from squidpy._docs import d
 from squidpy.pl._utils import save_fig
 
@@ -99,7 +98,7 @@ def var_by_distance(
 
     # if several variables are plotted, make a panel grid
     if isinstance(var, list) and not stack_vars:
-        fig, grid = _panel_grid(
+        fig, grid = panel_grid(
             hspace=0.25,
             wspace=0.75 / rcParams["figure.figsize"][0] + 0.02,
             ncols=4,

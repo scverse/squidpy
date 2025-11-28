@@ -10,11 +10,11 @@ from pathlib import Path
 from typing import Any, TypeAlias
 
 import anndata
+import pooch
 import spatialdata as sd
 from anndata import AnnData
 from scanpy import logging as logg
 from scanpy import read
-from scanpy._utils import check_presence_download
 
 from squidpy.im import ImageContainer
 
@@ -170,7 +170,7 @@ class ImgMetadata(Metadata):
         )
 
     def _download(self, fpath: PathLike, backup_url: str, **kwargs: Any) -> Any:
-        check_presence_download(Path(fpath), backup_url)
+        pooch.retrieve(fname=Path(fpath), url=backup_url, known_hash=None)
 
         img = ImageContainer()
         img.add_img(fpath, layer="image", library_id=self.library_id, **kwargs)
@@ -204,9 +204,8 @@ def _get_zipped_dataset(folderpath: Path, dataset_name: str, figshare_id: str) -
     if not download_zip.exists():
         logg.info(f"Downloading Visium H&E SpatialData to {download_zip}")
         try:
-            check_presence_download(
-                filename=download_zip,
-                backup_url=f"https://ndownloader.figshare.com/files/{figshare_id}",
+            pooch.retrieve(
+                fname=download_zip, url=f"https://ndownloader.figshare.com/files/{figshare_id}", known_hash=None
             )
         except Exception as e:
             raise RuntimeError(f"Failed to download dataset: {e}") from e
