@@ -24,7 +24,7 @@ from squidpy._utils import _ensure_dim_order, _get_scale_factors, _yx_from_shape
 from ._utils import _flatten_channels, _get_element_data
 
 
-class DETECT_TISSUE_METHOD(enum.Enum):
+class DetectTissueMethod(enum.Enum):
     OTSU = enum.auto()
     FELZENSZWALB = enum.auto()
 
@@ -72,7 +72,7 @@ def detect_tissue(
     image_key: str,
     *,
     scale: str = "auto",
-    method: DETECT_TISSUE_METHOD | str = DETECT_TISSUE_METHOD.OTSU,
+    method: DetectTissueMethod | str = DetectTissueMethod.OTSU,
     channel_format: Literal["infer", "rgb", "rgba", "multichannel"] = "infer",
     background_detection_params: BackgroundDetectionParams | None = None,
     corners_are_background: bool = True,
@@ -100,8 +100,8 @@ def detect_tissue(
     method
         Tissue detection method. Valid options are:
 
-            - `DETECT_TISSUE_METHOD.OTSU` or `"otsu"` - Otsu thresholding with background detection.
-            - `DETECT_TISSUE_METHOD.FELZENSZWALB` or `"felzenszwalb"` - Felzenszwalb superpixel segmentation.
+            - `DetectTissueMethod.OTSU` or `"otsu"` - Otsu thresholding with background detection.
+            - `DetectTissueMethod.FELZENSZWALB` or `"felzenszwalb"` - Felzenszwalb superpixel segmentation.
 
     channel_format
         Expected format of image channels. Valid options are:
@@ -157,7 +157,7 @@ def detect_tissue(
     # Normalize method
     if isinstance(method, str):
         try:
-            method = DETECT_TISSUE_METHOD[method.upper()]
+            method = DetectTissueMethod[method.upper()]
         except KeyError as e:
             raise ValueError('method must be "otsu" or "felzenszwalb"') from e
 
@@ -190,7 +190,7 @@ def detect_tissue(
         img_grey = img_grey_da.values  # may compute
 
     # First-pass foreground
-    if method == DETECT_TISSUE_METHOD.OTSU:
+    if method == DetectTissueMethod.OTSU:
         img_fg_mask_bool = _segment_otsu(img_grey=img_grey, params=bgp)
     else:
         p = felzenszwalb_params or FelzenszwalbParams()
