@@ -144,3 +144,6 @@ data
 # pixi
 .pixi
 pixi.lock
+
+# benchmarks
+benchmark*.json
