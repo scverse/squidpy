@@ -807,22 +807,8 @@ def _make_tiles(
 
     # Calculate centroid using center of mass
     y_coords, x_coords = np.where(mask_bool)
-    centroid_y_mask = float(np.mean(y_coords))
-    centroid_x_mask = float(np.mean(x_coords))
-
-    # Scale centroid coordinates to match image dimensions if mask is at different scale
-    if H_mask != H or W_mask != W:
-        scale_y = H / H_mask
-        scale_x = W / W_mask
-        centroid_y = centroid_y_mask * scale_y
-        centroid_x = centroid_x_mask * scale_x
-        logger.info(
-            f"Mask shape {mask.shape} doesn't match image shape ({H}, {W}). "
-            f"Scaled centroid coordinates by factors ({scale_y:.2f}, {scale_x:.2f})."
-        )
-    else:
-        centroid_y = centroid_y_mask
-        centroid_x = centroid_x_mask
+    centroid_y = float(np.mean(y_coords))
+    centroid_x = float(np.mean(x_coords))
 
     # Calculate offset to center grid on centroid
     tile_idx_y_centroid = int(centroid_y // ty)
