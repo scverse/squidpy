@@ -241,8 +241,8 @@ testpaths = [ "tests/" ]
 xfail_strict = true
 addopts = [
   "--ignore=tests/plotting/test_interactive.py",
+  "--ignore=tests/benchmarks",
   "--ignore=docs",
-  "--ignore=benchmarks",
   "--benchmark-disable",
 ]
 markers = [
@@ -313,9 +313,9 @@ lint = "ruff check ."
 format = "ruff format ."
 pre-commit-install = "pre-commit install"
 pre-commit = "pre-commit run"
-benchmark = "pytest benchmarks/ --benchmark-enable --benchmark-only -v --color=yes"
-benchmark-save = "pytest benchmarks/ --benchmark-enable --benchmark-only --benchmark-autosave -v --color=yes"
-benchmark-compare = "pytest benchmarks/ --benchmark-enable --benchmark-only --benchmark-compare -v --color=yes"
+benchmark = "pytest tests/benchmarks/ --benchmark-enable --benchmark-only -v --color=yes"
+benchmark-save = "pytest tests/benchmarks/ --benchmark-enable --benchmark-only --benchmark-autosave -v --color=yes"
+benchmark-compare = "pytest tests/benchmarks/ --benchmark-enable --benchmark-only --benchmark-compare -v --color=yes"
 
 [tool.cruft]
 skip = [

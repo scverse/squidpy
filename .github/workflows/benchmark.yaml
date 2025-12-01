@@ -66,7 +66,7 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          pytest benchmarks/ \
+          pytest tests/benchmarks/ \
             --benchmark-enable \
             --benchmark-only \
             --benchmark-json=benchmark-results.json \
@@ -78,7 +78,7 @@ jobs:
       - name: Generate report (simple mode)
         if: github.event.inputs.mode != 'compare'
         run: |
-          python .github/scripts/benchmark_report.py \
+          python .scripts/ci/benchmark_report.py \
             benchmark-results.json \
             --pr-ref="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" \
             --output=benchmark-report.md \
@@ -97,7 +97,7 @@ jobs:
           uv pip install -e ".[test]" --system
 
           # Run benchmarks on base
-          pytest benchmarks/ \
+          pytest tests/benchmarks/ \
             --benchmark-enable \
             --benchmark-only \
             --benchmark-json=benchmark-base.json \
@@ -115,7 +115,7 @@ jobs:
       - name: Generate comparison report
         if: github.event.inputs.mode == 'compare'
         run: |
-          python .github/scripts/benchmark_report.py \
+          python .scripts/ci/benchmark_report.py \
             benchmark-results.json \
             --base-results=benchmark-base.json \
             --pr-ref="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" \
