@@ -313,9 +313,9 @@ lint = "ruff check ."
 format = "ruff format ."
 pre-commit-install = "pre-commit install"
 pre-commit = "pre-commit run"
-benchmark = "pytest benchmarks/ --benchmark-only -v --color=yes"
-benchmark-save = "pytest benchmarks/ --benchmark-only --benchmark-autosave -v --color=yes"
-benchmark-compare = "pytest benchmarks/ --benchmark-only --benchmark-compare -v --color=yes"
+benchmark = "pytest benchmarks/ --benchmark-enable --benchmark-only -v --color=yes"
+benchmark-save = "pytest benchmarks/ --benchmark-enable --benchmark-only --benchmark-autosave -v --color=yes"
+benchmark-compare = "pytest benchmarks/ --benchmark-enable --benchmark-only --benchmark-compare -v --color=yes"
 
 [tool.cruft]
 skip = [
