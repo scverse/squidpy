@@ -222,7 +222,7 @@ def _get_zipped_dataset(folderpath: Path, dataset_name: str, figshare_id: str) -
     return sd.read_zarr(extracted_path)
 
 
-def download_file(filename, backup_url):
+def download_file(filename: PathLike, backup_url: str) -> None:
     """
     Replacement for scanpy._utils.check_presence_download using Pooch.
     Saves to the exact local path specified in 'filename'.
