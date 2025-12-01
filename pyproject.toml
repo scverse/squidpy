@@ -103,6 +103,7 @@ optional-dependencies.test = [
   "coverage[toml]>=7",
   "pytest>=7",
   # Just for VS Code
+  "pytest-benchmark>=4.0",
   "pytest-cov>=4",
   "pytest-mock>=3.5",
   "pytest-timeout>=2.1",
@@ -241,6 +242,12 @@ xfail_strict = true
 addopts = [
   "--ignore=tests/plotting/test_interactive.py",
   "--ignore=docs",
+  "--ignore=benchmarks",
+  "--benchmark-disable",
+]
+markers = [
+  "benchmark: mark test as a benchmark test",
+  "slow: mark test as slow running",
 ]
 
 [tool.coverage.run]
@@ -306,6 +313,9 @@ lint = "ruff check ."
 format = "ruff format ."
 pre-commit-install = "pre-commit install"
 pre-commit = "pre-commit run"
+benchmark = "pytest benchmarks/ --benchmark-only -v --color=yes"
+benchmark-save = "pytest benchmarks/ --benchmark-only --benchmark-autosave -v --color=yes"
+benchmark-compare = "pytest benchmarks/ --benchmark-only --benchmark-compare -v --color=yes"
 
 [tool.cruft]
 skip = [
