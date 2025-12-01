@@ -85,13 +85,15 @@ def _generate_simple_report(benchmarks: dict, ref: str) -> str:
 
         lines.append(f"| `{name}` | {mean} | ±{stddev} | {min_time} | {max_time} | {rounds} |")
 
-    lines.extend([
-        "",
-        "<details>",
-        "<summary>📈 Raw Statistics</summary>",
-        "",
-        "```",
-    ])
+    lines.extend(
+        [
+            "",
+            "<details>",
+            "<summary>📈 Raw Statistics</summary>",
+            "",
+            "```",
+        ]
+    )
 
     for name, stats in sorted(benchmarks.items()):
         lines.append(f"\n{name}:")
@@ -102,10 +104,12 @@ def _generate_simple_report(benchmarks: dict, ref: str) -> str:
         if "iterations" in stats:
             lines.append(f"  iterations: {stats['iterations']}")
 
-    lines.extend([
-        "```",
-        "</details>",
-    ])
+    lines.extend(
+        [
+            "```",
+            "</details>",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -151,13 +155,15 @@ def _generate_comparison_report(
         lines.append("")
         lines.append("**Removed benchmarks:** " + ", ".join(f"`{n}`" for n in sorted(removed)))
 
-    lines.extend([
-        "",
-        "<details>",
-        "<summary>📈 Detailed Statistics</summary>",
-        "",
-        "```",
-    ])
+    lines.extend(
+        [
+            "",
+            "<details>",
+            "<summary>📈 Detailed Statistics</summary>",
+            "",
+            "```",
+        ]
+    )
 
     for name, stats in sorted(pr_benchmarks.items()):
         lines.append(f"\n{name}:")
@@ -166,12 +172,14 @@ def _generate_comparison_report(
         lines.append(f"  max:    {stats['max']:.6f}s")
         lines.append(f"  rounds: {stats['rounds']}")
 
-    lines.extend([
-        "```",
-        "</details>",
-        "",
-        "**Legend:** 🔴 >10% slower | 🟢 >10% faster | ⚪ within 10% | 🆕 new benchmark",
-    ])
+    lines.extend(
+        [
+            "```",
+            "</details>",
+            "",
+            "**Legend:** 🔴 >10% slower | 🟢 >10% faster | ⚪ within 10% | 🆕 new benchmark",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -235,4 +243,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

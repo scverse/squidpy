@@ -49,9 +49,7 @@ def make_adata() -> Callable[[int, int], AnnData]:
         spatial_coords = rng.uniform(0, 1000, size=(n_obs, 2))
 
         # Create random cluster assignments
-        cluster_labels = pd.Categorical(
-            rng.choice([f"cluster_{i}" for i in range(n_clusters)], size=n_obs)
-        )
+        cluster_labels = pd.Categorical(rng.choice([f"cluster_{i}" for i in range(n_clusters)], size=n_obs))
 
         # Create minimal expression matrix
         X = rng.random((n_obs, 50))
@@ -78,9 +76,7 @@ BENCHMARK_SIZES = {
 
 
 @pytest.fixture(params=list(BENCHMARK_SIZES.keys()), ids=list(BENCHMARK_SIZES.keys()))
-def adata_scaling(
-    request: pytest.FixtureRequest, make_adata: Callable[[int, int], AnnData]
-) -> AnnData:
+def adata_scaling(request: pytest.FixtureRequest, make_adata: Callable[[int, int], AnnData]) -> AnnData:
     """
     Parameterized fixture that provides AnnData objects of varying sizes.
 

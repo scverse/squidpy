@@ -9,4 +9,3 @@ For more options, see pytest-benchmark documentation.
 """
 
 from __future__ import annotations
-

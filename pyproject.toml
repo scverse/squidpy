@@ -103,7 +103,7 @@ optional-dependencies.test = [
   "coverage[toml]>=7",
   "pytest>=7",
   # Just for VS Code
-  "pytest-benchmark>=4.0",
+  "pytest-benchmark>=4",
   "pytest-cov>=4",
   "pytest-mock>=3.5",
   "pytest-timeout>=2.1",

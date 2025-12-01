@@ -48,8 +48,8 @@ class TestCoOccurrenceBenchmarks:
     @pytest.mark.benchmark(group="co_occurrence_scaling")
     def test_co_occurrence_scaling(
         self,
-        benchmark: "pytest.benchmark.fixture.BenchmarkFixture",
-        adata_scaling: "AnnData",
+        benchmark: pytest.benchmark.fixture.BenchmarkFixture,
+        adata_scaling: AnnData,
     ) -> None:
         """
         Benchmark co_occurrence across different dataset sizes.
@@ -68,8 +68,8 @@ class TestCoOccurrenceIntervalBenchmarks:
     @pytest.mark.parametrize("n_intervals", [10, 25, 50, 100])
     def test_co_occurrence_intervals(
         self,
-        benchmark: "pytest.benchmark.fixture.BenchmarkFixture",
-        adata_default: "AnnData",
+        benchmark: pytest.benchmark.fixture.BenchmarkFixture,
+        adata_default: AnnData,
         n_intervals: int,
     ) -> None:
         """Benchmark co_occurrence with different interval counts."""
@@ -90,8 +90,8 @@ class TestCoOccurrenceNumbaCompilation:
     @pytest.mark.benchmark(group="co_occurrence_warmup")
     def test_co_occurrence_first_run(
         self,
-        benchmark: "pytest.benchmark.fixture.BenchmarkFixture",
-        make_adata: "Callable[[int, int], AnnData]",
+        benchmark: pytest.benchmark.fixture.BenchmarkFixture,
+        make_adata: Callable[[int, int], AnnData],
     ) -> None:
         """
         Benchmark first run to capture numba compilation overhead.
@@ -99,6 +99,7 @@ class TestCoOccurrenceNumbaCompilation:
         Note: This test measures cold-start performance including JIT compilation.
         Run with --benchmark-warmup=off to capture compilation time.
         """
+
         # Create fresh adata each time to avoid caching effects
         def run_co_occurrence() -> None:
             adata = make_adata(100)
@@ -121,8 +122,8 @@ class TestCoOccurrenceNumbaCompilation:
     ],
 )
 def test_co_occurrence_comprehensive(
-    benchmark: "pytest.benchmark.fixture.BenchmarkFixture",
-    make_adata: "Callable[[int, int], AnnData]",
+    benchmark: pytest.benchmark.fixture.BenchmarkFixture,
+    make_adata: Callable[[int, int], AnnData],
     n_obs: int,
     n_clusters: int,
     n_intervals: int,
