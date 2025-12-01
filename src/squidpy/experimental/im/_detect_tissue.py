@@ -4,16 +4,18 @@ import enum
 from dataclasses import dataclass
 from typing import Literal
 
+import dask.array as da
 import numpy as np
 import spatialdata as sd
 import xarray as xr
+from dask.base import is_dask_collection
 from dask_image.ndinterp import affine_transform as da_affine
 from skimage import measure
 from skimage.filters import gaussian, threshold_otsu
 from skimage.morphology import binary_closing, disk, remove_small_holes
 from skimage.segmentation import felzenszwalb
 from skimage.util import img_as_float
-from spatialdata._logging import logger as logg
+from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel
 from spatialdata.transformations import get_transformation
 
@@ -182,7 +184,7 @@ def detect_tissue(
     # Decide working resolution
     need_downscale = (not manual_scale) and (n_src_px > auto_max_pixels)
     if need_downscale:
-        logg.info("Downscaling for faster computation.")
+        logger.info("Downscaling for faster computation.")
         img_grey = _downscale_with_dask(img_grey=img_grey_da, target_pixels=auto_max_pixels)
     else:
         img_grey = img_grey_da.values  # may compute
@@ -227,13 +229,9 @@ def detect_tissue(
         return None
 
     # If dask-backed, return a NumPy array to honor the signature
-    try:
-        import dask.array as da  # noqa: F401
+    if is_dask_collection(img_fg_labels_up):
+        return np.asarray(img_fg_labels_up.compute())
 
-        if hasattr(img_fg_labels_up, "compute"):
-            return np.asarray(img_fg_labels_up.compute())
-    except (ImportError, AttributeError, TypeError):
-        pass
     return np.asarray(img_fg_labels_up)
 
 
@@ -243,7 +241,6 @@ def _affine_upscale_nearest(labels: np.ndarray, scale_matrix: np.ndarray, target
     Nearest-neighbor affine upscaling using dask-image. Returns dask array if available, else NumPy.
     """
     try:
-        import dask.array as da
 
         lbl_da = da.from_array(labels, chunks="auto")
         result = da_affine(
@@ -258,6 +255,7 @@ def _affine_upscale_nearest(labels: np.ndarray, scale_matrix: np.ndarray, target
         )
 
         return np.asarray(result)
+    
     except (ImportError, AttributeError, TypeError):
         sy = target_shape[0] / labels.shape[0]
         sx = target_shape[1] / labels.shape[1]
@@ -313,7 +311,7 @@ def _downscale_with_dask(img_grey: xr.DataArray, target_pixels: int) -> np.ndarr
 
     fy = max(1, int(np.ceil(h / target_h)))
     fx = max(1, int(np.ceil(w / target_w)))
-    logg.info(f"Downscaling from {h}×{w} with coarsen={fy}×{fx} to ≤{target_pixels} px.")
+    logger.info(f"Downscaling from {h}×{w} with coarsen={fy}×{fx} to ≤{target_pixels} px.")
 
     da_small = _ensure_dask(img_grey).coarsen(y=fy, x=fx, boundary="trim").mean()
     return np.asarray(_dask_compute(da_small))
@@ -324,9 +322,8 @@ def _ensure_dask(da: xr.DataArray) -> xr.DataArray:
     Ensure DataArray is dask-backed. If not, chunk to reasonable tiles.
     """
     try:
-        import dask.array as dask_array
 
-        if hasattr(da, "data") and isinstance(da.data, dask_array.Array):
+        if hasattr(da, "data") and isinstance(da.data, da.Array):
             return da
         return da.chunk({"y": 2048, "x": 2048})
     except (ImportError, AttributeError):
@@ -338,10 +335,9 @@ def _dask_compute(img_da: xr.DataArray) -> np.ndarray:
     Compute an xarray DataArray (possibly dask-backed) to a NumPy array with a ProgressBar if available.
     """
     try:
-        import dask.array as dask_array
         from dask.diagnostics import ProgressBar
 
-        if hasattr(img_da, "data") and isinstance(img_da.data, dask_array.Array):
+        if hasattr(img_da, "data") and isinstance(img_da.data, da.Array):
             with ProgressBar():
                 computed = img_da.data.compute()
                 return np.asarray(computed)

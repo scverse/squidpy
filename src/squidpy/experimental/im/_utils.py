@@ -5,8 +5,6 @@ from typing import Any, Literal
 import xarray as xr
 from spatialdata._logging import logger
 
-__all__ = ["_get_element_data", "_flatten_channels"]
-
 
 def _get_element_data(
     element_node: Any,

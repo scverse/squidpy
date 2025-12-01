@@ -8,6 +8,8 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import spatialdata as sd
+import xarray as xr
+from dask.base import is_dask_collection
 from shapely.geometry import Polygon
 from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel, ShapesModel
@@ -772,18 +774,27 @@ def _make_tiles(
     mask_da = _get_element_data(label_node, scale, "label", image_mask_key)
 
     # Convert to numpy array if needed
-    if hasattr(mask_da, "compute"):
-        mask = np.asarray(mask_da.compute())
-    elif hasattr(mask_da, "values"):
-        mask = np.asarray(mask_da.values)
+    if is_dask_collection(mask_da):
+        mask_da = mask_da.compute()
+
+    if isinstance(mask_da, xr.DataArray):
+        mask = np.asarray(mask_da.data)
     else:
         mask = np.asarray(mask_da)
 
     # Ensure 2D (y, x) shape
-    if mask.ndim > 2:
+    if mask.ndim > 3:
+        raise ValueError(f"Expected 2D mask with shape `(y, x)`, got shape `{mask.shape}`.")
+
+    if mask.ndim == 3:
+        old_shape = mask.shape
         mask = mask.squeeze()
-    if mask.ndim != 2:
-        raise ValueError(f"Expected 2D mask with shape (y, x), got shape {mask.shape}")
+        if mask.ndim == 2:
+            logger.warning(f"Mask had shape `{old_shape}`, squeezed to `{mask.shape}`.")
+        else:
+            raise ValueError(f"Expected 2D mask with shape `(y, x)`, got shape `{mask.shape}`.")
+
+    # If we made it here, the mask is 2D.
 
     # Ensure mask matches image dimensions
     H_mask, W_mask = mask.shape
@@ -887,10 +898,11 @@ def _get_mask_from_labels(sdata: sd.SpatialData, mask_key: str, scale: str) -> n
     label_node = sdata.labels[mask_key]
     mask_da = _get_element_data(label_node, scale, "label", mask_key)
 
-    if hasattr(mask_da, "compute"):
-        mask = np.asarray(mask_da.compute())
-    elif hasattr(mask_da, "values"):
-        mask = np.asarray(mask_da.values)
+    if is_dask_collection(mask_da):
+        mask_da = mask_da.compute()
+
+    if isinstance(mask_da, xr.DataArray):
+        mask = np.asarray(mask_da.data)
     else:
         mask = np.asarray(mask_da)
 
