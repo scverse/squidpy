@@ -4,25 +4,27 @@ import enum
 from dataclasses import dataclass
 from typing import Literal
 
+import dask.array as da
 import numpy as np
 import spatialdata as sd
 import xarray as xr
+from dask.base import is_dask_collection
 from dask_image.ndinterp import affine_transform as da_affine
 from skimage import measure
 from skimage.filters import gaussian, threshold_otsu
 from skimage.morphology import binary_closing, disk, remove_small_holes
 from skimage.segmentation import felzenszwalb
 from skimage.util import img_as_float
-from spatialdata._logging import logger as logg
+from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel
 from spatialdata.transformations import get_transformation
 
-from squidpy._utils import _get_scale_factors, _yx_from_shape
+from squidpy._utils import _ensure_dim_order, _get_scale_factors, _yx_from_shape
 
-from ._utils import _flatten_channels, _get_image_data
+from ._utils import _flatten_channels, _get_element_data
 
 
-class DETECT_TISSUE_METHOD(enum.Enum):
+class DetectTissueMethod(enum.Enum):
     OTSU = enum.auto()
     FELZENSZWALB = enum.auto()
 
@@ -70,7 +72,7 @@ def detect_tissue(
     image_key: str,
     *,
     scale: str = "auto",
-    method: DETECT_TISSUE_METHOD | str = DETECT_TISSUE_METHOD.OTSU,
+    method: DetectTissueMethod | str = DetectTissueMethod.OTSU,
     channel_format: Literal["infer", "rgb", "rgba", "multichannel"] = "infer",
     background_detection_params: BackgroundDetectionParams | None = None,
     corners_are_background: bool = True,
@@ -98,8 +100,8 @@ def detect_tissue(
     method
         Tissue detection method. Valid options are:
 
-            - `DETECT_TISSUE_METHOD.OTSU` or `"otsu"` - Otsu thresholding with background detection.
-            - `DETECT_TISSUE_METHOD.FELZENSZWALB` or `"felzenszwalb"` - Felzenszwalb superpixel segmentation.
+            - `DetectTissueMethod.OTSU` or `"otsu"` - Otsu thresholding with background detection.
+            - `DetectTissueMethod.FELZENSZWALB` or `"felzenszwalb"` - Felzenszwalb superpixel segmentation.
 
     channel_format
         Expected format of image channels. Valid options are:
@@ -155,7 +157,7 @@ def detect_tissue(
     # Normalize method
     if isinstance(method, str):
         try:
-            method = DETECT_TISSUE_METHOD[method.upper()]
+            method = DetectTissueMethod[method.upper()]
         except KeyError as e:
             raise ValueError('method must be "otsu" or "felzenszwalb"') from e
 
@@ -170,7 +172,9 @@ def detect_tissue(
     manual_scale = scale.lower() != "auto"
 
     # Load smallest available or explicit scale
-    img_src = _get_image_data(sdata, image_key, scale=scale if manual_scale else "auto")
+    img_node = sdata.images[image_key]
+    img_da = _get_element_data(img_node, scale if manual_scale else "auto", "image", image_key)
+    img_src = _ensure_dim_order(img_da, "yxc")
     src_h, src_w = _yx_from_shape(img_src.shape)
     n_src_px = src_h * src_w
 
@@ -180,13 +184,13 @@ def detect_tissue(
     # Decide working resolution
     need_downscale = (not manual_scale) and (n_src_px > auto_max_pixels)
     if need_downscale:
-        logg.info("Downscaling for faster computation.")
+        logger.info("Downscaling for faster computation.")
         img_grey = _downscale_with_dask(img_grey=img_grey_da, target_pixels=auto_max_pixels)
     else:
         img_grey = img_grey_da.values  # may compute
 
     # First-pass foreground
-    if method == DETECT_TISSUE_METHOD.OTSU:
+    if method == DetectTissueMethod.OTSU:
         img_fg_mask_bool = _segment_otsu(img_grey=img_grey, params=bgp)
     else:
         p = felzenszwalb_params or FelzenszwalbParams()
@@ -225,13 +229,9 @@ def detect_tissue(
         return None
 
     # If dask-backed, return a NumPy array to honor the signature
-    try:
-        import dask.array as da  # noqa: F401
+    if is_dask_collection(img_fg_labels_up):
+        return np.asarray(img_fg_labels_up.compute())
 
-        if hasattr(img_fg_labels_up, "compute"):
-            return np.asarray(img_fg_labels_up.compute())
-    except (ImportError, AttributeError, TypeError):
-        pass
     return np.asarray(img_fg_labels_up)
 
 
@@ -241,8 +241,6 @@ def _affine_upscale_nearest(labels: np.ndarray, scale_matrix: np.ndarray, target
     Nearest-neighbor affine upscaling using dask-image. Returns dask array if available, else NumPy.
     """
     try:
-        import dask.array as da
-
         lbl_da = da.from_array(labels, chunks="auto")
         result = da_affine(
             lbl_da,
@@ -256,6 +254,7 @@ def _affine_upscale_nearest(labels: np.ndarray, scale_matrix: np.ndarray, target
         )
 
         return np.asarray(result)
+
     except (ImportError, AttributeError, TypeError):
         sy = target_shape[0] / labels.shape[0]
         sx = target_shape[1] / labels.shape[1]
@@ -311,7 +310,7 @@ def _downscale_with_dask(img_grey: xr.DataArray, target_pixels: int) -> np.ndarr
 
     fy = max(1, int(np.ceil(h / target_h)))
     fx = max(1, int(np.ceil(w / target_w)))
-    logg.info(f"Downscaling from {h}×{w} with coarsen={fy}×{fx} to ≤{target_pixels} px.")
+    logger.info(f"Downscaling from {h}×{w} with coarsen={fy}×{fx} to ≤{target_pixels} px.")
 
     da_small = _ensure_dask(img_grey).coarsen(y=fy, x=fx, boundary="trim").mean()
     return np.asarray(_dask_compute(da_small))
@@ -322,9 +321,7 @@ def _ensure_dask(da: xr.DataArray) -> xr.DataArray:
     Ensure DataArray is dask-backed. If not, chunk to reasonable tiles.
     """
     try:
-        import dask.array as dask_array
-
-        if hasattr(da, "data") and isinstance(da.data, dask_array.Array):
+        if hasattr(da, "data") and isinstance(da.data, da.Array):
             return da
         return da.chunk({"y": 2048, "x": 2048})
     except (ImportError, AttributeError):
@@ -336,10 +333,9 @@ def _dask_compute(img_da: xr.DataArray) -> np.ndarray:
     Compute an xarray DataArray (possibly dask-backed) to a NumPy array with a ProgressBar if available.
     """
     try:
-        import dask.array as dask_array
         from dask.diagnostics import ProgressBar
 
-        if hasattr(img_da, "data") and isinstance(img_da.data, dask_array.Array):
+        if hasattr(img_da, "data") and isinstance(img_da.data, da.Array):
             with ProgressBar():
                 computed = img_da.data.compute()
                 return np.asarray(computed)
