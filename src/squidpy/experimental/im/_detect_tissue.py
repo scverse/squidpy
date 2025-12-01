@@ -241,7 +241,6 @@ def _affine_upscale_nearest(labels: np.ndarray, scale_matrix: np.ndarray, target
     Nearest-neighbor affine upscaling using dask-image. Returns dask array if available, else NumPy.
     """
     try:
-
         lbl_da = da.from_array(labels, chunks="auto")
         result = da_affine(
             lbl_da,
@@ -255,7 +254,7 @@ def _affine_upscale_nearest(labels: np.ndarray, scale_matrix: np.ndarray, target
         )
 
         return np.asarray(result)
-    
+
     except (ImportError, AttributeError, TypeError):
         sy = target_shape[0] / labels.shape[0]
         sx = target_shape[1] / labels.shape[1]
@@ -322,7 +321,6 @@ def _ensure_dask(da: xr.DataArray) -> xr.DataArray:
     Ensure DataArray is dask-backed. If not, chunk to reasonable tiles.
     """
     try:
-
         if hasattr(da, "data") and isinstance(da.data, da.Array):
             return da
         return da.chunk({"y": 2048, "x": 2048})
