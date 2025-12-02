@@ -7,10 +7,9 @@ from typing import Literal, NamedTuple
 import spatialdata as sd
 from anndata import AnnData
 from scanpy import settings
-from scanpy._utils import check_presence_download
 
 from squidpy._constants._constants import TenxVersions
-from squidpy.datasets._utils import DEFAULT_CACHE_DIR, PathLike, _get_zipped_dataset
+from squidpy.datasets._utils import DEFAULT_CACHE_DIR, PathLike, _get_zipped_dataset, download_file
 
 __all__ = ["visium"]
 
@@ -110,23 +109,20 @@ def visium(
 
     # download spatial data
     tar_pth = sample_dir / visium_files.spatial_attrs
-    check_presence_download(filename=tar_pth, backup_url=url_prefix + visium_files.spatial_attrs)
+    download_file(filename=tar_pth, backup_url=url_prefix + visium_files.spatial_attrs)
     with tarfile.open(tar_pth) as f:
         for el in f:
             if not (sample_dir / el.name).exists():
                 f.extract(el, sample_dir)
 
     # download counts
-    check_presence_download(
+    download_file(
         filename=sample_dir / "filtered_feature_bc_matrix.h5",
         backup_url=url_prefix + visium_files.feature_matrix,
     )
 
     if include_hires_tiff:  # download image
-        check_presence_download(
-            filename=sample_dir / "image.tif",
-            backup_url=url_prefix + visium_files.tif_image,
-        )
+        download_file(filename=sample_dir / "image.tif", backup_url=url_prefix + visium_files.tif_image)
         return read_visium(
             base_dir / sample_id,
             source_image_path=base_dir / sample_id / "image.tif",
