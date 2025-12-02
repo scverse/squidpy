@@ -9,6 +9,7 @@ from anndata import AnnData
 from scanpy import settings
 
 from squidpy._constants._constants import TenxVersions
+from squidpy.datasets._hash_registry import KNOWN_HASHES
 from squidpy.datasets._utils import DEFAULT_CACHE_DIR, PathLike, _get_zipped_dataset, download_file
 
 __all__ = ["visium"]
@@ -163,4 +164,5 @@ def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
         folderpath=folderpath,
         dataset_name=DATASET_NAME,
         figshare_id=FIGSHARE_ID,
+        known_hash=KNOWN_HASHES.get(f"https://ndownloader.figshare.com/files/{FIGSHARE_ID}"),
     )

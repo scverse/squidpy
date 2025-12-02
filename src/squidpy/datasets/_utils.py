@@ -182,7 +182,9 @@ class ImgMetadata(Metadata):
         return ".tiff"
 
 
-def _get_zipped_dataset(folderpath: Path, dataset_name: str, figshare_id: str) -> sd.SpatialData:
+def _get_zipped_dataset(
+    folderpath: Path, dataset_name: str, figshare_id: str, known_hash: str | None = None
+) -> sd.SpatialData:
     """Returns a specific dataset as SpatialData object. If the file is not present on disk, it will be downloaded and extracted."""
 
     # Create directory if it doesn't exist
@@ -204,7 +206,11 @@ def _get_zipped_dataset(folderpath: Path, dataset_name: str, figshare_id: str) -
     if not download_zip.exists():
         logg.info(f"Downloading Visium H&E SpatialData to {download_zip}")
         try:
-            download_file(filename=download_zip, backup_url=f"https://ndownloader.figshare.com/files/{figshare_id}")
+            download_file(
+                filename=download_zip,
+                backup_url=f"https://ndownloader.figshare.com/files/{figshare_id}",
+                known_hash=known_hash,
+            )
         except Exception as e:
             raise RuntimeError(f"Failed to download dataset: {e}") from e
 
@@ -222,14 +228,14 @@ def _get_zipped_dataset(folderpath: Path, dataset_name: str, figshare_id: str) -
     return sd.read_zarr(extracted_path)
 
 
-def download_file(filename: PathLike, backup_url: str) -> None:
+def download_file(filename: PathLike, backup_url: str, known_hash: str | None = None) -> None:
     """
     Replacement for scanpy._utils.check_presence_download using Pooch.
     Saves to the exact local path specified in 'filename'.
     """
     pooch.retrieve(
         url=backup_url,
-        known_hash=None,
+        known_hash=known_hash,
         fname=os.path.basename(filename),
         path=os.path.dirname(filename) or ".",  # Handles current dir if no folder
     )
