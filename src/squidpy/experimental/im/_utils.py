@@ -1,67 +1,61 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-import spatialdata as sd
 import xarray as xr
-from spatialdata._logging import logger as logg
+from spatialdata._logging import logger
 
 
-def _get_image_data(
-    sdata: sd.SpatialData,
-    image_key: str,
-    scale: str,
+def _get_element_data(
+    element_node: Any,
+    scale: str | Literal["auto"],
+    element_type: str = "element",
+    element_key: str = "",
 ) -> xr.DataArray:
     """
-    Extract image data from SpatialData object, handling both datatree and direct DataArray images.
+    Extract data array from a spatialdata element (image or label) node.
+    Supports multiscale and single-scale elements.
 
     Parameters
     ----------
-    sdata : SpatialData
-        SpatialData object
-    image_key : str
-        Key in sdata.images
-    scale : str
-        Multiscale level, e.g. "scale0", or "auto" for the smallest available scale
+    element_node
+        The element node from sdata.images[key] or sdata.labels[key]
+    scale
+        Scale level to use, or "auto" for images (picks coarsest).
+    element_type
+        Type of element for error messages (e.g., "image", "label").
+    element_key
+        Key of the element for error messages.
 
     Returns
     -------
-    xr.DataArray
-        Image data in (c, y, x) format
+    xr.DataArray of the element data.
     """
-    img_node = sdata.images[image_key]
-
-    # Check if the image is a datatree (has multiple scales) or a direct DataArray
-    if hasattr(img_node, "keys"):
-        available_scales = list(img_node.keys())
+    if hasattr(element_node, "keys"):  # multiscale
+        available = list(element_node.keys())
+        if not available:
+            raise ValueError(f"No scales for {element_type} {element_key!r}")
 
         if scale == "auto":
-            scale = available_scales[-1]
-        elif scale not in available_scales:
-            print(scale)
-            print(available_scales)
-            scale = available_scales[-1]
-            logg.warning(f"Scale '{scale}' not found, using available scale. Available scales: {available_scales}")
 
-        img_da = img_node[scale].image
-    else:
-        # It's a direct DataArray (no scales)
-        img_da = img_node.image if hasattr(img_node, "image") else img_node
+            def _idx(k: str) -> int:
+                num = "".join(ch for ch in k if ch.isdigit())
+                return int(num) if num else -1
 
-    return _ensure_cyx(img_da)
+            chosen = max(available, key=_idx)
+        elif scale not in available:
+            logger.warning(f"Scale {scale!r} not found. Available: {available}")
+            # Try scale0 as fallback, otherwise use first available
+            chosen = "scale0" if "scale0" in available else available[0]
+            logger.info(f"Using scale {chosen!r}")
+        else:
+            chosen = scale
 
+        data = element_node[chosen].image
+    else:  # single-scale
+        data = element_node.image if hasattr(element_node, "image") else element_node
 
-def _ensure_cyx(img_da: xr.DataArray) -> xr.DataArray:
-    """Ensure dims are (c, y, x). Adds a length-1 "c" if missing."""
-    dims = list(img_da.dims)
-    if "y" not in dims or "x" not in dims:
-        raise ValueError(f'Expected dims to include "y" and "x". Found dims={dims}')
-
-    # Handle case where dims are (c, y, x) - keep as is
-    if "c" in dims:
-        return img_da if dims[0] == "c" else img_da.transpose("c", "y", "x")
-    # If no "c" dimension, add one
-    return img_da.expand_dims({"c": [0]}).transpose("c", "y", "x")
+    return data
 
 
 def _flatten_channels(
@@ -104,21 +98,21 @@ def _flatten_channels(
 
     # If user explicitly specifies multichannel, always use mean
     if channel_format == "multichannel":
-        logg.info(f"Converting {n_channels}-channel image to greyscale using mean across all channels")
+        logger.info(f"Converting {n_channels}-channel image to greyscale using mean across all channels")
         return img.mean(dim="c")
 
     # Handle explicit RGB specification
     if channel_format == "rgb":
         if n_channels != 3:
             raise ValueError(f"Cannot treat {n_channels}-channel image as RGB (requires exactly 3 channels)")
-        logg.info("Converting RGB image to greyscale using luminance formula")
+        logger.info("Converting RGB image to greyscale using luminance formula")
         weights = xr.DataArray([0.299, 0.587, 0.114], dims=["c"], coords={"c": img.coords["c"]})
         return (img * weights).sum(dim="c")
 
     elif channel_format == "rgba":
         if n_channels != 4:
             raise ValueError(f"Cannot treat {n_channels}-channel image as RGBA (requires exactly 4 channels)")
-        logg.info("Converting RGBA image to greyscale using luminance formula (ignoring alpha)")
+        logger.info("Converting RGBA image to greyscale using luminance formula (ignoring alpha)")
         weights = xr.DataArray([0.299, 0.587, 0.114, 0.0], dims=["c"], coords={"c": img.coords["c"]})
         return (img * weights).sum(dim="c")
 
