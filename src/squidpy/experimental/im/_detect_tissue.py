@@ -206,23 +206,27 @@ def detect_tissue(
     img_node = sdata.images[image_key]
     img_da = _get_element_data(img_node, scale if manual_scale else "auto", "image", image_key)
     img_src = _ensure_dim_order(img_da, "yxc")
-    src_h, src_w = _yx_from_shape(img_src.shape)
+    src_h = int(img_src.sizes["y"])
+    src_w = int(img_src.sizes["x"])
     n_src_px = src_h * src_w
-
-    # Channel flattening (greyscale) for threshold-based methods
-    img_grey_da: xr.DataArray = _flatten_channels(img=img_src, channel_format=channel_format)
 
     # Decide working resolution
     need_downscale = (not manual_scale) and (n_src_px > auto_max_pixels)
-    if need_downscale:
-        logger.info("Downscaling for faster computation.")
-        img_grey = _downscale_with_dask(img_grey=img_grey_da, target_pixels=auto_max_pixels)
-    else:
-        img_grey = img_grey_da.values  # may compute
+
+    # Channel flattening (greyscale) for threshold-based methods
+    img_grey = None
+    if method != DetectTissueMethod.WEKA:
+        img_grey_da: xr.DataArray = _flatten_channels(img=img_src, channel_format=channel_format)
+        if need_downscale:
+            logger.info("Downscaling for faster computation.")
+            img_grey = _downscale_with_dask(img_grey=img_grey_da, target_pixels=auto_max_pixels)
+        else:
+            img_grey = img_grey_da.values  # may compute
 
     # Prepare color image for WEKA (keeps channels)
     if method == DetectTissueMethod.WEKA:
         if need_downscale:
+            logger.info("Downscaling for faster computation.")
             img_weka = _downscale_with_dask_multichannel(img_rgb=img_src, target_pixels=auto_max_pixels)
         else:
             img_weka = np.asarray(_dask_compute(_ensure_dask(img_src)))
@@ -284,7 +288,7 @@ def _affine_upscale_nearest(labels: np.ndarray, scale_matrix: np.ndarray, target
     """
     Nearest-neighbor affine upscaling using dask-image. Returns dask array if available, else NumPy.
     """
-    logger.info("Upscaling mask.")
+    logger.info("Upscaling mask back to original size.")
     try:
         lbl_da = da.from_array(labels, chunks="auto")
         result = da_affine(
@@ -365,7 +369,8 @@ def _downscale_with_dask_multichannel(img_rgb: xr.DataArray, target_pixels: int)
     """
     Downscale multichannel (y, x, c) with xarray.coarsen(mean) until H*W <= target_pixels. Returns NumPy array.
     """
-    h, w = _yx_from_shape(img_rgb.shape)
+    h = int(img_rgb.sizes["y"]) if hasattr(img_rgb, "sizes") and "y" in img_rgb.sizes else img_rgb.shape[0]
+    w = int(img_rgb.sizes["x"]) if hasattr(img_rgb, "sizes") and "x" in img_rgb.sizes else img_rgb.shape[1]
     n = h * w
     if n <= target_pixels:
         return np.asarray(_dask_compute(_ensure_dask(img_rgb)))
@@ -376,7 +381,6 @@ def _downscale_with_dask_multichannel(img_rgb: xr.DataArray, target_pixels: int)
 
     fy = max(1, int(np.ceil(h / target_h)))
     fx = max(1, int(np.ceil(w / target_w)))
-    logger.info(f"Downscaling RGB from {h}×{w} with coarsen={fy}×{fx} to ≤{target_pixels} px.")
 
     da_small = _ensure_dask(img_rgb).coarsen(y=fy, x=fx, boundary="trim").mean()
     return np.asarray(_dask_compute(da_small))
@@ -656,16 +660,26 @@ def _refine_with_background_classifier(
         ]
     )
 
+    # Standardize features for better optimizer behavior
+    mean = X_train.mean(axis=0)
+    std = X_train.std(axis=0)
+    std = np.maximum(std, 1e-6)
+
+    def _z(x: np.ndarray) -> np.ndarray:
+        return (x - mean) / std
+
+    X_train_z = _z(X_train)
+
     # Simple logistic regression classifier
     clf = LogisticRegression(
-        max_iter=200,
+        max_iter=10_000,
         n_jobs=-1,
         solver="lbfgs",
     )
-    clf.fit(X_train, y_train)
+    clf.fit(X_train_z, y_train)
 
     # Predict p(background) only for inside-mask pixels
-    p_bg_tissue = clf.predict_proba(feats_flat[idx_tissue])[:, 1]
+    p_bg_tissue = clf.predict_proba(_z(feats_flat[idx_tissue]))[:, 1]
 
     refined_flat = prior_flat.copy()
     # Demote high-confidence background inside the prior mask
