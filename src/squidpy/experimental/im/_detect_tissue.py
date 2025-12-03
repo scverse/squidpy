@@ -591,6 +591,7 @@ def _segment_weka(img: np.ndarray, params: BackgroundDetectionParams, weka_param
 
     return prior_mask
 
+
 def _refine_with_background_classifier(
     feats: np.ndarray,
     prior_mask: np.ndarray,
@@ -688,6 +689,7 @@ def _refine_with_background_classifier(
     refined_flat[idx_tissue[p_bg_tissue >= bg_prob_threshold]] = False
 
     return refined_flat.reshape(H, W)
+
 
 def _mask_from_labels_via_corners(
     img_grey: np.ndarray, labels: np.ndarray, params: BackgroundDetectionParams
