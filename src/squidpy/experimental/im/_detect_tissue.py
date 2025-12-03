@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import enum
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping, Sequence, TypeVar, cast
+from typing import Any, Literal, cast
 
 import dask.array as da
 import numpy as np
@@ -93,47 +94,6 @@ class WekaParams:
     refine_bg_prob_threshold: float = 0.6  # only drop pixels very likely to be background
 
 
-_MethodParamsT = TypeVar("_MethodParamsT", FelzenszwalbParams, WekaParams)
-
-
-def _coerce_method_params(
-    method_params: FelzenszwalbParams | WekaParams | Mapping[str, Any] | None,
-    cls: type[_MethodParamsT],
-    method_name: str,
-) -> _MethodParamsT:
-    """
-    Turn method_params into the expected dataclass for a method.
-    """
-    if method_params is None:
-        return cls()
-    if isinstance(method_params, cls):
-        return method_params
-    if isinstance(method_params, Mapping):
-        return cls(**method_params)
-    raise TypeError(
-        f"`method_params` for '{method_name}' must be a {cls.__name__} or mapping, "
-        f"got {type(method_params).__name__}.",
-    )
-
-
-def _normalize_method_params(
-    method: DetectTissueMethod,
-    method_params: FelzenszwalbParams | WekaParams | Mapping[str, Any] | None,
-) -> FelzenszwalbParams | WekaParams | None:
-    """
-    Select and validate method-specific params.
-    """
-    if method == DetectTissueMethod.OTSU:
-        if method_params is not None:
-            raise ValueError("`method_params` are not supported for OTSU tissue detection.")
-        return None
-    if method == DetectTissueMethod.FELZENSZWALB:
-        return _coerce_method_params(method_params, FelzenszwalbParams, "felzenszwalb")
-    if method == DetectTissueMethod.WEKA:
-        return _coerce_method_params(method_params, WekaParams, "weka")
-    raise ValueError(f"Unsupported method: {method}")
-
-
 def _normalize_margins(
     margins_px: int | Sequence[int],
     shape: tuple[int, int],
@@ -151,7 +111,7 @@ def _normalize_margins(
             raise ValueError("`border_margin_px` must be an int or a sequence of 4 ints (top, bottom, left, right).")
         try:
             t, b, l, r = (int(x) for x in margins_list)
-        except Exception as e:  # pragma: no cover - defensive
+        except (TypeError, ValueError) as e:  # pragma: no cover - defensive
             raise TypeError("`border_margin_px` entries must be convertible to int.") from e
     else:
         t = b = l = r = int(margins_px)
@@ -173,7 +133,7 @@ def _is_zero_margin(margins_px: int | Sequence[int]) -> bool:
         if isinstance(margins_px, Sequence) and not isinstance(margins_px, (str, bytes)):
             return all(int(x) == 0 for x in margins_px)
         return int(margins_px) == 0
-    except Exception:  # pragma: no cover - defensive
+    except (TypeError, ValueError):  # pragma: no cover - defensive
         return False
 
 
@@ -354,7 +314,35 @@ def detect_tissue(
     if method == DetectTissueMethod.WEKA and not corners_are_background:
         raise ValueError("WEKA tissue detection requires corner background priors; set corners_are_background=True.")
 
-    resolved_method_params = _normalize_method_params(method, method_params)
+    if method == DetectTissueMethod.OTSU:
+        if method_params is not None:
+            raise ValueError("`method_params` are not supported for OTSU tissue detection.")
+        resolved_method_params = None
+    elif method == DetectTissueMethod.FELZENSZWALB:
+        if method_params is None:
+            resolved_method_params = FelzenszwalbParams()
+        elif isinstance(method_params, FelzenszwalbParams):
+            resolved_method_params = method_params
+        elif isinstance(method_params, Mapping):
+            resolved_method_params = FelzenszwalbParams(**method_params)
+        else:
+            raise TypeError(
+                f"`method_params` for 'felzenszwalb' must be a FelzenszwalbParams or mapping, "
+                f"got {type(method_params).__name__}.",
+            )
+    elif method == DetectTissueMethod.WEKA:
+        if method_params is None:
+            resolved_method_params = WekaParams()
+        elif isinstance(method_params, WekaParams):
+            resolved_method_params = method_params
+        elif isinstance(method_params, Mapping):
+            resolved_method_params = WekaParams(**method_params)
+        else:
+            raise TypeError(
+                f"`method_params` for 'weka' must be a WekaParams or mapping, got {type(method_params).__name__}.",
+            )
+    else:
+        raise ValueError(f"Unsupported method: {method}")
 
     # Background params
     bgp = background_detection_params or BackgroundDetectionParams(
@@ -733,7 +721,7 @@ def _segment_weka(
 
     # Ensure both classes exist for training
     if not (training_labels == 1).any():
-        # Extremely degenerate: force a tiny background block
+        # Minimal case: force a tiny background block
         h_block = max(1, H // 50)
         w_block = max(1, W // 50)
         training_labels[:h_block, :w_block] = 1
