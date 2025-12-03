@@ -189,8 +189,11 @@ def detect_tissue(
             method = DetectTissueMethod[method.upper()]
         except KeyError as e:
             raise ValueError('method must be "otsu", "felzenszwalb", or "weka"') from e
-        
+
     logger.info(f"Detecting tissue with method: {method}")
+
+    if method == DetectTissueMethod.WEKA and not corners_are_background:
+        raise ValueError("WEKA tissue detection requires corner background priors; set corners_are_background=True.")
 
     # Background params
     bgp = background_detection_params or BackgroundDetectionParams(
@@ -255,7 +258,6 @@ def detect_tissue(
         n_samples=n_samples,
     )
 
-    
     img_fg_labels = _smooth_mask(img_fg_labels, mask_smoothing_cycles)
 
     # Upscale to full resolution
