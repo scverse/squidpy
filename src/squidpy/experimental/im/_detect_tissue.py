@@ -361,7 +361,6 @@ def _downscale_with_dask(img_grey: xr.DataArray, target_pixels: int) -> np.ndarr
 
     fy = max(1, int(np.ceil(h / target_h)))
     fx = max(1, int(np.ceil(w / target_w)))
-    logger.info(f"Downscaling from {h}×{w} with coarsen={fy}×{fx} to ≤{target_pixels} px.")
 
     da_small = _ensure_dask(img_grey).coarsen(y=fy, x=fx, boundary="trim").mean()
     return np.asarray(_dask_compute(da_small))
