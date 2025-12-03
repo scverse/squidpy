@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import enum
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping, Sequence, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 
 import dask.array as da
 import numpy as np
@@ -111,8 +112,7 @@ def _coerce_method_params(
     if isinstance(method_params, Mapping):
         return cls(**method_params)
     raise TypeError(
-        f"`method_params` for '{method_name}' must be a {cls.__name__} or mapping, "
-        f"got {type(method_params).__name__}.",
+        f"`method_params` for '{method_name}' must be a {cls.__name__} or mapping, got {type(method_params).__name__}.",
     )
 
 
