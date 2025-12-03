@@ -41,6 +41,8 @@ class TestDetectTissue(PlotTester, metaclass=PlotTesterMeta):
             sdata,
             image_key="hne",
             method="weka",
+            # We'll have to manually correct for the Visium frame here - nothing's perfect.
+            border_margin_px=1500,
         )
 
         sdata.pl.render_labels("hne_tissue").pl.show()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal, Mapping, Sequence, TypeVar, cast
 
 import dask.array as da
 import numpy as np
@@ -10,11 +10,12 @@ import spatialdata as sd
 import xarray as xr
 from dask.base import is_dask_collection
 from dask_image.ndinterp import affine_transform as da_affine
-from skimage import measure
+from skimage import feature, future, measure
 from skimage.filters import gaussian, threshold_otsu
 from skimage.morphology import binary_closing, disk, remove_small_holes
 from skimage.segmentation import felzenszwalb
 from skimage.util import img_as_float
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel
@@ -75,6 +76,7 @@ class WekaParams:
     Parameters for WEKA-like trainable segmentation.
     """
 
+    border_margin_px: int = 0  # legacy per-method margin; prefer detect_tissue(border_margin_px)
     sigma_min: float = 1.0
     sigma_max: float = 16.0
     edges: bool = True
@@ -91,15 +93,169 @@ class WekaParams:
     refine_bg_prob_threshold: float = 0.6  # only drop pixels very likely to be background
 
 
+_MethodParamsT = TypeVar("_MethodParamsT", FelzenszwalbParams, WekaParams)
+
+
+def _coerce_method_params(
+    method_params: FelzenszwalbParams | WekaParams | Mapping[str, Any] | None,
+    cls: type[_MethodParamsT],
+    method_name: str,
+) -> _MethodParamsT:
+    """
+    Turn method_params into the expected dataclass for a method.
+    """
+    if method_params is None:
+        return cls()
+    if isinstance(method_params, cls):
+        return method_params
+    if isinstance(method_params, Mapping):
+        return cls(**method_params)
+    raise TypeError(
+        f"`method_params` for '{method_name}' must be a {cls.__name__} or mapping, "
+        f"got {type(method_params).__name__}.",
+    )
+
+
+def _normalize_method_params(
+    method: DetectTissueMethod,
+    method_params: FelzenszwalbParams | WekaParams | Mapping[str, Any] | None,
+) -> FelzenszwalbParams | WekaParams | None:
+    """
+    Select and validate method-specific params.
+    """
+    if method == DetectTissueMethod.OTSU:
+        if method_params is not None:
+            raise ValueError("`method_params` are not supported for OTSU tissue detection.")
+        return None
+    if method == DetectTissueMethod.FELZENSZWALB:
+        return _coerce_method_params(method_params, FelzenszwalbParams, "felzenszwalb")
+    if method == DetectTissueMethod.WEKA:
+        return _coerce_method_params(method_params, WekaParams, "weka")
+    raise ValueError(f"Unsupported method: {method}")
+
+
+def _normalize_margins(
+    margins_px: int | Sequence[int],
+    shape: tuple[int, int],
+) -> tuple[int, int, int, int]:
+    """
+    Normalize border margins to a 4-tuple (top, bottom, left, right) of non-negative ints.
+    If the requested margins would eclipse the image, returns all zeros.
+    """
+    if isinstance(margins_px, (str, bytes)):
+        raise TypeError("`border_margin_px` must be an int or a sequence of 4 ints, not a string.")
+
+    if isinstance(margins_px, Sequence):
+        margins_list = list(margins_px)
+        if len(margins_list) != 4:
+            raise ValueError("`border_margin_px` must be an int or a sequence of 4 ints (top, bottom, left, right).")
+        try:
+            t, b, l, r = (int(x) for x in margins_list)
+        except Exception as e:  # pragma: no cover - defensive
+            raise TypeError("`border_margin_px` entries must be convertible to int.") from e
+    else:
+        t = b = l = r = int(margins_px)
+
+    if any(v < 0 for v in (t, b, l, r)):
+        raise ValueError("`border_margin_px` values must be non-negative.")
+
+    H, W = shape
+    if t + b >= H or l + r >= W:
+        return (0, 0, 0, 0)
+    return (t, b, l, r)
+
+
+def _is_zero_margin(margins_px: int | Sequence[int]) -> bool:
+    """
+    Check whether margins resolve to zero everywhere.
+    """
+    try:
+        if isinstance(margins_px, Sequence) and not isinstance(margins_px, (str, bytes)):
+            return all(int(x) == 0 for x in margins_px)
+        return int(margins_px) == 0
+    except Exception:  # pragma: no cover - defensive
+        return False
+
+
+def _build_inner_mask(shape: tuple[int, int], margins: tuple[int, int, int, int]) -> np.ndarray:
+    """
+    Mask that excludes a border defined by (top, bottom, left, right).
+    """
+    H, W = shape
+    t, b, l, r = margins
+    mask = np.ones((H, W), dtype=bool)
+    if t > 0:
+        mask[:t, :] = False
+    if b > 0:
+        mask[-b:, :] = False
+    if l > 0:
+        mask[:, :l] = False
+    if r > 0:
+        mask[:, -r:] = False
+    return mask
+
+
+def _apply_border_margin(mask: np.ndarray, margins: tuple[int, int, int, int]) -> np.ndarray:
+    """
+    Zero-out a border defined by (top, bottom, left, right) around a boolean mask.
+    """
+    t, b, l, r = margins
+    if t == b == l == r == 0:
+        return mask
+    out = np.array(mask, copy=True)
+    if t > 0:
+        out[:t, :] = False
+    if b > 0:
+        out[-b:, :] = False
+    if l > 0:
+        out[:, :l] = False
+    if r > 0:
+        out[:, -r:] = False
+    return out
+
+
+def _rescale_margins(
+    margins: tuple[int, int, int, int],
+    from_shape: tuple[int, int],
+    to_shape: tuple[int, int],
+) -> tuple[int, int, int, int]:
+    """
+    Rescale margins defined for `from_shape` so they apply to `to_shape`.
+    """
+    fy, fx = from_shape
+    ty, tx = to_shape
+    if fy == 0 or fx == 0:
+        return (0, 0, 0, 0)
+
+    sy = ty / float(fy)
+    sx = tx / float(fx)
+
+    t, b, l, r = margins
+    scaled = (
+        int(round(t * sy)),
+        int(round(b * sy)),
+        int(round(l * sx)),
+        int(round(r * sx)),
+    )
+    # Ensure margins do not eclipse the target shape
+    ty_eff = max(0, ty - (scaled[0] + scaled[1]))
+    tx_eff = max(0, tx - (scaled[2] + scaled[3]))
+    if ty_eff <= 0 or tx_eff <= 0:
+        return (0, 0, 0, 0)
+    return scaled
+
+
 def detect_tissue(
     sdata: sd.SpatialData,
     image_key: str,
     *,
     scale: str = "auto",
     method: DetectTissueMethod | str = DetectTissueMethod.OTSU,
+    method_params: FelzenszwalbParams | WekaParams | Mapping[str, Any] | None = None,
     channel_format: Literal["infer", "rgb", "rgba", "multichannel"] = "infer",
     background_detection_params: BackgroundDetectionParams | None = None,
     corners_are_background: bool = True,
+    border_margin_px: int | Sequence[int] = 0,
     min_specimen_area_frac: float = 0.01,
     n_samples: int | None = None,
     auto_max_pixels: int = 5_000_000,
@@ -107,8 +263,6 @@ def detect_tissue(
     mask_smoothing_cycles: int = 0,
     new_labels_key: str | None = None,
     inplace: bool = True,
-    felzenszwalb_params: FelzenszwalbParams | None = None,
-    weka_params: WekaParams | None = None,
 ) -> np.ndarray | None:
     """
     Detect tissue regions in an image and optionally store an integer-labeled mask.
@@ -128,6 +282,17 @@ def detect_tissue(
             - `DetectTissueMethod.OTSU` or `"otsu"` - Otsu thresholding with background detection.
             - `DetectTissueMethod.FELZENSZWALB` or `"felzenszwalb"` - Felzenszwalb superpixel segmentation.
             - `DetectTissueMethod.WEKA` or `"weka"` - Trainable segmentation with corner background priors and RGB multiscale features.
+    method_params
+        Optional parameters specific to the selected method. For `"felzenszwalb"`, provide a
+        :class:`FelzenszwalbParams` instance or a mapping of its fields. For `"weka"`, provide a
+        :class:`WekaParams` instance or mapping. Passing values when ``method="otsu"`` is not supported.
+    border_margin_px
+        Ignore a border when seeding and predicting tissue. Can be:
+
+            - a single int applied to all sides, or
+            - a sequence of four ints ``(top, bottom, left, right)``.
+
+        Useful for masking out fiducial rings or slide edges. Applied consistently across all methods.
 
     channel_format
         Expected format of image channels. Valid options are:
@@ -160,12 +325,6 @@ def detect_tissue(
         `"{image_key}_tissue"`.
     inplace
         If `True`, stores labels in ``sdata.labels``. If `False`, returns the mask array.
-    felzenszwalb_params
-        Parameters for Felzenszwalb superpixel segmentation. If `None`, uses default
-        size-aware parameters. Only used when `method` is `"felzenszwalb"`.
-    weka_params
-        Parameters for WEKA-like trainable segmentation. Only used when ``method`` is
-        ``"weka"``.
 
     Returns
     -------
@@ -195,6 +354,8 @@ def detect_tissue(
     if method == DetectTissueMethod.WEKA and not corners_are_background:
         raise ValueError("WEKA tissue detection requires corner background priors; set corners_are_background=True.")
 
+    resolved_method_params = _normalize_method_params(method, method_params)
+
     # Background params
     bgp = background_detection_params or BackgroundDetectionParams(
         ymin_xmin_is_bg=corners_are_background,
@@ -204,6 +365,7 @@ def detect_tissue(
     )
 
     manual_scale = scale.lower() != "auto"
+    normalized_margins_target = (0, 0, 0, 0)  # set after image load for shape-aware validation
 
     # Load smallest available or explicit scale
     img_node = sdata.images[image_key]
@@ -212,6 +374,12 @@ def detect_tissue(
     src_h = int(img_src.sizes["y"])
     src_w = int(img_src.sizes["x"])
     n_src_px = src_h * src_w
+    base_margin_px = border_margin_px
+    if method == DetectTissueMethod.WEKA and _is_zero_margin(base_margin_px):
+        wp_local = cast(WekaParams, resolved_method_params)
+        base_margin_px = getattr(wp_local, "border_margin_px", 0)
+    target_shape = _get_target_upscale_shape(sdata, image_key)
+    normalized_margins_target = _normalize_margins(base_margin_px, target_shape)
 
     # Decide working resolution
     need_downscale = (not manual_scale) and (n_src_px > auto_max_pixels)
@@ -233,17 +401,33 @@ def detect_tissue(
             img_weka = _downscale_with_dask_multichannel(img_rgb=img_src, target_pixels=auto_max_pixels)
         else:
             img_weka = np.asarray(_dask_compute(_ensure_dask(img_src)))
+        working_shape = img_weka.shape[:2]
+    else:
+        working_shape = img_grey.shape if img_grey is not None else (src_h, src_w)
+
+    normalized_margins = _rescale_margins(
+        normalized_margins_target,
+        from_shape=target_shape,
+        to_shape=working_shape,
+    )
 
     # First-pass foreground
     if method == DetectTissueMethod.OTSU:
         img_fg_mask_bool = _segment_otsu(img_grey=img_grey, params=bgp)
+        img_fg_mask_bool = _apply_border_margin(img_fg_mask_bool, normalized_margins)
     elif method == DetectTissueMethod.WEKA:
-        wp = weka_params or WekaParams()
-        img_fg_mask_bool = _segment_weka(img=img_weka, params=bgp, weka_params=wp)
+        wp = cast(WekaParams, resolved_method_params)
+        img_fg_mask_bool = _segment_weka(
+            img=img_weka,
+            params=bgp,
+            weka_params=wp,
+            border_margins_px=normalized_margins,
+        )
     else:
-        p = felzenszwalb_params or FelzenszwalbParams()
+        p = cast(FelzenszwalbParams, resolved_method_params)
         labels_sp = _segment_felzenszwalb(img_grey=img_grey, params=p)
         img_fg_mask_bool = _mask_from_labels_via_corners(img_grey=img_grey, labels=labels_sp, params=bgp)
+        img_fg_mask_bool = _apply_border_margin(img_fg_mask_bool, normalized_margins)
 
     logger.info("Finished segmentation.")
 
@@ -259,6 +443,7 @@ def detect_tissue(
     )
 
     img_fg_labels = _smooth_mask(img_fg_labels, mask_smoothing_cycles)
+    img_fg_labels = _apply_border_margin(img_fg_labels, normalized_margins)
 
     # Upscale to full resolution
     target_shape = _get_target_upscale_shape(sdata, image_key)
@@ -450,7 +635,12 @@ def _segment_felzenszwalb(img_grey: np.ndarray, params: FelzenszwalbParams) -> n
     )
 
 
-def _segment_weka(img: np.ndarray, params: BackgroundDetectionParams, weka_params: WekaParams) -> np.ndarray:
+def _segment_weka(
+    img: np.ndarray,
+    params: BackgroundDetectionParams,
+    weka_params: WekaParams,
+    border_margins_px: tuple[int, int, int, int] = (0, 0, 0, 0),
+) -> np.ndarray:
     """
     Trainable segmentation using multiscale features and a RandomForest classifier.
 
@@ -464,12 +654,6 @@ def _segment_weka(img: np.ndarray, params: BackgroundDetectionParams, weka_param
         - Optionally refine the resulting mask with a second-stage classifier that
           sees inside-mask pixels as candidate tissue and outside as background.
     """
-    try:
-        from skimage import feature, future
-        from sklearn.ensemble import RandomForestClassifier
-    except ImportError as e:  # pragma: no cover - optional deps
-        raise ImportError("WEKA segmentation requires `scikit-image` (feature/future) and `scikit-learn`.") from e
-
     img_f = img_as_float(img)
 
     if img_f.ndim == 2:
@@ -482,6 +666,7 @@ def _segment_weka(img: np.ndarray, params: BackgroundDetectionParams, weka_param
         raise ValueError("WEKA segmentation expects 2D or 3D (RGB/RGBA) input.")
 
     H, W = img_mono.shape
+    inner_mask = _build_inner_mask((H, W), border_margins_px)
 
     # Multiscale features (WEKA-like)
     feats = feature.multiscale_basic_features(
@@ -505,8 +690,11 @@ def _segment_weka(img: np.ndarray, params: BackgroundDetectionParams, weka_param
         w_block = max(1, W // 50)
         corner_mask[:h_block, :w_block] = True
     training_labels[corner_mask] = 1
+    if any(border_margins_px):
+        # Treat excluded border as background seeds to down-weight fiducial rings.
+        training_labels[~inner_mask] = 1
 
-    non_bg = ~corner_mask
+    non_bg = (~corner_mask) & inner_mask
 
     # Background prototype from corners
     if img_f.ndim == 2:
@@ -576,7 +764,7 @@ def _segment_weka(img: np.ndarray, params: BackgroundDetectionParams, weka_param
     clf = future.fit_segmenter(training_labels, feats, clf)
     result = future.predict_segmenter(feats, clf)
 
-    prior_mask = np.asarray(result == 2)
+    prior_mask = np.asarray(result == 2) & inner_mask
 
     # Optional second-stage refinement: inside-vs-outside mask classification
     if weka_params.refine_with_classifier:
