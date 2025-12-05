@@ -10,11 +10,11 @@ from pathlib import Path
 from typing import Any, TypeAlias
 
 import anndata
+import pooch
 import spatialdata as sd
 from anndata import AnnData
 from scanpy import logging as logg
 from scanpy import read
-from scanpy._utils import check_presence_download
 
 from squidpy.im import ImageContainer
 
@@ -170,7 +170,7 @@ class ImgMetadata(Metadata):
         )
 
     def _download(self, fpath: PathLike, backup_url: str, **kwargs: Any) -> Any:
-        check_presence_download(Path(fpath), backup_url)
+        download_file(filename=Path(fpath), backup_url=backup_url)
 
         img = ImageContainer()
         img.add_img(fpath, layer="image", library_id=self.library_id, **kwargs)
@@ -204,10 +204,7 @@ def _get_zipped_dataset(folderpath: Path, dataset_name: str, figshare_id: str) -
     if not download_zip.exists():
         logg.info(f"Downloading Visium H&E SpatialData to {download_zip}")
         try:
-            check_presence_download(
-                filename=download_zip,
-                backup_url=f"https://ndownloader.figshare.com/files/{figshare_id}",
-            )
+            download_file(filename=download_zip, backup_url=f"https://ndownloader.figshare.com/files/{figshare_id}")
         except Exception as e:
             raise RuntimeError(f"Failed to download dataset: {e}") from e
 
@@ -223,3 +220,16 @@ def _get_zipped_dataset(folderpath: Path, dataset_name: str, figshare_id: str) -
         raise RuntimeError(f"Expected extracted data at {extracted_path}, but not found")
 
     return sd.read_zarr(extracted_path)
+
+
+def download_file(filename: PathLike, backup_url: str) -> None:
+    """
+    Replacement for scanpy._utils.check_presence_download using Pooch.
+    Saves to the exact local path specified in 'filename'.
+    """
+    pooch.retrieve(
+        url=backup_url,
+        known_hash=None,
+        fname=os.path.basename(filename),
+        path=os.path.dirname(filename) or ".",  # Handles current dir if no folder
+    )
