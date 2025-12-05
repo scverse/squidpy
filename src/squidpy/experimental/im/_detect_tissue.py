@@ -159,9 +159,10 @@ def _apply_border_margin(mask: np.ndarray, margins: tuple[int, int, int, int]) -
     """
     Zero-out a border defined by (top, bottom, left, right) around a boolean mask.
     """
-    t, b, l, r = margins
-    if t == b == l == r == 0:
+    if margins == (0, 0, 0, 0):
         return mask
+
+    t, b, l, r = margins
     out = np.array(mask, copy=True)
     if t > 0:
         out[:t, :] = False

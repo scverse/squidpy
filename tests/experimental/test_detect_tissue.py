@@ -33,6 +33,24 @@ class TestDetectTissue(PlotTester, metaclass=PlotTesterMeta):
 
         sdata.pl.render_labels("hne_tissue").pl.show()
 
+    def test_plot_detect_tissue_using_border_margins(self):
+        """Test tissue detection using border margins on Visium H&E dataset."""
+        sdata = sq.datasets.visium_hne_sdata()
+
+        sq.experimental.im.detect_tissue(
+            sdata,
+            image_key="hne",
+            method="otsu",
+            border_margin_px=(
+                3000,  # top
+                4500,  # bottom
+                3500,  # left
+                4000,  # right
+            ),
+        )
+
+        sdata.pl.render_labels("hne_tissue").pl.show()
+
     def test_plot_detect_tissue_weka(self):
         """Test OTSU tissue detection on Visium H&E dataset."""
         sdata = sq.datasets.visium_hne_sdata()
