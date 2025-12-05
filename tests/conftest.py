@@ -382,7 +382,8 @@ def sdata_mask_graph():
             "table": sd.models.TableModel().parse(adata),
         }
     )
-    
+
+
 @pytest.fixture()
 def sdata_hne():
     return sq.datasets.visium_hne_sdata()
