@@ -77,7 +77,6 @@ class WekaParams:
     Parameters for WEKA-like trainable segmentation.
     """
 
-    border_margin_px: int = 0  # legacy per-method margin; prefer detect_tissue(border_margin_px)
     sigma_min: float = 1.0
     sigma_max: float = 16.0
     edges: bool = True
@@ -956,7 +955,7 @@ def _smooth_mask(mask: np.ndarray, cycles: int) -> np.ndarray:
     if cycles <= 0:
         return mask.astype(np.int32, copy=False)
 
-    logger.info(f"Smoothing mask with {cycles} cycles.")
+    logger.info(f"Smoothing mask for {cycles} cycle(s).")
     binary = mask > 0
     H, W = mask.shape
     r0 = max(1, min(5, min(H, W) // 100))
