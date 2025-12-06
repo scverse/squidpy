@@ -73,7 +73,9 @@ class TestDatasetEntry:
             name="V1_Test",
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
-                FileEntry(name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"),
+                FileEntry(
+                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"
+                ),
                 FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz", fallback_url="https://example.com/test.tar.gz"),
                 FileEntry(name="image.tif", s3_key="test.tif", fallback_url="https://example.com/test.tif"),
             ],
@@ -88,7 +90,9 @@ class TestDatasetEntry:
             name="V1_Test",
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
-                FileEntry(name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"),
+                FileEntry(
+                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"
+                ),
                 FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz", fallback_url="https://example.com/test.tar.gz"),
                 FileEntry(name="image.jpg", s3_key="test.jpg", fallback_url="https://example.com/test.jpg"),
             ],
@@ -100,7 +104,9 @@ class TestDatasetEntry:
             name="V1_Test",
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
-                FileEntry(name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"),
+                FileEntry(
+                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"
+                ),
                 FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz", fallback_url="https://example.com/test.tar.gz"),
             ],
         )
@@ -112,7 +118,9 @@ class TestDatasetEntry:
             name="test",
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
-                FileEntry(name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"),
+                FileEntry(
+                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"
+                ),
                 FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz", fallback_url="https://example.com/test.tar.gz"),
             ],
         )

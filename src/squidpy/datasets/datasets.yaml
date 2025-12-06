@@ -1,5 +1,5 @@
 # Squidpy Dataset Registry
-# 
+#
 # Each dataset has:
 #   - type: anndata | image | spatialdata | adata_with_image
 #   - files: list of files with individual URLs and hashes

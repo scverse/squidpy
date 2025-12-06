@@ -87,7 +87,7 @@ class TestDownloaderIntegration:
 
         # First download
         adata1 = downloader.download("imc")
-        
+
         # Check file exists in cache
         cache_files = list((tmp_path / "anndata").glob("*.h5ad"))
         assert len(cache_files) == 1

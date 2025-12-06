@@ -121,9 +121,7 @@ ImageDatasets = Literal[
 ]
 
 # SpatialData datasets (.zarr)
-SpatialDataDatasets = Literal[
-    "visium_hne_sdata",
-]
+SpatialDataDatasets = Literal["visium_hne_sdata",]
 
 
 # =============================================================================
@@ -160,10 +158,7 @@ def visium(
     # Validate sample_id against known names
     registry = get_registry()
     if sample_id not in registry:
-        raise ValueError(
-            f"Unknown Visium sample: {sample_id}. "
-            f"Available samples: {registry.visium_datasets}"
-        )
+        raise ValueError(f"Unknown Visium sample: {sample_id}. Available samples: {registry.visium_datasets}")
 
     # Use scanpy's datasetdir if base_dir not specified (backward compatible)
     if base_dir is None:
@@ -231,9 +226,6 @@ def _make_anndata_loader(dataset_name: str):
     return loader
 
 
-
-
-
 # =============================================================================
 # Image dataset functions
 # =============================================================================
@@ -269,7 +261,6 @@ def _make_image_loader(dataset_name: str):
     """
     loader.__name__ = dataset_name
     return loader
-
 
 
 # AnnData datasets
