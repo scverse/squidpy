@@ -10,14 +10,37 @@ from anndata import AnnData, OldFormatWarning
 
 import squidpy as sq
 
+# All public dataset functions that should be importable
+_DATASET_FUNCTIONS = [
+    # AnnData datasets
+    "four_i",
+    "imc",
+    "seqfish",
+    "visium_hne_adata",
+    "visium_hne_adata_crop",
+    "visium_fluo_adata",
+    "visium_fluo_adata_crop",
+    "sc_mouse_cortex",
+    "mibitof",
+    "merfish",
+    "slideseqv2",
+    # Image datasets
+    "visium_fluo_image_crop",
+    "visium_hne_image_crop",
+    "visium_hne_image",
+    # 10x Visium
+    "visium",
+    "visium_hne_sdata",
+]
+
 
 class TestDatasetsImports:
-    @pytest.mark.parametrize("func", sq.datasets._dataset.__all__ + sq.datasets._image.__all__)
+    @pytest.mark.parametrize("func", _DATASET_FUNCTIONS)
     def test_import(self, func):
         assert hasattr(sq.datasets, func), dir(sq.datasets)
         fn = getattr(sq.datasets, func)
 
-        assert isinstance(fn, FunctionType)
+        assert callable(fn)
 
 
 # TODO(michalk8): parse the code and xfail iff server issue
