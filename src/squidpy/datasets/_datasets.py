@@ -215,7 +215,7 @@ def _make_anndata_loader(dataset_name: str):
     path
         Path where to save the dataset.
     kwargs
-        Keyword arguments for :func:`anndata.read_h5ad`.
+        Keyword arguments for ``anndata.read_h5ad``.
 
     Returns
     -------
