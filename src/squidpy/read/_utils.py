@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 
 import numpy as np
 from anndata import AnnData
@@ -12,7 +13,9 @@ from scanpy import read_10x_h5, read_10x_mtx
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
-from squidpy.datasets._utils import PathLike
+
+# Type alias for path-like objects
+PathLike: TypeAlias = os.PathLike[str] | str
 
 
 def _read_counts(

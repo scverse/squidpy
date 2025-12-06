@@ -4,7 +4,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 
 import numpy as np
 import pandas as pd
@@ -13,8 +13,10 @@ from scanpy import logging as logg
 from scipy.sparse import csr_matrix
 
 from squidpy._constants._pkg_constants import Key
-from squidpy.datasets._utils import PathLike
 from squidpy.read._utils import _load_image, _read_counts
+
+# Type alias for path-like objects
+PathLike: TypeAlias = os.PathLike[str] | str
 
 __all__ = ["visium", "vizgen", "nanostring"]
 
