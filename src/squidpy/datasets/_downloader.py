@@ -83,7 +83,7 @@ class DatasetDownloader:
                     progressbar=True,
                 )
                 return Path(downloaded)
-            except Exception as e:
+            except (OSError, ValueError, RuntimeError) as e:
                 last_error = e
                 logg.warning(f"Failed to download from {url}: {e}")
                 continue
@@ -259,7 +259,7 @@ class DatasetDownloader:
                     source_image_path = sample_dir / image_file.name
                     if not source_image_path.exists() and image_path != source_image_path:
                         shutil.copy(image_path, source_image_path)
-                except Exception as e:
+                except (OSError, ValueError, RuntimeError) as e:
                     logg.warning(f"Failed to download high-res image: {e}")
 
         # Read using squidpy reader
