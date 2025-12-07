@@ -136,8 +136,15 @@ class DatasetDownloader:
             raise ValueError(f"Dataset {entry.name} has no files")
 
         file_entry = entry.files[0]
-        target_dir = Path(path).parent if path else self.cache_dir / "anndata"
-        target_name = Path(path).name if path else file_entry.name
+        if path:
+            path = Path(path)
+            target_dir = path.parent
+            # Ensure proper extension is used
+            expected_suffix = Path(file_entry.name).suffix
+            target_name = path.name if path.suffix else f"{path.name}{expected_suffix}"
+        else:
+            target_dir = self.cache_dir / "anndata"
+            target_name = file_entry.name
 
         local_path = self._download_file(file_entry, target_dir, target_name)
         adata = anndata.read_h5ad(local_path, **kwargs)
@@ -161,8 +168,15 @@ class DatasetDownloader:
             raise ValueError(f"Dataset {entry.name} has no files")
 
         file_entry = entry.files[0]
-        target_dir = Path(path).parent if path else self.cache_dir / "images"
-        target_name = Path(path).name if path else file_entry.name
+        if path:
+            path = Path(path)
+            target_dir = path.parent
+            # Ensure proper extension is used (e.g., .tiff, .png)
+            expected_suffix = Path(file_entry.name).suffix
+            target_name = path.name if path.suffix else f"{path.name}{expected_suffix}"
+        else:
+            target_dir = self.cache_dir / "images"
+            target_name = file_entry.name
 
         local_path = self._download_file(file_entry, target_dir, target_name)
 
