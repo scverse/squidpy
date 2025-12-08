@@ -6,21 +6,18 @@ All functions fetch datasets by their known names from the registry.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal
 
 from squidpy.datasets._downloader import DEFAULT_CACHE_DIR, get_downloader
 from squidpy.datasets._registry import get_registry
+from squidpy.read._utils import PathLike
 
 if TYPE_CHECKING:
     import spatialdata as sd
     from anndata import AnnData
 
     from squidpy.im import ImageContainer
-
-# Type alias for path-like objects
-PathLike: TypeAlias = os.PathLike[str] | str
 
 __all__ = [
     # Type aliases for dataset names
