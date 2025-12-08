@@ -14,7 +14,7 @@ datasets:
   four_i:
     type: anndata
     shape: [270876, 43]
-    doc_header: Pre-processed subset 4i dataset from Gut et al.
+    doc_header: "Pre-processed subset 4i dataset from `Gut et al <https://doi.org/10.1126/science.aar7042>`__."
     files:
       - name: four_i.h5ad
         s3_key: figshare/four_i.h5ad
@@ -24,7 +24,7 @@ datasets:
   imc:
     type: anndata
     shape: [4668, 34]
-    doc_header: Pre-processed subset IMC dataset from Jackson et al.
+    doc_header: "Pre-processed subset IMC dataset from `Jackson et al <https://www.nature.com/articles/s41586-019-1876-x>`__."
     files:
       - name: imc.h5ad
         s3_key: figshare/imc.h5ad
@@ -34,7 +34,7 @@ datasets:
   seqfish:
     type: anndata
     shape: [19416, 351]
-    doc_header: Pre-processed subset seqFISH dataset from Lohoff et al.
+    doc_header: "Pre-processed subset seqFISH dataset from `Lohoff et al <https://www.biorxiv.org/content/10.1101/2020.11.20.391896v1>`__."
     files:
       - name: seqfish.h5ad
         s3_key: figshare/seqfish.h5ad
@@ -44,7 +44,7 @@ datasets:
   visium_hne_adata:
     type: anndata
     shape: [2688, 18078]
-    doc_header: Pre-processed 10x Genomics Visium H&E dataset.
+    doc_header: "Pre-processed `10x Genomics Visium H&E dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`__."
     files:
       - name: visium_hne_adata.h5ad
         s3_key: figshare/visium_hne_adata.h5ad
@@ -54,7 +54,7 @@ datasets:
   visium_fluo_adata:
     type: anndata
     shape: [2800, 16562]
-    doc_header: Pre-processed 10x Genomics Visium Fluorescent dataset.
+    doc_header: "Pre-processed `10x Genomics Visium Fluorescent dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2>`__."
     files:
       - name: visium_fluo_adata.h5ad
         s3_key: figshare/visium_fluo_adata.h5ad
@@ -64,7 +64,7 @@ datasets:
   visium_hne_adata_crop:
     type: anndata
     shape: [684, 18078]
-    doc_header: Pre-processed subset 10x Genomics Visium H&E dataset.
+    doc_header: "Pre-processed subset `10x Genomics Visium H&E dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`__."
     files:
       - name: visium_hne_adata_crop.h5ad
         s3_key: figshare/visium_hne_adata_crop.h5ad
@@ -74,7 +74,7 @@ datasets:
   visium_fluo_adata_crop:
     type: anndata
     shape: [704, 16562]
-    doc_header: Pre-processed subset 10x Genomics Visium Fluorescent dataset.
+    doc_header: "Pre-processed subset `10x Genomics Visium Fluorescent dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2>`__."
     files:
       - name: visium_fluo_adata_crop.h5ad
         s3_key: figshare/visium_fluo_adata_crop.h5ad
@@ -84,7 +84,7 @@ datasets:
   sc_mouse_cortex:
     type: anndata
     shape: [21697, 36826]
-    doc_header: Pre-processed scRNA-seq mouse cortex.
+    doc_header: "Pre-processed `scRNA-seq mouse cortex <https://doi.org/10.1038/s41586-018-0654-5>`__."
     files:
       - name: sc_mouse_cortex.h5ad
         s3_key: figshare/sc_mouse_cortex.h5ad
@@ -94,7 +94,7 @@ datasets:
   mibitof:
     type: anndata
     shape: [3309, 36]
-    doc_header: Pre-processed MIBI-TOF dataset from Hartmann et al.
+    doc_header: "Pre-processed MIBI-TOF dataset from `Hartmann et al <https://doi.org/10.1101/2020.01.17.909796>`__."
     files:
       - name: mibitof.h5ad
         s3_key: figshare/mibitof.h5ad
@@ -104,7 +104,7 @@ datasets:
   merfish:
     type: anndata
     shape: [73655, 161]
-    doc_header: Pre-processed MERFISH dataset from Moffitt et al.
+    doc_header: "Pre-processed MERFISH dataset from `Moffitt et al <https://doi.org/10.1126/science.aau5324>`__."
     files:
       - name: merfish.h5ad
         s3_key: figshare/merfish.h5ad
@@ -114,7 +114,7 @@ datasets:
   slideseqv2:
     type: anndata
     shape: [41786, 4000]
-    doc_header: Pre-processed SlideseqV2 dataset from Stickles et al.
+    doc_header: "Pre-processed SlideseqV2 dataset from `Stickles et al <https://doi.org/10.1038/s41587-020-0739-1>`__."
     files:
       - name: slideseqv2.h5ad
         s3_key: figshare/slideseqv2.h5ad
