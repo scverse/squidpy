@@ -1,31 +1,15 @@
 #!/usr/bin/env python3
+"""Download datasets to populate CI cache.
+
+This script downloads all datasets that tests might need.
+The downloader handles caching to DEFAULT_CACHE_DIR (~/.cache/squidpy).
+"""
+
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-from typing import Any
 
 _CNT = 0  # increment this when you want to rebuild the CI cache
-
-
-def _print_message(func_name: str, path: Path, *, dry_run: bool = False) -> None:
-    prefix = "[DRY RUN]" if dry_run else ""
-    if path.exists():
-        print(f"{prefix}[Cached]      {func_name:>35} <- {str(path):>40}")
-    else:
-        msg = f"{prefix}[Downloading] {func_name:>35} -> {str(path):>40}"
-        print(msg)
-
-
-def _maybe_download_data(func_name: str) -> Any:
-    """Download data using default cache (DEFAULT_CACHE_DIR)."""
-    import squidpy as sq
-
-    try:
-        return getattr(sq.datasets, func_name)()
-    except Exception as e:  # noqa: BLE001
-        print(f"Error downloading {func_name}: {e}")
-        raise
 
 
 def main(args: argparse.Namespace) -> None:
@@ -36,15 +20,7 @@ def main(args: argparse.Namespace) -> None:
     from squidpy.datasets._registry import get_registry
 
     registry = get_registry()
-
-    # AnnData datasets (single .h5ad files) - registry returns list[str]
-    anndata_datasets = registry.anndata_datasets
-
-    # Image datasets (single .tiff files) - registry returns list[str]
-    image_datasets = registry.image_datasets
-
-    # SpatialData datasets (.zarr directories) - registry returns list[str]
-    spatialdata_datasets = registry.spatialdata_datasets
+    print(f"Cache directory: {DEFAULT_CACHE_DIR}")
 
     # Visium samples tested in CI
     # Add any sample here that's used in tests to ensure it's cached
@@ -53,81 +29,50 @@ def main(args: argparse.Namespace) -> None:
         "Targeted_Visium_Human_SpinalCord_Neuroscience",
         "Visium_FFPE_Human_Breast_Cancer",
     ]
-    # Note: Only samples listed here will be cached. If you add a test
-    # using a different Visium sample, add it to this list.
 
     if args.dry_run:
-        print(f"Cache directory: {DEFAULT_CACHE_DIR}")
-        print("\nAnnData datasets:")
-        for name in anndata_datasets:
-            path = DEFAULT_CACHE_DIR / "anndata" / f"{name}.h5ad"
-            _print_message(name, path, dry_run=True)
-
-        print("\nImage datasets:")
-        for name in image_datasets:
-            entry = registry[name]
-            file_name = entry.files[0].name
-            path = DEFAULT_CACHE_DIR / "images" / file_name
-            _print_message(name, path, dry_run=True)
-
-        print("\nSpatialData datasets:")
-        for name in spatialdata_datasets:
-            path = DEFAULT_CACHE_DIR / "spatialdata" / name
-            _print_message(name, path, dry_run=True)
-
-        print("\nVisium samples:")
-        for name in visium_samples_to_cache:
-            path = DEFAULT_CACHE_DIR / "visium" / name
-            _print_message(name, path, dry_run=True)
-
+        print("\nWould download:")
+        print(f"  - {len(registry.anndata_datasets)} AnnData datasets")
+        print(f"  - {len(registry.image_datasets)} Image datasets")
+        print(f"  - {len(registry.spatialdata_datasets)} SpatialData datasets")
+        print(f"  - {len(visium_samples_to_cache)} Visium samples")
         return
 
-    print(f"Cache directory: {DEFAULT_CACHE_DIR}")
-
-    # Download AnnData datasets
+    # Download AnnData datasets - just call the function, it handles caching
     print("\nDownloading AnnData datasets...")
-    for name in anndata_datasets:
-        path = DEFAULT_CACHE_DIR / "anndata" / f"{name}.h5ad"
-        _print_message(name, path)
-        obj = _maybe_download_data(name)
+    for name in registry.anndata_datasets:
+        print(f"  {name}")
+        obj = getattr(sq.datasets, name)()
         assert isinstance(obj, AnnData), f"Expected AnnData, got {type(obj)}"
-        assert path.is_file(), f"Expected file at {path}"
 
     # Download image datasets
     print("\nDownloading image datasets...")
-    for name in image_datasets:
-        entry = registry[name]
-        file_name = entry.files[0].name
-        path = DEFAULT_CACHE_DIR / "images" / file_name
-        _print_message(name, path)
-        obj = _maybe_download_data(name)
-        assert isinstance(obj, sq.im.ImageContainer), f"Expected ImageContainer, got {type(obj)}"
-        assert path.is_file(), f"Expected file at {path}"
+    for name in registry.image_datasets:
+        print(f"  {name}")
+        obj = getattr(sq.datasets, name)()
+        assert isinstance(obj, sq.im.ImageContainer)
 
     # Download SpatialData datasets
     print("\nDownloading SpatialData datasets...")
-    for name in spatialdata_datasets:
-        path = DEFAULT_CACHE_DIR / "spatialdata" / name
-        _print_message(name, path)
-        obj = _maybe_download_data(name)
-        # Don't import spatialdata just for type check
-        assert path.is_dir(), f"Expected directory at {path}"
+    for name in registry.spatialdata_datasets:
+        print(f"  {name}")
+        obj = getattr(sq.datasets, name)()
+        # Returns SpatialData object
 
-    # Download Visium samples (these are needed for tests)
-    # visium() now defaults to DEFAULT_CACHE_DIR/visium
+    # Download Visium samples (needed for tests)
     print("\nDownloading Visium samples...")
     for sample in visium_samples_to_cache:
-        sample_dir = DEFAULT_CACHE_DIR / "visium" / sample
-        matrix_file = sample_dir / "filtered_feature_bc_matrix.h5"
-        _print_message(sample, sample_dir)
-
+        print(f"  {sample}")
         obj = sq.datasets.visium(sample)
         assert isinstance(obj, AnnData), f"Expected AnnData, got {type(obj)}"
-        assert matrix_file.is_file(), f"Expected file at {matrix_file}"
+
+    print("\nDone!")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Download data used for tutorials/examples.")
+    parser = argparse.ArgumentParser(
+        description="Download datasets to populate CI cache."
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
