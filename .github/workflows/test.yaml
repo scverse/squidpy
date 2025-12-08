@@ -44,10 +44,13 @@ jobs:
         with:
           path: ~/.cache/squidpy
           key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
           enableCrossOsArchive: true
 
       - name: Download datasets
-        if: steps.data-cache.outputs.cache-hit != 'true'
+        # Always run to ensure any missing files are downloaded
+        # (restore-keys may provide partial cache)
         run: uvx hatch run data:download
 
   # Get the test environment from hatch as defined in pyproject.toml.
@@ -122,6 +125,8 @@ jobs:
         with:
           path: ~/.cache/squidpy
           key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
           enableCrossOsArchive: true
 
       - name: System dependencies (Linux)
@@ -179,6 +184,8 @@ jobs:
         with:
           path: ~/.cache/squidpy
           key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
           enableCrossOsArchive: true
 
       - name: System dependencies (Linux)

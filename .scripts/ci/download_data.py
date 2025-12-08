@@ -60,10 +60,11 @@ def main(args: argparse.Namespace) -> None:
         # Returns SpatialData object
 
     # Download Visium samples (needed for tests)
-    print("\nDownloading Visium samples...")
+    # Include high-res images since tests use include_hires_tiff=True
+    print("\nDownloading Visium samples (with high-res images)...")
     for sample in visium_samples_to_cache:
         print(f"  {sample}")
-        obj = sq.datasets.visium(sample)
+        obj = sq.datasets.visium(sample, include_hires_tiff=True)
         assert isinstance(obj, AnnData), f"Expected AnnData, got {type(obj)}"
 
     print("\nDone!")
