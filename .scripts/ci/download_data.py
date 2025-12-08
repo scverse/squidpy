@@ -8,9 +8,7 @@ from typing import Any
 _CNT = 0  # increment this when you want to rebuild the CI cache
 
 
-def _print_message(
-    func_name: str, path: Path, *, dry_run: bool = False
-) -> None:
+def _print_message(func_name: str, path: Path, *, dry_run: bool = False) -> None:
     prefix = "[DRY RUN]" if dry_run else ""
     if path.exists():
         print(f"{prefix}[Cached]      {func_name:>35} <- {str(path):>40}")
@@ -103,9 +101,7 @@ def main(args: argparse.Namespace) -> None:
         path = DEFAULT_CACHE_DIR / "images" / file_name
         _print_message(name, path)
         obj = _maybe_download_data(name)
-        assert isinstance(obj, sq.im.ImageContainer), (
-            f"Expected ImageContainer, got {type(obj)}"
-        )
+        assert isinstance(obj, sq.im.ImageContainer), f"Expected ImageContainer, got {type(obj)}"
         assert path.is_file(), f"Expected file at {path}"
 
     # Download SpatialData datasets
@@ -131,9 +127,7 @@ def main(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Download data used for tutorials/examples."
-    )
+    parser = argparse.ArgumentParser(description="Download data used for tutorials/examples.")
     parser.add_argument(
         "--dry-run",
         action="store_true",

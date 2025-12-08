@@ -49,9 +49,7 @@ def test_visium_datasets(sample):
     assert image_path.exists()
 
     # Test that tissue image is a tif image file (using `file`)
-    process = subprocess.run(
-        ["file", "--mime-type", image_path], stdout=subprocess.PIPE
-    )
+    process = subprocess.run(["file", "--mime-type", image_path], stdout=subprocess.PIPE)
     output = process.stdout.strip().decode()
     assert output == str(image_path) + ": image/tiff"
 

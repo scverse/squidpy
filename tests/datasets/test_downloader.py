@@ -106,9 +106,7 @@ class TestDownloaderIntegration:
         from anndata import AnnData
 
         downloader = DatasetDownloader(cache_dir=DEFAULT_CACHE_DIR)
-        adata = downloader.download(
-            "V1_Mouse_Kidney", include_hires_tiff=False
-        )
+        adata = downloader.download("V1_Mouse_Kidney", include_hires_tiff=False)
 
         assert isinstance(adata, AnnData)
         assert "spatial" in adata.uns

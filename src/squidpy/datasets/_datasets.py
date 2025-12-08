@@ -165,9 +165,7 @@ def visium(
         base_dir = DEFAULT_CACHE_DIR / "visium"
 
     downloader = get_downloader()
-    return downloader.download(
-        sample_id, base_dir, include_hires_tiff=include_hires_tiff
-    )
+    return downloader.download(sample_id, base_dir, include_hires_tiff=include_hires_tiff)
 
 
 def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
