@@ -28,8 +28,9 @@ class TestDatasetDownloader:
         assert downloader.cache_dir.exists()
 
     def test_init_custom_s3_url(self):
-        downloader = DatasetDownloader(s3_base_url="https://my-bucket.s3.amazonaws.com")
-        assert downloader._s3_base_url == "https://my-bucket.s3.amazonaws.com"
+        s3_url = "https://my-bucket.s3.amazonaws.com"
+        downloader = DatasetDownloader(s3_base_url=s3_url)
+        assert downloader._s3_base_url == s3_url
 
     def test_registry_loaded(self):
         downloader = DatasetDownloader()
@@ -69,11 +70,12 @@ class TestDownloaderIntegration:
 
     @pytest.mark.timeout(120)
     @pytest.mark.internet()
-    def test_download_imc_dataset(self, tmp_path: Path):
+    def test_download_imc_dataset(self):
         """Test downloading a small AnnData dataset."""
         from anndata import AnnData
 
-        downloader = DatasetDownloader(cache_dir=tmp_path)
+        # Use DEFAULT_CACHE_DIR to match what download_data.py uses
+        downloader = DatasetDownloader(cache_dir=DEFAULT_CACHE_DIR)
         adata = downloader.download("imc")
 
         assert isinstance(adata, AnnData)
@@ -81,16 +83,17 @@ class TestDownloaderIntegration:
 
     @pytest.mark.timeout(120)
     @pytest.mark.internet()
-    def test_download_caches_file(self, tmp_path: Path):
+    def test_download_caches_file(self):
         """Test that downloaded files are cached."""
-        downloader = DatasetDownloader(cache_dir=tmp_path)
+        downloader = DatasetDownloader(cache_dir=DEFAULT_CACHE_DIR)
 
         # First download
         adata1 = downloader.download("imc")
 
         # Check file exists in cache
-        cache_files = list((tmp_path / "anndata").glob("*.h5ad"))
-        assert len(cache_files) == 1
+        cache_files = list((DEFAULT_CACHE_DIR / "anndata").glob("*.h5ad"))
+        # At least one file (may have more from other tests)
+        assert len(cache_files) >= 1
 
         # Second download should use cache (no network)
         adata2 = downloader.download("imc")
@@ -98,11 +101,11 @@ class TestDownloaderIntegration:
 
     @pytest.mark.timeout(180)
     @pytest.mark.internet()
-    def test_download_visium_sample(self, tmp_path: Path):
+    def test_download_visium_sample(self):
         """Test downloading a Visium sample."""
         from anndata import AnnData
 
-        downloader = DatasetDownloader(cache_dir=tmp_path)
+        downloader = DatasetDownloader(cache_dir=DEFAULT_CACHE_DIR)
         adata = downloader.download("V1_Mouse_Kidney", include_hires_tiff=False)
 
         assert isinstance(adata, AnnData)

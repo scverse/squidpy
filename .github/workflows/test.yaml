@@ -42,9 +42,7 @@ jobs:
         id: data-cache
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/squidpy/*.h5ad
-            ~/.cache/squidpy/*.zarr
+          path: ~/.cache/squidpy
           key: data-${{ hashFiles('**/download_data.py') }}
           enableCrossOsArchive: true
 
@@ -122,9 +120,7 @@ jobs:
         id: data-cache
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/squidpy/*.h5ad
-            ~/.cache/squidpy/*.zarr
+          path: ~/.cache/squidpy
           key: data-${{ hashFiles('**/download_data.py') }}
           enableCrossOsArchive: true
 
@@ -181,9 +177,7 @@ jobs:
         id: coverage-data-cache
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/squidpy/*.h5ad
-            ~/.cache/squidpy/*.zarr
+          path: ~/.cache/squidpy
           key: data-${{ hashFiles('**/download_data.py') }}
           enableCrossOsArchive: true
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import warnings
 from http.client import RemoteDisconnected
-from pathlib import Path
 
 import pytest
 from anndata import AnnData, OldFormatWarning
@@ -46,11 +45,12 @@ class TestDatasetsImports:
 class TestDatasetsDownload:
     @pytest.mark.timeout(120)
     @pytest.mark.internet()
-    def test_download_imc(self, tmp_path: Path):
+    def test_download_imc(self):
+        # Not passing path uses DEFAULT_CACHE_DIR (~/.cache/squidpy)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=OldFormatWarning)
             try:
-                adata = sq.datasets.imc(tmp_path / "foo")
+                adata = sq.datasets.imc()
 
                 assert isinstance(adata, AnnData)
                 assert adata.shape == (4668, 34)
@@ -59,11 +59,12 @@ class TestDatasetsDownload:
 
     @pytest.mark.timeout(120)
     @pytest.mark.internet()
-    def test_download_visium_hne_image_crop(self, tmp_path: Path):
+    def test_download_visium_hne_image_crop(self):
+        # Not passing path uses DEFAULT_CACHE_DIR (~/.cache/squidpy)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=OldFormatWarning)
             try:
-                img = sq.datasets.visium_hne_image_crop(tmp_path / "foo")
+                img = sq.datasets.visium_hne_image_crop()
 
                 assert isinstance(img, sq.im.ImageContainer)
                 assert img.shape == (3527, 3527)
