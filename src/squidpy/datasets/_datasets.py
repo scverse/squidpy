@@ -10,9 +10,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
-from scanpy import settings
-
-from squidpy.datasets._downloader import get_downloader
+from squidpy.datasets._downloader import DEFAULT_CACHE_DIR, get_downloader
 from squidpy.datasets._registry import get_registry
 
 if TYPE_CHECKING:
@@ -148,7 +146,7 @@ def visium(
         Whether to download the high-resolution tissue section into
         :attr:`anndata.AnnData.uns` ``['spatial']['{sample_id}']['metadata']['source_image_path']``.
     base_dir
-        Directory where to download the data. If `None`, use :attr:`scanpy.settings.datasetdir`.
+        Directory where to download the data. If `None`, uses ~/.cache/squidpy/visium.
 
     Returns
     -------
@@ -158,14 +156,18 @@ def visium(
     # Validate sample_id against known names
     registry = get_registry()
     if sample_id not in registry:
-        raise ValueError(f"Unknown Visium sample: {sample_id}. Available samples: {registry.visium_datasets}")
+        msg = f"Unknown Visium sample: {sample_id}. "
+        msg += f"Available samples: {registry.visium_datasets}"
+        raise ValueError(msg)
 
-    # Use scanpy's datasetdir if base_dir not specified (backward compatible)
+    # Use DEFAULT_CACHE_DIR/visium if base_dir not specified
     if base_dir is None:
-        base_dir = settings.datasetdir
+        base_dir = DEFAULT_CACHE_DIR / "visium"
 
     downloader = get_downloader()
-    return downloader.download(sample_id, base_dir, include_hires_tiff=include_hires_tiff)
+    return downloader.download(
+        sample_id, base_dir, include_hires_tiff=include_hires_tiff
+    )
 
 
 def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
