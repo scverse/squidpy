@@ -23,9 +23,6 @@ __all__ = ["DatasetDownloader", "download", "get_downloader"]
 # Default cache directory
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "squidpy"
 
-# Browser-like User-Agent to avoid 403 errors from some servers
-USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-
 
 class DatasetDownloader:
     """Unified downloader for all squidpy datasets.
@@ -79,7 +76,6 @@ class DatasetDownloader:
                     known_hash=f"sha256:{file_entry.sha256}" if file_entry.sha256 else None,
                     fname=filename,
                     path=str(target_dir),
-                    downloader=pooch.HTTPDownloader(headers={"User-Agent": USER_AGENT}),
                     progressbar=True,
                 )
                 return Path(downloaded)
