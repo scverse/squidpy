@@ -54,11 +54,7 @@ class DatasetDownloader:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self._registry = get_registry()
-        self._s3_base_url = (
-            s3_base_url
-            if s3_base_url is not None
-            else self._registry.s3_base_url
-        )
+        self._s3_base_url = s3_base_url if s3_base_url is not None else self._registry.s3_base_url
 
     def _get_first_file(self, entry: DatasetEntry) -> FileEntry:
         """Get and validate the first file entry."""
@@ -77,9 +73,7 @@ class DatasetDownloader:
             path = Path(path)
             target_dir = path.parent
             suffix = Path(file_entry.name).suffix
-            target_name = (
-                path.name if path.suffix else f"{path.name}{suffix}"
-            )
+            target_name = path.name if path.suffix else f"{path.name}{suffix}"
         else:
             target_dir = self.cache_dir / default_subdir
             target_name = file_entry.name
@@ -108,11 +102,7 @@ class DatasetDownloader:
                 logg.info(f"Downloading {filename} from {url}")
                 downloaded = pooch.retrieve(
                     url=url,
-                    known_hash=(
-                        f"sha256:{file_entry.sha256}"
-                        if file_entry.sha256
-                        else None
-                    ),
+                    known_hash=(f"sha256:{file_entry.sha256}" if file_entry.sha256 else None),
                     fname=filename,
                     path=str(target_dir),
                     progressbar=True,
@@ -122,13 +112,9 @@ class DatasetDownloader:
                 last_error = e
                 logg.warning(f"Failed to download from {url}: {e}")
 
-        raise RuntimeError(
-            f"Failed to download {filename}. Last error: {last_error}"
-        )
+        raise RuntimeError(f"Failed to download {filename}. Last error: {last_error}")
 
-    def download(
-        self, name: str, path: Path | str | None = None, **kwargs: Any
-    ) -> Any:
+    def download(self, name: str, path: Path | str | None = None, **kwargs: Any) -> Any:
         """Download a dataset by name and return the appropriate object.
 
         Parameters
@@ -145,22 +131,13 @@ class DatasetDownloader:
         Loaded dataset.
         """
         if name not in self._registry:
-            raise ValueError(
-                f"Unknown dataset: {name}. "
-                f"Available: {self._registry.all_names}"
-            )
+            raise ValueError(f"Unknown dataset: {name}. Available: {self._registry.all_names}")
 
         entry = self._registry[name]
         loaders = {
-            DatasetType.ANNDATA: lambda: self._load_anndata(
-                entry, path, **kwargs
-            ),
-            DatasetType.IMAGE: lambda: self._load_image(
-                entry, path, **kwargs
-            ),
-            DatasetType.SPATIALDATA: lambda: self._load_spatialdata(
-                entry, path
-            ),
+            DatasetType.ANNDATA: lambda: self._load_anndata(entry, path, **kwargs),
+            DatasetType.IMAGE: lambda: self._load_image(entry, path, **kwargs),
+            DatasetType.SPATIALDATA: lambda: self._load_spatialdata(entry, path),
             DatasetType.ADATA_WITH_IMAGE: lambda: self._load_adata_with_image(
                 entry,
                 path,
@@ -183,17 +160,13 @@ class DatasetDownloader:
         import anndata
 
         file_entry = self._get_first_file(entry)
-        target_dir, target_name = self._resolve_path(
-            path, file_entry, "anndata"
-        )
+        target_dir, target_name = self._resolve_path(path, file_entry, "anndata")
 
         local_path = self._download_file(file_entry, target_dir, target_name)
         adata = anndata.read_h5ad(local_path, **kwargs)
 
         if entry.shape is not None and adata.shape != entry.shape:
-            logg.warning(
-                f"Expected shape {entry.shape}, got {adata.shape}"
-            )
+            logg.warning(f"Expected shape {entry.shape}, got {adata.shape}")
 
         return adata
 
@@ -207,16 +180,12 @@ class DatasetDownloader:
         from squidpy.im import ImageContainer
 
         file_entry = self._get_first_file(entry)
-        target_dir, target_name = self._resolve_path(
-            path, file_entry, "images"
-        )
+        target_dir, target_name = self._resolve_path(path, file_entry, "images")
 
         local_path = self._download_file(file_entry, target_dir, target_name)
 
         img = ImageContainer()
-        img.add_img(
-            local_path, layer="image", library_id=entry.library_id, **kwargs
-        )
+        img.add_img(local_path, layer="image", library_id=entry.library_id, **kwargs)
         return img
 
     def _load_spatialdata(
@@ -228,9 +197,7 @@ class DatasetDownloader:
         import spatialdata as sd
 
         file_entry = self._get_first_file(entry)
-        folder = (
-            Path(path) if path is not None else self.cache_dir / "spatialdata"
-        )
+        folder = Path(path) if path is not None else self.cache_dir / "spatialdata"
         folder.mkdir(parents=True, exist_ok=True)
 
         zarr_path = folder / f"{entry.name}.zarr"
@@ -244,9 +211,7 @@ class DatasetDownloader:
         shutil.unpack_archive(str(zip_path), folder)
 
         if not zarr_path.exists():
-            raise RuntimeError(
-                f"Expected extracted data at {zarr_path}, but not found"
-            )
+            raise RuntimeError(f"Expected extracted data at {zarr_path}, but not found")
 
         return sd.read_zarr(zarr_path)
 
@@ -259,26 +224,20 @@ class DatasetDownloader:
         """Download and load an AnnData with image (e.g., 10x Visium)."""
         from squidpy.read._read import visium as read_visium
 
-        base_dir = (
-            Path(path) if path is not None else self.cache_dir / "visium"
-        )
+        base_dir = Path(path) if path is not None else self.cache_dir / "visium"
         sample_dir = base_dir / entry.name
         sample_dir.mkdir(parents=True, exist_ok=True)
 
         # Download feature matrix
         matrix_file = entry.get_file("filtered_feature_bc_matrix.h5")
         if matrix_file is None:
-            raise ValueError(
-                f"Dataset {entry.name} missing filtered_feature_bc_matrix.h5"
-            )
+            raise ValueError(f"Dataset {entry.name} missing filtered_feature_bc_matrix.h5")
         self._download_file(matrix_file, sample_dir)
 
         # Download and extract spatial data
         spatial_file = entry.get_file("spatial.tar.gz")
         if spatial_file is None:
-            raise ValueError(
-                f"Dataset {entry.name} missing spatial.tar.gz"
-            )
+            raise ValueError(f"Dataset {entry.name} missing spatial.tar.gz")
 
         spatial_path = self._download_file(spatial_file, sample_dir)
         with tarfile.open(spatial_path) as f:
@@ -291,9 +250,7 @@ class DatasetDownloader:
         if include_hires_tiff:
             image_file = entry.get_file_by_prefix("image.")
             if image_file is None:
-                logg.warning(
-                    f"High-res image not available for {entry.name}"
-                )
+                logg.warning(f"High-res image not available for {entry.name}")
             else:
                 try:
                     self._download_file(image_file, sample_dir)
