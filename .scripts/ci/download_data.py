@@ -8,8 +8,12 @@ The downloader handles caching to DEFAULT_CACHE_DIR (~/.cache/squidpy).
 from __future__ import annotations
 
 import argparse
+import logging
 
 _CNT = 0  # increment this when you want to rebuild the CI cache
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 
 def main(args: argparse.Namespace) -> None:
@@ -20,10 +24,8 @@ def main(args: argparse.Namespace) -> None:
     from squidpy.datasets._registry import get_registry
 
     registry = get_registry()
-    print(f"Cache directory: {DEFAULT_CACHE_DIR}")
 
     # Visium samples tested in CI
-    # Add any sample here that's used in tests to ensure it's cached
     visium_samples_to_cache = [
         "V1_Mouse_Kidney",
         "Targeted_Visium_Human_SpinalCord_Neuroscience",
@@ -31,47 +33,37 @@ def main(args: argparse.Namespace) -> None:
     ]
 
     if args.dry_run:
-        print("\nWould download:")
-        print(f"  - {len(registry.anndata_datasets)} AnnData datasets")
-        print(f"  - {len(registry.image_datasets)} Image datasets")
-        print(f"  - {len(registry.spatialdata_datasets)} SpatialData datasets")
-        print(f"  - {len(visium_samples_to_cache)} Visium samples")
+        logger.info("Cache: %s", DEFAULT_CACHE_DIR)
+        logger.info(
+            "Would download: %d AnnData, %d images, %d SpatialData, %d Visium",
+            len(registry.anndata_datasets),
+            len(registry.image_datasets),
+            len(registry.spatialdata_datasets),
+            len(visium_samples_to_cache),
+        )
         return
 
-    # Download AnnData datasets - just call the function, it handles caching
-    print("\nDownloading AnnData datasets...")
+    # Download all datasets - the downloader handles caching
     for name in registry.anndata_datasets:
-        print(f"  {name}")
         obj = getattr(sq.datasets, name)()
-        assert isinstance(obj, AnnData), f"Expected AnnData, got {type(obj)}"
+        assert isinstance(obj, AnnData)
 
-    # Download image datasets
-    print("\nDownloading image datasets...")
     for name in registry.image_datasets:
-        print(f"  {name}")
         obj = getattr(sq.datasets, name)()
         assert isinstance(obj, sq.im.ImageContainer)
 
-    # Download SpatialData datasets
-    print("\nDownloading SpatialData datasets...")
     for name in registry.spatialdata_datasets:
-        print(f"  {name}")
-        obj = getattr(sq.datasets, name)()
-        # Returns SpatialData object
+        getattr(sq.datasets, name)()
 
-    # Download Visium samples (needed for tests)
-    # Include high-res images since tests use include_hires_tiff=True
-    print("\nDownloading Visium samples (with high-res images)...")
     for sample in visium_samples_to_cache:
-        print(f"  {sample}")
         obj = sq.datasets.visium(sample, include_hires_tiff=True)
-        assert isinstance(obj, AnnData), f"Expected AnnData, got {type(obj)}"
-
-    print("\nDone!")
+        assert isinstance(obj, AnnData)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Download datasets to populate CI cache.")
+    parser = argparse.ArgumentParser(
+        description="Download datasets to populate CI cache."
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
