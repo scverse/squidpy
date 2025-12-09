@@ -106,8 +106,6 @@ def visium(
     """
     Download Visium `datasets <https://support.10xgenomics.com/spatial-gene-expression/datasets>`_ from *10x Genomics*.
 
-    Uses the unified downloader which supports S3 with fallback to 10x Genomics servers.
-
     Parameters
     ----------
     sample_id
@@ -141,8 +139,6 @@ def visium(
 def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
     """
     Download a Visium H&E dataset as a SpatialData object.
-
-    Uses the unified downloader which supports S3 with fallback to Figshare.
 
     Parameters
     ----------

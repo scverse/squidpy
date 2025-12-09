@@ -1,4 +1,4 @@
-"""Unified dataset downloader using pooch with fallback URLs."""
+"""Unified dataset downloader using pooch."""
 
 from __future__ import annotations
 
@@ -27,9 +27,6 @@ DEFAULT_CACHE_DIR = Path.home() / ".cache" / "squidpy"
 class DatasetDownloader:
     """Unified downloader for all squidpy datasets.
 
-    This class provides a single interface for downloading datasets from
-    S3 (primary) with fallback to original sources (Figshare, 10x Genomics).
-
     Parameters
     ----------
     cache_dir
@@ -55,7 +52,7 @@ class DatasetDownloader:
         target_dir: Path,
         target_name: str | None = None,
     ) -> Path:
-        """Download a single file with fallback support."""
+        """Download a single file."""
         target_dir.mkdir(parents=True, exist_ok=True)
         filename = target_name or file_entry.name
         local_path = target_dir / filename
