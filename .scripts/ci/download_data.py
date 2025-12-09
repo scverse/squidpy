@@ -61,9 +61,7 @@ def main(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Download datasets to populate CI cache."
-    )
+    parser = argparse.ArgumentParser(description="Download datasets to populate CI cache.")
     parser.add_argument(
         "--dry-run",
         action="store_true",
