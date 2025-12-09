@@ -129,7 +129,7 @@ class DatasetDownloader:
             raise ValueError(f"Dataset {entry.name} has no files")
 
         file_entry = entry.files[0]
-        if path:
+        if path is not None:
             path = Path(path)
             target_dir = path.parent
             # Ensure proper extension is used
@@ -161,7 +161,7 @@ class DatasetDownloader:
             raise ValueError(f"Dataset {entry.name} has no files")
 
         file_entry = entry.files[0]
-        if path:
+        if path is not None:
             path = Path(path)
             target_dir = path.parent
             # Ensure proper extension is used (e.g., .tiff, .png)
@@ -190,7 +190,7 @@ class DatasetDownloader:
             raise ValueError(f"Dataset {entry.name} has no files")
 
         file_entry = entry.files[0]
-        folder = Path(path) if path else self.cache_dir / "spatialdata"
+        folder = Path(path) if path is not None else self.cache_dir / "spatialdata"
         folder.mkdir(parents=True, exist_ok=True)
 
         zarr_path = folder / f"{entry.name}.zarr"
@@ -222,7 +222,7 @@ class DatasetDownloader:
         from squidpy.read._read import visium as read_visium
 
         # Set up directories
-        if path:
+        if path is not None:
             base_dir = Path(path)
         else:
             base_dir = self.cache_dir / "visium"
