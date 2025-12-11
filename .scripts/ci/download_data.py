@@ -8,12 +8,10 @@ The downloader handles caching to DEFAULT_CACHE_DIR (~/.cache/squidpy).
 from __future__ import annotations
 
 import argparse
-import logging
+
+from spatialdata._logging import logger
 
 _CNT = 0  # increment this when you want to rebuild the CI cache
-
-logging.basicConfig(level=logging.INFO, format="%(message)s")
-logger = logging.getLogger(__name__)
 
 
 def main(args: argparse.Namespace) -> None:

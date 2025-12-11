@@ -20,6 +20,7 @@ from squidpy.datasets._registry import (
 
 if TYPE_CHECKING:
     from anndata import AnnData
+    from spatialdata import SpatialData
 
     from squidpy.im import ImageContainer
 
@@ -192,7 +193,7 @@ class DatasetDownloader:
         self,
         entry: DatasetEntry,
         path: Path | str | None = None,
-    ) -> Any:  # Returns SpatialData
+    ) -> SpatialData:
         """Download and load a SpatialData dataset."""
         import spatialdata as sd
 
