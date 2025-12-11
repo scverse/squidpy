@@ -11,8 +11,8 @@ from anndata import AnnData
 from cycler import Cycler, cycler
 from matplotlib.colors import ListedColormap, to_hex, to_rgba
 from scanpy import logging as logg
-from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 
+from squidpy._compat import add_colors_for_categorical_sample_annotation
 from squidpy._constants._pkg_constants import Key
 
 Palette_t: TypeAlias = str | ListedColormap | None

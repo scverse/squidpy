@@ -233,7 +233,7 @@ class FeatureMixin:
 
         Notes
         -----
-        If the image is not of type :class:`numpy.uint8`, it will be converted.
+        If the image is not of type :attr:`numpy.uint8`, it will be converted.
         """
         layer = self._get_layer(layer)
         library_id = self._get_library_id(library_id)

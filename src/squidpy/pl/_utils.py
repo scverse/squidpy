@@ -21,7 +21,7 @@ from matplotlib.figure import Figure
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from numba import njit, prange
 from pandas import CategoricalDtype
-from pandas._libs.lib import infer_dtype
+from pandas.api.types import infer_dtype
 from pandas.core.dtypes.common import (
     is_bool_dtype,
     is_integer_dtype,
@@ -105,7 +105,7 @@ def extract(
     Create a temporary :class:`anndata.AnnData` object for plotting.
 
     Move columns from :attr:`anndata.AnnData.obsm` ``['{obsm_key}']`` to :attr:`anndata.AnnData.obs` to enable
-    the use of :mod:`scanpy.plotting` functions.
+    the use of :mod:`scanpy.pl` functions.
 
     Parameters
     ----------
