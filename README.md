@@ -36,18 +36,16 @@ conda install -c conda-forge squidpy
 
 ### Interactive visualization
 
-To get optional dependencies required for the napari-based interactive plotting APIs, install the `interactive` extra:
-
-```console
-pip install 'squidpy[interactive]'
-```
+For interactive visualization with napari, please use [napari-spatialdata](https://github.com/scverse/napari-spatialdata).
+The original napari plugin from Squidpy has been deprecated and replaced by napari-spatialdata, which offers
+improved functionality and support for the SpatialData ecosystem.
 
 ## Key capabilities
 
 - Build and analyze spatial neighbor graphs directly from Visium, Slide-seq, Xenium, and other spatial omics assays.
 - Compute spatial statistics for cell types and genes, including neighborhood enrichment, co-occurrence, and Moran's I.
 - Efficiently store, featurize, and visualize high-resolution tissue microscopy images via [scikit-image](https://scikit-image.org/).
-- Explore annotated datasets interactively with [napari](https://napari.org/) and scverse visualization tooling.
+- Explore annotated datasets interactively with [napari-spatialdata](https://github.com/scverse/napari-spatialdata).
 
 ## Contributing
 

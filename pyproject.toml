@@ -214,8 +214,6 @@ lint.per-file-ignores.".scripts/ci/download_data.py" = [ "B", "D" ]
 lint.per-file-ignores."docs/*" = [ "B", "D" ]
 lint.per-file-ignores."src/squidpy/_constants/_constants.py" = [ "D101" ]
 lint.per-file-ignores."src/squidpy/_constants/_pkg_constants.py" = [ "D101", "D102", "D106" ]
-lint.per-file-ignores."src/squidpy/pl/_interactive/_widgets.py" = [ "D" ]
-lint.per-file-ignores."src/squidpy/pl/_interactive/interactive.py" = [ "E", "F" ]
 lint.per-file-ignores."src/squidpy/pl/_ligrec.py" = [ "B", "D" ]
 lint.per-file-ignores."tests/*" = [ "D" ]
 lint.unfixable = [
@@ -239,7 +237,6 @@ python_files = "test_*.py"
 testpaths = [ "tests/" ]
 xfail_strict = true
 addopts = [
-  "--ignore=tests/plotting/test_interactive.py",
   "--ignore=docs",
 ]
 
@@ -250,7 +247,6 @@ source = [ "squidpy" ]
 omit = [
   "*/__init__.py",
   "*/_version.py",
-  "squidpy/pl/_interactive/*",
   "tox/*",
 ]
 
