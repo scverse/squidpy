@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pooch
+from scanpy import settings
 from spatialdata._logging import logger as logg
 
 from squidpy.datasets._registry import (
@@ -28,11 +29,7 @@ __all__ = [
     "DatasetDownloader",
     "download",
     "get_downloader",
-    "DEFAULT_CACHE_DIR",
 ]
-
-# Default cache directory
-DEFAULT_CACHE_DIR = Path.home() / ".cache" / "squidpy"
 
 
 class DatasetDownloader:
@@ -41,7 +38,7 @@ class DatasetDownloader:
     Parameters
     ----------
     cache_dir
-        Directory to cache downloaded files. Defaults to ~/.cache/squidpy.
+        Directory to cache downloaded files. Defaults to :attr:`scanpy.settings.datasetdir`.
     s3_base_url
         Base URL for S3 bucket. If None, uses the value from datasets.yaml.
     """
@@ -51,7 +48,7 @@ class DatasetDownloader:
         cache_dir: Path | str | None = None,
         s3_base_url: str | None = None,
     ):
-        self.cache_dir = Path(cache_dir) if cache_dir else DEFAULT_CACHE_DIR
+        self.cache_dir = Path(cache_dir) if cache_dir else Path(settings.datasetdir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self._registry = get_registry()
