@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from scanpy import settings
 
 from squidpy.datasets._downloader import (
-    DEFAULT_CACHE_DIR,
     DatasetDownloader,
     download,
     get_downloader,
@@ -20,7 +20,7 @@ class TestDatasetDownloader:
 
     def test_init_default_cache_dir(self):
         downloader = DatasetDownloader()
-        assert downloader.cache_dir == DEFAULT_CACHE_DIR
+        assert downloader.cache_dir == Path(settings.datasetdir)
 
     def test_init_custom_cache_dir(self, tmp_path: Path):
         downloader = DatasetDownloader(cache_dir=tmp_path / "custom_cache")
@@ -74,8 +74,8 @@ class TestDownloaderIntegration:
         """Test downloading a small AnnData dataset."""
         from anndata import AnnData
 
-        # Use DEFAULT_CACHE_DIR to match what download_data.py uses
-        downloader = DatasetDownloader(cache_dir=DEFAULT_CACHE_DIR)
+        # Use scanpy.settings.datasetdir to match what download_data.py uses
+        downloader = DatasetDownloader(cache_dir=settings.datasetdir)
         adata = downloader.download("imc")
 
         assert isinstance(adata, AnnData)
@@ -85,13 +85,14 @@ class TestDownloaderIntegration:
     @pytest.mark.internet()
     def test_download_caches_file(self):
         """Test that downloaded files are cached."""
-        downloader = DatasetDownloader(cache_dir=DEFAULT_CACHE_DIR)
+        cache_dir = Path(settings.datasetdir)
+        downloader = DatasetDownloader(cache_dir=cache_dir)
 
         # First download
         adata1 = downloader.download("imc")
 
         # Check file exists in cache
-        cache_files = list((DEFAULT_CACHE_DIR / "anndata").glob("*.h5ad"))
+        cache_files = list((cache_dir / "anndata").glob("*.h5ad"))
         # At least one file (may have more from other tests)
         assert len(cache_files) >= 1
 
@@ -105,7 +106,7 @@ class TestDownloaderIntegration:
         """Test downloading a Visium sample."""
         from anndata import AnnData
 
-        downloader = DatasetDownloader(cache_dir=DEFAULT_CACHE_DIR)
+        downloader = DatasetDownloader(cache_dir=settings.datasetdir)
         adata = downloader.download("V1_Mouse_Kidney", include_hires_tiff=False)
 
         assert isinstance(adata, AnnData)

@@ -2,13 +2,14 @@
 """Download datasets to populate CI cache.
 
 This script downloads all datasets that tests might need.
-The downloader handles caching to DEFAULT_CACHE_DIR (~/.cache/squidpy).
+The downloader handles caching to scanpy.settings.datasetdir.
 """
 
 from __future__ import annotations
 
 import argparse
 
+from scanpy import settings
 from spatialdata._logging import logger
 
 _CNT = 0  # increment this when you want to rebuild the CI cache
@@ -18,7 +19,6 @@ def main(args: argparse.Namespace) -> None:
     from anndata import AnnData
 
     import squidpy as sq
-    from squidpy.datasets._downloader import DEFAULT_CACHE_DIR
     from squidpy.datasets._registry import get_registry
 
     registry = get_registry()
@@ -31,7 +31,7 @@ def main(args: argparse.Namespace) -> None:
     ]
 
     if args.dry_run:
-        logger.info("Cache: %s", DEFAULT_CACHE_DIR)
+        logger.info("Cache: %s", settings.datasetdir)
         logger.info(
             "Would download: %d AnnData, %d images, %d SpatialData, %d Visium",
             len(registry.anndata_datasets),

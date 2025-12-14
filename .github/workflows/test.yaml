@@ -42,7 +42,7 @@ jobs:
         id: data-cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/squidpy
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
           key: data-${{ hashFiles('**/download_data.py') }}
           restore-keys: |
             data-
@@ -123,7 +123,7 @@ jobs:
         id: data-cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/squidpy
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
           key: data-${{ hashFiles('**/download_data.py') }}
           restore-keys: |
             data-
@@ -182,7 +182,7 @@ jobs:
         id: coverage-data-cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/squidpy
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
           key: data-${{ hashFiles('**/download_data.py') }}
           restore-keys: |
             data-

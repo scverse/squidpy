@@ -46,7 +46,7 @@ class TestDatasetsDownload:
     @pytest.mark.timeout(120)
     @pytest.mark.internet()
     def test_download_imc(self):
-        # Not passing path uses DEFAULT_CACHE_DIR (~/.cache/squidpy)
+        # Not passing path uses scanpy.settings.datasetdir
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=OldFormatWarning)
             try:
@@ -60,7 +60,7 @@ class TestDatasetsDownload:
     @pytest.mark.timeout(120)
     @pytest.mark.internet()
     def test_download_visium_hne_image_crop(self):
-        # Not passing path uses DEFAULT_CACHE_DIR (~/.cache/squidpy)
+        # Not passing path uses scanpy.settings.datasetdir
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=OldFormatWarning)
             try:

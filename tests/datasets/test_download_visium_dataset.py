@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 import spatialdata as sd
 from anndata.tests.helpers import assert_adata_equal
+from scanpy import settings
 
 from squidpy.datasets import visium, visium_hne_sdata
-from squidpy.datasets._downloader import DEFAULT_CACHE_DIR
 
 
 @pytest.mark.timeout(120)
@@ -26,7 +26,6 @@ from squidpy.datasets._downloader import DEFAULT_CACHE_DIR
     ],
 )
 def test_visium_datasets(sample):
-    # visium() now defaults to DEFAULT_CACHE_DIR/visium
     # Tests that reading / downloading datasets works
     # and it does not have any global effects
     sample_dataset = visium(sample)
@@ -40,7 +39,7 @@ def test_visium_datasets(sample):
 
     # Test that downloading tissue image works
     sample_dataset = visium(sample, include_hires_tiff=True)
-    expected_image_path = DEFAULT_CACHE_DIR / "visium" / sample / "image.tif"
+    expected_image_path = Path(settings.datasetdir) / "visium" / sample / "image.tif"
     spatial_metadata = sample_dataset.uns["spatial"][sample]["metadata"]
     image_path = Path(spatial_metadata["source_image_path"])
     assert image_path == expected_image_path
@@ -57,7 +56,7 @@ def test_visium_datasets(sample):
 @pytest.mark.timeout(120)
 @pytest.mark.internet()
 def test_visium_sdata_dataset():
-    # Not passing path uses DEFAULT_CACHE_DIR
+    # Not passing path uses scanpy.settings.datasetdir
     sdata = visium_hne_sdata()
     assert isinstance(sdata, sd.SpatialData)
     assert list(sdata.shapes.keys()) == ["spots"]
