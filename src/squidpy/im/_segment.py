@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any
 
 import dask.array as da
 import numpy as np
+from scanpy.logging import logger as logg
 from scipy import ndimage as ndi
 from skimage.feature import peak_local_max
 from skimage.filters import threshold_otsu
 from skimage.segmentation import watershed
-from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import SegmentationBackend
 from squidpy._constants._pkg_constants import Key

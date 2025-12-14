@@ -8,12 +8,12 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numpy.random import default_rng
+from scanpy.logging import logger as logg
 from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.distance import pdist
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import LabelEncoder
 from spatialdata import SpatialData
-from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key

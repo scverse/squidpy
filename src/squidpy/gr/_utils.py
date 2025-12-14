@@ -12,8 +12,8 @@ from anndata import AnnData
 from anndata.utils import make_index_unique
 from pandas import CategoricalDtype
 from pandas.api.types import infer_dtype
+from scanpy.logging import logger as logg
 from scipy.sparse import csc_matrix, csr_matrix, issparse, spmatrix
-from spatialdata._logging import logger as logg
 
 from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
 from squidpy._docs import d

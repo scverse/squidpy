@@ -8,10 +8,10 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from scanpy.logging import logger as logg
 from sklearn.metrics import DistanceMetric
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import MinMaxScaler
-from spatialdata._logging import logger as logg
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
