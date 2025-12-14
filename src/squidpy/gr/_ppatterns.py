@@ -11,13 +11,13 @@ import pandas as pd
 from anndata import AnnData
 from numba import njit, prange
 from numpy.random import default_rng
-from scanpy import logging as logg
 from scanpy.metrics import gearys_c, morans_i
 from scipy import stats
 from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
+from spatialdata._logging import logger as logg
 from statsmodels.stats.multitest import multipletests
 
 from squidpy._constants._constants import SpatialAutocorr

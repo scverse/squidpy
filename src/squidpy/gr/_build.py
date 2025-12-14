@@ -14,7 +14,7 @@ import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
 from numba import njit
-from scanpy import logging as logg
+from spatialdata._logging import logger as logg
 from scipy.sparse import (
     SparseEfficiencyWarning,
     block_diag,

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from anndata import AnnData
-from scanpy import logging as logg
+from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs

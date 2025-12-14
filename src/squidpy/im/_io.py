@@ -8,8 +8,8 @@ import numpy as np
 import xarray as xr
 from dask import delayed
 from PIL import Image
-from scanpy import logging as logg
 from skimage.io import imread
+from spatialdata._logging import logger as logg
 from tifffile import TiffFile
 
 from squidpy._constants._constants import InferDimensions

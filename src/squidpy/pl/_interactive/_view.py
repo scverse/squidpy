@@ -6,7 +6,7 @@ import napari
 import numpy as np
 from napari.layers import Points
 from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QLabel, QWidget
-from scanpy import logging as logg
+from spatialdata._logging import logger as logg
 
 from squidpy.pl._interactive._model import ImageModel
 from squidpy.pl._interactive._widgets import (  # type: ignore[attr-defined]

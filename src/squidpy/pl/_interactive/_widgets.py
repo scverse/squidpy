@@ -11,7 +11,7 @@ from deprecated import deprecated
 from napari.layers import Points
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import Qt
-from scanpy import logging as logg
+from spatialdata._logging import logger as logg
 from superqt import QRangeSlider
 from vispy import scene
 from vispy.color.colormap import Colormap, MatplotlibColormap

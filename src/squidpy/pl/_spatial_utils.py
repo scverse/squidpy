@@ -28,12 +28,12 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib_scalebar.scalebar import ScaleBar
 from pandas import CategoricalDtype
-from scanpy import logging as logg
 from scanpy import settings as sc_settings
 from skimage.color import label2rgb
 from skimage.morphology import erosion, square
 from skimage.segmentation import find_boundaries
 from skimage.util import map_array
+from spatialdata._logging import logger as logg
 
 from squidpy._compat import add_categorical_legend
 from squidpy._constants._constants import ScatterShape

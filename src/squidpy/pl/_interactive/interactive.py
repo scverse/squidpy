@@ -13,7 +13,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 from anndata import AnnData
-from scanpy import logging as logg
+from spatialdata._logging import logger as logg
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, deprecated
