@@ -5,8 +5,8 @@ from itertools import product
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from scanpy import logging as logg
 from spatialdata import SpatialData
-from spatialdata._logging import logger as logg
 
 from squidpy._docs import d
 from squidpy.gr._utils import _save_data

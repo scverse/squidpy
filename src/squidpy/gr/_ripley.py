@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numpy.random import default_rng
-from scanpy.logging import logger as logg
+from scanpy import logging as logg
 from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.distance import pdist
 from sklearn.neighbors import NearestNeighbors

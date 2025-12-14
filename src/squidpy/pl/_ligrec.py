@@ -11,8 +11,8 @@ import scanpy as sc
 from anndata import AnnData
 from matplotlib.axes import Axes
 from matplotlib.colorbar import ColorbarBase
+from scanpy import logging as logg
 from scipy.cluster import hierarchy as sch
-from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import DendrogramAxis
 from squidpy._constants._pkg_constants import Key

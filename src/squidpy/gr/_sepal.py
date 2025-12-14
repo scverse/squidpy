@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit
-from scanpy.logging import logger as logg
+from scanpy import logging as logg
 from scipy.sparse import csr_matrix, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData

@@ -8,7 +8,7 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from scanpy.logging import logger as logg
+from scanpy import logging as logg
 from sklearn.metrics import DistanceMetric
 from sklearn.neighbors import KDTree
 from sklearn.preprocessing import MinMaxScaler

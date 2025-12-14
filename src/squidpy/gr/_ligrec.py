@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from scanpy.logging import logger as logg
+from scanpy import logging as logg
 from scipy.sparse import csc_matrix
 from spatialdata import SpatialData
 

@@ -6,7 +6,7 @@ from typing import Any
 
 import dask.array as da
 from dask_image.ndfilters import gaussian_filter as dask_gf
-from scanpy.logging import logger as logg
+from scanpy import logging as logg
 from scipy.ndimage import gaussian_filter as scipy_gf
 
 from squidpy._constants._constants import Processing

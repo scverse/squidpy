@@ -12,7 +12,7 @@ from anndata import AnnData
 from anndata.utils import make_index_unique
 from pandas import CategoricalDtype
 from pandas.api.types import infer_dtype
-from scanpy.logging import logger as logg
+from scanpy import logging as logg
 from scipy.sparse import csc_matrix, csr_matrix, issparse, spmatrix
 
 from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView

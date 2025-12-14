@@ -14,8 +14,8 @@ from anndata import AnnData
 from numba import njit
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
+from scanpy import logging as logg
 from spatialdata import SpatialData
-from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key

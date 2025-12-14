@@ -11,7 +11,7 @@ from napari import Viewer
 from napari.layers import Points, Shapes
 from pandas import CategoricalDtype
 from PyQt5.QtWidgets import QGridLayout, QLabel, QWidget
-from spatialdata._logging import logger as logg
+from scanpy import logging as logg
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, singledispatchmethod

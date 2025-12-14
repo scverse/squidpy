@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from scanpy import logging as logg
 from scipy.sparse import csr_matrix
 from spatialdata._logging import logger as logg
 

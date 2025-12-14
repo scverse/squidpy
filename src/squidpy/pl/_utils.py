@@ -29,12 +29,12 @@ from pandas.core.dtypes.common import (
     is_object_dtype,
     is_string_dtype,
 )
+from scanpy import logging as logg
 from scanpy import settings
 from scipy.cluster import hierarchy as sch
 from scipy.sparse import issparse, spmatrix
 from skimage import img_as_float32
 from skimage.color import rgb2gray
-from spatialdata._logging import logger as logg
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d

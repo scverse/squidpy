@@ -11,7 +11,7 @@ import pandas as pd
 from anndata import AnnData
 from numba import njit, prange
 from numpy.random import default_rng
-from scanpy.logging import logger as logg
+from scanpy import logging as logg
 from scanpy.metrics import gearys_c, morans_i
 from scipy import stats
 from scipy.sparse import spmatrix

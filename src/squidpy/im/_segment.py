@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import dask.array as da
 import numpy as np
-from scanpy.logging import logger as logg
+from scanpy import logging as logg
 from scipy import ndimage as ndi
 from skimage.feature import peak_local_max
 from skimage.filters import threshold_otsu
