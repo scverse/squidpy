@@ -33,10 +33,8 @@ __all__ = [
     "AnnDataDatasets",
     "ImageDatasets",
     "SpatialDataDatasets",
-    # 10x Genomics
-    "visium",
-    "visium_hne_sdata",
-    # AnnData datasets
+    # Datasets by format:
+    # AnnData
     "four_i",
     "imc",
     "seqfish",
@@ -48,8 +46,12 @@ __all__ = [
     "mibitof",
     "merfish",
     "slideseqv2",
-    # Image datasets
+    # AnnData with Image
+    "visium",
+    # Image
     "visium_fluo_image_crop",
     "visium_hne_image_crop",
     "visium_hne_image",
+    # SpatialData
+    "visium_hne_sdata",
 ]
