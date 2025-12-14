@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pooch
-from scanpy import logging as logg
+from spatialdata._logging import logger as logg
 
 from squidpy.datasets._registry import (
     DatasetEntry,
