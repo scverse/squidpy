@@ -13,8 +13,9 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
+from fast_array_utils import njit
 from fast_array_utils import stats as fau_stats
-from numba import njit
+from numba import prange
 from scanpy import logging as logg
 from scipy.sparse import (
     SparseEfficiencyWarning,
@@ -36,11 +37,8 @@ from spatialdata._core.query.relational_query import (
 )
 from spatialdata.models import get_table_keys
 from spatialdata.models.models import (
-    Image2DModel,
-    Image3DModel,
     Labels2DModel,
     Labels3DModel,
-    PointsModel,
     get_model,
 )
 
