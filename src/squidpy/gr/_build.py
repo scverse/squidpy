@@ -14,7 +14,6 @@ import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
 from numba import njit
-from spatialdata._logging import logger as logg
 from scipy.sparse import (
     SparseEfficiencyWarning,
     block_diag,
@@ -29,6 +28,7 @@ from sklearn.neighbors import NearestNeighbors
 from spatialdata import SpatialData
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.query.relational_query import get_element_instances, match_element_to_table
+from spatialdata._logging import logger as logg
 from spatialdata.models import get_table_keys
 from spatialdata.models.models import Labels2DModel, Labels3DModel, get_model
 
