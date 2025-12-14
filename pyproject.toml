@@ -63,7 +63,7 @@ dependencies = [
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
-  "spatialdata>=0.2.5",
+  "spatialdata>=0.6",
   "spatialdata-plot",
   "statsmodels>=0.12",
   # https://github.com/scverse/squidpy/issues/526
@@ -71,7 +71,7 @@ dependencies = [
   "tqdm>=4.50.2",
   "validators>=0.18.2",
   "xarray>=2024.10",
-  "zarr>=2.6.1",
+  "zarr>=3",
 ]
 
 optional-dependencies.dev = [

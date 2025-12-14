@@ -384,6 +384,11 @@ def sdata_mask_graph():
     )
 
 
+@pytest.fixture()
+def sdata_hne():
+    return sq.datasets.visium_hne_sdata()
+
+
 def _decorate(fn: Callable, clsname: str, name: str | None = None) -> Callable:
     @wraps(fn)
     def save_and_compare(self, *args, **kwargs):
