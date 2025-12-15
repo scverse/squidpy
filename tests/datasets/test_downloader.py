@@ -12,32 +12,33 @@ from squidpy.datasets._downloader import (
     download,
     get_downloader,
 )
+from squidpy.datasets._registry import get_registry
 
 
 class TestDatasetDownloader:
     """Tests for DatasetDownloader class."""
 
     def test_init_default_cache_dir(self):
-        downloader = DatasetDownloader()
+        downloader = DatasetDownloader(registry=get_registry())
         assert downloader.cache_dir == Path(settings.datasetdir)
 
     def test_init_custom_cache_dir(self, tmp_path: Path):
-        downloader = DatasetDownloader(cache_dir=tmp_path / "custom_cache")
+        downloader = DatasetDownloader(registry=get_registry(), cache_dir=tmp_path / "custom_cache")
         assert downloader.cache_dir == tmp_path / "custom_cache"
         assert downloader.cache_dir.exists()
 
     def test_init_custom_s3_url(self):
         s3_url = "https://my-bucket.s3.amazonaws.com"
-        downloader = DatasetDownloader(s3_base_url=s3_url)
+        downloader = DatasetDownloader(registry=get_registry(), s3_base_url=s3_url)
         assert downloader._s3_base_url == s3_url
 
     def test_registry_loaded(self):
-        downloader = DatasetDownloader()
-        assert downloader._registry is not None
-        assert len(downloader._registry.datasets) > 0
+        downloader = DatasetDownloader(registry=get_registry())
+        assert downloader.registry is not None
+        assert len(downloader.registry.datasets) > 0
 
     def test_download_unknown_dataset(self, tmp_path: Path):
-        downloader = DatasetDownloader(cache_dir=tmp_path)
+        downloader = DatasetDownloader(registry=get_registry(), cache_dir=tmp_path)
         with pytest.raises(ValueError, match="Unknown dataset"):
             downloader.download("nonexistent_dataset")
 
@@ -74,7 +75,7 @@ class TestDownloaderIntegration:
         from anndata import AnnData
 
         # Use scanpy.settings.datasetdir to match what download_data.py uses
-        downloader = DatasetDownloader(cache_dir=settings.datasetdir)
+        downloader = DatasetDownloader(registry=get_registry(), cache_dir=settings.datasetdir)
         adata = downloader.download("imc")
 
         assert isinstance(adata, AnnData)
@@ -85,7 +86,7 @@ class TestDownloaderIntegration:
     def test_download_caches_file(self):
         """Test that downloaded files are cached."""
         cache_dir = Path(settings.datasetdir)
-        downloader = DatasetDownloader(cache_dir=cache_dir)
+        downloader = DatasetDownloader(registry=get_registry(), cache_dir=cache_dir)
 
         # First download
         adata1 = downloader.download("imc")
@@ -105,7 +106,7 @@ class TestDownloaderIntegration:
         """Test downloading a Visium sample."""
         from anndata import AnnData
 
-        downloader = DatasetDownloader(cache_dir=settings.datasetdir)
+        downloader = DatasetDownloader(registry=get_registry(), cache_dir=settings.datasetdir)
         adata = downloader.download("V1_Mouse_Kidney", include_hires_tiff=False)
 
         assert isinstance(adata, AnnData)
