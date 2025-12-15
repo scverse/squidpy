@@ -40,7 +40,6 @@ class FileEntry:
 
     name: str
     s3_key: str
-    fallback_url: str
     sha256: str | None = None
 
     def get_urls(self, s3_base_url: str) -> list[str]:
@@ -48,8 +47,6 @@ class FileEntry:
         urls = []
         if s3_base_url and self.s3_key:
             urls.append(f"{s3_base_url.rstrip('/')}/{self.s3_key}")
-        if self.fallback_url:
-            urls.append(self.fallback_url)
         return urls
 
 
@@ -134,7 +131,6 @@ class DatasetRegistry:
                     FileEntry(
                         name=file_data["name"],
                         s3_key=file_data["s3_key"],
-                        fallback_url=file_data["fallback_url"],
                         sha256=file_data.get("sha256"),
                     )
                 )

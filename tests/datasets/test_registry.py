@@ -20,7 +20,6 @@ class TestFileEntry:
         entry = FileEntry(
             name="test.h5ad",
             s3_key="figshare/test.h5ad",
-            fallback_url="https://example.com/test.h5ad",
             sha256="abc123",
         )
         assert entry.name == "test.h5ad"
@@ -30,22 +29,11 @@ class TestFileEntry:
         entry = FileEntry(
             name="test.h5ad",
             s3_key="figshare/test.h5ad",
-            fallback_url="https://fallback.com/test.h5ad",
         )
         urls = entry.get_urls("https://s3.example.com")
         assert len(urls) == 2
         assert urls[0] == "https://s3.example.com/figshare/test.h5ad"
-        assert urls[1] == "https://fallback.com/test.h5ad"
 
-    def test_get_urls_without_s3(self):
-        entry = FileEntry(
-            name="test.h5ad",
-            s3_key="figshare/test.h5ad",
-            fallback_url="https://fallback.com/test.h5ad",
-        )
-        urls = entry.get_urls("")
-        assert len(urls) == 1
-        assert urls[0] == "https://fallback.com/test.h5ad"
 
 
 class TestDatasetEntry:
@@ -59,7 +47,6 @@ class TestDatasetEntry:
                 FileEntry(
                     name="test.h5ad",
                     s3_key="test.h5ad",
-                    fallback_url="https://example.com/test.h5ad",
                 )
             ],
             shape=(100, 50),
@@ -74,10 +61,10 @@ class TestDatasetEntry:
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
                 FileEntry(
-                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"
+                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5",
                 ),
-                FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz", fallback_url="https://example.com/test.tar.gz"),
-                FileEntry(name="image.tif", s3_key="test.tif", fallback_url="https://example.com/test.tif"),
+                FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz"),
+                FileEntry(name="image.tif", s3_key="test.tif"),
             ],
         )
         assert not entry.is_single_file
@@ -91,10 +78,10 @@ class TestDatasetEntry:
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
                 FileEntry(
-                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"
+                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5",
                 ),
-                FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz", fallback_url="https://example.com/test.tar.gz"),
-                FileEntry(name="image.jpg", s3_key="test.jpg", fallback_url="https://example.com/test.jpg"),
+                FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz"),
+                FileEntry(name="image.jpg", s3_key="test.jpg"),
             ],
         )
         assert entry.has_hires_image
@@ -105,9 +92,9 @@ class TestDatasetEntry:
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
                 FileEntry(
-                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"
+                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5",
                 ),
-                FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz", fallback_url="https://example.com/test.tar.gz"),
+                FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz"),
             ],
         )
         assert entry.is_adata_with_image
@@ -119,9 +106,9 @@ class TestDatasetEntry:
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
                 FileEntry(
-                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5", fallback_url="https://example.com/test.h5"
+                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5",
                 ),
-                FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz", fallback_url="https://example.com/test.tar.gz"),
+                FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz"),
             ],
         )
         f = entry.get_file("spatial.tar.gz")
@@ -152,7 +139,6 @@ class TestDatasetRegistry:
         assert four_i.type == DatasetType.ANNDATA
         assert four_i.shape == (270876, 43)
         assert len(four_i.files) == 1
-        assert "figshare.com" in four_i.files[0].fallback_url
 
     def test_image_datasets_loaded(self):
         registry = DatasetRegistry.from_yaml()
