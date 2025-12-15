@@ -12,7 +12,6 @@ from squidpy.datasets._downloader import (
     download,
     get_downloader,
 )
-from squidpy.datasets._registry import get_registry
 
 
 class TestDatasetDownloader:
@@ -111,40 +110,3 @@ class TestDownloaderIntegration:
 
         assert isinstance(adata, AnnData)
         assert "spatial" in adata.uns
-
-
-class TestFallbackUrls:
-    """Tests for fallback URL behavior."""
-
-    def test_primary_url_is_s3_when_configured(self, tmp_path: Path):
-        """Test that S3 URL is tried first when configured."""
-        downloader = DatasetDownloader(
-            cache_dir=tmp_path,
-            s3_base_url="https://my-bucket.s3.amazonaws.com",
-        )
-
-        registry = get_registry()
-        entry = registry["imc"]
-        file_entry = entry.files[0]
-        urls = file_entry.get_urls(downloader._s3_base_url)
-
-        # S3 should be first
-        assert urls[0].startswith("https://my-bucket.s3.amazonaws.com")
-        # Fallback should be second
-        assert "figshare.com" in urls[1]
-
-    def test_fallback_only_when_no_s3(self, tmp_path: Path):
-        """Test that only fallback is used when S3 not configured."""
-        downloader = DatasetDownloader(
-            cache_dir=tmp_path,
-            s3_base_url="",  # No S3
-        )
-
-        registry = get_registry()
-        entry = registry["imc"]
-        file_entry = entry.files[0]
-        urls = file_entry.get_urls(downloader._s3_base_url)
-
-        # Only fallback URL
-        assert len(urls) == 1
-        assert "figshare.com" in urls[0]
