@@ -53,7 +53,10 @@ def test_visium_datasets(sample):
     assert output == str(image_path) + ": image/tiff"
 
 
-@pytest.mark.timeout(120)
+# since this is 400mb's
+# and need to unpack it,
+# if downloading on other integration tests, it will timeout
+@pytest.mark.timeout(240)
 @pytest.mark.internet()
 def test_visium_sdata_dataset():
     # Not passing path uses scanpy.settings.datasetdir
