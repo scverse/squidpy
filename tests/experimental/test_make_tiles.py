@@ -5,6 +5,8 @@ import spatialdata_plot as sdp
 import squidpy as sq
 from tests.conftest import PlotTester, PlotTesterMeta
 
+from spatialdata.transformations import Identity, get_transformation, set_transformation
+
 _ = sdp
 
 
@@ -104,3 +106,19 @@ class TestMakeTilesFromSpots(PlotTester, metaclass=PlotTesterMeta):
             center_grid_on_tissue=True,
             preview=True,
         )
+
+
+def test_make_tiles_copies_image_transformations(sdata_hne):
+    """Tiles saved from images inherit the image transformations."""
+    image_key = "hne"
+    custom_cs = Identity()
+    set_transformation(sdata_hne.images[image_key], {"custom_cs": custom_cs}, set_all=True)
+
+    sq.experimental.im.make_tiles(sdata_hne, image_key=image_key, preview=False)
+
+    img_tfs = get_transformation(sdata_hne.images[image_key], get_all=True)
+    tile_tfs = get_transformation(sdata_hne.shapes[f"{image_key}_tiles"], get_all=True)
+
+    assert "custom_cs" in img_tfs and "custom_cs" in tile_tfs
+    assert isinstance(img_tfs["custom_cs"], Identity)
+    assert isinstance(tile_tfs["custom_cs"], Identity)
