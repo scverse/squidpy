@@ -75,8 +75,8 @@ class DatasetEntry:
                 return f
         return None
 
-    def get_file_by_prefix(self, prefix: str) -> FileEntry | None:
-        """Get a file by prefix (e.g., 'image.' to find image.tif or image.jpg)."""
+    def get_file_by_name_prefix(self, prefix: str) -> FileEntry | None:
+        """Get a file by prefix of its name (e.g., 'image.' to find image.tif or image.jpg)."""
         for f in self.files:
             if f.name.startswith(prefix):
                 return f

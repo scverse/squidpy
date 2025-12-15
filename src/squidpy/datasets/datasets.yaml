@@ -1,7 +1,7 @@
 # Squidpy Dataset Registry
 #
 # Each dataset has:
-#   - type: anndata | image | spatialdata | visium_10x
+#   - type: anndata  (.h5ad)| image (.tiff) | spatialdata (.zip -> .zarr) | visium_10x (3 files)
 #   - files: list of files with individual URLs and hashes
 #   - metadata: shape, doc_header, library_id, etc.
 

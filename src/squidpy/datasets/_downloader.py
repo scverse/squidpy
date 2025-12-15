@@ -57,12 +57,6 @@ class DatasetDownloader:
         self.registry = registry
         self._s3_base_url = s3_base_url or self.registry.s3_base_url
 
-    def _get_first_file(self, entry: DatasetEntry) -> FileEntry:
-        """Get and validate that the dataset has at least one file entry."""
-        if len(entry.files) == 0:
-            raise ValueError(f"Dataset {entry.name} has no files")
-        return entry.files[0]
-
     def _resolve_path(
         self,
         path: Path | str | None,
@@ -161,7 +155,9 @@ class DatasetDownloader:
         """Download and load an AnnData dataset."""
         import anndata
 
-        file_entry = self._get_first_file(entry)
+        file_entry = entry.get_file_by_suffix(".h5ad")
+        if file_entry is None:
+            raise ValueError(f"Dataset {entry.name} has no .h5ad file")
         target_dir, target_name = self._resolve_path(path, file_entry, "anndata")
 
         local_path = self._download_file(file_entry, target_dir, target_name)
@@ -181,7 +177,9 @@ class DatasetDownloader:
         """Download and load an image dataset."""
         from squidpy.im import ImageContainer
 
-        file_entry = self._get_first_file(entry)
+        file_entry = entry.get_file_by_suffix(".tiff")
+        if file_entry is None:
+            raise ValueError(f"Dataset {entry.name} has no .tiff file")
         target_dir, target_name = self._resolve_path(path, file_entry, "images")
 
         local_path = self._download_file(file_entry, target_dir, target_name)
@@ -198,7 +196,9 @@ class DatasetDownloader:
         """Download and load a SpatialData dataset."""
         import spatialdata as sd
 
-        file_entry = self._get_first_file(entry)
+        file_entry = entry.get_file_by_suffix(".zip")
+        if file_entry is None:
+            raise ValueError(f"Dataset {entry.name} has no .zip file")
         folder = Path(path or self.cache_dir / "spatialdata")
         folder.mkdir(parents=True, exist_ok=True)
 
@@ -250,7 +250,7 @@ class DatasetDownloader:
         # Optionally download high-res image
         source_image_path = None
         if include_hires_tiff:
-            image_file = entry.get_file_by_prefix("image.")
+            image_file = entry.get_file_by_name_prefix("image.")
             if image_file is None:
                 logg.warning(f"High-res image not available for {entry.name}")
             else:

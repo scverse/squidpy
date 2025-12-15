@@ -68,7 +68,7 @@ class TestDatasetEntry:
         )
         assert len(entry.files) == 3
         assert entry.type == DatasetType.VISIUM_10X
-        assert entry.get_file_by_prefix("image.") is not None
+        assert entry.get_file_by_name_prefix("image.") is not None
 
     def test_get_file(self):
         entry = DatasetEntry(
@@ -140,7 +140,7 @@ class TestDatasetRegistry:
         v1_sample = registry["V1_Adult_Mouse_Brain"]
         assert v1_sample.type == DatasetType.VISIUM_10X
         assert len(v1_sample.files) == 3  # matrix, spatial, image
-        assert v1_sample.get_file_by_prefix("image.") is not None
+        assert v1_sample.get_file_by_name_prefix("image.") is not None
 
     def test_visium_10x_has_jpg(self):
         """Test that Visium_FFPE_Human_Normal_Prostate has jpg image."""
@@ -148,7 +148,7 @@ class TestDatasetRegistry:
         sample = registry["Visium_FFPE_Human_Normal_Prostate"]
         assert sample.type == DatasetType.VISIUM_10X
         # Check it's a jpg
-        img_file = sample.get_file_by_prefix("image.")
+        img_file = sample.get_file_by_name_prefix("image.")
         assert img_file is not None
         assert img_file.name == "image.jpg"
 
