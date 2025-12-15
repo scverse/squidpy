@@ -55,7 +55,7 @@ class DatasetDownloader:
         self._s3_base_url = s3_base_url if s3_base_url is not None else self._registry.s3_base_url
 
     def _get_first_file(self, entry: DatasetEntry) -> FileEntry:
-        """Get and validate the first file entry."""
+        """Get and validate that the dataset has at least one file entry."""
         if not entry.files:
             raise ValueError(f"Dataset {entry.name} has no files")
         return entry.files[0]
