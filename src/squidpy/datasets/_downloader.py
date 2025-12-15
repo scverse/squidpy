@@ -95,7 +95,7 @@ class DatasetDownloader:
             return local_path
 
         urls = file_entry.get_urls(self._s3_base_url)
-        last_error = None
+        errors: list[Exception] = []
 
         for url in urls:
             try:
@@ -109,10 +109,11 @@ class DatasetDownloader:
                 )
                 return Path(downloaded)
             except (OSError, ValueError, RuntimeError) as e:
-                last_error = e
+                errors.append(e)
                 logg.warning(f"Failed to download from {url}: {e}")
 
-        raise RuntimeError(f"Failed to download {filename}. Last error: {last_error}")
+        msg = f"Failed to download {filename}"
+        raise ExceptionGroup(msg, errors)
 
     def download(self, name: str, path: Path | str | None = None, **kwargs: Any) -> Any:
         """Download a dataset by name and return the appropriate object.
