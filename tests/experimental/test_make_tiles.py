@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import spatialdata_plot as sdp
+from spatialdata.transformations import Identity, get_transformation, set_transformation
 
 import squidpy as sq
 from tests.conftest import PlotTester, PlotTesterMeta
-
-from spatialdata.transformations import Identity, get_transformation, set_transformation
 
 _ = sdp
 
