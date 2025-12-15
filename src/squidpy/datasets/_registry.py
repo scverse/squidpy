@@ -13,16 +13,16 @@ import yaml
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from importlib.resources import Traversable
 
 __all__ = ["DatasetType", "FileEntry", "DatasetEntry", "DatasetRegistry", "get_registry"]
 
 
-def _get_config_path() -> Path:
-    """Get the path to datasets.yaml using importlib.resources for robustness."""
-    # Use importlib.resources for robust path resolution across different installation methods
+def _get_config_traversable() -> Traversable:
+    """Get the file-like object to datasets.yaml using importlib.resources for robustness."""
+    # Using importlib.resources for robust path resolution across different installation methods
     # (editable installs, zip imports, etc.)
-    files = importlib.resources.files("squidpy.datasets")
-    return Path(str(files.joinpath("datasets.yaml")))
+    return importlib.resources.files("squidpy.datasets").joinpath("datasets.yaml")
 
 
 class DatasetType(Enum):
@@ -93,15 +93,15 @@ class DatasetRegistry:
     @classmethod
     def from_yaml(cls, config_path: Path | str | None = None) -> DatasetRegistry:
         """Load registry from YAML configuration file."""
+        # This case should be always true
+        # only for testing and tinkering config_path should be provided
         if config_path is None:
-            config_path = _get_config_path()
+            with _get_config_traversable().open() as f:
+                config = yaml.safe_load(f)
         else:
             config_path = Path(config_path)
-        if not config_path.exists():
-            raise FileNotFoundError(f"Dataset config not found: {config_path}")
-
-        with open(config_path) as f:
-            config = yaml.safe_load(f)
+            with open(config_path) as f:
+                config = yaml.safe_load(f)
 
         registry = cls(s3_base_url=config.get("s3_base_url", ""))
 
