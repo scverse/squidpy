@@ -1,7 +1,7 @@
 # Squidpy Dataset Registry
 #
 # Each dataset has:
-#   - type: anndata | image | spatialdata | adata_with_image
+#   - type: anndata | image | spatialdata | visium_10x
 #   - files: list of files with individual URLs and hashes
 #   - metadata: shape, doc_header, library_id, etc.
 
@@ -158,7 +158,7 @@ datasets:
   # 10x Genomics Visium datasets (3 files each)
   # ===========================================================================
   V1_Breast_Cancer_Block_A_Section_1:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Breast_Cancer_Block_A_Section_1.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -172,7 +172,7 @@ datasets:
         sha256: 73a94ca956d1b5c027dcaf1ac42c15fed4d4a12eefee4b4b597e62f34cc5959e
 
   V1_Breast_Cancer_Block_A_Section_2:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Breast_Cancer_Block_A_Section_2.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -186,7 +186,7 @@ datasets:
         sha256: 1ad96042cba8e05b22566ef5b8197714e06d4a5e98d040e926c8591ffdb48cc7
 
   V1_Human_Heart:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Human_Heart.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -200,7 +200,7 @@ datasets:
         sha256: ff6fc5169a4ab3af5a0799ee1333e2fa0e6df242bc6bc5162e6ea51e6826fa5f
 
   V1_Human_Lymph_Node:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Human_Lymph_Node.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -214,7 +214,7 @@ datasets:
         sha256: 19462aa8f74ed6032738251e2f56931be9047de58bab6ca0373af385aae2ff03
 
   V1_Mouse_Kidney:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Mouse_Kidney.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -228,7 +228,7 @@ datasets:
         sha256: be58cc8b6aec69635ecc813fa9de559fd124a5c265999aff198d76d75f3c6f6a
 
   V1_Adult_Mouse_Brain:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Adult_Mouse_Brain.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -242,7 +242,7 @@ datasets:
         sha256: 39d0a85a7cecb0bde9ad2566260d571bb49834d26fc443cb32b96475f30668b2
 
   V1_Mouse_Brain_Sagittal_Posterior:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Mouse_Brain_Sagittal_Posterior.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -256,7 +256,7 @@ datasets:
         sha256: 18558cd21345f6d590af4f519859a3710b400508ed31ae1e0b1d66b561de5e5f
 
   V1_Mouse_Brain_Sagittal_Posterior_Section_2:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Mouse_Brain_Sagittal_Posterior_Section_2.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -270,7 +270,7 @@ datasets:
         sha256: ccc41944ae7586b1468141f840897c6096e1ce9506e6e0774b9ef3d89054b12c
 
   V1_Mouse_Brain_Sagittal_Anterior:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Mouse_Brain_Sagittal_Anterior.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -284,7 +284,7 @@ datasets:
         sha256: 5837c44e4e1d0f77b3ade2350a4f2159922f4c388e882f1c38b5683ff7bd086d
 
   V1_Mouse_Brain_Sagittal_Anterior_Section_2:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Mouse_Brain_Sagittal_Anterior_Section_2.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -298,7 +298,7 @@ datasets:
         sha256: f6573c85a2e56fd9f70e6ce59134ed03a14140a074e2f85161f8b4778dad5bfb
 
   V1_Human_Brain_Section_1:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Human_Brain_Section_1.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -312,7 +312,7 @@ datasets:
         sha256: 68ac2d8b72514248eeb7666a7409c286d1e7d4af30b700baed36ebe85dcf2961
 
   V1_Human_Brain_Section_2:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Human_Brain_Section_2.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -326,7 +326,7 @@ datasets:
         sha256: 87881ff452472bc326c6267184a43ad5c53fb4caa39637679a59143228266ef1
 
   V1_Adult_Mouse_Brain_Coronal_Section_1:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Adult_Mouse_Brain_Coronal_Section_1.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -340,7 +340,7 @@ datasets:
         sha256: 9ce5353f60c6a19657cdd43db392d0cb9cb253891daa8751c00bd2918af892e3
 
   V1_Adult_Mouse_Brain_Coronal_Section_2:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset V1_Adult_Mouse_Brain_Coronal_Section_2.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -355,7 +355,7 @@ datasets:
 
   # SpaceRanger 1.2.0 datasets
   Targeted_Visium_Human_Cerebellum_Neuroscience:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_Cerebellum_Neuroscience.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -369,7 +369,7 @@ datasets:
         sha256: 51855c63d57e4c67f3ec0db22a051067706537c740763306334696305d686eda
 
   Parent_Visium_Human_Cerebellum:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Parent_Visium_Human_Cerebellum.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -383,7 +383,7 @@ datasets:
         sha256: 51855c63d57e4c67f3ec0db22a051067706537c740763306334696305d686eda
 
   Targeted_Visium_Human_SpinalCord_Neuroscience:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_SpinalCord_Neuroscience.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -397,7 +397,7 @@ datasets:
         sha256: 2b81347ba65f3f61a76a2b9d8ff6d05f34d72bc2cbf3e9895374e29f81f78019
 
   Parent_Visium_Human_SpinalCord:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Parent_Visium_Human_SpinalCord.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -411,7 +411,7 @@ datasets:
         sha256: 2b81347ba65f3f61a76a2b9d8ff6d05f34d72bc2cbf3e9895374e29f81f78019
 
   Targeted_Visium_Human_Glioblastoma_Pan_Cancer:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_Glioblastoma_Pan_Cancer.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -425,7 +425,7 @@ datasets:
         sha256: cb789cbf1b6b738a89728b3489bbf0c405ddfc12a7d870176ebd555c36212c5c
 
   Parent_Visium_Human_Glioblastoma:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Parent_Visium_Human_Glioblastoma.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -439,7 +439,7 @@ datasets:
         sha256: cb789cbf1b6b738a89728b3489bbf0c405ddfc12a7d870176ebd555c36212c5c
 
   Targeted_Visium_Human_BreastCancer_Immunology:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_BreastCancer_Immunology.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -453,7 +453,7 @@ datasets:
         sha256: 9f9963ce937b50891fc2723fbcd45394070c6975a3e2551b0a5db0ef45ca73f2
 
   Parent_Visium_Human_BreastCancer:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Parent_Visium_Human_BreastCancer.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -467,7 +467,7 @@ datasets:
         sha256: 9f9963ce937b50891fc2723fbcd45394070c6975a3e2551b0a5db0ef45ca73f2
 
   Targeted_Visium_Human_OvarianCancer_Pan_Cancer:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_OvarianCancer_Pan_Cancer.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -481,7 +481,7 @@ datasets:
         sha256: 2e36037b0850399c1fdb07c66c31db5458081febba4a1f80ac505cde6320ca79
 
   Targeted_Visium_Human_OvarianCancer_Immunology:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_OvarianCancer_Immunology.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -495,7 +495,7 @@ datasets:
         sha256: 2e36037b0850399c1fdb07c66c31db5458081febba4a1f80ac505cde6320ca79
 
   Parent_Visium_Human_OvarianCancer:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Parent_Visium_Human_OvarianCancer.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -509,7 +509,7 @@ datasets:
         sha256: 2e36037b0850399c1fdb07c66c31db5458081febba4a1f80ac505cde6320ca79
 
   Targeted_Visium_Human_ColorectalCancer_GeneSignature:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_ColorectalCancer_GeneSignature.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -523,7 +523,7 @@ datasets:
         sha256: 1825e4940d72b363d4676061168235ec3560b8ccb3f1259546cd66d2bfc3729a
 
   Parent_Visium_Human_ColorectalCancer:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium dataset Parent_Visium_Human_ColorectalCancer.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -538,7 +538,7 @@ datasets:
 
   # SpaceRanger 1.3.0 datasets (FFPE)
   Visium_FFPE_Mouse_Brain:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Mouse_Brain.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -550,7 +550,7 @@ datasets:
       # Note: image.tif not available for this dataset
 
   Visium_FFPE_Mouse_Brain_IF:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Mouse_Brain_IF.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -564,7 +564,7 @@ datasets:
         sha256: 1dd8bcad6297c25afdaaf7d0cfd1be3fac6db6bfc21a44ee71ad31dc13ecc9cf
 
   Visium_FFPE_Mouse_Kidney:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Mouse_Kidney.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -578,7 +578,7 @@ datasets:
         sha256: 6628054c2ecf68124f319ef154bead8359424fe9ccf9f2e1191aac66de787870
 
   Visium_FFPE_Human_Breast_Cancer:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Human_Breast_Cancer.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -592,7 +592,7 @@ datasets:
         sha256: b3fbbdb5006769ef7d2b614171e208b6caf901bde52272a02da6e3d019626ce0
 
   Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -606,7 +606,7 @@ datasets:
         sha256: 68b2eccb14f2344ceba2beccf99dace6506768c4e905624fa2e658fbda4dc86c
 
   Visium_FFPE_Human_Prostate_Cancer:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Human_Prostate_Cancer.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -620,7 +620,7 @@ datasets:
         sha256: c5e967a1c09deef5a1ef0a60b00c823d2daa3640b50ee3cb6683f61c254299f7
 
   Visium_FFPE_Human_Prostate_IF:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Human_Prostate_IF.
     files:
       - name: filtered_feature_bc_matrix.h5
@@ -634,7 +634,7 @@ datasets:
         sha256: a46c35abc58b10b3704a8f8f89d73ec8d2169b8eb4ed1e2bea8d72e6163837ba
 
   Visium_FFPE_Human_Normal_Prostate:
-    type: adata_with_image
+    type: visium_10x
     doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Human_Normal_Prostate.
     files:
       - name: filtered_feature_bc_matrix.h5

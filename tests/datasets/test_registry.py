@@ -53,10 +53,10 @@ class TestDatasetEntry:
         assert len(entry.files) == 1
         assert entry.shape == (100, 50)
 
-    def test_adata_with_image_dataset(self):
+    def test_visium_10x_dataset(self):
         entry = DatasetEntry(
             name="V1_Test",
-            type=DatasetType.ADATA_WITH_IMAGE,
+            type=DatasetType.VISIUM_10X,
             files=[
                 FileEntry(
                     name="filtered_feature_bc_matrix.h5",
@@ -67,13 +67,13 @@ class TestDatasetEntry:
             ],
         )
         assert len(entry.files) == 3
-        assert entry.type == DatasetType.ADATA_WITH_IMAGE
+        assert entry.type == DatasetType.VISIUM_10X
         assert entry.get_file_by_prefix("image.") is not None
 
     def test_get_file(self):
         entry = DatasetEntry(
             name="test",
-            type=DatasetType.ADATA_WITH_IMAGE,
+            type=DatasetType.VISIUM_10X,
             files=[
                 FileEntry(
                     name="filtered_feature_bc_matrix.h5",
@@ -128,25 +128,25 @@ class TestDatasetRegistry:
         sdata = registry["visium_hne_sdata"]
         assert sdata.type == DatasetType.SPATIALDATA
 
-    def test_adata_with_image_datasets_loaded(self):
+    def test_visium_10x_datasets_loaded(self):
         registry = DatasetRegistry.from_yaml()
         # Check samples from different versions
         assert "V1_Adult_Mouse_Brain" in registry
         assert "Parent_Visium_Human_Cerebellum" in registry
         assert "Visium_FFPE_Mouse_Brain" in registry
 
-    def test_adata_with_image_dataset_structure(self):
+    def test_visium_10x_dataset_structure(self):
         registry = DatasetRegistry.from_yaml()
         v1_sample = registry["V1_Adult_Mouse_Brain"]
-        assert v1_sample.type == DatasetType.ADATA_WITH_IMAGE
+        assert v1_sample.type == DatasetType.VISIUM_10X
         assert len(v1_sample.files) == 3  # matrix, spatial, image
         assert v1_sample.get_file_by_prefix("image.") is not None
 
-    def test_adata_with_image_has_jpg(self):
+    def test_visium_10x_has_jpg(self):
         """Test that Visium_FFPE_Human_Normal_Prostate has jpg image."""
         registry = DatasetRegistry.from_yaml()
         sample = registry["Visium_FFPE_Human_Normal_Prostate"]
-        assert sample.type == DatasetType.ADATA_WITH_IMAGE
+        assert sample.type == DatasetType.VISIUM_10X
         # Check it's a jpg
         img_file = sample.get_file_by_prefix("image.")
         assert img_file is not None
@@ -178,8 +178,8 @@ class TestDatasetRegistry:
         anndata_entries = list(registry.iter_by_type(DatasetType.ANNDATA))
         assert len(anndata_entries) == 11  # 11 h5ad datasets
 
-        adata_with_image_entries = list(registry.iter_by_type(DatasetType.ADATA_WITH_IMAGE))
-        assert len(adata_with_image_entries) == 35  # 35 Visium samples
+        visium_10x_entries = list(registry.iter_by_type(DatasetType.VISIUM_10X))
+        assert len(visium_10x_entries) == 35  # 35 Visium samples
 
     def test_property_lists(self):
         registry = DatasetRegistry.from_yaml()

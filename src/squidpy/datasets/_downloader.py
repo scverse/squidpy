@@ -138,7 +138,7 @@ class DatasetDownloader:
             DatasetType.ANNDATA: lambda: self._load_anndata(entry, path, **kwargs),
             DatasetType.IMAGE: lambda: self._load_image(entry, path, **kwargs),
             DatasetType.SPATIALDATA: lambda: self._load_spatialdata(entry, path),
-            DatasetType.ADATA_WITH_IMAGE: lambda: self._load_adata_with_image(
+            DatasetType.VISIUM_10X: lambda: self._load_visium_10x(
                 entry,
                 path,
                 include_hires_tiff=kwargs.pop("include_hires_tiff", False),
@@ -215,13 +215,13 @@ class DatasetDownloader:
 
         return sd.read_zarr(zarr_path)
 
-    def _load_adata_with_image(
+    def _load_visium_10x(
         self,
         entry: DatasetEntry,
         path: Path | str | None = None,
         include_hires_tiff: bool = False,
     ) -> AnnData:
-        """Download and load an AnnData with image (e.g., 10x Visium)."""
+        """Download and load a 10x Genomics Visium dataset."""
         from squidpy.read._read import visium as read_visium
 
         base_dir = Path(path) if path is not None else self.cache_dir / "visium"

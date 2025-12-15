@@ -31,7 +31,7 @@ class DatasetType(Enum):
     ANNDATA = "anndata"
     IMAGE = "image"
     SPATIALDATA = "spatialdata"
-    ADATA_WITH_IMAGE = "adata_with_image"
+    VISIUM_10X = "visium_10x"
 
 
 @dataclass(frozen=True)
@@ -174,14 +174,14 @@ class DatasetRegistry:
         return [name for name, entry in self.datasets.items() if entry.type == DatasetType.SPATIALDATA]
 
     @property
-    def adata_with_image_datasets(self) -> list[str]:
-        """Return names of all AnnData with image datasets (e.g., 10x Visium)."""
-        return [name for name, entry in self.datasets.items() if entry.type == DatasetType.ADATA_WITH_IMAGE]
+    def visium_10x_datasets(self) -> list[str]:
+        """Return names of all 10x Genomics Visium datasets."""
+        return [name for name, entry in self.datasets.items() if entry.type == DatasetType.VISIUM_10X]
 
     @property
     def visium_datasets(self) -> list[str]:
-        """Return names of all Visium datasets (alias for adata_with_image_datasets)."""
-        return self.adata_with_image_datasets
+        """Return names of all Visium datasets (alias for visium_10x_datasets)."""
+        return self.visium_10x_datasets
 
     @property
     def all_names(self) -> list[str]:

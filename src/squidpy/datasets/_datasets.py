@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 # Hardcoded dataset name types
 # =============================================================================
 
-# 10x Genomics Visium datasets (adata_with_image type)
+# 10x Genomics Visium datasets (visium_10x type)
 VisiumDatasets = Literal[
     # spaceranger version 1.1.0 datasets
     "V1_Breast_Cancer_Block_A_Section_1",
