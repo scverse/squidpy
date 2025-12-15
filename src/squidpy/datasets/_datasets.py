@@ -6,20 +6,19 @@ All functions fetch datasets by their known names from the registry.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from scanpy import settings
 
 from squidpy.datasets._downloader import get_downloader
-from squidpy.datasets._registry import get_registry
+from squidpy.datasets._registry import DatasetType, get_registry
 from squidpy.read._utils import PathLike
 
 if TYPE_CHECKING:
     import spatialdata as sd
     from anndata import AnnData
-
-    from squidpy.im import ImageContainer
 
 
 # =============================================================================
@@ -124,17 +123,17 @@ def visium(
         Spatial AnnData object.
     """
     # Validate sample_id against known names
-    registry = get_registry()
-    if sample_id not in registry:
+    downloader = get_downloader()
+
+    if sample_id not in downloader.registry:
         msg = f"Unknown Visium sample: {sample_id}. "
-        msg += f"Available samples: {registry.visium_datasets}"
+        msg += f"Available samples: {downloader.registry.visium_datasets}"
         raise ValueError(msg)
 
     # Use scanpy.settings.datasetdir/visium if base_dir not specified
     if base_dir is None:
         base_dir = Path(settings.datasetdir) / "visium"
 
-    downloader = get_downloader()
     return downloader.download(sample_id, base_dir, include_hires_tiff=include_hires_tiff)
 
 
@@ -158,92 +157,90 @@ def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
 
 
 # =============================================================================
-# AnnData dataset functions
+# Dataset loader factory
 # =============================================================================
 
 
-def _make_anndata_loader(dataset_name: str):
-    """Factory function to create dataset loader functions for known dataset names."""
-    registry = get_registry()
-    entry = registry.get(dataset_name)
+@dataclass(frozen=True)
+class _DocParts:
+    """Documentation parts for dataset loader functions."""
 
-    def loader(path: PathLike | None = None, **kwargs: Any) -> AnnData:
-        downloader = get_downloader()
-        return downloader.download(dataset_name, path, **kwargs)
+    shape_prefix: str
+    path_desc: str
+    kwargs_desc: str
+    return_type: str
 
-    # Set docstring from registry if available
-    if entry is not None:
-        loader.__doc__ = f"""
-    {entry.doc_header}
 
-    The shape of this :class:`anndata.AnnData` object ``{entry.shape}``.
+_ANNDATA_DOC = _DocParts(
+    shape_prefix="The shape of this :class:`anndata.AnnData` object",
+    path_desc="Path where to save the dataset.",
+    kwargs_desc="Keyword arguments for ``anndata.read_h5ad``.",
+    return_type=":class:`anndata.AnnData`\n        The dataset.",
+)
 
-    Parameters
-    ----------
-    path
-        Path where to save the dataset.
-    kwargs
-        Keyword arguments for ``anndata.read_h5ad``.
+_IMAGE_DOC = _DocParts(
+    shape_prefix="The shape of this image is",
+    path_desc="Path where to save the .tiff image.",
+    kwargs_desc="Keyword arguments for :meth:`squidpy.im.ImageContainer.add_img`.",
+    return_type=":class:`squidpy.im.ImageContainer`\n        The image data.",
+)
 
-    Returns
-    -------
-    :class:`anndata.AnnData`
-        The dataset.
+_DOC_PARTS_BY_TYPE: dict[DatasetType, _DocParts] = {
+    DatasetType.ANNDATA: _ANNDATA_DOC,
+    DatasetType.IMAGE: _IMAGE_DOC,
+}
+
+
+def _make_loader(dataset_name: str):
+    """Factory function to create dataset loader functions.
+
+    Automatically derives documentation from the registry based on dataset type.
     """
-    loader.__name__ = dataset_name
-    return loader
+    entry = get_registry().get(dataset_name)
 
+    if entry is None:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
 
-# =============================================================================
-# Image dataset functions
-# =============================================================================
+    doc_parts = _DOC_PARTS_BY_TYPE.get(entry.type)
+    if doc_parts is None:
+        raise ValueError(f"Unsupported type for loader factory: {entry.type}")
 
+    def loader(path: PathLike | None = None, **kwargs: Any):
+        return get_downloader().download(dataset_name, path, **kwargs)
 
-def _make_image_loader(dataset_name: str):
-    """Factory function to create image loader functions for known dataset names."""
-    registry = get_registry()
-    entry = registry.get(dataset_name)
-
-    def loader(path: PathLike | None = None, **kwargs: Any) -> ImageContainer:
-        downloader = get_downloader()
-        return downloader.download(dataset_name, path, **kwargs)
-
-    # Set docstring from registry if available
-    if entry is not None:
-        loader.__doc__ = f"""
+    loader.__doc__ = f"""
     {entry.doc_header}
 
-    The shape of this image is ``{entry.shape}``.
+    {doc_parts.shape_prefix} ``{entry.shape}``.
 
     Parameters
     ----------
     path
-        Path where to save the .tiff image.
+        {doc_parts.path_desc}
     kwargs
-        Keyword arguments for :meth:`squidpy.im.ImageContainer.add_img`.
+        {doc_parts.kwargs_desc}
 
     Returns
     -------
-    :class:`squidpy.im.ImageContainer`
-        The image data.
+    {doc_parts.return_type}
     """
     loader.__name__ = dataset_name
     return loader
 
 
 # AnnData datasets
-four_i = _make_anndata_loader("four_i")
-imc = _make_anndata_loader("imc")
-seqfish = _make_anndata_loader("seqfish")
-visium_hne_adata = _make_anndata_loader("visium_hne_adata")
-visium_fluo_adata = _make_anndata_loader("visium_fluo_adata")
-visium_hne_adata_crop = _make_anndata_loader("visium_hne_adata_crop")
-visium_fluo_adata_crop = _make_anndata_loader("visium_fluo_adata_crop")
-sc_mouse_cortex = _make_anndata_loader("sc_mouse_cortex")
-mibitof = _make_anndata_loader("mibitof")
-merfish = _make_anndata_loader("merfish")
-slideseqv2 = _make_anndata_loader("slideseqv2")
+four_i = _make_loader("four_i")
+imc = _make_loader("imc")
+seqfish = _make_loader("seqfish")
+visium_hne_adata = _make_loader("visium_hne_adata")
+visium_fluo_adata = _make_loader("visium_fluo_adata")
+visium_hne_adata_crop = _make_loader("visium_hne_adata_crop")
+visium_fluo_adata_crop = _make_loader("visium_fluo_adata_crop")
+sc_mouse_cortex = _make_loader("sc_mouse_cortex")
+mibitof = _make_loader("mibitof")
+merfish = _make_loader("merfish")
+slideseqv2 = _make_loader("slideseqv2")
 # Image datasets
-visium_fluo_image_crop = _make_image_loader("visium_fluo_image_crop")
-visium_hne_image_crop = _make_image_loader("visium_hne_image_crop")
-visium_hne_image = _make_image_loader("visium_hne_image")
+visium_fluo_image_crop = _make_loader("visium_fluo_image_crop")
+visium_hne_image_crop = _make_loader("visium_hne_image_crop")
+visium_hne_image = _make_loader("visium_hne_image")

@@ -35,7 +35,6 @@ class TestFileEntry:
         assert urls[0] == "https://s3.example.com/figshare/test.h5ad"
 
 
-
 class TestDatasetEntry:
     """Tests for DatasetEntry dataclass."""
 
@@ -61,7 +60,8 @@ class TestDatasetEntry:
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
                 FileEntry(
-                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5",
+                    name="filtered_feature_bc_matrix.h5",
+                    s3_key="test.h5",
                 ),
                 FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz"),
                 FileEntry(name="image.tif", s3_key="test.tif"),
@@ -78,7 +78,8 @@ class TestDatasetEntry:
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
                 FileEntry(
-                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5",
+                    name="filtered_feature_bc_matrix.h5",
+                    s3_key="test.h5",
                 ),
                 FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz"),
                 FileEntry(name="image.jpg", s3_key="test.jpg"),
@@ -92,7 +93,8 @@ class TestDatasetEntry:
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
                 FileEntry(
-                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5",
+                    name="filtered_feature_bc_matrix.h5",
+                    s3_key="test.h5",
                 ),
                 FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz"),
             ],
@@ -106,7 +108,8 @@ class TestDatasetEntry:
             type=DatasetType.ADATA_WITH_IMAGE,
             files=[
                 FileEntry(
-                    name="filtered_feature_bc_matrix.h5", s3_key="test.h5",
+                    name="filtered_feature_bc_matrix.h5",
+                    s3_key="test.h5",
                 ),
                 FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz"),
             ],

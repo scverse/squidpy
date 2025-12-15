@@ -19,9 +19,10 @@ def main(args: argparse.Namespace) -> None:
     from anndata import AnnData
 
     import squidpy as sq
-    from squidpy.datasets._registry import get_registry
+    from squidpy.datasets._downloader import get_downloader
 
-    registry = get_registry()
+    downloader = get_downloader()
+    registry = downloader.registry
 
     # Visium samples tested in CI
     visium_samples_to_cache = [

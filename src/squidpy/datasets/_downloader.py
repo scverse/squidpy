@@ -14,6 +14,7 @@ from spatialdata._logging import logger as logg
 
 from squidpy.datasets._registry import (
     DatasetEntry,
+    DatasetRegistry,
     DatasetType,
     FileEntry,
     get_registry,
@@ -45,14 +46,15 @@ class DatasetDownloader:
 
     def __init__(
         self,
+        registry: DatasetRegistry,
         cache_dir: Path | str | None = None,
         s3_base_url: str | None = None,
     ):
         self.cache_dir = Path(cache_dir) if cache_dir else Path(settings.datasetdir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        self._registry = get_registry()
-        self._s3_base_url = s3_base_url if s3_base_url is not None else self._registry.s3_base_url
+        self.registry = registry
+        self._s3_base_url = s3_base_url if s3_base_url is not None else self.registry.s3_base_url
 
     def _get_first_file(self, entry: DatasetEntry) -> FileEntry:
         """Get and validate that the dataset has at least one file entry."""
@@ -128,10 +130,10 @@ class DatasetDownloader:
         -------
         Loaded dataset.
         """
-        if name not in self._registry:
-            raise ValueError(f"Unknown dataset: {name}. Available: {self._registry.all_names}")
+        if name not in self.registry:
+            raise ValueError(f"Unknown dataset: {name}. Available: {self.registry.all_names}")
 
-        entry = self._registry[name]
+        entry = self.registry[name]
         loaders = {
             DatasetType.ANNDATA: lambda: self._load_anndata(entry, path, **kwargs),
             DatasetType.IMAGE: lambda: self._load_image(entry, path, **kwargs),
@@ -264,7 +266,7 @@ class DatasetDownloader:
 @lru_cache(maxsize=1)
 def get_downloader() -> DatasetDownloader:
     """Get the singleton downloader instance."""
-    return DatasetDownloader()
+    return DatasetDownloader(registry=get_registry())
 
 
 def download(name: str, path: Path | str | None = None, **kwargs: Any) -> Any:
