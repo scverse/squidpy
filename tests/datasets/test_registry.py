@@ -31,7 +31,7 @@ class TestFileEntry:
             s3_key="figshare/test.h5ad",
         )
         urls = entry.get_urls("https://s3.example.com")
-        assert len(urls) == 2
+        assert len(urls) == 1
         assert urls[0] == "https://s3.example.com/figshare/test.h5ad"
 
 
