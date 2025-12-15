@@ -7,11 +7,11 @@ from anndata import AnnData
 from matplotlib.colors import to_hex, to_rgb
 from numba import njit
 from pandas import CategoricalDtype
-from pandas._libs.lib import infer_dtype
+from pandas.api.types import infer_dtype
 from scanpy import logging as logg
-from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
 from scipy.spatial import KDTree
 
+from squidpy._compat import add_colors_for_categorical_sample_annotation
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
 

@@ -30,12 +30,12 @@ from matplotlib_scalebar.scalebar import ScaleBar
 from pandas import CategoricalDtype
 from scanpy import logging as logg
 from scanpy import settings as sc_settings
-from scanpy.plotting._tools.scatterplots import _add_categorical_legend
 from skimage.color import label2rgb
 from skimage.morphology import erosion, square
 from skimage.segmentation import find_boundaries
 from skimage.util import map_array
 
+from squidpy._compat import add_categorical_legend
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
@@ -665,7 +665,7 @@ def _decorate_axs(
                 palette=palette,
                 alpha=alpha,
             )
-            _add_categorical_legend(
+            add_categorical_legend(
                 ax,
                 color_source_vector,
                 palette=palette,
