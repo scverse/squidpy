@@ -55,7 +55,7 @@ class DatasetDownloader:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.registry = registry
-        self._s3_base_url = s3_base_url if s3_base_url is not None else self.registry.s3_base_url
+        self._s3_base_url = s3_base_url or self.registry.s3_base_url
 
     def _get_first_file(self, entry: DatasetEntry) -> FileEntry:
         """Get and validate that the dataset has at least one file entry."""
@@ -199,7 +199,7 @@ class DatasetDownloader:
         import spatialdata as sd
 
         file_entry = self._get_first_file(entry)
-        folder = Path(path) if path is not None else self.cache_dir / "spatialdata"
+        folder = Path(path or self.cache_dir / "spatialdata")
         folder.mkdir(parents=True, exist_ok=True)
 
         zarr_path = folder / f"{entry.name}.zarr"
@@ -226,7 +226,7 @@ class DatasetDownloader:
         """Download and load a 10x Genomics Visium dataset."""
         from squidpy.read._read import visium as read_visium
 
-        base_dir = Path(path) if path is not None else self.cache_dir / "visium"
+        base_dir = Path(path or self.cache_dir / "visium")
         sample_dir = base_dir / entry.name
         sample_dir.mkdir(parents=True, exist_ok=True)
 
