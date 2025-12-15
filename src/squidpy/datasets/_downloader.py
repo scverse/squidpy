@@ -50,7 +50,8 @@ class DatasetDownloader:
         cache_dir: Path | str | None = None,
         s3_base_url: str | None = None,
     ):
-        self.cache_dir = Path(cache_dir) if cache_dir else Path(settings.datasetdir)
+        self.cache_dir = Path(cache_dir or settings.datasetdir)
+
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.registry = registry
