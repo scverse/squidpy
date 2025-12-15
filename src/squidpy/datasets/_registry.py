@@ -61,16 +61,6 @@ class DatasetEntry:
     doc_header: str | None = None
     library_id: str | None = None
 
-    @property
-    def is_single_file(self) -> bool:
-        """Return True if dataset has only one file."""
-        return len(self.files) == 1
-
-    @property
-    def is_adata_with_image(self) -> bool:
-        """Return True if this is an AnnData with image dataset (e.g., 10x Visium)."""
-        return self.type == DatasetType.ADATA_WITH_IMAGE
-
     def get_file(self, name: str) -> FileEntry | None:
         """Get a specific file by name."""
         for f in self.files:
@@ -91,13 +81,6 @@ class DatasetEntry:
             if f.name.startswith(prefix):
                 return f
         return None
-
-    @property
-    def has_hires_image(self) -> bool:
-        """Return True if dataset has high-res image available."""
-        if not self.is_adata_with_image:
-            return False
-        return self.get_file_by_prefix("image.") is not None
 
 
 @dataclass

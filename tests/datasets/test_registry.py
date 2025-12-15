@@ -50,8 +50,7 @@ class TestDatasetEntry:
             ],
             shape=(100, 50),
         )
-        assert entry.is_single_file
-        assert not entry.is_adata_with_image
+        assert len(entry.files) == 1
         assert entry.shape == (100, 50)
 
     def test_adata_with_image_dataset(self):
@@ -67,40 +66,9 @@ class TestDatasetEntry:
                 FileEntry(name="image.tif", s3_key="test.tif"),
             ],
         )
-        assert not entry.is_single_file
-        assert entry.is_adata_with_image
-        assert entry.has_hires_image
-
-    def test_adata_with_image_jpg(self):
-        """Test that jpg images are also detected."""
-        entry = DatasetEntry(
-            name="V1_Test",
-            type=DatasetType.ADATA_WITH_IMAGE,
-            files=[
-                FileEntry(
-                    name="filtered_feature_bc_matrix.h5",
-                    s3_key="test.h5",
-                ),
-                FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz"),
-                FileEntry(name="image.jpg", s3_key="test.jpg"),
-            ],
-        )
-        assert entry.has_hires_image
-
-    def test_adata_with_image_without_image(self):
-        entry = DatasetEntry(
-            name="V1_Test",
-            type=DatasetType.ADATA_WITH_IMAGE,
-            files=[
-                FileEntry(
-                    name="filtered_feature_bc_matrix.h5",
-                    s3_key="test.h5",
-                ),
-                FileEntry(name="spatial.tar.gz", s3_key="test.tar.gz"),
-            ],
-        )
-        assert entry.is_adata_with_image
-        assert not entry.has_hires_image
+        assert len(entry.files) == 3
+        assert entry.type == DatasetType.ADATA_WITH_IMAGE
+        assert entry.get_file_by_prefix("image.") is not None
 
     def test_get_file(self):
         entry = DatasetEntry(
@@ -171,16 +139,14 @@ class TestDatasetRegistry:
         registry = DatasetRegistry.from_yaml()
         v1_sample = registry["V1_Adult_Mouse_Brain"]
         assert v1_sample.type == DatasetType.ADATA_WITH_IMAGE
-        assert v1_sample.is_adata_with_image
         assert len(v1_sample.files) == 3  # matrix, spatial, image
-        assert v1_sample.has_hires_image
+        assert v1_sample.get_file_by_prefix("image.") is not None
 
     def test_adata_with_image_has_jpg(self):
         """Test that Visium_FFPE_Human_Normal_Prostate has jpg image."""
         registry = DatasetRegistry.from_yaml()
         sample = registry["Visium_FFPE_Human_Normal_Prostate"]
-        assert sample.is_adata_with_image
-        assert sample.has_hires_image
+        assert sample.type == DatasetType.ADATA_WITH_IMAGE
         # Check it's a jpg
         img_file = sample.get_file_by_prefix("image.")
         assert img_file is not None
