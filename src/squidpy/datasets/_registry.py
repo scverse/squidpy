@@ -99,7 +99,6 @@ class DatasetRegistry:
             with _get_config_traversable().open() as f:
                 config = yaml.safe_load(f)
         else:
-            config_path = Path(config_path)
             with open(config_path) as f:
                 config = yaml.safe_load(f)
 
