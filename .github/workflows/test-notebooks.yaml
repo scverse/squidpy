@@ -11,7 +11,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ensure-data-is-cached:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          filter: blob:none
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+          python-version: "3.13"
+
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
+          key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
+          enableCrossOsArchive: true
+
+      - name: Download datasets
+        # Always run to ensure any missing files are downloaded
+        # (restore-keys may provide partial cache)
+        run: uvx hatch run data:download
+
   test:
+    needs: [ensure-data-is-cached]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -33,8 +63,20 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python }}
           cache-dependency-glob: pyproject.toml
+
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
+          key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
+          enableCrossOsArchive: true
+
       - name: Create notebooks environment
         run: uvx hatch -v env create notebooks
+
       - name: Test notebooks
         env:
           MPLBACKEND: agg
