@@ -1,77 +1,70 @@
 #!/usr/bin/env python3
+"""Download datasets to populate CI cache.
+
+This script downloads all datasets that tests might need.
+The downloader handles caching to scanpy.settings.datasetdir.
+"""
+
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-from typing import Any
 
-from squidpy.datasets import visium_hne_sdata
+from scanpy import settings
+from spatialdata._logging import logger
 
 _CNT = 0  # increment this when you want to rebuild the CI cache
-_ROOT = Path.home() / ".cache" / "squidpy"
-
-
-def _print_message(func_name: str, path: Path, *, dry_run: bool = False) -> None:
-    prefix = "[DRY RUN]" if dry_run else ""
-    if path.is_file():
-        print(f"{prefix}[Loading]     {func_name:>25} <- {str(path):>25}")
-    else:
-        print(f"{prefix}[Downloading] {func_name:>25} -> {str(path):>25}")
-
-
-def _maybe_download_data(func_name: str, path: Path) -> Any:
-    import squidpy as sq
-
-    try:
-        return getattr(sq.datasets, func_name)(path=path)
-    except Exception as e:  # noqa: BLE001
-        print(f"File {str(path):>25} seems to be corrupted: {e}. Removing and retrying")
-        path.unlink()
-
-        return getattr(sq.datasets, func_name)(path=path)
 
 
 def main(args: argparse.Namespace) -> None:
     from anndata import AnnData
 
     import squidpy as sq
+    from squidpy.datasets._downloader import get_downloader
 
-    all_datasets = sq.datasets._dataset.__all__ + sq.datasets._image.__all__
-    all_extensions = ["h5ad"] * len(sq.datasets._dataset.__all__) + ["tiff"] * len(sq.datasets._image.__all__)
+    downloader = get_downloader()
+    registry = downloader.registry
+
+    # Visium samples tested in CI
+    visium_samples_to_cache = [
+        "V1_Mouse_Kidney",
+        "Targeted_Visium_Human_SpinalCord_Neuroscience",
+        "Visium_FFPE_Human_Breast_Cancer",
+    ]
 
     if args.dry_run:
-        for func_name, ext in zip(all_datasets, all_extensions):
-            if func_name == "visium_hne_sdata":
-                ext = "zarr"
-            path = _ROOT / f"{func_name}.{ext}"
-            _print_message(func_name, path, dry_run=True)
+        logger.info("Cache: %s", settings.datasetdir)
+        logger.info(
+            "Would download: %d AnnData, %d images, %d SpatialData, %d Visium",
+            len(registry.anndata_datasets),
+            len(registry.image_datasets),
+            len(registry.spatialdata_datasets),
+            len(visium_samples_to_cache),
+        )
         return
 
-    # could be parallelized, but on CI it largely does not matter (usually limited to 2 cores + bandwidth limit)
-    for func_name, ext in zip(all_datasets, all_extensions):
-        if func_name == "visium_hne_sdata":
-            ext = "zarr"
-            path = _ROOT / f"{func_name}.{ext}"
+    # Download all datasets - the downloader handles caching
+    for name in registry.anndata_datasets:
+        obj = getattr(sq.datasets, name)()
+        assert isinstance(obj, AnnData)
 
-            _print_message(func_name, path)
-            obj = visium_hne_sdata(_ROOT)
+    for name in registry.image_datasets:
+        obj = getattr(sq.datasets, name)()
+        assert isinstance(obj, sq.im.ImageContainer)
 
-            assert path.is_dir(), f"Expected a .zarr folder at {path}"
-            continue
+    for name in registry.spatialdata_datasets:
+        getattr(sq.datasets, name)()
 
-        path = _ROOT / f"{func_name}.{ext}"
-        _print_message(func_name, path)
-        obj = _maybe_download_data(func_name, path)
-
-        # we could do without the AnnData check as well (1 less req. in tox.ini), but it's better to be safe
-        assert isinstance(obj, AnnData | sq.im.ImageContainer), type(obj)
-        assert path.is_file(), path
+    for sample in visium_samples_to_cache:
+        obj = sq.datasets.visium(sample, include_hires_tiff=True)
+        assert isinstance(obj, AnnData)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Download data used for tutorials/examples.")
+    parser = argparse.ArgumentParser(description="Download datasets to populate CI cache.")
     parser.add_argument(
-        "--dry-run", action="store_true", help="Do not download any data, just print what would be downloaded."
+        "--dry-run",
+        action="store_true",
+        help="Do not download, just print what would be downloaded.",
     )
 
     main(parser.parse_args())

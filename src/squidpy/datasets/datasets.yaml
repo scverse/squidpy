@@ -1,0 +1,648 @@
+# Squidpy Dataset Registry
+#
+# Each dataset has:
+#   - type: anndata  (.h5ad)| image (.tiff) | spatialdata (.zip -> .zarr) | visium_10x (3 files)
+#   - files: list of files with individual URLs and hashes
+#   - metadata: shape, doc_header, library_id, etc.
+
+s3_base_url: https://scverse-exampledata.s3.amazonaws.com/squidpy/
+
+datasets:
+  # ===========================================================================
+  # AnnData datasets (.h5ad)
+  # ===========================================================================
+  four_i:
+    type: anndata
+    shape: [270876, 43]
+    doc_header: "Pre-processed subset 4i dataset from `Gut et al <https://doi.org/10.1126/science.aar7042>`__."
+    files:
+      - name: four_i.h5ad
+        s3_key: figshare/four_i.h5ad
+        sha256: 894e54af155c8ce94bbeeac1056431de9cc0e86460e49cd38ca1a5f952e32124
+
+  imc:
+    type: anndata
+    shape: [4668, 34]
+    doc_header: "Pre-processed subset IMC dataset from `Jackson et al <https://www.nature.com/articles/s41586-019-1876-x>`__."
+    files:
+      - name: imc.h5ad
+        s3_key: figshare/imc.h5ad
+        sha256: 950c44c785ea86c4262140b0229e0b4f77110a765c3b6874cdb5e0e52973c6fe
+
+  seqfish:
+    type: anndata
+    shape: [19416, 351]
+    doc_header: "Pre-processed subset seqFISH dataset from `Lohoff et al <https://www.biorxiv.org/content/10.1101/2020.11.20.391896v1>`__."
+    files:
+      - name: seqfish.h5ad
+        s3_key: figshare/seqfish.h5ad
+        sha256: 7e544c0ede7538067537da69c52748ad01522ef7fc8691e077fd73c9434019f7
+
+  visium_hne_adata:
+    type: anndata
+    shape: [2688, 18078]
+    doc_header: "Pre-processed `10x Genomics Visium H&E dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`__."
+    files:
+      - name: visium_hne_adata.h5ad
+        s3_key: figshare/visium_hne_adata.h5ad
+        sha256: 3571e6b84dd32c73ece8ae0bebbd4758e77c6fdd321b2bbe0d4ffa8ed56e1cbe
+
+  visium_fluo_adata:
+    type: anndata
+    shape: [2800, 16562]
+    doc_header: "Pre-processed `10x Genomics Visium Fluorescent dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2>`__."
+    files:
+      - name: visium_fluo_adata.h5ad
+        s3_key: figshare/visium_fluo_adata.h5ad
+        sha256: 8f92e2a03a669f939a80ba7299678377d43847983f9e0f9846c4462f7c02bdd6
+
+  visium_hne_adata_crop:
+    type: anndata
+    shape: [684, 18078]
+    doc_header: "Pre-processed subset `10x Genomics Visium H&E dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`__."
+    files:
+      - name: visium_hne_adata_crop.h5ad
+        s3_key: figshare/visium_hne_adata_crop.h5ad
+        sha256: 9c9b277bde9f34a022df7f3e35b35ce7ecc80f006d6640b0786f4ace6f6eb5dd
+
+  visium_fluo_adata_crop:
+    type: anndata
+    shape: [704, 16562]
+    doc_header: "Pre-processed subset `10x Genomics Visium Fluorescent dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2>`__."
+    files:
+      - name: visium_fluo_adata_crop.h5ad
+        s3_key: figshare/visium_fluo_adata_crop.h5ad
+        sha256: ea8776c281a364e8c30a8de55a17479aa6d3c9eb90fe756c55f02ffd79e053ec
+
+  sc_mouse_cortex:
+    type: anndata
+    shape: [21697, 36826]
+    doc_header: "Pre-processed `scRNA-seq mouse cortex <https://doi.org/10.1038/s41586-018-0654-5>`__."
+    files:
+      - name: sc_mouse_cortex.h5ad
+        s3_key: figshare/sc_mouse_cortex.h5ad
+        sha256: 3e0a26e1af06c1ea8f53a808ee683bf950de8cc03ee48bd291f95eeca6056aac
+
+  mibitof:
+    type: anndata
+    shape: [3309, 36]
+    doc_header: "Pre-processed MIBI-TOF dataset from `Hartmann et al <https://doi.org/10.1101/2020.01.17.909796>`__."
+    files:
+      - name: mibitof.h5ad
+        s3_key: figshare/mibitof.h5ad
+        sha256: 3f125c51695d78ed1c36d5485dc390ab400154d021f0c7715b89f8ee83978690
+
+  merfish:
+    type: anndata
+    shape: [73655, 161]
+    doc_header: "Pre-processed MERFISH dataset from `Moffitt et al <https://doi.org/10.1126/science.aau5324>`__."
+    files:
+      - name: merfish.h5ad
+        s3_key: figshare/merfish.h5ad
+        sha256: 371723d48413ba76aba49ccf7ea24867b1db940529216fe2902484f5c2a48904
+
+  slideseqv2:
+    type: anndata
+    shape: [41786, 4000]
+    doc_header: "Pre-processed SlideseqV2 dataset from `Stickles et al <https://doi.org/10.1038/s41587-020-0739-1>`__."
+    files:
+      - name: slideseqv2.h5ad
+        s3_key: figshare/slideseqv2.h5ad
+        sha256: 224a0f2b3d4f6c0ac1583c93bb6bfa910a986df82302c4a927d61883b8b63d8b
+
+  # ===========================================================================
+  # Image datasets (.tiff)
+  # ===========================================================================
+  visium_fluo_image_crop:
+    type: image
+    shape: [7272, 7272]
+    library_id: V1_Adult_Mouse_Brain_Coronal_Section_2
+    doc_header: Cropped Fluorescent image from 10x Genomics Visium dataset.
+    files:
+      - name: visium_fluo_image_crop.tiff
+        s3_key: figshare/visium_fluo_image_crop.tiff
+        sha256: 2929fdd06e32fa25b38493e67f301fc5b22b1a32bfbe48ab7237d8d85fe8982d
+
+  visium_hne_image_crop:
+    type: image
+    shape: [3527, 3527]
+    library_id: V1_Adult_Mouse_Brain
+    doc_header: Cropped H&E image from 10x Genomics Visium dataset.
+    files:
+      - name: visium_hne_image_crop.tiff
+        s3_key: figshare/visium_hne_image_crop.tiff
+        sha256: 56d379d96da859ea963c4349bbc8de07da9b68ce133839ebef5fe1b033c9e7bb
+
+  visium_hne_image:
+    type: image
+    shape: [11757, 11291]
+    library_id: V1_Adult_Mouse_Brain
+    doc_header: H&E image from 10x Genomics Visium dataset.
+    files:
+      - name: visium_hne_image.tiff
+        s3_key: figshare/visium_hne_image.tiff
+        sha256: 39d0a85a7cecb0bde9ad2566260d571bb49834d26fc443cb32b96475f30668b2
+
+  # ===========================================================================
+  # SpatialData datasets (.zip -> .zarr)
+  # ===========================================================================
+  visium_hne_sdata:
+    type: spatialdata
+    doc_header: Visium H&E dataset as SpatialData object.
+    files:
+      - name: visium_hne_sdata.zip
+        s3_key: figshare/visium_hne_sdata.zip
+        sha256: 6f88b1624d072a362cb2b40a12f86b7649d3d2f2cc762dd6be23a078ac3093b6
+
+  # ===========================================================================
+  # 10x Genomics Visium datasets (3 files each)
+  # ===========================================================================
+  V1_Breast_Cancer_Block_A_Section_1:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Breast_Cancer_Block_A_Section_1.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Breast_Cancer_Block_A_Section_1/V1_Breast_Cancer_Block_A_Section_1_filtered_feature_bc_matrix.h5
+        sha256: b3cbb6ead60afad848ebcc07a34835613d9d2d79e416ad8300b210d9de584b65
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Breast_Cancer_Block_A_Section_1/V1_Breast_Cancer_Block_A_Section_1_spatial.tar.gz
+        sha256: 415530a9d31172f63fd358d5d1cefb0798698ef9c0e614f52825894cd45c61bf
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Breast_Cancer_Block_A_Section_1/V1_Breast_Cancer_Block_A_Section_1_image.tif
+        sha256: 73a94ca956d1b5c027dcaf1ac42c15fed4d4a12eefee4b4b597e62f34cc5959e
+
+  V1_Breast_Cancer_Block_A_Section_2:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Breast_Cancer_Block_A_Section_2.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Breast_Cancer_Block_A_Section_2/V1_Breast_Cancer_Block_A_Section_2_filtered_feature_bc_matrix.h5
+        sha256: e325b4e53f0036a71904cea6b7cd65945f10c25cf2ef8e2f681de9ac1ff7766c
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Breast_Cancer_Block_A_Section_2/V1_Breast_Cancer_Block_A_Section_2_spatial.tar.gz
+        sha256: 15fcf837478bcba847b50e393b016f95f02067ea930e81f96b103f2a14bf6db0
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Breast_Cancer_Block_A_Section_2/V1_Breast_Cancer_Block_A_Section_2_image.tif
+        sha256: 1ad96042cba8e05b22566ef5b8197714e06d4a5e98d040e926c8591ffdb48cc7
+
+  V1_Human_Heart:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Human_Heart.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Human_Heart/V1_Human_Heart_filtered_feature_bc_matrix.h5
+        sha256: a7274ea2ff2717693b200e614c288c174f02925b6d82c98221871a08e52d415b
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Human_Heart/V1_Human_Heart_spatial.tar.gz
+        sha256: f2033b6ec4c13dcaf75386d4de3e86cb3357e15fe0eaa2be7037c3d3f0194188
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Human_Heart/V1_Human_Heart_image.tif
+        sha256: ff6fc5169a4ab3af5a0799ee1333e2fa0e6df242bc6bc5162e6ea51e6826fa5f
+
+  V1_Human_Lymph_Node:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Human_Lymph_Node.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Human_Lymph_Node/V1_Human_Lymph_Node_filtered_feature_bc_matrix.h5
+        sha256: 86fd533eb907450e7125b9820183a0ca73776eeafcc5eddae5695b6aabfd9139
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Human_Lymph_Node/V1_Human_Lymph_Node_spatial.tar.gz
+        sha256: 812808883366ff9623dc8354847a7211b0d922b2bfc4c9359d6e12e993ea6a73
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Human_Lymph_Node/V1_Human_Lymph_Node_image.tif
+        sha256: 19462aa8f74ed6032738251e2f56931be9047de58bab6ca0373af385aae2ff03
+
+  V1_Mouse_Kidney:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Mouse_Kidney.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Mouse_Kidney/V1_Mouse_Kidney_filtered_feature_bc_matrix.h5
+        sha256: 5e0b1d1c51c4e8759cd623d212573e1c28daf95d66e0d25a8e4488f6bed3831a
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Mouse_Kidney/V1_Mouse_Kidney_spatial.tar.gz
+        sha256: 91570548eae3d2bcf738af45e9dc463547a01669841db43ff20afb41b7cc0539
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Mouse_Kidney/V1_Mouse_Kidney_image.tif
+        sha256: be58cc8b6aec69635ecc813fa9de559fd124a5c265999aff198d76d75f3c6f6a
+
+  V1_Adult_Mouse_Brain:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Adult_Mouse_Brain.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.h5
+        sha256: eb78379e02dcf48036abf05b67233e73ecb0d880787feb82f76ff16f6ce01eb3
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_spatial.tar.gz
+        sha256: 46d6b05ba740f232d6bf4b27b9a8846815851e000985fb878f1364bab04e5bd4
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_image.tif
+        sha256: 39d0a85a7cecb0bde9ad2566260d571bb49834d26fc443cb32b96475f30668b2
+
+  V1_Mouse_Brain_Sagittal_Posterior:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Mouse_Brain_Sagittal_Posterior.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Posterior/V1_Mouse_Brain_Sagittal_Posterior_filtered_feature_bc_matrix.h5
+        sha256: df962209143860488bd679ff7a1b3bb14985208d0929fb814934ba7571c488b6
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Posterior/V1_Mouse_Brain_Sagittal_Posterior_spatial.tar.gz
+        sha256: b878d7eaca487ffc17224a870f86599abf9d45a99033c1ef65661ff119cef0d5
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Posterior/V1_Mouse_Brain_Sagittal_Posterior_image.tif
+        sha256: 18558cd21345f6d590af4f519859a3710b400508ed31ae1e0b1d66b561de5e5f
+
+  V1_Mouse_Brain_Sagittal_Posterior_Section_2:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Mouse_Brain_Sagittal_Posterior_Section_2.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Posterior_Section_2/V1_Mouse_Brain_Sagittal_Posterior_Section_2_filtered_feature_bc_matrix.h5
+        sha256: 7e4dbea6a2037b3478719d121eec33a56b96d0c904daade9c8cbeb428f415bc4
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Posterior_Section_2/V1_Mouse_Brain_Sagittal_Posterior_Section_2_spatial.tar.gz
+        sha256: e8be08bf867387a6209c4f37ede4266d1305dfb038c77411b213a28fc2d79107
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Posterior_Section_2/V1_Mouse_Brain_Sagittal_Posterior_Section_2_image.tif
+        sha256: ccc41944ae7586b1468141f840897c6096e1ce9506e6e0774b9ef3d89054b12c
+
+  V1_Mouse_Brain_Sagittal_Anterior:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Mouse_Brain_Sagittal_Anterior.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Anterior/V1_Mouse_Brain_Sagittal_Anterior_filtered_feature_bc_matrix.h5
+        sha256: 56078d8d6fe6c13de248fdb1c518b691cdef78fb00021b659786b4a47c6656d5
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Anterior/V1_Mouse_Brain_Sagittal_Anterior_spatial.tar.gz
+        sha256: 5f41a803e2bd69fa4dfca6abc8fa2d4e0d76aeb6c72d7038a5fdcf9cc50a36f8
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Anterior/V1_Mouse_Brain_Sagittal_Anterior_image.tif
+        sha256: 5837c44e4e1d0f77b3ade2350a4f2159922f4c388e882f1c38b5683ff7bd086d
+
+  V1_Mouse_Brain_Sagittal_Anterior_Section_2:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Mouse_Brain_Sagittal_Anterior_Section_2.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Anterior_Section_2/V1_Mouse_Brain_Sagittal_Anterior_Section_2_filtered_feature_bc_matrix.h5
+        sha256: 6ffcca5979b722f7f112202a9a8273cdad60a2b40ba4f651d465fbba577b5a5c
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Anterior_Section_2/V1_Mouse_Brain_Sagittal_Anterior_Section_2_spatial.tar.gz
+        sha256: 0fa49dd44835e0a77c4f24653abe6092c0a164c594696540ee3d9e2eee2e34a2
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Mouse_Brain_Sagittal_Anterior_Section_2/V1_Mouse_Brain_Sagittal_Anterior_Section_2_image.tif
+        sha256: f6573c85a2e56fd9f70e6ce59134ed03a14140a074e2f85161f8b4778dad5bfb
+
+  V1_Human_Brain_Section_1:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Human_Brain_Section_1.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Human_Brain_Section_1/V1_Human_Brain_Section_1_filtered_feature_bc_matrix.h5
+        sha256: 076e5d1fa82243349ee963e069b362c81198e8c4f752ad9680dfb0714d0c240f
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Human_Brain_Section_1/V1_Human_Brain_Section_1_spatial.tar.gz
+        sha256: 3979bcbeb13a61d5e1a2ffb066bd76b4c121a1cd1293c66da7578cd1fbb1d247
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Human_Brain_Section_1/V1_Human_Brain_Section_1_image.tif
+        sha256: 68ac2d8b72514248eeb7666a7409c286d1e7d4af30b700baed36ebe85dcf2961
+
+  V1_Human_Brain_Section_2:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Human_Brain_Section_2.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Human_Brain_Section_2/V1_Human_Brain_Section_2_filtered_feature_bc_matrix.h5
+        sha256: 1ee773e152a1befb9a4fce1b4883f62790e717546d5db092e209c6ac4c1f9d2d
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Human_Brain_Section_2/V1_Human_Brain_Section_2_spatial.tar.gz
+        sha256: 74b40c7f38d69b086d47739a565a8b17e558c2c5cf2c83c17c999e9ac7c25f83
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Human_Brain_Section_2/V1_Human_Brain_Section_2_image.tif
+        sha256: 87881ff452472bc326c6267184a43ad5c53fb4caa39637679a59143228266ef1
+
+  V1_Adult_Mouse_Brain_Coronal_Section_1:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Adult_Mouse_Brain_Coronal_Section_1.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Adult_Mouse_Brain_Coronal_Section_1/V1_Adult_Mouse_Brain_Coronal_Section_1_filtered_feature_bc_matrix.h5
+        sha256: 005cecf7aed6704c8a29f446e6cb092a9db960b39cf312720ff0238ef94cca81
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Adult_Mouse_Brain_Coronal_Section_1/V1_Adult_Mouse_Brain_Coronal_Section_1_spatial.tar.gz
+        sha256: 96c5d31c3c8e9639e5545dcb4494580cbe8f7e0b63ca92476c800d332796e0f2
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Adult_Mouse_Brain_Coronal_Section_1/V1_Adult_Mouse_Brain_Coronal_Section_1_image.tif
+        sha256: 9ce5353f60c6a19657cdd43db392d0cb9cb253891daa8751c00bd2918af892e3
+
+  V1_Adult_Mouse_Brain_Coronal_Section_2:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset V1_Adult_Mouse_Brain_Coronal_Section_2.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/V1_Adult_Mouse_Brain_Coronal_Section_2/V1_Adult_Mouse_Brain_Coronal_Section_2_filtered_feature_bc_matrix.h5
+        sha256: 140366bde796174172d7c91b9c03107dfee3912c7cc060df0a47c030b6c72caf
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/V1_Adult_Mouse_Brain_Coronal_Section_2/V1_Adult_Mouse_Brain_Coronal_Section_2_spatial.tar.gz
+        sha256: 2b1e930d55fe8dff239d6838aa53389fe10ff011558a02ea654dad9d16737b03
+      - name: image.tif
+        s3_key: 10x_genomics/V1_Adult_Mouse_Brain_Coronal_Section_2/V1_Adult_Mouse_Brain_Coronal_Section_2_image.tif
+        sha256: 4df93ac227d129250ee3ade3d0d33175bd51f0baae0bcf2841be779b3df03b4a
+
+  # SpaceRanger 1.2.0 datasets
+  Targeted_Visium_Human_Cerebellum_Neuroscience:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_Cerebellum_Neuroscience.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Targeted_Visium_Human_Cerebellum_Neuroscience/Targeted_Visium_Human_Cerebellum_Neuroscience_filtered_feature_bc_matrix.h5
+        sha256: 93f2846c73c978fda63672b56ea6ccd6805344870030882bcb784c2e5ad4a281
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Targeted_Visium_Human_Cerebellum_Neuroscience/Targeted_Visium_Human_Cerebellum_Neuroscience_spatial.tar.gz
+        sha256: 4c5c78ed12b6af7661bceabc3f819e5668148b5bb330e72d3e0d7bd2031118a8
+      - name: image.tif
+        s3_key: 10x_genomics/Targeted_Visium_Human_Cerebellum_Neuroscience/Targeted_Visium_Human_Cerebellum_Neuroscience_image.tif
+        sha256: 51855c63d57e4c67f3ec0db22a051067706537c740763306334696305d686eda
+
+  Parent_Visium_Human_Cerebellum:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Parent_Visium_Human_Cerebellum.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Parent_Visium_Human_Cerebellum/Parent_Visium_Human_Cerebellum_filtered_feature_bc_matrix.h5
+        sha256: 05c137dd74623e748558c60a99d8e19749cbd073d070ce827aec73cee899f1d0
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Parent_Visium_Human_Cerebellum/Parent_Visium_Human_Cerebellum_spatial.tar.gz
+        sha256: 7a8a42ad53d93776b7b21b31c3727d76a8ed6c332e2f39b6b056b52ef41eeea0
+      - name: image.tif
+        s3_key: 10x_genomics/Parent_Visium_Human_Cerebellum/Parent_Visium_Human_Cerebellum_image.tif
+        sha256: 51855c63d57e4c67f3ec0db22a051067706537c740763306334696305d686eda
+
+  Targeted_Visium_Human_SpinalCord_Neuroscience:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_SpinalCord_Neuroscience.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Targeted_Visium_Human_SpinalCord_Neuroscience/Targeted_Visium_Human_SpinalCord_Neuroscience_filtered_feature_bc_matrix.h5
+        sha256: e6e0ced51e4092361cffba849e4fba1c3e641c27a59ce9622c6582ae42b4c98d
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Targeted_Visium_Human_SpinalCord_Neuroscience/Targeted_Visium_Human_SpinalCord_Neuroscience_spatial.tar.gz
+        sha256: ae94a184bc207170497a00fd95ae0bc49fda934f7e83113ca286d590c5f85e0e
+      - name: image.tif
+        s3_key: 10x_genomics/Targeted_Visium_Human_SpinalCord_Neuroscience/Targeted_Visium_Human_SpinalCord_Neuroscience_image.tif
+        sha256: 2b81347ba65f3f61a76a2b9d8ff6d05f34d72bc2cbf3e9895374e29f81f78019
+
+  Parent_Visium_Human_SpinalCord:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Parent_Visium_Human_SpinalCord.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Parent_Visium_Human_SpinalCord/Parent_Visium_Human_SpinalCord_filtered_feature_bc_matrix.h5
+        sha256: b731d6bf09c402c9b6f43c88296a08ffcaa508079a20d70f449342c165b80037
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Parent_Visium_Human_SpinalCord/Parent_Visium_Human_SpinalCord_spatial.tar.gz
+        sha256: 0d94e3b8efdb2dbc3be5d912f79828d7ea9ddb333eb7376f31986a8b16a34aeb
+      - name: image.tif
+        s3_key: 10x_genomics/Parent_Visium_Human_SpinalCord/Parent_Visium_Human_SpinalCord_image.tif
+        sha256: 2b81347ba65f3f61a76a2b9d8ff6d05f34d72bc2cbf3e9895374e29f81f78019
+
+  Targeted_Visium_Human_Glioblastoma_Pan_Cancer:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_Glioblastoma_Pan_Cancer.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Targeted_Visium_Human_Glioblastoma_Pan_Cancer/Targeted_Visium_Human_Glioblastoma_Pan_Cancer_filtered_feature_bc_matrix.h5
+        sha256: 2d6c3ba9dfb47235eb7fc560fbabe52ddb553a667af6d67f8ba2e1ac43d768f0
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Targeted_Visium_Human_Glioblastoma_Pan_Cancer/Targeted_Visium_Human_Glioblastoma_Pan_Cancer_spatial.tar.gz
+        sha256: c374909d78319f25fb487ed58804124370ee1312b36181fb1a04e9755bccc345
+      - name: image.tif
+        s3_key: 10x_genomics/Targeted_Visium_Human_Glioblastoma_Pan_Cancer/Targeted_Visium_Human_Glioblastoma_Pan_Cancer_image.tif
+        sha256: cb789cbf1b6b738a89728b3489bbf0c405ddfc12a7d870176ebd555c36212c5c
+
+  Parent_Visium_Human_Glioblastoma:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Parent_Visium_Human_Glioblastoma.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Parent_Visium_Human_Glioblastoma/Parent_Visium_Human_Glioblastoma_filtered_feature_bc_matrix.h5
+        sha256: 76d6b36807972a25c856a4bfe9ef3cd4ca71eaf5c4591271b0a7e471457ffb98
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Parent_Visium_Human_Glioblastoma/Parent_Visium_Human_Glioblastoma_spatial.tar.gz
+        sha256: 7be26425284ea6bfb07ea7ad6c001cd9a30b2ffc47547858bd51d219c9fd3a69
+      - name: image.tif
+        s3_key: 10x_genomics/Parent_Visium_Human_Glioblastoma/Parent_Visium_Human_Glioblastoma_image.tif
+        sha256: cb789cbf1b6b738a89728b3489bbf0c405ddfc12a7d870176ebd555c36212c5c
+
+  Targeted_Visium_Human_BreastCancer_Immunology:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_BreastCancer_Immunology.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Targeted_Visium_Human_BreastCancer_Immunology/Targeted_Visium_Human_BreastCancer_Immunology_filtered_feature_bc_matrix.h5
+        sha256: f19d185627d64e90f0c3b25ab9afcbb4090b7f76978f02346c7518190ad6d4e1
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Targeted_Visium_Human_BreastCancer_Immunology/Targeted_Visium_Human_BreastCancer_Immunology_spatial.tar.gz
+        sha256: 980d0bad49dfe3ad157968be3408893a9ae9deed4e789a3d0745d45484b8e78b
+      - name: image.tif
+        s3_key: 10x_genomics/Targeted_Visium_Human_BreastCancer_Immunology/Targeted_Visium_Human_BreastCancer_Immunology_image.tif
+        sha256: 9f9963ce937b50891fc2723fbcd45394070c6975a3e2551b0a5db0ef45ca73f2
+
+  Parent_Visium_Human_BreastCancer:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Parent_Visium_Human_BreastCancer.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Parent_Visium_Human_BreastCancer/Parent_Visium_Human_BreastCancer_filtered_feature_bc_matrix.h5
+        sha256: fb38021b00795bcd05720a7d1ac451dc443366cf27cad57b0b5144f4661a9d35
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Parent_Visium_Human_BreastCancer/Parent_Visium_Human_BreastCancer_spatial.tar.gz
+        sha256: 57b97ff5e9b0be325797ffa3d1b043414ff46ca9b13248b4b5d610d8e6806ade
+      - name: image.tif
+        s3_key: 10x_genomics/Parent_Visium_Human_BreastCancer/Parent_Visium_Human_BreastCancer_image.tif
+        sha256: 9f9963ce937b50891fc2723fbcd45394070c6975a3e2551b0a5db0ef45ca73f2
+
+  Targeted_Visium_Human_OvarianCancer_Pan_Cancer:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_OvarianCancer_Pan_Cancer.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Targeted_Visium_Human_OvarianCancer_Pan_Cancer/Targeted_Visium_Human_OvarianCancer_Pan_Cancer_filtered_feature_bc_matrix.h5
+        sha256: f2d0fdfae06adbf3f761802a8561d05459d211b25039caa1a6e994720b015551
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Targeted_Visium_Human_OvarianCancer_Pan_Cancer/Targeted_Visium_Human_OvarianCancer_Pan_Cancer_spatial.tar.gz
+        sha256: 469a5a144eb996535b9502382a6668d19e050aeacdc8c719c31c23b338c2c4f5
+      - name: image.tif
+        s3_key: 10x_genomics/Targeted_Visium_Human_OvarianCancer_Pan_Cancer/Targeted_Visium_Human_OvarianCancer_Pan_Cancer_image.tif
+        sha256: 2e36037b0850399c1fdb07c66c31db5458081febba4a1f80ac505cde6320ca79
+
+  Targeted_Visium_Human_OvarianCancer_Immunology:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_OvarianCancer_Immunology.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Targeted_Visium_Human_OvarianCancer_Immunology/Targeted_Visium_Human_OvarianCancer_Immunology_filtered_feature_bc_matrix.h5
+        sha256: b09c4888611195aa33cf9ec1d7b294728726376b76f41b3d3920a400f52fe89d
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Targeted_Visium_Human_OvarianCancer_Immunology/Targeted_Visium_Human_OvarianCancer_Immunology_spatial.tar.gz
+        sha256: 8165bec67690db161c9ea298777759bf765637b6ea8fb23a952c26933af65158
+      - name: image.tif
+        s3_key: 10x_genomics/Targeted_Visium_Human_OvarianCancer_Immunology/Targeted_Visium_Human_OvarianCancer_Immunology_image.tif
+        sha256: 2e36037b0850399c1fdb07c66c31db5458081febba4a1f80ac505cde6320ca79
+
+  Parent_Visium_Human_OvarianCancer:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Parent_Visium_Human_OvarianCancer.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Parent_Visium_Human_OvarianCancer/Parent_Visium_Human_OvarianCancer_filtered_feature_bc_matrix.h5
+        sha256: 5dd7fa0daca816d8700cf275c14c98004a37cc92a8c3b1d4c11f19ed3fedbc97
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Parent_Visium_Human_OvarianCancer/Parent_Visium_Human_OvarianCancer_spatial.tar.gz
+        sha256: 219698516af089fd2dea1b8080c4bdcf1c0c0a3eff05a63ef9f115c3e4b6ffdd
+      - name: image.tif
+        s3_key: 10x_genomics/Parent_Visium_Human_OvarianCancer/Parent_Visium_Human_OvarianCancer_image.tif
+        sha256: 2e36037b0850399c1fdb07c66c31db5458081febba4a1f80ac505cde6320ca79
+
+  Targeted_Visium_Human_ColorectalCancer_GeneSignature:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Targeted_Visium_Human_ColorectalCancer_GeneSignature.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Targeted_Visium_Human_ColorectalCancer_GeneSignature/Targeted_Visium_Human_ColorectalCancer_GeneSignature_filtered_feature_bc_matrix.h5
+        sha256: 3b7f01724c0adf9c469db5250cee6669d354ef1742e31003c7930f5d457f2457
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Targeted_Visium_Human_ColorectalCancer_GeneSignature/Targeted_Visium_Human_ColorectalCancer_GeneSignature_spatial.tar.gz
+        sha256: 077a8f78869e722431233109a0eac89a658847a8e82e3c5973eb193247ee49da
+      - name: image.tif
+        s3_key: 10x_genomics/Targeted_Visium_Human_ColorectalCancer_GeneSignature/Targeted_Visium_Human_ColorectalCancer_GeneSignature_image.tif
+        sha256: 1825e4940d72b363d4676061168235ec3560b8ccb3f1259546cd66d2bfc3729a
+
+  Parent_Visium_Human_ColorectalCancer:
+    type: visium_10x
+    doc_header: 10x Genomics Visium dataset Parent_Visium_Human_ColorectalCancer.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Parent_Visium_Human_ColorectalCancer/Parent_Visium_Human_ColorectalCancer_filtered_feature_bc_matrix.h5
+        sha256: 5826da1470ce071757675b563c9036c055f7f800e0930b635968b887546b95e0
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Parent_Visium_Human_ColorectalCancer/Parent_Visium_Human_ColorectalCancer_spatial.tar.gz
+        sha256: ebba3b8bfe212545181ef68c65b6e23eda7e3ddf9e59d02e6edc6b9d96325476
+      - name: image.tif
+        s3_key: 10x_genomics/Parent_Visium_Human_ColorectalCancer/Parent_Visium_Human_ColorectalCancer_image.tif
+        sha256: 1825e4940d72b363d4676061168235ec3560b8ccb3f1259546cd66d2bfc3729a
+
+  # SpaceRanger 1.3.0 datasets (FFPE)
+  Visium_FFPE_Mouse_Brain:
+    type: visium_10x
+    doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Mouse_Brain.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Visium_FFPE_Mouse_Brain/Visium_FFPE_Mouse_Brain_filtered_feature_bc_matrix.h5
+        sha256: f5a5d0fafeab6259ded1c4883b255ef57557b81f32774513594e23a49e8352ce
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Visium_FFPE_Mouse_Brain/Visium_FFPE_Mouse_Brain_spatial.tar.gz
+        sha256: e4e1b845fd078946c6f8b61bd8d1927c0ce2395c3730f602cd80ef439d4a9d73
+      # Note: image.tif not available for this dataset
+
+  Visium_FFPE_Mouse_Brain_IF:
+    type: visium_10x
+    doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Mouse_Brain_IF.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Visium_FFPE_Mouse_Brain_IF/Visium_FFPE_Mouse_Brain_IF_filtered_feature_bc_matrix.h5
+        sha256: 14e869d99cdf173bd20c900cc79a5df567ab6630ac50dfd75080afd993e80ff7
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Visium_FFPE_Mouse_Brain_IF/Visium_FFPE_Mouse_Brain_IF_spatial.tar.gz
+        sha256: 3df8b527d6f83970c0ab09872c69442fe5d2fb0a687db7918006b058012096f2
+      - name: image.tif
+        s3_key: 10x_genomics/Visium_FFPE_Mouse_Brain_IF/Visium_FFPE_Mouse_Brain_IF_image.tif
+        sha256: 1dd8bcad6297c25afdaaf7d0cfd1be3fac6db6bfc21a44ee71ad31dc13ecc9cf
+
+  Visium_FFPE_Mouse_Kidney:
+    type: visium_10x
+    doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Mouse_Kidney.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Visium_FFPE_Mouse_Kidney/Visium_FFPE_Mouse_Kidney_filtered_feature_bc_matrix.h5
+        sha256: b7c3a904971ece636c79cda1dd49d7f7f183080698516477f96182b46597f977
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Visium_FFPE_Mouse_Kidney/Visium_FFPE_Mouse_Kidney_spatial.tar.gz
+        sha256: cd55f1d7c5665d7f37ea83ab58729149e93e762f4ed69f7f9bde747ec4404c64
+      - name: image.tif
+        s3_key: 10x_genomics/Visium_FFPE_Mouse_Kidney/Visium_FFPE_Mouse_Kidney_image.tif
+        sha256: 6628054c2ecf68124f319ef154bead8359424fe9ccf9f2e1191aac66de787870
+
+  Visium_FFPE_Human_Breast_Cancer:
+    type: visium_10x
+    doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Human_Breast_Cancer.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Visium_FFPE_Human_Breast_Cancer/Visium_FFPE_Human_Breast_Cancer_filtered_feature_bc_matrix.h5
+        sha256: 64321f603f7200b0bedffbe353c04dde72bbe7c7be7390e503d955aa9b2584c5
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Visium_FFPE_Human_Breast_Cancer/Visium_FFPE_Human_Breast_Cancer_spatial.tar.gz
+        sha256: 2937fcc44b7adee70f162a9e09857410dcf22eed89a3e3187950dfc1574fea14
+      - name: image.tif
+        s3_key: 10x_genomics/Visium_FFPE_Human_Breast_Cancer/Visium_FFPE_Human_Breast_Cancer_image.tif
+        sha256: b3fbbdb5006769ef7d2b614171e208b6caf901bde52272a02da6e3d019626ce0
+
+  Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma:
+    type: visium_10x
+    doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma/Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma_filtered_feature_bc_matrix.h5
+        sha256: 61fa385e2f5126a3085aea6836e9bfcae8e0d90face655156dc872e7ea450d6a
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma/Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma_spatial.tar.gz
+        sha256: 3929961344a03075ce8012186952c1df7fd084e7cac7f1bccb70744a5eaf9569
+      - name: image.tif
+        s3_key: 10x_genomics/Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma/Visium_FFPE_Human_Prostate_Acinar_Cell_Carcinoma_image.tif
+        sha256: 68b2eccb14f2344ceba2beccf99dace6506768c4e905624fa2e658fbda4dc86c
+
+  Visium_FFPE_Human_Prostate_Cancer:
+    type: visium_10x
+    doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Human_Prostate_Cancer.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Visium_FFPE_Human_Prostate_Cancer/Visium_FFPE_Human_Prostate_Cancer_filtered_feature_bc_matrix.h5
+        sha256: 08fb4185da5ac375ab3f4782744752bf3aa23fedbe93d0882aaa9fa0afde9abd
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Visium_FFPE_Human_Prostate_Cancer/Visium_FFPE_Human_Prostate_Cancer_spatial.tar.gz
+        sha256: 3eec0e63de718a51afd1d11dea3a1db926009399937f93384d14c81f52e37202
+      - name: image.tif
+        s3_key: 10x_genomics/Visium_FFPE_Human_Prostate_Cancer/Visium_FFPE_Human_Prostate_Cancer_image.tif
+        sha256: c5e967a1c09deef5a1ef0a60b00c823d2daa3640b50ee3cb6683f61c254299f7
+
+  Visium_FFPE_Human_Prostate_IF:
+    type: visium_10x
+    doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Human_Prostate_IF.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Visium_FFPE_Human_Prostate_IF/Visium_FFPE_Human_Prostate_IF_filtered_feature_bc_matrix.h5
+        sha256: 14de9f9debec29e3e359d105191911f838478002216c4540a97d323b2fbea17b
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Visium_FFPE_Human_Prostate_IF/Visium_FFPE_Human_Prostate_IF_spatial.tar.gz
+        sha256: 508619614fb1d8db763c197df0a234d655c329be355f77b970b6ec29aa001da0
+      - name: image.tif
+        s3_key: 10x_genomics/Visium_FFPE_Human_Prostate_IF/Visium_FFPE_Human_Prostate_IF_image.tif
+        sha256: a46c35abc58b10b3704a8f8f89d73ec8d2169b8eb4ed1e2bea8d72e6163837ba
+
+  Visium_FFPE_Human_Normal_Prostate:
+    type: visium_10x
+    doc_header: 10x Genomics Visium FFPE dataset Visium_FFPE_Human_Normal_Prostate.
+    files:
+      - name: filtered_feature_bc_matrix.h5
+        s3_key: 10x_genomics/Visium_FFPE_Human_Normal_Prostate/Visium_FFPE_Human_Normal_Prostate_filtered_feature_bc_matrix.h5
+        sha256: a62e3f01b30eb0cbf524dbaafb52c086bc2710ff7461284b0b3778ca0e5a355c
+      - name: spatial.tar.gz
+        s3_key: 10x_genomics/Visium_FFPE_Human_Normal_Prostate/Visium_FFPE_Human_Normal_Prostate_spatial.tar.gz
+        sha256: cd9f2616ed155b8dcdd68d0780eda5dd24f1d440b02cfd8f5c5bd1bb6481000e
+      - name: image.jpg
+        s3_key: 10x_genomics/Visium_FFPE_Human_Normal_Prostate/Visium_FFPE_Human_Normal_Prostate_image.jpg
+        sha256: null
