@@ -6,7 +6,6 @@ import importlib.resources
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import lru_cache
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
@@ -14,6 +13,8 @@ import yaml
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from importlib.resources.abc import Traversable
+
+    from squidpy.read._utils import PathLike
 
 __all__ = ["DatasetType", "FileEntry", "DatasetEntry", "DatasetRegistry", "get_registry"]
 
@@ -91,7 +92,7 @@ class DatasetRegistry:
     datasets: dict[str, DatasetEntry] = field(default_factory=dict)
 
     @classmethod
-    def from_yaml(cls, config_path: Path | str | None = None) -> DatasetRegistry:
+    def from_yaml(cls, config_path: PathLike | None = None) -> DatasetRegistry:
         """Load registry from YAML configuration file."""
         # This case should be always true
         # only for testing and tinkering config_path should be provided
