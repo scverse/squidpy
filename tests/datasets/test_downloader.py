@@ -111,3 +111,36 @@ class TestDownloaderIntegration:
 
         assert isinstance(adata, AnnData)
         assert "spatial" in adata.uns
+
+    @pytest.mark.timeout(300)
+    @pytest.mark.internet()
+    def test_include_hires_tiff_caching_behavior(self):
+        """Test include_hires_tiff: cached files persist, return varies.
+
+        On CI, V1_Mouse_Kidney is pre-cached via .scripts/ci/download_data.py
+        with include_hires_tiff=True, so this tests return behavior.
+        """
+        sample_id = "V1_Mouse_Kidney"
+        cache_dir = Path(settings.datasetdir)
+        hires_image_path = cache_dir / "visium" / sample_id / "image.tif"
+        downloader = DatasetDownloader(
+            registry=get_registry(), cache_dir=cache_dir
+        )
+
+        # include_hires_tiff=False: no source_image_path in metadata
+        adata = downloader.download(sample_id, include_hires_tiff=False)
+        metadata = adata.uns["spatial"][sample_id].get("metadata", {})
+        assert "source_image_path" not in metadata
+
+        # include_hires_tiff=True: source_image_path in metadata, file cached
+        adata = downloader.download(sample_id, include_hires_tiff=True)
+        metadata = adata.uns["spatial"][sample_id].get("metadata", {})
+        assert "source_image_path" in metadata
+        assert Path(metadata["source_image_path"]).exists()
+        assert hires_image_path.exists()
+
+        # include_hires_tiff=False again: cached file persists, not in metadata
+        adata = downloader.download(sample_id, include_hires_tiff=False)
+        metadata = adata.uns["spatial"][sample_id].get("metadata", {})
+        assert "source_image_path" not in metadata
+        assert hires_image_path.exists()  # file still cached
