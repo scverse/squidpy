@@ -13,7 +13,7 @@ import yaml
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from importlib.resources import Traversable
+    from importlib.resources.abc import Traversable
 
 __all__ = ["DatasetType", "FileEntry", "DatasetEntry", "DatasetRegistry", "get_registry"]
 
