@@ -123,9 +123,7 @@ class TestDownloaderIntegration:
         sample_id = "V1_Mouse_Kidney"
         cache_dir = Path(settings.datasetdir)
         hires_image_path = cache_dir / "visium" / sample_id / "image.tif"
-        downloader = DatasetDownloader(
-            registry=get_registry(), cache_dir=cache_dir
-        )
+        downloader = DatasetDownloader(registry=get_registry(), cache_dir=cache_dir)
 
         # include_hires_tiff=False: no source_image_path in metadata
         adata = downloader.download(sample_id, include_hires_tiff=False)
