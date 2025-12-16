@@ -49,6 +49,7 @@ dependencies = [
   "dask[array]>=2021.2,<=2024.11.2",
   "dask-image>=0.5",
   "docrep>=0.3.1",
+  "fast-array-utils",
   "fsspec>=2021.11",
   "imagecodecs>=2025.8.2,<2026",
   "matplotlib>=3.3",
