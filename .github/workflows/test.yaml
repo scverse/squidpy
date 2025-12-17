@@ -42,14 +42,15 @@ jobs:
         id: data-cache
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/squidpy/*.h5ad
-            ~/.cache/squidpy/*.zarr
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
           key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
           enableCrossOsArchive: true
 
       - name: Download datasets
-        if: steps.data-cache.outputs.cache-hit != 'true'
+        # Always run to ensure any missing files are downloaded
+        # (restore-keys may provide partial cache)
         run: uvx hatch run data:download
 
   # Get the test environment from hatch as defined in pyproject.toml.
@@ -122,10 +123,10 @@ jobs:
         id: data-cache
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/squidpy/*.h5ad
-            ~/.cache/squidpy/*.zarr
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
           key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
           enableCrossOsArchive: true
 
       - name: System dependencies (Linux)
@@ -181,10 +182,10 @@ jobs:
         id: coverage-data-cache
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/squidpy/*.h5ad
-            ~/.cache/squidpy/*.zarr
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
           key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
           enableCrossOsArchive: true
 
       - name: System dependencies (Linux)
