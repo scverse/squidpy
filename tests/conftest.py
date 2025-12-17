@@ -48,6 +48,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
 
     warnings.simplefilter("ignore", OldFormatWarning)
     sc.pl.set_rcParams_defaults()
+    sc.set_figure_params(dpi=40, color_map="viridis")
 
 
 @pytest.fixture(scope="session")
