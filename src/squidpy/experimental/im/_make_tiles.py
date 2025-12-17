@@ -228,12 +228,9 @@ def _save_tiles_to_shapes(
     )
 
     sdata.shapes[shapes_key] = ShapesModel.parse(tile_gdf)
-    try:
-        transformations = get_transformation(sdata.images[image_key], get_all=True)
-    except (KeyError, ValueError):
-        transformations = None
-    if transformations:
-        set_transformation(sdata.shapes[shapes_key], transformations, set_all=True)
+    # we know that a) the element exists and b) it has at least an Identity transformation
+    transformations = get_transformation(sdata.images[image_key], get_all=True)
+    set_transformation(sdata.shapes[shapes_key], transformations, set_all=True)
     logger.info(f"Saved tile grid as 'sdata.shapes[\"{shapes_key}\"]'")
 
 
