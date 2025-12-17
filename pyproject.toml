@@ -102,6 +102,10 @@ optional-dependencies.docs = [
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
 ]
+optional-dependencies.leiden = [
+  "leidenalg",
+  "spatialleiden>=0.4",
+]
 optional-dependencies.test = [
   "coverage[toml]>=7",
   "pytest>=7",
@@ -112,12 +116,10 @@ optional-dependencies.test = [
   "pytest-xdist>=3",
   "scanpy[leiden]",
 ]
-
 urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
-
-urls.Documentation = "https://squidpy.readthedocs.io"
-urls.Home-page = "https://github.com/scverse/squidpy"
-urls.Source = "https://github.com/scverse/squidpy"
+urls."Documentation" = "https://squidpy.readthedocs.io"
+urls."Home-page" = "https://github.com/scverse/squidpy"
+urls."Source" = "https://github.com/scverse/squidpy"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
