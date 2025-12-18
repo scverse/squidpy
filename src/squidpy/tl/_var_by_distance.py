@@ -11,7 +11,6 @@ from anndata import AnnData
 from scanpy import logging as logg
 from sklearn.metrics import DistanceMetric
 from sklearn.neighbors import KDTree
-from sklearn.preprocessing import MinMaxScaler
 
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
@@ -92,7 +91,6 @@ def var_by_distance(
         raise TypeError(f"Invalid type for library_key: {type(library_key)}.")
 
     batch_design_matrices = {}
-    max_distances = {}
     anchor_col_id = 2
     # iterate over slide + anchor combinations (anchor only possible as well)
     combinations: Iterator[tuple[str, str | None]] | zip[tuple[list[int | float], str]]  # mypy
@@ -146,12 +144,11 @@ def var_by_distance(
         else:
             df["obs"] = adata.obs_names
 
-        # store dataframes by (slide, anchor) combination and also the corresponding maximum distance for normalization
+        # store dataframes by (slide, anchor) combinationq
         batch_design_matrices[(batch_var, anchor_var)] = df
-        max_distances[(batch_var, anchor_var)] = df[anchor_var].max()
 
     # normalize euclidean distances by slide
-    batch_design_matrices_ = _normalize_distances(batch_design_matrices, anchor, batch, max_distances)
+    batch_design_matrices_ = _normalize_distances(batch_design_matrices, anchor)
 
     # combine individual data frames
     # merge if multiple anchor points are used but there is no separation by slides
@@ -244,8 +241,6 @@ def _get_coordinates(
 def _normalize_distances(
     mapping_design_matrix: dict[tuple[Any | None, Any], pd.DataFrame],
     anchor: str | list[str],
-    slides: list[str] | list[None],
-    mapping_max_distances: dict[tuple[Any | None, Any], float],
 ) -> list[pd.DataFrame]:
     """Normalize distances to anchor."""
     if not isinstance(anchor, list):
@@ -259,7 +254,5 @@ def _normalize_distances(
 
     # normalize each slide separately will result in all conditions having a maximum distance of 1, which makes them comparable across all distances
     for (_, anchor_point), design_matrix in mapping_design_matrix.items():
-        scaler = MinMaxScaler()
-        scaler.fit(design_matrix[[anchor_point]].values)
-        design_matrix[anchor_point] = scaler.transform(design_matrix[[anchor_point]].values)
+        design_matrix[anchor_point] = design_matrix[anchor_point] / design_matrix[anchor_point].max()
     return list(mapping_design_matrix.values())
