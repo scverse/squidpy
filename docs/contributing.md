@@ -62,9 +62,9 @@ This will list “Standalone” environments and a table of “Matrix” environ
 +------------+---------+--------------------------+----------+---------------------------------+-------------+
 | Name       | Type    | Envs                     | Features | Dependencies                    | Scripts     |
 +------------+---------+--------------------------+----------+---------------------------------+-------------+
-| hatch-test | virtual | hatch-test.py3.10-stable | dev      | coverage-enable-subprocess==1.0 | cov-combine |
-|            |         | hatch-test.py3.13-stable | test     | coverage[toml]~=7.4             | cov-report  |
-|            |         | hatch-test.py3.13-pre    |          | pytest-mock~=3.12               | run         |
+| hatch-test | virtual | hatch-test.py3.11-stable | dev      | coverage-enable-subprocess==1.0 | cov-combine |
+|            |         | hatch-test.py3.14-stable | test     | coverage[toml]~=7.4             | cov-report  |
+|            |         | hatch-test.py3.14-pre    |          | pytest-mock~=3.12               | run         |
 |            |         |                          |          | pytest-randomly~=3.15           | run-cov     |
 |            |         |                          |          | pytest-rerunfailures~=14.0      |             |
 |            |         |                          |          | pytest-xdist[psutil]~=3.5       |             |
@@ -73,18 +73,18 @@ This will list “Standalone” environments and a table of “Matrix” environ
 ```
 
 From the `Envs` column, select the environment name you want to use for development.
-In this example, it would be `hatch-test.py3.13-stable`.
+In this example, it would be `hatch-test.py3.14-stable`.
 
 Next, create the environment with
 
 ```bash
-hatch env create hatch-test.py3.13-stable
+hatch env create hatch-test.py3.14-stable
 ```
 
 Then, obtain the path to the environment using
 
 ```bash
-hatch env find hatch-test.py3.13-stable
+hatch env find hatch-test.py3.14-stable
 ```
 
 In case you are using VScode, now open the command palette (Ctrl+Shift+P) and search for `Python: Select Interpreter`.
