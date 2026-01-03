@@ -39,6 +39,8 @@ from squidpy.gr._utils import (
 
 __all__ = ["spatial_autocorr", "co_occurrence"]
 
+from squidpy.gr._spagft import _spagft
+
 
 it = nt.int32
 ft = nt.float32
@@ -192,6 +194,11 @@ def spatial_autocorr(
         params["stat"] = "C"
         params["expected"] = 1.0
         params["ascending"] = True
+    elif mode.s == "spagft":
+        params["func"] = _spagft
+        params["stat"] = "GFT"
+        params["expected"] = 0.0
+        params["ascending"] = False
     else:
         raise NotImplementedError(f"Mode `{mode}` is not yet implemented.")
 
