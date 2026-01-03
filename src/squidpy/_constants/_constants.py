@@ -131,5 +131,6 @@ class NicheDefinitions(ModeEnum):
     NEIGHBORHOOD = "neighborhood"
     UTAG = "utag"
     CELLCHARTER = "cellcharter"
+    SPATIALLEIDEN = "spatialleiden"
     SPOT = "spot"
     BANKSY = "banksy"

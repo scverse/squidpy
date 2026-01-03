@@ -11,11 +11,13 @@ from enum import Enum
 from multiprocessing import Manager, cpu_count
 from queue import Queue
 from threading import Thread
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import joblib as jl
 import numba
 import numpy as np
+import xarray as xr
+from spatialdata.models import Image2DModel, Labels2DModel
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
 
@@ -255,7 +257,7 @@ def _get_n_cores(n_cores: int | None) -> int:
 @contextmanager
 def verbosity(level: int) -> Generator[None, None, None]:
     """
-    Temporarily set the verbosity level of :mod:`scanpy`.
+    Temporarily set the verbosity level of :doc:`scanpy <scanpy:index>`.
 
     Parameters
     ----------
@@ -347,3 +349,41 @@ def deprecated(reason: str) -> Any:
 
     else:
         raise TypeError(repr(type(reason)))
+
+
+def _get_scale_factors(
+    element: Image2DModel | Labels2DModel,
+) -> list[float]:
+    """
+    Get the scale factors of an image or labels.
+    """
+    if not hasattr(element, "keys"):
+        return []  # element isn't a datatree -> single scale
+
+    shapes = [_yx_from_shape(element[scale].image.shape) for scale in element.keys()]
+
+    factors: list[float] = [(y0 / y1 + x0 / x1) / 2 for (y0, x0), (y1, x1) in zip(shapes, shapes[1:], strict=False)]
+    return [int(f) for f in factors]
+
+
+def _yx_from_shape(shape: tuple[int, ...]) -> tuple[int, int]:
+    if len(shape) == 2:  # (y, x)
+        return shape[0], shape[1]
+    if len(shape) == 3:  # (c, y, x)
+        return shape[1], shape[2]
+
+    raise ValueError(f"Unsupported shape {shape}. Expected (y, x) or (c, y, x).")
+
+
+def _ensure_dim_order(img_da: xr.DataArray, order: Literal["cyx", "yxc"] = "yxc") -> xr.DataArray:
+    """
+    Ensure dims are in the requested order and that a 'c' dim exists.
+    Only supports images with dims subset of {'y','x','c'}.
+    """
+    dims = list(img_da.dims)
+    if "y" not in dims or "x" not in dims:
+        raise ValueError(f'Expected dims to include "y" and "x". Found dims={dims}')
+    if "c" not in dims:
+        img_da = img_da.expand_dims({"c": [0]})
+    # After possible expand, just transpose to target
+    return img_da.transpose(*tuple(order))

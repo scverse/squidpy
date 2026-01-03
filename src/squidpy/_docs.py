@@ -40,7 +40,7 @@ copy
     If ``True``, return the result, otherwise save it to the image container."""
 _numba_parallel = """\
 numba_parallel
-    Whether to use :class:`numba.prange` or not. If `None`, it is determined automatically.
+    Whether to use :func:`numba.prange` or not. If `None`, it is determined automatically.
     For small datasets or small number of interactions, it's recommended to set this to `False`."""
 _seed = """\
 seed
@@ -158,7 +158,7 @@ layer_added
     Layer of new image layer to add into ``img`` object."""
 _chunks_lazy = """\
 chunks
-    Number of chunks for :mod:`dask`. For automatic chunking, use ``chunks = 'auto'``.
+    Number of chunks for :doc:`dask:index`. For automatic chunking, use ``chunks = 'auto'``.
 lazy
     Whether to lazily compute the result or not. Only used when ``chunks != None``."""
 
@@ -194,9 +194,9 @@ library_key
 # static plotting docs
 _plotting_kwargs_static = """\
 scalebar_kwargs
-    Keyword arguments for :meth:`matplotlib_scalebar.ScaleBar`.
+    Keyword arguments for :class:`matplotlib_scalebar.ScaleBar`.
 edges_kwargs
-    Keyword arguments for :func:`networkx.draw_networkx_edges`.
+    Keyword arguments for :func:`networkx.drawing.nx_pylab.draw_networkx_edges`.
 kwargs
     Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
 """

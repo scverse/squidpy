@@ -11,7 +11,7 @@ import numba.types as nt
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numba import njit, prange  # noqa: F401
+from numba import njit
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
@@ -33,15 +33,7 @@ __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
 
 
 class NhoodEnrichmentResult(NamedTuple):
-    """Result of nhood_enrichment function.
-
-    Attributes
-    ----------
-    zscore : NDArray[np.number]
-        Z-score values of enrichment statistic.
-    count : NDArray[np.number]
-        Enrichment count.
-    """
+    """Result of nhood_enrichment function."""
 
     zscore: NDArray[np.number]
     counts: NDArray[np.number]  # NamedTuple inherits from tuple so cannot use 'count' as attribute name
@@ -51,6 +43,11 @@ class NhoodEnrichmentResult(NamedTuple):
 dt = nt.uint32
 ndt = np.uint32
 _template = """
+from __future__ import annotations
+
+from numba import njit, prange
+import numpy as np
+
 @njit(dt[:, :](dt[:], dt[:], dt[:]), parallel={parallel}, fastmath=True)
 def _nenrich_{n_cls}_{parallel}(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA) -> np.ndarray:
     '''

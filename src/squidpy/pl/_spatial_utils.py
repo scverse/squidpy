@@ -6,7 +6,7 @@ from copy import copy
 from functools import partial
 from numbers import Number
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypeAlias
 
 import dask.array as da
 import numpy as np
@@ -29,13 +29,13 @@ from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib_scalebar.scalebar import ScaleBar
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scanpy._settings import settings as sc_settings
-from scanpy.plotting._tools.scatterplots import _add_categorical_legend
+from scanpy import settings as sc_settings
 from skimage.color import label2rgb
 from skimage.morphology import erosion, square
 from skimage.segmentation import find_boundaries
 from skimage.util import map_array
 
+from squidpy._compat import add_categorical_legend
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
@@ -665,7 +665,7 @@ def _decorate_axs(
                 palette=palette,
                 alpha=alpha,
             )
-            _add_categorical_legend(
+            add_categorical_legend(
                 ax,
                 color_source_vector,
                 palette=palette,
@@ -842,12 +842,18 @@ def _prepare_params_plot(
             fig, ax = plt.subplots(figsize=figsize, dpi=dpi, constrained_layout=True)
 
     # set cmap and norm
-    if cmap is None:
-        cmap = plt.rcParams["image.cmap"]
-    if isinstance(cmap, str):
-        cmap = plt.colormaps[cmap]
-    cmap.set_bad("lightgray" if na_color is None else na_color)
 
+    if cmap is None:
+        cmap_name: str = str(plt.rcParams["image.cmap"])
+        cmap_obj = plt.get_cmap(cmap_name)
+    elif isinstance(cmap, str):
+        cmap_obj = plt.get_cmap(cmap)
+    else:
+        cmap_obj = cmap  # already a Colormap
+
+    cmap_obj.set_bad("lightgray" if na_color is None else na_color)
+
+    # build norm as before...
     if isinstance(norm, Normalize):
         pass
     elif vcenter is None:
@@ -863,7 +869,7 @@ def _prepare_params_plot(
         scalebar_dx, scalebar_units = _get_scalebar(scalebar_dx, scalebar_units, len(spatial_params.library_id))
 
     fig_params = FigParams(fig, ax, axs, iter_panels, title, ax_labels, frameon)
-    cmap_params = CmapParams(cmap, img_cmap, norm)
+    cmap_params = CmapParams(cmap_obj, img_cmap, norm)
     scalebar_params = ScalebarParams(scalebar_dx, scalebar_units)
 
     return fig_params, cmap_params, scalebar_params, kwargs

@@ -9,10 +9,7 @@ Please use `https://github.com/scverse/napari-spatialdata` instead.
 
 raise ImportError("The squidpy napari plugin is deprecated, please use https://github.com/scverse/napari-spatialdata")
 
-from typing import (
-    Any,
-    Union,  # noqa: F401
-)
+from typing import Any
 
 import matplotlib.pyplot as plt
 from anndata import AnnData

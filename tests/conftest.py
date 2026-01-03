@@ -19,10 +19,9 @@ import pytest
 import scanpy as sc
 import spatialdata as sd
 from anndata import AnnData, OldFormatWarning
-from geopandas import GeoDataFrame
 from matplotlib.testing.compare import compare_images
 from scipy.sparse import csr_matrix
-from shapely import LineString, Point, Polygon, distance
+from shapely import Point, Polygon
 
 import squidpy as sq
 from squidpy._constants._pkg_constants import Key
@@ -49,6 +48,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
 
     warnings.simplefilter("ignore", OldFormatWarning)
     sc.pl.set_rcParams_defaults()
+    sc.set_figure_params(dpi=40, color_map="viridis")
 
 
 @pytest.fixture(scope="session")
@@ -383,6 +383,11 @@ def sdata_mask_graph():
             "table": sd.models.TableModel().parse(adata),
         }
     )
+
+
+@pytest.fixture()
+def sdata_hne():
+    return sq.datasets.visium_hne_sdata()
 
 
 def _decorate(fn: Callable, clsname: str, name: str | None = None) -> Callable:
