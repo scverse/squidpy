@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import numpy as np
 from scipy.sparse import spmatrix
+
 from squidpy._utils import NDArrayA
+
 
 def _spagft(g: spmatrix, vals: NDArrayA) -> NDArrayA:
     """
@@ -25,6 +29,7 @@ def _spagft(g: spmatrix, vals: NDArrayA) -> NDArrayA:
     n_eig = min(20, lap.shape[0] - 2)
     if n_eig <= 0:
         from scipy.sparse.linalg import ArpackError
+
         raise ArpackError("Number of eigenvectors requested must be positive.")
     eigvals, eigvecs = eigsh(lap, k=n_eig, which="SM")
 

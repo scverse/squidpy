@@ -41,7 +41,6 @@ __all__ = ["spatial_autocorr", "co_occurrence"]
 
 from squidpy.gr._spagft import _spagft
 
-
 it = nt.int32
 ft = nt.float32
 tt = nt.UniTuple
