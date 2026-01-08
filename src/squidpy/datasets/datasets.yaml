@@ -5,7 +5,7 @@
 #   - files: list of files with individual URLs and hashes
 #   - metadata: shape, doc_header, library_id, etc.
 
-s3_base_url: https://scverse-exampledata.s3.amazonaws.com/squidpy/
+s3_base_url: https://exampledata.scverse.org/squidpy/
 
 datasets:
   # ===========================================================================
