@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from squidpy.settings import DeviceType, settings
+from squidpy.settings import settings
 
 
 class TestSettings:
