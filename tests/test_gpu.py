@@ -6,7 +6,6 @@ import pytest
 
 from squidpy.settings import settings
 
-
 # Skip all tests in this module if GPU is not available
 pytestmark = pytest.mark.skipif(
     not settings.gpu_available(),
@@ -28,7 +27,7 @@ class TestGPUCoOccurrence:
             copy=True,
             device="gpu",
         )
-        
+
         assert result is not None
         arr, interval = result
         assert arr.ndim == 3
@@ -47,7 +46,7 @@ class TestGPUCoOccurrence:
             copy=True,
             device="cpu",
         )
-        
+
         # Run on GPU
         gpu_result = sq.gr.co_occurrence(
             adata,
@@ -55,10 +54,10 @@ class TestGPUCoOccurrence:
             copy=True,
             device="gpu",
         )
-        
+
         cpu_arr, cpu_interval = cpu_result
         gpu_arr, gpu_interval = gpu_result
-        
+
         # Results should be close (allow for floating point differences)
         np.testing.assert_allclose(cpu_interval, gpu_interval, rtol=1e-5)
         np.testing.assert_allclose(cpu_arr, gpu_arr, rtol=1e-5)
