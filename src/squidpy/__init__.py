@@ -4,6 +4,7 @@ from importlib import metadata
 from importlib.metadata import PackageMetadata
 
 from squidpy import datasets, experimental, gr, im, pl, read, tl
+from squidpy.settings import settings
 
 try:
     md: PackageMetadata = metadata.metadata(__name__)
@@ -15,4 +16,4 @@ except ImportError:
 
 del metadata, md
 
-__all__ = ["datasets", "experimental", "gr", "im", "pl", "read", "tl"]
+__all__ = ["datasets", "experimental", "gr", "im", "pl", "read", "tl", "settings"]

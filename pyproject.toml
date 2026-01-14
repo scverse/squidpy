@@ -106,6 +106,12 @@ optional-dependencies.leiden = [
   "leidenalg",
   "spatialleiden>=0.4",
 ]
+optional-dependencies.gpu-cuda12 = [
+  "rapids-singlecell[rapids12]",
+]
+optional-dependencies.gpu-cuda11 = [
+  "rapids-singlecell[rapids11]",
+]
 optional-dependencies.test = [
   "coverage[toml]>=7",
   "pytest>=7",

@@ -18,6 +18,7 @@ import numba
 import numpy as np
 import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
+from squidpy.settings import DeviceType
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
 
@@ -387,3 +388,38 @@ def _ensure_dim_order(img_da: xr.DataArray, order: Literal["cyx", "yxc"] = "yxc"
         img_da = img_da.expand_dims({"c": [0]})
     # After possible expand, just transpose to target
     return img_da.transpose(*tuple(order))
+
+
+def resolve_device_arg(device: DeviceType | None) -> Literal["cpu", "gpu"]:
+    """
+    Resolve per-call device argument to actual backend.
+
+    Parameters
+    ----------
+    device
+        Per-call device setting. None uses ``settings.device``.
+
+    Returns
+    -------
+    Literal["cpu", "gpu"]
+        The resolved backend to use.
+
+    Raises
+    ------
+    RuntimeError
+        If GPU is requested but rapids-singlecell is not installed.
+    """
+    from squidpy.settings import settings
+
+    if device is None:
+        device = settings.device
+    if device == "cpu":
+        return "cpu"
+    if device == "gpu":
+        if not settings.gpu_available():
+            raise RuntimeError(
+                "GPU unavailable. Install with: pip install squidpy[gpu-cuda12] or squidpy[gpu-cuda11]"
+            )
+        return "gpu"
+    # if device == "auto"
+    return "gpu" if settings.gpu_available() else "cpu"
