@@ -18,6 +18,7 @@ import numba
 import numpy as np
 import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
+
 from squidpy.settings import DeviceType
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
@@ -417,9 +418,7 @@ def resolve_device_arg(device: DeviceType | None) -> Literal["cpu", "gpu"]:
         return "cpu"
     if device == "gpu":
         if not settings.gpu_available():
-            raise RuntimeError(
-                "GPU unavailable. Install with: pip install squidpy[gpu-cuda12] or squidpy[gpu-cuda11]"
-            )
+            raise RuntimeError("GPU unavailable. Install with: pip install squidpy[gpu-cuda12] or squidpy[gpu-cuda11]")
         return "gpu"
     # if device == "auto"
     return "gpu" if settings.gpu_available() else "cpu"
