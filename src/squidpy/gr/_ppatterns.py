@@ -23,7 +23,7 @@ from statsmodels.stats.multitest import multipletests
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize, resolve_device_arg
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -352,6 +352,7 @@ def co_occurrence(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    device: Literal["cpu", "gpu"] | None = None,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -369,6 +370,9 @@ def co_occurrence(
         Number of splits in which to divide the spatial coordinates in
         :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
     %(parallelize)s
+    device
+        Device to use for computation. If ``None``, uses :attr:`squidpy.settings.device`.
+        Set to ``"gpu"`` to use rapids-singlecell GPU acceleration.
 
     Returns
     -------
@@ -381,6 +385,22 @@ def co_occurrence(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
           computed at ``interval``.
     """
+    effective_device = resolve_device_arg(device)
+
+    if effective_device == "gpu":
+        from rapids_singlecell.squidpy import co_occurrence as rsc_co_occurrence
+
+        return rsc_co_occurrence(
+            adata,
+            cluster_key=cluster_key,
+            spatial_key=spatial_key,
+            interval=interval,
+            copy=copy,
+            n_splits=n_splits,
+            n_jobs=n_jobs,
+            backend=backend,
+            show_progress_bar=show_progress_bar,
+        )
 
     if isinstance(adata, SpatialData):
         adata = adata.table
