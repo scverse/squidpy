@@ -80,7 +80,9 @@ def visium(
 
     coords = pd.read_csv(
         tissue_positions_file,
-        header=1 if tissue_positions_file.name == "tissue_positions.csv" else None,
+        # if file name is tissue_positions.csv, then it has header, so use header=0. Else use
+        # header=None to assign colnames as 1,2,3... explicitly
+        header=0 if tissue_positions_file.name == "tissue_positions.csv" else None,
         index_col=0,
     )
     coords.columns = ["in_tissue", "array_row", "array_col", "pxl_col_in_fullres", "pxl_row_in_fullres"]
