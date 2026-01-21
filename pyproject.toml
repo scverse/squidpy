@@ -101,6 +101,7 @@ optional-dependencies.docs = [
   "sphinx-tabs",
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
+  "docutils<0.22",  # Pin to avoid sphinx-tabs KeyError with backrefs
 ]
 optional-dependencies.leiden = [
   "leidenalg",
