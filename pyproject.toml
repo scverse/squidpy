@@ -88,6 +88,7 @@ optional-dependencies.dev = [
   "ruff",
 ]
 optional-dependencies.docs = [
+  "docutils<0.22",                    # Pin to avoid sphinx-tabs KeyError with backrefs
   "ipython",
   "ipywidgets>=8",
   "myst-nb>=0.17.1",
@@ -101,7 +102,6 @@ optional-dependencies.docs = [
   "sphinx-tabs",
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
-  "docutils<0.22",  # Pin to avoid sphinx-tabs KeyError with backrefs
 ]
 optional-dependencies.leiden = [
   "leidenalg",
