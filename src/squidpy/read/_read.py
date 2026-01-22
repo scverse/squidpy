@@ -85,7 +85,7 @@ def visium(
     # Detect header by checking if first cell is 'barcode' (header) or a barcode value
     with open(tissue_positions_file) as f:
         first_cell = f.readline().split(",")[0].strip()
-    has_header = first_cell == "barcode"
+    has_header = first_cell.lower() == "barcode"
 
     coords = pd.read_csv(
         tissue_positions_file,
