@@ -87,7 +87,10 @@ class TestGpuDispatch:
                 import inspect
 
                 mock_sig = inspect.signature(lambda adata, cluster_key: None)
-                with patch("inspect.signature", side_effect=lambda f: mock_sig if f == mock_rapids_func else inspect.signature(f)):
+                with patch(
+                    "inspect.signature",
+                    side_effect=lambda f: mock_sig if f == mock_rapids_func else inspect.signature(f),
+                ):
                     result = my_func("adata_obj", "leiden", n_jobs=4, backend="threading", device="gpu")
 
         assert result == "gpu_result"
@@ -120,7 +123,10 @@ class TestGpuDispatch:
                 import inspect
 
                 mock_sig = inspect.signature(lambda x: None)
-                with patch("inspect.signature", side_effect=lambda f: mock_sig if f == mock_rapids_func else inspect.signature(f)):
+                with patch(
+                    "inspect.signature",
+                    side_effect=lambda f: mock_sig if f == mock_rapids_func else inspect.signature(f),
+                ):
                     result = my_func(42, device="gpu")
 
         assert result == "rapids_result"
