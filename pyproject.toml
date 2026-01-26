@@ -46,8 +46,8 @@ dependencies = [
   "aiohttp>=3.8.1",
   "anndata>=0.9",
   "cycler>=0.11",
-  "dask[array]>=2021.2,<=2024.11.2",
-  "dask-image>=0.5",
+  "dask[array]>=2021.2",
+  "dask-image>=2024.5",
   "docrep>=0.3.1",
   "fast-array-utils",
   "fsspec>=2021.11",
@@ -104,10 +104,10 @@ optional-dependencies.docs = [
   "sphinxcontrib-spelling>=7.6.2",
 ]
 optional-dependencies.gpu-cuda11 = [
-  "rapids-singlecell[rapids11]",
+  "rapids-singlecell[rapids11]>=0.13.5",
 ]
 optional-dependencies.gpu-cuda12 = [
-  "rapids-singlecell[rapids12]",
+  "rapids-singlecell[rapids12]>=0.13.5",
 ]
 optional-dependencies.leiden = [
   "leidenalg",
