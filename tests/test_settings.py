@@ -6,8 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from squidpy._utils import gpu_dispatch
-from squidpy.settings import settings
+from squidpy.settings import gpu_dispatch, settings
 
 
 class TestSettings:
@@ -27,16 +26,15 @@ class TestSettings:
 
     def test_set_device_invalid(self):
         """Test that invalid device raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid device"):
+        with pytest.raises(ValueError, match="device must be one of"):
             settings.device = "invalid"
 
     def test_set_device_gpu_without_rsc(self):
         """Test that setting device to 'gpu' without rapids-singlecell raises RuntimeError."""
         # This will fail if rapids-singlecell is not installed
         if not settings.gpu_available():
-            with pytest.raises(RuntimeError, match="rapids-singlecell not installed"):
+            with pytest.raises(RuntimeError, match="GPU unavailable"):
                 settings.device = "gpu"
-
 
 class TestGpuDispatch:
     """Test the gpu_dispatch decorator."""
@@ -45,7 +43,7 @@ class TestGpuDispatch:
         """Test that CPU device calls the original function."""
         original_called = []
 
-        @gpu_dispatch("fake_rapids_module")
+        @gpu_dispatch()
         def my_func(x, y, *, n_jobs=1, device=None):
             original_called.append((x, y, n_jobs))
             return x + y
@@ -58,7 +56,7 @@ class TestGpuDispatch:
         """Test that auto device falls back to CPU when GPU unavailable."""
         original_called = []
 
-        @gpu_dispatch("fake_rapids_module")
+        @gpu_dispatch()
         def my_func(x, device=None):
             original_called.append(x)
             return x * 2
@@ -69,38 +67,28 @@ class TestGpuDispatch:
             assert result == 10
             assert original_called == [5]
 
-    def test_gpu_path_filters_parameters(self):
-        """Test that GPU dispatch filters out parameters not in rapids signature."""
-        mock_rapids_func = MagicMock(return_value="gpu_result")
+    def test_gpu_path_calls_adapter(self):
+        """Test that GPU dispatch calls the adapter function from _gpu module."""
+        mock_adapter = MagicMock(return_value="gpu_result")
 
-        # Create a mock module
-        mock_module = MagicMock()
-        mock_module.my_func = mock_rapids_func
-
-        @gpu_dispatch("mock_rapids")
+        @gpu_dispatch()
         def my_func(adata, cluster_key, *, n_jobs=1, backend="loky", device=None):
             return "cpu_result"
 
-        with patch("importlib.import_module", return_value=mock_module):
-            with patch("squidpy._utils.resolve_device_arg", return_value="gpu"):
-                # Mock the rapids function signature to only accept adata and cluster_key
-                import inspect
-
-                mock_sig = inspect.signature(lambda adata, cluster_key: None)
-                with patch(
-                    "inspect.signature",
-                    side_effect=lambda f: mock_sig if f == mock_rapids_func else inspect.signature(f),
-                ):
-                    result = my_func("adata_obj", "leiden", n_jobs=4, backend="threading", device="gpu")
+        with patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"):
+            with patch("squidpy.gr._gpu.my_func_gpu", mock_adapter, create=True):
+                result = my_func("adata_obj", "leiden", n_jobs=4, backend="threading", device="gpu")
 
         assert result == "gpu_result"
-        # Should only be called with adata and cluster_key, not n_jobs or backend
-        mock_rapids_func.assert_called_once_with(adata="adata_obj", cluster_key="leiden")
+        # Adapter receives all args except device
+        mock_adapter.assert_called_once_with(
+            adata="adata_obj", cluster_key="leiden", n_jobs=4, backend="threading"
+        )
 
     def test_preserves_function_metadata(self):
         """Test that the decorator preserves function name and docstring."""
 
-        @gpu_dispatch("fake_module")
+        @gpu_dispatch()
         def documented_func(x, device=None):
             """This is the docstring."""
             return x
@@ -108,26 +96,17 @@ class TestGpuDispatch:
         assert documented_func.__name__ == "documented_func"
         assert documented_func.__doc__ == """This is the docstring."""
 
-    def test_custom_rapids_func_name(self):
-        """Test using a custom rapids function name."""
-        mock_rapids_func = MagicMock(return_value="rapids_result")
-        mock_module = MagicMock()
-        mock_module.different_name = mock_rapids_func
+    def test_custom_gpu_func_name(self):
+        """Test using a custom GPU adapter function name."""
+        mock_adapter = MagicMock(return_value="gpu_result")
 
-        @gpu_dispatch("mock_rapids", rapids_func_name="different_name")
+        @gpu_dispatch("custom_adapter_name")
         def my_func(x, device=None):
             return "cpu_result"
 
-        with patch("importlib.import_module", return_value=mock_module):
-            with patch("squidpy._utils.resolve_device_arg", return_value="gpu"):
-                import inspect
+        with patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"):
+            with patch("squidpy.gr._gpu.custom_adapter_name", mock_adapter, create=True):
+                result = my_func(42, device="gpu")
 
-                mock_sig = inspect.signature(lambda x: None)
-                with patch(
-                    "inspect.signature",
-                    side_effect=lambda f: mock_sig if f == mock_rapids_func else inspect.signature(f),
-                ):
-                    result = my_func(42, device="gpu")
-
-        assert result == "rapids_result"
-        mock_rapids_func.assert_called_once_with(x=42)
+        assert result == "gpu_result"
+        mock_adapter.assert_called_once_with(x=42)

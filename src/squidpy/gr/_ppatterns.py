@@ -23,7 +23,8 @@ from statsmodels.stats.multitest import multipletests
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, gpu_dispatch, parallelize
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy.settings import gpu_dispatch
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -45,7 +46,7 @@ bl = nt.boolean
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
-@gpu_dispatch("rapids_singlecell.squidpy_gpu")
+@gpu_dispatch()
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),
@@ -106,11 +107,11 @@ def spatial_autocorr(
         Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
     attr
         Which attribute of :class:`~anndata.AnnData` to access. See ``genes`` parameter for more information.
-    %(seed)s
+        Ignored when ``device='gpu'``.
+    %(seed_device)s
     %(copy)s
-    %(parallelize)s
-    device
-        Device for computation: ``"cpu"``, ``"gpu"``, or ``None`` (use ``settings.device``).
+    %(parallelize_device)s
+    %(device)s
 
     Returns
     -------
@@ -346,7 +347,7 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 
 @d.dedent
-@gpu_dispatch("rapids_singlecell.squidpy_gpu")
+@gpu_dispatch()
 def co_occurrence(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -373,10 +374,9 @@ def co_occurrence(
     %(copy)s
     n_splits
         Number of splits in which to divide the spatial coordinates in
-        :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
-    %(parallelize)s
-    device
-        Device for computation: ``"cpu"``, ``"gpu"``, or ``None`` (use ``settings.device``).
+        :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``. Ignored when ``device='gpu'``.
+    %(parallelize_device)s
+    %(device)s
 
     Returns
     -------

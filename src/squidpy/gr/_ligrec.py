@@ -20,7 +20,8 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, gpu_dispatch, parallelize
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy.settings import gpu_dispatch
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_positive,
@@ -633,7 +634,7 @@ class PermutationTest(PermutationTestABC):
 
 
 @d.dedent
-@gpu_dispatch("rapids_singlecell.squidpy_gpu")
+@gpu_dispatch()
 def ligrec(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -659,8 +660,7 @@ def ligrec(
     %(PT_test.parameters)s
     gene_symbols
         Key in :attr:`anndata.AnnData.var` to use instead of :attr:`anndata.AnnData.var_names`.
-    device
-        Device for computation: ``"cpu"``, ``"gpu"``, or ``None`` (use ``settings.device``).
+    %(device)s
 
     Returns
     -------
