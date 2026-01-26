@@ -32,10 +32,10 @@ class SqSettings:
         """Check if GPU acceleration is available."""
         try:
             import rapids_singlecell  # noqa: F401
+
             return True
         except ImportError:
             return False
-
 
 
 settings = SqSettings()

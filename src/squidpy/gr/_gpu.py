@@ -7,9 +7,9 @@ ensuring compatibility and clear documentation of supported parameters.
 from __future__ import annotations
 
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, Sequence
+from typing import TYPE_CHECKING, Any, Literal
 
 from squidpy._constants._pkg_constants import Key
 
@@ -150,7 +150,11 @@ def spatial_autocorr_gpu(
 
     check = check_gpu_params(
         "spatial_autocorr",
-        attr=attr, seed=seed, n_jobs=n_jobs, backend=backend, show_progress_bar=show_progress_bar,
+        attr=attr,
+        seed=seed,
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
     )
 
     return _spatial_autocorr_gpu(
@@ -186,7 +190,10 @@ def co_occurrence_gpu(
 
     check_gpu_params(
         "co_occurrence",
-        n_splits=n_splits, n_jobs=n_jobs, backend=backend, show_progress_bar=show_progress_bar,
+        n_splits=n_splits,
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
     )
 
     return _co_occurrence_gpu(
@@ -228,10 +235,16 @@ def ligrec_gpu(
 
     check_gpu_params(
         "ligrec",
-        clusters=clusters, seed=seed, numba_parallel=numba_parallel,
-        n_jobs=n_jobs, backend=backend, show_progress_bar=show_progress_bar,
-        transmitter_params=transmitter_params, receiver_params=receiver_params,
-        interactions_params=interactions_params, alpha=alpha,
+        clusters=clusters,
+        seed=seed,
+        numba_parallel=numba_parallel,
+        n_jobs=n_jobs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
+        transmitter_params=transmitter_params,
+        receiver_params=receiver_params,
+        interactions_params=interactions_params,
+        alpha=alpha,
     )
 
     return _ligrec_gpu(

@@ -36,6 +36,7 @@ class TestSettings:
             with pytest.raises(RuntimeError, match="GPU unavailable"):
                 settings.device = "gpu"
 
+
 class TestGpuDispatch:
     """Test the gpu_dispatch decorator."""
 
@@ -81,9 +82,7 @@ class TestGpuDispatch:
 
         assert result == "gpu_result"
         # Adapter receives all args except device
-        mock_adapter.assert_called_once_with(
-            adata="adata_obj", cluster_key="leiden", n_jobs=4, backend="threading"
-        )
+        mock_adapter.assert_called_once_with(adata="adata_obj", cluster_key="leiden", n_jobs=4, backend="threading")
 
     def test_preserves_function_metadata(self):
         """Test that the decorator preserves function name and docstring."""

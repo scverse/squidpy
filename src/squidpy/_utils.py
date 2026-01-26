@@ -387,5 +387,3 @@ def _ensure_dim_order(img_da: xr.DataArray, order: Literal["cyx", "yxc"] = "yxc"
         img_da = img_da.expand_dims({"c": [0]})
     # After possible expand, just transpose to target
     return img_da.transpose(*tuple(order))
-
-

@@ -21,7 +21,6 @@ from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
-from squidpy.settings import gpu_dispatch
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_positive,
@@ -30,6 +29,7 @@ from squidpy.gr._utils import (
     _genesymbols,
     _save_data,
 )
+from squidpy.settings import gpu_dispatch
 
 __all__ = ["ligrec", "PermutationTest"]
 
