@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from squidpy.gr._gpu import GpuParamSpec
 from squidpy.settings import gpu_dispatch, settings
 
 
@@ -14,7 +15,6 @@ class TestSettings:
 
     def test_default_device(self):
         """Test that default device is 'auto'."""
-        # Reset to default
         settings.device = "auto"
         assert settings.device == "auto"
 
@@ -31,7 +31,6 @@ class TestSettings:
 
     def test_set_device_gpu_without_rsc(self):
         """Test that setting device to 'gpu' without rapids-singlecell raises RuntimeError."""
-        # This will fail if rapids-singlecell is not installed
         if not settings.gpu_available():
             with pytest.raises(RuntimeError, match="GPU unavailable"):
                 settings.device = "gpu"
@@ -40,72 +39,135 @@ class TestSettings:
 class TestGpuDispatch:
     """Test the gpu_dispatch decorator."""
 
-    def test_cpu_path_calls_original(self):
-        """Test that CPU device calls the original function."""
-        original_called = []
+    @pytest.fixture
+    def mock_gpu_module(self):
+        """Create a mock GPU module with adapter function."""
+        mock_adapter = MagicMock(return_value="gpu_result")
+        mock_module = MagicMock()
+        mock_module.my_func = mock_adapter
+        return mock_module, mock_adapter
+
+    def test_cpu_path(self):
+        """Test CPU device calls original function."""
+        calls = []
 
         @gpu_dispatch()
         def my_func(x, y, *, n_jobs=1, device=None):
-            original_called.append((x, y, n_jobs))
+            calls.append((x, y, n_jobs))
             return x + y
 
-        result = my_func(1, 2, device="cpu")
-        assert result == 3
-        assert original_called == [(1, 2, 1)]
+        assert my_func(1, 2, device="cpu") == 3
+        assert calls == [(1, 2, 1)]
 
-    def test_cpu_path_with_auto_device_no_gpu(self):
-        """Test that auto device falls back to CPU when GPU unavailable."""
-        original_called = []
+    def test_auto_device_falls_back_to_cpu(self):
+        """Test auto device falls back to CPU when GPU unavailable."""
+        if settings.gpu_available():
+            pytest.skip("GPU is available")
+
+        calls = []
 
         @gpu_dispatch()
         def my_func(x, device=None):
-            original_called.append(x)
+            calls.append(x)
             return x * 2
 
-        # With auto and no GPU available, should call original
-        if not settings.gpu_available():
-            result = my_func(5, device="auto")
-            assert result == 10
-            assert original_called == [5]
+        assert my_func(5, device="auto") == 10
+        assert calls == [5]
 
-    def test_gpu_path_calls_adapter(self):
-        """Test that GPU dispatch calls the adapter function from _gpu module."""
-        mock_adapter = MagicMock(return_value="gpu_result")
+    def test_gpu_path(self, mock_gpu_module):
+        """Test GPU device dispatches to GPU module."""
+        mock_module, mock_adapter = mock_gpu_module
 
-        @gpu_dispatch()
-        def my_func(adata, cluster_key, *, n_jobs=1, backend="loky", device=None):
+        @gpu_dispatch(gpu_module="test_module")
+        def my_func(x, device=None):
             return "cpu_result"
 
-        with patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"):
-            with patch("squidpy.gr._gpu.my_func_gpu", mock_adapter, create=True):
-                result = my_func("adata_obj", "leiden", n_jobs=4, backend="threading", device="gpu")
+        with (
+            patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+            patch("importlib.import_module", return_value=mock_module),
+            patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", {"my_func": {"cpu_only": {}, "gpu_only": {}}}),
+        ):
+            assert my_func(42, device="gpu") == "gpu_result"
 
-        assert result == "gpu_result"
-        # Adapter receives all args except device
-        mock_adapter.assert_called_once_with(adata="adata_obj", cluster_key="leiden", n_jobs=4, backend="threading")
+        mock_adapter.assert_called_once_with(x=42)
+
+    def test_custom_gpu_func_name(self, mock_gpu_module):
+        """Test custom GPU function name."""
+        mock_module, mock_adapter = mock_gpu_module
+        mock_module.custom_name = mock_adapter
+
+        @gpu_dispatch(gpu_module="test_module", gpu_func_name="custom_name")
+        def my_func(x, device=None):
+            return "cpu_result"
+
+        with (
+            patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+            patch("importlib.import_module", return_value=mock_module),
+            patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", {"my_func": {"cpu_only": {}, "gpu_only": {}}}),
+        ):
+            assert my_func(42, device="gpu") == "gpu_result"
+
+        mock_adapter.assert_called_once_with(x=42)
 
     def test_preserves_function_metadata(self):
-        """Test that the decorator preserves function name and docstring."""
+        """Test decorator preserves function name and injects GPU note."""
 
         @gpu_dispatch()
         def documented_func(x, device=None):
-            """This is the docstring."""
+            """Original docstring.
+
+            Parameters
+            ----------
+            x
+                Input value.
+            """
             return x
 
         assert documented_func.__name__ == "documented_func"
-        assert documented_func.__doc__ == """This is the docstring."""
+        assert "Original docstring." in documented_func.__doc__
+        assert "GPU acceleration" in documented_func.__doc__
 
-    def test_custom_gpu_func_name(self):
-        """Test using a custom GPU adapter function name."""
-        mock_adapter = MagicMock(return_value="gpu_result")
+    def test_cpu_only_params_filtered_on_gpu(self, mock_gpu_module):
+        """Test CPU-only params are filtered out on GPU."""
+        mock_module, mock_adapter = mock_gpu_module
+        registry = {
+            "my_func": {
+                "cpu_only": {"n_jobs": GpuParamSpec(None)},
+                "gpu_only": {},
+            }
+        }
 
-        @gpu_dispatch("custom_adapter_name")
-        def my_func(x, device=None):
+        @gpu_dispatch(gpu_module="test_module")
+        def my_func(x, n_jobs=None, device=None):
             return "cpu_result"
 
-        with patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"):
-            with patch("squidpy.gr._gpu.custom_adapter_name", mock_adapter, create=True):
-                result = my_func(42, device="gpu")
+        with (
+            patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+            patch("importlib.import_module", return_value=mock_module),
+            patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry),
+        ):
+            my_func(42, n_jobs=4, device="gpu")
 
-        assert result == "gpu_result"
+        # n_jobs should be filtered out
         mock_adapter.assert_called_once_with(x=42)
+
+    def test_gpu_only_params_error_on_cpu_if_non_default(self):
+        """Test GPU-only params raise error on CPU if non-default."""
+        registry = {
+            "my_func": {
+                "cpu_only": {},
+                "gpu_only": {"use_sparse": GpuParamSpec(True)},
+            }
+        }
+
+        @gpu_dispatch(gpu_module="test_module")
+        def my_func(x, use_sparse=True, device=None):
+            return "cpu_result"
+
+        with patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry):
+            # Default value works
+            assert my_func(42, use_sparse=True, device="cpu") == "cpu_result"
+
+            # Non-default raises error
+            with pytest.raises(ValueError, match="use_sparse.*only supported on GPU"):
+                my_func(42, use_sparse=False, device="cpu")

@@ -1,21 +1,16 @@
-"""GPU adapter functions for squidpy.gr functions.
+"""GPU parameter registry for squidpy.gr functions.
 
-These stubs provide explicit parameter mapping between squidpy and rapids_singlecell,
-ensuring compatibility and clear documentation of supported parameters.
+Defines which parameters are CPU-only (ignored on GPU) and GPU-only (ignored on CPU).
+The gpu_dispatch decorator uses this registry to automatically handle parameter filtering.
 """
 
 from __future__ import annotations
 
-import warnings
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
-from squidpy._constants._pkg_constants import Key
-
-if TYPE_CHECKING:
-    from anndata import AnnData
-    from numpy.typing import NDArray
+__all__ = ["GPU_PARAM_REGISTRY", "GpuParamSpec", "check_gpu_params", "check_cpu_params"]
 
 
 @dataclass
@@ -43,6 +38,8 @@ _PARALLELIZE: dict[str, GpuParamSpec] = {
 _SEED: dict[str, GpuParamSpec] = {"seed": GpuParamSpec(None)}
 
 # Registry: {func_name: {"cpu_only": {...}, "gpu_only": {...}}}
+# - cpu_only: parameters ignored on GPU (warn if non-default, then filter out)
+# - gpu_only: parameters ignored on CPU (error if non-default, pass through to GPU)
 GPU_PARAM_REGISTRY: dict[str, dict[str, dict[str, GpuParamSpec]]] = {
     "spatial_autocorr": {
         "cpu_only": {
@@ -77,17 +74,8 @@ GPU_PARAM_REGISTRY: dict[str, dict[str, dict[str, GpuParamSpec]]] = {
 }
 
 
-@dataclass
-class CheckResult:
-    """Result of parameter compatibility check."""
-
-    ignored: dict[str, Any] = field(default_factory=dict)
-    warnings: list[str] = field(default_factory=list)
-    gpu_defaults: dict[str, Any] = field(default_factory=dict)
-
-
-def check_gpu_params(func_name: str, **cpu_only_values: Any) -> CheckResult:
-    """Check CPU-only params against registry, warn about non-defaults, return GPU defaults.
+def check_gpu_params(func_name: str, **cpu_only_values: Any) -> None:
+    """Check CPU-only params on GPU, raise error if non-default.
 
     Parameters
     ----------
@@ -95,11 +83,14 @@ def check_gpu_params(func_name: str, **cpu_only_values: Any) -> CheckResult:
         Name of the function in GPU_PARAM_REGISTRY.
     **cpu_only_values
         CPU-only parameter values to check.
+
+    Raises
+    ------
+    ValueError
+        If a CPU-only parameter has a non-default value on GPU.
     """
-    result = CheckResult()
     registry = GPU_PARAM_REGISTRY.get(func_name, {"cpu_only": {}, "gpu_only": {}})
 
-    # Check CPU-only params
     for name, spec in registry["cpu_only"].items():
         if name not in cpu_only_values:
             continue
@@ -109,155 +100,36 @@ def check_gpu_params(func_name: str, **cpu_only_values: Any) -> CheckResult:
         if spec.validator:
             msg = spec.validator(value)
         elif value != spec.default:
-            msg = spec.message or f"{name}={value!r} is ignored on GPU."
+            msg = spec.message or f"{name}={value!r} is only supported on CPU. Use device='cpu' or remove this argument."
         else:
             msg = None
 
         if msg:
-            msg = msg.format(name=name, value=value)
-            result.ignored[name] = value
-            result.warnings.append(msg)
-            warnings.warn(msg, UserWarning, stacklevel=3)
+            raise ValueError(msg.format(name=name, value=value))
 
-    # Collect GPU-only param defaults
+
+def check_cpu_params(func_name: str, **gpu_only_values: Any) -> None:
+    """Check GPU-only params on CPU, raise error if non-default.
+
+    Parameters
+    ----------
+    func_name
+        Name of the function in GPU_PARAM_REGISTRY.
+    **gpu_only_values
+        GPU-only parameter values to check.
+
+    Raises
+    ------
+    ValueError
+        If a GPU-only parameter has a non-default value on CPU.
+    """
+    registry = GPU_PARAM_REGISTRY.get(func_name, {"cpu_only": {}, "gpu_only": {}})
+
     for name, spec in registry["gpu_only"].items():
-        result.gpu_defaults[name] = spec.default
+        if name not in gpu_only_values:
+            continue
+        value = gpu_only_values[name]
 
-    return result
-
-
-def spatial_autocorr_gpu(
-    adata: AnnData,
-    connectivity_key: str = Key.obsp.spatial_conn(),
-    genes: str | int | Sequence[str] | Sequence[int] | None = None,
-    mode: Literal["moran", "geary"] = "moran",
-    transformation: bool = True,
-    n_perms: int | None = None,
-    two_tailed: bool = False,
-    corr_method: str | None = "fdr_bh",
-    layer: str | None = None,
-    use_raw: bool = False,
-    copy: bool = False,
-    # CPU-only params
-    attr: Literal["obs", "X", "obsm"] = "X",
-    seed: int | None = None,
-    n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
-) -> Any:
-    """GPU adapter for spatial_autocorr via rapids_singlecell."""
-    from rapids_singlecell.squidpy_gpu import spatial_autocorr as _spatial_autocorr_gpu
-
-    check = check_gpu_params(
-        "spatial_autocorr",
-        attr=attr,
-        seed=seed,
-        n_jobs=n_jobs,
-        backend=backend,
-        show_progress_bar=show_progress_bar,
-    )
-
-    return _spatial_autocorr_gpu(
-        adata=adata,
-        connectivity_key=connectivity_key,
-        genes=genes,
-        mode=mode,
-        transformation=transformation,
-        n_perms=n_perms,
-        two_tailed=two_tailed,
-        corr_method=corr_method,
-        layer=layer,
-        use_raw=use_raw,
-        copy=copy,
-        **check.gpu_defaults,
-    )
-
-
-def co_occurrence_gpu(
-    adata: AnnData,
-    cluster_key: str,
-    spatial_key: str = Key.obsm.spatial,
-    interval: int | NDArray[Any] = 50,
-    copy: bool = False,
-    # CPU-only params
-    n_splits: int | None = None,
-    n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
-) -> Any:
-    """GPU adapter for co_occurrence via rapids_singlecell."""
-    from rapids_singlecell.squidpy_gpu import co_occurrence as _co_occurrence_gpu
-
-    check_gpu_params(
-        "co_occurrence",
-        n_splits=n_splits,
-        n_jobs=n_jobs,
-        backend=backend,
-        show_progress_bar=show_progress_bar,
-    )
-
-    return _co_occurrence_gpu(
-        adata=adata,
-        cluster_key=cluster_key,
-        spatial_key=spatial_key,
-        interval=interval,
-        copy=copy,
-    )
-
-
-def ligrec_gpu(
-    adata: AnnData,
-    cluster_key: str,
-    interactions: Any = None,
-    complex_policy: Literal["min", "all"] = "min",
-    threshold: float = 0.01,
-    corr_method: str | None = None,
-    corr_axis: Literal["interactions", "clusters"] = "clusters",
-    use_raw: bool = True,
-    copy: bool = False,
-    key_added: str | None = None,
-    gene_symbols: str | None = None,
-    n_perms: int = 1000,
-    # CPU-only params
-    clusters: Any = None,
-    seed: int | None = None,
-    numba_parallel: bool | None = None,
-    n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
-    transmitter_params: dict[str, Any] | None = None,
-    receiver_params: dict[str, Any] | None = None,
-    interactions_params: dict[str, Any] | None = None,
-    alpha: float = 0.05,
-) -> Any:
-    """GPU adapter for ligrec via rapids_singlecell."""
-    from rapids_singlecell.squidpy_gpu import ligrec as _ligrec_gpu
-
-    check_gpu_params(
-        "ligrec",
-        clusters=clusters,
-        seed=seed,
-        numba_parallel=numba_parallel,
-        n_jobs=n_jobs,
-        backend=backend,
-        show_progress_bar=show_progress_bar,
-        transmitter_params=transmitter_params,
-        receiver_params=receiver_params,
-        interactions_params=interactions_params,
-        alpha=alpha,
-    )
-
-    return _ligrec_gpu(
-        adata=adata,
-        cluster_key=cluster_key,
-        interactions=interactions,
-        complex_policy=complex_policy,
-        threshold=threshold,
-        corr_method=corr_method,
-        corr_axis=corr_axis,
-        use_raw=use_raw,
-        copy=copy,
-        key_added=key_added,
-        gene_symbols=gene_symbols,
-        n_perms=n_perms,
-    )
+        if value != spec.default:
+            msg = f"{name}={value!r} is only supported on GPU. Use device='gpu' or remove this argument."
+            raise ValueError(msg)

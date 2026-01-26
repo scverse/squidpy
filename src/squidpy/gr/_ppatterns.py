@@ -60,6 +60,7 @@ def spatial_autocorr(
     layer: str | None = None,
     seed: int | None = None,
     use_raw: bool = False,
+    use_sparse: bool = True,
     copy: bool = False,
     n_jobs: int | None = None,
     backend: str = "loky",
@@ -108,6 +109,8 @@ def spatial_autocorr(
     attr
         Which attribute of :class:`~anndata.AnnData` to access. See ``genes`` parameter for more information.
         Ignored when ``device='gpu'``.
+    use_sparse
+        If `True`, use sparse matrix representation for the input matrix. Only used when ``device='gpu'``.
     %(seed_device)s
     %(copy)s
     %(parallelize_device)s

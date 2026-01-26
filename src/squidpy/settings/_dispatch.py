@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import functools
+import importlib
 import inspect
 import re
 from collections.abc import Callable
 from typing import Any, Literal, TypeVar
 
+from squidpy.gr._gpu import GPU_PARAM_REGISTRY, check_cpu_params, check_gpu_params
 from squidpy.settings._settings import settings
 
 __all__ = ["gpu_dispatch"]
@@ -55,15 +57,31 @@ def _inject_gpu_note(doc: str | None, func_name: str) -> str | None:
     return doc + "\n\n" + _make_gpu_note(func_name)
 
 
-def gpu_dispatch(gpu_func_name: str | None = None) -> Callable[[F], F]:
-    """Decorator to dispatch to GPU adapter when device='gpu'.
+def gpu_dispatch(
+    gpu_module: str = "rapids_singlecell.gr",
+    gpu_func_name: str | None = None,
+) -> Callable[[F], F]:
+    """Decorator to dispatch to GPU implementation when device='gpu'.
+
+    Uses the GPU_PARAM_REGISTRY from squidpy.gr._gpu to:
+    - Warn about CPU-only parameters that differ from defaults, then filter them out
+    - Filter out GPU-only parameters on CPU (they only affect GPU)
 
     Also injects a GPU note into the function's docstring.
+
+    Parameters
+    ----------
+    gpu_module
+        Module path containing the GPU implementation.
+    gpu_func_name
+        Name of GPU function. Defaults to same name as decorated function.
     """
 
     def decorator(func: F) -> F:
+        func_name = func.__name__
+
         # Inject GPU note into docstring
-        func.__doc__ = _inject_gpu_note(func.__doc__, func.__name__)
+        func.__doc__ = _inject_gpu_note(func.__doc__, func_name)
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -81,12 +99,29 @@ def gpu_dispatch(gpu_func_name: str | None = None) -> Callable[[F], F]:
             # Handle **kwargs: unpack instead of passing as kwargs=dict
             extra_kwargs = all_args.pop("kwargs", {})
 
-            if _resolve_device(device) == "gpu":
-                from squidpy.gr import _gpu
+            # Get registry for this function
+            registry = GPU_PARAM_REGISTRY.get(func_name, {"cpu_only": {}, "gpu_only": {}})
 
-                adapter_name = gpu_func_name if gpu_func_name is not None else f"{func.__name__}_gpu"
-                gpu_adapter = getattr(_gpu, adapter_name)
-                return gpu_adapter(**all_args, **extra_kwargs)
+            if _resolve_device(device) == "gpu":
+                # Collect CPU-only param values and check them (warn if non-default)
+                cpu_only_values = {k: all_args.pop(k) for k in list(all_args) if k in registry["cpu_only"]}
+                cpu_only_values.update(
+                    {k: extra_kwargs.pop(k) for k in list(extra_kwargs) if k in registry["cpu_only"]}
+                )
+
+                check_gpu_params(func_name, **cpu_only_values)
+
+                # Import and call GPU function
+                module = importlib.import_module(gpu_module)
+                gpu_func = getattr(module, gpu_func_name or func_name)
+
+                return gpu_func(**all_args, **extra_kwargs)
+
+            # CPU path: check gpu_only params (error if non-default), then filter them out
+            gpu_only_values = {k: all_args.pop(k) for k in list(all_args) if k in registry["gpu_only"]}
+            gpu_only_values.update({k: extra_kwargs.pop(k) for k in list(extra_kwargs) if k in registry["gpu_only"]})
+
+            check_cpu_params(func_name, **gpu_only_values)
 
             return func(**all_args, **extra_kwargs)
 
