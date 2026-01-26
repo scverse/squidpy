@@ -23,7 +23,7 @@ from statsmodels.stats.multitest import multipletests
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize, resolve_device_arg
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, gpu_dispatch, parallelize
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -342,6 +342,7 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 
 @d.dedent
+@gpu_dispatch("rapids_singlecell.squidpy")
 def co_occurrence(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -385,23 +386,6 @@ def co_occurrence(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
           computed at ``interval``.
     """
-    effective_device = resolve_device_arg(device)
-
-    if effective_device == "gpu":
-        from rapids_singlecell.squidpy import co_occurrence as rsc_co_occurrence
-
-        return rsc_co_occurrence(
-            adata,
-            cluster_key=cluster_key,
-            spatial_key=spatial_key,
-            interval=interval,
-            copy=copy,
-            n_splits=n_splits,
-            n_jobs=n_jobs,
-            backend=backend,
-            show_progress_bar=show_progress_bar,
-        )
-
     if isinstance(adata, SpatialData):
         adata = adata.table
     _assert_categorical_obs(adata, key=cluster_key)
