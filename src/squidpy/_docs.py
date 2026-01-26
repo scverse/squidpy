@@ -132,7 +132,7 @@ seed
 _device = """\
 device
     Device for computation: ``'cpu'``, ``'gpu'``, or ``None`` (use ``squidpy.settings.device``).
-    When ``'gpu'``, dispatches to :mod:`rapids_singlecell` for GPU-accelerated computation."""
+    When ``'gpu'``, dispatches to :doc:`rapids_singlecell <rapids_singlecell:index>` for GPU-accelerated computation."""
 _channels = """\
 channels
     Channels for this feature is computed. If `None`, use all channels."""
