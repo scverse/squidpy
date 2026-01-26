@@ -45,6 +45,7 @@ bl = nt.boolean
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
+@gpu_dispatch("rapids_singlecell.squidpy_gpu")
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),
@@ -62,6 +63,7 @@ def spatial_autocorr(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    device: Literal["cpu", "gpu"] | None = None,
 ) -> pd.DataFrame | None:
     """
     Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
@@ -107,6 +109,9 @@ def spatial_autocorr(
     %(seed)s
     %(copy)s
     %(parallelize)s
+    device
+        Device to use for computation. If ``None``, uses :attr:`squidpy.settings.device`.
+        Set to ``"gpu"`` to use rapids-singlecell GPU acceleration.
 
     Returns
     -------

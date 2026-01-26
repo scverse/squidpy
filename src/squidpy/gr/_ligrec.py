@@ -20,7 +20,7 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, gpu_dispatch, parallelize
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_positive,
@@ -633,6 +633,7 @@ class PermutationTest(PermutationTestABC):
 
 
 @d.dedent
+@gpu_dispatch("rapids_singlecell.squidpy_gpu")
 def ligrec(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -645,6 +646,7 @@ def ligrec(
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
+    device: Literal["cpu", "gpu"] | None = None,
     **kwargs: Any,
 ) -> Mapping[str, pd.DataFrame] | None:
     """
@@ -657,6 +659,9 @@ def ligrec(
     %(PT_test.parameters)s
     gene_symbols
         Key in :attr:`anndata.AnnData.var` to use instead of :attr:`anndata.AnnData.var_names`.
+    device
+        Device to use for computation. If ``None``, uses :attr:`squidpy.settings.device`.
+        Set to ``"gpu"`` to use rapids-singlecell GPU acceleration.
 
     Returns
     -------
