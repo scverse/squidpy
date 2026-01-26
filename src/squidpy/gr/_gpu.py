@@ -100,7 +100,9 @@ def check_gpu_params(func_name: str, **cpu_only_values: Any) -> None:
         if spec.validator:
             msg = spec.validator(value)
         elif value != spec.default:
-            msg = spec.message or f"{name}={value!r} is only supported on CPU. Use device='cpu' or remove this argument."
+            msg = (
+                spec.message or f"{name}={value!r} is only supported on CPU. Use device='cpu' or remove this argument."
+            )
         else:
             msg = None
 
