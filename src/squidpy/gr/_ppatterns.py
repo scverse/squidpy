@@ -342,7 +342,7 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 
 @d.dedent
-@gpu_dispatch("rapids_singlecell.squidpy")
+@gpu_dispatch("rapids_singlecell.squidpy_gpu")
 def co_occurrence(
     adata: AnnData | SpatialData,
     cluster_key: str,

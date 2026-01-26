@@ -20,7 +20,7 @@ __all__ = [
 ]
 
 # See https://github.com/scverse/squidpy/issues/1061 for more details
-_SET_DEFAULT_COLORS_FOR_CATEGORICAL_OBS_CHANGED = Version(version("scanpy")) >= Version("0.12.0rc1")
+_SET_DEFAULT_COLORS_FOR_CATEGORICAL_OBS_CHANGED = Version("0.12.0rc1") <= Version(version("scanpy")) < Version("0.12.0")
 
 if _SET_DEFAULT_COLORS_FOR_CATEGORICAL_OBS_CHANGED:
     from scanpy.plotting._utils import _set_default_colors_for_categorical_obs as set_default_colors_for_categorical_obs

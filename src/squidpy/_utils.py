@@ -441,7 +441,7 @@ def gpu_dispatch(rapids_module: str, rapids_func_name: str | None = None) -> Cal
     Parameters
     ----------
     rapids_module
-        Module path, e.g. "rapids_singlecell.squidpy" or "rapids_singlecell.gr"
+        Module path, e.g. "rapids_singlecell.squidpy_gpu" or "rapids_singlecell.gr"
     rapids_func_name
         Function name in the rapids module. If None, uses the decorated function's name.
 
@@ -452,7 +452,7 @@ def gpu_dispatch(rapids_module: str, rapids_func_name: str | None = None) -> Cal
 
     Examples
     --------
-    >>> @gpu_dispatch("rapids_singlecell.squidpy")
+    >>> @gpu_dispatch("rapids_singlecell.squidpy_gpu")
     ... def co_occurrence(adata, cluster_key, *, device=None, n_jobs=None, ...):
     ...     # CPU implementation
     ...     ...
