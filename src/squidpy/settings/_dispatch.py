@@ -14,13 +14,6 @@ __all__ = ["gpu_dispatch"]
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-_GPU_NOTE_TEMPLATE = """
-.. note::
-    This function supports GPU acceleration via :doc:`rapids_singlecell <rapids_singlecell:index>`.
-    See :func:`rapids_singlecell.squidpy_gpu.{func_name}` for the GPU implementation.
-"""
-
-
 def _resolve_device(device: Literal["auto", "cpu", "gpu"] | None) -> Literal["cpu", "gpu"]:
     """Resolve device arg to 'cpu' or 'gpu'."""
     if device is None:
@@ -35,21 +28,30 @@ def _resolve_device(device: Literal["auto", "cpu", "gpu"] | None) -> Literal["cp
     return "gpu" if settings.gpu_available() else "cpu"
 
 
+def _make_gpu_note(func_name: str, indent: str = "") -> str:
+    lines = [
+        ".. note::",
+        "    This function supports GPU acceleration via :doc:`rapids_singlecell <rapids_singlecell:index>`.",
+        f"    See :func:`rapids_singlecell.gr.{func_name}` for the GPU implementation.",
+    ]
+    return "\n".join(indent + line for line in lines)
+
+
 def _inject_gpu_note(doc: str | None, func_name: str) -> str | None:
-    """Inject GPU note into docstring after the first paragraph."""
+    """Inject GPU note into docstring before the Parameters section."""
     if doc is None:
         return None
 
-    gpu_note = _GPU_NOTE_TEMPLATE.format(func_name=func_name)
-
-    # Find "Parameters\n----------" and insert note before it
-    match = re.search(r"(\n\s*Parameters\s*\n\s*-+)", doc)
+    # Find "Parameters\n    ----------" and capture the indentation (spaces only, not newline)
+    match = re.search(r"\n([ \t]*)Parameters\s*\n\s*-+", doc)
     if match:
+        indent = match.group(1)  # Capture only the spaces/tabs before Parameters
+        gpu_note = _make_gpu_note(func_name, indent)
         insert_pos = match.start()
-        return doc[:insert_pos] + "\n" + gpu_note + doc[insert_pos:]
+        return doc[:insert_pos] + "\n\n" + gpu_note + "\n" + doc[insert_pos:]
 
     # Fallback: append at the end
-    return doc + "\n" + gpu_note
+    return doc + "\n\n" + _make_gpu_note(func_name)
 
 
 def gpu_dispatch(gpu_func_name: str | None = None) -> Callable[[F], F]:
