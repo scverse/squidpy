@@ -14,6 +14,7 @@ __all__ = ["gpu_dispatch"]
 
 F = TypeVar("F", bound=Callable[..., Any])
 
+
 def _resolve_device(device: Literal["auto", "cpu", "gpu"] | None) -> Literal["cpu", "gpu"]:
     """Resolve device arg to 'cpu' or 'gpu'."""
     if device is None:
