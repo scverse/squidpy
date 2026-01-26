@@ -660,8 +660,7 @@ def ligrec(
     gene_symbols
         Key in :attr:`anndata.AnnData.var` to use instead of :attr:`anndata.AnnData.var_names`.
     device
-        Device to use for computation. If ``None``, uses :attr:`squidpy.settings.device`.
-        Set to ``"gpu"`` to use rapids-singlecell GPU acceleration.
+        Device for computation: ``"cpu"``, ``"gpu"``, or ``None`` (use ``settings.device``).
 
     Returns
     -------

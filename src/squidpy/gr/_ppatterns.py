@@ -110,8 +110,7 @@ def spatial_autocorr(
     %(copy)s
     %(parallelize)s
     device
-        Device to use for computation. If ``None``, uses :attr:`squidpy.settings.device`.
-        Set to ``"gpu"`` to use rapids-singlecell GPU acceleration.
+        Device for computation: ``"cpu"``, ``"gpu"``, or ``None`` (use ``settings.device``).
 
     Returns
     -------
@@ -377,8 +376,7 @@ def co_occurrence(
         :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
     %(parallelize)s
     device
-        Device to use for computation. If ``None``, uses :attr:`squidpy.settings.device`.
-        Set to ``"gpu"`` to use rapids-singlecell GPU acceleration.
+        Device for computation: ``"cpu"``, ``"gpu"``, or ``None`` (use ``settings.device``).
 
     Returns
     -------
