@@ -23,6 +23,7 @@ from statsmodels.stats.multitest import multipletests
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
+from squidpy._settings import gpu_dispatch
 from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -45,6 +46,7 @@ bl = nt.boolean
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
+@gpu_dispatch()
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),
@@ -54,14 +56,16 @@ def spatial_autocorr(
     n_perms: int | None = None,
     two_tailed: bool = False,
     corr_method: str | None = "fdr_bh",
-    attr: Literal["obs", "X", "obsm"] = "X",
+    attr: Literal["obs", "X", "obsm"] | None = None,
     layer: str | None = None,
     seed: int | None = None,
     use_raw: bool = False,
+    use_sparse: bool | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
+    backend: str | None = None,
+    show_progress_bar: bool | None = None,
+    device: Literal["cpu", "gpu"] | None = None,
 ) -> pd.DataFrame | None:
     """
     Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
@@ -104,9 +108,14 @@ def spatial_autocorr(
         Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
     attr
         Which attribute of :class:`~anndata.AnnData` to access. See ``genes`` parameter for more information.
-    %(seed)s
+        Ignored when ``device='gpu'``.
+    use_sparse
+        If `True`, use sparse matrix representation for the input matrix.
+        Only used when ``device='gpu'``. Defaults to `True` on GPU.
+    %(seed_device)s
     %(copy)s
-    %(parallelize)s
+    %(parallelize_device)s
+    %(device)s
 
     Returns
     -------
@@ -342,16 +351,17 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 
 @d.dedent
+@gpu_dispatch()
 def co_occurrence(
     adata: AnnData | SpatialData,
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
-    n_splits: int | None = None,
     n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
+    backend: str | None = None,
+    show_progress_bar: bool | None = None,
+    device: Literal["cpu", "gpu"] | None = None,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -365,10 +375,8 @@ def co_occurrence(
         Distances interval at which co-occurrence is computed. If :class:`int`, uniformly spaced interval
         of the given size will be used.
     %(copy)s
-    n_splits
-        Number of splits in which to divide the spatial coordinates in
-        :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
-    %(parallelize)s
+    %(parallelize_device)s
+    %(device)s
 
     Returns
     -------
@@ -381,7 +389,6 @@ def co_occurrence(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
           computed at ``interval``.
     """
-
     if isinstance(adata, SpatialData):
         adata = adata.table
     _assert_categorical_obs(adata, key=cluster_key)
@@ -405,10 +412,8 @@ def co_occurrence(
     spatial_y = spatial[:, 1]
 
     # Compute co-occurrence probabilities using the fast numba routine.
+    start = logg.info(f"Calculating co-occurrence probabilities for `{len(interval)}` intervals")
     out = _co_occurrence_helper(spatial_x, spatial_y, interval, labs)
-    start = logg.info(
-        f"Calculating co-occurrence probabilities for `{len(interval)}` intervals using `{n_jobs}` core(s) and `{n_splits}` splits"
-    )
 
     if copy:
         logg.info("Finish", time=start)

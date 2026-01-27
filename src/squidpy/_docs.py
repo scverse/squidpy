@@ -119,6 +119,28 @@ backend
     Parallelization backend to use. See :class:`joblib.Parallel` for available options.
 show_progress_bar
     Whether to show the progress bar or not."""
+_parallelize_device = """\
+n_jobs
+    Number of parallel jobs to use. Ignored when ``device='gpu'``.
+    For ``backend="loky"``, the number of cores used by numba for
+    each job spawned by the backend will be set to 1 in order to
+    overcome the oversubscription issue in case you run
+    numba in your function to parallelize.
+    To set the absolute maximum number of threads in numba
+    for your python program, set the environment variable:
+    ``NUMBA_NUM_THREADS`` before running the program.
+backend
+    Parallelization backend to use. See :class:`joblib.Parallel` for available options.
+    Ignored when ``device='gpu'``.
+show_progress_bar
+    Whether to show the progress bar or not. Ignored when ``device='gpu'``."""
+_seed_device = """\
+seed
+    Random seed for reproducibility. Ignored when ``device='gpu'``."""
+_device = """\
+device
+    Device for computation: ``'cpu'``, ``'gpu'``, or ``None`` (use ``squidpy.settings.device``).
+    When ``'gpu'``, dispatches to :doc:`rapids_singlecell <rapids_singlecell:index>` for GPU-accelerated computation."""
 _channels = """\
 channels
     Channels for this feature is computed. If `None`, use all channels."""
@@ -379,6 +401,9 @@ d = DocstringProcessor(
     cat_plotting=_cat_plotting,
     plotting_returns=_plotting_returns,
     parallelize=_parallelize,
+    parallelize_device=_parallelize_device,
+    seed_device=_seed_device,
+    device=_device,
     channels=_channels,
     segment_kwargs=_segment_kwargs,
     ligrec_test_returns=_ligrec_test_returns,

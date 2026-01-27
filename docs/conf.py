@@ -66,6 +66,7 @@ intersphinx_mapping = dict(  # noqa: C408
     napari=("https://napari.org", None),
     spatialdata=("https://spatialdata.scverse.org/en/latest", None),
     shapely=("https://shapely.readthedocs.io/en/stable", None),
+    rapids_singlecell=("https://rapids-singlecell.readthedocs.io/en/latest", None),
 )
 
 # Add any paths that contain templates here, relative to this directory.
