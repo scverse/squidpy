@@ -209,18 +209,14 @@ def calculate_image_features(
             group, prop = parts[1], parts[2]
             if group == "label":
                 if prop not in _MASK_PROPS:
-                    raise ValueError(
-                        f"Unknown skimage label property: '{prop}'. "
-                        f"Available: {sorted(_MASK_PROPS)}"
-                    )
+                    raise ValueError(f"Unknown skimage label property: '{prop}'. Available: {sorted(_MASK_PROPS)}")
                 if parsed_label_props is None:
                     parsed_label_props = set()
                 parsed_label_props.add(prop)
             elif group == "label+image":
                 if prop not in _INTENSITY_PROPS:
                     raise ValueError(
-                        f"Unknown skimage intensity property: '{prop}'. "
-                        f"Available: {sorted(_INTENSITY_PROPS)}"
+                        f"Unknown skimage intensity property: '{prop}'. Available: {sorted(_INTENSITY_PROPS)}"
                     )
                 if parsed_intensity_props is None:
                     parsed_intensity_props = set()
