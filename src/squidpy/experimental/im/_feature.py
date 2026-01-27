@@ -169,17 +169,23 @@ def calculate_image_features(
         scale_str = f" (using scale '{scale}')" if scale is not None else ""
         logg.info(f"Converting shapes to labels{scale_str}.")
         _, max_y, max_x = image.shape
-        labels = np.asarray(
-            rasterize(
-                sdata.shapes[shapes_key],
-                ["x", "y"],
-                min_coordinate=[0, 0],
-                max_coordinate=[max_x, max_y],
-                target_coordinate_system="global",
-                target_unit_to_pixels=1.0,
-                return_regions_as_labels=True,
+        try:
+            labels = np.asarray(
+                rasterize(
+                    sdata.shapes[shapes_key],
+                    ["x", "y"],
+                    min_coordinate=[0, 0],
+                    max_coordinate=[max_x, max_y],
+                    target_coordinate_system="global",
+                    target_unit_to_pixels=1.0,
+                    return_regions_as_labels=True,
+                )
             )
-        )
+        except ValueError as e:
+            raise ValueError(
+                "Failed to rasterize shapes; geometries may be empty or unsupported for rasterization. "
+                "Filter out empty/non-polygon geometries or choose a different shapes_key."
+            ) from e
     else:
         labels = _get_array_from_DataTree_or_DataArray(sdata.labels[labels_key], scale)
 
@@ -373,7 +379,10 @@ def calculate_image_features(
     # because when converting the shapes to labels, a potential index 0
     # in the shapes is set to 1 in the labels and therefore we'd otherwise
     # be off-by-one in the label_id.
-    adata.obs["label_id"] = sdata.shapes[shapes_key].index.values if shapes_key is not None else cell_ids
+    if shapes_key is not None and len(sdata.shapes[shapes_key]) == len(adata):
+        adata.obs["label_id"] = sdata.shapes[shapes_key].index.values
+    else:
+        adata.obs["label_id"] = cell_ids
 
     if inplace:
         sdata.tables[adata_key_added] = TableModel.parse(adata)
