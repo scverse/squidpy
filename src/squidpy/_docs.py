@@ -121,11 +121,19 @@ show_progress_bar
     Whether to show the progress bar or not."""
 _parallelize_device = """\
 n_jobs
-    Number of parallel jobs. Ignored when ``device='gpu'``.
+    Number of parallel jobs to use. Ignored when ``device='gpu'``.
+    For ``backend="loky"``, the number of cores used by numba for
+    each job spawned by the backend will be set to 1 in order to
+    overcome the oversubscription issue in case you run
+    numba in your function to parallelize.
+    To set the absolute maximum number of threads in numba
+    for your python program, set the environment variable:
+    ``NUMBA_NUM_THREADS`` before running the program.
 backend
-    Parallelization backend. Ignored when ``device='gpu'``.
+    Parallelization backend to use. See :class:`joblib.Parallel` for available options.
+    Ignored when ``device='gpu'``.
 show_progress_bar
-    Whether to show the progress bar. Ignored when ``device='gpu'``."""
+    Whether to show the progress bar or not. Ignored when ``device='gpu'``."""
 _seed_device = """\
 seed
     Random seed for reproducibility. Ignored when ``device='gpu'``."""
