@@ -137,11 +137,16 @@ class TestGpuDispatch:
             }
         }
 
-        @gpu_dispatch(gpu_module="test_module")
-        def my_func(x, n_jobs=None, device=None):
-            return "cpu_result"
+        # Need to patch in both modules: dispatch for registry lookup, _gpu for check functions
+        with (
+            patch("squidpy.settings._dispatch.GPU_PARAM_REGISTRY", registry),
+            patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry),
+        ):
 
-        with patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry):
+            @gpu_dispatch(gpu_module="test_module")
+            def my_func(x, n_jobs=None, device=None):
+                return "cpu_result"
+
             # Not provided (None) - should work
             with (
                 patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
@@ -167,14 +172,122 @@ class TestGpuDispatch:
             }
         }
 
-        @gpu_dispatch(gpu_module="test_module")
-        def my_func(x, use_sparse=None, device=None):
-            return "cpu_result"
+        # Need to patch in both modules: dispatch for registry lookup, _gpu for check functions
+        with (
+            patch("squidpy.settings._dispatch.GPU_PARAM_REGISTRY", registry),
+            patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry),
+        ):
 
-        with patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry):
+            @gpu_dispatch(gpu_module="test_module")
+            def my_func(x, use_sparse=None, device=None):
+                return "cpu_result"
+
             # Not provided (None) - should work
             assert my_func(42, device="cpu") == "cpu_result"
 
             # Provided a value - should error
             with pytest.raises(ValueError, match="use_sparse.*only supported on GPU"):
                 my_func(42, use_sparse=True, device="cpu")
+
+    def test_function_not_in_registry_works(self):
+        """Test that functions not in registry work transparently."""
+        calls = []
+
+        @gpu_dispatch()
+        def unregistered_func(x, device=None):
+            calls.append(x)
+            return x * 3
+
+        # Should work on CPU without issues
+        assert unregistered_func(10, device="cpu") == 30
+        assert calls == [10]
+
+    def test_gpu_silent_fallback_when_unavailable(self):
+        """Test GPU silently falls back to CPU when unavailable."""
+        if settings.gpu_available():
+            pytest.skip("GPU is available")
+
+        calls = []
+
+        @gpu_dispatch()
+        def my_func(x, device=None):
+            calls.append(x)
+            return x + 1
+
+        # Should silently fall back to CPU
+        result = my_func(5, device="gpu")
+        assert result == 6
+        assert calls == [5]
+
+    def test_custom_validator_error(self, mock_gpu_module):
+        """Test custom validator raises appropriate error."""
+        mock_module, mock_adapter = mock_gpu_module
+
+        def my_validator(value):
+            if value != "allowed":
+                return f"value={value!r} is not allowed on GPU"
+            return None
+
+        registry = {
+            "my_func": {
+                "cpu_only": {"custom_param": GpuParamSpec("allowed", validator=my_validator)},
+                "gpu_only": {},
+            }
+        }
+
+        # Need to patch in both modules: dispatch for registry lookup, _gpu for check functions
+        with (
+            patch("squidpy.settings._dispatch.GPU_PARAM_REGISTRY", registry),
+            patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry),
+        ):
+
+            @gpu_dispatch(gpu_module="test_module")
+            def my_func(x, custom_param=None, device=None):
+                return "cpu_result"
+
+            # Allowed value - should work
+            with (
+                patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+                patch("importlib.import_module", return_value=mock_module),
+            ):
+                my_func(42, custom_param="allowed", device="gpu")
+
+            # Not allowed value - should error
+            with pytest.raises(ValueError, match="value='bad' is not allowed on GPU"):
+                with (
+                    patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+                    patch("importlib.import_module", return_value=mock_module),
+                ):
+                    my_func(42, custom_param="bad", device="gpu")
+
+    def test_docstring_uses_custom_gpu_module(self):
+        """Test that docstring GPU note uses the specified gpu_module."""
+
+        @gpu_dispatch(gpu_module="custom.module.path")
+        def my_func(x, device=None):
+            """My function.
+
+            Parameters
+            ----------
+            x
+                Input.
+            """
+            return x
+
+        assert "custom.module.path.my_func" in my_func.__doc__
+
+    def test_docstring_uses_custom_gpu_func_name(self):
+        """Test that docstring GPU note uses the specified gpu_func_name."""
+
+        @gpu_dispatch(gpu_module="some.module", gpu_func_name="different_name")
+        def my_func(x, device=None):
+            """My function.
+
+            Parameters
+            ----------
+            x
+                Input.
+            """
+            return x
+
+        assert "some.module.different_name" in my_func.__doc__

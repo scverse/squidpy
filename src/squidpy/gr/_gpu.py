@@ -1,7 +1,7 @@
 """GPU parameter registry for squidpy.gr functions.
 
-Defines which parameters are CPU-only (ignored on GPU) and GPU-only (ignored on CPU).
-The gpu_dispatch decorator uses this registry to automatically handle parameter filtering.
+Defines which parameters are CPU-only (error on GPU if provided) and GPU-only (error on CPU if provided).
+The gpu_dispatch decorator uses this registry to automatically handle parameter validation and filtering.
 """
 
 from __future__ import annotations
@@ -23,10 +23,10 @@ class GpuParamSpec:
 
 
 def _attr_validator(value: Any) -> str | None:
-    """Special validator for attr param - only warn if not 'X'."""
+    """Validator for attr param - error if not 'X' on GPU."""
     if value == "X":
         return None
-    return f"attr={value!r} is not supported on GPU, using attr='X'. Set device='cpu' to use other attributes."
+    return f"attr={value!r} is not supported on GPU. Set device='cpu' to use other attributes."
 
 
 # Common CPU-only param specs (reusable)
@@ -38,8 +38,8 @@ _PARALLELIZE: dict[str, GpuParamSpec] = {
 _SEED: dict[str, GpuParamSpec] = {"seed": GpuParamSpec(None)}
 
 # Registry: {func_name: {"cpu_only": {...}, "gpu_only": {...}}}
-# - cpu_only: parameters ignored on GPU (warn if non-default, then filter out)
-# - gpu_only: parameters ignored on CPU (error if non-default, pass through to GPU)
+# - cpu_only: parameters only supported on CPU (error on GPU if user provided a non-None value)
+# - gpu_only: parameters only supported on GPU (error on CPU if user provided a non-None value)
 GPU_PARAM_REGISTRY: dict[str, dict[str, dict[str, GpuParamSpec]]] = {
     "spatial_autocorr": {
         "cpu_only": {

@@ -56,15 +56,15 @@ def spatial_autocorr(
     n_perms: int | None = None,
     two_tailed: bool = False,
     corr_method: str | None = "fdr_bh",
-    attr: Literal["obs", "X", "obsm"] = "X",
+    attr: Literal["obs", "X", "obsm"] | None = None,
     layer: str | None = None,
     seed: int | None = None,
     use_raw: bool = False,
     use_sparse: bool | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
+    backend: str | None = None,
+    show_progress_bar: bool | None = None,
     device: Literal["cpu", "gpu"] | None = None,
 ) -> pd.DataFrame | None:
     """
@@ -140,6 +140,10 @@ def spatial_autocorr(
     if isinstance(adata, SpatialData):
         adata = adata.table
     _assert_connectivity_key(adata, connectivity_key)
+
+    # Apply defaults for CPU-only params
+    if attr is None:
+        attr = "X"
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
         if genes is None:
@@ -360,8 +364,8 @@ def co_occurrence(
     copy: bool = False,
     n_splits: int | None = None,
     n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
+    backend: str | None = None,
+    show_progress_bar: bool | None = None,
     device: Literal["cpu", "gpu"] | None = None,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
@@ -416,10 +420,8 @@ def co_occurrence(
     spatial_y = spatial[:, 1]
 
     # Compute co-occurrence probabilities using the fast numba routine.
+    start = logg.info(f"Calculating co-occurrence probabilities for `{len(interval)}` intervals")
     out = _co_occurrence_helper(spatial_x, spatial_y, interval, labs)
-    start = logg.info(
-        f"Calculating co-occurrence probabilities for `{len(interval)}` intervals using `{n_jobs}` core(s) and `{n_splits}` splits"
-    )
 
     if copy:
         logg.info("Finish", time=start)
