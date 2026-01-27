@@ -202,22 +202,18 @@ class TestGpuDispatch:
         assert unregistered_func(10, device="cpu") == 30
         assert calls == [10]
 
-    def test_gpu_silent_fallback_when_unavailable(self):
-        """Test GPU silently falls back to CPU when unavailable."""
+    def test_gpu_errors_when_unavailable(self):
+        """Test GPU raises error when unavailable."""
         if settings.gpu_available():
             pytest.skip("GPU is available")
 
-        calls = []
-
         @gpu_dispatch()
         def my_func(x, device=None):
-            calls.append(x)
             return x + 1
 
-        # Should silently fall back to CPU
-        result = my_func(5, device="gpu")
-        assert result == 6
-        assert calls == [5]
+        # Should raise error when GPU requested but unavailable
+        with pytest.raises(RuntimeError, match="GPU unavailable"):
+            my_func(5, device="gpu")
 
     def test_custom_validator_error(self, mock_gpu_module):
         """Test custom validator raises appropriate error."""

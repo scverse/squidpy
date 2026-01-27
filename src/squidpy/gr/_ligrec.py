@@ -329,7 +329,9 @@ class PermutationTestABC(ABC):
         copy: bool = False,
         key_added: str | None = None,
         numba_parallel: bool | None = None,
-        **kwargs: Any,
+        n_jobs: int | None = None,
+        backend: str | None = None,
+        show_progress_bar: bool | None = None,
     ) -> Mapping[str, pd.DataFrame] | None:
         """
         Perform the permutation test as described in :cite:`cellphonedb`.
@@ -411,10 +413,10 @@ class PermutationTestABC(ABC):
         # much faster than applymap (tested on 1M interactions)
         interactions_ = np.vectorize(lambda g: gene_mapper[g])(interactions.values)
 
-        n_jobs = _get_n_cores(kwargs.pop("n_jobs", None))
+        n_jobs_ = _get_n_cores(n_jobs)
         start = logg.info(
             f"Running `{n_perms}` permutations on `{len(interactions)}` interactions "
-            f"and `{len(clusters)}` cluster combinations using `{n_jobs}` core(s)"
+            f"and `{len(clusters)}` cluster combinations using `{n_jobs_}` core(s)"
         )
         res = _analysis(
             data,
@@ -423,9 +425,10 @@ class PermutationTestABC(ABC):
             threshold=threshold,
             n_perms=n_perms,
             seed=seed,
-            n_jobs=n_jobs,
+            n_jobs=n_jobs_,
             numba_parallel=numba_parallel,
-            **kwargs,
+            backend=backend,
+            show_progress_bar=show_progress_bar,
         )
         res = {
             "means": _create_sparse_df(
@@ -648,7 +651,19 @@ def ligrec(
     key_added: str | None = None,
     gene_symbols: str | None = None,
     device: Literal["cpu", "gpu"] | None = None,
-    **kwargs: Any,
+    # prepare params
+    interactions_params: Mapping[str, Any] | None = None,
+    transmitter_params: Mapping[str, Any] | None = None,
+    receiver_params: Mapping[str, Any] | None = None,
+    # test params
+    clusters: Cluster_t | None = None,
+    n_perms: int | None = None,
+    seed: int | None = None,
+    alpha: float | None = None,
+    numba_parallel: bool | None = None,
+    n_jobs: int | None = None,
+    backend: str | None = None,
+    show_progress_bar: bool | None = None,
 ) -> Mapping[str, pd.DataFrame] | None:
     """
     %(PT_test.full_desc)s
@@ -668,18 +683,44 @@ def ligrec(
     """  # noqa: D400
     if isinstance(adata, SpatialData):
         adata = adata.table
+
+    # Apply defaults for params that don't accept None in prepare/test
+    if interactions_params is None:
+        interactions_params = MappingProxyType({})
+    if transmitter_params is None:
+        transmitter_params = MappingProxyType({"categories": "ligand"})
+    if receiver_params is None:
+        receiver_params = MappingProxyType({"categories": "receptor"})
+    if n_perms is None:
+        n_perms = 1000
+    if alpha is None:
+        alpha = 0.05
+
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)
-            .prepare(interactions, complex_policy=complex_policy, **kwargs)
+            .prepare(
+                interactions,
+                complex_policy=complex_policy,
+                interactions_params=interactions_params,
+                transmitter_params=transmitter_params,
+                receiver_params=receiver_params,
+            )
             .test(
                 cluster_key=cluster_key,
+                clusters=clusters,
+                n_perms=n_perms,
                 threshold=threshold,
+                seed=seed,
                 corr_method=corr_method,
                 corr_axis=corr_axis,
+                alpha=alpha,
                 copy=copy,
                 key_added=key_added,
-                **kwargs,
+                numba_parallel=numba_parallel,
+                n_jobs=n_jobs,
+                backend=backend,
+                show_progress_bar=show_progress_bar,
             )
         )
 
@@ -694,7 +735,8 @@ def _analysis(
     seed: int | None = None,
     n_jobs: int = 1,
     numba_parallel: bool | None = None,
-    **kwargs: Any,
+    backend: str | None = None,
+    show_progress_bar: bool | None = None,
 ) -> TempResult:
     """
     Run the analysis as described in :cite:`cellphonedb`.
@@ -717,8 +759,10 @@ def _analysis(
         Number of parallel jobs to launch.
     numba_parallel
         Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
-    kwargs
-        Keyword arguments for :func:`squidpy._utils.parallelize`, such as ``n_jobs`` or ``backend``.
+    backend
+        Parallelization backend to use.
+    show_progress_bar
+        Whether to show the progress bar.
 
     Returns
     -------
@@ -761,7 +805,8 @@ def _analysis(
         n_jobs=n_jobs,
         unit="permutation",
         extractor=extractor,
-        **kwargs,
+        backend=backend,
+        show_progress_bar=show_progress_bar,
     )(
         data,
         mean,

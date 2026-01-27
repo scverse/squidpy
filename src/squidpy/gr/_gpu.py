@@ -130,7 +130,7 @@ def check_cpu_params(func_name: str, **gpu_only_values: Any) -> None:
     """
     registry = GPU_PARAM_REGISTRY.get(func_name, {"cpu_only": {}, "gpu_only": {}})
 
-    for name, spec in registry["gpu_only"].items():
+    for name, _spec in registry["gpu_only"].items():
         if name not in gpu_only_values:
             continue
         value = gpu_only_values[name]
