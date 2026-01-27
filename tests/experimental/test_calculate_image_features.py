@@ -12,18 +12,60 @@ import squidpy as sq
 
 @pytest.fixture()
 def sdata_hne_small(sdata_hne):
-    """Small subset of sdata_hne for faster tests (10-100 spots)."""
-    # Query a small bounding box to get 10-100 spots
-    # Using a 500x500 pixel box should give us a reasonable number
-    sdata_small = bounding_box_query(
-        sdata_hne,
-        axes=["x", "y"],
-        min_coordinate=[1000, 1000],
-        max_coordinate=[1500, 1500],
-        target_coordinate_system="global",
-        filter_table=True,
-    )
-    return sdata_small
+    """Small subset of sdata_hne for faster tests (aim for 10–100 spots)."""
+
+    def _subset_spots(sd: SpatialData, max_spots: int = 100):
+        if "spots" not in sd.shapes:
+            return sd
+        spots = sd.shapes["spots"]
+        try:
+            length = len(spots)
+        except Exception:  # pragma: no cover - defensive
+            return sd
+        if length <= max_spots:
+            return sd
+        # Try to subset while preserving type (GeoDataFrame / array)
+        try:
+            spots_subset = spots.iloc[:max_spots]
+        except Exception:  # pragma: no cover
+            spots_subset = spots[:max_spots]
+        return SpatialData(
+            images=sd.images,
+            labels=sd.labels,
+            shapes={"spots": spots_subset},
+            tables=sd.tables,
+        )
+
+    # Derive a central bounding box and enlarge until we capture some spots
+    if "spots" not in sdata_hne.shapes:
+        return sdata_hne
+
+    spots = sdata_hne.shapes["spots"]
+    try:
+        minx, miny, maxx, maxy = spots.total_bounds  # type: ignore[attr-defined]
+    except Exception:  # pragma: no cover
+        # Fallback: return original if bounds are unavailable
+        return sdata_hne
+
+    cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
+    candidate_sizes = [500, 1000, 2000, 4000]
+
+    for size in candidate_sizes:
+        half = size / 2
+        candidate = bounding_box_query(
+            sdata_hne,
+            axes=["x", "y"],
+            min_coordinate=[cx - half, cy - half],
+            max_coordinate=[cx + half, cy + half],
+            target_coordinate_system="global",
+            filter_table=True,
+        )
+
+        if "spots" in candidate.shapes and len(candidate.shapes["spots"]) > 0:
+            return _subset_spots(candidate)
+
+    # If no spots found in any candidate box, fall back to original
+    return _subset_spots(sdata_hne)
 
 
 class TestCalculateImageFeatures:
