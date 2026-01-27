@@ -145,5 +145,4 @@ data
 .pixi
 pixi.lock
 
-# version file
 _version.py

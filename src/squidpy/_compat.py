@@ -19,10 +19,9 @@ __all__ = [
     "SparseCSRView",
 ]
 
-# See https://github.com/scverse/squidpy/issues/1061 for more details
-# scanpy around version 0.11.x- 0.12.x changed the function name from set_default_colors_for_categorical_obs to _set_default_colors_for_categorical_obs
-# and then changed it back
-# so to not track with versioning we use the underscore version first (current), fall back to non-underscore for older/future versions
+# See https://github.com/scverse/squidpy/issues/1061 for more details.
+# Scanpy 0.11.x-0.12.x renamed set_default_colors_for_categorical_obs to _set_default_colors_for_categorical_obs
+# and then changed it back. Try underscore version first, fall back to non-underscore.
 try:
     from scanpy.plotting._utils import _set_default_colors_for_categorical_obs as set_default_colors_for_categorical_obs
 except ImportError:
