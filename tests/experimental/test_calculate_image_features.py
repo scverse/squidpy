@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
+import xarray as xr
+from spatialdata import SpatialData
+from spatialdata.models import Image2DModel, Labels2DModel
 
 import squidpy as sq
 
@@ -99,3 +103,66 @@ class TestCalculateImageFeatures:
                 scale="scale0",
                 measurements=["nonexistent:measurement"],
             )
+
+    def test_with_intensity_features(self, sdata_hne):
+        """Test intensity-based features with multi-channel image."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_hne,
+            image_key="hne",
+            shapes_key="spots",
+            scale="scale0",
+            measurements=["skimage:label+image"],
+            n_jobs=1,
+            inplace=False,
+        )
+
+        assert result.shape[0] > 0
+        assert result.shape[1] > 0
+        # Column names should include channel information
+        assert any("_" in col for col in result.columns)
+
+    def test_dimension_mismatch(self):
+        """Test error when image and labels have mismatched dimensions."""
+        rng = np.random.default_rng(42)
+
+        # Create image: 100x100, 3 channels
+        image_data = rng.integers(0, 255, (3, 100, 100), dtype=np.uint8)
+        image_xr = xr.DataArray(
+            image_data,
+            dims=["c", "y", "x"],
+            coords={"c": ["R", "G", "B"]},
+        )
+
+        # Create labels: 80x80 (different dimensions)
+        labels_data = rng.integers(1, 10, (80, 80), dtype=np.uint32)
+        labels_xr = xr.DataArray(labels_data, dims=["y", "x"])
+
+        sdata = SpatialData(
+            images={"test_img": Image2DModel.parse(image_xr)},
+            labels={"test_labels": Labels2DModel.parse(labels_xr)},
+        )
+
+        with pytest.raises(ValueError, match="do not match"):
+            sq.experimental.im.calculate_image_features(
+                sdata,
+                image_key="test_img",
+                labels_key="test_labels",
+                measurements=["skimage:label"],
+                n_jobs=1,
+            )
+
+    def test_with_progress_bar(self, sdata_hne):
+        """Test that progress bar can be enabled."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_hne,
+            image_key="hne",
+            shapes_key="spots",
+            scale="scale0",
+            measurements=["skimage:label"],
+            show_progress_bar=True,
+            n_jobs=1,
+            inplace=False,
+        )
+
+        assert isinstance(result, pd.DataFrame)
+        assert result.shape[0] > 0
