@@ -20,14 +20,14 @@ def sdata_hne_small(sdata_hne):
         spots = sd.shapes["spots"]
         try:
             length = len(spots)
-        except Exception:  # pragma: no cover - defensive
+        except TypeError:  # pragma: no cover - defensive
             return sd
         if length <= max_spots:
             return sd
         # Try to subset while preserving type (GeoDataFrame / array)
         try:
             spots_subset = spots.iloc[:max_spots]
-        except Exception:  # pragma: no cover
+        except AttributeError:  # pragma: no cover
             spots_subset = spots[:max_spots]
         return SpatialData(
             images=sd.images,
@@ -43,7 +43,7 @@ def sdata_hne_small(sdata_hne):
     spots = sdata_hne.shapes["spots"]
     try:
         minx, miny, maxx, maxy = spots.total_bounds  # type: ignore[attr-defined]
-    except Exception:  # pragma: no cover
+    except AttributeError:  # pragma: no cover
         # Fallback: return original if bounds are unavailable
         return sdata_hne
 
