@@ -127,12 +127,12 @@ class TestGpuDispatch:
         assert "Original docstring." in documented_func.__doc__
         assert "GPU acceleration" in documented_func.__doc__
 
-    def test_cpu_only_params_filtered_on_gpu(self, mock_gpu_module):
-        """Test CPU-only params are filtered out on GPU."""
+    def test_cpu_only_params_error_on_gpu_if_provided(self, mock_gpu_module):
+        """Test CPU-only params raise error on GPU if user provided a value."""
         mock_module, mock_adapter = mock_gpu_module
         registry = {
             "my_func": {
-                "cpu_only": {"n_jobs": GpuParamSpec(None)},
+                "cpu_only": {"n_jobs": GpuParamSpec(1)},
                 "gpu_only": {},
             }
         }
@@ -141,18 +141,25 @@ class TestGpuDispatch:
         def my_func(x, n_jobs=None, device=None):
             return "cpu_result"
 
-        with (
-            patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
-            patch("importlib.import_module", return_value=mock_module),
-            patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry),
-        ):
-            my_func(42, n_jobs=4, device="gpu")
+        with patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry):
+            # Not provided (None) - should work
+            with (
+                patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+                patch("importlib.import_module", return_value=mock_module),
+            ):
+                my_func(42, device="gpu")
+                mock_adapter.assert_called_once_with(x=42)
 
-        # n_jobs should be filtered out
-        mock_adapter.assert_called_once_with(x=42)
+            # Provided a value - should error
+            with pytest.raises(ValueError, match="n_jobs.*only supported on CPU"):
+                with (
+                    patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+                    patch("importlib.import_module", return_value=mock_module),
+                ):
+                    my_func(42, n_jobs=4, device="gpu")
 
-    def test_gpu_only_params_error_on_cpu_if_non_default(self):
-        """Test GPU-only params raise error on CPU if non-default."""
+    def test_gpu_only_params_error_on_cpu_if_provided(self):
+        """Test GPU-only params raise error on CPU if user provided a value."""
         registry = {
             "my_func": {
                 "cpu_only": {},
@@ -161,13 +168,13 @@ class TestGpuDispatch:
         }
 
         @gpu_dispatch(gpu_module="test_module")
-        def my_func(x, use_sparse=True, device=None):
+        def my_func(x, use_sparse=None, device=None):
             return "cpu_result"
 
         with patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry):
-            # Default value works
-            assert my_func(42, use_sparse=True, device="cpu") == "cpu_result"
+            # Not provided (None) - should work
+            assert my_func(42, device="cpu") == "cpu_result"
 
-            # Non-default raises error
+            # Provided a value - should error
             with pytest.raises(ValueError, match="use_sparse.*only supported on GPU"):
-                my_func(42, use_sparse=False, device="cpu")
+                my_func(42, use_sparse=True, device="cpu")

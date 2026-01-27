@@ -9,7 +9,7 @@ import re
 from collections.abc import Callable
 from typing import Any, Literal, TypeVar
 
-from squidpy.gr._gpu import GPU_PARAM_REGISTRY, check_cpu_params, check_gpu_params
+from squidpy.gr._gpu import GPU_PARAM_REGISTRY, apply_defaults, check_cpu_params, check_gpu_params
 from squidpy.settings._settings import settings
 
 __all__ = ["gpu_dispatch"]
@@ -99,17 +99,19 @@ def gpu_dispatch(
             # Handle **kwargs: unpack instead of passing as kwargs=dict
             extra_kwargs = all_args.pop("kwargs", {})
 
+
             # Get registry for this function
             registry = GPU_PARAM_REGISTRY.get(func_name, {"cpu_only": {}, "gpu_only": {}})
 
             if _resolve_device(device) == "gpu":
-                # Collect CPU-only param values and check them (warn if non-default)
+                # Collect CPU-only param values and check them (error if user provided)
                 cpu_only_values = {k: all_args.pop(k) for k in list(all_args) if k in registry["cpu_only"]}
-                cpu_only_values.update(
-                    {k: extra_kwargs.pop(k) for k in list(extra_kwargs) if k in registry["cpu_only"]}
-                )
+                cpu_only_values.update({k: extra_kwargs.pop(k) for k in list(extra_kwargs) if k in registry["cpu_only"]})
 
                 check_gpu_params(func_name, **cpu_only_values)
+
+                # Apply defaults for GPU-only params that are None
+                apply_defaults(func_name, all_args, "gpu")
 
                 # Import and call GPU function
                 module = importlib.import_module(gpu_module)
@@ -117,11 +119,14 @@ def gpu_dispatch(
 
                 return gpu_func(**all_args, **extra_kwargs)
 
-            # CPU path: check gpu_only params (error if non-default), then filter them out
+            # CPU path: check gpu_only params (error if user provided), then filter them out
             gpu_only_values = {k: all_args.pop(k) for k in list(all_args) if k in registry["gpu_only"]}
             gpu_only_values.update({k: extra_kwargs.pop(k) for k in list(extra_kwargs) if k in registry["gpu_only"]})
 
             check_cpu_params(func_name, **gpu_only_values)
+
+            # Apply defaults for CPU-only params that are None
+            apply_defaults(func_name, all_args, "cpu")
 
             return func(**all_args, **extra_kwargs)
 
