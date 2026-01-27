@@ -123,7 +123,9 @@ def gpu_dispatch(
 
             # CPU path: check gpu_only params (error if user provided), then filter them out
             gpu_only_values = {k: all_args.pop(k) for k in list(all_args) if k in registry["gpu_only"]}
-            gpu_only_values.update({k: variadic_kwargs.pop(k) for k in list(variadic_kwargs) if k in registry["gpu_only"]})
+            gpu_only_values.update(
+                {k: variadic_kwargs.pop(k) for k in list(variadic_kwargs) if k in registry["gpu_only"]}
+            )
 
             check_cpu_params(func_name, **gpu_only_values)
 
