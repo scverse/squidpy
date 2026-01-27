@@ -102,7 +102,7 @@ class ImageModel:
             self.library_id = [self.library_id]
         self.library_id, _ = _unique_order_preserving(self.library_id)  # type: ignore[assignment]
 
-        if not len(self.library_id):
+        if self.library_id is None or not len(self.library_id):
             raise ValueError("No library ids have been selected.")
         # invalid library ids from adata are filtered below
         # invalid library ids from container raise KeyError in `__post_init__` after this call

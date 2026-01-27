@@ -1,0 +1,233 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 5 1,15 * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: "1"
+  MPLBACKEND: agg
+  UV_COMPILE_BYTECODE: "1"
+  COVERAGE_FILE: ${{ github.workspace }}/.coverage
+
+defaults:
+  run:
+    # to fail on error in multiline statements (-e), in pipes (-o pipefail), and on unset variables (-u).
+    shell: bash -euo pipefail {0}
+
+jobs:
+  ensure-data-is-cached:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          filter: blob:none
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+          python-version: "3.13"
+
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
+          key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
+          enableCrossOsArchive: true
+
+      - name: Download datasets
+        # Always run to ensure any missing files are downloaded
+        # (restore-keys may provide partial cache)
+        run: uvx hatch run data:download
+
+  # Get the test environment from hatch as defined in pyproject.toml.
+  # This ensures that the pyproject.toml is the single point of truth for test definitions and the same tests are
+  # run locally and on continuous integration.
+  # Check [[tool.hatch.envs.hatch-test.matrix]] in pyproject.toml and https://hatch.pypa.io/latest/environment/ for more details.
+  get-environments:
+    runs-on: ubuntu-latest
+    outputs:
+      envs: ${{ steps.get-envs.outputs.envs }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          filter: blob:none
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Get test environments
+        id: get-envs
+        run: |
+          ENVS_JSON=$(NO_COLOR=1 uvx --quiet hatch env show --json | jq -c 'to_entries
+            | map(
+                select(.key | startswith("hatch-test"))
+                | {
+                    name: .key,
+                    label: (if (.key | contains("pre")) then .key + " (PRE-RELEASE DEPENDENCIES)" else .key end),
+                    python: .value.python
+                  }
+              )')
+          echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
+
+  # Run tests through hatch. Spawns a separate runner for each environment defined in the hatch matrix obtained above.
+  test:
+    needs: [ensure-data-is-cached, get-environments]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
+        exclude:
+          - os: macos-latest
+            env: { name: hatch-test.py3.11-stable }
+          - os: macos-latest
+            env: { name: hatch-test.py3.12-stable }
+          - os: ubuntu-latest
+            env: { name: hatch-test.py3.13-stable } # skipping because we run this as a coverage job
+    name: ${{ matrix.env.label }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          filter: blob:none
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.env.python }}
+          cache-dependency-glob: pyproject.toml
+
+      - name: Ensure figure directory exists
+        run: mkdir -p "$GITHUB_WORKSPACE/tests/figures"
+
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
+          key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
+          enableCrossOsArchive: true
+
+      - name: System dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install automake -y
+
+          # PyQt5 related
+          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
+          sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
+
+      - name: System dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install automake
+
+      - name: create hatch environment
+        run: uvx hatch env create ${{ matrix.env.name }}
+
+      - name: run tests using hatch
+        env:
+          PLATFORM: ${{ matrix.os }}
+          DISPLAY: :42
+        run: uvx hatch run ${{ matrix.env.name }}:run -v --color=yes -n auto
+
+      - name: Archive figures generated during testing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual_test_results_${{ runner.os }}_${{ matrix.env.name }}
+          path: ${{ github.workspace }}/tests/figures/*
+
+  coverage:
+    name: Coverage (ubuntu-latest, hatch-test.py3.13-stable)
+    needs: [ensure-data-is-cached]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          filter: blob:none
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+          cache-dependency-glob: pyproject.toml
+
+      - name: Ensure figure directory exists
+        run: mkdir -p "$GITHUB_WORKSPACE/tests/figures"
+
+      - name: Restore data cache
+        id: coverage-data-cache
+        uses: actions/cache@v4
+        with:
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
+          key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
+          enableCrossOsArchive: true
+
+      - name: System dependencies (Linux)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install automake -y
+
+          # PyQt5 related
+          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
+          sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
+
+      - name: create hatch environment
+        run: uvx hatch env create hatch-test.py3.13-stable
+
+      - name: run coverage tests
+        env:
+          PLATFORM: ubuntu-latest
+          DISPLAY: :42
+        run: |
+          uvx hatch run hatch-test.py3.13-stable:cov-erase
+          uvx hatch run hatch-test.py3.13-stable:run-cov -v --color=yes
+          uvx hatch run hatch-test.py3.13-stable:cov-combine
+          uvx hatch run hatch-test.py3.13-stable:cov-report
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+
+  # Check that all tests defined above pass. This makes it easy to set a single "required" test in branch
+  # protection instead of having to update it frequently. See https://github.com/re-actors/alls-green#why.
+  check:
+    name: Tests pass in all hatch environments
+    if: always()
+    needs:
+      - get-environments
+      - test
+      - coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}

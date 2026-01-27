@@ -3,7 +3,7 @@ from __future__ import annotations
 from importlib import metadata
 from importlib.metadata import PackageMetadata
 
-from squidpy import datasets, exp, gr, im, pl, read, tl
+from squidpy import datasets, experimental, gr, im, pl, read, tl
 
 try:
     md: PackageMetadata = metadata.metadata(__name__)
@@ -14,3 +14,5 @@ except ImportError:
     md = None  # type: ignore[assignment]
 
 del metadata, md
+
+__all__ = ["datasets", "experimental", "gr", "im", "pl", "read", "tl"]

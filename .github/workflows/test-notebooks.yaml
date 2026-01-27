@@ -1,0 +1,88 @@
+name: Test notebooks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ensure-data-is-cached:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          filter: blob:none
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+          python-version: "3.13"
+
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
+          key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
+          enableCrossOsArchive: true
+
+      - name: Download datasets
+        # Always run to ensure any missing files are downloaded
+        # (restore-keys may provide partial cache)
+        run: uvx hatch run data:download
+
+  test:
+    needs: [ensure-data-is-cached]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.12"]
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python }}
+          cache-dependency-glob: pyproject.toml
+
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
+          key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
+          enableCrossOsArchive: true
+
+      - name: Create notebooks environment
+        run: uvx hatch -v env create notebooks
+
+      - name: Test notebooks
+        env:
+          MPLBACKEND: agg
+          PLATFORM: ${{ matrix.os }}
+          DISPLAY: :42
+
+        run: |
+          uvx hatch run notebooks:setup-squidpy-kernel
+          uvx hatch run notebooks:run-notebooks

@@ -160,7 +160,7 @@ def ligrec(
     %(adata)s
         It can also be a :class:`dict`, as returned by :func:`squidpy.gr.ligrec`.
     %(cluster_key)s
-        Only used when ``adata`` is of type :class:`AnnData`.
+        Only used when ``adata`` is of type :class:`~anndata.AnnData`.
     source_groups
         Source interaction clusters. If `None`, select all clusters.
     target_groups
