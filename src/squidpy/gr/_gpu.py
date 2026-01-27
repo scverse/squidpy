@@ -107,7 +107,9 @@ def check_gpu_params(func_name: str, **cpu_only_values: Any) -> None:
                 raise ValueError(msg.format(name=name, value=value))
         else:
             # User explicitly provided a value for a CPU-only param on GPU
-            msg = spec.message or f"{name}={value!r} is only supported on CPU. Use device='cpu' or remove this argument."
+            msg = (
+                spec.message or f"{name}={value!r} is only supported on CPU. Use device='cpu' or remove this argument."
+            )
             raise ValueError(msg.format(name=name, value=value))
 
 

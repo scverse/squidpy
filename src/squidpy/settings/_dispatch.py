@@ -99,14 +99,15 @@ def gpu_dispatch(
             # Handle **kwargs: unpack instead of passing as kwargs=dict
             extra_kwargs = all_args.pop("kwargs", {})
 
-
             # Get registry for this function
             registry = GPU_PARAM_REGISTRY.get(func_name, {"cpu_only": {}, "gpu_only": {}})
 
             if _resolve_device(device) == "gpu":
                 # Collect CPU-only param values and check them (error if user provided)
                 cpu_only_values = {k: all_args.pop(k) for k in list(all_args) if k in registry["cpu_only"]}
-                cpu_only_values.update({k: extra_kwargs.pop(k) for k in list(extra_kwargs) if k in registry["cpu_only"]})
+                cpu_only_values.update(
+                    {k: extra_kwargs.pop(k) for k in list(extra_kwargs) if k in registry["cpu_only"]}
+                )
 
                 check_gpu_params(func_name, **cpu_only_values)
 
