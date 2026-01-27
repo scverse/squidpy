@@ -60,12 +60,7 @@ GPU_PARAM_REGISTRY: dict[str, dict[str, dict[str, GpuParamSpec]]] = {
     },
     "ligrec": {
         "cpu_only": {
-            "clusters": GpuParamSpec(None),
             "numba_parallel": GpuParamSpec(None),
-            "transmitter_params": GpuParamSpec(None),
-            "receiver_params": GpuParamSpec(None),
-            "interactions_params": GpuParamSpec(None),
-            "alpha": GpuParamSpec(0.05),
             **_SEED,
             **_PARALLELIZE,
         },

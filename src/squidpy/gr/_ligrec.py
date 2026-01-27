@@ -583,7 +583,6 @@ class PermutationTest(PermutationTestABC):
         interactions_params: Mapping[str, Any] = MappingProxyType({}),
         transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
         receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
-        **_: Any,
     ) -> PermutationTest:
         """
         %(PT_prepare.full_desc)s
@@ -652,15 +651,16 @@ def ligrec(
     gene_symbols: str | None = None,
     device: Literal["cpu", "gpu"] | None = None,
     # prepare params
-    interactions_params: Mapping[str, Any] | None = None,
-    transmitter_params: Mapping[str, Any] | None = None,
-    receiver_params: Mapping[str, Any] | None = None,
+    interactions_params: Mapping[str, Any] = MappingProxyType({}),
+    transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
+    receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
     # test params
     clusters: Cluster_t | None = None,
-    n_perms: int | None = None,
+    n_perms: int = 1000,
     seed: int | None = None,
-    alpha: float | None = None,
+    alpha: float = 0.05,
     numba_parallel: bool | None = None,
+    # CPU-only params (must be None to allow dispatch to detect if user provided)
     n_jobs: int | None = None,
     backend: str | None = None,
     show_progress_bar: bool | None = None,
@@ -683,18 +683,6 @@ def ligrec(
     """  # noqa: D400
     if isinstance(adata, SpatialData):
         adata = adata.table
-
-    # Apply defaults for params that don't accept None in prepare/test
-    if interactions_params is None:
-        interactions_params = MappingProxyType({})
-    if transmitter_params is None:
-        transmitter_params = MappingProxyType({"categories": "ligand"})
-    if receiver_params is None:
-        receiver_params = MappingProxyType({"categories": "receptor"})
-    if n_perms is None:
-        n_perms = 1000
-    if alpha is None:
-        alpha = 0.05
 
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
