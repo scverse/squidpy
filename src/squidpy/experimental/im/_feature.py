@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import itertools
-import os
 import warnings
 from collections.abc import Callable, Sequence
 from typing import Any
@@ -14,8 +12,7 @@ import numpy.typing as npt
 import pandas as pd
 import xarray as xr
 from cp_measure.bulk import get_core_measurements, get_correlation_measurements
-from numba import njit, prange
-from scipy import ndimage
+from numba import njit
 from skimage import measure
 from skimage.measure import label
 from spatialdata import SpatialData, rasterize
