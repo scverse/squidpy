@@ -16,6 +16,7 @@ class TestCalculateImageFeatures:
             sdata_hne,
             image_key="hne",
             shapes_key="spots",
+            scale="scale0",
             measurements=["skimage:label"],
             adata_key_added="morphology",
             n_jobs=1,
@@ -46,6 +47,7 @@ class TestCalculateImageFeatures:
             sdata_hne,
             image_key="hne",
             shapes_key="spots",
+            scale="scale0",
             measurements=["skimage:label"],
             n_jobs=1,
             inplace=False,
@@ -94,5 +96,6 @@ class TestCalculateImageFeatures:
                 sdata_hne,
                 image_key="hne",
                 shapes_key="spots",
+                scale="scale0",
                 measurements=["nonexistent:measurement"],
             )
