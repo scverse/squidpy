@@ -196,11 +196,59 @@ def calculate_image_features(
     if isinstance(measurements, str):
         measurements = [measurements]
 
-    if isinstance(measurements, list):
-        invalid_measurements = [m for m in measurements if m not in available_measurements]
-        if invalid_measurements:
+    # Parse measurements to support individual properties: "skimage:label:area"
+    parsed_label_props = None
+    parsed_intensity_props = None
+    has_cpmeasure_core = False
+    has_cpmeasure_correlation = False
+
+    for m in measurements:
+        parts = m.split(":")
+        if len(parts) == 3 and parts[0] == "skimage":
+            # Individual property: "skimage:label:area"
+            group, prop = parts[1], parts[2]
+            if group == "label":
+                if prop not in _MASK_PROPS:
+                    raise ValueError(
+                        f"Unknown skimage label property: '{prop}'. "
+                        f"Available: {sorted(_MASK_PROPS)}"
+                    )
+                if parsed_label_props is None:
+                    parsed_label_props = set()
+                parsed_label_props.add(prop)
+            elif group == "label+image":
+                if prop not in _INTENSITY_PROPS:
+                    raise ValueError(
+                        f"Unknown skimage intensity property: '{prop}'. "
+                        f"Available: {sorted(_INTENSITY_PROPS)}"
+                    )
+                if parsed_intensity_props is None:
+                    parsed_intensity_props = set()
+                parsed_intensity_props.add(prop)
+            else:
+                raise ValueError(f"Unknown skimage group: '{group}'. Use 'label' or 'label+image'")
+        elif m == "skimage:label":
+            # Full label group
+            if parsed_label_props is None:
+                parsed_label_props = _MASK_PROPS.copy()
+            else:
+                parsed_label_props.update(_MASK_PROPS)
+        elif m == "skimage:label+image":
+            # Full intensity group
+            if parsed_intensity_props is None:
+                parsed_intensity_props = _INTENSITY_PROPS.copy()
+            else:
+                parsed_intensity_props.update(_INTENSITY_PROPS)
+        elif m == "cpmeasure:core":
+            has_cpmeasure_core = True
+        elif m == "cpmeasure:correlation":
+            has_cpmeasure_correlation = True
+        elif m not in available_measurements:
             raise ValueError(
-                f"Invalid measurement(s): {invalid_measurements}, available measurements: {available_measurements}"
+                f"Invalid measurement: '{m}'. "
+                f"Available: {available_measurements}, "
+                f"or use 'skimage:label:property' / 'skimage:label+image:property' "
+                f"for individual properties"
             )
 
     if labels.size == 0:
@@ -222,7 +270,7 @@ def calculate_image_features(
     if image.shape[1:] != labels.shape:
         raise ValueError(f"Image and labels have mismatched dimensions: image {image.shape[1:]}, labels {labels.shape}")
 
-    if "cpmeasure:correlation" in measurements:
+    if has_cpmeasure_correlation:
         measurements_corr = get_correlation_measurements()
 
     cell_ids = np.unique(labels)
@@ -237,7 +285,7 @@ def calculate_image_features(
 
     logg.info(f"Using '{n_jobs}' core(s).")
 
-    if "skimage:label" in measurements:
+    if parsed_label_props is not None:
         logg.info("Calculating 'skimage' label features.")
         res = parallelize(
             _get_regionprops_features,
@@ -247,14 +295,14 @@ def calculate_image_features(
             backend=backend,
             show_progress_bar=show_progress_bar,
             verbose=verbose,
-        )(labels=labels, intensity_image=None)
+        )(labels=labels, intensity_image=None, props=parsed_label_props)
         all_features.append(res)
 
-    if "skimage:label+image" in measurements:
+    if parsed_intensity_props is not None:
         for ch_idx in range(n_channels):
             ch_name = channel_names[ch_idx] if channel_names is not None else f"{ch_idx}"
             ch_image = image[ch_idx]
-            logg.info(f"Calculating 'skimage' image features for channel '{ch_idx}'.")
+            logg.info(f"Calculating 'skimage' image features for channel '{ch_name}'.")
             res = parallelize(
                 _get_regionprops_features,
                 collection=cell_ids_list,
@@ -263,12 +311,12 @@ def calculate_image_features(
                 backend=backend,
                 show_progress_bar=show_progress_bar,
                 verbose=verbose,
-            )(labels=labels, intensity_image=ch_image)
+            )(labels=labels, intensity_image=ch_image, props=parsed_intensity_props)
             # Append channel names to each feature column
             res = res.rename(columns=lambda col, ch_name=ch_name: f"{col}_{ch_name}")
             all_features.append(res)
 
-    if "cpmeasure:core" in measurements:
+    if has_cpmeasure_core:
         measurements_core = get_core_measurements()
         for ch_idx in range(n_channels):
             ch_name = channel_names[ch_idx] if channel_names is not None else f"{ch_idx}"
@@ -397,6 +445,7 @@ def _calculate_regionprops_from_crop(
     cell_mask_cropped: NDArray,
     intensity_image_cropped: NDArray | None,
     cell_id: int,
+    props: set[str],
 ) -> dict[str, float]:
     """
     Calculate regionprops features from pre-cropped arrays.
@@ -406,7 +455,7 @@ def _calculate_regionprops_from_crop(
         region_props = measure.regionprops(label_image=label(cell_mask_cropped))
         if not region_props:
             return {}
-        return _extract_features_from_regionprops(region_props[0], _MASK_PROPS, cell_id)
+        return _extract_features_from_regionprops(region_props[0], props, cell_id)
     else:
         region_props = measure.regionprops(
             label_image=label(cell_mask_cropped),
@@ -414,7 +463,7 @@ def _calculate_regionprops_from_crop(
         )
         if not region_props:
             return {}
-        return _extract_features_from_regionprops(region_props[0], _INTENSITY_PROPS, cell_id, skip_callable=True)
+        return _extract_features_from_regionprops(region_props[0], props, cell_id, skip_callable=True)
 
 
 def _append_channel_names(
@@ -565,6 +614,7 @@ def _get_regionprops_features(
     labels: NDArray,
     intensity_image: NDArray | None = None,
     queue: Any | None = None,
+    props: set[str] | None = None,
 ) -> pd.DataFrame:
     """Calculate regionprops features for each cell from the full label image."""
     # Initialize features dictionary with None values to preserve order
@@ -578,7 +628,15 @@ def _get_regionprops_features(
             if crop is None:
                 continue
             cell_mask_cropped, intensity_image_cropped, _ = crop
-            cell_features = _calculate_regionprops_from_crop(cell_mask_cropped, intensity_image_cropped, cell_id)
+            # Default to full property sets for backward compatibility
+            if props is None:
+                props = _INTENSITY_PROPS if intensity_image is not None else _MASK_PROPS
+            cell_features = _calculate_regionprops_from_crop(
+                cell_mask_cropped,
+                intensity_image_cropped,
+                cell_id,
+                props,
+            )
             features[cell_id] = cell_features
             if queue is not None:
                 queue.put(Signal.UPDATE)

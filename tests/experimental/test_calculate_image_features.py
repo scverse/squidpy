@@ -4,20 +4,36 @@ import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
-from spatialdata import SpatialData
+from spatialdata import SpatialData, bounding_box_query
 from spatialdata.models import Image2DModel, Labels2DModel
 
 import squidpy as sq
 
 
+@pytest.fixture()
+def sdata_hne_small(sdata_hne):
+    """Small subset of sdata_hne for faster tests (10-100 spots)."""
+    # Query a small bounding box to get 10-100 spots
+    # Using a 500x500 pixel box should give us a reasonable number
+    sdata_small = bounding_box_query(
+        sdata_hne,
+        axes=["x", "y"],
+        min_coordinate=[1000, 1000],
+        max_coordinate=[1500, 1500],
+        target_coordinate_system="global",
+        filter_table=True,
+    )
+    return sdata_small
+
+
 class TestCalculateImageFeatures:
     """Tests for calculate_image_features function."""
 
-    def test_calculate_features_with_shapes(self, sdata_hne):
+    def test_calculate_features_with_shapes(self, sdata_hne_small):
         """Test basic feature calculation with shapes."""
         # Use minimal measurements to keep test fast
         sq.experimental.im.calculate_image_features(
-            sdata_hne,
+            sdata_hne_small,
             image_key="hne",
             shapes_key="spots",
             scale="scale0",
@@ -28,8 +44,8 @@ class TestCalculateImageFeatures:
         )
 
         # Check that the table was added
-        assert "morphology" in sdata_hne.tables
-        adata = sdata_hne.tables["morphology"]
+        assert "morphology" in sdata_hne_small.tables
+        adata = sdata_hne_small.tables["morphology"]
 
         # Check basic structure
         assert adata.n_obs > 0
@@ -45,10 +61,10 @@ class TestCalculateImageFeatures:
         assert "region" in adata.obs
         assert "label_id" in adata.obs
 
-    def test_calculate_features_copy(self, sdata_hne):
+    def test_calculate_features_copy(self, sdata_hne_small):
         """Test that copy=False returns DataFrame."""
         result = sq.experimental.im.calculate_image_features(
-            sdata_hne,
+            sdata_hne_small,
             image_key="hne",
             shapes_key="spots",
             scale="scale0",
@@ -62,52 +78,52 @@ class TestCalculateImageFeatures:
         assert result.shape[0] > 0
         assert result.shape[1] > 0
 
-    def test_invalid_image_key(self, sdata_hne):
+    def test_invalid_image_key(self, sdata_hne_small):
         """Test error when image key doesn't exist."""
         with pytest.raises(ValueError, match="Image key 'nonexistent' not found"):
             sq.experimental.im.calculate_image_features(
-                sdata_hne,
+                sdata_hne_small,
                 image_key="nonexistent",
                 shapes_key="spots",
                 measurements=["skimage:label"],
             )
 
-    def test_invalid_shapes_key(self, sdata_hne):
+    def test_invalid_shapes_key(self, sdata_hne_small):
         """Test error when shapes key doesn't exist."""
         with pytest.raises(ValueError, match="Shapes key 'nonexistent' not found"):
             sq.experimental.im.calculate_image_features(
-                sdata_hne,
+                sdata_hne_small,
                 image_key="hne",
                 shapes_key="nonexistent",
                 measurements=["skimage:label"],
             )
 
-    def test_both_labels_and_shapes_error(self, sdata_hne):
+    def test_both_labels_and_shapes_error(self, sdata_hne_small):
         """Test error when both labels_key and shapes_key are provided."""
         with pytest.raises(ValueError, match="Use either `labels_key` or `shapes_key`, not both"):
             sq.experimental.im.calculate_image_features(
-                sdata_hne,
+                sdata_hne_small,
                 image_key="hne",
                 labels_key="fake_labels",
                 shapes_key="spots",
                 measurements=["skimage:label"],
             )
 
-    def test_invalid_measurement(self, sdata_hne):
+    def test_invalid_measurement(self, sdata_hne_small):
         """Test error with invalid measurement type."""
         with pytest.raises(ValueError, match="Invalid measurement"):
             sq.experimental.im.calculate_image_features(
-                sdata_hne,
+                sdata_hne_small,
                 image_key="hne",
                 shapes_key="spots",
                 scale="scale0",
                 measurements=["nonexistent:measurement"],
             )
 
-    def test_with_intensity_features(self, sdata_hne):
+    def test_with_intensity_features(self, sdata_hne_small):
         """Test intensity-based features with multi-channel image."""
         result = sq.experimental.im.calculate_image_features(
-            sdata_hne,
+            sdata_hne_small,
             image_key="hne",
             shapes_key="spots",
             scale="scale0",
@@ -151,10 +167,10 @@ class TestCalculateImageFeatures:
                 n_jobs=1,
             )
 
-    def test_with_progress_bar(self, sdata_hne):
+    def test_with_progress_bar(self, sdata_hne_small):
         """Test that progress bar can be enabled."""
         result = sq.experimental.im.calculate_image_features(
-            sdata_hne,
+            sdata_hne_small,
             image_key="hne",
             shapes_key="spots",
             scale="scale0",
@@ -166,3 +182,38 @@ class TestCalculateImageFeatures:
 
         assert isinstance(result, pd.DataFrame)
         assert result.shape[0] > 0
+
+    def test_single_mask_property(self, sdata_hne_small):
+        """Test selecting a single skimage mask property (area) only."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_hne_small,
+            image_key="hne",
+            shapes_key="spots",
+            scale="scale0",
+            measurements=["skimage:label:area"],
+            inplace=False,
+            n_jobs=1,
+        )
+
+        assert isinstance(result, pd.DataFrame)
+        assert result.shape[0] > 0
+        assert list(result.columns) == ["area"]
+
+    def test_single_intensity_property(self, sdata_hne_small):
+        """Test selecting a single intensity property (mean) per channel."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_hne_small,
+            image_key="hne",
+            shapes_key="spots",
+            scale="scale0",
+            measurements=["skimage:label+image:intensity_mean"],
+            inplace=False,
+            n_jobs=1,
+        )
+
+        # Expect one column per channel
+        assert isinstance(result, pd.DataFrame)
+        assert result.shape[0] > 0
+        assert all(col.endswith(("_0", "_1", "_2")) or "_" in col for col in result.columns)
+        # Should not contain other intensity props
+        assert not any(col.startswith("intensity_max") for col in result.columns)
