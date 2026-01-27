@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 import squidpy as sq
-from squidpy.settings import settings
+from squidpy._settings import settings
 
 # Skip all tests in this module if GPU is not available
 pytestmark = pytest.mark.skipif(

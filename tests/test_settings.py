@@ -1,4 +1,4 @@
-"""Tests for squidpy.settings module."""
+"""Tests for squidpy._settings module."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from squidpy._settings import gpu_dispatch, settings
 from squidpy.gr._gpu import GpuParamSpec
-from squidpy.settings import gpu_dispatch, settings
 
 
 class TestSettings:
@@ -83,7 +83,7 @@ class TestGpuDispatch:
             return "cpu_result"
 
         with (
-            patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+            patch("squidpy._settings._dispatch._resolve_device", return_value="gpu"),
             patch("importlib.import_module", return_value=mock_module),
             patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", {"my_func": {"cpu_only": {}, "gpu_only": {}}}),
         ):
@@ -101,7 +101,7 @@ class TestGpuDispatch:
             return "cpu_result"
 
         with (
-            patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+            patch("squidpy._settings._dispatch._resolve_device", return_value="gpu"),
             patch("importlib.import_module", return_value=mock_module),
             patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", {"my_func": {"cpu_only": {}, "gpu_only": {}}}),
         ):
@@ -139,7 +139,7 @@ class TestGpuDispatch:
 
         # Need to patch in both modules: dispatch for registry lookup, _gpu for check functions
         with (
-            patch("squidpy.settings._dispatch.GPU_PARAM_REGISTRY", registry),
+            patch("squidpy._settings._dispatch.GPU_PARAM_REGISTRY", registry),
             patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry),
         ):
 
@@ -149,7 +149,7 @@ class TestGpuDispatch:
 
             # Not provided (None) - should work
             with (
-                patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+                patch("squidpy._settings._dispatch._resolve_device", return_value="gpu"),
                 patch("importlib.import_module", return_value=mock_module),
             ):
                 my_func(42, device="gpu")
@@ -158,7 +158,7 @@ class TestGpuDispatch:
             # Provided a value - should error
             with pytest.raises(ValueError, match="n_jobs.*only supported on CPU"):
                 with (
-                    patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+                    patch("squidpy._settings._dispatch._resolve_device", return_value="gpu"),
                     patch("importlib.import_module", return_value=mock_module),
                 ):
                     my_func(42, n_jobs=4, device="gpu")
@@ -174,7 +174,7 @@ class TestGpuDispatch:
 
         # Need to patch in both modules: dispatch for registry lookup, _gpu for check functions
         with (
-            patch("squidpy.settings._dispatch.GPU_PARAM_REGISTRY", registry),
+            patch("squidpy._settings._dispatch.GPU_PARAM_REGISTRY", registry),
             patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry),
         ):
 
@@ -233,7 +233,7 @@ class TestGpuDispatch:
 
         # Need to patch in both modules: dispatch for registry lookup, _gpu for check functions
         with (
-            patch("squidpy.settings._dispatch.GPU_PARAM_REGISTRY", registry),
+            patch("squidpy._settings._dispatch.GPU_PARAM_REGISTRY", registry),
             patch("squidpy.gr._gpu.GPU_PARAM_REGISTRY", registry),
         ):
 
@@ -243,7 +243,7 @@ class TestGpuDispatch:
 
             # Allowed value - should work
             with (
-                patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+                patch("squidpy._settings._dispatch._resolve_device", return_value="gpu"),
                 patch("importlib.import_module", return_value=mock_module),
             ):
                 my_func(42, custom_param="allowed", device="gpu")
@@ -251,7 +251,7 @@ class TestGpuDispatch:
             # Not allowed value - should error
             with pytest.raises(ValueError, match="value='bad' is not allowed on GPU"):
                 with (
-                    patch("squidpy.settings._dispatch._resolve_device", return_value="gpu"),
+                    patch("squidpy._settings._dispatch._resolve_device", return_value="gpu"),
                     patch("importlib.import_module", return_value=mock_module),
                 ):
                     my_func(42, custom_param="bad", device="gpu")

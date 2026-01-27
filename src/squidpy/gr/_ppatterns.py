@@ -23,6 +23,7 @@ from statsmodels.stats.multitest import multipletests
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
+from squidpy._settings import gpu_dispatch
 from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -31,7 +32,6 @@ from squidpy.gr._utils import (
     _assert_spatial_basis,
     _save_data,
 )
-from squidpy.settings import gpu_dispatch
 
 __all__ = ["spatial_autocorr", "co_occurrence"]
 
@@ -140,10 +140,6 @@ def spatial_autocorr(
     if isinstance(adata, SpatialData):
         adata = adata.table
     _assert_connectivity_key(adata, connectivity_key)
-
-    # Apply defaults for CPU-only params
-    if attr is None:
-        attr = "X"
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
         if genes is None:

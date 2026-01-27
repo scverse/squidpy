@@ -20,6 +20,7 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
+from squidpy._settings import gpu_dispatch
 from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -29,7 +30,6 @@ from squidpy.gr._utils import (
     _genesymbols,
     _save_data,
 )
-from squidpy.settings import gpu_dispatch
 
 __all__ = ["ligrec", "PermutationTest"]
 

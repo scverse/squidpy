@@ -9,8 +9,8 @@ import re
 from collections.abc import Callable
 from typing import Any, Literal, TypeVar
 
+from squidpy._settings._settings import settings
 from squidpy.gr._gpu import GPU_PARAM_REGISTRY, apply_defaults, check_cpu_params, check_gpu_params
-from squidpy.settings._settings import settings
 
 __all__ = ["gpu_dispatch"]
 
