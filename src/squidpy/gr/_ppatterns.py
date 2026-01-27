@@ -358,7 +358,6 @@ def co_occurrence(
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
-    n_splits: int | None = None,
     n_jobs: int | None = None,
     backend: str | None = None,
     show_progress_bar: bool | None = None,
@@ -376,9 +375,6 @@ def co_occurrence(
         Distances interval at which co-occurrence is computed. If :class:`int`, uniformly spaced interval
         of the given size will be used.
     %(copy)s
-    n_splits
-        Number of splits in which to divide the spatial coordinates in
-        :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``. Ignored when ``device='gpu'``.
     %(parallelize_device)s
     %(device)s
 

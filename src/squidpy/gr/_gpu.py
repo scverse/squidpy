@@ -53,7 +53,6 @@ GPU_PARAM_REGISTRY: dict[str, dict[str, dict[str, GpuParamSpec]]] = {
     },
     "co_occurrence": {
         "cpu_only": {
-            "n_splits": GpuParamSpec(None),
             **_PARALLELIZE,
         },
         "gpu_only": {},
