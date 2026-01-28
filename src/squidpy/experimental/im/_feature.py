@@ -14,6 +14,7 @@ import xarray as xr
 from cp_measure.bulk import get_core_measurements, get_correlation_measurements
 from numba import njit
 from skimage import measure
+from skimage.feature import graycomatrix, graycoprops
 from skimage.measure import label
 from spatialdata import SpatialData, rasterize
 from spatialdata._logging import logger as logg
@@ -90,6 +91,9 @@ class ParsedMeasurements(NamedTuple):
     intensity_props: set[str] | None
     has_cpmeasure_core: bool
     has_cpmeasure_correlation: bool
+    has_squidpy_summary: bool
+    has_squidpy_texture: bool
+    has_squidpy_color_hist: bool
 
 
 def _parse_measurements(
@@ -107,6 +111,9 @@ def _parse_measurements(
     parsed_intensity_props: set[str] | None = None
     has_cpmeasure_core = False
     has_cpmeasure_correlation = False
+    has_squidpy_summary = False
+    has_squidpy_texture = False
+    has_squidpy_color_hist = False
 
     for m in measurements:
         parts = m.split(":")
@@ -132,6 +139,12 @@ def _parse_measurements(
             has_cpmeasure_core = True
         elif m == "cpmeasure:correlation":
             has_cpmeasure_correlation = True
+        elif m == "squidpy:summary":
+            has_squidpy_summary = True
+        elif m == "squidpy:texture":
+            has_squidpy_texture = True
+        elif m == "squidpy:color_hist":
+            has_squidpy_color_hist = True
         elif m not in available_measurements:
             raise ValueError(
                 f"Invalid measurement: '{m}'. "
@@ -145,6 +158,9 @@ def _parse_measurements(
         parsed_intensity_props,
         has_cpmeasure_core,
         has_cpmeasure_correlation,
+        has_squidpy_summary,
+        has_squidpy_texture,
+        has_squidpy_color_hist,
     )
 
 
@@ -265,6 +281,9 @@ def calculate_image_features(
         "skimage:label+image",
         "cpmeasure:core",
         "cpmeasure:correlation",
+        "squidpy:summary",
+        "squidpy:texture",
+        "squidpy:color_hist",
     ]
 
     parsed = _parse_measurements(measurements, available_measurements)
@@ -274,6 +293,9 @@ def calculate_image_features(
         and parsed.intensity_props is None
         and not parsed.has_cpmeasure_core
         and not parsed.has_cpmeasure_correlation
+        and not parsed.has_squidpy_summary
+        and not parsed.has_squidpy_texture
+        and not parsed.has_squidpy_color_hist
     ):
         raise ValueError("No valid measurements requested")
 
@@ -310,6 +332,10 @@ def calculate_image_features(
     n_jobs = _get_n_cores(n_jobs)
 
     logg.info(f"Using '{n_jobs}' core(s).")
+
+    if parsed.has_squidpy_summary or parsed.has_squidpy_texture or parsed.has_squidpy_color_hist:
+        sq_feats = _compute_squidpy_channel_features(image, labels, cell_ids, channel_names, parsed)
+        all_features.extend(sq_feats)
 
     if parsed.label_props is not None:
         logg.info("Calculating 'skimage' label features.")
@@ -536,6 +562,90 @@ def _prepare_images_for_measurement(
         image1_prepared = img1.astype(np.float32)
         image2_prepared = None if img2 is None else img2.astype(np.float32)
     return mask, image1_prepared, image2_prepared
+
+
+def _get_label_bbox(labels: NDArray) -> tuple[int, int, int, int]:
+    """Return tight bounding box (y_min, y_max, x_min, x_max) for non-zero labels."""
+    yx = np.argwhere(labels > 0)
+    if yx.size == 0:
+        return 0, labels.shape[0], 0, labels.shape[1]
+    y_min, x_min = yx.min(axis=0)
+    y_max, x_max = yx.max(axis=0) + 1
+    return int(y_min), int(y_max), int(x_min), int(x_max)
+
+
+def _compute_squidpy_channel_features(
+    image: NDArray,
+    labels: NDArray,
+    cell_ids: NDArray,
+    channel_names: NDArray | None,
+    parsed: ParsedMeasurements,
+) -> list[pd.DataFrame]:
+    """Compute squidpy legacy-like features and broadcast to cells."""
+    feats: list[pd.DataFrame] = []
+
+    # Crop to label bbox to speed computations
+    y_min, y_max, x_min, x_max = _get_label_bbox(labels)
+    img_crop = image[:, y_min:y_max, x_min:x_max]
+
+    n_channels = img_crop.shape[0]
+    ch_names = channel_names if channel_names is not None else np.arange(n_channels).astype(str)
+
+    if parsed.has_squidpy_summary:
+        summary_vals: dict[str, float] = {}
+        for ch_idx in range(n_channels):
+            ch = img_crop[ch_idx].astype(np.float32)
+            summary_vals.update(
+                {
+                    f"summary_mean_{ch_names[ch_idx]}": float(np.mean(ch)),
+                    f"summary_std_{ch_names[ch_idx]}": float(np.std(ch)),
+                    f"summary_min_{ch_names[ch_idx]}": float(np.min(ch)),
+                    f"summary_max_{ch_names[ch_idx]}": float(np.max(ch)),
+                }
+            )
+        df = pd.DataFrame([summary_vals] * len(cell_ids), index=cell_ids)
+        feats.append(df)
+
+    if parsed.has_squidpy_texture:
+        tex_vals: dict[str, float] = {}
+        # Quantize to 32 levels to keep GLCM small
+        quant_levels = 32
+        for ch_idx in range(n_channels):
+            ch = img_crop[ch_idx]
+            # normalize to [0, quant_levels-1]
+            ch_norm = ch.astype(np.float32)
+            if ch_norm.max() > ch_norm.min():
+                ch_norm = (ch_norm - ch_norm.min()) / (ch_norm.max() - ch_norm.min())
+            ch_q = np.clip((ch_norm * (quant_levels - 1)).round().astype(np.uint8), 0, quant_levels - 1)
+            glcm = graycomatrix(ch_q, distances=[1], angles=[0], levels=quant_levels, symmetric=True, normed=True)
+            tex_vals.update(
+                {
+                    f"texture_contrast_{ch_names[ch_idx]}": float(graycoprops(glcm, "contrast")[0, 0]),
+                    f"texture_dissimilarity_{ch_names[ch_idx]}": float(graycoprops(glcm, "dissimilarity")[0, 0]),
+                    f"texture_homogeneity_{ch_names[ch_idx]}": float(graycoprops(glcm, "homogeneity")[0, 0]),
+                    f"texture_energy_{ch_names[ch_idx]}": float(graycoprops(glcm, "energy")[0, 0]),
+                    f"texture_ASM_{ch_names[ch_idx]}": float(graycoprops(glcm, "ASM")[0, 0]),
+                    f"texture_correlation_{ch_names[ch_idx]}": float(graycoprops(glcm, "correlation")[0, 0]),
+                }
+            )
+        df = pd.DataFrame([tex_vals] * len(cell_ids), index=cell_ids)
+        feats.append(df)
+
+    if parsed.has_squidpy_color_hist:
+        hist_vals: dict[str, float] = {}
+        bins = 16
+        for ch_idx in range(n_channels):
+            ch = img_crop[ch_idx].astype(np.float32)
+            hist, bin_edges = np.histogram(ch, bins=bins, range=(ch.min(), ch.max() if ch.max() > ch.min() else ch.min() + 1))
+            hist = hist.astype(np.float32)
+            hist_sum = hist.sum()
+            if hist_sum > 0:
+                hist = hist / hist_sum
+            hist_vals.update({f"color_hist_bin{b}_{ch_names[ch_idx]}": float(v) for b, v in enumerate(hist)})
+        df = pd.DataFrame([hist_vals] * len(cell_ids), index=cell_ids)
+        feats.append(df)
+
+    return feats
 
 
 @njit(fastmath=True)

@@ -249,3 +249,51 @@ class TestCalculateImageFeatures:
         assert all(col.endswith(("_0", "_1", "_2")) or "_" in col for col in result.columns)
         # Should not contain other intensity props
         assert not any(col.startswith("intensity_max") for col in result.columns)
+
+    def test_squidpy_summary(self, sdata_hne_small):
+        """Test squidpy summary stats per channel."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_hne_small,
+            image_key="hne",
+            shapes_key="spots",
+            scale="scale0",
+            measurements=["squidpy:summary"],
+            inplace=False,
+            n_jobs=1,
+        )
+
+        assert isinstance(result, pd.DataFrame)
+        assert result.shape[0] > 0
+        assert any(col.startswith("summary_mean") for col in result.columns)
+
+    def test_squidpy_texture(self, sdata_hne_small):
+        """Test squidpy texture stats per channel."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_hne_small,
+            image_key="hne",
+            shapes_key="spots",
+            scale="scale0",
+            measurements=["squidpy:texture"],
+            inplace=False,
+            n_jobs=1,
+        )
+
+        assert isinstance(result, pd.DataFrame)
+        assert result.shape[0] > 0
+        assert any(col.startswith("texture_contrast") for col in result.columns)
+
+    def test_squidpy_color_hist(self, sdata_hne_small):
+        """Test squidpy color histogram per channel."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_hne_small,
+            image_key="hne",
+            shapes_key="spots",
+            scale="scale0",
+            measurements=["squidpy:color_hist"],
+            inplace=False,
+            n_jobs=1,
+        )
+
+        assert isinstance(result, pd.DataFrame)
+        assert result.shape[0] > 0
+        assert any(col.startswith("color_hist_bin") for col in result.columns)
