@@ -636,7 +636,9 @@ def _compute_squidpy_channel_features(
         bins = 16
         for ch_idx in range(n_channels):
             ch = img_crop[ch_idx].astype(np.float32)
-            hist, bin_edges = np.histogram(ch, bins=bins, range=(ch.min(), ch.max() if ch.max() > ch.min() else ch.min() + 1))
+            hist, bin_edges = np.histogram(
+                ch, bins=bins, range=(ch.min(), ch.max() if ch.max() > ch.min() else ch.min() + 1)
+            )
             hist = hist.astype(np.float32)
             hist_sum = hist.sum()
             if hist_sum > 0:
