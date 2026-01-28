@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, NamedTuple
 
 import anndata as ad
 import numpy as np
@@ -84,6 +84,70 @@ _ARRAY_2D_PROPS = frozenset({"inertia_tensor"})
 _SPECIAL_PROPS = frozenset({"inertia_tensor_eigvals"})
 
 
+class ParsedMeasurements(NamedTuple):
+    measurements: list[str]
+    label_props: set[str] | None
+    intensity_props: set[str] | None
+    has_cpmeasure_core: bool
+    has_cpmeasure_correlation: bool
+
+
+def _parse_measurements(
+    measurements: str | list[str] | None,
+    available_measurements: list[str],
+) -> ParsedMeasurements:
+    """Parse and validate measurements, supporting per-property selection."""
+    if measurements is None:
+        measurements = available_measurements
+
+    if isinstance(measurements, str):
+        measurements = [measurements]
+
+    parsed_label_props: set[str] | None = None
+    parsed_intensity_props: set[str] | None = None
+    has_cpmeasure_core = False
+    has_cpmeasure_correlation = False
+
+    for m in measurements:
+        parts = m.split(":")
+        if len(parts) == 3 and parts[0] == "skimage":
+            group, prop = parts[1], parts[2]
+            if group == "label":
+                if prop not in _MASK_PROPS:
+                    raise ValueError(f"Unknown skimage label property: '{prop}'. Available: {sorted(_MASK_PROPS)}")
+                parsed_label_props = (parsed_label_props or set()) | {prop}
+            elif group == "label+image":
+                if prop not in _INTENSITY_PROPS:
+                    raise ValueError(
+                        f"Unknown skimage intensity property: '{prop}'. Available: {sorted(_INTENSITY_PROPS)}"
+                    )
+                parsed_intensity_props = (parsed_intensity_props or set()) | {prop}
+            else:
+                raise ValueError(f"Unknown skimage group: '{group}'. Use 'label' or 'label+image'")
+        elif m == "skimage:label":
+            parsed_label_props = (parsed_label_props or set()) | _MASK_PROPS.copy()
+        elif m == "skimage:label+image":
+            parsed_intensity_props = (parsed_intensity_props or set()) | _INTENSITY_PROPS.copy()
+        elif m == "cpmeasure:core":
+            has_cpmeasure_core = True
+        elif m == "cpmeasure:correlation":
+            has_cpmeasure_correlation = True
+        elif m not in available_measurements:
+            raise ValueError(
+                f"Invalid measurement: '{m}'. "
+                f"Available: {available_measurements}, "
+                f"or use 'skimage:label:property' / 'skimage:label+image:property' for individual properties"
+            )
+
+    return ParsedMeasurements(
+        measurements,
+        parsed_label_props,
+        parsed_intensity_props,
+        has_cpmeasure_core,
+        has_cpmeasure_correlation,
+    )
+
+
 @d.dedent
 @inject_docs(f=ImageFeature)
 def calculate_image_features(
@@ -135,10 +199,17 @@ def calculate_image_features(
     -----
     This is an experimental feature that requires the `cp_measure` package
     to be installed.
+
+    Per-property selection is supported, e.g. ``"skimage:label:area"`` or
+    ``"skimage:label+image:intensity_mean"``. Full groups remain available via
+    ``"skimage:label"`` and ``"skimage:label+image"``.
     """
 
     if image_key not in sdata.images.keys():
         raise ValueError(f"Image key '{image_key}' not found, valid keys: {list(sdata.images.keys())}")
+
+    if labels_key is None and shapes_key is None:
+        raise ValueError("Provide either `labels_key` or `shapes_key`.")
 
     if labels_key is not None and shapes_key is not None:
         raise ValueError("Use either `labels_key` or `shapes_key`, not both.")
@@ -196,62 +267,15 @@ def calculate_image_features(
         "cpmeasure:correlation",
     ]
 
-    if measurements is None:
-        measurements = available_measurements
+    parsed = _parse_measurements(measurements, available_measurements)
 
-    if isinstance(measurements, str):
-        measurements = [measurements]
-
-    # Parse measurements to support individual properties: "skimage:label:area"
-    parsed_label_props = None
-    parsed_intensity_props = None
-    has_cpmeasure_core = False
-    has_cpmeasure_correlation = False
-
-    for m in measurements:
-        parts = m.split(":")
-        if len(parts) == 3 and parts[0] == "skimage":
-            # Individual property: "skimage:label:area"
-            group, prop = parts[1], parts[2]
-            if group == "label":
-                if prop not in _MASK_PROPS:
-                    raise ValueError(f"Unknown skimage label property: '{prop}'. Available: {sorted(_MASK_PROPS)}")
-                if parsed_label_props is None:
-                    parsed_label_props = set()
-                parsed_label_props.add(prop)
-            elif group == "label+image":
-                if prop not in _INTENSITY_PROPS:
-                    raise ValueError(
-                        f"Unknown skimage intensity property: '{prop}'. Available: {sorted(_INTENSITY_PROPS)}"
-                    )
-                if parsed_intensity_props is None:
-                    parsed_intensity_props = set()
-                parsed_intensity_props.add(prop)
-            else:
-                raise ValueError(f"Unknown skimage group: '{group}'. Use 'label' or 'label+image'")
-        elif m == "skimage:label":
-            # Full label group
-            if parsed_label_props is None:
-                parsed_label_props = _MASK_PROPS.copy()
-            else:
-                parsed_label_props.update(_MASK_PROPS)
-        elif m == "skimage:label+image":
-            # Full intensity group
-            if parsed_intensity_props is None:
-                parsed_intensity_props = _INTENSITY_PROPS.copy()
-            else:
-                parsed_intensity_props.update(_INTENSITY_PROPS)
-        elif m == "cpmeasure:core":
-            has_cpmeasure_core = True
-        elif m == "cpmeasure:correlation":
-            has_cpmeasure_correlation = True
-        elif m not in available_measurements:
-            raise ValueError(
-                f"Invalid measurement: '{m}'. "
-                f"Available: {available_measurements}, "
-                f"or use 'skimage:label:property' / 'skimage:label+image:property' "
-                f"for individual properties"
-            )
+    if (
+        parsed.label_props is None
+        and parsed.intensity_props is None
+        and not parsed.has_cpmeasure_core
+        and not parsed.has_cpmeasure_correlation
+    ):
+        raise ValueError("No valid measurements requested")
 
     if labels.size == 0:
         raise ValueError("Labels array is empty")
@@ -272,7 +296,7 @@ def calculate_image_features(
     if image.shape[1:] != labels.shape:
         raise ValueError(f"Image and labels have mismatched dimensions: image {image.shape[1:]}, labels {labels.shape}")
 
-    if has_cpmeasure_correlation:
+    if parsed.has_cpmeasure_correlation:
         measurements_corr = get_correlation_measurements()
 
     cell_ids = np.unique(labels)
@@ -287,7 +311,7 @@ def calculate_image_features(
 
     logg.info(f"Using '{n_jobs}' core(s).")
 
-    if parsed_label_props is not None:
+    if parsed.label_props is not None:
         logg.info("Calculating 'skimage' label features.")
         res = parallelize(
             _get_regionprops_features,
@@ -297,10 +321,10 @@ def calculate_image_features(
             backend=backend,
             show_progress_bar=show_progress_bar,
             verbose=verbose,
-        )(labels=labels, intensity_image=None, props=parsed_label_props)
+        )(labels=labels, intensity_image=None, props=parsed.label_props)
         all_features.append(res)
 
-    if parsed_intensity_props is not None:
+    if parsed.intensity_props is not None:
         for ch_idx in range(n_channels):
             ch_name = channel_names[ch_idx] if channel_names is not None else f"{ch_idx}"
             ch_image = image[ch_idx]
@@ -313,12 +337,12 @@ def calculate_image_features(
                 backend=backend,
                 show_progress_bar=show_progress_bar,
                 verbose=verbose,
-            )(labels=labels, intensity_image=ch_image, props=parsed_intensity_props)
+            )(labels=labels, intensity_image=ch_image, props=parsed.intensity_props)
             # Append channel names to each feature column
             res = res.rename(columns=lambda col, ch_name=ch_name: f"{col}_{ch_name}")
             all_features.append(res)
 
-    if has_cpmeasure_core:
+    if parsed.has_cpmeasure_core:
         measurements_core = get_core_measurements()
         for ch_idx in range(n_channels):
             ch_name = channel_names[ch_idx] if channel_names is not None else f"{ch_idx}"
@@ -335,7 +359,7 @@ def calculate_image_features(
             )(labels, ch_image, None, measurements_core, ch_name)
             all_features.append(res)
 
-    if "cpmeasure:correlation" in measurements:
+    if parsed.has_cpmeasure_correlation:
         for ch1_idx in range(n_channels):
             for ch2_idx in range(ch1_idx + 1, n_channels):
                 ch1_name = channel_names[ch1_idx] if channel_names is not None else f"{ch1_idx}"

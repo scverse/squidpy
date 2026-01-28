@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
-from spatialdata import SpatialData, bounding_box_query
+from spatialdata import SpatialData
 from spatialdata.models import Image2DModel, Labels2DModel
 
 import squidpy as sq
@@ -17,30 +17,23 @@ def sdata_hne_small(sdata_hne):
     if "spots" not in sdata_hne.shapes:
         return sdata_hne
 
-    # Crop to central tissue area (roughly the dense tissue in Visium H&E)
-    # Chosen from dataset bounds as seen in the provided plot.
-    bbox = bounding_box_query(
-        sdata_hne,
-        axes=["x", "y"],
-        min_coordinate=[2500, 1500],
-        max_coordinate=[7500, 8000],
-        target_coordinate_system="global",
-        filter_table=True,
+    spots = sdata_hne.shapes["spots"]
+    try:
+        spots = spots.loc[~spots.geometry.is_empty]  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+
+    # Take the first ~100 spots to keep rasterization fast and non-empty
+    spots_subset = spots.iloc[:100] if len(spots) > 100 else spots
+    if len(spots_subset) == 0:
+        return sdata_hne
+
+    return SpatialData(
+        images=sdata_hne.images,
+        labels=sdata_hne.labels,
+        shapes={"spots": spots_subset},
+        tables=sdata_hne.tables,
     )
-
-    # Ensure we keep only spots and drop empties
-    if "spots" in bbox.shapes:
-        spots = bbox.shapes["spots"]
-        try:
-            spots = spots.loc[~spots.geometry.is_empty]  # type: ignore[attr-defined]
-        except AttributeError:
-            pass
-        # Rebuild SpatialData to use filtered spots; fall back to original if empty
-        if len(spots) > 0:
-            return SpatialData(images=bbox.images, labels=bbox.labels, shapes={"spots": spots}, tables=bbox.tables)
-
-    # Fallback: return original sdata if crop produced no valid spots
-    return sdata_hne
 
 
 class TestCalculateImageFeatures:
@@ -126,6 +119,15 @@ class TestCalculateImageFeatures:
                 measurements=["skimage:label"],
             )
 
+    def test_missing_labels_and_shapes(self, sdata_hne_small):
+        """Test error when neither labels_key nor shapes_key is provided."""
+        with pytest.raises(ValueError, match="Provide either `labels_key` or `shapes_key`."):
+            sq.experimental.im.calculate_image_features(
+                sdata_hne_small,
+                image_key="hne",
+                measurements=["skimage:label"],
+            )
+
     def test_invalid_measurement(self, sdata_hne_small):
         """Test error with invalid measurement type."""
         with pytest.raises(ValueError, match="Invalid measurement"):
@@ -135,6 +137,19 @@ class TestCalculateImageFeatures:
                 shapes_key="spots",
                 scale="scale0",
                 measurements=["nonexistent:measurement"],
+            )
+
+    def test_no_valid_measurements(self, sdata_hne_small):
+        """Test error when no valid measurements are requested."""
+        with pytest.raises(ValueError, match="No valid measurements requested"):
+            sq.experimental.im.calculate_image_features(
+                sdata_hne_small,
+                image_key="hne",
+                shapes_key="spots",
+                scale="scale0",
+                measurements=[],
+                n_jobs=1,
+                inplace=False,
             )
 
     def test_with_intensity_features(self, sdata_hne_small):
