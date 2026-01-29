@@ -72,15 +72,24 @@ def visium(
         (path / f"{Key.uns.spatial}/scalefactors_json.json").read_bytes()
     )
 
+    # Space Ranger versions use different file formats:
+    #   - v1: tissue_positions.csv (no header)
+    #   - v2: tissue_positions_list.csv (with header)
+    #   - v3: tissue_positions.csv (with header)
     tissue_positions_file = (
         path / "spatial/tissue_positions.csv"
         if (path / "spatial/tissue_positions.csv").exists()
         else path / "spatial/tissue_positions_list.csv"
     )
 
+    # Detect header by checking if first cell is 'barcode' (header) or a barcode value
+    with open(tissue_positions_file) as f:
+        first_cell = f.readline().split(",")[0].strip()
+    has_header = first_cell.lower() == "barcode"
+
     coords = pd.read_csv(
         tissue_positions_file,
-        header=1 if tissue_positions_file.name == "tissue_positions.csv" else None,
+        header=0 if has_header else None,
         index_col=0,
     )
     coords.columns = ["in_tissue", "array_row", "array_col", "pxl_col_in_fullres", "pxl_row_in_fullres"]

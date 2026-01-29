@@ -88,6 +88,7 @@ optional-dependencies.dev = [
   "ruff",
 ]
 optional-dependencies.docs = [
+  "docutils<0.22",                    # Pin to avoid sphinx-tabs KeyError with backrefs
   "ipython",
   "ipywidgets>=8",
   "myst-nb>=0.17.1",
