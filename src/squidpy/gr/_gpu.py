@@ -1,25 +1,24 @@
-"""GPU parameter registry for squidpy.gr functions.
+"""GPU parameter handling for squidpy.gr functions.
 
-Defines which parameters are CPU-only (error on GPU if provided) and GPU-only (error on CPU if provided).
-The gpu_dispatch decorator uses this registry to automatically handle parameter validation and filtering.
+Automatically determines CPU-only and GPU-only parameters by introspecting function signatures.
+Only special cases (custom validators) need explicit registry entries.
 """
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["GPU_PARAM_REGISTRY", "GpuParamSpec", "check_gpu_params", "check_cpu_params", "apply_defaults"]
+__all__ = ["SPECIAL_PARAM_REGISTRY", "ParamSpec", "check_exclusive_params", "get_exclusive_params"]
 
 
 @dataclass
-class GpuParamSpec:
-    """Specification for a parameter's GPU compatibility."""
+class ParamSpec:
+    """Specification for a parameter with custom validation."""
 
-    default: Any
-    message: str | None = None
-    validator: Callable[[Any], str | None] | None = None
+    validate_fn: Callable[[Any], str | None]
 
 
 def _attr_validator(value: Any) -> str | None:
@@ -29,131 +28,88 @@ def _attr_validator(value: Any) -> str | None:
     return f"attr={value!r} is not supported on GPU. Set device='cpu' to use other attributes."
 
 
-# Common CPU-only param specs (reusable)
-_PARALLELIZE: dict[str, GpuParamSpec] = {
-    "n_jobs": GpuParamSpec(None),
-    "backend": GpuParamSpec("loky"),
-    "show_progress_bar": GpuParamSpec(True),
-}
-_SEED: dict[str, GpuParamSpec] = {"seed": GpuParamSpec(None)}
-
-# Registry: {func_name: {"cpu_only": {...}, "gpu_only": {...}}}
-# - cpu_only: parameters only supported on CPU (error on GPU if user provided a non-None value)
-# - gpu_only: parameters only supported on GPU (error on CPU if user provided a non-None value)
-GPU_PARAM_REGISTRY: dict[str, dict[str, dict[str, GpuParamSpec]]] = {
+# Minimal registry: only for params that need custom validators
+# Format: {func_name: {"cpu_only": {param: ParamSpec}, "gpu_only": {param: ParamSpec}}}
+SPECIAL_PARAM_REGISTRY: dict[str, dict[str, dict[str, ParamSpec]]] = {
     "spatial_autocorr": {
         "cpu_only": {
-            "attr": GpuParamSpec("X", validator=_attr_validator),
-            **_SEED,
-            **_PARALLELIZE,
-        },
-        "gpu_only": {
-            "use_sparse": GpuParamSpec(True),
-        },
-    },
-    "co_occurrence": {
-        "cpu_only": {
-            **_PARALLELIZE,
-        },
-        "gpu_only": {},
-    },
-    "ligrec": {
-        "cpu_only": {
-            "numba_parallel": GpuParamSpec(None),
-            **_SEED,
-            **_PARALLELIZE,
+            "attr": ParamSpec(validate_fn=_attr_validator),
         },
         "gpu_only": {},
     },
 }
 
 
-def check_gpu_params(func_name: str, **cpu_only_values: Any) -> None:
-    """Check CPU-only params on GPU, raise error if user provided a value.
+def get_exclusive_params(
+    cpu_func: Callable[..., Any], gpu_func: Callable[..., Any]
+) -> tuple[set[str], set[str]]:
+    """Get CPU-only and GPU-only params by comparing function signatures.
+
+    Parameters
+    ----------
+    cpu_func
+        The CPU implementation function.
+    gpu_func
+        The GPU implementation function.
+
+    Returns
+    -------
+    Tuple of (cpu_only_params, gpu_only_params) as sets of param names.
+    """
+    cpu_sig = inspect.signature(cpu_func)
+    gpu_sig = inspect.signature(gpu_func)
+
+    cpu_params = set(cpu_sig.parameters.keys())
+    gpu_params = set(gpu_sig.parameters.keys())
+
+    # CPU-only: in CPU sig but not in GPU sig (excluding 'device' which is handled separately)
+    cpu_only = cpu_params - gpu_params - {"device"}
+
+    # GPU-only: in GPU sig but not in CPU sig
+    gpu_only = gpu_params - cpu_params
+
+    return cpu_only, gpu_only
+
+
+def check_exclusive_params(
+    func_name: str,
+    user_provided_exclusive: set[str],
+    param_values: dict[str, Any],
+    target_device: str,
+) -> None:
+    """Check exclusive params, raise error if user explicitly provided any.
 
     Parameters
     ----------
     func_name
-        Name of the function in GPU_PARAM_REGISTRY.
-    **cpu_only_values
-        CPU-only parameter values to check. None means not provided by user.
+        Name of the function (for registry lookup).
+    user_provided_exclusive
+        Set of param names that user explicitly provided AND are exclusive to other device.
+    param_values
+        All argument values (for error messages and custom validators).
+    target_device
+        The device being used ('cpu' or 'gpu').
 
     Raises
     ------
     ValueError
-        If a CPU-only parameter was explicitly provided (not None) on GPU.
+        If user explicitly provided an exclusive parameter.
     """
-    registry = GPU_PARAM_REGISTRY.get(func_name, {"cpu_only": {}, "gpu_only": {}})
+    other_device = "gpu" if target_device == "cpu" else "cpu"
+    registry_key = "gpu_only" if target_device == "cpu" else "cpu_only"
+    registry = SPECIAL_PARAM_REGISTRY.get(func_name, {"cpu_only": {}, "gpu_only": {}})
 
-    for name, spec in registry["cpu_only"].items():
-        if name not in cpu_only_values:
-            continue
-        value = cpu_only_values[name]
+    for name in user_provided_exclusive:
+        value = param_values.get(name)
 
-        # None means user didn't provide a value - that's fine
-        if value is None:
-            continue
-
-        # Use custom validator if provided
-        if spec.validator:
-            msg = spec.validator(value)
+        # Check special validate_fn first (they may allow certain values)
+        if name in registry[registry_key]:
+            spec = registry[registry_key][name]
+            msg = spec.validate_fn(value)
             if msg:
-                raise ValueError(msg.format(name=name, value=value))
-        else:
-            # User explicitly provided a value for a CPU-only param on GPU
-            msg = (
-                spec.message or f"{name}={value!r} is only supported on CPU. Use device='cpu' or remove this argument."
-            )
-            raise ValueError(msg.format(name=name, value=value))
-
-
-def check_cpu_params(func_name: str, **gpu_only_values: Any) -> None:
-    """Check GPU-only params on CPU, raise error if user provided a value.
-
-    Parameters
-    ----------
-    func_name
-        Name of the function in GPU_PARAM_REGISTRY.
-    **gpu_only_values
-        GPU-only parameter values to check. None means not provided by user.
-
-    Raises
-    ------
-    ValueError
-        If a GPU-only parameter was explicitly provided (not None) on CPU.
-    """
-    registry = GPU_PARAM_REGISTRY.get(func_name, {"cpu_only": {}, "gpu_only": {}})
-
-    for name, _spec in registry["gpu_only"].items():
-        if name not in gpu_only_values:
-            continue
-        value = gpu_only_values[name]
-
-        # None means user didn't provide a value - that's fine
-        if value is None:
+                raise ValueError(msg)
             continue
 
-        # User explicitly provided a value for a GPU-only param on CPU
-        msg = f"{name}={value!r} is only supported on GPU. Use device='gpu' or remove this argument."
+        # User explicitly provided an exclusive param - error
+        msg = f"{name}={value!r} is only supported on {other_device.upper()}. Use device={other_device!r} or remove this argument."
         raise ValueError(msg)
-
-
-def apply_defaults(func_name: str, args: dict[str, Any], target: str) -> None:
-    """Apply registry defaults for params that are None.
-
-    Parameters
-    ----------
-    func_name
-        Name of the function in GPU_PARAM_REGISTRY.
-    args
-        Arguments dict to modify in place.
-    target
-        Either 'cpu' or 'gpu' - which defaults to apply.
-    """
-    registry = GPU_PARAM_REGISTRY.get(func_name, {"cpu_only": {}, "gpu_only": {}})
-
-    # Apply defaults for the target's own params
-    param_key = "cpu_only" if target == "cpu" else "gpu_only"
-    for name, spec in registry[param_key].items():
-        if name in args and args[name] is None:
-            args[name] = spec.default
