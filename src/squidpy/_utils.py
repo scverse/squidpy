@@ -79,9 +79,9 @@ def parallelize(
     n_split: int | None = None,
     unit: str = "",
     use_ixs: bool = False,
-    backend: str = "loky",
+    backend: str | None = "loky",
     extractor: Callable[[Sequence[Any]], Any] | None = None,
-    show_progress_bar: bool = True,
+    show_progress_bar: bool | None = True,
     use_runner: bool = False,
     **_: Any,
 ) -> Any:
@@ -119,6 +119,12 @@ def parallelize(
     -------
     The result depending on ``callable``, ``extractor``.
     """
+    # Apply defaults for None values (allows dispatch to pass through None)
+    if backend is None:
+        backend = "loky"
+    if show_progress_bar is None:
+        show_progress_bar = True
+
     if show_progress_bar:
         try:
             import ipywidgets  # noqa: F401

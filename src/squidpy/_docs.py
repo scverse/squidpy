@@ -105,7 +105,9 @@ ax
 _plotting_returns = """\
 Nothing, just plots the figure and optionally saves the plot.
 """
-_parallelize = """\
+_CPU_ONLY = " Only available when ``device='cpu'``."
+
+_n_jobs = """\
 n_jobs
     Number of parallel jobs to use.
     For ``backend="loky"``, the number of cores used by numba for
@@ -114,29 +116,19 @@ n_jobs
     numba in your function to parallelize.
     To set the absolute maximum number of threads in numba
     for your python program, set the environment variable:
-    ``NUMBA_NUM_THREADS`` before running the program.
+    ``NUMBA_NUM_THREADS`` before running the program."""
+_backend = """\
 backend
-    Parallelization backend to use. See :class:`joblib.Parallel` for available options.
+    Parallelization backend to use. See :class:`joblib.Parallel` for available options."""
+_show_progress_bar = """\
 show_progress_bar
     Whether to show the progress bar or not."""
-_parallelize_device = """\
-n_jobs
-    Number of parallel jobs to use. Ignored when ``device='gpu'``.
-    For ``backend="loky"``, the number of cores used by numba for
-    each job spawned by the backend will be set to 1 in order to
-    overcome the oversubscription issue in case you run
-    numba in your function to parallelize.
-    To set the absolute maximum number of threads in numba
-    for your python program, set the environment variable:
-    ``NUMBA_NUM_THREADS`` before running the program.
-backend
-    Parallelization backend to use. See :class:`joblib.Parallel` for available options.
-    Ignored when ``device='gpu'``.
-show_progress_bar
-    Whether to show the progress bar or not. Ignored when ``device='gpu'``."""
-_seed_device = """\
+
+_parallelize = f"{_n_jobs}\n{_backend}\n{_show_progress_bar}"
+_parallelize_device = f"{_n_jobs}{_CPU_ONLY}\n{_backend}{_CPU_ONLY}\n{_show_progress_bar}{_CPU_ONLY}"
+_seed_device = f"""\
 seed
-    Random seed for reproducibility. Ignored when ``device='gpu'``."""
+    Random seed for reproducibility.{_CPU_ONLY}"""
 _device = """\
 device
     Device for computation: ``'cpu'``, ``'gpu'``, or ``None`` (use ``squidpy.settings.device``).
