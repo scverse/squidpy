@@ -40,9 +40,7 @@ SPECIAL_PARAM_REGISTRY: dict[str, dict[str, dict[str, ParamSpec]]] = {
 }
 
 
-def get_exclusive_params(
-    cpu_func: Callable[..., Any], gpu_func: Callable[..., Any]
-) -> tuple[set[str], set[str]]:
+def get_exclusive_params(cpu_func: Callable[..., Any], gpu_func: Callable[..., Any]) -> tuple[set[str], set[str]]:
     """Get CPU-only and GPU-only params by comparing function signatures.
 
     Parameters
