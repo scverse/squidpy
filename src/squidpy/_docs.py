@@ -128,11 +128,13 @@ _parallelize = f"{_n_jobs}\n{_backend}\n{_show_progress_bar}"
 _parallelize_device = f"{_n_jobs}{_CPU_ONLY}\n{_backend}{_CPU_ONLY}\n{_show_progress_bar}{_CPU_ONLY}"
 _seed_device = f"""\
 seed
-    Random seed for reproducibility.{_CPU_ONLY}"""
+    Random seed for reproducibility.{_CPU_ONLY}
+"""
 _device = """\
 device
     Device for computation: ``'cpu'``, ``'gpu'``, or ``None`` (use ``squidpy.settings.device``).
-    When ``'gpu'``, dispatches to :doc:`rapids_singlecell <rapids_singlecell:index>` for GPU-accelerated computation."""
+    When ``'gpu'``, dispatches to :doc:`rapids_singlecell <rapids_singlecell:index>` for GPU-accelerated computation.
+"""
 _channels = """\
 channels
     Channels for this feature is computed. If `None`, use all channels."""

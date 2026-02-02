@@ -5,9 +5,10 @@ from __future__ import annotations
 from contextvars import ContextVar
 from typing import Literal, get_args
 
-__all__ = ["settings", "DeviceType"]
+__all__ = ["settings", "DeviceType", "GPU_UNAVAILABLE_MSG"]
 
 DeviceType = Literal["auto", "cpu", "gpu"]
+GPU_UNAVAILABLE_MSG = "GPU unavailable. Install: pip install squidpy[gpu-cuda12] or with [gpu-cuda11] for CUDA 11 support."
 _device_var: ContextVar[DeviceType] = ContextVar("device", default="auto")
 
 
@@ -37,7 +38,7 @@ class SqSettings:
         if value not in get_args(DeviceType):
             raise ValueError(f"device must be one of {get_args(DeviceType)}, got {value!r}")
         if value == "gpu" and not self.gpu_available:
-            raise RuntimeError("GPU unavailable. Install: pip install squidpy[gpu-cuda12] or with [gpu-cuda11] for CUDA 11 support.")
+            raise RuntimeError(GPU_UNAVAILABLE_MSG)
         _device_var.set(value)
 
 

@@ -1,4 +1,4 @@
-"""GPU parameter handling for squidpy.gr functions.
+"""GPU parameter handling for squidpy functions with GPU acceleration.
 
 Automatically determines CPU-only and GPU-only parameters by introspecting function signatures.
 Only special cases (custom validators) need explicit registry entries.
