@@ -46,7 +46,7 @@ dependencies = [
   "aiohttp>=3.8.1",
   "anndata>=0.9",
   "cycler>=0.11",
-  "dask[array]>=2021.2,<=2024.11.2",
+  "dask[array]>=2021.2",
   "dask-image>=0.5",
   "docrep>=0.3.1",
   "fast-array-utils",
@@ -66,7 +66,7 @@ dependencies = [
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
-  "spatialdata>=0.6",
+  "spatialdata>=0.7",
   "spatialdata-plot",
   "statsmodels>=0.12",
   # https://github.com/scverse/squidpy/issues/526
