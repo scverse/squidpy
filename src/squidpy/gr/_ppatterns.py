@@ -56,7 +56,7 @@ def spatial_autocorr(
     n_perms: int | None = None,
     two_tailed: bool = False,
     corr_method: str | None = "fdr_bh",
-    attr: Literal["obs", "X", "obsm"] | None = None,
+    attr: Literal["obs", "X", "obsm"] = "X",
     layer: str | None = None,
     seed: int | None = None,
     use_raw: bool = False,
@@ -108,7 +108,7 @@ def spatial_autocorr(
         Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
     attr
         Which attribute of :class:`~anndata.AnnData` to access. See ``genes`` parameter for more information.
-        Ignored when ``device='gpu'``.
+        Can be only 'X' when effective device is 'gpu'.
     use_sparse
         If `True`, use sparse matrix representation for the input matrix.
         Only used when ``device='gpu'``. Defaults to `True` on GPU.
@@ -137,6 +137,7 @@ def spatial_autocorr(
         - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe, if ``mode = {sp.MORAN.s!r}``.
         - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
+    del device, use_sparse  # device and use_sparse are handled by the gpu_dispatch decorator
     if isinstance(adata, SpatialData):
         adata = adata.table
     _assert_connectivity_key(adata, connectivity_key)
