@@ -31,7 +31,7 @@ class TestSettings:
 
     def test_set_device_gpu_without_rsc(self):
         """Test that setting device to 'gpu' without rapids-singlecell raises RuntimeError."""
-        if not settings.gpu_available():
+        if not settings.gpu_available:
             with pytest.raises(RuntimeError, match="GPU unavailable"):
                 settings.device = "gpu"
 
@@ -53,7 +53,7 @@ class TestGpuDispatch:
 
     def test_auto_device_falls_back_to_cpu(self):
         """Test auto device falls back to CPU when GPU unavailable."""
-        if settings.gpu_available():
+        if settings.gpu_available:
             pytest.skip("GPU is available")
 
         calls = []
@@ -203,7 +203,7 @@ class TestGpuDispatch:
 
     def test_gpu_errors_when_unavailable(self):
         """Test GPU raises error when unavailable."""
-        if settings.gpu_available():
+        if settings.gpu_available:
             pytest.skip("GPU is available")
 
         @gpu_dispatch()

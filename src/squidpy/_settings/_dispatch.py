@@ -24,11 +24,11 @@ def _resolve_device(device: Literal["auto", "cpu", "gpu"] | None) -> Literal["cp
     if device == "cpu":
         return "cpu"
     if device == "gpu":
-        if not settings.gpu_available():
+        if not settings.gpu_available:
             raise RuntimeError("GPU unavailable. Install with: pip install squidpy[gpu-cuda12]")
         return "gpu"
     # auto
-    return "gpu" if settings.gpu_available() else "cpu"
+    return "gpu" if settings.gpu_available else "cpu"
 
 
 def _make_gpu_note(func_name: str, gpu_module: str, indent: str = "") -> str:

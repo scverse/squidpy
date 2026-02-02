@@ -10,7 +10,7 @@ from squidpy._settings import settings
 
 # Skip all tests in this module if GPU is not available
 pytestmark = pytest.mark.skipif(
-    not settings.gpu_available(),
+    not settings.gpu_available,
     reason="GPU tests require rapids-singlecell to be installed",
 )
 
