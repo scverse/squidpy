@@ -10,7 +10,7 @@ from collections.abc import Callable
 from typing import Any, Literal, TypeVar
 
 from squidpy._settings._settings import GPU_UNAVAILABLE_MSG, settings
-from squidpy.gr._gpu import GPU_PARAM_REGISTRY, check_exclusive_params, get_or_create_registry_entry
+from squidpy.gr._gpu import SPECIAL_PARAM_REGISTRY, check_exclusive_params, get_exclusive_params
 
 __all__ = ["gpu_dispatch"]
 
@@ -103,16 +103,16 @@ def gpu_dispatch(
 
             # Get or create registry entry (populated once per function)
             key = (gpu_module, _gpu_func_name)
-            if key not in GPU_PARAM_REGISTRY:
+            if key not in SPECIAL_PARAM_REGISTRY:
                 try:
                     module = importlib.import_module(gpu_module)
                     gpu_func = getattr(module, _gpu_func_name)
-                    get_or_create_registry_entry(gpu_module, _gpu_func_name, func, gpu_func)
+                    cpu_only, gpu_only = get_exclusive_params(func, gpu_func)
                 except (ImportError, AttributeError):
                     # GPU module not available, just run CPU function
                     return func(**all_args)
 
-            entry = GPU_PARAM_REGISTRY[key]
+            entry = SPECIAL_PARAM_REGISTRY[key]
 
             if resolved_device == "gpu":
                 # Check if user explicitly provided any CPU-only params

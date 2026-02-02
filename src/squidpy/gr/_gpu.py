@@ -11,11 +11,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["SPECIAL_PARAM_REGISTRY", "ParamSpec", "check_exclusive_params", "get_exclusive_params"]
+__all__ = ["SPECIAL_PARAM_REGISTRY", "check_exclusive_params", "get_exclusive_params"]
 
 
 @dataclass
-class ParamSpec:
+class GpuParamSpec:
     """Specification for a parameter with custom validation."""
 
     validate_fn: Callable[[Any], str | None]
@@ -29,11 +29,11 @@ def _attr_validator(value: Any) -> str | None:
 
 
 # Minimal registry: only for params that need custom validators
-# Format: {func_name: {"cpu_only": {param: ParamSpec}, "gpu_only": {param: ParamSpec}}}
-SPECIAL_PARAM_REGISTRY: dict[str, dict[str, dict[str, ParamSpec]]] = {
+# Format: {func_name: {"cpu_only": {param: GpuParamSpec}, "gpu_only": {param: GpuParamSpec}}}
+SPECIAL_PARAM_REGISTRY: dict[str, dict[str, dict[str, GpuParamSpec]]] = {
     "spatial_autocorr": {
         "cpu_only": {
-            "attr": ParamSpec(validate_fn=_attr_validator),
+            "attr": GpuParamSpec(validate_fn=_attr_validator),
         },
         "gpu_only": {},
     },

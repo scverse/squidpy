@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from squidpy._settings import gpu_dispatch, settings
-from squidpy.gr._gpu import SPECIAL_PARAM_REGISTRY, ParamSpec
+from squidpy.gr._gpu import SPECIAL_PARAM_REGISTRY, GpuParamSpec
 
 
 class TestSettings:
@@ -231,7 +231,7 @@ class TestGpuDispatch:
 
         registry = {
             "my_func": {
-                "cpu_only": {"custom_param": ParamSpec(validate_fn=my_validator)},
+                "cpu_only": {"custom_param": GpuParamSpec(validate_fn=my_validator)},
                 "gpu_only": {},
             }
         }
