@@ -9,8 +9,8 @@ import re
 from collections.abc import Callable
 from typing import Any, Literal, TypeVar
 
-from squidpy._settings._settings import settings
-from squidpy.gr._gpu import check_exclusive_params, get_exclusive_params
+from squidpy._settings._settings import GPU_UNAVAILABLE_MSG, settings
+from squidpy.gr._gpu import GPU_PARAM_REGISTRY, check_exclusive_params, get_or_create_registry_entry
 
 __all__ = ["gpu_dispatch"]
 
@@ -25,7 +25,7 @@ def _resolve_device(device: Literal["auto", "cpu", "gpu"] | None) -> Literal["cp
         return "cpu"
     if device == "gpu":
         if not settings.gpu_available:
-            raise RuntimeError("GPU unavailable. Install with: pip install squidpy[gpu-cuda12]")
+            raise RuntimeError(GPU_UNAVAILABLE_MSG)
         return "gpu"
     # auto
     return "gpu" if settings.gpu_available else "cpu"
@@ -65,9 +65,7 @@ def gpu_dispatch(
 
     Automatically determines CPU-only and GPU-only parameters by comparing
     function signatures. Errors if user explicitly provides a value for
-    an exclusive parameter on the wrong device. GPU-only
-    parameters are also present in the CPU signature but only to
-    provide a way for the user to pass the parameter to the GPU function.
+    an exclusive parameter on the wrong device.
 
     Also injects a GPU note into the function's docstring.
 
@@ -86,18 +84,6 @@ def gpu_dispatch(
         # Inject GPU note into docstring
         func.__doc__ = _inject_gpu_note(func.__doc__, _gpu_func_name, gpu_module)
 
-        # Cache for exclusive params (computed lazily on first GPU call)
-        _exclusive_params_cache: dict[str, Any] | None = None
-
-        def _get_exclusive_params() -> tuple[dict[str, Any], dict[str, Any]]:
-            nonlocal _exclusive_params_cache
-            if _exclusive_params_cache is None:
-                module = importlib.import_module(gpu_module)
-                gpu_func = getattr(module, _gpu_func_name)
-                cpu_only, gpu_only = get_exclusive_params(func, gpu_func)
-                _exclusive_params_cache = {"cpu_only": cpu_only, "gpu_only": gpu_only}
-            return _exclusive_params_cache["cpu_only"], _exclusive_params_cache["gpu_only"]
-
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             sig = inspect.signature(func)
@@ -115,37 +101,39 @@ def gpu_dispatch(
             device = all_args.pop("device", None)
             resolved_device = _resolve_device(device)
 
-            if resolved_device == "gpu":
-                cpu_only_params, gpu_only_params = _get_exclusive_params()
+            # Get or create registry entry (populated once per function)
+            key = (gpu_module, _gpu_func_name)
+            if key not in GPU_PARAM_REGISTRY:
+                try:
+                    module = importlib.import_module(gpu_module)
+                    gpu_func = getattr(module, _gpu_func_name)
+                    get_or_create_registry_entry(gpu_module, _gpu_func_name, func, gpu_func)
+                except (ImportError, AttributeError):
+                    # GPU module not available, just run CPU function
+                    return func(**all_args)
 
+            entry = GPU_PARAM_REGISTRY[key]
+
+            if resolved_device == "gpu":
                 # Check if user explicitly provided any CPU-only params
-                user_provided_cpu_only = user_provided & cpu_only_params
-                if user_provided_cpu_only:
-                    check_exclusive_params(func_name, user_provided_cpu_only, all_args, "gpu")
+                cpu_only_names = set(entry.cpu_only_params.keys())
+                user_provided_cpu_only = user_provided & cpu_only_names
+                check_exclusive_params(func_name, user_provided_cpu_only, all_args, "gpu", entry)
 
                 # Remove CPU-only params before calling GPU func
-                for k in cpu_only_params:
+                for k in cpu_only_names:
                     all_args.pop(k, None)
 
-                module = importlib.import_module(gpu_module)
-                gpu_func = getattr(module, _gpu_func_name)
-                return gpu_func(**all_args)
+                return entry.gpu_func(**all_args)
 
             # CPU path
-            try:
-                cpu_only_params, gpu_only_params = _get_exclusive_params()
-            except (ImportError, AttributeError):
-                # GPU module not available, just run CPU function
-                return func(**all_args)
-
             # Check if user explicitly provided any GPU-only params
-            user_provided_gpu_only = user_provided & gpu_only_params
-            if user_provided_gpu_only:
-                gpu_only_values = {k: all_args[k] for k in user_provided_gpu_only}
-                check_exclusive_params(func_name, user_provided_gpu_only, gpu_only_values, "cpu")
+            gpu_only_names = set(entry.gpu_only_params.keys())
+            user_provided_gpu_only = user_provided & gpu_only_names
+            check_exclusive_params(func_name, user_provided_gpu_only, all_args, "cpu", entry)
 
             # Remove GPU-only params before calling CPU func
-            for k in gpu_only_params:
+            for k in gpu_only_names:
                 all_args.pop(k, None)
 
             return func(**all_args)
