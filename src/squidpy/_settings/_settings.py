@@ -8,7 +8,9 @@ from typing import Literal, get_args
 __all__ = ["settings", "DeviceType", "GPU_UNAVAILABLE_MSG"]
 
 DeviceType = Literal["auto", "cpu", "gpu"]
-GPU_UNAVAILABLE_MSG = "GPU unavailable. Install: pip install squidpy[gpu-cuda12] or with [gpu-cuda11] for CUDA 11 support."
+GPU_UNAVAILABLE_MSG = (
+    "GPU unavailable. Install: pip install squidpy[gpu-cuda12] or with [gpu-cuda11] for CUDA 11 support."
+)
 _device_var: ContextVar[DeviceType] = ContextVar("device", default="auto")
 
 
