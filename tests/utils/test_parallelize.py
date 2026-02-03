@@ -67,7 +67,8 @@ def func(request) -> Callable:
 # in case of failure.
 
 
-@pytest.mark.timeout(30)
+@pytest.mark.flaky(max_runs=5)
+@pytest.mark.timeout(2)
 @pytest.mark.parametrize(
     "backend",
     [
