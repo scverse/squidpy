@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from squidpy._settings import gpu_dispatch, settings
-from squidpy.gr._gpu import SPECIAL_PARAM_REGISTRY, GpuParamSpec
+from squidpy._settings._dispatch import _DISPATCH_CACHE
 
 
 class TestSettings:
@@ -38,6 +38,10 @@ class TestSettings:
 
 class TestGpuDispatch:
     """Test the gpu_dispatch decorator."""
+
+    def setup_method(self):
+        """Clear dispatch cache before each test."""
+        _DISPATCH_CACHE.clear()
 
     def test_cpu_path(self):
         """Test CPU device calls original function."""

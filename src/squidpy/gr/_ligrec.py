@@ -659,10 +659,10 @@ def ligrec(
     seed: int | None = None,
     alpha: float = 0.05,
     numba_parallel: bool | None = None,
-    # CPU-only params (must be None to allow dispatch to detect if user provided)
     n_jobs: int | None = None,
     backend: str | None = None,
     show_progress_bar: bool | None = None,
+    device_kwargs: dict[str, Any] | None = None,
 ) -> Mapping[str, pd.DataFrame] | None:
     """
     %(PT_test.full_desc)s
@@ -674,11 +674,15 @@ def ligrec(
     %(PT_test.parameters)s
     gene_symbols
         Key in :attr:`anndata.AnnData.var` to use instead of :attr:`anndata.AnnData.var_names`.
+    device_kwargs
+        Additional keyword arguments passed to the GPU implementation when ``squidpy.settings.device``
+        is set to ``'gpu'``. Ignored on CPU.
 
     Returns
     -------
     %(ligrec_test_returns)s
     """  # noqa: D400
+    del device_kwargs  # handled by gpu_dispatch decorator
     if isinstance(adata, SpatialData):
         adata = adata.table
 

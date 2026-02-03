@@ -60,11 +60,11 @@ def spatial_autocorr(
     layer: str | None = None,
     seed: int | None = None,
     use_raw: bool = False,
-    use_sparse: bool | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
     backend: str | None = None,
     show_progress_bar: bool | None = None,
+    device_kwargs: dict[str, Any] | None = None,
 ) -> pd.DataFrame | None:
     """
     Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
@@ -108,12 +108,12 @@ def spatial_autocorr(
     attr
         Which attribute of :class:`~anndata.AnnData` to access. See ``genes`` parameter for more information.
         Can be only 'X' when effective device is 'gpu'.
-    use_sparse
-        If `True`, use sparse matrix representation for the input matrix.
-        Only used when ``device='gpu'``. Defaults to `True` on GPU.
     %(seed_device)s
     %(copy)s
     %(parallelize_device)s
+    device_kwargs
+        Additional keyword arguments passed to the GPU implementation when ``squidpy.settings.device``
+        is set to ``'gpu'``. Ignored on CPU.
 
     Returns
     -------
@@ -360,6 +360,7 @@ def co_occurrence(
     n_jobs: int | None = None,
     backend: str | None = None,
     show_progress_bar: bool | None = None,
+    device_kwargs: dict[str, Any] | None = None,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -374,6 +375,9 @@ def co_occurrence(
         of the given size will be used.
     %(copy)s
     %(parallelize_device)s
+    device_kwargs
+        Additional keyword arguments passed to the GPU implementation when ``squidpy.settings.device``
+        is set to ``'gpu'``. Ignored on CPU.
 
     Returns
     -------
@@ -386,7 +390,7 @@ def co_occurrence(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
           computed at ``interval``.
     """
-    del n_jobs, backend, show_progress_bar  # handled by gpu_dispatch decorator or unused on CPU
+    del n_jobs, backend, show_progress_bar, device_kwargs  # handled by gpu_dispatch decorator or unused on CPU
     if isinstance(adata, SpatialData):
         adata = adata.table
     _assert_categorical_obs(adata, key=cluster_key)
