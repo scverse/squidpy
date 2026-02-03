@@ -65,7 +65,6 @@ def spatial_autocorr(
     n_jobs: int | None = None,
     backend: str | None = None,
     show_progress_bar: bool | None = None,
-    device: Literal["cpu", "gpu"] | None = None,
 ) -> pd.DataFrame | None:
     """
     Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
@@ -115,7 +114,6 @@ def spatial_autocorr(
     %(seed_device)s
     %(copy)s
     %(parallelize_device)s
-    %(device)s
 
     Returns
     -------
@@ -362,7 +360,6 @@ def co_occurrence(
     n_jobs: int | None = None,
     backend: str | None = None,
     show_progress_bar: bool | None = None,
-    device: Literal["cpu", "gpu"] | None = None,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -377,7 +374,6 @@ def co_occurrence(
         of the given size will be used.
     %(copy)s
     %(parallelize_device)s
-    %(device)s
 
     Returns
     -------
@@ -390,7 +386,7 @@ def co_occurrence(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
           computed at ``interval``.
     """
-    del device, n_jobs, backend, show_progress_bar  # handled by gpu_dispatch decorator or unused on CPU
+    del n_jobs, backend, show_progress_bar  # handled by gpu_dispatch decorator or unused on CPU
     if isinstance(adata, SpatialData):
         adata = adata.table
     _assert_categorical_obs(adata, key=cluster_key)

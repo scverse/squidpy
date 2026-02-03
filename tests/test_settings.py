@@ -44,12 +44,14 @@ class TestGpuDispatch:
         calls = []
 
         @gpu_dispatch()
-        def my_func(x, y, *, n_jobs=1, device=None):
+        def my_func(x, y, *, n_jobs=1):
             calls.append((x, y, n_jobs))
             return x + y
 
-        assert my_func(1, 2, device="cpu") == 3
+        settings.device = "cpu"
+        assert my_func(1, 2) == 3
         assert calls == [(1, 2, 1)]
+        settings.device = "auto"  # reset
 
     def test_auto_device_falls_back_to_cpu(self):
         """Test auto device falls back to CPU when GPU unavailable."""
@@ -59,11 +61,12 @@ class TestGpuDispatch:
         calls = []
 
         @gpu_dispatch()
-        def my_func(x, device=None):
+        def my_func(x):
             calls.append(x)
             return x * 2
 
-        assert my_func(5, device="auto") == 10
+        settings.device = "auto"
+        assert my_func(5) == 10
         assert calls == [5]
 
     def test_gpu_path(self):
@@ -77,14 +80,14 @@ class TestGpuDispatch:
         mock_module.my_func = gpu_my_func
 
         @gpu_dispatch(gpu_module="test_module")
-        def my_func(x, device=None):
+        def my_func(x):
             return "cpu_result"
 
         with (
-            patch("squidpy._settings._dispatch._resolve_device", return_value="gpu"),
+            patch("squidpy._settings._dispatch._get_effective_device", return_value="gpu"),
             patch("importlib.import_module", return_value=mock_module),
         ):
-            assert my_func(42, device="gpu") == "gpu_result"
+            assert my_func(42) == "gpu_result"
 
     def test_custom_gpu_func_name(self):
         """Test custom GPU function name."""
@@ -97,20 +100,20 @@ class TestGpuDispatch:
         mock_module.custom_name = custom_name
 
         @gpu_dispatch(gpu_module="test_module", gpu_func_name="custom_name")
-        def my_func(x, device=None):
+        def my_func(x):
             return "cpu_result"
 
         with (
-            patch("squidpy._settings._dispatch._resolve_device", return_value="gpu"),
+            patch("squidpy._settings._dispatch._get_effective_device", return_value="gpu"),
             patch("importlib.import_module", return_value=mock_module),
         ):
-            assert my_func(42, device="gpu") == "gpu_result"
+            assert my_func(42) == "gpu_result"
 
     def test_preserves_function_metadata(self):
         """Test decorator preserves function name and injects GPU note."""
 
         @gpu_dispatch()
-        def documented_func(x, device=None):
+        def documented_func(x):
             """Original docstring.
 
             Parameters
@@ -135,23 +138,23 @@ class TestGpuDispatch:
         mock_module.my_func = gpu_my_func
 
         @gpu_dispatch(gpu_module="test_module")
-        def my_func(x, n_jobs=1, device=None):
+        def my_func(x, n_jobs=1):
             return "cpu_result"
 
         with (
-            patch("squidpy._settings._dispatch._resolve_device", return_value="gpu"),
+            patch("squidpy._settings._dispatch._get_effective_device", return_value="gpu"),
             patch("importlib.import_module", return_value=mock_module),
         ):
             # Not provided - should work
-            assert my_func(42, device="gpu") == "gpu_result"
+            assert my_func(42) == "gpu_result"
 
             # Explicitly provided (even if same as default) - should error
             with pytest.raises(ValueError, match="n_jobs.*only supported on CPU"):
-                my_func(42, n_jobs=1, device="gpu")
+                my_func(42, n_jobs=1)
 
             # Explicitly provided with different value - should also error
             with pytest.raises(ValueError, match="n_jobs.*only supported on CPU"):
-                my_func(42, n_jobs=4, device="gpu")
+                my_func(42, n_jobs=4)
 
     def test_gpu_only_params_error_on_cpu_if_provided(self):
         """Test GPU-only params raise error on CPU if user explicitly provided them.
@@ -170,16 +173,18 @@ class TestGpuDispatch:
 
         # CPU func does NOT have gpu_batch_size
         @gpu_dispatch(gpu_module="test_module")
-        def my_func(x, device=None):
+        def my_func(x):
             return "cpu_result"
 
+        settings.device = "cpu"
         with patch("importlib.import_module", return_value=mock_module):
             # Not provided - should work
-            assert my_func(42, device="cpu") == "cpu_result"
+            assert my_func(42) == "cpu_result"
 
             # GPU-only param on CPU - Python raises TypeError (not in signature)
             with pytest.raises(TypeError, match="unexpected keyword argument"):
-                my_func(42, gpu_batch_size=500, device="cpu")
+                my_func(42, gpu_batch_size=500)
+        settings.device = "auto"  # reset
 
     def test_function_with_no_exclusive_params(self):
         """Test that functions with matching signatures work transparently."""
@@ -193,13 +198,15 @@ class TestGpuDispatch:
         mock_module.my_func = gpu_func
 
         @gpu_dispatch(gpu_module="test_module")
-        def my_func(x, device=None):
+        def my_func(x):
             calls.append(x)
             return x * 3
 
+        settings.device = "cpu"
         # Should work on CPU without issues
-        assert my_func(10, device="cpu") == 30
+        assert my_func(10) == 30
         assert calls == [10]
+        settings.device = "auto"  # reset
 
     def test_gpu_errors_when_unavailable(self):
         """Test GPU raises error when unavailable."""
@@ -207,12 +214,12 @@ class TestGpuDispatch:
             pytest.skip("GPU is available")
 
         @gpu_dispatch()
-        def my_func(x, device=None):
+        def my_func(x):
             return x + 1
 
         # Should raise error when GPU requested but unavailable
         with pytest.raises(RuntimeError, match="GPU unavailable"):
-            my_func(5, device="gpu")
+            settings.device = "gpu"
 
     def test_custom_validator_error(self):
         """Test custom validator raises appropriate error."""
@@ -239,25 +246,25 @@ class TestGpuDispatch:
         with patch.dict(SPECIAL_PARAM_REGISTRY, registry):
 
             @gpu_dispatch(gpu_module="test_module")
-            def my_func(x, custom_param="allowed", device=None):
+            def my_func(x, custom_param="allowed"):
                 return "cpu_result"
 
             with (
-                patch("squidpy._settings._dispatch._resolve_device", return_value="gpu"),
+                patch("squidpy._settings._dispatch._get_effective_device", return_value="gpu"),
                 patch("importlib.import_module", return_value=mock_module),
             ):
                 # Allowed value - should work
-                assert my_func(42, custom_param="allowed", device="gpu") == "gpu_result"
+                assert my_func(42, custom_param="allowed") == "gpu_result"
 
                 # Not allowed value - should error
                 with pytest.raises(ValueError, match="value='bad' is not allowed on GPU"):
-                    my_func(42, custom_param="bad", device="gpu")
+                    my_func(42, custom_param="bad")
 
     def test_docstring_uses_custom_gpu_module(self):
         """Test that docstring GPU note uses the specified gpu_module."""
 
         @gpu_dispatch(gpu_module="custom.module.path")
-        def my_func(x, device=None):
+        def my_func(x):
             """My function.
 
             Parameters
@@ -273,7 +280,7 @@ class TestGpuDispatch:
         """Test that docstring GPU note uses the specified gpu_func_name."""
 
         @gpu_dispatch(gpu_module="some.module", gpu_func_name="different_name")
-        def my_func(x, device=None):
+        def my_func(x):
             """My function.
 
             Parameters

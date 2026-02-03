@@ -7,7 +7,7 @@ import importlib
 import inspect
 import re
 from collections.abc import Callable
-from typing import Any, Literal, TypeVar
+from typing import Any, TypeVar
 
 from squidpy._settings._settings import GPU_UNAVAILABLE_MSG, settings
 from squidpy.gr._gpu import SPECIAL_PARAM_REGISTRY, check_exclusive_params, get_exclusive_params
@@ -17,10 +17,9 @@ __all__ = ["gpu_dispatch"]
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def _resolve_device(device: Literal["auto", "cpu", "gpu"] | None) -> Literal["cpu", "gpu"]:
-    """Resolve device arg to 'cpu' or 'gpu'."""
-    if device is None:
-        device = settings.device
+def _get_effective_device() -> str:
+    """Get effective device from settings, resolving 'auto'."""
+    device = settings.device
     if device == "cpu":
         return "cpu"
     if device == "gpu":
@@ -98,8 +97,7 @@ def gpu_dispatch(
             bound.apply_defaults()
             all_args = dict(bound.arguments)
 
-            device = all_args.pop("device", None)
-            resolved_device = _resolve_device(device)
+            resolved_device = _get_effective_device()
 
             # Get or create registry entry (populated once per function)
             key = (gpu_module, _gpu_func_name)

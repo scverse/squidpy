@@ -649,7 +649,6 @@ def ligrec(
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
-    device: Literal["cpu", "gpu"] | None = None,
     # prepare params
     interactions_params: Mapping[str, Any] = MappingProxyType({}),
     transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
@@ -675,7 +674,6 @@ def ligrec(
     %(PT_test.parameters)s
     gene_symbols
         Key in :attr:`anndata.AnnData.var` to use instead of :attr:`anndata.AnnData.var_names`.
-    %(device)s
 
     Returns
     -------
