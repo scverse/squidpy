@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 import importlib
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, TypeVar
 
 from squidpy._settings._settings import GPU_UNAVAILABLE_MSG, settings
@@ -45,7 +45,7 @@ def _inject_gpu_note(doc: str | None, func_name: str, gpu_module: str) -> str | 
     # Find "Parameters\n    ----------" and capture the indentation (spaces only, not newline)
     match = re.search(r"\n([ \t]*)Parameters\s*\n\s*-+", doc)
     if match:
-        indent = match.group(1)  # Capture only the spaces/tabs before Parameters
+        indent = match.group(1)
         gpu_note = _make_gpu_note(func_name, gpu_module, indent)
         insert_pos = match.start()
         return doc[:insert_pos] + "\n\n" + gpu_note + "\n" + doc[insert_pos:]
@@ -61,11 +61,13 @@ _GPU_FUNC_CACHE: dict[tuple[str, str], Callable[..., Any]] = {}
 def gpu_dispatch(
     gpu_module: str = "rapids_singlecell.gr",
     gpu_func_name: str | None = None,
+    validate_args: Mapping[str, Callable[[Any], None]] | None = None,
 ) -> Callable[[F], F]:
     """Decorator to dispatch to GPU implementation based on settings.device.
 
-    When device is 'gpu', calls the GPU implementation from the specified module.
-    The `device_kwargs` parameter (if present) is passed to the GPU function.
+    When device is 'gpu', calls the GPU implementation from the specified module,
+    passing all arguments through. The `device_kwargs` parameter is merged into
+    the call for GPU-specific options.
 
     Parameters
     ----------
@@ -73,13 +75,17 @@ def gpu_dispatch(
         Module path containing the GPU implementation.
     gpu_func_name
         Name of GPU function. Defaults to same name as decorated function.
+    validate_args
+        Mapping of parameter names to validation functions. Each validator is called
+        with the parameter value before GPU dispatch and should raise ValueError
+        if the value is not supported on GPU. Only called when dispatching to GPU.
     """
+    _validate_args = validate_args or {}
 
     def decorator(func: F) -> F:
         func_name = func.__name__
         _gpu_func_name = gpu_func_name or func_name
 
-        # Inject GPU note into docstring
         func.__doc__ = _inject_gpu_note(func.__doc__, _gpu_func_name, gpu_module)
 
         @functools.wraps(func)
@@ -87,24 +93,27 @@ def gpu_dispatch(
             resolved_device = _get_effective_device()
 
             if resolved_device == "cpu":
-                # CPU path - just remove device_kwargs if present and call CPU func
                 kwargs.pop("device_kwargs", None)
                 return func(*args, **kwargs)
 
-            # GPU path
+            # GPU path - run validators
+            for param_name, validator in _validate_args.items():
+                if param_name in kwargs:
+                    validator(kwargs[param_name])
+
+            # Get GPU function
             key = (gpu_module, _gpu_func_name)
             if key not in _GPU_FUNC_CACHE:
                 try:
                     module = importlib.import_module(gpu_module)
                     _GPU_FUNC_CACHE[key] = getattr(module, _gpu_func_name)
                 except (ImportError, AttributeError):
-                    # GPU module not available, fall back to CPU
                     kwargs.pop("device_kwargs", None)
                     return func(*args, **kwargs)
 
             gpu_func = _GPU_FUNC_CACHE[key]
 
-            # Extract device_kwargs and merge into kwargs for GPU call
+            # Merge device_kwargs and call GPU function
             device_kwargs = kwargs.pop("device_kwargs", None) or {}
             kwargs.update(device_kwargs)
 

@@ -36,6 +36,15 @@ from squidpy.gr._utils import (
 __all__ = ["spatial_autocorr", "co_occurrence"]
 
 
+def _validate_attr_for_gpu(value: Any) -> None:
+    """Validate attr parameter for GPU dispatch."""
+    if value != "X":
+        raise ValueError(
+            f"attr={value!r} is not supported on GPU. "
+            "Use `squidpy.settings.device = 'cpu'` to use other attributes."
+        )
+
+
 it = nt.int32
 ft = nt.float32
 tt = nt.UniTuple
@@ -46,7 +55,7 @@ bl = nt.boolean
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
-@gpu_dispatch()
+@gpu_dispatch(validate_args={"attr": _validate_attr_for_gpu})
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),
