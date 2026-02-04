@@ -20,7 +20,8 @@ class TestGPUCoOccurrence:
 
     def test_co_occurrence_gpu(self, adata):
         """Test co_occurrence with GPU device."""
-        result = sq.gr.co_occurrence(adata, cluster_key="leiden", copy=True, device="gpu")
+        with settings.use_device("gpu"):
+            result = sq.gr.co_occurrence(adata, cluster_key="leiden", copy=True)
 
         assert result is not None
         arr, interval = result
@@ -29,8 +30,10 @@ class TestGPUCoOccurrence:
 
     def test_co_occurrence_gpu_vs_cpu(self, adata):
         """Test that GPU and CPU results are approximately equal."""
-        cpu_arr, cpu_interval = sq.gr.co_occurrence(adata, cluster_key="leiden", copy=True, device="cpu")
-        gpu_arr, gpu_interval = sq.gr.co_occurrence(adata, cluster_key="leiden", copy=True, device="gpu")
+        with settings.use_device("cpu"):
+            cpu_arr, cpu_interval = sq.gr.co_occurrence(adata, cluster_key="leiden", copy=True)
+        with settings.use_device("gpu"):
+            gpu_arr, gpu_interval = sq.gr.co_occurrence(adata, cluster_key="leiden", copy=True)
 
         np.testing.assert_allclose(cpu_interval, gpu_interval, rtol=1e-5)
         np.testing.assert_allclose(cpu_arr, gpu_arr, rtol=1e-5)
@@ -42,7 +45,8 @@ class TestGPUSpatialAutocorr:
     def test_spatial_autocorr_gpu(self, adata):
         """Test spatial_autocorr with GPU device."""
         sq.gr.spatial_neighbors(adata)
-        result = sq.gr.spatial_autocorr(adata, mode="moran", copy=True, device="gpu")
+        with settings.use_device("gpu"):
+            result = sq.gr.spatial_autocorr(adata, mode="moran", copy=True)
 
         assert result is not None
         assert "I" in result.columns
@@ -51,8 +55,10 @@ class TestGPUSpatialAutocorr:
     def test_spatial_autocorr_gpu_vs_cpu(self, adata):
         """Test that GPU and CPU results are approximately equal."""
         sq.gr.spatial_neighbors(adata)
-        cpu_result = sq.gr.spatial_autocorr(adata, mode="moran", copy=True, device="cpu")
-        gpu_result = sq.gr.spatial_autocorr(adata, mode="moran", copy=True, device="gpu")
+        with settings.use_device("cpu"):
+            cpu_result = sq.gr.spatial_autocorr(adata, mode="moran", copy=True)
+        with settings.use_device("gpu"):
+            gpu_result = sq.gr.spatial_autocorr(adata, mode="moran", copy=True)
 
         np.testing.assert_allclose(cpu_result["I"].values, gpu_result["I"].values, rtol=1e-3, equal_nan=True)
 
@@ -62,7 +68,8 @@ class TestGPULigrec:
 
     def test_ligrec_gpu(self, adata):
         """Test ligrec with GPU device."""
-        result = sq.gr.ligrec(adata, cluster_key="leiden", copy=True, device="gpu")
+        with settings.use_device("gpu"):
+            result = sq.gr.ligrec(adata, cluster_key="leiden", copy=True)
 
         assert result is not None
         assert "means" in result

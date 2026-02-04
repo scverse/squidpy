@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal, get_args
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-__all__ = ["settings", "DeviceType", "GPU_UNAVAILABLE_MSG"]
+__all__ = ["settings", "DeviceType"]
 
 DeviceType = Literal["cpu", "gpu"]
 GPU_UNAVAILABLE_MSG = (

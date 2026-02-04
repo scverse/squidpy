@@ -45,7 +45,6 @@ def _inject_gpu_note(doc: str | None, func_name: str, gpu_module: str) -> str | 
 def _get_gpu_func(gpu_module: str, func_name: str) -> Callable[..., Any]:
     """Get GPU function from module, with caching.
 
-
     Raises
     ------
     ImportError
