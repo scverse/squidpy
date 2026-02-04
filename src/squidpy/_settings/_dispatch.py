@@ -86,9 +86,7 @@ def gpu_dispatch(
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            effective_device = settings.device
-
-            if effective_device == "cpu":
+            if settings.device == "cpu":
                 device_kwargs = kwargs.pop("device_kwargs", None)
                 if device_kwargs is not None and len(device_kwargs) > 0:
                     raise ValueError(
