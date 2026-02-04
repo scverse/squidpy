@@ -102,12 +102,11 @@ def gpu_dispatch(
             # get GPU function
             gpu_func = _get_gpu_func(gpu_module, func_name)
 
+            # filter out None values to let GPU function use its defaults
+            kwargs = {k: v for k, v in kwargs.items() if v is not None}
             # merge device_kwargs and call GPU function
             device_kwargs = kwargs.pop("device_kwargs", None) or {}
             kwargs.update(device_kwargs)
-
-            # filter out None values to let GPU function use its defaults
-            kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
             return gpu_func(*args, **kwargs)
 
