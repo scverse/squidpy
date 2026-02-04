@@ -141,7 +141,7 @@ def spatial_autocorr(
         - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe, if ``mode = {sp.MORAN.s!r}``.
         - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
-    del device, use_sparse  # device and use_sparse are handled by the gpu_dispatch decorator
+    del device_kwargs  # device and use_sparse are handled by the gpu_dispatch decorator
     if isinstance(adata, SpatialData):
         adata = adata.table
     _assert_connectivity_key(adata, connectivity_key)
