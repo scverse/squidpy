@@ -8,24 +8,11 @@ import re
 from collections.abc import Callable, Mapping
 from typing import Any, TypeVar
 
-from squidpy._settings._settings import GPU_UNAVAILABLE_MSG, settings
+from squidpy._settings._settings import settings
 
 __all__ = ["gpu_dispatch"]
 
 F = TypeVar("F", bound=Callable[..., Any])
-
-
-def _get_effective_device() -> str:
-    """Get effective device from settings, resolving 'auto'."""
-    device = settings.device
-    if device == "cpu":
-        return "cpu"
-    if device == "gpu":
-        if not settings.gpu_available:
-            raise RuntimeError(GPU_UNAVAILABLE_MSG)
-        return "gpu"
-    # auto
-    return "gpu" if settings.gpu_available else "cpu"
 
 
 def _make_gpu_note(func_name: str, gpu_module: str, indent: str = "") -> str:
@@ -100,7 +87,7 @@ def gpu_dispatch(
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            resolved_device = _get_effective_device()
+            resolved_device = settings.device
 
             if resolved_device == "cpu":
                 kwargs.pop("device_kwargs", None)

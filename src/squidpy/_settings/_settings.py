@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from contextvars import ContextVar
-from typing import Literal, get_args
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
+from typing import TYPE_CHECKING, Literal, get_args
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 __all__ = ["settings", "DeviceType", "GPU_UNAVAILABLE_MSG"]
 
-DeviceType = Literal["auto", "cpu", "gpu"]
+DeviceType = Literal["cpu", "gpu"]
 GPU_UNAVAILABLE_MSG = (
     "GPU unavailable. Install: pip install squidpy[gpu-cuda12] or with [gpu-cuda11] for CUDA 11 support."
 )
-_device_var: ContextVar[DeviceType] = ContextVar("device", default="auto")
+_device_var: ContextVar[DeviceType | None] = ContextVar("device", default=None)
 
 
 def _check_gpu_available() -> bool:
@@ -32,8 +36,8 @@ class SqSettings:
     gpu_available
         Whether GPU acceleration via rapids-singlecell is available.
     device
-        Compute device setting: ``'auto'`` (default), ``'cpu'``, or ``'gpu'``.
-        When ``'auto'``, GPU is used if available, otherwise CPU.
+        Compute device.
+        Defaults to ``'gpu'`` if available, otherwise ``'cpu'``.
     """
 
     def __init__(self) -> None:
@@ -41,13 +45,15 @@ class SqSettings:
 
     @property
     def device(self) -> DeviceType:
-        """Compute device: ``'auto'``, ``'cpu'``, or ``'gpu'``.
+        """Compute device: ``'cpu'`` or ``'gpu'``.
 
-        When set to ``'auto'`` (default), GPU is used if rapids-singlecell
-        is installed, otherwise falls back to CPU. Setting to ``'gpu'``
-        when GPU is unavailable raises a RuntimeError.
+        Defaults to ``'gpu'`` if rapids-singlecell is installed, otherwise ``'cpu'``.
+        Setting to ``'gpu'`` when GPU is unavailable raises a RuntimeError.
         """
-        return _device_var.get()
+        value = _device_var.get()
+        if value is None:
+            return "gpu" if self.gpu_available else "cpu"
+        return value
 
     @device.setter
     def device(self, value: DeviceType) -> None:
@@ -56,6 +62,27 @@ class SqSettings:
         if value == "gpu" and not self.gpu_available:
             raise RuntimeError(GPU_UNAVAILABLE_MSG)
         _device_var.set(value)
+
+    @contextmanager
+    def use_device(self, device: DeviceType) -> Generator[None, None, None]:
+        """Temporarily set the compute device within a context.
+
+        Parameters
+        ----------
+        device
+            The device to use.
+
+        Examples
+        --------
+        >>> with sq.settings.use_device("cpu"):
+        ...     sq.gr.spatial_neighbors(adata)
+        """
+        token: Token[DeviceType | None] = _device_var.set(_device_var.get())
+        try:
+            self.device = device
+            yield
+        finally:
+            _device_var.reset(token)
 
 
 settings = SqSettings()
