@@ -28,7 +28,7 @@ def _check_gpu_available() -> bool:
         return False
 
 
-class SqSettings:
+class _SqSettings:
     """Global configuration for squidpy.
 
     Attributes
@@ -85,4 +85,4 @@ class SqSettings:
             _device_var.reset(token)
 
 
-settings = SqSettings()
+settings = _SqSettings()
