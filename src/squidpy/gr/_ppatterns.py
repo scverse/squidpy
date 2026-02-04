@@ -119,9 +119,7 @@ def spatial_autocorr(
     %(seed_device)s
     %(copy)s
     %(parallelize_device)s
-    device_kwargs
-        Additional keyword arguments passed to the GPU implementation when ``squidpy.settings.device``
-        is set to ``'gpu'``. Ignored on CPU.
+    %(device_kwargs)s
 
     Returns
     -------
@@ -383,9 +381,7 @@ def co_occurrence(
         of the given size will be used.
     %(copy)s
     %(parallelize_device)s
-    device_kwargs
-        Additional keyword arguments passed to the GPU implementation when ``squidpy.settings.device``
-        is set to ``'gpu'``. Ignored on CPU.
+    %(device_kwargs)s
 
     Returns
     -------

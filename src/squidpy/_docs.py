@@ -130,11 +130,10 @@ _seed_device = f"""\
 seed
     Random seed for reproducibility.{_CPU_ONLY}
 """
-_device = """\
-device
-    Device for computation: ``'cpu'``, ``'gpu'``, or ``None`` (use ``squidpy.settings.device``).
-    When ``'gpu'``, dispatches to :doc:`rapids_singlecell <rapids_singlecell:index>` for GPU-accelerated computation.
-"""
+_device_kwargs = """\
+device_kwargs
+    Additional keyword arguments passed to the GPU implementation when ``squidpy.settings.device``
+    is set to ``'gpu'``. Ignored on CPU."""
 _channels = """\
 channels
     Channels for this feature is computed. If `None`, use all channels."""
@@ -397,7 +396,7 @@ d = DocstringProcessor(
     parallelize=_parallelize,
     parallelize_device=_parallelize_device,
     seed_device=_seed_device,
-    device=_device,
+    device_kwargs=_device_kwargs,
     channels=_channels,
     segment_kwargs=_segment_kwargs,
     ligrec_test_returns=_ligrec_test_returns,
