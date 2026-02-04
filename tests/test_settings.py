@@ -3,14 +3,9 @@
 from __future__ import annotations
 
 import concurrent.futures
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-# Ensure src is in path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from squidpy._settings import gpu_dispatch, settings
 from squidpy._settings._dispatch import _get_gpu_func
