@@ -54,8 +54,20 @@ def _inject_gpu_note(doc: str | None, func_name: str, gpu_module: str) -> str | 
     return doc + "\n\n" + _make_gpu_note(func_name, gpu_module)
 
 
-# Cache for GPU functions
-_GPU_FUNC_CACHE: dict[tuple[str, str], Callable[..., Any]] = {}
+@functools.cache
+def _get_gpu_func(gpu_module: str, func_name: str) -> Callable[..., Any]:
+    """Get GPU function from module, with caching.
+
+
+    Raises
+    ------
+    ImportError
+        If the GPU module cannot be imported.
+    AttributeError
+        If the function does not exist in the GPU module.
+    """
+    module = importlib.import_module(gpu_module)
+    return getattr(module, func_name)
 
 
 def gpu_dispatch(
@@ -94,29 +106,21 @@ def gpu_dispatch(
                 kwargs.pop("device_kwargs", None)
                 return func(*args, **kwargs)
 
-            # GPU path - run validators and remove validated args
+            # GPU path
+            # run validators and remove validated args
             for param_name, validator in _validate_args.items():
                 if param_name in kwargs:
                     validator(kwargs[param_name])
                     kwargs.pop(param_name)
 
-            # Get GPU function
-            key = (gpu_module, func_name)
-            if key not in _GPU_FUNC_CACHE:
-                try:
-                    module = importlib.import_module(gpu_module)
-                    _GPU_FUNC_CACHE[key] = getattr(module, func_name)
-                except (ImportError, AttributeError):
-                    kwargs.pop("device_kwargs", None)
-                    return func(*args, **kwargs)
+            # get GPU function
+            gpu_func = _get_gpu_func(gpu_module, func_name)
 
-            gpu_func = _GPU_FUNC_CACHE[key]
-
-            # Merge device_kwargs and call GPU function
+            # merge device_kwargs and call GPU function
             device_kwargs = kwargs.pop("device_kwargs", None) or {}
             kwargs.update(device_kwargs)
 
-            # Filter out None values to let GPU function use its defaults
+            # filter out None values to let GPU function use its defaults
             kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
             return gpu_func(*args, **kwargs)
