@@ -187,34 +187,8 @@ class TestGpuDispatch:
                     assert result == "gpu_result"
                     assert received_kwargs == {"x": 42, "use_sparse": True}
 
-    def test_device_kwargs_none_on_cpu(self):
-        """Test device_kwargs=None is allowed on CPU path."""
-        calls = []
-
-        @gpu_dispatch()
-        def my_func(x, device_kwargs=None):
-            calls.append(x)
-            return x * 2
-
-        with settings.use_device("cpu"):
-            assert my_func(5, device_kwargs=None) == 10
-            assert calls == [5]
-
-    def test_device_kwargs_empty_on_cpu(self):
-        """Test device_kwargs={} is allowed on CPU path."""
-        calls = []
-
-        @gpu_dispatch()
-        def my_func(x, device_kwargs=None):
-            calls.append(x)
-            return x * 2
-
-        with settings.use_device("cpu"):
-            assert my_func(5, device_kwargs={}) == 10
-            assert calls == [5]
-
     def test_device_kwargs_error_on_cpu(self):
-        """Test device_kwargs with values raises error on CPU path."""
+        """Test device_kwargs raises error on CPU path."""
 
         @gpu_dispatch()
         def my_func(x, device_kwargs=None):
