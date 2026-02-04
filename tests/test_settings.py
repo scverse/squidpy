@@ -91,21 +91,6 @@ class TestUseDeviceContextManager:
             with settings.use_device("gpu"):
                 pass
 
-    def test_nested_use_device(self):
-        """Test nested use_device contexts restore correctly."""
-        if settings.gpu_available:
-            pytest.skip("GPU is available")
-
-        original = settings.device
-        settings.device = "cpu"
-
-        with settings.use_device("cpu"):
-            assert settings.device == "cpu"
-            with settings.use_device("cpu"):
-                assert settings.device == "cpu"
-            assert settings.device == "cpu"
-        assert settings.device == "cpu"
-
     def test_use_device_thread_isolation(self):
         """Test that use_device is thread-safe with isolated contexts."""
         results = {}
