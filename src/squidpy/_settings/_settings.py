@@ -25,14 +25,28 @@ def _check_gpu_available() -> bool:
 
 
 class SqSettings:
-    """Global configuration for squidpy."""
+    """Global configuration for squidpy.
+
+    Attributes
+    ----------
+    gpu_available
+        Whether GPU acceleration via rapids-singlecell is available.
+    device
+        Compute device setting: ``'auto'`` (default), ``'cpu'``, or ``'gpu'``.
+        When ``'auto'``, GPU is used if available, otherwise CPU.
+    """
 
     def __init__(self) -> None:
         self.gpu_available: bool = _check_gpu_available()
 
     @property
     def device(self) -> DeviceType:
-        """Compute device: ``'auto'``, ``'cpu'``, or ``'gpu'``."""
+        """Compute device: ``'auto'``, ``'cpu'``, or ``'gpu'``.
+
+        When set to ``'auto'`` (default), GPU is used if rapids-singlecell
+        is installed, otherwise falls back to CPU. Setting to ``'gpu'``
+        when GPU is unavailable raises a RuntimeError.
+        """
         return _device_var.get()
 
     @device.setter

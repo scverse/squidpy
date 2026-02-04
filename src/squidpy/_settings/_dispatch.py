@@ -60,33 +60,31 @@ _GPU_FUNC_CACHE: dict[tuple[str, str], Callable[..., Any]] = {}
 
 def gpu_dispatch(
     gpu_module: str = "rapids_singlecell.gr",
-    gpu_func_name: str | None = None,
     validate_args: Mapping[str, Callable[[Any], None]] | None = None,
 ) -> Callable[[F], F]:
     """Decorator to dispatch to GPU implementation based on settings.device.
 
-    When device is 'gpu', calls the GPU implementation from the specified module,
-    passing all arguments through. The `device_kwargs` parameter is merged into
-    the call for GPU-specific options.
+    When device is 'gpu', calls the GPU implementation from the specified module.
+    The ``device_kwargs`` parameter from the decorated function is merged into the
+    call for GPU-specific options. Arguments with ``None`` values are filtered out
+    to let the GPU function use its defaults.
 
     Parameters
     ----------
     gpu_module
         Module path containing the GPU implementation.
-    gpu_func_name
-        Name of GPU function. Defaults to same name as decorated function.
     validate_args
         Mapping of parameter names to validation functions. Each validator is called
         with the parameter value before GPU dispatch and should raise ValueError
-        if the value is not supported on GPU. Only called when dispatching to GPU.
+        if the value is not supported on GPU. Validated arguments are removed from
+        kwargs before calling the GPU function. Only called when dispatching to GPU.
     """
     _validate_args = validate_args or {}
 
     def decorator(func: F) -> F:
         func_name = func.__name__
-        _gpu_func_name = gpu_func_name or func_name
 
-        func.__doc__ = _inject_gpu_note(func.__doc__, _gpu_func_name, gpu_module)
+        func.__doc__ = _inject_gpu_note(func.__doc__, func_name, gpu_module)
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -96,17 +94,18 @@ def gpu_dispatch(
                 kwargs.pop("device_kwargs", None)
                 return func(*args, **kwargs)
 
-            # GPU path - run validators
+            # GPU path - run validators and remove validated args
             for param_name, validator in _validate_args.items():
                 if param_name in kwargs:
                     validator(kwargs[param_name])
+                    kwargs.pop(param_name)
 
             # Get GPU function
-            key = (gpu_module, _gpu_func_name)
+            key = (gpu_module, func_name)
             if key not in _GPU_FUNC_CACHE:
                 try:
                     module = importlib.import_module(gpu_module)
-                    _GPU_FUNC_CACHE[key] = getattr(module, _gpu_func_name)
+                    _GPU_FUNC_CACHE[key] = getattr(module, func_name)
                 except (ImportError, AttributeError):
                     kwargs.pop("device_kwargs", None)
                     return func(*args, **kwargs)
@@ -116,6 +115,9 @@ def gpu_dispatch(
             # Merge device_kwargs and call GPU function
             device_kwargs = kwargs.pop("device_kwargs", None) or {}
             kwargs.update(device_kwargs)
+
+            # Filter out None values to let GPU function use its defaults
+            kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
             return gpu_func(*args, **kwargs)
 
