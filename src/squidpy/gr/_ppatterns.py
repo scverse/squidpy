@@ -54,7 +54,7 @@ bl = nt.boolean
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
-@gpu_dispatch(validate_args={"attr": _validate_attr_for_gpu})
+@gpu_dispatch(gpu_module="rapids_singlecell.gr", validate_args={"attr": _validate_attr_for_gpu})
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),

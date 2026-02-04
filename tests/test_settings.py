@@ -195,7 +195,7 @@ class TestGpuDispatch:
             return x * 2
 
         with settings.use_device("cpu"):
-            with pytest.raises(ValueError, match="device_kwargs=.* is not supported when device='cpu'"):
+            with pytest.raises(ValueError, match="device_kwargs should not be provided"):
                 my_func(5, device_kwargs={"use_sparse": True})
 
     def test_validate_args_on_gpu(self):
