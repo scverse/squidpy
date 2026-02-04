@@ -200,4 +200,3 @@ class TestGpuDispatch:
             return x
 
         assert "custom.module.path.my_func" in my_func.__doc__
-
