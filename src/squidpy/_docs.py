@@ -109,7 +109,7 @@ _CPU_ONLY = " Only available when ``device='cpu'``."
 
 _n_jobs = """\
 n_jobs
-    Number of parallel jobs to use.
+    Number of parallel jobs to use. If ``None``, use all available cores.
     For ``backend="loky"``, the number of cores used by numba for
     each job spawned by the backend will be set to 1 in order to
     overcome the oversubscription issue in case you run
@@ -119,10 +119,11 @@ n_jobs
     ``NUMBA_NUM_THREADS`` before running the program."""
 _backend = """\
 backend
-    Parallelization backend to use. See :class:`joblib.Parallel` for available options."""
+    Parallelization backend to use. If ``None``, defaults to ``'loky'``.
+    See :class:`joblib.Parallel` for available options."""
 _show_progress_bar = """\
 show_progress_bar
-    Whether to show the progress bar or not."""
+    Whether to show the progress bar. If ``None``, uses ``scanpy.settings.verbosity``."""
 
 _parallelize = f"{_n_jobs}\n{_backend}\n{_show_progress_bar}"
 _parallelize_device = f"{_n_jobs}{_CPU_ONLY}\n{_backend}{_CPU_ONLY}\n{_show_progress_bar}{_CPU_ONLY}"
@@ -133,7 +134,7 @@ seed
 _device_kwargs = """\
 device_kwargs
     Additional keyword arguments passed to the GPU implementation when ``squidpy.settings.device``
-    is set to ``'gpu'``. Ignored on CPU."""
+    is set to ``'gpu'``. Must be ``None`` or empty when device is ``'cpu'``."""
 _channels = """\
 channels
     Channels for this feature is computed. If `None`, use all channels."""

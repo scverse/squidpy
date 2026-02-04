@@ -86,10 +86,15 @@ def gpu_dispatch(
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            resolved_device = settings.device
+            effective_device = settings.device
 
-            if resolved_device == "cpu":
-                kwargs.pop("device_kwargs", None)
+            if effective_device == "cpu":
+                device_kwargs = kwargs.pop("device_kwargs", None)
+                if device_kwargs is not None and len(device_kwargs) > 0:
+                    raise ValueError(
+                        "device_kwargs should not be provided when squidpy.settings.device='cpu'. "
+                        "Set squidpy.settings.device='gpu' or use settings.use_device('gpu') context manager."
+                    )
                 return func(*args, **kwargs)
 
             # GPU path

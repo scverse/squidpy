@@ -743,15 +743,9 @@ def _analysis(
         Percentage threshold for removing lowly expressed genes in clusters.
     %(n_perms)s
     %(seed)s
-    n_jobs
-        Number of parallel jobs to launch.
     numba_parallel
         Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
-    backend
-        Parallelization backend to use.
-    show_progress_bar
-        Whether to show the progress bar.
-
+    %(parallelize)s
     Returns
     -------
     Tuple of the following format:
