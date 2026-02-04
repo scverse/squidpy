@@ -119,6 +119,7 @@ class TestUseDeviceContextManager:
             with settings.use_device(device):
                 # Small delay to increase chance of interleaving
                 import time
+
                 time.sleep(0.01)
                 results[thread_id] = settings.device
 
