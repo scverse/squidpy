@@ -58,6 +58,4 @@ class TestGPUvsCPU:
             gpu_result = sq.gr.ligrec(adata_filtered, cluster_key="leiden", copy=True, n_perms=5)
 
         # Compare means (deterministic)
-        np.testing.assert_allclose(
-            cpu_result["means"].values, gpu_result["means"].values, rtol=1e-5, equal_nan=True
-        )
+        np.testing.assert_allclose(cpu_result["means"].values, gpu_result["means"].values, rtol=1e-5, equal_nan=True)
