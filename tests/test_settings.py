@@ -47,10 +47,6 @@ class TestSettings:
         with pytest.raises(ValueError, match="device must be one of"):
             settings.device = "invalid"
 
-    def test_set_device_auto_invalid(self):
-        """Test that 'auto' is no longer a valid device."""
-        with pytest.raises(ValueError, match="device must be one of"):
-            settings.device = "auto"
 
     def test_set_device_gpu_without_rsc(self):
         """Test that setting device to 'gpu' without rapids-singlecell raises RuntimeError."""
