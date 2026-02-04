@@ -40,8 +40,7 @@ def _validate_attr_for_gpu(value: Any) -> None:
     """Validate attr parameter for GPU dispatch."""
     if value != "X":
         raise ValueError(
-            f"attr={value!r} is not supported on GPU. "
-            "Use `squidpy.settings.device = 'cpu'` to use other attributes."
+            f"attr={value!r} is not supported on GPU. Use `squidpy.settings.device = 'cpu'` to use other attributes."
         )
 
 
