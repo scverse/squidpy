@@ -46,9 +46,9 @@ def sliding_window(
     %(spatial_key)s
     partial_windows: Literal["adaptive", "drop", "split"] | None
         If None, possibly small windows at the edges are kept.
-        If 'adaptive', all windows might be shrunken a bit to avoid small windows at the edges.
-        If 'drop', possibly small windows at the edges are removed.
-        If 'split', windows are split into subwindows until not exceeding `max_nr_cells`
+        If `adaptive`, all windows might be shrunken a bit to avoid small windows at the edges.
+        If `drop`, possibly small windows at the edges are removed.
+        If `split`, windows are split into subwindows until not exceeding `max_nr_cells`
     max_nr_cells: int | None
         The maximum number of cells allowed after merging two windows.
         Required if `partial_windows = split`
@@ -60,19 +60,18 @@ def sliding_window(
     If ``copy = True``, returns the sliding window annotation(s) as pandas dataframe
     Otherwise, stores the sliding window annotation(s) in .obs.
     """
-    if overlap < 0:
-        raise ValueError("Overlap must be non-negative.")
-    if overlap >= window_size:
-        raise ValueError("Overlap must be less than the window size.")
-    if overlap >= window_size // 2 and window_size == "adaptive":
-        raise ValueError("Overlap must be less than window_size // 2 when using 'adaptive'")
-
-    if partial_windows == "split" and max_nr_cells is None:
-        raise ValueError("max_nr_cells must be set when partial_windows is 'split'.")
-    if partial_windows != "split" and max_nr_cells is not None:
-        logg.warning("Ignoring max_nr_cells as partial_windows is not 'split'.")
-    if partial_windows == "split" and overlap != 0:
-        logg.warning("Ignoring overlap as it cannot be used with 'split'.")
+    if partial_windows == "split":
+        if max_nr_cells is None:
+            raise ValueError("`max_nr_cells` must be set when `partial_windows == split`.")
+        if window_size is not None:
+            logg.warning(f"Ingoring `window_size` when using `{partial_windows}`.")
+        if overlap != 0:
+            logg.warning("Ignoring `overlap` as it cannot be used with `split`.")
+    else:
+        if max_nr_cells is not None:
+            logg.warning("Ignoring `max_nr_cells` as `partial_windows != split`.")
+        if overlap < 0:
+            raise ValueError("Overlap must be non-negative.")
 
     if isinstance(adata, SpatialData):
         adata = adata.table
@@ -105,8 +104,13 @@ def sliding_window(
         # mostly arbitrary choice, except that full integers usually generate windows with 1-2 cells at the borders
         window_size = max(int(np.floor(coord_range // 3.95)), 1)
 
-    if window_size <= 0:
-        raise ValueError("Window size must be larger than 0.")
+    if partial_windows != "split":
+        if window_size <= 0:
+            raise ValueError("Window size must be larger than 0.")
+        if overlap >= window_size:
+            raise ValueError("Overlap must be less than the window size.")
+        if overlap >= window_size // 2 and window_size == "adaptive":
+            raise ValueError("Overlap must be less than `window_size` // 2 when using `adaptive`.")
 
     if library_key is not None and library_key not in adata.obs:
         raise ValueError(f"Library key '{library_key}' not found in adata.obs")
@@ -265,7 +269,7 @@ def _calculate_window_corners(
         minimum Y coordinate
     max_y: float
         maximum Y coordinate
-    window_size: float
+    window_size: int
         size of each window
     lib_coords: pd.DataFrame | None
         coordinates of all samples for one library
@@ -290,8 +294,8 @@ def _calculate_window_corners(
         number_x_windows = np.ceil((max_x - min_x) / window_size)
         number_y_windows = np.ceil((max_y - min_y) / window_size)
 
-        x_window_size = (max_x - min_x) / number_x_windows
-        y_window_size = (max_y - min_y) / number_y_windows
+        x_window_size = np.ceil((max_x - min_x) / number_x_windows)
+        y_window_size = np.ceil((max_y - min_y) / number_y_windows)
     else:
         x_window_size = window_size
         y_window_size = window_size
