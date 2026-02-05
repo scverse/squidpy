@@ -64,12 +64,12 @@ def sliding_window(
         if max_nr_cells is None:
             raise ValueError("`max_nr_cells` must be set when `partial_windows == split`.")
         if window_size is not None:
-            logg.warning(f"Ingoring `window_size` when using `{partial_windows}`.")
+            logg.warning(f"Ingoring `window_size` when using `{partial_windows}`")
         if overlap != 0:
-            logg.warning("Ignoring `overlap` as it cannot be used with `split`.")
+            logg.warning("Ignoring `overlap` as it cannot be used with `split`")
     else:
         if max_nr_cells is not None:
-            logg.warning("Ignoring `max_nr_cells` as `partial_windows != split`.")
+            logg.warning("Ignoring `max_nr_cells` as `partial_windows != split`")
         if overlap < 0:
             raise ValueError("Overlap must be non-negative.")
 
@@ -121,7 +121,7 @@ def sliding_window(
     sliding_window_df = pd.DataFrame(index=adata.obs.index)
 
     if sliding_window_key in adata.obs:
-        logg.warning(f"Overwriting existing column '{sliding_window_key}' in adata.obs.")
+        logg.warning(f"Overwriting existing column '{sliding_window_key}' in adata.obs")
 
     for lib in libraries:
         if lib is not None:
