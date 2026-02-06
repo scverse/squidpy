@@ -294,6 +294,7 @@ def _calculate_window_corners(
         number_x_windows = np.ceil((max_x - min_x) / window_size)
         number_y_windows = np.ceil((max_y - min_y) / window_size)
 
+        # use np.ceil to avoid float errors
         x_window_size = np.ceil((max_x - min_x) / number_x_windows)
         y_window_size = np.ceil((max_y - min_y) / number_y_windows)
     else:
@@ -319,7 +320,9 @@ def _calculate_window_corners(
         windows["x_end"] = windows["x_end"].clip(upper=max_x)
         windows["y_end"] = windows["y_end"].clip(upper=max_y)
     elif partial_windows == "adaptive":
-        pass
+        # as window_size is an integer to avoid float errors, it can exceed max_x and max_y -> clip
+        windows["x_end"] = windows["x_end"].clip(upper=max_x)
+        windows["y_end"] = windows["y_end"].clip(upper=max_y)
     elif partial_windows == "drop":
         valid_windows = (windows["x_end"] <= max_x) & (windows["y_end"] <= max_y)
         windows = windows[valid_windows]

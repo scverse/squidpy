@@ -135,18 +135,24 @@ class TestSlidingWindow:
         assert df[sliding_window_key].notnull().all()
         assert len(df) == adata_squaregrid.n_obs
 
-    def test_sliding_window_split_respects_max_nr_cells(
+    def test_sliding_window_split_nr_cells(
         self,
         adata_mibitof: AnnData,
         sliding_window_key: str = "sliding_window_key",
         library_key: str = "library_id",
     ):
+        """
+        Test that when using 'split', each window contains at most max_nr_cells
+        and at least max_nr_cells // 2 cells,
+        unless the total number of cells is smaller than max_nr_cells // 2.
+        """
         max_nr_cells = 100
+        total_cells = adata_mibitof.n_obs
 
         df = sliding_window(
             adata_mibitof,
             library_key=library_key,
-            window_size=None,
+            window_size=None,  # ignored in split mode
             overlap=0,
             coord_columns=("globalX", "globalY"),
             sliding_window_key=sliding_window_key,
@@ -155,12 +161,19 @@ class TestSlidingWindow:
             copy=True,
         )
 
-        assert sliding_window_key in df.columns
-        assert df[sliding_window_key].notnull().all()
-
         counts = df[sliding_window_key].value_counts()
+
+        # all windows respect the upper bound
         assert counts.max() <= max_nr_cells
-        assert counts.shape[0] > 1  # more than one window
+
+        # determine strict lower bound
+        lower_bound = max_nr_cells // 2
+        if total_cells < lower_bound:
+            # if total cells are too few, just one window is allowed smaller
+            assert counts.max() == total_cells
+        else:
+            # otherwise, every window must satisfy the lower bound
+            assert (counts >= lower_bound).all()
 
 
 class TestCalculateWindowCorners:
@@ -220,5 +233,5 @@ class TestCalculateWindowCorners:
 
         assert windows["x_start"].min() == 0
         assert windows["y_start"].min() == 0
-        assert windows["x_end"].max() >= 200
-        assert windows["y_end"].max() >= 200
+        assert windows["x_end"].max() == 200
+        assert windows["y_end"].max() == 200
