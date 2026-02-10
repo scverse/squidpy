@@ -151,6 +151,7 @@ nitpick_ignore = [
     ("py:class", "squidpy._constants._constants.SpatialAutocorr"),
     ("py:class", "squidpy._constants._constants.CoordType"),
     ("py:class", "squidpy._constants._constants.Transform"),
+    ("py:class", "pandas.core.frame.DataFrame"),
 ]
 # see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369
 linkcheck_ignore = [
