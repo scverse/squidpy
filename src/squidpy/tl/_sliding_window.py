@@ -169,7 +169,7 @@ def sliding_window(
             )
             obs_indices = lib_coords.index[mask]
 
-            if overlap == 0:
+            if overlap == 0 or partial_windows == "split":
                 sliding_window_df.loc[obs_indices, sliding_window_key] = f"{lib_key}window_{idx}"
 
             else:
