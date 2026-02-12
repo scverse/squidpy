@@ -128,7 +128,6 @@ def sliding_window(
             lib_mask = adata.obs[library_key] == lib
             lib_coords = coords.loc[lib_mask]
         else:
-            lib_mask = np.ones(len(adata), dtype=bool)
             lib_coords = coords
 
         min_x, max_x = lib_coords[x_col].min(), lib_coords[x_col].max()
@@ -174,9 +173,7 @@ def sliding_window(
 
             else:
                 col_name = f"{sliding_window_key}_{lib_key}window_{idx}"
-                sliding_window_df.loc[obs_indices, col_name] = True
-                # Avoid chained assignment for pandas CoW compatibility
-                sliding_window_df[col_name] = sliding_window_df[col_name].fillna(False)
+                sliding_window_df[col_name] = mask
 
     if overlap == 0:
         # create categorical variable for ordered windows
