@@ -109,7 +109,7 @@ def sliding_window(
             raise ValueError("Window size must be larger than 0.")
         if overlap >= window_size:
             raise ValueError("Overlap must be less than the window size.")
-        if overlap >= window_size // 2 and window_size == "adaptive":
+        if overlap >= window_size // 2 and partial_windows == "adaptive":
             raise ValueError("Overlap must be less than `window_size` // 2 when using `adaptive`.")
 
     if library_key is not None and library_key not in adata.obs:
@@ -289,12 +289,20 @@ def _calculate_window_corners(
     """
     # adjust x and y window size if 'adaptive'
     if partial_windows == "adaptive":
-        number_x_windows = np.ceil((max_x - min_x) / window_size)
-        number_y_windows = np.ceil((max_y - min_y) / window_size)
+        total_width = max_x - min_x
+        total_height = max_y - min_y
 
-        # use np.ceil to avoid float errors
-        x_window_size = np.ceil((max_x - min_x) / number_x_windows)
-        y_window_size = np.ceil((max_y - min_y) / number_y_windows)
+        # number of windows in x and y direction
+        number_x_windows = np.ceil((total_width - overlap) / (window_size - overlap))
+        number_y_windows = np.ceil((total_height - overlap) / (window_size - overlap))
+
+        # window size in x and y direction
+        x_window_size = (total_width + (number_x_windows - 1) * overlap) / number_x_windows
+        y_window_size = (total_height + (number_y_windows - 1) * overlap) / number_y_windows
+
+        # avoid float errors
+        x_window_size = np.ceil(x_window_size)
+        y_window_size = np.ceil(y_window_size)
     else:
         x_window_size = window_size
         y_window_size = window_size
@@ -321,6 +329,12 @@ def _calculate_window_corners(
         # as window_size is an integer to avoid float errors, it can exceed max_x and max_y -> clip
         windows["x_end"] = windows["x_end"].clip(upper=max_x)
         windows["y_end"] = windows["y_end"].clip(upper=max_y)
+
+        # remove redundant windows in the corners
+        redundant_windows = ((windows["x_end"] - windows["x_start"]) <= overlap) | (
+            (windows["y_end"] - windows["y_start"]) <= overlap
+        )
+        windows = windows[~redundant_windows]
     elif partial_windows == "drop":
         valid_windows = (windows["x_end"] <= max_x) & (windows["y_end"] <= max_y)
         windows = windows[valid_windows]
