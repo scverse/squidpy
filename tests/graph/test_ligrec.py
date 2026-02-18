@@ -112,6 +112,22 @@ class TestValidBehavior:
 
         _ = PermutationTest(adata, use_raw=False)
 
+    def test_sparse_fill_value_zero(self, adata: AnnData):
+        """Regression: pandas>=3.0 from_spmatrix changed fill_value to NaN (pandas PR #59064).
+
+        Structural zeros in gene-expression matrices are real observations, not
+        missing values.  Treating them as NaN inflates groupby().mean() and
+        corrupts ligrec results.  _fix_sparse_fill_value() must normalise the
+        fill_value back to 0 at construction time.
+        """
+        pt = PermutationTest(adata)
+        for col in pt._data.columns:
+            arr = pt._data[col].array
+            assert isinstance(arr, pd.arrays.SparseArray), f"Column {col!r} is not a SparseArray"
+            assert arr.fill_value == 0.0, (
+                f"SparseArray fill_value for column {col!r} must be 0, not NaN — see pandas PR #59064"
+            )
+
     def test_all_genes_capitalized(self, adata: AnnData, interactions: Interactions_t):
         pt = PermutationTest(adata).prepare(interactions=interactions)
         genes = pd.Series([g for gs in pt.interactions[["source", "target"]].values for g in gs], dtype="string")

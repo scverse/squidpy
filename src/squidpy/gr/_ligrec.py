@@ -26,6 +26,7 @@ from squidpy.gr._utils import (
     _assert_positive,
     _check_tuple_needles,
     _create_sparse_df,
+    _fix_sparse_fill_value,
     _genesymbols,
     _save_data,
 )
@@ -210,8 +211,10 @@ class PermutationTestABC(ABC):
                 raise ValueError(f"Expected `{adata.n_obs}` cells in `.raw` object, found `{adata.raw.n_obs}`.")
             adata = adata.raw
 
-        self._data = pd.DataFrame.sparse.from_spmatrix(
-            csc_matrix(adata.X), index=adata.obs_names, columns=adata.var_names
+        self._data = _fix_sparse_fill_value(
+            pd.DataFrame.sparse.from_spmatrix(
+                csc_matrix(adata.X), index=adata.obs_names, columns=adata.var_names
+            )
         )
 
         self._interactions: pd.DataFrame | None = None

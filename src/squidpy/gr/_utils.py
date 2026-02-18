@@ -130,6 +130,39 @@ def _create_sparse_df(
     return pd.DataFrame._from_arrays(arrays, columns=columns, index=index, verify_integrity=False)
 
 
+def _fix_sparse_fill_value(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure all :class:`~pandas.arrays.SparseArray` columns in ``df`` use ``fill_value=0``, not NaN.
+
+    pandas >= 3.0 changed :meth:`~pandas.DataFrame.sparse.from_spmatrix` to use
+    ``fill_value=NaN`` for float dtypes (pandas PR #59064), treating structural
+    zeros as missing data.  For gene-expression matrices built from scipy sparse
+    matrices, structural zeros are real observations (unexpressed genes), not
+    missing values.  Treating them as NaN causes ``groupby().mean()`` to exclude
+    them from the denominator, inflating means and corrupting
+    :func:`squidpy.gr.ligrec` results.
+
+    The fix is allocation-free: existing ``sp_values`` and ``sp_index`` are
+    reused; only the fill-value scalar is updated.
+    """
+    needs_fix = any(
+        isinstance(df[c].array, pd.arrays.SparseArray) and np.isnan(df[c].array.fill_value)
+        for c in df.columns
+    )
+    if not needs_fix:
+        return df
+
+    return pd.DataFrame(
+        {
+            c: pd.arrays.SparseArray(df[c].array, fill_value=0.0)
+            if isinstance(df[c].array, pd.arrays.SparseArray) and np.isnan(df[c].array.fill_value)
+            else df[c]
+            for c in df.columns
+        },
+        index=df.index,
+    )
+
+
 def _assert_categorical_obs(adata: AnnData, key: str) -> None:
     if key not in adata.obs:
         raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
