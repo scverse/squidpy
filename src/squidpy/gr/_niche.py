@@ -245,7 +245,7 @@ def calculate_niche(
             for col in result_columns:
                 if col in lib_result.obs.columns:
                     prefixed_values = lib_result.obs[col].apply(
-                        lambda x, lib=lib_id: (f"lib={lib}_{x}" if x != "not_a_niche" else x)
+                        lambda x, lib=lib_id: f"lib={lib}_{x}" if x != "not_a_niche" else x
                     )
 
                     adata.obs.loc[lib_indices, col] = prefixed_values.values
