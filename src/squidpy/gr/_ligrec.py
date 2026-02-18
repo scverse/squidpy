@@ -212,9 +212,7 @@ class PermutationTestABC(ABC):
             adata = adata.raw
 
         self._data = _fix_sparse_fill_value(
-            pd.DataFrame.sparse.from_spmatrix(
-                csc_matrix(adata.X), index=adata.obs_names, columns=adata.var_names
-            )
+            pd.DataFrame.sparse.from_spmatrix(csc_matrix(adata.X), index=adata.obs_names, columns=adata.var_names)
         )
 
         self._interactions: pd.DataFrame | None = None

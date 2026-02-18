@@ -146,8 +146,7 @@ def _fix_sparse_fill_value(df: pd.DataFrame) -> pd.DataFrame:
     reused; only the fill-value scalar is updated.
     """
     needs_fix = any(
-        isinstance(df[c].array, pd.arrays.SparseArray) and np.isnan(df[c].array.fill_value)
-        for c in df.columns
+        isinstance(df[c].array, pd.arrays.SparseArray) and np.isnan(df[c].array.fill_value) for c in df.columns
     )
     if not needs_fix:
         return df
