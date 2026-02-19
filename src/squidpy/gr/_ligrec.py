@@ -735,8 +735,11 @@ def _analysis(
 
         return TempResult(means=means, pvalues=pvalues)
 
-    groups = data.groupby("clusters", observed=True)
     clustering = np.array(data["clusters"].values, dtype=np.int32)
+    # densify the data earlier to avoid concatenating sparse arrays
+    # with multiple fill values: '[0.0, nan]' (which leads PerformanceWarning)
+    data = data.astype({c: np.float64 for c in data.columns if c != "clusters"})
+    groups = data.groupby("clusters", observed=True)
 
     mean = groups.mean().values.T  # (n_genes, n_clusters)
     # see https://github.com/scverse/squidpy/pull/991#issuecomment-2888506296
