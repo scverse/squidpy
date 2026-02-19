@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Sequence
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -13,7 +13,7 @@ from anndata.utils import make_index_unique
 from pandas import CategoricalDtype
 from pandas.api.types import infer_dtype
 from scanpy import logging as logg
-from scipy.sparse import csc_matrix, csr_matrix, issparse, spmatrix
+from scipy.sparse import csc_matrix, csr_matrix, spmatrix
 
 from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
 from squidpy._docs import d
