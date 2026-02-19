@@ -94,6 +94,7 @@ class Symbol(ModeEnum):
 class SpatialAutocorr(ModeEnum):
     MORAN = "moran"
     GEARY = "geary"
+    SPAGFT = "spagft"
 
 
 @unique
