@@ -6,7 +6,7 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numba import njit, prange
+from numba import get_num_threads, get_thread_id, njit, prange
 from scanpy import logging as logg
 from scipy.sparse import csr_matrix, issparse, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
@@ -157,10 +157,25 @@ def _diffusion_batch(
     thresh: float,
 ) -> NDArrayA:
     n_genes = vals_dense.shape[1]
+    n_cells = vals_dense.shape[0]
+    sat_shape = sat.shape[0]
+    n_threads = get_num_threads()
+
+    # Pre-allocate per-thread workspace to avoid allocator contention
+    conc_buf = np.empty((n_threads, n_cells))
+    entropy_buf = np.empty((n_threads, n_iter))
+    nhood_buf = np.empty((n_threads, sat_shape))
+    dcdt_buf = np.empty((n_threads, n_cells))
+
     scores = np.empty(n_genes)
     for i in prange(n_genes):
-        conc = vals_dense[:, i].copy()
-        time_iter = _diffusion(conc, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh)
+        tid = get_thread_id()
+        conc = conc_buf[tid]
+        conc[:] = vals_dense[:, i]
+        time_iter = _diffusion(
+            conc, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh,
+            entropy_buf[tid], nhood_buf[tid], dcdt_buf[tid],
+        )
         scores[i] = dt * time_iter
     return scores
 
@@ -174,14 +189,17 @@ def _diffusion(
     sat_idx: NDArrayA,
     unsat: NDArrayA,
     unsat_idx: NDArrayA,
-    dt: float = 0.001,
-    thresh: float = 1e-8,
+    dt: float,
+    thresh: float,
+    entropy_arr: NDArrayA,
+    nhood: NDArrayA,
+    dcdt: NDArrayA,
 ) -> float:
     """Simulate diffusion process on a regular graph."""
-    sat_shape, conc_shape = sat.shape[0], conc.shape[0]
-    entropy_arr = np.zeros(n_iter)
+    sat_shape = sat.shape[0]
+    entropy_arr[:] = 0.0
+    nhood[:] = 0.0
     prev_ent = 1.0
-    nhood = np.zeros(sat_shape)
 
     for i in range(n_iter):
         for j in range(sat_shape):
@@ -191,7 +209,7 @@ def _diffusion(
         else:
             d2 = _laplacian_rect(conc[sat], nhood)
 
-        dcdt = np.zeros(conc_shape)
+        dcdt[:] = 0.0
         dcdt[sat] = d2
         conc[sat] += dcdt[sat] * dt
         conc[unsat] += dcdt[unsat_idx] * dt
