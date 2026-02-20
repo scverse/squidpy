@@ -737,7 +737,7 @@ def _analysis(
 
     clustering = np.array(data["clusters"].values, dtype=np.int32)
     # densify the data earlier to avoid concatenating sparse arrays
-    # with multiple fill values: '[0.0, nan]' (which leads PerformanceWarning)
+    # with multiple fill values: '[0.0, nan]' (which leads to PerformanceWarning)
     data = data.astype({c: np.float64 for c in data.columns if c != "clusters"})
     groups = data.groupby("clusters", observed=True)
 
