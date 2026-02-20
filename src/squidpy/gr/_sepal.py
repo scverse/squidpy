@@ -173,8 +173,18 @@ def _diffusion_batch(
         conc = conc_buf[tid]
         conc[:] = vals_dense[:, i]
         time_iter = _diffusion(
-            conc, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh,
-            entropy_buf[tid], nhood_buf[tid], dcdt_buf[tid],
+            conc,
+            use_hex,
+            n_iter,
+            sat,
+            sat_idx,
+            unsat,
+            unsat_idx,
+            dt,
+            thresh,
+            entropy_buf[tid],
+            nhood_buf[tid],
+            dcdt_buf[tid],
         )
         scores[i] = dt * time_iter
     return scores
