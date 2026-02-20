@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import Literal
 
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numba import njit
+from numba import get_num_threads, get_thread_id, njit, prange
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix, isspmatrix_csr, spmatrix
+from scipy.sparse import csr_matrix, issparse, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA
 from squidpy.gr._utils import (
     _assert_connectivity_key,
     _assert_non_empty_sequence,
@@ -108,8 +108,6 @@ def sepal(
             genes = genes[adata.var["highly_variable"].values]
     genes = _assert_non_empty_sequence(genes, name="genes")
 
-    n_jobs = _get_n_cores(n_jobs)
-
     g = adata.obsp[connectivity_key]
     if not isspmatrix_csr(g):
         g = csr_matrix(g)
@@ -124,27 +122,13 @@ def sepal(
 
     # get counts
     vals, genes = _extract_expression(adata, genes=genes, use_raw=use_raw, layer=layer)
-    start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` core(s)")
+    start = logg.info(f"Calculating sepal score for `{len(genes)}` genes")
 
-    score = parallelize(
-        _score_helper,
-        collection=np.arange(len(genes)).tolist(),
-        extractor=np.hstack,
-        use_ixs=False,
-        n_jobs=n_jobs,
-        backend=backend,
-        show_progress_bar=show_progress_bar,
-    )(
-        vals=vals,
-        max_neighs=max_neighs,
-        n_iter=n_iter,
-        sat=sat,
-        sat_idx=sat_idx,
-        unsat=unsat,
-        unsat_idx=unsat_idx,
-        dt=dt,
-        thresh=thresh,
-    )
+    vals_dense = vals.toarray() if issparse(vals) else np.asarray(vals)
+    vals_dense = np.ascontiguousarray(vals_dense, dtype=np.float64)
+
+    use_hex = max_neighs == 6
+    score = _diffusion_batch(vals_dense, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh)
 
     key_added = "sepal_score"
     sepal_score = pd.DataFrame(score, index=genes, columns=[key_added])
@@ -160,10 +144,10 @@ def sepal(
     _save_data(adata, attr="uns", key=key_added, data=sepal_score, time=start)
 
 
-def _score_helper(
-    ixs: Sequence[int],
-    vals: spmatrix | NDArrayA,
-    max_neighs: int,
+@njit(parallel=True)
+def _diffusion_batch(
+    vals_dense: NDArrayA,
+    use_hex: bool,
     n_iter: int,
     sat: NDArrayA,
     sat_idx: NDArrayA,
@@ -171,58 +155,71 @@ def _score_helper(
     unsat_idx: NDArrayA,
     dt: float,
     thresh: float,
-    queue: SigQueue | None = None,
 ) -> NDArrayA:
-    if max_neighs == 4:
-        fun = _laplacian_rect
-    elif max_neighs == 6:
-        fun = _laplacian_hex
-    else:
-        raise NotImplementedError(f"Laplacian for `{max_neighs}` neighbors is not yet implemented.")
+    n_genes = vals_dense.shape[1]
+    n_cells = vals_dense.shape[0]
+    sat_shape = sat.shape[0]
+    n_threads = get_num_threads()
 
-    score = []
-    for i in ixs:
-        if isinstance(vals, spmatrix):
-            conc = vals[:, i].toarray().flatten()  # Safe to call toarray()
-        else:
-            conc = vals[:, i].copy()  # vals is assumed to be a NumPy array here
+    # Pre-allocate per-thread workspace to avoid allocator contention
+    conc_buf = np.empty((n_threads, n_cells))
+    entropy_buf = np.empty((n_threads, n_iter))
+    nhood_buf = np.empty((n_threads, sat_shape))
+    dcdt_buf = np.empty((n_threads, n_cells))
 
-        time_iter = _diffusion(conc, fun, n_iter, sat, sat_idx, unsat, unsat_idx, dt=dt, thresh=thresh)
-        score.append(dt * time_iter)
-
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    return np.array(score)
+    scores = np.empty(n_genes)
+    for i in prange(n_genes):
+        tid = get_thread_id()
+        conc = conc_buf[tid]
+        conc[:] = vals_dense[:, i]
+        time_iter = _diffusion(
+            conc,
+            use_hex,
+            n_iter,
+            sat,
+            sat_idx,
+            unsat,
+            unsat_idx,
+            dt,
+            thresh,
+            entropy_buf[tid],
+            nhood_buf[tid],
+            dcdt_buf[tid],
+        )
+        scores[i] = dt * time_iter
+    return scores
 
 
 @njit(fastmath=True)
 def _diffusion(
     conc: NDArrayA,
-    laplacian: Callable[[NDArrayA, NDArrayA], float],
+    use_hex: bool,
     n_iter: int,
     sat: NDArrayA,
     sat_idx: NDArrayA,
     unsat: NDArrayA,
     unsat_idx: NDArrayA,
-    dt: float = 0.001,
-    thresh: float = 1e-8,
+    dt: float,
+    thresh: float,
+    entropy_arr: NDArrayA,
+    nhood: NDArrayA,
+    dcdt: NDArrayA,
 ) -> float:
     """Simulate diffusion process on a regular graph."""
-    sat_shape, conc_shape = sat.shape[0], conc.shape[0]
-    entropy_arr = np.zeros(n_iter)
+    sat_shape = sat.shape[0]
+    entropy_arr[:] = 0.0
+    nhood[:] = 0.0
     prev_ent = 1.0
-    nhood = np.zeros(sat_shape)
 
     for i in range(n_iter):
         for j in range(sat_shape):
             nhood[j] = np.sum(conc[sat_idx[j]])
-        d2 = laplacian(conc[sat], nhood)
+        if use_hex:
+            d2 = _laplacian_hex(conc[sat], nhood)
+        else:
+            d2 = _laplacian_rect(conc[sat], nhood)
 
-        dcdt = np.zeros(conc_shape)
+        dcdt[:] = 0.0
         dcdt[sat] = d2
         conc[sat] += dcdt[sat] * dt
         conc[unsat] += dcdt[unsat_idx] * dt
