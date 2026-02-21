@@ -102,6 +102,12 @@ optional-dependencies.docs = [
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
 ]
+optional-dependencies.gpu-cuda11 = [
+  "rapids-singlecell[rapids11]>=0.13.5",
+]
+optional-dependencies.gpu-cuda12 = [
+  "rapids-singlecell[rapids12]>=0.13.5",
+]
 optional-dependencies.leiden = [
   "leidenalg",
   "spatialleiden>=0.4",
