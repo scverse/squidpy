@@ -398,9 +398,7 @@ def co_occurrence(
 
     # Compute co-occurrence probabilities using the fast numba routine.
     out = _co_occurrence_helper(spatial_x, spatial_y, interval, labs)
-    start = logg.info(
-        f"Calculating co-occurrence probabilities for `{len(interval)}` intervals"
-    )
+    start = logg.info(f"Calculating co-occurrence probabilities for `{len(interval)}` intervals")
 
     if copy:
         logg.info("Finish", time=start)
