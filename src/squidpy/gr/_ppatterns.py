@@ -348,10 +348,6 @@ def co_occurrence(
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
-    n_splits: int | None = None,
-    n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -365,10 +361,6 @@ def co_occurrence(
         Distances interval at which co-occurrence is computed. If :class:`int`, uniformly spaced interval
         of the given size will be used.
     %(copy)s
-    n_splits
-        Number of splits in which to divide the spatial coordinates in
-        :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
-    %(parallelize)s
 
     Returns
     -------
@@ -407,7 +399,7 @@ def co_occurrence(
     # Compute co-occurrence probabilities using the fast numba routine.
     out = _co_occurrence_helper(spatial_x, spatial_y, interval, labs)
     start = logg.info(
-        f"Calculating co-occurrence probabilities for `{len(interval)}` intervals using `{n_jobs}` core(s) and `{n_splits}` splits"
+        f"Calculating co-occurrence probabilities for `{len(interval)}` intervals"
     )
 
     if copy:
