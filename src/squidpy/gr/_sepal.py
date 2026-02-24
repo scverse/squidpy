@@ -40,7 +40,7 @@ def sepal(
     layer: str | None = None,
     use_raw: bool = False,
     copy: bool = False,
-    sparse_batch_size: int = 4096,
+    sparse_batch_size: int = 128,
 ) -> pd.DataFrame | None:
     """
     Identify spatially variable genes with *Sepal*.
@@ -80,7 +80,6 @@ def sepal(
         Number of genes to process in each batch when using sparse inputs.
         Used to keep memory bounded while using parallel diffusion.
         If your dataset can fit in memory, set this to a large value to use dense inputs for optimal performance.
-        Default is 4096.
 
     Returns
     -------
@@ -129,9 +128,7 @@ def sepal(
     use_hex = max_neighs == 6
 
     if issparse(vals):
-        score = _diffusion_batch_sparse(
-            vals, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh, sparse_batch_size
-        )
+        score = _diffusion_batch_sparse(vals, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh, sparse_batch_size)
     else:
         vals_dense = np.ascontiguousarray(vals, dtype=np.float64)
         score = _diffusion_batch(vals_dense, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh)
@@ -148,6 +145,7 @@ def sepal(
         return sepal_score
 
     _save_data(adata, attr="uns", key=key_added, data=sepal_score, time=start)
+
 
 
 def _diffusion_batch_sparse(
@@ -169,15 +167,7 @@ def _diffusion_batch_sparse(
         end = min(start + sparse_batch_size, n_genes)
         chunk = np.ascontiguousarray(vals[:, start:end].toarray(), dtype=np.float64)
         scores[start:end] = _diffusion_batch(
-            chunk,
-            use_hex,
-            n_iter,
-            sat,
-            sat_idx,
-            unsat,
-            unsat_idx,
-            dt,
-            thresh,
+            chunk, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh,
         )
     return scores
 
