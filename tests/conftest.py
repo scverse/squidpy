@@ -162,7 +162,8 @@ def adata_squaregrid() -> AnnData:
 def paul15() -> AnnData:
     # session because we don't modify this dataset
     adata = sc.datasets.paul15()
-    sc.pp.normalize_per_cell(adata)
+    sc.pp.filter_cells(adata, min_counts=1)
+    sc.pp.normalize_total(adata)
     adata.raw = adata.copy()
 
     return adata
