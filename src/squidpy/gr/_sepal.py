@@ -40,9 +40,7 @@ def sepal(
     layer: str | None = None,
     use_raw: bool = False,
     copy: bool = False,
-    n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
+    sparse_batch_size: int = 4096,
 ) -> pd.DataFrame | None:
     """
     Identify spatially variable genes with *Sepal*.
@@ -78,7 +76,11 @@ def sepal(
     use_raw
         Whether to access :attr:`anndata.AnnData.raw`.
     %(copy)s
-    %(parallelize)s
+    sparse_batch_size
+        Number of genes to process in each batch when using sparse inputs.
+        Used to keep memory bounded while using parallel diffusion.
+        If your dataset can fit in memory, set this to a large value to use dense inputs for optimal performance.
+        Default is 4096.
 
     Returns
     -------
@@ -124,11 +126,13 @@ def sepal(
     vals, genes = _extract_expression(adata, genes=genes, use_raw=use_raw, layer=layer)
     start = logg.info(f"Calculating sepal score for `{len(genes)}` genes")
 
-    vals_dense = vals.toarray() if issparse(vals) else np.asarray(vals)
-    vals_dense = np.ascontiguousarray(vals_dense, dtype=np.float64)
-
     use_hex = max_neighs == 6
-    score = _diffusion_batch(vals_dense, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh)
+
+    if issparse(vals):
+        score = _diffusion_batch_sparse(vals, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh, sparse_batch_size)
+    else:
+        vals_dense = np.ascontiguousarray(vals, dtype=np.float64)
+        score = _diffusion_batch(vals_dense, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh)
 
     key_added = "sepal_score"
     sepal_score = pd.DataFrame(score, index=genes, columns=[key_added])
@@ -142,6 +146,31 @@ def sepal(
         return sepal_score
 
     _save_data(adata, attr="uns", key=key_added, data=sepal_score, time=start)
+
+
+
+def _diffusion_batch_sparse(
+    vals: spmatrix,
+    use_hex: bool,
+    n_iter: int,
+    sat: NDArrayA,
+    sat_idx: NDArrayA,
+    unsat: NDArrayA,
+    unsat_idx: NDArrayA,
+    dt: float,
+    thresh: float,
+    sparse_batch_size: int,
+) -> NDArrayA:
+    """Densify in small batches to keep memory bounded while using parallel diffusion."""
+    n_genes = vals.shape[1]
+    scores = np.empty(n_genes)
+    for start in range(0, n_genes, sparse_batch_size):
+        end = min(start + sparse_batch_size, n_genes)
+        chunk = np.ascontiguousarray(vals[:, start:end].toarray(), dtype=np.float64)
+        scores[start:end] = _diffusion_batch(
+            chunk, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh,
+        )
+    return scores
 
 
 @njit(parallel=True)
