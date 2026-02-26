@@ -15,8 +15,8 @@ keywords = [
 ]
 license = "BSD-3-Clause"
 maintainers = [
-  { name = "Tim Treis", email = "tim.treis@scverse.org" },
   { name = "Selman Ozleyen", email = "selman.ozleyen@helmholtz-munich.de" },
+  { name = "Tim Treis", email = "tim.treis@scverse.org" },
 ]
 authors = [
   { name = "scverse" },
@@ -46,7 +46,7 @@ dependencies = [
   "aiohttp>=3.8.1",
   "anndata>=0.9",
   "cycler>=0.11",
-  "dask[array]>=2021.2,<=2024.11.2",
+  "dask[array]>=2021.2",
   "dask-image>=0.5",
   "docrep>=0.3.1",
   "fast-array-utils",
@@ -66,7 +66,7 @@ dependencies = [
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
-  "spatialdata>=0.6",
+  "spatialdata>=0.7.1",
   "spatialdata-plot",
   "statsmodels>=0.12",
   # https://github.com/scverse/squidpy/issues/526
@@ -76,7 +76,6 @@ dependencies = [
   "xarray>=2024.10",
   "zarr>=3",
 ]
-
 optional-dependencies.dev = [
   "hatch>=1.9",
   "ipykernel",
@@ -88,6 +87,7 @@ optional-dependencies.dev = [
   "ruff",
 ]
 optional-dependencies.docs = [
+  "docutils<0.22",                    # Pin to avoid sphinx-tabs KeyError with backrefs
   "ipython",
   "ipywidgets>=8",
   "myst-nb>=0.17.1",
@@ -127,17 +127,11 @@ include-package-data = true
 
 [tool.setuptools_scm]
 
-[tool.hatch.version]
-source = "vcs"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "_version.py"
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.hatch.build.targets.wheel]
-packages = [ "src/squidpy" ]
+[tool.hatch]
+build.hooks.vcs.version-file = "_version.py"
+build.targets.wheel.packages = [ "src/squidpy" ]
+metadata.allow-direct-references = true
+version.source = "vcs"
 
 [tool.ruff]
 line-length = 120
@@ -150,7 +144,6 @@ exclude = [
   "docs/_build",
   "setup.py",
 ]
-
 format.docstring-code-format = true
 lint.select = [
   "B",   # flake8-bugbear
@@ -160,8 +153,8 @@ lint.select = [
   "F",   # pyflakes
   "I",   # isort
   # below are not autofixed
-  "UP", # pyupgrade
-  "W",  # pycodestyle
+  "UP",  # pyupgrade
+  "W",   # pycodestyle
 ]
 # "squidpy/*.py"= ["RST303"]
 lint.ignore = [
@@ -245,68 +238,30 @@ addopts = [
   "--ignore=docs",
 ]
 
-[tool.coverage.run]
-branch = true
-parallel = true
-source = [ "squidpy" ]
-omit = [
+[tool.coverage]
+run.branch = true
+run.omit = [
   "*/__init__.py",
   "*/_version.py",
   "tox/*",
 ]
-
-[tool.coverage.paths]
-source = [
+run.parallel = true
+run.source = [ "squidpy" ]
+paths.source = [
   "squidpy",
   "*/site-packages/squidpy",
 ]
-
-[tool.coverage.report]
-exclude_lines = [
+report.exclude_lines = [
   "\\#.*pragma:\\s*no.?cover",
-  "^if __name__ == .__main__.:$",
   "^\\s*raise AssertionError\\b",
   "^\\s*raise NotImplementedError\\b",
   "^\\s*return NotImplemented\\b",
+  "^if __name__ == .__main__.:$",
 ]
-show_missing = true
-precision = 2
-skip_empty = true
-sort = "Miss"
-
-[tool.pixi.workspace]
-channels = [ "conda-forge" ]
-platforms = [ "osx-arm64", "linux-64" ]
-
-[tool.pixi.dependencies]
-python = ">=3.11"
-
-[tool.pixi.pypi-dependencies]
-squidpy = { path = ".", editable = true }
-
-[tool.pixi.feature.py311.dependencies]
-python = "3.11.*"
-
-[tool.pixi.feature.py313.dependencies]
-python = "3.13.*"
-
-[tool.pixi.environments]
-dev-py311 = { features = [ "dev", "test", "py311" ], solve-group = "py311" }
-docs-py311 = { features = [ "docs", "py311" ], solve-group = "py311" }
-
-default = { features = [ "py313" ], solve-group = "py313" }
-dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
-docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
-test-py313 = { features = [ "test", "py313" ], solve-group = "py313" }
-
-[tool.pixi.tasks]
-lab = "jupyter lab"
-kernel-install = "python -m ipykernel install --user --name pixi-dev --display-name \"squidpy (dev)\""
-test = "pytest -v --color=yes --tb=short --durations=10"
-lint = "ruff check ."
-format = "ruff format ."
-pre-commit-install = "pre-commit install"
-pre-commit = "pre-commit run"
+report.precision = 2
+report.show_missing = true
+report.skip_empty = true
+report.sort = "Miss"
 
 [tool.cruft]
 skip = [
@@ -319,3 +274,24 @@ skip = [
   "docs/references.md",
   "docs/notebooks/example.ipynb",
 ]
+
+[tool.pixi]
+dependencies.python = ">=3.11"
+environments.dev-py311 = { features = [ "dev", "test", "py311" ], solve-group = "py311" }
+environments.docs-py311 = { features = [ "docs", "py311" ], solve-group = "py311" }
+environments.default = { features = [ "py313" ], solve-group = "py313" }
+environments.dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
+environments.docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
+environments.test-py313 = { features = [ "test", "py313" ], solve-group = "py313" }
+feature.py311.dependencies.python = "3.11.*"
+feature.py313.dependencies.python = "3.13.*"
+pypi-dependencies.squidpy = { path = ".", editable = true }
+tasks.lab = "jupyter lab"
+tasks.kernel-install = 'python -m ipykernel install --user --name pixi-dev --display-name "squidpy (dev)"'
+tasks.test = "pytest -v --color=yes --tb=short --durations=10"
+tasks.lint = "ruff check ."
+tasks.format = "ruff format ."
+tasks.pre-commit-install = "pre-commit install"
+tasks.pre-commit = "pre-commit run"
+workspace.channels = [ "conda-forge" ]
+workspace.platforms = [ "osx-arm64", "linux-64" ]

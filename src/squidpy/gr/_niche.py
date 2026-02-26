@@ -245,7 +245,7 @@ def calculate_niche(
             for col in result_columns:
                 if col in lib_result.obs.columns:
                     prefixed_values = lib_result.obs[col].apply(
-                        lambda x, lib=lib_id: (f"lib={lib}_{x}" if x != "not_a_niche" else x)
+                        lambda x, lib=lib_id: f"lib={lib}_{x}" if x != "not_a_niche" else x
                     )
 
                     adata.obs.loc[lib_indices, col] = prefixed_values.values
@@ -456,7 +456,9 @@ def _get_nhood_profile_niches(
         nhood_profile = weighted_profile
 
     # create AnnData object from neighborhood profile to perform scanpy functions
-    adata_neighborhood = ad.AnnData(X=nhood_profile)
+    # Use .to_numpy(copy=True) to ensure the array is writeable (required for pandas CoW compatibility)
+    # Preserve the DataFrame index for later matching with adata_masked
+    adata_neighborhood = ad.AnnData(X=nhood_profile.to_numpy(copy=True), obs=pd.DataFrame(index=nhood_profile.index))
 
     # reason for scaling see https://monkeybread.readthedocs.io/en/latest/notebooks/tutorial.html#niche-analysis
     if scale:
