@@ -10,6 +10,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # TODO: remove once hatch is compatible with virtualenv 21+ (pypa/hatch#2193)
+  UV_CONSTRAINT: ${{ github.workspace }}/.github/uv-constraints.txt
+
 jobs:
   ensure-data-is-cached:
     runs-on: ubuntu-latest

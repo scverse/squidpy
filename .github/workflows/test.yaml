@@ -17,6 +17,8 @@ env:
   MPLBACKEND: agg
   UV_COMPILE_BYTECODE: "1"
   COVERAGE_FILE: ${{ github.workspace }}/.coverage
+  # TODO: remove once hatch is compatible with virtualenv 21+ (pypa/hatch#2193)
+  UV_CONSTRAINT: ${{ github.workspace }}/.github/uv-constraints.txt
 
 defaults:
   run:
