@@ -7,7 +7,7 @@ from functools import partial
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import dask.array as da
 import matplotlib as mpl
@@ -51,7 +51,6 @@ Pathlike_t: TypeAlias = str | Path
 Arraylike_t: TypeAlias = NDArrayA | xr.DataArray
 InferDims_t: TypeAlias = Literal["default", "prefer_channels", "prefer_z"] | Sequence[str]
 Input_t: TypeAlias = Pathlike_t | Arraylike_t | Literal["ImageContainer"]
-Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependencies
 _ERROR_NOTIMPLEMENTED_LIBID = f"It seems there are multiple `library_id` in `adata.uns[{Key.uns.spatial!r}]`.\n \
                                 Loading multiple images is not implemented (yet), please specify a `library_id`."
 
