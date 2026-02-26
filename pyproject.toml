@@ -224,17 +224,17 @@ lint.unfixable = [
 lint.flake8-tidy-imports.ban-relative-imports = "all"
 lint.isort.required-imports = [ "from __future__ import annotations" ]
 
-[tool.pytest.ini_options]
-filterwarnings = [
+[tool.pytest]
+ini_options.filterwarnings = [
   "error::numba.NumbaPerformanceWarning",
   "ignore::UserWarning",
   "ignore::anndata.OldFormatWarning",
   "ignore:.*pkg_resources:DeprecationWarning",
 ]
-python_files = "test_*.py"
-testpaths = [ "tests/" ]
-xfail_strict = true
-addopts = [
+ini_options.python_files = "test_*.py"
+ini_options.testpaths = [ "tests/" ]
+ini_options.xfail_strict = true
+ini_options.addopts = [
   "--ignore=docs",
 ]
 
