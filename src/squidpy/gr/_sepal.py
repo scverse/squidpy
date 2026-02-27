@@ -3,12 +3,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Literal
 
+import fast_array_utils
 import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import get_num_threads, get_thread_id, njit, prange
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix, issparse, isspmatrix_csr, spmatrix
+from scipy.sparse import csc_matrix, csr_matrix, issparse, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData
 
@@ -40,7 +41,6 @@ def sepal(
     layer: str | None = None,
     use_raw: bool = False,
     copy: bool = False,
-    sparse_batch_size: int = 128,
 ) -> pd.DataFrame | None:
     """
     Identify spatially variable genes with *Sepal*.
@@ -76,10 +76,6 @@ def sepal(
     use_raw
         Whether to access :attr:`anndata.AnnData.raw`.
     %(copy)s
-    sparse_batch_size
-        Number of genes to process in each batch when using sparse inputs.
-        Used to keep memory bounded while using parallel diffusion.
-        If your dataset can fit in memory, set this to a large value to use dense inputs for optimal performance.
 
     Returns
     -------
@@ -128,12 +124,21 @@ def sepal(
     use_hex = max_neighs == 6
 
     if issparse(vals):
-        score = _diffusion_batch_sparse(
-            vals, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh, sparse_batch_size
+        vals = csc_matrix(vals)
+        score = _diffusion_batch_csc(
+            vals,
+            use_hex,
+            n_iter,
+            sat,
+            sat_idx,
+            unsat,
+            unsat_idx,
+            dt,
+            thresh,
         )
     else:
         vals_dense = np.ascontiguousarray(vals, dtype=np.float64)
-        score = _diffusion_batch(vals_dense, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh)
+        score = _diffusion_batch_dense(vals_dense, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh)
 
     key_added = "sepal_score"
     sepal_score = pd.DataFrame(score, index=genes, columns=[key_added])
@@ -149,8 +154,9 @@ def sepal(
     _save_data(adata, attr="uns", key=key_added, data=sepal_score, time=start)
 
 
-def _diffusion_batch_sparse(
-    vals: spmatrix,
+@njit(parallel=True)
+def _diffusion_batch_csc(
+    vals: csc_matrix,
     use_hex: bool,
     n_iter: int,
     sat: NDArrayA,
@@ -159,16 +165,28 @@ def _diffusion_batch_sparse(
     unsat_idx: NDArrayA,
     dt: float,
     thresh: float,
-    sparse_batch_size: int,
 ) -> NDArrayA:
-    """Densify in small batches to keep memory bounded while using parallel diffusion."""
-    n_genes = vals.shape[1]
+    indptr = vals.indptr
+    indices = vals.indices
+    data = vals.data
+    n_cells, n_genes = vals.shape
+    sat_shape = sat.shape[0]
+    n_threads = get_num_threads()
+
+    conc_buf = np.empty((n_threads, n_cells))
+    entropy_buf = np.empty((n_threads, n_iter))
+    nhood_buf = np.empty((n_threads, sat_shape))
+    dcdt_buf = np.empty((n_threads, n_cells))
+
     scores = np.empty(n_genes)
-    for start in range(0, n_genes, sparse_batch_size):
-        end = min(start + sparse_batch_size, n_genes)
-        chunk = np.ascontiguousarray(vals[:, start:end].toarray(), dtype=np.float64)
-        scores[start:end] = _diffusion_batch(
-            chunk,
+    for i in prange(n_genes):
+        tid = get_thread_id()
+        conc = conc_buf[tid]
+        conc[:] = 0.0
+        for j in range(indptr[i], indptr[i + 1]):
+            conc[indices[j]] = data[j]
+        time_iter = _diffusion(
+            conc,
             use_hex,
             n_iter,
             sat,
@@ -177,13 +195,17 @@ def _diffusion_batch_sparse(
             unsat_idx,
             dt,
             thresh,
+            entropy_buf[tid],
+            nhood_buf[tid],
+            dcdt_buf[tid],
         )
+        scores[i] = dt * time_iter
     return scores
 
 
 @njit(parallel=True)
-def _diffusion_batch(
-    vals_dense: NDArrayA,
+def _diffusion_batch_dense(
+    vals: NDArrayA,
     use_hex: bool,
     n_iter: int,
     sat: NDArrayA,
@@ -193,8 +215,8 @@ def _diffusion_batch(
     dt: float,
     thresh: float,
 ) -> NDArrayA:
-    n_genes = vals_dense.shape[1]
-    n_cells = vals_dense.shape[0]
+    n_genes = vals.shape[1]
+    n_cells = vals.shape[0]
     sat_shape = sat.shape[0]
     n_threads = get_num_threads()
 
@@ -208,7 +230,7 @@ def _diffusion_batch(
     for i in prange(n_genes):
         tid = get_thread_id()
         conc = conc_buf[tid]
-        conc[:] = vals_dense[:, i]
+        conc[:] = vals[:, i]
         time_iter = _diffusion(
             conc,
             use_hex,
