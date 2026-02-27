@@ -121,10 +121,15 @@ venv.bak/
 # mkdocs documentation
 /site
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# Tests and coverage
+/data/
+/node_modules/
+/.coverage*
+
+
+# docs
+/docs/generated/
+/docs/_build/
 
 # Pyre type checker
 .pyre/
