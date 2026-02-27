@@ -151,6 +151,4 @@ def test_make_tiles_from_spots_invalid_spots_key(sdata_hne):
 def test_make_tiles_from_spots_invalid_image_key(sdata_hne):
     """make_tiles_from_spots raises KeyError for a missing image key."""
     with pytest.raises(KeyError, match="not found in sdata.images"):
-        sq.experimental.im.make_tiles_from_spots(
-            sdata_hne, spots_key="spots", image_key="nonexistent", preview=False
-        )
+        sq.experimental.im.make_tiles_from_spots(sdata_hne, spots_key="spots", image_key="nonexistent", preview=False)

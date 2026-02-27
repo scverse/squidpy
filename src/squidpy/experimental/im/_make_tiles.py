@@ -171,9 +171,7 @@ def _get_largest_scale_dimensions(
 ) -> tuple[int, int]:
     """Get the dimensions (H, W) of the largest/finest scale of an image."""
     if image_key not in sdata.images:
-        raise KeyError(
-            f"Image key '{image_key}' not found in sdata.images. Available: {list(sdata.images.keys())}"
-        )
+        raise KeyError(f"Image key '{image_key}' not found in sdata.images. Available: {list(sdata.images.keys())}")
     img_node = sdata.images[image_key]
 
     # Use _get_element_data with "scale0" which is always the largest scale
@@ -363,9 +361,7 @@ def make_tiles(
     """
     # --- upfront parameter validation ---
     if image_key not in sdata.images:
-        raise KeyError(
-            f"Image key '{image_key}' not found in sdata.images. Available: {list(sdata.images.keys())}"
-        )
+        raise KeyError(f"Image key '{image_key}' not found in sdata.images. Available: {list(sdata.images.keys())}")
     if tile_size[0] <= 0 or tile_size[1] <= 0:
         raise ValueError(f"tile_size must have positive values, got {tile_size}.")
     if not 0 <= min_tissue_fraction <= 1:
@@ -540,9 +536,7 @@ def make_tiles_from_spots(
     if spots_key not in sdata.shapes:
         raise KeyError(f"Spots key '{spots_key}' not found in sdata.shapes")
     if image_key is not None and image_key not in sdata.images:
-        raise KeyError(
-            f"Image key '{image_key}' not found in sdata.images. Available: {list(sdata.images.keys())}"
-        )
+        raise KeyError(f"Image key '{image_key}' not found in sdata.images. Available: {list(sdata.images.keys())}")
     if not 0 <= min_tissue_fraction <= 1:
         raise ValueError(f"min_tissue_fraction must be in [0, 1], got {min_tissue_fraction}.")
 
@@ -850,9 +844,7 @@ def _get_spot_coordinates(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Extract spot centers (x, y) and IDs from a shapes table."""
     if spots_key not in sdata.shapes:
-        raise KeyError(
-            f"Spots key '{spots_key}' not found in sdata.shapes. Available: {list(sdata.shapes.keys())}"
-        )
+        raise KeyError(f"Spots key '{spots_key}' not found in sdata.shapes. Available: {list(sdata.shapes.keys())}")
     gdf = sdata.shapes[spots_key]
     if "geometry" not in gdf:
         raise ValueError(f"Shapes '{spots_key}' lack geometry column required for spot coordinates.")
