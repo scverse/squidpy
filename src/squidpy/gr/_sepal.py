@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Literal
 
-import fast_array_utils
+import fast_array_utils  # noqa: F401
 import numpy as np
 import pandas as pd
 from anndata import AnnData
