@@ -153,8 +153,8 @@ lint.select = [
   "F",   # pyflakes
   "I",   # isort
   # below are not autofixed
-  "UP",  # pyupgrade
-  "W",   # pycodestyle
+  "UP", # pyupgrade
+  "W",  # pycodestyle
 ]
 # "squidpy/*.py"= ["RST303"]
 lint.ignore = [

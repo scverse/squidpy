@@ -5,6 +5,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 # -- Path setup --------------------------------------------------------------
+from __future__ import annotations
+
 import shutil
 import sys
 from datetime import datetime
