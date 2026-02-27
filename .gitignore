@@ -8,6 +8,13 @@ buck-out/
 __pycache__/
 .*cache/
 
+# C extensions
+*.so
+*.pyc
+.DS_Store
+*/.DS_Store
+.idea
+notebooks/data
 # Distribution / packaging
 /dist/
 
@@ -16,6 +23,132 @@ __pycache__/
 /node_modules/
 /.coverage*
 
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+data/
+tests/figures/
+tests/_images/*-failed-diff.png
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/build/
+docs/api
+docs/classes
+/docs/generated/
+/docs/_build/
+docs/source/api/*rst
+docs/source/auto_*
+docs/source/gen_modules
+docs/source/external_tutorials
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# Tests and coverage
+/data/
+/node_modules/
+/.coverage*
+
+
 # docs
 /docs/generated/
 /docs/_build/
+
+# Pyre type checker
+.pyre/
+
+# editors
+.idea
+
+# data
+data
+
+# Vim .swp
+*.swp
+
+# vscode
+.vscode
+
+# pixi
+.pixi
+pixi.lock
+
+_version.py
+
