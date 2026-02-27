@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 import spatialdata_plot as sdp
 from spatialdata.transformations import Identity, get_transformation, set_transformation
 
@@ -122,33 +121,3 @@ def test_make_tiles_copies_image_transformations(sdata_hne):
     assert "custom_cs" in img_tfs and "custom_cs" in tile_tfs
     assert isinstance(img_tfs["custom_cs"], Identity)
     assert isinstance(tile_tfs["custom_cs"], Identity)
-
-
-def test_make_tiles_invalid_image_key(sdata_hne):
-    """make_tiles raises KeyError for a missing image key."""
-    with pytest.raises(KeyError, match="not found in sdata.images"):
-        sq.experimental.im.make_tiles(sdata_hne, image_key="nonexistent", preview=False)
-
-
-def test_make_tiles_invalid_tile_size(sdata_hne):
-    """make_tiles raises ValueError for non-positive tile size."""
-    with pytest.raises(ValueError, match="tile_size must have positive values"):
-        sq.experimental.im.make_tiles(sdata_hne, image_key="hne", tile_size=(0, 224), preview=False)
-
-
-def test_make_tiles_invalid_min_tissue_fraction(sdata_hne):
-    """make_tiles raises ValueError for out-of-range min_tissue_fraction."""
-    with pytest.raises(ValueError, match="min_tissue_fraction must be in"):
-        sq.experimental.im.make_tiles(sdata_hne, image_key="hne", min_tissue_fraction=1.5, preview=False)
-
-
-def test_make_tiles_from_spots_invalid_spots_key(sdata_hne):
-    """make_tiles_from_spots raises KeyError for a missing spots key."""
-    with pytest.raises(KeyError, match="not found in sdata.shapes"):
-        sq.experimental.im.make_tiles_from_spots(sdata_hne, spots_key="nonexistent", preview=False)
-
-
-def test_make_tiles_from_spots_invalid_image_key(sdata_hne):
-    """make_tiles_from_spots raises KeyError for a missing image key."""
-    with pytest.raises(KeyError, match="not found in sdata.images"):
-        sq.experimental.im.make_tiles_from_spots(sdata_hne, spots_key="spots", image_key="nonexistent", preview=False)

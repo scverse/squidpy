@@ -359,7 +359,6 @@ def make_tiles(
     make_tiles_from_spots
         Create tiles centered on Visium spots instead of a regular grid.
     """
-    # --- upfront parameter validation ---
     if image_key not in sdata.images:
         raise KeyError(f"Image key '{image_key}' not found in sdata.images. Available: {list(sdata.images.keys())}")
     if tile_size[0] <= 0 or tile_size[1] <= 0:
