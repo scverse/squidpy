@@ -171,7 +171,7 @@ def _get_image(
             raise KeyError(
                 f"Image key: `{img_res_key}` does not exist. Available image keys: `{image_mapping.values()}`"
             )
-        img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_res_key] for i in library_id]
+        img = [adata.uns[spatial_key][i][Key.uns.image_key][img_res_key] for i in library_id]
 
     if img_channel is None:
         img = [im[..., :3] for im in img]
@@ -234,9 +234,7 @@ def _get_scalefactor_size(
             if not len(scale_factor_key):
                 raise ValueError(f"No `scale_factor` found that could match `img_res_key`: {img_res_key}.")
             _scale_factor_key = scale_factor_key[0]  # get first scale_factor
-            scale_factor = [
-                adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id
-            ]
+            scale_factor = [adata.uns[spatial_key][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id]
         else:  # handle case where scale_factor is float or list
             scale_factor = _get_list(scale_factor, _type=float, ref_len=len(library_id), name="scale_factor")
 
@@ -251,7 +249,7 @@ def _get_scalefactor_size(
         if not (len(size) == len(library_id) == len(scale_factor)):
             raise ValueError("Len of `size`, `library_id` and `scale_factor` do not match.")
         size = [
-            adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][size_key] * s * sf * 0.5
+            adata.uns[spatial_key][i][Key.uns.scalefactor_key][size_key] * s * sf * 0.5
             for i, s, sf in zip(library_id, size, scale_factor, strict=False)
         ]
         return scale_factor, size
