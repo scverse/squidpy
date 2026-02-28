@@ -857,10 +857,7 @@ def _get_spot_coordinates(
 
 def _get_primary_coordinate_system(element: SpatialElement) -> str | None:
     """Return the first available coordinate system, preferring 'global'."""
-    try:
-        transformations = get_transformation(element, get_all=True)
-    except (KeyError, ValueError):
-        return None
+    transformations = get_transformation(element, get_all=True)
     if not transformations:
         return None
     # Prefer 'global' if present
