@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Literal
 
-import fast_array_utils  # noqa: F401
+import numba
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numba import get_num_threads, get_thread_id, njit, prange
+from numba import njit
 from scanpy import logging as logg
 from scipy.sparse import csc_matrix, csr_matrix, issparse, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
@@ -47,6 +47,11 @@ def sepal(
 
     *Sepal* is a method that simulates a diffusion process to quantify spatial structure in tissue.
     See :cite:`andersson2021` for reference.
+
+    **Note**: This function parallelizes the diffusion simulation across threads using numba kernels.
+    The number of threads is determined by :func:`numba.get_num_threads`.
+    If the given data is sparse and the densified version is not too large,
+    consider densifying the data before calling this function for better performance.
 
     Parameters
     ----------
@@ -125,20 +130,8 @@ def sepal(
 
     if issparse(vals):
         vals = csc_matrix(vals)
-        score = _diffusion_batch_csc(
-            vals,
-            use_hex,
-            n_iter,
-            sat,
-            sat_idx,
-            unsat,
-            unsat_idx,
-            dt,
-            thresh,
-        )
-    else:
-        vals_dense = np.ascontiguousarray(vals, dtype=np.float64)
-        score = _diffusion_batch_dense(vals_dense, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh)
+    n_jobs = numba.get_num_threads()
+    score = _diffusion_genes(vals, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh, n_jobs=n_jobs)
 
     key_added = "sepal_score"
     sepal_score = pd.DataFrame(score, index=genes, columns=[key_added])
@@ -154,57 +147,7 @@ def sepal(
     _save_data(adata, attr="uns", key=key_added, data=sepal_score, time=start)
 
 
-@njit(parallel=True)
-def _diffusion_batch_csc(
-    vals: csc_matrix,
-    use_hex: bool,
-    n_iter: int,
-    sat: NDArrayA,
-    sat_idx: NDArrayA,
-    unsat: NDArrayA,
-    unsat_idx: NDArrayA,
-    dt: float,
-    thresh: float,
-) -> NDArrayA:
-    indptr = vals.indptr
-    indices = vals.indices
-    data = vals.data
-    n_cells, n_genes = vals.shape
-    sat_shape = sat.shape[0]
-    n_threads = get_num_threads()
-
-    conc_buf = np.empty((n_threads, n_cells))
-    entropy_buf = np.empty((n_threads, n_iter))
-    nhood_buf = np.empty((n_threads, sat_shape))
-    dcdt_buf = np.empty((n_threads, n_cells))
-
-    scores = np.empty(n_genes)
-    for i in prange(n_genes):
-        tid = get_thread_id()
-        conc = conc_buf[tid]
-        conc[:] = 0.0
-        for j in range(indptr[i], indptr[i + 1]):
-            conc[indices[j]] = data[j]
-        time_iter = _diffusion(
-            conc,
-            use_hex,
-            n_iter,
-            sat,
-            sat_idx,
-            unsat,
-            unsat_idx,
-            dt,
-            thresh,
-            entropy_buf[tid],
-            nhood_buf[tid],
-            dcdt_buf[tid],
-        )
-        scores[i] = dt * time_iter
-    return scores
-
-
-@njit(parallel=True)
-def _diffusion_batch_dense(
+def _diffusion_genes(
     vals: NDArrayA,
     use_hex: bool,
     n_iter: int,
@@ -214,42 +157,33 @@ def _diffusion_batch_dense(
     unsat_idx: NDArrayA,
     dt: float,
     thresh: float,
+    n_jobs: int,
+    show_progress_bar: bool = True,
 ) -> NDArrayA:
-    n_genes = vals.shape[1]
-    n_cells = vals.shape[0]
-    sat_shape = sat.shape[0]
-    n_threads = get_num_threads()
+    """Run diffusion for each gene column, parallelised across threads."""
+    from tqdm.contrib.concurrent import thread_map
 
-    # Pre-allocate per-thread workspace to avoid allocator contention
-    conc_buf = np.empty((n_threads, n_cells))
-    entropy_buf = np.empty((n_threads, n_iter))
-    nhood_buf = np.empty((n_threads, sat_shape))
-    dcdt_buf = np.empty((n_threads, n_cells))
+    sparse = issparse(vals)
 
-    scores = np.empty(n_genes)
-    for i in prange(n_genes):
-        tid = get_thread_id()
-        conc = conc_buf[tid]
-        conc[:] = vals[:, i]
+    def _process_gene(i: int) -> float:
+        if sparse:
+            conc = np.ascontiguousarray(vals[:, i].toarray().ravel(), dtype=np.float64)
+        else:
+            conc = vals[:, i]
         time_iter = _diffusion(
-            conc,
-            use_hex,
-            n_iter,
-            sat,
-            sat_idx,
-            unsat,
-            unsat_idx,
-            dt,
-            thresh,
-            entropy_buf[tid],
-            nhood_buf[tid],
-            dcdt_buf[tid],
+            conc, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh,
         )
-        scores[i] = dt * time_iter
-    return scores
+        return dt * time_iter
+
+    scores = thread_map(
+        _process_gene, range(vals.shape[1]),
+        max_workers=n_jobs, unit="gene", disable=not show_progress_bar,
+    )
+
+    return np.array(scores)
 
 
-@njit(fastmath=True)
+@njit(fastmath=True, nogil=True)
 def _diffusion(
     conc: NDArrayA,
     use_hex: bool,
@@ -260,14 +194,13 @@ def _diffusion(
     unsat_idx: NDArrayA,
     dt: float,
     thresh: float,
-    entropy_arr: NDArrayA,
-    nhood: NDArrayA,
-    dcdt: NDArrayA,
 ) -> float:
     """Simulate diffusion process on a regular graph."""
     sat_shape = sat.shape[0]
-    entropy_arr[:] = 0.0
-    nhood[:] = 0.0
+    n_cells = conc.shape[0]
+    entropy_arr = np.zeros(n_iter)
+    nhood = np.zeros(sat_shape)
+    dcdt = np.zeros(n_cells)
     prev_ent = 1.0
 
     for i in range(n_iter):
