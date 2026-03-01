@@ -171,13 +171,24 @@ def _diffusion_genes(
         else:
             conc = vals[:, i]
         time_iter = _diffusion(
-            conc, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh,
+            conc,
+            use_hex,
+            n_iter,
+            sat,
+            sat_idx,
+            unsat,
+            unsat_idx,
+            dt,
+            thresh,
         )
         return dt * time_iter
 
     scores = thread_map(
-        _process_gene, range(vals.shape[1]),
-        max_workers=n_jobs, unit="gene", disable=not show_progress_bar,
+        _process_gene,
+        range(vals.shape[1]),
+        max_workers=n_jobs,
+        unit="gene",
+        disable=not show_progress_bar,
     )
 
     return np.array(scores)
