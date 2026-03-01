@@ -278,6 +278,37 @@ def verbosity(level: int) -> Generator[None, None, None]:
         sc.settings.verbosity = verbosity
 
 
+def deprecated_params(
+    params: dict[str, str],
+) -> Callable[..., Any]:
+    """Decorator that warns when deprecated keyword arguments are passed.
+
+    Parameters
+    ----------
+    params
+        Mapping of deprecated parameter names to the version in which
+        they will be removed, e.g. ``{"n_jobs": "1.10.0"}``.
+    """
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            for k in list(kwargs):
+                if k in params:
+                    warnings.warn(
+                        f"Parameter `{k}` of `{func.__name__}()` is deprecated "
+                        f"and has no effect. It will be removed in squidpy v{params[k]}.",
+                        FutureWarning,
+                        stacklevel=2,
+                    )
+                    kwargs.pop(k)
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
 string_types = (bytes, str)
 
 
