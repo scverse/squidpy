@@ -642,6 +642,7 @@ def ligrec(
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
+    table_key: str = "table",
     **kwargs: Any,
 ) -> Mapping[str, pd.DataFrame] | None:
     """
@@ -654,13 +655,20 @@ def ligrec(
     %(PT_test.parameters)s
     gene_symbols
         Key in :attr:`anndata.AnnData.var` to use instead of :attr:`anndata.AnnData.var_names`.
+    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used if ``adata`` is a :class:`spatialdata.SpatialData`.
 
     Returns
     -------
     %(ligrec_test_returns)s
     """  # noqa: D400
     if isinstance(adata, SpatialData):
-        adata = adata.table
+        if table_key not in adata.tables:
+            raise ValueError(
+                f"Table '{table_key}' not found in SpatialData. Available tables: {list(adata.tables.keys())}"
+            )
+        adata = adata.tables[table_key]
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)

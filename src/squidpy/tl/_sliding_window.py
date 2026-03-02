@@ -25,6 +25,7 @@ def sliding_window(
     spatial_key: str = "spatial",
     drop_partial_windows: bool = False,
     copy: bool = False,
+    table_key: str = "table",
 ) -> pd.DataFrame | None:
     """
     Divide a tissue slice into regulary shaped spatially contiguous regions (windows).
@@ -46,6 +47,9 @@ def sliding_window(
         If True, drop windows that are smaller than the window size at the borders.
     copy: bool
         If True, return the result, otherwise save it to the adata object.
+    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used if ``adata`` is a :class:`spatialdata.SpatialData`.
 
     Returns
     -------
@@ -56,7 +60,11 @@ def sliding_window(
         raise ValueError("Overlap must be non-negative.")
 
     if isinstance(adata, SpatialData):
-        adata = adata.table
+        if table_key not in adata.tables:
+            raise ValueError(
+                f"Table '{table_key}' not found in SpatialData. Available tables: {list(adata.tables.keys())}"
+            )
+        adata = adata.tables[table_key]
 
     # we don't want to modify the original adata in case of copy=True
     if copy:

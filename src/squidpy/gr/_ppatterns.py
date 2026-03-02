@@ -62,6 +62,7 @@ def spatial_autocorr(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    table_key: str = "table",
 ) -> pd.DataFrame | None:
     """
     Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
@@ -107,6 +108,9 @@ def spatial_autocorr(
     %(seed)s
     %(copy)s
     %(parallelize)s
+    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used if ``adata`` is a :class:`spatialdata.SpatialData`.
 
     Returns
     -------
@@ -129,7 +133,11 @@ def spatial_autocorr(
         - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
     if isinstance(adata, SpatialData):
-        adata = adata.table
+        if table_key not in adata.tables:
+            raise ValueError(
+                f"Table '{table_key}' not found in SpatialData. Available tables: {list(adata.tables.keys())}"
+            )
+        adata = adata.tables[table_key]
     _assert_connectivity_key(adata, connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
@@ -352,6 +360,7 @@ def co_occurrence(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    table_key: str = "table",
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -369,6 +378,9 @@ def co_occurrence(
         Number of splits in which to divide the spatial coordinates in
         :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
     %(parallelize)s
+    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used if ``adata`` is a :class:`spatialdata.SpatialData`.
 
     Returns
     -------
@@ -383,7 +395,11 @@ def co_occurrence(
     """
 
     if isinstance(adata, SpatialData):
-        adata = adata.table
+        if table_key not in adata.tables:
+            raise ValueError(
+                f"Table '{table_key}' not found in SpatialData. Available tables: {list(adata.tables.keys())}"
+            )
+        adata = adata.tables[table_key]
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
 

@@ -146,6 +146,7 @@ def nhood_enrichment(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    table_key: str = "table",
 ) -> NhoodEnrichmentResult | None:
     """
     Compute neighborhood enrichment by permutation test.
@@ -161,6 +162,9 @@ def nhood_enrichment(
     %(seed)s
     %(copy)s
     %(parallelize)s
+    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used if ``adata`` is a :class:`spatialdata.SpatialData`.
 
     Returns
     -------
@@ -172,7 +176,11 @@ def nhood_enrichment(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
     """
     if isinstance(adata, SpatialData):
-        adata = adata.table
+        if table_key not in adata.tables:
+            raise ValueError(
+                f"Table '{table_key}' not found in SpatialData. Available tables: {list(adata.tables.keys())}"
+            )
+        adata = adata.tables[table_key]
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -239,6 +247,7 @@ def centrality_scores(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = False,
+    table_key: str = "table",
 ) -> pd.DataFrame | None:
     """
     Compute centrality scores per cluster or cell type.
@@ -260,6 +269,9 @@ def centrality_scores(
     %(conn_key)s
     %(copy)s
     %(parallelize)s
+    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used if ``adata`` is a :class:`spatialdata.SpatialData`.
 
     Returns
     -------
@@ -269,7 +281,11 @@ def centrality_scores(
           as mentioned above.
     """
     if isinstance(adata, SpatialData):
-        adata = adata.table
+        if table_key not in adata.tables:
+            raise ValueError(
+                f"Table '{table_key}' not found in SpatialData. Available tables: {list(adata.tables.keys())}"
+            )
+        adata = adata.tables[table_key]
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -333,6 +349,7 @@ def interaction_matrix(
     normalized: bool = False,
     copy: bool = False,
     weights: bool = False,
+    table_key: str = "table",
 ) -> NDArrayA | None:
     """
     Compute interaction matrix for clusters.
@@ -347,6 +364,9 @@ def interaction_matrix(
     %(copy)s
     weights
         Whether to use edge weights or binarize.
+    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used if ``adata`` is a :class:`spatialdata.SpatialData`.
 
     Returns
     -------
@@ -357,7 +377,11 @@ def interaction_matrix(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_interactions']`` - the interaction matrix.
     """
     if isinstance(adata, SpatialData):
-        adata = adata.table
+        if table_key not in adata.tables:
+            raise ValueError(
+                f"Table '{table_key}' not found in SpatialData. Available tables: {list(adata.tables.keys())}"
+            )
+        adata = adata.tables[table_key]
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
