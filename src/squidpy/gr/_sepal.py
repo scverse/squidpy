@@ -1,20 +1,23 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
 
+import numba
 import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix, isspmatrix_csr, spmatrix
+from scipy.sparse import csc_matrix, csr_matrix, issparse, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData
+from tqdm.auto import tqdm
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA
 from squidpy.gr._utils import (
     _assert_connectivity_key,
     _assert_non_empty_sequence,
@@ -40,15 +43,15 @@ def sepal(
     layer: str | None = None,
     use_raw: bool = False,
     copy: bool = False,
-    n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
 ) -> pd.DataFrame | None:
     """
     Identify spatially variable genes with *Sepal*.
 
     *Sepal* is a method that simulates a diffusion process to quantify spatial structure in tissue.
     See :cite:`andersson2021` for reference.
+
+    **Note**: This function parallelizes the diffusion simulation across threads using numba kernels.
+    The number of threads is determined by :func:`numba.get_num_threads`.
 
     Parameters
     ----------
@@ -78,7 +81,6 @@ def sepal(
     use_raw
         Whether to access :attr:`anndata.AnnData.raw`.
     %(copy)s
-    %(parallelize)s
 
     Returns
     -------
@@ -108,8 +110,6 @@ def sepal(
             genes = genes[adata.var["highly_variable"].values]
     genes = _assert_non_empty_sequence(genes, name="genes")
 
-    n_jobs = _get_n_cores(n_jobs)
-
     g = adata.obsp[connectivity_key]
     if not isspmatrix_csr(g):
         g = csr_matrix(g)
@@ -124,27 +124,14 @@ def sepal(
 
     # get counts
     vals, genes = _extract_expression(adata, genes=genes, use_raw=use_raw, layer=layer)
-    start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` core(s)")
+    start = logg.info(f"Calculating sepal score for `{len(genes)}` genes")
 
-    score = parallelize(
-        _score_helper,
-        collection=np.arange(len(genes)).tolist(),
-        extractor=np.hstack,
-        use_ixs=False,
-        n_jobs=n_jobs,
-        backend=backend,
-        show_progress_bar=show_progress_bar,
-    )(
-        vals=vals,
-        max_neighs=max_neighs,
-        n_iter=n_iter,
-        sat=sat,
-        sat_idx=sat_idx,
-        unsat=unsat,
-        unsat_idx=unsat_idx,
-        dt=dt,
-        thresh=thresh,
-    )
+    use_hex = max_neighs == 6
+
+    if issparse(vals):
+        vals = csc_matrix(vals)
+    n_jobs = numba.get_num_threads()
+    score = _diffusion_genes(vals, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh, n_jobs=n_jobs)
 
     key_added = "sepal_score"
     sepal_score = pd.DataFrame(score, index=genes, columns=[key_added])
@@ -160,10 +147,9 @@ def sepal(
     _save_data(adata, attr="uns", key=key_added, data=sepal_score, time=start)
 
 
-def _score_helper(
-    ixs: Sequence[int],
-    vals: spmatrix | NDArrayA,
-    max_neighs: int,
+def _diffusion_genes(
+    vals: NDArrayA | spmatrix,
+    use_hex: bool,
     n_iter: int,
     sat: NDArrayA,
     sat_idx: NDArrayA,
@@ -171,58 +157,74 @@ def _score_helper(
     unsat_idx: NDArrayA,
     dt: float,
     thresh: float,
-    queue: SigQueue | None = None,
+    n_jobs: int,
+    show_progress_bar: bool = True,
 ) -> NDArrayA:
-    if max_neighs == 4:
-        fun = _laplacian_rect
-    elif max_neighs == 6:
-        fun = _laplacian_hex
-    else:
-        raise NotImplementedError(f"Laplacian for `{max_neighs}` neighbors is not yet implemented.")
+    """Run diffusion for each gene column, parallelised across threads."""
 
-    score = []
-    for i in ixs:
-        if isinstance(vals, spmatrix):
-            conc = vals[:, i].toarray().flatten()  # Safe to call toarray()
+    sparse = issparse(vals)
+
+    def _process_gene(i: int) -> float:
+        if sparse:
+            conc = np.ascontiguousarray(vals[:, i].toarray().ravel(), dtype=np.float64)
         else:
-            conc = vals[:, i].copy()  # vals is assumed to be a NumPy array here
+            conc = vals[:, i]
+        time_iter = _diffusion(
+            conc,
+            use_hex,
+            n_iter,
+            sat,
+            sat_idx,
+            unsat,
+            unsat_idx,
+            dt,
+            thresh,
+        )
+        return dt * time_iter
 
-        time_iter = _diffusion(conc, fun, n_iter, sat, sat_idx, unsat, unsat_idx, dt=dt, thresh=thresh)
-        score.append(dt * time_iter)
+    gene_indices = range(vals.shape[1])
+    with ThreadPoolExecutor(max_workers=n_jobs) as pool:
+        scores = list(
+            tqdm(
+                pool.map(_process_gene, gene_indices),
+                total=len(gene_indices),
+                unit="gene",
+                disable=not show_progress_bar,
+            )
+        )
 
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    return np.array(score)
+    return np.array(scores)
 
 
-@njit(fastmath=True)
+@njit(fastmath=True, nogil=True)
 def _diffusion(
     conc: NDArrayA,
-    laplacian: Callable[[NDArrayA, NDArrayA], float],
+    use_hex: bool,
     n_iter: int,
     sat: NDArrayA,
     sat_idx: NDArrayA,
     unsat: NDArrayA,
     unsat_idx: NDArrayA,
-    dt: float = 0.001,
-    thresh: float = 1e-8,
+    dt: float,
+    thresh: float,
 ) -> float:
     """Simulate diffusion process on a regular graph."""
-    sat_shape, conc_shape = sat.shape[0], conc.shape[0]
+    sat_shape = sat.shape[0]
+    n_cells = conc.shape[0]
     entropy_arr = np.zeros(n_iter)
-    prev_ent = 1.0
     nhood = np.zeros(sat_shape)
+    dcdt = np.zeros(n_cells)
+    prev_ent = 1.0
 
     for i in range(n_iter):
         for j in range(sat_shape):
             nhood[j] = np.sum(conc[sat_idx[j]])
-        d2 = laplacian(conc[sat], nhood)
+        if use_hex:
+            d2 = _laplacian_hex(conc[sat], nhood)
+        else:
+            d2 = _laplacian_rect(conc[sat], nhood)
 
-        dcdt = np.zeros(conc_shape)
+        dcdt[:] = 0.0
         dcdt[sat] = d2
         conc[sat] += dcdt[sat] * dt
         conc[unsat] += dcdt[unsat_idx] * dt

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numba
 import numpy as np
 from anndata import AnnData
 from pandas.testing import assert_frame_equal
@@ -16,8 +17,14 @@ def test_sepal_seq_par(adata: AnnData):
     adata.var["highly_variable"] = rng.choice([True, False], size=adata.var_names.shape, p=[0.005, 0.995])
 
     sepal(adata, max_neighs=6)
-    df = sepal(adata, max_neighs=6, copy=True, n_jobs=1)
-    df_parallel = sepal(adata, max_neighs=6, copy=True, n_jobs=2)
+
+    prev_threads = numba.get_num_threads()
+    try:
+        numba.set_num_threads(1)
+        df = sepal(adata, max_neighs=6, copy=True)
+    finally:
+        numba.set_num_threads(prev_threads)
+    df_parallel = sepal(adata, max_neighs=6, copy=True)
 
     idx_df = df.index.values
     idx_adata = adata[:, adata.var.highly_variable.values].var_names.values
@@ -40,8 +47,13 @@ def test_sepal_square_seq_par(adata_squaregrid: AnnData):
     rng = np.random.default_rng(42)
     adata.var["highly_variable"] = rng.choice([True, False], size=adata.var_names.shape)
 
-    sepal(adata, max_neighs=4)
-    df_parallel = sepal(adata, copy=True, n_jobs=2, max_neighs=4)
+    prev_threads = numba.get_num_threads()
+    try:
+        numba.set_num_threads(1)
+        sepal(adata, max_neighs=4)
+    finally:
+        numba.set_num_threads(prev_threads)
+    df_parallel = sepal(adata, copy=True, max_neighs=4)
 
     idx_df = df_parallel.index.values
     idx_adata = adata[:, adata.var.highly_variable.values].var_names.values
