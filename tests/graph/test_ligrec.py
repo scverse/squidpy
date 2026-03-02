@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Mapping, Sequence
 from itertools import product
-from time import time
+
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -313,39 +313,6 @@ class TestValidBehavior:
         assert not np.allclose(r3["pvalues"], r1["pvalues"])
         assert not np.allclose(r3["pvalues"], r2["pvalues"])
 
-    def test_reproducibility_numba_parallel_off(self, adata: AnnData, interactions: Interactions_t):
-        t1 = time()
-        r1 = ligrec(
-            adata,
-            _CK,
-            interactions=interactions,
-            n_perms=25,
-            copy=True,
-            show_progress_bar=False,
-            seed=42,
-            numba_parallel=False,
-        )
-        t1 = time() - t1
-
-        t2 = time()
-        r2 = ligrec(
-            adata,
-            _CK,
-            interactions=interactions,
-            n_perms=25,
-            copy=True,
-            show_progress_bar=False,
-            seed=42,
-            numba_parallel=True,
-        )
-        t2 = time() - t2
-
-        assert r1 is not r2
-        # for such a small data, overhead from parallelization is too high
-        assert t1 <= t2, (t1, t2)
-        np.testing.assert_allclose(r1["means"], r2["means"])
-        np.testing.assert_allclose(r1["pvalues"], r2["pvalues"])
-
     def test_paul15_correct_means(self, paul15: AnnData, paul15_means: pd.DataFrame):
         res = ligrec(
             paul15,
@@ -437,7 +404,6 @@ class TestValidBehavior:
             copy=True,
             show_progress_bar=False,
             seed=42,
-            numba_parallel=False,
         )
 
         assert len(res["pvalues"]) == len(expected)
