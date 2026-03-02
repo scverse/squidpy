@@ -147,7 +147,7 @@ def spatial_neighbors(
         adata=adata,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
-        spatial_key=spatial_key
+        spatial_key=spatial_key,
     )
 
     _assert_positive(n_rings, name="n_rings")
@@ -450,6 +450,7 @@ def _resolve_sdata(
         adata = adata.tables[table_key]
         library_key = region_key
         return adata, library_key
+
 
 @njit
 def _csr_bilateral_diag_scale_helper(

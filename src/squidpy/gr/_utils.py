@@ -22,7 +22,6 @@ from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, _unique_order_preserving
 
-
 _TABLE_KEY_DOC = """    table_key
         Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
         Only used if ``adata`` is a :class:`spatialdata.SpatialData`."""
@@ -64,8 +63,7 @@ def extract_table_if_spatialdata(fn: Callable[..., Any]) -> Callable[..., Any]:
         if isinstance(adata, SpatialData):
             if table_key not in adata.tables:
                 raise ValueError(
-                    f"Table {table_key!r} not found in SpatialData. "
-                    f"Available tables: {list(adata.tables.keys())}"
+                    f"Table {table_key!r} not found in SpatialData. Available tables: {list(adata.tables.keys())}"
                 )
             bound.arguments["adata"] = adata.tables[table_key]
 
