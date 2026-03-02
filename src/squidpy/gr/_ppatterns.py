@@ -30,6 +30,7 @@ from squidpy.gr._utils import (
     _assert_positive,
     _assert_spatial_basis,
     _save_data,
+    extract_table_if_spatialdata,
 )
 
 __all__ = ["spatial_autocorr", "co_occurrence"]
@@ -45,6 +46,7 @@ bl = nt.boolean
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
+@extract_table_if_spatialdata
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),
@@ -128,8 +130,6 @@ def spatial_autocorr(
         - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe, if ``mode = {sp.MORAN.s!r}``.
         - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
     _assert_connectivity_key(adata, connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
@@ -342,6 +342,7 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 
 @d.dedent
+@extract_table_if_spatialdata
 def co_occurrence(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -381,9 +382,6 @@ def co_occurrence(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
           computed at ``interval``.
     """
-
-    if isinstance(adata, SpatialData):
-        adata = adata.table
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
 

@@ -9,12 +9,13 @@ from scanpy import logging as logg
 from spatialdata import SpatialData
 
 from squidpy._docs import d
-from squidpy.gr._utils import _save_data
+from squidpy.gr._utils import _save_data, extract_table_if_spatialdata
 
 __all__ = ["sliding_window"]
 
 
 @d.dedent
+@extract_table_if_spatialdata
 def sliding_window(
     adata: AnnData | SpatialData,
     library_key: str | None = None,
@@ -54,9 +55,6 @@ def sliding_window(
     """
     if overlap < 0:
         raise ValueError("Overlap must be non-negative.")
-
-    if isinstance(adata, SpatialData):
-        adata = adata.table
 
     # we don't want to modify the original adata in case of copy=True
     if copy:
