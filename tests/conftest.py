@@ -240,15 +240,6 @@ def cont_dot() -> ImageContainer:
 
 
 @pytest.fixture()
-def napari_cont() -> ImageContainer:
-    return ImageContainer(
-        "tests/_data/test_img.jpg",
-        layer="V1_Adult_Mouse_Brain",
-        library_id="V1_Adult_Mouse_Brain",
-    )
-
-
-@pytest.fixture()
 def interactions(adata: AnnData) -> tuple[Sequence[str], Sequence[str]]:
     return tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))  # type: ignore
 
@@ -266,13 +257,6 @@ def complexes(adata: AnnData) -> Sequence[tuple[str, str]]:
 
 
 @pytest.fixture(scope="session")
-def ligrec_no_numba() -> Mapping[str, pd.DataFrame]:
-    with open("tests/_data/ligrec_no_numba.pickle", "rb") as fin:
-        data = pickle.load(fin)
-        return {"means": data[0], "pvalues": data[1], "metadata": data[2]}
-
-
-@pytest.fixture(scope="session")
 def ligrec_result() -> Mapping[str, pd.DataFrame]:
     adata = _adata.copy()
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
@@ -281,8 +265,6 @@ def ligrec_result() -> Mapping[str, pd.DataFrame]:
         "leiden",
         interactions=interactions,
         n_perms=25,
-        n_jobs=1,
-        show_progress_bar=False,
         copy=True,
         seed=0,
     )
@@ -430,30 +412,11 @@ class PlotTester(ABC):
         plt.close()
 
         if tolerance is None:
-            # see https://github.com/scverse/squidpy/pull/302
-            tolerance = 2 * TOL if "Napari" in str(basename) else TOL
+            tolerance = TOL
 
         res = compare_images(str(EXPECTED / f"{basename}.png"), str(out_path), tolerance)
 
         assert res is None, res
-
-
-def pytest_addoption(parser):
-    parser.addoption("--test-napari", action="store_true", help="Test interactive image view")
-
-
-def pytest_collection_modifyitems(config, items):
-    if config.getoption("--test-napari"):
-        return
-    skip_slow = pytest.mark.skip(reason="Need --test-napari option to test interactive image view")
-    for item in items:
-        if "qt" in item.keywords:
-            item.add_marker(skip_slow)
-
-
-@pytest.fixture(scope="session")
-def _test_napari(pytestconfig):
-    _ = pytestconfig.getoption("--test-napari", skip=True)
 
 
 @pytest.fixture()
