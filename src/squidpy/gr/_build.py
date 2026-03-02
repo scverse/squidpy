@@ -142,54 +142,13 @@ def spatial_neighbors(
         - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - the spatial distances.
         - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - :class:`dict` containing parameters.
     """
-    if isinstance(adata, SpatialData):
-        assert elements_to_coordinate_systems is not None, (
-            "Since `adata` is a :class:`spatialdata.SpatialData`, `elements_to_coordinate_systems` must not be `None`."
-        )
-        assert table_key is not None, (
-            "Since `adata` is a :class:`spatialdata.SpatialData`, `table_key` must not be `None`."
-        )
-        elements, table = match_element_to_table(adata, list(elements_to_coordinate_systems), table_key)
-        assert table.obs_names.equals(adata.tables[table_key].obs_names), (
-            "The spatialdata table must annotate all elements keys. Some elements are missing, please check the `elements_to_coordinate_systems` dictionary."
-        )
-        regions, region_key, instance_key = get_table_keys(adata.tables[table_key])
-        regions = [regions] if isinstance(regions, str) else regions
-        ordered_regions_in_table = adata.tables[table_key].obs[region_key].unique()
 
-        # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
-        remove_centroids = {}
-        elem_instances = []
-        for e in regions:
-            schema = get_model(elements[e])
-            element_instances = get_element_instances(elements[e]).to_series()
-            if np.isin(0, element_instances.values) and (schema in (Labels2DModel, Labels3DModel)):
-                element_instances = element_instances.drop(index=0)
-                remove_centroids[e] = True
-            else:
-                remove_centroids[e] = False
-            elem_instances.append(element_instances)
-
-        element_instances = pd.concat(elem_instances)
-        if (not np.all(element_instances.values == adata.tables[table_key].obs[instance_key].values)) or (
-            not np.all(ordered_regions_in_table == regions)
-        ):
-            raise ValueError(
-                "The spatialdata table must annotate all elements keys. Some elements are missing or not ordered correctly, please check the `elements_to_coordinate_systems` dictionary."
-            )
-        centroids = []
-        for region_ in ordered_regions_in_table:
-            cs = elements_to_coordinate_systems[region_]
-            centroid = get_centroids(adata[region_], coordinate_system=cs)[["x", "y"]].compute()
-
-            # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
-            if remove_centroids[region_]:
-                centroid = centroid[1:].copy()
-            centroids.append(centroid)
-
-        adata.tables[table_key].obsm[spatial_key] = np.concatenate(centroids)
-        adata = adata.tables[table_key]
-        library_key = region_key
+    adata, library_key = _resolve_sdata(
+        adata=adata,
+        elements_to_coordinate_systems=elements_to_coordinate_systems,
+        table_key=table_key,
+        spatial_key=spatial_key
+    )
 
     _assert_positive(n_rings, name="n_rings")
     _assert_positive(n_neighs, name="n_neighs")
@@ -435,6 +394,62 @@ def _build_connectivity(
 
     return Adj
 
+
+def _resolve_sdata(
+    adata: AnnData | SpatialData,
+    elements_to_coordinate_systems: dict[str, str],
+    table_key: str = "table",
+    spatial_key: str = Key.obsm.spatial,
+) -> tuple[AnnData, str | None]:
+    if isinstance(adata, SpatialData):
+        assert elements_to_coordinate_systems is not None, (
+            "Since `adata` is a :class:`spatialdata.SpatialData`, `elements_to_coordinate_systems` must not be `None`."
+        )
+        assert table_key is not None, (
+            "Since `adata` is a :class:`spatialdata.SpatialData`, `table_key` must not be `None`."
+        )
+        elements, table = match_element_to_table(adata, list(elements_to_coordinate_systems), table_key)
+        assert table.obs_names.equals(adata.tables[table_key].obs_names), (
+            "The spatialdata table must annotate all elements keys. Some elements are missing, please check the `elements_to_coordinate_systems` dictionary."
+        )
+        regions, region_key, instance_key = get_table_keys(adata.tables[table_key])
+        regions = [regions] if isinstance(regions, str) else regions
+        ordered_regions_in_table = adata.tables[table_key].obs[region_key].unique()
+
+        # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
+        remove_centroids = {}
+        elem_instances = []
+        for e in regions:
+            schema = get_model(elements[e])
+            element_instances = get_element_instances(elements[e]).to_series()
+            if np.isin(0, element_instances.values) and (schema in (Labels2DModel, Labels3DModel)):
+                element_instances = element_instances.drop(index=0)
+                remove_centroids[e] = True
+            else:
+                remove_centroids[e] = False
+            elem_instances.append(element_instances)
+
+        element_instances = pd.concat(elem_instances)
+        if (not np.all(element_instances.values == adata.tables[table_key].obs[instance_key].values)) or (
+            not np.all(ordered_regions_in_table == regions)
+        ):
+            raise ValueError(
+                "The spatialdata table must annotate all elements keys. Some elements are missing or not ordered correctly, please check the `elements_to_coordinate_systems` dictionary."
+            )
+        centroids = []
+        for region_ in ordered_regions_in_table:
+            cs = elements_to_coordinate_systems[region_]
+            centroid = get_centroids(adata[region_], coordinate_system=cs)[["x", "y"]].compute()
+
+            # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
+            if remove_centroids[region_]:
+                centroid = centroid[1:].copy()
+            centroids.append(centroid)
+
+        adata.tables[table_key].obsm[spatial_key] = np.concatenate(centroids)
+        adata = adata.tables[table_key]
+        library_key = region_key
+        return adata, library_key
 
 @njit
 def _csr_bilateral_diag_scale_helper(
