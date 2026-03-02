@@ -265,6 +265,8 @@ def ligrec_result() -> Mapping[str, pd.DataFrame]:
         "leiden",
         interactions=interactions,
         n_perms=25,
+        n_jobs=1,
+        show_progress_bar=False,
         copy=True,
         seed=0,
     )
