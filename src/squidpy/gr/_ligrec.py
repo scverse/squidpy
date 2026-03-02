@@ -804,7 +804,7 @@ def _analysis_helper(
     interactions: NDArrayA,
     interaction_clusters: NDArrayA,
     clustering: NDArrayA,
-    root_seed: int | None = None,
+    root_seed: int,
     numba_parallel: bool | None = None,
     queue: SigQueue | None = None,
 ) -> TempResult:
@@ -814,7 +814,7 @@ def _analysis_helper(
     Parameters
     ----------
     perms
-        Permutation indices. Used as worker ID for deriving per-worker generators.
+        Permutation indices. Only used to differentiate workers/permutations.
     data
         Array of shape `(n_cells, n_genes)`.
     mean
@@ -829,7 +829,7 @@ def _analysis_helper(
     clustering
         Array of shape `(n_cells,)` containing the original clustering.
     root_seed
-        Integer seed derived from the parent generator. Each worker creates
+        Integer seed derived from the root generator. Each worker creates
         an independent stream via ``default_rng([perms[0], root_seed])``.
     numba_parallel
         Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
@@ -845,10 +845,7 @@ def _analysis_helper(
         - `'pvalues'` - array of shape `(n_interactions, n_interaction_clusters)`  containing `np.sum(T0 > T)`
           where `T0` is the test statistic under null hypothesis and `T` is the true test statistic.
     """
-    if root_seed is None:
-        rng = np.random.default_rng()
-    else:
-        rng = np.random.default_rng([perms[0], root_seed])
+    rng = np.random.default_rng([perms[0], root_seed])
 
     clustering = clustering.copy()
     n_cls = mean.shape[1]
