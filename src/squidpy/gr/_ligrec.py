@@ -706,9 +706,9 @@ def _analysis(
     data: pd.DataFrame,
     interactions: NDArrayA,
     interaction_clusters: NDArrayA,
+    rng: np.random.Generator,
     threshold: float = 0.1,
     n_perms: int = 1000,
-    rng: np.random.Generator | None = None,
     n_jobs: int = 1,
     numba_parallel: bool | None = None,
     **kwargs: Any,
@@ -775,8 +775,6 @@ def _analysis(
 
     # (n_cells, n_genes)
     data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
-    if rng is None:
-        rng = np.random.default_rng()
     root_seed = rng.integers(np.iinfo(np.int64).max)
     # all 3 should be C contiguous
     return parallelize(  # type: ignore[no-any-return]
