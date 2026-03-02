@@ -649,9 +649,9 @@ def _analysis(
     data: pd.DataFrame,
     interactions: NDArrayA,
     interaction_clusters: NDArrayA,
+    rng: np.random.Generator,
     threshold: float = 0.1,
     n_perms: int = 1000,
-    rng: np.random.Generator | None = None,
     n_jobs: int = 1,
     show_progress_bar: bool = True,
 ) -> TempResult:
@@ -698,27 +698,79 @@ def _analysis(
         lambda c: ((c > 0).astype(np.int64).sum() / len(c)) >= threshold
     ).values  # (n_clusters, n_genes)
 
-    counts = groups.size().values.astype(np.float64)
-    inv_counts = 1.0 / np.maximum(counts, 1)
+    # (n_cells, n_genes)
+    data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
+    root_seed = rng.integers(np.iinfo(np.int64).max)
+    # all 3 should be C contiguous
+    return parallelize(  # type: ignore[no-any-return]
+        _analysis_helper,
+        np.arange(n_perms, dtype=np.int32).tolist(),
+        n_jobs=n_jobs,
+        unit="permutation",
+        extractor=extractor,
+        **kwargs,
+    )(
+        data,
+        mean,
+        mask,
+        interactions,
+        interaction_clusters=interaction_clusters,
+        clustering=clustering,
+        root_seed=root_seed,
+        numba_parallel=numba_parallel,
+    )
 
     data_arr = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
 
-    interactions = np.array(interactions, dtype=np.int32)
-    interaction_clusters = np.array(interaction_clusters, dtype=np.int32)
-    rec = interactions[:, 0]
-    lig = interactions[:, 1]
-    c1 = interaction_clusters[:, 0]
-    c2 = interaction_clusters[:, 1]
+def _analysis_helper(
+    perms: NDArrayA,
+    data: NDArrayA,
+    mean: NDArrayA,
+    mask: NDArrayA,
+    interactions: NDArrayA,
+    interaction_clusters: NDArrayA,
+    clustering: NDArrayA,
+    root_seed: int,
+    numba_parallel: bool | None = None,
+    queue: SigQueue | None = None,
+) -> TempResult:
+    """
+    Run the results of mean, percent and shuffled analysis.
 
-    obs_score = mean_obs[c1, :][:, rec].T + mean_obs[c2, :][:, lig].T
-    nonzero = (mean_obs[c1, :][:, rec].T > 0) & (mean_obs[c2, :][:, lig].T > 0)
-    valid = nonzero & mask[c1, :][:, rec].T & mask[c2, :][:, lig].T
-    res_means = np.where(nonzero, obs_score / 2.0, 0.0)
+    Parameters
+    ----------
+    perms
+        Permutation indices. Only used to differentiate workers/permutations.
+    data
+        Array of shape `(n_cells, n_genes)`.
+    mean
+        Array of shape `(n_genes, n_clusters)` representing mean expression per cluster.
+    mask
+        Array of shape `(n_genes, n_clusters)` containing `True` if the a gene within a cluster is
+        expressed at least in ``threshold`` percentage of cells.
+    interactions
+        Array of shape `(n_interactions, 2)`.
+    interaction_clusters
+        Array of shape `(n_interaction_clusters, 2)`.
+    clustering
+        Array of shape `(n_cells,)` containing the original clustering.
+    root_seed
+        Integer seed derived from the root generator. Each worker creates
+        an independent stream via ``default_rng([perms[0], root_seed])``.
+    numba_parallel
+        Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
+    queue
+        Signalling queue to update progress bar.
 
     n_inter = len(rec)
     n_cpairs = len(c1)
 
-    root_seed = rng.integers(np.iinfo(np.int64).max)
+        - `'means'` - array of shape `(n_interactions, n_interaction_clusters)` containing the true test
+          statistic. It is `None` if ``min(perms)!=0`` so that only 1 worker calculates it.
+        - `'pvalues'` - array of shape `(n_interactions, n_interaction_clusters)`  containing `np.sum(T0 > T)`
+          where `T0` is the test statistic under null hypothesis and `T` is the true test statistic.
+    """
+    rng = np.random.default_rng([perms[0], root_seed])
 
     base_chunk, remainder = divmod(n_perms, n_jobs)
     chunk_sizes = np.full(n_jobs, base_chunk, dtype=np.int64)
@@ -748,8 +800,16 @@ def _analysis(
         list(pool.map(_worker, range(n_jobs)))
     pbar.close()
 
-    pval_counts = thread_counts.sum(axis=0)
-    pvalues = pval_counts.astype(np.float64) / n_perms
-    pvalues[~valid] = np.nan
+    for _ in perms:
+        rng.shuffle(clustering)
+        error = test(interactions, interaction_clusters, data, clustering, mean, mask, res=res)
+        if error:
+            raise ValueError("In the execution of the numba function, an unhandled case was encountered. ")
+            # This is mainly to avoid a numba warning
+            # Otherwise, the numba function wouldn't be
+            # executed in parallel
+            # See: https://github.com/scverse/squidpy/issues/994
+        if queue is not None:
+            queue.put(Signal.UPDATE)
 
     return TempResult(means=res_means, pvalues=pvalues)

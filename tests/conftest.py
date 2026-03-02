@@ -257,6 +257,12 @@ def complexes(adata: AnnData) -> Sequence[tuple[str, str]]:
 
 
 @pytest.fixture(scope="session")
+def ligrec_pvalues_reference() -> Mapping[str, pd.DataFrame]:
+    with open("tests/_data/ligrec_pvalues_reference.pickle", "rb") as fin:
+        return pickle.load(fin)
+
+
+@pytest.fixture(scope="session")
 def ligrec_result() -> Mapping[str, pd.DataFrame]:
     adata = _adata.copy()
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
