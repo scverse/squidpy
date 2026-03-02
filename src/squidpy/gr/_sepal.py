@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
 
 import numba
@@ -12,6 +13,7 @@ from scanpy import logging as logg
 from scipy.sparse import csc_matrix, csr_matrix, issparse, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData
+from tqdm.auto import tqdm
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -50,8 +52,6 @@ def sepal(
 
     **Note**: This function parallelizes the diffusion simulation across threads using numba kernels.
     The number of threads is determined by :func:`numba.get_num_threads`.
-    If the given data is sparse and the densified version is not too large,
-    consider densifying the data before calling this function for better performance.
 
     Parameters
     ----------
@@ -148,7 +148,7 @@ def sepal(
 
 
 def _diffusion_genes(
-    vals: NDArrayA,
+    vals: NDArrayA | spmatrix,
     use_hex: bool,
     n_iter: int,
     sat: NDArrayA,
@@ -161,7 +161,7 @@ def _diffusion_genes(
     show_progress_bar: bool = True,
 ) -> NDArrayA:
     """Run diffusion for each gene column, parallelised across threads."""
-    from tqdm.contrib.concurrent import thread_map
+
 
     sparse = issparse(vals)
 
@@ -183,13 +183,14 @@ def _diffusion_genes(
         )
         return dt * time_iter
 
-    scores = thread_map(
-        _process_gene,
-        range(vals.shape[1]),
-        max_workers=n_jobs,
-        unit="gene",
-        disable=not show_progress_bar,
-    )
+    gene_indices = range(vals.shape[1])
+    with ThreadPoolExecutor(max_workers=n_jobs) as pool:
+        scores = list(tqdm(
+            pool.map(_process_gene, gene_indices),
+            total=len(gene_indices),
+            unit="gene",
+            disable=not show_progress_bar,
+        ))
 
     return np.array(scores)
 
