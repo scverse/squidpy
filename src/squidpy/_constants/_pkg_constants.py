@@ -198,8 +198,18 @@ class Key:
     class obsp:
         @classmethod
         def spatial_dist(cls, value: str | None = None) -> str:
-            return f"{Key.obsm.spatial}_distances" if value is None else f"{value}_distances"
+            if value is None:
+                return f"{Key.obsm.spatial}_distances"
+            # Handle case where suffix is already present
+            if value.endswith("_distances"):
+                return value
+            return f"{value}_distances"
 
         @classmethod
         def spatial_conn(cls, value: str | None = None) -> str:
-            return f"{Key.obsm.spatial}_connectivities" if value is None else f"{value}_connectivities"
+            if value is None:
+                return f"{Key.obsm.spatial}_connectivities"
+            # Handle case where suffix is already present
+            if value.endswith("_connectivities"):
+                return value
+            return f"{value}_connectivities"
