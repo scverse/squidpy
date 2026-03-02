@@ -162,7 +162,6 @@ def _diffusion_genes(
 ) -> NDArrayA:
     """Run diffusion for each gene column, parallelised across threads."""
 
-
     sparse = issparse(vals)
 
     def _process_gene(i: int) -> float:
@@ -185,12 +184,14 @@ def _diffusion_genes(
 
     gene_indices = range(vals.shape[1])
     with ThreadPoolExecutor(max_workers=n_jobs) as pool:
-        scores = list(tqdm(
-            pool.map(_process_gene, gene_indices),
-            total=len(gene_indices),
-            unit="gene",
-            disable=not show_progress_bar,
-        ))
+        scores = list(
+            tqdm(
+                pool.map(_process_gene, gene_indices),
+                total=len(gene_indices),
+                unit="gene",
+                disable=not show_progress_bar,
+            )
+        )
 
     return np.array(scores)
 
