@@ -642,7 +642,17 @@ def ligrec(
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
-    **kwargs: Any,
+    n_perms: int = 1000,
+    seed: int | None = None,
+    clusters: Cluster_t | None = None,
+    alpha: float = 0.05,
+    numba_parallel: bool | None = None,
+    n_jobs: int | None = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
+    interactions_params: Mapping[str, Any] = MappingProxyType({}),
+    transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
+    receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
 ) -> Mapping[str, pd.DataFrame] | None:
     """
     %(PT_test.full_desc)s
@@ -664,15 +674,28 @@ def ligrec(
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)
-            .prepare(interactions, complex_policy=complex_policy, **kwargs)
+            .prepare(
+                interactions,
+                complex_policy=complex_policy,
+                interactions_params=interactions_params,
+                transmitter_params=transmitter_params,
+                receiver_params=receiver_params,
+            )
             .test(
                 cluster_key=cluster_key,
+                clusters=clusters,
+                n_perms=n_perms,
                 threshold=threshold,
+                seed=seed,
                 corr_method=corr_method,
                 corr_axis=corr_axis,
+                alpha=alpha,
                 copy=copy,
                 key_added=key_added,
-                **kwargs,
+                numba_parallel=numba_parallel,
+                n_jobs=n_jobs,
+                backend=backend,
+                show_progress_bar=show_progress_bar,
             )
         )
 
