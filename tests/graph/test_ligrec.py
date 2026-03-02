@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 from collections.abc import Mapping, Sequence
 from itertools import product
-
 from typing import TYPE_CHECKING
 
 import numpy as np
