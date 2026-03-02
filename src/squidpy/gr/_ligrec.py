@@ -722,6 +722,7 @@ def _analysis(
 
     data_arr = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
 
+
 def _analysis_helper(
     perms: NDArrayA,
     data: NDArrayA,
