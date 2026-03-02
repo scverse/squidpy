@@ -8,10 +8,6 @@ Install Squidpy by running::
 
     pip install squidpy
 
-Alternatively, to include all dependencies, such as the interactive image viewer {mod}`napari`, run::
-
-    pip install 'squidpy[interactive]'
-
 ## Conda
 
 Install Squidpy via Conda as::
@@ -23,3 +19,13 @@ Install Squidpy via Conda as::
 To install Squidpy from GitHub, run::
 
     pip install git+https://github.com/scverse/squidpy@main
+
+## Interactive visualization
+
+For interactive visualization with napari, please use [napari-spatialdata](https://github.com/scverse/napari-spatialdata).
+The original napari plugin from Squidpy has been deprecated and replaced by napari-spatialdata,
+which offers improved functionality and support for the SpatialData ecosystem.
+
+Install napari-spatialdata with::
+
+    pip install napari-spatialdata
