@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from itertools import product
+from time import time
 from typing import TYPE_CHECKING
 
-import numba
 import numpy as np
 import pandas as pd
 import pytest
@@ -167,6 +167,8 @@ class TestValidBehavior:
             n_perms=5,
             corr_axis="clusters",
             seed=42,
+            n_jobs=1,
+            show_progress_bar=False,
             copy=True,
         )
         ri = ligrec(
@@ -175,6 +177,8 @@ class TestValidBehavior:
             interactions=interactions,
             n_perms=5,
             corr_axis="interactions",
+            n_jobs=1,
+            show_progress_bar=False,
             seed=42,
             copy=True,
         )
@@ -187,7 +191,7 @@ class TestValidBehavior:
     def test_inplace_default_key(self, adata: AnnData, interactions: Interactions_t):
         key = Key.uns.ligrec(_CK)
         assert key not in adata.uns
-        res = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=False)
+        res = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=False, show_progress_bar=False)
 
         assert res is None
         assert isinstance(adata.uns[key], dict)
@@ -199,7 +203,9 @@ class TestValidBehavior:
 
     def test_inplace_key_added(self, adata: AnnData, interactions: Interactions_t):
         assert "foobar" not in adata.uns
-        res = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=False, key_added="foobar")
+        res = ligrec(
+            adata, _CK, interactions=interactions, n_perms=5, copy=False, key_added="foobar", show_progress_bar=False
+        )
 
         assert res is None
         assert isinstance(adata.uns["foobar"], dict)
@@ -211,7 +217,9 @@ class TestValidBehavior:
 
     def test_return_no_write(self, adata: AnnData, interactions: Interactions_t):
         assert "foobar" not in adata.uns
-        r = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=True, key_added="foobar")
+        r = ligrec(
+            adata, _CK, interactions=interactions, n_perms=5, copy=True, key_added="foobar", show_progress_bar=False
+        )
 
         assert "foobar" not in adata.uns
         assert len(r) == 3
@@ -227,6 +235,7 @@ class TestValidBehavior:
             interactions=interactions,
             n_perms=5,
             copy=True,
+            show_progress_bar=False,
             corr_method=fdr_method,
             threshold=0,
         )
@@ -238,7 +247,7 @@ class TestValidBehavior:
             assert np.nanmin(r["pvalues"].values) >= 0, np.nanmin(r["pvalues"].values)
 
     def test_result_correct_index(self, adata: AnnData, interactions: Interactions_t):
-        r = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=True)
+        r = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=True, show_progress_bar=False)
 
         np.testing.assert_array_equal(r["means"].index, r["pvalues"].index)
         np.testing.assert_array_equal(r["pvalues"].index, r["metadata"].index)
@@ -252,7 +261,7 @@ class TestValidBehavior:
         if TYPE_CHECKING:
             assert isinstance(interactions, pd.DataFrame)
         interactions["metadata"] = "foo"
-        r = ligrec(adata, _CK, interactions=interactions, n_perms=5, seed=2, copy=True)
+        r = ligrec(adata, _CK, interactions=interactions, n_perms=5, seed=2, copy=True, show_progress_bar=False)
 
         assert r["means"].sparse.density <= 0.15
         assert r["pvalues"].sparse.density <= 0.95
@@ -263,14 +272,17 @@ class TestValidBehavior:
         np.testing.assert_array_equal(r["metadata"].columns, ["metadata"])
         np.testing.assert_array_equal(r["metadata"]["metadata"], interactions["metadata"])
 
-    def test_reproducibility(self, adata: AnnData, interactions: Interactions_t):
+    @pytest.mark.parametrize("n_jobs", [1, 2])
+    def test_reproducibility_cores(self, adata: AnnData, interactions: Interactions_t, n_jobs: int):
         r1 = ligrec(
             adata,
             _CK,
             interactions=interactions,
             n_perms=25,
             copy=True,
+            show_progress_bar=False,
             seed=42,
+            n_jobs=n_jobs,
         )
         r2 = ligrec(
             adata,
@@ -278,7 +290,9 @@ class TestValidBehavior:
             interactions=interactions,
             n_perms=25,
             copy=True,
+            show_progress_bar=False,
             seed=42,
+            n_jobs=n_jobs,
         )
         r3 = ligrec(
             adata,
@@ -286,7 +300,9 @@ class TestValidBehavior:
             interactions=interactions,
             n_perms=25,
             copy=True,
+            show_progress_bar=False,
             seed=43,
+            n_jobs=n_jobs,
         )
 
         assert r1 is not r2
@@ -297,6 +313,39 @@ class TestValidBehavior:
         assert not np.allclose(r3["pvalues"], r1["pvalues"])
         assert not np.allclose(r3["pvalues"], r2["pvalues"])
 
+    def test_reproducibility_numba_parallel_off(self, adata: AnnData, interactions: Interactions_t):
+        t1 = time()
+        r1 = ligrec(
+            adata,
+            _CK,
+            interactions=interactions,
+            n_perms=25,
+            copy=True,
+            show_progress_bar=False,
+            seed=42,
+            numba_parallel=False,
+        )
+        t1 = time() - t1
+
+        t2 = time()
+        r2 = ligrec(
+            adata,
+            _CK,
+            interactions=interactions,
+            n_perms=25,
+            copy=True,
+            show_progress_bar=False,
+            seed=42,
+            numba_parallel=True,
+        )
+        t2 = time() - t2
+
+        assert r1 is not r2
+        # for such a small data, overhead from parallelization is too high
+        assert t1 <= t2, (t1, t2)
+        np.testing.assert_allclose(r1["means"], r2["means"])
+        np.testing.assert_allclose(r1["pvalues"], r2["pvalues"])
+
     def test_paul15_correct_means(self, paul15: AnnData, paul15_means: pd.DataFrame):
         res = ligrec(
             paul15,
@@ -304,29 +353,31 @@ class TestValidBehavior:
             interactions=list(paul15_means.index.to_list()),
             corr_method=None,
             copy=True,
+            show_progress_bar=False,
             threshold=0.01,
             seed=0,
             n_perms=1,
+            n_jobs=1,
         )
 
         np.testing.assert_array_equal(res["means"].index, paul15_means.index)
         np.testing.assert_array_equal(res["means"].columns, paul15_means.columns)
         np.testing.assert_allclose(res["means"].values, paul15_means.values)
 
-    def test_reproducibility_single_thread(self, adata: AnnData, interactions: Interactions_t):
+    def test_reproducibility_numba_off(
+        self, adata: AnnData, interactions: Interactions_t, ligrec_no_numba: Mapping[str, pd.DataFrame]
+    ):
+        r = ligrec(
+            adata, _CK, interactions=interactions, n_perms=5, copy=True, show_progress_bar=False, seed=42, n_jobs=1
+        )
+        np.testing.assert_array_equal(r["means"].index, ligrec_no_numba["means"].index)
+        np.testing.assert_array_equal(r["means"].columns, ligrec_no_numba["means"].columns)
+        np.testing.assert_array_equal(r["pvalues"].index, ligrec_no_numba["pvalues"].index)
+        np.testing.assert_array_equal(r["pvalues"].columns, ligrec_no_numba["pvalues"].columns)
 
-        old_threads = numba.get_num_threads()
-        try:
-            numba.set_num_threads(1)
-            r1 = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=True, seed=42)
-        finally:
-            numba.set_num_threads(old_threads)
-
-        r2 = ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=True, seed=42)
-
-        np.testing.assert_allclose(r1["means"], r2["means"])
-        np.testing.assert_allclose(r1["pvalues"], r2["pvalues"])
-        np.testing.assert_array_equal(np.where(np.isnan(r1["pvalues"])), np.where(np.isnan(r2["pvalues"])))
+        np.testing.assert_allclose(r["means"], ligrec_no_numba["means"])
+        np.testing.assert_allclose(r["pvalues"], ligrec_no_numba["pvalues"])
+        np.testing.assert_array_equal(np.where(np.isnan(r["pvalues"])), np.where(np.isnan(ligrec_no_numba["pvalues"])))
 
     def test_pvalues_reference(
         self, adata: AnnData, interactions: Interactions_t, ligrec_pvalues_reference: Mapping[str, pd.DataFrame]
@@ -355,8 +406,10 @@ class TestValidBehavior:
             interactions=interactions,
             n_perms=5,
             copy=False,
+            show_progress_bar=False,
             complex_policy="all",
             key_added="ligrec_test",
+            n_jobs=2,
         )
 
         err = capsys.readouterr().err
@@ -366,7 +419,7 @@ class TestValidBehavior:
         assert "DEBUG: Creating all gene combinations within complexes" in err
         assert "DEBUG: Removing interactions with no genes in the data" in err
         assert "DEBUG: Removing genes not in any interaction" in err
-        assert "Running `5` permutations on `25` interactions and `25` cluster combinations" in err
+        assert "Running `5` permutations on `25` interactions and `25` cluster combinations using `2` core(s)" in err
         assert "Adding `adata.uns['ligrec_test']`" in err
 
     def test_non_uniqueness(self, adata: AnnData, interactions: Interactions_t):
@@ -382,7 +435,9 @@ class TestValidBehavior:
             interactions=interactions,
             n_perms=1,
             copy=True,
+            show_progress_bar=False,
             seed=42,
+            numba_parallel=False,
         )
 
         assert len(res["pvalues"]) == len(expected)
@@ -390,7 +445,7 @@ class TestValidBehavior:
 
     @pytest.mark.xfail(reason="AnnData cannot handle writing MultiIndex")
     def test_writeable(self, adata: AnnData, interactions: Interactions_t, tmpdir):
-        ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=False, key_added="foo")
+        ligrec(adata, _CK, interactions=interactions, n_perms=5, copy=False, show_progress_bar=False, key_added="foo")
         res = adata.uns["foo"]
 
         sc.write(tmpdir / "ligrec.h5ad", adata)
@@ -410,6 +465,7 @@ class TestValidBehavior:
             n_perms=5,
             use_raw=use_raw,
             copy=True,
+            show_progress_bar=False,
             gene_symbols="gene_ids",
         )
 

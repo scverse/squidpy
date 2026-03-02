@@ -257,6 +257,13 @@ def complexes(adata: AnnData) -> Sequence[tuple[str, str]]:
 
 
 @pytest.fixture(scope="session")
+def ligrec_no_numba() -> Mapping[str, pd.DataFrame]:
+    with open("tests/_data/ligrec_no_numba.pickle", "rb") as fin:
+        data = pickle.load(fin)
+        return {"means": data[0], "pvalues": data[1], "metadata": data[2]}
+
+
+@pytest.fixture(scope="session")
 def ligrec_pvalues_reference() -> Mapping[str, pd.DataFrame]:
     with open("tests/_data/ligrec_pvalues_reference.pickle", "rb") as fin:
         return pickle.load(fin)
