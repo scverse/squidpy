@@ -21,6 +21,7 @@ from squidpy.gr._utils import (
     _assert_spatial_basis,
     _extract_expression,
     _save_data,
+    extract_table_if_spatialdata,
 )
 
 __all__ = ["sepal"]
@@ -28,6 +29,7 @@ __all__ = ["sepal"]
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
+@extract_table_if_spatialdata
 def sepal(
     adata: AnnData | SpatialData,
     max_neighs: Literal[4, 6],
@@ -93,8 +95,6 @@ def sepal(
     If some genes in :attr:`anndata.AnnData.uns` ``['sepal_score']`` are `NaN`,
     consider re-running the function with increased ``n_iter``.
     """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
     _assert_connectivity_key(adata, connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
     if max_neighs not in (4, 6):

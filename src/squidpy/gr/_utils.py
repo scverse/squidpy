@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Hashable, Iterable, Sequence
+import functools
+import inspect
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from contextlib import contextmanager
 from typing import Any
 
@@ -14,10 +16,77 @@ from pandas import CategoricalDtype
 from pandas.api.types import infer_dtype
 from scanpy import logging as logg
 from scipy.sparse import csc_matrix, csr_matrix, spmatrix
+from spatialdata import SpatialData
 
 from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, _unique_order_preserving
+
+_TABLE_KEY_DOC = """    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used if ``adata`` is a :class:`spatialdata.SpatialData`."""
+
+
+def extract_table_if_spatialdata(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Decorator that resolves a :class:`~spatialdata.SpatialData` to an :class:`~anndata.AnnData`.
+
+    Adds a ``table_key`` parameter (default ``"table"``) to the wrapped
+    function's signature **and** appends its documentation to the docstring.
+    When the first positional argument (``adata``) is a
+    :class:`~spatialdata.SpatialData`, the table is looked up via
+    ``adata.tables[table_key]`` and passed through in its place.
+    """
+    sig = inspect.signature(fn)
+
+    table_param = inspect.Parameter(
+        "table_key",
+        inspect.Parameter.KEYWORD_ONLY,
+        default="table",
+    )
+    params = list(sig.parameters.values())
+    kw_only_start = next(
+        (i for i, p in enumerate(params) if p.kind == inspect.Parameter.KEYWORD_ONLY),
+        len(params),
+    )
+    var_kw = [i for i, p in enumerate(params) if p.kind == inspect.Parameter.VAR_KEYWORD]
+    insert_pos = var_kw[0] if var_kw else kw_only_start
+    params.insert(insert_pos, table_param)
+    new_sig = sig.replace(parameters=params)
+
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        bound = new_sig.bind(*args, **kwargs)
+        bound.apply_defaults()
+        table_key: str = bound.arguments.pop("table_key")
+
+        adata = bound.arguments.get("adata")
+        if isinstance(adata, SpatialData):
+            if table_key not in adata.tables:
+                raise ValueError(
+                    f"Table {table_key!r} not found in SpatialData. Available tables: {list(adata.tables.keys())}"
+                )
+            bound.arguments["adata"] = adata.tables[table_key]
+
+        return fn(*bound.args, **bound.kwargs)
+
+    wrapper.__signature__ = new_sig  # type: ignore[attr-defined]
+
+    if wrapper.__doc__ is not None:
+        # Insert table_key docs before the "Returns" / "Notes" / "References"
+        # section, or append at the end of Parameters if none found.
+        doc = wrapper.__doc__
+        for marker in ("Returns\n", "Notes\n", "References\n"):
+            idx = doc.find(marker)
+            if idx != -1:
+                # Back up past the "    -------\n" underline to the section header
+                header_start = doc.rfind("\n", 0, idx - 1)
+                doc = doc[:header_start] + "\n" + _TABLE_KEY_DOC + "\n" + doc[header_start:]
+                break
+        else:
+            doc = doc.rstrip() + "\n" + _TABLE_KEY_DOC + "\n"
+        wrapper.__doc__ = doc
+
+    return wrapper
 
 
 def _check_tuple_needles(
