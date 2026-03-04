@@ -409,6 +409,7 @@ class PermutationTestABC(ABC):
         # much faster than applymap (tested on 1M interactions)
         interactions_ = np.vectorize(lambda g: gene_mapper[g])(interactions.values)
 
+        rng = np.random.default_rng(seed)
         n_jobs = _get_n_cores(kwargs.pop("n_jobs", None))
         start = logg.info(
             f"Running `{n_perms}` permutations on `{len(interactions)}` interactions "
@@ -420,7 +421,7 @@ class PermutationTestABC(ABC):
             clusters_,
             threshold=threshold,
             n_perms=n_perms,
-            seed=seed,
+            rng=rng,
             n_jobs=n_jobs,
             numba_parallel=numba_parallel,
             **kwargs,
@@ -642,7 +643,17 @@ def ligrec(
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
-    **kwargs: Any,
+    n_perms: int = 1000,
+    seed: int | None = None,
+    clusters: Cluster_t | None = None,
+    alpha: float = 0.05,
+    numba_parallel: bool | None = None,
+    n_jobs: int | None = None,
+    backend: str = "loky",
+    show_progress_bar: bool = True,
+    interactions_params: Mapping[str, Any] = MappingProxyType({}),
+    transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
+    receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
 ) -> Mapping[str, pd.DataFrame] | None:
     """
     %(PT_test.full_desc)s
@@ -664,15 +675,28 @@ def ligrec(
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)
-            .prepare(interactions, complex_policy=complex_policy, **kwargs)
+            .prepare(
+                interactions,
+                complex_policy=complex_policy,
+                interactions_params=interactions_params,
+                transmitter_params=transmitter_params,
+                receiver_params=receiver_params,
+            )
             .test(
                 cluster_key=cluster_key,
+                clusters=clusters,
+                n_perms=n_perms,
                 threshold=threshold,
+                seed=seed,
                 corr_method=corr_method,
                 corr_axis=corr_axis,
+                alpha=alpha,
                 copy=copy,
                 key_added=key_added,
-                **kwargs,
+                numba_parallel=numba_parallel,
+                n_jobs=n_jobs,
+                backend=backend,
+                show_progress_bar=show_progress_bar,
             )
         )
 
@@ -682,9 +706,9 @@ def _analysis(
     data: pd.DataFrame,
     interactions: NDArrayA,
     interaction_clusters: NDArrayA,
+    rng: np.random.Generator,
     threshold: float = 0.1,
     n_perms: int = 1000,
-    seed: int | None = None,
     n_jobs: int = 1,
     numba_parallel: bool | None = None,
     **kwargs: Any,
@@ -705,7 +729,8 @@ def _analysis(
     threshold
         Percentage threshold for removing lowly expressed genes in clusters.
     %(n_perms)s
-    %(seed)s
+    rng
+        NumPy :class:`numpy.random.Generator` for reproducibility.
     n_jobs
         Number of parallel jobs to launch.
     numba_parallel
@@ -750,6 +775,7 @@ def _analysis(
 
     # (n_cells, n_genes)
     data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
+    root_seed = rng.integers(np.iinfo(np.int64).max)
     # all 3 should be C contiguous
     return parallelize(  # type: ignore[no-any-return]
         _analysis_helper,
@@ -765,7 +791,7 @@ def _analysis(
         interactions,
         interaction_clusters=interaction_clusters,
         clustering=clustering,
-        seed=seed,
+        root_seed=root_seed,
         numba_parallel=numba_parallel,
     )
 
@@ -778,7 +804,7 @@ def _analysis_helper(
     interactions: NDArrayA,
     interaction_clusters: NDArrayA,
     clustering: NDArrayA,
-    seed: int | None = None,
+    root_seed: int | None = None,
     numba_parallel: bool | None = None,
     queue: SigQueue | None = None,
 ) -> TempResult:
@@ -788,7 +814,7 @@ def _analysis_helper(
     Parameters
     ----------
     perms
-        Permutation indices. Only used to set the ``seed``.
+        Permutation indices. Used as worker ID for deriving per-worker generators.
     data
         Array of shape `(n_cells, n_genes)`.
     mean
@@ -802,8 +828,9 @@ def _analysis_helper(
         Array of shape `(n_interaction_clusters, 2)`.
     clustering
         Array of shape `(n_cells,)` containing the original clustering.
-    seed
-        Random seed for :class:`numpy.random.RandomState`.
+    root_seed
+        Integer seed derived from the parent generator. Each worker creates
+        an independent stream via ``default_rng([perms[0], root_seed])``.
     numba_parallel
         Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
     queue
@@ -818,7 +845,10 @@ def _analysis_helper(
         - `'pvalues'` - array of shape `(n_interactions, n_interaction_clusters)`  containing `np.sum(T0 > T)`
           where `T0` is the test statistic under null hypothesis and `T` is the true test statistic.
     """
-    rs = np.random.RandomState(None if seed is None else perms[0] + seed)
+    if root_seed is None:
+        rng = np.random.default_rng()
+    else:
+        rng = np.random.default_rng([perms[0], root_seed])
 
     clustering = clustering.copy()
     n_cls = mean.shape[1]
@@ -847,7 +877,7 @@ def _analysis_helper(
         test = _test
 
     for _ in perms:
-        rs.shuffle(clustering)
+        rng.shuffle(clustering)
         error = test(interactions, interaction_clusters, data, clustering, mean, mask, res=res)
         if error:
             raise ValueError("In the execution of the numba function, an unhandled case was encountered. ")
