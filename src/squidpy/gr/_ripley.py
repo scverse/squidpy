@@ -39,6 +39,7 @@ def ripley(
     n_steps: int = 50,
     seed: int | None = None,
     copy: bool = False,
+    table_key: str = "table",
 ) -> dict[str, pd.DataFrame | NDArrayA]:
     r"""
     Calculate various Ripley's statistics for point processes.
@@ -93,6 +94,9 @@ def ripley(
         Number of steps for the support.
     %(seed)s
     %(copy)s
+    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used if ``adata`` is a :class:`spatialdata.SpatialData`.
 
     Returns
     -------
@@ -105,7 +109,11 @@ def ripley(
     or :cite:`Baddeley2015-lm`.
     """
     if isinstance(adata, SpatialData):
-        adata = adata.table
+        if table_key not in adata.tables:
+            raise ValueError(
+                f"Table '{table_key}' not found in SpatialData. Available tables: {list(adata.tables.keys())}"
+            )
+        adata = adata.tables[table_key]
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
     coordinates = adata.obsm[spatial_key]

@@ -43,6 +43,7 @@ def sepal(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    table_key: str = "table",
 ) -> pd.DataFrame | None:
     """
     Identify spatially variable genes with *Sepal*.
@@ -79,6 +80,9 @@ def sepal(
         Whether to access :attr:`anndata.AnnData.raw`.
     %(copy)s
     %(parallelize)s
+    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used if ``adata`` is a :class:`spatialdata.SpatialData`.
 
     Returns
     -------
@@ -94,7 +98,11 @@ def sepal(
     consider re-running the function with increased ``n_iter``.
     """
     if isinstance(adata, SpatialData):
-        adata = adata.table
+        if table_key not in adata.tables:
+            raise ValueError(
+                f"Table '{table_key}' not found in SpatialData. Available tables: {list(adata.tables.keys())}"
+            )
+        adata = adata.tables[table_key]
     _assert_connectivity_key(adata, connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
     if max_neighs not in (4, 6):
