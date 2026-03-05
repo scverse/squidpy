@@ -13,6 +13,9 @@ open = "python3 -m webbrowser -t docs/_build/html/index.html"
 clean = "git clean -fdX -- {args:docs}"
 
 [envs.data]
+extra-dependencies = [
+    "setuptools",
+]
 [envs.data.scripts]
 download = "python ./.scripts/ci/download_data.py {args}"
 
