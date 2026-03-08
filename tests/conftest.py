@@ -162,7 +162,8 @@ def adata_squaregrid() -> AnnData:
 def paul15() -> AnnData:
     # session because we don't modify this dataset
     adata = sc.datasets.paul15()
-    sc.pp.normalize_per_cell(adata)
+    sc.pp.filter_cells(adata, min_counts=1)
+    sc.pp.normalize_total(adata)
     adata.raw = adata.copy()
 
     return adata
@@ -236,15 +237,6 @@ def cont_dot() -> ImageContainer:
     img_orig = np.zeros((ys, xs, 10), dtype=np.uint8)
     img_orig[20, 50, :] = range(10, 20)  # put a dot at y 20, x 50
     return ImageContainer(img_orig, layer="image_0")
-
-
-@pytest.fixture()
-def napari_cont() -> ImageContainer:
-    return ImageContainer(
-        "tests/_data/test_img.jpg",
-        layer="V1_Adult_Mouse_Brain",
-        library_id="V1_Adult_Mouse_Brain",
-    )
 
 
 @pytest.fixture()
@@ -429,30 +421,11 @@ class PlotTester(ABC):
         plt.close()
 
         if tolerance is None:
-            # see https://github.com/scverse/squidpy/pull/302
-            tolerance = 2 * TOL if "Napari" in str(basename) else TOL
+            tolerance = TOL
 
         res = compare_images(str(EXPECTED / f"{basename}.png"), str(out_path), tolerance)
 
         assert res is None, res
-
-
-def pytest_addoption(parser):
-    parser.addoption("--test-napari", action="store_true", help="Test interactive image view")
-
-
-def pytest_collection_modifyitems(config, items):
-    if config.getoption("--test-napari"):
-        return
-    skip_slow = pytest.mark.skip(reason="Need --test-napari option to test interactive image view")
-    for item in items:
-        if "qt" in item.keywords:
-            item.add_marker(skip_slow)
-
-
-@pytest.fixture(scope="session")
-def _test_napari(pytestconfig):
-    _ = pytestconfig.getoption("--test-napari", skip=True)
 
 
 @pytest.fixture()
