@@ -8,17 +8,19 @@ from squidpy.tl import _calculate_window_corners, sliding_window
 
 class TestSlidingWindow:
     @pytest.mark.parametrize(
-        "windowsize_overlap_drop",
+        "windowsize_overlap_partial",
         [
             (300, 0, None),
             (300, 50, None),
             (300, 50, "drop"),
+            (300, 0, "adaptive"),
+            (300, 50, "adaptive"),
         ],
     )
     def test_sliding_window_several_slices(
         self,
         adata_mibitof: AnnData,
-        windowsize_overlap_drop: tuple[int, int, str | None],
+        windowsize_overlap_partial: tuple[int, int, str | None],
         sliding_window_key: str = "sliding_window_key",
         library_key: str = "library_id",
     ):
@@ -30,7 +32,7 @@ class TestSlidingWindow:
                     total_cells += df[col].sum()
             return total_cells
 
-        window_size, overlap, partial_windows = windowsize_overlap_drop
+        window_size, overlap, partial_windows = windowsize_overlap_partial
         df = sliding_window(
             adata_mibitof,
             library_key=library_key,
@@ -53,6 +55,9 @@ class TestSlidingWindow:
             if partial_windows == "drop":
                 assert len(sliding_window_cols) == 27
                 assert _count_total_assignments() == 2536
+            elif partial_windows == "adaptive":
+                assert len(sliding_window_cols) == 48
+                assert _count_total_assignments() == 4411
             else:
                 assert len(sliding_window_cols) == 70
                 assert _count_total_assignments() == 4569
@@ -222,3 +227,25 @@ class TestSlidingWindow:
         assert windows.shape == (4, 4)
         assert windows.iloc[0].values.tolist() == [0, 100, 0, 100]
         assert windows.iloc[-1].values.tolist() == [80, 180, 80, 180]
+
+    def test_calculate_window_corners_adaptive_partial_windows(self):
+        min_x = 0
+        max_x = 200
+        min_y = 0
+        max_y = 200
+        window_size = 100
+        overlap = 20
+
+        windows = _calculate_window_corners(
+            min_x=min_x,
+            max_x=max_x,
+            min_y=min_y,
+            max_y=max_y,
+            window_size=window_size,
+            overlap=overlap,
+            partial_windows="adaptive",
+        )
+
+        assert windows.shape == (9, 4)
+        assert windows.iloc[0].values.tolist() == [0, 80, 0, 80]
+        assert windows.iloc[-1].values.tolist() == [120, 200, 120, 200]
