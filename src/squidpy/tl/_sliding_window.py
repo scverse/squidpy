@@ -121,13 +121,14 @@ def sliding_window(
     sliding_window_df = pd.DataFrame(index=adata.obs.index)
 
     if sliding_window_key in adata.obs:
-        logg.warning(f"Overwriting existing column '{sliding_window_key}' in adata.obs")
+        logg.warning(f"Overwriting existing column '{sliding_window_key}' in adata.obs.")
 
     for lib in libraries:
         if lib is not None:
             lib_mask = adata.obs[library_key] == lib
             lib_coords = coords.loc[lib_mask]
         else:
+            lib_mask = np.ones(len(adata), dtype=bool)
             lib_coords = coords
 
         min_x, max_x = lib_coords[x_col].min(), lib_coords[x_col].max()
@@ -143,8 +144,7 @@ def sliding_window(
             overlap=overlap,
             partial_windows=partial_windows,
             lib_coords=lib_coords,
-            x_col=x_col,
-            y_col=y_col,
+            coord_columns=(x_col, y_col),
             max_nr_cells=max_nr_cells,
         )
 
@@ -158,8 +158,7 @@ def sliding_window(
             y_end = window["y_end"]
 
             mask = _get_window_mask(
-                x_col=x_col,
-                y_col=y_col,
+                coord_columns=(x_col, y_col),
                 lib_coords=lib_coords,
                 x_start=x_start,
                 x_end=x_end,
@@ -169,11 +168,19 @@ def sliding_window(
             obs_indices = lib_coords.index[mask]
 
             if overlap == 0 or partial_windows == "split":
+                mask = (
+                    (lib_coords[x_col] >= x_start)
+                    & (lib_coords[x_col] <= x_end)
+                    & (lib_coords[y_col] >= y_start)
+                    & (lib_coords[y_col] <= y_end)
+                )
+                obs_indices = lib_coords.index[mask]
                 sliding_window_df.loc[obs_indices, sliding_window_key] = f"{lib_key}window_{idx}"
 
             else:
                 col_name = f"{sliding_window_key}_{lib_key}window_{idx}"
-                sliding_window_df[col_name] = mask
+                sliding_window_df.loc[obs_indices, col_name] = True
+                sliding_window_df.loc[:, col_name].fillna(False, inplace=True)
 
     if overlap == 0:
         # create categorical variable for ordered windows
@@ -196,8 +203,7 @@ def sliding_window(
 
 
 def _get_window_mask(
-    x_col: str,
-    y_col: str,
+    coord_columns: tuple[str, str],
     lib_coords: pd.DataFrame,
     x_start: int,
     x_end: int,
@@ -209,10 +215,8 @@ def _get_window_mask(
 
     Parameters
     ----------
-    x_col: str
-        Column name in `lib_coords` containing x-coordinates.
-    y_col: str
-        Column name in `lib_coords` containing y-coordinates.
+    coord_columns: Tuple[str, str]
+        Tuple of column names in `adata.obs` that specify the coordinates (x, y), i.e. ('globalX', 'globalY')
     lib_coords: pd.DataFrame
         DataFrame containing spatial coordinates (e.g. `adata.obs` subset for one library).
         Coordinate values are expected to be integers.
@@ -230,6 +234,8 @@ def _get_window_mask(
     pd.Series
         Boolean mask indicating which rows in `lib_coords` fall inside the specified window.
     """
+    x_col, y_col = coord_columns
+
     mask = (
         (lib_coords[x_col] >= x_start)
         & (lib_coords[x_col] <= x_end)
@@ -249,8 +255,7 @@ def _calculate_window_corners(
     overlap: int = 0,
     partial_windows: Literal["adaptive", "drop", "split"] | None = None,
     lib_coords: pd.DataFrame | None = None,
-    x_col: str | None = None,
-    y_col: str | None = None,
+    coord_columns: tuple[str, str] | None = None,
     max_nr_cells: int | None = None,
 ) -> pd.DataFrame:
     """
@@ -267,14 +272,12 @@ def _calculate_window_corners(
         minimum Y coordinate
     max_y: float
         maximum Y coordinate
-    window_size: int
+    window_size: float
         size of each window
     lib_coords: pd.DataFrame | None
         coordinates of all samples for one library
-    x_col: str | None
-        the column in `lib_coords` corresponding to the x coordinates
-    y_col: str | None
-        the column in `lib_coords` corresponding to the y coordinates
+    coord_columns: Tuple[str, str]
+        Tuple of column names in `adata.obs` that specify the coordinates (x, y), i.e. ('globalX', 'globalY')
     overlap: float
         overlap between consecutive windows (must be less than window_size)
     partial_windows: Literal["adaptive", "drop", "split"] | None
@@ -340,11 +343,13 @@ def _calculate_window_corners(
         windows = windows[valid_windows]
     elif partial_windows == "split":
         # split the slide recursively into windows with at most max_nr_cells
+        x_col, y_col = coord_columns
+
         coord_x_sorted = lib_coords.sort_values(by=[x_col])
         coord_y_sorted = lib_coords.sort_values(by=[y_col])
 
         windows = _split_window(
-            max_nr_cells, x_col, y_col, coord_x_sorted, coord_y_sorted, min_x, max_x, min_y, max_y
+            max_nr_cells, (x_col, y_col), coord_x_sorted, coord_y_sorted, min_x, max_x, min_y, max_y
         ).sort_values(["x_start", "x_end", "y_start", "y_end"])
     else:
         raise ValueError(f"{partial_windows} is not a valid partial_windows argument.")
@@ -355,8 +360,7 @@ def _calculate_window_corners(
 
 def _split_window(
     max_cells: int,
-    x_col: str,
-    y_col: str,
+    coord_columns: tuple[str, str],
     coord_x_sorted: pd.DataFrame,
     coord_y_sorted: pd.DataFrame,
     x_start: int,
@@ -372,12 +376,8 @@ def _split_window(
     ----------
     max_cells : int
         Maximum number of cells allowed per window.
-    x_col : str
-        Name of the column in `coord_x_sorted` and `coord_y_sorted` corresponding to
-        x coordinates.
-    y_col : str
-        Name of the column in `coord_x_sorted` and `coord_y_sorted` corresponding to
-        y coordinates.
+    coord_columns: Tuple[str, str]
+        Tuple of column names in `adata.obs` that specify the coordinates (x, y), i.e. ('globalX', 'globalY')
     coord_x_sorted : pandas.DataFrame
         DataFrame containing cell coordinates, sorted by `x_col`.
     coord_y_sorted : pandas.DataFrame
@@ -395,19 +395,21 @@ def _split_window(
     -------
     windows: pandas DataFrame with columns ['x_start', 'x_end', 'y_start', 'y_end']
     """
+    x_col, y_col = coord_columns
+
     # return current window if it contains less cells than max_cells
-    n_cells = _get_window_mask(x_col, y_col, coord_x_sorted, x_start, x_end, y_start, y_end).sum()
+    n_cells = _get_window_mask(coord_columns, coord_x_sorted, x_start, x_end, y_start, y_end).sum()
 
     if n_cells <= max_cells:
         return pd.DataFrame({"x_start": [x_start], "x_end": [x_end], "y_start": [y_start], "y_end": [y_end]})
 
     # define start and stop indices of subsetted windows
     sub_coord_x_sorted = coord_x_sorted[
-        _get_window_mask(x_col, y_col, coord_x_sorted, x_start, x_end, y_start, y_end)
+        _get_window_mask(coord_columns, coord_x_sorted, x_start, x_end, y_start, y_end)
     ].reset_index(drop=True)
 
     sub_coord_y_sorted = coord_y_sorted[
-        _get_window_mask(x_col, y_col, coord_y_sorted, x_start, x_end, y_start, y_end)
+        _get_window_mask(coord_columns, coord_y_sorted, x_start, x_end, y_start, y_end)
     ].reset_index(drop=True)
 
     middle_pos = len(sub_coord_x_sorted) // 2
@@ -428,7 +430,7 @@ def _split_window(
     for x_start, x_end, y_start, y_end in indices:
         windows.append(
             _split_window(
-                max_cells, x_col, y_col, sub_coord_x_sorted, sub_coord_y_sorted, x_start, x_end, y_start, y_end
+                max_cells, (x_col, y_col), sub_coord_x_sorted, sub_coord_y_sorted, x_start, x_end, y_start, y_end
             )
         )
 
