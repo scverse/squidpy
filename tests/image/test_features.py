@@ -20,11 +20,11 @@ class TestFeatureMixin:
             cont.features_summary("image")
 
     def test_invalid_layer(self, small_cont: ImageContainer):
-        with pytest.raises(KeyError, match=r"Image layer `foobar` not found in"):
+        with pytest.raises(KeyError, match=r"not found in `image layers`"):
             small_cont.features_summary("foobar")
 
     def test_invalid_channels(self, small_cont: ImageContainer):
-        with pytest.raises(ValueError, match=r"Channel `-1` is not in"):
+        with pytest.raises(ValueError, match=r"Expected `channel` to be one of"):
             small_cont.features_summary("image", channels=-1)
 
     @pytest.mark.parametrize("quantiles", [(), (0.5,), (0.1, 0.9)])
@@ -91,7 +91,7 @@ class TestFeatureMixin:
                 assert any(f"dist-{d}" in h for h in haystack), haystack
 
     def test_segmentation_invalid_props(self, small_cont: ImageContainer):
-        with pytest.raises(ValueError, match=r"Invalid property `foobar`. Valid properties are"):
+        with pytest.raises(ValueError, match=r"Expected `property` to be one of"):
             small_cont.features_segmentation("image", feature_name="foo", props=["foobar"])
 
     def test_segmentation_label(self, small_cont_seg: ImageContainer):
@@ -167,7 +167,7 @@ class TestFeatureMixin:
 
 class TestHighLevel:
     def test_invalid_layer(self, adata: AnnData, cont: ImageContainer):
-        with pytest.raises(KeyError, match=r"Image layer `foo` not found"):
+        with pytest.raises(KeyError, match=r"not found in `image layers`"):
             calculate_image_features(adata, cont, layer="foo")
 
     def test_invalid_feature(self, adata: AnnData, cont: ImageContainer):

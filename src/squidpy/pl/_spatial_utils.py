@@ -38,7 +38,7 @@ from skimage.util import map_array
 from squidpy._compat import add_categorical_legend
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, _assert_key_exists
 from squidpy.im._coords import CropCoords
 from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
@@ -130,8 +130,7 @@ def _get_library_id(
             raise ValueError(f"Could not fetch `library_id`, check that `spatial_key: {spatial_key}` is correct.")
         return library_id
     if library_key is not None:
-        if library_key not in adata.obs:
-            raise KeyError(f"`library_key: {library_key}` not in `adata.obs`.")
+        _assert_key_exists(library_key, container=adata.obs, container_name="adata.obs")
         if library_id is None:
             library_id = adata.obs[library_key].cat.categories.tolist()
         _assert_value_in_obs(adata, key=library_key, val=library_id)
@@ -555,10 +554,7 @@ def _plot_edges(
     from networkx import Graph
     from networkx.drawing import draw_networkx_edges
 
-    if connectivity_key not in adata.obsp:
-        raise KeyError(
-            f"Unable to find `connectivity_key: {connectivity_key}` in `adata.obsp`. Please set `connectivity_key`."
-        )
+    _assert_key_exists(connectivity_key, container=adata.obsp, container_name="adata.obsp")
 
     g = Graph(adata.obsp[connectivity_key])
     if not len(g.edges):

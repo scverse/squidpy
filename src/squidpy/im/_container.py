@@ -26,7 +26,7 @@ from skimage.util import img_as_float
 from squidpy._constants._constants import InferDimensions
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, singledispatchmethod
+from squidpy._utils import NDArrayA, _assert_key_exists, singledispatchmethod
 from squidpy.gr._utils import (
     _assert_in_range,
     _assert_non_empty_sequence,
@@ -313,8 +313,7 @@ class ImageContainer(FeatureMixin):
     @singledispatchmethod
     def _load_img(self, img: Pathlike_t | Input_t | ImageContainer, layer: str, **kwargs: Any) -> xr.DataArray | None:
         if isinstance(img, ImageContainer):
-            if layer not in img:
-                raise KeyError(f"Image identifier `{layer}` not found in `{img}`.")
+            _assert_key_exists(layer, container=img, container_name=str(img))
 
             _ = kwargs.pop("dims", None)
             return self._load_img(img[layer], **kwargs)
@@ -1406,8 +1405,7 @@ class ImageContainer(FeatureMixin):
                 )
             library_id = self.library_ids[0]
 
-        if library_id not in self.library_ids:
-            raise KeyError(f"Library id `{library_id}` not found in `{self.library_ids}`.")
+        _assert_key_exists(library_id, container=self.library_ids, container_name="library_ids")
 
         return library_id
 
@@ -1470,8 +1468,7 @@ class ImageContainer(FeatureMixin):
                     f"Unable to determine which layer to use. Please supply one from `{sorted(self.data.keys())}`."
                 )
             layer = list(self)[0]
-        if layer not in self:
-            raise KeyError(f"Image layer `{layer}` not found in `{sorted(self)}`.")
+        _assert_key_exists(layer, container=self, container_name="image layers")
 
         return layer
 

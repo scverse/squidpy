@@ -20,6 +20,7 @@ from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
+from squidpy._utils import _assert_in, _assert_key_exists
 
 __all__ = ["calculate_niche"]
 
@@ -175,17 +176,10 @@ def calculate_niche(
         orig_adata = data
         adata = data.copy()
 
-    if spatial_connectivities_key not in adata.obsp.keys():
-        raise KeyError(
-            f"Key '{spatial_connectivities_key}' not found in `adata.obsp`. "
-            "If you haven't computed a spatial neighborhood graph yet, use `sq.gr.spatial_neighbors`."
-        )
+    _assert_key_exists(spatial_connectivities_key, container=adata.obsp, container_name="adata.obsp")
 
-    if flavor == "spatialleiden" and (latent_connectivities_key not in adata.obsp.keys()):
-        raise KeyError(
-            f"Key '{latent_connectivities_key}' not found in `adata.obsp`. "
-            "If you haven't computed a latent neighborhood graph yet, use `sc.pp.neighbors`."
-        )
+    if flavor == "spatialleiden":
+        _assert_key_exists(latent_connectivities_key, container=adata.obsp, container_name="adata.obsp")
 
     result_columns = _get_result_columns(
         flavor=flavor,
@@ -572,10 +566,7 @@ def _get_cellcharter_niches(
 
     if use_rep is not None:
         # Use provided embedding from adata.obsm
-        if use_rep not in adata.obsm:
-            raise KeyError(
-                f"Embedding key '{use_rep}' not found in adata.obsm. Available keys: {list(adata.obsm.keys())}"
-            )
+        _assert_key_exists(use_rep, container=adata.obsm, container_name="adata.obsm")
         embedding = adata.obsm[use_rep]
         # Ensure embedding has the right number of components
         if embedding.shape[1] < n_components:
@@ -842,10 +833,7 @@ def _validate_niche_args(
     if not isinstance(data, AnnData | SpatialData):
         raise TypeError(f"'data' must be an AnnData or SpatialData object, got {type(data).__name__}")
 
-    if flavor not in ["neighborhood", "utag", "cellcharter", "spatialleiden"]:
-        raise ValueError(
-            f"Invalid flavor '{flavor}'. Please choose one of 'neighborhood', 'utag', 'cellcharter', 'spatialleiden'."
-        )
+    _assert_in(flavor, name="flavor", collection=["neighborhood", "utag", "cellcharter", "spatialleiden"])
 
     if library_key is not None:
         if not isinstance(library_key, str):
@@ -993,8 +981,7 @@ def _validate_niche_args(
 
         if aggregation is not None and not isinstance(aggregation, str):
             raise TypeError(f"'aggregation' must be a string, got {type(aggregation).__name__}")
-        if aggregation not in ["mean", "variance"]:
-            raise ValueError(f"'aggregation' must be one of 'mean' or 'variance', got {aggregation}")
+        _assert_in(aggregation, name="aggregation", collection=["mean", "variance"])
 
         if not isinstance(n_components, int):
             raise TypeError(f"'n_components' must be an integer, got {type(n_components).__name__}")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 import inspect
 import warnings
-from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
+from collections.abc import Callable, Collection, Generator, Hashable, Iterable, Sequence
 from contextlib import contextmanager
 from enum import Enum
 from multiprocessing import Manager, cpu_count
@@ -56,6 +56,19 @@ def _unique_order_preserving(
     seen: set[Hashable] = set()
     seen_add = seen.add
     return [i for i in iterable if not (i in seen or seen_add(i))], seen
+
+
+def _assert_in(value: Any, *, name: str, collection: Collection[Any]) -> None:
+    """Assert that ``value`` is in ``collection``."""
+    if value not in collection:
+        raise ValueError(f"Expected `{name}` to be one of `{sorted(collection)}`, found `{value!r}`.")
+
+
+def _assert_key_exists(key: str, *, container: Any, container_name: str) -> None:
+    """Assert that ``key`` exists in ``container``."""
+    if key not in container:
+        available = sorted(container.keys()) if hasattr(container, "keys") else sorted(container)
+        raise KeyError(f"Key `{key!r}` not found in `{container_name}`. Available keys: `{available}`.")
 
 
 def _callback_wrapper(chosen_runner: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:

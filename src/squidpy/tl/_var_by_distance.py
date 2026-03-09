@@ -14,7 +14,7 @@ from sklearn.neighbors import KDTree
 from sklearn.preprocessing import MinMaxScaler
 
 from squidpy._docs import d
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, _assert_in
 from squidpy.gr._utils import _save_data
 
 __all__ = ["var_by_distance"]
@@ -83,8 +83,7 @@ def var_by_distance(
             if isinstance(library_id, str):
                 library_id = [library_id]
             for x in library_id:
-                if x not in adata.obs[library_key].unique():
-                    raise ValueError(f"library id {x} not in {library_key}")
+                _assert_in(x, name="library_id", collection=adata.obs[library_key].unique())
             batch = [slide for slide in library_id if slide in adata.obs[library_key].unique()]
         else:
             batch = adata.obs[library_key].unique().tolist()

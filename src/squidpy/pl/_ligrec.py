@@ -17,7 +17,7 @@ from scipy.cluster import hierarchy as sch
 from squidpy._constants._constants import DendrogramAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
-from squidpy._utils import _unique_order_preserving, verbosity
+from squidpy._utils import _assert_key_exists, _unique_order_preserving, verbosity
 from squidpy.pl._utils import _dendrogram, _filter_kwargs, save_fig
 
 __all__ = ["ligrec"]
@@ -245,8 +245,7 @@ def ligrec(
             raise ValueError("Please provide `cluster_key` when supplying an `AnnData` object.")
 
         cluster_key = Key.uns.ligrec(cluster_key)
-        if cluster_key not in adata.uns_keys():
-            raise KeyError(f"Key `{cluster_key}` not found in `adata.uns`.")
+        _assert_key_exists(cluster_key, container=adata.uns, container_name="adata.uns")
         adata = adata.uns[cluster_key]
 
     if not isinstance(adata, dict):

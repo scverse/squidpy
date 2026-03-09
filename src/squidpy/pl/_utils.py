@@ -38,7 +38,7 @@ from skimage.color import rgb2gray
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, _assert_in, _assert_key_exists
 from squidpy.gr._utils import _assert_categorical_obs
 
 Vector_name_t = tuple[pd.Series | NDArrayA | None, str | None]
@@ -310,8 +310,7 @@ class ALayer:
 
     @layer.setter
     def layer(self, layer: str | None = None) -> None:
-        if layer not in (None,) + tuple(self.adata.layers.keys()):
-            raise KeyError(f"Invalid layer `{layer}`. Valid options are `{[None] + sorted(self.adata.layers.keys())}`.")
+        _assert_in(layer, name="layer", collection=(None,) + tuple(self.adata.layers.keys()))
         self._previous_layer = layer
         # handle in raw setter
         self.raw = False
@@ -654,8 +653,7 @@ def sanitize_anndata(adata: AnnData) -> None:
 
 
 def _assert_value_in_obs(adata: AnnData, key: str, val: Sequence[Any] | Any) -> None:
-    if key not in adata.obs:
-        raise KeyError(f"Key `{key}` not found in `adata.obs`.")
+    _assert_key_exists(key, container=adata.obs, container_name="adata.obs")
     if not isinstance(val, list):
         val = [val]
     val = set(val) - set(adata.obs[key].unique())

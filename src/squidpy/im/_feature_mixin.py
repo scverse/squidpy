@@ -11,7 +11,7 @@ from skimage.util import img_as_ubyte
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, _assert_in
 from squidpy.gr._utils import _assert_non_empty_sequence
 from squidpy.im._coords import _NULL_PADDING, CropCoords
 
@@ -30,8 +30,7 @@ def _get_channels(xr_img: NDArrayA | xr.DataArray, channels: Channel_t | None) -
         channels = [channels]
 
     for c in channels:
-        if c not in all_channels:
-            raise ValueError(f"Channel `{c}` is not in `{all_channels}`.")
+        _assert_in(c, name="channel", collection=all_channels)
 
     return list(channels)
 
@@ -367,8 +366,7 @@ class FeatureMixin:
 
         props = _assert_non_empty_sequence(props, name="properties")
         for prop in props:
-            if prop not in _valid_seg_prop:
-                raise ValueError(f"Invalid property `{prop}`. Valid properties are `{_valid_seg_prop}`.")
+            _assert_in(prop, name="property", collection=_valid_seg_prop)
 
         no_intensity_props = [p for p in props if "intensity" not in p]
         intensity_props = [p for p in props if "intensity" in p]

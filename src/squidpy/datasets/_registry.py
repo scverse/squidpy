@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from squidpy._utils import _assert_key_exists
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from importlib.resources.abc import Traversable
@@ -144,8 +146,7 @@ class DatasetRegistry:
 
     def __getitem__(self, name: str) -> DatasetEntry:
         """Get a dataset by name, raises KeyError if not found."""
-        if name not in self.datasets:
-            raise KeyError(f"Unknown dataset: {name}. Available: {list(self.datasets.keys())}")
+        _assert_key_exists(name, container=self.datasets, container_name="datasets")
         return self.datasets[name]
 
     def __contains__(self, name: str) -> bool:

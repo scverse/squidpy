@@ -13,7 +13,7 @@ from squidpy.im import ImageContainer, process
 
 class TestProcess:
     def test_invalid_layer(self, small_cont: ImageContainer):
-        with pytest.raises(KeyError, match=r"Image layer `foobar` not found in"):
+        with pytest.raises(KeyError, match=r"not found in `image layers`"):
             process(small_cont, layer="foobar")
 
     @pytest.mark.parametrize("dy", [25, 0.3, None])

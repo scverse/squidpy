@@ -20,7 +20,7 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA, Signal, SigQueue, _assert_key_exists, _get_n_cores, parallelize
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_positive,
@@ -256,10 +256,8 @@ class PermutationTestABC(ABC):
             interactions = pd.DataFrame(interactions)
 
         if isinstance(interactions, pd.DataFrame):
-            if SOURCE not in interactions.columns:
-                raise KeyError(f"Column `{SOURCE!r}` is not in `interactions`.")
-            if TARGET not in interactions.columns:
-                raise KeyError(f"Column `{TARGET!r}` is not in `interactions`.")
+            _assert_key_exists(SOURCE, container=interactions.columns, container_name="interactions.columns")
+            _assert_key_exists(TARGET, container=interactions.columns, container_name="interactions.columns")
 
             self._interactions = interactions.copy()
         elif isinstance(interactions, Iterable):

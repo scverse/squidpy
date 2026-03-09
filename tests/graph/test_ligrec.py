@@ -74,18 +74,18 @@ class TestInvalidBehavior:
             ligrec(adata, _CK, interactions=42)
 
     def test_invalid_interactions_dict(self, adata: AnnData):
-        with pytest.raises(KeyError, match=r"Column .* is not in `interactions`."):
+        with pytest.raises(KeyError, match=r"not found in `interactions.columns`"):
             ligrec(adata, _CK, interactions={"foo": ["foo"], "target": ["bar"]})
-        with pytest.raises(KeyError, match=r"Column .* is not in `interactions`."):
+        with pytest.raises(KeyError, match=r"not found in `interactions.columns`"):
             ligrec(adata, _CK, interactions={"source": ["foo"], "bar": ["bar"]})
 
     def test_invalid_interactions_dataframe(self, adata: AnnData, interactions: Interactions_t):
         df = pd.DataFrame(interactions, columns=["foo", "target"])
-        with pytest.raises(KeyError, match=r"Column .* is not in `interactions`."):
+        with pytest.raises(KeyError, match=r"not found in `interactions.columns`"):
             ligrec(adata, _CK, interactions=df)
 
         df = pd.DataFrame(interactions, columns=["source", "bar"])
-        with pytest.raises(KeyError, match=r"Column .* is not in `interactions`."):
+        with pytest.raises(KeyError, match=r"not found in `interactions.columns`"):
             ligrec(adata, _CK, interactions=df)
 
     def test_interactions_invalid_sequence(self, adata: AnnData, interactions: Interactions_t):

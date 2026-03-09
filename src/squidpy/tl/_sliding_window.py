@@ -9,6 +9,7 @@ from scanpy import logging as logg
 from spatialdata import SpatialData
 
 from squidpy._docs import d
+from squidpy._utils import _assert_key_exists
 from squidpy.gr._utils import _save_data
 
 __all__ = ["sliding_window"]
@@ -89,8 +90,8 @@ def sliding_window(
     if window_size <= 0:
         raise ValueError("Window size must be larger than 0.")
 
-    if library_key is not None and library_key not in adata.obs:
-        raise ValueError(f"Library key '{library_key}' not found in adata.obs")
+    if library_key is not None:
+        _assert_key_exists(library_key, container=adata.obs, container_name="adata.obs")
 
     libraries = [None] if library_key is None else adata.obs[library_key].unique()
 

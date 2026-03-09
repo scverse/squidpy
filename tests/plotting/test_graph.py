@@ -128,7 +128,7 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
             pl.ligrec(42)
 
     def test_invalid_key(self, adata: AnnData):
-        with pytest.raises(KeyError, match=r"Key `foobar_ligrec` not found in `adata.uns`."):
+        with pytest.raises(KeyError, match=r"not found in `adata.uns`"):
             pl.ligrec(adata, cluster_key="foobar")
 
     def test_valid_key_invalid_object(self, adata: AnnData):

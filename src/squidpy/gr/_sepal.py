@@ -14,7 +14,7 @@ from spatialdata import SpatialData
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA, Signal, SigQueue, _assert_in, _get_n_cores, parallelize
 from squidpy.gr._utils import (
     _assert_connectivity_key,
     _assert_non_empty_sequence,
@@ -97,8 +97,7 @@ def sepal(
         adata = adata.table
     _assert_connectivity_key(adata, connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
-    if max_neighs not in (4, 6):
-        raise ValueError(f"Expected `max_neighs` to be either `4` or `6`, found `{max_neighs}`.")
+    _assert_in(max_neighs, name="max_neighs", collection=(4, 6))
 
     spatial = adata.obsm[spatial_key].astype(np.float64)
 

@@ -82,7 +82,7 @@ class TestWatershed:
 
 class TestHighLevel:
     def test_invalid_layer(self, small_cont: ImageContainer):
-        with pytest.raises(KeyError, match=r"Image layer `foobar` not found in"):
+        with pytest.raises(KeyError, match=r"not found in `image layers`"):
             segment(small_cont, layer="foobar")
 
     @pytest.mark.parametrize("method", ["watershed", dummy_segment])
