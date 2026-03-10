@@ -27,13 +27,13 @@ from squidpy._constants._constants import InferDimensions
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, singledispatchmethod
-from squidpy.gr._utils import (
+from squidpy._validators import (
     _assert_in_range,
     _assert_non_empty_sequence,
     _assert_non_negative,
     _assert_positive,
-    _assert_spatial_basis,
 )
+from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.im._coords import (
     _NULL_COORDS,
     _NULL_PADDING,

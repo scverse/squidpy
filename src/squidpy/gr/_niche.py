@@ -20,6 +20,7 @@ from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
+from squidpy._validators import _assert_isinstance, _assert_key_in_adata, _assert_one_of
 
 __all__ = ["calculate_niche"]
 
@@ -175,16 +176,19 @@ def calculate_niche(
         orig_adata = data
         adata = data.copy()
 
-    if spatial_connectivities_key not in adata.obsp.keys():
-        raise KeyError(
-            f"Key '{spatial_connectivities_key}' not found in `adata.obsp`. "
-            "If you haven't computed a spatial neighborhood graph yet, use `sq.gr.spatial_neighbors`."
-        )
+    _assert_key_in_adata(
+        adata,
+        spatial_connectivities_key,
+        attr="obsp",
+        extra_msg="If you haven't computed a spatial neighborhood graph yet, use `sq.gr.spatial_neighbors`.",
+    )
 
-    if flavor == "spatialleiden" and (latent_connectivities_key not in adata.obsp.keys()):
-        raise KeyError(
-            f"Key '{latent_connectivities_key}' not found in `adata.obsp`. "
-            "If you haven't computed a latent neighborhood graph yet, use `sc.pp.neighbors`."
+    if flavor == "spatialleiden":
+        _assert_key_in_adata(
+            adata,
+            latent_connectivities_key,
+            attr="obsp",
+            extra_msg="If you haven't computed a latent neighborhood graph yet, use `sc.pp.neighbors`.",
         )
 
     result_columns = _get_result_columns(
@@ -195,8 +199,7 @@ def calculate_niche(
     )
 
     if library_key is not None:
-        if library_key not in adata.obs.columns:
-            raise KeyError(f"'{library_key}' not found in `adata.obs`.")
+        _assert_key_in_adata(adata, library_key, attr="obs")
 
         logg.info(f"Stratifying by library_key '{library_key}'")
 
@@ -572,10 +575,7 @@ def _get_cellcharter_niches(
 
     if use_rep is not None:
         # Use provided embedding from adata.obsm
-        if use_rep not in adata.obsm:
-            raise KeyError(
-                f"Embedding key '{use_rep}' not found in adata.obsm. Available keys: {list(adata.obsm.keys())}"
-            )
+        _assert_key_in_adata(adata, use_rep, attr="obsm")
         embedding = adata.obsm[use_rep]
         # Ensure embedding has the right number of components
         if embedding.shape[1] < n_components:
@@ -839,17 +839,12 @@ def _validate_niche_args(
     TypeError
         If arguments are of incorrect type.
     """
-    if not isinstance(data, AnnData | SpatialData):
-        raise TypeError(f"'data' must be an AnnData or SpatialData object, got {type(data).__name__}")
+    _assert_isinstance(data, (AnnData, SpatialData), name="data")
 
-    if flavor not in ["neighborhood", "utag", "cellcharter", "spatialleiden"]:
-        raise ValueError(
-            f"Invalid flavor '{flavor}'. Please choose one of 'neighborhood', 'utag', 'cellcharter', 'spatialleiden'."
-        )
+    _assert_one_of(flavor, ["neighborhood", "utag", "cellcharter", "spatialleiden"], name="flavor")
 
     if library_key is not None:
-        if not isinstance(library_key, str):
-            raise TypeError(f"'library_key' must be a string, got {type(library_key).__name__}")
+        _assert_isinstance(library_key, str, name="library_key")
         if isinstance(data, AnnData):
             if library_key not in data.obs.columns:
                 raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
@@ -861,8 +856,8 @@ def _validate_niche_args(
             if library_key not in data.tables[table_key].obs.columns:
                 raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
 
-    if n_neighbors is not None and not isinstance(n_neighbors, int):
-        raise TypeError(f"'n_neighbors' must be an integer, got {type(n_neighbors).__name__}")
+    if n_neighbors is not None:
+        _assert_isinstance(n_neighbors, int, name="n_neighbors")
 
     if resolutions is not None:
         if not isinstance(resolutions, float | tuple | list):
@@ -880,14 +875,12 @@ def _validate_niche_args(
                 ):
                     raise TypeError("Each item in the list 'resolutions' must be a float or a tuple of floats.")
 
-    if n_hop_weights is not None and not isinstance(n_hop_weights, list):
-        raise TypeError(f"'n_hop_weights' must be a list of floats, got {type(n_hop_weights).__name__}")
+    if n_hop_weights is not None:
+        _assert_isinstance(n_hop_weights, list, name="n_hop_weights")
 
-    if not isinstance(scale, bool):
-        raise TypeError(f"'scale' must be a boolean, got {type(scale).__name__}")
+    _assert_isinstance(scale, bool, name="scale")
 
-    if not isinstance(abs_nhood, bool):
-        raise TypeError(f"'abs_nhood' must be a boolean, got {type(abs_nhood).__name__}")
+    _assert_isinstance(abs_nhood, bool, name="abs_nhood")
 
     # Define parameters used by each flavor
     flavor_param_specs = {
@@ -976,55 +969,43 @@ def _validate_niche_args(
 
     # Flavor-specific validations
     if flavor == "neighborhood":
-        if not isinstance(groups, str):
-            raise TypeError(f"'groups' must be a string, got {type(groups).__name__}")
+        _assert_isinstance(groups, str, name="groups")
 
-        if min_niche_size is not None and not isinstance(min_niche_size, int):
-            raise TypeError(f"'min_niche_size' must be an integer, got {type(min_niche_size).__name__}")
+        if min_niche_size is not None:
+            _assert_isinstance(min_niche_size, int, name="min_niche_size")
 
         if distance is not None and isinstance(distance, int) and distance < 1:
             raise ValueError(f"'distance' must be at least 1, got {distance}")
 
     elif flavor == "cellcharter":
-        if distance is not None and not isinstance(distance, int):
-            raise TypeError(f"'distance' must be an integer, got {type(distance).__name__}")
+        if distance is not None:
+            _assert_isinstance(distance, int, name="distance")
         if distance is not None and distance < 1:
             raise ValueError(f"'distance' must be at least 1, got {distance}")
 
-        if aggregation is not None and not isinstance(aggregation, str):
-            raise TypeError(f"'aggregation' must be a string, got {type(aggregation).__name__}")
-        if aggregation not in ["mean", "variance"]:
-            raise ValueError(f"'aggregation' must be one of 'mean' or 'variance', got {aggregation}")
+        if aggregation is not None:
+            _assert_isinstance(aggregation, str, name="aggregation")
+            _assert_one_of(aggregation, ["mean", "variance"], name="aggregation")
 
-        if not isinstance(n_components, int):
-            raise TypeError(f"'n_components' must be an integer, got {type(n_components).__name__}")
+        _assert_isinstance(n_components, int, name="n_components")
         if n_components < 1:
             raise ValueError(f"'n_components' must be at least 1, got {n_components}")
 
-        if not isinstance(random_state, int):
-            raise TypeError(f"'random_state' must be an integer, got {type(random_state).__name__}")
+        _assert_isinstance(random_state, int, name="random_state")
 
-        if use_rep is not None and not isinstance(use_rep, str):
-            raise TypeError(f"'use_rep' must be a string, got {type(use_rep).__name__}")
+        if use_rep is not None:
+            _assert_isinstance(use_rep, str, name="use_rep")
 
         # for mypy
         if resolutions is None:
             resolutions = [0.0]
 
     elif flavor == "spatialleiden":
-        if not isinstance(latent_connectivities_key, str):
-            raise TypeError(
-                f"'latent_connectivities_key' must be a string, got {type(latent_connectivities_key).__name__}"
-            )
-        if not isinstance(spatial_connectivities_key, str):
-            raise TypeError(
-                f"'spatial_connectivities_key' must be a string, got {type(spatial_connectivities_key).__name__}"
-            )
+        _assert_isinstance(latent_connectivities_key, str, name="latent_connectivities_key")
+        _assert_isinstance(spatial_connectivities_key, str, name="spatial_connectivities_key")
 
-        if not isinstance(layer_ratio, float | int):
-            raise TypeError(f"'layer_ratio' must be a float, got {type(layer_ratio).__name__}")
-        if not isinstance(n_iterations, int):
-            raise TypeError(f"'n_iterations' must be an integer, got {type(n_iterations).__name__}")
+        _assert_isinstance(layer_ratio, (float, int), name="layer_ratio")
+        _assert_isinstance(n_iterations, int, name="n_iterations")
         if not (
             isinstance(use_weights, bool)
             or (
@@ -1034,14 +1015,12 @@ def _validate_niche_args(
             )
         ):
             raise TypeError(f"'use_weights' must be a bool or a tuple of two bools, got {use_weights!r}")
-        if not isinstance(random_state, int):
-            raise TypeError(f"'random_state' must be an integer, got {type(random_state).__name__}")
+        _assert_isinstance(random_state, int, name="random_state")
 
         if resolutions is None:
             resolutions = [1.0]
 
-    if not isinstance(inplace, bool):
-        raise TypeError(f"'inplace' must be a boolean, got {type(inplace).__name__}")
+    _assert_isinstance(inplace, bool, name="inplace")
 
 
 def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs: dict[str, Any]) -> None:

@@ -17,11 +17,8 @@ from matplotlib.axes import Axes
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
-from squidpy.gr._utils import (
-    _assert_categorical_obs,
-    _assert_non_empty_sequence,
-    _get_valid_values,
-)
+from squidpy._validators import _assert_non_empty_sequence, _get_valid_values
+from squidpy.gr._utils import _assert_categorical_obs
 from squidpy.pl._color_utils import Palette_t, _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _heatmap, save_fig
 

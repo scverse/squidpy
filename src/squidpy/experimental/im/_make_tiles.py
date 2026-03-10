@@ -17,6 +17,7 @@ from spatialdata.models._utils import SpatialElement
 from spatialdata.transformations import get_transformation, set_transformation
 
 from squidpy._utils import _yx_from_shape
+from squidpy._validators import _assert_in_range, _assert_key_in_sdata, _assert_positive
 
 from ._utils import _get_element_data
 
@@ -170,8 +171,6 @@ def _get_largest_scale_dimensions(
     image_key: str,
 ) -> tuple[int, int]:
     """Get the dimensions (H, W) of the largest/finest scale of an image."""
-    if image_key not in sdata.images:
-        raise KeyError(f"Image key '{image_key}' not found in sdata.images. Available: {list(sdata.images.keys())}")
     img_node = sdata.images[image_key]
 
     # Use _get_element_data with "scale0" which is always the largest scale
@@ -359,12 +358,10 @@ def make_tiles(
     make_tiles_from_spots
         Create tiles centered on Visium spots instead of a regular grid.
     """
-    if image_key not in sdata.images:
-        raise KeyError(f"Image key '{image_key}' not found in sdata.images. Available: {list(sdata.images.keys())}")
-    if tile_size[0] <= 0 or tile_size[1] <= 0:
-        raise ValueError(f"tile_size must have positive values, got {tile_size}.")
-    if not 0 <= min_tissue_fraction <= 1:
-        raise ValueError(f"min_tissue_fraction must be in [0, 1], got {min_tissue_fraction}.")
+    _assert_key_in_sdata(sdata, image_key, attr="images")
+    _assert_positive(tile_size[0], name="tile_size[0]")
+    _assert_positive(tile_size[1], name="tile_size[1]")
+    _assert_in_range(min_tissue_fraction, 0, 1, name="min_tissue_fraction")
 
     # Derive mask key for centering if needed
     mask_key_for_grid = image_mask_key
@@ -431,8 +428,7 @@ def make_tiles(
                 )
             except (ImportError, KeyError, ValueError, RuntimeError) as e:  # pragma: no cover - defensive
                 logger.warning("detect_tissue failed (%s); tiles will not be classified.", e)
-        if classification_mask_key not in sdata.labels:
-            raise KeyError(f"Tissue mask '{classification_mask_key}' not found in sdata.labels.")
+        _assert_key_in_sdata(sdata, classification_mask_key, attr="labels")
         # Use a mask scale that aligns with the full-resolution image; avoid coarsest "auto" selection.
         if scale == "auto":
             label_node = sdata.labels.get(classification_mask_key)
@@ -532,12 +528,10 @@ def make_tiles_from_spots(
         Helper used to derive tissue masks automatically when needed.
     """
 
-    if spots_key not in sdata.shapes:
-        raise KeyError(f"Spots key '{spots_key}' not found in sdata.shapes")
-    if image_key is not None and image_key not in sdata.images:
-        raise KeyError(f"Image key '{image_key}' not found in sdata.images. Available: {list(sdata.images.keys())}")
-    if not 0 <= min_tissue_fraction <= 1:
-        raise ValueError(f"min_tissue_fraction must be in [0, 1], got {min_tissue_fraction}.")
+    _assert_key_in_sdata(sdata, spots_key, attr="shapes")
+    if image_key is not None:
+        _assert_key_in_sdata(sdata, image_key, attr="images")
+    _assert_in_range(min_tissue_fraction, 0, 1, name="min_tissue_fraction")
 
     target_cs: str | None = None
     if image_key is not None:
@@ -585,9 +579,6 @@ def make_tiles_from_spots(
 
     if classification_mask_key is not None:
         if image_key is not None:
-            if image_key not in sdata.images:
-                raise KeyError(f"Image key '{image_key}' not found in sdata.images")
-
             mask_key = classification_mask_key
             if mask_key in sdata.labels:
                 target_hw = _get_largest_scale_dimensions(sdata, image_key)
@@ -605,8 +596,7 @@ def make_tiles_from_spots(
                 shapes_key=shapes_key,
             )
         else:
-            if classification_mask_key not in sdata.labels:
-                raise KeyError(f"Tissue mask '{classification_mask_key}' not found in sdata.labels.")
+            _assert_key_in_sdata(sdata, classification_mask_key, attr="labels")
             # Without an image we cannot infer the best scale; default to finest scale unless user specified.
             scale_used = "scale0" if scale == "auto" else scale
             _filter_tiles(
@@ -697,8 +687,7 @@ def _filter_tiles(
         mask_key = f"{image_key}_tissue"
     else:
         raise ValueError("tissue_mask_key must be provided when image_key is None.")
-    if mask_key not in sdata.labels:
-        raise KeyError(f"Tissue mask '{mask_key}' not found in sdata.labels.")
+    _assert_key_in_sdata(sdata, mask_key, attr="labels")
     mask = _get_mask_from_labels(sdata, mask_key, scale)
     H_mask, W_mask = mask.shape
 
@@ -766,10 +755,6 @@ def _make_tiles(
     scale: str = "auto",
 ) -> _TileGrid:
     """Construct a tile grid for an image, optionally centered on a tissue mask."""
-    # Validate image key
-    if image_key not in sdata.images:
-        raise KeyError(f"Image key '{image_key}' not found in sdata.images")
-
     # Get image dimensions from the largest/finest scale
     H, W = _get_largest_scale_dimensions(sdata, image_key)
 
@@ -780,10 +765,7 @@ def _make_tiles(
         return _TileGrid(H, W, tile_size=tile_size)
 
     # Path 2: Center grid on tissue mask centroid
-    if image_mask_key not in sdata.labels:
-        raise KeyError(
-            f"Mask key '{image_mask_key}' not found in sdata.labels. Available keys: {list(sdata.labels.keys())}"
-        )
+    _assert_key_in_sdata(sdata, image_mask_key, attr="labels")
 
     # Get mask and compute centroid
     label_node = sdata.labels[image_mask_key]
@@ -842,8 +824,6 @@ def _get_spot_coordinates(
     spots_key: str,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Extract spot centers (x, y) and IDs from a shapes table."""
-    if spots_key not in sdata.shapes:
-        raise KeyError(f"Spots key '{spots_key}' not found in sdata.shapes. Available: {list(sdata.shapes.keys())}")
     gdf = sdata.shapes[spots_key]
     if "geometry" not in gdf:
         raise ValueError(f"Shapes '{spots_key}' lack geometry column required for spot coordinates.")
@@ -893,9 +873,6 @@ def _derive_tile_size_from_spots(coords: np.ndarray) -> tuple[int, int]:
 
 def _get_mask_from_labels(sdata: sd.SpatialData, mask_key: str, scale: str) -> np.ndarray:
     """Extract a 2D mask array from ``sdata.labels`` at the requested scale."""
-    if mask_key not in sdata.labels:
-        raise KeyError(f"Mask key '{mask_key}' not found in sdata.labels")
-
     label_node = sdata.labels[mask_key]
     mask_da = _get_element_data(label_node, scale, "label", mask_key)
 

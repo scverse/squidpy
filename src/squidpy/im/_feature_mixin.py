@@ -12,7 +12,7 @@ from skimage.util import img_as_ubyte
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
-from squidpy.gr._utils import _assert_non_empty_sequence
+from squidpy._validators import _assert_non_empty_sequence
 from squidpy.im._coords import _NULL_PADDING, CropCoords
 
 Feature_t: TypeAlias = dict[str, Any]
