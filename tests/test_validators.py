@@ -239,8 +239,15 @@ class TestAssertIsinstanceEdgeCases:
 # ---------------------------------------------------------------------------
 class TestReExports:
     def test_gr_utils_reexports(self):
-        # Just verify they are the same objects
-        from squidpy._validators import _assert_positive as _ap
+        """Verify all re-exported validators are the same objects as the originals."""
+        from squidpy._validators import (
+            _assert_in_range as _orig_air,
+            _assert_non_empty_sequence as _orig_anes,
+            _assert_non_negative as _orig_ann,
+            _assert_positive as _orig_ap,
+            _check_tuple_needles as _orig_ctn,
+            _get_valid_values as _orig_gvv,
+        )
         from squidpy.gr._utils import (
             _assert_in_range,
             _assert_non_empty_sequence,
@@ -250,4 +257,9 @@ class TestReExports:
             _get_valid_values,
         )
 
-        assert _assert_positive is _ap
+        assert _assert_positive is _orig_ap
+        assert _assert_non_negative is _orig_ann
+        assert _assert_in_range is _orig_air
+        assert _assert_non_empty_sequence is _orig_anes
+        assert _check_tuple_needles is _orig_ctn
+        assert _get_valid_values is _orig_gvv
