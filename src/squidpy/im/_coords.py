@@ -9,7 +9,7 @@ import numpy as np
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
-from squidpy.gr._utils import _assert_non_negative
+from squidpy._validators import assert_non_negative
 
 
 def _circular_mask(arr: NDArrayA, y: int, x: int, radius: float) -> NDArrayA:
@@ -139,10 +139,10 @@ class CropPadding(TupleSerializer):
     y_post: float
 
     def __post_init__(self) -> None:
-        _assert_non_negative(self.x_pre, name="x_pre")
-        _assert_non_negative(self.y_pre, name="y_pre")
-        _assert_non_negative(self.x_post, name="x_post")
-        _assert_non_negative(self.y_post, name="y_post")
+        assert_non_negative(self.x_pre, name="x_pre")
+        assert_non_negative(self.y_pre, name="y_pre")
+        assert_non_negative(self.x_post, name="x_post")
+        assert_non_negative(self.y_post, name="y_post")
 
     @property
     def T(self) -> CropPadding:
