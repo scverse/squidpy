@@ -30,7 +30,6 @@ from squidpy.gr._utils import (
     _check_tuple_needles,
     _genesymbols,
     _save_data,
-    extract_adata,
 )
 
 __all__ = ["ligrec", "PermutationTest"]
@@ -560,8 +559,6 @@ def ligrec(
     interactions_params: Mapping[str, Any] = MappingProxyType({}),
     transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
     receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
-    *,
-    table_key: str = "table",
 ) -> Mapping[str, pd.DataFrame] | None:
     """
     %(PT_test.full_desc)s
@@ -578,7 +575,6 @@ def ligrec(
     -------
     %(ligrec_test_returns)s
     """  # noqa: D400
-    adata = extract_adata(adata, table_key=table_key)
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)
