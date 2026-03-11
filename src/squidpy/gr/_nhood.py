@@ -27,6 +27,7 @@ from squidpy.gr._utils import (
     _assert_positive,
     _save_data,
     _shuffle_group,
+    extract_adata,
 )
 
 __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
@@ -146,6 +147,8 @@ def nhood_enrichment(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    *,
+    table_key: str = "table",
 ) -> NhoodEnrichmentResult | None:
     """
     Compute neighborhood enrichment by permutation test.
@@ -171,8 +174,7 @@ def nhood_enrichment(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - the enrichment z-score.
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
     """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -239,6 +241,8 @@ def centrality_scores(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = False,
+    *,
+    table_key: str = "table",
 ) -> pd.DataFrame | None:
     """
     Compute centrality scores per cluster or cell type.
@@ -268,8 +272,7 @@ def centrality_scores(
         - :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_centrality_scores']`` - the centrality scores,
           as mentioned above.
     """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -333,6 +336,8 @@ def interaction_matrix(
     normalized: bool = False,
     copy: bool = False,
     weights: bool = False,
+    *,
+    table_key: str = "table",
 ) -> NDArrayA | None:
     """
     Compute interaction matrix for clusters.
@@ -356,8 +361,7 @@ def interaction_matrix(
 
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_interactions']`` - the interaction matrix.
     """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)

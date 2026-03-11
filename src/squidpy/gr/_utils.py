@@ -14,10 +14,39 @@ from pandas import CategoricalDtype
 from pandas.api.types import infer_dtype
 from scanpy import logging as logg
 from scipy.sparse import csc_matrix, csr_matrix, spmatrix
+from spatialdata import SpatialData
 
 from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, _unique_order_preserving
+
+
+def extract_adata(adata: AnnData | SpatialData, *, table_key: str = "table") -> AnnData:
+    """Resolve a :class:`~spatialdata.SpatialData` to an :class:`~anndata.AnnData`.
+
+    If *adata* is already an :class:`~anndata.AnnData` it is returned as-is.
+    When a :class:`~spatialdata.SpatialData` is passed, the table stored under
+    *table_key* is looked up via ``sdata.tables[table_key]``.
+
+    Parameters
+    ----------
+    adata
+        An :class:`~anndata.AnnData` or :class:`~spatialdata.SpatialData`.
+    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used when *adata* is a :class:`~spatialdata.SpatialData`.
+
+    Returns
+    -------
+    The resolved :class:`~anndata.AnnData`.
+    """
+    if isinstance(adata, SpatialData):
+        if table_key not in adata.tables:
+            raise ValueError(
+                f"Table {table_key!r} not found in SpatialData. Available tables: {list(adata.tables.keys())}"
+            )
+        return adata.tables[table_key]
+    return adata
 
 
 def _check_tuple_needles(
