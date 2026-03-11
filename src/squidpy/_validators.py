@@ -52,7 +52,7 @@ def assert_non_empty_sequence(
         seq = (seq,)
 
     res, _ = _unique_order_preserving(seq)
-    if not len(res):
+    if not res:
         raise ValueError(f"No {name} have been selected.")
 
     return res
@@ -60,7 +60,7 @@ def assert_non_empty_sequence(
 
 def get_valid_values(needle: Sequence[Any], haystack: Sequence[Any]) -> Sequence[Any]:
     res = [n for n in needle if n in haystack]
-    if not len(res):
+    if not res:
         raise ValueError(f"No valid values were found. Valid values are `{sorted(set(haystack))}`.")
     return res
 

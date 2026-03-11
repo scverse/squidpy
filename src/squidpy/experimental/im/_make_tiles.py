@@ -170,7 +170,10 @@ def _get_largest_scale_dimensions(
     sdata: sd.SpatialData,
     image_key: str,
 ) -> tuple[int, int]:
-    """Get the dimensions (H, W) of the largest/finest scale of an image."""
+    """Get the dimensions (H, W) of the largest/finest scale of an image.
+
+    Callers must validate *image_key* before calling this helper.
+    """
     img_node = sdata.images[image_key]
 
     # Use _get_element_data with "scale0" which is always the largest scale
@@ -754,7 +757,10 @@ def _make_tiles(
     center_grid_on_tissue: bool = False,
     scale: str = "auto",
 ) -> _TileGrid:
-    """Construct a tile grid for an image, optionally centered on a tissue mask."""
+    """Construct a tile grid for an image, optionally centered on a tissue mask.
+
+    Callers must validate *image_key* before calling this helper.
+    """
     # Get image dimensions from the largest/finest scale
     H, W = _get_largest_scale_dimensions(sdata, image_key)
 
@@ -823,7 +829,10 @@ def _get_spot_coordinates(
     sdata: sd.SpatialData,
     spots_key: str,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Extract spot centers (x, y) and IDs from a shapes table."""
+    """Extract spot centers (x, y) and IDs from a shapes table.
+
+    Callers must validate *spots_key* before calling this helper.
+    """
     gdf = sdata.shapes[spots_key]
     if "geometry" not in gdf:
         raise ValueError(f"Shapes '{spots_key}' lack geometry column required for spot coordinates.")
@@ -872,7 +881,10 @@ def _derive_tile_size_from_spots(coords: np.ndarray) -> tuple[int, int]:
 
 
 def _get_mask_from_labels(sdata: sd.SpatialData, mask_key: str, scale: str) -> np.ndarray:
-    """Extract a 2D mask array from ``sdata.labels`` at the requested scale."""
+    """Extract a 2D mask array from ``sdata.labels`` at the requested scale.
+
+    Callers must validate *mask_key* before calling this helper.
+    """
     label_node = sdata.labels[mask_key]
     mask_da = _get_element_data(label_node, scale, "label", mask_key)
 
