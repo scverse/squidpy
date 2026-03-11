@@ -351,7 +351,6 @@ def co_occurrence(
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
-
     *,
     table_key: str = "table",
 ) -> tuple[NDArrayA, NDArrayA] | None:
