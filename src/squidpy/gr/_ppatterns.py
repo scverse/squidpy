@@ -23,7 +23,7 @@ from statsmodels.stats.multitest import multipletests
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, deprecated_params, parallelize
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -342,16 +342,13 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 
 @d.dedent
+@deprecated_params({"n_splits": "1.10.0", "n_jobs": "1.10.0", "backend": "1.10.0", "show_progress_bar": "1.10.0"})
 def co_occurrence(
     adata: AnnData | SpatialData,
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
-    n_splits: int | None = None,
-    n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -365,10 +362,6 @@ def co_occurrence(
         Distances interval at which co-occurrence is computed. If :class:`int`, uniformly spaced interval
         of the given size will be used.
     %(copy)s
-    n_splits
-        Number of splits in which to divide the spatial coordinates in
-        :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
-    %(parallelize)s
 
     Returns
     -------
@@ -406,9 +399,7 @@ def co_occurrence(
 
     # Compute co-occurrence probabilities using the fast numba routine.
     out = _co_occurrence_helper(spatial_x, spatial_y, interval, labs)
-    start = logg.info(
-        f"Calculating co-occurrence probabilities for `{len(interval)}` intervals using `{n_jobs}` core(s) and `{n_splits}` splits"
-    )
+    start = logg.info(f"Calculating co-occurrence probabilities for `{len(interval)}` intervals")
 
     if copy:
         logg.info("Finish", time=start)
