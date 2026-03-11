@@ -17,7 +17,7 @@ from spatialdata.models._utils import SpatialElement
 from spatialdata.transformations import get_transformation, set_transformation
 
 from squidpy._utils import _yx_from_shape
-from squidpy._validators import _assert_in_range, _assert_key_in_sdata, _assert_positive
+from squidpy._validators import assert_in_range, assert_key_in_sdata, assert_positive
 
 from ._utils import _get_element_data
 
@@ -358,10 +358,10 @@ def make_tiles(
     make_tiles_from_spots
         Create tiles centered on Visium spots instead of a regular grid.
     """
-    _assert_key_in_sdata(sdata, image_key, attr="images")
-    _assert_positive(tile_size[0], name="tile_size[0]")
-    _assert_positive(tile_size[1], name="tile_size[1]")
-    _assert_in_range(min_tissue_fraction, 0, 1, name="min_tissue_fraction")
+    assert_key_in_sdata(sdata, image_key, attr="images")
+    assert_positive(tile_size[0], name="tile_size[0]")
+    assert_positive(tile_size[1], name="tile_size[1]")
+    assert_in_range(min_tissue_fraction, 0, 1, name="min_tissue_fraction")
 
     # Derive mask key for centering if needed
     mask_key_for_grid = image_mask_key
@@ -428,7 +428,7 @@ def make_tiles(
                 )
             except (ImportError, KeyError, ValueError, RuntimeError) as e:  # pragma: no cover - defensive
                 logger.warning("detect_tissue failed (%s); tiles will not be classified.", e)
-        _assert_key_in_sdata(sdata, classification_mask_key, attr="labels")
+        assert_key_in_sdata(sdata, classification_mask_key, attr="labels")
         # Use a mask scale that aligns with the full-resolution image; avoid coarsest "auto" selection.
         if scale == "auto":
             label_node = sdata.labels.get(classification_mask_key)
@@ -528,10 +528,10 @@ def make_tiles_from_spots(
         Helper used to derive tissue masks automatically when needed.
     """
 
-    _assert_key_in_sdata(sdata, spots_key, attr="shapes")
+    assert_key_in_sdata(sdata, spots_key, attr="shapes")
     if image_key is not None:
-        _assert_key_in_sdata(sdata, image_key, attr="images")
-    _assert_in_range(min_tissue_fraction, 0, 1, name="min_tissue_fraction")
+        assert_key_in_sdata(sdata, image_key, attr="images")
+    assert_in_range(min_tissue_fraction, 0, 1, name="min_tissue_fraction")
 
     target_cs: str | None = None
     if image_key is not None:
@@ -596,7 +596,7 @@ def make_tiles_from_spots(
                 shapes_key=shapes_key,
             )
         else:
-            _assert_key_in_sdata(sdata, classification_mask_key, attr="labels")
+            assert_key_in_sdata(sdata, classification_mask_key, attr="labels")
             # Without an image we cannot infer the best scale; default to finest scale unless user specified.
             scale_used = "scale0" if scale == "auto" else scale
             _filter_tiles(
@@ -687,7 +687,7 @@ def _filter_tiles(
         mask_key = f"{image_key}_tissue"
     else:
         raise ValueError("tissue_mask_key must be provided when image_key is None.")
-    _assert_key_in_sdata(sdata, mask_key, attr="labels")
+    assert_key_in_sdata(sdata, mask_key, attr="labels")
     mask = _get_mask_from_labels(sdata, mask_key, scale)
     H_mask, W_mask = mask.shape
 
@@ -765,7 +765,7 @@ def _make_tiles(
         return _TileGrid(H, W, tile_size=tile_size)
 
     # Path 2: Center grid on tissue mask centroid
-    _assert_key_in_sdata(sdata, image_mask_key, attr="labels")
+    assert_key_in_sdata(sdata, image_mask_key, attr="labels")
 
     # Get mask and compute centroid
     label_node = sdata.labels[image_mask_key]

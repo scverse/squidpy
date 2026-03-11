@@ -28,10 +28,10 @@ from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, singledispatchmethod
 from squidpy._validators import (
-    _assert_in_range,
-    _assert_non_empty_sequence,
-    _assert_non_negative,
-    _assert_positive,
+    assert_in_range,
+    assert_non_empty_sequence,
+    assert_non_negative,
+    assert_positive,
 )
 from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.im._coords import (
@@ -518,9 +518,9 @@ class ImageContainer(FeatureMixin):
         size = self._convert_to_pixel_space(size)
 
         ys, xs = size
-        _assert_positive(ys, name="height")
-        _assert_positive(xs, name="width")
-        _assert_positive(scale, name="scale")
+        assert_positive(ys, name="height")
+        assert_positive(xs, name="width")
+        assert_positive(scale, name="scale")
 
         orig = CropCoords(x0=x, y0=y, x1=x + xs, y1=y + ys)
 
@@ -659,15 +659,15 @@ class ImageContainer(FeatureMixin):
         %(crop_corner.returns)s
         """
         y, x = self._convert_to_pixel_space((y, x))
-        _assert_in_range(y, 0, self.shape[0], name="height")
-        _assert_in_range(x, 0, self.shape[1], name="width")
+        assert_in_range(y, 0, self.shape[0], name="height")
+        assert_in_range(x, 0, self.shape[1], name="width")
 
         if not isinstance(radius, Iterable):
             radius = (radius, radius)
 
         (yr, xr) = self._convert_to_pixel_space(radius)
-        _assert_non_negative(yr, name="radius height")
-        _assert_non_negative(xr, name="radius width")
+        assert_non_negative(yr, name="radius height")
+        assert_non_negative(xr, name="radius width")
 
         return self.crop_corner(  # type: ignore[no-any-return]
             y=y - yr, x=x - xr, size=(yr * 2 + 1, xr * 2 + 1), **kwargs
@@ -708,8 +708,8 @@ class ImageContainer(FeatureMixin):
 
         y, x = self.shape
         ys, xs = size
-        _assert_in_range(ys, 0, y, name="height")
-        _assert_in_range(xs, 0, x, name="width")
+        assert_in_range(ys, 0, y, name="height")
+        assert_in_range(xs, 0, x, name="width")
 
         unique_ycoord = np.arange(start=0, stop=(y // ys + (y % ys != 0)) * ys, step=ys)
         unique_xcoord = np.arange(start=0, stop=(x // xs + (x % xs != 0)) * xs, step=xs)
@@ -770,13 +770,13 @@ class ImageContainer(FeatureMixin):
         The type of the crops depends on ``as_array`` and the number of dimensions on ``squeeze``.
         """
         self._assert_not_empty()
-        _assert_positive(spot_scale, name="scale")
+        assert_positive(spot_scale, name="scale")
         _assert_spatial_basis(adata, spatial_key)
 
         # limit to obs_names
         if obs_names is None:
             obs_names = adata.obs_names
-        obs_names = _assert_non_empty_sequence(obs_names, name="observations")
+        obs_names = assert_non_empty_sequence(obs_names, name="observations")
         adata = adata[obs_names, :]
 
         scale = self.data.attrs.get(Key.img.scale, 1)
@@ -1497,10 +1497,10 @@ class ImageContainer(FeatureMixin):
     def _convert_to_pixel_space(self, size: tuple[FoI_t, FoI_t]) -> tuple[int, int]:
         y, x = size
         if isinstance(y, float):
-            _assert_in_range(y, 0, 1, name="y")
+            assert_in_range(y, 0, 1, name="y")
             y = int(self.shape[0] * y)
         if isinstance(x, float):
-            _assert_in_range(x, 0, 1, name="x")
+            assert_in_range(x, 0, 1, name="x")
             x = int(self.shape[1] * x)
 
         return y, x

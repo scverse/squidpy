@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from spatialdata import SpatialData
 
 
-def _check_tuple_needles(
+def check_tuple_needles(
     needles: Sequence[tuple[Any, Any]],
     haystack: Sequence[Any],
     msg: str,
@@ -43,7 +43,7 @@ def _check_tuple_needles(
     return filtered
 
 
-def _assert_non_empty_sequence(
+def assert_non_empty_sequence(
     seq: Hashable | Iterable[Hashable], *, name: str, convert_scalar: bool = True
 ) -> list[Any]:
     if isinstance(seq, str) or not isinstance(seq, Iterable):
@@ -58,29 +58,29 @@ def _assert_non_empty_sequence(
     return res
 
 
-def _get_valid_values(needle: Sequence[Any], haystack: Sequence[Any]) -> Sequence[Any]:
+def get_valid_values(needle: Sequence[Any], haystack: Sequence[Any]) -> Sequence[Any]:
     res = [n for n in needle if n in haystack]
     if not len(res):
         raise ValueError(f"No valid values were found. Valid values are `{sorted(set(haystack))}`.")
     return res
 
 
-def _assert_positive(value: float, *, name: str) -> None:
+def assert_positive(value: float, *, name: str) -> None:
     if value <= 0:
         raise ValueError(f"Expected `{name}` to be positive, found `{value}`.")
 
 
-def _assert_non_negative(value: float, *, name: str) -> None:
+def assert_non_negative(value: float, *, name: str) -> None:
     if value < 0:
         raise ValueError(f"Expected `{name}` to be non-negative, found `{value}`.")
 
 
-def _assert_in_range(value: float, minn: float, maxx: float, *, name: str) -> None:
+def assert_in_range(value: float, minn: float, maxx: float, *, name: str) -> None:
     if not (minn <= value <= maxx):
         raise ValueError(f"Expected `{name}` to be in interval `[{minn}, {maxx}]`, found `{value}`.")
 
 
-def _assert_isinstance(value: Any, expected_type: type | tuple[type, ...], *, name: str) -> None:
+def assert_isinstance(value: Any, expected_type: type | tuple[type, ...], *, name: str) -> None:
     """Raise TypeError if *value* is not an instance of *expected_type*."""
     if not isinstance(value, expected_type):
         if isinstance(expected_type, tuple):
@@ -90,13 +90,13 @@ def _assert_isinstance(value: Any, expected_type: type | tuple[type, ...], *, na
         raise TypeError(f"Expected `{name}` to be of type `{type_names}`, got `{type(value).__name__}`.")
 
 
-def _assert_one_of(value: Any, options: Sequence[Any], *, name: str) -> None:
+def assert_one_of(value: Any, options: Sequence[Any], *, name: str) -> None:
     """Raise ValueError if *value* is not in *options*."""
     if value not in options:
         raise ValueError(f"Expected `{name}` to be one of `{list(options)}`, got `{value!r}`.")
 
 
-def _assert_key_in(obj: Any, key: str, *, attr: str, obj_name: str, extra_msg: str = "") -> None:
+def assert_key_in(obj: Any, key: str, *, attr: str, obj_name: str, extra_msg: str = "") -> None:
     """Raise KeyError if *key* not in ``getattr(obj, attr)``."""
     container = getattr(obj, attr)
     if key not in container:
@@ -107,11 +107,11 @@ def _assert_key_in(obj: Any, key: str, *, attr: str, obj_name: str, extra_msg: s
         raise KeyError(msg)
 
 
-def _assert_key_in_adata(adata: AnnData, key: str, *, attr: str, extra_msg: str = "") -> None:
+def assert_key_in_adata(adata: AnnData, key: str, *, attr: str, extra_msg: str = "") -> None:
     """Raise KeyError if *key* not in ``getattr(adata, attr)``."""
-    _assert_key_in(adata, key, attr=attr, obj_name="adata", extra_msg=extra_msg)
+    assert_key_in(adata, key, attr=attr, obj_name="adata", extra_msg=extra_msg)
 
 
-def _assert_key_in_sdata(sdata: SpatialData, key: str, *, attr: str, extra_msg: str = "") -> None:
+def assert_key_in_sdata(sdata: SpatialData, key: str, *, attr: str, extra_msg: str = "") -> None:
     """Raise KeyError if *key* not in ``getattr(sdata, attr)``."""
-    _assert_key_in(sdata, key, attr=attr, obj_name="sdata", extra_msg=extra_msg)
+    assert_key_in(sdata, key, attr=attr, obj_name="sdata", extra_msg=extra_msg)

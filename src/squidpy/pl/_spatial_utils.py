@@ -39,7 +39,7 @@ from squidpy._compat import add_categorical_legend
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
-from squidpy._validators import _assert_key_in_adata
+from squidpy._validators import assert_key_in_adata
 from squidpy.im._coords import CropCoords
 from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
@@ -131,7 +131,7 @@ def _get_library_id(
             raise ValueError(f"Could not fetch `library_id`, check that `spatial_key: {spatial_key}` is correct.")
         return library_id
     if library_key is not None:
-        _assert_key_in_adata(adata, library_key, attr="obs")
+        assert_key_in_adata(adata, library_key, attr="obs")
         if library_id is None:
             library_id = adata.obs[library_key].cat.categories.tolist()
         _assert_value_in_obs(adata, key=library_key, val=library_id)
@@ -555,7 +555,7 @@ def _plot_edges(
     from networkx import Graph
     from networkx.drawing import draw_networkx_edges
 
-    _assert_key_in_adata(adata, connectivity_key, attr="obsp", extra_msg="Please set `connectivity_key`.")
+    assert_key_in_adata(adata, connectivity_key, attr="obsp", extra_msg="Please set `connectivity_key`.")
 
     g = Graph(adata.obsp[connectivity_key])
     if not len(g.edges):

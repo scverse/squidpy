@@ -24,7 +24,7 @@ from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, deprecated_params, parallelize
-from squidpy._validators import _assert_key_in_adata
+from squidpy._validators import assert_key_in_adata
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -159,7 +159,7 @@ def spatial_autocorr(
         return adata.obs[cols].T.to_numpy(), cols
 
     def extract_obsm(adata: AnnData, ixs: int | Sequence[int] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
-        _assert_key_in_adata(adata, layer, attr="obsm")
+        assert_key_in_adata(adata, layer, attr="obsm")
         if ixs is None:
             ixs = list(np.arange(adata.obsm[layer].shape[1]))
         ixs = list(np.ravel([ixs]))

@@ -17,7 +17,7 @@ from matplotlib.axes import Axes
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
-from squidpy._validators import _assert_non_empty_sequence, _get_valid_values
+from squidpy._validators import assert_non_empty_sequence, get_valid_values
 from squidpy.gr._utils import _assert_categorical_obs
 from squidpy.pl._color_utils import Palette_t, _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _heatmap, save_fig
@@ -88,8 +88,8 @@ def centrality_scores(
     palette = _get_palette(adata, cluster_key=cluster_key, categories=clusters, palette=palette)
 
     score = scores if score is None else score
-    score = _assert_non_empty_sequence(score, name="centrality scores")
-    score = sorted(_get_valid_values(score, scores))
+    score = assert_non_empty_sequence(score, name="centrality scores")
+    score = sorted(get_valid_values(score, scores))
 
     fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
@@ -361,8 +361,8 @@ def co_occurrence(
     categories = adata.obs[cluster_key].cat.categories
 
     clusters = categories if clusters is None else clusters
-    clusters = _assert_non_empty_sequence(clusters, name="clusters")
-    clusters = sorted(_get_valid_values(clusters, categories))
+    clusters = assert_non_empty_sequence(clusters, name="clusters")
+    clusters = sorted(get_valid_values(clusters, categories))
 
     palette = _get_palette(adata, cluster_key=cluster_key, categories=categories, palette=palette)
 

@@ -39,7 +39,7 @@ from skimage.color import rgb2gray
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
-from squidpy._validators import _assert_in_range, _assert_key_in_adata
+from squidpy._validators import assert_in_range, assert_key_in_adata
 from squidpy.gr._utils import _assert_categorical_obs
 
 Vector_name_t = tuple[pd.Series | NDArrayA | None, str | None]
@@ -470,7 +470,7 @@ def _contrasting_color(r: int, g: int, b: int) -> str:
 
 
 def _get_black_or_white(value: float, cmap: mcolors.Colormap) -> str:
-    _assert_in_range(value, 0.0, 1.0, name="value")
+    assert_in_range(value, 0.0, 1.0, name="value")
 
     r, g, b, *_ = (int(c * 255) for c in cmap(value))
     return _contrasting_color(r, g, b)
@@ -654,7 +654,7 @@ def sanitize_anndata(adata: AnnData) -> None:
 
 
 def _assert_value_in_obs(adata: AnnData, key: str, val: Sequence[Any] | Any) -> None:
-    _assert_key_in_adata(adata, key, attr="obs")
+    assert_key_in_adata(adata, key, attr="obs")
     if not isinstance(val, list):
         val = [val]
     val = set(val) - set(adata.obs[key].unique())

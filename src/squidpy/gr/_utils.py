@@ -19,12 +19,12 @@ from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy._validators import (  # noqa: F401  — re-exported for backwards compatibility
-    _assert_in_range,
-    _assert_non_empty_sequence,
-    _assert_non_negative,
-    _assert_positive,
-    _check_tuple_needles,
-    _get_valid_values,
+    assert_in_range as _assert_in_range,
+    assert_non_empty_sequence as _assert_non_empty_sequence,
+    assert_non_negative as _assert_non_negative,
+    assert_positive as _assert_positive,
+    check_tuple_needles as _check_tuple_needles,
+    get_valid_values as _get_valid_values,
 )
 
 
