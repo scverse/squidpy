@@ -17,7 +17,6 @@ from tqdm.auto import tqdm
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-
 from squidpy._utils import NDArrayA, deprecated_params
 from squidpy._validators import assert_non_empty_sequence
 from squidpy.gr._utils import (
