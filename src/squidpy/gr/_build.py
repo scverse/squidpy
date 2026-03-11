@@ -149,6 +149,7 @@ def spatial_neighbors(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         spatial_key=spatial_key,
+        library_key=library_key,
     )
 
     _assert_positive(n_rings, name="n_rings")
@@ -401,9 +402,10 @@ def _resolve_sdata(
     elements_to_coordinate_systems: dict[str, str] | None,
     table_key: str = "table",
     spatial_key: str = Key.obsm.spatial,
+    library_key: str | None = None,
 ) -> tuple[AnnData, str | None]:
     if not isinstance(adata, SpatialData):
-        return adata, None
+        return adata, library_key
 
     assert elements_to_coordinate_systems is not None, (
         "Since `adata` is a :class:`spatialdata.SpatialData`, `elements_to_coordinate_systems` must not be `None`."
