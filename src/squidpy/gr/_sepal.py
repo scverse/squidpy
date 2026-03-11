@@ -31,6 +31,7 @@ __all__ = ["sepal"]
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
+@deprecated_params({"backend": "1.10.0"})
 def sepal(
     adata: AnnData | SpatialData,
     max_neighs: Literal[4, 6],
@@ -43,6 +44,8 @@ def sepal(
     layer: str | None = None,
     use_raw: bool = False,
     copy: bool = False,
+    n_jobs: int | None = None,
+    show_progress_bar: bool = True,
 ) -> pd.DataFrame | None:
     """
     Identify spatially variable genes with *Sepal*.
@@ -81,7 +84,8 @@ def sepal(
     use_raw
         Whether to access :attr:`anndata.AnnData.raw`.
     %(copy)s
-
+    %(n_jobs)s
+    %(show_progress_bar)s
     Returns
     -------
     If ``copy = True``, returns a :class:`pandas.DataFrame` with the sepal scores.
@@ -131,7 +135,7 @@ def sepal(
     if issparse(vals):
         vals = csc_matrix(vals)
     n_jobs = numba.get_num_threads()
-    score = _diffusion_genes(vals, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh, n_jobs=n_jobs)
+    score = _diffusion_genes(vals, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh, n_jobs=n_jobs, show_progress_bar=show_progress_bar)
 
     key_added = "sepal_score"
     sepal_score = pd.DataFrame(score, index=genes, columns=[key_added])
