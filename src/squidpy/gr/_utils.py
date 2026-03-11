@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import functools
-import inspect
-from collections.abc import Callable, Hashable, Iterable, Sequence
+from collections.abc import Hashable, Iterable, Sequence
 from contextlib import contextmanager
 from typing import Any
 
@@ -22,71 +20,34 @@ from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, _unique_order_preserving
 
-_TABLE_KEY_DOC = """    table_key
+
+def extract_adata(adata: AnnData | SpatialData, *, table_key: str = "table") -> AnnData:
+    """Resolve a :class:`~spatialdata.SpatialData` to an :class:`~anndata.AnnData`.
+
+    If *adata* is already an :class:`~anndata.AnnData` it is returned as-is.
+    When a :class:`~spatialdata.SpatialData` is passed, the table stored under
+    *table_key* is looked up via ``sdata.tables[table_key]``.
+
+    Parameters
+    ----------
+    adata
+        An :class:`~anndata.AnnData` or :class:`~spatialdata.SpatialData`.
+    table_key
         Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
-        Only used if ``adata`` is a :class:`spatialdata.SpatialData`."""
+        Only used when *adata* is a :class:`~spatialdata.SpatialData`.
 
-
-def extract_table_if_spatialdata(fn: Callable[..., Any]) -> Callable[..., Any]:
-    """Decorator that resolves a :class:`~spatialdata.SpatialData` to an :class:`~anndata.AnnData`.
-
-    Adds a ``table_key`` parameter (default ``"table"``) to the wrapped
-    function's signature **and** appends its documentation to the docstring.
-    When the first positional argument (``adata``) is a
-    :class:`~spatialdata.SpatialData`, the table is looked up via
-    ``adata.tables[table_key]`` and passed through in its place.
+    Returns
+    -------
+    The resolved :class:`~anndata.AnnData`.
     """
-    sig = inspect.signature(fn)
-
-    table_param = inspect.Parameter(
-        "table_key",
-        inspect.Parameter.KEYWORD_ONLY,
-        default="table",
-    )
-    params = list(sig.parameters.values())
-    kw_only_start = next(
-        (i for i, p in enumerate(params) if p.kind == inspect.Parameter.KEYWORD_ONLY),
-        len(params),
-    )
-    var_kw = [i for i, p in enumerate(params) if p.kind == inspect.Parameter.VAR_KEYWORD]
-    insert_pos = var_kw[0] if var_kw else kw_only_start
-    params.insert(insert_pos, table_param)
-    new_sig = sig.replace(parameters=params)
-
-    @functools.wraps(fn)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        bound = new_sig.bind(*args, **kwargs)
-        bound.apply_defaults()
-        table_key: str = bound.arguments.pop("table_key")
-
-        adata = bound.arguments.get("adata")
-        if isinstance(adata, SpatialData):
-            if table_key not in adata.tables:
-                raise ValueError(
-                    f"Table {table_key!r} not found in SpatialData. Available tables: {list(adata.tables.keys())}"
-                )
-            bound.arguments["adata"] = adata.tables[table_key]
-
-        return fn(*bound.args, **bound.kwargs)
-
-    wrapper.__signature__ = new_sig  # type: ignore[attr-defined]
-
-    if wrapper.__doc__ is not None:
-        # Insert table_key docs before the "Returns" / "Notes" / "References"
-        # section, or append at the end of Parameters if none found.
-        doc = wrapper.__doc__
-        for marker in ("Returns\n", "Notes\n", "References\n"):
-            idx = doc.find(marker)
-            if idx != -1:
-                # Back up past the "    -------\n" underline to the section header
-                header_start = doc.rfind("\n", 0, idx - 1)
-                doc = doc[:header_start] + "\n" + _TABLE_KEY_DOC + "\n" + doc[header_start:]
-                break
-        else:
-            doc = doc.rstrip() + "\n" + _TABLE_KEY_DOC + "\n"
-        wrapper.__doc__ = doc
-
-    return wrapper
+    if isinstance(adata, SpatialData):
+        if table_key not in adata.tables:
+            raise ValueError(
+                f"Table {table_key!r} not found in SpatialData. "
+                f"Available tables: {list(adata.tables.keys())}"
+            )
+        return adata.tables[table_key]
+    return adata
 
 
 def _check_tuple_needles(

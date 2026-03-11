@@ -21,7 +21,7 @@ from squidpy.gr._utils import (
     _assert_spatial_basis,
     _extract_expression,
     _save_data,
-    extract_table_if_spatialdata,
+    extract_adata,
 )
 
 __all__ = ["sepal"]
@@ -29,7 +29,6 @@ __all__ = ["sepal"]
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
-@extract_table_if_spatialdata
 def sepal(
     adata: AnnData | SpatialData,
     max_neighs: Literal[4, 6],
@@ -45,6 +44,8 @@ def sepal(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    *,
+    table_key: str = "table",
 ) -> pd.DataFrame | None:
     """
     Identify spatially variable genes with *Sepal*.
@@ -95,6 +96,7 @@ def sepal(
     If some genes in :attr:`anndata.AnnData.uns` ``['sepal_score']`` are `NaN`,
     consider re-running the function with increased ``n_iter``.
     """
+    adata = extract_adata(adata, table_key=table_key)
     _assert_connectivity_key(adata, connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
     if max_neighs not in (4, 6):

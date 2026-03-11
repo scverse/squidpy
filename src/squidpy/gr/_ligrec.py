@@ -27,7 +27,7 @@ from squidpy.gr._utils import (
     _check_tuple_needles,
     _genesymbols,
     _save_data,
-    extract_table_if_spatialdata,
+    extract_adata,
 )
 
 __all__ = ["ligrec", "PermutationTest"]
@@ -631,7 +631,6 @@ class PermutationTest(PermutationTestABC):
 
 
 @d.dedent
-@extract_table_if_spatialdata
 def ligrec(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -644,6 +643,8 @@ def ligrec(
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
+    *,
+    table_key: str = "table",
     **kwargs: Any,
 ) -> Mapping[str, pd.DataFrame] | None:
     """
@@ -661,6 +662,7 @@ def ligrec(
     -------
     %(ligrec_test_returns)s
     """  # noqa: D400
+    adata = extract_adata(adata, table_key=table_key)
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)
