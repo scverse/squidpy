@@ -196,18 +196,18 @@ class Key:
             return haystack
 
     class obsp:
+        @staticmethod
+        def _spatial_key(value: str | None, suffix: str) -> str:
+            if value is None:
+                return f"{Key.obsm.spatial}_{suffix}"
+            if value.endswith(f"_{suffix}"):
+                return value
+            return f"{value}_{suffix}"
+
         @classmethod
         def spatial_dist(cls, value: str | None = None) -> str:
-            if value is None:
-                return f"{Key.obsm.spatial}_distances"
-            if value.endswith("_distances"):
-                return value
-            return f"{value}_distances"
+            return cls._spatial_key(value, "distances")
 
         @classmethod
         def spatial_conn(cls, value: str | None = None) -> str:
-            if value is None:
-                return f"{Key.obsm.spatial}_connectivities"
-            if value.endswith("_connectivities"):
-                return value
-            return f"{value}_connectivities"
+            return cls._spatial_key(value, "connectivities")
