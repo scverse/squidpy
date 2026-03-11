@@ -14,6 +14,7 @@ from scipy.sparse import csc_matrix, csr_matrix, issparse, isspmatrix_csr, spmat
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData
 from tqdm.auto import tqdm
+
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, deprecated_params
