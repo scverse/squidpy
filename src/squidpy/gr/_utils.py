@@ -43,8 +43,7 @@ def extract_adata(adata: AnnData | SpatialData, *, table_key: str = "table") -> 
     if isinstance(adata, SpatialData):
         if table_key not in adata.tables:
             raise ValueError(
-                f"Table {table_key!r} not found in SpatialData. "
-                f"Available tables: {list(adata.tables.keys())}"
+                f"Table {table_key!r} not found in SpatialData. Available tables: {list(adata.tables.keys())}"
             )
         return adata.tables[table_key]
     return adata
