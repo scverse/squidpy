@@ -242,10 +242,20 @@ class TestReExports:
         """Verify all re-exported validators are the same objects as the originals."""
         from squidpy._validators import (
             assert_in_range as orig_air,
+        )
+        from squidpy._validators import (
             assert_non_empty_sequence as orig_anes,
+        )
+        from squidpy._validators import (
             assert_non_negative as orig_ann,
+        )
+        from squidpy._validators import (
             assert_positive as orig_ap,
+        )
+        from squidpy._validators import (
             check_tuple_needles as orig_ctn,
+        )
+        from squidpy._validators import (
             get_valid_values as orig_gvv,
         )
         from squidpy.gr._utils import (

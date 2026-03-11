@@ -20,10 +20,20 @@ from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy._validators import (  # noqa: F401  — re-exported for backwards compatibility
     assert_in_range as _assert_in_range,
+)
+from squidpy._validators import (
     assert_non_empty_sequence as _assert_non_empty_sequence,
+)
+from squidpy._validators import (
     assert_non_negative as _assert_non_negative,
+)
+from squidpy._validators import (
     assert_positive as _assert_positive,
+)
+from squidpy._validators import (
     check_tuple_needles as _check_tuple_needles,
+)
+from squidpy._validators import (
     get_valid_values as _get_valid_values,
 )
 
