@@ -256,8 +256,6 @@ def complexes(adata: AnnData) -> Sequence[tuple[str, str]]:
     ]
 
 
-
-
 @pytest.fixture(scope="session")
 def ligrec_pvalues_reference() -> Mapping[str, pd.DataFrame]:
     with open("tests/_data/ligrec_pvalues_reference.pickle", "rb") as fin:
