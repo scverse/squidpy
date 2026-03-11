@@ -409,8 +409,8 @@ def _resolve_sdata(
         "Since `adata` is a :class:`spatialdata.SpatialData`, `elements_to_coordinate_systems` must not be `None`."
     )
     table = extract_adata(adata, table_key=table_key)
-    elements, _ = match_element_to_table(adata, list(elements_to_coordinate_systems), table_key)
-    assert table.obs_names.equals(adata.tables[table_key].obs_names), (
+    elements, matched_table = match_element_to_table(adata, list(elements_to_coordinate_systems), table_key)
+    assert matched_table.obs_names.equals(table.obs_names), (
         "The spatialdata table must annotate all elements keys. Some elements are missing, please check the `elements_to_coordinate_systems` dictionary."
     )
     regions, region_key, instance_key = get_table_keys(table)
@@ -574,8 +574,7 @@ def mask_graph(
     if not isinstance(polygon_mask, Polygon | MultiPolygon):
         raise ValueError(f"`polygon_mask` should be of type `Polygon` or `MultiPolygon`, got {type(polygon_mask)}")
 
-    # get elements
-    table = sdata.tables[table_key]
+    table = extract_adata(sdata, table_key=table_key)
     coords = table.obsm[spatial_key]
     Adj = table.obsp[conns_key]
     Dst = table.obsp[dists_key]
