@@ -135,7 +135,19 @@ def sepal(
     if issparse(vals):
         vals = csc_matrix(vals)
     n_jobs = numba.get_num_threads()
-    score = _diffusion_genes(vals, use_hex, n_iter, sat, sat_idx, unsat, unsat_idx, dt, thresh, n_jobs=n_jobs, show_progress_bar=show_progress_bar)
+    score = _diffusion_genes(
+        vals,
+        use_hex,
+        n_iter,
+        sat,
+        sat_idx,
+        unsat,
+        unsat_idx,
+        dt,
+        thresh,
+        n_jobs=n_jobs,
+        show_progress_bar=show_progress_bar,
+    )
 
     key_added = "sepal_score"
     sepal_score = pd.DataFrame(score, index=genes, columns=[key_added])
