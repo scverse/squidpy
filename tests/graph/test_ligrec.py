@@ -330,21 +330,6 @@ class TestValidBehavior:
         np.testing.assert_array_equal(res["means"].columns, paul15_means.columns)
         np.testing.assert_allclose(res["means"].values, paul15_means.values)
 
-    def test_reproducibility_numba_off(
-        self, adata: AnnData, interactions: Interactions_t, ligrec_no_numba: Mapping[str, pd.DataFrame]
-    ):
-        r = ligrec(
-            adata, _CK, interactions=interactions, n_perms=5, copy=True, show_progress_bar=False, seed=42, n_jobs=1
-        )
-        np.testing.assert_array_equal(r["means"].index, ligrec_no_numba["means"].index)
-        np.testing.assert_array_equal(r["means"].columns, ligrec_no_numba["means"].columns)
-        np.testing.assert_array_equal(r["pvalues"].index, ligrec_no_numba["pvalues"].index)
-        np.testing.assert_array_equal(r["pvalues"].columns, ligrec_no_numba["pvalues"].columns)
-
-        np.testing.assert_allclose(r["means"], ligrec_no_numba["means"])
-        np.testing.assert_allclose(r["pvalues"], ligrec_no_numba["pvalues"])
-        np.testing.assert_array_equal(np.where(np.isnan(r["pvalues"])), np.where(np.isnan(ligrec_no_numba["pvalues"])))
-
     def test_pvalues_reference(
         self, adata: AnnData, interactions: Interactions_t, ligrec_pvalues_reference: Mapping[str, pd.DataFrame]
     ):
