@@ -537,7 +537,7 @@ class PermutationTest(PermutationTestABC):
 
 
 @d.dedent
-@deprecated_params({"numba_parallel": "1.10.0"})
+@deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
 def ligrec(
     adata: AnnData | SpatialData,
     cluster_key: str,
