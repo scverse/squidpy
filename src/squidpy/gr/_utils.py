@@ -18,24 +18,7 @@ from scipy.sparse import csc_matrix, csr_matrix, spmatrix
 from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
-from squidpy._validators import (  # noqa: F401  — re-exported for backwards compatibility
-    assert_in_range as _assert_in_range,
-)
-from squidpy._validators import (
-    assert_non_empty_sequence as _assert_non_empty_sequence,
-)
-from squidpy._validators import (
-    assert_non_negative as _assert_non_negative,
-)
-from squidpy._validators import (
-    assert_positive as _assert_positive,
-)
-from squidpy._validators import (
-    check_tuple_needles as _check_tuple_needles,
-)
-from squidpy._validators import (
-    get_valid_values as _get_valid_values,
-)
+from squidpy._validators import assert_non_empty_sequence
 
 
 def _assert_categorical_obs(adata: AnnData, key: str) -> None:
@@ -85,10 +68,10 @@ def _extract_expression(
 
     if use_raw:
         genes = list(set(adata.raw.var_names) & set(genes))  # type: ignore[arg-type]
-        genes = _assert_non_empty_sequence(genes, name="genes")
+        genes = assert_non_empty_sequence(genes, name="genes")
         res = adata.raw[:, genes].X
     else:
-        genes = _assert_non_empty_sequence(genes, name="genes")
+        genes = assert_non_empty_sequence(genes, name="genes")
 
         if layer is None:
             res = adata[:, genes].X

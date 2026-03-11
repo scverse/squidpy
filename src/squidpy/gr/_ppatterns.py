@@ -24,11 +24,10 @@ from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, deprecated_params, parallelize
-from squidpy._validators import assert_key_in_adata
+from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
-    _assert_positive,
     _assert_spatial_basis,
     _save_data,
 )
@@ -200,7 +199,7 @@ def spatial_autocorr(
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
-        _assert_positive(n_perms, name="n_perms")
+        assert_positive(n_perms, name="n_perms")
         perms = list(np.arange(n_perms))
 
         score_perms = parallelize(
