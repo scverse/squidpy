@@ -42,9 +42,9 @@ from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA
+from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
-    _assert_positive,
     _assert_spatial_basis,
     _save_data,
 )
@@ -191,8 +191,8 @@ def spatial_neighbors(
         adata = adata.tables[table_key]
         library_key = region_key
 
-    _assert_positive(n_rings, name="n_rings")
-    _assert_positive(n_neighs, name="n_neighs")
+    assert_positive(n_rings, name="n_rings")
+    assert_positive(n_neighs, name="n_neighs")
     _assert_spatial_basis(adata, spatial_key)
 
     transform = Transform.NONE if transform is None else Transform(transform)
