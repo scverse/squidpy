@@ -18,6 +18,7 @@ import numba
 import numpy as np
 import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
+from tqdm.auto import tqdm
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
 
@@ -261,21 +262,10 @@ def thread_map(
     """
     from concurrent.futures import ThreadPoolExecutor
 
-    try:
-        import ipywidgets  # noqa: F401
-        from tqdm.auto import tqdm
-    except ImportError:
-        try:
-            from tqdm.std import tqdm
-        except ImportError:
-            tqdm = None  # type: ignore[assignment]
-
-    _total = total if total is not None else (len(items) if hasattr(items, "__len__") else None)
-
     with ThreadPoolExecutor(max_workers=n_jobs) as pool:
         it = pool.map(fn, items)
         if show_progress_bar and tqdm is not None:
-            it = tqdm(it, total=_total, unit=unit)
+            it = tqdm(it, total=len(items), unit=unit)
         return list(it)
 
 
