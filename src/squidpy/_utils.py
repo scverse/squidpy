@@ -228,6 +228,57 @@ def parallelize(
     return wrapper
 
 
+def thread_map(
+    fn: Callable[..., Any],
+    items: Iterable[Any],
+    *,
+    n_jobs: int = 1,
+    show_progress_bar: bool = False,
+    unit: str = "item",
+    total: int | None = None,
+) -> list[Any]:
+    """Map *fn* over *items* using a thread pool with an optional progress bar.
+
+    Parameters
+    ----------
+    fn
+        Callable applied to each element of *items*.
+    items
+        Iterable of inputs passed one-by-one to *fn*.
+    n_jobs
+        Number of worker threads. ``1`` runs sequentially (no pool overhead).
+    show_progress_bar
+        Whether to display a ``tqdm`` progress bar.
+    unit
+        Label shown next to the ``tqdm`` counter.
+    total
+        Length hint passed to ``tqdm`` when *items* has no ``__len__``.
+
+    Returns
+    -------
+    list
+        Results in the same order as *items*.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    try:
+        import ipywidgets  # noqa: F401
+        from tqdm.auto import tqdm
+    except ImportError:
+        try:
+            from tqdm.std import tqdm
+        except ImportError:
+            tqdm = None  # type: ignore[assignment]
+
+    _total = total if total is not None else (len(items) if hasattr(items, "__len__") else None)
+
+    with ThreadPoolExecutor(max_workers=n_jobs) as pool:
+        it = pool.map(fn, items)
+        if show_progress_bar and tqdm is not None:
+            it = tqdm(it, total=_total, unit=unit)
+        return list(it)
+
+
 def _get_n_cores(n_cores: int | None) -> int:
     """
     Make number of cores a positive integer.

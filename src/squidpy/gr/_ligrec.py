@@ -5,7 +5,6 @@ from __future__ import annotations
 from abc import ABC
 from collections import namedtuple
 from collections.abc import Iterable, Mapping, Sequence
-from concurrent.futures import ThreadPoolExecutor
 from itertools import product
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias
@@ -22,7 +21,7 @@ from tqdm.auto import tqdm
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, _get_n_cores, deprecated_params
+from squidpy._utils import NDArrayA, _get_n_cores, deprecated_params, thread_map
 from squidpy._validators import assert_positive, check_tuple_needles
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -712,31 +711,25 @@ def _analysis(
     chunk_sizes = np.full(n_jobs, base_chunk, dtype=np.int64)
     chunk_sizes[:remainder] += 1
 
-    thread_counts = np.zeros((n_jobs, n_inter, n_cpairs), dtype=np.int64)
     pbar = tqdm(total=n_perms, unit="permutation", disable=not show_progress_bar)
 
-    def _worker(t: int) -> None:
+    def _worker(t: int) -> NDArrayA:
+        local_counts = np.zeros((n_inter, n_cpairs), dtype=np.int64)
         rs = np.random.RandomState(None if seed is None else t + seed)
         perm = clustering.copy()
         for _ in range(chunk_sizes[t]):
             rs.shuffle(perm)
             _score_permutation(
-                data_arr,
-                perm,
-                inv_counts,
-                mean_obs,
-                interactions,
-                interaction_clusters,
-                valid,
-                thread_counts[t],
+                data_arr, perm, inv_counts, mean_obs,
+                interactions, interaction_clusters, valid, local_counts,
             )
             pbar.update(1)
+        return local_counts
 
-    with ThreadPoolExecutor(max_workers=n_jobs) as pool:
-        list(pool.map(_worker, range(n_jobs)))
+    thread_counts = thread_map(_worker, range(n_jobs), n_jobs=n_jobs)
     pbar.close()
 
-    pval_counts = thread_counts.sum(axis=0)
+    pval_counts = np.sum(thread_counts, axis=0)
     pvalues = pval_counts.astype(np.float64) / n_perms
     pvalues[~valid] = np.nan
 
