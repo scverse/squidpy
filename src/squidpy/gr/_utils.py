@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Hashable, Iterable, Sequence
+from collections.abc import Sequence
 from contextlib import contextmanager
 from typing import Any
 
@@ -18,7 +18,9 @@ from spatialdata import SpatialData
 
 from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
 from squidpy._docs import d
-from squidpy._utils import NDArrayA, _unique_order_preserving
+
+from squidpy._utils import NDArrayA
+from squidpy._validators import assert_non_empty_sequence
 
 
 def extract_adata(adata: AnnData | SpatialData, *, table_key: str = "table") -> AnnData:
@@ -80,6 +82,7 @@ def _check_tuple_needles(
     return filtered
 
 
+
 def _assert_categorical_obs(adata: AnnData, key: str) -> None:
     if key not in adata.obs:
         raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
@@ -100,43 +103,6 @@ def _assert_connectivity_key(adata: AnnData, key: str) -> None:
 def _assert_spatial_basis(adata: AnnData, key: str) -> None:
     if key not in adata.obsm:
         raise KeyError(f"Spatial basis `{key}` not found in `adata.obsm`.")
-
-
-def _assert_non_empty_sequence(
-    seq: Hashable | Iterable[Hashable], *, name: str, convert_scalar: bool = True
-) -> list[Any]:
-    if isinstance(seq, str) or not isinstance(seq, Iterable):
-        if not convert_scalar:
-            raise TypeError(f"Expected a sequence, found `{type(seq)}`.")
-        seq = (seq,)
-
-    res, _ = _unique_order_preserving(seq)
-    if not len(res):
-        raise ValueError(f"No {name} have been selected.")
-
-    return res
-
-
-def _get_valid_values(needle: Sequence[Any], haystack: Sequence[Any]) -> Sequence[Any]:
-    res = [n for n in needle if n in haystack]
-    if not len(res):
-        raise ValueError(f"No valid values were found. Valid values are `{sorted(set(haystack))}`.")
-    return res
-
-
-def _assert_positive(value: float, *, name: str) -> None:
-    if value <= 0:
-        raise ValueError(f"Expected `{name}` to be positive, found `{value}`.")
-
-
-def _assert_non_negative(value: float, *, name: str) -> None:
-    if value < 0:
-        raise ValueError(f"Expected `{name}` to be non-negative, found `{value}`.")
-
-
-def _assert_in_range(value: float, minn: float, maxx: float, *, name: str) -> None:
-    if not (minn <= value <= maxx):
-        raise ValueError(f"Expected `{name}` to be in interval `[{minn}, {maxx}]`, found `{value}`.")
 
 
 def _save_data(adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool = True, time: Any | None = None) -> None:
@@ -164,10 +130,10 @@ def _extract_expression(
 
     if use_raw:
         genes = list(set(adata.raw.var_names) & set(genes))  # type: ignore[arg-type]
-        genes = _assert_non_empty_sequence(genes, name="genes")
+        genes = assert_non_empty_sequence(genes, name="genes")
         res = adata.raw[:, genes].X
     else:
-        genes = _assert_non_empty_sequence(genes, name="genes")
+        genes = assert_non_empty_sequence(genes, name="genes")
 
         if layer is None:
             res = adata[:, genes].X

@@ -15,9 +15,9 @@ from spatialdata import SpatialData
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._validators import assert_non_empty_sequence
 from squidpy.gr._utils import (
     _assert_connectivity_key,
-    _assert_non_empty_sequence,
     _assert_spatial_basis,
     _extract_expression,
     _save_data,
@@ -108,7 +108,7 @@ def sepal(
         genes = adata.var_names.values
         if "highly_variable" in adata.var.columns:
             genes = genes[adata.var["highly_variable"].values]
-    genes = _assert_non_empty_sequence(genes, name="genes")
+    genes = assert_non_empty_sequence(genes, name="genes")
 
     n_jobs = _get_n_cores(n_jobs)
 

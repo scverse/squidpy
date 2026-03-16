@@ -21,10 +21,10 @@ from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
-    _assert_positive,
     _save_data,
     _shuffle_group,
     extract_adata,
@@ -178,7 +178,7 @@ def nhood_enrichment(
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
-    _assert_positive(n_perms, name="n_perms")
+    assert_positive(n_perms, name="n_perms")
 
     adj = adata.obsp[connectivity_key]
     original_clust = adata.obs[cluster_key]
