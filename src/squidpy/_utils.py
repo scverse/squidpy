@@ -18,6 +18,7 @@ import numba
 import numpy as np
 import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
+from tqdm.auto import tqdm
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
 
@@ -226,6 +227,46 @@ def parallelize(
     pass_queue = not hasattr(callback, "py_func")  # we'd be inside a numba function
 
     return wrapper
+
+
+def thread_map(
+    fn: Callable[..., Any],
+    items: Iterable[Any],
+    *,
+    n_jobs: int = 1,
+    show_progress_bar: bool = False,
+    unit: str = "item",
+    total: int | None = None,
+) -> list[Any]:
+    """Map *fn* over *items* using a thread pool with an optional progress bar.
+
+    Parameters
+    ----------
+    fn
+        Callable applied to each element of *items*.
+    items
+        Iterable of inputs passed one-by-one to *fn*.
+    n_jobs
+        Number of worker threads. ``1`` runs sequentially (no pool overhead).
+    show_progress_bar
+        Whether to display a ``tqdm`` progress bar.
+    unit
+        Label shown next to the ``tqdm`` counter.
+    total
+        Length hint passed to ``tqdm`` when *items* has no ``__len__``.
+
+    Returns
+    -------
+    list
+        Results in the same order as *items*.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=n_jobs) as pool:
+        it = pool.map(fn, items)
+        if show_progress_bar and tqdm is not None:
+            it = tqdm(it, total=len(items), unit=unit)
+        return list(it)
 
 
 def _get_n_cores(n_cores: int | None) -> int:
