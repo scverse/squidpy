@@ -194,8 +194,11 @@ def _diffusion_genes(
         return dt * time_iter
 
     scores = thread_map(
-        _process_gene, range(vals.shape[1]),
-        n_jobs=n_jobs, show_progress_bar=show_progress_bar, unit="gene",
+        _process_gene,
+        range(vals.shape[1]),
+        n_jobs=n_jobs,
+        show_progress_bar=show_progress_bar,
+        unit="gene",
     )
     return np.array(scores)
 
