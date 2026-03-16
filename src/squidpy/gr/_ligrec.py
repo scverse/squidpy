@@ -720,8 +720,14 @@ def _analysis(
         for _ in range(chunk_sizes[t]):
             rs.shuffle(perm)
             _score_permutation(
-                data_arr, perm, inv_counts, mean_obs,
-                interactions, interaction_clusters, valid, local_counts,
+                data_arr,
+                perm,
+                inv_counts,
+                mean_obs,
+                interactions,
+                interaction_clusters,
+                valid,
+                local_counts,
             )
             pbar.update(1)
         return local_counts
