@@ -10,7 +10,6 @@ from itertools import product
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
-import numba
 import numpy as np
 import pandas as pd
 from anndata import AnnData
@@ -23,7 +22,7 @@ from tqdm.auto import tqdm
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, deprecated_params
+from squidpy._utils import NDArrayA, _get_n_cores, deprecated_params
 from squidpy._validators import assert_positive, check_tuple_needles
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -313,9 +312,7 @@ class PermutationTestABC(ABC):
         # much faster than applymap (tested on 1M interactions)
         interactions_ = np.vectorize(lambda g: gene_mapper[g])(interactions.values)
 
-        if n_jobs is None:
-            n_jobs = numba.get_num_threads()
-        n_jobs = max(1, min(n_jobs, n_perms))
+        n_jobs = _get_n_cores(n_jobs)
         start = logg.info(
             f"Running `{n_perms}` permutations on `{len(interactions)}` interactions "
             f"and `{len(clusters)}` cluster combinations using `{n_jobs}` core(s)"
