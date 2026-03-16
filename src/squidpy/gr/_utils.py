@@ -18,7 +18,6 @@ from spatialdata import SpatialData
 
 from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
 from squidpy._docs import d
-
 from squidpy._utils import NDArrayA
 from squidpy._validators import assert_non_empty_sequence
 
@@ -80,7 +79,6 @@ def _check_tuple_needles(
         filtered.append((a, b))
 
     return filtered
-
 
 
 def _assert_categorical_obs(adata: AnnData, key: str) -> None:

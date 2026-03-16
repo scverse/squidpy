@@ -20,11 +20,8 @@ from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
-
-from squidpy.gr._utils import extract_adata
-
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
-
+from squidpy.gr._utils import extract_adata
 
 __all__ = ["calculate_niche"]
 
@@ -851,7 +848,6 @@ def _validate_niche_args(
         adata = extract_adata(data, table_key=table_key or "table")
         if library_key not in adata.obs.columns:
             raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
-
 
     if n_neighbors is not None:
         assert_isinstance(n_neighbors, int, name="n_neighbors")
