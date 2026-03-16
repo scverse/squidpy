@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
 
-import numba
 import numpy as np
 import pandas as pd
 from anndata import AnnData
@@ -13,11 +11,10 @@ from scanpy import logging as logg
 from scipy.sparse import csc_matrix, csr_matrix, issparse, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData
-from tqdm.auto import tqdm
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, deprecated_params
+from squidpy._utils import NDArrayA, _get_n_cores, deprecated_params, thread_map
 from squidpy._validators import assert_non_empty_sequence
 from squidpy.gr._utils import (
     _assert_connectivity_key,
@@ -52,9 +49,6 @@ def sepal(
 
     *Sepal* is a method that simulates a diffusion process to quantify spatial structure in tissue.
     See :cite:`andersson2021` for reference.
-
-    **Note**: This function parallelizes the diffusion simulation across threads using numba kernels.
-    The number of threads is determined by :func:`numba.get_num_threads`.
 
     Parameters
     ----------
@@ -114,6 +108,8 @@ def sepal(
             genes = genes[adata.var["highly_variable"].values]
     genes = assert_non_empty_sequence(genes, name="genes")
 
+    n_jobs = _get_n_cores(n_jobs)
+
     g = adata.obsp[connectivity_key]
     if not isspmatrix_csr(g):
         g = csr_matrix(g)
@@ -134,7 +130,6 @@ def sepal(
 
     if issparse(vals):
         vals = csc_matrix(vals)
-    n_jobs = numba.get_num_threads()
     score = _diffusion_genes(
         vals,
         use_hex,
@@ -198,17 +193,10 @@ def _diffusion_genes(
         )
         return dt * time_iter
 
-    gene_indices = range(vals.shape[1])
-    with ThreadPoolExecutor(max_workers=n_jobs) as pool:
-        scores = list(
-            tqdm(
-                pool.map(_process_gene, gene_indices),
-                total=len(gene_indices),
-                unit="gene",
-                disable=not show_progress_bar,
-            )
-        )
-
+    scores = thread_map(
+        _process_gene, range(vals.shape[1]),
+        n_jobs=n_jobs, show_progress_bar=show_progress_bar, unit="gene",
+    )
     return np.array(scores)
 
 
