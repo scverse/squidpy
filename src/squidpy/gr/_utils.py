@@ -50,37 +50,6 @@ def extract_adata(adata: AnnData | SpatialData, *, table_key: str = "table") -> 
     return adata
 
 
-def _check_tuple_needles(
-    needles: Sequence[tuple[Any, Any]],
-    haystack: Sequence[Any],
-    msg: str,
-    reraise: bool = True,
-) -> Sequence[tuple[Any, Any]]:
-    filtered = []
-
-    for needle in needles:
-        if not isinstance(needle, Sequence):
-            raise TypeError(f"Expected a `Sequence`, found `{type(needle).__name__}`.")
-        if len(needle) != 2:
-            raise ValueError(f"Expected a `tuple` of length `2`, found `{len(needle)}`.")
-        a, b = needle
-
-        if a not in haystack:
-            if reraise:
-                raise ValueError(msg.format(a))
-            else:
-                continue
-        if b not in haystack:
-            if reraise:
-                raise ValueError(msg.format(b))
-            else:
-                continue
-
-        filtered.append((a, b))
-
-    return filtered
-
-
 def _assert_categorical_obs(adata: AnnData, key: str) -> None:
     if key not in adata.obs:
         raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
