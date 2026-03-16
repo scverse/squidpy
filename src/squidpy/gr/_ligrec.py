@@ -23,11 +23,12 @@ from tqdm.auto import tqdm
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
+
 from squidpy._utils import NDArrayA, deprecated_params
+from squidpy._validators import assert_positive, check_tuple_needles
+
 from squidpy.gr._utils import (
     _assert_categorical_obs,
-    _assert_positive,
-    _check_tuple_needles,
     _genesymbols,
     _save_data,
 )
@@ -267,7 +268,7 @@ class PermutationTestABC(ABC):
         -------
         %(ligrec_test_returns)s
         """
-        _assert_positive(n_perms, name="n_perms")
+        assert_positive(n_perms, name="n_perms")
         _assert_categorical_obs(self._adata, key=cluster_key)
 
         if corr_method is not None:
@@ -291,7 +292,7 @@ class PermutationTestABC(ABC):
         if all(isinstance(c, str) for c in clusters):
             clusters = list(product(clusters, repeat=2))  # type: ignore[assignment]
         clusters = sorted(
-            _check_tuple_needles(
+            check_tuple_needles(
                 clusters,  # type: ignore[arg-type]
                 self._filtered_data["clusters"].cat.categories,
                 msg="Invalid cluster `{0!r}`.",
