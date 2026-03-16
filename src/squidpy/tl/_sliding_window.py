@@ -9,7 +9,7 @@ from scanpy import logging as logg
 from spatialdata import SpatialData
 
 from squidpy._docs import d
-from squidpy.gr._utils import _save_data
+from squidpy.gr._utils import _save_data, extract_adata
 
 __all__ = ["sliding_window"]
 
@@ -25,6 +25,8 @@ def sliding_window(
     spatial_key: str = "spatial",
     drop_partial_windows: bool = False,
     copy: bool = False,
+    *,
+    table_key: str = "table",
 ) -> pd.DataFrame | None:
     """
     Divide a tissue slice into regulary shaped spatially contiguous regions (windows).
@@ -55,8 +57,7 @@ def sliding_window(
     if overlap < 0:
         raise ValueError("Overlap must be non-negative.")
 
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata(adata, table_key=table_key)
 
     # we don't want to modify the original adata in case of copy=True
     if copy:

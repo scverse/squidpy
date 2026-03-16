@@ -26,6 +26,7 @@ from squidpy.gr._utils import (
     _assert_categorical_obs,
     _genesymbols,
     _save_data,
+    extract_adata,
 )
 
 __all__ = ["ligrec", "PermutationTest"]
@@ -641,6 +642,8 @@ def ligrec(
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
+    *,
+    table_key: str = "table",
     **kwargs: Any,
 ) -> Mapping[str, pd.DataFrame] | None:
     """
@@ -658,8 +661,7 @@ def ligrec(
     -------
     %(ligrec_test_returns)s
     """  # noqa: D400
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata(adata, table_key=table_key)
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)

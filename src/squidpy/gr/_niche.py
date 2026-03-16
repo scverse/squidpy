@@ -21,6 +21,7 @@ from spatialdata._logging import logger as logg
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
+from squidpy.gr._utils import extract_adata
 
 __all__ = ["calculate_niche"]
 
@@ -169,12 +170,8 @@ def calculate_niche(
     if resolutions is None:
         resolutions = [0.5]
 
-    if isinstance(data, SpatialData):
-        orig_adata = data.tables[table_key]
-        adata = orig_adata.copy()
-    else:
-        orig_adata = data
-        adata = data.copy()
+    orig_adata = extract_adata(data, table_key=table_key or "table")
+    adata = orig_adata.copy()
 
     assert_key_in_adata(
         adata,
@@ -843,18 +840,14 @@ def _validate_niche_args(
 
     assert_one_of(flavor, ["neighborhood", "utag", "cellcharter", "spatialleiden"], name="flavor")
 
+    if isinstance(data, SpatialData) and table_key is None:
+        raise ValueError("'table_key' is required when 'data' is a SpatialData object")
+
     if library_key is not None:
         assert_isinstance(library_key, str, name="library_key")
-        if isinstance(data, AnnData):
-            if library_key not in data.obs.columns:
-                raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
-        elif isinstance(data, SpatialData):
-            if table_key is None:
-                raise ValueError("'table_key' is required when 'data' is a SpatialData object")
-            if table_key not in data.tables:
-                raise ValueError(f"'table_key' must be a valid table key in 'data', got {table_key}")
-            if library_key not in data.tables[table_key].obs.columns:
-                raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
+        adata = extract_adata(data, table_key=table_key or "table")
+        if library_key not in adata.obs.columns:
+            raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
 
     if n_neighbors is not None:
         assert_isinstance(n_neighbors, int, name="n_neighbors")
