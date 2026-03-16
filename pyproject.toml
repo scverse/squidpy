@@ -225,17 +225,21 @@ lint.flake8-tidy-imports.ban-relative-imports = "all"
 lint.isort.required-imports = [ "from __future__ import annotations" ]
 
 [tool.pytest]
-ini_options.filterwarnings = [
+strict = true
+filterwarnings = [
   "error::numba.NumbaPerformanceWarning",
   "ignore::UserWarning",
   "ignore::anndata.OldFormatWarning",
   "ignore:.*pkg_resources:DeprecationWarning",
 ]
-ini_options.python_files = "test_*.py"
-ini_options.testpaths = [ "tests/" ]
-ini_options.xfail_strict = true
-ini_options.addopts = [
+python_files = [ "test_*.py" ]
+testpaths = [ "tests/" ]
+addopts = [
   "--ignore=docs",
+]
+markers = [
+  "internet: tests that require internet",
+  "gpu: tests that require GPU",
 ]
 
 [tool.coverage]
