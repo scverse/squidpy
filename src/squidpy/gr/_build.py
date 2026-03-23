@@ -14,6 +14,7 @@ import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
 from fast_array_utils import stats as fau_stats
+from joblib import Parallel, delayed
 from numba import njit, prange
 from scipy.sparse import (
     SparseEfficiencyWarning,
@@ -77,6 +78,7 @@ def spatial_neighbors(
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
+    n_jobs: int = 1,
 ) -> SpatialNeighborsResult | None:
     """
     Create a graph from spatial coordinates.
@@ -131,6 +133,9 @@ def spatial_neighbors(
     key_added
         Key which controls where the results are saved if ``copy = False``.
     %(copy)s
+    n_jobs
+        Number of parallel jobs for computing per-library graphs. Only used when ``library_key`` is not ``None``.
+        ``1`` (default) disables parallelism. ``-1`` uses all available CPUs.
 
     Returns
     -------
@@ -230,14 +235,25 @@ def spatial_neighbors(
     )
 
     if library_key is not None:
-        mats: list[tuple[spmatrix, spmatrix]] = []
+
+        def _compute_one(lib: Any) -> tuple[np.ndarray, spmatrix, spmatrix]:
+            idx = np.where(adata.obs[library_key] == lib)[0]
+            adj, dst = _build_fun(adata[adata.obs[library_key] == lib])
+            return idx, adj, dst
+
+        results = Parallel(n_jobs=n_jobs)(delayed(_compute_one)(lib) for lib in libs)
+
         ixs: list[int] = []
-        for lib in libs:
-            ixs.extend(np.where(adata.obs[library_key] == lib)[0])
-            mats.append(_build_fun(adata[adata.obs[library_key] == lib]))
-        ixs = cast(list[int], np.argsort(ixs).tolist())
-        Adj = block_diag([m[0] for m in mats], format="csr")[ixs, :][:, ixs]
-        Dst = block_diag([m[1] for m in mats], format="csr")[ixs, :][:, ixs]
+        mats_adj: list[spmatrix] = []
+        mats_dst: list[spmatrix] = []
+        for idx, adj, dst in results:
+            ixs.extend(idx)
+            mats_adj.append(adj)
+            mats_dst.append(dst)
+
+        ixs_order = cast(list[int], np.argsort(ixs).tolist())
+        Adj = block_diag(mats_adj, format="csr")[ixs_order, :][:, ixs_order]
+        Dst = block_diag(mats_dst, format="csr")[ixs_order, :][:, ixs_order]
     else:
         Adj, Dst = _build_fun(adata)
 
