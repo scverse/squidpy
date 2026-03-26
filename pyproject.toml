@@ -117,9 +117,9 @@ optional-dependencies.test = [
   "scanpy[leiden]",
 ]
 urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
-urls."Documentation" = "https://squidpy.readthedocs.io"
-urls."Home-page" = "https://github.com/scverse/squidpy"
-urls."Source" = "https://github.com/scverse/squidpy"
+urls.Documentation = "https://squidpy.readthedocs.io"
+urls.Home-page = "https://github.com/scverse/squidpy"
+urls.Source = "https://github.com/scverse/squidpy"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
