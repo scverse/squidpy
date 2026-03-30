@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 
+import numpy as np
 import pytest
 import spatialdata_plot as sdp
 
@@ -34,7 +35,7 @@ def sdata_hne(_sdata_hne_with_tissue):
 
 class TestQCImage(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_calc_qc_image_hne(self, sdata_hne):
-        """Test QC image on Visium H&E dataset with default H&E metrics."""
+        """Test QC image overlay with a single sharpness metric."""
         sq.experimental.im.qc_image(
             sdata_hne,
             image_key="hne",
@@ -50,13 +51,13 @@ class TestQCImage(PlotTester, metaclass=PlotTesterMeta):
         )
 
     def test_plot_calc_qc_image_not_hne(self, sdata_hne):
-        """Test QC image with is_hne=False (generic metrics only)."""
+        """Test QC image overlay with is_hne=False default metrics."""
         sq.experimental.im.qc_image(
             sdata_hne,
             image_key="hne",
             tile_size=_FAST_TILE,
             is_hne=False,
-            metrics=[sq.experimental.im.QCMetric.TENENGRAD],
+            metrics=None,
             progress=False,
         )
 
@@ -142,6 +143,7 @@ def test_qc_image_rgb_metric(sdata_hne):
         sdata_hne,
         image_key="hne",
         tile_size=_FAST_TILE,
+        is_hne=True,
         metrics=[sq.experimental.im.QCMetric.HEMATOXYLIN_MEAN],
         detect_tissue=False,
         detect_outliers=False,
@@ -149,3 +151,66 @@ def test_qc_image_rgb_metric(sdata_hne):
     )
     adata = sdata_hne.tables["qc_img_hne"]
     assert "qc_hematoxylin_mean" in adata.var_names
+
+
+def test_qc_image_outlier_detection_with_tissue(sdata_hne):
+    """Test that outlier detection with tissue classification populates expected columns."""
+    sq.experimental.im.qc_image(
+        sdata_hne,
+        image_key="hne",
+        tile_size=_FAST_TILE,
+        metrics=[sq.experimental.im.QCMetric.TENENGRAD],
+        detect_outliers=True,
+        detect_tissue=True,
+        progress=False,
+    )
+    adata = sdata_hne.tables["qc_img_hne"]
+    assert "qc_outlier" in adata.obs.columns
+    assert "is_tissue" in adata.obs.columns
+    assert "is_background" in adata.obs.columns
+    assert "unfocus_score" in adata.obs.columns
+    assert set(adata.obs["qc_outlier"].cat.categories) == {"False", "True"}
+    # At least some tiles should be classified as tissue
+    assert (adata.obs["is_tissue"] == "True").any()
+
+
+def test_qc_image_outlier_detection_without_tissue(sdata_hne):
+    """Test outlier detection without tissue classification scores all tiles."""
+    sq.experimental.im.qc_image(
+        sdata_hne,
+        image_key="hne",
+        tile_size=_FAST_TILE,
+        metrics=[sq.experimental.im.QCMetric.TENENGRAD],
+        detect_outliers=True,
+        detect_tissue=False,
+        progress=False,
+    )
+    adata = sdata_hne.tables["qc_img_hne"]
+    assert "qc_outlier" in adata.obs.columns
+    assert "unfocus_score" in adata.obs.columns
+    # Without tissue detection, these columns should not exist
+    assert "is_tissue" not in adata.obs.columns
+    assert "is_background" not in adata.obs.columns
+    # All tiles should have a valid unfocus score (no NaNs)
+    assert not np.any(np.isnan(adata.obs["unfocus_score"].values))
+
+
+def test_qc_image_compute_only(sdata_hne):
+    """Test compute-only mode without outlier detection."""
+    sq.experimental.im.qc_image(
+        sdata_hne,
+        image_key="hne",
+        tile_size=_FAST_TILE,
+        metrics=[sq.experimental.im.QCMetric.TENENGRAD, sq.experimental.im.QCMetric.BRIGHTNESS_MEAN],
+        detect_outliers=False,
+        detect_tissue=False,
+        progress=False,
+    )
+    adata = sdata_hne.tables["qc_img_hne"]
+    assert set(adata.var_names) == {"qc_tenengrad", "qc_brightness_mean"}
+    # No outlier-related columns
+    assert "qc_outlier" not in adata.obs.columns
+    assert "unfocus_score" not in adata.obs.columns
+    # Spatial coordinates should still be present
+    assert "centroid_y" in adata.obs.columns
+    assert "spatial" in adata.obsm
