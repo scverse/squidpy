@@ -82,21 +82,22 @@ def qc_image(
     if figsize is None:
         figsize = (12, 4 * nrows)
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
+    _fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
 
     if nrows == 1:
         axes = axes.reshape(1, -1)
     if ncols == 1:
         axes = axes.reshape(-1, 1)
 
+    var_name_to_idx = {name: idx for idx, name in enumerate(adata.var_names)}
+
     for i, metric_name in enumerate(metrics_to_plot):
         var_name = f"qc_{metric_name}"
-        if var_name not in adata.var_names:
+        if var_name not in var_name_to_idx:
             logg.warning(f"Variable '{var_name}' not found in adata.var_names. Skipping.")
             continue
 
-        metric_idx = list(adata.var_names).index(var_name)
-        raw_values = adata.X[:, metric_idx]
+        raw_values = adata.X[:, var_name_to_idx[var_name]]
 
         ax_spatial = axes[i, 0]
         ax_hist = axes[i, 1]
@@ -163,30 +164,30 @@ def qc_image(
 
         # Panel 3: Statistics
         ax_stats.axis("off")
-        stats_text = f"""
-        Raw {metric_name.replace("_", " ").title()} Statistics:
-
-        Count: {len(raw_values):,}
-        Mean: {np.mean(raw_values):.4f}
-        Std: {np.std(raw_values):.4f}
-        Min: {np.min(raw_values):.4f}
-        Max: {np.max(raw_values):.4f}
-
-        Percentiles:
-        5%: {np.percentile(raw_values, 5):.4f}
-        25%: {np.percentile(raw_values, 25):.4f}
-        50%: {np.percentile(raw_values, 50):.4f}
-        75%: {np.percentile(raw_values, 75):.4f}
-        95%: {np.percentile(raw_values, 95):.4f}
-
-        Non-zero: {np.count_nonzero(raw_values):,}
-        Zero: {np.sum(raw_values == 0):,}
-        """
+        stats_text = (
+            f"Raw {metric_name.replace('_', ' ').title()} Statistics:\n"
+            f"\n"
+            f"Count: {len(raw_values):,}\n"
+            f"Mean: {np.mean(raw_values):.4f}\n"
+            f"Std: {np.std(raw_values):.4f}\n"
+            f"Min: {np.min(raw_values):.4f}\n"
+            f"Max: {np.max(raw_values):.4f}\n"
+            f"\n"
+            f"Percentiles:\n"
+            f"5%: {np.percentile(raw_values, 5):.4f}\n"
+            f"25%: {np.percentile(raw_values, 25):.4f}\n"
+            f"50%: {np.percentile(raw_values, 50):.4f}\n"
+            f"75%: {np.percentile(raw_values, 75):.4f}\n"
+            f"95%: {np.percentile(raw_values, 95):.4f}\n"
+            f"\n"
+            f"Non-zero: {np.count_nonzero(raw_values):,}\n"
+            f"Zero: {np.sum(raw_values == 0):,}"
+        )
 
         ax_stats.text(
             0.05,
             0.95,
-            stats_text.strip(),
+            stats_text,
             transform=ax_stats.transAxes,
             fontsize=9,
             verticalalignment="top",

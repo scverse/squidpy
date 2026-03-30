@@ -246,7 +246,7 @@ def _get_mask_materialized(sdata: SpatialData, mask_key: str, scale: str) -> np.
     return np.asarray(arr.compute())
 
 
-def _ensure_tissue_mask(
+def _resolve_tissue_mask(
     sdata: SpatialData,
     image_key: str,
     scale: str,

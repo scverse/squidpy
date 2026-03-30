@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import lru_cache
+
 import numpy as np
 from scipy.fft import fft2, fftfreq
 from skimage.filters import laplace, sobel_h, sobel_v
@@ -32,6 +34,15 @@ def _pop_variance(block: np.ndarray) -> np.ndarray:
     return np.array([[float(np.var(b))]], dtype=np.float32)
 
 
+@lru_cache(maxsize=4)
+def _fft_high_freq_mask(h: int, w: int) -> np.ndarray:
+    """Frequency-domain mask for high-frequency energy (cached per tile shape)."""
+    fy = fftfreq(h)
+    fx = fftfreq(w)
+    ry, rx = np.meshgrid(fy, fx, indexing="ij")
+    return np.hypot(ry, rx) > 0.1
+
+
 def _fft_high_freq_energy(block: np.ndarray) -> np.ndarray:
     x = _to_f32_2d(block).astype(np.float64, copy=False)
     m = float(x.mean())
@@ -41,12 +52,7 @@ def _fft_high_freq_energy(block: np.ndarray) -> np.ndarray:
     F = fft2(x)
     mag2 = (F.real * F.real) + (F.imag * F.imag)
 
-    h, w = x.shape
-    fy = fftfreq(h)
-    fx = fftfreq(w)
-    ry, rx = np.meshgrid(fy, fx, indexing="ij")
-    r = np.hypot(ry, rx)
-    mask = r > 0.1
+    mask = _fft_high_freq_mask(x.shape[0], x.shape[1])
 
     total = float(mag2.sum())
     if not np.isfinite(total) or total <= 1e-12:
@@ -54,10 +60,7 @@ def _fft_high_freq_energy(block: np.ndarray) -> np.ndarray:
     else:
         hi = float(mag2[mask].sum())
         ratio = hi / total if np.isfinite(hi) else 0.0
-        if ratio < 0.0:
-            ratio = 0.0
-        if ratio > 1.0:
-            ratio = 1.0
+        ratio = np.clip(ratio, 0.0, 1.0)
     return np.array([[ratio]], dtype=np.float32)
 
 
@@ -90,8 +93,5 @@ def _haar_wavelet_energy(block: np.ndarray) -> np.ndarray:
     else:
         detail = float((cH * cH).sum() + (cV * cV).sum() + (cD * cD).sum())
         ratio = detail / total if np.isfinite(detail) else 0.0
-        if ratio < 0.0:
-            ratio = 0.0
-        if ratio > 1.0:
-            ratio = 1.0
+        ratio = np.clip(ratio, 0.0, 1.0)
     return np.array([[ratio]], dtype=np.float32)

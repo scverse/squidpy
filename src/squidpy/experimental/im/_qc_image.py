@@ -18,9 +18,9 @@ from squidpy._utils import _ensure_dim_order
 from squidpy.experimental.im._qc_metrics import _HNE_METRICS, InputKind, QCMetric, get_metric_info
 from squidpy.experimental.im._utils import (
     TileGrid,
-    _ensure_tissue_mask,
     _get_element_data,
     _get_mask_dask,
+    _resolve_tissue_mask,
     _save_tile_grid_to_shapes,
 )
 
@@ -145,7 +145,6 @@ def qc_image(
     H, W = int(gray.shape[0]), int(gray.shape[1])
 
     tg = TileGrid(H, W, tile_size)
-    tile_indices = tg.indices()
     obs_names = tg.names()
 
     logger.info("Quantifying image quality.")
@@ -164,11 +163,11 @@ def qc_image(
     # Prepare inputs lazily (only for needed kinds)
     prepared_inputs: dict[InputKind, da.Array] = {}
 
-    # Resolve tissue mask once if needed by MASK metrics or tissue detection
-    _tissue_mask_da: da.Array | None = None
+    _tissue_binary_da: da.Array | None = None
     if InputKind.MASK in groups or detect_tissue:
-        mask_key_resolved = _ensure_tissue_mask(sdata, image_key, scale, tissue_mask_key)
-        _tissue_mask_da = _get_mask_dask(sdata, mask_key_resolved, scale)
+        mask_key_resolved = _resolve_tissue_mask(sdata, image_key, scale, tissue_mask_key)
+        raw_mask = _get_mask_dask(sdata, mask_key_resolved, scale)
+        _tissue_binary_da = (raw_mask > 0).astype(np.float32).rechunk((tg.ty, tg.tx))
 
     if InputKind.GRAYSCALE in groups:
         prepared_inputs[InputKind.GRAYSCALE] = gray.rechunk((tg.ty, tg.tx))
@@ -181,9 +180,8 @@ def qc_image(
             rgb_arr = rgb_arr / float(np.iinfo(src_dtype).max)
         prepared_inputs[InputKind.RGB] = rgb_arr.rechunk((tg.ty, tg.tx, 3))
 
-    if InputKind.MASK in groups and _tissue_mask_da is not None:
-        binary = (_tissue_mask_da > 0).astype(np.float32).rechunk((tg.ty, tg.tx))
-        prepared_inputs[InputKind.MASK] = binary
+    if InputKind.MASK in groups and _tissue_binary_da is not None:
+        prepared_inputs[InputKind.MASK] = _tissue_binary_da
 
     # Build all dask graphs lazily
     delayed_scores: dict[str, da.Array] = {}
@@ -192,8 +190,6 @@ def qc_image(
         source = prepared_inputs[kind]
 
         if kind == InputKind.RGB:
-            # RGB tiles are (ty, tx, 3) -> metric returns (1, 1)
-            # drop_axis=2 removes the channel dim from the output
             delayed_scores[m.value] = da.map_blocks(
                 metric_func, source, dtype=np.float32, chunks=out_chunks, drop_axis=2
             )
@@ -224,25 +220,20 @@ def qc_image(
     adata.obs["centroid_x"] = cents[:, 1]
     adata.obsm["spatial"] = cents
 
-    # Defaults to avoid NameError when skipping tissue/outliers
     tissue = np.zeros(n_tiles, dtype=bool)
     back = ~tissue
-    t_sim = np.zeros(n_tiles, np.float32)
-    b_sim = np.zeros(n_tiles, np.float32)
     outlier_labels = np.ones(n_tiles, dtype=int)
     unfocus_scores: np.ndarray | None = None
 
     if detect_outliers:
         if detect_tissue:
-            tissue, back, t_sim, b_sim = _detect_tissue_from_mask(
-                sdata,
-                image_key,
-                tile_indices,
-                tg.ty,
-                tg.tx,
-                scale,
+            tissue, back = _classify_tiles_by_tissue(
+                tg,
+                sdata=sdata,
+                image_key=image_key,
+                scale=scale,
                 tissue_mask_key=tissue_mask_key,
-                mask_da=_tissue_mask_da,
+                binary_mask_da=_tissue_binary_da,
             )
             logger.info(f"- Classified tiles: background: {back.sum()}, tissue: {tissue.sum()}.")
 
@@ -253,7 +244,6 @@ def qc_image(
             outlier_labels = np.ones(n_tiles, dtype=int)
             outlier_labels[tissue] = np.where(tissue_scores >= 1 - outlier_threshold, -1, 1)
         else:
-            # No tissue mask: score all tiles
             all_scores_arr = _compute_unfocus_scores(X, var_names)
             unfocus_scores = all_scores_arr
             outlier_labels = np.where(all_scores_arr >= 1 - outlier_threshold, -1, 1)
@@ -262,8 +252,6 @@ def qc_image(
         if detect_tissue:
             adata.obs["is_tissue"] = pd.Categorical(tissue.astype(str), categories=["False", "True"])
             adata.obs["is_background"] = pd.Categorical(back.astype(str), categories=["False", "True"])
-            adata.obs["tissue_similarity"] = t_sim
-            adata.obs["background_similarity"] = b_sim
         adata.obs["unfocus_score"] = unfocus_scores
 
         logger.info(f"- Detected {int((outlier_labels == -1).sum())} outlier tiles.")
@@ -322,11 +310,11 @@ def qc_image(
             logger.warning(f"Could not generate preview plot: {e}")
 
 
-def _to_gray_dask_yx(
-    img_yxc: xr.DataArray,
-    weights: tuple[float, float, float] = (0.2126, 0.7152, 0.0722),
-) -> da.Array:
-    """Convert multi-channel image to grayscale using luminance weights."""
+_LUMINANCE_WEIGHTS = da.from_array(np.array([0.2126, 0.7152, 0.0722], dtype=np.float32), chunks=(3,))
+
+
+def _to_gray_dask_yx(img_yxc: xr.DataArray) -> da.Array:
+    """Convert multi-channel image to grayscale using ITU-R BT.709 luminance weights."""
     arr = img_yxc.data
     if arr.ndim != 3:
         raise ValueError(f"Expected image with shape `(y, x, c)`, found `{arr.shape}`.")
@@ -334,51 +322,49 @@ def _to_gray_dask_yx(
     if c == 1:
         return arr[..., 0].astype(np.float32, copy=False)
     rgb = arr[..., :3].astype(np.float32, copy=False)
-    w = da.from_array(np.asarray(weights, dtype=np.float32), chunks=(3,))
-    gray = da.tensordot(rgb, w, axes=([2], [0]))
+    gray = da.tensordot(rgb, _LUMINANCE_WEIGHTS, axes=([2], [0]))
     return gray.astype(np.float32, copy=False)
 
 
-def _detect_tissue_from_mask(
+def _classify_tiles_by_tissue(
+    tg: TileGrid,
+    *,
     sdata: SpatialData,
     image_key: str,
-    tile_indices: np.ndarray,
-    ty: int,
-    tx: int,
     scale: str = "scale0",
     tissue_mask_key: str | None = None,
-    mask_da: da.Array | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Detect tissue regions from mask and classify tiles."""
-    n_tiles = len(tile_indices)
+    binary_mask_da: da.Array | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Classify tiles as tissue or background based on a binary mask.
 
-    if mask_da is None:
-        mask_key_resolved = _ensure_tissue_mask(sdata, image_key, scale, tissue_mask_key)
-        mask_da = _get_mask_dask(sdata, mask_key_resolved, scale)
-    H, W = mask_da.shape
-    tiles_y = (H + ty - 1) // ty
-    tiles_x = (W + tx - 1) // tx
+    Returns
+    -------
+    tissue, background
+        Boolean arrays of shape ``(n_tiles,)``.
+    """
+    if binary_mask_da is None:
+        mask_key_resolved = _resolve_tissue_mask(sdata, image_key, scale, tissue_mask_key)
+        raw_mask = _get_mask_dask(sdata, mask_key_resolved, scale)
+        binary_mask_da = (raw_mask > 0).astype(np.float32).rechunk((tg.ty, tg.tx))
 
-    binary = (mask_da > 0).astype(np.float32).rechunk((ty, tx))
+    H, W = binary_mask_da.shape
+    tiles_y = (H + tg.ty - 1) // tg.ty
+    tiles_x = (W + tg.tx - 1) // tg.tx
 
     def _mean_block(block: np.ndarray) -> np.ndarray:
         return np.array([[float(block.mean())]], dtype=np.float32)
 
     frac_da = da.map_blocks(
         _mean_block,
-        binary,
+        binary_mask_da,
         dtype=np.float32,
         chunks=((1,) * tiles_y, (1,) * tiles_x),
     )
-    frac_grid = frac_da.compute()
-    frac = frac_grid.ravel()[:n_tiles]
+    n_tiles = tg.tiles_y * tg.tiles_x
+    frac = frac_da.compute().ravel()[:n_tiles]
 
     tissue = frac > 0.5
-    back = ~tissue
-    t_sim = tissue.astype(np.float32)
-    b_sim = back.astype(np.float32)
-
-    return tissue, back, t_sim, b_sim
+    return tissue, ~tissue
 
 
 def _compute_unfocus_scores(X: np.ndarray, var_names: list[str]) -> np.ndarray:
