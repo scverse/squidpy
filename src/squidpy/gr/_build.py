@@ -91,41 +91,23 @@ def _resolve_graph_builder(
     else:
         coord_type = CoordType(coord_type)
 
+    common: dict[str, Any] = {
+        "n_neighs": n_neighs,
+        "transform": transform,
+        "set_diag": set_diag,
+    }
+
     if coord_type == CoordType.GRID:
         if percentile is not None:
             raise ValueError(
                 "`percentile` is not supported for grid coordinates. It only applies to generic (non-grid) graphs."
             )
-        return GridBuilder(
-            n_neighs=n_neighs,
-            n_rings=n_rings,
-            delaunay=delaunay,
-            transform=transform,
-            set_diag=set_diag,
-        )
+        return GridBuilder(**common, n_rings=n_rings, delaunay=delaunay)
     if delaunay:
-        return DelaunayBuilder(
-            radius=radius,
-            n_neighs=n_neighs,
-            transform=transform,
-            set_diag=set_diag,
-            percentile=percentile,
-        )
+        return DelaunayBuilder(**common, radius=radius, percentile=percentile)
     if radius is not None:
-        return RadiusBuilder(
-            radius=radius,
-            n_neighs=n_neighs,
-            transform=transform,
-            set_diag=set_diag,
-            percentile=percentile,
-        )
-
-    return KNNBuilder(
-        n_neighs=n_neighs,
-        transform=transform,
-        set_diag=set_diag,
-        percentile=percentile,
-    )
+        return RadiusBuilder(**common, radius=radius, percentile=percentile)
+    return KNNBuilder(**common, percentile=percentile)
 
 
 @d.dedent
