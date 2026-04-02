@@ -1,20 +1,6 @@
-"""Graph construction strategies for :func:`squidpy.gr.spatial_neighbors`.
+"""Graph construction strategies for spatial neighbor graphs.
 
-This module provides the builder classes that control how spatial neighbor
-graphs are constructed.  :func:`~squidpy.gr.spatial_neighbors` accepts a
-``builder`` argument; when supplied, the builder fully determines the
-graph-construction algorithm and its parameters.
-
-Built-in builders cover the common cases:
-
-- :class:`KNNBuilder` -- k-nearest-neighbor graph.
-- :class:`RadiusBuilder` -- radius-based graph.
-- :class:`DelaunayBuilder` -- Delaunay triangulation graph.
-- :class:`GridBuilder` -- grid (Visium-style) graph.
-
-To implement a custom strategy, subclass :class:`GraphBuilder` and override
-:meth:`~GraphBuilder._build_graph`.  The returned object can then be passed
-to ``spatial_neighbors(adata, builder=my_builder)``.
+See the :doc:`/extensibility` guide for how to implement a custom builder.
 """
 
 from __future__ import annotations

@@ -116,6 +116,9 @@ import squidpy as sq
 
 
 ## Extensibility
+
+See the {doc}`extensibility guide </extensibility>` for how to implement a custom graph builder.
+
 ```{eval-rst}
 .. module:: squidpy.gr.neighbors
 .. currentmodule:: squidpy
