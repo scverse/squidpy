@@ -139,22 +139,7 @@ class KNNBuilder(GraphBuilder):
         return Adj, Dst
 
 
-class _RadiusFilterBuilder(GraphBuilder):
-    """Intermediate base for builders that support radius-interval pruning."""
-
-    radius: float | tuple[float, float] | None
-    n_neighs: int
-
-    @property
-    def coord_type(self) -> CoordType:
-        return CoordType.GENERIC
-
-    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
-        if isinstance(self.radius, Iterable):
-            _filter_by_radius_interval(Adj, Dst, self.radius)
-
-
-class RadiusBuilder(_RadiusFilterBuilder):
+class RadiusBuilder(GraphBuilder):
     """Build a generic radius-based spatial graph."""
 
     def __init__(
@@ -169,6 +154,10 @@ class RadiusBuilder(_RadiusFilterBuilder):
         super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
         self.radius = radius
         self.n_neighs = n_neighs
+
+    @property
+    def coord_type(self) -> CoordType:
+        return CoordType.GENERIC
 
     def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
@@ -191,8 +180,12 @@ class RadiusBuilder(_RadiusFilterBuilder):
         Dst.setdiag(0.0)
         return Adj, Dst
 
+    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+        if isinstance(self.radius, Iterable):
+            _filter_by_radius_interval(Adj, Dst, self.radius)
 
-class DelaunayBuilder(_RadiusFilterBuilder):
+
+class DelaunayBuilder(GraphBuilder):
     """Build a generic spatial graph from a Delaunay triangulation."""
 
     def __init__(
@@ -217,6 +210,10 @@ class DelaunayBuilder(_RadiusFilterBuilder):
         self.radius = radius
         self.n_neighs = n_neighs
 
+    @property
+    def coord_type(self) -> CoordType:
+        return CoordType.GENERIC
+
     def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
         tri = Delaunay(coords)
@@ -235,6 +232,10 @@ class DelaunayBuilder(_RadiusFilterBuilder):
         Adj.setdiag(1.0 if self.set_diag else Adj.diagonal())
         Dst.setdiag(0.0)
         return Adj, Dst
+
+    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+        if isinstance(self.radius, Iterable):
+            _filter_by_radius_interval(Adj, Dst, self.radius)
 
 
 class GridBuilder(GraphBuilder):
