@@ -52,11 +52,6 @@ from squidpy.gr._utils import (
 
 __all__ = [
     "SpatialNeighborsResult",
-    "GraphBuilder",
-    "KNNBuilder",
-    "RadiusBuilder",
-    "DelaunayBuilder",
-    "GridBuilder",
     "spatial_neighbors",
 ]
 
