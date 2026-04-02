@@ -109,8 +109,6 @@ import squidpy as sq
     datasets.visium_hne_image_crop
     datasets.visium_fluo_image_crop
 ```
-## Types
-
 
 
 ## Extensibility
