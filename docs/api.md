@@ -109,3 +109,20 @@ import squidpy as sq
     datasets.visium_hne_image_crop
     datasets.visium_fluo_image_crop
 ```
+## Types
+
+
+
+## Extensibility
+```{eval-rst}
+.. module:: squidpy.gr.neighbors
+.. currentmodule:: squidpy
+.. autosummary::
+    :toctree: api
+
+    gr.neighbors.GraphBuilder
+    gr.neighbors.KNNBuilder
+    gr.neighbors.RadiusBuilder
+    gr.neighbors.DelaunayBuilder
+    gr.neighbors.GridBuilder
+```
