@@ -228,29 +228,26 @@ class TestSpatialNeighbors:
         np.testing.assert_allclose(legacy.distances.toarray(), result.distances.toarray())
 
     def test_builder_argument_conflict(self, non_visium_adata: AnnData):
-        with pytest.raises(ValueError, match="conflicts"):
+        with pytest.raises(ValueError, match="must not be set"):
             spatial_neighbors(non_visium_adata, builder=RadiusBuilder(radius=5.0), delaunay=True)
 
-    def test_builder_matching_non_default_legacy_args(self, non_visium_adata: AnnData):
+    def test_builder_rejects_any_legacy_args(self, non_visium_adata: AnnData):
         builder = RadiusBuilder(radius=5.0, n_neighs=3, percentile=95.0, transform="cosine", set_diag=True)
 
-        baseline = spatial_neighbors(non_visium_adata, builder=builder, copy=True)
-        matched = spatial_neighbors(
-            non_visium_adata,
-            builder=builder,
-            coord_type="generic",
-            n_neighs=3,
-            radius=5.0,
-            percentile=95.0,
-            transform=Transform.COSINE,
-            set_diag=True,
-            copy=True,
-        )
+        with pytest.raises(ValueError, match="must not be set"):
+            spatial_neighbors(
+                non_visium_adata,
+                builder=builder,
+                coord_type="generic",
+                n_neighs=3,
+                radius=5.0,
+                percentile=95.0,
+                transform="cosine",
+                set_diag=True,
+                copy=True,
+            )
 
-        np.testing.assert_allclose(baseline.connectivities.toarray(), matched.connectivities.toarray())
-        np.testing.assert_allclose(baseline.distances.toarray(), matched.distances.toarray())
-
-    def test_builder_compatibility_normalizes_none_transform(self, non_visium_adata: AnnData):
+    def test_builder_allows_none_legacy_args(self, non_visium_adata: AnnData):
         builder = KNNBuilder(n_neighs=3, transform=Transform.NONE)
 
         baseline = spatial_neighbors(non_visium_adata, builder=builder, copy=True)
@@ -259,20 +256,16 @@ class TestSpatialNeighbors:
         np.testing.assert_array_equal(baseline.connectivities.toarray(), matched.connectivities.toarray())
         np.testing.assert_allclose(baseline.distances.toarray(), matched.distances.toarray())
 
-    def test_builder_compatibility_normalizes_tuple_radius_order(self, non_visium_adata: AnnData):
+    def test_builder_rejects_radius(self, non_visium_adata: AnnData):
         builder = RadiusBuilder(radius=(4.0, 2.0))
 
-        baseline = spatial_neighbors(non_visium_adata, builder=builder, copy=True)
-        matched = spatial_neighbors(
-            non_visium_adata,
-            builder=builder,
-            coord_type="generic",
-            radius=(2.0, 4.0),
-            copy=True,
-        )
-
-        np.testing.assert_array_equal(baseline.connectivities.toarray(), matched.connectivities.toarray())
-        np.testing.assert_allclose(baseline.distances.toarray(), matched.distances.toarray())
+        with pytest.raises(ValueError, match="must not be set"):
+            spatial_neighbors(
+                non_visium_adata,
+                builder=builder,
+                radius=(2.0, 4.0),
+                copy=True,
+            )
 
     def test_grid_mode_ignores_radius(self, adata_squaregrid: AnnData):
         default = spatial_neighbors(adata_squaregrid, coord_type="grid", n_neighs=4, n_rings=2, copy=True)
