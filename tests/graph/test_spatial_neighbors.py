@@ -13,8 +13,16 @@ from spatialdata.datasets import blobs
 from squidpy._constants._constants import Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import mask_graph, spatial_neighbors
-from squidpy.gr._build import DelaunayBuilder, GridBuilder, KNNBuilder, RadiusBuilder, _build_connectivity
-from squidpy.gr.neighbors import KNNBuilder as PublicKNNBuilder
+from squidpy.gr.neighbors import (
+    DelaunayBuilder,
+    GridBuilder,
+    KNNBuilder,
+    RadiusBuilder,
+    _build_connectivity,
+)
+from squidpy.gr.neighbors import (
+    KNNBuilder as PublicKNNBuilder,
+)
 
 
 class TestSpatialNeighbors:
