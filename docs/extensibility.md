@@ -17,28 +17,29 @@ You can implement your own strategy by subclassing it.
 The base class handles percentile filtering, adjacency transforms, and
 {class}`~scipy.sparse.SparseEfficiencyWarning` suppression automatically.
 
-### Example: mutual KNN
+### Example: fast radius search with SNN
 
-The built-in {class}`~squidpy.gr.neighbors.KNNBuilder` keeps all k-nearest
-edges regardless of reciprocity. A mutual KNN graph retains an edge only when
-both endpoints consider each other a neighbor, producing a sparser and more
-conservative graph:
+The built-in {class}`~squidpy.gr.neighbors.RadiusBuilder` uses scikit-learn's
+``NearestNeighbors``. The [snnpy](https://github.com/nla-group/snn) library
+provides a faster exact fixed-radius search based on PCA-based pruning. The
+example below swaps the backend while keeping full compatibility with the rest
+of the Squidpy graph pipeline:
 
 ```python
 import numpy as np
 from scipy.sparse import csr_matrix
-from sklearn.neighbors import NearestNeighbors
+from snnpy import build_snn_model
 
 from squidpy._constants._constants import CoordType
 from squidpy.gr.neighbors import GraphBuilder
 
 
-class MutualKNNBuilder(GraphBuilder):
-    """KNN graph keeping only mutual (reciprocal) edges."""
+class SNNRadiusBuilder(GraphBuilder):
+    """Radius graph using the SNN fixed-radius search backend."""
 
-    def __init__(self, n_neighs: int = 6, **kwargs):
+    def __init__(self, radius: float, **kwargs):
         super().__init__(**kwargs)
-        self.n_neighs = n_neighs
+        self.radius = radius
 
     @property
     def coord_type(self) -> CoordType:
@@ -46,21 +47,20 @@ class MutualKNNBuilder(GraphBuilder):
 
     def build_graph(self, coords):
         N = coords.shape[0]
-        tree = NearestNeighbors(n_neighbors=self.n_neighs, metric="euclidean")
-        tree.fit(coords)
-        dists, indices = tree.kneighbors()
+        model = build_snn_model(coords, verbose=0)
+        indices, dists = model.batch_query_radius(
+            coords, self.radius, return_distance=True,
+        )
 
-        row = np.repeat(np.arange(N), self.n_neighs)
-        col = indices.reshape(-1)
-        d = dists.reshape(-1)
+        row = np.repeat(np.arange(N), [len(idx) for idx in indices])
+        col = np.concatenate(indices)
+        d = np.concatenate(dists).astype(np.float64)
 
-        Adj = csr_matrix((np.ones_like(d, dtype=np.float32), (row, col)), shape=(N, N))
+        Adj = csr_matrix(
+            (np.ones(len(row), dtype=np.float32), (row, col)),
+            shape=(N, N),
+        )
         Dst = csr_matrix((d, (row, col)), shape=(N, N))
-
-        # keep only mutual edges
-        mutual = Adj.multiply(Adj.T)
-        Adj = mutual.tocsr()
-        Dst = Dst.multiply(mutual).tocsr()
 
         Adj.setdiag(1.0 if self.set_diag else Adj.diagonal())
         Dst.setdiag(0.0)
@@ -72,5 +72,5 @@ Use it like any other builder:
 ```python
 import squidpy as sq
 
-sq.gr.spatial_neighbors(adata, builder=MutualKNNBuilder(n_neighs=6))
+sq.gr.spatial_neighbors(adata, builder=SNNRadiusBuilder(radius=100.0))
 ```
