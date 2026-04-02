@@ -10,6 +10,7 @@ from scipy.sparse import isspmatrix_csr
 from shapely import Point
 from spatialdata.datasets import blobs
 
+from squidpy._constants._constants import Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import DelaunayBuilder, GridBuilder, KNNBuilder, RadiusBuilder, mask_graph, spatial_neighbors
 from squidpy.gr._build import _build_connectivity
@@ -47,6 +48,22 @@ class TestSpatialNeighbors:
         )
         return adata_concat, batch1, batch2
 
+    @staticmethod
+    def _assert_library_key_block_diagonal(adata, **neighbor_kwargs):
+        adata2 = adata.copy()
+        adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(adata, adata2)
+        spatial_neighbors(adata2, **neighbor_kwargs)
+        spatial_neighbors(adata_concat, library_key="library_id", **neighbor_kwargs)
+        np.testing.assert_array_equal(
+            adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].toarray(),
+            adata.obsp[Key.obsp.spatial_conn()].toarray(),
+        )
+        np.testing.assert_array_equal(
+            adata_concat[adata_concat.obs["library_id"] == batch2].obsp[Key.obsp.spatial_conn()].toarray(),
+            adata2.obsp[Key.obsp.spatial_conn()].toarray(),
+        )
+        return adata_concat
+
     # TODO: add edge cases
     # TODO(giovp): test with reshuffling
     @pytest.mark.parametrize(("n_rings", "n_neigh", "sum_dist"), [(1, 6, 0), (2, 18, 30), (3, 36, 84)])
@@ -66,20 +83,8 @@ class TestSpatialNeighbors:
         if n_rings > 1:
             assert visium_adata.obsp[Key.obsp.spatial_dist()][0].sum() == sum_dist
 
-        # test for library_key
-        visium_adata2 = visium_adata.copy()
-        adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(visium_adata, visium_adata2)
-        spatial_neighbors(visium_adata2, n_rings=n_rings)
-        spatial_neighbors(adata_concat, library_key="library_id", n_rings=n_rings)
+        adata_concat = self._assert_library_key_block_diagonal(visium_adata, n_rings=n_rings)
         assert adata_concat.obsp[Key.obsp.spatial_conn()][0].sum() == n_neigh
-        np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].toarray(),
-            visium_adata.obsp[Key.obsp.spatial_conn()].toarray(),
-        )
-        np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs["library_id"] == batch2].obsp[Key.obsp.spatial_conn()].toarray(),
-            visium_adata2.obsp[Key.obsp.spatial_conn()].toarray(),
-        )
 
     @pytest.mark.parametrize(("n_rings", "n_neigh", "sum_neigh"), [(1, 4, 4), (2, 4, 12), (3, 4, 24)])
     def test_spatial_neighbors_squaregrid(self, adata_squaregrid: AnnData, n_rings: int, n_neigh: int, sum_neigh: int):
@@ -91,26 +96,10 @@ class TestSpatialNeighbors:
         assert np.diff(adata.obsp[Key.obsp.spatial_conn()].indptr).max() == sum_neigh
         assert adata.uns[Key.uns.spatial_neighs()]["distances_key"] == Key.obsp.spatial_dist()
 
-        # test for library_key
-        adata2 = adata.copy()
-        adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(adata, adata2)
-        spatial_neighbors(adata2, n_neighs=n_neigh, n_rings=n_rings, coord_type="grid")
-        spatial_neighbors(
-            adata_concat,
-            library_key="library_id",
-            n_neighs=n_neigh,
-            n_rings=n_rings,
-            coord_type="grid",
+        adata_concat = self._assert_library_key_block_diagonal(
+            adata, n_neighs=n_neigh, n_rings=n_rings, coord_type="grid",
         )
         assert np.diff(adata_concat.obsp[Key.obsp.spatial_conn()].indptr).max() == sum_neigh
-        np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].toarray(),
-            adata.obsp[Key.obsp.spatial_conn()].toarray(),
-        )
-        np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs["library_id"] == batch2].obsp[Key.obsp.spatial_conn()].toarray(),
-            adata2.obsp[Key.obsp.spatial_conn()].toarray(),
-        )
 
     @pytest.mark.parametrize("type_rings", [("grid", 1), ("grid", 6), ("generic", 1)])
     @pytest.mark.parametrize("set_diag", [False, True])
@@ -162,20 +151,7 @@ class TestSpatialNeighbors:
         np.testing.assert_array_equal(spatial_graph, self._gt_dgraph)
         np.testing.assert_allclose(spatial_dist, self._gt_ddist)
 
-        # test for library_key
-        non_visium_adata2 = non_visium_adata.copy()
-        adata_concat, batch1, batch2 = TestSpatialNeighbors._adata_concat(non_visium_adata, non_visium_adata2)
-        spatial_neighbors(adata_concat, library_key="library_id", delaunay=True, coord_type=None)
-        spatial_neighbors(non_visium_adata2, delaunay=True, coord_type=None)
-
-        np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs["library_id"] == batch1].obsp[Key.obsp.spatial_conn()].toarray(),
-            non_visium_adata.obsp[Key.obsp.spatial_conn()].toarray(),
-        )
-        np.testing.assert_array_equal(
-            adata_concat[adata_concat.obs["library_id"] == batch2].obsp[Key.obsp.spatial_conn()].toarray(),
-            non_visium_adata2.obsp[Key.obsp.spatial_conn()].toarray(),
-        )
+        self._assert_library_key_block_diagonal(non_visium_adata, delaunay=True, coord_type=None)
 
     @pytest.mark.parametrize("set_diag", [False, True])
     @pytest.mark.parametrize("radius", [(0, np.inf), (2.0, 4.0), (-42, -420), (100, 200)])
@@ -217,37 +193,108 @@ class TestSpatialNeighbors:
     def test_builder_module_export(self):
         assert PublicKNNBuilder is KNNBuilder
 
-    def test_knn_builder_matches_legacy(self, non_visium_adata: AnnData):
-        legacy = spatial_neighbors(non_visium_adata, n_neighs=3, coord_type="generic", copy=True)
-        builder = spatial_neighbors(non_visium_adata, builder=KNNBuilder(n_neighs=3), copy=True)
+    @pytest.mark.parametrize(
+        ("legacy_kwargs", "builder"),
+        [
+            ({"n_neighs": 3, "coord_type": "generic"}, KNNBuilder(n_neighs=3)),
+            ({"radius": 5.0, "coord_type": "generic"}, RadiusBuilder(radius=5.0)),
+            ({"delaunay": True, "coord_type": "generic"}, DelaunayBuilder()),
+        ],
+        ids=["knn", "radius", "delaunay"],
+    )
+    def test_generic_builder_matches_legacy(
+        self, non_visium_adata: AnnData, legacy_kwargs: dict, builder: object
+    ):
+        legacy = spatial_neighbors(non_visium_adata, **legacy_kwargs, copy=True)
+        result = spatial_neighbors(non_visium_adata, builder=builder, copy=True)
 
-        np.testing.assert_array_equal(legacy.connectivities.toarray(), builder.connectivities.toarray())
-        np.testing.assert_allclose(legacy.distances.toarray(), builder.distances.toarray())
+        np.testing.assert_array_equal(legacy.connectivities.toarray(), result.connectivities.toarray())
+        np.testing.assert_allclose(legacy.distances.toarray(), result.distances.toarray())
 
-    def test_radius_builder_matches_legacy(self, non_visium_adata: AnnData):
-        legacy = spatial_neighbors(non_visium_adata, radius=5.0, coord_type="generic", copy=True)
-        builder = spatial_neighbors(non_visium_adata, builder=RadiusBuilder(radius=5.0), copy=True)
+    @pytest.mark.parametrize(
+        ("legacy_kwargs", "builder"),
+        [
+            ({"n_neighs": 4, "n_rings": 2, "coord_type": "grid"}, GridBuilder(n_neighs=4, n_rings=2)),
+            ({"n_neighs": 6, "n_rings": 1, "coord_type": "grid"}, GridBuilder(n_neighs=6, n_rings=1)),
+        ],
+        ids=["4neighs_2rings", "6neighs_1ring"],
+    )
+    def test_grid_builder_matches_legacy(
+        self, adata_squaregrid: AnnData, legacy_kwargs: dict, builder: object
+    ):
+        legacy = spatial_neighbors(adata_squaregrid, **legacy_kwargs, copy=True)
+        result = spatial_neighbors(adata_squaregrid, builder=builder, copy=True)
 
-        np.testing.assert_array_equal(legacy.connectivities.toarray(), builder.connectivities.toarray())
-        np.testing.assert_allclose(legacy.distances.toarray(), builder.distances.toarray())
-
-    def test_delaunay_builder_matches_legacy(self, non_visium_adata: AnnData):
-        legacy = spatial_neighbors(non_visium_adata, delaunay=True, coord_type="generic", copy=True)
-        builder = spatial_neighbors(non_visium_adata, builder=DelaunayBuilder(), copy=True)
-
-        np.testing.assert_array_equal(legacy.connectivities.toarray(), builder.connectivities.toarray())
-        np.testing.assert_allclose(legacy.distances.toarray(), builder.distances.toarray())
-
-    def test_grid_builder_matches_legacy(self, adata_squaregrid: AnnData):
-        legacy = spatial_neighbors(adata_squaregrid, n_neighs=4, n_rings=2, coord_type="grid", copy=True)
-        builder = spatial_neighbors(adata_squaregrid, builder=GridBuilder(n_neighs=4, n_rings=2), copy=True)
-
-        np.testing.assert_array_equal(legacy.connectivities.toarray(), builder.connectivities.toarray())
-        np.testing.assert_allclose(legacy.distances.toarray(), builder.distances.toarray())
+        np.testing.assert_array_equal(legacy.connectivities.toarray(), result.connectivities.toarray())
+        np.testing.assert_allclose(legacy.distances.toarray(), result.distances.toarray())
 
     def test_builder_argument_conflict(self, non_visium_adata: AnnData):
         with pytest.raises(ValueError, match="conflicts"):
             spatial_neighbors(non_visium_adata, builder=RadiusBuilder(radius=5.0), delaunay=True)
+
+    def test_builder_matching_non_default_legacy_args(self, non_visium_adata: AnnData):
+        builder = RadiusBuilder(radius=5.0, n_neighs=3, percentile=95.0, transform="cosine", set_diag=True)
+
+        baseline = spatial_neighbors(non_visium_adata, builder=builder, copy=True)
+        matched = spatial_neighbors(
+            non_visium_adata,
+            builder=builder,
+            coord_type="generic",
+            n_neighs=3,
+            radius=5.0,
+            percentile=95.0,
+            transform=Transform.COSINE,
+            set_diag=True,
+            copy=True,
+        )
+
+        np.testing.assert_allclose(baseline.connectivities.toarray(), matched.connectivities.toarray())
+        np.testing.assert_allclose(baseline.distances.toarray(), matched.distances.toarray())
+
+    def test_builder_compatibility_normalizes_none_transform(self, non_visium_adata: AnnData):
+        builder = KNNBuilder(n_neighs=3, transform=Transform.NONE)
+
+        baseline = spatial_neighbors(non_visium_adata, builder=builder, copy=True)
+        matched = spatial_neighbors(non_visium_adata, builder=builder, transform=None, copy=True)
+
+        np.testing.assert_array_equal(baseline.connectivities.toarray(), matched.connectivities.toarray())
+        np.testing.assert_allclose(baseline.distances.toarray(), matched.distances.toarray())
+
+    def test_builder_compatibility_normalizes_tuple_radius_order(self, non_visium_adata: AnnData):
+        builder = RadiusBuilder(radius=(4.0, 2.0))
+
+        baseline = spatial_neighbors(non_visium_adata, builder=builder, copy=True)
+        matched = spatial_neighbors(
+            non_visium_adata,
+            builder=builder,
+            coord_type="generic",
+            radius=(2.0, 4.0),
+            copy=True,
+        )
+
+        np.testing.assert_array_equal(baseline.connectivities.toarray(), matched.connectivities.toarray())
+        np.testing.assert_allclose(baseline.distances.toarray(), matched.distances.toarray())
+
+    def test_grid_mode_ignores_radius(self, adata_squaregrid: AnnData):
+        default = spatial_neighbors(adata_squaregrid, coord_type="grid", n_neighs=4, n_rings=2, copy=True)
+        ignored = spatial_neighbors(
+            adata_squaregrid,
+            coord_type="grid",
+            n_neighs=4,
+            n_rings=2,
+            radius=(0.1, 0.2),
+            copy=True,
+        )
+
+        np.testing.assert_array_equal(default.connectivities.toarray(), ignored.connectivities.toarray())
+        np.testing.assert_allclose(default.distances.toarray(), ignored.distances.toarray())
+
+    def test_delaunay_mode_ignores_scalar_radius(self, non_visium_adata: AnnData):
+        default = spatial_neighbors(non_visium_adata, coord_type="generic", delaunay=True, copy=True)
+        ignored = spatial_neighbors(non_visium_adata, coord_type="generic", delaunay=True, radius=5.0, copy=True)
+
+        np.testing.assert_array_equal(default.connectivities.toarray(), ignored.connectivities.toarray())
+        np.testing.assert_allclose(default.distances.toarray(), ignored.distances.toarray())
 
     @pytest.mark.parametrize("percentile", [99.0, 95.0])
     def test_percentile_filtering(self, adata_hne: AnnData, percentile: float, coord_type="generic"):

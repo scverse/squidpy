@@ -182,7 +182,22 @@ class KNNBuilder(GraphBuilder):
         )
 
 
-class RadiusBuilder(GraphBuilder):
+class _RadiusFilterBuilder(GraphBuilder):
+    """Intermediate base for builders that support radius-interval pruning."""
+
+    radius: float | tuple[float, float] | None
+    n_neighs: int
+
+    @property
+    def coord_type(self) -> CoordType:
+        return CoordType.GENERIC
+
+    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+        if isinstance(self.radius, Iterable):
+            _filter_by_radius_interval(Adj, Dst, self.radius)
+
+
+class RadiusBuilder(_RadiusFilterBuilder):
     """Build a generic radius-based spatial graph."""
 
     def __init__(
@@ -197,10 +212,6 @@ class RadiusBuilder(GraphBuilder):
         super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
         self.radius = radius
         self.n_neighs = n_neighs
-
-    @property
-    def coord_type(self) -> CoordType:
-        return CoordType.GENERIC
 
     @property
     def legacy_params(self) -> dict[str, Any]:
@@ -218,12 +229,8 @@ class RadiusBuilder(GraphBuilder):
             ),
         )
 
-    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
-        if isinstance(self.radius, Iterable):
-            _filter_by_radius_interval(Adj, Dst, self.radius)
 
-
-class DelaunayBuilder(GraphBuilder):
+class DelaunayBuilder(_RadiusFilterBuilder):
     """Build a generic spatial graph from a Delaunay triangulation."""
 
     def __init__(
@@ -238,10 +245,6 @@ class DelaunayBuilder(GraphBuilder):
         super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
         self.radius = radius
         self.n_neighs = n_neighs
-
-    @property
-    def coord_type(self) -> CoordType:
-        return CoordType.GENERIC
 
     @property
     def legacy_params(self) -> dict[str, Any]:
@@ -259,10 +262,6 @@ class DelaunayBuilder(GraphBuilder):
                 set_diag=self.set_diag,
             ),
         )
-
-    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
-        if isinstance(self.radius, Iterable):
-            _filter_by_radius_interval(Adj, Dst, self.radius)
 
 
 class GridBuilder(GraphBuilder):
@@ -555,7 +554,7 @@ def spatial_neighbors(
     Grid-specific behavior
     ----------------------
     Grid mode currently does not validate ``n_neighs`` to a fixed set
-    such as ``{4, 6}``. Internally it first queries the
+    such as ``{{4, 6}}``. Internally it first queries the
     ``n_neighs`` nearest candidates and then applies a distance-based
     correction tuned for grid-like coordinates. As a result:
 
