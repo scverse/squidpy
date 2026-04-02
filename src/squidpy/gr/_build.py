@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from functools import partial
 from itertools import chain
@@ -49,7 +50,15 @@ from squidpy.gr._utils import (
     _save_data,
 )
 
-__all__ = ["spatial_neighbors"]
+__all__ = [
+    "SpatialNeighborsResult",
+    "GraphBuilder",
+    "KNNBuilder",
+    "RadiusBuilder",
+    "DelaunayBuilder",
+    "GridBuilder",
+    "spatial_neighbors",
+]
 
 
 class SpatialNeighborsResult(NamedTuple):
@@ -57,6 +66,358 @@ class SpatialNeighborsResult(NamedTuple):
 
     connectivities: csr_matrix
     distances: csr_matrix
+
+
+class GraphBuilder(ABC):
+    """Base class for spatial graph construction strategies."""
+
+    def __init__(
+        self,
+        transform: str | Transform | None = None,
+        set_diag: bool = False,
+        percentile: float | None = None,
+    ) -> None:
+        self.transform = Transform.NONE if transform is None else Transform(transform)
+        self.set_diag = set_diag
+        self.percentile = percentile
+
+    @property
+    @abstractmethod
+    def coord_type(self) -> CoordType:
+        """Coordinate system supported by this builder."""
+
+    @property
+    def legacy_params(self) -> dict[str, Any]:
+        """Return parameters expressed in the legacy spatial_neighbors API."""
+        return {
+            "coord_type": self.coord_type,
+            "n_neighs": 6,
+            "radius": None,
+            "delaunay": False,
+            "n_rings": 1,
+            "percentile": self.percentile,
+            "transform": self.transform,
+            "set_diag": self.set_diag,
+        }
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        """Return metadata stored in adata.uns after graph construction."""
+        params = self.legacy_params
+        return {
+            "n_neighbors": params["n_neighs"],
+            "coord_type": self.coord_type.v,
+            "radius": params["radius"],
+            "transform": self.transform.v,
+        }
+
+    def build(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SparseEfficiencyWarning)
+            Adj, Dst = self._build_graph(coords)
+
+        self._apply_filters(Adj, Dst)
+        self._apply_percentile(Adj, Dst)
+        Adj.eliminate_zeros()
+        Dst.eliminate_zeros()
+
+        return self._apply_transform(Adj), Dst
+
+    @abstractmethod
+    def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+        """Construct raw adjacency and distance matrices."""
+
+    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+        """Apply builder-specific post-processing filters."""
+        return None
+
+    def _apply_percentile(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+        if self.percentile is not None and self.coord_type == CoordType.GENERIC:
+            threshold = np.percentile(Dst.data, self.percentile)
+            Adj[Dst > threshold] = 0.0
+            Dst[Dst > threshold] = 0.0
+
+    def _apply_transform(self, Adj: csr_matrix) -> csr_matrix:
+        if self.transform == Transform.SPECTRAL:
+            return cast(csr_matrix, _transform_a_spectral(Adj))
+        if self.transform == Transform.COSINE:
+            return cast(csr_matrix, _transform_a_cosine(Adj))
+        if self.transform == Transform.NONE:
+            return Adj
+
+        raise NotImplementedError(f"Transform `{self.transform}` is not yet implemented.")
+
+
+class KNNBuilder(GraphBuilder):
+    """Build a generic k-nearest-neighbor spatial graph."""
+
+    def __init__(
+        self,
+        n_neighs: int = 6,
+        transform: str | Transform | None = None,
+        set_diag: bool = False,
+        percentile: float | None = None,
+    ) -> None:
+        assert_positive(n_neighs, name="n_neighs")
+        super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
+        self.n_neighs = n_neighs
+
+    @property
+    def coord_type(self) -> CoordType:
+        return CoordType.GENERIC
+
+    @property
+    def legacy_params(self) -> dict[str, Any]:
+        return super().legacy_params | {"n_neighs": self.n_neighs}
+
+    def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+        return cast(
+            tuple[csr_matrix, csr_matrix],
+            _build_connectivity(
+                coords,
+                n_neighs=self.n_neighs,
+                return_distance=True,
+                set_diag=self.set_diag,
+            ),
+        )
+
+
+class RadiusBuilder(GraphBuilder):
+    """Build a generic radius-based spatial graph."""
+
+    def __init__(
+        self,
+        radius: float | tuple[float, float],
+        n_neighs: int = 6,
+        transform: str | Transform | None = None,
+        set_diag: bool = False,
+        percentile: float | None = None,
+    ) -> None:
+        assert_positive(n_neighs, name="n_neighs")
+        super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
+        self.radius = radius
+        self.n_neighs = n_neighs
+
+    @property
+    def coord_type(self) -> CoordType:
+        return CoordType.GENERIC
+
+    @property
+    def legacy_params(self) -> dict[str, Any]:
+        return super().legacy_params | {"n_neighs": self.n_neighs, "radius": self.radius}
+
+    def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+        return cast(
+            tuple[csr_matrix, csr_matrix],
+            _build_connectivity(
+                coords,
+                n_neighs=self.n_neighs,
+                radius=self.radius,
+                return_distance=True,
+                set_diag=self.set_diag,
+            ),
+        )
+
+    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+        if isinstance(self.radius, Iterable):
+            _filter_by_radius_interval(Adj, Dst, self.radius)
+
+
+class DelaunayBuilder(GraphBuilder):
+    """Build a generic spatial graph from a Delaunay triangulation."""
+
+    def __init__(
+        self,
+        radius: float | tuple[float, float] | None = None,
+        n_neighs: int = 6,
+        transform: str | Transform | None = None,
+        set_diag: bool = False,
+        percentile: float | None = None,
+    ) -> None:
+        assert_positive(n_neighs, name="n_neighs")
+        super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
+        self.radius = radius
+        self.n_neighs = n_neighs
+
+    @property
+    def coord_type(self) -> CoordType:
+        return CoordType.GENERIC
+
+    @property
+    def legacy_params(self) -> dict[str, Any]:
+        return super().legacy_params | {"n_neighs": self.n_neighs, "radius": self.radius, "delaunay": True}
+
+    def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+        return cast(
+            tuple[csr_matrix, csr_matrix],
+            _build_connectivity(
+                coords,
+                n_neighs=self.n_neighs,
+                radius=self.radius,
+                delaunay=True,
+                return_distance=True,
+                set_diag=self.set_diag,
+            ),
+        )
+
+    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+        if isinstance(self.radius, Iterable):
+            _filter_by_radius_interval(Adj, Dst, self.radius)
+
+
+class GridBuilder(GraphBuilder):
+    """Build a grid-based spatial graph."""
+
+    def __init__(
+        self,
+        n_neighs: int = 6,
+        n_rings: int = 1,
+        delaunay: bool = False,
+        transform: str | Transform | None = None,
+        set_diag: bool = False,
+        percentile: float | None = None,
+    ) -> None:
+        assert_positive(n_neighs, name="n_neighs")
+        assert_positive(n_rings, name="n_rings")
+        super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
+        self.n_neighs = n_neighs
+        self.n_rings = n_rings
+        self.delaunay = delaunay
+
+    @property
+    def coord_type(self) -> CoordType:
+        return CoordType.GRID
+
+    @property
+    def legacy_params(self) -> dict[str, Any]:
+        return super().legacy_params | {
+            "n_neighs": self.n_neighs,
+            "delaunay": self.delaunay,
+            "n_rings": self.n_rings,
+        }
+
+    def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+        return _build_grid(
+            coords,
+            n_neighs=self.n_neighs,
+            n_rings=self.n_rings,
+            delaunay=self.delaunay,
+            set_diag=self.set_diag,
+        )
+
+
+def _filter_by_radius_interval(
+    Adj: csr_matrix,
+    Dst: csr_matrix,
+    radius: Iterable[float],
+) -> None:
+    minn, maxx = sorted(radius)[:2]
+    mask = (Dst.data < minn) | (Dst.data > maxx)
+    a_diag = Adj.diagonal()
+
+    Dst.data[mask] = 0.0
+    Adj.data[mask] = 0.0
+    Adj.setdiag(a_diag)
+
+
+def _normalize_builder_param(name: str, value: Any) -> Any:
+    if name == "coord_type":
+        return None if value is None else CoordType(value)
+    if name == "transform":
+        return Transform.NONE if value is None else Transform(value)
+    if name == "radius" and isinstance(value, tuple):
+        return tuple(sorted(value)[:2])
+
+    return value
+
+
+def _validate_builder_compatibility(
+    builder: GraphBuilder,
+    *,
+    coord_type: str | CoordType | None,
+    n_neighs: int,
+    radius: float | tuple[float, float] | None,
+    delaunay: bool,
+    n_rings: int,
+    percentile: float | None,
+    transform: str | Transform | None,
+    set_diag: bool,
+) -> None:
+    defaults = {
+        "coord_type": None,
+        "n_neighs": 6,
+        "radius": None,
+        "delaunay": False,
+        "n_rings": 1,
+        "percentile": None,
+        "transform": None,
+        "set_diag": False,
+    }
+    provided = {
+        "coord_type": coord_type,
+        "n_neighs": n_neighs,
+        "radius": radius,
+        "delaunay": delaunay,
+        "n_rings": n_rings,
+        "percentile": percentile,
+        "transform": transform,
+        "set_diag": set_diag,
+    }
+
+    for key, value in provided.items():
+        if value == defaults[key]:
+            continue
+
+        if _normalize_builder_param(key, value) != _normalize_builder_param(key, builder.legacy_params[key]):
+            raise ValueError(
+                f"Parameter `{key}` conflicts with `{type(builder).__name__}`. "
+                "Leave graph-construction arguments at their defaults or make them match the builder."
+            )
+
+
+def _resolve_graph_builder(
+    *,
+    coord_type: CoordType,
+    n_neighs: int,
+    radius: float | tuple[float, float] | None,
+    delaunay: bool,
+    n_rings: int,
+    percentile: float | None,
+    transform: Transform,
+    set_diag: bool,
+) -> GraphBuilder:
+    if coord_type == CoordType.GRID:
+        return GridBuilder(
+            n_neighs=n_neighs,
+            n_rings=n_rings,
+            delaunay=delaunay,
+            transform=transform,
+            set_diag=set_diag,
+            percentile=percentile,
+        )
+    if delaunay:
+        return DelaunayBuilder(
+            radius=radius,
+            n_neighs=n_neighs,
+            transform=transform,
+            set_diag=set_diag,
+            percentile=percentile,
+        )
+    if radius is not None:
+        return RadiusBuilder(
+            radius=radius,
+            n_neighs=n_neighs,
+            transform=transform,
+            set_diag=set_diag,
+            percentile=percentile,
+        )
+
+    return KNNBuilder(
+        n_neighs=n_neighs,
+        transform=transform,
+        set_diag=set_diag,
+        percentile=percentile,
+    )
 
 
 @d.dedent
@@ -75,6 +436,7 @@ def spatial_neighbors(
     percentile: float | None = None,
     transform: str | Transform | None = None,
     set_diag: bool = False,
+    builder: GraphBuilder | None = None,
     key_added: str = "spatial",
     copy: bool = False,
 ) -> SpatialNeighborsResult | None:
@@ -128,9 +490,46 @@ def spatial_neighbors(
             - `{t.NONE.v}` - no transformation of the adjacency matrix.
     set_diag
         Whether to set the diagonal of the spatial connectivities to `1.0`.
+    builder
+        Advanced graph construction strategy. When provided, graph-construction arguments
+        (``coord_type``, ``n_neighs``, ``radius``, ``delaunay``, ``n_rings``, ``percentile``,
+        ``transform``, ``set_diag``) must either be left at their defaults or match the builder.
     key_added
         Key which controls where the results are saved if ``copy = False``.
     %(copy)s
+
+    Notes
+    -----
+    ``spatial_neighbors`` has 4 graph-construction modes:
+
+        - Grid mode:
+          ``coord_type='grid'``. Uses ``n_neighs`` and ``n_rings``.
+          ``radius`` is ignored. ``delaunay`` is forwarded to the
+          underlying grid connectivity builder. This is the mode used
+          for Visium-like grid coordinates.
+        - Generic k-nearest-neighbor mode:
+          ``coord_type='generic'``, ``delaunay=False``, ``radius=None``.
+          Uses ``n_neighs``.
+        - Generic radius mode:
+          ``coord_type='generic'``, ``delaunay=False``, ``radius`` set.
+          Uses ``radius`` and builds a radius-based neighbor graph.
+          If ``radius`` is a tuple, the graph is built with the maximum
+          radius and then pruned to the interval
+          ``[min(radius), max(radius)]``.
+        - Generic Delaunay mode:
+          ``coord_type='generic'``, ``delaunay=True``.
+          Builds a Delaunay triangulation graph. ``n_neighs`` is not
+          used for the triangulation itself, but is still accepted for
+          backward compatibility. If ``radius`` is a tuple, it is used
+          only as a post-construction pruning interval.
+
+    Across these modes:
+
+        - ``percentile`` only affects generic graphs.
+        - ``transform`` and ``set_diag`` apply to all modes.
+        - If ``builder`` is provided, it determines the mode directly.
+          The legacy graph-construction arguments must then stay at
+          their defaults or match the builder configuration.
 
     Returns
     -------
@@ -191,20 +590,47 @@ def spatial_neighbors(
         adata = adata.tables[table_key]
         library_key = region_key
 
-    assert_positive(n_rings, name="n_rings")
-    assert_positive(n_neighs, name="n_neighs")
     _assert_spatial_basis(adata, spatial_key)
 
-    transform = Transform.NONE if transform is None else Transform(transform)
-    if coord_type is None:
-        if radius is not None:
-            logg.warning(
-                f"Graph creation with `radius` is only available when `coord_type = {CoordType.GENERIC!r}` specified. "
-                f"Ignoring parameter `radius = {radius}`."
-            )
-        coord_type = CoordType.GRID if Key.uns.spatial in adata.uns else CoordType.GENERIC
+    if builder is not None:
+        if not isinstance(builder, GraphBuilder):
+            raise TypeError(f"Expected `builder` to be a `GraphBuilder`, found `{type(builder)}`.")
+        _validate_builder_compatibility(
+            builder,
+            coord_type=coord_type,
+            n_neighs=n_neighs,
+            radius=radius,
+            delaunay=delaunay,
+            n_rings=n_rings,
+            percentile=percentile,
+            transform=transform,
+            set_diag=set_diag,
+        )
     else:
-        coord_type = CoordType(coord_type)
+        assert_positive(n_rings, name="n_rings")
+        assert_positive(n_neighs, name="n_neighs")
+
+        transform = Transform.NONE if transform is None else Transform(transform)
+        if coord_type is None:
+            if radius is not None:
+                logg.warning(
+                    f"Graph creation with `radius` is only available when `coord_type = {CoordType.GENERIC!r}` specified. "
+                    f"Ignoring parameter `radius = {radius}`."
+                )
+            coord_type = CoordType.GRID if Key.uns.spatial in adata.uns else CoordType.GENERIC
+        else:
+            coord_type = CoordType(coord_type)
+
+        builder = _resolve_graph_builder(
+            coord_type=coord_type,
+            n_neighs=n_neighs,
+            radius=radius,
+            delaunay=delaunay,
+            n_rings=n_rings,
+            percentile=percentile,
+            transform=transform,
+            set_diag=set_diag,
+        )
 
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
@@ -214,19 +640,12 @@ def spatial_neighbors(
         libs = [None]
 
     start = logg.info(
-        f"Creating graph using `{coord_type}` coordinates and `{transform}` transform and `{len(libs)}` libraries."
+        f"Creating graph using `{builder.coord_type}` coordinates and `{builder.transform}` transform and `{len(libs)}` libraries."
     )
     _build_fun = partial(
         _spatial_neighbor,
         spatial_key=spatial_key,
-        coord_type=coord_type,
-        n_neighs=n_neighs,
-        radius=radius,
-        delaunay=delaunay,
-        n_rings=n_rings,
-        transform=transform,
-        set_diag=set_diag,
-        percentile=percentile,
+        builder=builder,
     )
 
     if library_key is not None:
@@ -248,12 +667,7 @@ def spatial_neighbors(
     neighbors_dict = {
         "connectivities_key": conns_key,
         "distances_key": dists_key,
-        "params": {
-            "n_neighbors": n_neighs,
-            "coord_type": coord_type.v,
-            "radius": radius,
-            "transform": transform.v,
-        },
+        "params": builder.metadata,
     }
 
     if copy:
@@ -267,66 +681,13 @@ def spatial_neighbors(
 def _spatial_neighbor(
     adata: AnnData,
     spatial_key: str = Key.obsm.spatial,
-    coord_type: str | CoordType | None = None,
-    n_neighs: int = 6,
-    radius: float | tuple[float, float] | None = None,
-    delaunay: bool = False,
-    n_rings: int = 1,
-    transform: str | Transform | None = None,
-    set_diag: bool = False,
-    percentile: float | None = None,
+    builder: GraphBuilder | None = None,
 ) -> tuple[csr_matrix, csr_matrix]:
+    if builder is None:
+        raise ValueError("No graph builder was provided.")
+
     coords = adata.obsm[spatial_key]
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", SparseEfficiencyWarning)
-        if coord_type == CoordType.GRID:
-            Adj, Dst = _build_grid(
-                coords,
-                n_neighs=n_neighs,
-                n_rings=n_rings,
-                delaunay=delaunay,
-                set_diag=set_diag,
-            )
-        elif coord_type == CoordType.GENERIC:
-            Adj, Dst = _build_connectivity(
-                coords,
-                n_neighs=n_neighs,
-                radius=radius,
-                delaunay=delaunay,
-                return_distance=True,
-                set_diag=set_diag,
-            )
-        else:
-            raise NotImplementedError(f"Coordinate type `{coord_type}` is not yet implemented.")
-
-    if coord_type == CoordType.GENERIC and isinstance(radius, Iterable):
-        minn, maxx = sorted(radius)[:2]
-        mask = (Dst.data < minn) | (Dst.data > maxx)
-        a_diag = Adj.diagonal()
-
-        Dst.data[mask] = 0.0
-        Adj.data[mask] = 0.0
-        Adj.setdiag(a_diag)
-
-    if percentile is not None and coord_type == CoordType.GENERIC:
-        threshold = np.percentile(Dst.data, percentile)
-        Adj[Dst > threshold] = 0.0
-        Dst[Dst > threshold] = 0.0
-
-    Adj.eliminate_zeros()
-    Dst.eliminate_zeros()
-
-    # check transform
-    if transform == Transform.SPECTRAL:
-        Adj = _transform_a_spectral(Adj)
-    elif transform == Transform.COSINE:
-        Adj = _transform_a_cosine(Adj)
-    elif transform == Transform.NONE:
-        pass
-    else:
-        raise NotImplementedError(f"Transform `{transform}` is not yet implemented.")
-
-    return Adj, Dst
+    return builder.build(coords)
 
 
 def _build_grid(

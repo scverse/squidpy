@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from squidpy.gr._build import SpatialNeighborsResult, mask_graph, spatial_neighbors
+from squidpy.gr._build import (
+    DelaunayBuilder,
+    GraphBuilder,
+    GridBuilder,
+    KNNBuilder,
+    RadiusBuilder,
+    SpatialNeighborsResult,
+    mask_graph,
+    spatial_neighbors,
+)
 from squidpy.gr._ligrec import ligrec
 from squidpy.gr._nhood import (
     NhoodEnrichmentResult,
@@ -17,6 +26,11 @@ from squidpy.gr._sepal import sepal
 
 __all__ = [
     "SpatialNeighborsResult",
+    "GraphBuilder",
+    "KNNBuilder",
+    "RadiusBuilder",
+    "DelaunayBuilder",
+    "GridBuilder",
     "NhoodEnrichmentResult",
     "mask_graph",
     "spatial_neighbors",

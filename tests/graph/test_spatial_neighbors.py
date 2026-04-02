@@ -11,8 +11,9 @@ from shapely import Point
 from spatialdata.datasets import blobs
 
 from squidpy._constants._pkg_constants import Key
-from squidpy.gr import mask_graph, spatial_neighbors
+from squidpy.gr import DelaunayBuilder, GridBuilder, KNNBuilder, RadiusBuilder, mask_graph, spatial_neighbors
 from squidpy.gr._build import _build_connectivity
+from squidpy.gr.neighbors import KNNBuilder as PublicKNNBuilder
 
 
 class TestSpatialNeighbors:
@@ -212,6 +213,41 @@ class TestSpatialNeighbors:
         assert Key.obsp.spatial_dist() not in non_visium_adata.obsp
         np.testing.assert_allclose(result.distances.toarray(), self._gt_ddist)
         np.testing.assert_allclose(result.connectivities.toarray(), self._gt_dgraph)
+
+    def test_builder_module_export(self):
+        assert PublicKNNBuilder is KNNBuilder
+
+    def test_knn_builder_matches_legacy(self, non_visium_adata: AnnData):
+        legacy = spatial_neighbors(non_visium_adata, n_neighs=3, coord_type="generic", copy=True)
+        builder = spatial_neighbors(non_visium_adata, builder=KNNBuilder(n_neighs=3), copy=True)
+
+        np.testing.assert_array_equal(legacy.connectivities.toarray(), builder.connectivities.toarray())
+        np.testing.assert_allclose(legacy.distances.toarray(), builder.distances.toarray())
+
+    def test_radius_builder_matches_legacy(self, non_visium_adata: AnnData):
+        legacy = spatial_neighbors(non_visium_adata, radius=5.0, coord_type="generic", copy=True)
+        builder = spatial_neighbors(non_visium_adata, builder=RadiusBuilder(radius=5.0), copy=True)
+
+        np.testing.assert_array_equal(legacy.connectivities.toarray(), builder.connectivities.toarray())
+        np.testing.assert_allclose(legacy.distances.toarray(), builder.distances.toarray())
+
+    def test_delaunay_builder_matches_legacy(self, non_visium_adata: AnnData):
+        legacy = spatial_neighbors(non_visium_adata, delaunay=True, coord_type="generic", copy=True)
+        builder = spatial_neighbors(non_visium_adata, builder=DelaunayBuilder(), copy=True)
+
+        np.testing.assert_array_equal(legacy.connectivities.toarray(), builder.connectivities.toarray())
+        np.testing.assert_allclose(legacy.distances.toarray(), builder.distances.toarray())
+
+    def test_grid_builder_matches_legacy(self, adata_squaregrid: AnnData):
+        legacy = spatial_neighbors(adata_squaregrid, n_neighs=4, n_rings=2, coord_type="grid", copy=True)
+        builder = spatial_neighbors(adata_squaregrid, builder=GridBuilder(n_neighs=4, n_rings=2), copy=True)
+
+        np.testing.assert_array_equal(legacy.connectivities.toarray(), builder.connectivities.toarray())
+        np.testing.assert_allclose(legacy.distances.toarray(), builder.distances.toarray())
+
+    def test_builder_argument_conflict(self, non_visium_adata: AnnData):
+        with pytest.raises(ValueError, match="conflicts"):
+            spatial_neighbors(non_visium_adata, builder=RadiusBuilder(radius=5.0), delaunay=True)
 
     @pytest.mark.parametrize("percentile", [99.0, 95.0])
     def test_percentile_filtering(self, adata_hne: AnnData, percentile: float, coord_type="generic"):
