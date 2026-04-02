@@ -12,7 +12,7 @@ from skimage.util import img_as_ubyte
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
-from squidpy.gr._utils import _assert_non_empty_sequence
+from squidpy._validators import assert_non_empty_sequence
 from squidpy.im._coords import _NULL_PADDING, CropCoords
 
 Feature_t: TypeAlias = dict[str, Any]
@@ -113,9 +113,9 @@ class FeatureMixin:
         library_id = self._get_library_id(library_id)
         arr = self[layer].sel(z=library_id)
 
-        quantiles = _assert_non_empty_sequence(quantiles, name="quantiles")
+        quantiles = assert_non_empty_sequence(quantiles, name="quantiles")
         channels = _get_channels(arr, channels)
-        channels = _assert_non_empty_sequence(channels, name="channels")
+        channels = assert_non_empty_sequence(channels, name="channels")
 
         features = {}
         for c in channels:
@@ -164,7 +164,7 @@ class FeatureMixin:
         arr = self[layer].sel(z=library_id)
 
         channels = _get_channels(arr, channels)
-        channels = _assert_non_empty_sequence(channels, name="channels")
+        channels = assert_non_empty_sequence(channels, name="channels")
 
         # if v_range is None, use whole-image range
         if v_range is None:
@@ -238,12 +238,12 @@ class FeatureMixin:
         layer = self._get_layer(layer)
         library_id = self._get_library_id(library_id)
 
-        props = _assert_non_empty_sequence(props, name="properties")
-        angles = _assert_non_empty_sequence(angles, name="angles")
-        distances = _assert_non_empty_sequence(distances, name="distances")
+        props = assert_non_empty_sequence(props, name="properties")
+        angles = assert_non_empty_sequence(angles, name="angles")
+        distances = assert_non_empty_sequence(distances, name="distances")
 
         channels = _get_channels(self[layer], channels)
-        channels = _assert_non_empty_sequence(channels, name="channels")
+        channels = assert_non_empty_sequence(channels, name="channels")
 
         arr = self[layer].sel(z=library_id)[..., channels].values
 
@@ -365,7 +365,7 @@ class FeatureMixin:
         label_layer = self._get_layer(label_layer)
         library_id = self._get_library_id(library_id)
 
-        props = _assert_non_empty_sequence(props, name="properties")
+        props = assert_non_empty_sequence(props, name="properties")
         for prop in props:
             if prop not in _valid_seg_prop:
                 raise ValueError(f"Invalid property `{prop}`. Valid properties are `{_valid_seg_prop}`.")
@@ -377,7 +377,7 @@ class FeatureMixin:
             if intensity_layer is None:
                 raise ValueError("Please specify `intensity_layer` if using intensity properties.")
             channels = _get_channels(self[intensity_layer], channels)
-            channels = _assert_non_empty_sequence(channels, name="channels")
+            channels = assert_non_empty_sequence(channels, name="channels")
         else:
             channels = ()
 
