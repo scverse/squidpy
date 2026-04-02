@@ -387,8 +387,7 @@ def _resolve_graph_builder(
     if coord_type == CoordType.GRID:
         if percentile is not None:
             raise ValueError(
-                "`percentile` is not supported for grid coordinates. "
-                "It only applies to generic (non-grid) graphs."
+                "`percentile` is not supported for grid coordinates. It only applies to generic (non-grid) graphs."
             )
         return GridBuilder(
             n_neighs=n_neighs,
