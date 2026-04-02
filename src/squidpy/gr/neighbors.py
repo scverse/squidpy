@@ -329,7 +329,6 @@ def _filter_by_radius_interval(
     Adj.setdiag(a_diag)
 
 
-
 @njit
 def _csr_bilateral_diag_scale_helper(
     mat: csr_array | csr_matrix,

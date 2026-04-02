@@ -398,8 +398,11 @@ def _spatial_neighbors(
 ) -> SpatialNeighborsResult | None:
     """Internal implementation of spatial_neighbors (no deprecation warning)."""
     adata, library_key = _resolve_spatial_data(
-        adata, spatial_key=spatial_key, elements_to_coordinate_systems=elements_to_coordinate_systems,
-        table_key=table_key, library_key=library_key,
+        adata,
+        spatial_key=spatial_key,
+        elements_to_coordinate_systems=elements_to_coordinate_systems,
+        table_key=table_key,
+        library_key=library_key,
     )
 
     _assert_spatial_basis(adata, spatial_key)
@@ -436,7 +439,9 @@ def _spatial_neighbors(
             has_spatial_uns=Key.uns.spatial in adata.uns,
         )
 
-    return _run_spatial_neighbors(adata, builder=builder, spatial_key=spatial_key, library_key=library_key, key_added=key_added, copy=copy)
+    return _run_spatial_neighbors(
+        adata, builder=builder, spatial_key=spatial_key, library_key=library_key, key_added=key_added, copy=copy
+    )
 
 
 @d.dedent
@@ -472,14 +477,20 @@ def spatial_neighbors_knn(
     """
     transform_enum = Transform.NONE if transform is None else Transform(transform)
     builder = KNNBuilder(
-        n_neighs=n_neighs, percentile=percentile,
-        transform=transform_enum, set_diag=set_diag,
+        n_neighs=n_neighs,
+        percentile=percentile,
+        transform=transform_enum,
+        set_diag=set_diag,
     )
     return _spatial_neighbors(
-        adata, spatial_key=spatial_key,
+        adata,
+        spatial_key=spatial_key,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
-        table_key=table_key, library_key=library_key,
-        builder=builder, key_added=key_added, copy=copy,
+        table_key=table_key,
+        library_key=library_key,
+        builder=builder,
+        key_added=key_added,
+        copy=copy,
     )
 
 
@@ -521,14 +532,21 @@ def spatial_neighbors_radius(
     """
     transform_enum = Transform.NONE if transform is None else Transform(transform)
     builder = RadiusBuilder(
-        n_neighs=n_neighs, radius=radius, percentile=percentile,
-        transform=transform_enum, set_diag=set_diag,
+        n_neighs=n_neighs,
+        radius=radius,
+        percentile=percentile,
+        transform=transform_enum,
+        set_diag=set_diag,
     )
     return _spatial_neighbors(
-        adata, spatial_key=spatial_key,
+        adata,
+        spatial_key=spatial_key,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
-        table_key=table_key, library_key=library_key,
-        builder=builder, key_added=key_added, copy=copy,
+        table_key=table_key,
+        library_key=library_key,
+        builder=builder,
+        key_added=key_added,
+        copy=copy,
     )
 
 
@@ -566,14 +584,20 @@ def spatial_neighbors_delaunay(
     """
     transform_enum = Transform.NONE if transform is None else Transform(transform)
     builder = DelaunayBuilder(
-        radius=radius, percentile=percentile,
-        transform=transform_enum, set_diag=set_diag,
+        radius=radius,
+        percentile=percentile,
+        transform=transform_enum,
+        set_diag=set_diag,
     )
     return _spatial_neighbors(
-        adata, spatial_key=spatial_key,
+        adata,
+        spatial_key=spatial_key,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
-        table_key=table_key, library_key=library_key,
-        builder=builder, key_added=key_added, copy=copy,
+        table_key=table_key,
+        library_key=library_key,
+        builder=builder,
+        key_added=key_added,
+        copy=copy,
     )
 
 
@@ -619,14 +643,21 @@ def spatial_neighbors_grid(
     assert_positive(n_neighs, name="n_neighs")
     transform_enum = Transform.NONE if transform is None else Transform(transform)
     builder = GridBuilder(
-        n_neighs=n_neighs, n_rings=n_rings, delaunay=delaunay,
-        transform=transform_enum, set_diag=set_diag,
+        n_neighs=n_neighs,
+        n_rings=n_rings,
+        delaunay=delaunay,
+        transform=transform_enum,
+        set_diag=set_diag,
     )
     return _spatial_neighbors(
-        adata, spatial_key=spatial_key,
+        adata,
+        spatial_key=spatial_key,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
-        table_key=table_key, library_key=library_key,
-        builder=builder, key_added=key_added, copy=copy,
+        table_key=table_key,
+        library_key=library_key,
+        builder=builder,
+        key_added=key_added,
+        copy=copy,
     )
 
 
