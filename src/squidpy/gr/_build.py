@@ -70,15 +70,27 @@ def _validate_no_legacy_params(**kwargs: Any) -> None:
 
 def _resolve_graph_builder(
     *,
-    coord_type: CoordType,
+    coord_type: str | CoordType | None,
     n_neighs: int,
     radius: float | tuple[float, float] | None,
     delaunay: bool,
     n_rings: int,
     percentile: float | None,
-    transform: Transform,
+    transform: str | Transform | None,
     set_diag: bool,
+    has_spatial_uns: bool = False,
 ) -> GraphBuilder:
+    transform = Transform.NONE if transform is None else Transform(transform)
+    if coord_type is None:
+        if radius is not None:
+            logg.warning(
+                f"Graph creation with `radius` is only available when `coord_type = {CoordType.GENERIC!r}` specified. "
+                f"Ignoring parameter `radius = {radius}`."
+            )
+        coord_type = CoordType.GRID if has_spatial_uns else CoordType.GENERIC
+    else:
+        coord_type = CoordType(coord_type)
+
     if coord_type == CoordType.GRID:
         if percentile is not None:
             raise ValueError(
@@ -348,17 +360,6 @@ def spatial_neighbors(
         assert_positive(n_rings, name="n_rings")
         assert_positive(n_neighs, name="n_neighs")
 
-        transform = Transform.NONE if transform is None else Transform(transform)
-        if coord_type is None:
-            if radius is not None:
-                logg.warning(
-                    f"Graph creation with `radius` is only available when `coord_type = {CoordType.GENERIC!r}` specified. "
-                    f"Ignoring parameter `radius = {radius}`."
-                )
-            coord_type = CoordType.GRID if Key.uns.spatial in adata.uns else CoordType.GENERIC
-        else:
-            coord_type = CoordType(coord_type)
-
         builder = _resolve_graph_builder(
             coord_type=coord_type,
             n_neighs=n_neighs,
@@ -368,6 +369,7 @@ def spatial_neighbors(
             percentile=percentile,
             transform=transform,
             set_diag=set_diag,
+            has_spatial_uns=Key.uns.spatial in adata.uns,
         )
 
     if library_key is not None:
