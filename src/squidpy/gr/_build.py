@@ -530,6 +530,39 @@ def spatial_neighbors(
         - If ``builder`` is provided, it determines the mode directly.
           The legacy graph-construction arguments must then stay at
           their defaults or match the builder configuration.
+        - By default, observations are not treated as their own
+          neighbors. The distance matrix always has a zero diagonal.
+          The connectivity matrix only gets a nonzero diagonal when
+          ``set_diag=True``.
+
+    Argument precedence
+    -------------------
+    When ``builder`` is not provided, the mode is resolved as follows:
+
+        - If ``coord_type`` resolves to ``'grid'``, grid mode is used.
+          In that case ``radius`` is ignored.
+        - Otherwise, if ``delaunay=True``, Delaunay mode is used.
+          In this mode ``n_neighs`` does not affect the triangulation.
+          A tuple ``radius`` is only used afterward as a pruning
+          interval. A scalar ``radius`` is ignored.
+        - Otherwise, if ``radius`` is set, radius mode is used.
+          In this mode ``n_neighs`` does not act as a second cutoff.
+        - Otherwise, k-nearest-neighbor mode is used.
+
+    Grid-specific behavior
+    ----------------------
+    Grid mode currently does not validate ``n_neighs`` to a fixed set
+    such as ``{4, 6}``. Internally it first queries the
+    ``n_neighs`` nearest candidates and then applies a distance-based
+    correction tuned for grid-like coordinates. As a result:
+
+        - values such as ``n_neighs=4`` and ``n_neighs=6`` are the
+          intended square-grid and hex-grid choices, respectively;
+        - other values are accepted for backward compatibility, but
+          their geometric interpretation is not guaranteed to match a
+          continuous ring on the grid;
+        - no clockwise or other within-ring ordering is part of the
+          public API.
 
     Returns
     -------
