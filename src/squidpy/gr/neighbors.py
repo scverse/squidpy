@@ -53,9 +53,9 @@ class GraphBuilder(ABC):
     def build(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SparseEfficiencyWarning)
-            Adj, Dst = self._build_graph(coords)
+            Adj, Dst = self.build_graph(coords)
 
-        self._apply_filters(Adj, Dst)
+        self.apply_filters(Adj, Dst)
         self._apply_percentile(Adj, Dst)
         Adj.eliminate_zeros()
         Dst.eliminate_zeros()
@@ -63,10 +63,10 @@ class GraphBuilder(ABC):
         return self._apply_transform(Adj), Dst
 
     @abstractmethod
-    def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+    def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         """Construct raw adjacency and distance matrices."""
 
-    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+    def apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
         """Apply builder-specific post-processing filters."""
         return None
 
@@ -105,7 +105,7 @@ class KNNBuilder(GraphBuilder):
     def coord_type(self) -> CoordType:
         return CoordType.GENERIC
 
-    def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+    def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
         tree = NearestNeighbors(n_neighbors=self.n_neighs, radius=1, metric="euclidean")
         tree.fit(coords)
@@ -145,7 +145,7 @@ class RadiusBuilder(GraphBuilder):
     def coord_type(self) -> CoordType:
         return CoordType.GENERIC
 
-    def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+    def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
         r = self.radius if isinstance(self.radius, int | float) else max(self.radius)
         tree = NearestNeighbors(n_neighbors=self.n_neighs, radius=r, metric="euclidean")
@@ -166,7 +166,7 @@ class RadiusBuilder(GraphBuilder):
         Dst.setdiag(0.0)
         return Adj, Dst
 
-    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+    def apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
         if isinstance(self.radius, Iterable):
             _filter_by_radius_interval(Adj, Dst, self.radius)
 
@@ -200,7 +200,7 @@ class DelaunayBuilder(GraphBuilder):
     def coord_type(self) -> CoordType:
         return CoordType.GENERIC
 
-    def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+    def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
         tri = Delaunay(coords)
         indptr, indices = tri.vertex_neighbor_vertices
@@ -219,7 +219,7 @@ class DelaunayBuilder(GraphBuilder):
         Dst.setdiag(0.0)
         return Adj, Dst
 
-    def _apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+    def apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
         if isinstance(self.radius, Iterable):
             _filter_by_radius_interval(Adj, Dst, self.radius)
 
@@ -246,7 +246,7 @@ class GridBuilder(GraphBuilder):
     def coord_type(self) -> CoordType:
         return CoordType.GRID
 
-    def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+    def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         if self.n_rings > 1:
             Adj = self._base_adjacency(coords, set_diag=True)
             Res, Walk = Adj, Adj

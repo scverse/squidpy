@@ -304,7 +304,7 @@ class TestSpatialNeighbors:
         assert not ((result.connectivities != result_filtered.connectivities).nnz == 0)
         assert result.distances.max() > result_filtered.distances.max()
 
-        Adj, Dst = KNNBuilder(n_neighs=6, set_diag=False)._build_graph(adata_hne.obsm["spatial"])
+        Adj, Dst = KNNBuilder(n_neighs=6, set_diag=False).build_graph(adata_hne.obsm["spatial"])
         threshold = np.percentile(Dst.data, percentile)
         Adj[Dst > threshold] = 0.0
         Dst[Dst > threshold] = 0.0
