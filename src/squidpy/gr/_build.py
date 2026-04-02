@@ -94,8 +94,6 @@ def spatial_neighbors(
     table_key
         Key in :attr:`spatialdata.SpatialData.tables` where the spatialdata table is stored. Must not be `None` if
         `adata` is a :class:`spatialdata.SpatialData`.
-    mask_polygon
-        The Polygon or MultiPolygon element.
     %(library_key)s
     coord_type
         Type of coordinate system. Valid options are:
