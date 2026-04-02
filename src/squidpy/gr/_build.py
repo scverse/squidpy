@@ -275,11 +275,10 @@ class GridBuilder(GraphBuilder):
         delaunay: bool = False,
         transform: str | Transform | None = None,
         set_diag: bool = False,
-        percentile: float | None = None,
     ) -> None:
         assert_positive(n_neighs, name="n_neighs")
         assert_positive(n_rings, name="n_rings")
-        super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
+        super().__init__(transform=transform, set_diag=set_diag, percentile=None)
         self.n_neighs = n_neighs
         self.n_rings = n_rings
         self.delaunay = delaunay
@@ -387,13 +386,17 @@ def _resolve_graph_builder(
     set_diag: bool,
 ) -> GraphBuilder:
     if coord_type == CoordType.GRID:
+        if percentile is not None:
+            raise ValueError(
+                "`percentile` is not supported for grid coordinates. "
+                "It only applies to generic (non-grid) graphs."
+            )
         return GridBuilder(
             n_neighs=n_neighs,
             n_rings=n_rings,
             delaunay=delaunay,
             transform=transform,
             set_diag=set_diag,
-            percentile=percentile,
         )
     if delaunay:
         return DelaunayBuilder(
