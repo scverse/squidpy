@@ -6,7 +6,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from itertools import chain
-from typing import Any, cast
+from typing import cast
 
 import numpy as np
 from fast_array_utils import stats as fau_stats
@@ -46,31 +46,6 @@ class GraphBuilder(ABC):
     @abstractmethod
     def coord_type(self) -> CoordType:
         """Coordinate system supported by this builder."""
-
-    @property
-    def legacy_params(self) -> dict[str, Any]:
-        """Return parameters expressed in the legacy spatial_neighbors API."""
-        return {
-            "coord_type": self.coord_type,
-            "n_neighs": 6,
-            "radius": None,
-            "delaunay": False,
-            "n_rings": 1,
-            "percentile": self.percentile,
-            "transform": self.transform,
-            "set_diag": self.set_diag,
-        }
-
-    @property
-    def metadata(self) -> dict[str, Any]:
-        """Return metadata stored in adata.uns after graph construction."""
-        params = self.legacy_params
-        return {
-            "n_neighbors": params["n_neighs"],
-            "coord_type": self.coord_type.v,
-            "radius": params["radius"],
-            "transform": self.transform.v,
-        }
 
     def build(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         with warnings.catch_warnings():
@@ -127,10 +102,6 @@ class KNNBuilder(GraphBuilder):
     def coord_type(self) -> CoordType:
         return CoordType.GENERIC
 
-    @property
-    def legacy_params(self) -> dict[str, Any]:
-        return super().legacy_params | {"n_neighs": self.n_neighs}
-
     def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         return cast(
             tuple[csr_matrix, csr_matrix],
@@ -174,10 +145,6 @@ class RadiusBuilder(_RadiusFilterBuilder):
         self.radius = radius
         self.n_neighs = n_neighs
 
-    @property
-    def legacy_params(self) -> dict[str, Any]:
-        return super().legacy_params | {"n_neighs": self.n_neighs, "radius": self.radius}
-
     def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         return cast(
             tuple[csr_matrix, csr_matrix],
@@ -206,10 +173,6 @@ class DelaunayBuilder(_RadiusFilterBuilder):
         super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
         self.radius = radius
         self.n_neighs = n_neighs
-
-    @property
-    def legacy_params(self) -> dict[str, Any]:
-        return super().legacy_params | {"n_neighs": self.n_neighs, "radius": self.radius, "delaunay": True}
 
     def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         return cast(
@@ -246,14 +209,6 @@ class GridBuilder(GraphBuilder):
     @property
     def coord_type(self) -> CoordType:
         return CoordType.GRID
-
-    @property
-    def legacy_params(self) -> dict[str, Any]:
-        return super().legacy_params | {
-            "n_neighs": self.n_neighs,
-            "delaunay": self.delaunay,
-            "n_rings": self.n_rings,
-        }
 
     def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         return _build_grid(

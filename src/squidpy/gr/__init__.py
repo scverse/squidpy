@@ -7,6 +7,7 @@ from squidpy.gr._build import (
     mask_graph,
     spatial_neighbors,
 )
+from squidpy.gr import neighbors
 from squidpy.gr._ligrec import ligrec
 from squidpy.gr._nhood import (
     NhoodEnrichmentResult,
@@ -22,6 +23,7 @@ from squidpy.gr._sepal import sepal
 __all__ = [
     "SpatialNeighborsResult",
     "NhoodEnrichmentResult",
+    "neighbors",
     "mask_graph",
     "spatial_neighbors",
     "ligrec",

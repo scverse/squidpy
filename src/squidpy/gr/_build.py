@@ -405,7 +405,12 @@ def spatial_neighbors(
     neighbors_dict = {
         "connectivities_key": conns_key,
         "distances_key": dists_key,
-        "params": builder.metadata,
+        "params": {
+            "n_neighbors": getattr(builder, "n_neighs", 6),
+            "coord_type": builder.coord_type.v,
+            "radius": getattr(builder, "radius", None),
+            "transform": builder.transform.v,
+        },
     }
 
     if copy:
