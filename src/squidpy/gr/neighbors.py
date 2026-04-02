@@ -181,11 +181,20 @@ class DelaunayBuilder(_RadiusFilterBuilder):
     def __init__(
         self,
         radius: float | tuple[float, float] | None = None,
-        n_neighs: int = 6,
+        n_neighs: int | None = None,
         transform: str | Transform | None = None,
         set_diag: bool = False,
         percentile: float | None = None,
     ) -> None:
+        if n_neighs is not None:
+            warnings.warn(
+                "Parameter `n_neighs` of `DelaunayBuilder` is ignored by "
+                "Delaunay triangulation and will be removed in squidpy v2.0.0.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            n_neighs = 6
         assert_positive(n_neighs, name="n_neighs")
         super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
         self.radius = radius

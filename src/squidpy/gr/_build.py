@@ -215,10 +215,10 @@ def spatial_neighbors(
           ``[min(radius), max(radius)]``.
         - Generic Delaunay mode:
           ``coord_type='generic'``, ``delaunay=True``.
-          Builds a Delaunay triangulation graph. ``n_neighs`` is not
-          used for the triangulation itself, but is still accepted for
-          backward compatibility. If ``radius`` is a tuple, it is used
-          only as a post-construction pruning interval.
+          Builds a Delaunay triangulation graph. ``n_neighs`` is
+          ignored by the triangulation and passing it is deprecated.
+          If ``radius`` is a tuple, it is used only as a
+          post-construction pruning interval.
 
     Across these modes:
 
@@ -239,7 +239,7 @@ def spatial_neighbors(
         - If ``coord_type`` resolves to ``'grid'``, grid mode is used.
           In that case ``radius`` is ignored.
         - Otherwise, if ``delaunay=True``, Delaunay mode is used.
-          In this mode ``n_neighs`` does not affect the triangulation.
+          ``n_neighs`` is ignored (deprecated).
           A tuple ``radius`` is only used afterward as a pruning
           interval. A scalar ``radius`` is ignored.
         - Otherwise, if ``radius`` is set, radius mode is used.
