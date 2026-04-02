@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from functools import partial
 from typing import Any, NamedTuple, cast
 
@@ -49,6 +50,10 @@ from squidpy.gr.neighbors import (
 __all__ = [
     "SpatialNeighborsResult",
     "spatial_neighbors",
+    "spatial_neighbors_knn",
+    "spatial_neighbors_radius",
+    "spatial_neighbors_delaunay",
+    "spatial_neighbors_grid",
 ]
 
 
@@ -110,6 +115,66 @@ def _resolve_graph_builder(
     return KNNBuilder(**common, percentile=percentile)
 
 
+def _resolve_spatial_data(
+    adata: AnnData | SpatialData,
+    *,
+    spatial_key: str,
+    elements_to_coordinate_systems: dict[str, str] | None,
+    table_key: str | None,
+    library_key: str | None,
+) -> tuple[AnnData, str | None]:
+    """Resolve SpatialData to AnnData, returning (adata, library_key)."""
+    if isinstance(adata, SpatialData):
+        assert elements_to_coordinate_systems is not None, (
+            "Since `adata` is a :class:`spatialdata.SpatialData`, `elements_to_coordinate_systems` must not be `None`."
+        )
+        assert table_key is not None, (
+            "Since `adata` is a :class:`spatialdata.SpatialData`, `table_key` must not be `None`."
+        )
+        elements, table = match_element_to_table(adata, list(elements_to_coordinate_systems), table_key)
+        assert table.obs_names.equals(adata.tables[table_key].obs_names), (
+            "The spatialdata table must annotate all elements keys. Some elements are missing, please check the `elements_to_coordinate_systems` dictionary."
+        )
+        regions, region_key, instance_key = get_table_keys(adata.tables[table_key])
+        regions = [regions] if isinstance(regions, str) else regions
+        ordered_regions_in_table = adata.tables[table_key].obs[region_key].unique()
+
+        # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
+        remove_centroids = {}
+        elem_instances = []
+        for e in regions:
+            schema = get_model(elements[e])
+            element_instances = get_element_instances(elements[e]).to_series()
+            if np.isin(0, element_instances.values) and (schema in (Labels2DModel, Labels3DModel)):
+                element_instances = element_instances.drop(index=0)
+                remove_centroids[e] = True
+            else:
+                remove_centroids[e] = False
+            elem_instances.append(element_instances)
+
+        element_instances = pd.concat(elem_instances)
+        if (not np.all(element_instances.values == adata.tables[table_key].obs[instance_key].values)) or (
+            not np.all(ordered_regions_in_table == regions)
+        ):
+            raise ValueError(
+                "The spatialdata table must annotate all elements keys. Some elements are missing or not ordered correctly, please check the `elements_to_coordinate_systems` dictionary."
+            )
+        centroids = []
+        for region_ in ordered_regions_in_table:
+            cs = elements_to_coordinate_systems[region_]
+            centroid = get_centroids(adata[region_], coordinate_system=cs)[["x", "y"]].compute()
+
+            # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
+            if remove_centroids[region_]:
+                centroid = centroid[1:].copy()
+            centroids.append(centroid)
+
+        adata.tables[table_key].obsm[spatial_key] = np.concatenate(centroids)
+        adata = adata.tables[table_key]
+        library_key = region_key
+    return adata, library_key
+
+
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)
 def spatial_neighbors(
@@ -132,6 +197,18 @@ def spatial_neighbors(
 ) -> SpatialNeighborsResult | None:
     """
     Create a graph from spatial coordinates.
+
+    .. deprecated:: 1.6.0
+        The flat-parameter API of ``spatial_neighbors`` is deprecated and will
+        be removed in squidpy v1.7.0.  Use one of the mode-specific functions
+        instead:
+
+        - :func:`spatial_neighbors_knn`
+        - :func:`spatial_neighbors_radius`
+        - :func:`spatial_neighbors_delaunay`
+        - :func:`spatial_neighbors_grid`
+
+        Passing a ``builder`` instance directly remains supported.
 
     Parameters
     ----------
@@ -271,54 +348,59 @@ def spatial_neighbors(
         - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - the spatial distances.
         - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - :class:`dict` containing parameters.
     """
-    if isinstance(adata, SpatialData):
-        assert elements_to_coordinate_systems is not None, (
-            "Since `adata` is a :class:`spatialdata.SpatialData`, `elements_to_coordinate_systems` must not be `None`."
+    if builder is None:
+        warnings.warn(
+            "Calling `spatial_neighbors` without a `builder` argument is deprecated "
+            "and will be removed in squidpy v1.7.0. Use one of the mode-specific "
+            "functions instead: `spatial_neighbors_knn`, `spatial_neighbors_radius`, "
+            "`spatial_neighbors_delaunay`, or `spatial_neighbors_grid`.",
+            FutureWarning,
+            stacklevel=2,
         )
-        assert table_key is not None, (
-            "Since `adata` is a :class:`spatialdata.SpatialData`, `table_key` must not be `None`."
-        )
-        elements, table = match_element_to_table(adata, list(elements_to_coordinate_systems), table_key)
-        assert table.obs_names.equals(adata.tables[table_key].obs_names), (
-            "The spatialdata table must annotate all elements keys. Some elements are missing, please check the `elements_to_coordinate_systems` dictionary."
-        )
-        regions, region_key, instance_key = get_table_keys(adata.tables[table_key])
-        regions = [regions] if isinstance(regions, str) else regions
-        ordered_regions_in_table = adata.tables[table_key].obs[region_key].unique()
+    return _spatial_neighbors(
+        adata,
+        spatial_key=spatial_key,
+        elements_to_coordinate_systems=elements_to_coordinate_systems,
+        table_key=table_key,
+        library_key=library_key,
+        coord_type=coord_type,
+        n_neighs=n_neighs,
+        radius=radius,
+        delaunay=delaunay,
+        n_rings=n_rings,
+        percentile=percentile,
+        transform=transform,
+        set_diag=set_diag,
+        builder=builder,
+        key_added=key_added,
+        copy=copy,
+    )
 
-        # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
-        remove_centroids = {}
-        elem_instances = []
-        for e in regions:
-            schema = get_model(elements[e])
-            element_instances = get_element_instances(elements[e]).to_series()
-            if np.isin(0, element_instances.values) and (schema in (Labels2DModel, Labels3DModel)):
-                element_instances = element_instances.drop(index=0)
-                remove_centroids[e] = True
-            else:
-                remove_centroids[e] = False
-            elem_instances.append(element_instances)
 
-        element_instances = pd.concat(elem_instances)
-        if (not np.all(element_instances.values == adata.tables[table_key].obs[instance_key].values)) or (
-            not np.all(ordered_regions_in_table == regions)
-        ):
-            raise ValueError(
-                "The spatialdata table must annotate all elements keys. Some elements are missing or not ordered correctly, please check the `elements_to_coordinate_systems` dictionary."
-            )
-        centroids = []
-        for region_ in ordered_regions_in_table:
-            cs = elements_to_coordinate_systems[region_]
-            centroid = get_centroids(adata[region_], coordinate_system=cs)[["x", "y"]].compute()
-
-            # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
-            if remove_centroids[region_]:
-                centroid = centroid[1:].copy()
-            centroids.append(centroid)
-
-        adata.tables[table_key].obsm[spatial_key] = np.concatenate(centroids)
-        adata = adata.tables[table_key]
-        library_key = region_key
+def _spatial_neighbors(
+    adata: AnnData | SpatialData,
+    *,
+    spatial_key: str = Key.obsm.spatial,
+    elements_to_coordinate_systems: dict[str, str] | None = None,
+    table_key: str | None = None,
+    library_key: str | None = None,
+    coord_type: str | CoordType | None = None,
+    n_neighs: int | None = None,
+    radius: float | tuple[float, float] | None = None,
+    delaunay: bool | None = None,
+    n_rings: int | None = None,
+    percentile: float | None = None,
+    transform: str | Transform | None = None,
+    set_diag: bool | None = None,
+    builder: GraphBuilder | None = None,
+    key_added: str = "spatial",
+    copy: bool = False,
+) -> SpatialNeighborsResult | None:
+    """Internal implementation of spatial_neighbors (no deprecation warning)."""
+    adata, library_key = _resolve_spatial_data(
+        adata, spatial_key=spatial_key, elements_to_coordinate_systems=elements_to_coordinate_systems,
+        table_key=table_key, library_key=library_key,
+    )
 
     _assert_spatial_basis(adata, spatial_key)
 
@@ -354,6 +436,210 @@ def spatial_neighbors(
             has_spatial_uns=Key.uns.spatial in adata.uns,
         )
 
+    return _run_spatial_neighbors(adata, builder=builder, spatial_key=spatial_key, library_key=library_key, key_added=key_added, copy=copy)
+
+
+@d.dedent
+def spatial_neighbors_knn(
+    adata: AnnData | SpatialData,
+    spatial_key: str = Key.obsm.spatial,
+    elements_to_coordinate_systems: dict[str, str] | None = None,
+    table_key: str | None = None,
+    library_key: str | None = None,
+    n_neighs: int = 6,
+    percentile: float | None = None,
+    transform: str | Transform | None = None,
+    set_diag: bool = False,
+    key_added: str = "spatial",
+    copy: bool = False,
+) -> SpatialNeighborsResult | None:
+    """Create a k-nearest-neighbor graph from spatial coordinates.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(spatial_key)s
+    %(sdata_params)s
+    %(library_key)s
+    n_neighs
+        Number of nearest neighbors. Defaults to ``6``.
+    %(graph_common_params)s
+    %(copy)s
+
+    Returns
+    -------
+    %(spatial_neighbors_returns)s
+    """
+    transform_enum = Transform.NONE if transform is None else Transform(transform)
+    builder = KNNBuilder(
+        n_neighs=n_neighs, percentile=percentile,
+        transform=transform_enum, set_diag=set_diag,
+    )
+    return _spatial_neighbors(
+        adata, spatial_key=spatial_key,
+        elements_to_coordinate_systems=elements_to_coordinate_systems,
+        table_key=table_key, library_key=library_key,
+        builder=builder, key_added=key_added, copy=copy,
+    )
+
+
+@d.dedent
+def spatial_neighbors_radius(
+    adata: AnnData | SpatialData,
+    spatial_key: str = Key.obsm.spatial,
+    elements_to_coordinate_systems: dict[str, str] | None = None,
+    table_key: str | None = None,
+    library_key: str | None = None,
+    radius: float | tuple[float, float] = 1.0,
+    n_neighs: int = 6,
+    percentile: float | None = None,
+    transform: str | Transform | None = None,
+    set_diag: bool = False,
+    key_added: str = "spatial",
+    copy: bool = False,
+) -> SpatialNeighborsResult | None:
+    """Create a radius-based graph from spatial coordinates.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(spatial_key)s
+    %(sdata_params)s
+    %(library_key)s
+    radius
+        Neighborhood radius.  If a :class:`tuple`, the graph is built with the
+        maximum radius and then pruned to the interval ``[min(radius), max(radius)]``.
+    n_neighs
+        Number of nearest neighbors used internally by the radius graph builder.
+        Defaults to ``6``.
+    %(graph_common_params)s
+    %(copy)s
+
+    Returns
+    -------
+    %(spatial_neighbors_returns)s
+    """
+    transform_enum = Transform.NONE if transform is None else Transform(transform)
+    builder = RadiusBuilder(
+        n_neighs=n_neighs, radius=radius, percentile=percentile,
+        transform=transform_enum, set_diag=set_diag,
+    )
+    return _spatial_neighbors(
+        adata, spatial_key=spatial_key,
+        elements_to_coordinate_systems=elements_to_coordinate_systems,
+        table_key=table_key, library_key=library_key,
+        builder=builder, key_added=key_added, copy=copy,
+    )
+
+
+@d.dedent
+def spatial_neighbors_delaunay(
+    adata: AnnData | SpatialData,
+    spatial_key: str = Key.obsm.spatial,
+    elements_to_coordinate_systems: dict[str, str] | None = None,
+    table_key: str | None = None,
+    library_key: str | None = None,
+    radius: tuple[float, float] | None = None,
+    percentile: float | None = None,
+    transform: str | Transform | None = None,
+    set_diag: bool = False,
+    key_added: str = "spatial",
+    copy: bool = False,
+) -> SpatialNeighborsResult | None:
+    """Create a Delaunay triangulation graph from spatial coordinates.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(spatial_key)s
+    %(sdata_params)s
+    %(library_key)s
+    radius
+        If a :class:`tuple`, used as a post-construction pruning interval
+        ``[min(radius), max(radius)]``.
+    %(graph_common_params)s
+    %(copy)s
+
+    Returns
+    -------
+    %(spatial_neighbors_returns)s
+    """
+    transform_enum = Transform.NONE if transform is None else Transform(transform)
+    builder = DelaunayBuilder(
+        radius=radius, percentile=percentile,
+        transform=transform_enum, set_diag=set_diag,
+    )
+    return _spatial_neighbors(
+        adata, spatial_key=spatial_key,
+        elements_to_coordinate_systems=elements_to_coordinate_systems,
+        table_key=table_key, library_key=library_key,
+        builder=builder, key_added=key_added, copy=copy,
+    )
+
+
+@d.dedent
+def spatial_neighbors_grid(
+    adata: AnnData | SpatialData,
+    spatial_key: str = Key.obsm.spatial,
+    elements_to_coordinate_systems: dict[str, str] | None = None,
+    table_key: str | None = None,
+    library_key: str | None = None,
+    n_neighs: int = 6,
+    n_rings: int = 1,
+    delaunay: bool = False,
+    transform: str | Transform | None = None,
+    set_diag: bool = False,
+    key_added: str = "spatial",
+    copy: bool = False,
+) -> SpatialNeighborsResult | None:
+    """Create a grid-based graph from spatial coordinates.
+
+    This is the mode used for Visium-like grid coordinates.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(spatial_key)s
+    %(sdata_params)s
+    %(library_key)s
+    n_neighs
+        Number of neighboring tiles. Defaults to ``6``.
+    n_rings
+        Number of rings of neighbors. Defaults to ``1``.
+    delaunay
+        Whether to compute the grid graph from Delaunay triangulation.
+    %(graph_common_params)s
+    %(copy)s
+
+    Returns
+    -------
+    %(spatial_neighbors_returns)s
+    """
+    assert_positive(n_rings, name="n_rings")
+    assert_positive(n_neighs, name="n_neighs")
+    transform_enum = Transform.NONE if transform is None else Transform(transform)
+    builder = GridBuilder(
+        n_neighs=n_neighs, n_rings=n_rings, delaunay=delaunay,
+        transform=transform_enum, set_diag=set_diag,
+    )
+    return _spatial_neighbors(
+        adata, spatial_key=spatial_key,
+        elements_to_coordinate_systems=elements_to_coordinate_systems,
+        table_key=table_key, library_key=library_key,
+        builder=builder, key_added=key_added, copy=copy,
+    )
+
+
+def _run_spatial_neighbors(
+    adata: AnnData,
+    *,
+    builder: GraphBuilder,
+    spatial_key: str = Key.obsm.spatial,
+    library_key: str | None = None,
+    key_added: str = "spatial",
+    copy: bool = False,
+) -> SpatialNeighborsResult | None:
+    """Shared core: build the graph from a resolved builder and save results."""
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
         libs = adata.obs[library_key].cat.categories

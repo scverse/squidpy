@@ -7,6 +7,10 @@ from squidpy.gr._build import (
     SpatialNeighborsResult,
     mask_graph,
     spatial_neighbors,
+    spatial_neighbors_delaunay,
+    spatial_neighbors_grid,
+    spatial_neighbors_knn,
+    spatial_neighbors_radius,
 )
 from squidpy.gr._ligrec import ligrec
 from squidpy.gr._nhood import (
@@ -26,6 +30,10 @@ __all__ = [
     "neighbors",
     "mask_graph",
     "spatial_neighbors",
+    "spatial_neighbors_knn",
+    "spatial_neighbors_radius",
+    "spatial_neighbors_delaunay",
+    "spatial_neighbors_grid",
     "ligrec",
     "centrality_scores",
     "interaction_matrix",
