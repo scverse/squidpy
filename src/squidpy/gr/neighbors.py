@@ -120,15 +120,23 @@ class KNNBuilder(GraphBuilder):
         return CoordType.GENERIC
 
     def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
-        return cast(
-            tuple[csr_matrix, csr_matrix],
-            _build_connectivity(
-                coords,
-                n_neighs=self.n_neighs,
-                return_distance=True,
-                set_diag=self.set_diag,
-            ),
+        N = coords.shape[0]
+        tree = NearestNeighbors(n_neighbors=self.n_neighs, radius=1, metric="euclidean")
+        tree.fit(coords)
+
+        dists, col_indices = tree.kneighbors()
+        dists, col_indices = dists.reshape(-1), col_indices.reshape(-1)
+        row_indices = np.repeat(np.arange(N), self.n_neighs)
+
+        Adj = csr_matrix(
+            (np.ones_like(row_indices, dtype=np.float32), (row_indices, col_indices)),
+            shape=(N, N),
         )
+        Dst = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
+
+        Adj.setdiag(1.0 if self.set_diag else Adj.diagonal())
+        Dst.setdiag(0.0)
+        return Adj, Dst
 
 
 class _RadiusFilterBuilder(GraphBuilder):
@@ -163,16 +171,25 @@ class RadiusBuilder(_RadiusFilterBuilder):
         self.n_neighs = n_neighs
 
     def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
-        return cast(
-            tuple[csr_matrix, csr_matrix],
-            _build_connectivity(
-                coords,
-                n_neighs=self.n_neighs,
-                radius=self.radius,
-                return_distance=True,
-                set_diag=self.set_diag,
-            ),
+        N = coords.shape[0]
+        r = self.radius if isinstance(self.radius, int | float) else max(self.radius)
+        tree = NearestNeighbors(n_neighbors=self.n_neighs, radius=r, metric="euclidean")
+        tree.fit(coords)
+
+        dists, col_indices = tree.radius_neighbors()
+        row_indices = np.repeat(np.arange(N), [len(x) for x in col_indices])
+        dists = np.concatenate(dists)
+        col_indices = np.concatenate(col_indices)
+
+        Adj = csr_matrix(
+            (np.ones_like(row_indices, dtype=np.float32), (row_indices, col_indices)),
+            shape=(N, N),
         )
+        Dst = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
+
+        Adj.setdiag(1.0 if self.set_diag else Adj.diagonal())
+        Dst.setdiag(0.0)
+        return Adj, Dst
 
 
 class DelaunayBuilder(_RadiusFilterBuilder):
@@ -201,17 +218,23 @@ class DelaunayBuilder(_RadiusFilterBuilder):
         self.n_neighs = n_neighs
 
     def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
-        return cast(
-            tuple[csr_matrix, csr_matrix],
-            _build_connectivity(
-                coords,
-                n_neighs=self.n_neighs,
-                radius=self.radius,
-                delaunay=True,
-                return_distance=True,
-                set_diag=self.set_diag,
-            ),
-        )
+        N = coords.shape[0]
+        tri = Delaunay(coords)
+        indptr, indices = tri.vertex_neighbor_vertices
+        Adj = csr_matrix((np.ones_like(indices, dtype=np.float32), indices, indptr), shape=(N, N))
+
+        # fmt: off
+        dists = np.array(list(chain(*(
+            euclidean_distances(coords[indices[indptr[i] : indptr[i + 1]], :], coords[np.newaxis, i, :])
+            for i in range(N)
+            if len(indices[indptr[i] : indptr[i + 1]])
+        )))).squeeze()
+        # fmt: on
+        Dst = csr_matrix((dists, indices, indptr), shape=(N, N))
+
+        Adj.setdiag(1.0 if self.set_diag else Adj.diagonal())
+        Dst.setdiag(0.0)
+        return Adj, Dst
 
 
 class GridBuilder(GraphBuilder):
@@ -237,13 +260,53 @@ class GridBuilder(GraphBuilder):
         return CoordType.GRID
 
     def _build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
-        return _build_grid(
-            coords,
-            n_neighs=self.n_neighs,
-            n_rings=self.n_rings,
-            delaunay=self.delaunay,
-            set_diag=self.set_diag,
-        )
+        if self.n_rings > 1:
+            Adj = self._base_adjacency(coords, set_diag=True)
+            Res, Walk = Adj, Adj
+            for i in range(self.n_rings - 1):
+                Walk = Walk @ Adj
+                Walk[Res.nonzero()] = 0.0
+                Walk.eliminate_zeros()
+                Walk.data[:] = i + 2.0
+                Res = Res + Walk
+            Adj = Res
+            Adj.setdiag(float(self.set_diag))
+            Adj.eliminate_zeros()
+
+            Dst = Adj.copy()
+            Adj.data[:] = 1.0
+        else:
+            Adj = self._base_adjacency(coords, set_diag=self.set_diag)
+            Dst = Adj.copy()
+
+        Dst.setdiag(0.0)
+        return Adj, Dst
+
+    def _base_adjacency(self, coords: NDArrayA, *, set_diag: bool) -> csr_matrix:
+        """KNN adjacency with median-distance correction for grid coordinates."""
+        N = coords.shape[0]
+        if self.delaunay:
+            tri = Delaunay(coords)
+            indptr, indices = tri.vertex_neighbor_vertices
+            Adj = csr_matrix((np.ones_like(indices, dtype=np.float32), indices, indptr), shape=(N, N))
+        else:
+            tree = NearestNeighbors(n_neighbors=self.n_neighs, radius=1, metric="euclidean")
+            tree.fit(coords)
+            dists, col_indices = tree.kneighbors()
+            dists, col_indices = dists.reshape(-1), col_indices.reshape(-1)
+            row_indices = np.repeat(np.arange(N), self.n_neighs)
+
+            dist_cutoff = np.median(dists) * 1.3
+            mask = dists < dist_cutoff
+            row_indices, col_indices = row_indices[mask], col_indices[mask]
+
+            Adj = csr_matrix(
+                (np.ones_like(row_indices, dtype=np.float32), (row_indices, col_indices)),
+                shape=(N, N),
+            )
+
+        Adj.setdiag(1.0 if set_diag else Adj.diagonal())
+        return Adj
 
 
 # ---------------------------------------------------------------------------
@@ -264,112 +327,6 @@ def _filter_by_radius_interval(
     Adj.data[mask] = 0.0
     Adj.setdiag(a_diag)
 
-
-def _build_grid(
-    coords: NDArrayA,
-    n_neighs: int,
-    n_rings: int,
-    delaunay: bool = False,
-    set_diag: bool = False,
-) -> tuple[csr_matrix, csr_matrix]:
-    if n_rings > 1:
-        Adj: csr_matrix = _build_connectivity(
-            coords,
-            n_neighs=n_neighs,
-            neigh_correct=True,
-            set_diag=True,
-            delaunay=delaunay,
-            return_distance=False,
-        )
-        Res, Walk = Adj, Adj
-        for i in range(n_rings - 1):
-            Walk = Walk @ Adj
-            Walk[Res.nonzero()] = 0.0
-            Walk.eliminate_zeros()
-            Walk.data[:] = i + 2.0
-            Res = Res + Walk
-        Adj = Res
-        Adj.setdiag(float(set_diag))
-        Adj.eliminate_zeros()
-
-        Dst = Adj.copy()
-        Adj.data[:] = 1.0
-    else:
-        Adj = _build_connectivity(
-            coords,
-            n_neighs=n_neighs,
-            neigh_correct=True,
-            delaunay=delaunay,
-            set_diag=set_diag,
-        )
-        Dst = Adj.copy()
-
-    Dst.setdiag(0.0)
-
-    return Adj, Dst
-
-
-def _build_connectivity(
-    coords: NDArrayA,
-    n_neighs: int,
-    radius: float | tuple[float, float] | None = None,
-    delaunay: bool = False,
-    neigh_correct: bool = False,
-    set_diag: bool = False,
-    return_distance: bool = False,
-) -> csr_matrix | tuple[csr_matrix, csr_matrix]:
-    N = coords.shape[0]
-    if delaunay:
-        tri = Delaunay(coords)
-        indptr, indices = tri.vertex_neighbor_vertices
-        Adj = csr_matrix((np.ones_like(indices, dtype=np.float32), indices, indptr), shape=(N, N))
-
-        if return_distance:
-            # fmt: off
-            dists = np.array(list(chain(*(
-                euclidean_distances(coords[indices[indptr[i] : indptr[i + 1]], :], coords[np.newaxis, i, :])
-                for i in range(N)
-                if len(indices[indptr[i] : indptr[i + 1]])
-            )))).squeeze()
-            Dst = csr_matrix((dists, indices, indptr), shape=(N, N))
-            # fmt: on
-    else:
-        r = 1 if radius is None else radius if isinstance(radius, int | float) else max(radius)
-        tree = NearestNeighbors(n_neighbors=n_neighs, radius=r, metric="euclidean")
-        tree.fit(coords)
-
-        if radius is None:
-            dists, col_indices = tree.kneighbors()
-            dists, col_indices = dists.reshape(-1), col_indices.reshape(-1)
-            row_indices = np.repeat(np.arange(N), n_neighs)
-            if neigh_correct:
-                dist_cutoff = np.median(dists) * 1.3  # there's a small amount of sway
-                mask = dists < dist_cutoff
-                row_indices, col_indices, dists = (
-                    row_indices[mask],
-                    col_indices[mask],
-                    dists[mask],
-                )
-        else:
-            dists, col_indices = tree.radius_neighbors()
-            row_indices = np.repeat(np.arange(N), [len(x) for x in col_indices])
-            dists = np.concatenate(dists)
-            col_indices = np.concatenate(col_indices)
-
-        Adj = csr_matrix(
-            (np.ones_like(row_indices, dtype=np.float32), (row_indices, col_indices)),
-            shape=(N, N),
-        )
-        if return_distance:
-            Dst = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
-
-    # radius-based filtering needs same indices/indptr: do not remove 0s
-    Adj.setdiag(1.0 if set_diag else Adj.diagonal())
-    if return_distance:
-        Dst.setdiag(0.0)
-        return Adj, Dst
-
-    return Adj
 
 
 @njit

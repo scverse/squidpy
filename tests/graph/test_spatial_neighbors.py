@@ -18,7 +18,6 @@ from squidpy.gr.neighbors import (
     GridBuilder,
     KNNBuilder,
     RadiusBuilder,
-    _build_connectivity,
 )
 from squidpy.gr.neighbors import (
     KNNBuilder as PublicKNNBuilder,
@@ -305,7 +304,7 @@ class TestSpatialNeighbors:
         assert not ((result.connectivities != result_filtered.connectivities).nnz == 0)
         assert result.distances.max() > result_filtered.distances.max()
 
-        Adj, Dst = _build_connectivity(adata_hne.obsm["spatial"], n_neighs=6, return_distance=True, set_diag=False)
+        Adj, Dst = KNNBuilder(n_neighs=6, set_diag=False)._build_graph(adata_hne.obsm["spatial"])
         threshold = np.percentile(Dst.data, percentile)
         Adj[Dst > threshold] = 0.0
         Dst[Dst > threshold] = 0.0
