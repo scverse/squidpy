@@ -97,7 +97,10 @@ class TestSpatialNeighbors:
         assert adata.uns[Key.uns.spatial_neighs()]["distances_key"] == Key.obsp.spatial_dist()
 
         adata_concat = self._assert_library_key_block_diagonal(
-            adata, n_neighs=n_neigh, n_rings=n_rings, coord_type="grid",
+            adata,
+            n_neighs=n_neigh,
+            n_rings=n_rings,
+            coord_type="grid",
         )
         assert np.diff(adata_concat.obsp[Key.obsp.spatial_conn()].indptr).max() == sum_neigh
 
@@ -202,9 +205,7 @@ class TestSpatialNeighbors:
         ],
         ids=["knn", "radius", "delaunay"],
     )
-    def test_generic_builder_matches_legacy(
-        self, non_visium_adata: AnnData, legacy_kwargs: dict, builder: object
-    ):
+    def test_generic_builder_matches_legacy(self, non_visium_adata: AnnData, legacy_kwargs: dict, builder: object):
         legacy = spatial_neighbors(non_visium_adata, **legacy_kwargs, copy=True)
         result = spatial_neighbors(non_visium_adata, builder=builder, copy=True)
 
@@ -219,9 +220,7 @@ class TestSpatialNeighbors:
         ],
         ids=["4neighs_2rings", "6neighs_1ring"],
     )
-    def test_grid_builder_matches_legacy(
-        self, adata_squaregrid: AnnData, legacy_kwargs: dict, builder: object
-    ):
+    def test_grid_builder_matches_legacy(self, adata_squaregrid: AnnData, legacy_kwargs: dict, builder: object):
         legacy = spatial_neighbors(adata_squaregrid, **legacy_kwargs, copy=True)
         result = spatial_neighbors(adata_squaregrid, builder=builder, copy=True)
 
