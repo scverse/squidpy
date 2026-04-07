@@ -106,7 +106,6 @@ optional-dependencies.leiden = [
   "leidenalg",
   "spatialleiden>=0.4",
 ]
-TODO: give nice instructions on how to install jax
 optional-dependencies.jax = [
   "jax",
 ]
