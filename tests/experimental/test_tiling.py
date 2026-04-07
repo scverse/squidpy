@@ -13,14 +13,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from tests.conftest import PlotTester, PlotTesterMeta
-
 from squidpy.experimental.im._tiling import (
     TileSpec,
     build_tile_specs,
     extract_tile,
     verify_coverage,
 )
+from tests.conftest import PlotTester, PlotTesterMeta
 
 # ---------------------------------------------------------------------------
 # Brick-pattern fixture
@@ -149,8 +148,7 @@ class TestBuildTileSpecs:
             expected_row, expected_col = _expected_tile_key(cy, cx, _TILE_SIZE, _IMAGE_SIZE)
             expected_origin = (expected_row * _TILE_SIZE, expected_col * _TILE_SIZE)
             assert actual[lid] == expected_origin, (
-                f"Cell {lid} centroid=({cy:.1f},{cx:.1f}): "
-                f"expected tile origin {expected_origin}, got {actual[lid]}"
+                f"Cell {lid} centroid=({cy:.1f},{cx:.1f}): expected tile origin {expected_origin}, got {actual[lid]}"
             )
 
     def test_no_duplicates(self, brick_labels):
@@ -177,8 +175,8 @@ class TestBuildTileSpecs:
             half_w = _CELL_W / 2.0
             y0, y1 = cy - half_h, cy + half_h
             x0, x1 = cx - half_w, cx + half_w
-            crosses_y = (y0 < 250 < y1)
-            crosses_x = (x0 < 250 < x1)
+            crosses_y = y0 < 250 < y1
+            crosses_x = x0 < 250 < x1
             if crosses_y or crosses_x:
                 boundary_cells.append(lid)
 
@@ -208,12 +206,10 @@ class TestBuildTileSpecs:
                 cell_x0 = cent_x - (_CELL_W - 1) / 2.0
                 cell_x1 = cent_x + (_CELL_W - 1) / 2.0
                 assert cy0 <= cell_y0 and cell_y1 <= cy1, (
-                    f"Cell {lid} y-range [{cell_y0:.0f},{cell_y1:.0f}] "
-                    f"not in crop y-range [{cy0},{cy1}]"
+                    f"Cell {lid} y-range [{cell_y0:.0f},{cell_y1:.0f}] not in crop y-range [{cy0},{cy1}]"
                 )
                 assert cx0 <= cell_x0 and cell_x1 <= cx1, (
-                    f"Cell {lid} x-range [{cell_x0:.0f},{cell_x1:.0f}] "
-                    f"not in crop x-range [{cx0},{cx1}]"
+                    f"Cell {lid} x-range [{cell_x0:.0f},{cell_x1:.0f}] not in crop x-range [{cx0},{cx1}]"
                 )
 
 
@@ -265,10 +261,7 @@ class TestExtractTile:
             _, tile_lbl = extract_tile(brick_image, labels, spec)
             present = set(np.unique(tile_lbl))
             present.discard(0)
-            assert present == spec.owned_ids, (
-                f"Tile base={spec.base}: expected {spec.owned_ids}, "
-                f"got {present}"
-            )
+            assert present == spec.owned_ids, f"Tile base={spec.base}: expected {spec.owned_ids}, got {present}"
 
     def test_owned_cell_pixels_preserved(self, brick_labels, brick_image):
         """Pixel values for owned cells match the original labels."""
