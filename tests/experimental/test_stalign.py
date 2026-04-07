@@ -12,7 +12,7 @@ jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 transform_points_row_col = import_module("squidpy.experimental.tl._stalign_core").transform_points_row_col
 
-_ = jax # so that the linter doesn't complain about unused import
+_ = jax  # so that the linter doesn't complain about unused import
 
 
 def _make_row_col_points() -> np.ndarray:
