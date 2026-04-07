@@ -6,7 +6,7 @@ import pytest
 from anndata import AnnData
 
 import squidpy as sq
-from squidpy.experimental.tl._stalign_core import _transform_points_row_col
+from squidpy.experimental.tl._stalign_core import transform_points_row_col
 
 jax = pytest.importorskip("jax")
 
@@ -90,8 +90,8 @@ def test_transform_points_backward_reverses_nonstationary_flow():
         velocity[1, :, j, 0] = j
 
     points = jnp.asarray([[1.0, 1.0]])
-    transformed = _transform_points_row_col(xv, jnp.asarray(velocity), affine, points, direction="forward")
-    restored = _transform_points_row_col(xv, jnp.asarray(velocity), affine, transformed, direction="backward")
+    transformed = transform_points_row_col(xv, jnp.asarray(velocity), affine, points, direction="forward")
+    restored = transform_points_row_col(xv, jnp.asarray(velocity), affine, transformed, direction="backward")
 
     np.testing.assert_allclose(np.asarray(restored), np.asarray(points))
 
