@@ -20,6 +20,7 @@ from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 from statsmodels.stats.multitest import multipletests
 
+from squidpy._backends import dispatch
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -45,6 +46,7 @@ bl = nt.boolean
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
+@dispatch
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),
@@ -60,7 +62,6 @@ def spatial_autocorr(
     use_raw: bool = False,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
     show_progress_bar: bool = True,
 ) -> pd.DataFrame | None:
     """
@@ -208,7 +209,7 @@ def spatial_autocorr(
             extractor=np.concatenate,
             use_ixs=True,
             n_jobs=n_jobs,
-            backend=backend,
+            backend="loky",
             show_progress_bar=show_progress_bar,
         )(mode=mode, g=g, vals=vals, seed=seed)
     else:
@@ -341,7 +342,8 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 
 @d.dedent
-@deprecated_params({"n_splits": "1.10.0", "n_jobs": "1.10.0", "backend": "1.10.0", "show_progress_bar": "1.10.0"})
+@deprecated_params({"n_splits": "1.10.0", "n_jobs": "1.10.0"})
+@dispatch
 def co_occurrence(
     adata: AnnData | SpatialData,
     cluster_key: str,
