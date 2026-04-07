@@ -7,17 +7,17 @@ import numpy as np
 # --- Intensity metrics (grayscale input) ---
 
 
-def _brightness_mean(block: np.ndarray) -> np.ndarray:
+def brightness_mean(block: np.ndarray) -> np.ndarray:
     """Mean pixel intensity of a grayscale tile."""
     return np.array([[float(block.mean())]], dtype=np.float32)
 
 
-def _brightness_std(block: np.ndarray) -> np.ndarray:
+def brightness_std(block: np.ndarray) -> np.ndarray:
     """Standard deviation of pixel intensity of a grayscale tile."""
     return np.array([[float(block.std())]], dtype=np.float32)
 
 
-def _entropy(block: np.ndarray) -> np.ndarray:
+def entropy(block: np.ndarray) -> np.ndarray:
     """Shannon entropy of pixel intensity histogram."""
     arr = block.ravel()
     lo, hi = float(arr.min()), float(arr.max())
@@ -35,7 +35,7 @@ def _entropy(block: np.ndarray) -> np.ndarray:
 # --- Staining metrics (RGB input, H&E only) ---
 
 
-def _rgb_to_hed(block_rgb: np.ndarray) -> np.ndarray:
+def rgb_to_hed(block_rgb: np.ndarray) -> np.ndarray:
     """Convert RGB tile to HED colour space using Beer-Lambert deconvolution.
 
     Parameters
@@ -67,36 +67,36 @@ def _rgb_to_hed_cached(block_rgb: np.ndarray) -> np.ndarray:
     cache = getattr(_hed_local, "cache", None)
     if cache is not None and cache[0] == key:
         return cache[1]
-    result = _rgb_to_hed(block_rgb)
+    result = rgb_to_hed(block_rgb)
     _hed_local.cache = (key, result)
     return result
 
 
-def _hematoxylin_mean(block: np.ndarray) -> np.ndarray:
+def hematoxylin_mean(block: np.ndarray) -> np.ndarray:
     """Mean hematoxylin channel intensity."""
     hed = _rgb_to_hed_cached(block)
     return np.array([[float(hed[..., 0].mean())]], dtype=np.float32)
 
 
-def _hematoxylin_std(block: np.ndarray) -> np.ndarray:
+def hematoxylin_std(block: np.ndarray) -> np.ndarray:
     """Std of hematoxylin channel intensity."""
     hed = _rgb_to_hed_cached(block)
     return np.array([[float(hed[..., 0].std())]], dtype=np.float32)
 
 
-def _eosin_mean(block: np.ndarray) -> np.ndarray:
+def eosin_mean(block: np.ndarray) -> np.ndarray:
     """Mean eosin channel intensity."""
     hed = _rgb_to_hed_cached(block)
     return np.array([[float(hed[..., 1].mean())]], dtype=np.float32)
 
 
-def _eosin_std(block: np.ndarray) -> np.ndarray:
+def eosin_std(block: np.ndarray) -> np.ndarray:
     """Std of eosin channel intensity."""
     hed = _rgb_to_hed_cached(block)
     return np.array([[float(hed[..., 1].std())]], dtype=np.float32)
 
 
-def _he_ratio(block: np.ndarray) -> np.ndarray:
+def he_ratio(block: np.ndarray) -> np.ndarray:
     """Ratio of hematoxylin to eosin mean intensity."""
     hed = _rgb_to_hed_cached(block)
     h_mean = float(np.abs(hed[..., 0]).mean())
@@ -108,7 +108,7 @@ def _he_ratio(block: np.ndarray) -> np.ndarray:
 # --- Artifact metrics (RGB input, H&E only) ---
 
 
-def _fold_fraction(block: np.ndarray) -> np.ndarray:
+def fold_fraction(block: np.ndarray) -> np.ndarray:
     """Fraction of pixels identified as tissue folds.
 
     Uses HSV thresholds tuned for H&E staining: saturation > 0.4 and
@@ -128,6 +128,6 @@ def _fold_fraction(block: np.ndarray) -> np.ndarray:
 # --- Tissue coverage (mask input) ---
 
 
-def _tissue_fraction(block: np.ndarray) -> np.ndarray:
+def tissue_fraction(block: np.ndarray) -> np.ndarray:
     """Fraction of pixels that are tissue (nonzero) in a binary mask tile."""
     return np.array([[float(block.mean())]], dtype=np.float32)

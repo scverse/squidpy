@@ -97,7 +97,7 @@ class TileGrid:
         return da.coarsen(reducer, arr_yx, {0: self.ty, 1: self.tx}, trim_excess=False)
 
 
-def _get_element_data(
+def get_element_data(
     element_node: Any,
     scale: str | Literal["auto"],
     element_type: str = "element",
@@ -149,7 +149,7 @@ def _get_element_data(
     return data
 
 
-def _flatten_channels(
+def flatten_channels(
     img: xr.DataArray,
     channel_format: Literal["infer", "rgb", "rgba", "multichannel"] = "infer",
 ) -> xr.DataArray:
@@ -222,12 +222,12 @@ def _flatten_channels(
         )
 
 
-def _get_mask_dask(sdata: SpatialData, mask_key: str, scale: str) -> da.Array:
+def get_mask_dask(sdata: SpatialData, mask_key: str, scale: str) -> da.Array:
     """Extract mask as a lazy dask array from ``sdata.labels``."""
     if mask_key not in sdata.labels:
         raise KeyError(f"Mask key '{mask_key}' not found in sdata.labels")
     label_node = sdata.labels[mask_key]
-    mask_xr = _get_element_data(label_node, scale, "label", mask_key)
+    mask_xr = get_element_data(label_node, scale, "label", mask_key)
 
     arr = mask_xr.data if hasattr(mask_xr, "data") else mask_xr
     if not isinstance(arr, da.Array):
@@ -240,13 +240,13 @@ def _get_mask_dask(sdata: SpatialData, mask_key: str, scale: str) -> da.Array:
     return arr
 
 
-def _get_mask_materialized(sdata: SpatialData, mask_key: str, scale: str) -> np.ndarray:
+def get_mask_materialized(sdata: SpatialData, mask_key: str, scale: str) -> np.ndarray:
     """Extract a 2D mask array from ``sdata.labels`` at the requested scale (materialized)."""
-    arr = _get_mask_dask(sdata, mask_key, scale)
+    arr = get_mask_dask(sdata, mask_key, scale)
     return np.asarray(arr.compute())
 
 
-def _resolve_tissue_mask(
+def resolve_tissue_mask(
     sdata: SpatialData,
     image_key: str,
     scale: str,
@@ -280,7 +280,7 @@ def _resolve_tissue_mask(
     return mask_key
 
 
-def _save_tile_grid_to_shapes(
+def save_tile_grid_to_shapes(
     sdata: SpatialData,
     tg: TileGrid,
     shapes_key: str,

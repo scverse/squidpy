@@ -18,10 +18,10 @@ from squidpy._utils import _ensure_dim_order
 from squidpy.experimental.im._qc_metrics import _HNE_METRICS, InputKind, QCMetric, get_metric_info
 from squidpy.experimental.im._utils import (
     TileGrid,
-    _get_element_data,
-    _get_mask_dask,
-    _resolve_tissue_mask,
-    _save_tile_grid_to_shapes,
+    get_element_data,
+    get_mask_dask,
+    resolve_tissue_mask,
+    save_tile_grid_to_shapes,
 )
 
 _DEFAULT_HNE_METRICS: list[QCMetric] = [
@@ -139,7 +139,7 @@ def qc_image(
 
     # Compute QC metrics
     img_node = sdata.images[image_key]
-    img_da = _get_element_data(img_node, scale, "image", image_key)
+    img_da = get_element_data(img_node, scale, "image", image_key)
     img_yxc = _ensure_dim_order(img_da, "yxc")
     gray = _to_gray_dask_yx(img_yxc)
     H, W = int(gray.shape[0]), int(gray.shape[1])
@@ -165,8 +165,8 @@ def qc_image(
 
     _tissue_binary_da: da.Array | None = None
     if InputKind.MASK in groups or detect_tissue:
-        mask_key_resolved = _resolve_tissue_mask(sdata, image_key, scale, tissue_mask_key)
-        raw_mask = _get_mask_dask(sdata, mask_key_resolved, scale)
+        mask_key_resolved = resolve_tissue_mask(sdata, image_key, scale, tissue_mask_key)
+        raw_mask = get_mask_dask(sdata, mask_key_resolved, scale)
         _tissue_binary_da = (raw_mask > 0).astype(np.float32).rechunk((tg.ty, tg.tx))
 
     if InputKind.GRAYSCALE in groups:
@@ -278,7 +278,7 @@ def qc_image(
     shapes_key = f"qc_img_{image_key}_grid"
 
     # Build shapes first (need the index for tile_id linkage)
-    _save_tile_grid_to_shapes(sdata, tg, shapes_key, copy_transforms_from_key=image_key)
+    save_tile_grid_to_shapes(sdata, tg, shapes_key, copy_transforms_from_key=image_key)
 
     # Set spatialdata linkage on adata BEFORE TableModel.parse
     adata.obs["grid_name"] = pd.Categorical([shapes_key] * len(adata))
@@ -343,8 +343,8 @@ def _classify_tiles_by_tissue(
         Boolean arrays of shape ``(n_tiles,)``.
     """
     if binary_mask_da is None:
-        mask_key_resolved = _resolve_tissue_mask(sdata, image_key, scale, tissue_mask_key)
-        raw_mask = _get_mask_dask(sdata, mask_key_resolved, scale)
+        mask_key_resolved = resolve_tissue_mask(sdata, image_key, scale, tissue_mask_key)
+        raw_mask = get_mask_dask(sdata, mask_key_resolved, scale)
         binary_mask_da = (raw_mask > 0).astype(np.float32).rechunk((tg.ty, tg.tx))
 
     H, W = binary_mask_da.shape

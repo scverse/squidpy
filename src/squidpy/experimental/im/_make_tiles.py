@@ -16,9 +16,9 @@ from squidpy._utils import _yx_from_shape
 from squidpy._validators import assert_in_range, assert_key_in_sdata, assert_positive
 from squidpy.experimental.im._utils import (
     TileGrid,
-    _get_element_data,
-    _get_mask_materialized,
-    _save_tile_grid_to_shapes,
+    get_element_data,
+    get_mask_materialized,
+    save_tile_grid_to_shapes,
 )
 
 __all__ = ["make_tiles", "make_tiles_from_spots"]
@@ -87,9 +87,9 @@ def _get_largest_scale_dimensions(
     """
     img_node = sdata.images[image_key]
 
-    # Use _get_element_data with "scale0" which is always the largest scale
+    # Use get_element_data with "scale0" which is always the largest scale
     # It handles both datatree (multiscale) and single-scale images
-    img_da = _get_element_data(img_node, "scale0", "image", image_key)
+    img_da = get_element_data(img_node, "scale0", "image", image_key)
 
     # Get spatial dimensions (y, x)
     if "y" in img_da.sizes and "x" in img_da.sizes:
@@ -124,7 +124,7 @@ def _save_tiles_to_shapes(
     shapes_key: str,
 ) -> None:
     """Save a TileGrid to sdata.shapes as a GeoDataFrame."""
-    _save_tile_grid_to_shapes(sdata, tg, shapes_key, copy_transforms_from_key=image_key)
+    save_tile_grid_to_shapes(sdata, tg, shapes_key, copy_transforms_from_key=image_key)
 
 
 def _save_spot_tiles_to_shapes(
@@ -580,7 +580,7 @@ def _filter_tiles(
     else:
         raise ValueError("tissue_mask_key must be provided when image_key is None.")
     assert_key_in_sdata(sdata, mask_key, attr="labels")
-    mask = _get_mask_materialized(sdata, mask_key, scale)
+    mask = get_mask_materialized(sdata, mask_key, scale)
     H_mask, W_mask = mask.shape
 
     # Check tissue coverage for each tile
@@ -664,7 +664,7 @@ def _make_tiles(
 
     # Get mask and compute centroid
     label_node = sdata.labels[image_mask_key]
-    mask_da = _get_element_data(label_node, scale, "label", image_mask_key)
+    mask_da = get_element_data(label_node, scale, "label", image_mask_key)
 
     # Convert to numpy array if needed
     if is_dask_collection(mask_da):

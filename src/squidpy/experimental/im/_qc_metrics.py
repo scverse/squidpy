@@ -6,23 +6,23 @@ from enum import StrEnum
 import numpy as np
 
 from squidpy.experimental.im._intensity_metrics import (
-    _brightness_mean,
-    _brightness_std,
-    _entropy,
-    _eosin_mean,
-    _eosin_std,
-    _fold_fraction,
-    _he_ratio,
-    _hematoxylin_mean,
-    _hematoxylin_std,
-    _tissue_fraction,
+    brightness_mean,
+    brightness_std,
+    entropy,
+    eosin_mean,
+    eosin_std,
+    fold_fraction,
+    he_ratio,
+    hematoxylin_mean,
+    hematoxylin_std,
+    tissue_fraction,
 )
 from squidpy.experimental.im._sharpness_metrics import (
-    _fft_high_freq_energy,
-    _haar_wavelet_energy,
-    _laplacian_variance,
-    _pop_variance,
-    _tenengrad_mean,
+    fft_high_freq_energy,
+    haar_wavelet_energy,
+    laplacian_variance,
+    pop_variance,
+    tenengrad_mean,
 )
 
 MetricFn = Callable[[np.ndarray], np.ndarray]
@@ -71,25 +71,25 @@ _HNE_METRICS: set[QCMetric] = {
 
 _METRIC_REGISTRY: dict[QCMetric, tuple[InputKind, MetricFn]] = {
     # Sharpness (grayscale)
-    QCMetric.TENENGRAD: (InputKind.GRAYSCALE, _tenengrad_mean),
-    QCMetric.VAR_OF_LAPLACIAN: (InputKind.GRAYSCALE, _laplacian_variance),
-    QCMetric.VARIANCE: (InputKind.GRAYSCALE, _pop_variance),
-    QCMetric.FFT_HIGH_FREQ_ENERGY: (InputKind.GRAYSCALE, _fft_high_freq_energy),
-    QCMetric.HAAR_WAVELET_ENERGY: (InputKind.GRAYSCALE, _haar_wavelet_energy),
+    QCMetric.TENENGRAD: (InputKind.GRAYSCALE, tenengrad_mean),
+    QCMetric.VAR_OF_LAPLACIAN: (InputKind.GRAYSCALE, laplacian_variance),
+    QCMetric.VARIANCE: (InputKind.GRAYSCALE, pop_variance),
+    QCMetric.FFT_HIGH_FREQ_ENERGY: (InputKind.GRAYSCALE, fft_high_freq_energy),
+    QCMetric.HAAR_WAVELET_ENERGY: (InputKind.GRAYSCALE, haar_wavelet_energy),
     # Intensity (grayscale)
-    QCMetric.BRIGHTNESS_MEAN: (InputKind.GRAYSCALE, _brightness_mean),
-    QCMetric.BRIGHTNESS_STD: (InputKind.GRAYSCALE, _brightness_std),
-    QCMetric.ENTROPY: (InputKind.GRAYSCALE, _entropy),
+    QCMetric.BRIGHTNESS_MEAN: (InputKind.GRAYSCALE, brightness_mean),
+    QCMetric.BRIGHTNESS_STD: (InputKind.GRAYSCALE, brightness_std),
+    QCMetric.ENTROPY: (InputKind.GRAYSCALE, entropy),
     # Staining (RGB, H&E only)
-    QCMetric.HEMATOXYLIN_MEAN: (InputKind.RGB, _hematoxylin_mean),
-    QCMetric.HEMATOXYLIN_STD: (InputKind.RGB, _hematoxylin_std),
-    QCMetric.EOSIN_MEAN: (InputKind.RGB, _eosin_mean),
-    QCMetric.EOSIN_STD: (InputKind.RGB, _eosin_std),
-    QCMetric.HE_RATIO: (InputKind.RGB, _he_ratio),
+    QCMetric.HEMATOXYLIN_MEAN: (InputKind.RGB, hematoxylin_mean),
+    QCMetric.HEMATOXYLIN_STD: (InputKind.RGB, hematoxylin_std),
+    QCMetric.EOSIN_MEAN: (InputKind.RGB, eosin_mean),
+    QCMetric.EOSIN_STD: (InputKind.RGB, eosin_std),
+    QCMetric.HE_RATIO: (InputKind.RGB, he_ratio),
     # Artifacts (RGB, H&E only)
-    QCMetric.FOLD_FRACTION: (InputKind.RGB, _fold_fraction),
+    QCMetric.FOLD_FRACTION: (InputKind.RGB, fold_fraction),
     # Tissue coverage (mask)
-    QCMetric.TISSUE_FRACTION: (InputKind.MASK, _tissue_fraction),
+    QCMetric.TISSUE_FRACTION: (InputKind.MASK, tissue_fraction),
 }
 
 
