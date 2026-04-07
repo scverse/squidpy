@@ -28,8 +28,7 @@ def _check_backends() -> None:
 
         names = ", ".join(_backends.keys())
         logging.getLogger(__name__).info(
-            f"GPU backend available ({names}). "
-            f"Set squidpy.settings.backend = 'cuda' to enable."
+            f"GPU backend available ({names}). Set squidpy.settings.backend = 'cuda' to enable."
         )
 
 

@@ -20,8 +20,8 @@ class _Settings:
     @backend.setter
     def backend(self, value: str) -> None:
         from squidpy._backends._registry import (
-            TRUSTED_BACKENDS,
             _TRUSTED_ALIASES,
+            TRUSTED_BACKENDS,
             _check_trusted,
             available_backend_names,
             get_backend,
@@ -36,25 +36,20 @@ class _Settings:
 
         # Completely unknown name and not a loaded backend
         if resolved is None:
-            raise ValueError(
-                f"Unknown backend {value!r}. "
-                f"Available backends: {available_backend_names() or ['cpu']}."
-            )
+            raise ValueError(f"Unknown backend {value!r}. Available backends: {available_backend_names() or ['cpu']}.")
 
         # Trusted alias but backend package not installed
         if resolved in _TRUSTED_ALIASES and get_backend(value) is None:
             canonical = _TRUSTED_ALIASES[resolved]
             package = TRUSTED_BACKENDS[canonical]["package"]
             raise ValueError(
-                f"Backend {value!r} ({canonical}) is not installed. "
-                f"Install it with: pip install {package}"
+                f"Backend {value!r} ({canonical}) is not installed. Install it with: pip install {package}"
             )
 
         # Loaded but not installed (untrusted, not in alias map for trusted)
         if get_backend(value) is None:
             raise ValueError(
-                f"Backend {value!r} is not installed. "
-                f"Available backends: {available_backend_names() or ['cpu']}."
+                f"Backend {value!r} is not installed. Available backends: {available_backend_names() or ['cpu']}."
             )
 
         # Warn if untrusted

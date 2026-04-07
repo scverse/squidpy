@@ -3,6 +3,7 @@
 Usage in backend CI::
 
     from squidpy.testing.backend_conformance import validate_backend
+
     validate_backend("rapids_singlecell")
 """
 

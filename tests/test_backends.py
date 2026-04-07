@@ -6,12 +6,11 @@ import warnings
 
 import pytest
 
-from squidpy._backends import dispatch, settings
+from squidpy._backends import _registry, dispatch, settings
 from squidpy._backends._dispatch import _sig_cache
-from squidpy._backends import _registry
 from squidpy._backends._registry import (
-    TRUSTED_BACKENDS,
     _TRUSTED_ALIASES,
+    TRUSTED_BACKENDS,
     _alias_map,
     _backends,
 )

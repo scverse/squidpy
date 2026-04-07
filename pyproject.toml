@@ -76,6 +76,12 @@ dependencies = [
   "xarray>=2024.10",
   "zarr>=3",
 ]
+optional-dependencies.cu12 = [
+  "rapids-singlecell-cu12[rapids]",
+]
+optional-dependencies.cu13 = [
+  "rapids-singlecell-cu13[rapids]",
+]
 optional-dependencies.dev = [
   "hatch>=1.9",
   "ipykernel",
@@ -106,15 +112,6 @@ optional-dependencies.leiden = [
   "leidenalg",
   "spatialleiden>=0.4",
 ]
-
-optional-dependencies.cu12 = [
-  "rapids-singlecell-cu12[rapids]",
-]
-
-optional-dependencies.cu13 = [
-  "rapids-singlecell-cu13[rapids]",
-]
-
 optional-dependencies.test = [
   "coverage[toml]>=7",
   "pytest>=7",

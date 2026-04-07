@@ -82,7 +82,12 @@ def _extract_param_docs(docstring: str | None, param_names: set[str]) -> dict[st
                 in_params = True
                 i += 2
                 continue
-        if in_params and stripped and not stripped[0].isspace() and stripped.startswith(("Returns", "Raises", "See ", "Notes", "Examples", "Yields", "Warns", "References")):
+        if (
+            in_params
+            and stripped
+            and not stripped[0].isspace()
+            and stripped.startswith(("Returns", "Raises", "See ", "Notes", "Examples", "Yields", "Warns", "References"))
+        ):
             break
         if in_params:
             # Check if this line starts a parameter (non-indented or 4-space indented name)
@@ -305,8 +310,7 @@ def dispatch(func: F) -> F:
     --------
     >>> from squidpy._backends import dispatch
     >>> @dispatch
-    ... def my_function(adata, n_jobs=None):
-    ...     ...  # CPU implementation
+    ... def my_function(adata, n_jobs=None): ...  # CPU implementation
     """
     func_name = func.__name__
 
@@ -321,8 +325,7 @@ def dispatch(func: F) -> F:
         backend = get_backend(effective)
         if backend is None:
             raise RuntimeError(
-                f"Backend {effective!r} is not installed. "
-                f"Install it or set squidpy.settings.backend = 'cpu'."
+                f"Backend {effective!r} is not installed. Install it or set squidpy.settings.backend = 'cpu'."
             )
 
         method = getattr(backend, func_name, None)
