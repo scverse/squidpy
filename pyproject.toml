@@ -102,12 +102,12 @@ optional-dependencies.docs = [
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
 ]
+optional-dependencies.jax = [
+  "jax",
+]
 optional-dependencies.leiden = [
   "leidenalg",
   "spatialleiden>=0.4",
-]
-optional-dependencies.jax = [
-  "jax",
 ]
 optional-dependencies.test = [
   "coverage[toml]>=7",

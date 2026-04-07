@@ -10,6 +10,7 @@ from squidpy.experimental.tl.stalign_tools import STalignResult, stalign_points
 
 __all__ = ["stalign"]
 
+
 def stalign(
     adata_src: AnnData,
     adata_tgt: AnnData,
@@ -157,7 +158,6 @@ def stalign(
         }
 
     return result
-
 
 
 def _result_to_uns(result: STalignResult) -> dict[str, object]:
