@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import jax
 import jax.numpy as jnp
@@ -10,10 +10,7 @@ import jax.scipy as jsp
 import numpy as np
 
 JAX_DTYPE = jnp.float64 if jax.config.x64_enabled else jnp.float32
-
-if TYPE_CHECKING:
-    from typing import Literal
-
+__all__ = ["JAX_DTYPE", "lddmm", "transform_points_row_col"]
 
 def _to_affine(linear: Any, translation: Any) -> Any:
     return jnp.array(
@@ -59,7 +56,7 @@ def _interp(
     return jax.vmap(_sample)(arr)
 
 
-def _transform_points_row_col(
+def transform_points_row_col(
     xv: tuple[Any, Any],
     velocity: Any,
     affine: Any,
@@ -241,7 +238,7 @@ def _lddmm_loss(
         / sigmaR**2
     )
 
-    transformed_points = _transform_points_row_col(xv, velocity, affine, points_source, direction="forward")
+    transformed_points = transform_points_row_col(xv, velocity, affine, points_source, direction="forward")
     if points_source.shape[0] == 0:
         point_energy = jnp.array(0.0, dtype=source_image.dtype)
     else:
@@ -251,7 +248,7 @@ def _lddmm_loss(
     return total, (contrast_source, transformed_points, match_energy, reg_energy, point_energy)
 
 
-def _lddmm(
+def lddmm(
     xI: tuple[Any, Any],
     I: Any,
     xJ: tuple[Any, Any],

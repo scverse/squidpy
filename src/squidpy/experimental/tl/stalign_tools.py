@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 from anndata import AnnData
 
-from squidpy.experimental.tl._stalign_core import JAX_DTYPE, _lddmm, _transform_points_row_col
+from squidpy.experimental.tl._stalign_core import JAX_DTYPE, lddmm, transform_points_row_col
 from squidpy.experimental.tl._stalign_helpers import (
     PointOrder,
     affine_from_points,
@@ -136,7 +136,7 @@ def transform_points(
 ) -> JaxArray:
     """Transform point arrays with a fitted STalign map."""
     points_rc = to_row_col(points, point_order=point_order)
-    transformed = _transform_points_row_col(
+    transformed = transform_points_row_col(
         xv,
         jnp.asarray(v),
         jnp.asarray(A),
@@ -189,7 +189,7 @@ def stalign_points(
         target_landmarks = to_row_col(landmarks_target, point_order="row_col")
         linear, translation = affine_from_points(source_landmarks, target_landmarks)
 
-    result = _lddmm(
+    result = lddmm(
         preprocessed.source_grid,
         preprocessed.source_image,
         preprocessed.target_grid,
