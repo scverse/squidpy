@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import jax.numpy as jnp
 import numpy as np
 import pytest
 from anndata import AnnData
 
 import squidpy as sq
+from squidpy.experimental.tl._stalign_core import _transform_points_row_col
 
 jax = pytest.importorskip("jax")
 
@@ -75,6 +77,23 @@ def test_stalign_points_returns_result_and_transform_points():
     assert backward.shape == points.shape
     assert np.all(np.isfinite(transformed))
     assert np.all(np.isfinite(backward))
+
+
+def test_transform_points_backward_reverses_nonstationary_flow():
+    xv = (jnp.linspace(0.0, 2.0, 3), jnp.linspace(0.0, 2.0, 3))
+    affine = jnp.eye(3)
+    velocity = np.zeros((2, 3, 3, 2), dtype=float)
+
+    for i in range(3):
+        velocity[0, i, :, 1] = i
+    for j in range(3):
+        velocity[1, :, j, 0] = j
+
+    points = jnp.asarray([[1.0, 1.0]])
+    transformed = _transform_points_row_col(xv, jnp.asarray(velocity), affine, points, direction="forward")
+    restored = _transform_points_row_col(xv, jnp.asarray(velocity), affine, transformed, direction="backward")
+
+    np.testing.assert_allclose(np.asarray(restored), np.asarray(points))
 
 
 def test_stalign_wrapper_and_transform_adata_method():
