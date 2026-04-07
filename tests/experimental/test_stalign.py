@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from importlib import import_module
+
 import numpy as np
 import pytest
 from anndata import AnnData
@@ -7,11 +9,10 @@ from anndata import AnnData
 import squidpy as sq
 
 jax = pytest.importorskip("jax")
-import jax.numpy as jnp
+jnp = pytest.importorskip("jax.numpy")
+transform_points_row_col = import_module("squidpy.experimental.tl._stalign_core").transform_points_row_col
 
-from squidpy.experimental.tl._stalign_core import transform_points_row_col
-
-_ = jax
+_ = jax # so that the linter doesn't complain about unused import
 
 
 def _make_row_col_points() -> np.ndarray:
@@ -134,10 +135,9 @@ def test_stalign_wrapper_and_transform_adata_method():
     result.transform_adata(adata_src, key_added="stalign_copy", inplace=True)
     assert "stalign_copy" in adata_src.obsm
 
-    original = adata_src.obsm["spatial"].copy()
     written = result.transform_adata(adata_src, inplace=True)
     assert written is None
-    np.testing.assert_allclose(adata_src.obsm["spatial"], original)
+    np.testing.assert_allclose(adata_src.obsm["spatial"], transformed)
 
 
 def test_stalign_inplace_false_does_not_write_uns():
