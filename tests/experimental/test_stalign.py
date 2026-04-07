@@ -100,6 +100,7 @@ def test_stalign_wrapper_and_transform_adata_method():
     assert "stalign" in adata_src.uns
     assert "result" in adata_src.uns["stalign"]
     assert adata_src.uns["stalign"]["result"]["aligned_points"].shape == adata_src.obsm["spatial"].shape
+    assert set(adata_src.uns["stalign"]["result"]["velocity_grid"]) == {"row", "col"}
 
     transformed = result.transform_adata(adata_src)
     assert isinstance(transformed, np.ndarray)
@@ -135,3 +136,26 @@ def test_stalign_copy_true_does_not_write_uns():
     )
 
     assert "stalign" not in adata_src.uns
+
+
+def test_stalign_uns_payload_is_h5ad_serializable(tmp_path):
+    adata_src = _make_xy_adata()
+    adata_tgt = _make_xy_adata()
+
+    sq.experimental.tl.stalign(
+        adata_src,
+        adata_tgt,
+        src_key="spatial",
+        tgt_key="spatial",
+        src_landmarks_key="landmarks",
+        tgt_landmarks_key="landmarks",
+        dx=0.5,
+        blur=1.0,
+        a=1.0,
+        expand=1.0,
+        nt=1,
+        niter=1,
+        epV=1.0,
+    )
+
+    adata_src.write_h5ad(tmp_path / "stalign.h5ad")
