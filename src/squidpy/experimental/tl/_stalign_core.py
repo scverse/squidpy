@@ -12,6 +12,7 @@ import numpy as np
 JAX_DTYPE = jnp.float64 if jax.config.x64_enabled else jnp.float32
 __all__ = ["JAX_DTYPE", "lddmm", "transform_points_row_col"]
 
+
 def _to_affine(linear: Any, translation: Any) -> Any:
     return jnp.array(
         [
