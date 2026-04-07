@@ -32,7 +32,7 @@ def calculate_niche(
     data: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
     library_key: str | None = None,
-    table_key: str | None = None,
+    table_key: str | None = "table",
     mask: pd.core.series.Series = None,
     groups: str | None = None,
     n_neighbors: int | None = None,
@@ -170,7 +170,7 @@ def calculate_niche(
     if resolutions is None:
         resolutions = [0.5]
 
-    orig_adata = extract_adata(data, table_key=table_key or "table")
+    orig_adata = extract_adata(data, table_key=table_key)
     adata = orig_adata.copy()
 
     assert_key_in_adata(
@@ -845,7 +845,7 @@ def _validate_niche_args(
 
     if library_key is not None:
         assert_isinstance(library_key, str, name="library_key")
-        adata = extract_adata(data, table_key=table_key or "table")
+        adata = extract_adata(data, table_key=table_key)
         if library_key not in adata.obs.columns:
             raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
 
