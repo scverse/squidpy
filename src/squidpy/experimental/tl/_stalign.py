@@ -35,7 +35,7 @@ def stalign(
     sigmaA: float = 5.0,
     sigmaR: float = 5e5,
     sigmaP: float = 2e1,
-    copy: bool = False,
+    inplace: bool = True,
 ) -> STalignResult:
     """
     Align point coordinates stored on two AnnData objects.
@@ -97,8 +97,8 @@ def stalign(
         Velocity regularization scale.
     sigmaP
         Landmark matching scale.
-    copy
-        If ``False``, store a serializable summary of the fitted result under
+    inplace
+        If ``True``, store a serializable summary of the fitted result under
         ``adata_src.uns["stalign"]``. The fitted result object is returned in
         all cases.
 
@@ -148,7 +148,7 @@ def stalign(
     result.point_order = "xy"
     result.aligned_points = np.asarray(result.aligned_points)[:, [1, 0]]
 
-    if not copy:
+    if inplace:
         adata_src.uns["stalign"] = {
             "result": _result_to_uns(result),
             "src_key": src_key,

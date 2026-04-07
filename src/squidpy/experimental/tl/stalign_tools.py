@@ -69,24 +69,22 @@ class STalignResult:
         spatial_key: str = "spatial",
         key_added: str | None = None,
         direction: Literal["forward", "backward"] = "forward",
-        copy: bool = False,
-    ) -> AnnData | np.ndarray | None:
-        """Apply the fitted transform to coordinates stored on an AnnData object."""
+        inplace: bool = False,
+    ) -> np.ndarray | None:
+        """
+        Apply the fitted transform to coordinates stored on an AnnData object.
+
+        If ``inplace=False``, return the transformed coordinates without
+        modifying ``adata``. If ``inplace=True``, write the transformed
+        coordinates to ``adata.obsm[spatial_key]`` or ``adata.obsm[key_added]``
+        and return ``None``.
+        """
         points = extract_points(adata, key=spatial_key)
         transformed = np.asarray(self.transform_points(points, direction=direction, point_order="xy"))
-
-        if copy:
-            adata = adata.copy()
-
-        if key_added is None:
-            if copy:
-                adata.obsm[spatial_key] = transformed
-                return adata
+        if not inplace:
             return transformed
 
-        adata.obsm[key_added] = transformed
-        if copy:
-            return adata
+        adata.obsm[spatial_key if key_added is None else key_added] = transformed
         return None
 
 

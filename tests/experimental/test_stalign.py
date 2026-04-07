@@ -126,15 +126,15 @@ def test_stalign_wrapper_and_transform_adata_method():
     assert isinstance(transformed, np.ndarray)
     assert transformed.shape == adata_src.obsm["spatial"].shape
 
-    result.transform_adata(adata_src, key_added="stalign")
+    result.transform_adata(adata_src, key_added="stalign", inplace=True)
     assert "stalign" in adata_src.obsm
 
-    copied = result.transform_adata(adata_src, key_added="stalign_copy", copy=True)
-    assert isinstance(copied, AnnData)
-    assert "stalign_copy" in copied.obsm
+    assert "stalign_copy" not in adata_src.obsm
+    result.transform_adata(adata_src, key_added="stalign_copy", inplace=True)
+    assert "stalign_copy" in adata_src.obsm
 
 
-def test_stalign_copy_true_does_not_write_uns():
+def test_stalign_inplace_false_does_not_write_uns():
     adata_src = _make_xy_adata()
     adata_tgt = _make_xy_adata()
 
@@ -152,7 +152,7 @@ def test_stalign_copy_true_does_not_write_uns():
         nt=1,
         niter=1,
         epV=1.0,
-        copy=True,
+        inplace=False,
     )
 
     assert "stalign" not in adata_src.uns
