@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import jax
 import jax.numpy as jnp
@@ -10,6 +10,9 @@ import jax.scipy as jsp
 import numpy as np
 
 JAX_DTYPE = jnp.float64 if jax.config.x64_enabled else jnp.float32
+
+if TYPE_CHECKING:
+    from typing import Literal
 
 
 def _to_affine(linear: Any, translation: Any) -> Any:
@@ -62,20 +65,19 @@ def _transform_points_row_col(
     affine: Any,
     points: Any,
     *,
-    direction: str,
+    direction: Literal["forward", "backward"] = "forward",
 ) -> Any:
     pts = jnp.asarray(points)
     n_steps = velocity.shape[0]
+    time_steps = range(n_steps)
+    flow_sign = 1.0
     if direction == "backward":
         affine = jnp.linalg.inv(affine)
         pts = pts @ affine[:2, :2].T + affine[:2, -1]
         flow_sign = -1.0
-    elif direction == "forward":
-        flow_sign = 1.0
-    else:
-        raise ValueError(f"Unknown `direction`: `{direction}`.")
+        time_steps = reversed(time_steps)
 
-    for t in range(n_steps):
+    for t in time_steps:
         disp = _interp(
             xv,
             jnp.moveaxis(flow_sign * velocity[t], -1, 0),
