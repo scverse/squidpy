@@ -164,7 +164,10 @@ def _result_to_uns(result: STalignResult) -> dict[str, object]:
     return {
         "affine": np.asarray(result.affine),
         "velocity": np.asarray(result.velocity),
-        "velocity_grid": tuple(np.asarray(axis) for axis in result.velocity_grid),
+        "velocity_grid": {
+            "row": np.asarray(result.velocity_grid[0]),
+            "col": np.asarray(result.velocity_grid[1]),
+        },
         "aligned_points": np.asarray(result.aligned_points),
         "point_order": result.point_order,
     }
