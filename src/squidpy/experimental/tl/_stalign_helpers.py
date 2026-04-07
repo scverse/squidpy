@@ -56,6 +56,7 @@ def extract_landmarks(adata: AnnData, key: str) -> np.ndarray:
 # TODO: are these duplicated? I would imagine its
 # better to keep image transform functions under some place
 
+
 def to_row_col(points: np.ndarray, *, point_order: PointOrder) -> np.ndarray:
     """Convert coordinates to row-column order."""
     arr = _validate_points(points, name="points")

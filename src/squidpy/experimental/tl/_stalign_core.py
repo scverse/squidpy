@@ -144,12 +144,9 @@ def _build_regularizer(
     fy = jnp.arange(shape[0], dtype=xv[0].dtype) / (shape[0] * dv[0])
     fx = jnp.arange(shape[1], dtype=xv[1].dtype) / (shape[1] * dv[1])
     frequency_grid = jnp.stack(jnp.meshgrid(fy, fx, indexing="ij"), axis=-1)
-    ll = (
-        1.0
-        + 2.0
-        * a**2
-        * jnp.sum((1.0 - jnp.cos(2.0 * np.pi * frequency_grid * dv)) / (dv**2), axis=-1)
-    ) ** (2.0 * p)
+    ll = (1.0 + 2.0 * a**2 * jnp.sum((1.0 - jnp.cos(2.0 * np.pi * frequency_grid * dv)) / (dv**2), axis=-1)) ** (
+        2.0 * p
+    )
     kernel = 1.0 / ll
     dv_prod = jnp.prod(dv)
     return kernel, ll, dv_prod
