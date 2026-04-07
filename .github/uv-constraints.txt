@@ -1,0 +1,2 @@
+# TODO: remove once hatch is compatible with virtualenv 21+ (pypa/hatch#2193)
+virtualenv<21

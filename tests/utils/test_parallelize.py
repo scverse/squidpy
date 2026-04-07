@@ -67,20 +67,21 @@ def func(request) -> Callable:
 # in case of failure.
 
 
-@pytest.mark.timeout(30)
+@pytest.mark.flaky(max_runs=5)
+@pytest.mark.timeout(5)
 @pytest.mark.parametrize(
     "backend",
     [
         pytest.param(
             "threading",
             marks=pytest.mark.skipif(
-                os.environ.get("CI") == "true", reason="Only testing 'loky' backend in CI environment"
+                os.environ.get("CI") == "true", reason="Not testing 'threading' backend in CI environment"
             ),
         ),
         pytest.param(
             "multiprocessing",
             marks=pytest.mark.skipif(
-                os.environ.get("CI") == "true", reason="Only testing 'loky' backend in CI environment"
+                os.environ.get("CI") == "true", reason="Not testing 'multiprocessing' backend in CI environment"
             ),
         ),
         "loky",

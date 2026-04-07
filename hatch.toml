@@ -39,17 +39,14 @@ download = "python ./.scripts/ci/download_data.py {args}"
 deps = ["stable"]
 python = ["3.11", "3.12", "3.13"]
 
-# Test the newest supported Python version also with pre-release deps
-# [[envs.hatch-test.matrix]]
-# deps = [ "pre" ]
-# python = [ "3.13" ]
+[[envs.hatch-test.matrix]]
+deps = ["pre"]
+python = ["3.13"]
 
-# [envs.hatch-test.overrides]
-# If the matrix variable `deps` is set to "pre",
-# set the environment variable `UV_PRERELEASE` to "allow".
-# matrix.deps.env-vars = [
-#   { key = "UV_PRERELEASE", value = "allow", if = [ "pre" ] },
-# ]
+[envs.hatch-test.overrides]
+matrix.deps.env-vars = [
+  { key = "UV_PRERELEASE", value = "allow", if = ["pre"] },
+]
 
 [envs.notebooks]
 extra-dependencies = [

@@ -21,11 +21,9 @@ from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._validators import assert_positive, check_tuple_needles
 from squidpy.gr._utils import (
     _assert_categorical_obs,
-    _assert_positive,
-    _check_tuple_needles,
-    _create_sparse_df,
     _genesymbols,
     _save_data,
 )
@@ -212,7 +210,7 @@ class PermutationTestABC(ABC):
 
         self._data = pd.DataFrame.sparse.from_spmatrix(
             csc_matrix(adata.X), index=adata.obs_names, columns=adata.var_names
-        )
+        ).fillna(0.0)
 
         self._interactions: pd.DataFrame | None = None
         self._filtered_data: pd.DataFrame | None = None
@@ -363,7 +361,7 @@ class PermutationTestABC(ABC):
         -------
         %(ligrec_test_returns)s
         """
-        _assert_positive(n_perms, name="n_perms")
+        assert_positive(n_perms, name="n_perms")
         _assert_categorical_obs(self._adata, key=cluster_key)
 
         if corr_method is not None:
@@ -387,7 +385,7 @@ class PermutationTestABC(ABC):
         if all(isinstance(c, str) for c in clusters):
             clusters = list(product(clusters, repeat=2))  # type: ignore[assignment]
         clusters = sorted(
-            _check_tuple_needles(
+            check_tuple_needles(
                 clusters,  # type: ignore[arg-type]
                 self._filtered_data["clusters"].cat.categories,
                 msg="Invalid cluster `{0!r}`.",
@@ -426,18 +424,16 @@ class PermutationTestABC(ABC):
             numba_parallel=numba_parallel,
             **kwargs,
         )
+        index = pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET])
+        columns = pd.MultiIndex.from_tuples(clusters, names=["cluster_1", "cluster_2"])
         res = {
-            "means": _create_sparse_df(
-                res.means,
-                index=pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET]),
-                columns=pd.MultiIndex.from_tuples(clusters, names=["cluster_1", "cluster_2"]),
-                fill_value=0,
+            "means": pd.DataFrame(
+                {c: pd.arrays.SparseArray(res.means[:, i], fill_value=0) for i, c in enumerate(columns)},
+                index=index,
             ),
-            "pvalues": _create_sparse_df(
-                res.pvalues,
-                index=pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET]),
-                columns=pd.MultiIndex.from_tuples(clusters, names=["cluster_1", "cluster_2"]),
-                fill_value=np.nan,
+            "pvalues": pd.DataFrame(
+                {c: pd.arrays.SparseArray(res.pvalues[:, i], fill_value=np.nan) for i, c in enumerate(columns)},
+                index=index,
             ),
             "metadata": self.interactions[self.interactions.columns.difference([SOURCE, TARGET])],
         }
@@ -738,8 +734,11 @@ def _analysis(
 
         return TempResult(means=means, pvalues=pvalues)
 
-    groups = data.groupby("clusters", observed=True)
     clustering = np.array(data["clusters"].values, dtype=np.int32)
+    # densify the data earlier to avoid concatenating sparse arrays
+    # with multiple fill values: '[0.0, nan]' (which leads to PerformanceWarning)
+    data = data.astype({c: np.float64 for c in data.columns if c != "clusters"})
+    groups = data.groupby("clusters", observed=True)
 
     mean = groups.mean().values.T  # (n_genes, n_clusters)
     # see https://github.com/scverse/squidpy/pull/991#issuecomment-2888506296

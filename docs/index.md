@@ -44,7 +44,7 @@ Please see our manuscript [Palla, Spitzer et al. (2022)](https://doi.org/10.1038
 - Build and analyze the neighborhood graph from spatial coordinates
 - Compute spatial statistics for cell-types and genes
 - Efficiently store, analyze and visualize large tissue images, leveraging [scikit-image](https://scikit-image.org/)
-- Interactively explore [anndata](https://anndata.readthedocs.io/en/stable/) and large tissue images in [napari](https://napari.org/)
+- Interactively explore spatial data with [napari-spatialdata](https://github.com/scverse/napari-spatialdata)
 
 ## Getting started with Squidpy
 

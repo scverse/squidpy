@@ -17,6 +17,8 @@ env:
   MPLBACKEND: agg
   UV_COMPILE_BYTECODE: "1"
   COVERAGE_FILE: ${{ github.workspace }}/.coverage
+  # TODO: remove once hatch is compatible with virtualenv 21+ (pypa/hatch#2193)
+  UV_CONSTRAINT: ${{ github.workspace }}/.github/uv-constraints.txt
 
 defaults:
   run:
@@ -100,10 +102,13 @@ jobs:
             env: { name: hatch-test.py3.11-stable }
           - os: macos-latest
             env: { name: hatch-test.py3.12-stable }
+          - os: macos-latest
+            env: { name: hatch-test.py3.13-pre } # pre-release only needs one OS
           - os: ubuntu-latest
             env: { name: hatch-test.py3.13-stable } # skipping because we run this as a coverage job
     name: ${{ matrix.env.label }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ contains(matrix.env.name, 'pre') }}
     steps:
       - uses: actions/checkout@v5
         with:
