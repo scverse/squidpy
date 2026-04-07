@@ -32,7 +32,6 @@ def calculate_niche(
     data: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
     library_key: str | None = None,
-    table_key: str | None = "table",
     mask: pd.core.series.Series = None,
     groups: str | None = None,
     n_neighbors: int | None = None,
@@ -52,7 +51,9 @@ def calculate_niche(
     use_weights: bool | tuple[bool, bool] = True,
     use_rep: str | None = None,
     inplace: bool = True,
-) -> AnnData:
+    *,
+    table_key: str = "table",
+) -> AnnData | None:
     """
     Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
     The resulting niche labels with be stored in 'adata.obs'.
