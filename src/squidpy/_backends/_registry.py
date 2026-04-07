@@ -32,11 +32,11 @@ for _canonical, _info in TRUSTED_BACKENDS.items():
         _TRUSTED_ALIASES[_alias] = _canonical
 
 
-def discover_backends() -> None:
-    """Discover and register backends via entrypoints.
+def _ensure_discovered() -> None:
+    """Discover and register backends via entrypoints (lazy, runs once).
 
-    All backends are loaded. Untrusted backends (not in :data:`TRUSTED_BACKENDS`)
-    emit a warning on first use.
+    All backends are loaded on first call. Untrusted backends (not in
+    :data:`TRUSTED_BACKENDS`) emit a warning on first use.
     """
     global _discovered
     if _discovered:
@@ -65,6 +65,12 @@ def discover_backends() -> None:
         except Exception:  # noqa: BLE001
             logger.debug("Failed to load backend entrypoint %r", ep.name, exc_info=True)
 
+    # Merge backend-specific params into dispatched function signatures
+    if _backends:
+        from squidpy._backends._dispatch import _update_signatures
+
+        _update_signatures()
+
 
 def _check_trusted(name: str) -> None:
     """Emit a one-time warning if the backend is not in the trusted list."""
@@ -84,7 +90,7 @@ def resolve_backend_name(name: str) -> str | None:
     Recognises both loaded backends and trusted (but not yet installed)
     backend aliases.  Returns ``None`` only for completely unknown names.
     """
-    discover_backends()
+    _ensure_discovered()
     if name == "cpu":
         return "cpu"
     return _alias_map.get(name) or _TRUSTED_ALIASES.get(name)
@@ -92,7 +98,7 @@ def resolve_backend_name(name: str) -> str | None:
 
 def get_backend(name: str) -> Any | None:
     """Get backend instance by name or alias. Returns None for 'cpu'."""
-    discover_backends()
+    _ensure_discovered()
     if name == "cpu":
         return None
     canonical = _alias_map.get(name) or _TRUSTED_ALIASES.get(name)
@@ -103,5 +109,5 @@ def get_backend(name: str) -> Any | None:
 
 def available_backend_names() -> list[str]:
     """Return all registered backend names and aliases."""
-    discover_backends()
+    _ensure_discovered()
     return sorted(_alias_map.keys())

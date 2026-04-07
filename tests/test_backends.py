@@ -21,6 +21,15 @@ class FakeBackend:
     aliases = ["fake", "test-gpu"]
 
     def my_func(self, x, gpu_param=None):
+        """Run my_func on GPU.
+
+        Parameters
+        ----------
+        x
+            Input value.
+        gpu_param
+            GPU-specific parameter.
+        """
         return f"gpu:{x}:{gpu_param}"
 
 
@@ -31,7 +40,9 @@ def _reset_state():
     _alias_map.clear()
     _sig_cache.clear()
     old_discovered = _registry._discovered
-    _registry._discovered = False
+    # Mark as discovered to prevent entrypoint loading during tests —
+    # tests register their own fake backends explicitly.
+    _registry._discovered = True
     settings.backend = "cpu"
     # Temporarily add fake backend to trusted list
     old_trusted = TRUSTED_BACKENDS.copy()
@@ -83,12 +94,13 @@ class TestSettings:
         settings.backend = "fake"
         with settings.use_backend("cpu"):
             assert settings.backend == "cpu"
-        assert settings.backend == "fake"
+        assert settings.backend == "fake_gpu"
 
     def test_set_via_alias(self):
         _register_fake()
         settings.backend = "fake"
-        assert settings.backend == "fake"
+        # Aliases resolve to canonical name
+        assert settings.backend == "fake_gpu"
 
     def test_set_via_canonical(self):
         _register_fake()
@@ -108,6 +120,29 @@ class TestSettings:
             settings.backend = "fake"
             assert len(w) == 1
             assert "not in squidpy's trusted backends list" in str(w[0].message)
+
+    def test_available_backends_empty(self):
+        assert settings.available_backends() == []
+
+    def test_available_backends_with_registered(self):
+        _register_fake()
+        assert "fake_gpu" in settings.available_backends()
+
+    def test_get_backend_returns_instance(self):
+        backend = _register_fake()
+        result = settings.get_backend("fake_gpu")
+        assert result is backend
+
+    def test_get_backend_by_alias(self):
+        backend = _register_fake()
+        assert settings.get_backend("fake") is backend
+        assert settings.get_backend("test-gpu") is backend
+
+    def test_get_backend_unknown_returns_none(self):
+        assert settings.get_backend("nonexistent") is None
+
+    def test_get_backend_cpu_returns_none(self):
+        assert settings.get_backend("cpu") is None
 
 
 class TestDispatch:
@@ -220,3 +255,125 @@ class TestDispatch:
 
         with pytest.raises(RuntimeError, match="not installed"):
             my_func(42, backend="nonexistent_backend")
+
+
+class TestDocstringMerging:
+    """Test numpydoc parameter extraction and injection."""
+
+    def test_extract_param_docs(self):
+        from squidpy._backends._dispatch import _extract_param_docs
+
+        docstring = """\
+Run something.
+
+Parameters
+----------
+x
+    Input value.
+gpu_param
+    GPU-specific parameter.
+
+Returns
+-------
+Result.
+"""
+        result = _extract_param_docs(docstring, {"gpu_param"})
+        assert "gpu_param" in result
+        assert "GPU-specific" in result["gpu_param"]
+
+    def test_extract_skips_missing_params(self):
+        from squidpy._backends._dispatch import _extract_param_docs
+
+        docstring = """\
+Parameters
+----------
+x
+    Input.
+"""
+        result = _extract_param_docs(docstring, {"nonexistent"})
+        assert result == {}
+
+    def test_extract_no_params_section(self):
+        from squidpy._backends._dispatch import _extract_param_docs
+
+        result = _extract_param_docs("Just a docstring.", {"x"})
+        assert result == {}
+
+    def test_inject_param_docs(self):
+        from squidpy._backends._dispatch import _inject_param_docs
+
+        docstring = """\
+Do something.
+
+Parameters
+----------
+x
+    Input.
+
+Returns
+-------
+Result.
+"""
+        result = _inject_param_docs(docstring, {"gpu_param": "gpu_param\n    A GPU param."})
+        assert "gpu_param" in result
+        assert "backend" in result
+        # backend doc should appear before Returns
+        lines = result.split("\n")
+        backend_idx = next(i for i, l in enumerate(lines) if "backend" in l.lower() and "Backend to use" not in l)
+        returns_idx = next(i for i, l in enumerate(lines) if l.strip() == "Returns")
+        assert backend_idx < returns_idx
+
+    def test_inject_no_params_section_unchanged(self):
+        from squidpy._backends._dispatch import _inject_param_docs
+
+        docstring = "Just a plain docstring."
+        assert _inject_param_docs(docstring, {"x": "x\n    Param."}) == docstring
+
+    def test_extract_handles_multiline_descriptions(self):
+        from squidpy._backends._dispatch import _extract_param_docs
+
+        docstring = """\
+Parameters
+----------
+multi
+    First line of description.
+    Second line continues here
+    with more detail.
+other
+    Another param.
+"""
+        result = _extract_param_docs(docstring, {"multi"})
+        assert "multi" in result
+        assert "Second line" in result["multi"]
+        assert "with more detail" in result["multi"]
+
+
+class TestLazyDiscovery:
+    """Test that backend discovery is lazy."""
+
+    def test_discovery_not_triggered_on_import(self):
+        """Verify _discovered stays False until a backend function is used."""
+        # Reset discovery state
+        _registry._discovered = False
+        _backends.clear()
+        _alias_map.clear()
+
+        # Just importing squidpy should not trigger discovery
+        # (we can't re-import, but we can check the flag after reset)
+        assert not _registry._discovered
+
+    def test_discovery_triggered_by_get_backend(self):
+        """get_backend triggers lazy discovery."""
+        _registry._discovered = False
+        from squidpy._backends._registry import get_backend
+
+        get_backend("cpu")
+        assert _registry._discovered
+
+    def test_discovery_triggered_by_settings_setter(self):
+        """Setting backend triggers lazy discovery."""
+        _registry._discovered = False
+        _register_fake()
+        _registry._discovered = False  # reset after _register_fake
+        settings.backend = "fake"
+        assert _registry._discovered

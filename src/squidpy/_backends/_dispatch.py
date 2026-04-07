@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import functools
 import inspect
-import re
 import warnings
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -14,14 +13,12 @@ from squidpy._backends._settings import settings
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-# Cache: (func_id, backend_canonical_name) -> (shared, cpu_only, gpu_only, host_defaults)
-_sig_cache: dict[tuple[int, str], tuple[set, set, set, dict]] = {}
+# Cache: (func_qualname, backend_canonical_name) -> (shared, cpu_only, gpu_only, host_defaults)
+_sig_cache: dict[tuple[str, str], tuple[set, set, set, dict]] = {}
 
 
 # All functions decorated with @dispatch, so we can update their signatures later
 _dispatched_functions: list[Callable] = []
-
-_BACKEND_DOC = "backend\n    Backend to use. Use ``'cpu'`` for the default implementation or a\n    registered backend name (e.g. ``'gpu'``). See ``squidpy.settings.backend``."
 
 
 def _get_param_sets(
@@ -31,7 +28,7 @@ def _get_param_sets(
     backend_name: str,
 ) -> tuple[set, set, set, dict]:
     """Compute shared/cpu_only/gpu_only param sets. Cached per function+backend."""
-    key = (id(func), backend_name)
+    key = (func.__qualname__, backend_name)
     if key in _sig_cache:
         return _sig_cache[key]
 
@@ -60,119 +57,169 @@ def _get_param_sets(
     return result
 
 
+# numpydoc section headers that end a Parameters block
+_NUMPYDOC_SECTIONS = frozenset(
+    ("Returns", "Raises", "See Also", "Notes", "Examples", "Yields", "Warns", "References", "Attributes", "Methods")
+)
+
+
+def _find_section(lines: list[str], section: str) -> tuple[int, int] | None:
+    """Find a numpydoc section, returning (header_line, first_content_line).
+
+    Returns None if the section is not found.
+    """
+    for i, line in enumerate(lines):
+        if line.strip() == section and i + 1 < len(lines) and lines[i + 1].strip().startswith("---"):
+            return i, i + 2
+    return None
+
+
+def _detect_indent(lines: list[str], start: int, end: int) -> str:
+    """Detect the parameter-name indentation used in a numpydoc Parameters block.
+
+    Looks for the first non-empty, non-section-header line between start and end.
+    """
+    for line in lines[start:end]:
+        stripped = line.lstrip()
+        if stripped and stripped.split()[0].replace("*", "").replace(",", "").isidentifier():
+            return line[: len(line) - len(stripped)]
+    return "    "
+
+
 def _extract_param_docs(docstring: str | None, param_names: set[str]) -> dict[str, str]:
     """Extract numpydoc parameter entries for the given names.
 
-    Returns a dict mapping param name to its full doc block (name line + indented body).
+    Uses indentation-based parsing: a parameter entry starts with a line
+    whose indentation matches the section's base indent, and continues
+    with all subsequent lines that are blank or more deeply indented.
+
+    Returns a dict mapping param name to its dedented doc block.
+    On any parse ambiguity, the parameter is skipped rather than producing
+    garbled output.
     """
     if not docstring or not param_names:
         return {}
 
-    result: dict[str, str] = {}
     lines = docstring.split("\n")
+    section = _find_section(lines, "Parameters")
+    if section is None:
+        return {}
 
-    # Find "Parameters" section
-    in_params = False
-    i = 0
-    while i < len(lines):
+    _, content_start = section
+
+    # Find where the Parameters section ends
+    content_end = len(lines)
+    for i in range(content_start, len(lines)):
         stripped = lines[i].strip()
-        if stripped == "Parameters":
-            # Next line should be "----------"
+        if stripped in _NUMPYDOC_SECTIONS:
             if i + 1 < len(lines) and lines[i + 1].strip().startswith("---"):
-                in_params = True
-                i += 2
+                content_end = i
+                break
+
+    base_indent = _detect_indent(lines, content_start, content_end)
+    base_indent_len = len(base_indent)
+
+    # Parse parameter entries by indentation
+    result: dict[str, str] = {}
+    i = content_start
+    while i < content_end:
+        line = lines[i]
+
+        # Skip blank lines between parameters
+        if not line.strip():
+            i += 1
+            continue
+
+        # A parameter name line: at base indentation, starts with an identifier
+        line_indent_len = len(line) - len(line.lstrip())
+        if line_indent_len != base_indent_len:
+            i += 1
+            continue
+
+        # Extract the parameter name (first word, before optional " : type")
+        first_token = line.strip().split()[0].rstrip(",")
+        # Handle *args, **kwargs style names
+        name = first_token.lstrip("*")
+
+        # Collect the body (lines indented deeper than base)
+        block_lines = [line]
+        j = i + 1
+        while j < content_end:
+            body_line = lines[j]
+            if not body_line.strip():
+                block_lines.append(body_line)
+                j += 1
                 continue
-        if (
-            in_params
-            and stripped
-            and not stripped[0].isspace()
-            and stripped.startswith(("Returns", "Raises", "See ", "Notes", "Examples", "Yields", "Warns", "References"))
-        ):
-            break
-        if in_params:
-            # Check if this line starts a parameter (non-indented or 4-space indented name)
-            match = re.match(r"^(\s*)(\w+)\s*(?::.*)?$", lines[i])
-            if match:
-                indent = match.group(1)
-                name = match.group(2)
-                if name in param_names:
-                    # Collect this param's doc block
-                    block_lines = [lines[i]]
-                    j = i + 1
-                    while j < len(lines):
-                        # Continuation lines are more indented than the param name
-                        if lines[j].strip() == "":
-                            block_lines.append(lines[j])
-                            j += 1
-                            continue
-                        line_indent = len(lines[j]) - len(lines[j].lstrip())
-                        name_indent = len(indent)
-                        if line_indent > name_indent:
-                            block_lines.append(lines[j])
-                            j += 1
-                        else:
-                            break
-                    # Strip trailing blank lines
-                    while block_lines and block_lines[-1].strip() == "":
-                        block_lines.pop()
-                    result[name] = "\n".join(block_lines)
-        i += 1
+            body_indent_len = len(body_line) - len(body_line.lstrip())
+            if body_indent_len > base_indent_len:
+                block_lines.append(body_line)
+                j += 1
+            else:
+                break
+
+        # Strip trailing blank lines
+        while block_lines and not block_lines[-1].strip():
+            block_lines.pop()
+
+        if name in param_names:
+            # Dedent the block to remove the base indentation
+            dedented = []
+            for bl in block_lines:
+                if bl.strip():
+                    dedented.append(bl[base_indent_len:] if len(bl) >= base_indent_len else bl)
+                else:
+                    dedented.append("")
+            result[name] = "\n".join(dedented)
+
+        i = j
 
     return result
 
 
-def _dedent_param_doc(doc: str) -> str:
-    """Strip leading indentation from an extracted param doc block."""
-    lines = doc.split("\n")
-    if not lines:
-        return doc
-    # Find minimum indentation across non-empty lines
-    indents = [len(line) - len(line.lstrip()) for line in lines if line.strip()]
-    if not indents:
-        return doc
-    min_indent = min(indents)
-    return "\n".join(line[min_indent:] if line.strip() else "" for line in lines)
-
-
 def _inject_param_docs(docstring: str | None, extra_docs: dict[str, str]) -> str:
-    """Inject extra parameter docs + backend doc before the Returns section."""
+    """Inject extra parameter docs and ``backend`` doc into a numpydoc docstring.
+
+    Inserts before the first non-Parameters section (Returns, Raises, etc.).
+    If the Parameters section can't be found, the docstring is returned unchanged
+    rather than producing garbled output.
+    """
     if not docstring:
         return docstring or ""
 
-    # Dedent extracted docs then combine with backend doc
-    dedented = [_dedent_param_doc(doc) for doc in extra_docs.values()]
-    extra_block = "\n".join(dedented + [_BACKEND_DOC]) if dedented else _BACKEND_DOC
-
-    # Find the end of the Parameters section (before Returns/Raises/etc.)
     lines = docstring.split("\n")
-    insert_idx = None
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        if stripped in ("Returns", "Raises", "See Also", "Notes", "Examples", "Yields", "Warns", "References"):
+    section = _find_section(lines, "Parameters")
+    if section is None:
+        return docstring
+
+    _, content_start = section
+
+    # Find insertion point: just before the next section header
+    insert_idx = len(lines)
+    for i in range(content_start, len(lines)):
+        stripped = lines[i].strip()
+        if stripped in _NUMPYDOC_SECTIONS:
             if i + 1 < len(lines) and lines[i + 1].strip().startswith("---"):
                 insert_idx = i
                 break
 
-    if insert_idx is not None:
-        # Detect the param-name indentation used in the host docstring
-        indent = ""
-        for line in lines[:insert_idx]:
-            # Match lines that look like param names (word at start of indented block)
-            match = re.match(r"^(\s*)\w+\s*$", line)
-            if match:
-                indent = match.group(1)
-                break
+    indent = _detect_indent(lines, content_start, insert_idx)
+    body_indent = indent + "    "
 
-        # Re-indent the extra docs to match the host style
-        indented_lines = []
-        for doc_line in extra_block.split("\n"):
+    # Build the extra parameter lines
+    extra_lines: list[str] = []
+    for doc_block in extra_docs.values():
+        for doc_line in doc_block.split("\n"):
             if doc_line.strip():
-                indented_lines.append(indent + doc_line)
+                extra_lines.append(indent + doc_line)
             else:
-                indented_lines.append("")
+                extra_lines.append("")
 
-        lines = lines[:insert_idx] + indented_lines + [""] + lines[insert_idx:]
+    # Always add the backend parameter doc
+    extra_lines.append(f"{indent}backend")
+    extra_lines.append(f"{body_indent}Backend to use. Use ``'cpu'`` for the default implementation or a")
+    extra_lines.append(f"{body_indent}registered backend name (e.g. ``'gpu'``). See ``squidpy.settings.backend``.")
 
+    lines = lines[:insert_idx] + extra_lines + [""] + lines[insert_idx:]
     return "\n".join(lines)
 
 
@@ -192,14 +239,41 @@ def _build_signature(func: Callable) -> None:
     func.__signature__ = sig.replace(parameters=params)
 
 
-def update_signatures() -> None:
-    """Merge GPU-only params from discovered backends into dispatched function signatures.
+def _find_public_func(wrapper: Callable) -> Callable:
+    """Find the outermost public function that wraps a dispatch wrapper.
 
-    Called once after backend discovery so that ``help()`` / IDE tooltips
-    show the full parameter list (CPU + GPU + backend) with documentation.
+    Walks from the module-level attribute through ``__wrapped__`` to verify
+    it actually chains back to our wrapper.  Returns the outermost function
+    (which may be ``wrapper`` itself if no outer decorator exists).
     """
     import sys
 
+    func = wrapper.__wrapped__
+    mod = sys.modules.get(func.__module__)
+    if mod is None:
+        return wrapper
+
+    candidate = getattr(mod, func.__name__, None)
+    if candidate is None or candidate is wrapper:
+        return wrapper
+
+    # Walk __wrapped__ chain to verify candidate actually wraps our wrapper
+    obj = candidate
+    while obj is not None:
+        if obj is wrapper:
+            return candidate
+        obj = getattr(obj, "__wrapped__", None)
+
+    return wrapper
+
+
+def _update_signatures() -> None:
+    """Merge GPU-only params from discovered backends into dispatched function signatures.
+
+    Called once automatically after backend discovery so that ``help()`` /
+    IDE tooltips show the full parameter list (CPU + GPU + backend) with
+    documentation.
+    """
     from squidpy._backends._registry import _backends
 
     for wrapper in _dispatched_functions:
@@ -253,20 +327,18 @@ def update_signatures() -> None:
             params.append(var_kw)
 
         merged_sig = host_sig.replace(parameters=params)
+        merged_doc = _inject_param_docs(wrapper.__doc__, adapter_docs)
+
+        # Update the dispatch wrapper
         wrapper.__signature__ = merged_sig
+        wrapper.__doc__ = merged_doc
 
-        # --- Update docstring ---
-        wrapper.__doc__ = _inject_param_docs(wrapper.__doc__, adapter_docs)
-
-        # Outer decorators (deprecated_params, etc.) may have copied the initial
-        # __signature__ and __doc__ via functools.wraps.  Update the outermost
-        # public function so help() / IDE tooltips reflect the merged view.
-        mod = sys.modules.get(func.__module__)
-        if mod is not None:
-            public_func = getattr(mod, func_name, None)
-            if public_func is not None and public_func is not wrapper:
-                public_func.__signature__ = merged_sig
-                public_func.__doc__ = wrapper.__doc__
+        # If an outer decorator (e.g. deprecated_params) copied __signature__
+        # and __doc__ via functools.wraps, update it too.
+        public_func = _find_public_func(wrapper)
+        if public_func is not wrapper:
+            public_func.__signature__ = merged_sig
+            public_func.__doc__ = merged_doc
 
 
 def dispatch(func: F) -> F:

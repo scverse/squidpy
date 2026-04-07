@@ -16,23 +16,4 @@ except ImportError:
 
 del metadata, md
 
-
-def _check_backends() -> None:
-    from squidpy._backends._dispatch import update_signatures
-    from squidpy._backends._registry import _backends, discover_backends
-
-    discover_backends()
-    update_signatures()
-    if _backends:
-        import logging
-
-        names = ", ".join(_backends.keys())
-        logging.getLogger(__name__).info(
-            f"GPU backend available ({names}). Set squidpy.settings.backend = 'cuda' to enable."
-        )
-
-
-_check_backends()
-del _check_backends
-
 __all__ = ["datasets", "experimental", "gr", "im", "pl", "read", "settings", "tl"]
