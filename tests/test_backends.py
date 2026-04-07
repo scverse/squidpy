@@ -79,13 +79,18 @@ class TestSettings:
     def test_default_is_cpu(self):
         assert settings.backend == "cpu"
 
+    def test_set_unknown_backend_raises_with_suggestion(self):
+        _register_fake()
+        with pytest.raises(ValueError, match="Unknown backend.*Did you mean"):
+            settings.backend = "fak"  # close to "fake"
+
     def test_set_unknown_backend_raises(self):
         with pytest.raises(ValueError, match="Unknown backend"):
             settings.backend = "nonexistent"
 
     def test_trusted_but_not_installed_raises(self):
         # fake_gpu is trusted but not registered (not installed)
-        with pytest.raises(ValueError, match="not installed"):
+        with pytest.raises(ImportError, match="not installed"):
             settings.backend = "fake"
 
     def test_context_manager_restores(self):
@@ -353,13 +358,10 @@ class TestLazyDiscovery:
 
     def test_discovery_not_triggered_on_import(self):
         """Verify _discovered stays False until a backend function is used."""
-        # Reset discovery state
         _registry._discovered = False
         _backends.clear()
         _alias_map.clear()
 
-        # Just importing squidpy should not trigger discovery
-        # (we can't re-import, but we can check the flag after reset)
         assert not _registry._discovered
 
     def test_discovery_triggered_by_get_backend(self):
@@ -374,6 +376,6 @@ class TestLazyDiscovery:
         """Setting backend triggers lazy discovery."""
         _registry._discovered = False
         _register_fake()
-        _registry._discovered = False  # reset after _register_fake
+        _registry._discovered = False
         settings.backend = "fake"
         assert _registry._discovered

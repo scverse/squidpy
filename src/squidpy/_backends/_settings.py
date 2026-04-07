@@ -29,8 +29,9 @@ class _Settings:
     def backend(self) -> str:
         """The active backend name (default ``'cpu'``).
 
-        Set to a registered backend name (e.g. ``'gpu'``, ``'cuda'``)
+        Set to a registered backend name or alias (e.g. ``'gpu'``, ``'cuda'``)
         to dispatch supported functions to that backend.
+        Aliases are resolved to the canonical name.
 
         Examples
         --------
@@ -44,8 +45,8 @@ class _Settings:
     def backend(self, value: str) -> None:
         from squidpy._backends._registry import (
             TRUSTED_BACKENDS,
-            _check_trusted,
-            available_backend_names,
+            _suggest_backend,
+            check_trusted,
             get_backend,
             resolve_backend_name,
         )
@@ -56,25 +57,23 @@ class _Settings:
 
         canonical = resolve_backend_name(value)
 
-        # Completely unknown name
+        # Completely unknown name — suggest alternatives
         if canonical is None:
-            raise ValueError(f"Unknown backend {value!r}. Available backends: {available_backend_names() or ['cpu']}.")
+            raise ValueError(_suggest_backend(value))
 
         # Trusted but not installed
         if canonical in TRUSTED_BACKENDS and get_backend(canonical) is None:
             package = TRUSTED_BACKENDS[canonical]["package"]
-            raise ValueError(
+            raise ImportError(
                 f"Backend {value!r} ({canonical}) is not installed. Install it with: pip install {package}"
             )
 
         # Known alias but backend not loaded
         if get_backend(canonical) is None:
-            raise ValueError(
-                f"Backend {value!r} is not installed. Available backends: {available_backend_names() or ['cpu']}."
-            )
+            raise ImportError(f"Backend {value!r} is not installed.")
 
         # Warn if untrusted
-        _check_trusted(canonical)
+        check_trusted(canonical)
 
         # Always store the canonical name
         _backend_var.set(canonical)

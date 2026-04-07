@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.metadata
 import logging
 import warnings
+from difflib import get_close_matches
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -67,12 +68,12 @@ def _ensure_discovered() -> None:
 
     # Merge backend-specific params into dispatched function signatures
     if _backends:
-        from squidpy._backends._dispatch import _update_signatures
+        from squidpy._backends._dispatch import update_signatures
 
-        _update_signatures()
+        update_signatures()
 
 
-def _check_trusted(name: str) -> None:
+def check_trusted(name: str) -> None:
     """Emit a one-time warning if the backend is not in the trusted list."""
     canonical = _alias_map.get(name, name)
     if canonical not in TRUSTED_BACKENDS and canonical in _backends:
@@ -82,6 +83,22 @@ def _check_trusted(name: str) -> None:
             f"Trusted backends: {sorted(TRUSTED_BACKENDS)}.",
             stacklevel=3,
         )
+
+
+def _suggest_backend(name: str) -> str:
+    """Build an error message with 'did you mean' suggestions."""
+    _ensure_discovered()
+    all_names = sorted(set(list(_alias_map.keys()) + list(_TRUSTED_ALIASES.keys())))
+    matches = get_close_matches(name, all_names, n=1, cutoff=0.4)
+    msg = f"Unknown backend {name!r}."
+    if matches:
+        msg += f" Did you mean {matches[0]!r}?"
+    available = available_backend_names()
+    if available:
+        msg += f" Available: {available}."
+    else:
+        msg += " No backends are currently installed."
+    return msg
 
 
 def resolve_backend_name(name: str) -> str | None:

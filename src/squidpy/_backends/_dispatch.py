@@ -267,7 +267,7 @@ def _find_public_func(wrapper: Callable) -> Callable:
     return wrapper
 
 
-def _update_signatures() -> None:
+def update_signatures() -> None:
     """Merge GPU-only params from discovered backends into dispatched function signatures.
 
     Called once automatically after backend discovery so that ``help()`` /
