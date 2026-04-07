@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import jax.numpy as jnp
 import numpy as np
 import pytest
 from anndata import AnnData
 
 import squidpy as sq
-from squidpy.experimental.tl._stalign_core import transform_points_row_col
 
 jax = pytest.importorskip("jax")
+import jax.numpy as jnp
+
+from squidpy.experimental.tl._stalign_core import transform_points_row_col
 
 _ = jax
 
