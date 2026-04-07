@@ -146,3 +146,5 @@ data
 pixi.lock
 
 _version.py
+# TODO: no idea hwy I needed this
+.mplconfig/*
