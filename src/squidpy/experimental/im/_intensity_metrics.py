@@ -58,13 +58,17 @@ def hed_metrics(block: np.ndarray) -> np.ndarray:
     e = hed[..., 1]
 
     return np.array(
-        [[[
-            float(h.mean()),
-            float(h.std()),
-            float(e.mean()),
-            float(e.std()),
-            float(np.abs(h).mean() / (np.abs(e).mean() + 1e-10)),
-        ]]],
+        [
+            [
+                [
+                    float(h.mean()),
+                    float(h.std()),
+                    float(e.mean()),
+                    float(e.std()),
+                    float(np.abs(h).mean() / (np.abs(e).mean() + 1e-10)),
+                ]
+            ]
+        ],
         dtype=np.float32,
     )
 
