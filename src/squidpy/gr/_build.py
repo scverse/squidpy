@@ -122,7 +122,14 @@ def _resolve_graph_builder(
             )
         return DelaunayBuilder(**common, radius=radius, percentile=percentile)
     if radius is not None:
-        return RadiusBuilder(n_neighs=n_neighs, **common, radius=radius, percentile=percentile)
+        # below check should be removed once legacy mode spatial_neighbors is deprecated
+        if n_neighs_was_set:
+            warnings.warn(
+                "Parameter `n_neighs` is ignored when `radius` is set and will be removed in squidpy v2.0.0.",
+                FutureWarning,
+                stacklevel=3,
+            )
+        return RadiusBuilder(**common, radius=radius, percentile=percentile)
     return KNNBuilder(n_neighs=n_neighs, **common, percentile=percentile)
 
 
@@ -298,6 +305,7 @@ def spatial_neighbors(
         - Generic radius mode:
           ``coord_type='generic'``, ``delaunay=False``, ``radius`` set.
           Uses ``radius`` and builds a radius-based neighbor graph.
+          ``n_neighs`` is ignored and passing it is deprecated.
           If ``radius`` is a tuple, the graph is built with the maximum
           radius and then pruned to the interval
           ``[min(radius), max(radius)]``.
@@ -331,7 +339,7 @@ def spatial_neighbors(
           A tuple ``radius`` is only used afterward as a pruning
           interval. A scalar ``radius`` is ignored.
         - Otherwise, if ``radius`` is set, radius mode is used.
-          In this mode ``n_neighs`` does not act as a second cutoff.
+          In this mode ``n_neighs`` is ignored (deprecated).
         - Otherwise, k-nearest-neighbor mode is used.
 
     Grid-specific behavior
@@ -490,7 +498,6 @@ def spatial_neighbors_radius(
     table_key: str | None = None,
     library_key: str | None = None,
     radius: float | tuple[float, float] = 1.0,
-    n_neighs: int = 6,
     percentile: float | None = None,
     transform: str | Transform | None = None,
     set_diag: bool = False,
@@ -508,9 +515,6 @@ def spatial_neighbors_radius(
     radius
         Neighborhood radius.  If a :class:`tuple`, the graph is built with the
         maximum radius and then pruned to the interval ``[min(radius), max(radius)]``.
-    n_neighs
-        Number of nearest neighbors used internally by the radius graph builder.
-        Defaults to ``6``.
     %(graph_common_params)s
     %(copy)s
 
@@ -520,7 +524,6 @@ def spatial_neighbors_radius(
     """
     transform_enum = Transform.NONE if transform is None else Transform(transform)
     builder = RadiusBuilder(
-        n_neighs=n_neighs,
         radius=radius,
         percentile=percentile,
         transform=transform_enum,

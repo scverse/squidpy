@@ -239,7 +239,7 @@ class TestSpatialNeighbors:
             spatial_neighbors(non_visium_adata, builder=RadiusBuilder(radius=5.0), delaunay=True)
 
     def test_builder_rejects_any_legacy_args(self, non_visium_adata: AnnData):
-        builder = RadiusBuilder(radius=5.0, n_neighs=3, percentile=95.0, transform="cosine", set_diag=True)
+        builder = RadiusBuilder(radius=5.0, percentile=95.0, transform="cosine", set_diag=True)
 
         with pytest.raises(ValueError, match="must not be set"):
             spatial_neighbors(
@@ -298,6 +298,10 @@ class TestSpatialNeighbors:
     def test_delaunay_mode_warns_on_n_neighs(self, non_visium_adata: AnnData):
         with pytest.warns(FutureWarning, match=r"Parameter `n_neighs` is ignored when `delaunay=True`"):
             spatial_neighbors(non_visium_adata, coord_type="generic", delaunay=True, n_neighs=3, copy=True)
+
+    def test_radius_mode_warns_on_n_neighs(self, non_visium_adata: AnnData):
+        with pytest.warns(FutureWarning, match=r"Parameter `n_neighs` is ignored when `radius` is set"):
+            spatial_neighbors(non_visium_adata, coord_type="generic", radius=5.0, n_neighs=3, copy=True)
 
     @pytest.mark.parametrize("percentile", [99.0, 95.0])
     def test_percentile_filtering(self, adata_hne: AnnData, percentile: float, coord_type="generic"):

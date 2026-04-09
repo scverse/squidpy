@@ -131,15 +131,12 @@ class RadiusBuilder(GraphBuilder):
     def __init__(
         self,
         radius: float | tuple[float, float],
-        n_neighs: int = 6,
         transform: str | Transform | None = None,
         set_diag: bool = False,
         percentile: float | None = None,
     ) -> None:
-        assert_positive(n_neighs, name="n_neighs")
         super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
         self.radius = radius
-        self.n_neighs = n_neighs
 
     @property
     def coord_type(self) -> CoordType:
@@ -148,7 +145,7 @@ class RadiusBuilder(GraphBuilder):
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
         r = self.radius if isinstance(self.radius, int | float) else max(self.radius)
-        tree = NearestNeighbors(n_neighbors=self.n_neighs, radius=r, metric="euclidean")
+        tree = NearestNeighbors(radius=r, metric="euclidean")
         tree.fit(coords)
 
         dists, col_indices = tree.radius_neighbors()
