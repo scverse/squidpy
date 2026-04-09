@@ -27,7 +27,7 @@ from squidpy.gr._utils import (
     _assert_connectivity_key,
     _save_data,
     _shuffle_group,
-    extract_adata,
+    extract_adata_if_sdata,
 )
 
 __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
@@ -174,7 +174,7 @@ def nhood_enrichment(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - the enrichment z-score.
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
     """
-    adata = extract_adata(adata, table_key=table_key)
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -272,7 +272,7 @@ def centrality_scores(
         - :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_centrality_scores']`` - the centrality scores,
           as mentioned above.
     """
-    adata = extract_adata(adata, table_key=table_key)
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -361,7 +361,7 @@ def interaction_matrix(
 
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_interactions']`` - the interaction matrix.
     """
-    adata = extract_adata(adata, table_key=table_key)
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)

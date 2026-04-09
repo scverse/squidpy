@@ -19,7 +19,7 @@ from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA
-from squidpy.gr._utils import _assert_categorical_obs, _assert_spatial_basis, _save_data, extract_adata
+from squidpy.gr._utils import _assert_categorical_obs, _assert_spatial_basis, _save_data, extract_adata_if_sdata
 
 __all__ = ["ripley"]
 
@@ -106,7 +106,7 @@ def ripley(
     `Wikipedia <https://en.wikipedia.org/wiki/Spatial_descriptive_statistics#Ripley's_K_and_L_functions>`_
     or :cite:`Baddeley2015-lm`.
     """
-    adata = extract_adata(adata, table_key=table_key)
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
     coordinates = adata.obsm[spatial_key]

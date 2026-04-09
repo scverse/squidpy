@@ -47,7 +47,7 @@ from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_spatial_basis,
     _save_data,
-    extract_adata,
+    extract_adata_if_sdata,
 )
 
 __all__ = ["spatial_neighbors"]
@@ -408,7 +408,7 @@ def _resolve_sdata(
     assert elements_to_coordinate_systems is not None, (
         "Since `adata` is a :class:`spatialdata.SpatialData`, `elements_to_coordinate_systems` must not be `None`."
     )
-    table = extract_adata(adata, table_key=table_key)
+    table = extract_adata_if_sdata(adata, table_key=table_key)
     elements, matched_table = match_element_to_table(adata, list(elements_to_coordinate_systems), table_key)
     assert matched_table.obs_names.equals(table.obs_names), (
         "The spatialdata table must annotate all elements keys. Some elements are missing, please check the `elements_to_coordinate_systems` dictionary."
@@ -574,7 +574,7 @@ def mask_graph(
     if not isinstance(polygon_mask, Polygon | MultiPolygon):
         raise ValueError(f"`polygon_mask` should be of type `Polygon` or `MultiPolygon`, got {type(polygon_mask)}")
 
-    table = extract_adata(sdata, table_key=table_key)
+    table = extract_adata_if_sdata(sdata, table_key=table_key)
     coords = table.obsm[spatial_key]
     Adj = table.obsp[conns_key]
     Dst = table.obsp[dists_key]

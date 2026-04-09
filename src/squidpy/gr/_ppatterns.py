@@ -30,7 +30,7 @@ from squidpy.gr._utils import (
     _assert_connectivity_key,
     _assert_spatial_basis,
     _save_data,
-    extract_adata,
+    extract_adata_if_sdata,
 )
 
 __all__ = ["spatial_autocorr", "co_occurrence"]
@@ -131,7 +131,7 @@ def spatial_autocorr(
         - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe, if ``mode = {sp.MORAN.s!r}``.
         - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
-    adata = extract_adata(adata, table_key=table_key)
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     _assert_connectivity_key(adata, connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
@@ -377,7 +377,7 @@ def co_occurrence(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
           computed at ``interval``.
     """
-    adata = extract_adata(adata, table_key=table_key)
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
 

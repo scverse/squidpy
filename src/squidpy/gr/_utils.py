@@ -22,7 +22,7 @@ from squidpy._utils import NDArrayA
 from squidpy._validators import assert_non_empty_sequence
 
 
-def extract_adata(adata: AnnData | SpatialData, *, table_key: str = "table") -> AnnData:
+def extract_adata_if_sdata(adata: AnnData | SpatialData, *, table_key: str = "table") -> AnnData:
     """Resolve a :class:`~spatialdata.SpatialData` to an :class:`~anndata.AnnData`.
 
     If *adata* is already an :class:`~anndata.AnnData` it is returned as-is.

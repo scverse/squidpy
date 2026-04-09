@@ -7,32 +7,32 @@ import spatialdata as sd
 from anndata import AnnData
 
 from squidpy._constants._pkg_constants import Key
-from squidpy.gr._utils import _shuffle_group, extract_adata
+from squidpy.gr._utils import _shuffle_group, extract_adata_if_sdata
 
 
 class TestExtractAdata:
     def test_passthrough_anndata(self):
         adata = AnnData(np.zeros((3, 2)))
-        assert extract_adata(adata) is adata
+        assert extract_adata_if_sdata(adata) is adata
 
     def test_sdata_default_table_key(self, sdata_mask_graph: sd.SpatialData):
-        result = extract_adata(sdata_mask_graph)
+        result = extract_adata_if_sdata(sdata_mask_graph)
         assert isinstance(result, AnnData)
         assert result is sdata_mask_graph.tables["table"]
 
     def test_sdata_custom_table_key(self, sdata_mask_graph: sd.SpatialData):
         sdata_mask_graph["my_table"] = sdata_mask_graph.tables["table"].copy()
-        result = extract_adata(sdata_mask_graph, table_key="my_table")
+        result = extract_adata_if_sdata(sdata_mask_graph, table_key="my_table")
         assert isinstance(result, AnnData)
 
     def test_sdata_missing_table_key(self, sdata_mask_graph: sd.SpatialData):
         with pytest.raises(ValueError, match="not found in SpatialData"):
-            extract_adata(sdata_mask_graph, table_key="nonexistent")
+            extract_adata_if_sdata(sdata_mask_graph, table_key="nonexistent")
 
     def test_sdata_missing_default_table(self):
         sdata = sd.SpatialData()
         with pytest.raises(ValueError, match="'table' not found in SpatialData"):
-            extract_adata(sdata)
+            extract_adata_if_sdata(sdata)
 
 
 class TestObspSpatialKey:

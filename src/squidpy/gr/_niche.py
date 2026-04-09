@@ -21,7 +21,7 @@ from spatialdata._logging import logger as logg
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
-from squidpy.gr._utils import extract_adata
+from squidpy.gr._utils import extract_adata_if_sdata
 
 __all__ = ["calculate_niche"]
 
@@ -171,7 +171,7 @@ def calculate_niche(
     if resolutions is None:
         resolutions = [0.5]
 
-    orig_adata = extract_adata(data, table_key=table_key)
+    orig_adata = extract_adata_if_sdata(data, table_key=table_key)
     adata = orig_adata.copy()
 
     assert_key_in_adata(
@@ -846,7 +846,7 @@ def _validate_niche_args(
 
     if library_key is not None:
         assert_isinstance(library_key, str, name="library_key")
-        adata = extract_adata(data, table_key=table_key)
+        adata = extract_adata_if_sdata(data, table_key=table_key)
         if library_key not in adata.obs.columns:
             raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
 

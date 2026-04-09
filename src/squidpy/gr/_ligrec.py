@@ -26,7 +26,7 @@ from squidpy.gr._utils import (
     _assert_categorical_obs,
     _genesymbols,
     _save_data,
-    extract_adata,
+    extract_adata_if_sdata,
 )
 
 __all__ = ["ligrec", "PermutationTest"]
@@ -661,7 +661,7 @@ def ligrec(
     -------
     %(ligrec_test_returns)s
     """  # noqa: D400
-    adata = extract_adata(adata, table_key=table_key)
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)
