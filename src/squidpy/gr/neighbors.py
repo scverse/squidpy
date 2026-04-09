@@ -53,36 +53,36 @@ class GraphBuilder(ABC):
     def build(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SparseEfficiencyWarning)
-            Adj, Dst = self.build_graph(coords)
+            adj, dst = self.build_graph(coords)
 
-        self.apply_filters(Adj, Dst)
-        self._apply_percentile(Adj, Dst)
-        Adj.eliminate_zeros()
-        Dst.eliminate_zeros()
+        self.apply_filters(adj, dst)
+        self._apply_percentile(adj, dst)
+        adj.eliminate_zeros()
+        dst.eliminate_zeros()
 
-        return self._apply_transform(Adj), Dst
+        return self._apply_transform(adj), dst
 
     @abstractmethod
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         """Construct raw adjacency and distance matrices."""
 
-    def apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> None:
         """Apply builder-specific post-processing filters."""
         return None
 
-    def _apply_percentile(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+    def _apply_percentile(self, adj: csr_matrix, dst: csr_matrix) -> None:
         if self.percentile is not None and self.coord_type == CoordType.GENERIC:
-            threshold = np.percentile(Dst.data, self.percentile)
-            Adj[Dst > threshold] = 0.0
-            Dst[Dst > threshold] = 0.0
+            threshold = np.percentile(dst.data, self.percentile)
+            adj[dst > threshold] = 0.0
+            dst[dst > threshold] = 0.0
 
-    def _apply_transform(self, Adj: csr_matrix) -> csr_matrix:
+    def _apply_transform(self, adj: csr_matrix) -> csr_matrix:
         if self.transform == Transform.SPECTRAL:
-            return cast(csr_matrix, _transform_a_spectral(Adj))
+            return cast(csr_matrix, _transform_a_spectral(adj))
         if self.transform == Transform.COSINE:
-            return cast(csr_matrix, _transform_a_cosine(Adj))
+            return cast(csr_matrix, _transform_a_cosine(adj))
         if self.transform == Transform.NONE:
-            return Adj
+            return adj
 
         raise NotImplementedError(f"Transform `{self.transform}` is not yet implemented.")
 
@@ -114,15 +114,15 @@ class KNNBuilder(GraphBuilder):
         dists, col_indices = dists.reshape(-1), col_indices.reshape(-1)
         row_indices = np.repeat(np.arange(N), self.n_neighs)
 
-        Adj = csr_matrix(
+        adj = csr_matrix(
             (np.ones_like(row_indices, dtype=np.float32), (row_indices, col_indices)),
             shape=(N, N),
         )
-        Dst = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
+        dst = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
 
-        Adj.setdiag(1.0 if self.set_diag else Adj.diagonal())
-        Dst.setdiag(0.0)
-        return Adj, Dst
+        adj.setdiag(1.0 if self.set_diag else adj.diagonal())
+        dst.setdiag(0.0)
+        return adj, dst
 
 
 class RadiusBuilder(GraphBuilder):
@@ -153,19 +153,19 @@ class RadiusBuilder(GraphBuilder):
         dists = np.concatenate(dists)
         col_indices = np.concatenate(col_indices)
 
-        Adj = csr_matrix(
+        adj = csr_matrix(
             (np.ones_like(row_indices, dtype=np.float32), (row_indices, col_indices)),
             shape=(N, N),
         )
-        Dst = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
+        dst = csr_matrix((dists, (row_indices, col_indices)), shape=(N, N))
 
-        Adj.setdiag(1.0 if self.set_diag else Adj.diagonal())
-        Dst.setdiag(0.0)
-        return Adj, Dst
+        adj.setdiag(1.0 if self.set_diag else adj.diagonal())
+        dst.setdiag(0.0)
+        return adj, dst
 
-    def apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> None:
         if isinstance(self.radius, Iterable):
-            _filter_by_radius_interval(Adj, Dst, self.radius)
+            _filter_by_radius_interval(adj, dst, self.radius)
 
 
 class DelaunayBuilder(GraphBuilder):
@@ -189,7 +189,7 @@ class DelaunayBuilder(GraphBuilder):
         N = coords.shape[0]
         tri = Delaunay(coords)
         indptr, indices = tri.vertex_neighbor_vertices
-        Adj = csr_matrix((np.ones_like(indices, dtype=np.float32), indices, indptr), shape=(N, N))
+        adj = csr_matrix((np.ones_like(indices, dtype=np.float32), indices, indptr), shape=(N, N))
 
         # fmt: off
         dists = np.array(list(chain(*(
@@ -198,15 +198,15 @@ class DelaunayBuilder(GraphBuilder):
             if len(indices[indptr[i] : indptr[i + 1]])
         )))).squeeze()
         # fmt: on
-        Dst = csr_matrix((dists, indices, indptr), shape=(N, N))
+        dst = csr_matrix((dists, indices, indptr), shape=(N, N))
 
-        Adj.setdiag(1.0 if self.set_diag else Adj.diagonal())
-        Dst.setdiag(0.0)
-        return Adj, Dst
+        adj.setdiag(1.0 if self.set_diag else adj.diagonal())
+        dst.setdiag(0.0)
+        return adj, dst
 
-    def apply_filters(self, Adj: csr_matrix, Dst: csr_matrix) -> None:
+    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> None:
         if isinstance(self.radius, Iterable):
-            _filter_by_radius_interval(Adj, Dst, self.radius)
+            _filter_by_radius_interval(adj, dst, self.radius)
 
 
 class GridBuilder(GraphBuilder):
@@ -233,26 +233,26 @@ class GridBuilder(GraphBuilder):
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         if self.n_rings > 1:
-            Adj = self._base_adjacency(coords, set_diag=True)
-            Res, Walk = Adj, Adj
+            adj = self._base_adjacency(coords, set_diag=True)
+            res, walk = adj, adj
             for i in range(self.n_rings - 1):
-                Walk = Walk @ Adj
-                Walk[Res.nonzero()] = 0.0
-                Walk.eliminate_zeros()
-                Walk.data[:] = i + 2.0
-                Res = Res + Walk
-            Adj = Res
-            Adj.setdiag(float(self.set_diag))
-            Adj.eliminate_zeros()
+                walk = walk @ adj
+                walk[res.nonzero()] = 0.0
+                walk.eliminate_zeros()
+                walk.data[:] = i + 2.0
+                res = res + walk
+            adj = res
+            adj.setdiag(float(self.set_diag))
+            adj.eliminate_zeros()
 
-            Dst = Adj.copy()
-            Adj.data[:] = 1.0
+            dst = adj.copy()
+            adj.data[:] = 1.0
         else:
-            Adj = self._base_adjacency(coords, set_diag=self.set_diag)
-            Dst = Adj.copy()
+            adj = self._base_adjacency(coords, set_diag=self.set_diag)
+            dst = adj.copy()
 
-        Dst.setdiag(0.0)
-        return Adj, Dst
+        dst.setdiag(0.0)
+        return adj, dst
 
     def _base_adjacency(self, coords: NDArrayA, *, set_diag: bool) -> csr_matrix:
         """KNN adjacency with median-distance correction for grid coordinates."""
@@ -260,7 +260,7 @@ class GridBuilder(GraphBuilder):
         if self.delaunay:
             tri = Delaunay(coords)
             indptr, indices = tri.vertex_neighbor_vertices
-            Adj = csr_matrix((np.ones_like(indices, dtype=np.float32), indices, indptr), shape=(N, N))
+            adj = csr_matrix((np.ones_like(indices, dtype=np.float32), indices, indptr), shape=(N, N))
         else:
             tree = NearestNeighbors(n_neighbors=self.n_neighs, radius=1, metric="euclidean")
             tree.fit(coords)
@@ -272,13 +272,13 @@ class GridBuilder(GraphBuilder):
             mask = dists < dist_cutoff
             row_indices, col_indices = row_indices[mask], col_indices[mask]
 
-            Adj = csr_matrix(
+            adj = csr_matrix(
                 (np.ones_like(row_indices, dtype=np.float32), (row_indices, col_indices)),
                 shape=(N, N),
             )
 
-        Adj.setdiag(1.0 if set_diag else Adj.diagonal())
-        return Adj
+        adj.setdiag(1.0 if set_diag else adj.diagonal())
+        return adj
 
 
 # ---------------------------------------------------------------------------
@@ -287,17 +287,17 @@ class GridBuilder(GraphBuilder):
 
 
 def _filter_by_radius_interval(
-    Adj: csr_matrix,
-    Dst: csr_matrix,
+    adj: csr_matrix,
+    dst: csr_matrix,
     radius: Iterable[float],
 ) -> None:
     minn, maxx = sorted(radius)[:2]
-    mask = (Dst.data < minn) | (Dst.data > maxx)
-    a_diag = Adj.diagonal()
+    mask = (dst.data < minn) | (dst.data > maxx)
+    a_diag = adj.diagonal()
 
-    Dst.data[mask] = 0.0
-    Adj.data[mask] = 0.0
-    Adj.setdiag(a_diag)
+    dst.data[mask] = 0.0
+    adj.data[mask] = 0.0
+    adj.setdiag(a_diag)
 
 
 @njit

@@ -11,11 +11,23 @@ You can implement your own strategy by subclassing it.
 | Method / property | Required | Purpose |
 |---|---|---|
 | {attr}`~squidpy.gr.neighbors.GraphBuilder.coord_type` | yes | Return the {class}`~squidpy._constants._constants.CoordType` this builder supports. |
-| {meth}`~squidpy.gr.neighbors.GraphBuilder.build_graph` | yes | Construct and return ``(Adj, Dst)`` as {class}`~scipy.sparse.csr_matrix` pair. |
-| {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_filters` | no | Post-processing on the raw ``Adj``/``Dst`` (e.g. radius-interval pruning). Called before percentile filtering and transform. |
+| {meth}`~squidpy.gr.neighbors.GraphBuilder.build_graph` | yes | Construct and return ``(adj, dst)`` as {class}`~scipy.sparse.csr_matrix` pair. |
+| {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_filters` | no | Post-processing on the raw ``adj``/``dst`` (e.g. radius-interval pruning). Called before percentile filtering and transform. |
 
 The base class handles percentile filtering, adjacency transforms, and
 {class}`~scipy.sparse.SparseEfficiencyWarning` suppression automatically.
+
+Here ``adj`` and ``dst`` are square sparse matrices of shape ``(n_obs, n_obs)``
+with matching sparsity structure:
+
+- ``adj`` is the connectivity / adjacency matrix. Non-zero entries mark edges in
+  the graph, and built-in builders typically use ``1.0`` for present edges.
+- ``dst`` is the distance matrix for those same edges. For generic graphs this is
+  usually the Euclidean edge length. For grid builders it may instead encode
+  graph-distance semantics such as ring number.
+- Both should be returned as {class}`~scipy.sparse.csr_matrix`.
+- By convention, ``dst`` should have a zero diagonal, and ``adj`` should only
+  have a non-zero diagonal when ``set_diag=True``.
 
 ### Example: fast radius search with SNN
 
@@ -56,15 +68,15 @@ class SNNRadiusBuilder(GraphBuilder):
         col = np.concatenate(indices)
         d = np.concatenate(dists).astype(np.float64)
 
-        Adj = csr_matrix(
+        adj = csr_matrix(
             (np.ones(len(row), dtype=np.float32), (row, col)),
             shape=(N, N),
         )
-        Dst = csr_matrix((d, (row, col)), shape=(N, N))
+        dst = csr_matrix((d, (row, col)), shape=(N, N))
 
-        Adj.setdiag(1.0 if self.set_diag else Adj.diagonal())
-        Dst.setdiag(0.0)
-        return Adj, Dst
+        adj.setdiag(1.0 if self.set_diag else adj.diagonal())
+        dst.setdiag(0.0)
+        return adj, dst
 ```
 
 Use it like any other builder:

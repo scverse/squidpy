@@ -696,10 +696,10 @@ def _run_spatial_neighbors(
             ixs.extend(np.where(adata.obs[library_key] == lib)[0])
             mats.append(builder.build(adata[adata.obs[library_key] == lib].obsm[spatial_key]))
         ixs = cast(list[int], np.argsort(ixs).tolist())
-        Adj = block_diag([m[0] for m in mats], format="csr")[ixs, :][:, ixs]
-        Dst = block_diag([m[1] for m in mats], format="csr")[ixs, :][:, ixs]
+        adj = block_diag([m[0] for m in mats], format="csr")[ixs, :][:, ixs]
+        dst = block_diag([m[1] for m in mats], format="csr")[ixs, :][:, ixs]
     else:
-        Adj, Dst = builder.build(adata.obsm[spatial_key])
+        adj, dst = builder.build(adata.obsm[spatial_key])
 
     neighs_key = Key.uns.spatial_neighs(key_added)
     conns_key = Key.obsp.spatial_conn(key_added)
@@ -717,10 +717,10 @@ def _run_spatial_neighbors(
     }
 
     if copy:
-        return SpatialNeighborsResult(connectivities=Adj, distances=Dst)
+        return SpatialNeighborsResult(connectivities=adj, distances=dst)
 
-    _save_data(adata, attr="obsp", key=conns_key, data=Adj)
-    _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
+    _save_data(adata, attr="obsp", key=conns_key, data=adj)
+    _save_data(adata, attr="obsp", key=dists_key, data=dst, prefix=False)
     _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
 
 
@@ -782,11 +782,11 @@ def mask_graph(
     # get elements
     table = sdata.tables[table_key]
     coords = table.obsm[spatial_key]
-    Adj = table.obsp[conns_key]
-    Dst = table.obsp[dists_key]
+    adj = table.obsp[conns_key]
+    dst = table.obsp[dists_key]
 
     # convert edges to lines
-    lines_coords, idx_out = _get_lines_coords(Adj.indices, Adj.indptr, coords)
+    lines_coords, idx_out = _get_lines_coords(adj.indices, adj.indptr, coords)
     lines_coords, idx_out = np.array(lines_coords), np.array(idx_out)
     lines_df = gpd.GeoDataFrame(geometry=list(map(LineString, lines_coords)))
 
@@ -800,12 +800,12 @@ def mask_graph(
     filt_idx_out = idx_out[filt_lines]
 
     # filter connectivities
-    Adj[filt_idx_out[:, 0], filt_idx_out[:, 1]] = 0
-    Adj.eliminate_zeros()
+    adj[filt_idx_out[:, 0], filt_idx_out[:, 1]] = 0
+    adj.eliminate_zeros()
 
     # filter_distances
-    Dst[filt_idx_out[:, 0], filt_idx_out[:, 1]] = 0
-    Dst.eliminate_zeros()
+    dst[filt_idx_out[:, 0], filt_idx_out[:, 1]] = 0
+    dst.eliminate_zeros()
 
     mask_conns_key = f"{key_added}_{conns_key}"
     mask_dists_key = f"{key_added}_{dists_key}"
@@ -822,11 +822,11 @@ def mask_graph(
     }
 
     if copy:
-        return Adj, Dst
+        return adj, dst
 
     # save back to spatialdata
-    _save_data(table, attr="obsp", key=mask_conns_key, data=Adj)
-    _save_data(table, attr="obsp", key=mask_dists_key, data=Dst, prefix=False)
+    _save_data(table, attr="obsp", key=mask_conns_key, data=adj)
+    _save_data(table, attr="obsp", key=mask_dists_key, data=dst, prefix=False)
     _save_data(table, attr="uns", key=mask_neighs_key, data=neighbors_dict, prefix=False)
 
 
