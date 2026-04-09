@@ -43,10 +43,27 @@ def _make_xy_adata() -> AnnData:
     return adata
 
 
+def _make_config() -> sq.experimental.tl.stalign_tools.STalignConfig:
+    return sq.experimental.tl.stalign_tools.STalignConfig(
+        preprocess=sq.experimental.tl.stalign_tools.STalignPreprocessConfig(dx=0.5, blur=1.0),
+        registration=sq.experimental.tl.stalign_tools.STalignRegistrationConfig(
+            a=1.0,
+            expand=1.0,
+            nt=1,
+            niter=1,
+            epV=1.0,
+        ),
+    )
+
+
 def test_stalign_preprocess_returns_channels_first():
     points = _make_row_col_points()
 
-    result = sq.experimental.tl.stalign_tools.stalign_preprocess(points, points, dx=0.5, blur=1.0)
+    result = sq.experimental.tl.stalign_tools.stalign_preprocess(
+        points,
+        points,
+        config=sq.experimental.tl.stalign_tools.STalignPreprocessConfig(dx=0.5, blur=1.0),
+    )
 
     assert result.source_image.ndim == 3
     assert result.source_image.shape[0] == 1
@@ -57,18 +74,13 @@ def test_stalign_preprocess_returns_channels_first():
 def test_stalign_points_returns_result_and_transform_points():
     points = _make_row_col_points()
 
+    config = _make_config()
     result = sq.experimental.tl.stalign_tools.stalign_points(
         points,
         points,
-        dx=0.5,
-        blur=1.0,
+        config=config,
         landmarks_source=points[:3],
         landmarks_target=points[:3],
-        a=1.0,
-        expand=1.0,
-        nt=1,
-        niter=1,
-        epV=1.0,
     )
 
     transformed = np.asarray(result.transform_points(points, direction="forward"))
@@ -102,6 +114,7 @@ def test_stalign_wrapper_and_transform_adata_method():
     adata_src = _make_xy_adata()
     adata_tgt = _make_xy_adata()
 
+    config = _make_config()
     result = sq.experimental.tl.stalign(
         adata_src,
         adata_tgt,
@@ -109,13 +122,7 @@ def test_stalign_wrapper_and_transform_adata_method():
         tgt_key="spatial",
         src_landmarks_key="landmarks",
         tgt_landmarks_key="landmarks",
-        dx=0.5,
-        blur=1.0,
-        a=1.0,
-        expand=1.0,
-        nt=1,
-        niter=1,
-        epV=1.0,
+        config=config,
     )
 
     assert "stalign" in adata_src.uns
@@ -144,6 +151,7 @@ def test_stalign_inplace_false_does_not_write_uns():
     adata_src = _make_xy_adata()
     adata_tgt = _make_xy_adata()
 
+    config = _make_config()
     sq.experimental.tl.stalign(
         adata_src,
         adata_tgt,
@@ -151,13 +159,7 @@ def test_stalign_inplace_false_does_not_write_uns():
         tgt_key="spatial",
         src_landmarks_key="landmarks",
         tgt_landmarks_key="landmarks",
-        dx=0.5,
-        blur=1.0,
-        a=1.0,
-        expand=1.0,
-        nt=1,
-        niter=1,
-        epV=1.0,
+        config=config,
         inplace=False,
     )
 
@@ -168,6 +170,7 @@ def test_stalign_uns_payload_is_h5ad_serializable(tmp_path):
     adata_src = _make_xy_adata()
     adata_tgt = _make_xy_adata()
 
+    config = _make_config()
     sq.experimental.tl.stalign(
         adata_src,
         adata_tgt,
@@ -175,13 +178,7 @@ def test_stalign_uns_payload_is_h5ad_serializable(tmp_path):
         tgt_key="spatial",
         src_landmarks_key="landmarks",
         tgt_landmarks_key="landmarks",
-        dx=0.5,
-        blur=1.0,
-        a=1.0,
-        expand=1.0,
-        nt=1,
-        niter=1,
-        epV=1.0,
+        config=config,
     )
 
     adata_src.write_h5ad(tmp_path / "stalign.h5ad")

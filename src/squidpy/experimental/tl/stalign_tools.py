@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import jax.numpy as jnp
 import numpy as np
@@ -26,7 +26,49 @@ if TYPE_CHECKING:
 else:  # pragma: no cover - typing only
     JaxArray = Any
 
-__all__ = ["STalignPreprocessResult", "STalignResult", "stalign_points", "stalign_preprocess", "transform_points"]
+BlurScales: TypeAlias = float | tuple[float, ...] | list[float]
+
+__all__ = [
+    "STalignConfig",
+    "STalignPreprocessConfig",
+    "STalignPreprocessResult",
+    "STalignRegistrationConfig",
+    "STalignResult",
+    "stalign_points",
+    "stalign_preprocess",
+    "transform_points",
+]
+
+
+@dataclass(slots=True)
+class STalignPreprocessConfig:
+    dx: float = 30.0
+    blur: BlurScales = (2.0, 1.0, 0.5)
+    expand: float = 1.1
+
+
+@dataclass(slots=True)
+class STalignRegistrationConfig:
+    a: float = 500.0
+    p: float = 2.0
+    expand: float = 2.0
+    nt: int = 3
+    niter: int = 5000
+    diffeo_start: int = 0
+    epL: float = 2e-8
+    epT: float = 2e-1
+    epV: float = 2e3
+    sigmaM: float = 1.0
+    sigmaB: float = 2.0
+    sigmaA: float = 5.0
+    sigmaR: float = 5e5
+    sigmaP: float = 2e1
+
+
+@dataclass(slots=True)
+class STalignConfig:
+    preprocess: STalignPreprocessConfig = field(default_factory=STalignPreprocessConfig)
+    registration: STalignRegistrationConfig = field(default_factory=STalignRegistrationConfig)
 
 
 @dataclass(slots=True)
@@ -92,27 +134,26 @@ def stalign_preprocess(
     source_points: np.ndarray,
     target_points: np.ndarray,
     *,
-    dx: float = 30.0,
-    blur: float | list[float] = (2.0, 1.0, 0.5),
-    expand: float = 1.1,
+    config: STalignPreprocessConfig | None = None,
 ) -> STalignPreprocessResult:
     """Rasterize source and target point clouds for LDDMM registration."""
+    config = STalignPreprocessConfig() if config is None else config
     source_points = to_row_col(source_points, point_order="row_col")
     target_points = to_row_col(target_points, point_order="row_col")
 
     source_x, source_y, source_image = rasterize(
         source_points[:, 1],
         source_points[:, 0],
-        dx=dx,
-        blur=blur,
-        expand=expand,
+        dx=config.dx,
+        blur=config.blur,
+        expand=config.expand,
     )
     target_x, target_y, target_image = rasterize(
         target_points[:, 1],
         target_points[:, 0],
-        dx=dx,
-        blur=blur,
-        expand=expand,
+        dx=config.dx,
+        blur=config.blur,
+        expand=config.expand,
     )
 
     return STalignPreprocessResult(
@@ -149,30 +190,17 @@ def stalign_points(
     target_points: np.ndarray,
     *,
     preprocessed: STalignPreprocessResult | None = None,
-    dx: float = 30.0,
-    blur: float | list[float] = (2.0, 1.0, 0.5),
+    config: STalignConfig | None = None,
     landmarks_source: np.ndarray | None = None,
     landmarks_target: np.ndarray | None = None,
-    a: float = 500.0,
-    p: float = 2.0,
-    expand: float = 2.0,
-    nt: int = 3,
-    niter: int = 5000,
-    diffeo_start: int = 0,
-    epL: float = 2e-8,
-    epT: float = 2e-1,
-    epV: float = 2e3,
-    sigmaM: float = 1.0,
-    sigmaB: float = 2.0,
-    sigmaA: float = 5.0,
-    sigmaR: float = 5e5,
-    sigmaP: float = 2e1,
 ) -> STalignResult:
     """Align source point cloud to target with a JAX LDDMM solver."""
+    config = STalignConfig() if config is None else config
+    registration = config.registration
     source_points = to_row_col(source_points, point_order="row_col")
     target_points = to_row_col(target_points, point_order="row_col")
     if preprocessed is None:
-        preprocessed = stalign_preprocess(source_points, target_points, dx=dx, blur=blur)
+        preprocessed = stalign_preprocess(source_points, target_points, config=config.preprocess)
 
     if (landmarks_source is None) != (landmarks_target is None):
         raise ValueError("Expected both landmark arrays to be provided together.")
@@ -196,20 +224,20 @@ def stalign_points(
         T=jnp.asarray(translation, dtype=JAX_DTYPE),
         points_source=None if source_landmarks is None else jnp.asarray(source_landmarks, dtype=JAX_DTYPE),
         points_target=None if target_landmarks is None else jnp.asarray(target_landmarks, dtype=JAX_DTYPE),
-        a=a,
-        p=p,
-        expand=expand,
-        nt=nt,
-        niter=niter,
-        diffeo_start=diffeo_start,
-        epL=epL,
-        epT=epT,
-        epV=epV,
-        sigmaM=sigmaM,
-        sigmaB=sigmaB,
-        sigmaA=sigmaA,
-        sigmaR=sigmaR,
-        sigmaP=sigmaP,
+        a=registration.a,
+        p=registration.p,
+        expand=registration.expand,
+        nt=registration.nt,
+        niter=registration.niter,
+        diffeo_start=registration.diffeo_start,
+        epL=registration.epL,
+        epT=registration.epT,
+        epV=registration.epV,
+        sigmaM=registration.sigmaM,
+        sigmaB=registration.sigmaB,
+        sigmaA=registration.sigmaA,
+        sigmaR=registration.sigmaR,
+        sigmaP=registration.sigmaP,
     )
     aligned_points = transform_points(
         result["xv"],

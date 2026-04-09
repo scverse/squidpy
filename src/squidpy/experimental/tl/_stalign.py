@@ -6,7 +6,7 @@ import numpy as np
 from anndata import AnnData
 
 from squidpy.experimental.tl._stalign_helpers import extract_landmarks, extract_points
-from squidpy.experimental.tl.stalign_tools import STalignResult, stalign_points
+from squidpy.experimental.tl.stalign_tools import STalignConfig, STalignResult, stalign_points
 
 __all__ = ["stalign"]
 
@@ -19,22 +19,7 @@ def stalign(
     tgt_key: str = "spatial",
     src_landmarks_key: str | None = None,
     tgt_landmarks_key: str | None = None,
-    dx: float = 30.0,
-    blur: float | list[float] = (2.0, 1.0, 0.5),
-    a: float = 500.0,
-    p: float = 2.0,
-    expand: float = 2.0,
-    nt: int = 3,
-    niter: int = 5000,
-    diffeo_start: int = 0,
-    epL: float = 2e-8,
-    epT: float = 2e-1,
-    epV: float = 2e3,
-    sigmaM: float = 1.0,
-    sigmaB: float = 2.0,
-    sigmaA: float = 5.0,
-    sigmaR: float = 5e5,
-    sigmaP: float = 2e1,
+    config: STalignConfig | None = None,
     inplace: bool = True,
 ) -> STalignResult:
     """
@@ -65,38 +50,9 @@ def stalign(
     tgt_landmarks_key
         Optional key in ``adata_tgt.obsm`` or ``adata_tgt.uns`` containing
         target landmark coordinates in ``(x, y)`` order.
-    dx
-        Rasterization grid spacing.
-    blur
-        Rasterization blur scale or scales.
-    a
-        Velocity field smoothness scale.
-    p
-        Power of the differential operator used in regularization.
-    expand
-        Expansion factor for the velocity field domain.
-    nt
-        Number of time steps used for integrating the velocity field.
-    niter
-        Number of optimization iterations.
-    diffeo_start
-        Iteration at which nonlinear velocity updates start.
-    epL
-        Gradient step size for the affine linear term.
-    epT
-        Gradient step size for the affine translation term.
-    epV
-        Gradient step size for the velocity field.
-    sigmaM
-        Matching term scale.
-    sigmaB
-        Background term scale.
-    sigmaA
-        Artifact term scale.
-    sigmaR
-        Velocity regularization scale.
-    sigmaP
-        Landmark matching scale.
+    config
+        Optional STalign hyperparameter bundle. ``config.preprocess`` controls
+        rasterization and ``config.registration`` controls LDDMM fitting.
     inplace
         If ``True``, store a serializable summary of the fitted result under
         ``adata_src.uns["stalign"]``. The fitted result object is returned in
@@ -126,24 +82,9 @@ def stalign(
     result = stalign_points(
         source_points,
         target_points,
-        dx=dx,
-        blur=blur,
+        config=config,
         landmarks_source=landmarks_source,
         landmarks_target=landmarks_target,
-        a=a,
-        p=p,
-        expand=expand,
-        nt=nt,
-        niter=niter,
-        diffeo_start=diffeo_start,
-        epL=epL,
-        epT=epT,
-        epV=epV,
-        sigmaM=sigmaM,
-        sigmaB=sigmaB,
-        sigmaA=sigmaA,
-        sigmaR=sigmaR,
-        sigmaP=sigmaP,
     )
     result.point_order = "xy"
     result.aligned_points = np.asarray(result.aligned_points)[:, [1, 0]]
