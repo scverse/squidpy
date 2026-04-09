@@ -295,6 +295,10 @@ class TestSpatialNeighbors:
         np.testing.assert_array_equal(default.connectivities.toarray(), ignored.connectivities.toarray())
         np.testing.assert_allclose(default.distances.toarray(), ignored.distances.toarray())
 
+    def test_delaunay_mode_warns_on_n_neighs(self, non_visium_adata: AnnData):
+        with pytest.warns(FutureWarning, match=r"Parameter `n_neighs` is ignored when `delaunay=True`"):
+            spatial_neighbors(non_visium_adata, coord_type="generic", delaunay=True, n_neighs=3, copy=True)
+
     @pytest.mark.parametrize("percentile", [99.0, 95.0])
     def test_percentile_filtering(self, adata_hne: AnnData, percentile: float, coord_type="generic"):
         result = spatial_neighbors(adata_hne, coord_type=coord_type, copy=True)

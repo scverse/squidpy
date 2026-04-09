@@ -75,15 +75,24 @@ def _validate_no_legacy_params(**kwargs: Any) -> None:
 def _resolve_graph_builder(
     *,
     coord_type: str | CoordType | None,
-    n_neighs: int,
+    n_neighs: int | None,
     radius: float | tuple[float, float] | None,
-    delaunay: bool,
-    n_rings: int,
+    delaunay: bool | None,
+    n_rings: int | None,
     percentile: float | None,
     transform: str | Transform | None,
-    set_diag: bool,
+    set_diag: bool | None,
     has_spatial_uns: bool = False,
 ) -> GraphBuilder:
+    n_neighs_was_set = n_neighs is not None
+    n_neighs = 6 if n_neighs is None else n_neighs
+    delaunay = False if delaunay is None else delaunay
+    n_rings = 1 if n_rings is None else n_rings
+    set_diag = False if set_diag is None else set_diag
+
+    assert_positive(n_rings, name="n_rings")
+    assert_positive(n_neighs, name="n_neighs")
+
     transform = Transform.NONE if transform is None else Transform(transform)
     if coord_type is None:
         if radius is not None:
@@ -95,23 +104,26 @@ def _resolve_graph_builder(
     else:
         coord_type = CoordType(coord_type)
 
-    common: dict[str, Any] = {
-        "n_neighs": n_neighs,
-        "transform": transform,
-        "set_diag": set_diag,
-    }
+    common: dict[str, Any] = {"transform": transform, "set_diag": set_diag}
 
     if coord_type == CoordType.GRID:
         if percentile is not None:
             raise ValueError(
                 "`percentile` is not supported for grid coordinates. It only applies to generic (non-grid) graphs."
             )
-        return GridBuilder(**common, n_rings=n_rings, delaunay=delaunay)
+        return GridBuilder(n_neighs=n_neighs, **common, n_rings=n_rings, delaunay=delaunay)
     if delaunay:
+        # below check should be removed once legacy mode spatial_neighbors is deprecated
+        if n_neighs_was_set:
+            warnings.warn(
+                "Parameter `n_neighs` is ignored when `delaunay=True` and will be removed in squidpy v2.0.0.",
+                FutureWarning,
+                stacklevel=3,
+            )
         return DelaunayBuilder(**common, radius=radius, percentile=percentile)
     if radius is not None:
-        return RadiusBuilder(**common, radius=radius, percentile=percentile)
-    return KNNBuilder(**common, percentile=percentile)
+        return RadiusBuilder(n_neighs=n_neighs, **common, radius=radius, percentile=percentile)
+    return KNNBuilder(n_neighs=n_neighs, **common, percentile=percentile)
 
 
 def _resolve_spatial_data(
@@ -376,14 +388,6 @@ def spatial_neighbors(
             set_diag=set_diag,
         )
     else:
-        n_neighs = n_neighs if n_neighs is not None else 6
-        delaunay = delaunay if delaunay is not None else False
-        n_rings = n_rings if n_rings is not None else 1
-        set_diag = set_diag if set_diag is not None else False
-
-        assert_positive(n_rings, name="n_rings")
-        assert_positive(n_neighs, name="n_neighs")
-
         builder = _resolve_graph_builder(
             coord_type=coord_type,
             n_neighs=n_neighs,
