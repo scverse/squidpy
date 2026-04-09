@@ -716,6 +716,7 @@ def _run_spatial_neighbors(
     _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
     _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
 
+
 @d.dedent
 def mask_graph(
     sdata: SpatialData,
