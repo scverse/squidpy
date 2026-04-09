@@ -447,6 +447,7 @@ def _spatial_neighbors(
 @d.dedent
 def spatial_neighbors_knn(
     adata: AnnData | SpatialData,
+    *,
     spatial_key: str = Key.obsm.spatial,
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
@@ -497,6 +498,7 @@ def spatial_neighbors_knn(
 @d.dedent
 def spatial_neighbors_radius(
     adata: AnnData | SpatialData,
+    *,
     spatial_key: str = Key.obsm.spatial,
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
@@ -553,6 +555,7 @@ def spatial_neighbors_radius(
 @d.dedent
 def spatial_neighbors_delaunay(
     adata: AnnData | SpatialData,
+    *,
     spatial_key: str = Key.obsm.spatial,
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
@@ -604,6 +607,7 @@ def spatial_neighbors_delaunay(
 @d.dedent
 def spatial_neighbors_grid(
     adata: AnnData | SpatialData,
+    *,
     spatial_key: str = Key.obsm.spatial,
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
