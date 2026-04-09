@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import warnings
-from functools import partial
 from typing import Any, NamedTuple, cast
 
 import geopandas as gpd
@@ -377,6 +376,26 @@ def spatial_neighbors(
     )
 
 
+def _prepare_spatial_neighbors_input(
+    adata: AnnData | SpatialData,
+    *,
+    spatial_key: str,
+    elements_to_coordinate_systems: dict[str, str] | None,
+    table_key: str | None,
+    library_key: str | None,
+) -> tuple[AnnData, str | None]:
+    """Resolve input data and validate the requested spatial basis."""
+    adata, library_key = _resolve_spatial_data(
+        adata,
+        spatial_key=spatial_key,
+        elements_to_coordinate_systems=elements_to_coordinate_systems,
+        table_key=table_key,
+        library_key=library_key,
+    )
+    _assert_spatial_basis(adata, spatial_key)
+    return adata, library_key
+
+
 def _spatial_neighbors(
     adata: AnnData | SpatialData,
     *,
@@ -397,15 +416,13 @@ def _spatial_neighbors(
     copy: bool = False,
 ) -> SpatialNeighborsResult | None:
     """Internal implementation of spatial_neighbors (no deprecation warning)."""
-    adata, library_key = _resolve_spatial_data(
+    adata, library_key = _prepare_spatial_neighbors_input(
         adata,
         spatial_key=spatial_key,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
     )
-
-    _assert_spatial_basis(adata, spatial_key)
 
     if builder is not None:
         _validate_no_legacy_params(
@@ -483,13 +500,18 @@ def spatial_neighbors_knn(
         transform=transform_enum,
         set_diag=set_diag,
     )
-    return _spatial_neighbors(
+    adata, library_key = _prepare_spatial_neighbors_input(
         adata,
         spatial_key=spatial_key,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+    )
+    return _run_spatial_neighbors(
+        adata,
         builder=builder,
+        spatial_key=spatial_key,
+        library_key=library_key,
         key_added=key_added,
         copy=copy,
     )
@@ -540,13 +562,18 @@ def spatial_neighbors_radius(
         transform=transform_enum,
         set_diag=set_diag,
     )
-    return _spatial_neighbors(
+    adata, library_key = _prepare_spatial_neighbors_input(
         adata,
         spatial_key=spatial_key,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+    )
+    return _run_spatial_neighbors(
+        adata,
         builder=builder,
+        spatial_key=spatial_key,
+        library_key=library_key,
         key_added=key_added,
         copy=copy,
     )
@@ -592,13 +619,18 @@ def spatial_neighbors_delaunay(
         transform=transform_enum,
         set_diag=set_diag,
     )
-    return _spatial_neighbors(
+    adata, library_key = _prepare_spatial_neighbors_input(
         adata,
         spatial_key=spatial_key,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+    )
+    return _run_spatial_neighbors(
+        adata,
         builder=builder,
+        spatial_key=spatial_key,
+        library_key=library_key,
         key_added=key_added,
         copy=copy,
     )
@@ -653,13 +685,18 @@ def spatial_neighbors_grid(
         transform=transform_enum,
         set_diag=set_diag,
     )
-    return _spatial_neighbors(
+    adata, library_key = _prepare_spatial_neighbors_input(
         adata,
         spatial_key=spatial_key,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+    )
+    return _run_spatial_neighbors(
+        adata,
         builder=builder,
+        spatial_key=spatial_key,
+        library_key=library_key,
         key_added=key_added,
         copy=copy,
     )
@@ -685,23 +722,17 @@ def _run_spatial_neighbors(
     start = logg.info(
         f"Creating graph using `{builder.coord_type}` coordinates and `{builder.transform}` transform and `{len(libs)}` libraries."
     )
-    _build_fun = partial(
-        _spatial_neighbor,
-        spatial_key=spatial_key,
-        builder=builder,
-    )
-
     if library_key is not None:
         mats: list[tuple[spmatrix, spmatrix]] = []
         ixs: list[int] = []
         for lib in libs:
             ixs.extend(np.where(adata.obs[library_key] == lib)[0])
-            mats.append(_build_fun(adata[adata.obs[library_key] == lib]))
+            mats.append(builder.build(adata[adata.obs[library_key] == lib].obsm[spatial_key]))
         ixs = cast(list[int], np.argsort(ixs).tolist())
         Adj = block_diag([m[0] for m in mats], format="csr")[ixs, :][:, ixs]
         Dst = block_diag([m[1] for m in mats], format="csr")[ixs, :][:, ixs]
     else:
-        Adj, Dst = _build_fun(adata)
+        Adj, Dst = builder.build(adata.obsm[spatial_key])
 
     neighs_key = Key.uns.spatial_neighs(key_added)
     conns_key = Key.obsp.spatial_conn(key_added)
@@ -724,19 +755,6 @@ def _run_spatial_neighbors(
     _save_data(adata, attr="obsp", key=conns_key, data=Adj)
     _save_data(adata, attr="obsp", key=dists_key, data=Dst, prefix=False)
     _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
-
-
-def _spatial_neighbor(
-    adata: AnnData,
-    spatial_key: str = Key.obsm.spatial,
-    builder: GraphBuilder | None = None,
-) -> tuple[csr_matrix, csr_matrix]:
-    if builder is None:
-        raise ValueError("No graph builder was provided.")
-
-    coords = adata.obsm[spatial_key]
-    return builder.build(coords)
-
 
 @d.dedent
 def mask_graph(
