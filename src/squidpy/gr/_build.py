@@ -356,66 +356,6 @@ def spatial_neighbors(
             FutureWarning,
             stacklevel=2,
         )
-    return _spatial_neighbors(
-        adata,
-        spatial_key=spatial_key,
-        elements_to_coordinate_systems=elements_to_coordinate_systems,
-        table_key=table_key,
-        library_key=library_key,
-        coord_type=coord_type,
-        n_neighs=n_neighs,
-        radius=radius,
-        delaunay=delaunay,
-        n_rings=n_rings,
-        percentile=percentile,
-        transform=transform,
-        set_diag=set_diag,
-        builder=builder,
-        key_added=key_added,
-        copy=copy,
-    )
-
-
-def _prepare_spatial_neighbors_input(
-    adata: AnnData | SpatialData,
-    *,
-    spatial_key: str,
-    elements_to_coordinate_systems: dict[str, str] | None,
-    table_key: str | None,
-    library_key: str | None,
-) -> tuple[AnnData, str | None]:
-    """Resolve input data and validate the requested spatial basis."""
-    adata, library_key = _resolve_spatial_data(
-        adata,
-        spatial_key=spatial_key,
-        elements_to_coordinate_systems=elements_to_coordinate_systems,
-        table_key=table_key,
-        library_key=library_key,
-    )
-    _assert_spatial_basis(adata, spatial_key)
-    return adata, library_key
-
-
-def _spatial_neighbors(
-    adata: AnnData | SpatialData,
-    *,
-    spatial_key: str = Key.obsm.spatial,
-    elements_to_coordinate_systems: dict[str, str] | None = None,
-    table_key: str | None = None,
-    library_key: str | None = None,
-    coord_type: str | CoordType | None = None,
-    n_neighs: int | None = None,
-    radius: float | tuple[float, float] | None = None,
-    delaunay: bool | None = None,
-    n_rings: int | None = None,
-    percentile: float | None = None,
-    transform: str | Transform | None = None,
-    set_diag: bool | None = None,
-    builder: GraphBuilder | None = None,
-    key_added: str = "spatial",
-    copy: bool = False,
-) -> SpatialNeighborsResult | None:
-    """Internal implementation of spatial_neighbors (no deprecation warning)."""
     adata, library_key = _prepare_spatial_neighbors_input(
         adata,
         spatial_key=spatial_key,
@@ -459,6 +399,26 @@ def _spatial_neighbors(
     return _run_spatial_neighbors(
         adata, builder=builder, spatial_key=spatial_key, library_key=library_key, key_added=key_added, copy=copy
     )
+
+
+def _prepare_spatial_neighbors_input(
+    adata: AnnData | SpatialData,
+    *,
+    spatial_key: str,
+    elements_to_coordinate_systems: dict[str, str] | None,
+    table_key: str | None,
+    library_key: str | None,
+) -> tuple[AnnData, str | None]:
+    """Resolve input data and validate the requested spatial basis."""
+    adata, library_key = _resolve_spatial_data(
+        adata,
+        spatial_key=spatial_key,
+        elements_to_coordinate_systems=elements_to_coordinate_systems,
+        table_key=table_key,
+        library_key=library_key,
+    )
+    _assert_spatial_basis(adata, spatial_key)
+    return adata, library_key
 
 
 @d.dedent
