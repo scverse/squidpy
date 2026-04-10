@@ -36,6 +36,12 @@ with matching sparsity structure:
   graph-distance semantics such as ring number.
 - When subclassing {class}`~squidpy.gr.neighbors.GraphBuilderCSR`, both should be
   returned as {class}`~scipy.sparse.csr_matrix`.
+- For CSR-based builders, ``adj`` often behaves like a boolean or indicator
+  matrix describing whether an edge is present, even if it is stored with a
+  numeric dtype such as ``float32``. ``dst`` stores edge-associated values such
+  as distances and will often use a floating-point dtype. The exact dtype choice
+  is left to the builder implementation and may depend on performance, memory,
+  and numerical accuracy requirements.
 - By convention, ``dst`` should have a zero diagonal, and ``adj`` should only
   have a non-zero diagonal when ``set_diag=True``.
 
