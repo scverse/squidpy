@@ -20,12 +20,12 @@ from spatialdata.models import Image2DModel, Labels2DModel
 # Tile-boundary QC fixture
 # ---------------------------------------------------------------------------
 
-_IMAGE_SIZE = 400
-_TILE_BORDERS = (133, 267)  # 3×3 grid on 400 px → borders at 133, 267
+_IMAGE_SIZE = 600
+_TILE_BORDERS = (200, 400)  # 3×3 grid on 600 px → borders at 200, 400
 _BORDER_GAP = 2  # pixels zeroed at each tile border
 _CELL_GAP = 2  # minimum gap between any two cells
-_N_CELLS_TARGET = 40
-_SEMI_AXIS_RANGE = (8, 20)  # semi-axis lengths in pixels
+_N_CELLS_TARGET = 120
+_SEMI_AXIS_RANGE = (6, 16)  # semi-axis lengths in pixels
 
 
 @dataclass

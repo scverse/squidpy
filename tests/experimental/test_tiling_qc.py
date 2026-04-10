@@ -214,11 +214,12 @@ class TestCalculateTilingQC:
         )
         assert "centroid_y" in adata.obs.columns
         assert "centroid_x" in adata.obs.columns
-        # Centroids should be within image bounds (400x400)
+        # Centroids should be within image bounds
+        from tests.experimental.conftest import _IMAGE_SIZE
         assert (adata.obs["centroid_y"] >= 0).all()
         assert (adata.obs["centroid_x"] >= 0).all()
-        assert (adata.obs["centroid_y"] < 400).all()
-        assert (adata.obs["centroid_x"] < 400).all()
+        assert (adata.obs["centroid_y"] < _IMAGE_SIZE).all()
+        assert (adata.obs["centroid_x"] < _IMAGE_SIZE).all()
 
     def test_params_stored_in_uns(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
