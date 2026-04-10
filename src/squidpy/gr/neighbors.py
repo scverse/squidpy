@@ -9,7 +9,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from itertools import chain
-from typing import cast
+from typing import Generic, TypeVar, cast
 
 import numpy as np
 from fast_array_utils import stats as fau_stats
@@ -29,10 +29,14 @@ from squidpy._constants._constants import CoordType, Transform
 from squidpy._utils import NDArrayA
 from squidpy._validators import assert_positive
 
-__all__ = ["GraphBuilder", "KNNBuilder", "RadiusBuilder", "DelaunayBuilder", "GridBuilder"]
+__all__ = ["GraphBuilder", "GraphBuilderCSR", "KNNBuilder", "RadiusBuilder", "DelaunayBuilder", "GridBuilder"]
 
 
-class GraphBuilder(ABC):
+CoordT = TypeVar("CoordT")
+GraphMatrixT = TypeVar("GraphMatrixT")
+
+
+class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
     """Base class for spatial graph construction strategies."""
 
     def __init__(
@@ -50,44 +54,67 @@ class GraphBuilder(ABC):
     def coord_type(self) -> CoordType:
         """Coordinate system supported by this builder."""
 
+    def build(self, coords: CoordT) -> tuple[GraphMatrixT, GraphMatrixT]:
+        adj, dst = self.build_graph(coords)
+        adj, dst = self.apply_filters(adj, dst)
+        adj, dst = self.apply_percentile(adj, dst)
+        adj, dst = self.apply_transform(adj, dst)
+        return adj, dst
+
+
+    @abstractmethod
+    def build_graph(self, coords: CoordT) -> tuple[GraphMatrixT, GraphMatrixT]:
+        """Construct raw adjacency and distance matrices."""
+
+    def apply_filters(self, adj: GraphMatrixT, dst: GraphMatrixT) -> tuple[GraphMatrixT, GraphMatrixT]:
+        """Apply builder-specific post-processing filters."""
+        return adj, dst
+
+    def apply_percentile(self, adj: GraphMatrixT, dst: GraphMatrixT) -> tuple[GraphMatrixT, GraphMatrixT]:
+        return adj, dst
+
+    def apply_transform(self, adj: GraphMatrixT, dst: GraphMatrixT) -> tuple[GraphMatrixT, GraphMatrixT]:
+        return adj, dst
+
+
+class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
+    """CSR-based graph construction strategy."""
+
     def build(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SparseEfficiencyWarning)
-            adj, dst = self.build_graph(coords)
-
-        self.apply_filters(adj, dst)
-        self._apply_percentile(adj, dst)
-        adj.eliminate_zeros()
-        dst.eliminate_zeros()
-
-        return self._apply_transform(adj), dst
+            return super().build(coords)
 
     @abstractmethod
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         """Construct raw adjacency and distance matrices."""
 
-    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> None:
+    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
         """Apply builder-specific post-processing filters."""
-        return None
+        return adj, dst
 
-    def _apply_percentile(self, adj: csr_matrix, dst: csr_matrix) -> None:
+    def apply_percentile(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
         if self.percentile is not None and self.coord_type == CoordType.GENERIC:
             threshold = np.percentile(dst.data, self.percentile)
             adj[dst > threshold] = 0.0
             dst[dst > threshold] = 0.0
+        return adj, dst
 
-    def _apply_transform(self, adj: csr_matrix) -> csr_matrix:
+    def apply_transform(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
+        adj.eliminate_zeros()
+        dst.eliminate_zeros()
+
         if self.transform == Transform.SPECTRAL:
-            return cast(csr_matrix, _transform_a_spectral(adj))
+            return cast(csr_matrix, _transform_a_spectral(adj)), dst
         if self.transform == Transform.COSINE:
-            return cast(csr_matrix, _transform_a_cosine(adj))
+            return cast(csr_matrix, _transform_a_cosine(adj)), dst
         if self.transform == Transform.NONE:
-            return adj
+            return adj, dst
 
         raise NotImplementedError(f"Transform `{self.transform}` is not yet implemented.")
 
 
-class KNNBuilder(GraphBuilder):
+class KNNBuilder(GraphBuilderCSR):
     """Build a generic k-nearest-neighbor spatial graph."""
 
     def __init__(
@@ -125,7 +152,7 @@ class KNNBuilder(GraphBuilder):
         return adj, dst
 
 
-class RadiusBuilder(GraphBuilder):
+class RadiusBuilder(GraphBuilderCSR):
     """Build a generic radius-based spatial graph."""
 
     def __init__(
@@ -163,12 +190,13 @@ class RadiusBuilder(GraphBuilder):
         dst.setdiag(0.0)
         return adj, dst
 
-    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> None:
+    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
         if isinstance(self.radius, Iterable):
             _filter_by_radius_interval(adj, dst, self.radius)
+        return adj, dst
 
 
-class DelaunayBuilder(GraphBuilder):
+class DelaunayBuilder(GraphBuilderCSR):
     """Build a generic spatial graph from a Delaunay triangulation."""
 
     def __init__(
@@ -204,12 +232,13 @@ class DelaunayBuilder(GraphBuilder):
         dst.setdiag(0.0)
         return adj, dst
 
-    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> None:
+    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
         if isinstance(self.radius, Iterable):
             _filter_by_radius_interval(adj, dst, self.radius)
+        return adj, dst
 
 
-class GridBuilder(GraphBuilder):
+class GridBuilder(GraphBuilderCSR):
     """Build a grid-based spatial graph."""
 
     def __init__(

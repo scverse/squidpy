@@ -2,20 +2,29 @@
 
 ## Custom graph builders
 
-The `squidpy.gr.neighbors` module exposes a {class}`~squidpy.gr.neighbors.GraphBuilder`
-base class that all built-in graph construction strategies inherit from.
-You can implement your own strategy by subclassing it.
+The `squidpy.gr.neighbors` module exposes two builder base classes:
+
+- {class}`~squidpy.gr.neighbors.GraphBuilder` is the generic builder pipeline.
+  Use it when you want to plug in a custom coordinate type or sparse-matrix backend.
+- {class}`~squidpy.gr.neighbors.GraphBuilderCSR` is the CSR-specialized builder used
+  by the built-in graph construction strategies. Use it when your builder returns
+  {class}`~scipy.sparse.csr_matrix` objects and should reuse the default CSR-specific
+  percentile filtering, transform handling, and sparse warning suppression.
 
 ### What to override
 
-| Method / property | Required | Purpose |
+| Base class | Method / property | Required | Purpose |
 |---|---|---|
-| {attr}`~squidpy.gr.neighbors.GraphBuilder.coord_type` | yes | Return the {class}`~squidpy._constants._constants.CoordType` this builder supports. |
-| {meth}`~squidpy.gr.neighbors.GraphBuilder.build_graph` | yes | Construct and return ``(adj, dst)`` as {class}`~scipy.sparse.csr_matrix` pair. |
-| {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_filters` | no | Post-processing on the raw ``adj``/``dst`` (e.g. radius-interval pruning). Called before percentile filtering and transform. |
+| {class}`~squidpy.gr.neighbors.GraphBuilder` | {attr}`~squidpy.gr.neighbors.GraphBuilder.coord_type` | yes | Return the {class}`~squidpy._constants._constants.CoordType` this builder supports. |
+| {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.build_graph` | yes | Construct and return ``(adj, dst)`` using the coordinate and matrix types of your custom backend. |
+| {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_filters` | no | Post-process the raw ``adj``/``dst`` before percentile filtering and transform. |
+| {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_percentile` | no | Override percentile handling when the backend needs custom behavior. |
+| {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_transform` | no | Override transform handling when the backend needs custom behavior. |
+| {class}`~squidpy.gr.neighbors.GraphBuilderCSR` | {meth}`~squidpy.gr.neighbors.GraphBuilderCSR.build_graph` | yes | Construct and return ``(adj, dst)`` as a {class}`~scipy.sparse.csr_matrix` pair. |
 
-The base class handles percentile filtering, adjacency transforms, and
-{class}`~scipy.sparse.SparseEfficiencyWarning` suppression automatically.
+The generic builder only defines the pipeline. The CSR-specialized builder adds the
+built-in CSR behavior for percentile filtering, adjacency transforms, and
+{class}`~scipy.sparse.SparseEfficiencyWarning` suppression.
 
 Here ``adj`` and ``dst`` are square sparse matrices of shape ``(n_obs, n_obs)``
 with matching sparsity structure:
@@ -25,7 +34,8 @@ with matching sparsity structure:
 - ``dst`` is the distance matrix for those same edges. For generic graphs this is
   usually the Euclidean edge length. For grid builders it may instead encode
   graph-distance semantics such as ring number.
-- Both should be returned as {class}`~scipy.sparse.csr_matrix`.
+- When subclassing {class}`~squidpy.gr.neighbors.GraphBuilderCSR`, both should be
+  returned as {class}`~scipy.sparse.csr_matrix`.
 - By convention, ``dst`` should have a zero diagonal, and ``adj`` should only
   have a non-zero diagonal when ``set_diag=True``.
 
@@ -43,10 +53,10 @@ from scipy.sparse import csr_matrix
 from snnpy import build_snn_model
 
 from squidpy._constants._constants import CoordType
-from squidpy.gr.neighbors import GraphBuilder
+from squidpy.gr.neighbors import GraphBuilderCSR
 
 
-class SNNRadiusBuilder(GraphBuilder):
+class SNNRadiusBuilder(GraphBuilderCSR):
     """Radius graph using the SNN fixed-radius search backend."""
 
     def __init__(self, radius: float, **kwargs):

@@ -83,7 +83,7 @@ def _resolve_graph_builder(
     transform: str | Transform | None,
     set_diag: bool | None,
     has_spatial_uns: bool = False,
-) -> GraphBuilder:
+) -> GraphBuilder[Any, Any]:
     n_neighs_was_set = n_neighs is not None
     n_neighs = 6 if n_neighs is None else n_neighs
     delaunay = False if delaunay is None else delaunay
@@ -209,7 +209,7 @@ def spatial_neighbors(
     percentile: float | None = None,
     transform: str | Transform | None = None,
     set_diag: bool | None = None,
-    builder: GraphBuilder | None = None,
+    builder: GraphBuilder[Any, Any] | None = None,
     key_added: str = "spatial",
     copy: bool = False,
 ) -> SpatialNeighborsResult | None:
@@ -672,7 +672,7 @@ def spatial_neighbors_grid(
 def _run_spatial_neighbors(
     adata: AnnData,
     *,
-    builder: GraphBuilder,
+    builder: GraphBuilder[Any, Any],
     spatial_key: str = Key.obsm.spatial,
     library_key: str | None = None,
     key_added: str = "spatial",
