@@ -286,6 +286,9 @@ def spatial_neighbors(
         Advanced graph construction strategy. When provided, all other graph-construction
         arguments (``coord_type``, ``n_neighs``, ``radius``, ``delaunay``, ``n_rings``,
         ``percentile``, ``transform``, ``set_diag``) must be left as ``None``.
+        Built-in builders subclass {class}`~squidpy.gr.neighbors.GraphBuilderCSR`,
+        while custom backends can implement the more generic
+        {class}`~squidpy.gr.neighbors.GraphBuilder` interface directly.
     key_added
         Key which controls where the results are saved if ``copy = False``.
     %(copy)s

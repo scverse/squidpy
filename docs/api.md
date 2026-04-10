@@ -126,6 +126,7 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     :toctree: api
 
     gr.neighbors.GraphBuilder
+    gr.neighbors.GraphBuilderCSR
     gr.neighbors.KNNBuilder
     gr.neighbors.RadiusBuilder
     gr.neighbors.DelaunayBuilder

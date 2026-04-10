@@ -14,7 +14,7 @@ The `squidpy.gr.neighbors` module exposes two builder base classes:
 ### What to override
 
 | Base class | Method / property | Required | Purpose |
-|---|---|---|
+|---|---|---|---|
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {attr}`~squidpy.gr.neighbors.GraphBuilder.coord_type` | yes | Return the {class}`~squidpy._constants._constants.CoordType` this builder supports. |
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.build_graph` | yes | Construct and return ``(adj, dst)`` using the coordinate and matrix types of your custom backend. |
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_filters` | no | Post-process the raw ``adj``/``dst`` before percentile filtering and transform. |
