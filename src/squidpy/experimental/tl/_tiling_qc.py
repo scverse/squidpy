@@ -487,7 +487,6 @@ def calculate_tiling_qc(
 
     try:
         import ipywidgets  # noqa: F401
-
         from tqdm.auto import tqdm
     except ImportError:
         from tqdm.std import tqdm
