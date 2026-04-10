@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import functools
 import inspect
+import os
 import warnings
 from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
 from contextlib import contextmanager
 from enum import Enum
-import os
 from multiprocessing import Manager
 from queue import Queue
 from threading import Thread
