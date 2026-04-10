@@ -637,7 +637,10 @@ def spatial_neighbors_grid(
     n_rings
         Number of rings of neighbors. Defaults to ``1``.
     delaunay
-        Whether to compute the grid graph from Delaunay triangulation.
+        Whether to derive the base grid connectivity from a Delaunay triangulation.
+        This is still grid mode: unlike :func:`spatial_neighbors_delaunay`, the
+        resulting distance matrix encodes grid or ring distances rather than
+        Euclidean edge lengths.
     %(graph_common_params)s
     %(copy)s
 

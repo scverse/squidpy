@@ -196,7 +196,11 @@ class RadiusBuilder(GraphBuilderCSR):
 
 
 class DelaunayBuilder(GraphBuilderCSR):
-    """Build a generic spatial graph from a Delaunay triangulation."""
+    """Build a generic point-cloud graph from a Delaunay triangulation.
+
+    Unlike ``GridBuilder(delaunay=True)``, this builder uses the triangulation as the
+    graph itself and stores real Euclidean edge lengths in ``dst``.
+    """
 
     def __init__(
         self,
@@ -238,7 +242,12 @@ class DelaunayBuilder(GraphBuilderCSR):
 
 
 class GridBuilder(GraphBuilderCSR):
-    """Build a grid-based spatial graph."""
+    """Build a grid-based spatial graph.
+
+    When ``delaunay=True``, Delaunay triangulation is used only to derive the base
+    grid connectivity. The resulting ``dst`` still encodes grid or ring distances,
+    not geometric Euclidean edge lengths.
+    """
 
     def __init__(
         self,
