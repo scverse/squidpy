@@ -9,7 +9,6 @@ from squidpy.experimental.pl._tiling_qc import tiling_qc
 from squidpy.experimental.tl._tiling_qc import calculate_tiling_qc
 from tests.conftest import PlotTester, PlotTesterMeta
 
-
 # ---------------------------------------------------------------------------
 # Core behavioural tests
 # ---------------------------------------------------------------------------
@@ -21,7 +20,10 @@ class TestCalculateTilingQC:
     def test_returns_anndata_with_scores(self, sdata_tile_boundary):
         sdata, gt = sdata_tile_boundary
         adata = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
         )
         assert adata.n_obs == len(gt.cut_cell_ids) + len(gt.intact_cell_ids)
         assert adata.n_vars == 0
@@ -31,7 +33,10 @@ class TestCalculateTilingQC:
     def test_cut_cells_score_higher_than_intact(self, sdata_tile_boundary):
         sdata, gt = sdata_tile_boundary
         adata = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
         )
         obs = adata.obs
         cut = obs[obs["label_id"].isin(gt.cut_cell_ids)]["max_straight_edge_ratio"].dropna()
@@ -42,10 +47,16 @@ class TestCalculateTilingQC:
         """Tiling must not change results — scores should be identical."""
         sdata, _ = sdata_tile_boundary
         adata_tiled = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
         )
         adata_single = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=2000, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=2000,
+            inplace=False,
         )
         df1 = adata_tiled.obs.set_index("label_id").sort_index()
         df2 = adata_single.obs.set_index("label_id").sort_index()
@@ -53,7 +64,10 @@ class TestCalculateTilingQC:
         assert set(df1.index) == set(df2.index)
         for col in ["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"]:
             np.testing.assert_allclose(
-                df1[col].values, df2[col].values, atol=1e-10, equal_nan=True,
+                df1[col].values,
+                df2[col].values,
+                atol=1e-10,
+                equal_nan=True,
             )
 
     def test_invalid_labels_key(self, sdata_tile_boundary):
