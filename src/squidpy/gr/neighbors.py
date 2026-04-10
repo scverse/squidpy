@@ -61,7 +61,6 @@ class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
         adj, dst = self.apply_transform(adj, dst)
         return adj, dst
 
-
     @abstractmethod
     def build_graph(self, coords: CoordT) -> tuple[GraphMatrixT, GraphMatrixT]:
         """Construct raw adjacency and distance matrices."""
