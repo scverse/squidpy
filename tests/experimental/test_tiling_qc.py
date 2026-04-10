@@ -216,6 +216,7 @@ class TestCalculateTilingQC:
         assert "centroid_x" in adata.obs.columns
         # Centroids should be within image bounds
         from tests.experimental.conftest import _IMAGE_SIZE
+
         assert (adata.obs["centroid_y"] >= 0).all()
         assert (adata.obs["centroid_x"] >= 0).all()
         assert (adata.obs["centroid_y"] < _IMAGE_SIZE).all()
