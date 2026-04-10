@@ -388,9 +388,9 @@ def extract_labels_tile_lazy(
 
 def _zero_non_owned(tile_labels: np.ndarray, owned_ids: frozenset[int]) -> None:
     """Zero out labels not in *owned_ids* (in-place)."""
-    for lid in np.unique(tile_labels):
-        if lid != 0 and lid not in owned_ids:
-            tile_labels[tile_labels == lid] = 0
+    owned_arr = np.array(list(owned_ids), dtype=tile_labels.dtype)
+    mask = ~np.isin(tile_labels, owned_arr) & (tile_labels != 0)
+    tile_labels[mask] = 0
 
 
 # ---------------------------------------------------------------------------

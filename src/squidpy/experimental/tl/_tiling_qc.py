@@ -18,6 +18,7 @@ in :mod:`squidpy.experimental.im._tiling`, so this scales to
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 import anndata as ad
@@ -25,6 +26,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
+from numba import njit
 from skimage.measure import find_contours, regionprops
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
@@ -49,10 +51,103 @@ _MIN_CELL_AREA = 20
 # sub-pixel contours from marching squares.
 _DEFAULT_DISTANCE_TOL = 0.75
 
+# Maximum contour points to analyse.  Longer contours are resampled
+# to this length via equidistant arc-length interpolation to bound
+# the O(n²) two-pointer scan.
+_MAX_CONTOUR_POINTS = 500
+
+_SCORE_COLUMNS = ["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"]
+_NAN_SCORES = {col: np.nan for col in _SCORE_COLUMNS}
+
 
 # ---------------------------------------------------------------------------
 # Core geometry
 # ---------------------------------------------------------------------------
+
+
+@njit(cache=True)
+def _collinear_scan(
+    contour: np.ndarray,
+    cum_arc: np.ndarray,
+    total_arc: float,
+    distance_tol: float,
+) -> tuple[float, float]:
+    """Numba-accelerated two-pointer collinearity scan.
+
+    For each start index, extends the end index as long as all
+    intermediate points stay within ``distance_tol`` of the
+    start→end line.  Returns ``(best_length, best_angle)``.
+    """
+    n = contour.shape[0]
+    best_len = 0.0
+    best_angle = 0.0
+
+    for start in range(n - 2):
+        remaining_arc = total_arc - cum_arc[start]
+        if remaining_arc <= best_len:
+            break
+
+        for end in range(start + 2, n):
+            d0 = contour[end, 0] - contour[start, 0]
+            d1 = contour[end, 1] - contour[start, 1]
+            seg_len = math.sqrt(d0 * d0 + d1 * d1)
+            if seg_len < 1e-12:
+                continue
+
+            # Max perpendicular distance of intermediate points
+            max_perp = 0.0
+            for k in range(start + 1, end):
+                r0 = contour[k, 0] - contour[start, 0]
+                r1 = contour[k, 1] - contour[start, 1]
+                perp = abs(d0 * r1 - d1 * r0) / seg_len
+                if perp > max_perp:
+                    max_perp = perp
+                if perp > distance_tol:
+                    break
+
+            if max_perp > distance_tol:
+                break
+
+            if seg_len > best_len:
+                best_len = seg_len
+                best_angle = math.atan2(d0, d1)
+
+    return best_len, best_angle
+
+
+def _resample_contour(contour: np.ndarray, max_points: int) -> np.ndarray:
+    """Resample a contour to at most *max_points* via arc-length interpolation.
+
+    Fully vectorised using :func:`numpy.searchsorted` — no Python
+    loops.  Preserves geometry far better than naive stride-based
+    subsampling because points are placed equidistantly along the
+    contour arc.
+    """
+    n = len(contour)
+    if n <= max_points:
+        return contour
+
+    diffs = np.diff(contour, axis=0)
+    seg_lengths = np.sqrt((diffs**2).sum(axis=1))
+    cum_arc = np.empty(n, dtype=np.float64)
+    cum_arc[0] = 0.0
+    cum_arc[1:] = np.cumsum(seg_lengths)
+    total = cum_arc[-1]
+
+    if total < 1e-12:
+        return contour[:max_points]
+
+    targets = np.linspace(0.0, total, max_points)
+
+    # For each target, find the segment it falls into
+    idx = np.searchsorted(cum_arc, targets, side="right") - 1
+    idx = np.clip(idx, 0, n - 2)
+
+    seg = cum_arc[idx + 1] - cum_arc[idx]
+    safe_seg = np.where(seg < 1e-12, 1.0, seg)
+    frac = np.where(seg < 1e-12, 0.0, (targets - cum_arc[idx]) / safe_seg)
+
+    return contour[idx] + frac[:, np.newaxis] * (contour[idx + 1] - contour[idx])
 
 
 def _longest_collinear_segment(
@@ -61,10 +156,10 @@ def _longest_collinear_segment(
 ) -> tuple[float, float]:
     """Find the longest collinear run of contour points.
 
-    Uses a two-pointer approach: for each start index, extend the end
-    index as long as all intermediate points are within
-    ``distance_tol`` of the line from start to end.  Early exit when
-    remaining points cannot beat the current best.
+    Uses a numba-compiled two-pointer scan with three contour
+    rotations to handle the closure point.  Long contours are
+    resampled to at most :data:`_MAX_CONTOUR_POINTS` via arc-length
+    interpolation to bound worst-case runtime.
 
     Parameters
     ----------
@@ -85,42 +180,47 @@ def _longest_collinear_segment(
     if n < 3:
         return 0.0, 0.0
 
+    pts = np.asarray(contour, dtype=np.float64)
+    pts = _resample_contour(pts, _MAX_CONTOUR_POINTS)
+    n = len(pts)
+
+    # find_contours returns closed contours (first ≈ last point)
+    closed = np.sqrt(((pts[0] - pts[-1]) ** 2).sum()) < 1.0
+
+    # For closed contours, drop the duplicate last point and precompute
+    # segment lengths once — rotations reuse the same distances.
+    if closed and n > 6:
+        core = pts[:-1]
+        core_diffs = np.diff(core, axis=0)
+        core_seg_lens = np.sqrt((core_diffs**2).sum(axis=1))
+        rotations = [0, len(core) // 3, 2 * len(core) // 3]
+    else:
+        core = pts
+        core_diffs = np.diff(core, axis=0)
+        core_seg_lens = np.sqrt((core_diffs**2).sum(axis=1))
+        rotations = [0]
+
     best_len = 0.0
     best_angle = 0.0
 
-    # Precompute cumulative arc length for early-exit bound
-    diffs_all = np.diff(contour, axis=0)
-    seg_lengths = np.sqrt((diffs_all**2).sum(axis=1))
-    cum_arc = np.zeros(n, dtype=np.float64)
-    cum_arc[1:] = np.cumsum(seg_lengths)
-    total_arc = cum_arc[-1]
+    # Scan at multiple rotations so straight segments crossing the
+    # closure point are not split.
+    for shift in rotations:
+        if shift == 0:
+            rotated = core
+            sl = core_seg_lens
+        else:
+            rotated = np.roll(core, -shift, axis=0)
+            sl = np.roll(core_seg_lens, -shift)
 
-    for start in range(n - 2):
-        # Upper bound: arc length from start to end of contour
-        remaining_arc = total_arc - cum_arc[start]
-        if remaining_arc <= best_len:
-            break  # no start from here or later can beat best
+        cum_arc = np.empty(len(rotated), dtype=np.float64)
+        cum_arc[0] = 0.0
+        cum_arc[1:] = np.cumsum(sl)
 
-        for end in range(start + 2, n):
-            p0 = contour[start]
-            p1 = contour[end]
-            d = p1 - p0
-            seg_len = np.sqrt(d[0] ** 2 + d[1] ** 2)
-            if seg_len < 1e-12:
-                continue
-
-            # Perpendicular distances of all intermediate points
-            intermediates = contour[start + 1 : end]
-            rel = intermediates - p0
-            cross = np.abs(d[0] * rel[:, 1] - d[1] * rel[:, 0])
-            max_perp = cross.max() / seg_len
-
-            if max_perp > distance_tol:
-                break
-
-            if seg_len > best_len:
-                best_len = seg_len
-                best_angle = float(np.arctan2(d[0], d[1]))
+        length, angle = _collinear_scan(rotated, cum_arc, cum_arc[-1], distance_tol)
+        if length > best_len:
+            best_len = length
+            best_angle = angle
 
     return best_len, best_angle
 
@@ -213,10 +313,7 @@ def _score_tile(
     """
     regions = regionprops(tile_labels)
     if not regions:
-        return pd.DataFrame(
-            columns=["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"],
-            dtype=float,
-        )
+        return pd.DataFrame(columns=_SCORE_COLUMNS, dtype=float)
 
     rows: dict[int, dict[str, float]] = {}
 
@@ -225,39 +322,25 @@ def _score_tile(
         area = region.area
 
         if area < min_area * (downsample**2):
-            rows[lid] = {
-                "max_straight_edge_ratio": np.nan,
-                "cardinal_alignment_score": np.nan,
-                "cut_score": np.nan,
-            }
+            rows[lid] = dict(_NAN_SCORES)
             continue
 
-        # Extract bbox crop for efficient contour finding.
         # Pad with 1px of zeros so find_contours can trace cells
         # that touch the crop edge (e.g., cells filling their bbox).
         min_row, min_col, max_row, max_col = region.bbox
         crop = (tile_labels[min_row:max_row, min_col:max_col] == lid).astype(np.float32)
         crop = np.pad(crop, 1, mode="constant", constant_values=0)
 
-        # Optionally downsample for speed
         if downsample > 1:
             crop = crop[::downsample, ::downsample]
 
         contours = find_contours(crop, 0.5)
         if not contours:
-            rows[lid] = {
-                "max_straight_edge_ratio": np.nan,
-                "cardinal_alignment_score": np.nan,
-                "cut_score": np.nan,
-            }
+            rows[lid] = dict(_NAN_SCORES)
             continue
 
-        # Use the longest contour (exterior boundary)
         contour = max(contours, key=len)
-
-        # Scale area to analysis resolution for consistent normalisation
         analysis_area = area / (downsample**2) if downsample > 1 else area
-
         ser, cas, cs = _straight_edge_metrics(contour, analysis_area, distance_tol)
 
         rows[lid] = {
@@ -400,12 +483,29 @@ def calculate_tiling_qc(
     )
 
     # --- Process tiles (labels only — no image needed) ---
-    def _process_one(spec, idx):
-        tile_lbl = extract_labels_tile_lazy(labels_da, spec)
-        logg.debug(f"Tiling QC tile {idx + 1}/{len(specs)}: {len(spec.owned_ids)} cells.")
-        return _score_tile(tile_lbl, distance_tol=distance_tol, min_area=min_area, downsample=downsample)
+    n_cells_total = sum(len(s.owned_ids) for s in specs)
 
-    results = Parallel(n_jobs=n_jobs, prefer="threads")(delayed(_process_one)(spec, i) for i, spec in enumerate(specs))
+    try:
+        import ipywidgets  # noqa: F401
+
+        from tqdm.auto import tqdm
+    except ImportError:
+        from tqdm.std import tqdm
+
+    pbar = tqdm(total=n_cells_total, desc="Scoring cells", unit="cells")
+
+    def _process_one(spec):
+        tile_lbl = extract_labels_tile_lazy(labels_da, spec)
+        df = _score_tile(tile_lbl, distance_tol=distance_tol, min_area=min_area, downsample=downsample)
+        pbar.update(len(spec.owned_ids))
+        return df
+
+    if n_jobs == 1:
+        results = [_process_one(spec) for spec in specs]
+    else:
+        results = Parallel(n_jobs=n_jobs, prefer="threads")(delayed(_process_one)(spec) for spec in specs)
+
+    pbar.close()
     tile_dfs = [df for df in results if not df.empty]
 
     if not tile_dfs:
