@@ -18,6 +18,7 @@ import squidpy as sq
     :toctree: api
 
     gr.spatial_neighbors
+    gr.spatial_neighbors_from_builder
     gr.spatial_neighbors_knn
     gr.spatial_neighbors_radius
     gr.spatial_neighbors_delaunay

@@ -20,7 +20,7 @@ The `squidpy.gr.neighbors` module exposes two builder base classes:
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_filters` | no | Post-process the raw ``adj``/``dst`` before percentile filtering and transform. |
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_percentile` | no | Override percentile handling when the backend needs custom behavior. |
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_transform` | no | Override transform handling when the backend needs custom behavior. |
-| {class}`~squidpy.gr.neighbors.GraphBuilderCSR` | {meth}`~squidpy.gr.neighbors.GraphBuilderCSR.build_graph` | yes | Construct and return ``(adj, dst)`` as a {class}`~scipy.sparse.csr_matrix` pair. |
+
 
 The generic builder only defines the pipeline. The CSR-specialized builder adds the
 built-in CSR behavior for percentile filtering, adjacency transforms, and
@@ -100,5 +100,5 @@ Use it like any other builder:
 ```python
 import squidpy as sq
 
-sq.gr.spatial_neighbors(adata, builder=SNNRadiusBuilder(radius=100.0))
+sq.gr.spatial_neighbors_from_builder(adata, SNNRadiusBuilder(radius=100.0))
 ```

@@ -49,6 +49,7 @@ from squidpy.gr.neighbors import (
 __all__ = [
     "SpatialNeighborsResult",
     "spatial_neighbors",
+    "spatial_neighbors_from_builder",
     "spatial_neighbors_knn",
     "spatial_neighbors_radius",
     "spatial_neighbors_delaunay",
@@ -61,15 +62,6 @@ class SpatialNeighborsResult(NamedTuple):
 
     connectivities: csr_matrix
     distances: csr_matrix
-
-
-def _validate_no_legacy_params(**kwargs: Any) -> None:
-    conflicts = [k for k, v in kwargs.items() if v is not None]
-    if conflicts:
-        raise ValueError(
-            "When `builder` is provided, graph-construction arguments must not be set. "
-            f"Got non-default values for: {', '.join(conflicts)}."
-        )
 
 
 def _resolve_graph_builder(
@@ -209,7 +201,6 @@ def spatial_neighbors(
     percentile: float | None = None,
     transform: str | Transform | None = None,
     set_diag: bool | None = None,
-    builder: GraphBuilder[Any, Any] | None = None,
     key_added: str = "spatial",
     copy: bool = False,
 ) -> SpatialNeighborsResult | None:
@@ -217,16 +208,14 @@ def spatial_neighbors(
     Create a graph from spatial coordinates.
 
     .. deprecated:: 1.6.0
-        The flat-parameter API of ``spatial_neighbors`` is deprecated and will
-        be removed in squidpy v1.7.0.  Use one of the mode-specific functions
-        instead:
+        ``spatial_neighbors`` is deprecated and will be removed in squidpy
+        v1.7.0. Use one of the mode-specific functions instead:
 
         - :func:`spatial_neighbors_knn`
         - :func:`spatial_neighbors_radius`
         - :func:`spatial_neighbors_delaunay`
         - :func:`spatial_neighbors_grid`
-
-        Passing a ``builder`` instance directly remains supported.
+        - :func:`spatial_neighbors_from_builder`
 
     Parameters
     ----------
@@ -243,8 +232,7 @@ def spatial_neighbors(
         `adata` is a :class:`spatialdata.SpatialData`.
     %(library_key)s
     coord_type
-        Type of coordinate system. Must not be set when ``builder`` is given.
-        Valid options are:
+        Type of coordinate system. Valid options are:
 
             - `{c.GRID.s!r}` - grid coordinates.
             - `{c.GENERIC.s!r}` - generic coordinates.
@@ -256,24 +244,23 @@ def spatial_neighbors(
             - `{c.GRID.s!r}` - number of neighboring tiles.
             - `{c.GENERIC.s!r}` - number of neighborhoods for non-grid data. Only used when ``delaunay = False``.
 
-        Defaults to ``6`` when no ``builder`` is provided. Must not be set when ``builder`` is given.
+        Defaults to ``6``.
     radius
-        Only available when ``coord_type = {c.GENERIC.s!r}``. Must not be set when ``builder`` is given.
+        Only available when ``coord_type = {c.GENERIC.s!r}``.
         Depending on the type:
 
             - :class:`float` - compute the graph based on neighborhood radius.
             - :class:`tuple` - prune the final graph to only contain edges in interval `[min(radius), max(radius)]`.
     delaunay
         Whether to compute the graph from Delaunay triangulation. Only used when ``coord_type = {c.GENERIC.s!r}``.
-        Defaults to ``False`` when no ``builder`` is provided. Must not be set when ``builder`` is given.
+        Defaults to ``False``.
     n_rings
         Number of rings of neighbors for grid data. Only used when ``coord_type = {c.GRID.s!r}``.
-        Defaults to ``1`` when no ``builder`` is provided. Must not be set when ``builder`` is given.
+        Defaults to ``1``.
     percentile
         Percentile of the distances to use as threshold. Only used when ``coord_type = {c.GENERIC.s!r}``.
-        Must not be set when ``builder`` is given.
     transform
-        Type of adjacency matrix transform. Must not be set when ``builder`` is given.
+        Type of adjacency matrix transform.
         Valid options are:
 
             - `{t.SPECTRAL.s!r}` - spectral transformation of the adjacency matrix.
@@ -281,14 +268,7 @@ def spatial_neighbors(
             - `{t.NONE.v}` - no transformation of the adjacency matrix.
     set_diag
         Whether to set the diagonal of the spatial connectivities to `1.0`.
-        Defaults to ``False`` when no ``builder`` is provided. Must not be set when ``builder`` is given.
-    builder
-        Advanced graph construction strategy. When provided, all other graph-construction
-        arguments (``coord_type``, ``n_neighs``, ``radius``, ``delaunay``, ``n_rings``,
-        ``percentile``, ``transform``, ``set_diag``) must be left as ``None``.
-        Built-in builders subclass {{class}}`~squidpy.gr.neighbors.GraphBuilderCSR`,
-        while custom backends can implement the more generic
-        {{class}}`~squidpy.gr.neighbors.GraphBuilder` interface directly.
+        Defaults to ``False``.
     key_added
         Key which controls where the results are saved if ``copy = False``.
     %(copy)s
@@ -323,9 +303,6 @@ def spatial_neighbors(
 
         - ``percentile`` only affects generic graphs.
         - ``transform`` and ``set_diag`` apply to all modes.
-        - If ``builder`` is provided, it determines the mode directly.
-          All other graph-construction arguments must be left as
-          ``None``.
         - By default, observations are not treated as their own
           neighbors. The distance matrix always has a zero diagonal.
           The connectivity matrix only gets a nonzero diagonal when
@@ -333,7 +310,7 @@ def spatial_neighbors(
 
     Argument precedence
     -------------------
-    When ``builder`` is not provided, the mode is resolved as follows:
+    The mode is resolved as follows:
 
         - If ``coord_type`` resolves to ``'grid'``, grid mode is used.
           In that case ``radius`` is ignored.
@@ -370,15 +347,14 @@ def spatial_neighbors(
         - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - the spatial distances.
         - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - :class:`dict` containing parameters.
     """
-    if builder is None:
-        warnings.warn(
-            "Calling `spatial_neighbors` without a `builder` argument is deprecated "
-            "and will be removed in squidpy v1.7.0. Use one of the mode-specific "
-            "functions instead: `spatial_neighbors_knn`, `spatial_neighbors_radius`, "
-            "`spatial_neighbors_delaunay`, or `spatial_neighbors_grid`.",
-            FutureWarning,
-            stacklevel=2,
-        )
+    warnings.warn(
+        "Calling `spatial_neighbors` is deprecated and will be removed in squidpy "
+        "v1.7.0. Use `spatial_neighbors_knn`, `spatial_neighbors_radius`, "
+        "`spatial_neighbors_delaunay`, `spatial_neighbors_grid`, or "
+        "`spatial_neighbors_from_builder` instead.",
+        FutureWarning,
+        stacklevel=2,
+    )
     adata, library_key = _prepare_spatial_neighbors_input(
         adata,
         spatial_key=spatial_key,
@@ -386,33 +362,70 @@ def spatial_neighbors(
         table_key=table_key,
         library_key=library_key,
     )
-
-    if builder is not None:
-        _validate_no_legacy_params(
-            coord_type=coord_type,
-            n_neighs=n_neighs,
-            radius=radius,
-            delaunay=delaunay,
-            n_rings=n_rings,
-            percentile=percentile,
-            transform=transform,
-            set_diag=set_diag,
-        )
-    else:
-        builder = _resolve_graph_builder(
-            coord_type=coord_type,
-            n_neighs=n_neighs,
-            radius=radius,
-            delaunay=delaunay,
-            n_rings=n_rings,
-            percentile=percentile,
-            transform=transform,
-            set_diag=set_diag,
-            has_spatial_uns=Key.uns.spatial in adata.uns,
-        )
+    builder = _resolve_graph_builder(
+        coord_type=coord_type,
+        n_neighs=n_neighs,
+        radius=radius,
+        delaunay=delaunay,
+        n_rings=n_rings,
+        percentile=percentile,
+        transform=transform,
+        set_diag=set_diag,
+        has_spatial_uns=Key.uns.spatial in adata.uns,
+    )
 
     return _run_spatial_neighbors(
         adata, builder=builder, spatial_key=spatial_key, library_key=library_key, key_added=key_added, copy=copy
+    )
+
+
+@d.dedent
+def spatial_neighbors_from_builder(
+    adata: AnnData | SpatialData,
+    builder: GraphBuilder[Any, Any],
+    *,
+    spatial_key: str = Key.obsm.spatial,
+    elements_to_coordinate_systems: dict[str, str] | None = None,
+    table_key: str | None = None,
+    library_key: str | None = None,
+    key_added: str = "spatial",
+    copy: bool = False,
+) -> SpatialNeighborsResult | None:
+    """Create a graph from spatial coordinates using an explicit builder instance.
+
+    Parameters
+    ----------
+    %(adata)s
+    builder
+        Graph construction strategy to execute. Built-in builders subclass
+        {{class}}`~squidpy.gr.neighbors.GraphBuilderCSR`, while custom backends
+        can implement the more generic
+        {{class}}`~squidpy.gr.neighbors.GraphBuilder` interface directly.
+    %(spatial_key)s
+    %(sdata_params)s
+    %(library_key)s
+    key_added
+        Key which controls where the results are saved if ``copy = False``.
+    %(copy)s
+
+    Returns
+    -------
+    %(spatial_neighbors_returns)s
+    """
+    adata, library_key = _prepare_spatial_neighbors_input(
+        adata,
+        spatial_key=spatial_key,
+        elements_to_coordinate_systems=elements_to_coordinate_systems,
+        table_key=table_key,
+        library_key=library_key,
+    )
+    return _run_spatial_neighbors(
+        adata,
+        builder=builder,
+        spatial_key=spatial_key,
+        library_key=library_key,
+        key_added=key_added,
+        copy=copy,
     )
 
 

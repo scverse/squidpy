@@ -12,7 +12,7 @@ from spatialdata.datasets import blobs
 
 from squidpy._constants._constants import Transform
 from squidpy._constants._pkg_constants import Key
-from squidpy.gr import mask_graph, spatial_neighbors
+from squidpy.gr import mask_graph, spatial_neighbors, spatial_neighbors_from_builder
 from squidpy.gr.neighbors import (
     DelaunayBuilder,
     GridBuilder,
@@ -214,7 +214,7 @@ class TestSpatialNeighbors:
     )
     def test_generic_builder_matches_legacy(self, non_visium_adata: AnnData, legacy_kwargs: dict, builder: object):
         legacy = spatial_neighbors(non_visium_adata, **legacy_kwargs, copy=True)
-        result = spatial_neighbors(non_visium_adata, builder=builder, copy=True)
+        result = spatial_neighbors_from_builder(non_visium_adata, builder=builder, copy=True)
 
         np.testing.assert_array_equal(legacy.connectivities.toarray(), result.connectivities.toarray())
         np.testing.assert_allclose(legacy.distances.toarray(), result.distances.toarray())
@@ -229,50 +229,19 @@ class TestSpatialNeighbors:
     )
     def test_grid_builder_matches_legacy(self, adata_squaregrid: AnnData, legacy_kwargs: dict, builder: object):
         legacy = spatial_neighbors(adata_squaregrid, **legacy_kwargs, copy=True)
-        result = spatial_neighbors(adata_squaregrid, builder=builder, copy=True)
+        result = spatial_neighbors_from_builder(adata_squaregrid, builder=builder, copy=True)
 
         np.testing.assert_array_equal(legacy.connectivities.toarray(), result.connectivities.toarray())
         np.testing.assert_allclose(legacy.distances.toarray(), result.distances.toarray())
 
-    def test_builder_argument_conflict(self, non_visium_adata: AnnData):
-        with pytest.raises(ValueError, match="must not be set"):
-            spatial_neighbors(non_visium_adata, builder=RadiusBuilder(radius=5.0), delaunay=True)
-
-    def test_builder_rejects_any_legacy_args(self, non_visium_adata: AnnData):
-        builder = RadiusBuilder(radius=5.0, percentile=95.0, transform="cosine", set_diag=True)
-
-        with pytest.raises(ValueError, match="must not be set"):
-            spatial_neighbors(
-                non_visium_adata,
-                builder=builder,
-                coord_type="generic",
-                n_neighs=3,
-                radius=5.0,
-                percentile=95.0,
-                transform="cosine",
-                set_diag=True,
-                copy=True,
-            )
-
-    def test_builder_allows_none_legacy_args(self, non_visium_adata: AnnData):
+    def test_builder_explicit_entry_point(self, non_visium_adata: AnnData):
         builder = KNNBuilder(n_neighs=3, transform=Transform.NONE)
 
-        baseline = spatial_neighbors(non_visium_adata, builder=builder, copy=True)
-        matched = spatial_neighbors(non_visium_adata, builder=builder, transform=None, copy=True)
+        baseline = spatial_neighbors_from_builder(non_visium_adata, builder=builder, copy=True)
+        matched = spatial_neighbors_from_builder(non_visium_adata, builder=builder, copy=True)
 
         np.testing.assert_array_equal(baseline.connectivities.toarray(), matched.connectivities.toarray())
         np.testing.assert_allclose(baseline.distances.toarray(), matched.distances.toarray())
-
-    def test_builder_rejects_radius(self, non_visium_adata: AnnData):
-        builder = RadiusBuilder(radius=(4.0, 2.0))
-
-        with pytest.raises(ValueError, match="must not be set"):
-            spatial_neighbors(
-                non_visium_adata,
-                builder=builder,
-                radius=(2.0, 4.0),
-                copy=True,
-            )
 
     def test_grid_mode_ignores_radius(self, adata_squaregrid: AnnData):
         default = spatial_neighbors(adata_squaregrid, coord_type="grid", n_neighs=4, n_rings=2, copy=True)
