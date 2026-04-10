@@ -13,25 +13,30 @@ computes per-cell metrics that quantify this artifact:
 
 All heavy computation is done per-tile via the tiling infrastructure
 in :mod:`squidpy.experimental.im._tiling`, so this scales to
-100k×100k images without materialising the full array.
+100k x 100k images without materialising the full array.
 """
 
 from __future__ import annotations
 
 import math
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import anndata as ad
+import dask
 import numpy as np
 import pandas as pd
+import spatialdata as sd
 import xarray as xr
-from joblib import Parallel, delayed
+from dask.diagnostics import ProgressBar
 from numba import njit
 from skimage.measure import find_contours, regionprops
-from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
 
+if TYPE_CHECKING:
+    from dask.distributed import Client
+
+from squidpy._utils import cpu_count
 from squidpy.experimental.im._tiling import (
     build_tile_specs,
     compute_cell_info,
@@ -65,7 +70,7 @@ _NAN_SCORES = {col: np.nan for col in _SCORE_COLUMNS}
 # ---------------------------------------------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _collinear_scan(
     contour: np.ndarray,
     cum_arc: np.ndarray,
@@ -358,7 +363,7 @@ def _score_tile(
 
 
 def _compute_centroids_for_labels(
-    sdata: SpatialData,
+    sdata: sd.SpatialData,
     labels_key: str,
     labels_da: xr.DataArray,
     scale: str | None,
@@ -388,7 +393,7 @@ _METHOD_KEY = "tiling_qc"
 
 
 def calculate_tiling_qc(
-    sdata: SpatialData,
+    sdata: sd.SpatialData,
     labels_key: str,
     scale: str | None = None,
     tile_size: int = 2048,
@@ -396,7 +401,8 @@ def calculate_tiling_qc(
     distance_tol: float = _DEFAULT_DISTANCE_TOL,
     min_area: int = _MIN_CELL_AREA,
     downsample: int = 1,
-    n_jobs: int = 1,
+    n_jobs: int = -1,
+    client: Client | None = None,
     adata_key_added: str | None = None,
     inplace: bool = True,
 ) -> ad.AnnData | None:
@@ -434,9 +440,16 @@ def calculate_tiling_qc(
     downsample
         Factor by which to downsample each cell's bounding-box crop
         before contour extraction.  Straightness is scale-invariant,
-        so ``2``–``4`` is safe and much faster on large cells.
+        so ``2``--``4`` is safe and much faster on large cells.
     n_jobs
-        Number of parallel jobs for tile processing.
+        Number of threads for tile processing.  ``-1`` (default) uses
+        all available CPUs.  Ignored when ``client`` is provided.
+    client
+        A :class:`dask.distributed.Client` for distributed execution.
+        When provided, tile processing is submitted to this client,
+        ``n_jobs`` is ignored, and progress is reported via the dask
+        dashboard.  Workers must have access to the underlying data
+        store (e.g. shared filesystem or cloud storage for zarr).
     adata_key_added
         Key under which to store the result in ``sdata.tables``.
         Defaults to ``"{labels_key}_qc"``.
@@ -454,6 +467,13 @@ def calculate_tiling_qc(
     - ``cardinal_alignment_score``: axis-alignment of that segment
       (1 = cardinal, 0 = diagonal).
     - ``cut_score``: product of the two.
+
+    Notes
+    -----
+    Tile processing is parallelised via :func:`dask.compute`.  By
+    default a threaded scheduler with ``n_jobs`` workers is used.
+    Pass a :class:`~dask.distributed.Client` to use a distributed
+    cluster instead.
     """
     # --- Validate ---
     if labels_key not in sdata.labels:
@@ -483,28 +503,22 @@ def calculate_tiling_qc(
     )
 
     # --- Process tiles (labels only — no image needed) ---
-    n_cells_total = sum(len(s.owned_ids) for s in specs)
-
-    try:
-        import ipywidgets  # noqa: F401
-        from tqdm.auto import tqdm
-    except ImportError:
-        from tqdm.std import tqdm
-
-    pbar = tqdm(total=n_cells_total, desc="Scoring cells", unit="cells")
-
+    @dask.delayed
     def _process_one(spec):
         tile_lbl = extract_labels_tile_lazy(labels_da, spec)
-        df = _score_tile(tile_lbl, distance_tol=distance_tol, min_area=min_area, downsample=downsample)
-        pbar.update(len(spec.owned_ids))
-        return df
+        return _score_tile(tile_lbl, distance_tol=distance_tol, min_area=min_area, downsample=downsample)
 
-    if n_jobs == 1:
-        results = [_process_one(spec) for spec in specs]
+    tasks = [_process_one(spec) for spec in specs]
+
+    if client is not None:
+        if n_jobs != -1:
+            logg.warning("`n_jobs` is ignored when a `client` is provided. Parallelism is controlled by the client.")
+        results = dask.compute(*tasks, scheduler=client)
     else:
-        results = Parallel(n_jobs=n_jobs, prefer="threads")(delayed(_process_one)(spec) for spec in specs)
+        num_workers = cpu_count() if n_jobs == -1 else n_jobs
+        with ProgressBar():
+            results = dask.compute(*tasks, scheduler="threads", num_workers=num_workers)
 
-    pbar.close()
     tile_dfs = [df for df in results if not df.empty]
 
     if not tile_dfs:

@@ -2,22 +2,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from spatialdata import SpatialData
+import spatialdata as sd
 
 __all__ = ["tiling_qc"]
 
 
 def tiling_qc(
-    sdata: SpatialData,
+    sdata: sd.SpatialData,
     labels_key: str,
     qc_key: str | None = None,
     score_col: str = "cut_score",
     cmap: str = "Reds",
     figsize: tuple[float, float] | None = None,
-    **kwargs: Any,
 ) -> None:
     """Plot labels coloured by their tiling-artifact score.
 
@@ -43,11 +39,7 @@ def tiling_qc(
         Matplotlib colormap name.
     figsize
         Figure size passed to :meth:`spatialdata.SpatialData.pl.show`.
-    **kwargs
-        Forwarded to :meth:`spatialdata.SpatialData.pl.render_labels`.
     """
-    import spatialdata_plot  # noqa: F401  — registers accessor
-
     table_key = qc_key if qc_key is not None else f"{labels_key}_qc"
     if table_key not in sdata.tables:
         raise ValueError(
@@ -62,7 +54,9 @@ def tiling_qc(
             f"Available: {[c for c in adata.obs.columns if c not in ('region', 'label_id')]}"
         )
 
-    show_kwargs: dict[str, Any] = {}
+    import spatialdata_plot  # noqa: F401  — registers accessor
+
+    show_kwargs: dict[str, object] = {}
     if figsize is not None:
         show_kwargs["figsize"] = figsize
 
@@ -71,5 +65,4 @@ def tiling_qc(
         color=score_col,
         table_name=table_key,
         cmap=cmap,
-        **kwargs,
     ).pl.show(**show_kwargs)

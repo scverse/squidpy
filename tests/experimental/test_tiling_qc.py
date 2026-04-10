@@ -5,8 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from squidpy.experimental.pl._tiling_qc import tiling_qc
-from squidpy.experimental.tl._tiling_qc import calculate_tiling_qc
+import squidpy as sq
 from tests.conftest import PlotTester, PlotTesterMeta
 
 # ---------------------------------------------------------------------------
@@ -15,11 +14,11 @@ from tests.conftest import PlotTester, PlotTesterMeta
 
 
 class TestCalculateTilingQC:
-    """Tests for calculate_tiling_qc using the tile-boundary fixture."""
+    """Tests for sq.experimental.tl.calculate_tiling_qc using the tile-boundary fixture."""
 
     def test_returns_anndata_with_scores(self, sdata_tile_boundary):
         sdata, gt = sdata_tile_boundary
-        adata = calculate_tiling_qc(
+        adata = sq.experimental.tl.calculate_tiling_qc(
             sdata,
             labels_key="labels",
             tile_size=200,
@@ -32,7 +31,7 @@ class TestCalculateTilingQC:
 
     def test_cut_cells_score_higher_than_intact(self, sdata_tile_boundary):
         sdata, gt = sdata_tile_boundary
-        adata = calculate_tiling_qc(
+        adata = sq.experimental.tl.calculate_tiling_qc(
             sdata,
             labels_key="labels",
             tile_size=200,
@@ -46,13 +45,13 @@ class TestCalculateTilingQC:
     def test_tiled_vs_single_tile(self, sdata_tile_boundary):
         """Tiling must not change results — scores should be identical."""
         sdata, _ = sdata_tile_boundary
-        adata_tiled = calculate_tiling_qc(
+        adata_tiled = sq.experimental.tl.calculate_tiling_qc(
             sdata,
             labels_key="labels",
             tile_size=200,
             inplace=False,
         )
-        adata_single = calculate_tiling_qc(
+        adata_single = sq.experimental.tl.calculate_tiling_qc(
             sdata,
             labels_key="labels",
             tile_size=2000,
@@ -73,7 +72,7 @@ class TestCalculateTilingQC:
     def test_invalid_labels_key(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         with pytest.raises(ValueError, match="not found"):
-            calculate_tiling_qc(sdata, labels_key="nonexistent", inplace=False)
+            sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="nonexistent", inplace=False)
 
 
 # ---------------------------------------------------------------------------
@@ -85,18 +84,18 @@ class TestCalculateTilingQC:
 def sdata_with_qc(sdata_tile_boundary):
     """SpatialData with tiling QC already computed."""
     sdata, _ = sdata_tile_boundary
-    calculate_tiling_qc(sdata, labels_key="labels", tile_size=200, inplace=True)
+    sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200, inplace=True)
     return sdata
 
 
 class TestTilingQCVisual(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_tiling_qc_cut_score(self, sdata_with_qc):
         """Visual: labels coloured by cut_score."""
-        tiling_qc(sdata_with_qc, labels_key="labels", score_col="cut_score")
+        sq.experimental.pl.tiling_qc(sdata_with_qc, labels_key="labels", score_col="cut_score")
 
     def test_plot_tiling_qc_cardinal_alignment(self, sdata_with_qc):
         """Visual: labels coloured by cardinal_alignment_score."""
-        tiling_qc(
+        sq.experimental.pl.tiling_qc(
             sdata_with_qc,
             labels_key="labels",
             score_col="cardinal_alignment_score",
@@ -104,7 +103,7 @@ class TestTilingQCVisual(PlotTester, metaclass=PlotTesterMeta):
 
     def test_plot_tiling_qc_straight_edge_ratio(self, sdata_with_qc):
         """Visual: labels coloured by max_straight_edge_ratio."""
-        tiling_qc(
+        sq.experimental.pl.tiling_qc(
             sdata_with_qc,
             labels_key="labels",
             score_col="max_straight_edge_ratio",

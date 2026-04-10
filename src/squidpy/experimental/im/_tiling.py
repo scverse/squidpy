@@ -203,10 +203,10 @@ def _auto_margin(cell_info: dict[int, CellInfo]) -> int:
     """Compute the minimum margin that covers the largest cell's half-extent."""
     if not cell_info:
         return 0
-    max_half = max(max(c.bbox_h, c.bbox_w) for c in cell_info.values())
+    max_extent = max(max(c.bbox_h, c.bbox_w) for c in cell_info.values())
     # Centroid can be at most half a bbox away from the cell's edge.
     # Add 1 pixel for safety (rounding / off-by-one).
-    return int(np.ceil(max_half / 2)) + 1
+    return int(np.ceil(max_extent / 2)) + 1
 
 
 def build_tile_specs(
@@ -413,17 +413,20 @@ def verify_coverage(
 
     Raises
     ------
-    AssertionError
+    ValueError
         If any cell is missing or assigned to more than one tile.
     """
     owned_union: set[int] = set()
     for spec in specs:
         overlap = owned_union & spec.owned_ids
-        assert not overlap, f"Cells {overlap} assigned to multiple tiles"
+        if overlap:
+            raise ValueError(f"Cells {overlap} assigned to multiple tiles")
         owned_union |= spec.owned_ids
 
     missing = all_label_ids - owned_union
-    assert not missing, f"Cells {missing} not assigned to any tile"
+    if missing:
+        raise ValueError(f"Cells {missing} not assigned to any tile")
 
     extra = owned_union - all_label_ids
-    assert not extra, f"Tile specs reference non-existent labels {extra}"
+    if extra:
+        raise ValueError(f"Tile specs reference non-existent labels {extra}")
