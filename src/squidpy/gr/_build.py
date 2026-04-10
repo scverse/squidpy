@@ -286,9 +286,9 @@ def spatial_neighbors(
         Advanced graph construction strategy. When provided, all other graph-construction
         arguments (``coord_type``, ``n_neighs``, ``radius``, ``delaunay``, ``n_rings``,
         ``percentile``, ``transform``, ``set_diag``) must be left as ``None``.
-        Built-in builders subclass {class}`~squidpy.gr.neighbors.GraphBuilderCSR`,
+        Built-in builders subclass {{class}}`~squidpy.gr.neighbors.GraphBuilderCSR`,
         while custom backends can implement the more generic
-        {class}`~squidpy.gr.neighbors.GraphBuilder` interface directly.
+        {{class}}`~squidpy.gr.neighbors.GraphBuilder` interface directly.
     key_added
         Key which controls where the results are saved if ``copy = False``.
     %(copy)s
@@ -453,6 +453,10 @@ def spatial_neighbors_knn(
 ) -> SpatialNeighborsResult | None:
     """Create a k-nearest-neighbor graph from spatial coordinates.
 
+    Each observation is connected to its ``n_neighs`` nearest observations in
+    Euclidean space. This mode is typically most useful for continuous
+    coordinates, where you want to control neighborhood size directly.
+
     Parameters
     ----------
     %(adata)s
@@ -460,7 +464,8 @@ def spatial_neighbors_knn(
     %(sdata_params)s
     %(library_key)s
     n_neighs
-        Number of nearest neighbors. Defaults to ``6``.
+        Number of nearest neighbors. Defaults to ``6``. Smaller values produce a
+        sparser, more local graph; larger values connect broader neighborhoods.
     %(graph_common_params)s
     %(copy)s
 
@@ -509,6 +514,10 @@ def spatial_neighbors_radius(
 ) -> SpatialNeighborsResult | None:
     """Create a radius-based graph from spatial coordinates.
 
+    Two observations are connected when their Euclidean distance falls within the
+    requested radius. This mode is useful when a physical interaction scale is
+    more meaningful than a fixed number of neighbors.
+
     Parameters
     ----------
     %(adata)s
@@ -518,6 +527,9 @@ def spatial_neighbors_radius(
     radius
         Neighborhood radius.  If a :class:`tuple`, the graph is built with the
         maximum radius and then pruned to the interval ``[min(radius), max(radius)]``.
+        In practice, a single value defines a disk around each observation,
+        whereas a tuple defines an annulus by keeping only edges within the
+        specified distance interval.
     %(graph_common_params)s
     %(copy)s
 
@@ -566,6 +578,11 @@ def spatial_neighbors_delaunay(
 ) -> SpatialNeighborsResult | None:
     """Create a Delaunay triangulation graph from spatial coordinates.
 
+    Delaunay triangulation connects observations into triangles such that no
+    other observation lies inside the circumcircle of each triangle. In
+    practice, this yields an adaptive geometry-driven graph rather than one
+    based on a fixed ``k`` or radius, and ``dst`` stores Euclidean edge lengths.
+
     Parameters
     ----------
     %(adata)s
@@ -574,7 +591,9 @@ def spatial_neighbors_delaunay(
     %(library_key)s
     radius
         If a :class:`tuple`, used as a post-construction pruning interval
-        ``[min(radius), max(radius)]``.
+        ``[min(radius), max(radius)]``. This does not change the triangulation
+        itself; it only removes Delaunay edges whose Euclidean lengths fall
+        outside the interval.
     %(graph_common_params)s
     %(copy)s
 
@@ -625,6 +644,10 @@ def spatial_neighbors_grid(
     """Create a grid-based graph from spatial coordinates.
 
     This is the mode used for Visium-like grid coordinates.
+    It assumes observations lie on an approximately regular lattice, so it is
+    usually not appropriate for continuous coordinates such as Xenium point
+    clouds. On irregular coordinates, the resulting graph and ring distances may
+    not have a meaningful grid interpretation.
 
     Parameters
     ----------
@@ -633,14 +656,24 @@ def spatial_neighbors_grid(
     %(sdata_params)s
     %(library_key)s
     n_neighs
-        Number of neighboring tiles. Defaults to ``6``.
+        Number of neighboring tiles used to form the base grid connectivity.
+        Defaults to ``6``. On a Visium-like hexagonal grid, ``6`` corresponds to
+        the immediate surrounding spots, while smaller values such as ``3`` make
+        the first-ring graph deliberately sparser.
     n_rings
-        Number of rings of neighbors. Defaults to ``1``.
+        Number of rings of neighbors. Defaults to ``1``. ``n_rings=1`` keeps
+        only immediate neighbors; larger values add progressively more distant
+        shells and encode the shell number in ``dst``. For example,
+        ``n_neighs=3`` with ``n_rings=2`` on a Visium-like grid starts from a
+        sparse three-neighbor base graph and then adds a second graph-distance
+        ring relative to that base connectivity.
     delaunay
         Whether to derive the base grid connectivity from a Delaunay triangulation.
         This is still grid mode: unlike :func:`spatial_neighbors_delaunay`, the
         resulting distance matrix encodes grid or ring distances rather than
-        Euclidean edge lengths.
+        Euclidean edge lengths. In practice, this changes how the first-ring
+        connectivity is inferred, but not the meaning of the resulting
+        distances.
     %(graph_common_params)s
     %(copy)s
 
