@@ -62,7 +62,7 @@ _hed_local = threading.local()
 
 
 def _rgb_to_hed_cached(block_rgb: np.ndarray) -> np.ndarray:
-    """Cached wrapper around ``_rgb_to_hed``."""
+    """Cached wrapper around ``rgb_to_hed``."""
     key = block_rgb.ctypes.data
     cache = getattr(_hed_local, "cache", None)
     if cache is not None and cache[0] == key:
