@@ -59,20 +59,16 @@ def _place_ellipsoids(
         if cell_id >= n_target:
             break
 
-        # Random ellipse parameters
         cy = rng.integers(semi_range[1] + cell_gap, H - semi_range[1] - cell_gap)
         cx = rng.integers(semi_range[1] + cell_gap, W - semi_range[1] - cell_gap)
         r_radius = rng.integers(semi_range[0], semi_range[1] + 1)
         c_radius = rng.integers(semi_range[0], semi_range[1] + 1)
         angle = rng.uniform(0, np.pi)
 
-        # Rasterise candidate ellipse
         rr, cc = ellipse(cy, cx, r_radius, c_radius, shape=shape, rotation=angle)
         if len(rr) == 0:
             continue
 
-        # Check for overlap (including gap buffer)
-        # Dilate existing labels by cell_gap and check candidate pixels
         if cell_gap > 0:
             occupied = ndimage.binary_dilation(
                 labels > 0,
@@ -127,15 +123,11 @@ def _relabel_and_track(
     intact_ids
         Fragment IDs from cells that remained whole.
     """
-    # Relabel connected components (each fragment gets a new ID)
     relabelled, n_fragments = ndimage.label(cut > 0)
 
-    # Map each fragment back to its original cell ID
-    # For each new fragment, find which original cell(s) it overlaps with
     cut_ids: set[int] = set()
     intact_ids: set[int] = set()
 
-    # Build reverse mapping: original_id → set of fragment_ids
     orig_to_fragments: dict[int, set[int]] = {}
     for frag_id in range(1, n_fragments + 1):
         frag_mask = relabelled == frag_id
@@ -164,7 +156,6 @@ def make_tile_boundary_sdata() -> tuple[SpatialData, TileBoundaryGroundTruth]:
     """
     rng = np.random.default_rng(42)
 
-    # 1. Place ellipsoids
     original_labels = _place_ellipsoids(
         shape=(_IMAGE_SIZE, _IMAGE_SIZE),
         n_target=_N_CELLS_TARGET,
@@ -172,9 +163,8 @@ def make_tile_boundary_sdata() -> tuple[SpatialData, TileBoundaryGroundTruth]:
         cell_gap=_CELL_GAP,
         rng=rng,
     )
-    n_original = len(np.unique(original_labels)) - 1  # exclude background
+    n_original = len(np.unique(original_labels)) - 1
 
-    # 2. Apply tile cuts (zero out 2px stripes at borders)
     cut_labels = _apply_tile_cuts(
         original_labels,
         borders_y=_TILE_BORDERS,
@@ -182,14 +172,11 @@ def make_tile_boundary_sdata() -> tuple[SpatialData, TileBoundaryGroundTruth]:
         gap=_BORDER_GAP,
     )
 
-    # 3. Relabel fragments and track ground truth
     relabelled, cut_ids, intact_ids = _relabel_and_track(original_labels, cut_labels)
 
-    # 4. Wrap as dask array (chunks matching ~tile size for realistic access)
     dask_labels = da.from_array(relabelled, chunks=(200, 200))
     labels_xr = xr.DataArray(dask_labels, dims=["y", "x"])
 
-    # 5. Dummy image for API compatibility
     image_data = rng.integers(0, 255, (3, _IMAGE_SIZE, _IMAGE_SIZE), dtype=np.uint8)
     image_xr = xr.DataArray(image_data, dims=["c", "y", "x"], coords={"c": ["R", "G", "B"]})
 

@@ -96,7 +96,6 @@ def compute_cell_info_multiscale(
     if not available:
         return {}
 
-    # Pick coarsest scale (highest numeric suffix)
     def _scale_idx(k: str) -> int:
         num = "".join(c for c in k if c.isdigit())
         return int(num) if num else 0
@@ -108,7 +107,6 @@ def compute_cell_info_multiscale(
     if coarse_labels.ndim != 2:
         raise ValueError(f"Expected 2-D labels at scale {coarsest}, got shape {coarse_labels.shape}")
 
-    # Compute scale factors to target resolution
     target_da = labels_node[target_scale].ds["image"]
     target_h, target_w = target_da.sizes.get("y", target_da.shape[-2]), target_da.sizes.get("x", target_da.shape[-1])
     coarse_h, coarse_w = coarse_labels.shape
@@ -248,19 +246,16 @@ def build_tile_specs(
     if margin < 0:
         raise ValueError(f"overlap_margin must be non-negative, got {margin}")
 
-    # Assign each cell to a base-grid cell by its centroid
     cell_to_tile: dict[int, tuple[int, int]] = {}
     for lid, ci in cell_info.items():
         tile_row = min(int(ci.centroid_y) // tile_size, (H - 1) // tile_size)
         tile_col = min(int(ci.centroid_x) // tile_size, (W - 1) // tile_size)
         cell_to_tile[lid] = (tile_row, tile_col)
 
-    # Group cells by tile
     tile_to_cells: dict[tuple[int, int], set[int]] = {}
     for lid, key in cell_to_tile.items():
         tile_to_cells.setdefault(key, set()).add(lid)
 
-    # Build specs (skip empty tiles)
     n_rows = (H + tile_size - 1) // tile_size
     n_cols = (W + tile_size - 1) // tile_size
 

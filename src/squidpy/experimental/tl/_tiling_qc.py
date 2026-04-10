@@ -99,7 +99,6 @@ def _collinear_scan(
             if seg_len < 1e-12:
                 continue
 
-            # Max perpendicular distance of intermediate points
             max_perp = 0.0
             for k in range(start + 1, end):
                 r0 = contour[k, 0] - contour[start, 0]
@@ -144,7 +143,6 @@ def _resample_contour(contour: np.ndarray, max_points: int) -> np.ndarray:
 
     targets = np.linspace(0.0, total, max_points)
 
-    # For each target, find the segment it falls into
     idx = np.searchsorted(cum_arc, targets, side="right") - 1
     idx = np.clip(idx, 0, n - 2)
 
@@ -236,10 +234,7 @@ def _cardinal_alignment(angle: float) -> float:
     Returns a value in ``[0, 1]`` where 1 means perfectly axis-aligned
     and 0 means maximally diagonal (45°).
     """
-    # Normalise angle to [0, π) — direction, not orientation
     a = abs(angle) % np.pi
-
-    # Distance to nearest cardinal: 0, π/2, π
     dist = min(a, abs(a - np.pi / 2), abs(a - np.pi))
 
     # Map [0, π/4] → [1, 0]
@@ -475,11 +470,9 @@ def calculate_tiling_qc(
     Pass a :class:`~dask.distributed.Client` to use a distributed
     cluster instead.
     """
-    # --- Validate ---
     if labels_key not in sdata.labels:
         raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
 
-    # --- Resolve labels DataArray (stays lazy) ---
     labels_node = sdata.labels[labels_key]
     if isinstance(labels_node, xr.DataTree):
         if scale is None:
@@ -488,7 +481,6 @@ def calculate_tiling_qc(
     else:
         labels_da = labels_node
 
-    # --- Compute centroids ---
     cell_info = _compute_centroids_for_labels(sdata, labels_key, labels_da, scale)
     if not cell_info:
         raise ValueError("No cells found in labels (all zeros).")
@@ -496,13 +488,11 @@ def calculate_tiling_qc(
     H = int(labels_da.sizes.get("y", labels_da.shape[-2]))
     W = int(labels_da.sizes.get("x", labels_da.shape[-1]))
 
-    # --- Build tile specs ---
     specs = build_tile_specs((H, W), cell_info, tile_size=tile_size, overlap_margin=overlap_margin)
     logg.info(
         f"Tiling QC: {len(specs)} tiles ({tile_size}x{tile_size}, margin={overlap_margin}, downsample={downsample}x)."
     )
 
-    # --- Process tiles (labels only — no image needed) ---
     @dask.delayed
     def _process_one(spec):
         tile_lbl = extract_labels_tile_lazy(labels_da, spec)
@@ -526,19 +516,16 @@ def calculate_tiling_qc(
 
     combined = pd.concat(tile_dfs, axis=0).sort_index()
 
-    # Sanity: each cell should appear in exactly one tile
     if combined.index.duplicated().any():
         dups = combined.index[combined.index.duplicated()].unique().tolist()
         raise RuntimeError(f"Duplicate cell IDs across tiles — tile ownership may be broken. Duplicates: {dups}")
 
-    # --- Build AnnData (scores in .obs, empty .X) ---
     n_cells = len(combined)
     adata = ad.AnnData(
         X=np.empty((n_cells, 0), dtype=np.float32),
     )
     adata.obs_names = [f"cell_{i}" for i in combined.index]
 
-    # Spatialdata linking
     adata.obs["region"] = pd.Categorical([labels_key] * n_cells)
     adata.obs["label_id"] = combined.index.values
     adata.uns["spatialdata_attrs"] = {
@@ -547,15 +534,12 @@ def calculate_tiling_qc(
         "instance_key": "label_id",
     }
 
-    # QC scores in obs
     for col in combined.columns:
         adata.obs[col] = combined[col].values
 
-    # Centroids (already computed without materialising the full array)
     adata.obs["centroid_y"] = np.array([cell_info[lid].centroid_y for lid in combined.index])
     adata.obs["centroid_x"] = np.array([cell_info[lid].centroid_x for lid in combined.index])
 
-    # Algorithm parameters in uns
     adata.uns[_METHOD_KEY] = {
         "scale": scale,
         "tile_size": tile_size,
