@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import threading
-
 import numpy as np
 
 # --- Intensity metrics (grayscale input) ---
@@ -53,52 +51,55 @@ def rgb_to_hed(block_rgb: np.ndarray) -> np.ndarray:
     return rgb2hed(rgb_clipped)
 
 
-# Thread-local 1-entry cache: avoids re-computing HED deconvolution when
-# multiple HED metrics are called sequentially on the same dask block.
-# Uses threading.local so each dask worker thread gets its own cache,
-# and ctypes.data (the buffer's memory address) as the key so it remains
-# valid and unique while the array is alive.
-_hed_local = threading.local()
+def hed_metrics(block: np.ndarray) -> np.ndarray:
+    """Return all HED-derived metrics for one RGB tile."""
+    hed = rgb_to_hed(block)
+    h = hed[..., 0]
+    e = hed[..., 1]
 
-
-def _rgb_to_hed_cached(block_rgb: np.ndarray) -> np.ndarray:
-    """Cached wrapper around ``rgb_to_hed``."""
-    key = block_rgb.ctypes.data
-    cache = getattr(_hed_local, "cache", None)
-    if cache is not None and cache[0] == key:
-        return cache[1]
-    result = rgb_to_hed(block_rgb)
-    _hed_local.cache = (key, result)
-    return result
+    return np.array(
+        [
+            [
+                [
+                    float(h.mean()),
+                    float(h.std()),
+                    float(e.mean()),
+                    float(e.std()),
+                    float(np.abs(h).mean() / (np.abs(e).mean() + 1e-10)),
+                ]
+            ]
+        ],
+        dtype=np.float32,
+    )
 
 
 def hematoxylin_mean(block: np.ndarray) -> np.ndarray:
     """Mean hematoxylin channel intensity."""
-    hed = _rgb_to_hed_cached(block)
+    hed = rgb_to_hed(block)
     return np.array([[float(hed[..., 0].mean())]], dtype=np.float32)
 
 
 def hematoxylin_std(block: np.ndarray) -> np.ndarray:
     """Std of hematoxylin channel intensity."""
-    hed = _rgb_to_hed_cached(block)
+    hed = rgb_to_hed(block)
     return np.array([[float(hed[..., 0].std())]], dtype=np.float32)
 
 
 def eosin_mean(block: np.ndarray) -> np.ndarray:
     """Mean eosin channel intensity."""
-    hed = _rgb_to_hed_cached(block)
+    hed = rgb_to_hed(block)
     return np.array([[float(hed[..., 1].mean())]], dtype=np.float32)
 
 
 def eosin_std(block: np.ndarray) -> np.ndarray:
     """Std of eosin channel intensity."""
-    hed = _rgb_to_hed_cached(block)
+    hed = rgb_to_hed(block)
     return np.array([[float(hed[..., 1].std())]], dtype=np.float32)
 
 
 def he_ratio(block: np.ndarray) -> np.ndarray:
     """Ratio of hematoxylin to eosin mean intensity."""
-    hed = _rgb_to_hed_cached(block)
+    hed = rgb_to_hed(block)
     h_mean = float(np.abs(hed[..., 0]).mean())
     e_mean = float(np.abs(hed[..., 1]).mean())
     ratio = h_mean / (e_mean + 1e-10)

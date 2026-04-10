@@ -15,6 +15,7 @@ from spatialdata._logging import logger
 from spatialdata.models import TableModel
 
 from squidpy._utils import _ensure_dim_order
+from squidpy.experimental.im._intensity_metrics import hed_metrics
 from squidpy.experimental.im._qc_metrics import _HNE_METRICS, InputKind, QCMetric, get_metric_info
 from squidpy.experimental.im._utils import (
     TileGrid,
@@ -185,7 +186,30 @@ def qc_image(
 
     # Build all dask graphs lazily
     delayed_scores: dict[str, da.Array] = {}
+    hed_metric_indices = {
+        QCMetric.HEMATOXYLIN_MEAN: 0,
+        QCMetric.HEMATOXYLIN_STD: 1,
+        QCMetric.EOSIN_MEAN: 2,
+        QCMetric.EOSIN_STD: 3,
+        QCMetric.HE_RATIO: 4,
+    }
+    hed_scores: da.Array | None = None
+
     for m in metrics:
+        if m in hed_metric_indices:
+            if hed_scores is None:
+                hed_scores = da.map_blocks(
+                    hed_metrics,
+                    prepared_inputs[InputKind.RGB],
+                    dtype=np.float32,
+                    chunks=out_chunks + ((5,),),
+                    drop_axis=2,
+                    new_axis=2,
+                )
+            delayed_scores[m.value] = hed_scores[..., hed_metric_indices[m]]
+            logger.info(f"- Calculating metric: '{m.value}'")
+            continue
+
         kind, metric_func = get_metric_info(m)
         source = prepared_inputs[kind]
 
