@@ -393,6 +393,14 @@ def spatial_neighbors_from_builder(
 ) -> SpatialNeighborsResult | None:
     """Create a graph from spatial coordinates using an explicit builder instance.
 
+    This function is the bridge between the high-level API (e.g.,
+    :func:`spatial_neighbors_knn`, :func:`spatial_neighbors_radius`) and advanced
+    customization via builder classes. Use this when you need to:
+
+    - Stack or chain builder behaviors
+    - Pass pre-configured builder instances multiple times
+    - Implement custom builders (see :doc:`/extensibility`)
+
     Parameters
     ----------
     %(adata)s
@@ -411,6 +419,14 @@ def spatial_neighbors_from_builder(
     Returns
     -------
     %(spatial_neighbors_returns)s
+
+    See Also
+    --------
+    spatial_neighbors_knn : k-nearest-neighbor graphs (wraps :class:`~squidpy.gr.neighbors.KNNBuilder`).
+    spatial_neighbors_radius : radius-based graphs (wraps :class:`~squidpy.gr.neighbors.RadiusBuilder`).
+    spatial_neighbors_delaunay : Delaunay triangulation graphs (wraps :class:`~squidpy.gr.neighbors.DelaunayBuilder`).
+    spatial_neighbors_grid : grid-based graphs (wraps :class:`~squidpy.gr.neighbors.GridBuilder`).
+    gr.neighbors.GraphBuilder : Base builder interface. Inherit from this or :class:`~squidpy.gr.neighbors.GraphBuilderCSR` to implement custom graph construction.
     """
     adata, library_key = _prepare_spatial_neighbors_input(
         adata,
@@ -485,6 +501,11 @@ def spatial_neighbors_knn(
     Returns
     -------
     %(spatial_neighbors_returns)s
+
+    See Also
+    --------
+    spatial_neighbors_from_builder : Use :class:`~squidpy.gr.neighbors.KNNBuilder` directly for advanced customization.
+    gr.neighbors.KNNBuilder : k-nearest-neighbor builder class.
     """
     transform_enum = Transform.NONE if transform is None else Transform(transform)
     builder = KNNBuilder(
@@ -549,6 +570,11 @@ def spatial_neighbors_radius(
     Returns
     -------
     %(spatial_neighbors_returns)s
+
+    See Also
+    --------
+    spatial_neighbors_from_builder : Use :class:`~squidpy.gr.neighbors.RadiusBuilder` directly for advanced customization.
+    gr.neighbors.RadiusBuilder : radius-based builder class.
     """
     transform_enum = Transform.NONE if transform is None else Transform(transform)
     builder = RadiusBuilder(
@@ -613,6 +639,11 @@ def spatial_neighbors_delaunay(
     Returns
     -------
     %(spatial_neighbors_returns)s
+
+    See Also
+    --------
+    spatial_neighbors_from_builder : Use :class:`~squidpy.gr.neighbors.DelaunayBuilder` directly for advanced customization.
+    gr.neighbors.DelaunayBuilder : Delaunay triangulation builder class.
     """
     transform_enum = Transform.NONE if transform is None else Transform(transform)
     builder = DelaunayBuilder(
@@ -693,6 +724,11 @@ def spatial_neighbors_grid(
     Returns
     -------
     %(spatial_neighbors_returns)s
+
+    See Also
+    --------
+    spatial_neighbors_from_builder : Use :class:`~squidpy.gr.neighbors.GridBuilder` directly for advanced customization.
+    gr.neighbors.GridBuilder : grid-based builder class.
     """
     assert_positive(n_rings, name="n_rings")
     assert_positive(n_neighs, name="n_neighs")
@@ -774,6 +810,7 @@ def _run_spatial_neighbors(
     _save_data(adata, attr="obsp", key=conns_key, data=adj)
     _save_data(adata, attr="obsp", key=dists_key, data=dst, prefix=False)
     _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
+    return None
 
 
 @d.dedent

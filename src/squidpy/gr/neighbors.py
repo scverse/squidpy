@@ -77,7 +77,22 @@ class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
 
 
 class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
-    """CSR-based graph construction strategy."""
+    """CSR-based graph construction strategy.
+
+    Specializes :class:`GraphBuilder` for sparse CSR matrix output. Adds built-in handling
+    for percentile-based edge pruning, adjacency transforms (spectral/cosine), and
+    SparseEfficiencyWarning suppression. All built-in concrete builders
+    (:class:`KNNBuilder`, :class:`RadiusBuilder`, :class:`DelaunayBuilder`, :class:`GridBuilder`)
+    inherit from this class.
+
+    Subclass this (not the generic :class:`GraphBuilder`) when implementing a builder
+    that returns CSR matrices.
+
+    See Also
+    --------
+    GraphBuilder : Generic builder interface for custom coordinate/matrix types.
+    KNNBuilder : Example of a concrete CSR-based builder.
+    """
 
     def build(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         with warnings.catch_warnings():
@@ -114,7 +129,12 @@ class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
 
 
 class KNNBuilder(GraphBuilderCSR):
-    """Build a generic k-nearest-neighbor spatial graph."""
+    """Build a generic k-nearest-neighbor spatial graph.
+
+    Each observation is connected to its k nearest neighbors. See
+    :func:`~squidpy.gr.spatial_neighbors_knn` for the user-facing API or
+    :func:`~squidpy.gr.spatial_neighbors_from_builder` for direct builder usage.
+    """
 
     def __init__(
         self,
@@ -152,7 +172,13 @@ class KNNBuilder(GraphBuilderCSR):
 
 
 class RadiusBuilder(GraphBuilderCSR):
-    """Build a generic radius-based spatial graph."""
+    """Build a generic radius-based spatial graph.
+
+    Two observations are connected when their Euclidean distance falls within
+    the specified radius. See :func:`~squidpy.gr.spatial_neighbors_radius` for the
+    user-facing API or :func:`~squidpy.gr.spatial_neighbors_from_builder` for
+    direct builder usage.
+    """
 
     def __init__(
         self,
@@ -198,8 +224,13 @@ class RadiusBuilder(GraphBuilderCSR):
 class DelaunayBuilder(GraphBuilderCSR):
     """Build a generic point-cloud graph from a Delaunay triangulation.
 
-    Unlike ``GridBuilder(delaunay=True)``, this builder uses the triangulation as the
-    graph itself and stores real Euclidean edge lengths in ``dst``.
+    Delaunay triangulation connects observations into triangles such that no
+    other observation lies inside the circumcircle of each triangle. Unlike
+    ``GridBuilder(delaunay=True)``, this builder uses geometry-based connectivity
+    and stores real Euclidean edge lengths.
+
+    See :func:`~squidpy.gr.spatial_neighbors_delaunay` for the user-facing API or
+    :func:`~squidpy.gr.spatial_neighbors_from_builder` for direct builder usage.
     """
 
     def __init__(
@@ -244,9 +275,13 @@ class DelaunayBuilder(GraphBuilderCSR):
 class GridBuilder(GraphBuilderCSR):
     """Build a grid-based spatial graph.
 
-    When ``delaunay=True``, Delaunay triangulation is used only to derive the base
-    grid connectivity. The resulting ``dst`` still encodes grid or ring distances,
-    not geometric Euclidean edge lengths.
+    Assumes observations lie on an approximately regular lattice (e.g., Visium).
+    When ``delaunay=True``, Delaunay triangulation is used only to derive the
+    base connectivity; the distance matrix still encodes grid/ring distances,
+    not Euclidean lengths.
+
+    See :func:`~squidpy.gr.spatial_neighbors_grid` for the user-facing API or
+    :func:`~squidpy.gr.spatial_neighbors_from_builder` for direct builder usage.
     """
 
     def __init__(
