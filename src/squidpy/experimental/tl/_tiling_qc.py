@@ -283,9 +283,7 @@ def _compute_centroids_for_labels(
     """Compute cell centroids using the most efficient strategy available."""
     if isinstance(sdata.labels[labels_key], xr.DataTree):
         logg.info("Computing centroids from coarse scale.")
-        return compute_cell_info_multiscale(
-            sdata.labels[labels_key], target_scale=scale or "scale0"
-        )
+        return compute_cell_info_multiscale(sdata.labels[labels_key], target_scale=scale or "scale0")
 
     n_pixels = labels_da.sizes.get("y", 1) * labels_da.sizes.get("x", 1)
     if n_pixels <= 4096 * 4096:
@@ -376,9 +374,7 @@ def calculate_tiling_qc(
     """
     # --- Validate ---
     if labels_key not in sdata.labels:
-        raise ValueError(
-            f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}"
-        )
+        raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
 
     # --- Resolve labels DataArray (stays lazy) ---
     labels_node = sdata.labels[labels_key]
@@ -398,12 +394,9 @@ def calculate_tiling_qc(
     W = int(labels_da.sizes.get("x", labels_da.shape[-1]))
 
     # --- Build tile specs ---
-    specs = build_tile_specs(
-        (H, W), cell_info, tile_size=tile_size, overlap_margin=overlap_margin
-    )
+    specs = build_tile_specs((H, W), cell_info, tile_size=tile_size, overlap_margin=overlap_margin)
     logg.info(
-        f"Tiling QC: {len(specs)} tiles ({tile_size}x{tile_size}, "
-        f"margin={overlap_margin}, downsample={downsample}x)."
+        f"Tiling QC: {len(specs)} tiles ({tile_size}x{tile_size}, margin={overlap_margin}, downsample={downsample}x)."
     )
 
     # --- Process tiles (labels only — no image needed) ---
@@ -412,9 +405,7 @@ def calculate_tiling_qc(
         logg.debug(f"Tiling QC tile {idx + 1}/{len(specs)}: {len(spec.owned_ids)} cells.")
         return _score_tile(tile_lbl, distance_tol=distance_tol, min_area=min_area, downsample=downsample)
 
-    results = Parallel(n_jobs=n_jobs, prefer="threads")(
-        delayed(_process_one)(spec, i) for i, spec in enumerate(specs)
-    )
+    results = Parallel(n_jobs=n_jobs, prefer="threads")(delayed(_process_one)(spec, i) for i, spec in enumerate(specs))
     tile_dfs = [df for df in results if not df.empty]
 
     if not tile_dfs:
@@ -425,10 +416,7 @@ def calculate_tiling_qc(
     # Sanity: each cell should appear in exactly one tile
     if combined.index.duplicated().any():
         dups = combined.index[combined.index.duplicated()].unique().tolist()
-        raise RuntimeError(
-            f"Duplicate cell IDs across tiles — tile ownership may be broken. "
-            f"Duplicates: {dups}"
-        )
+        raise RuntimeError(f"Duplicate cell IDs across tiles — tile ownership may be broken. Duplicates: {dups}")
 
     # --- Build AnnData (scores in .obs, empty .X) ---
     n_cells = len(combined)
@@ -451,12 +439,8 @@ def calculate_tiling_qc(
         adata.obs[col] = combined[col].values
 
     # Centroids (already computed without materialising the full array)
-    adata.obs["centroid_y"] = np.array(
-        [cell_info[lid].centroid_y for lid in combined.index]
-    )
-    adata.obs["centroid_x"] = np.array(
-        [cell_info[lid].centroid_x for lid in combined.index]
-    )
+    adata.obs["centroid_y"] = np.array([cell_info[lid].centroid_y for lid in combined.index])
+    adata.obs["centroid_x"] = np.array([cell_info[lid].centroid_x for lid in combined.index])
 
     # Algorithm parameters in uns
     adata.uns[_METHOD_KEY] = {
