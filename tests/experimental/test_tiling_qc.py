@@ -40,14 +40,16 @@ class TestLongestCollinearSegment:
 
     def test_staircase_is_straight(self):
         """A pixel staircase (alternating cardinal/diagonal steps) is collinear."""
-        contour = np.array([
-            [0.0, 0.5],
-            [0.5, 1.0],
-            [0.5, 2.0],
-            [1.0, 2.5],
-            [1.0, 3.5],
-            [1.5, 4.0],
-        ])
+        contour = np.array(
+            [
+                [0.0, 0.5],
+                [0.5, 1.0],
+                [0.5, 2.0],
+                [1.0, 2.5],
+                [1.0, 3.5],
+                [1.5, 4.0],
+            ]
+        )
         length, _ = _longest_collinear_segment(contour, distance_tol=0.75)
         assert length > 3.0
 
@@ -125,6 +127,7 @@ class TestScoreTile:
 
     def test_single_cell(self):
         from skimage.draw import disk
+
         labels = np.zeros((50, 50), dtype=np.int32)
         rr, cc = disk((25, 25), 15, shape=(50, 50))
         labels[rr, cc] = 1
@@ -148,6 +151,7 @@ class TestScoreTile:
 
     def test_downsample(self):
         from skimage.draw import disk
+
         labels = np.zeros((100, 100), dtype=np.int32)
         rr, cc = disk((50, 50), 30, shape=(100, 100))
         labels[rr, cc] = 1
@@ -168,7 +172,10 @@ class TestCalculateTilingQC:
     def test_returns_anndata_with_scores_in_obs(self, sdata_tile_boundary):
         sdata, gt = sdata_tile_boundary
         adata = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
         )
         assert adata.n_obs == len(gt.cut_cell_ids) + len(gt.intact_cell_ids)
         assert adata.n_vars == 0
@@ -178,7 +185,10 @@ class TestCalculateTilingQC:
     def test_inplace_stores_in_default_table_key(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         result = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=True,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=True,
         )
         assert result is None
         assert "labels_qc" in sdata.tables
@@ -186,7 +196,10 @@ class TestCalculateTilingQC:
     def test_spatialdata_attrs(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         adata = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
         )
         assert adata.uns["spatialdata_attrs"]["region"] == "labels"
         assert "label_id" in adata.obs.columns
@@ -194,7 +207,10 @@ class TestCalculateTilingQC:
     def test_centroids_stored_in_obs(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         adata = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
         )
         assert "centroid_y" in adata.obs.columns
         assert "centroid_x" in adata.obs.columns
@@ -207,8 +223,13 @@ class TestCalculateTilingQC:
     def test_params_stored_in_uns(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         adata = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200,
-            distance_tol=1.0, min_area=10, downsample=2, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            distance_tol=1.0,
+            min_area=10,
+            downsample=2,
+            inplace=False,
         )
         params = adata.uns["tiling_qc"]
         assert params["tile_size"] == 200
@@ -220,7 +241,10 @@ class TestCalculateTilingQC:
     def test_cut_cells_score_higher_than_intact(self, sdata_tile_boundary):
         sdata, gt = sdata_tile_boundary
         adata = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
         )
         obs = adata.obs
         cut = obs[obs["label_id"].isin(gt.cut_cell_ids)]["max_straight_edge_ratio"].dropna()
@@ -230,7 +254,10 @@ class TestCalculateTilingQC:
     def test_score_ranges(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         adata = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
         )
         for col in ["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"]:
             valid = adata.obs[col].dropna()
@@ -239,7 +266,10 @@ class TestCalculateTilingQC:
     def test_cardinal_score_bounded(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         adata = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
         )
         cardinal = adata.obs["cardinal_alignment_score"].dropna()
         assert (cardinal >= 0).all()
@@ -248,10 +278,16 @@ class TestCalculateTilingQC:
     def test_tiled_vs_single_tile(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         adata_tiled = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
         )
         adata_single = calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=2000, inplace=False,
+            sdata,
+            labels_key="labels",
+            tile_size=2000,
+            inplace=False,
         )
         df1 = adata_tiled.obs.set_index("label_id").sort_index()
         df2 = adata_single.obs.set_index("label_id").sort_index()
@@ -259,7 +295,10 @@ class TestCalculateTilingQC:
         assert set(df1.index) == set(df2.index)
         for col in ["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"]:
             np.testing.assert_allclose(
-                df1[col].values, df2[col].values, atol=1e-10, equal_nan=True,
+                df1[col].values,
+                df2[col].values,
+                atol=1e-10,
+                equal_nan=True,
             )
 
     def test_invalid_labels_key(self, sdata_tile_boundary):
@@ -270,8 +309,11 @@ class TestCalculateTilingQC:
     def test_custom_adata_key(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200,
-            adata_key_added="my_qc", inplace=True,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            adata_key_added="my_qc",
+            inplace=True,
         )
         assert "my_qc" in sdata.tables
 
@@ -286,28 +328,40 @@ class TestPlotTilingQC:
 
     def test_plot_renders(self, sdata_tile_boundary):
         import matplotlib
+
         matplotlib.use("Agg")
 
         sdata, _ = sdata_tile_boundary
         calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=True,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=True,
         )
         tiling_qc(sdata, labels_key="labels")
         import matplotlib.pyplot as plt
+
         plt.close("all")
 
     def test_plot_custom_score_col(self, sdata_tile_boundary):
         import matplotlib
+
         matplotlib.use("Agg")
 
         sdata, _ = sdata_tile_boundary
         calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=True,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=True,
         )
         tiling_qc(
-            sdata, labels_key="labels", score_col="max_straight_edge_ratio",
+            sdata,
+            labels_key="labels",
+            score_col="max_straight_edge_ratio",
         )
         import matplotlib.pyplot as plt
+
         plt.close("all")
 
     def test_plot_missing_qc_table(self, sdata_tile_boundary):
@@ -318,7 +372,10 @@ class TestPlotTilingQC:
     def test_plot_invalid_score_col(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=True,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=True,
         )
         with pytest.raises(ValueError, match="not found"):
             tiling_qc(sdata, labels_key="labels", score_col="invalid")
@@ -345,6 +402,7 @@ class TestTilingQCVisual(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_tiling_qc_straight_edge_ratio(self, sdata_with_qc):
         """Visual: labels coloured by max_straight_edge_ratio."""
         tiling_qc(
-            sdata_with_qc, labels_key="labels",
+            sdata_with_qc,
+            labels_key="labels",
             score_col="max_straight_edge_ratio",
         )
