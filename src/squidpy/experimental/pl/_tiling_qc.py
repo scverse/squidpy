@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from matplotlib.colors import Normalize, PowerNorm
 import spatialdata as sd
+from matplotlib.colors import Normalize, PowerNorm
 
 __all__ = ["tiling_qc"]
 
