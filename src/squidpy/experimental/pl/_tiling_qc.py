@@ -66,4 +66,5 @@ def tiling_qc(
         color=score_col,
         table_name=table_key,
         cmap=cmap,
+        colorbar=True,
     ).pl.show(**show_kwargs)
