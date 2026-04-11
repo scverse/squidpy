@@ -86,9 +86,7 @@ class TestCalculateTilingQC:
     def test_spatial_postprocessing_columns(self, sdata_tile_boundary):
         """Spatial post-processing produces correct dtypes and value ranges."""
         sdata, _ = sdata_tile_boundary
-        adata = sq.experimental.tl.calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False
-        )
+        adata = sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200, inplace=False)
         obs = adata.obs
 
         # smoothed_cut_score is non-negative (product of non-negatives)
@@ -107,9 +105,7 @@ class TestCalculateTilingQC:
     def test_outlier_fraction_consistent_with_is_outlier(self, sdata_tile_boundary):
         """nhood_outlier_fraction should be 1.0 only when all k neighbors are outliers."""
         sdata, _ = sdata_tile_boundary
-        adata = sq.experimental.tl.calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False
-        )
+        adata = sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200, inplace=False)
         obs = adata.obs
         # Cells with nhood_outlier_fraction == 0 should exist (most cells are not outliers)
         assert (obs["nhood_outlier_fraction"] == 0).any()
@@ -124,13 +120,9 @@ class TestCalculateTilingQC:
 
     def test_clean_dataset_no_outliers(self, sdata_clean):
         """No tiling artifacts → MAD-based outlier detection should flag zero cells."""
-        adata = sq.experimental.tl.calculate_tiling_qc(
-            sdata_clean, labels_key="labels", tile_size=200, inplace=False
-        )
+        adata = sq.experimental.tl.calculate_tiling_qc(sdata_clean, labels_key="labels", tile_size=200, inplace=False)
         obs = adata.obs
-        assert not obs["is_outlier"].any(), (
-            f"Expected 0 outliers on clean data, got {obs['is_outlier'].sum()}"
-        )
+        assert not obs["is_outlier"].any(), f"Expected 0 outliers on clean data, got {obs['is_outlier'].sum()}"
         assert (obs["nhood_outlier_fraction"] == 0).all()
 
     def test_few_cells_below_k(self):
@@ -147,16 +139,14 @@ class TestCalculateTilingQC:
             labels[yy**2 + xx**2 <= 64] = i
 
         sdata = SpatialData(
-            images={"image": Image2DModel.parse(
-                xr.DataArray(np.zeros((3, 100, 100), dtype=np.uint8), dims=["c", "y", "x"])
-            )},
-            labels={"labels": Labels2DModel.parse(
-                xr.DataArray(da.from_array(labels, chunks=(100, 100)), dims=["y", "x"])
-            )},
+            images={
+                "image": Image2DModel.parse(xr.DataArray(np.zeros((3, 100, 100), dtype=np.uint8), dims=["c", "y", "x"]))
+            },
+            labels={
+                "labels": Labels2DModel.parse(xr.DataArray(da.from_array(labels, chunks=(100, 100)), dims=["y", "x"]))
+            },
         )
-        adata = sq.experimental.tl.calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False
-        )
+        adata = sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200, inplace=False)
         assert adata.n_obs == 3
         for col in ["smoothed_cut_score", "is_outlier", "nhood_outlier_fraction"]:
             assert col in adata.obs.columns
