@@ -249,6 +249,10 @@ class TestTilingQCVisual(PlotTester, metaclass=PlotTesterMeta):
         """Visual: default plot (nhood_outlier_fraction, RdYlGn_r, colorbar)."""
         sq.experimental.pl.tiling_qc(sdata_with_qc, labels_key="labels")
 
+    def test_plot_tiling_qc_is_outlier(self, sdata_with_qc):
+        """Visual: labels coloured by is_outlier (boolean)."""
+        sq.experimental.pl.tiling_qc(sdata_with_qc, labels_key="labels", score_col="is_outlier")
+
     def test_plot_tiling_qc_smoothed_cut_score(self, sdata_with_qc):
         """Visual: labels coloured by smoothed_cut_score."""
         sq.experimental.pl.tiling_qc(
