@@ -57,7 +57,16 @@ def tiling_qc(
 
     import spatialdata_plot  # noqa: F401  - registers accessor
 
-    show_kwargs: dict[str, object] = {}
+    _TITLES = {
+        "nhood_outlier_fraction": "Neighborhood outlier fraction",
+        "smoothed_cut_score": "Smoothed cut score",
+        "cut_score": "Cut score",
+        "is_outlier": "Outlier flag",
+        "max_straight_edge_ratio": "Max straight edge ratio",
+        "cardinal_alignment_score": "Cardinal alignment score",
+    }
+
+    show_kwargs: dict[str, object] = {"title": _TITLES.get(score_col, score_col)}
     if figsize is not None:
         show_kwargs["figsize"] = figsize
 
