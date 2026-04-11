@@ -155,20 +155,30 @@ class TestCalculateTilingQC:
         sdata, _ = sdata_tile_boundary
         with pytest.raises(ValueError, match="At least one outlier gate"):
             sq.experimental.tl.calculate_tiling_qc(
-                sdata, labels_key="labels", tile_size=200, inplace=False,
-                outlier_use_cut=False, outlier_use_smoothed=False,
+                sdata,
+                labels_key="labels",
+                tile_size=200,
+                inplace=False,
+                outlier_use_cut=False,
+                outlier_use_smoothed=False,
             )
 
     def test_invalid_nmads_raises(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         with pytest.raises(ValueError, match="nmads_cut must be positive"):
             sq.experimental.tl.calculate_tiling_qc(
-                sdata, labels_key="labels", tile_size=200, inplace=False,
+                sdata,
+                labels_key="labels",
+                tile_size=200,
+                inplace=False,
                 nmads_cut=0,
             )
         with pytest.raises(ValueError, match="nmads_smoothed must be positive"):
             sq.experimental.tl.calculate_tiling_qc(
-                sdata, labels_key="labels", tile_size=200, inplace=False,
+                sdata,
+                labels_key="labels",
+                tile_size=200,
+                inplace=False,
                 nmads_smoothed=-1,
             )
 
@@ -176,8 +186,12 @@ class TestCalculateTilingQC:
         """Using only cut_score gate should still produce valid output."""
         sdata, _ = sdata_tile_boundary
         adata = sq.experimental.tl.calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
-            outlier_use_cut=True, outlier_use_smoothed=False,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
+            outlier_use_cut=True,
+            outlier_use_smoothed=False,
         )
         assert adata.obs["is_outlier"].dtype == bool
         assert adata.uns["tiling_qc"]["outlier_use_cut"] is True
@@ -187,8 +201,12 @@ class TestCalculateTilingQC:
         """Using only smoothed gate should still produce valid output."""
         sdata, _ = sdata_tile_boundary
         adata = sq.experimental.tl.calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, inplace=False,
-            outlier_use_cut=False, outlier_use_smoothed=True,
+            sdata,
+            labels_key="labels",
+            tile_size=200,
+            inplace=False,
+            outlier_use_cut=False,
+            outlier_use_smoothed=True,
         )
         assert adata.obs["is_outlier"].dtype == bool
 
