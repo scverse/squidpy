@@ -21,11 +21,10 @@ from spatialdata.models import Image2DModel, Labels2DModel
 # ---------------------------------------------------------------------------
 
 _IMAGE_SIZE = 600
-_TILE_BORDERS = (200, 400)  # 3×3 grid on 600 px → borders at 200, 400
+_TILE_BORDERS = (200, 400)  # 3x3 grid on 600 px - borders at 200, 400
 _BORDER_GAP = 2  # pixels zeroed at each tile border
-_CELL_GAP = 2  # minimum gap between any two cells
-_N_CELLS_TARGET = 120
-_SEMI_AXIS_RANGE = (6, 16)  # semi-axis lengths in pixels
+_SEMI_AXIS_RANGE = (5, 10)  # semi-axis lengths in pixels
+_GRID_STEP = 24  # spacing between cell centers on the grid
 
 
 @dataclass
@@ -39,49 +38,46 @@ class TileBoundaryGroundTruth:
     tile_borders_x: tuple[int, ...] = _TILE_BORDERS
 
 
-def _place_ellipsoids(
+def _place_ellipsoids_grid(
     shape: tuple[int, int],
-    n_target: int,
     semi_range: tuple[int, int],
-    cell_gap: int,
+    grid_step: int,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Place non-overlapping ellipsoids via rejection sampling.
+    """Place non-overlapping ellipsoids on a jittered grid.
+
+    Cell centers are placed on a regular grid with spacing ``grid_step``,
+    then jittered by a small random offset.  Each cell gets random
+    semi-axes and rotation.  The grid guarantees no overlaps as long as
+    ``grid_step >= 2 * semi_range[1] + margin``, so no collision
+    checking is needed.
 
     Returns an ``(H, W)`` int32 label array with IDs 1..N.
     """
     H, W = shape
     labels = np.zeros(shape, dtype=np.int32)
+    margin = semi_range[1] + 1
+    max_jitter = (grid_step - 2 * semi_range[1]) // 2
+
+    # Build grid centers
+    ys = np.arange(margin, H - margin, grid_step)
+    xs = np.arange(margin, W - margin, grid_step)
+
     cell_id = 0
-    max_attempts = n_target * 20  # allow generous retries
+    for y0 in ys:
+        for x0 in xs:
+            cy = y0 + rng.integers(-max_jitter, max_jitter + 1)
+            cx = x0 + rng.integers(-max_jitter, max_jitter + 1)
+            r_radius = rng.integers(semi_range[0], semi_range[1] + 1)
+            c_radius = rng.integers(semi_range[0], semi_range[1] + 1)
+            angle = rng.uniform(0, np.pi)
 
-    for _ in range(max_attempts):
-        if cell_id >= n_target:
-            break
+            rr, cc = ellipse(cy, cx, r_radius, c_radius, shape=shape, rotation=angle)
+            if len(rr) == 0:
+                continue
 
-        cy = rng.integers(semi_range[1] + cell_gap, H - semi_range[1] - cell_gap)
-        cx = rng.integers(semi_range[1] + cell_gap, W - semi_range[1] - cell_gap)
-        r_radius = rng.integers(semi_range[0], semi_range[1] + 1)
-        c_radius = rng.integers(semi_range[0], semi_range[1] + 1)
-        angle = rng.uniform(0, np.pi)
-
-        rr, cc = ellipse(cy, cx, r_radius, c_radius, shape=shape, rotation=angle)
-        if len(rr) == 0:
-            continue
-
-        if cell_gap > 0:
-            occupied = ndimage.binary_dilation(
-                labels > 0,
-                iterations=cell_gap,
-            )
-        else:
-            occupied = labels > 0
-
-        if occupied[rr, cc].any():
-            continue
-
-        cell_id += 1
-        labels[rr, cc] = cell_id
+            cell_id += 1
+            labels[rr, cc] = cell_id
 
     return labels
 
@@ -156,11 +152,10 @@ def make_tile_boundary_sdata() -> tuple[SpatialData, TileBoundaryGroundTruth]:
     """
     rng = np.random.default_rng(42)
 
-    original_labels = _place_ellipsoids(
+    original_labels = _place_ellipsoids_grid(
         shape=(_IMAGE_SIZE, _IMAGE_SIZE),
-        n_target=_N_CELLS_TARGET,
         semi_range=_SEMI_AXIS_RANGE,
-        cell_gap=_CELL_GAP,
+        grid_step=_GRID_STEP,
         rng=rng,
     )
     n_original = len(np.unique(original_labels)) - 1
@@ -207,11 +202,10 @@ def make_clean_sdata() -> SpatialData:
     spatial post-processing should flag zero outliers.
     """
     rng = np.random.default_rng(123)
-    labels = _place_ellipsoids(
+    labels = _place_ellipsoids_grid(
         shape=(_IMAGE_SIZE, _IMAGE_SIZE),
-        n_target=_N_CELLS_TARGET,
         semi_range=_SEMI_AXIS_RANGE,
-        cell_gap=_CELL_GAP,
+        grid_step=_GRID_STEP,
         rng=rng,
     )
     dask_labels = da.from_array(labels, chunks=(200, 200))
