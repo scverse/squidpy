@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from matplotlib.colors import Normalize, PowerNorm
 import spatialdata as sd
 
 __all__ = ["tiling_qc"]
@@ -13,6 +14,7 @@ def tiling_qc(
     qc_key: str | None = None,
     score_col: str = "cut_score",
     cmap: str = "Reds",
+    norm: Normalize | None = None,
     figsize: tuple[float, float] | None = None,
 ) -> None:
     """Plot labels coloured by their tiling-artifact score.
@@ -37,6 +39,11 @@ def tiling_qc(
         ``"cardinal_alignment_score"``.
     cmap
         Matplotlib colormap name.
+    norm
+        Matplotlib normalisation for the colour scale.  Defaults to
+        ``PowerNorm(gamma=0.5)`` which compresses low scores toward
+        zero, making tile-boundary artifacts more visually prominent.
+        Pass ``Normalize()`` for a linear scale.
     figsize
         Figure size passed to :meth:`spatialdata.SpatialData.pl.show`.
     """
@@ -56,6 +63,9 @@ def tiling_qc(
 
     import spatialdata_plot  # noqa: F401  — registers accessor
 
+    if norm is None:
+        norm = PowerNorm(gamma=0.5)
+
     show_kwargs: dict[str, object] = {}
     if figsize is not None:
         show_kwargs["figsize"] = figsize
@@ -65,4 +75,5 @@ def tiling_qc(
         color=score_col,
         table_name=table_key,
         cmap=cmap,
+        norm=norm,
     ).pl.show(**show_kwargs)
