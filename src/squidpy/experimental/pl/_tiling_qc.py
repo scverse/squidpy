@@ -11,8 +11,8 @@ def tiling_qc(
     sdata: sd.SpatialData,
     labels_key: str,
     qc_key: str | None = None,
-    score_col: str = "cut_score",
-    cmap: str = "Reds",
+    score_col: str = "nhood_outlier_fraction",
+    cmap: str = "RdYlGn_r",
     figsize: tuple[float, float] | None = None,
 ) -> None:
     """Plot labels coloured by their tiling-artifact score.
@@ -33,6 +33,7 @@ def tiling_qc(
         ``"{labels_key}_qc"``.
     score_col
         Which ``.obs`` column to colour by.  One of
+        ``"nhood_outlier_fraction"``, ``"smoothed_cut_score"``,
         ``"cut_score"``, ``"max_straight_edge_ratio"``,
         ``"cardinal_alignment_score"``.
     cmap
@@ -54,7 +55,7 @@ def tiling_qc(
             f"Available: {[c for c in adata.obs.columns if c not in ('region', 'label_id')]}"
         )
 
-    import spatialdata_plot  # noqa: F401  — registers accessor
+    import spatialdata_plot  # noqa: F401  - registers accessor
 
     show_kwargs: dict[str, object] = {}
     if figsize is not None:

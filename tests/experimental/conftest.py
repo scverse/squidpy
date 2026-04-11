@@ -198,3 +198,35 @@ def make_tile_boundary_sdata() -> tuple[SpatialData, TileBoundaryGroundTruth]:
 def sdata_tile_boundary() -> tuple[SpatialData, TileBoundaryGroundTruth]:
     """Fixture wrapper around :func:`make_tile_boundary_sdata`."""
     return make_tile_boundary_sdata()
+
+
+def make_clean_sdata() -> SpatialData:
+    """Build a SpatialData with natural ellipsoid cells and NO tile cuts.
+
+    This is the negative control: no tiling artifacts exist, so the
+    spatial post-processing should flag zero outliers.
+    """
+    rng = np.random.default_rng(123)
+    labels = _place_ellipsoids(
+        shape=(_IMAGE_SIZE, _IMAGE_SIZE),
+        n_target=_N_CELLS_TARGET,
+        semi_range=_SEMI_AXIS_RANGE,
+        cell_gap=_CELL_GAP,
+        rng=rng,
+    )
+    dask_labels = da.from_array(labels, chunks=(200, 200))
+    labels_xr = xr.DataArray(dask_labels, dims=["y", "x"])
+
+    image_data = rng.integers(0, 255, (3, _IMAGE_SIZE, _IMAGE_SIZE), dtype=np.uint8)
+    image_xr = xr.DataArray(image_data, dims=["c", "y", "x"], coords={"c": ["R", "G", "B"]})
+
+    return SpatialData(
+        images={"image": Image2DModel.parse(image_xr)},
+        labels={"labels": Labels2DModel.parse(labels_xr)},
+    )
+
+
+@pytest.fixture()
+def sdata_clean() -> SpatialData:
+    """Fixture wrapper around :func:`make_clean_sdata`."""
+    return make_clean_sdata()

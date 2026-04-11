@@ -10,6 +10,14 @@ computes per-cell metrics that quantify this artifact:
   0° or 90° (axis-aligned tile borders).
 - **cut_score**: product of the two, combining evidence from shape and
   orientation.
+- **smoothed_cut_score**: cut_score multiplied by the mean cut_score of
+  k=10 nearest spatial neighbors - amplifies boundary cells while
+  suppressing isolated high-scorers.
+- **is_outlier**: boolean flag for cells whose smoothed_cut_score exceeds
+  median + nmads x MAD x 1.4826 (default nmads=3).
+- **nhood_outlier_fraction**: fraction of k=10 nearest neighbors that are
+  smoothed-score outliers (MAD-based).  Bounded [0, 1]; high values
+  precisely trace the FOV tile grid.
 
 All heavy computation is done per-tile via the tiling infrastructure
 in :mod:`squidpy.experimental.im._tiling`, so this scales to
@@ -30,6 +38,7 @@ import xarray as xr
 from dask.diagnostics import ProgressBar
 from numba import njit
 from skimage.measure import find_contours, regionprops
+from sklearn.neighbors import BallTree
 from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
 
@@ -47,7 +56,7 @@ from squidpy.experimental.im._tiling import (
 
 __all__ = ["calculate_tiling_qc"]
 
-# Minimum cell area in pixels — smaller cells produce noisy contours
+# Minimum cell area in pixels - smaller cells produce noisy contours
 _MIN_CELL_AREA = 20
 
 # Default perpendicular distance tolerance for collinearity (pixels).
@@ -61,8 +70,10 @@ _DEFAULT_DISTANCE_TOL = 0.75
 # the O(n²) two-pointer scan.
 _MAX_CONTOUR_POINTS = 500
 
-_SCORE_COLUMNS = ["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"]
-_NAN_SCORES = dict.fromkeys(_SCORE_COLUMNS, np.nan)
+_TILE_SCORE_COLUMNS = ["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"]
+_POST_SCORE_COLUMNS = ["smoothed_cut_score", "is_outlier", "nhood_outlier_fraction"]
+_SCORE_COLUMNS = _TILE_SCORE_COLUMNS + _POST_SCORE_COLUMNS
+_NAN_TILE_SCORES = dict.fromkeys(_TILE_SCORE_COLUMNS, np.nan)
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +133,7 @@ def _collinear_scan(
 def _resample_contour(contour: np.ndarray, max_points: int) -> np.ndarray:
     """Resample a contour to at most *max_points* via arc-length interpolation.
 
-    Fully vectorised using :func:`numpy.searchsorted` — no Python
+    Fully vectorised using :func:`numpy.searchsorted` - no Python
     loops.  Preserves geometry far better than naive stride-based
     subsampling because points are placed equidistantly along the
     contour arc.
@@ -191,7 +202,7 @@ def _longest_collinear_segment(
     closed = np.sqrt(((pts[0] - pts[-1]) ** 2).sum()) < 1.0
 
     # For closed contours, drop the duplicate last point and precompute
-    # segment lengths once — rotations reuse the same distances.
+    # segment lengths once - rotations reuse the same distances.
     if closed and n > 6:
         core = pts[:-1]
         core_diffs = np.diff(core, axis=0)
@@ -313,7 +324,7 @@ def _score_tile(
     """
     regions = regionprops(tile_labels)
     if not regions:
-        return pd.DataFrame(columns=_SCORE_COLUMNS, dtype=float)
+        return pd.DataFrame(columns=_TILE_SCORE_COLUMNS, dtype=float)
 
     rows: dict[int, dict[str, float]] = {}
 
@@ -322,7 +333,7 @@ def _score_tile(
         area = region.area
 
         if area < min_area * (downsample**2):
-            rows[lid] = dict(_NAN_SCORES)
+            rows[lid] = dict(_NAN_TILE_SCORES)
             continue
 
         # Pad with 1px of zeros so find_contours can trace cells
@@ -336,7 +347,7 @@ def _score_tile(
 
         contours = find_contours(crop, 0.5)
         if not contours:
-            rows[lid] = dict(_NAN_SCORES)
+            rows[lid] = dict(_NAN_TILE_SCORES)
             continue
 
         contour = max(contours, key=len)
@@ -396,6 +407,7 @@ def calculate_tiling_qc(
     distance_tol: float = _DEFAULT_DISTANCE_TOL,
     min_area: int = _MIN_CELL_AREA,
     downsample: int = 1,
+    nmads: float = 3,
     n_jobs: int = -1,
     client: Client | None = None,
     adata_key_added: str | None = None,
@@ -436,6 +448,13 @@ def calculate_tiling_qc(
         Factor by which to downsample each cell's bounding-box crop
         before contour extraction.  Straightness is scale-invariant,
         so ``2``--``4`` is safe and much faster on large cells.
+    nmads
+        Number of MADs above the median of ``smoothed_cut_score``
+        to use as the outlier threshold.  The threshold is
+        ``median + nmads x MAD x 1.4826``.  Lower values
+        increase sensitivity (more outliers); higher values are
+        more conservative.  Default 3 (≈ 99.7th percentile for
+        normally distributed data).
     n_jobs
         Number of threads for tile processing.  ``-1`` (default) uses
         all available CPUs.  Ignored when ``client`` is provided.
@@ -455,13 +474,21 @@ def calculate_tiling_qc(
     Returns
     -------
     :class:`~anndata.AnnData` when ``inplace=False``, otherwise ``None``.
-    The AnnData ``.obs`` contains three scores per cell:
+    The AnnData ``.obs`` contains five scores per cell:
 
     - ``max_straight_edge_ratio``: longest collinear boundary segment /
       equivalent diameter.
     - ``cardinal_alignment_score``: axis-alignment of that segment
       (1 = cardinal, 0 = diagonal).
     - ``cut_score``: product of the two.
+    - ``smoothed_cut_score``: ``cut_score x mean(neighbor cut_scores)``
+      over k=10 nearest spatial neighbors.  Amplifies cells on FOV
+      boundaries while suppressing isolated high-scorers.
+    - ``is_outlier``: boolean, ``True`` when ``smoothed_cut_score``
+      exceeds ``median + nmads x MAD x 1.4826``.
+    - ``nhood_outlier_fraction``: fraction of k=10 nearest neighbors
+      that are smoothed-score outliers (MAD-based).  Bounded [0, 1];
+      high values trace the tile grid.
 
     Notes
     -----
@@ -512,15 +539,51 @@ def calculate_tiling_qc(
     tile_dfs = [df for df in results if not df.empty]
 
     if not tile_dfs:
-        raise ValueError("No cells scored — labels may be empty or all below min_area.")
+        raise ValueError("No cells scored - labels may be empty or all below min_area.")
 
     combined = pd.concat(tile_dfs, axis=0).sort_index()
 
     if combined.index.duplicated().any():
         dups = combined.index[combined.index.duplicated()].unique().tolist()
-        raise RuntimeError(f"Duplicate cell IDs across tiles — tile ownership may be broken. Duplicates: {dups}")
+        raise RuntimeError(f"Duplicate cell IDs across tiles - tile ownership may be broken. Duplicates: {dups}")
 
+    # --- Spatial context post-processing ---
     n_cells = len(combined)
+    k = 10
+
+    centroid_y = np.array([cell_info[lid].centroid_y for lid in combined.index])
+    centroid_x = np.array([cell_info[lid].centroid_x for lid in combined.index])
+    centroids = np.column_stack([centroid_y, centroid_x])
+
+    if n_cells <= 1:
+        combined["smoothed_cut_score"] = combined["cut_score"]
+        combined["is_outlier"] = False
+        combined["nhood_outlier_fraction"] = 0.0
+    else:
+        effective_k = min(k, n_cells - 1)
+        tree = BallTree(centroids)
+        _, indices = tree.query(centroids, k=effective_k + 1)  # +1 because query includes self
+        neighbor_idx = indices[:, 1:]
+
+        cut_scores = combined["cut_score"].values.copy()
+        cut_scores = np.where(np.isnan(cut_scores), 0.0, cut_scores)
+        neighbor_mean = cut_scores[neighbor_idx].mean(axis=1)
+        smoothed = cut_scores * neighbor_mean
+        combined["smoothed_cut_score"] = smoothed
+
+        median_s = np.median(smoothed)
+        mad_s = np.median(np.abs(smoothed - median_s))
+        if mad_s < 1e-12:
+            # Degenerate distribution - no spread, no outliers.
+            is_outlier = np.zeros(n_cells, dtype=bool)
+        else:
+            threshold = median_s + nmads * mad_s * 1.4826
+            is_outlier = smoothed >= threshold
+        combined["is_outlier"] = is_outlier
+
+        neighbor_outlier_frac = combined["is_outlier"].values[neighbor_idx].mean(axis=1)
+        combined["nhood_outlier_fraction"] = neighbor_outlier_frac
+
     adata = ad.AnnData(
         X=np.empty((n_cells, 0), dtype=np.float32),
     )
@@ -534,11 +597,14 @@ def calculate_tiling_qc(
         "instance_key": "label_id",
     }
 
+    # TODO: migrate tiling QC scores to .obsm once spatialdata-plot
+    # supports rendering labels colored by obsm keys.
+    # See scverse/spatialdata-plot#587.
     for col in combined.columns:
         adata.obs[col] = combined[col].values
 
-    adata.obs["centroid_y"] = np.array([cell_info[lid].centroid_y for lid in combined.index])
-    adata.obs["centroid_x"] = np.array([cell_info[lid].centroid_x for lid in combined.index])
+    adata.obs["centroid_y"] = centroid_y
+    adata.obs["centroid_x"] = centroid_x
 
     adata.uns[_METHOD_KEY] = {
         "scale": scale,
@@ -547,6 +613,8 @@ def calculate_tiling_qc(
         "distance_tol": distance_tol,
         "min_area": min_area,
         "downsample": downsample,
+        "nmads": nmads,
+        "nhood_k": k,
     }
 
     if inplace:
