@@ -62,7 +62,7 @@ _DEFAULT_DISTANCE_TOL = 0.75
 _MAX_CONTOUR_POINTS = 500
 
 _SCORE_COLUMNS = ["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"]
-_NAN_SCORES = {col: np.nan for col in _SCORE_COLUMNS}
+_NAN_SCORES = dict.fromkeys(_SCORE_COLUMNS, np.nan)
 
 
 # ---------------------------------------------------------------------------
