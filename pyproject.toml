@@ -261,7 +261,7 @@ addopts = [
 markers = [
   "internet: tests that require internet",
   "gpu: tests that require GPU",
-]
+  ]
 
 [tool.coverage]
 run.branch = true

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from squidpy.gr import neighbors
 from squidpy.gr._build import (
+    GraphMatrixT,
     SpatialNeighborsResult,
     mask_graph,
     spatial_neighbors,
@@ -26,6 +27,7 @@ from squidpy.gr._ripley import ripley
 from squidpy.gr._sepal import sepal
 
 __all__ = [
+    "GraphMatrixT",
     "SpatialNeighborsResult",
     "NhoodEnrichmentResult",
     "neighbors",

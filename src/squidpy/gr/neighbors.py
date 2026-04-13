@@ -32,6 +32,7 @@ from squidpy._utils import NDArrayA
 from squidpy._validators import assert_positive
 
 __all__ = [
+    "GraphMatrixT",
     "GraphBuilder",
     "GraphBuilderCSR",
     "GraphPostprocessor",

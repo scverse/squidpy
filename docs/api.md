@@ -23,6 +23,7 @@ import squidpy as sq
     gr.spatial_neighbors_radius
     gr.spatial_neighbors_delaunay
     gr.spatial_neighbors_grid
+    gr.GraphMatrixT
     gr.SpatialNeighborsResult
     gr.mask_graph
     gr.nhood_enrichment
@@ -128,6 +129,7 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 
     gr.neighbors.GraphBuilder
     gr.neighbors.GraphBuilderCSR
+    gr.neighbors.GraphMatrixT
     gr.neighbors.GraphPostprocessor
     gr.neighbors.DistanceIntervalPostprocessor
     gr.neighbors.PercentilePostprocessor
