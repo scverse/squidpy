@@ -236,6 +236,7 @@ class RadiusBuilder(GraphBuilderCSR):
         dst.setdiag(0.0)
         return adj, dst
 
+
 class DelaunayBuilder(GraphBuilderCSR):
     """Build a generic point-cloud graph from a Delaunay triangulation.
 
@@ -287,6 +288,7 @@ class DelaunayBuilder(GraphBuilderCSR):
         adj.setdiag(1.0 if self.set_diag else adj.diagonal())
         dst.setdiag(0.0)
         return adj, dst
+
 
 class GridBuilder(GraphBuilderCSR):
     """Build a grid-based spatial graph.
@@ -383,6 +385,7 @@ def _filter_by_radius_interval(
     dst.data[mask] = 0.0
     adj.data[mask] = 0.0
     adj.setdiag(a_diag)
+
 
 @dataclass(frozen=True)
 class DistanceIntervalPostprocessor:
