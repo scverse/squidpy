@@ -81,9 +81,7 @@ class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
         mats: Sequence[tuple[GraphMatrixT, GraphMatrixT]],
         ixs: Sequence[int],
     ) -> tuple[GraphMatrixT, GraphMatrixT]:
-        raise NotImplementedError(
-            "Using `library_key` with this graph builder is not implemented yet."
-        )
+        raise NotImplementedError("Using `library_key` with this graph builder is not implemented yet.")
 
 
 class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
