@@ -376,7 +376,7 @@ def spatial_neighbors(
     )
 
     return _run_spatial_neighbors(
-        adata, builder=builder, spatial_key=spatial_key, library_key=library_key, key_added=key_added, copy=copy
+        adata, builder, spatial_key=spatial_key, library_key=library_key, key_added=key_added, copy=copy
     )
 
 
@@ -441,7 +441,7 @@ def spatial_neighbors_from_builder(
     )
     return _run_spatial_neighbors(
         adata,
-        builder=builder,
+        builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -527,7 +527,7 @@ def spatial_neighbors_knn(
     )
     return _run_spatial_neighbors(
         adata,
-        builder=builder,
+        builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -596,7 +596,7 @@ def spatial_neighbors_radius(
     )
     return _run_spatial_neighbors(
         adata,
-        builder=builder,
+        builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -665,7 +665,7 @@ def spatial_neighbors_delaunay(
     )
     return _run_spatial_neighbors(
         adata,
-        builder=builder,
+        builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -753,7 +753,7 @@ def spatial_neighbors_grid(
     )
     return _run_spatial_neighbors(
         adata,
-        builder=builder,
+        builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -763,8 +763,8 @@ def spatial_neighbors_grid(
 
 def _run_spatial_neighbors(
     adata: AnnData,
-    *,
     builder: GraphBuilder[Any, Any],
+    *,
     spatial_key: str = Key.obsm.spatial,
     library_key: str | None = None,
     key_added: str = "spatial",
