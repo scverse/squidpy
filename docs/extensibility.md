@@ -15,7 +15,6 @@ The `squidpy.gr.neighbors` module exposes two builder base classes:
 
 | Base class | Method / property | Required | Purpose |
 |---|---|---|---|
-| {class}`~squidpy.gr.neighbors.GraphBuilder` | {attr}`~squidpy.gr.neighbors.GraphBuilder.coord_type` | yes | Return the {class}`~squidpy._constants._constants.CoordType` this builder supports. |
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.build_graph` | yes | Construct and return ``(adj, dst)`` using the coordinate and matrix types of your custom backend. |
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_filters` | no | Post-process the raw ``adj``/``dst`` before percentile filtering and transform. |
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_percentile` | no | Override percentile handling when the backend needs custom behavior. |
@@ -60,7 +59,6 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from snnpy import build_snn_model
 
-from squidpy._constants._constants import CoordType
 from squidpy.gr.neighbors import GraphBuilderCSR
 
 
@@ -70,10 +68,6 @@ class SNNRadiusBuilder(GraphBuilderCSR):
     def __init__(self, radius: float, **kwargs):
         super().__init__(**kwargs)
         self.radius = radius
-
-    @property
-    def coord_type(self) -> CoordType:
-        return CoordType.GENERIC
 
     def build_graph(self, coords):
         N = coords.shape[0]

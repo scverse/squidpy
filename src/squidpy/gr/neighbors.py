@@ -26,7 +26,7 @@ from scipy.spatial import Delaunay
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 from sklearn.neighbors import NearestNeighbors
 
-from squidpy._constants._constants import CoordType, Transform
+from squidpy._constants._constants import Transform
 from squidpy._utils import NDArrayA
 from squidpy._validators import assert_positive
 
@@ -54,11 +54,6 @@ class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
         self.transform = Transform.NONE if transform is None else Transform(transform)
         self.set_diag = set_diag
         self.percentile = percentile
-
-    @property
-    @abstractmethod
-    def coord_type(self) -> CoordType:
-        """Coordinate system supported by this builder."""
 
     def build(self, coords: CoordT) -> tuple[GraphMatrixT, GraphMatrixT]:
         adj, dst = self.build_graph(coords)
@@ -127,7 +122,7 @@ class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
         return adj, dst
 
     def apply_percentile(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
-        if self.percentile is not None and self.coord_type == CoordType.GENERIC:
+        if self.percentile is not None:
             threshold = np.percentile(dst.data, self.percentile)
             adj[dst > threshold] = 0.0
             dst[dst > threshold] = 0.0
@@ -176,10 +171,6 @@ class KNNBuilder(GraphBuilderCSR):
         super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
         self.n_neighs = n_neighs
 
-    @property
-    def coord_type(self) -> CoordType:
-        return CoordType.GENERIC
-
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
         tree = NearestNeighbors(n_neighbors=self.n_neighs, radius=1, metric="euclidean")
@@ -218,10 +209,6 @@ class RadiusBuilder(GraphBuilderCSR):
     ) -> None:
         super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
         self.radius = radius
-
-    @property
-    def coord_type(self) -> CoordType:
-        return CoordType.GENERIC
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
@@ -271,10 +258,6 @@ class DelaunayBuilder(GraphBuilderCSR):
     ) -> None:
         super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
         self.radius = radius
-
-    @property
-    def coord_type(self) -> CoordType:
-        return CoordType.GENERIC
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
@@ -327,10 +310,6 @@ class GridBuilder(GraphBuilderCSR):
         self.n_neighs = n_neighs
         self.n_rings = n_rings
         self.delaunay = delaunay
-
-    @property
-    def coord_type(self) -> CoordType:
-        return CoordType.GRID
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         if self.n_rings > 1:

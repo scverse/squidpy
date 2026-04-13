@@ -87,7 +87,7 @@ def _resolve_graph_builder(
     if coord_type is None:
         if radius is not None:
             logg.warning(
-                f"Graph creation with `radius` is only available when `coord_type = {CoordType.GENERIC!r}` specified. "
+                "Graph creation with `radius` is only available for generic coordinates. "
                 f"Ignoring parameter `radius = {radius}`."
             )
         coord_type = CoordType.GRID if has_spatial_uns else CoordType.GENERIC
@@ -779,7 +779,7 @@ def _run_spatial_neighbors(
         libs = [None]
 
     start = logg.info(
-        f"Creating graph using `{builder.coord_type}` coordinates and `{builder.transform}` transform and `{len(libs)}` libraries."
+        f"Creating graph using `{builder.transform}` transform and `{len(libs)}` libraries."
     )
     if library_key is not None:
         mats: list[tuple[Any, Any]] = []
@@ -800,7 +800,6 @@ def _run_spatial_neighbors(
         "distances_key": dists_key,
         "params": {
             "n_neighbors": getattr(builder, "n_neighs", 6),
-            "coord_type": builder.coord_type.v,
             "radius": getattr(builder, "radius", None),
             "transform": builder.transform.v,
         },
