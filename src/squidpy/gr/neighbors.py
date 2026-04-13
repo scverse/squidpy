@@ -91,9 +91,7 @@ class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
         Override this only if the builder should support multi-library graph
         construction via ``library_key``.
         """
-        raise NotImplementedError(
-            "Using `library_key` with this graph builder is not implemented yet."
-        )
+        raise NotImplementedError("Using `library_key` with this graph builder is not implemented yet.")
 
 
 class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
