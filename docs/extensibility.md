@@ -20,10 +20,12 @@ The `squidpy.gr.neighbors` module exposes two builder base classes:
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_filters` | no | Post-process the raw ``adj``/``dst`` before percentile filtering and transform. |
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_percentile` | no | Override percentile handling when the backend needs custom behavior. |
 | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.apply_transform` | no | Override transform handling when the backend needs custom behavior. |
+| {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.combine` | no | Combine per-library results when using ``library_key``. If you do not need ``library_key`` support, leaving this unimplemented is fine. |
 
 
-The generic builder only defines the pipeline. The CSR-specialized builder adds the
-built-in CSR behavior for percentile filtering, adjacency transforms, and
+The generic builder only defines the pipeline. The CSR-specialized builder adds
+the built-in CSR behavior for percentile filtering, adjacency transforms,
+multi-library ``library_key`` combination, and
 {class}`~scipy.sparse.SparseEfficiencyWarning` suppression.
 
 Here ``adj`` and ``dst`` are square sparse matrices of shape ``(n_obs, n_obs)``

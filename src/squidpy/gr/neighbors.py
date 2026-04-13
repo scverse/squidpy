@@ -38,7 +38,12 @@ GraphMatrixT = TypeVar("GraphMatrixT")
 
 
 class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
-    """Base class for spatial graph construction strategies."""
+    """Base class for spatial graph construction strategies.
+
+    Custom builders must implement :meth:`build_graph`. Overriding
+    :meth:`combine` is optional and only needed to support multi-library graph
+    construction via ``library_key``.
+    """
 
     def __init__(
         self,
@@ -81,15 +86,23 @@ class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
         mats: Sequence[tuple[GraphMatrixT, GraphMatrixT]],
         ixs: Sequence[int],
     ) -> tuple[GraphMatrixT, GraphMatrixT]:
-        raise NotImplementedError("Using `library_key` with this graph builder is not implemented yet.")
+        """Combine per-library results into a single graph.
+
+        Override this only if the builder should support multi-library graph
+        construction via ``library_key``.
+        """
+        raise NotImplementedError(
+            "Using `library_key` with this graph builder is not implemented yet."
+        )
 
 
 class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
     """CSR-based graph construction strategy.
 
     Specializes :class:`GraphBuilder` for sparse CSR matrix output. Adds built-in handling
-    for percentile-based edge pruning, adjacency transforms (spectral/cosine), and
-    SparseEfficiencyWarning suppression. All built-in concrete builders
+    for percentile-based edge pruning, adjacency transforms (spectral/cosine),
+    SparseEfficiencyWarning suppression, and multi-library ``library_key``
+    combination. All built-in concrete builders
     (:class:`KNNBuilder`, :class:`RadiusBuilder`, :class:`DelaunayBuilder`, :class:`GridBuilder`)
     inherit from this class.
 

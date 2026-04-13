@@ -410,6 +410,9 @@ def spatial_neighbors_from_builder(
         {{class}}`~squidpy.gr.neighbors.GraphBuilderCSR`, while custom backends
         can implement the more generic
         {{class}}`~squidpy.gr.neighbors.GraphBuilder` interface directly.
+        Custom builders only need to implement multi-library support when using
+        ``library_key``; otherwise leaving
+        :meth:`~squidpy.gr.neighbors.GraphBuilder.combine` unimplemented is fine.
     %(spatial_key)s
     %(sdata_params)s
     %(library_key)s
