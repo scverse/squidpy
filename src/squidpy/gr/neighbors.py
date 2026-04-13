@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Generic, TypeVar, cast
 
@@ -16,6 +16,7 @@ from fast_array_utils import stats as fau_stats
 from numba import njit, prange
 from scipy.sparse import (
     SparseEfficiencyWarning,
+    block_diag,
     csr_array,
     csr_matrix,
     isspmatrix_csr,
@@ -75,6 +76,15 @@ class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
     def apply_transform(self, adj: GraphMatrixT, dst: GraphMatrixT) -> tuple[GraphMatrixT, GraphMatrixT]:
         return adj, dst
 
+    def combine(
+        self,
+        mats: Sequence[tuple[GraphMatrixT, GraphMatrixT]],
+        ixs: Sequence[int],
+    ) -> tuple[GraphMatrixT, GraphMatrixT]:
+        raise NotImplementedError(
+            "Using `library_key` with this graph builder is not implemented yet."
+        )
+
 
 class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
     """CSR-based graph construction strategy.
@@ -126,6 +136,16 @@ class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
             return adj, dst
 
         raise NotImplementedError(f"Transform `{self.transform}` is not yet implemented.")
+
+    def combine(
+        self,
+        mats: Sequence[tuple[csr_matrix, csr_matrix]],
+        ixs: Sequence[int],
+    ) -> tuple[csr_matrix, csr_matrix]:
+        order = cast(list[int], np.argsort(ixs).tolist())
+        adj = block_diag([m[0] for m in mats], format="csr")[order, :][:, order]
+        dst = block_diag([m[1] for m in mats], format="csr")[order, :][:, order]
+        return cast(csr_matrix, adj), cast(csr_matrix, dst)
 
 
 class KNNBuilder(GraphBuilderCSR):

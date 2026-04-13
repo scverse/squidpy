@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, NamedTuple, cast
+from typing import Any, Generic, NamedTuple, TypeVar
 
 import geopandas as gpd
 import numpy as np
@@ -11,11 +11,6 @@ import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
 from numba import njit
-from scipy.sparse import (
-    block_diag,
-    csr_matrix,
-    spmatrix,
-)
 from shapely import LineString, MultiPolygon, Polygon
 from spatialdata import SpatialData
 from spatialdata._core.centroids import get_centroids
@@ -57,11 +52,14 @@ __all__ = [
 ]
 
 
-class SpatialNeighborsResult(NamedTuple):
+GraphMatrixT = TypeVar("GraphMatrixT")
+
+
+class SpatialNeighborsResult(NamedTuple, Generic[GraphMatrixT]):
     """Result of spatial_neighbors function."""
 
-    connectivities: csr_matrix
-    distances: csr_matrix
+    connectivities: GraphMatrixT
+    distances: GraphMatrixT
 
 
 def _resolve_graph_builder(
@@ -781,14 +779,12 @@ def _run_spatial_neighbors(
         f"Creating graph using `{builder.coord_type}` coordinates and `{builder.transform}` transform and `{len(libs)}` libraries."
     )
     if library_key is not None:
-        mats: list[tuple[spmatrix, spmatrix]] = []
+        mats: list[tuple[Any, Any]] = []
         ixs: list[int] = []
         for lib in libs:
             ixs.extend(np.where(adata.obs[library_key] == lib)[0])
             mats.append(builder.build(adata[adata.obs[library_key] == lib].obsm[spatial_key]))
-        ixs = cast(list[int], np.argsort(ixs).tolist())
-        adj = block_diag([m[0] for m in mats], format="csr")[ixs, :][:, ixs]
-        dst = block_diag([m[1] for m in mats], format="csr")[ixs, :][:, ixs]
+        adj, dst = builder.combine(mats, ixs)
     else:
         adj, dst = builder.build(adata.obsm[spatial_key])
 
