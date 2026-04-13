@@ -128,6 +128,10 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 
     gr.neighbors.GraphBuilder
     gr.neighbors.GraphBuilderCSR
+    gr.neighbors.GraphPostprocessor
+    gr.neighbors.DistanceIntervalPostprocessor
+    gr.neighbors.PercentilePostprocessor
+    gr.neighbors.TransformPostprocessor
     gr.neighbors.KNNBuilder
     gr.neighbors.RadiusBuilder
     gr.neighbors.DelaunayBuilder

@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from itertools import chain
 from typing import Generic, TypeVar, cast
 
@@ -30,19 +31,32 @@ from squidpy._constants._constants import Transform
 from squidpy._utils import NDArrayA
 from squidpy._validators import assert_positive
 
-__all__ = ["GraphBuilder", "GraphBuilderCSR", "KNNBuilder", "RadiusBuilder", "DelaunayBuilder", "GridBuilder"]
+__all__ = [
+    "GraphBuilder",
+    "GraphBuilderCSR",
+    "GraphPostprocessor",
+    "DistanceIntervalPostprocessor",
+    "PercentilePostprocessor",
+    "TransformPostprocessor",
+    "KNNBuilder",
+    "RadiusBuilder",
+    "DelaunayBuilder",
+    "GridBuilder",
+]
 
 
 CoordT = TypeVar("CoordT")
 GraphMatrixT = TypeVar("GraphMatrixT")
+GraphPostprocessor = Callable[[GraphMatrixT, GraphMatrixT], tuple[GraphMatrixT, GraphMatrixT]]
 
 
 class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
     """Base class for spatial graph construction strategies.
 
     Custom builders must implement :meth:`build_graph`. Overriding
-    :meth:`combine` is optional and only needed to support multi-library graph
-    construction via ``library_key``.
+    :meth:`postprocessors` and :meth:`combine` is optional. Postprocessors can
+    be provided directly via ``__init__`` or by overriding
+    :meth:`postprocessors`.
     """
 
     def __init__(
@@ -50,31 +64,26 @@ class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
         transform: str | Transform | None = None,
         set_diag: bool = False,
         percentile: float | None = None,
+        postprocessors: Sequence[GraphPostprocessor[GraphMatrixT]] = (),
     ) -> None:
         self.transform = Transform.NONE if transform is None else Transform(transform)
         self.set_diag = set_diag
         self.percentile = percentile
+        self._postprocessors: list[GraphPostprocessor[GraphMatrixT]] = list(postprocessors)
 
     def build(self, coords: CoordT) -> tuple[GraphMatrixT, GraphMatrixT]:
         adj, dst = self.build_graph(coords)
-        adj, dst = self.apply_filters(adj, dst)
-        adj, dst = self.apply_percentile(adj, dst)
-        adj, dst = self.apply_transform(adj, dst)
+        for postprocessor in self.postprocessors():
+            adj, dst = postprocessor(adj, dst)
         return adj, dst
 
     @abstractmethod
     def build_graph(self, coords: CoordT) -> tuple[GraphMatrixT, GraphMatrixT]:
         """Construct raw adjacency and distance matrices."""
 
-    def apply_filters(self, adj: GraphMatrixT, dst: GraphMatrixT) -> tuple[GraphMatrixT, GraphMatrixT]:
-        """Apply builder-specific post-processing filters."""
-        return adj, dst
-
-    def apply_percentile(self, adj: GraphMatrixT, dst: GraphMatrixT) -> tuple[GraphMatrixT, GraphMatrixT]:
-        return adj, dst
-
-    def apply_transform(self, adj: GraphMatrixT, dst: GraphMatrixT) -> tuple[GraphMatrixT, GraphMatrixT]:
-        return adj, dst
+    def postprocessors(self) -> Sequence[GraphPostprocessor[GraphMatrixT]]:
+        """Return post-build processing steps for ``(adj, dst)``."""
+        return self._postprocessors
 
     def combine(
         self,
@@ -92,12 +101,12 @@ class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
 class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
     """CSR-based graph construction strategy.
 
-    Specializes :class:`GraphBuilder` for sparse CSR matrix output. Adds built-in handling
-    for percentile-based edge pruning, adjacency transforms (spectral/cosine),
-    SparseEfficiencyWarning suppression, and multi-library ``library_key``
-    combination. All built-in concrete builders
+    Specializes :class:`GraphBuilder` for sparse CSR matrix output. Adds
+    SparseEfficiencyWarning suppression and multi-library ``library_key``
+    combination. Built-in concrete builders
     (:class:`KNNBuilder`, :class:`RadiusBuilder`, :class:`DelaunayBuilder`, :class:`GridBuilder`)
-    inherit from this class.
+    inherit from this class and declare their postprocessors explicitly in
+    ``__init__`` using the reusable public postprocessor classes.
 
     Subclass this (not the generic :class:`GraphBuilder`) when implementing a builder
     that returns CSR matrices.
@@ -116,30 +125,6 @@ class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
     @abstractmethod
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         """Construct raw adjacency and distance matrices."""
-
-    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
-        """Apply builder-specific post-processing filters."""
-        return adj, dst
-
-    def apply_percentile(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
-        if self.percentile is not None:
-            threshold = np.percentile(dst.data, self.percentile)
-            adj[dst > threshold] = 0.0
-            dst[dst > threshold] = 0.0
-        return adj, dst
-
-    def apply_transform(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
-        adj.eliminate_zeros()
-        dst.eliminate_zeros()
-
-        if self.transform == Transform.SPECTRAL:
-            return cast(csr_matrix, _transform_a_spectral(adj)), dst
-        if self.transform == Transform.COSINE:
-            return cast(csr_matrix, _transform_a_cosine(adj)), dst
-        if self.transform == Transform.NONE:
-            return adj, dst
-
-        raise NotImplementedError(f"Transform `{self.transform}` is not yet implemented.")
 
     def combine(
         self,
@@ -168,7 +153,16 @@ class KNNBuilder(GraphBuilderCSR):
         percentile: float | None = None,
     ) -> None:
         assert_positive(n_neighs, name="n_neighs")
-        super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
+        postprocessors: list[GraphPostprocessor[csr_matrix]] = []
+        if percentile is not None:
+            postprocessors.append(PercentilePostprocessor(percentile))
+        postprocessors.append(TransformPostprocessor(Transform.NONE if transform is None else Transform(transform)))
+        super().__init__(
+            transform=transform,
+            set_diag=set_diag,
+            percentile=percentile,
+            postprocessors=postprocessors,
+        )
         self.n_neighs = n_neighs
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
@@ -207,7 +201,18 @@ class RadiusBuilder(GraphBuilderCSR):
         set_diag: bool = False,
         percentile: float | None = None,
     ) -> None:
-        super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
+        postprocessors: list[GraphPostprocessor[csr_matrix]] = []
+        if isinstance(radius, tuple):
+            postprocessors.append(DistanceIntervalPostprocessor(tuple(sorted(radius))))
+        if percentile is not None:
+            postprocessors.append(PercentilePostprocessor(percentile))
+        postprocessors.append(TransformPostprocessor(Transform.NONE if transform is None else Transform(transform)))
+        super().__init__(
+            transform=transform,
+            set_diag=set_diag,
+            percentile=percentile,
+            postprocessors=postprocessors,
+        )
         self.radius = radius
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
@@ -231,12 +236,6 @@ class RadiusBuilder(GraphBuilderCSR):
         dst.setdiag(0.0)
         return adj, dst
 
-    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
-        if isinstance(self.radius, Iterable):
-            _filter_by_radius_interval(adj, dst, self.radius)
-        return adj, dst
-
-
 class DelaunayBuilder(GraphBuilderCSR):
     """Build a generic point-cloud graph from a Delaunay triangulation.
 
@@ -256,7 +255,18 @@ class DelaunayBuilder(GraphBuilderCSR):
         set_diag: bool = False,
         percentile: float | None = None,
     ) -> None:
-        super().__init__(transform=transform, set_diag=set_diag, percentile=percentile)
+        postprocessors: list[GraphPostprocessor[csr_matrix]] = []
+        if isinstance(radius, tuple):
+            postprocessors.append(DistanceIntervalPostprocessor(tuple(sorted(radius))))
+        if percentile is not None:
+            postprocessors.append(PercentilePostprocessor(percentile))
+        postprocessors.append(TransformPostprocessor(Transform.NONE if transform is None else Transform(transform)))
+        super().__init__(
+            transform=transform,
+            set_diag=set_diag,
+            percentile=percentile,
+            postprocessors=postprocessors,
+        )
         self.radius = radius
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
@@ -277,12 +287,6 @@ class DelaunayBuilder(GraphBuilderCSR):
         adj.setdiag(1.0 if self.set_diag else adj.diagonal())
         dst.setdiag(0.0)
         return adj, dst
-
-    def apply_filters(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
-        if isinstance(self.radius, Iterable):
-            _filter_by_radius_interval(adj, dst, self.radius)
-        return adj, dst
-
 
 class GridBuilder(GraphBuilderCSR):
     """Build a grid-based spatial graph.
@@ -306,7 +310,8 @@ class GridBuilder(GraphBuilderCSR):
     ) -> None:
         assert_positive(n_neighs, name="n_neighs")
         assert_positive(n_rings, name="n_rings")
-        super().__init__(transform=transform, set_diag=set_diag, percentile=None)
+        postprocessors = [TransformPostprocessor(Transform.NONE if transform is None else Transform(transform))]
+        super().__init__(transform=transform, set_diag=set_diag, percentile=None, postprocessors=postprocessors)
         self.n_neighs = n_neighs
         self.n_rings = n_rings
         self.delaunay = delaunay
@@ -369,15 +374,52 @@ class GridBuilder(GraphBuilderCSR):
 def _filter_by_radius_interval(
     adj: csr_matrix,
     dst: csr_matrix,
-    radius: Iterable[float],
+    radius: tuple[float, float],
 ) -> None:
-    minn, maxx = sorted(radius)[:2]
+    minn, maxx = radius
     mask = (dst.data < minn) | (dst.data > maxx)
     a_diag = adj.diagonal()
 
     dst.data[mask] = 0.0
     adj.data[mask] = 0.0
     adj.setdiag(a_diag)
+
+@dataclass(frozen=True)
+class DistanceIntervalPostprocessor:
+    interval: tuple[float, float]
+
+    def __call__(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
+        _filter_by_radius_interval(adj, dst, self.interval)
+        return adj, dst
+
+
+@dataclass(frozen=True)
+class PercentilePostprocessor:
+    percentile: float
+
+    def __call__(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
+        threshold = np.percentile(dst.data, self.percentile)
+        adj[dst > threshold] = 0.0
+        dst[dst > threshold] = 0.0
+        return adj, dst
+
+
+@dataclass(frozen=True)
+class TransformPostprocessor:
+    transform: Transform
+
+    def __call__(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
+        adj.eliminate_zeros()
+        dst.eliminate_zeros()
+
+        if self.transform == Transform.SPECTRAL:
+            return cast(csr_matrix, _transform_a_spectral(adj)), dst
+        if self.transform == Transform.COSINE:
+            return cast(csr_matrix, _transform_a_cosine(adj)), dst
+        if self.transform == Transform.NONE:
+            return adj, dst
+
+        raise NotImplementedError(f"Transform `{self.transform}` is not yet implemented.")
 
 
 @njit

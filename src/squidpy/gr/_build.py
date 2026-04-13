@@ -410,6 +410,10 @@ def spatial_neighbors_from_builder(
         {{class}}`~squidpy.gr.neighbors.GraphBuilderCSR`, while custom backends
         can implement the more generic
         {{class}}`~squidpy.gr.neighbors.GraphBuilder` interface directly.
+        Reusable post-build operations are also exposed via
+        :class:`~squidpy.gr.neighbors.DistanceIntervalPostprocessor`,
+        :class:`~squidpy.gr.neighbors.PercentilePostprocessor`, and
+        :class:`~squidpy.gr.neighbors.TransformPostprocessor`.
         Custom builders only need to implement multi-library support when using
         ``library_key``; otherwise leaving
         :meth:`~squidpy.gr.neighbors.GraphBuilder.combine` unimplemented is fine.
