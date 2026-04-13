@@ -105,7 +105,7 @@ def _resolve_graph_builder(
             )
         return GridBuilder(n_neighs=n_neighs, **common, n_rings=n_rings, delaunay=delaunay)
     if delaunay:
-        # below check should be removed once legacy mode spatial_neighbors is deprecated
+        # TODO: below check should be removed once legacy mode spatial_neighbors is deprecated
         if n_neighs_was_set:
             warnings.warn(
                 "Parameter `n_neighs` is ignored when `delaunay=True` and will be removed in squidpy v2.0.0.",
@@ -114,7 +114,7 @@ def _resolve_graph_builder(
             )
         return DelaunayBuilder(**common, radius=radius, percentile=percentile)
     if radius is not None:
-        # below check should be removed once legacy mode spatial_neighbors is deprecated
+        # TODO: below check should be removed once legacy mode spatial_neighbors is deprecated
         if n_neighs_was_set:
             warnings.warn(
                 "Parameter `n_neighs` is ignored when `radius` is set and will be removed in squidpy v2.0.0.",
