@@ -778,9 +778,7 @@ def _run_spatial_neighbors(
     else:
         libs = [None]
 
-    start = logg.info(
-        f"Creating graph using `{builder.transform}` transform and `{len(libs)}` libraries."
-    )
+    start = logg.info(f"Creating graph using `{builder.transform}` transform and `{len(libs)}` libraries.")
     if library_key is not None:
         mats: list[tuple[Any, Any]] = []
         ixs: list[int] = []
