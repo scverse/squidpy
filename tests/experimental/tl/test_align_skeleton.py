@@ -132,6 +132,7 @@ def test_optional_deps_not_imported_at_import_time() -> None:
             ),
         ],
         text=True,
+        timeout=30,
     ).strip()
     assert out == "", f"Optional deps imported by `import squidpy`: {out}"
 

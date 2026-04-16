@@ -8,7 +8,10 @@ of "passed-but-unneeded" combinations lives in :mod:`._validation`.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal
+
+import numpy as np
 
 from squidpy.experimental.tl._align._backends import get_backend
 from squidpy.experimental.tl._align._io import (
@@ -160,8 +163,8 @@ def align_by_landmarks(
     cs_name_query: str | None = None,
     scale_ref: str | None = None,
     scale_query: str | None = None,
-    landmarks_ref: tuple[tuple[float, float], ...] | None = None,
-    landmarks_query: tuple[tuple[float, float], ...] | None = None,
+    landmarks_ref: Sequence[tuple[float, float]] | np.ndarray | None = None,
+    landmarks_query: Sequence[tuple[float, float]] | np.ndarray | None = None,
     *,
     model: Literal["similarity", "affine"] = "similarity",
     output_mode: Literal["affine", "return"] = "affine",

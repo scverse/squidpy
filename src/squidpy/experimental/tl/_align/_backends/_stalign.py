@@ -82,9 +82,11 @@ class StAlignBackend:
             ),
             metadata={
                 "flavour": "stalign",
-                # Escape hatch for power users who want the diffeomorphic
-                # part (velocity field, velocity grid, affine init) rather
-                # than just the materialised displacement.
+                # Escape hatch: the full STalignResult (velocity field,
+                # velocity grid, affine init) for power users who need
+                # the diffeomorphic map.  This keeps the JAX arrays alive
+                # in memory -- callers who only need the displacement
+                # should drop this key or use ``output_mode='obs'``.
                 "stalign_result": stalign_result,
             },
         )

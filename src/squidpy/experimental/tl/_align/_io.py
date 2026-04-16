@@ -213,7 +213,7 @@ def apply_affine_to_cs(
 
     if pair.query_container is not None and pair.query_element_key is not None:
         sdata = pair.query_container if inplace else _shallow_copy_sdata(pair.query_container)
-        element = sdata[pair.query_element_key]
+        element = _get_element(sdata, pair.query_element_key)
         set_transformation(element, affine.to_spatialdata(), to_coordinate_system=target_cs)
         return None if inplace else sdata
 
@@ -222,7 +222,9 @@ def apply_affine_to_cs(
         moving_cs = pair.query_cs
         sd_affine = affine.to_spatialdata()
         touched_any = False
-        for _etype, _name, element in sdata._gen_elements(include_tables=False):
+        for _etype, _name, element in sdata.gen_elements():
+            if isinstance(element, AnnData):
+                continue
             element_transforms = get_transformation(element, get_all=True)
             if moving_cs not in element_transforms:
                 continue
@@ -258,6 +260,13 @@ def materialise_obs(
     add the deltas.  When the source query lives inside a SpatialData, the new
     AnnData is registered as ``sdata.tables[key_added]``; otherwise it is
     returned directly.
+
+    .. note::
+
+       The returned AnnData **shares** ``X`` and ``var`` with the source
+       query by reference to avoid copying potentially-large expression
+       matrices.  Mutating one will affect the other.  Call
+       ``.copy()`` on the result if you need full independence.
     """
     if not isinstance(pair.query, AnnData):
         raise TypeError("materialise_obs only works for `align_obs`; `pair.query` must be an AnnData.")
@@ -297,6 +306,15 @@ def materialise_obs(
     return new_adata
 
 
+def _get_element(sdata: SpatialData, key: str) -> object:
+    """Look up a spatial element by name across all element types."""
+    for attr in ("images", "labels", "points", "shapes", "tables"):
+        store = getattr(sdata, attr)
+        if key in store:
+            return store[key]
+    raise KeyError(f"Element {key!r} not found in the SpatialData object.")
+
+
 def _shallow_copy_sdata(sdata: SpatialData) -> SpatialData:
     """Shallow copy of a SpatialData object for ``inplace=False`` writeback paths.
 
@@ -304,6 +322,5 @@ def _shallow_copy_sdata(sdata: SpatialData) -> SpatialData:
     ``attrs`` propagate the same way spatialdata's own subsetting handles
     them, rather than reconstructing via the ``__init__`` constructor.
     """
-    element_names = [name for _, name, _ in sdata._gen_elements(include_tables=True)]
+    element_names = [name for _, name, _ in sdata.gen_elements()]
     return sdata.subset(element_names, filter_tables=False, include_orphan_tables=True)
-

@@ -54,6 +54,13 @@ class STalignPreprocessConfig:
 
 @dataclass(slots=True)
 class STalignRegistrationConfig:
+    """LDDMM registration hyperparameters.
+
+    Field names (``sigmaM``, ``epL``, etc.) preserve the conventions from
+    the STalign paper and reference implementation to keep them
+    recognisable when cross-referencing the literature.
+    """
+
     a: float = 500.0
     p: float = 2.0
     expand: float = 2.0
