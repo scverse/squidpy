@@ -82,6 +82,7 @@ import squidpy as sq
 .. autosummary::
     :toctree: api
 
+    tl.impute
     tl.sliding_window
     tl.var_by_distance
 ```
