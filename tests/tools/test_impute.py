@@ -15,7 +15,7 @@ def _make_adata(n_obs: int, genes: list[str], rng: np.random.Generator) -> AnnDa
 
 
 class TestSpaGE:
-    def test_spage_impute_dense_copy(self):
+    def test_spage_impute_dense(self):
         rng = np.random.default_rng(0)
         sc_genes = [f"g{i}" for i in range(10)]
         st_genes = [f"g{i}" for i in range(5)]
@@ -30,15 +30,15 @@ class TestSpaGE:
             n_pv=3,
             n_neighbors=5,
             key_added="spage",
-            copy=True,
+            remove_shared=False,
         )
 
-        assert "spage" in res.obsm
-        assert "spage" not in st_adata.obsm
+        assert res is st_adata
+        assert "spage" in st_adata.obsm
 
-        df = res.obsm["spage"]
-        assert df.shape == (st_adata.n_obs, 5)
-        assert list(df.columns) == [f"g{i}" for i in range(5, 10)]
+        df = st_adata.obsm["spage"]
+        assert df.shape == (st_adata.n_obs, 10)
+        assert list(df.columns) == [f"g{i}" for i in range(10)]
         assert df.index.equals(st_adata.obs_names)
 
     def test_spage_impute_sparse(self):
@@ -58,14 +58,14 @@ class TestSpaGE:
             n_pv=3,
             n_neighbors=4,
             key_added="spage",
-            copy=True,
+            remove_shared=False,
         )
 
         df = res.obsm["spage"]
-        assert df.shape == (st_adata.n_obs, 4)
-        assert list(df.columns) == [f"g{i}" for i in range(4, 8)]
+        assert df.shape == (st_adata.n_obs, 8)
+        assert list(df.columns) == [f"g{i}" for i in range(8)]
 
-    def test_spage_impute_copy_false(self):
+    def test_spage_impute_returns_input(self):
         rng = np.random.default_rng(5)
         sc_genes = [f"g{i}" for i in range(9)]
         st_genes = [f"g{i}" for i in range(6)]
@@ -80,7 +80,7 @@ class TestSpaGE:
             n_pv=3,
             n_neighbors=4,
             key_added="spage",
-            copy=False,
+            remove_shared=False,
         )
 
         assert res is st_adata
@@ -103,7 +103,7 @@ class TestSpaGE:
             n_pv=3,
             n_neighbors=5,
             key_added="spage",
-            copy=True,
+            remove_shared=False,
         )
 
         df = res.obsm["spage"]
@@ -142,11 +142,11 @@ class TestSpaGE:
             n_pv=3,
             n_neighbors=50,
             key_added="spage",
-            copy=True,
+            remove_shared=False,
         )
 
         df = res.obsm["spage"]
-        assert df.shape == (st_adata.n_obs, 3)
+        assert df.shape == (st_adata.n_obs, 7)
 
     def test_spage_impute_use_raw(self):
         rng = np.random.default_rng(9)
@@ -167,7 +167,7 @@ class TestSpaGE:
             n_neighbors=4,
             key_added="spage",
             use_raw=True,
-            copy=True,
+            remove_shared=False,
         )
 
         assert "spage" in res.obsm
@@ -191,7 +191,7 @@ class TestSpaGE:
             n_neighbors=4,
             key_added="spage",
             layer="counts",
-            copy=True,
+            remove_shared=False,
         )
 
         assert "spage" in res.obsm
@@ -227,7 +227,7 @@ class TestSpaGE:
         st_adata = _make_adata(10, st_genes, rng)
 
         with pytest.raises(ValueError, match="No genes to impute"):
-            impute(st_adata, sc_adata, method="spage", n_pv=2, n_neighbors=3)
+            impute(st_adata, sc_adata, method="spage", genes=[], n_pv=2, n_neighbors=3)
 
     def test_spage_impute_n_pv_too_large(self):
         rng = np.random.default_rng(4)
@@ -267,7 +267,7 @@ class TestImputeDispatch:
             method="spage",
             n_pv=3,
             n_neighbors=4,
-            copy=True,
+            remove_shared=False,
         )
 
         assert "spage" in res.obsm
