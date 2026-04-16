@@ -88,9 +88,7 @@ def spage_impute(
     shared_genes = _shared_genes(st_adata, sc_adata)
 
     if params.n_pv > len(shared_genes):
-        raise ValueError(
-            f"`n_pv` must be <= number of shared genes ({len(shared_genes)}), found `{params.n_pv}`."
-        )
+        raise ValueError(f"`n_pv` must be <= number of shared genes ({len(shared_genes)}), found `{params.n_pv}`.")
 
     sc_shared, _ = _extract_expression(sc_adata, genes=shared_genes, use_raw=params.use_raw, layer=params.layer)
     st_shared, _ = _extract_expression(st_adata, genes=shared_genes, use_raw=params.use_raw, layer=params.layer)
@@ -113,9 +111,7 @@ def spage_impute(
 
     effective_n_pv = int(np.sum(np.diag(cosine) > params.cosine_threshold))
     if effective_n_pv <= 0:
-        raise ValueError(
-            "No effective principal vectors found. Consider lowering `cosine_threshold` or `n_pv`."
-        )
+        raise ValueError("No effective principal vectors found. Consider lowering `cosine_threshold` or `n_pv`.")
 
     S = source_pv[:effective_n_pv].T
 

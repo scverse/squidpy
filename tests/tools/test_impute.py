@@ -95,7 +95,7 @@ class TestSpaGE:
         st_adata = _make_adata(14, st_genes, rng)
 
         genes = ["g7", "g5"]
-        res =  impute(
+        res = impute(
             st_adata,
             sc_adata,
             genes=genes,
