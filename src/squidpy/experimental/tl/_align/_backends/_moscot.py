@@ -8,7 +8,7 @@ purely to satisfy the :class:`AlignBackend` Protocol.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from squidpy.experimental.tl._align._types import AlignPair, AlignResult
@@ -21,13 +21,11 @@ class MoscotBackend:
     def align_obs(
         self,
         pair: AlignPair,
-        *,
-        device: Literal["cpu", "gpu"] | None = None,
         **kwargs: Any,
     ) -> AlignResult:
         from squidpy.experimental.tl._align._jax import require_jax
 
-        require_jax(device)
+        require_jax()
         raise NotImplementedError(
             "moscot backend `align_obs`: TODO. Skeleton landed; the moscot "
             "solver will replace this body in a follow-up PR."
@@ -36,8 +34,6 @@ class MoscotBackend:
     def align_images(
         self,
         pair: AlignPair,
-        *,
-        device: Literal["cpu", "gpu"] | None = None,
         **kwargs: Any,
     ) -> AlignResult:
         raise NotImplementedError("moscot does not implement image alignment; use `flavour='stalign'`.")

@@ -48,7 +48,6 @@ def align_obs(
     *,
     output_mode: Literal["affine", "obs", "return"] = "obs",
     key_added: str | None = None,
-    device: Literal["cpu", "gpu"] | None = None,
     inplace: bool = True,
     **flavour_kwargs: Any,
 ) -> AnnData | SpatialData | AlignResult | None:
@@ -83,9 +82,6 @@ def align_obs(
         Name for the aligned table when ``output_mode='obs'`` and inputs are
         SpatialData.  Defaults to ``'{adata_query_name}_aligned'``.
         Rejected with any other ``output_mode``.
-    device
-        ``'cpu'``/``'gpu'`` to force a JAX device, or ``None`` to let JAX
-        pick the default.  Only consulted by JAX-backed flavours.
     inplace
         If ``True``, mutate the query container; otherwise return a copy.
         Only affects SpatialData inputs -- for plain AnnData with
@@ -99,7 +95,7 @@ def align_obs(
 
     pair = resolve_obs_pair(data_ref, data_query, adata_ref_name, adata_query_name)
     backend = get_backend(flavour)
-    result = backend.align_obs(pair, device=device, **flavour_kwargs)
+    result = backend.align_obs(pair, **flavour_kwargs)
 
     # Auto-generate key_added for SpatialData obs writeback.
     if key_added is None and output_mode == "obs" and pair.query_element_key is not None:
@@ -118,7 +114,6 @@ def align_images(
     scale_ref: str | Literal["auto"] = "auto",
     scale_query: str | Literal["auto"] = "auto",
     output_mode: Literal["affine", "return"] = "affine",
-    device: Literal["cpu", "gpu"] | None = None,
     inplace: bool = True,
     **flavour_kwargs: Any,
 ) -> SpatialData | AlignResult | None:
@@ -145,7 +140,7 @@ def align_images(
         ``'affine'`` registers the fit on the query image element so all of
         its scales inherit the transformation; ``'return'`` returns the raw
         :class:`AlignResult`.
-    device, inplace, flavour_kwargs
+    inplace, flavour_kwargs
         See :func:`align_obs`.
     """
     validate_flavour(flavour, allowed=ALLOWED_FLAVOURS_IMAGES, op="align_images")
@@ -160,7 +155,7 @@ def align_images(
         scale_query=scale_query,
     )
     backend = get_backend(flavour)
-    result = backend.align_images(pair, device=device, **flavour_kwargs)
+    result = backend.align_images(pair, **flavour_kwargs)
 
     return _writeback(pair, result, output_mode=output_mode, key_added=None, inplace=inplace)
 

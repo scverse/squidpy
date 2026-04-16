@@ -1,13 +1,13 @@
 """STalign backend.
 
-Wraps the JAX LDDMM solver lifted from scverse/squidpy#1150 (Selman Özleyen)
+Wraps the JAX LDDMM solver lifted from scverse/squidpy#1150 (Selman Ozleyen)
 into the :class:`AlignBackend` Protocol. Only ``align_obs`` is implemented
 today; ``align_images`` raises until upstream support exists.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -23,7 +23,6 @@ class StAlignBackend:
         self,
         pair: AlignPair,
         *,
-        device: Literal["cpu", "gpu"] | None = None,
         config: Any | None = None,
         landmarks_source: np.ndarray | None = None,
         landmarks_target: np.ndarray | None = None,
@@ -39,7 +38,7 @@ class StAlignBackend:
         # `ModuleNotFoundError: import of jax halted; None in sys.modules`
         # instead of the clean `ImportError("JAX is required ...")` from
         # _jax.require_jax.
-        require_jax(device)
+        require_jax()
 
         from squidpy.experimental.tl._align._backends._stalign_tools import stalign_points
         from squidpy.experimental.tl._align._types import AlignResult, ObsDisplacement
@@ -94,8 +93,6 @@ class StAlignBackend:
     def align_images(
         self,
         pair: AlignPair,
-        *,
-        device: Literal["cpu", "gpu"] | None = None,
         **kwargs: Any,
     ) -> AlignResult:
         raise NotImplementedError(

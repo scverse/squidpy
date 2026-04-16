@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from squidpy.experimental.tl._align._types import AlignPair, AlignResult
@@ -24,15 +24,11 @@ class AlignBackend(Protocol):
     def align_obs(
         self,
         pair: AlignPair,
-        *,
-        device: Literal["cpu", "gpu"] | None = None,
         **kwargs: Any,
     ) -> AlignResult: ...
 
     def align_images(
         self,
         pair: AlignPair,
-        *,
-        device: Literal["cpu", "gpu"] | None = None,
         **kwargs: Any,
     ) -> AlignResult: ...
