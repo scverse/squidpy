@@ -7,7 +7,6 @@ from anndata import AnnData
 from scipy.sparse import csr_matrix
 
 from squidpy.tl import impute
-from squidpy.tl._spage_impute import SpaGEParams
 
 
 def _make_adata(n_obs: int, genes: list[str], rng: np.random.Generator) -> AnnData:
@@ -28,7 +27,8 @@ class TestSpaGE:
             st_adata,
             sc_adata,
             method="spage",
-            method_params=SpaGEParams(n_pv=3, n_neighbors=5),
+            n_pv=3,
+            n_neighbors=5,
             key_added="spage",
             copy=True,
         )
@@ -253,7 +253,7 @@ class TestImputeDispatch:
         with pytest.raises(ValueError, match="one of"):
             impute(st_adata, sc_adata, method="tangram")
 
-    def test_method_params_object_is_supported(self):
+    def test_spage_args_are_supported(self):
         rng = np.random.default_rng(14)
         sc_genes = [f"g{i}" for i in range(8)]
         st_genes = [f"g{i}" for i in range(5)]
@@ -265,7 +265,8 @@ class TestImputeDispatch:
             st_adata,
             sc_adata,
             method="spage",
-            method_params=SpaGEParams(n_pv=3, n_neighbors=4),
+            n_pv=3,
+            n_neighbors=4,
             copy=True,
         )
 

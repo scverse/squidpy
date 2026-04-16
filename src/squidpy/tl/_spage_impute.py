@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Sequence
 
 import numba
 import numpy as np
@@ -18,21 +17,7 @@ from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _extract_expression, _save_data
 
-__all__ = ["SpaGEParams", "spage_impute"]
-
-
-@dataclass(slots=True, frozen=True)
-class SpaGEParams:
-    n_pv: int = 30
-    n_neighbors: int = 50
-    cosine_threshold: float = 0.3
-    use_raw: bool = False
-    layer: str | None = None
-    n_jobs: int | None = None
-
-    @classmethod
-    def from_mapping(cls, params: Mapping[str, object]) -> SpaGEParams:
-        return cls(**params)
+__all__ = ["spage_impute"]
 
 
 @d.dedent
@@ -41,8 +26,14 @@ def spage_impute(
     sc_adata: AnnData,
     *,
     genes: Sequence[str] | None = None,
-    params: SpaGEParams | Mapping[str, object] | None = None,
+    n_pv: int = 30,
+    n_neighbors: int = 50,
+    cosine_threshold: float = 0.3,
+    use_raw: bool = False,
+    layer: str | None = None,
     key_added: str = "spage",
+    n_jobs: int | None = None,
+    copy: bool = False,
 ) -> AnnData:
     """
     Impute spatially unmeasured genes in spatial data using SpaGE.
@@ -55,10 +46,20 @@ def spage_impute(
         scRNA-seq AnnData object.
     genes
         Genes to impute. If `None`, uses genes present in `sc_adata` but missing from `st_adata`.
-    params
-        SpaGE-specific parameters.
+    n_pv
+        Number of principal vectors used for alignment.
+    n_neighbors
+        Number of nearest neighbors used for imputation.
+    cosine_threshold
+        Threshold on cosine similarity to select effective principal vectors.
+    use_raw
+        Whether to use `.raw` for expression values.
+    layer
+        Layer to use for expression values.
     key_added
         Key added to `.obsm` for the imputed genes.
+    n_jobs
+        Number of parallel jobs for nearest neighbors search.
     copy
         Whether to return a copy of `st_adata`.
 
@@ -68,44 +69,42 @@ def spage_impute(
     """
     start = logg.info("Running SpaGE imputation")
 
-    if params is None:
-        params = SpaGEParams()
-    elif isinstance(params, Mapping):
-        params = SpaGEParams.from_mapping(params)
+    if copy:
+        st_adata = st_adata.copy()
 
-    if params.n_pv <= 0:
+    if n_pv <= 0:
         raise ValueError("`n_pv` must be positive.")
-    if params.n_neighbors <= 0:
+    if n_neighbors <= 0:
         raise ValueError("`n_neighbors` must be positive.")
-    if params.cosine_threshold < 0:
+    if cosine_threshold < 0:
         raise ValueError("`cosine_threshold` must be non-negative.")
 
     genes_to_predict = _resolve_genes_to_predict(st_adata, sc_adata, genes)
     shared_genes = _shared_genes(st_adata, sc_adata)
 
-    if params.n_pv > len(shared_genes):
-        raise ValueError(f"`n_pv` must be <= number of shared genes ({len(shared_genes)}), found `{params.n_pv}`.")
+    if n_pv > len(shared_genes):
+        raise ValueError(f"`n_pv` must be <= number of shared genes ({len(shared_genes)}), found `{n_pv}`.")
 
-    sc_shared, _ = _extract_expression(sc_adata, genes=shared_genes, use_raw=params.use_raw, layer=params.layer)
-    st_shared, _ = _extract_expression(st_adata, genes=shared_genes, use_raw=params.use_raw, layer=params.layer)
-    sc_target, _ = _extract_expression(sc_adata, genes=genes_to_predict, use_raw=params.use_raw, layer=params.layer)
+    sc_shared, _ = _extract_expression(sc_adata, genes=shared_genes, use_raw=use_raw, layer=layer)
+    st_shared, _ = _extract_expression(st_adata, genes=shared_genes, use_raw=use_raw, layer=layer)
+    sc_target, _ = _extract_expression(sc_adata, genes=genes_to_predict, use_raw=use_raw, layer=layer)
 
     sc_shared = _standardize(sc_shared)
     st_shared = _standardize(st_shared)
 
-    source_components = _fit_components(sc_shared, params.n_pv)
-    target_components = _fit_components(st_shared, params.n_pv)
+    source_components = _fit_components(sc_shared, n_pv)
+    target_components = _fit_components(st_shared, n_pv)
 
     source_components = _orthonormalize(source_components)
     target_components = _orthonormalize(target_components)
 
-    n_pv_eff = min(params.n_pv, source_components.shape[0], target_components.shape[0])
+    n_pv_eff = min(n_pv, source_components.shape[0], target_components.shape[0])
     if n_pv_eff <= 0:
         raise ValueError("No principal vectors could be computed.")
 
     source_pv, target_pv, cosine = _compute_principal_vectors(source_components, target_components, n_pv_eff)
 
-    effective_n_pv = int(np.sum(np.diag(cosine) > params.cosine_threshold))
+    effective_n_pv = int(np.sum(np.diag(cosine) > cosine_threshold))
     if effective_n_pv <= 0:
         raise ValueError("No effective principal vectors found. Consider lowering `cosine_threshold` or `n_pv`.")
 
@@ -114,12 +113,12 @@ def spage_impute(
     sc_proj = _dot(sc_shared, S)
     st_proj = _dot(st_shared, S)
 
-    n_neighbors = min(params.n_neighbors, sc_proj.shape[0])
+    n_neighbors = min(n_neighbors, sc_proj.shape[0])
     nn = NearestNeighbors(
         n_neighbors=n_neighbors,
         metric="cosine",
         algorithm="auto",
-        n_jobs=params.n_jobs,
+        n_jobs=n_jobs,
     )
     nn.fit(sc_proj)
     distances, indices = nn.kneighbors(st_proj, return_distance=True)
