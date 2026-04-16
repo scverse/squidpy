@@ -66,7 +66,6 @@ def spage_impute(
     """
     start = logg.info("Running SpaGE imputation")
 
-
     if n_pv <= 0:
         raise ValueError("`n_pv` must be positive.")
     if n_neighbors <= 0:
