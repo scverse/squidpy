@@ -129,17 +129,20 @@ def _resolve_genes_to_predict(
     st_adata: AnnData,
     sc_adata: AnnData,
     genes: Sequence[str] | None,
+    remove_shared: bool = False,
 ) -> list[str]:
     if genes is None:
-        genes_to_predict = [g for g in sc_adata.var_names if g not in st_adata.var_names]
+        genes_to_predict = [g for g in sc_adata.var_names]
     else:
         genes_to_predict = [g for g in genes if g in sc_adata.var_names]
         missing = [g for g in genes if g not in sc_adata.var_names]
         if missing:
             raise ValueError(f"Genes not found in `sc_adata`: {missing}")
-        genes_to_predict = [g for g in genes_to_predict if g not in st_adata.var_names]
+        genes_to_predict = [g for g in genes_to_predict]
     if not genes_to_predict:
         raise ValueError("No genes to impute. Ensure `genes` are in `sc_adata` and absent from `st_adata`.")
+    if remove_shared:
+        genes_to_predict = [g for g in genes_to_predict if g not in st_adata.var_names]
     return genes_to_predict
 
 
