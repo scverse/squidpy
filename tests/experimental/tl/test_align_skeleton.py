@@ -102,8 +102,9 @@ def test_public_callables_exist() -> None:
     import squidpy as sq
 
     assert callable(sq.experimental.tl.align_obs)
-    assert callable(sq.experimental.tl.align_images)
     assert callable(sq.experimental.tl.align_by_landmarks)
+    # align_images is not yet public (no backend implements it)
+    assert not hasattr(sq.experimental.tl, "align_images")
 
 
 # ---------------------------------------------------------------------------
@@ -317,10 +318,10 @@ def test_validate_landmarks_happy_path() -> None:
 
 
 def test_align_images_rejects_output_mode_obs(sdata_single) -> None:
-    import squidpy as sq
+    from squidpy.experimental.tl._align._api import align_images
 
     with pytest.raises(ValueError, match="output_mode"):
-        sq.experimental.tl.align_images(
+        align_images(
             sdata_single,
             None,
             img_ref_name="img_ref",
@@ -352,11 +353,11 @@ def test_align_obs_stalign_image_path_raises(sdata_single) -> None:
     """``align_images(flavour='stalign')`` is still NotImplementedError; the
     PR-#1150 lift only ships point alignment.  This pins the contract that
     the dispatch reaches the backend cleanly (no ImportError/AttributeError)."""
-    import squidpy as sq
+    from squidpy.experimental.tl._align._api import align_images
 
     pytest.importorskip("jax")
     with pytest.raises(NotImplementedError, match="stalign image alignment"):
-        sq.experimental.tl.align_images(
+        align_images(
             sdata_single,
             None,
             img_ref_name="img_ref",
@@ -393,10 +394,10 @@ def test_align_obs_unknown_flavour(sdata_single) -> None:
 
 
 def test_align_images_rejects_moscot(sdata_single) -> None:
-    import squidpy as sq
+    from squidpy.experimental.tl._align._api import align_images
 
     with pytest.raises(ValueError, match="flavour"):
-        sq.experimental.tl.align_images(
+        align_images(
             sdata_single,
             None,
             img_ref_name="img_ref",

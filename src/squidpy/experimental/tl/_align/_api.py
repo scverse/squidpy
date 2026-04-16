@@ -32,7 +32,6 @@ from squidpy.experimental.tl._align._validation import (
     validate_landmark_model,
     validate_landmarks,
     validate_output_mode,
-    validate_required,
 )
 
 if TYPE_CHECKING:
@@ -47,7 +46,7 @@ def align_obs(
     adata_query_name: str | None = None,
     flavour: Literal["stalign", "moscot"] = "stalign",
     *,
-    output_mode: Literal["affine", "obs", "return"] = "affine",
+    output_mode: Literal["affine", "obs", "return"] = "obs",
     key_added: str | None = None,
     device: Literal["cpu", "gpu"] | None = None,
     inplace: bool = True,
@@ -71,23 +70,26 @@ def align_obs(
     output_mode
         How to deliver the result:
 
-        - ``'affine'`` — register the fitted affine on the query element via
+        - ``'obs'`` (default) -- bake the fit into a new AnnData whose
+          ``obsm['spatial']`` already lives in the reference coordinate
+          system.  For SpatialData inputs the new table is stored under
+          ``key_added`` (auto-generated from the query name when omitted).
+        - ``'affine'`` -- register the fitted affine on the query element via
           :func:`spatialdata.transformations.set_transformation`, so every
           element in the query coordinate system inherits the alignment.
           Requires the backend to produce an affine transform.
-        - ``'obs'`` — bake the (possibly non-affine) fit into a new AnnData
-          whose ``obsm['spatial']`` already lives in the reference coordinate
-          system; for SpatialData inputs the new table is stored under
-          ``key_added``.
-        - ``'return'`` — return the raw :class:`AlignResult`; no writeback.
+        - ``'return'`` -- return the raw :class:`AlignResult`; no writeback.
     key_added
-        Required when ``output_mode='obs'`` and inputs are SpatialData.
+        Name for the aligned table when ``output_mode='obs'`` and inputs are
+        SpatialData.  Defaults to ``'{adata_query_name}_aligned'``.
         Rejected with any other ``output_mode``.
     device
         ``'cpu'``/``'gpu'`` to force a JAX device, or ``None`` to let JAX
         pick the default.  Only consulted by JAX-backed flavours.
     inplace
         If ``True``, mutate the query container; otherwise return a copy.
+        Only affects SpatialData inputs -- for plain AnnData with
+        ``output_mode='obs'``, the aligned AnnData is always returned.
     **flavour_kwargs
         Backend-specific knobs forwarded as-is to the chosen backend.
     """
@@ -99,16 +101,20 @@ def align_obs(
     backend = get_backend(flavour)
     result = backend.align_obs(pair, device=device, **flavour_kwargs)
 
+    # Auto-generate key_added for SpatialData obs writeback.
+    if key_added is None and output_mode == "obs" and pair.query_element_key is not None:
+        key_added = f"{pair.query_element_key}_aligned"
+
     return _writeback(pair, result, output_mode=output_mode, key_added=key_added, inplace=inplace)
 
 
 def align_images(
     sdata_ref: SpatialData,
     sdata_query: SpatialData | None = None,
-    img_ref_name: str | None = None,
-    img_query_name: str | None = None,
-    flavour: Literal["stalign"] = "stalign",
     *,
+    img_ref_name: str,
+    img_query_name: str,
+    flavour: Literal["stalign"] = "stalign",
     scale_ref: str | Literal["auto"] = "auto",
     scale_query: str | Literal["auto"] = "auto",
     output_mode: Literal["affine", "return"] = "affine",
@@ -117,6 +123,11 @@ def align_images(
     **flavour_kwargs: Any,
 ) -> SpatialData | AlignResult | None:
     """Align two raster images living inside :class:`spatialdata.SpatialData`.
+
+    .. note::
+
+       No backend currently implements image alignment.  This function is
+       reserved for a follow-up PR and is not yet part of the public API.
 
     Parameters
     ----------
@@ -137,8 +148,6 @@ def align_images(
     device, inplace, flavour_kwargs
         See :func:`align_obs`.
     """
-    validate_required(name="img_ref_name", value=img_ref_name, when="calling `align_images`")
-    validate_required(name="img_query_name", value=img_query_name, when="calling `align_images`")
     validate_flavour(flavour, allowed=ALLOWED_FLAVOURS_IMAGES, op="align_images")
     validate_output_mode(output_mode, allowed=ALLOWED_OUTPUT_MODES_NONOBS, op="align_images")
 
@@ -159,20 +168,18 @@ def align_images(
 def align_by_landmarks(
     sdata_ref: SpatialData,
     sdata_query: SpatialData | None = None,
-    cs_name_ref: str | None = None,
-    cs_name_query: str | None = None,
-    scale_ref: str | None = None,
-    scale_query: str | None = None,
-    landmarks_ref: Sequence[tuple[float, float]] | np.ndarray | None = None,
-    landmarks_query: Sequence[tuple[float, float]] | np.ndarray | None = None,
     *,
+    cs_name_ref: str,
+    cs_name_query: str,
+    landmarks_ref: Sequence[tuple[float, float]] | np.ndarray,
+    landmarks_query: Sequence[tuple[float, float]] | np.ndarray,
     model: Literal["similarity", "affine"] = "similarity",
     output_mode: Literal["affine", "return"] = "affine",
     inplace: bool = True,
 ) -> SpatialData | AlignResult | None:
     """Align by a closed-form fit on user-provided landmarks.
 
-    Pure NumPy under the hood — JAX is **not** required for this path.
+    Pure NumPy under the hood -- JAX is **not** required for this path.
 
     Parameters
     ----------
@@ -181,31 +188,34 @@ def align_by_landmarks(
         coordinate systems of the same SpatialData against each other.
     cs_name_ref, cs_name_query
         Coordinate system names.
-    scale_ref, scale_query
-        Optional scale identifiers used purely for landmark-extent
-        validation: if you extracted your landmarks at a particular scale,
-        passing the same scale here lets us catch the "wrong scale" footgun
-        early.
     landmarks_ref, landmarks_query
-        Equal-length sequences of ``(y, x)`` tuples.  ``model='similarity'``
-        needs ≥ 2 pairs, ``model='affine'`` needs ≥ 3.
+        Equal-length sequences of ``(x, y)`` tuples in the pixel space of
+        the respective coordinate system.  ``model='similarity'`` needs
+        at least 3 pairs, ``model='affine'`` needs at least 3.
+        Landmarks are validated against the coordinate-system extent
+        (via :func:`spatialdata.get_extent`) to catch scale mismatches
+        early.
     model
         ``'similarity'`` (rotation + uniform scale + translation) or
         ``'affine'`` (full 6-parameter linear).
     output_mode, inplace
         See :func:`align_obs`.
     """
-    validate_required(name="cs_name_ref", value=cs_name_ref, when="calling `align_by_landmarks`")
-    validate_required(name="cs_name_query", value=cs_name_query, when="calling `align_by_landmarks`")
-    validate_required(name="landmarks_ref", value=landmarks_ref, when="calling `align_by_landmarks`")
-    validate_required(name="landmarks_query", value=landmarks_query, when="calling `align_by_landmarks`")
-
     validate_output_mode(output_mode, allowed=ALLOWED_OUTPUT_MODES_NONOBS, op="align_by_landmarks")
     validate_landmark_model(model)
 
-    # We don't materialise extents here in the skeleton; backends / a future
-    # PR can fill in the cs-extent lookup once we wire spatialdata.get_extent.
-    ref_arr, query_arr = validate_landmarks(landmarks_ref, landmarks_query, model=model)
+    # Fetch coordinate-system extents for landmark bounds checking.
+    cs_ref_extent = _get_cs_extent(sdata_ref, cs_name_ref)
+    sdata_query_resolved = sdata_query if sdata_query is not None else sdata_ref
+    cs_query_extent = _get_cs_extent(sdata_query_resolved, cs_name_query)
+
+    ref_arr, query_arr = validate_landmarks(
+        landmarks_ref,
+        landmarks_query,
+        model=model,
+        cs_ref_extent=cs_ref_extent,
+        cs_query_extent=cs_query_extent,
+    )
 
     pair = resolve_element_pair(sdata_ref, sdata_query, cs_name_ref, cs_name_query)
 
@@ -221,6 +231,17 @@ def align_by_landmarks(
     result = AlignResult(transform=affine, metadata={"flavour": "landmark", "model": model})
 
     return _writeback(pair, result, output_mode=output_mode, key_added=None, inplace=inplace)
+
+
+def _get_cs_extent(
+    sdata: SpatialData,
+    cs_name: str,
+) -> tuple[float, float, float, float]:
+    """Return ``(x_min, y_min, x_max, y_max)`` for a coordinate system."""
+    from spatialdata import get_extent
+
+    extent = get_extent(sdata, coordinate_system=cs_name)
+    return (extent["x"][0], extent["y"][0], extent["x"][1], extent["y"][1])
 
 
 # ---------------------------------------------------------------------------

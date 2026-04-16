@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from squidpy.experimental.tl._align import align_by_landmarks, align_images, align_obs
+from squidpy.experimental.tl._align import align_by_landmarks, align_obs
 
 if TYPE_CHECKING:
     from squidpy.experimental.tl._align._backends._stalign_tools import (
@@ -20,7 +20,6 @@ __all__ = [
     "STalignRegistrationConfig",
     "STalignResult",
     "align_by_landmarks",
-    "align_images",
     "align_obs",
 ]
 
