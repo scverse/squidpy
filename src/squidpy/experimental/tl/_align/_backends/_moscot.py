@@ -28,8 +28,6 @@ class MoscotBackend:
         from squidpy.experimental.tl._align._jax import require_jax
 
         require_jax(device)
-        # Lazy moscot import lives here in the next PR:
-        #     import moscot
         raise NotImplementedError(
             "moscot backend `align_obs`: TODO. Skeleton landed; the moscot "
             "solver will replace this body in a follow-up PR."

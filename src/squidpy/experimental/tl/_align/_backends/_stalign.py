@@ -56,7 +56,7 @@ class StAlignBackend:
         tgt_xy = np.asarray(pair.ref.obsm["spatial"], dtype=float)
 
         # stalign_points runs internally in row_col (yx); obsm["spatial"] is xy
-        # by squidpy convention. Mirror Selman's _stalign.py:69-70 / :90 swap.
+        # by squidpy convention -- swap axes at the boundary.
         src_rc = src_xy[:, [1, 0]]
         tgt_rc = tgt_xy[:, [1, 0]]
         landmarks_src_rc = None if landmarks_source is None else np.asarray(landmarks_source)[:, [1, 0]]

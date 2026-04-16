@@ -248,7 +248,6 @@ def _writeback(
             )
         return apply_affine_to_cs(pair, result.transform, inplace=inplace)
 
-    if output_mode == "obs":
-        return materialise_obs(pair, result, key_added=key_added, inplace=inplace)
-
-    raise ValueError(f"Unknown output_mode {output_mode!r}.")
+    # output_mode == "obs" -- the only remaining valid branch after
+    # validate_output_mode has already rejected unknown values.
+    return materialise_obs(pair, result, key_added=key_added, inplace=inplace)

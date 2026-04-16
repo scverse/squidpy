@@ -12,8 +12,12 @@ import jax.numpy as jnp
 import jax.scipy as jsp
 import numpy as np
 
-JAX_DTYPE = jnp.float64 if jax.config.x64_enabled else jnp.float32
-__all__ = ["JAX_DTYPE", "lddmm", "transform_points_row_col"]
+__all__ = ["jax_dtype", "lddmm", "transform_points_row_col"]
+
+
+def jax_dtype() -> jnp.dtype:
+    """Resolve the active JAX float dtype at call time, not import time."""
+    return jnp.float64 if jax.config.x64_enabled else jnp.float32
 
 
 def _to_affine(linear: Any, translation: Any) -> Any:
@@ -279,20 +283,20 @@ def lddmm(
 ) -> dict[str, Any]:
     x_source = (jnp.asarray(xI[0]), jnp.asarray(xI[1]))
     x_target = (jnp.asarray(xJ[0]), jnp.asarray(xJ[1]))
-    source_image = jnp.asarray(I, dtype=JAX_DTYPE)
-    target_image = jnp.asarray(J, dtype=JAX_DTYPE)
-    linear = jnp.asarray(L, dtype=JAX_DTYPE)
-    translation = jnp.asarray(T, dtype=JAX_DTYPE)
+    source_image = jnp.asarray(I, dtype=jax_dtype())
+    target_image = jnp.asarray(J, dtype=jax_dtype())
+    linear = jnp.asarray(L, dtype=jax_dtype())
+    translation = jnp.asarray(T, dtype=jax_dtype())
 
     if points_source is None:
-        source_landmarks = jnp.zeros((0, 2), dtype=JAX_DTYPE)
-        target_landmarks = jnp.zeros((0, 2), dtype=JAX_DTYPE)
+        source_landmarks = jnp.zeros((0, 2), dtype=jax_dtype())
+        target_landmarks = jnp.zeros((0, 2), dtype=jax_dtype())
     else:
-        source_landmarks = jnp.asarray(points_source, dtype=JAX_DTYPE)
-        target_landmarks = jnp.asarray(points_target, dtype=JAX_DTYPE)
+        source_landmarks = jnp.asarray(points_source, dtype=jax_dtype())
+        target_landmarks = jnp.asarray(points_target, dtype=jax_dtype())
 
     xv = _build_velocity_grid(x_source, a=a, expand=expand)
-    velocity = jnp.zeros((nt, xv[0].shape[0], xv[1].shape[0], 2), dtype=JAX_DTYPE)
+    velocity = jnp.zeros((nt, xv[0].shape[0], xv[1].shape[0], 2), dtype=jax_dtype())
     kernel, ll, dv_prod = _build_regularizer(xv, a=a, p=p)
 
     match_weights = jnp.full(target_image.shape[1:], 0.5, dtype=target_image.dtype)

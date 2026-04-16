@@ -1,20 +1,19 @@
 """Low-level point-cloud tools for experimental STalign.
 
-Lifted from scverse/squidpy#1150 (Selman Özleyen). Only the two import paths
-below were rewritten to point at the sibling lifted modules; the rest of the
-file is byte-for-byte identical to the upstream PR.
+Lifted from scverse/squidpy#1150 (Selman Özleyen) with import paths
+adjusted and minor cleanups (config unpacking, lazy dtype resolution).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import jax.numpy as jnp
 import numpy as np
 from anndata import AnnData
 
-from squidpy.experimental.tl._align._backends._stalign_core import JAX_DTYPE, lddmm, transform_points_row_col
+from squidpy.experimental.tl._align._backends._stalign_core import jax_dtype, lddmm, transform_points_row_col
 from squidpy.experimental.tl._align._backends._stalign_helpers import (
     PointOrder,
     affine_from_points,
@@ -191,7 +190,7 @@ def transform_points(
         xv,
         jnp.asarray(v),
         jnp.asarray(A),
-        jnp.asarray(points_rc, dtype=JAX_DTYPE),
+        jnp.asarray(points_rc, dtype=jax_dtype()),
         direction=direction,
     )
     return jnp.asarray(from_row_col(np.asarray(transformed), point_order=point_order))
@@ -227,29 +226,17 @@ def stalign_points(
         target_landmarks = to_row_col(landmarks_target, point_order="row_col")
         linear, translation = affine_from_points(source_landmarks, target_landmarks)
 
+    dtype = jax_dtype()
     result = lddmm(
         preprocessed.source_grid,
         preprocessed.source_image,
         preprocessed.target_grid,
         preprocessed.target_image,
-        L=jnp.asarray(linear, dtype=JAX_DTYPE),
-        T=jnp.asarray(translation, dtype=JAX_DTYPE),
-        points_source=None if source_landmarks is None else jnp.asarray(source_landmarks, dtype=JAX_DTYPE),
-        points_target=None if target_landmarks is None else jnp.asarray(target_landmarks, dtype=JAX_DTYPE),
-        a=registration.a,
-        p=registration.p,
-        expand=registration.expand,
-        nt=registration.nt,
-        niter=registration.niter,
-        diffeo_start=registration.diffeo_start,
-        epL=registration.epL,
-        epT=registration.epT,
-        epV=registration.epV,
-        sigmaM=registration.sigmaM,
-        sigmaB=registration.sigmaB,
-        sigmaA=registration.sigmaA,
-        sigmaR=registration.sigmaR,
-        sigmaP=registration.sigmaP,
+        L=jnp.asarray(linear, dtype=dtype),
+        T=jnp.asarray(translation, dtype=dtype),
+        points_source=None if source_landmarks is None else jnp.asarray(source_landmarks, dtype=dtype),
+        points_target=None if target_landmarks is None else jnp.asarray(target_landmarks, dtype=dtype),
+        **asdict(registration),
     )
     aligned_points = transform_points(
         result["xv"],
