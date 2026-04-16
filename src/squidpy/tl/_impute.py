@@ -30,7 +30,6 @@ def impute(
     layer: str | None = None,
     key_added: str = "spage",
     n_jobs: int | None = None,
-    copy: bool = False,
 ) -> AnnData:
     """
     Impute spatially unmeasured genes in spatial data using a selected method.
@@ -52,9 +51,6 @@ def impute(
         or a mapping with matching field names.
     key_added
         Key added to `.obsm` for the imputed genes.
-    copy
-        Whether to return a copy of `st_adata`.
-
     Returns
     -------
     AnnData with imputed genes stored in `.obsm[key_added]`.
@@ -80,7 +76,6 @@ def impute(
             genes=genes,
             params=method_params,
             key_added=key_added,
-            copy=copy,
         )
 
     raise NotImplementedError(f"Method `{method}` is not yet implemented.")

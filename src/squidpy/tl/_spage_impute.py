@@ -43,7 +43,6 @@ def spage_impute(
     genes: Sequence[str] | None = None,
     params: SpaGEParams | Mapping[str, object] | None = None,
     key_added: str = "spage",
-    copy: bool = False,
 ) -> AnnData:
     """
     Impute spatially unmeasured genes in spatial data using SpaGE.
@@ -68,9 +67,6 @@ def spage_impute(
     AnnData with imputed genes stored in `.obsm[key_added]`.
     """
     start = logg.info("Running SpaGE imputation")
-
-    if copy:
-        st_adata = st_adata.copy()
 
     if params is None:
         params = SpaGEParams()
