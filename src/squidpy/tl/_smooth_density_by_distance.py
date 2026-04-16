@@ -105,9 +105,7 @@ def smooth_density_by_distance(
     assert_key_in_sdata(sdata, contour_key, attr="shapes")
     assert_key_in_sdata(sdata, points_key, attr="points")
     feature_values = (
-        assert_non_empty_sequence(feature_values, name="feature_values")
-        if feature_values is not None
-        else None
+        assert_non_empty_sequence(feature_values, name="feature_values") if feature_values is not None else None
     )
 
     contours = _prepare_contours(

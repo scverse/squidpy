@@ -58,7 +58,9 @@ def sdata_ring_density():
 
     return sd.SpatialData.init_from_elements(
         {
-            "cells": sd.models.ShapesModel().parse(cells_raw, transformations={"global": Scale([2.0, 2.0], axes=("x", "y"))}),
+            "cells": sd.models.ShapesModel().parse(
+                cells_raw, transformations={"global": Scale([2.0, 2.0], axes=("x", "y"))}
+            ),
             "contours": sd.models.ShapesModel().parse(contour_df, transformations={"global": Identity()}),
             "transcripts": sd.models.PointsModel().parse(
                 transcripts_ddf,

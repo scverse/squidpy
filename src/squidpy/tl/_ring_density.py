@@ -101,9 +101,7 @@ def ring_density(
     assert_one_of(target, ["cells", "transcripts"], name="target")
 
     feature_values = (
-        assert_non_empty_sequence(feature_values, name="feature_values")
-        if feature_values is not None
-        else None
+        assert_non_empty_sequence(feature_values, name="feature_values") if feature_values is not None else None
     )
 
     contours = _prepare_contours(
