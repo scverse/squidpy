@@ -33,7 +33,6 @@ def spage_impute(
     layer: str | None = None,
     key_added: str = "spage",
     n_jobs: int | None = None,
-    copy: bool = False,
 ) -> AnnData:
     """
     Impute spatially unmeasured genes in spatial data using SpaGE.
@@ -60,8 +59,6 @@ def spage_impute(
         Key added to `.obsm` for the imputed genes.
     n_jobs
         Number of parallel jobs for nearest neighbors search.
-    copy
-        Whether to return a copy of `st_adata`.
 
     Returns
     -------
@@ -69,8 +66,6 @@ def spage_impute(
     """
     start = logg.info("Running SpaGE imputation")
 
-    if copy:
-        st_adata = st_adata.copy()
 
     if n_pv <= 0:
         raise ValueError("`n_pv` must be positive.")

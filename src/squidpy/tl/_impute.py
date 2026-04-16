@@ -28,7 +28,6 @@ def impute(
     layer: str | None = None,
     key_added: str = "spage",
     n_jobs: int | None = None,
-    copy: bool = False,
 ) -> AnnData:
     """
     Impute spatially unmeasured genes in spatial data using a selected method.
@@ -59,8 +58,6 @@ def impute(
         Key added to `.obsm` for the imputed genes.
     n_jobs
         Number of parallel jobs for nearest neighbors search.
-    copy
-        Whether to return a copy of `st_adata`.
     Returns
     -------
     AnnData with imputed genes stored in `.obsm[key_added]`.
