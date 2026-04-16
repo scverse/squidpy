@@ -28,6 +28,7 @@ def impute(
     layer: str | None = None,
     key_added: str = "spage",
     n_jobs: int | None = None,
+    remove_shared: bool = True,
 ) -> AnnData:
     """
     Impute spatially unmeasured genes in spatial data using a selected method.
@@ -58,6 +59,8 @@ def impute(
         Key added to `.obsm` for the imputed genes.
     n_jobs
         Number of parallel jobs for nearest neighbors search.
+    remove_shared
+        Whether to remove shared genes from the imputed gene set. By default, only genes that
     Returns
     -------
     AnnData with imputed genes stored in `.obsm[key_added]`.
@@ -76,7 +79,7 @@ def impute(
             layer=layer,
             key_added=key_added,
             n_jobs=n_jobs,
-            copy=copy,
+            remove_shared=remove_shared,
         )
 
     raise NotImplementedError(f"Method `{method}` is not yet implemented.")

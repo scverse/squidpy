@@ -33,6 +33,7 @@ def spage_impute(
     layer: str | None = None,
     key_added: str = "spage",
     n_jobs: int | None = None,
+    remove_shared: bool = True,
 ) -> AnnData:
     """
     Impute spatially unmeasured genes in spatial data using SpaGE.
@@ -59,6 +60,8 @@ def spage_impute(
         Key added to `.obsm` for the imputed genes.
     n_jobs
         Number of parallel jobs for nearest neighbors search.
+    remove_shared
+        Whether to remove shared genes from the imputed gene set. By default, only genes that are present in `sc_adata` but absent from `st_adata` are imputed.
 
     Returns
     -------
@@ -73,7 +76,7 @@ def spage_impute(
     if cosine_threshold < 0:
         raise ValueError("`cosine_threshold` must be non-negative.")
 
-    genes_to_predict = _resolve_genes_to_predict(st_adata, sc_adata, genes)
+    genes_to_predict = _resolve_genes_to_predict(st_adata, sc_adata, genes, remove_shared)
     shared_genes = _shared_genes(st_adata, sc_adata)
 
     if n_pv > len(shared_genes):
