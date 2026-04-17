@@ -33,8 +33,8 @@ def spage_impute(
     layer: str | None = None,
     key_added: str = "spage",
     n_jobs: int | None = None,
-    remove_shared: bool = True,
-) -> AnnData:
+    copy: bool = False,
+) -> pd.DataFrame | None:
     """
     Impute spatially unmeasured genes in spatial data using SpaGE.
 
@@ -60,12 +60,13 @@ def spage_impute(
         Key added to `.obsm` for the imputed genes.
     n_jobs
         Number of parallel jobs for nearest neighbors search.
-    remove_shared
-        Whether to remove shared genes from the imputed gene set. By default, only genes that are present in `sc_adata` but absent from `st_adata` are imputed.
+    copy
+        If `True`, return the imputed dataframe. Otherwise, save it to `.obsm[key_added]`.
 
     Returns
     -------
-    AnnData with imputed genes stored in `.obsm[key_added]`.
+    If ``copy = True``, returns a :class:`pandas.DataFrame` with imputed values.
+    Otherwise, stores the result in :attr:`anndata.AnnData.obsm` ``[key_added]`` and returns `None`.
     """
     start = logg.info("Running SpaGE imputation")
 
@@ -76,7 +77,7 @@ def spage_impute(
     if cosine_threshold < 0:
         raise ValueError("`cosine_threshold` must be non-negative.")
 
-    genes_to_predict = _resolve_genes_to_predict(st_adata, sc_adata, genes, remove_shared)
+    genes_to_predict = _resolve_genes_to_predict(sc_adata, genes)
     shared_genes = _shared_genes(st_adata, sc_adata)
 
     if n_pv > len(shared_genes):
@@ -124,15 +125,17 @@ def spage_impute(
     imputed = _impute_from_neighbors(weights, mask, indices, sc_target)
 
     result = pd.DataFrame(imputed, index=st_adata.obs_names, columns=genes_to_predict)
+    if copy:
+        logg.info("Finish", time=start)
+        return result
+
     _save_data(st_adata, attr="obsm", key=key_added, data=result, time=start)
-    return st_adata
+    return None
 
 
 def _resolve_genes_to_predict(
-    st_adata: AnnData,
     sc_adata: AnnData,
     genes: Sequence[str] | None,
-    remove_shared: bool = False,
 ) -> list[str]:
     if genes is None:
         genes_to_predict = [g for g in sc_adata.var_names]
@@ -143,9 +146,7 @@ def _resolve_genes_to_predict(
             raise ValueError(f"Genes not found in `sc_adata`: {missing}")
         genes_to_predict = [g for g in genes_to_predict]
     if not genes_to_predict:
-        raise ValueError("No genes to impute. Ensure `genes` are in `sc_adata` and absent from `st_adata`.")
-    if remove_shared:
-        genes_to_predict = [g for g in genes_to_predict if g not in st_adata.var_names]
+        raise ValueError("No genes to impute. Ensure `genes` are in `sc_adata`.")
     return genes_to_predict
 
 

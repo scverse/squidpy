@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from anndata import AnnData
+import pandas as pd
 
 from squidpy._docs import d
 from squidpy._validators import assert_one_of
@@ -28,8 +29,8 @@ def impute(
     layer: str | None = None,
     key_added: str = "spage",
     n_jobs: int | None = None,
-    remove_shared: bool = True,
-) -> AnnData:
+    copy: bool = False,
+) -> pd.DataFrame | None:
     """
     Impute spatially unmeasured genes in spatial data using a selected method.
 
@@ -59,11 +60,12 @@ def impute(
         Key added to `.obsm` for the imputed genes.
     n_jobs
         Number of parallel jobs for nearest neighbors search.
-    remove_shared
-        Whether to remove shared genes from the imputed gene set. By default, only genes that
+    copy
+        If `True`, return the imputed dataframe. Otherwise, save it to `.obsm[key_added]`.
     Returns
     -------
-    AnnData with imputed genes stored in `.obsm[key_added]`.
+    If ``copy = True``, returns a :class:`pandas.DataFrame` with imputed values.
+    Otherwise, stores the result in :attr:`anndata.AnnData.obsm` ``[key_added]`` and returns `None`.
     """
     assert_one_of(method, _ALLOWED_METHODS, name="method")
 
@@ -79,7 +81,7 @@ def impute(
             layer=layer,
             key_added=key_added,
             n_jobs=n_jobs,
-            remove_shared=remove_shared,
+            copy=copy,
         )
 
     raise NotImplementedError(f"Method `{method}` is not yet implemented.")

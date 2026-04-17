@@ -30,10 +30,9 @@ class TestSpaGE:
             n_pv=3,
             n_neighbors=5,
             key_added="spage",
-            remove_shared=False,
         )
 
-        assert res is st_adata
+        assert res is None
         assert "spage" in st_adata.obsm
 
         df = st_adata.obsm["spage"]
@@ -58,14 +57,14 @@ class TestSpaGE:
             n_pv=3,
             n_neighbors=4,
             key_added="spage",
-            remove_shared=False,
         )
 
-        df = res.obsm["spage"]
+        assert res is None
+        df = st_adata.obsm["spage"]
         assert df.shape == (st_adata.n_obs, 8)
         assert list(df.columns) == [f"g{i}" for i in range(8)]
 
-    def test_spage_impute_returns_input(self):
+    def test_spage_impute_in_place_write(self):
         rng = np.random.default_rng(5)
         sc_genes = [f"g{i}" for i in range(9)]
         st_genes = [f"g{i}" for i in range(6)]
@@ -80,11 +79,32 @@ class TestSpaGE:
             n_pv=3,
             n_neighbors=4,
             key_added="spage",
-            remove_shared=False,
         )
 
-        assert res is st_adata
+        assert res is None
         assert "spage" in st_adata.obsm
+
+    def test_spage_impute_copy_returns_dataframe(self):
+        rng = np.random.default_rng(15)
+        sc_genes = [f"g{i}" for i in range(9)]
+        st_genes = [f"g{i}" for i in range(6)]
+
+        sc_adata = _make_adata(25, sc_genes, rng)
+        st_adata = _make_adata(12, st_genes, rng)
+
+        res = impute(
+            st_adata,
+            sc_adata,
+            method="spage",
+            n_pv=3,
+            n_neighbors=4,
+            key_added="spage",
+            copy=True,
+        )
+
+        assert isinstance(res, pd.DataFrame)
+        assert res.shape == (st_adata.n_obs, 9)
+        assert "spage" not in st_adata.obsm
 
     def test_spage_impute_genes_subset_order(self):
         rng = np.random.default_rng(6)
@@ -103,10 +123,10 @@ class TestSpaGE:
             n_pv=3,
             n_neighbors=5,
             key_added="spage",
-            remove_shared=False,
         )
 
-        df = res.obsm["spage"]
+        assert res is None
+        df = st_adata.obsm["spage"]
         assert list(df.columns) == genes
 
     def test_spage_impute_cosine_threshold_too_strict(self):
@@ -142,10 +162,10 @@ class TestSpaGE:
             n_pv=3,
             n_neighbors=50,
             key_added="spage",
-            remove_shared=False,
         )
 
-        df = res.obsm["spage"]
+        assert res is None
+        df = st_adata.obsm["spage"]
         assert df.shape == (st_adata.n_obs, 7)
 
     def test_spage_impute_use_raw(self):
@@ -167,10 +187,10 @@ class TestSpaGE:
             n_neighbors=4,
             key_added="spage",
             use_raw=True,
-            remove_shared=False,
         )
 
-        assert "spage" in res.obsm
+        assert res is None
+        assert "spage" in st_adata.obsm
 
     def test_spage_impute_layer(self):
         rng = np.random.default_rng(10)
@@ -191,10 +211,31 @@ class TestSpaGE:
             n_neighbors=4,
             key_added="spage",
             layer="counts",
-            remove_shared=False,
         )
 
-        assert "spage" in res.obsm
+        assert res is None
+        assert "spage" in st_adata.obsm
+
+    def test_spage_impute_shared_genes_are_kept(self):
+        rng = np.random.default_rng(16)
+        sc_genes = [f"g{i}" for i in range(10)]
+        st_genes = [f"g{i}" for i in range(5)]
+
+        sc_adata = _make_adata(40, sc_genes, rng)
+        st_adata = _make_adata(20, st_genes, rng)
+
+        impute(
+            st_adata,
+            sc_adata,
+            method="spage",
+            n_pv=3,
+            n_neighbors=5,
+            key_added="spage",
+        )
+
+        df = st_adata.obsm["spage"]
+        assert df.shape == (st_adata.n_obs, 10)
+        assert all(gene in df.columns for gene in st_genes)
 
     def test_spage_impute_invalid_genes(self):
         rng = np.random.default_rng(2)
@@ -267,7 +308,7 @@ class TestImputeDispatch:
             method="spage",
             n_pv=3,
             n_neighbors=4,
-            remove_shared=False,
         )
 
-        assert "spage" in res.obsm
+        assert res is None
+        assert "spage" in st_adata.obsm
