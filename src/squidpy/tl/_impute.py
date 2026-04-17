@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from anndata import AnnData
 import pandas as pd
+from anndata import AnnData
 
 from squidpy._docs import d
 from squidpy._validators import assert_one_of
