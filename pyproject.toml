@@ -136,6 +136,27 @@ build.targets.wheel.packages = [ "src/squidpy" ]
 metadata.allow-direct-references = true
 version.source = "vcs"
 
+[tool.pixi]
+workspace.channels = [ "conda-forge" ]
+workspace.platforms = [ "linux-64", "osx-arm64" ]
+dependencies.python = ">=3.11"
+pypi-dependencies.squidpy = { path = ".", editable = true }
+tasks.format = "ruff format ."
+tasks.kernel-install = 'python -m ipykernel install --user --name pixi-dev --display-name "squidpy (dev)"'
+tasks.lab = "jupyter lab"
+tasks.lint = "ruff check ."
+tasks.pre-commit = "pre-commit run"
+tasks.pre-commit-install = "pre-commit install"
+tasks.test = "pytest -v --color=yes --tb=short --durations=10"
+feature.py311.dependencies.python = "3.11.*"
+feature.py313.dependencies.python = "3.13.*"
+environments.default = { features = [ "py313" ], solve-group = "py313" }
+environments.dev-py311 = { features = [ "dev", "test", "py311" ], solve-group = "py311" }
+environments.dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
+environments.docs-py311 = { features = [ "docs", "py311" ], solve-group = "py311" }
+environments.docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
+environments.test-py313 = { features = [ "test", "py313" ], solve-group = "py313" }
+
 [tool.ruff]
 line-length = 120
 exclude = [
@@ -281,24 +302,3 @@ skip = [
   "docs/references.md",
   "docs/notebooks/example.ipynb",
 ]
-
-[tool.pixi]
-dependencies.python = ">=3.11"
-environments.dev-py311 = { features = [ "dev", "test", "py311" ], solve-group = "py311" }
-environments.docs-py311 = { features = [ "docs", "py311" ], solve-group = "py311" }
-environments.default = { features = [ "py313" ], solve-group = "py313" }
-environments.dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
-environments.docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
-environments.test-py313 = { features = [ "test", "py313" ], solve-group = "py313" }
-feature.py311.dependencies.python = "3.11.*"
-feature.py313.dependencies.python = "3.13.*"
-pypi-dependencies.squidpy = { path = ".", editable = true }
-tasks.lab = "jupyter lab"
-tasks.kernel-install = 'python -m ipykernel install --user --name pixi-dev --display-name "squidpy (dev)"'
-tasks.test = "pytest -v --color=yes --tb=short --durations=10"
-tasks.lint = "ruff check ."
-tasks.format = "ruff format ."
-tasks.pre-commit-install = "pre-commit install"
-tasks.pre-commit = "pre-commit run"
-workspace.channels = [ "conda-forge" ]
-workspace.platforms = [ "osx-arm64", "linux-64" ]
