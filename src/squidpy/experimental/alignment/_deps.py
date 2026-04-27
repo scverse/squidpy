@@ -11,10 +11,10 @@ JAX_INSTALL_HINT = 'Install it with `pip install "squidpy[jax]"`.'
 ALIGN_EXTRA_TODO = 'Consider `pip install "squidpy[align]"` for alignment methods.'
 
 
-def import_stalign_tools() -> ModuleType:
-    """Import STalign tools with a centralized optional dependency message."""
+def import_stalign_method() -> ModuleType:
+    """Import the STalign method with a centralized optional dependency message."""
     try:
-        return import_module("squidpy.experimental.tl.stalign_tools")
+        return import_module("squidpy.experimental.alignment._methods._stalign")
     except ModuleNotFoundError as e:
         if e.name == "jax":
             raise ImportError(f"STalign requires the optional dependency `jax`. {JAX_INSTALL_HINT}") from e
