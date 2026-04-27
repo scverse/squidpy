@@ -39,9 +39,11 @@ _STALIGN_REEXPORTS = frozenset(
 def __getattr__(name: str) -> Any:
     """Lazy access to JAX-only STalign config dataclasses."""
     if name in _STALIGN_REEXPORTS:
+        # TODO maybe this needs to be removed
         return getattr(import_stalign_tools(), name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+# TODO maybe this needs to be removed
 def __dir__() -> list[str]:
     return sorted(__all__)
