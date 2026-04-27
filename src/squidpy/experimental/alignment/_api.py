@@ -1,19 +1,15 @@
-"""Public alignment orchestrators."""
+"""Public experimental alignment entry points."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal
-
-import numpy as np
 
 if TYPE_CHECKING:
     from anndata import AnnData
-    from spatialdata import SpatialData
 
 AlignmentMethod = Literal["stalign", "grid-ot"]
 
-__all__ = ["align_by_landmarks", "align_obs"]
+__all__ = ["align_obs"]
 
 
 def align_obs(
@@ -30,22 +26,6 @@ def align_obs(
 ) -> AnnData | Any:
     """Align query observation coordinates to reference observation coordinates."""
     raise NotImplementedError("`align_obs` will be wired to alignment methods in a follow-up commit.")
-
-
-def align_by_landmarks(
-    sdata_ref: SpatialData,
-    sdata_query: SpatialData | None = None,
-    *,
-    cs_name_ref: str,
-    cs_name_query: str,
-    landmarks_ref: Sequence[tuple[float, float]] | np.ndarray,
-    landmarks_query: Sequence[tuple[float, float]] | np.ndarray,
-    model: Literal["similarity", "affine"] = "similarity",
-    output_mode: Literal["affine", "return"] = "affine",
-    inplace: bool = True,
-) -> SpatialData | Any:
-    """Align SpatialData coordinate systems by user-provided landmarks."""
-    raise NotImplementedError("`align_by_landmarks` will be implemented in a follow-up commit.")
 
 
 def align_images(*args: Any, **kwargs: Any) -> None:

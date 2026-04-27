@@ -6,6 +6,6 @@ These features may change or be removed in future releases.
 
 from __future__ import annotations
 
-from . import im, pl, tl
+from . import alignment, im, pl, tl
 
-__all__ = ["im", "pl", "tl"]
+__all__ = ["alignment", "im", "pl", "tl"]

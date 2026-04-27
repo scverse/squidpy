@@ -1,51 +1,28 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from importlib import import_module
 
-from squidpy.experimental.tl._align import align_by_landmarks, align_obs
-
-if TYPE_CHECKING:
-    from squidpy.experimental.tl.stalign_tools import (
-        STalignConfig,
-        STalignPreprocessConfig,
-        STalignPreprocessResult,
-        STalignRegistrationConfig,
-        STalignResult,
-    )
-
-__all__ = [
-    "STalignConfig",
-    "STalignPreprocessConfig",
-    "STalignPreprocessResult",
-    "STalignRegistrationConfig",
-    "STalignResult",
-    "align_by_landmarks",
-    "align_obs",
-]
-
-_STALIGN_REEXPORTS = frozenset(
-    {
-        "STalignConfig",
-        "STalignPreprocessConfig",
-        "STalignPreprocessResult",
-        "STalignRegistrationConfig",
-        "STalignResult",
-    }
-)
+__all__ = ["stalign", "stalign_tools"]
 
 
-def __getattr__(name: str) -> Any:
-    """Lazy access to JAX-only STalign config dataclasses."""
-    if name in _STALIGN_REEXPORTS:
-        try:
-            from squidpy.experimental.tl import stalign_tools as _tools
-        except ModuleNotFoundError as e:
-            if e.name == "jax":
-                raise ImportError(
-                    'STalign requires the optional dependency `jax`. Install it with `pip install "squidpy[jax]"`.'
-                ) from e
-            raise
-        return getattr(_tools, name)
+def _import_stalign_module(module_name: str):
+    try:
+        return import_module(module_name)
+    except ModuleNotFoundError as e:
+        if e.name == "jax":
+            raise ImportError(
+                'STalign requires the optional dependency `jax`. Install it with `pip install "squidpy[jax]"`.'
+            ) from e
+        raise
+
+
+def __getattr__(name: str):
+    # Module-level lazy imports are a common scientific Python pattern for
+    # optional or heavy dependencies.
+    if name == "stalign":
+        return _import_stalign_module("squidpy.experimental.tl._stalign").stalign
+    if name == "stalign_tools":
+        return _import_stalign_module("squidpy.experimental.tl.stalign_tools")
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
