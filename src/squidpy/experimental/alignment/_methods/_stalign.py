@@ -18,6 +18,8 @@ else:  # pragma: no cover - typing only
 
 
 JAX_DTYPE = jnp.float64 if jax.config.x64_enabled else jnp.float32
+
+
 def _to_affine(linear: Any, translation: Any) -> Any:
     return jnp.array(
         [
@@ -369,8 +371,8 @@ def lddmm(
     }
 
 
-
 PointOrder = Literal["row_col", "xy"]
+
 
 def _validate_points(points: np.ndarray, *, name: str) -> np.ndarray:
     arr = np.asarray(points, dtype=float)
