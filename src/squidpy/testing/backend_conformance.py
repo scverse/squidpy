@@ -57,7 +57,7 @@ def validate_backend(
         If any test fails.
     """
     import squidpy as sq
-    from squidpy._backends._registry import get_backend
+    from squidpy._backends import get_backend
 
     backend = get_backend(backend_name)
     assert backend is not None, f"Backend {backend_name!r} not found"

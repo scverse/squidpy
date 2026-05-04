@@ -2,8 +2,39 @@
 
 from __future__ import annotations
 
-from squidpy._backends._dispatch import dispatch
-from squidpy._backends._registry import available_backend_names, get_backend
-from squidpy._backends._settings import settings
+from scverse_backends import BackendDispatcher
 
-__all__ = ["dispatch", "get_backend", "available_backend_names", "settings"]
+_dispatcher = BackendDispatcher(
+    entrypoint_group="squidpy.backends",
+    host_name="squidpy",
+    trusted_backends={
+        "rapids_singlecell": {
+            "aliases": ["rapids-singlecell", "rsc", "cuda"],
+            "package": "rapids-singlecell",
+            "distributions": [
+                "rapids-singlecell",
+                "rapids-singlecell-cu12",
+                "rapids-singlecell-cu13",
+            ],
+            "entrypoints": ["rapids_singlecell"],
+            "module_prefixes": ["rapids_singlecell"],
+        },
+    },
+    reserved_backends={
+        "gpu": "Use a concrete backend alias such as 'cuda' or 'rsc'.",
+    },
+)
+
+dispatch = _dispatcher.dispatch
+settings = _dispatcher.settings
+get_backend = _dispatcher.get_backend
+available_backend_names = _dispatcher.available_backend_names
+discover = _dispatcher.discover
+
+__all__ = [
+    "available_backend_names",
+    "discover",
+    "dispatch",
+    "get_backend",
+    "settings",
+]

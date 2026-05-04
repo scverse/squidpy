@@ -89,14 +89,9 @@ import squidpy as sq
 ## Settings
 
 ```{eval-rst}
-.. currentmodule:: squidpy._backends._settings
-
-.. autoclass:: _Settings
-    :members: backend, use_backend, available_backends, get_backend
-
 .. data:: squidpy.settings
 
-    The global settings instance. See :class:`~squidpy._backends._settings._Settings`.
+    The global backend settings instance provided by :mod:`scverse_backends`.
 ```
 
 ## Datasets

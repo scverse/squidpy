@@ -1,381 +1,162 @@
-"""Tests for the backend dispatch system."""
+"""Integration tests for squidpy's scverse-backends configuration."""
 
 from __future__ import annotations
 
-import warnings
+import inspect
 
 import pytest
 
-from squidpy._backends import _registry, dispatch, settings
-from squidpy._backends._dispatch import _sig_cache
-from squidpy._backends._registry import (
-    _TRUSTED_ALIASES,
-    TRUSTED_BACKENDS,
-    _alias_map,
-    _backends,
-)
+from squidpy._backends import _dispatcher, dispatch, get_backend, settings
 
 
-class FakeBackend:
-    name = "fake_gpu"
-    aliases = ["fake", "test-gpu"]
+class FakeRapidsBackend:
+    name = "rapids_singlecell"
+    aliases = ["rapids-singlecell", "rsc", "cuda"]
 
-    def my_func(self, x, gpu_param=None):
-        """Run my_func on GPU.
+    def my_func(self, x, backend_param=None):
+        """Run my_func on a backend.
 
         Parameters
         ----------
         x
             Input value.
-        gpu_param
-            GPU-specific parameter.
+        backend_param
+            Backend-specific parameter.
         """
-        return f"gpu:{x}:{gpu_param}"
+        return f"backend:{x}:{backend_param}"
 
 
 @pytest.fixture(autouse=True)
-def _reset_state():
-    """Reset all backend state between tests."""
-    _backends.clear()
-    _alias_map.clear()
-    _sig_cache.clear()
-    old_discovered = _registry._discovered
-    # Mark as discovered to prevent entrypoint loading during tests —
-    # tests register their own fake backends explicitly.
-    _registry._discovered = True
-    settings.backend = "cpu"
-    # Temporarily add fake backend to trusted list
-    old_trusted = TRUSTED_BACKENDS.copy()
-    old_aliases = _TRUSTED_ALIASES.copy()
-    TRUSTED_BACKENDS["fake_gpu"] = {
-        "aliases": ["fake", "test-gpu"],
-        "package": "fake-gpu-pkg",
-    }
-    _TRUSTED_ALIASES["fake_gpu"] = "fake_gpu"
-    _TRUSTED_ALIASES["fake"] = "fake_gpu"
-    _TRUSTED_ALIASES["test-gpu"] = "fake_gpu"
+def _reset_backend_state():
+    registry = _dispatcher._registry
+    dispatch_impl = _dispatcher._dispatch_impl
+
+    old_discovered = registry._discovered
+    old_backends = registry._backends.copy()
+    old_alias_map = registry._alias_map.copy()
+    old_load_errors = registry._load_errors.copy()
+    old_registration_errors = registry._registration_errors.copy()
+    old_warned_untrusted = registry._warned_untrusted.copy()
+    old_sig_cache = dispatch_impl._sig_cache.copy()
+    old_dispatched_functions = list(dispatch_impl._dispatched_functions)
+    backend_token = settings._backend_var.set("cpu")
+
+    registry._discovered = True
+    registry._backends.clear()
+    registry._alias_map.clear()
+    registry._load_errors.clear()
+    registry._registration_errors.clear()
+    registry._warned_untrusted.clear()
+    dispatch_impl._sig_cache.clear()
+    dispatch_impl._dispatched_functions = []
+
     yield
-    _backends.clear()
-    _alias_map.clear()
-    _sig_cache.clear()
-    _registry._discovered = old_discovered
-    settings.backend = "cpu"
-    TRUSTED_BACKENDS.clear()
-    TRUSTED_BACKENDS.update(old_trusted)
-    _TRUSTED_ALIASES.clear()
-    _TRUSTED_ALIASES.update(old_aliases)
+
+    registry._discovered = old_discovered
+    registry._backends.clear()
+    registry._backends.update(old_backends)
+    registry._alias_map.clear()
+    registry._alias_map.update(old_alias_map)
+    registry._load_errors.clear()
+    registry._load_errors.update(old_load_errors)
+    registry._registration_errors.clear()
+    registry._registration_errors.update(old_registration_errors)
+    registry._warned_untrusted.clear()
+    registry._warned_untrusted.update(old_warned_untrusted)
+    dispatch_impl._sig_cache.clear()
+    dispatch_impl._sig_cache.update(old_sig_cache)
+    dispatch_impl._dispatched_functions = old_dispatched_functions
+    settings._backend_var.reset(backend_token)
 
 
-def _register_fake():
-    backend = FakeBackend()
-    _backends["fake_gpu"] = backend
-    _alias_map["fake_gpu"] = "fake_gpu"
-    _alias_map["fake"] = "fake_gpu"
-    _alias_map["test-gpu"] = "fake_gpu"
+def _register_fake_rsc() -> FakeRapidsBackend:
+    backend = FakeRapidsBackend()
+    registry = _dispatcher._registry
+    registry._backends[backend.name] = backend
+    registry._alias_map[backend.name] = backend.name
+    for alias in backend.aliases:
+        registry._alias_map[alias] = backend.name
     return backend
 
 
-class TestSettings:
-    def test_default_is_cpu(self):
-        assert settings.backend == "cpu"
-
-    def test_set_unknown_backend_raises_with_suggestion(self):
-        _register_fake()
-        with pytest.raises(ValueError, match="Unknown backend.*Did you mean"):
-            settings.backend = "fak"  # close to "fake"
-
-    def test_set_unknown_backend_raises(self):
-        with pytest.raises(ValueError, match="Unknown backend"):
-            settings.backend = "nonexistent"
-
-    def test_trusted_but_not_installed_raises(self):
-        # fake_gpu is trusted but not registered (not installed)
-        with pytest.raises(ImportError, match="not installed"):
-            settings.backend = "fake"
-
-    def test_context_manager_restores(self):
-        _register_fake()
-
-        settings.backend = "fake"
-        with settings.use_backend("cpu"):
-            assert settings.backend == "cpu"
-        assert settings.backend == "fake_gpu"
-
-    def test_set_via_alias(self):
-        _register_fake()
-        settings.backend = "fake"
-        # Aliases resolve to canonical name
-        assert settings.backend == "fake_gpu"
-
-    def test_set_via_canonical(self):
-        _register_fake()
-        settings.backend = "fake_gpu"
-        assert settings.backend == "fake_gpu"
-
-    def test_untrusted_backend_warns(self):
-        # Remove fake_gpu from trusted list
-        TRUSTED_BACKENDS.pop("fake_gpu", None)
-        _TRUSTED_ALIASES.pop("fake_gpu", None)
-        _TRUSTED_ALIASES.pop("fake", None)
-        _TRUSTED_ALIASES.pop("test-gpu", None)
-
-        _register_fake()
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            settings.backend = "fake"
-            assert len(w) == 1
-            assert "not in squidpy's trusted backends list" in str(w[0].message)
-
-    def test_available_backends_empty(self):
-        assert settings.available_backends() == []
-
-    def test_available_backends_with_registered(self):
-        _register_fake()
-        assert "fake_gpu" in settings.available_backends()
-
-    def test_get_backend_returns_instance(self):
-        backend = _register_fake()
-        result = settings.get_backend("fake_gpu")
-        assert result is backend
-
-    def test_get_backend_by_alias(self):
-        backend = _register_fake()
-        assert settings.get_backend("fake") is backend
-        assert settings.get_backend("test-gpu") is backend
-
-    def test_get_backend_unknown_returns_none(self):
-        assert settings.get_backend("nonexistent") is None
-
-    def test_get_backend_cpu_returns_none(self):
-        assert settings.get_backend("cpu") is None
-
-
-class TestDispatch:
-    def test_cpu_path(self):
-        @dispatch
-        def my_func(x, n_jobs=None):
-            return f"cpu:{x}:{n_jobs}"
-
-        assert my_func(42) == "cpu:42:None"
-        assert my_func(42, n_jobs=4) == "cpu:42:4"
-
-    def test_gpu_dispatch(self):
-        _register_fake()
-
-        @dispatch
-        def my_func(x, n_jobs=None):
-            return f"cpu:{x}"
+def test_trusted_rsc_policy_uses_concrete_cuda_alias():
+    trusted = _dispatcher._registry.trusted_backends["rapids_singlecell"]
 
-        with settings.use_backend("fake"):
-            assert my_func(42) == "gpu:42:None"
+    assert trusted["aliases"] == ["rapids-singlecell", "rsc", "cuda"]
+    assert "gpu" not in trusted["aliases"]
+    assert _dispatcher._registry.reserved_backends == {"gpu": "Use a concrete backend alias such as 'cuda' or 'rsc'."}
 
-    def test_gpu_specific_kwarg(self):
-        _register_fake()
 
-        @dispatch
-        def my_func(x, n_jobs=None):
-            return f"cpu:{x}"
+def test_gpu_alias_is_reserved():
+    with pytest.raises(ValueError, match="Use a concrete backend alias"):
+        settings.backend = "gpu"
 
-        with settings.use_backend("fake"):
-            assert my_func(42, gpu_param="hello") == "gpu:42:hello"
 
-    def test_cpu_only_kwarg_warns(self):
-        _register_fake()
+def test_trusted_rsc_not_installed_has_install_hint():
+    with pytest.raises(ImportError, match="pip install rapids-singlecell"):
+        settings.backend = "rsc"
 
-        @dispatch
-        def my_func(x, n_jobs=None):
-            return f"cpu:{x}"
 
-        with settings.use_backend("fake"):
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-                my_func(42, n_jobs=4)
-                assert len(w) == 1
-                assert "n_jobs" in str(w[0].message)
+def test_get_backend_resolves_registered_rsc_aliases():
+    backend = _register_fake_rsc()
 
-    def test_cpu_only_kwarg_default_silent(self):
-        _register_fake()
+    assert get_backend("rapids_singlecell") is backend
+    assert get_backend("rapids-singlecell") is backend
+    assert get_backend("rsc") is backend
+    assert get_backend("cuda") is backend
+    assert get_backend("cpu") is None
 
-        @dispatch
-        def my_func(x, n_jobs=None):
-            return f"cpu:{x}"
 
-        with settings.use_backend("fake"):
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-                my_func(42, n_jobs=None)
-                assert len(w) == 0
+def test_dispatch_routes_to_registered_rsc_alias():
+    _register_fake_rsc()
 
-    def test_gpu_kwarg_on_cpu_raises(self):
-        _register_fake()
+    @dispatch
+    def my_func(x, n_jobs=None):
+        return f"cpu:{x}:{n_jobs}"
 
-        @dispatch
-        def my_func(x, n_jobs=None):
-            return f"cpu:{x}"
+    with settings.use_backend("cuda"):
+        assert my_func(42, backend_param="value") == "backend:42:value"
 
-        with pytest.raises(TypeError, match="gpu_param"):
-            my_func(42, gpu_param="hello")
 
-    def test_fallback_when_not_implemented(self):
-        _register_fake()
+def test_backend_specific_params_merge_into_signature_and_docstring():
+    _register_fake_rsc()
 
-        @dispatch
-        def other_func(x):
-            return f"cpu:{x}"
-
-        with settings.use_backend("fake"):
-            # FakeBackend doesn't have other_func -> CPU fallback
-            assert other_func(42) == "cpu:42"
-
-    def test_per_function_override(self):
-        _register_fake()
-
-        @dispatch
-        def my_func(x, n_jobs=None):
-            return f"cpu:{x}"
-
-        settings.backend = "fake"
-        assert my_func(42, backend="cpu") == "cpu:42"
-
-    def test_alias_resolution(self):
-        _register_fake()
-
-        @dispatch
-        def my_func(x, n_jobs=None):
-            return f"cpu:{x}"
-
-        with settings.use_backend("fake_gpu"):
-            assert my_func(42) == "gpu:42:None"
-        with settings.use_backend("fake"):
-            assert my_func(42) == "gpu:42:None"
-        with settings.use_backend("test-gpu"):
-            assert my_func(42) == "gpu:42:None"
-
-    def test_backend_not_installed_raises(self):
-        _register_fake()
-
-        @dispatch
-        def my_func(x):
-            return f"cpu:{x}"
-
-        with pytest.raises(RuntimeError, match="not installed"):
-            my_func(42, backend="nonexistent_backend")
-
-
-class TestDocstringMerging:
-    """Test numpydoc parameter extraction and injection."""
-
-    def test_extract_param_docs(self):
-        from squidpy._backends._dispatch import _extract_param_docs
-
-        docstring = """\
-Run something.
-
-Parameters
-----------
-x
-    Input value.
-gpu_param
-    GPU-specific parameter.
-
-Returns
--------
-Result.
-"""
-        result = _extract_param_docs(docstring, {"gpu_param"})
-        assert "gpu_param" in result
-        assert "GPU-specific" in result["gpu_param"]
-
-    def test_extract_skips_missing_params(self):
-        from squidpy._backends._dispatch import _extract_param_docs
-
-        docstring = """\
-Parameters
-----------
-x
-    Input.
-"""
-        result = _extract_param_docs(docstring, {"nonexistent"})
-        assert result == {}
-
-    def test_extract_no_params_section(self):
-        from squidpy._backends._dispatch import _extract_param_docs
-
-        result = _extract_param_docs("Just a docstring.", {"x"})
-        assert result == {}
-
-    def test_inject_param_docs(self):
-        from squidpy._backends._dispatch import _inject_param_docs
-
-        docstring = """\
-Do something.
-
-Parameters
-----------
-x
-    Input.
-
-Returns
--------
-Result.
-"""
-        result = _inject_param_docs(docstring, {"gpu_param": "gpu_param\n    A GPU param."})
-        assert "gpu_param" in result
-        assert "backend" in result
-        # backend doc should appear before Returns
-        lines = result.split("\n")
-        backend_idx = next(i for i, l in enumerate(lines) if "backend" in l.lower() and "Backend to use" not in l)
-        returns_idx = next(i for i, l in enumerate(lines) if l.strip() == "Returns")
-        assert backend_idx < returns_idx
-
-    def test_inject_no_params_section_unchanged(self):
-        from squidpy._backends._dispatch import _inject_param_docs
-
-        docstring = "Just a plain docstring."
-        assert _inject_param_docs(docstring, {"x": "x\n    Param."}) == docstring
-
-    def test_extract_handles_multiline_descriptions(self):
-        from squidpy._backends._dispatch import _extract_param_docs
-
-        docstring = """\
-Parameters
-----------
-multi
-    First line of description.
-    Second line continues here
-    with more detail.
-other
-    Another param.
-"""
-        result = _extract_param_docs(docstring, {"multi"})
-        assert "multi" in result
-        assert "Second line" in result["multi"]
-        assert "with more detail" in result["multi"]
-
-
-class TestLazyDiscovery:
-    """Test that backend discovery is lazy."""
-
-    def test_discovery_not_triggered_on_import(self):
-        """Verify _discovered stays False until a backend function is used."""
-        _registry._discovered = False
-        _backends.clear()
-        _alias_map.clear()
-
-        assert not _registry._discovered
-
-    def test_discovery_triggered_by_get_backend(self):
-        """get_backend triggers lazy discovery."""
-        _registry._discovered = False
-        from squidpy._backends._registry import get_backend
-
-        get_backend("cpu")
-        assert _registry._discovered
-
-    def test_discovery_triggered_by_settings_setter(self):
-        """Setting backend triggers lazy discovery."""
-        _registry._discovered = False
-        _register_fake()
-        _registry._discovered = False
-        settings.backend = "fake"
-        assert _registry._discovered
+    @dispatch
+    def my_func(x, n_jobs=None):
+        """Run my_func.
+
+        Parameters
+        ----------
+        x
+            Input value.
+        n_jobs
+            Host-only parameter.
+
+        Returns
+        -------
+        Result.
+        """
+        return f"cpu:{x}:{n_jobs}"
+
+    _dispatcher._dispatch_impl._update_signatures()
+
+    sig = inspect.signature(my_func)
+    assert list(sig.parameters) == ["x", "n_jobs", "backend_param", "backend"]
+    doc = my_func.__doc__
+    assert "backend_param (rapids_singlecell)" in doc
+    assert "Other Parameters" in doc
+    assert "Backend selector injected by ``scverse-backends``" in doc
+
+
+def test_untrusted_backend_cannot_claim_reserved_gpu_alias():
+    class BadBackend:
+        name = "bad_backend"
+        aliases = ["gpu"]
+
+    with pytest.warns(UserWarning, match="reserved by squidpy"):
+        _dispatcher._registry._register_backend(BadBackend(), entrypoint_name="bad_backend")
+
+    assert get_backend("bad_backend").name == "bad_backend"
+    assert get_backend("gpu") is None
+    with pytest.raises(ValueError, match="Use a concrete backend alias"):
+        settings.backend = "gpu"
