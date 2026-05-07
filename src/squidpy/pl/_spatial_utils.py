@@ -6,7 +6,7 @@ from copy import copy
 from functools import partial
 from numbers import Number
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import dask.array as da
 import numpy as np
@@ -44,15 +44,15 @@ from squidpy.im._coords import CropCoords
 from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
 
-_AvailShapes: TypeAlias = Literal["circle", "square", "hex"]
-Palette_t: TypeAlias = str | ListedColormap | None
-_Normalize: TypeAlias = Normalize | Sequence[Normalize]
-_SeqStr: TypeAlias = str | Sequence[str]
-_SeqFloat: TypeAlias = float | Sequence[float]
-_SeqArray: TypeAlias = NDArrayA | Sequence[NDArrayA]
-_CoordTuple: TypeAlias = tuple[int, int, int, int]
-_FontWeight: TypeAlias = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
-_FontSize: TypeAlias = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
+type _AvailShapes = Literal["circle", "square", "hex"]
+type Palette_t = str | ListedColormap | None
+type _Normalize = Normalize | Sequence[Normalize]
+type _SeqStr = str | Sequence[str]
+type _SeqFloat = float | Sequence[float]
+type _SeqArray = NDArrayA | Sequence[NDArrayA]
+type _CoordTuple = tuple[int, int, int, int]
+type _FontWeight = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
+type _FontSize = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
 
 
 # named tuples

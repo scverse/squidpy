@@ -227,3 +227,16 @@ class TestHighLevel:
         assert [key for key in res.keys() if "texture" in key] != [], "feature name texture not in dict keys"
         assert [key for key in res.keys() if "summary" in key] != [], "feature name summary not in dict keys"
         assert [key for key in res.keys() if "histogram" in key] != [], "feature name histogram not in dict keys"
+
+    def test_legacy_parallel_backend(self, adata: AnnData, cont: ImageContainer):
+        with pytest.warns(FutureWarning, match="parallel_backend"):
+            res = calculate_image_features(
+                adata,
+                cont,
+                backend="threading",
+                copy=True,
+                features="summary",
+                n_jobs=1,
+            )
+
+        assert isinstance(res, pd.DataFrame)

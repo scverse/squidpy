@@ -17,10 +17,18 @@ from pandas import CategoricalDtype
 from scanpy import logging as logg
 from spatialdata import SpatialData
 
+from squidpy._backends import backend_dispatch
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import (
+    NDArrayA,
+    Signal,
+    SigQueue,
+    _deprecate_backend_as_parallel_backend,
+    _get_n_cores,
+    parallelize,
+)
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -134,6 +142,8 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, 
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
 @d.dedent
+@_deprecate_backend_as_parallel_backend
+@backend_dispatch
 def nhood_enrichment(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -144,7 +154,7 @@ def nhood_enrichment(
     seed: int | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
+    parallel_backend: str = "loky",
     show_progress_bar: bool = True,
 ) -> NhoodEnrichmentResult | None:
     """
@@ -161,6 +171,8 @@ def nhood_enrichment(
     %(seed)s
     %(copy)s
     %(parallelize)s
+    parallel_backend
+        Which joblib backend to use for parallel neighborhood enrichment.
 
     Returns
     -------
@@ -203,7 +215,7 @@ def nhood_enrichment(
         collection=np.arange(n_perms).tolist(),
         extractor=np.vstack,
         n_jobs=n_jobs,
-        backend=backend,
+        backend=parallel_backend,
         show_progress_bar=show_progress_bar,
     )(
         callback=_test,
@@ -230,6 +242,8 @@ def nhood_enrichment(
 
 @d.dedent
 @inject_docs(c=Centrality)
+@_deprecate_backend_as_parallel_backend
+@backend_dispatch
 def centrality_scores(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -237,7 +251,7 @@ def centrality_scores(
     connectivity_key: str | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
+    parallel_backend: str = "loky",
     show_progress_bar: bool = False,
 ) -> pd.DataFrame | None:
     """
@@ -260,6 +274,8 @@ def centrality_scores(
     %(conn_key)s
     %(copy)s
     %(parallelize)s
+    parallel_backend
+        Which joblib backend to use for parallel centrality computation.
 
     Returns
     -------
@@ -307,7 +323,7 @@ def centrality_scores(
             collection=cat,
             extractor=pd.concat,
             n_jobs=n_jobs,
-            backend=backend,
+            backend=parallel_backend,
             show_progress_bar=show_progress_bar,
         )(clusters=clusters, fun=v, method=k)
         res_list.append(df)
@@ -326,6 +342,7 @@ def centrality_scores(
 
 
 @d.dedent
+@backend_dispatch
 def interaction_matrix(
     adata: AnnData | SpatialData,
     cluster_key: str,

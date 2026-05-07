@@ -65,7 +65,7 @@ dependencies = [
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
-  "scverse-backends",
+  "scverse-backends>=0.0.2,<0.1",
   "spatialdata>=0.7.1",
   "spatialdata-plot",
   "statsmodels>=0.12",

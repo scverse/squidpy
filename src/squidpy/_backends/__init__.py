@@ -25,7 +25,7 @@ _dispatcher = BackendDispatcher(
     },
 )
 
-dispatch = _dispatcher.dispatch
+backend_dispatch = _dispatcher.backend_dispatch
 settings = _dispatcher.settings
 get_backend = _dispatcher.get_backend
 available_backend_names = _dispatcher.available_backend_names
@@ -33,8 +33,8 @@ discover = _dispatcher.discover
 
 __all__ = [
     "available_backend_names",
+    "backend_dispatch",
     "discover",
-    "dispatch",
     "get_backend",
     "settings",
 ]

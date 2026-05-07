@@ -119,6 +119,35 @@ def test_spatial_autocorr_attr(dummy_adata: AnnData, attr: Literal["X", "obs", "
     np.testing.assert_array_equal(sorted(df.index), sorted(index))
 
 
+def test_spatial_autocorr_parallel_backend(dummy_adata: AnnData):
+    df = spatial_autocorr(
+        dummy_adata,
+        copy=True,
+        n_jobs=1,
+        n_perms=5,
+        parallel_backend="threading",
+        seed=42,
+        show_progress_bar=False,
+    )
+
+    assert "pval_sim" in df
+
+
+def test_spatial_autocorr_legacy_parallel_backend(dummy_adata: AnnData):
+    with pytest.warns(FutureWarning, match="parallel_backend"):
+        df = spatial_autocorr(
+            dummy_adata,
+            backend="threading",
+            copy=True,
+            n_jobs=1,
+            n_perms=5,
+            seed=42,
+            show_progress_bar=False,
+        )
+
+    assert "pval_sim" in df
+
+
 def test_co_occurrence(adata: AnnData):
     """
     check co_occurrence score and shape
@@ -135,6 +164,23 @@ def test_co_occurrence(adata: AnnData):
     assert arr.ndim == 3
     assert arr.shape[2] == 49
     assert arr.shape[1] == arr.shape[0] == adata.obs["leiden"].unique().shape[0]
+
+
+def test_co_occurrence_legacy_parallel_kwargs(adata: AnnData):
+    with pytest.warns(FutureWarning) as record:
+        arr, interval = co_occurrence(
+            adata,
+            cluster_key="leiden",
+            backend="loky",
+            copy=True,
+            show_progress_bar=False,
+        )
+
+    assert arr.ndim == 3
+    assert interval.ndim == 1
+    messages = [str(w.message) for w in record]
+    assert any("backend" in message for message in messages)
+    assert any("show_progress_bar" in message for message in messages)
 
 
 def test_co_occurrence_reproducibility(adata: AnnData):

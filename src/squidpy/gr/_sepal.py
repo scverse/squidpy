@@ -12,9 +12,17 @@ from scipy.sparse import csr_matrix, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData
 
+from squidpy._backends import backend_dispatch
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import (
+    NDArrayA,
+    Signal,
+    SigQueue,
+    _deprecate_backend_as_parallel_backend,
+    _get_n_cores,
+    parallelize,
+)
 from squidpy._validators import assert_non_empty_sequence
 from squidpy.gr._utils import (
     _assert_connectivity_key,
@@ -28,6 +36,8 @@ __all__ = ["sepal"]
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
+@_deprecate_backend_as_parallel_backend
+@backend_dispatch
 def sepal(
     adata: AnnData | SpatialData,
     max_neighs: Literal[4, 6],
@@ -41,7 +51,7 @@ def sepal(
     use_raw: bool = False,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
+    parallel_backend: str = "loky",
     show_progress_bar: bool = True,
 ) -> pd.DataFrame | None:
     """
@@ -79,6 +89,8 @@ def sepal(
         Whether to access :attr:`anndata.AnnData.raw`.
     %(copy)s
     %(parallelize)s
+    parallel_backend
+        Which joblib backend to use for parallel Sepal computation.
 
     Returns
     -------
@@ -132,7 +144,7 @@ def sepal(
         extractor=np.hstack,
         use_ixs=False,
         n_jobs=n_jobs,
-        backend=backend,
+        backend=parallel_backend,
         show_progress_bar=show_progress_bar,
     )(
         vals=vals,

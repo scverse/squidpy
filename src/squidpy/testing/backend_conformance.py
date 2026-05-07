@@ -9,27 +9,49 @@ Usage in backend CI::
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Sequence
 
 import numpy as np
 from anndata import AnnData
 
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
 # Tolerance registry per function
 TOLERANCES: dict[str, dict[str, float]] = {
-    "spatial_autocorr": {"atol": 1e-5, "rtol": 1e-3},
-    "co_occurrence": {"atol": 1e-5, "rtol": 1e-2},
+    "spatial_autocorr": {"atol": 1e-5, "rtol": 1e-5},
+    "co_occurrence": {"atol": 1e-6, "rtol": 1e-6},
+    "nhood_enrichment": {"atol": 1e-6, "rtol": 1e-5},
 }
+_CONFORMANCE_ERRORS = (AssertionError, AttributeError, ImportError, KeyError, RuntimeError, TypeError, ValueError)
 
 
-def _make_test_adata(n_obs: int = 500, n_vars: int = 100) -> AnnData:
-    """Create a minimal AnnData for testing."""
+def _make_test_adata(n_obs: int = 144, n_vars: int = 6) -> AnnData:
+    """Create deterministic data with planted spatial signal."""
     rng = np.random.default_rng(42)
-    adata = AnnData(X=rng.random((n_obs, n_vars)).astype(np.float32))
-    adata.obsm["spatial"] = rng.random((n_obs, 2)).astype(np.float32) * 1000
-    adata.obs["cell_type"] = rng.choice(["A", "B", "C"], size=n_obs)
+    side = int(np.ceil(np.sqrt(n_obs)))
+    yy, xx = np.mgrid[:side, :side]
+    coords = np.c_[xx.ravel(), yy.ravel()][:n_obs].astype(np.float32)
+    scale = float(max(side - 1, 1))
+    x = coords[:, 0] / scale
+    y = coords[:, 1] / scale
+
+    planted = np.column_stack(
+        [
+            x + y,
+            x - y,
+            np.sin(np.pi * x) * np.cos(np.pi * y),
+            rng.normal(0.0, 0.01, size=n_obs),
+        ]
+    )
+    if n_vars > planted.shape[1]:
+        noise = rng.normal(0.0, 0.05, size=(n_obs, n_vars - planted.shape[1]))
+        planted = np.column_stack([planted, noise])
+
+    adata = AnnData(X=planted[:, :n_vars].astype(np.float32))
+    adata.obsm["spatial"] = coords
+    adata.obs["cell_type"] = np.select(
+        [coords[:, 0] < side / 3, coords[:, 0] >= 2 * side / 3],
+        ["A", "C"],
+        default="B",
+    )
     adata.obs["cell_type"] = adata.obs["cell_type"].astype("category")
     return adata
 
@@ -70,11 +92,13 @@ def validate_backend(
     all_tests = {
         "spatial_autocorr": _test_spatial_autocorr,
         "co_occurrence": _test_co_occurrence,
+        "nhood_enrichment": _test_nhood_enrichment,
     }
 
     to_test = {k: v for k, v in all_tests.items() if functions is None or k in functions}
 
     results: dict[str, str] = {}
+    failures: dict[str, BaseException] = {}
     for name, test_fn in to_test.items():
         method = getattr(backend, name, None)
         if method is None:
@@ -83,11 +107,36 @@ def validate_backend(
         try:
             test_fn(adata, backend_name)
             results[name] = "PASSED"
-        except Exception as e:
+        except _CONFORMANCE_ERRORS as e:
             results[name] = f"FAILED: {e}"
-            raise
+            failures[name] = e
+
+    if failures:
+        summary = "; ".join(f"{name}: {results[name]}" for name in failures)
+        first = next(iter(failures.values()))
+        raise AssertionError(f"Backend conformance failed: {summary}") from first
 
     return results
+
+
+def _assert_numeric_frame_close(cpu_result, backend_result, *, name: str) -> None:
+    np.testing.assert_array_equal(
+        cpu_result.index.to_numpy(),
+        backend_result.index.to_numpy(),
+        err_msg=f"{name} index mismatch",
+    )
+    numeric_cols = cpu_result.select_dtypes(include=np.number).columns
+    np.testing.assert_array_equal(
+        numeric_cols.to_numpy(),
+        backend_result.select_dtypes(include=np.number).columns.to_numpy(),
+        err_msg=f"{name} numeric columns mismatch",
+    )
+    np.testing.assert_allclose(
+        cpu_result[numeric_cols].to_numpy(),
+        backend_result[numeric_cols].to_numpy(),
+        **TOLERANCES[name],
+        err_msg=f"{name} numeric result mismatch",
+    )
 
 
 def _test_spatial_autocorr(adata: AnnData, backend_name: str) -> None:
@@ -100,13 +149,7 @@ def _test_spatial_autocorr(adata: AnnData, backend_name: str) -> None:
     with sq.settings.use_backend(backend_name):
         backend_result = sq.gr.spatial_autocorr(adata.copy(), mode="moran", copy=True)
 
-    tol = TOLERANCES["spatial_autocorr"]
-    np.testing.assert_allclose(
-        cpu_result["I"].values,
-        backend_result["I"].values,
-        **tol,
-        err_msg="spatial_autocorr Moran's I mismatch",
-    )
+    _assert_numeric_frame_close(cpu_result, backend_result, name="spatial_autocorr")
 
 
 def _test_co_occurrence(adata: AnnData, backend_name: str) -> None:
@@ -122,4 +165,40 @@ def _test_co_occurrence(adata: AnnData, backend_name: str) -> None:
         backend_result[0],
         **tol,
         err_msg="co_occurrence probability mismatch",
+    )
+    np.testing.assert_allclose(
+        cpu_result[1],
+        backend_result[1],
+        **tol,
+        err_msg="co_occurrence interval mismatch",
+    )
+
+
+def _test_nhood_enrichment(adata: AnnData, backend_name: str) -> None:
+    import squidpy as sq
+
+    kwargs = {
+        "cluster_key": "cell_type",
+        "copy": True,
+        "n_jobs": 1,
+        "n_perms": 32,
+        "seed": 42,
+        "show_progress_bar": False,
+    }
+    cpu_result = sq.gr.nhood_enrichment(adata.copy(), **kwargs)
+    with sq.settings.use_backend(backend_name):
+        backend_result = sq.gr.nhood_enrichment(adata.copy(), **kwargs)
+
+    tol = TOLERANCES["nhood_enrichment"]
+    np.testing.assert_array_equal(
+        cpu_result.counts,
+        backend_result.counts,
+        err_msg="nhood_enrichment counts mismatch",
+    )
+    np.testing.assert_allclose(
+        cpu_result.zscore,
+        backend_result.zscore,
+        equal_nan=True,
+        **tol,
+        err_msg="nhood_enrichment z-score mismatch",
     )

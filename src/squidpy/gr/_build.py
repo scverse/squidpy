@@ -38,6 +38,7 @@ from spatialdata.models.models import (
     get_model,
 )
 
+from squidpy._backends import backend_dispatch
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -61,6 +62,7 @@ class SpatialNeighborsResult(NamedTuple):
 
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)
+@backend_dispatch
 def spatial_neighbors(
     adata: AnnData | SpatialData,
     spatial_key: str = Key.obsm.spatial,
