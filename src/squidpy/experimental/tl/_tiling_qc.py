@@ -11,13 +11,13 @@ computes per-cell metrics that quantify this artifact:
 - **cut_score**: product of the two, combining evidence from shape and
   orientation.
 - **smoothed_cut_score**: cut_score multiplied by the mean cut_score of
-  k=10 nearest spatial neighbors - amplifies boundary cells while
-  suppressing isolated high-scorers.
+  the ``n_neighbors`` nearest spatial neighbors - amplifies boundary
+  cells while suppressing isolated high-scorers.
 - **is_outlier**: boolean flag gated on per-cell cut_score and/or
   spatially smoothed score exceeding their respective MAD thresholds.
-- **nhood_outlier_fraction**: fraction of k=10 nearest neighbors that are
-  smoothed-score outliers (MAD-based).  Bounded [0, 1]; high values
-  precisely trace the FOV tile grid.
+- **nhood_outlier_fraction**: fraction of ``n_neighbors`` nearest
+  neighbors that are smoothed-score outliers (MAD-based).  Bounded
+  [0, 1]; high values precisely trace the FOV tile grid.
 
 All heavy computation is done per-tile via the tiling infrastructure
 in :mod:`squidpy.experimental.im._tiling`, so this scales to
@@ -69,6 +69,11 @@ _DEFAULT_DISTANCE_TOL = 0.75
 # to this length via equidistant arc-length interpolation to bound
 # the O(n²) two-pointer scan.
 _MAX_CONTOUR_POINTS = 500
+
+# Consistency factor for normal distributions: sd ~ 1.4826 x MAD.
+# Used to convert MAD-based thresholds to standard-deviation units so
+# `nmads_*` parameters behave like z-score multipliers.
+_MAD_TO_SD = 1.4826
 
 _TILE_SCORE_COLUMNS = ["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"]
 _POST_SCORE_COLUMNS = ["smoothed_cut_score", "is_outlier", "nhood_outlier_fraction"]
@@ -411,6 +416,7 @@ def calculate_tiling_qc(
     outlier_use_smoothed: bool = True,
     nmads_cut: float = 1.5,
     nmads_smoothed: float = 3,
+    n_neighbors: int = 10,
     n_jobs: int = -1,
     client: Client | None = None,
     adata_key_added: str | None = None,
@@ -465,6 +471,12 @@ def calculate_tiling_qc(
     nmads_smoothed
         Number of MADs for the ``smoothed_cut_score`` outlier gate.
         Threshold is ``median + nmads_smoothed x MAD x 1.4826``.
+    n_neighbors
+        Number of nearest spatial neighbors used to compute
+        ``smoothed_cut_score`` and ``nhood_outlier_fraction``.  In a
+        perfect grid each cell has 8 immediate neighbours; the default
+        of 10 leaves a little wiggle room for biological irregularity
+        without wasting compute on distant cells.
     n_jobs
         Number of threads for tile processing.  ``-1`` (default) uses
         all available CPUs.  Ignored when ``client`` is provided.
@@ -492,14 +504,14 @@ def calculate_tiling_qc(
       (1 = cardinal, 0 = diagonal).
     - ``cut_score``: product of the two.
     - ``smoothed_cut_score``: ``cut_score x mean(neighbor cut_scores)``
-      over k=10 nearest spatial neighbors.  Amplifies cells on FOV
-      boundaries while suppressing isolated high-scorers.
+      over the ``n_neighbors`` nearest spatial neighbors.  Amplifies
+      cells on FOV boundaries while suppressing isolated high-scorers.
     - ``is_outlier``: boolean, ``True`` when the enabled outlier
       gates are satisfied (``cut_score`` and/or ``smoothed_cut_score``
       exceeding their respective MAD thresholds).
-    - ``nhood_outlier_fraction``: fraction of k=10 nearest neighbors
-      that are smoothed-score outliers (MAD-based).  Bounded [0, 1];
-      high values trace the tile grid.
+    - ``nhood_outlier_fraction``: fraction of ``n_neighbors`` nearest
+      neighbors that are smoothed-score outliers (MAD-based).  Bounded
+      [0, 1]; high values trace the tile grid.
 
     Notes
     -----
@@ -510,6 +522,14 @@ def calculate_tiling_qc(
     """
     if labels_key not in sdata.labels:
         raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
+    if not outlier_use_cut and not outlier_use_smoothed:
+        raise ValueError("At least one outlier gate must be enabled (outlier_use_cut or outlier_use_smoothed).")
+    if outlier_use_cut and nmads_cut <= 0:
+        raise ValueError(f"nmads_cut must be positive, got {nmads_cut}.")
+    if outlier_use_smoothed and nmads_smoothed <= 0:
+        raise ValueError(f"nmads_smoothed must be positive, got {nmads_smoothed}.")
+    if n_neighbors < 1:
+        raise ValueError(f"n_neighbors must be >= 1, got {n_neighbors}.")
 
     labels_node = sdata.labels[labels_key]
     if isinstance(labels_node, xr.DataTree):
@@ -558,17 +578,8 @@ def calculate_tiling_qc(
         dups = combined.index[combined.index.duplicated()].unique().tolist()
         raise RuntimeError(f"Duplicate cell IDs across tiles - tile ownership may be broken. Duplicates: {dups}")
 
-    # --- Validation ---
-    if not outlier_use_cut and not outlier_use_smoothed:
-        raise ValueError("At least one outlier gate must be enabled (outlier_use_cut or outlier_use_smoothed).")
-    if outlier_use_cut and nmads_cut <= 0:
-        raise ValueError(f"nmads_cut must be positive, got {nmads_cut}.")
-    if outlier_use_smoothed and nmads_smoothed <= 0:
-        raise ValueError(f"nmads_smoothed must be positive, got {nmads_smoothed}.")
-
     # --- Spatial context post-processing ---
     n_cells = len(combined)
-    k = 10
 
     centroid_y = np.array([cell_info[lid].centroid_y for lid in combined.index])
     centroid_x = np.array([cell_info[lid].centroid_x for lid in combined.index])
@@ -579,7 +590,7 @@ def calculate_tiling_qc(
         combined["is_outlier"] = False
         combined["nhood_outlier_fraction"] = 0.0
     else:
-        effective_k = min(k, n_cells - 1)
+        effective_k = min(n_neighbors, n_cells - 1)
         tree = BallTree(centroids)
         _, indices = tree.query(centroids, k=effective_k + 1)  # +1 because query includes self
         neighbor_idx = indices[:, 1:]
@@ -599,7 +610,7 @@ def calculate_tiling_qc(
             if mad_c < 1e-12:
                 is_outlier[:] = False
             else:
-                is_outlier &= cut_scores >= median_c + nmads_cut * mad_c * 1.4826
+                is_outlier &= cut_scores >= median_c + nmads_cut * mad_c * _MAD_TO_SD
 
         if outlier_use_smoothed:
             median_s = np.median(smoothed)
@@ -607,7 +618,7 @@ def calculate_tiling_qc(
             if mad_s < 1e-12:
                 is_outlier[:] = False
             else:
-                is_outlier &= smoothed >= median_s + nmads_smoothed * mad_s * 1.4826
+                is_outlier &= smoothed >= median_s + nmads_smoothed * mad_s * _MAD_TO_SD
 
         combined["is_outlier"] = is_outlier
 
@@ -647,7 +658,7 @@ def calculate_tiling_qc(
         "outlier_use_smoothed": outlier_use_smoothed,
         "nmads_cut": nmads_cut,
         "nmads_smoothed": nmads_smoothed,
-        "nhood_k": k,
+        "n_neighbors": n_neighbors,
     }
 
     if inplace:

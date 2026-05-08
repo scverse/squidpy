@@ -256,33 +256,25 @@ def build_tile_specs(
     for lid, key in cell_to_tile.items():
         tile_to_cells.setdefault(key, set()).add(lid)
 
-    n_rows = (H + tile_size - 1) // tile_size
-    n_cols = (W + tile_size - 1) // tile_size
-
     specs: list[TileSpec] = []
-    for row in range(n_rows):
-        for col in range(n_cols):
-            owned = tile_to_cells.get((row, col), set())
-            if not owned:
-                continue
+    for (row, col), owned in sorted(tile_to_cells.items()):
+        by0 = row * tile_size
+        bx0 = col * tile_size
+        by1 = min(by0 + tile_size, H)
+        bx1 = min(bx0 + tile_size, W)
 
-            by0 = row * tile_size
-            bx0 = col * tile_size
-            by1 = min(by0 + tile_size, H)
-            bx1 = min(bx0 + tile_size, W)
+        cy0 = max(by0 - margin, 0)
+        cx0 = max(bx0 - margin, 0)
+        cy1 = min(by1 + margin, H)
+        cx1 = min(bx1 + margin, W)
 
-            cy0 = max(by0 - margin, 0)
-            cx0 = max(bx0 - margin, 0)
-            cy1 = min(by1 + margin, H)
-            cx1 = min(bx1 + margin, W)
-
-            specs.append(
-                TileSpec(
-                    base=(by0, bx0, by1, bx1),
-                    crop=(cy0, cx0, cy1, cx1),
-                    owned_ids=frozenset(owned),
-                )
+        specs.append(
+            TileSpec(
+                base=(by0, bx0, by1, bx1),
+                crop=(cy0, cx0, cy1, cx1),
+                owned_ids=frozenset(owned),
             )
+        )
 
     return specs
 

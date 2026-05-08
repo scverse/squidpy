@@ -99,8 +99,8 @@ class TestCalculateTilingQC:
         assert (obs["nhood_outlier_fraction"] >= 0).all()
         assert (obs["nhood_outlier_fraction"] <= 1).all()
 
-        # nhood_k stored in uns
-        assert adata.uns["tiling_qc"]["nhood_k"] == 10
+        # n_neighbors stored in uns
+        assert adata.uns["tiling_qc"]["n_neighbors"] == 10
 
     def test_outlier_fraction_consistent_with_is_outlier(self, sdata_tile_boundary):
         """nhood_outlier_fraction should be 1.0 only when all k neighbors are outliers."""
