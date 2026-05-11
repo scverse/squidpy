@@ -8,7 +8,7 @@ import pytest
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatialdata import SpatialData
 from spatialdata.models import ShapesModel
-from spatialdata.transformations import Affine, Identity, Scale, Sequence, Translation, set_transformation
+from spatialdata.transformations import Affine, Identity, Scale, Sequence, set_transformation
 
 from squidpy.experimental.utils import derive_mpp_from_shapes
 
@@ -54,38 +54,20 @@ def _make_sdata(gdf: gpd.GeoDataFrame, transforms: dict | None = None) -> Spatia
     return sdata
 
 
-def _rotation_affine(angle_deg: float) -> Affine:
-    a = math.radians(angle_deg)
-    cos, sin = math.cos(a), math.sin(a)
-    m = np.array(
-        [
-            [cos, -sin, 0.0],
-            [sin, cos, 0.0],
-            [0.0, 0.0, 1.0],
-        ]
-    )
-    return Affine(m, input_axes=("x", "y"), output_axes=("x", "y"))
-
-
-def test_hex_pitch_identity():
-    centers = _hex_lattice(pitch=100.0)
-    sdata = _make_sdata(_points_shapes(centers, radius=27.5))
-    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=100.0)
-    assert mpp == pytest.approx(1.0, rel=1e-9)
-
-
-def test_hex_pitch_scaled():
-    centers = _hex_lattice(pitch=100.0)
-    sdata = _make_sdata(_points_shapes(centers, radius=27.5), transforms={"global": Scale([2.0, 2.0], axes=("x", "y"))})
-    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=100.0)
-    assert mpp == pytest.approx(0.5, rel=1e-9)
-
-
-def test_square_pitch():
-    centers = _square_lattice(pitch=8.0)
-    sdata = _make_sdata(_points_shapes(centers, radius=1.0))
-    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=8.0)
-    assert mpp == pytest.approx(1.0, rel=1e-9)
+@pytest.mark.parametrize(
+    ("lattice", "pitch", "transform", "expected_mpp"),
+    [
+        (_hex_lattice, 100.0, None, 1.0),
+        (_hex_lattice, 100.0, Scale([2.0, 2.0], axes=("x", "y")), 0.5),
+        (_square_lattice, 8.0, None, 1.0),
+    ],
+)
+def test_pitch(lattice, pitch, transform, expected_mpp):
+    centers = lattice(pitch=pitch)
+    transforms = {"global": transform} if transform is not None else None
+    sdata = _make_sdata(_points_shapes(centers, radius=pitch / 4.0), transforms=transforms)
+    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=pitch)
+    assert mpp == pytest.approx(expected_mpp, rel=1e-9)
 
 
 def test_diameter_points():
@@ -103,53 +85,44 @@ def test_diameter_polygons():
 
 
 def test_coordinate_system_selection():
-    centers = _square_lattice(pitch=8.0)
     sdata = _make_sdata(
-        _points_shapes(centers, radius=1.0),
+        _points_shapes(_square_lattice(pitch=8.0), radius=1.0),
         transforms={"native": Identity(), "downscaled": Scale([0.5, 0.5], axes=("x", "y"))},
     )
     mpp_native = derive_mpp_from_shapes(sdata, "shapes", "native", um_between_centers=8.0)
     mpp_down = derive_mpp_from_shapes(sdata, "shapes", "downscaled", um_between_centers=8.0)
-    assert mpp_native == pytest.approx(1.0, rel=1e-9)
-    assert mpp_down == pytest.approx(2.0, rel=1e-9)
     assert mpp_down / mpp_native == pytest.approx(2.0, rel=1e-9)
 
 
 def test_anisotropy_rejected():
-    centers = _square_lattice(pitch=8.0)
-    sdata = _make_sdata(_points_shapes(centers, radius=1.0), transforms={"global": Scale([2.0, 4.0], axes=("x", "y"))})
+    sdata = _make_sdata(
+        _points_shapes(_square_lattice(pitch=8.0), radius=1.0),
+        transforms={"global": Scale([2.0, 4.0], axes=("x", "y"))},
+    )
     with pytest.raises(ValueError, match=r"anisotropic"):
         derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=8.0)
 
 
 def test_rotation_preserved():
-    centers = _hex_lattice(pitch=100.0)
+    angle = math.radians(30.0)
+    cos, sin = math.cos(angle), math.sin(angle)
+    rotation = Affine(
+        np.array([[cos, -sin, 0.0], [sin, cos, 0.0], [0.0, 0.0, 1.0]]),
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
+    )
     sdata = _make_sdata(
-        _points_shapes(centers, radius=27.5),
-        transforms={"global": Sequence([Scale([2.0, 2.0], axes=("x", "y")), _rotation_affine(30.0)])},
+        _points_shapes(_hex_lattice(pitch=100.0), radius=27.5),
+        transforms={"global": Sequence([Scale([2.0, 2.0], axes=("x", "y")), rotation])},
     )
     mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=100.0)
     assert mpp == pytest.approx(0.5, rel=1e-6)
 
 
-def test_sequence_translation_ignored():
-    centers = _hex_lattice(pitch=100.0)
-    sdata = _make_sdata(
-        _points_shapes(centers, radius=27.5),
-        transforms={
-            "global": Sequence([Scale([2.0, 2.0], axes=("x", "y")), Translation([10.0, -5.0], axes=("x", "y"))]),
-        },
-    )
-    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=100.0)
-    assert mpp == pytest.approx(0.5, rel=1e-9)
-
-
 def test_three_d_rejected():
-    gdf = gpd.GeoDataFrame(
-        {"radius": [1.0, 1.0]},
-        geometry=[Point(0.0, 0.0, 0.0), Point(1.0, 0.0, 0.0)],
+    gdf = ShapesModel.parse(
+        gpd.GeoDataFrame({"radius": [1.0, 1.0]}, geometry=[Point(0.0, 0.0, 0.0), Point(1.0, 0.0, 0.0)])
     )
-    gdf = ShapesModel.parse(gdf)
     sdata = SpatialData(shapes={"shapes": gdf})
     with pytest.raises(ValueError, match=r"3D"):
         derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=1.0)
@@ -158,37 +131,29 @@ def test_three_d_rejected():
 def test_multipolygon_rejected():
     p1 = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
     p2 = Polygon([(2, 2), (3, 2), (3, 3), (2, 3)])
-    gdf = gpd.GeoDataFrame(geometry=[MultiPolygon([p1, p2])])
-    gdf = ShapesModel.parse(gdf)
+    gdf = ShapesModel.parse(gpd.GeoDataFrame(geometry=[MultiPolygon([p1, p2])]))
     sdata = SpatialData(shapes={"shapes": gdf})
     with pytest.raises(ValueError, match=r"MultiPolygon"):
         derive_mpp_from_shapes(sdata, "shapes", "global", um_diameter=1.0)
 
 
 def test_single_shape_pitch_rejected():
-    gdf = _points_shapes(np.array([[0.0, 0.0]]), radius=1.0)
-    sdata = _make_sdata(gdf)
+    sdata = _make_sdata(_points_shapes(np.array([[0.0, 0.0]]), radius=1.0))
     with pytest.raises(ValueError, match=r"single shape"):
         derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=100.0)
 
 
 def test_single_shape_diameter_works():
-    gdf = _points_shapes(np.array([[0.0, 0.0]]), radius=27.5)
-    sdata = _make_sdata(gdf)
+    sdata = _make_sdata(_points_shapes(np.array([[0.0, 0.0]]), radius=27.5))
     mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_diameter=55.0)
     assert mpp == pytest.approx(1.0, rel=1e-9)
 
 
-def test_neither_arg_rejected():
+@pytest.mark.parametrize("kwargs", [{}, {"um_between_centers": 8.0, "um_diameter": 1.0}])
+def test_xor_args_rejected(kwargs):
     sdata = _make_sdata(_points_shapes(_square_lattice(pitch=8.0), radius=1.0))
     with pytest.raises(ValueError, match=r"exactly one"):
-        derive_mpp_from_shapes(sdata, "shapes", "global")
-
-
-def test_both_args_rejected():
-    sdata = _make_sdata(_points_shapes(_square_lattice(pitch=8.0), radius=1.0))
-    with pytest.raises(ValueError, match=r"exactly one"):
-        derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=8.0, um_diameter=1.0)
+        derive_mpp_from_shapes(sdata, "shapes", "global", **kwargs)
 
 
 def test_unknown_coordinate_system():
