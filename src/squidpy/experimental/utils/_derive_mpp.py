@@ -31,7 +31,11 @@ def derive_mpp_from_shapes(
     corresponding geometric quantity in the target coordinate system and dividing the physical value
     by it.
 
-    Exactly one of ``um_between_centers`` or ``um_diameter`` must be provided.
+    Exactly one of ``um_between_centers`` or ``um_diameter`` must be provided. Prefer
+    ``um_between_centers`` when the technology's canonical pitch is known: it averages over the
+    realised grid and is robust to per-spot calibration noise in the stored radius. ``um_diameter``
+    depends on a single stored scalar and can disagree by a fraction of a percent on real Visium
+    data where the radius and grid pitch are calibrated separately.
 
     The function requires the transformation between the shapes' native frame and ``coordinate_system``
     to be a similarity (uniform scale plus optional rotation and translation). Non-uniform scales,
