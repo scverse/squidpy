@@ -92,7 +92,6 @@ def test_diameter_points():
     centers = _hex_lattice(pitch=100.0)
     sdata = _make_sdata(_points_shapes(centers, radius=27.5), transforms={"global": Scale([4.0, 4.0], axes=("x", "y"))})
     mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_diameter=55.0)
-    # native diam = 55, scale=4 -> target diam = 220 px, mpp = 55/220 = 0.25
     assert mpp == pytest.approx(0.25, rel=1e-9)
 
 
@@ -100,7 +99,6 @@ def test_diameter_polygons():
     centers = _square_lattice(pitch=8.0)
     sdata = _make_sdata(_square_polygons_shapes(centers, edge=8.0))
     mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_diameter=8.0)
-    # native edge = 8 px under identity; sqrt(area)=8 -> mpp = 1
     assert mpp == pytest.approx(1.0, rel=1e-9)
 
 
