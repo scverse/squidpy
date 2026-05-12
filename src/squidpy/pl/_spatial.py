@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import os
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
@@ -39,6 +40,17 @@ from squidpy.pl._spatial_utils import (
     _subs,
 )
 from squidpy.pl._utils import sanitize_anndata, save_fig
+
+
+def _use_sdata_plot_backend() -> bool:
+    """Return True when the spatialdata-plot delegation backend should be used.
+
+    Toggled by the SQUIDPY_USE_SDATAPLOT environment variable (any non-empty,
+    non-falsy value enables it). Off by default so existing behavior is
+    unchanged. Used during the migration window to A/B the new pipeline
+    against the legacy _spatial_plot implementation.
+    """
+    return os.environ.get("SQUIDPY_USE_SDATAPLOT", "").lower() in {"1", "true", "yes", "on"}
 
 
 @d.get_sections(base="spatial_plot", sections=["Returns"])
@@ -433,6 +445,10 @@ def spatial_scatter(
     -------
     %(spatial_plot.returns)s
     """
+    if _use_sdata_plot_backend():
+        from squidpy.pl._sdata_delegation import _spatial_scatter_via_sdata_plot
+
+        return _spatial_scatter_via_sdata_plot(adata, shape=shape, **kwargs)
     return _spatial_plot(adata, shape=shape, seg=None, seg_key=None, **kwargs)
 
 
@@ -477,6 +493,17 @@ def spatial_segment(
     -------
     %(spatial_plot.returns)s
     """
+    if _use_sdata_plot_backend():
+        from squidpy.pl._sdata_delegation import _spatial_segment_via_sdata_plot
+
+        return _spatial_segment_via_sdata_plot(
+            adata,
+            seg_cell_id=seg_cell_id,
+            seg_key=seg_key,
+            seg_contourpx=seg_contourpx,
+            seg_outline=seg_outline,
+            **kwargs,
+        )
     return _spatial_plot(
         adata,
         seg=seg,
