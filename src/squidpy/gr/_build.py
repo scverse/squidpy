@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Generic, NamedTuple
+from typing import Any, Generic, Literal, NamedTuple
 
 import geopandas as gpd
 import numpy as np
@@ -694,7 +694,7 @@ def spatial_neighbors_grid(
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
-    n_neighs: int = 6,
+    n_neighs: Literal[4, 6] = 6,
     n_rings: int = 1,
     delaunay: bool = False,
     transform: str | Transform | None = None,
@@ -718,9 +718,10 @@ def spatial_neighbors_grid(
     %(library_key)s
     n_neighs
         Number of neighboring tiles used to form the base grid connectivity.
-        Defaults to ``6``. On a Visium-like hexagonal grid, ``6`` corresponds to
-        the immediate surrounding spots, while smaller values such as ``3`` make
-        the first-ring graph deliberately sparser.
+        Defaults to ``6``. Use ``4`` for a square grid or ``6`` for a hexagonal
+        grid such as Visium; other values are accepted at runtime but their
+        geometric interpretation on a regular grid is not part of the public
+        API.
     n_rings
         Number of rings of neighbors. Defaults to ``1``. ``n_rings=1`` keeps
         only immediate neighbors; larger values add progressively more distant
