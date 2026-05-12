@@ -246,6 +246,11 @@ class DelaunayBuilder(GraphBuilderCSR):
     ``GridBuilder(delaunay=True)``, this builder uses geometry-based connectivity
     and stores real Euclidean edge lengths.
 
+    ``radius`` only controls post-construction edge pruning; the triangulation
+    itself is unchanged. A tuple ``(min, max)`` keeps edges with Euclidean
+    length in that interval. A scalar ``r`` is shorthand for ``(0.0, r)``,
+    i.e. keep edges with length at most ``r``. ``None`` keeps every edge.
+
     See :func:`~squidpy.gr.spatial_neighbors_delaunay` for the user-facing API or
     :func:`~squidpy.gr.spatial_neighbors_from_builder` for direct builder usage.
     """
@@ -257,8 +262,10 @@ class DelaunayBuilder(GraphBuilderCSR):
         set_diag: bool = False,
         percentile: float | None = None,
     ) -> None:
+        if isinstance(radius, int | float):
+            radius = (0.0, float(radius))
         postprocessors: list[GraphPostprocessor[csr_matrix]] = []
-        if isinstance(radius, tuple):
+        if radius is not None:
             postprocessors.append(DistanceIntervalPostprocessor(tuple(sorted(radius))))
         if percentile is not None:
             postprocessors.append(PercentilePostprocessor(percentile))

@@ -109,7 +109,13 @@ def _resolve_graph_builder(
                 FutureWarning,
                 stacklevel=3,
             )
-        return DelaunayBuilder(**common, radius=radius, percentile=percentile)
+        # Preserve the documented legacy contract: under the deprecated
+        # `spatial_neighbors`, a scalar `radius` with `delaunay=True` is silently
+        # ignored. The new `DelaunayBuilder(radius=r)` interprets a scalar as
+        # the interval `(0.0, r)`, so we strip scalars here before delegating
+        # and only forward tuple intervals to keep the legacy behavior intact.
+        legacy_radius = radius if isinstance(radius, tuple) else None
+        return DelaunayBuilder(**common, radius=legacy_radius, percentile=percentile)
     if radius is not None:
         # TODO: below check should be removed once legacy mode spatial_neighbors is deprecated
         if n_neighs_was_set:
@@ -615,7 +621,7 @@ def spatial_neighbors_delaunay(
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
-    radius: tuple[float, float] | None = None,
+    radius: float | tuple[float, float] | None = None,
     percentile: float | None = None,
     transform: str | Transform | None = None,
     set_diag: bool = False,
@@ -636,10 +642,14 @@ def spatial_neighbors_delaunay(
     %(sdata_params)s
     %(library_key)s
     radius
-        If a :class:`tuple`, used as a post-construction pruning interval
-        ``[min(radius), max(radius)]``. This does not change the triangulation
-        itself; it only removes Delaunay edges whose Euclidean lengths fall
-        outside the interval.
+        Post-construction edge pruning of the Delaunay graph. The triangulation
+        itself is never changed; only the resulting edges are filtered.
+
+            - :class:`tuple` ``(min, max)``: keep edges with Euclidean length
+              in ``[min(radius), max(radius)]``.
+            - :class:`float` / :class:`int` ``r``: shorthand for ``(0.0, r)``,
+              i.e. keep edges with length at most ``r``.
+            - ``None``: keep every Delaunay edge.
     %(graph_common_params)s
     %(copy)s
 

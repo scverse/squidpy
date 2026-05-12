@@ -209,8 +209,12 @@ class TestSpatialNeighbors:
             ({"n_neighs": 3, "coord_type": "generic"}, KNNBuilder(n_neighs=3)),
             ({"radius": 5.0, "coord_type": "generic"}, RadiusBuilder(radius=5.0)),
             ({"delaunay": True, "coord_type": "generic"}, DelaunayBuilder()),
+            (
+                {"delaunay": True, "radius": (2.0, 4.0), "coord_type": "generic"},
+                DelaunayBuilder(radius=(2.0, 4.0)),
+            ),
         ],
-        ids=["knn", "radius", "delaunay"],
+        ids=["knn", "radius", "delaunay", "delaunay_interval"],
     )
     def test_generic_builder_matches_legacy(self, non_visium_adata: AnnData, legacy_kwargs: dict, builder: object):
         legacy = spatial_neighbors(non_visium_adata, **legacy_kwargs, copy=True)
@@ -263,6 +267,15 @@ class TestSpatialNeighbors:
 
         np.testing.assert_array_equal(default.connectivities.toarray(), ignored.connectivities.toarray())
         np.testing.assert_allclose(default.distances.toarray(), ignored.distances.toarray())
+
+    def test_delaunay_builder_scalar_radius_equals_zero_max_tuple(self, non_visium_adata: AnnData):
+        scalar = spatial_neighbors_from_builder(non_visium_adata, builder=DelaunayBuilder(radius=5.0), copy=True)
+        interval = spatial_neighbors_from_builder(
+            non_visium_adata, builder=DelaunayBuilder(radius=(0.0, 5.0)), copy=True
+        )
+
+        np.testing.assert_array_equal(scalar.connectivities.toarray(), interval.connectivities.toarray())
+        np.testing.assert_allclose(scalar.distances.toarray(), interval.distances.toarray())
 
     def test_delaunay_mode_warns_on_n_neighs(self, non_visium_adata: AnnData):
         with pytest.warns(FutureWarning, match=r"Parameter `n_neighs` is ignored when `delaunay=True`"):
