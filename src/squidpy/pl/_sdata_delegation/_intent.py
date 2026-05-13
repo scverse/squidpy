@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
+
+ElementKind = Literal["shapes", "labels", "points"]
 
 
 @dataclass(frozen=True, slots=True)
 class DataIntent:
-    needs_shapes: bool = False
-    needs_labels: bool = False
-    needs_points: bool = False
+    element_kind: ElementKind = "shapes"
     needs_image: bool = False
     needs_graph: bool = False
     library_ids: tuple[str, ...] = ()
@@ -22,10 +22,6 @@ class DataIntent:
     alt_var: str | None = None
     size_key: str | None = None
     seg_cell_id: str | None = None
-    shapes_layer: str | None = None
-    labels_layer: str | None = None
-    image_layer: str | None = None
-    points_layer: str | None = None
     graph_layer: str | None = None
 
 
@@ -74,9 +70,6 @@ class PostRenderIntent:
     legend_fontoutline: int | None = None
     legend_na: bool = True
     colorbar: bool = True
-    scalebar_dx: tuple[float, ...] | None = None
-    scalebar_units: tuple[str, ...] | None = None
-    scalebar_kwargs: dict[str, Any] = field(default_factory=dict)
     save: str | None = None
 
 
@@ -85,7 +78,6 @@ class PanelIntent:
     library_id: str
     color: str | None
     size: float | None = None
-    scale_factor: float | None = None
     crop_coord: tuple[float, float, float, float] | None = None
     scalebar_dx: float | None = None
     scalebar_units: str | None = None

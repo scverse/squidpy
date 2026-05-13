@@ -20,7 +20,6 @@ from squidpy.pl._sdata_delegation import (
 )
 from squidpy.pl._sdata_delegation._capture import (
     capture_scatter_intent,
-    capture_scatter_intent_path1,
     capture_segment_intent,
 )
 
@@ -43,22 +42,20 @@ def adata_hne_concat_with_cluster(adata_hne_concat: AnnData) -> AnnData:
 
 class TestCaptureIntent:
     def test_single_library_resolved_from_uns(self, adata_hne_with_cluster: AnnData) -> None:
-        intent = capture_scatter_intent_path1(adata_hne_with_cluster, color="cluster_path1")
+        intent = capture_scatter_intent(adata_hne_with_cluster, color="cluster_path1")
         assert intent.data.library_ids == ("V1_Adult_Mouse_Brain",)
         assert len(intent.panels) == 1
         assert intent.panels[0].color == "cluster_path1"
-        assert intent.data.needs_shapes is True
+        assert intent.data.element_kind == "shapes"
         assert intent.data.needs_image is True
 
     def test_multi_library_via_library_key(self, adata_hne_concat_with_cluster: AnnData) -> None:
-        intent = capture_scatter_intent_path1(
-            adata_hne_concat_with_cluster, color="cluster_path1", library_key="library_id"
-        )
+        intent = capture_scatter_intent(adata_hne_concat_with_cluster, color="cluster_path1", library_key="library_id")
         assert set(intent.data.library_ids) == {"V1_Adult_Mouse_Brain", "V2_Adult_Mouse_Brain"}
         assert len(intent.panels) == 2
 
     def test_no_color_is_allowed(self, adata_hne_with_cluster: AnnData) -> None:
-        intent = capture_scatter_intent_path1(adata_hne_with_cluster)
+        intent = capture_scatter_intent(adata_hne_with_cluster)
         assert intent.panels[0].color is None
 
     def test_multi_color_expands_panels(self, adata_hne_with_cluster: AnnData) -> None:
@@ -92,11 +89,11 @@ class TestCaptureIntent:
 
     def test_unsupported_kwarg_rejected(self, adata_hne_with_cluster: AnnData) -> None:
         with pytest.raises(NotImplementedError, match="does not yet support"):
-            capture_scatter_intent_path1(adata_hne_with_cluster, color="cluster_path1", some_future_kwarg=True)
+            capture_scatter_intent(adata_hne_with_cluster, color="cluster_path1", some_future_kwarg=True)
 
     def test_legend_loc_on_data_deprecated(self, adata_hne_with_cluster: AnnData) -> None:
         with pytest.warns(DeprecationWarning, match="on data"):
-            capture_scatter_intent_path1(adata_hne_with_cluster, color="cluster_path1", legend_loc="on data")
+            capture_scatter_intent(adata_hne_with_cluster, color="cluster_path1", legend_loc="on data")
 
     def test_size_per_library_sequence(self, adata_hne_concat_with_cluster: AnnData) -> None:
         intent = capture_scatter_intent(
@@ -151,7 +148,7 @@ class TestCaptureIntent:
     def test_vmin_vmax_folded_into_norm(self, adata_hne_with_cluster: AnnData) -> None:
         from matplotlib.colors import Normalize
 
-        intent = capture_scatter_intent_path1(adata_hne_with_cluster, color="cluster_path1", vmin=0.0, vmax=5.0)
+        intent = capture_scatter_intent(adata_hne_with_cluster, color="cluster_path1", vmin=0.0, vmax=5.0)
         assert isinstance(intent.render.norm, Normalize)
         assert intent.render.norm.vmin == 0.0
         assert intent.render.norm.vmax == 5.0
@@ -159,21 +156,18 @@ class TestCaptureIntent:
     def test_vcenter_uses_twoslope(self, adata_hne_with_cluster: AnnData) -> None:
         from matplotlib.colors import TwoSlopeNorm
 
-        intent = capture_scatter_intent_path1(
-            adata_hne_with_cluster, color="cluster_path1", vmin=-1.0, vmax=1.0, vcenter=0.0
-        )
+        intent = capture_scatter_intent(adata_hne_with_cluster, color="cluster_path1", vmin=-1.0, vmax=1.0, vcenter=0.0)
         assert isinstance(intent.render.norm, TwoSlopeNorm)
 
     def test_norm_and_vmin_conflict_rejected(self, adata_hne_with_cluster: AnnData) -> None:
         from matplotlib.colors import Normalize
 
         with pytest.raises(ValueError, match="not both"):
-            capture_scatter_intent_path1(adata_hne_with_cluster, color="cluster_path1", norm=Normalize(0, 1), vmin=0)
+            capture_scatter_intent(adata_hne_with_cluster, color="cluster_path1", norm=Normalize(0, 1), vmin=0)
 
     def test_shape_none_routes_to_points(self, adata_hne_with_cluster: AnnData) -> None:
         intent = capture_scatter_intent(adata_hne_with_cluster, color="cluster_path1", shape=None)
-        assert intent.data.needs_points is True
-        assert intent.data.needs_shapes is False
+        assert intent.data.element_kind == "points"
 
 
 class TestRender:
@@ -299,11 +293,13 @@ class TestPath2Continuous:
 
 
 class TestPath3Segmentation:
-    @pytest.fixture(scope="class")
+    @pytest.fixture()
     def mibitof(self) -> AnnData:
         import squidpy as sq
 
-        return sq.datasets.mibitof()
+        # Function-scoped + copy so tests that mutate obs (e.g. adding _sq_region via the
+        # adapter) don't leak state into siblings.
+        return sq.datasets.mibitof().copy()
 
     def test_capture_requires_seg_cell_id(self, mibitof: AnnData) -> None:
         with pytest.raises(TypeError):
@@ -313,10 +309,9 @@ class TestPath3Segmentation:
         with pytest.raises(ValueError, match="seg_contourpx=1"):
             capture_segment_intent(mibitof, seg_cell_id="cell_id", seg_contourpx=1)
 
-    def test_capture_needs_labels_not_shapes(self, mibitof: AnnData) -> None:
+    def test_capture_element_kind_is_labels(self, mibitof: AnnData) -> None:
         intent = capture_segment_intent(mibitof, seg_cell_id="cell_id", color="Cluster")
-        assert intent.data.needs_labels is True
-        assert intent.data.needs_shapes is False
+        assert intent.data.element_kind == "labels"
         assert intent.data.seg_cell_id == "cell_id"
 
     def test_single_library_segment_renders(self, mibitof: AnnData) -> None:
