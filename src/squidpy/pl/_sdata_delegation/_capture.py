@@ -69,60 +69,57 @@ def _normalize_groups(groups: str | Sequence[str] | None) -> tuple[str, ...] | N
     return tuple(groups)
 
 
-def _per_library(value: Any, library_ids: tuple[str, ...], name: str) -> tuple[Any, ...]:
+def _per_library(
+    value: Any, library_ids: tuple[str, ...], name: str, *, ambiguous_tuple: bool = True
+) -> tuple[Any, ...]:
     """Broadcast a scalar or validate a sequence to library count.
 
-    Disambiguates a crop tuple (2 or 4 ints/floats, single value) from a sequence
-    of per-library values. For ambiguous cases, prefer the broadcast interpretation
-    only when the tuple has exactly 2 or 4 numeric elements.
+    With ``ambiguous_tuple=True`` (default for crop_coord etc.), a 2- or 4-tuple of
+    numbers is treated as a single value to broadcast. With ``ambiguous_tuple=False``
+    (size, scalebar_dx, etc.), any sequence is treated as per-library.
     """
     if value is None:
         return tuple(None for _ in library_ids)
-    if isinstance(value, (list, tuple)) and not (
-        len(value) in (2, 4) and all(isinstance(v, (int, float)) for v in value)
-    ):
+    is_seq = isinstance(value, (list, tuple))
+    looks_like_single_tuple = (
+        ambiguous_tuple and is_seq and len(value) in (2, 4) and all(isinstance(v, (int, float)) for v in value)
+    )
+    if is_seq and not looks_like_single_tuple:
         if len(value) != len(library_ids):
             raise ValueError(f"`{name}` length {len(value)} != number of libraries {len(library_ids)}.")
         return tuple(value)
     return tuple(value for _ in library_ids)
 
 
-def _per_library_scalar(value: Any, library_ids: tuple[str, ...], name: str) -> tuple[Any, ...]:
-    """Broadcast a scalar to all libraries, or validate a sequence per library.
-
-    For kwargs like `size` where a sequence is always per-library (never a single tuple).
-    """
-    if value is None:
-        return tuple(None for _ in library_ids)
-    if isinstance(value, (list, tuple)):
-        if len(value) != len(library_ids):
-            raise ValueError(f"`{name}` length {len(value)} != number of libraries {len(library_ids)}.")
-        return tuple(value)
-    return tuple(value for _ in library_ids)
-
-
-def _resolve_palette(palette: Any) -> tuple[Any, Any, tuple[str, ...] | None]:
+def _resolve_palette(palette: Any) -> tuple[Any, Any, Any, tuple[str, ...] | None]:
     """Route a squidpy `palette` value to the right sdata-plot slot.
 
-    Returns (palette, cmap, groups). sdata-plot's render_shapes rejects `palette` without
-    `groups`, but accepts `Colormap` via `cmap` even for categorical color (the renderer
-    samples it by category index internally). So:
-      - dict {category: color} -> palette + groups from keys
-      - Colormap / ListedColormap -> route to cmap (no groups needed)
-      - list of color strings -> wrap as ListedColormap -> cmap
-      - str (single color, palette name) or None -> passthrough
+    Returns ``(palette, cmap, color_override, groups)``. sdata-plot's render_shapes rejects
+    ``palette`` without ``groups``, but accepts ``Colormap`` via ``cmap`` (sampled by
+    category index for categorical color). Mapping:
+
+    - ``None`` -> passthrough
+    - dict {category: color} -> palette + groups from keys
+    - ``Colormap`` / ``ListedColormap`` -> cmap
+    - list of color strings -> wrap as ListedColormap -> cmap
+    - single mpl-recognized color str/tuple -> color_override (set as the literal panel color)
+    - other str (e.g. palette name) -> passthrough as palette
     """
-    from matplotlib.colors import Colormap, ListedColormap
+    from matplotlib.colors import Colormap, ListedColormap, is_color_like
 
     if palette is None:
-        return None, None, None
+        return None, None, None, None
     if isinstance(palette, dict):
-        return palette, None, tuple(palette.keys())
+        return palette, None, None, tuple(palette.keys())
     if isinstance(palette, Colormap):
-        return None, palette, None
+        return None, palette, None, None
     if isinstance(palette, (list, tuple)):
-        return None, ListedColormap(list(palette)), None
-    return palette, None, None
+        if all(isinstance(p, str) and is_color_like(p) for p in palette):
+            return None, ListedColormap(list(palette)), None, None
+        return None, ListedColormap(list(palette)), None, None
+    if isinstance(palette, str) and is_color_like(palette):
+        return None, None, palette, None
+    return palette, None, None, None
 
 
 def _expand_panels(
@@ -183,6 +180,20 @@ def _validate_ax(ax: Any, n_panels: int) -> tuple[Any, ...] | None:
     if len(ax_seq) != n_panels:
         raise ValueError(f"`ax` has {len(ax_seq)} axes but {n_panels} panels are required.")
     return ax_seq
+
+
+def _apply_color_override(
+    panels: tuple[PanelIntent, ...],
+    color_override: Any,
+    color_tuple: tuple[str, ...],
+) -> tuple[PanelIntent, ...]:
+    """Replace the `color` field on each panel with a literal color when the user
+    passed a single color string as `palette` and no explicit `color` column."""
+    if color_override is None or color_tuple:
+        return panels
+    from dataclasses import replace
+
+    return tuple(replace(p, color=color_override) for p in panels)
 
 
 def capture_scatter_intent(
@@ -273,7 +284,7 @@ def capture_scatter_intent(
     crop_per_lib = _per_library(crop_coord, library_ids, "crop_coord")
     scalebar_dx_per_lib = _per_library(scalebar_dx, library_ids, "scalebar_dx")
     scalebar_units_per_lib = _per_library(scalebar_units, library_ids, "scalebar_units")
-    size_per_lib = _per_library_scalar(size, library_ids, "size")
+    size_per_lib = _per_library(size, library_ids, "size", ambiguous_tuple=False)
 
     panels = _expand_panels(
         library_ids,
@@ -289,12 +300,12 @@ def capture_scatter_intent(
     ax_seq = _validate_ax(ax, len(panels))
 
     data = DataIntent(
-        needs_shapes=not use_points,
-        needs_points=use_points,
+        element_kind="points" if use_points else "shapes",
         needs_image=bool(img),
         needs_graph=connectivity_key is not None,
         library_ids=library_ids,
         library_key=library_key,
+        coordinate_system=spatial_key,
         img_res_key=img_res_key if img else None,
         img_channel=img_channel,
         color=color_tuple,
@@ -306,9 +317,10 @@ def capture_scatter_intent(
     )
 
     resolved_norm = _build_norm(vmin=vmin, vmax=vmax, vcenter=vcenter, norm=norm)
-    resolved_palette, palette_cmap, inferred_groups = _resolve_palette(palette)
+    resolved_palette, palette_cmap, color_override, inferred_groups = _resolve_palette(palette)
     resolved_cmap = palette_cmap if cmap is None else cmap
     groups_tuple = _normalize_groups(groups) or inferred_groups
+    panels = _apply_color_override(panels, color_override, color_tuple)
 
     render = RenderIntent(
         shape=shape,
@@ -446,10 +458,11 @@ def capture_segment_intent(
     ax_seq = _validate_ax(ax, len(panels))
 
     data = DataIntent(
-        needs_labels=True,
+        element_kind="labels",
         needs_image=bool(img),
         library_ids=library_ids,
         library_key=library_key,
+        coordinate_system=spatial_key,
         img_res_key=img_res_key if img else None,
         img_channel=img_channel,
         color=color_tuple,
@@ -461,9 +474,10 @@ def capture_segment_intent(
 
     resolved_norm = _build_norm(vmin=vmin, vmax=vmax, vcenter=vcenter, norm=norm)
     outline_alpha = 1.0 if seg_outline else 0.0
-    resolved_palette, palette_cmap, inferred_groups = _resolve_palette(palette)
+    resolved_palette, palette_cmap, color_override, inferred_groups = _resolve_palette(palette)
     resolved_cmap = palette_cmap if cmap is None else cmap
     groups_tuple = _normalize_groups(groups) or inferred_groups
+    panels = _apply_color_override(panels, color_override, color_tuple)
 
     render = RenderIntent(
         cmap=resolved_cmap,
@@ -499,6 +513,3 @@ def capture_segment_intent(
         post=post,
         panels=panels,
     )
-
-
-capture_scatter_intent_path1 = capture_scatter_intent
