@@ -8,13 +8,17 @@ from ._detect_tissue import (
 )
 from ._feature import calculate_image_features
 from ._make_tiles import make_tiles, make_tiles_from_spots
+from ._qc_image import qc_image
+from ._qc_metrics import QCMetric
 
 __all__ = [
     "BackgroundDetectionParams",
     "FelzenszwalbParams",
+    "QCMetric",
     "WekaParams",
     "calculate_image_features",
     "detect_tissue",
     "make_tiles",
     "make_tiles_from_spots",
+    "qc_image",
 ]
