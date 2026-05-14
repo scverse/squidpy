@@ -23,6 +23,7 @@ from typing import Literal
 
 import numpy as np
 import xarray as xr
+from scipy import ndimage as ndi
 from skimage.measure import regionprops
 
 __all__ = [
@@ -47,6 +48,8 @@ class CellInfo:
     centroid_x: float
     bbox_h: int  # height of bounding box (pixels)
     bbox_w: int  # width of bounding box (pixels)
+    bbox_y0: int = 0  # top-left y of bounding box
+    bbox_x0: int = 0  # top-left x of bounding box
 
 
 @dataclass(frozen=True)
@@ -100,6 +103,8 @@ def compute_cell_info(labels: np.ndarray) -> dict[int, CellInfo]:
             centroid_x=float(p.centroid[1]),
             bbox_h=max_row - min_row,
             bbox_w=max_col - min_col,
+            bbox_y0=min_row,
+            bbox_x0=min_col,
         )
     return info
 
@@ -174,6 +179,8 @@ def compute_cell_info_multiscale(
             centroid_x=ci.centroid_x * sx,
             bbox_h=int(np.ceil(ci.bbox_h * sy)),
             bbox_w=int(np.ceil(ci.bbox_w * sx)),
+            bbox_y0=int(np.floor(ci.bbox_y0 * sy)),
+            bbox_x0=int(np.floor(ci.bbox_x0 * sx)),
         )
     return rescaled
 
@@ -211,7 +218,6 @@ def compute_cell_info_tiled(
 
     H, W = int(labels_da.sizes["y"]), int(labels_da.sizes["x"])
 
-    # Per-label accumulators
     area: dict[int, int] = {}
     sum_y: dict[int, float] = {}
     sum_x: dict[int, float] = {}
@@ -227,21 +233,30 @@ def compute_cell_info_tiled(
             tile = labels_da.isel(y=slice(y0, y1), x=slice(x0, x1)).values
             if tile.ndim > 2:
                 tile = tile.squeeze()
-            ids = np.unique(tile)
-            ids = ids[ids != 0]
-            if ids.size == 0:
+            flat = tile.ravel()
+            counts = np.bincount(flat)
+            if counts.size <= 1 or not counts[1:].any():
                 continue
-            for lid in ids:
-                lid_int = int(lid)
-                ys, xs = np.where(tile == lid)
-                # Convert tile-local coords to global
-                ys_g = ys + y0
-                xs_g = xs + x0
-                area[lid_int] = area.get(lid_int, 0) + ys.size
-                sum_y[lid_int] = sum_y.get(lid_int, 0.0) + float(ys_g.sum())
-                sum_x[lid_int] = sum_x.get(lid_int, 0.0) + float(xs_g.sum())
-                ymin, ymax = int(ys_g.min()), int(ys_g.max())
-                xmin, xmax = int(xs_g.min()), int(xs_g.max())
+
+            yy, xx = np.mgrid[y0 : y0 + tile.shape[0], x0 : x0 + tile.shape[1]]
+            sums_y = np.bincount(flat, weights=yy.ravel(), minlength=counts.size)
+            sums_x = np.bincount(flat, weights=xx.ravel(), minlength=counts.size)
+            slices = ndi.find_objects(tile)
+
+            for lid_int, count in enumerate(counts):
+                if lid_int == 0 or count == 0:
+                    continue
+                area[lid_int] = area.get(lid_int, 0) + int(count)
+                sum_y[lid_int] = sum_y.get(lid_int, 0.0) + float(sums_y[lid_int])
+                sum_x[lid_int] = sum_x.get(lid_int, 0.0) + float(sums_x[lid_int])
+                sl = slices[lid_int - 1]
+                if sl is None:
+                    continue
+                y_slice, x_slice = sl
+                ymin = y0 + y_slice.start
+                ymax = y0 + y_slice.stop - 1
+                xmin = x0 + x_slice.start
+                xmax = x0 + x_slice.stop - 1
                 min_y[lid_int] = min(min_y.get(lid_int, ymin), ymin)
                 min_x[lid_int] = min(min_x.get(lid_int, xmin), xmin)
                 max_y[lid_int] = max(max_y.get(lid_int, ymax), ymax)
@@ -255,6 +270,8 @@ def compute_cell_info_tiled(
             centroid_x=sum_x[lid_int] / a,
             bbox_h=max_y[lid_int] - min_y[lid_int] + 1,
             bbox_w=max_x[lid_int] - min_x[lid_int] + 1,
+            bbox_y0=min_y[lid_int],
+            bbox_x0=min_x[lid_int],
         )
     return info
 
@@ -357,12 +374,11 @@ def build_tile_specs(
 
 def _zero_non_owned(tile_labels: np.ndarray, owned: frozenset[int]) -> np.ndarray:
     """Return a copy of ``tile_labels`` with non-owned labels set to 0."""
-    out = tile_labels.copy()
-    unique_in_crop = np.unique(out)
-    for lid in unique_in_crop:
-        if lid != 0 and int(lid) not in owned:
-            out[out == lid] = 0
-    return out
+    if not owned:
+        return np.zeros_like(tile_labels)
+    owned_arr = np.fromiter(owned, dtype=tile_labels.dtype, count=len(owned))
+    keep = np.isin(tile_labels, owned_arr)
+    return np.where(keep, tile_labels, 0)
 
 
 def extract_tile(

@@ -20,6 +20,7 @@ from cp_measure.featurizer import featurize, make_featurizer_config
 from joblib import Parallel, delayed
 from skimage import measure
 from skimage.feature import graycomatrix, graycoprops
+from skimage.segmentation import relabel_sequential
 from spatialdata import SpatialData, rasterize
 from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel, get_channel_names
@@ -50,7 +51,7 @@ class DropReport:
     outside_image_extent: int = 0
     partial_at_image_boundary: int = 0
     cp_measure_no_data: int = 0
-    empty_tile_drop: int = 0
+    empty_tiles: int = 0
     other: dict[str, int] = field(default_factory=dict)
 
     def summary(self) -> str:
@@ -269,26 +270,6 @@ def _build_cp_config(cp_flags: dict[str, bool], channel_names: list[str]) -> dic
 # ---------------------------------------------------------------------------
 
 
-def _relabel_contiguous(labels: np.ndarray) -> tuple[np.ndarray, dict[int, int]]:
-    """Relabel a mask to contiguous IDs 1..N, returning the new mask and a mapping.
-
-    Returns
-    -------
-    relabeled
-        Label image with contiguous IDs.
-    new_to_orig
-        Mapping from new contiguous ID → original label ID.
-    """
-    unique_ids = np.unique(labels)
-    unique_ids = unique_ids[unique_ids != 0]
-    new_to_orig: dict[int, int] = {}
-    relabeled = np.zeros_like(labels)
-    for new_id, orig_id in enumerate(unique_ids, start=1):
-        relabeled[labels == orig_id] = new_id
-        new_to_orig[new_id] = int(orig_id)
-    return relabeled, new_to_orig
-
-
 def _featurize_tile(
     tile_image: np.ndarray,
     tile_labels: np.ndarray,
@@ -322,20 +303,15 @@ def _featurize_tile(
     # --- cp_measure features ---
     if parsed.cp_flags is not None:
         cp_config = _build_cp_config(parsed.cp_flags, channel_names)
-        # Relabel to contiguous IDs (1..N) — cp_measure assumes dense labels
-        # internally and will index-error on sparse IDs like [1, 37, 82].
-        contiguous_labels, orig_ids = _relabel_contiguous(tile_labels)
-        masks_3d = contiguous_labels[np.newaxis, :, :]  # (1, H, W)
+        # cp_measure assumes dense 1..N IDs and index-errors on sparse IDs.
+        contiguous_labels, _, inverse = relabel_sequential(tile_labels)
+        masks_3d = contiguous_labels[np.newaxis, :, :]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             data, columns, rows = featurize(tile_image, masks_3d, cp_config)
         if data.shape[0] > 0:
-            # Map contiguous labels back to original IDs.
-            # rows may include labels that produced no data (cp_measure bug);
-            # use only the first data.shape[0] rows.
-            # TODO: switch to return_as="anndata" once afermg/cp_measure#38
-            # fixes the rows/data length mismatch.
-            row_labels = [orig_ids[r[2]] for r in rows[: data.shape[0]]]
+            # cp_measure may return more rows than data; trim and remap.
+            row_labels = [int(inverse[r[2]]) for r in rows[: data.shape[0]]]
             cp_df = pd.DataFrame(data, index=row_labels, columns=columns)
             parts.append(cp_df)
 
@@ -540,6 +516,28 @@ def _relative_affine(sdata: SpatialData, image_key: str, labels_key: str, cs: st
     return m_global_to_img @ m_lbl_to_global
 
 
+def _rasterize_to_image_grid(element: Any, image_da: xr.DataArray, cs: str) -> xr.DataArray:
+    """Rasterize a spatialdata element onto an image DataArray's pixel grid."""
+    logg.warning(
+        f"Materializing element onto image grid via spatialdata.rasterize in '{cs}'. "
+        f"Lazy behavior is lost for this run."
+    )
+    img_h = int(image_da.sizes["y"])
+    img_w = int(image_da.sizes["x"])
+    result = rasterize(
+        element,
+        ["x", "y"],
+        min_coordinate=[0, 0],
+        max_coordinate=[img_w, img_h],
+        target_coordinate_system=cs,
+        target_unit_to_pixels=1.0,
+        return_regions_as_labels=True,
+    )
+    if isinstance(result, xr.DataArray):
+        return result
+    return xr.DataArray(np.asarray(result), dims=["y", "x"])
+
+
 def _is_close_identity(m: np.ndarray, atol: float = 1e-6) -> bool:
     return bool(np.allclose(m, np.eye(m.shape[0]), atol=atol))
 
@@ -578,45 +576,21 @@ def _align_to_image_grid(
 
     # Integer-pixel offset of labels relative to image. (tx, ty) means
     # labels pixel (0, 0) lands at image pixel (tx, ty) in (x, y) order.
-    tx: int
-    ty: int
     if _is_close_identity(m):
         tx, ty = 0, 0
+    elif (decomposed := _decompose_pixel_translation(m)) is not None:
+        tx, ty = decomposed
+    elif align_mode == "strict":
+        raise ValueError(
+            f"Labels not aligned to image pixel grid in coordinate system '{cs}'. "
+            f"Relative affine (x,y) =\n{m}\n"
+            f"Pass align_mode='rasterize' to resample labels onto the image grid "
+            f"(via spatialdata.rasterize), or pre-align with spatialdata.rasterize "
+            f"in your pipeline."
+        )
     else:
-        decomposed = _decompose_pixel_translation(m)
-        if decomposed is not None:
-            tx, ty = decomposed
-        else:
-            if align_mode == "strict":
-                raise ValueError(
-                    f"Labels not aligned to image pixel grid in coordinate system '{cs}'. "
-                    f"Relative affine (x,y) =\n{m}\n"
-                    f"Pass align_mode='rasterize' to resample labels onto the image grid "
-                    f"(via spatialdata.rasterize), or pre-align with spatialdata.rasterize "
-                    f"in your pipeline."
-                )
-            # align_mode == "rasterize": materialize labels onto image grid.
-            logg.warning(
-                "align_mode='rasterize' triggered: resampling labels onto the image grid "
-                "via spatialdata.rasterize. This materializes labels in memory; lazy "
-                "behavior is lost for this run."
-            )
-            img_h = int(image_da.sizes["y"])
-            img_w = int(image_da.sizes["x"])
-            rasterized = rasterize(
-                sdata.labels[labels_key],
-                ["x", "y"],
-                min_coordinate=[0, 0],
-                max_coordinate=[img_w, img_h],
-                target_coordinate_system=cs,
-                target_unit_to_pixels=1.0,
-                return_regions_as_labels=True,
-            )
-            if isinstance(rasterized, xr.DataArray):
-                labels_da = rasterized
-            else:
-                labels_da = xr.DataArray(np.asarray(rasterized), dims=["y", "x"])
-            tx, ty = 0, 0
+        labels_da = _rasterize_to_image_grid(sdata.labels[labels_key], image_da, cs)
+        tx, ty = 0, 0
 
     # Determine overlap rectangle in image-pixel coords.
     img_h = int(image_da.sizes["y"])
@@ -664,34 +638,27 @@ def _classify_dropped_cells(
 ) -> tuple[int, int, int]:
     """Return ``(fully_inside, partially_inside, fully_outside)`` cell counts.
 
-    A cell whose entire bounding box is inside the crop window is counted as
-    fully inside.  If only part of its bounding box is inside, it is
-    partially inside.  If the cell does not appear inside the crop window at
-    all, it is fully outside.
+    Uses per-cell bounding boxes computed via tile-streamed reads so the
+    full label array is never materialized.
     """
     lbl_h = int(labels_da.sizes.get("y", labels_da.shape[-2]))
     lbl_w = int(labels_da.sizes.get("x", labels_da.shape[-1]))
-    # Skip the work entirely when nothing is cropped away.
     if y0 <= 0 and x0 <= 0 and y1 >= lbl_h and x1 >= lbl_w:
         return 0, 0, 0
 
-    arr = labels_da.values
-    if arr.ndim > 2:
-        arr = arr.squeeze()
-    inside = arr[y0:y1, x0:x1]
-    ids_total = {int(v) for v in np.unique(arr) if v != 0}
-    ids_inside_any = {int(v) for v in np.unique(inside) if v != 0}
-
-    fully_outside = len(ids_total - ids_inside_any)
-
-    # Find which "inside_any" cells are only partial: their bbox in `arr`
-    # extends outside the crop window.
+    cell_info = compute_cell_info_tiled(labels_da)
+    fully_inside = 0
     partial = 0
-    for lid in ids_inside_any:
-        ys, xs = np.where(arr == lid)
-        if ys.min() < y0 or ys.max() >= y1 or xs.min() < x0 or xs.max() >= x1:
+    fully_outside = 0
+    for ci in cell_info.values():
+        by0, bx0 = ci.bbox_y0, ci.bbox_x0
+        by1, bx1 = by0 + ci.bbox_h, bx0 + ci.bbox_w
+        if by1 <= y0 or by0 >= y1 or bx1 <= x0 or bx0 >= x1:
+            fully_outside += 1
+        elif by0 >= y0 and by1 <= y1 and bx0 >= x0 and bx1 <= x1:
+            fully_inside += 1
+        else:
             partial += 1
-    fully_inside = len(ids_inside_any) - partial
     return fully_inside, partial, fully_outside
 
 
@@ -974,7 +941,7 @@ def calculate_image_features(
         start=1,
     ):
         if df.empty:
-            drop_report.empty_tile_drop += 1
+            drop_report.empty_tiles += 1
         else:
             tile_dfs.append(df)
         if done == 1 or done == total_tiles or done % log_every == 0:
