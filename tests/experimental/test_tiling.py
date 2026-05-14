@@ -12,11 +12,15 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+import xarray as xr
 
 from squidpy.experimental.im._tiling import (
-    TileSpec,
     build_tile_specs,
+    compute_cell_info,
+    compute_cell_info_multiscale,
+    compute_cell_info_tiled,
     extract_tile,
+    extract_tile_lazy,
     verify_coverage,
 )
 from tests.conftest import PlotTester, PlotTesterMeta
@@ -95,6 +99,22 @@ def _expected_tile_key(cy: float, cx: float, tile_size: int, image_size: int) ->
     return (row, col)
 
 
+_TILE_SIZE = 250  # 500 / 250 = 2×2 = 4 tiles
+
+
+def _specs_from_labels(labels, tile_size=_TILE_SIZE, overlap_margin="auto"):
+    """Convenience: compute cell info + build tile specs from a numpy label array."""
+    cell_info = compute_cell_info(labels)
+    return build_tile_specs(labels.shape, cell_info, tile_size=tile_size, overlap_margin=overlap_margin)
+
+
+def _label_ids(labels):
+    """All nonzero label IDs as a set."""
+    ids = set(np.unique(labels).tolist())
+    ids.discard(0)
+    return ids
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -117,26 +137,24 @@ def brick_image():
 # build_tile_specs — deterministic checks
 # ---------------------------------------------------------------------------
 
-_TILE_SIZE = 250  # 500 / 250 = 2×2 = 4 tiles
-
 
 class TestBuildTileSpecs:
     def test_four_tiles(self, brick_labels):
         """500×500 with tile_size=250 produces at most 4 tiles."""
         labels, _, _ = brick_labels
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
         assert len(specs) <= 4
 
     def test_full_coverage(self, brick_labels):
         """Every cell is assigned to exactly one tile."""
         labels, _, _ = brick_labels
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
-        verify_coverage(labels, specs)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
+        verify_coverage(_label_ids(labels), specs)
 
     def test_cell_assigned_to_centroid_tile(self, brick_labels):
         """Each cell's tile matches the tile we predict from its centroid."""
         labels, centroids, _ = brick_labels
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
 
         # Build actual mapping: cell_id → tile base origin
         actual: dict[int, tuple[int, int]] = {}
@@ -154,7 +172,7 @@ class TestBuildTileSpecs:
     def test_no_duplicates(self, brick_labels):
         """No cell ID appears in more than one tile."""
         labels, _, _ = brick_labels
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
 
         seen: set[int] = set()
         for spec in specs:
@@ -168,8 +186,6 @@ class TestBuildTileSpecs:
         # A cell straddles a boundary if its rectangle crosses y=250 or x=250
         # but its centroid is on one side
         boundary_cells = []
-        step_y = _CELL_H + gap
-        step_x = _CELL_W + gap
         for lid, (cy, cx) in centroids.items():
             half_h = _CELL_H / 2.0
             half_w = _CELL_W / 2.0
@@ -183,7 +199,7 @@ class TestBuildTileSpecs:
         # With cell_h=20 and various gaps, we expect some boundary cells
         # (the brick offset makes this likely for odd rows near y=250)
         # Just verify they're all assigned somewhere
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
         all_owned = set()
         for s in specs:
             all_owned |= s.owned_ids
@@ -193,7 +209,7 @@ class TestBuildTileSpecs:
     def test_crop_contains_owned_cells_fully(self, brick_labels):
         """Every owned cell's rectangle fits inside its tile's crop region."""
         labels, centroids, _ = brick_labels
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE, overlap_margin="auto")
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE, overlap_margin="auto")
 
         for spec in specs:
             cy0, cx0, cy1, cx1 = spec.crop
@@ -216,33 +232,27 @@ class TestBuildTileSpecs:
 class TestBuildTileSpecsEdgeCases:
     def test_empty_labels(self):
         labels = np.zeros((500, 500), dtype=np.int32)
-        specs = build_tile_specs(labels, tile_size=250)
+        specs = _specs_from_labels(labels, tile_size=250)
         assert specs == []
-        verify_coverage(labels, specs)
+        verify_coverage(_label_ids(labels), specs)
 
     def test_single_cell_whole_image(self):
         """One cell that fills most of the image."""
         labels = np.zeros((500, 500), dtype=np.int32)
         labels[10:490, 10:490] = 1
-        specs = build_tile_specs(labels, tile_size=250)
-        verify_coverage(labels, specs)
+        specs = _specs_from_labels(labels, tile_size=250)
+        verify_coverage(_label_ids(labels), specs)
         assert len(specs) == 1  # centroid is at ~(250,250), lands in one tile
 
     def test_invalid_tile_size(self):
-        labels = np.zeros((100, 100), dtype=np.int32)
         with pytest.raises(ValueError, match="tile_size must be positive"):
-            build_tile_specs(labels, tile_size=0)
-
-    def test_invalid_labels_ndim(self):
-        labels = np.zeros((2, 100, 100), dtype=np.int32)
-        with pytest.raises(ValueError, match="Expected 2-D labels"):
-            build_tile_specs(labels, tile_size=100)
+            build_tile_specs((100, 100), {}, tile_size=0)
 
     def test_tile_size_larger_than_image(self):
         """tile_size > image → single tile."""
         labels, _ = _make_brick_labels(image_size=100, gap=5)
-        specs = build_tile_specs(labels, tile_size=1000)
-        verify_coverage(labels, specs)
+        specs = _specs_from_labels(labels, tile_size=1000)
+        verify_coverage(_label_ids(labels), specs)
         assert len(specs) == 1
 
 
@@ -255,7 +265,7 @@ class TestExtractTile:
     def test_non_owned_cells_zeroed(self, brick_labels, brick_image):
         """Only owned cells survive in the extracted tile mask."""
         labels, _, _ = brick_labels
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
 
         for spec in specs:
             _, tile_lbl = extract_tile(brick_image, labels, spec)
@@ -266,7 +276,7 @@ class TestExtractTile:
     def test_owned_cell_pixels_preserved(self, brick_labels, brick_image):
         """Pixel values for owned cells match the original labels."""
         labels, _, _ = brick_labels
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
 
         for spec in specs:
             cy0, cx0, cy1, cx1 = spec.crop
@@ -279,7 +289,7 @@ class TestExtractTile:
     def test_original_labels_not_mutated(self, brick_labels, brick_image):
         labels, _, _ = brick_labels
         labels_copy = labels.copy()
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
         for spec in specs:
             extract_tile(brick_image, labels, spec)
         np.testing.assert_array_equal(labels, labels_copy)
@@ -287,7 +297,7 @@ class TestExtractTile:
     def test_image_crop_shape(self, brick_labels, brick_image):
         """Extracted image has shape (C, crop_h, crop_w)."""
         labels, _, _ = brick_labels
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
         for spec in specs:
             tile_img, tile_lbl = extract_tile(brick_image, labels, spec)
             cy0, cx0, cy1, cx1 = spec.crop
@@ -304,8 +314,8 @@ class TestEndToEnd:
     def test_roundtrip_no_cells_lost(self, brick_labels, brick_image):
         """Build specs → extract tiles → union of labels == all cells."""
         labels, centroids, _ = brick_labels
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
-        verify_coverage(labels, specs)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
+        verify_coverage(_label_ids(labels), specs)
 
         recovered: set[int] = set()
         for spec in specs:
@@ -323,8 +333,8 @@ class TestEndToEnd:
         n_cells = len(centroids)
         assert n_cells > 0
 
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
-        verify_coverage(labels, specs)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
+        verify_coverage(_label_ids(labels), specs)
 
         # Total owned cells across all tiles == total cells
         total_owned = sum(len(s.owned_ids) for s in specs)
@@ -336,8 +346,8 @@ class TestEndToEnd:
         n_cells = len(centroids)
         assert n_cells > 0
 
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
-        verify_coverage(labels, specs)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
+        verify_coverage(_label_ids(labels), specs)
 
         total_owned = sum(len(s.owned_ids) for s in specs)
         assert total_owned == n_cells
@@ -390,15 +400,131 @@ def _plot_tile_assignment(labels, specs, title=""):
     ax.set_ylabel("y")
 
 
+# ---------------------------------------------------------------------------
+# Lazy / multiscale helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_multiscale_tree(labels: np.ndarray, n_scales: int = 3) -> xr.DataTree:
+    """Build a tiny multiscale DataTree by integer-downsampling."""
+    scales: dict[str, xr.DataTree] = {}
+    for i in range(n_scales):
+        step = 2**i
+        sub = labels[::step, ::step]
+        ds = xr.Dataset({"image": xr.DataArray(sub, dims=("y", "x"))})
+        scales[f"scale{i}"] = xr.DataTree(ds)
+    return xr.DataTree.from_dict(scales)
+
+
+class TestComputeCellInfoMultiscale:
+    def test_target_is_coarsest_matches_eager(self):
+        labels, _ = _make_brick_labels(gap=10)
+        tree = _make_multiscale_tree(labels, n_scales=3)
+        # scale2 is coarsest. Target it -> use that scale directly.
+        info_ms = compute_cell_info_multiscale(tree, target_scale="scale2")
+        info_eager = compute_cell_info(tree["scale2"].ds["image"].values)
+        assert set(info_ms.keys()) == set(info_eager.keys())
+        for lid in info_ms:
+            assert info_ms[lid].centroid_y == pytest.approx(info_eager[lid].centroid_y, abs=0.5)
+            assert info_ms[lid].centroid_x == pytest.approx(info_eager[lid].centroid_x, abs=0.5)
+
+    def test_rescale_to_finer(self):
+        labels, _ = _make_brick_labels(gap=10)
+        tree = _make_multiscale_tree(labels, n_scales=3)
+        info_ms = compute_cell_info_multiscale(tree, target_scale="scale0")
+        info_eager = compute_cell_info(labels)
+        # Centroids should be close (within ~1 px due to coarse-scale quantization)
+        assert set(info_ms.keys()) == set(info_eager.keys())
+        for lid in info_ms:
+            assert info_ms[lid].centroid_y == pytest.approx(info_eager[lid].centroid_y, abs=4.0)
+            assert info_ms[lid].centroid_x == pytest.approx(info_eager[lid].centroid_x, abs=4.0)
+
+    def test_missing_target_raises(self):
+        labels, _ = _make_brick_labels(gap=10)
+        tree = _make_multiscale_tree(labels, n_scales=2)
+        with pytest.raises(ValueError, match="not found in DataTree"):
+            compute_cell_info_multiscale(tree, target_scale="scale99")
+
+
+class TestComputeCellInfoTiled:
+    def test_matches_eager_no_cell_spans_tiles(self):
+        labels, _ = _make_brick_labels(gap=10)  # cells are 20x30, well below chunk
+        labels_da = xr.DataArray(labels, dims=("y", "x"))
+        info_tiled = compute_cell_info_tiled(labels_da, chunk=128)
+        info_eager = compute_cell_info(labels)
+        assert set(info_tiled.keys()) == set(info_eager.keys())
+        for lid in info_eager:
+            assert info_tiled[lid].centroid_y == pytest.approx(info_eager[lid].centroid_y, abs=1e-6)
+            assert info_tiled[lid].centroid_x == pytest.approx(info_eager[lid].centroid_x, abs=1e-6)
+            assert info_tiled[lid].bbox_h == info_eager[lid].bbox_h
+            assert info_tiled[lid].bbox_w == info_eager[lid].bbox_w
+
+    def test_matches_eager_cells_span_tile_boundary(self):
+        # A 100x100 cell crossing chunk boundary at 50.
+        labels = np.zeros((200, 200), dtype=np.int32)
+        labels[30:130, 30:130] = 1
+        labels_da = xr.DataArray(labels, dims=("y", "x"))
+        info_tiled = compute_cell_info_tiled(labels_da, chunk=50)
+        info_eager = compute_cell_info(labels)
+        assert set(info_tiled.keys()) == set(info_eager.keys())
+        for lid in info_eager:
+            assert info_tiled[lid].centroid_y == pytest.approx(info_eager[lid].centroid_y, abs=1e-6)
+            assert info_tiled[lid].centroid_x == pytest.approx(info_eager[lid].centroid_x, abs=1e-6)
+            assert info_tiled[lid].bbox_h == info_eager[lid].bbox_h
+            assert info_tiled[lid].bbox_w == info_eager[lid].bbox_w
+
+    def test_empty_labels(self):
+        labels = np.zeros((100, 100), dtype=np.int32)
+        labels_da = xr.DataArray(labels, dims=("y", "x"))
+        assert compute_cell_info_tiled(labels_da, chunk=32) == {}
+
+
+class TestExtractTileLazy:
+    def test_matches_eager(self, brick_labels, brick_image):
+        labels, _, _ = brick_labels
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
+        labels_da = xr.DataArray(labels, dims=("y", "x"))
+        image_da = xr.DataArray(brick_image, dims=("c", "y", "x"))
+        for spec in specs:
+            img_e, lbl_e = extract_tile(brick_image, labels, spec)
+            img_l, lbl_l = extract_tile_lazy(image_da, labels_da, spec)
+            np.testing.assert_array_equal(img_e, img_l)
+            np.testing.assert_array_equal(lbl_e, lbl_l)
+
+
+class TestVerifyCoverage:
+    def test_detects_duplicate(self):
+        spec_a = build_tile_specs((100, 100), {1: _make_ci(1, 25, 25)}, tile_size=50)
+        spec_b = build_tile_specs((100, 100), {1: _make_ci(1, 25, 25)}, tile_size=50)
+        with pytest.raises(AssertionError, match="multiple tiles"):
+            verify_coverage({1}, spec_a + spec_b)
+
+    def test_detects_missing(self):
+        specs = build_tile_specs((100, 100), {}, tile_size=50)
+        with pytest.raises(AssertionError, match="not assigned"):
+            verify_coverage({42}, specs)
+
+    def test_detects_extra(self):
+        specs = build_tile_specs((100, 100), {1: _make_ci(1, 25, 25)}, tile_size=50, overlap_margin=0)
+        with pytest.raises(AssertionError, match="non-existent"):
+            verify_coverage(set(), specs)
+
+
+def _make_ci(label: int, cy: float, cx: float, h: int = 4, w: int = 4):
+    from squidpy.experimental.im._tiling import CellInfo
+
+    return CellInfo(label=label, centroid_y=cy, centroid_x=cx, bbox_h=h, bbox_w=w)
+
+
 class TestTilingVisual(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_tile_assignment_gap(self):
         """Visual: brick pattern (gap=10), cells colored by tile."""
         labels, _ = _make_brick_labels(gap=10)
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
         _plot_tile_assignment(labels, specs, title="Tile assignment (gap=10)")
 
     def test_plot_tile_assignment_touching(self):
         """Visual: brick pattern (gap=0, touching), cells colored by tile."""
         labels, _ = _make_brick_labels(gap=0)
-        specs = build_tile_specs(labels, tile_size=_TILE_SIZE)
+        specs = _specs_from_labels(labels, tile_size=_TILE_SIZE)
         _plot_tile_assignment(labels, specs, title="Tile assignment (gap=0, touching)")

@@ -1,984 +1,1020 @@
-"""Experimental feature extraction module."""
+"""Experimental feature extraction module.
+
+Extracts per-cell features from segmentation masks using cp_measure,
+scikit-image regionprops, and squidpy-specific metrics.  Large images
+are automatically tiled so that each tile is processed independently.
+"""
 
 from __future__ import annotations
 
+import time
 import warnings
-from collections.abc import Callable, Sequence
-from typing import Any, NamedTuple
+from dataclasses import dataclass, field, fields
+from typing import Any, Literal, NamedTuple
 
 import anndata as ad
 import numpy as np
-import numpy.typing as npt
 import pandas as pd
 import xarray as xr
-from cp_measure.bulk import get_core_measurements, get_correlation_measurements
-from numba import njit
+from cp_measure.featurizer import featurize, make_featurizer_config
+from joblib import Parallel, delayed
 from skimage import measure
 from skimage.feature import graycomatrix, graycoprops
-from skimage.measure import label
 from spatialdata import SpatialData, rasterize
 from spatialdata._logging import logger as logg
-from spatialdata.models import TableModel
+from spatialdata.models import TableModel, get_channel_names
+from spatialdata.transformations import get_transformation
+from tqdm.auto import tqdm
 
-from squidpy._constants._constants import ImageFeature
-from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, _get_n_cores, parallelize
+from squidpy.experimental.im._tiling import (
+    build_tile_specs,
+    compute_cell_info,
+    compute_cell_info_multiscale,
+    compute_cell_info_tiled,
+    extract_tile_lazy,
+)
+
+# ---------------------------------------------------------------------------
+# Drop accounting
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class DropReport:
+    """Counters for cells that were excluded during a featurization run.
+
+    Emitted once at the end of ``calculate_image_features`` so users know
+    why their cell count shrank.
+    """
+
+    outside_image_extent: int = 0
+    partial_at_image_boundary: int = 0
+    cp_measure_no_data: int = 0
+    empty_tile_drop: int = 0
+    other: dict[str, int] = field(default_factory=dict)
+
+    def summary(self) -> str:
+        lines = ["Cell drop report:"]
+        for f in fields(self):
+            v = getattr(self, f.name)
+            if isinstance(v, int) and v > 0:
+                lines.append(f"  {f.name}: {v}")
+            elif isinstance(v, dict):
+                for k, vv in v.items():
+                    if vv:
+                        lines.append(f"  {k}: {vv}")
+        if len(lines) == 1:
+            return "Cell drop report: no cells dropped."
+        return "\n".join(lines)
+
 
 __all__ = ["calculate_image_features"]
 
-# Define constant property sets
-_MASK_PROPS = {
-    "area",
-    "area_filled",
-    "area_convex",
-    "num_pixels",
-    "axis_major_length",
-    "axis_minor_length",
-    "eccentricity",
-    "equivalent_diameter",
-    "extent",
-    "feret_diameter_max",
-    "solidity",
-    "euler_number",
-    "centroid",
-    "centroid_local",
-    "perimeter",
-    "perimeter_crofton",
-    "inertia_tensor",
-    "inertia_tensor_eigvals",
-}
-_INTENSITY_PROPS = {
-    "intensity_max",
-    "intensity_mean",
-    "intensity_min",
-    "intensity_std",
-}
+# ---------------------------------------------------------------------------
+# Skimage property sets
+# ---------------------------------------------------------------------------
 
-# Define array types using modern syntax
-NDArray = npt.NDArray[Any]  # Generic array
-FloatArray = npt.NDArray[np.float32]  # Float32 array
-IntArray = npt.NDArray[np.int_]  # Integer array
-BoolArray = npt.NDArray[np.bool_]  # Boolean array
-
-# Define property sets at module level for better performance
-_SCALAR_PROPS = frozenset(
+_MASK_PROPS = frozenset(
     {
         "area",
         "area_filled",
         "area_convex",
-        "num_pixels",
         "axis_major_length",
         "axis_minor_length",
         "eccentricity",
-        "equivalent_diameter",
+        "equivalent_diameter_area",
         "extent",
         "feret_diameter_max",
         "solidity",
         "euler_number",
+        "centroid",
+        "centroid_local",
         "perimeter",
         "perimeter_crofton",
+        "inertia_tensor",
+        "inertia_tensor_eigvals",
+    }
+)
+_INTENSITY_PROPS = frozenset(
+    {
+        "intensity_max",
+        "intensity_mean",
+        "intensity_min",
+        "intensity_std",
     }
 )
 
-_ARRAY_1D_PROPS = frozenset({"centroid", "centroid_local"})
-_ARRAY_2D_PROPS = frozenset({"inertia_tensor"})
-_SPECIAL_PROPS = frozenset({"inertia_tensor_eigvals"})
+# cp_measure feature name → make_featurizer_config keyword(s)
+_CPMEASURE_FLAGS: dict[str, dict[str, bool]] = {
+    "cpmeasure:intensity": {"intensity": True},
+    "cpmeasure:sizeshape": {"sizeshape": True},
+    "cpmeasure:texture": {"texture": True},
+    "cpmeasure:granularity": {"granularity": True},
+    "cpmeasure:zernike": {"zernike": True},
+    "cpmeasure:feret": {"feret": True},
+    "cpmeasure:radial": {"radial_distribution": True, "radial_zernikes": True},
+    "cpmeasure:correlation": {
+        "correlation_pearson": True,
+        "correlation_costes": True,
+        "correlation_manders_fold": True,
+        "correlation_rwc": True,
+    },
+    "cpmeasure:correlation_pearson": {"correlation_pearson": True},
+    "cpmeasure:correlation_costes": {"correlation_costes": True},
+    "cpmeasure:correlation_manders_fold": {"correlation_manders_fold": True},
+    "cpmeasure:correlation_rwc": {"correlation_rwc": True},
+}
+
+# All known top-level feature group names (used for validation)
+_ALL_FEATURES = (
+    set(_CPMEASURE_FLAGS.keys())
+    | {"skimage:label", "skimage:label+image"}
+    | {"squidpy:summary", "squidpy:texture", "squidpy:color_hist"}
+)
 
 
-class ParsedMeasurements(NamedTuple):
-    measurements: list[str]
-    label_props: set[str] | None
-    intensity_props: set[str] | None
-    has_cpmeasure_core: bool
-    has_cpmeasure_correlation: bool
-    has_squidpy_summary: bool
-    has_squidpy_texture: bool
-    has_squidpy_color_hist: bool
+# ---------------------------------------------------------------------------
+# Feature parsing
+# ---------------------------------------------------------------------------
 
 
-def _parse_measurements(
-    measurements: str | list[str] | None,
-    available_measurements: list[str],
-) -> ParsedMeasurements:
-    """Parse and validate measurements, supporting per-property selection."""
-    if measurements is None:
-        measurements = available_measurements
+class _ParsedFeatures(NamedTuple):
+    cp_flags: dict[str, bool] | None  # kwargs for make_featurizer_config
+    skimage_label_props: frozenset[str] | None
+    skimage_intensity_props: frozenset[str] | None
+    squidpy_summary: bool
+    squidpy_texture: bool
+    squidpy_color_hist: bool
 
-    if isinstance(measurements, str):
-        measurements = [measurements]
 
-    parsed_label_props: set[str] | None = None
-    parsed_intensity_props: set[str] | None = None
-    has_cpmeasure_core = False
-    has_cpmeasure_correlation = False
-    has_squidpy_summary = False
-    has_squidpy_texture = False
-    has_squidpy_color_hist = False
+def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
+    """Parse user-facing feature names into structured config."""
+    if features is None:
+        # Default: all cp_measure features
+        return _ParsedFeatures(
+            cp_flags={},  # empty dict → all defaults (all True)
+            skimage_label_props=None,
+            skimage_intensity_props=None,
+            squidpy_summary=False,
+            squidpy_texture=False,
+            squidpy_color_hist=False,
+        )
 
-    for m in measurements:
-        parts = m.split(":")
-        if len(parts) == 3 and parts[0] == "skimage":
-            group, prop = parts[1], parts[2]
-            if group == "label":
-                if prop not in _MASK_PROPS:
-                    raise ValueError(f"Unknown skimage label property: '{prop}'. Available: {sorted(_MASK_PROPS)}")
-                parsed_label_props = (parsed_label_props or set()) | {prop}
-            elif group == "label+image":
-                if prop not in _INTENSITY_PROPS:
-                    raise ValueError(
-                        f"Unknown skimage intensity property: '{prop}'. Available: {sorted(_INTENSITY_PROPS)}"
-                    )
-                parsed_intensity_props = (parsed_intensity_props or set()) | {prop}
-            else:
-                raise ValueError(f"Unknown skimage group: '{group}'. Use 'label' or 'label+image'")
-        elif m == "skimage:label":
-            parsed_label_props = (parsed_label_props or set()) | _MASK_PROPS.copy()
-        elif m == "skimage:label+image":
-            parsed_intensity_props = (parsed_intensity_props or set()) | _INTENSITY_PROPS.copy()
-        elif m == "cpmeasure:core":
-            has_cpmeasure_core = True
-        elif m == "cpmeasure:correlation":
-            has_cpmeasure_correlation = True
-        elif m == "squidpy:summary":
-            has_squidpy_summary = True
-        elif m == "squidpy:texture":
-            has_squidpy_texture = True
-        elif m == "squidpy:color_hist":
-            has_squidpy_color_hist = True
-        elif m not in available_measurements:
+    if isinstance(features, str):
+        features = [features]
+
+    cp_flags: dict[str, bool] = {}
+    has_any_cp = False
+    label_props: set[str] | None = None
+    intensity_props: set[str] | None = None
+    sq_summary = False
+    sq_texture = False
+    sq_color_hist = False
+
+    for f in features:
+        # cp_measure features
+        if f in _CPMEASURE_FLAGS:
+            has_any_cp = True
+            cp_flags.update(_CPMEASURE_FLAGS[f])
+
+        # skimage group-level
+        elif f == "skimage:label":
+            label_props = set(_MASK_PROPS)
+        elif f == "skimage:label+image":
+            intensity_props = set(_INTENSITY_PROPS)
+
+        # skimage fine-grained: "skimage:label:prop" or "skimage:label+image:prop"
+        elif f.startswith("skimage:label:"):
+            prop = f.split(":", 2)[2]
+            if prop not in _MASK_PROPS:
+                raise ValueError(f"Unknown skimage label property: '{prop}'. Available: {sorted(_MASK_PROPS)}")
+            label_props = (label_props or set()) | {prop}
+        elif f.startswith("skimage:label+image:"):
+            prop = f.split(":", 2)[2]
+            if prop not in _INTENSITY_PROPS:
+                raise ValueError(f"Unknown skimage intensity property: '{prop}'. Available: {sorted(_INTENSITY_PROPS)}")
+            intensity_props = (intensity_props or set()) | {prop}
+
+        # squidpy features
+        elif f == "squidpy:summary":
+            sq_summary = True
+        elif f == "squidpy:texture":
+            sq_texture = True
+        elif f == "squidpy:color_hist":
+            sq_color_hist = True
+
+        else:
             raise ValueError(
-                f"Invalid measurement: '{m}'. "
-                f"Available: {available_measurements}, "
-                f"or use 'skimage:label:property' / 'skimage:label+image:property' for individual properties"
+                f"Unknown feature: '{f}'. Available top-level features: {sorted(_ALL_FEATURES)}, "
+                f"or use 'skimage:label:property' / 'skimage:label+image:property' for individual properties."
             )
 
-    return ParsedMeasurements(
-        measurements,
-        parsed_label_props,
-        parsed_intensity_props,
-        has_cpmeasure_core,
-        has_cpmeasure_correlation,
-        has_squidpy_summary,
-        has_squidpy_texture,
-        has_squidpy_color_hist,
+    return _ParsedFeatures(
+        cp_flags=cp_flags if has_any_cp else None,
+        skimage_label_props=frozenset(label_props) if label_props else None,
+        skimage_intensity_props=frozenset(intensity_props) if intensity_props else None,
+        squidpy_summary=sq_summary,
+        squidpy_texture=sq_texture,
+        squidpy_color_hist=sq_color_hist,
     )
 
 
-@d.dedent
-@inject_docs(f=ImageFeature)
+def _has_any_features(parsed: _ParsedFeatures) -> bool:
+    return (
+        parsed.cp_flags is not None
+        or parsed.skimage_label_props is not None
+        or parsed.skimage_intensity_props is not None
+        or parsed.squidpy_summary
+        or parsed.squidpy_texture
+        or parsed.squidpy_color_hist
+    )
+
+
+# ---------------------------------------------------------------------------
+# cp_measure config builder
+# ---------------------------------------------------------------------------
+
+
+def _build_cp_config(cp_flags: dict[str, bool], channel_names: list[str]) -> dict:
+    """Build a cp_measure featurizer config from parsed flags.
+
+    When ``cp_flags`` is empty (the default-all case), every feature is
+    enabled.  Otherwise, only the explicitly requested features are turned on.
+    """
+    if not cp_flags:
+        # All defaults (everything True)
+        return make_featurizer_config(channel_names)
+
+    # Start with everything off, then enable requested features
+    all_off = {
+        "intensity": False,
+        "texture": False,
+        "granularity": False,
+        "radial_distribution": False,
+        "radial_zernikes": False,
+        "sizeshape": False,
+        "zernike": False,
+        "feret": False,
+        "correlation_pearson": False,
+        "correlation_costes": False,
+        "correlation_manders_fold": False,
+        "correlation_rwc": False,
+    }
+    all_off.update(cp_flags)
+    return make_featurizer_config(channel_names, **all_off)
+
+
+# ---------------------------------------------------------------------------
+# Per-tile feature computation
+# ---------------------------------------------------------------------------
+
+
+def _relabel_contiguous(labels: np.ndarray) -> tuple[np.ndarray, dict[int, int]]:
+    """Relabel a mask to contiguous IDs 1..N, returning the new mask and a mapping.
+
+    Returns
+    -------
+    relabeled
+        Label image with contiguous IDs.
+    new_to_orig
+        Mapping from new contiguous ID → original label ID.
+    """
+    unique_ids = np.unique(labels)
+    unique_ids = unique_ids[unique_ids != 0]
+    new_to_orig: dict[int, int] = {}
+    relabeled = np.zeros_like(labels)
+    for new_id, orig_id in enumerate(unique_ids, start=1):
+        relabeled[labels == orig_id] = new_id
+        new_to_orig[new_id] = int(orig_id)
+    return relabeled, new_to_orig
+
+
+def _featurize_tile(
+    tile_image: np.ndarray,
+    tile_labels: np.ndarray,
+    parsed: _ParsedFeatures,
+    channel_names: list[str],
+) -> pd.DataFrame:
+    """Compute all requested features for a single tile.
+
+    Parameters
+    ----------
+    tile_image
+        ``(C, H, W)`` image tile.
+    tile_labels
+        ``(H, W)`` label tile with only owned cells.
+    parsed
+        Parsed feature configuration.
+    channel_names
+        Channel names for column naming.
+
+    Returns
+    -------
+    DataFrame indexed by cell label ID with one column per feature.
+    """
+    cell_ids = np.unique(tile_labels)
+    cell_ids = cell_ids[cell_ids != 0]
+    if len(cell_ids) == 0:
+        return pd.DataFrame()
+
+    parts: list[pd.DataFrame] = []
+
+    # --- cp_measure features ---
+    if parsed.cp_flags is not None:
+        cp_config = _build_cp_config(parsed.cp_flags, channel_names)
+        # Relabel to contiguous IDs (1..N) — cp_measure assumes dense labels
+        # internally and will index-error on sparse IDs like [1, 37, 82].
+        contiguous_labels, orig_ids = _relabel_contiguous(tile_labels)
+        masks_3d = contiguous_labels[np.newaxis, :, :]  # (1, H, W)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            data, columns, rows = featurize(tile_image, masks_3d, cp_config)
+        if data.shape[0] > 0:
+            # Map contiguous labels back to original IDs.
+            # rows may include labels that produced no data (cp_measure bug);
+            # use only the first data.shape[0] rows.
+            # TODO: switch to return_as="anndata" once afermg/cp_measure#38
+            # fixes the rows/data length mismatch.
+            row_labels = [orig_ids[r[2]] for r in rows[: data.shape[0]]]
+            cp_df = pd.DataFrame(data, index=row_labels, columns=columns)
+            parts.append(cp_df)
+
+    # --- skimage regionprops ---
+    if parsed.skimage_label_props is not None or parsed.skimage_intensity_props is not None:
+        df = _compute_skimage_features(
+            tile_labels, tile_image, parsed.skimage_label_props, parsed.skimage_intensity_props, channel_names
+        )
+        if not df.empty:
+            parts.append(df)
+
+    # --- squidpy per-cell features ---
+    if parsed.squidpy_summary or parsed.squidpy_texture or parsed.squidpy_color_hist:
+        df = _compute_squidpy_per_cell(tile_labels, tile_image, parsed, channel_names)
+        if not df.empty:
+            parts.append(df)
+
+    if not parts:
+        return pd.DataFrame(index=cell_ids)
+
+    combined = pd.concat(parts, axis=1)
+    combined = combined.reindex(cell_ids)
+    return combined
+
+
+# ---------------------------------------------------------------------------
+# skimage regionprops
+# ---------------------------------------------------------------------------
+
+
+def _regionprops_to_row(region: Any, props: frozenset[str]) -> dict[str, float]:
+    """Extract scalar features from a single regionprops object."""
+    row: dict[str, float] = {}
+    for prop in props:
+        try:
+            value = getattr(region, prop)
+            arr = np.asarray(value)
+            if arr.ndim == 0:
+                row[prop] = float(arr)
+            elif arr.ndim == 1:
+                for i, v in enumerate(arr):
+                    row[f"{prop}_{i}"] = float(v)
+            elif arr.ndim == 2:
+                for i in range(arr.shape[0]):
+                    for j in range(arr.shape[1]):
+                        row[f"{prop}_{i}x{j}"] = float(arr[i, j])
+        except (ValueError, TypeError, AttributeError):
+            continue
+    return row
+
+
+def _compute_skimage_features(
+    labels: np.ndarray,
+    image: np.ndarray,
+    label_props: frozenset[str] | None,
+    intensity_props: frozenset[str] | None,
+    channel_names: list[str],
+) -> pd.DataFrame:
+    """Compute skimage regionprops features for all cells in a tile."""
+    parts: list[pd.DataFrame] = []
+
+    if label_props is not None:
+        regions = measure.regionprops(labels)
+        rows = {r.label: _regionprops_to_row(r, label_props) for r in regions}
+        parts.append(pd.DataFrame.from_dict(rows, orient="index"))
+
+    if intensity_props is not None:
+        for ch_idx, ch_name in enumerate(channel_names):
+            regions = measure.regionprops(labels, intensity_image=image[ch_idx])
+            rows = {r.label: _regionprops_to_row(r, intensity_props) for r in regions}
+            df = pd.DataFrame.from_dict(rows, orient="index")
+            df = df.rename(columns=lambda c, _ch=ch_name: f"{c}_{_ch}")
+            parts.append(df)
+
+    if not parts:
+        return pd.DataFrame()
+    return pd.concat(parts, axis=1)
+
+
+# ---------------------------------------------------------------------------
+# squidpy per-cell features
+# ---------------------------------------------------------------------------
+
+
+def _compute_squidpy_per_cell(
+    labels: np.ndarray,
+    image: np.ndarray,
+    parsed: _ParsedFeatures,
+    channel_names: list[str],
+) -> pd.DataFrame:
+    """Compute squidpy features per cell within a tile."""
+    regions = measure.regionprops(labels)
+    n_channels = image.shape[0]
+    rows: dict[int, dict[str, float]] = {}
+
+    for region in regions:
+        lid = region.label
+        bbox = region.bbox  # (min_row, min_col, max_row, max_col)
+        cell_features: dict[str, float] = {}
+
+        # Extract cell's bounding box from image
+        img_crop = image[:, bbox[0] : bbox[2], bbox[1] : bbox[3]]
+        mask_crop = labels[bbox[0] : bbox[2], bbox[1] : bbox[3]] == lid
+
+        for ch_idx in range(n_channels):
+            ch_name = channel_names[ch_idx]
+            ch_crop = img_crop[ch_idx].astype(np.float32)
+            masked_vals = ch_crop[mask_crop]
+
+            if len(masked_vals) == 0:
+                continue
+
+            if parsed.squidpy_summary:
+                cell_features[f"summary_mean_{ch_name}"] = float(np.mean(masked_vals))
+                cell_features[f"summary_std_{ch_name}"] = float(np.std(masked_vals))
+                cell_features[f"summary_min_{ch_name}"] = float(np.min(masked_vals))
+                cell_features[f"summary_max_{ch_name}"] = float(np.max(masked_vals))
+
+            if parsed.squidpy_texture:
+                cell_features.update(_glcm_features(ch_crop, mask_crop, ch_name))
+
+            if parsed.squidpy_color_hist:
+                cell_features.update(_histogram_features(masked_vals, ch_name))
+
+        rows[lid] = cell_features
+
+    return pd.DataFrame.from_dict(rows, orient="index")
+
+
+def _glcm_features(channel_crop: np.ndarray, mask: np.ndarray, ch_name: str) -> dict[str, float]:
+    """GLCM texture features for a single channel within a cell's bbox."""
+    quant_levels = 32
+    ch = channel_crop.copy()
+    # Zero out non-cell pixels so they don't affect GLCM
+    ch[~mask] = 0
+    ch_min, ch_max = float(ch[mask].min()), float(ch[mask].max())
+    if ch_max > ch_min:
+        ch = (ch - ch_min) / (ch_max - ch_min)
+    else:
+        ch = np.zeros_like(ch)
+    ch_q = np.clip((ch * (quant_levels - 1)).round().astype(np.uint8), 0, quant_levels - 1)
+    ch_q[~mask] = 0
+
+    try:
+        glcm = graycomatrix(ch_q, distances=[1], angles=[0], levels=quant_levels, symmetric=True, normed=True)
+        return {
+            f"texture_contrast_{ch_name}": float(graycoprops(glcm, "contrast")[0, 0]),
+            f"texture_dissimilarity_{ch_name}": float(graycoprops(glcm, "dissimilarity")[0, 0]),
+            f"texture_homogeneity_{ch_name}": float(graycoprops(glcm, "homogeneity")[0, 0]),
+            f"texture_energy_{ch_name}": float(graycoprops(glcm, "energy")[0, 0]),
+            f"texture_ASM_{ch_name}": float(graycoprops(glcm, "ASM")[0, 0]),
+            f"texture_correlation_{ch_name}": float(graycoprops(glcm, "correlation")[0, 0]),
+        }
+    except (ValueError, IndexError):
+        return {}
+
+
+def _histogram_features(masked_vals: np.ndarray, ch_name: str, bins: int = 16) -> dict[str, float]:
+    """Per-cell intensity histogram features."""
+    lo, hi = float(masked_vals.min()), float(masked_vals.max())
+    hist, _ = np.histogram(masked_vals, bins=bins, range=(lo, hi if hi > lo else lo + 1))
+    hist = hist.astype(np.float32)
+    hist_sum = hist.sum()
+    if hist_sum > 0:
+        hist = hist / hist_sum
+    return {f"color_hist_bin{b}_{ch_name}": float(v) for b, v in enumerate(hist)}
+
+
+# ---------------------------------------------------------------------------
+# Input preparation (lazy — returns xarray DataArrays, not numpy)
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Coordinate-system aware alignment
+# ---------------------------------------------------------------------------
+
+
+def _shared_coordinate_system(sdata: SpatialData, image_key: str, labels_key: str) -> str:
+    img_t = get_transformation(sdata.images[image_key], get_all=True)
+    lbl_t = get_transformation(sdata.labels[labels_key], get_all=True)
+    shared = set(img_t) & set(lbl_t)
+    if not shared:
+        raise ValueError(
+            f"Image '{image_key}' and labels '{labels_key}' share no coordinate "
+            f"system (image: {sorted(img_t)}, labels: {sorted(lbl_t)})."
+        )
+    return "global" if "global" in shared else sorted(shared)[0]
+
+
+def _relative_affine(sdata: SpatialData, image_key: str, labels_key: str, cs: str) -> np.ndarray:
+    """Return the 3x3 affine that maps labels-pixel-coords to image-pixel-coords.
+
+    Uses ``(x, y)`` axis order to match :mod:`spatialdata` convention.
+    """
+    t_img = get_transformation(sdata.images[image_key], to_coordinate_system=cs)
+    t_lbl = get_transformation(sdata.labels[labels_key], to_coordinate_system=cs)
+    # image_pixel <- global <- labels_pixel
+    m_img_to_global = t_img.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    m_lbl_to_global = t_lbl.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    m_global_to_img = np.linalg.inv(m_img_to_global)
+    return m_global_to_img @ m_lbl_to_global
+
+
+def _is_close_identity(m: np.ndarray, atol: float = 1e-6) -> bool:
+    return bool(np.allclose(m, np.eye(m.shape[0]), atol=atol))
+
+
+def _decompose_pixel_translation(m: np.ndarray, atol: float = 1e-6) -> tuple[int, int] | None:
+    """If ``m`` is identity-plus-integer-translation, return ``(tx, ty)``; else None.
+
+    ``m`` is a 3x3 affine in (x, y) axis order.
+    """
+    rotscale = m[:2, :2]
+    if not np.allclose(rotscale, np.eye(2), atol=atol):
+        return None
+    tx, ty = float(m[0, 2]), float(m[1, 2])
+    if not (abs(tx - round(tx)) < atol and abs(ty - round(ty)) < atol):
+        return None
+    return int(round(tx)), int(round(ty))
+
+
+def _align_to_image_grid(
+    sdata: SpatialData,
+    image_key: str,
+    labels_key: str,
+    image_da: xr.DataArray,
+    labels_da: xr.DataArray,
+    align_mode: Literal["strict", "rasterize"],
+    drop_report: DropReport,
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Crop image and labels to their pixel-grid overlap, honoring transforms.
+
+    See module docstring of concern 3 fix for full semantics. Mutates
+    ``drop_report`` to count cells dropped because they fall outside the
+    overlap rectangle.
+    """
+    cs = _shared_coordinate_system(sdata, image_key, labels_key)
+    m = _relative_affine(sdata, image_key, labels_key, cs)
+
+    # Integer-pixel offset of labels relative to image. (tx, ty) means
+    # labels pixel (0, 0) lands at image pixel (tx, ty) in (x, y) order.
+    tx: int
+    ty: int
+    if _is_close_identity(m):
+        tx, ty = 0, 0
+    else:
+        decomposed = _decompose_pixel_translation(m)
+        if decomposed is not None:
+            tx, ty = decomposed
+        else:
+            if align_mode == "strict":
+                raise ValueError(
+                    f"Labels not aligned to image pixel grid in coordinate system '{cs}'. "
+                    f"Relative affine (x,y) =\n{m}\n"
+                    f"Pass align_mode='rasterize' to resample labels onto the image grid "
+                    f"(via spatialdata.rasterize), or pre-align with spatialdata.rasterize "
+                    f"in your pipeline."
+                )
+            # align_mode == "rasterize": materialize labels onto image grid.
+            logg.warning(
+                "align_mode='rasterize' triggered: resampling labels onto the image grid "
+                "via spatialdata.rasterize. This materializes labels in memory; lazy "
+                "behavior is lost for this run."
+            )
+            img_h = int(image_da.sizes["y"])
+            img_w = int(image_da.sizes["x"])
+            rasterized = rasterize(
+                sdata.labels[labels_key],
+                ["x", "y"],
+                min_coordinate=[0, 0],
+                max_coordinate=[img_w, img_h],
+                target_coordinate_system=cs,
+                target_unit_to_pixels=1.0,
+                return_regions_as_labels=True,
+            )
+            if isinstance(rasterized, xr.DataArray):
+                labels_da = rasterized
+            else:
+                labels_da = xr.DataArray(np.asarray(rasterized), dims=["y", "x"])
+            tx, ty = 0, 0
+
+    # Determine overlap rectangle in image-pixel coords.
+    img_h = int(image_da.sizes["y"])
+    img_w = int(image_da.sizes["x"])
+    lbl_h = int(labels_da.sizes.get("y", labels_da.shape[-2]))
+    lbl_w = int(labels_da.sizes.get("x", labels_da.shape[-1]))
+
+    # Labels pixel (i_y, i_x) in label coords maps to image pixel (i_y+ty, i_x+tx).
+    img_y0 = max(0, ty)
+    img_x0 = max(0, tx)
+    img_y1 = min(img_h, lbl_h + ty)
+    img_x1 = min(img_w, lbl_w + tx)
+    if img_y1 <= img_y0 or img_x1 <= img_x0:
+        raise ValueError(f"Image '{image_key}' and labels '{labels_key}' do not overlap in coordinate system '{cs}'.")
+
+    lbl_y0 = img_y0 - ty
+    lbl_x0 = img_x0 - tx
+    lbl_y1 = img_y1 - ty
+    lbl_x1 = img_x1 - tx
+
+    image_crop = image_da.isel(y=slice(img_y0, img_y1), x=slice(img_x0, img_x1))
+    labels_crop = labels_da.isel(y=slice(lbl_y0, lbl_y1), x=slice(lbl_x0, lbl_x1))
+
+    # Count cells that fall (partially) outside the labels_crop.
+    cells_inside, cells_partial, cells_outside = _classify_dropped_cells(labels_da, lbl_y0, lbl_x0, lbl_y1, lbl_x1)
+    if cells_outside or cells_partial:
+        drop_report.outside_image_extent += cells_outside
+        drop_report.partial_at_image_boundary += cells_partial
+        warnings.warn(
+            f"Dropping {cells_outside} cells outside the image extent and "
+            f"{cells_partial} cells partially outside. See end-of-run drop report.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    return image_crop, labels_crop
+
+
+def _classify_dropped_cells(
+    labels_da: xr.DataArray,
+    y0: int,
+    x0: int,
+    y1: int,
+    x1: int,
+) -> tuple[int, int, int]:
+    """Return ``(fully_inside, partially_inside, fully_outside)`` cell counts.
+
+    A cell whose entire bounding box is inside the crop window is counted as
+    fully inside.  If only part of its bounding box is inside, it is
+    partially inside.  If the cell does not appear inside the crop window at
+    all, it is fully outside.
+    """
+    lbl_h = int(labels_da.sizes.get("y", labels_da.shape[-2]))
+    lbl_w = int(labels_da.sizes.get("x", labels_da.shape[-1]))
+    # Skip the work entirely when nothing is cropped away.
+    if y0 <= 0 and x0 <= 0 and y1 >= lbl_h and x1 >= lbl_w:
+        return 0, 0, 0
+
+    arr = labels_da.values
+    if arr.ndim > 2:
+        arr = arr.squeeze()
+    inside = arr[y0:y1, x0:x1]
+    ids_total = {int(v) for v in np.unique(arr) if v != 0}
+    ids_inside_any = {int(v) for v in np.unique(inside) if v != 0}
+
+    fully_outside = len(ids_total - ids_inside_any)
+
+    # Find which "inside_any" cells are only partial: their bbox in `arr`
+    # extends outside the crop window.
+    partial = 0
+    for lid in ids_inside_any:
+        ys, xs = np.where(arr == lid)
+        if ys.min() < y0 or ys.max() >= y1 or xs.min() < x0 or xs.max() >= x1:
+            partial += 1
+    fully_inside = len(ids_inside_any) - partial
+    return fully_inside, partial, fully_outside
+
+
+def _resolve_da(node: xr.DataTree | xr.DataArray, scale: str | None) -> xr.DataArray:
+    """Get a DataArray from a DataTree or single-scale element (stays lazy)."""
+    if not isinstance(node, xr.DataTree):
+        return node
+    if scale is None:
+        raise ValueError("Scale must be provided for DataTree data.")
+    if scale not in node:
+        raise ValueError(f"Scale '{scale}' not found. Available: {list(node.keys())}")
+    return node[scale].ds["image"]
+
+
+def _validate_inputs(
+    sdata: SpatialData,
+    image_key: str,
+    labels_key: str | None,
+    shapes_key: str | None,
+    scale: str | None,
+) -> None:
+    """Run all input validation checks (no data loading)."""
+    if image_key not in sdata.images:
+        raise ValueError(f"Image key '{image_key}' not found, valid keys: {list(sdata.images.keys())}")
+    if labels_key is None and shapes_key is None:
+        raise ValueError("Provide either `labels_key` or `shapes_key`.")
+    if labels_key is not None and shapes_key is not None:
+        raise ValueError("Use either `labels_key` or `shapes_key`, not both.")
+    if labels_key is not None and labels_key not in sdata.labels:
+        raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
+    if shapes_key is not None and shapes_key not in sdata.shapes:
+        raise ValueError(f"Shapes key '{shapes_key}' not found, valid keys: {list(sdata.shapes.keys())}")
+    if labels_key is not None and isinstance(sdata.labels[labels_key], xr.DataTree) and scale is None:
+        raise ValueError("When using multi-scale labels, please specify the scale.")
+    if isinstance(sdata.images[image_key], xr.DataTree) and scale is None:
+        raise ValueError("When using multi-scale images, please specify the scale.")
+
+
+def _prepare_lazy(
+    sdata: SpatialData,
+    image_key: str,
+    labels_key: str | None,
+    shapes_key: str | None,
+    scale: str | None,
+    channels: list[str] | list[int] | None,
+    align_mode: Literal["strict", "rasterize"],
+    drop_report: DropReport,
+) -> tuple[xr.DataArray, xr.DataArray, list[str]]:
+    """Return lazy (dask-backed) image and labels DataArrays, plus channel names.
+
+    Does NOT call ``.compute()`` — arrays stay lazy for on-demand tile reads.
+    For the shapes→labels path, labels are materialized (rasterize returns
+    an in-memory array) but wrapped in a DataArray for a uniform interface.
+    """
+    _validate_inputs(sdata, image_key, labels_key, shapes_key, scale)
+
+    # Image DataArray (lazy)
+    image_da = _resolve_da(sdata.images[image_key], scale)
+    if "c" not in image_da.dims:
+        image_da = image_da.expand_dims("c")
+
+    # Labels DataArray (lazy for labels_key, materialized for shapes_key)
+    if labels_key is not None:
+        labels_da = _resolve_da(sdata.labels[labels_key], scale)
+    else:
+        logg.info("Converting shapes to labels.")
+        img_shape = {d: image_da.sizes[d] for d in ("y", "x")}
+        try:
+            labels_result = rasterize(
+                sdata.shapes[shapes_key],
+                ["x", "y"],
+                min_coordinate=[0, 0],
+                max_coordinate=[img_shape["x"], img_shape["y"]],
+                target_coordinate_system="global",
+                target_unit_to_pixels=1.0,
+                return_regions_as_labels=True,
+            )
+        except ValueError as e:
+            raise ValueError(
+                "Failed to rasterize shapes; geometries may be empty or unsupported. "
+                "Filter out empty/non-polygon geometries or choose a different shapes_key."
+            ) from e
+        if isinstance(labels_result, xr.DataArray):
+            labels_da = labels_result
+        else:
+            labels_da = xr.DataArray(np.asarray(labels_result), dims=["y", "x"])
+
+    # Align labels to image pixel grid via SpatialData transformations.
+    # For the shapes_key path, rasterize already targets the image grid, so
+    # the transforms are identity and this is a cheap no-op.
+    if labels_key is not None:
+        image_da, labels_da = _align_to_image_grid(
+            sdata, image_key, labels_key, image_da, labels_da, align_mode, drop_report
+        )
+
+    # Resolve channel names through spatialdata's canonical accessor so we
+    # honor c_coords set at parse time. Always cast to str.
+    all_ch = [str(v) for v in get_channel_names(sdata.images[image_key])]
+    if len(all_ch) != image_da.sizes["c"]:
+        # Multiscale element where get_channel_names may report from a
+        # different scale than image_da. Fall back to positional naming.
+        all_ch = [str(i) for i in range(image_da.sizes["c"])]
+
+    ch_names: list[str]
+    if channels is not None:
+        selected_idx: list[int] = []
+        ch_names = []
+        for ch in channels:
+            if isinstance(ch, int):
+                if ch < 0 or ch >= len(all_ch):
+                    raise ValueError(f"Channel index {ch} out of range [0, {len(all_ch)}).")
+                selected_idx.append(ch)
+                ch_names.append(all_ch[ch])
+            else:
+                ch_str = str(ch)
+                if ch_str not in all_ch:
+                    raise ValueError(f"Channel '{ch}' not found. Available: {all_ch}")
+                selected_idx.append(all_ch.index(ch_str))
+                ch_names.append(ch_str)
+        image_da = image_da.isel(c=selected_idx)
+    else:
+        ch_names = all_ch
+
+    return image_da, labels_da, ch_names
+
+
+def _compute_centroids(
+    sdata: SpatialData,
+    labels_key: str | None,
+    labels_da: xr.DataArray,
+    scale: str | None,
+) -> dict:
+    """Compute cell centroids using the most efficient strategy available."""
+    # Multiscale labels → use coarsest scale
+    if labels_key is not None and isinstance(sdata.labels[labels_key], xr.DataTree):
+        logg.info("Computing centroids from coarse scale.")
+        return compute_cell_info_multiscale(sdata.labels[labels_key], target_scale=scale or "scale0")
+
+    # Small enough to fit in memory → direct regionprops
+    n_pixels = labels_da.sizes.get("y", 1) * labels_da.sizes.get("x", 1)
+    if n_pixels <= 4096 * 4096:
+        lbl_np = labels_da.values
+        if lbl_np.ndim > 2:
+            lbl_np = lbl_np.squeeze()
+        return compute_cell_info(lbl_np)
+
+    # Large single-scale → tiled centroid computation
+    logg.info("Computing centroids in tiled mode (large single-scale labels).")
+    return compute_cell_info_tiled(labels_da)
+
+
+# ---------------------------------------------------------------------------
+# Main function
+# ---------------------------------------------------------------------------
+
+
 def calculate_image_features(
     sdata: SpatialData,
     image_key: str,
     labels_key: str | None = None,
     shapes_key: str | None = None,
     scale: str | None = None,
-    measurements: list[str] | str | None = None,
+    channels: list[str] | list[int] | None = None,
+    features: list[str] | str | None = None,
+    tile_size: int = 2048,
+    overlap_margin: int | Literal["auto"] = "auto",
+    align_mode: Literal["strict", "rasterize"] = "strict",
     adata_key_added: str = "morphology",
     invalid_as_zero: bool = True,
-    n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = False,  # slower, needs to be optimised
-    verbose: bool = False,
+    n_jobs: int = 1,
     inplace: bool = True,
-) -> pd.DataFrame | None:
+) -> ad.AnnData | None:
     """
-    Calculate features from segmentation masks using CellProfiler measurements.
+    Calculate per-cell features from segmentation masks.
 
-    This function uses the `cp_measure` package to extract features from
-    segmentation masks. It supports both basic shape features and
-    intensity-based features if an intensity image is provided.
+    Uses `cp_measure <https://github.com/afermg/cp_measure>`_ for
+    CellProfiler-derived features, scikit-image ``regionprops`` for
+    morphological/intensity features, and squidpy-specific per-cell
+    metrics (summary statistics, GLCM texture, colour histograms).
+
+    Large images are automatically tiled into ``tile_size × tile_size``
+    chunks with overlap so that every cell is fully contained in exactly
+    one tile.
 
     Parameters
     ----------
     sdata
-        The spatial data object containing the segmentation masks.
-    labels_key
-        Key in :attr:`spatialdata.SpatialData.labels` containing the
-        segmentation masks.
-    shapes_key
-        Key in :attr:`spatialdata.SpatialData.shapes` containing the
-        shape features.
+        SpatialData object.
     image_key
-        Key in :attr:`spatialdata.SpatialData.images` containing the
-        intensity image.
+        Key in ``sdata.images``.
+    labels_key
+        Key in ``sdata.labels`` with segmentation masks.
+    shapes_key
+        Key in ``sdata.shapes`` (rasterized to labels internally).
+    scale
+        Scale level for multi-scale data.
+    channels
+        Subset of channels to use.  ``None`` uses all channels.
+    features
+        Which features to compute.  Accepts a list of strings:
+
+        - ``"cpmeasure:intensity"``, ``"cpmeasure:sizeshape"``,
+          ``"cpmeasure:texture"``, ``"cpmeasure:granularity"``,
+          ``"cpmeasure:zernike"``, ``"cpmeasure:feret"``,
+          ``"cpmeasure:radial"``, ``"cpmeasure:correlation"``
+        - ``"skimage:label"`` (all mask props), ``"skimage:label:area"``
+          (single prop), ``"skimage:label+image"`` (all intensity props),
+          ``"skimage:label+image:intensity_mean"`` (single prop)
+        - ``"squidpy:summary"``, ``"squidpy:texture"``,
+          ``"squidpy:color_hist"``
+
+        ``None`` enables all cp_measure features.
+    tile_size
+        Side length of the tiling grid (pixels).
+    overlap_margin
+        Overlap around each tile to capture boundary cells.
+        ``"auto"`` computes the minimum from the largest cell's bounding box.
+    align_mode
+        How to handle image/labels coordinate-system alignment when their
+        pixel grids do not match.
+
+        * ``"strict"`` (default): require the relative transform between
+          image and labels to be identity or an integer-pixel translation.
+          Raise otherwise with a hint pointing to :func:`spatialdata.rasterize`.
+        * ``"rasterize"``: silently resample labels onto the image pixel
+          grid using :func:`spatialdata.rasterize` when the transforms are
+          not pixel-aligned. Logs a warning because this materializes the
+          full label grid in memory.
     adata_key_added
-        Key to store the AnnData object in the SpatialData object.
-    %(parallelize)s
+        Key under which to store the result in ``sdata.tables``.
+    invalid_as_zero
+        Replace ``inf`` and ``NaN`` values with zero.
+    n_jobs
+        Number of parallel jobs for tile processing.
+    inplace
+        If ``True``, store result in ``sdata.tables``.  Otherwise return it.
 
     Returns
     -------
-    A :class:`pandas.DataFrame` with the calculated features. If the image has
-    multiple channels, features are calculated for each channel separately and
-    channel names are appended to the feature names.
-
-    Notes
-    -----
-    This is an experimental feature that requires the `cp_measure` package
-    to be installed.
-
-    Per-property selection is supported, e.g. ``"skimage:label:area"`` or
-    ``"skimage:label+image:intensity_mean"``. Full groups remain available via
-    ``"skimage:label"`` and ``"skimage:label+image"``.
+    :class:`~anndata.AnnData` when ``inplace=False``, otherwise ``None``.
     """
+    # --- Parse & validate ---
+    parsed = _parse_features(features)
+    if not _has_any_features(parsed):
+        raise ValueError("No valid features requested.")
 
-    if image_key not in sdata.images.keys():
-        raise ValueError(f"Image key '{image_key}' not found, valid keys: {list(sdata.images.keys())}")
+    drop_report = DropReport()
 
-    if labels_key is None and shapes_key is None:
-        raise ValueError("Provide either `labels_key` or `shapes_key`.")
+    image_da, labels_da, channel_names = _prepare_lazy(
+        sdata, image_key, labels_key, shapes_key, scale, channels, align_mode, drop_report
+    )
 
-    if labels_key is not None and shapes_key is not None:
-        raise ValueError("Use either `labels_key` or `shapes_key`, not both.")
+    # --- Warmup: compute centroids without materializing full arrays ---
+    cell_info = _compute_centroids(sdata, labels_key, labels_da, scale)
+    if not cell_info:
+        logg.info(drop_report.summary())
+        raise ValueError("No cells found in labels (all zeros).")
 
-    if labels_key is not None and labels_key not in sdata.labels.keys():
-        raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
+    H = int(labels_da.sizes.get("y", labels_da.shape[-2]))
+    W = int(labels_da.sizes.get("x", labels_da.shape[-1]))
 
-    if shapes_key is not None and shapes_key not in sdata.shapes.keys():
-        raise ValueError(f"Shapes key '{shapes_key}' not found, valid keys: {list(sdata.shapes.keys())}")
+    # --- Tile ---
+    specs = build_tile_specs((H, W), cell_info, tile_size=tile_size, overlap_margin=overlap_margin)
+    total_tiles = len(specs)
+    logg.info(f"Processing {total_tiles} tiles ({tile_size}x{tile_size}, margin={overlap_margin}).")
 
-    if (
-        isinstance(sdata.images[image_key], xr.DataTree) or isinstance(sdata.labels[labels_key], xr.DataTree)
-    ) and scale is None:
-        raise ValueError("When using multi-scale data, please specify the scale.")
+    # --- Process tiles (each worker materializes only its own ~2k x 2k crop) ---
+    def _process_one(spec):
+        tile_img, tile_lbl = extract_tile_lazy(image_da, labels_da, spec)
+        return _featurize_tile(tile_img, tile_lbl, parsed, channel_names)
 
-    if scale is not None and not isinstance(scale, str):
-        raise ValueError("Scale must be a string.")
-
-    image = _get_array_from_DataTree_or_DataArray(sdata.images[image_key], scale)
-    labels = _get_array_from_DataTree_or_DataArray(sdata.labels[labels_key], scale) if labels_key is not None else None
-
-    if labels is not None and image.shape[1:] != labels.shape:
-        raise ValueError(
-            f"Image dimensions {image.shape[1:]} do not match labels dimensions {labels.shape} at scale '{scale}'"
-        )
-
-    if shapes_key is not None:
-        scale_str = f" (using scale '{scale}')" if scale is not None else ""
-        logg.info(f"Converting shapes to labels{scale_str}.")
-        _, max_y, max_x = image.shape
-        try:
-            labels = np.asarray(
-                rasterize(
-                    sdata.shapes[shapes_key],
-                    ["x", "y"],
-                    min_coordinate=[0, 0],
-                    max_coordinate=[max_x, max_y],
-                    target_coordinate_system="global",
-                    target_unit_to_pixels=1.0,
-                    return_regions_as_labels=True,
-                )
-            )
-        except ValueError as e:
-            raise ValueError(
-                "Failed to rasterize shapes; geometries may be empty or unsupported for rasterization. "
-                "Filter out empty/non-polygon geometries or choose a different shapes_key."
-            ) from e
-    else:
-        labels = _get_array_from_DataTree_or_DataArray(sdata.labels[labels_key], scale)
-
-    available_measurements = [
-        "skimage:label",
-        "skimage:label+image",
-        "cpmeasure:core",
-        "cpmeasure:correlation",
-        "squidpy:summary",
-        "squidpy:texture",
-        "squidpy:color_hist",
-    ]
-
-    parsed = _parse_measurements(measurements, available_measurements)
-
-    if (
-        parsed.label_props is None
-        and parsed.intensity_props is None
-        and not parsed.has_cpmeasure_core
-        and not parsed.has_cpmeasure_correlation
-        and not parsed.has_squidpy_summary
-        and not parsed.has_squidpy_texture
-        and not parsed.has_squidpy_color_hist
+    log_every = max(1, total_tiles // 10)
+    start_t = time.monotonic()
+    tile_dfs: list[pd.DataFrame] = []
+    results_iter = Parallel(n_jobs=n_jobs, prefer="threads", return_as="generator_unordered")(
+        delayed(_process_one)(spec) for spec in specs
+    )
+    for done, df in enumerate(
+        tqdm(results_iter, total=total_tiles, desc="Featurizing tiles", unit="tile"),
+        start=1,
     ):
-        raise ValueError("No valid measurements requested")
+        if df.empty:
+            drop_report.empty_tile_drop += 1
+        else:
+            tile_dfs.append(df)
+        if done == 1 or done == total_tiles or done % log_every == 0:
+            elapsed = time.monotonic() - start_t
+            logg.info(f"Tile {done}/{total_tiles} done (elapsed {elapsed:.1f}s).")
 
-    if labels.size == 0:
-        raise ValueError("Labels array is empty")
+    if not tile_dfs:
+        logg.info(drop_report.summary())
+        raise ValueError("No features computed for any tile.")
 
-    max_label = int(labels.max())
-    if max_label == 0:
-        raise ValueError("No cells found in labels (max label is 0)")
+    combined = pd.concat(tile_dfs, axis=0)
 
-    channel_names = None
-    if hasattr(sdata.images[image_key], "coords") and "c" in sdata.images[image_key].coords:
-        channel_names = sdata.images[image_key].coords["c"].values
-
-    if image.ndim == 2:
-        image = image[None, :, :]
-    elif image.ndim != 3:
-        raise ValueError(f"Expected 2D or 3D image, got shape {image.shape}")
-
-    if image.shape[1:] != labels.shape:
-        raise ValueError(f"Image and labels have mismatched dimensions: image {image.shape[1:]}, labels {labels.shape}")
-
-    if parsed.has_cpmeasure_correlation:
-        measurements_corr = get_correlation_measurements()
-
-    cell_ids = np.unique(labels)
-    cell_ids = cell_ids[cell_ids != 0]
-    # Sort cell_ids to ensure consistent order
-    cell_ids = np.sort(cell_ids)
-    cell_ids_list = cell_ids.tolist()  # Convert to list for parallelize
-
-    all_features = []
-    n_channels = image.shape[0]
-    n_jobs = _get_n_cores(n_jobs)
-
-    logg.info(f"Using '{n_jobs}' core(s).")
-
-    if parsed.has_squidpy_summary or parsed.has_squidpy_texture or parsed.has_squidpy_color_hist:
-        sq_feats = _compute_squidpy_channel_features(image, labels, cell_ids, channel_names, parsed)
-        all_features.extend(sq_feats)
-
-    if parsed.label_props is not None:
-        logg.info("Calculating 'skimage' label features.")
-        res = parallelize(
-            _get_regionprops_features,
-            collection=cell_ids_list,
-            extractor=pd.concat,
-            n_jobs=n_jobs,
-            backend=backend,
-            show_progress_bar=show_progress_bar,
-            verbose=verbose,
-        )(labels=labels, intensity_image=None, props=parsed.label_props)
-        all_features.append(res)
-
-    if parsed.intensity_props is not None:
-        for ch_idx in range(n_channels):
-            ch_name = channel_names[ch_idx] if channel_names is not None else f"{ch_idx}"
-            ch_image = image[ch_idx]
-            logg.info(f"Calculating 'skimage' image features for channel '{ch_name}'.")
-            res = parallelize(
-                _get_regionprops_features,
-                collection=cell_ids_list,
-                extractor=pd.concat,
-                n_jobs=n_jobs,
-                backend=backend,
-                show_progress_bar=show_progress_bar,
-                verbose=verbose,
-            )(labels=labels, intensity_image=ch_image, props=parsed.intensity_props)
-            # Append channel names to each feature column
-            res = res.rename(columns=lambda col, ch_name=ch_name: f"{col}_{ch_name}")
-            all_features.append(res)
-
-    if parsed.has_cpmeasure_core:
-        measurements_core = get_core_measurements()
-        for ch_idx in range(n_channels):
-            ch_name = channel_names[ch_idx] if channel_names is not None else f"{ch_idx}"
-            ch_image = image[ch_idx]
-            logg.info(f"Calculating 'cpmeasure' core features for channel '{ch_idx}'.")
-            res = parallelize(
-                _calculate_features_helper,
-                collection=cell_ids_list,
-                extractor=pd.concat,
-                n_jobs=n_jobs,
-                backend=backend,
-                show_progress_bar=show_progress_bar,
-                verbose=verbose,
-            )(labels, ch_image, None, measurements_core, ch_name)
-            all_features.append(res)
-
-    if parsed.has_cpmeasure_correlation:
-        for ch1_idx in range(n_channels):
-            for ch2_idx in range(ch1_idx + 1, n_channels):
-                ch1_name = channel_names[ch1_idx] if channel_names is not None else f"{ch1_idx}"
-                ch2_name = channel_names[ch2_idx] if channel_names is not None else f"{ch2_idx}"
-                logg.info(
-                    f"Calculating 'cpmeasure' correlation features between channels '{ch1_name}' and '{ch2_name}'."
-                )
-                ch1_image = image[ch1_idx]
-                ch2_image = image[ch2_idx]
-                res = parallelize(
-                    _calculate_features_helper,
-                    collection=cell_ids_list,
-                    extractor=pd.concat,
-                    n_jobs=n_jobs,
-                    backend=backend,
-                    show_progress_bar=show_progress_bar,
-                    verbose=verbose,
-                )(labels, ch1_image, ch2_image, measurements_corr, ch1_name, ch2_name)
-                all_features.append(res)
-
-    combined_features = pd.concat(all_features, axis=1)
-
+    # --- Post-process ---
     if invalid_as_zero:
-        combined_features = combined_features.replace([np.inf, -np.inf], 0)
-        combined_features = combined_features.fillna(0)
+        combined = combined.replace([np.inf, -np.inf], 0).fillna(0)
 
-    # Ensure cell IDs are preserved in the correct order
-    combined_features = combined_features.loc[cell_ids]
+    # Sort by cell label for deterministic output
+    combined = combined.sort_index()
 
-    adata = ad.AnnData(X=combined_features)
-    adata.obs_names = [f"cell_{i}" for i in cell_ids]
-    adata.var_names = combined_features.columns
+    # --- Build AnnData ---
+    adata = ad.AnnData(X=combined.values.astype(np.float32))
+    adata.obs_names = [f"cell_{i}" for i in combined.index]
+    adata.var_names = list(combined.columns)
 
+    region_key_value = labels_key if labels_key is not None else shapes_key
     adata.uns["spatialdata_attrs"] = {
-        "region": labels_key if labels_key is not None else shapes_key,
+        "region": region_key_value,
         "region_key": "region",
         "instance_key": "label_id",
     }
-    adata.obs["region"] = pd.Categorical([labels_key if labels_key is not None else shapes_key] * len(adata))
-    # here we either use the cell_ids or the index of the shapes. Needed
-    # because when converting the shapes to labels, a potential index 0
-    # in the shapes is set to 1 in the labels and therefore we'd otherwise
-    # be off-by-one in the label_id.
+    adata.obs["region"] = pd.Categorical([region_key_value] * len(adata))
+
     if shapes_key is not None and len(sdata.shapes[shapes_key]) == len(adata):
         adata.obs["label_id"] = sdata.shapes[shapes_key].index.values
     else:
-        adata.obs["label_id"] = cell_ids
+        adata.obs["label_id"] = combined.index.values
+
+    logg.info(drop_report.summary())
 
     if inplace:
         sdata.tables[adata_key_added] = TableModel.parse(adata)
-    else:
-        return combined_features
-
-
-def _extract_features_from_regionprops(
-    region_obj: Any,
-    props: set[str],
-    cell_id: int,
-    skip_callable: bool = False,
-) -> dict[str, float]:
-    """Extract features from a regionprops object given a list of properties."""
-    cell_features = {}
-
-    for prop in props:
-        try:
-            value = getattr(region_obj, prop)
-            if skip_callable and callable(value):
-                continue
-
-            if prop in _SCALAR_PROPS:
-                cell_features[prop] = float(value)
-            elif prop in _ARRAY_1D_PROPS:
-                # Convert to array only once
-                value = np.asarray(value)
-                for i, v in enumerate(value):
-                    cell_features[f"{prop}_{i}"] = float(v)
-            elif prop in _ARRAY_2D_PROPS:
-                # Convert to array only once
-                value = np.asarray(value)
-                for i in range(value.shape[0]):
-                    for j in range(value.shape[1]):
-                        cell_features[f"{prop}_{i}x{j}"] = float(value[i, j])
-            elif prop in _SPECIAL_PROPS:
-                # Convert to array only once
-                value = np.asarray(value)
-                for i, v in enumerate(value):
-                    cell_features[f"{prop}_{i}"] = float(v)
-            else:
-                # Fallback for any other properties
-                if isinstance(value, np.ndarray | list | tuple):
-                    value = np.asarray(value)
-                    if value.ndim == 1:
-                        for i, v in enumerate(value):
-                            cell_features[f"{prop}_{i}"] = float(v)
-                    elif value.ndim == 2:
-                        for i in range(value.shape[0]):
-                            for j in range(value.shape[1]):
-                                cell_features[f"{prop}_{i}x{j}"] = float(value[i, j])
-                    else:
-                        cell_features[prop] = float(value.flatten()[0])
-                else:
-                    cell_features[prop] = float(value)
-
-        except (ValueError, TypeError, AttributeError) as e:
-            logg.warning(f"Error calculating {prop} for cell {cell_id}: {str(e)}")
-            continue
-
-    return cell_features
-
-
-def _calculate_regionprops_from_crop(
-    cell_mask_cropped: NDArray,
-    intensity_image_cropped: NDArray | None,
-    cell_id: int,
-    props: set[str],
-) -> dict[str, float]:
-    """
-    Calculate regionprops features from pre-cropped arrays.
-    Uses intensity-based properties if an intensity image is provided.
-    """
-    if intensity_image_cropped is None:
-        region_props = measure.regionprops(label_image=label(cell_mask_cropped))
-        if not region_props:
-            return {}
-        return _extract_features_from_regionprops(region_props[0], props, cell_id)
-    else:
-        region_props = measure.regionprops(
-            label_image=label(cell_mask_cropped),
-            intensity_image=intensity_image_cropped,
-        )
-        if not region_props:
-            return {}
-        return _extract_features_from_regionprops(region_props[0], props, cell_id, skip_callable=True)
-
-
-def _append_channel_names(
-    features: dict[str, Any],
-    channel1: str | None,
-    channel2: str | None = None,
-) -> dict[str, Any]:
-    """Append channel name(s) to all keys in the feature dictionary."""
-    if channel2 is None:
-        return {f"{k}_{channel1}": v for k, v in features.items()}
-    else:
-        return {f"{k}_{channel1}_{channel2}": v for k, v in features.items()}
-
-
-def _prepare_images_for_measurement(
-    name: str,
-    cell_mask: NDArray,
-    img1: NDArray,
-    img2: NDArray | None,
-    conv_params: dict[str, Any],
-) -> tuple[NDArray, NDArray | None, NDArray | None]:
-    """
-    Convert inputs to the appropriate dtype based on the measurement type.
-    """
-    if name in conv_params.get("uint8_features", []):
-        mask = cell_mask.astype(np.uint8)
-        image1_prepared = img1.astype(np.uint8)
-        image2_prepared = None if img2 is None else img2.astype(np.uint8)
-    elif name == "texture":
-        mask = cell_mask.astype(np.uint8)
-        image1_prepared = (img1.astype(np.float32) - conv_params["img1_min"]) / conv_params["img1_range"]
-        image2_prepared = (
-            None if img2 is None else (img2.astype(np.float32) - conv_params["img2_min"]) / conv_params["img2_range"]
-        )
-    elif name in conv_params.get("float_features", []):
-        mask = cell_mask.astype(np.float32)
-        image1_prepared = img1.astype(np.float32)
-        image2_prepared = None if img2 is None else img2.astype(np.float32)
-    else:
-        mask = cell_mask.astype(np.float32)
-        image1_prepared = img1.astype(np.float32)
-        image2_prepared = None if img2 is None else img2.astype(np.float32)
-    return mask, image1_prepared, image2_prepared
-
-
-def _get_label_bbox(labels: NDArray) -> tuple[int, int, int, int]:
-    """Return tight bounding box (y_min, y_max, x_min, x_max) for non-zero labels."""
-    yx = np.argwhere(labels > 0)
-    if yx.size == 0:
-        return 0, labels.shape[0], 0, labels.shape[1]
-    y_min, x_min = yx.min(axis=0)
-    y_max, x_max = yx.max(axis=0) + 1
-    return int(y_min), int(y_max), int(x_min), int(x_max)
-
-
-def _compute_squidpy_channel_features(
-    image: NDArray,
-    labels: NDArray,
-    cell_ids: NDArray,
-    channel_names: NDArray | None,
-    parsed: ParsedMeasurements,
-) -> list[pd.DataFrame]:
-    """Compute squidpy legacy-like features and broadcast to cells."""
-    feats: list[pd.DataFrame] = []
-
-    # Crop to label bbox to speed computations
-    y_min, y_max, x_min, x_max = _get_label_bbox(labels)
-    img_crop = image[:, y_min:y_max, x_min:x_max]
-
-    n_channels = img_crop.shape[0]
-    ch_names = channel_names if channel_names is not None else np.arange(n_channels).astype(str)
-
-    if parsed.has_squidpy_summary:
-        summary_vals: dict[str, float] = {}
-        for ch_idx in range(n_channels):
-            ch = img_crop[ch_idx].astype(np.float32)
-            summary_vals.update(
-                {
-                    f"summary_mean_{ch_names[ch_idx]}": float(np.mean(ch)),
-                    f"summary_std_{ch_names[ch_idx]}": float(np.std(ch)),
-                    f"summary_min_{ch_names[ch_idx]}": float(np.min(ch)),
-                    f"summary_max_{ch_names[ch_idx]}": float(np.max(ch)),
-                }
-            )
-        df = pd.DataFrame([summary_vals] * len(cell_ids), index=cell_ids)
-        feats.append(df)
-
-    if parsed.has_squidpy_texture:
-        tex_vals: dict[str, float] = {}
-        # Quantize to 32 levels to keep GLCM small
-        quant_levels = 32
-        for ch_idx in range(n_channels):
-            ch = img_crop[ch_idx]
-            # normalize to [0, quant_levels-1]
-            ch_norm = ch.astype(np.float32)
-            if ch_norm.max() > ch_norm.min():
-                ch_norm = (ch_norm - ch_norm.min()) / (ch_norm.max() - ch_norm.min())
-            ch_q = np.clip((ch_norm * (quant_levels - 1)).round().astype(np.uint8), 0, quant_levels - 1)
-            glcm = graycomatrix(ch_q, distances=[1], angles=[0], levels=quant_levels, symmetric=True, normed=True)
-            tex_vals.update(
-                {
-                    f"texture_contrast_{ch_names[ch_idx]}": float(graycoprops(glcm, "contrast")[0, 0]),
-                    f"texture_dissimilarity_{ch_names[ch_idx]}": float(graycoprops(glcm, "dissimilarity")[0, 0]),
-                    f"texture_homogeneity_{ch_names[ch_idx]}": float(graycoprops(glcm, "homogeneity")[0, 0]),
-                    f"texture_energy_{ch_names[ch_idx]}": float(graycoprops(glcm, "energy")[0, 0]),
-                    f"texture_ASM_{ch_names[ch_idx]}": float(graycoprops(glcm, "ASM")[0, 0]),
-                    f"texture_correlation_{ch_names[ch_idx]}": float(graycoprops(glcm, "correlation")[0, 0]),
-                }
-            )
-        df = pd.DataFrame([tex_vals] * len(cell_ids), index=cell_ids)
-        feats.append(df)
-
-    if parsed.has_squidpy_color_hist:
-        hist_vals: dict[str, float] = {}
-        bins = 16
-        for ch_idx in range(n_channels):
-            ch = img_crop[ch_idx].astype(np.float32)
-            hist, bin_edges = np.histogram(
-                ch, bins=bins, range=(ch.min(), ch.max() if ch.max() > ch.min() else ch.min() + 1)
-            )
-            hist = hist.astype(np.float32)
-            hist_sum = hist.sum()
-            if hist_sum > 0:
-                hist = hist / hist_sum
-            hist_vals.update({f"color_hist_bin{b}_{ch_names[ch_idx]}": float(v) for b, v in enumerate(hist)})
-        df = pd.DataFrame([hist_vals] * len(cell_ids), index=cell_ids)
-        feats.append(df)
-
-    return feats
-
-
-@njit(fastmath=True)
-def _get_cell_crops_numba(
-    cell_id: int,
-    labels: npt.NDArray[np.int_],
-    image1: npt.NDArray[np.float32],
-    image2: npt.NDArray[np.float32],
-    pad: int = 1,
-) -> tuple[npt.NDArray[np.bool_], npt.NDArray[np.float32], npt.NDArray[np.float32]]:
-    """Numba-accelerated version of _get_cell_crops.
-
-    Note: image1 and image2 should be passed as empty arrays (np.zeros((0,0))) if not used.
-    """
-    # Find cell boundaries using vectorized operations
-    cell_mask = labels == cell_id
-    if not np.any(cell_mask):
-        return (
-            np.zeros((0, 0), dtype=np.bool_),
-            np.zeros((0, 0), dtype=image1.dtype),
-            np.zeros((0, 0), dtype=image2.dtype),
-        )
-
-    # Get non-zero indices efficiently
-    y_indices, x_indices = np.nonzero(cell_mask)
-    y_min, y_max = y_indices.min(), y_indices.max()
-    x_min, x_max = x_indices.min(), x_indices.max()
-
-    # Get image dimensions
-    height, width = labels.shape
-
-    # Calculate padding with boundary checks in one step
-    y_pad_min = min(pad, y_min)
-    y_pad_max = min(pad, height - y_max - 1)
-    x_pad_min = min(pad, x_min)
-    x_pad_max = min(pad, width - x_max - 1)
-
-    # Calculate crop dimensions with padding
-    y_start = y_min - y_pad_min
-    y_end = y_max + y_pad_max + 1
-    x_start = x_min - x_pad_min
-    x_end = x_max + x_pad_max + 1
-
-    # Create output arrays with exact size
-    y_size = y_end - y_start
-    x_size = x_end - x_start
-
-    # Create cell mask crop
-    cell_mask_cropped = np.zeros((y_size, x_size), dtype=np.bool_)
-    for i in range(y_size):
-        for j in range(x_size):
-            cell_mask_cropped[i, j] = cell_mask[y_start + i, x_start + j]
-
-    # Handle image crops efficiently
-    if image1.size > 0:
-        image1_cropped = np.zeros((y_size, x_size), dtype=image1.dtype)
-        for i in range(y_size):
-            for j in range(x_size):
-                image1_cropped[i, j] = image1[y_start + i, x_start + j]
-    else:
-        image1_cropped = np.zeros((0, 0), dtype=image1.dtype)
-
-    if image2.size > 0:
-        image2_cropped = np.zeros((y_size, x_size), dtype=image2.dtype)
-        for i in range(y_size):
-            for j in range(x_size):
-                image2_cropped[i, j] = image2[y_start + i, x_start + j]
-    else:
-        image2_cropped = np.zeros((0, 0), dtype=image2.dtype)
-
-    return cell_mask_cropped, image1_cropped, image2_cropped
-
-
-def _get_cell_crops(
-    cell_id: int,
-    labels: NDArray,
-    image1: NDArray | None = None,
-    image2: NDArray | None = None,
-    pad: int = 1,
-    verbose: bool = False,
-) -> tuple[NDArray, NDArray | None, NDArray | None] | None:
-    """Generator function to get cropped arrays for a cell."""
-    # Create empty arrays for unused images
-    empty_image = np.zeros((0, 0), dtype=np.float32)
-    image1_np = image1 if image1 is not None else empty_image
-    image2_np = image2 if image2 is not None else empty_image
-
-    # Use Numba-accelerated version
-    cell_mask_cropped, image1_cropped, image2_cropped = _get_cell_crops_numba(
-        cell_id, labels, image1_np, image2_np, pad
-    )
-
-    if cell_mask_cropped.size == 0:
         return None
-
-    # Convert back to None for unused images
-    image1_cropped = image1_cropped if image1 is not None else None
-    image2_cropped = image2_cropped if image2 is not None else None
-
-    return cell_mask_cropped, image1_cropped, image2_cropped
-
-
-def _get_regionprops_features(
-    cell_ids: Sequence[int],
-    labels: NDArray,
-    intensity_image: NDArray | None = None,
-    queue: Any | None = None,
-    props: set[str] | None = None,
-) -> pd.DataFrame:
-    """Calculate regionprops features for each cell from the full label image."""
-    # Initialize features dictionary with None values to preserve order
-    features = dict.fromkeys(cell_ids, None)
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        # Process cells in order to preserve order
-        for cell_id in cell_ids:
-            crop = _get_cell_crops(cell_id, labels, image1=intensity_image)
-            if crop is None:
-                continue
-            cell_mask_cropped, intensity_image_cropped, _ = crop
-            # Default to full property sets for backward compatibility
-            if props is None:
-                props = _INTENSITY_PROPS if intensity_image is not None else _MASK_PROPS
-            cell_features = _calculate_regionprops_from_crop(
-                cell_mask_cropped,
-                intensity_image_cropped,
-                cell_id,
-                props,
-            )
-            features[cell_id] = cell_features
-            if queue is not None:
-                queue.put(Signal.UPDATE)
-        if queue is not None:
-            queue.put(Signal.FINISH)
-
-    # Convert to DataFrame while preserving order
-    df = pd.DataFrame.from_dict(features, orient="index")
-    # Ensure the index matches the input cell_ids order
-    df = df.reindex(cell_ids)
-    return df
-
-
-def _measurement_wrapper(
-    func: Callable[..., dict[str, Any]],
-    mask: NDArray,
-    image1: NDArray | None,
-    image2: NDArray | None = None,
-) -> dict[str, Any]:
-    """Wrapper function to handle both core and correlation measurements.
-
-    Parameters
-    ----------
-    func
-        The measurement function to call
-    mask
-        The cell mask
-    image1
-        First image (or only image for core measurements)
-    image2
-        Second image for correlation measurements. If None, this is a core
-        measurement.
-
-    Returns
-    -------
-    Dictionary of feature values
-    """
-    if image1 is None:
-        return {}  # Return empty dict if no image data
-
-    try:
-        if image2 is None:
-            return func(mask, image1)
-        else:
-            # Check if we have valid data for correlation
-            if not np.any(mask) or not np.any(image1) or not np.any(image2):
-                # Get feature names from a successful call to maintain structure
-                dummy_mask = np.ones((2, 2), dtype=bool)
-                dummy_img = np.ones((2, 2), dtype=image1.dtype)
-                feature_names = func(dummy_img, dummy_img, dummy_mask).keys()
-                # Return dictionary with NaN values for all features
-                return dict.fromkeys(feature_names, np.nan)
-            return func(image1, image2, mask)
-    except (IndexError, ValueError) as e:
-        # Handle cases where correlation calculation fails
-        if "index 0 is out of bounds" in str(e) or "size 0" in str(e):
-            # Get feature names from a successful call to maintain structure
-            dummy_mask = np.ones((2, 2), dtype=bool)
-            dummy_img = np.ones((2, 2), dtype=image1.dtype)
-            feature_names = func(dummy_img, dummy_img, dummy_mask).keys()
-            # Return dictionary with NaN values for all features
-            return dict.fromkeys(feature_names, np.nan)
-        raise  # Re-raise other errors
-
-
-def _calculate_features_helper(
-    cell_ids: Sequence[int],
-    labels: NDArray,
-    image1: NDArray,
-    image2: NDArray | None,
-    measurements: dict[str, Any],
-    channel1_name: str | None = None,
-    channel2_name: str | None = None,
-    queue: Any | None = None,
-    verbose: bool = False,
-) -> pd.DataFrame:
-    """Helper function to calculate features for a subset of cells."""
-    # Initialize features dictionary with None values to preserve order
-    features_dict = dict.fromkeys(cell_ids, None)
-
-    # Pre-allocate lists for type conversion
-    uint8_features = [
-        "radial_distribution",
-        "radial_zernikes",
-        "intensity",
-        "sizeshape",
-        "zernike",
-        "ferret",
-    ]
-    float_features = ["manders_fold", "rwc"]
-
-    # Pre-compute normalization if needed
-    conv_params: dict[str, Any] = {
-        "uint8_features": uint8_features,
-        "float_features": float_features,
-    }
-    if "texture" in measurements:
-        img1_min = image1.min()
-        img1_max = image1.max()
-        conv_params["img1_min"] = img1_min
-        conv_params["img1_range"] = img1_max - img1_min + 1e-10
-        if image2 is not None:
-            img2_min = image2.min()
-            img2_max = image2.max()
-            conv_params["img2_min"] = img2_min
-            conv_params["img2_range"] = img2_max - img2_min + 1e-10
-
-    # Process cells in order to preserve order
-    for cell_id in cell_ids:
-        crop = _get_cell_crops(cell_id, labels, image1, image2, verbose=verbose)
-        if crop is None:
-            continue
-        cell_mask_cropped, image1_cropped, image2_cropped = crop
-        cell_features = {}
-
-        # Calculate regionprops features using cached crop
-        try:
-            region_features = _calculate_regionprops_from_crop(
-                cell_mask_cropped,
-                image1_cropped if image2 is None else None,
-                cell_id,
-            )
-            if image2 is None:
-                region_features = _append_channel_names(region_features, channel1_name)
-            else:
-                region_features = _append_channel_names(region_features, channel1_name, channel2_name)
-            cell_features.update(region_features)
-        except (ValueError, TypeError, AttributeError) as e:
-            if verbose:
-                logg.warning(f"Failed to calculate regionprops features for cell {cell_id}: {str(e)}")
-
-        # Calculate cp-measure features for each measurement
-        for name, func in measurements.items():
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    if image1_cropped is None:
-                        continue
-                    mask_conv, img1_conv, img2_conv = _prepare_images_for_measurement(
-                        name,
-                        cell_mask_cropped,
-                        image1_cropped,
-                        image2_cropped,
-                        conv_params,
-                    )
-                    feature_dict = _measurement_wrapper(func, mask_conv, img1_conv, img2_conv)
-                    # Ensure each feature returns a single value
-                    for k, v in feature_dict.items():
-                        if len(v) > 1:
-                            raise ValueError(f"Feature {k} has more than one value.")
-                        else:
-                            feature_dict[k] = float(v[0])
-                    if image2 is None:
-                        feature_dict = _append_channel_names(feature_dict, channel1_name)
-                    else:
-                        feature_dict = _append_channel_names(feature_dict, channel1_name, channel2_name)
-                    cell_features.update(feature_dict)
-            except (ValueError, TypeError, AttributeError) as e:
-                if verbose:
-                    logg.warning(f"Failed to calculate '{name}' features for cell {cell_id}: {str(e)}")
-
-        features_dict[cell_id] = cell_features
-
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    # Convert to DataFrame while preserving order
-    df = pd.DataFrame.from_dict(features_dict, orient="index")
-    # Ensure the index matches the input cell_ids order
-    df = df.reindex(cell_ids)
-    return df
-
-
-def _get_array_from_DataTree_or_DataArray(
-    data: xr.DataTree | xr.DataArray,
-    scale: str | None = None,
-) -> NDArray:
-    """
-    Returns a NumPy array for the given data and scale.
-    If data is an xr.DataTree, it checks for the scale key and computes the image.
-    If data is an xr.DataArray, it computes the array (ignoring scale).
-
-    Parameters
-    ----------
-    data
-        The xarray data to convert to a NumPy array
-    scale
-        Optional scale key for DataTree data
-
-    Returns
-    -------
-    np.ndarray
-        The computed NumPy array
-    """
-    if not isinstance(data, xr.DataTree):
-        return np.asarray(data.compute())
-    if scale is None:
-        raise ValueError("Scale must be provided for DataTree data")
-    if scale not in data:
-        raise ValueError(f"Scale '{scale}' not found. Available scales: {list(data.keys())}")
-    return np.asarray(data[scale].image.compute())
+    return adata
