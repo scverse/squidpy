@@ -5,7 +5,7 @@ import math
 import geopandas as gpd
 import numpy as np
 import pytest
-from shapely.geometry import MultiPolygon, Point, Polygon
+from shapely import MultiPolygon, Point, Polygon
 from spatialdata import SpatialData
 from spatialdata.models import ShapesModel
 from spatialdata.transformations import Affine, Identity, Scale, Sequence, set_transformation
@@ -46,6 +46,14 @@ def _square_polygons_shapes(centers: np.ndarray, edge: float) -> gpd.GeoDataFram
     return ShapesModel.parse(gdf)
 
 
+def _hex_polygons_shapes(centers: np.ndarray, edge: float) -> gpd.GeoDataFrame:
+    angles = np.linspace(0.0, 2 * math.pi, 7)[:-1]
+    offsets = np.column_stack([edge * np.cos(angles), edge * np.sin(angles)])
+    polys = [Polygon([(x + ox, y + oy) for ox, oy in offsets]) for x, y in centers]
+    gdf = gpd.GeoDataFrame(geometry=polys)
+    return ShapesModel.parse(gdf)
+
+
 def _make_sdata(gdf: gpd.GeoDataFrame, transforms: dict | None = None) -> SpatialData:
     sdata = SpatialData(shapes={"shapes": gdf})
     if transforms is not None:
@@ -70,6 +78,17 @@ def test_pitch(lattice, pitch, transform, expected_mpp):
     assert mpp == pytest.approx(expected_mpp, rel=1e-9)
 
 
+def test_pitch_large_grid_subsampling():
+    # 120x120 = 14_400 points: well above _PITCH_MAX_SAMPLES (5_000). The buggy
+    # tree-on-subsample implementation returns mpp ~0.35 here instead of 1.0.
+    pitch = 8.0
+    n = 120
+    centers = _square_lattice(pitch=pitch, n=n)
+    sdata = _make_sdata(_points_shapes(centers, radius=pitch / 4.0))
+    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=pitch)
+    assert mpp == pytest.approx(1.0, rel=1e-9)
+
+
 def test_diameter_points():
     centers = _hex_lattice(pitch=100.0)
     sdata = _make_sdata(_points_shapes(centers, radius=27.5), transforms={"global": Scale([4.0, 4.0], axes=("x", "y"))})
@@ -77,11 +96,30 @@ def test_diameter_points():
     assert mpp == pytest.approx(0.25, rel=1e-9)
 
 
-def test_diameter_polygons():
+def test_square_edge_polygons():
     centers = _square_lattice(pitch=8.0)
     sdata = _make_sdata(_square_polygons_shapes(centers, edge=8.0))
-    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_diameter=8.0)
+    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_square_edge=8.0)
     assert mpp == pytest.approx(1.0, rel=1e-9)
+
+
+def test_um_diameter_on_polygons_rejected():
+    sdata = _make_sdata(_square_polygons_shapes(_square_lattice(pitch=8.0), edge=8.0))
+    with pytest.raises(ValueError, match=r"um_diameter.*Point geometries"):
+        derive_mpp_from_shapes(sdata, "shapes", "global", um_diameter=8.0)
+
+
+def test_um_square_edge_on_points_rejected():
+    sdata = _make_sdata(_points_shapes(_square_lattice(pitch=8.0), radius=1.0))
+    with pytest.raises(ValueError, match=r"um_square_edge.*Polygon geometries"):
+        derive_mpp_from_shapes(sdata, "shapes", "global", um_square_edge=8.0)
+
+
+def test_um_square_edge_on_non_square_polygons_rejected():
+    centers = _square_lattice(pitch=10.0)
+    sdata = _make_sdata(_hex_polygons_shapes(centers, edge=3.0))
+    with pytest.raises(ValueError, match=r"square/rectangular polygons"):
+        derive_mpp_from_shapes(sdata, "shapes", "global", um_square_edge=3.0)
 
 
 def test_coordinate_system_selection():
@@ -149,8 +187,17 @@ def test_single_shape_diameter_works():
     assert mpp == pytest.approx(1.0, rel=1e-9)
 
 
-@pytest.mark.parametrize("kwargs", [{}, {"um_between_centers": 8.0, "um_diameter": 1.0}])
-def test_xor_args_rejected(kwargs):
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        {"um_between_centers": 8.0, "um_diameter": 1.0},
+        {"um_between_centers": 8.0, "um_square_edge": 8.0},
+        {"um_diameter": 1.0, "um_square_edge": 8.0},
+        {"um_between_centers": 8.0, "um_diameter": 1.0, "um_square_edge": 8.0},
+    ],
+)
+def test_mutex_args_rejected(kwargs):
     sdata = _make_sdata(_points_shapes(_square_lattice(pitch=8.0), radius=1.0))
     with pytest.raises(ValueError, match=r"exactly one"):
         derive_mpp_from_shapes(sdata, "shapes", "global", **kwargs)
