@@ -148,7 +148,7 @@ def nhood_enrichment(
     backend: str = "loky",
     show_progress_bar: bool = True,
     *,
-    table_key: str = "table",
+    table_key: str | None = None,
 ) -> NhoodEnrichmentResult | None:
     """
     Compute neighborhood enrichment by permutation test.
@@ -156,6 +156,7 @@ def nhood_enrichment(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(cluster_key)s
     %(library_key)s
     %(conn_key)s
@@ -242,7 +243,7 @@ def centrality_scores(
     backend: str = "loky",
     show_progress_bar: bool = False,
     *,
-    table_key: str = "table",
+    table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
     Compute centrality scores per cluster or cell type.
@@ -252,6 +253,7 @@ def centrality_scores(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(cluster_key)s
     score
         Centrality measures as described in :mod:`networkx.algorithms.centrality` :cite:`networkx`.
@@ -337,7 +339,7 @@ def interaction_matrix(
     copy: bool = False,
     weights: bool = False,
     *,
-    table_key: str = "table",
+    table_key: str | None = None,
 ) -> NDArrayA | None:
     """
     Compute interaction matrix for clusters.
@@ -345,6 +347,7 @@ def interaction_matrix(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(cluster_key)s
     %(conn_key)s
     normalized

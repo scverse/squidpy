@@ -26,7 +26,7 @@ def sliding_window(
     drop_partial_windows: bool = False,
     copy: bool = False,
     *,
-    table_key: str = "table",
+    table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
     Divide a tissue slice into regulary shaped spatially contiguous regions (windows).
@@ -34,6 +34,7 @@ def sliding_window(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     window_size: int
         Size of the sliding window.
     %(library_key)s

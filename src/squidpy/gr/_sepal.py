@@ -45,7 +45,7 @@ def sepal(
     backend: str = "loky",
     show_progress_bar: bool = True,
     *,
-    table_key: str = "table",
+    table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
     Identify spatially variable genes with *Sepal*.
@@ -56,6 +56,7 @@ def sepal(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     max_neighs
         Maximum number of neighbors of a node in the graph. Valid options are:
 

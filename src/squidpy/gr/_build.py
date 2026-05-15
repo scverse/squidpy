@@ -398,7 +398,7 @@ def _build_connectivity(
 def _resolve_sdata(
     adata: AnnData | SpatialData,
     elements_to_coordinate_systems: dict[str, str] | None,
-    table_key: str = "table",
+    table_key: str | None = None,
     spatial_key: str = Key.obsm.spatial,
     library_key: str | None = None,
 ) -> tuple[AnnData, str | None]:

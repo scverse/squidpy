@@ -64,7 +64,7 @@ def spatial_autocorr(
     backend: str = "loky",
     show_progress_bar: bool = True,
     *,
-    table_key: str = "table",
+    table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
     Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
@@ -74,6 +74,7 @@ def spatial_autocorr(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(conn_key)s
     genes
         Depending on the ``attr``:
@@ -351,7 +352,7 @@ def co_occurrence(
     interval: int | NDArrayA = 50,
     copy: bool = False,
     *,
-    table_key: str = "table",
+    table_key: str | None = None,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -359,6 +360,7 @@ def co_occurrence(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(cluster_key)s
     %(spatial_key)s
     interval

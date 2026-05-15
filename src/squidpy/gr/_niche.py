@@ -52,7 +52,7 @@ def calculate_niche(
     use_rep: str | None = None,
     inplace: bool = True,
     *,
-    table_key: str = "table",
+    table_key: str | None = None,
 ) -> AnnData | None:
     """
     Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
@@ -70,8 +70,7 @@ def calculate_niche(
     %(library_key)s
         If provided, niches will be calculated separately for each unique value in this column.
         Each niche will be prefixed with the library identifier.
-    table_key
-        Key in `spatialdata.tables` to specify an 'anndata' table. Only necessary if 'sdata' is passed.
+    %(table_key)s
     mask
         Boolean array to filter cells which won't get assigned to a niche.
         Note that if you want to exclude these cells during neighborhood calculation already, you should subset your AnnData table before running 'sq.gr.spatial_neigbors'.
@@ -842,7 +841,7 @@ def _validate_niche_args(
     assert_one_of(flavor, ["neighborhood", "utag", "cellcharter", "spatialleiden"], name="flavor")
 
     if isinstance(data, SpatialData) and table_key is None:
-        raise ValueError("'table_key' is required when 'data' is a SpatialData object")
+        raise TypeError("missing required keyword-only argument: 'table_key'")
 
     if library_key is not None:
         assert_isinstance(library_key, str, name="library_key")

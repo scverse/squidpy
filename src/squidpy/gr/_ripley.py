@@ -40,7 +40,7 @@ def ripley(
     seed: int | None = None,
     copy: bool = False,
     *,
-    table_key: str = "table",
+    table_key: str | None = None,
 ) -> dict[str, pd.DataFrame | NDArrayA]:
     r"""
     Calculate various Ripley's statistics for point processes.
@@ -76,6 +76,7 @@ def ripley(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(cluster_key)s
     mode
         Which Ripley's statistic to compute.

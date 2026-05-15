@@ -643,7 +643,7 @@ def ligrec(
     key_added: str | None = None,
     gene_symbols: str | None = None,
     *,
-    table_key: str = "table",
+    table_key: str | None = None,
     **kwargs: Any,
 ) -> Mapping[str, pd.DataFrame] | None:
     """
@@ -652,6 +652,7 @@ def ligrec(
     Parameters
     ----------
     %(PT.parameters)s
+    %(table_key)s
     %(PT_prepare_full.parameters)s
     %(PT_test.parameters)s
     gene_symbols

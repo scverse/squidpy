@@ -15,10 +15,9 @@ class TestExtractAdata:
         adata = AnnData(np.zeros((3, 2)))
         assert extract_adata_if_sdata(adata) is adata
 
-    def test_sdata_default_table_key(self, sdata_mask_graph: sd.SpatialData):
-        result = extract_adata_if_sdata(sdata_mask_graph)
-        assert isinstance(result, AnnData)
-        assert result is sdata_mask_graph.tables["table"]
+    def test_sdata_requires_table_key(self, sdata_mask_graph: sd.SpatialData):
+        with pytest.raises(TypeError, match="missing required keyword-only argument: 'table_key'"):
+            extract_adata_if_sdata(sdata_mask_graph)
 
     def test_sdata_custom_table_key(self, sdata_mask_graph: sd.SpatialData):
         sdata_mask_graph["my_table"] = sdata_mask_graph.tables["table"].copy()
@@ -29,9 +28,9 @@ class TestExtractAdata:
         with pytest.raises(ValueError, match="not found in SpatialData"):
             extract_adata_if_sdata(sdata_mask_graph, table_key="nonexistent")
 
-    def test_sdata_missing_default_table(self):
+    def test_sdata_missing_table_key_without_tables(self):
         sdata = sd.SpatialData()
-        with pytest.raises(ValueError, match="'table' not found in SpatialData"):
+        with pytest.raises(TypeError, match="missing required keyword-only argument: 'table_key'"):
             extract_adata_if_sdata(sdata)
 
 

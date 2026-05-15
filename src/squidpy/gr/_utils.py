@@ -22,12 +22,12 @@ from squidpy._utils import NDArrayA
 from squidpy._validators import assert_non_empty_sequence
 
 
-def extract_adata_if_sdata(adata: AnnData | SpatialData, *, table_key: str = "table") -> AnnData:
+def extract_adata_if_sdata(adata: AnnData | SpatialData, *, table_key: str | None = None) -> AnnData:
     """Resolve a :class:`~spatialdata.SpatialData` to an :class:`~anndata.AnnData`.
 
     If *adata* is already an :class:`~anndata.AnnData` it is returned as-is.
-    When a :class:`~spatialdata.SpatialData` is passed, the table stored under
-    *table_key* is looked up via ``sdata.tables[table_key]``.
+    When a :class:`~spatialdata.SpatialData` is passed, *table_key* is required
+    and looked up via ``sdata.tables[table_key]``.
 
     Parameters
     ----------
@@ -42,6 +42,8 @@ def extract_adata_if_sdata(adata: AnnData | SpatialData, *, table_key: str = "ta
     The resolved :class:`~anndata.AnnData`.
     """
     if isinstance(adata, SpatialData):
+        if table_key is None:
+            raise TypeError("missing required keyword-only argument: 'table_key'")
         if table_key not in adata.tables:
             raise ValueError(
                 f"Table {table_key!r} not found in SpatialData. Available tables: {list(adata.tables.keys())}"
