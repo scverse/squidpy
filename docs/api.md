@@ -29,6 +29,7 @@ import squidpy as sq
     gr.ligrec
     gr.spatial_autocorr
     gr.sepal
+    gr.calculate_niche
 ```
 
 ## Image
