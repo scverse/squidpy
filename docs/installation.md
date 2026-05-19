@@ -1,6 +1,6 @@
 # Installation
 
-Squidpy requires Python version >= 3.11 to run.
+Squidpy requires Python version >= 3.12 to run.
 
 ## PyPI
 

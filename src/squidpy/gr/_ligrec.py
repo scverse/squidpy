@@ -8,7 +8,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from functools import partial
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -17,10 +17,11 @@ from scanpy import logging as logg
 from scipy.sparse import csc_matrix
 from spatialdata import SpatialData
 
+from squidpy._backends import backend_dispatch
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA, Signal, SigQueue, _deprecate_backend_as_parallel_backend, _get_n_cores, parallelize
 from squidpy._validators import assert_positive, check_tuple_needles
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -30,11 +31,11 @@ from squidpy.gr._utils import (
 
 __all__ = ["ligrec", "PermutationTest"]
 
-StrSeq: TypeAlias = Sequence[str]
-SeqTuple: TypeAlias = Sequence[tuple[str, str]]
-Interaction_t: TypeAlias = pd.DataFrame | Mapping[str, StrSeq] | StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
+type StrSeq = Sequence[str]
+type SeqTuple = Sequence[tuple[str, str]]
+type Interaction_t = pd.DataFrame | Mapping[str, StrSeq] | StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
 
-Cluster_t: TypeAlias = StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
+type Cluster_t = StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
 
 SOURCE = "source"
 TARGET = "target"
@@ -313,6 +314,7 @@ class PermutationTestABC(ABC):
     @d.get_sections(base="PT_test", sections=["Parameters"])
     @d.dedent
     @inject_docs(src=SOURCE, tgt=TARGET, fa=CorrAxis)
+    @_deprecate_backend_as_parallel_backend
     def test(
         self,
         cluster_key: str,
@@ -326,6 +328,7 @@ class PermutationTestABC(ABC):
         copy: bool = False,
         key_added: str | None = None,
         numba_parallel: bool | None = None,
+        parallel_backend: str = "loky",
         **kwargs: Any,
     ) -> Mapping[str, pd.DataFrame] | None:
         """
@@ -356,6 +359,8 @@ class PermutationTestABC(ABC):
             If `None`, ``'{{cluster_key}}_ligrec'`` will be used.
         %(numba_parallel)s
         %(parallelize)s
+        parallel_backend
+            Which joblib backend to use for permutation parallelism.
 
         Returns
         -------
@@ -422,6 +427,7 @@ class PermutationTestABC(ABC):
             seed=seed,
             n_jobs=n_jobs,
             numba_parallel=numba_parallel,
+            parallel_backend=parallel_backend,
             **kwargs,
         )
         index = pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET])
@@ -629,6 +635,8 @@ class PermutationTest(PermutationTestABC):
 
 
 @d.dedent
+@_deprecate_backend_as_parallel_backend
+@backend_dispatch
 def ligrec(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -641,6 +649,7 @@ def ligrec(
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
+    parallel_backend: str = "loky",
     **kwargs: Any,
 ) -> Mapping[str, pd.DataFrame] | None:
     """
@@ -653,6 +662,8 @@ def ligrec(
     %(PT_test.parameters)s
     gene_symbols
         Key in :attr:`anndata.AnnData.var` to use instead of :attr:`anndata.AnnData.var_names`.
+    parallel_backend
+        Which joblib backend to use for permutation parallelism.
 
     Returns
     -------
@@ -671,6 +682,7 @@ def ligrec(
                 corr_axis=corr_axis,
                 copy=copy,
                 key_added=key_added,
+                parallel_backend=parallel_backend,
                 **kwargs,
             )
         )
@@ -686,6 +698,7 @@ def _analysis(
     seed: int | None = None,
     n_jobs: int = 1,
     numba_parallel: bool | None = None,
+    parallel_backend: str = "loky",
     **kwargs: Any,
 ) -> TempResult:
     """
@@ -709,8 +722,10 @@ def _analysis(
         Number of parallel jobs to launch.
     numba_parallel
         Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
+    parallel_backend
+        Which joblib backend to use for permutation parallelism.
     kwargs
-        Keyword arguments for :func:`squidpy._utils.parallelize`, such as ``n_jobs`` or ``backend``.
+        Additional keyword arguments for :func:`squidpy._utils.parallelize`.
 
     Returns
     -------
@@ -754,6 +769,7 @@ def _analysis(
         _analysis_helper,
         np.arange(n_perms, dtype=np.int32).tolist(),
         n_jobs=n_jobs,
+        backend=parallel_backend,
         unit="permutation",
         extractor=extractor,
         **kwargs,

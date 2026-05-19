@@ -228,6 +228,45 @@ def parallelize(
     return wrapper
 
 
+_JOBLIB_BACKENDS = frozenset({"dask", "loky", "multiprocessing", "ray", "sequential", "threading"})
+
+
+def _is_joblib_backend(backend: Any) -> bool:
+    return isinstance(backend, str) and (backend in _JOBLIB_BACKENDS or backend in jl.parallel.BACKENDS)
+
+
+def _deprecate_backend_as_parallel_backend(func: Callable[..., Any]) -> Callable[..., Any]:
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if _is_joblib_backend(kwargs.get("backend")):
+            if "parallel_backend" in kwargs:
+                raise TypeError("Pass only one of `backend` or `parallel_backend` for joblib parallelism.")
+            warnings.warn(
+                "Using `backend` for joblib parallelism is deprecated. Use `parallel_backend` instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            kwargs["parallel_backend"] = kwargs.pop("backend")
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def _deprecate_legacy_joblib_backend(func: Callable[..., Any]) -> Callable[..., Any]:
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if _is_joblib_backend(kwargs.get("backend")):
+            warnings.warn(
+                "Using `backend` for joblib parallelism is deprecated and has no effect.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            kwargs.pop("backend")
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 def _get_n_cores(n_cores: int | None) -> int:
     """
     Make number of cores a positive integer.

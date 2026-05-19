@@ -37,7 +37,7 @@ download = "python ./.scripts/ci/download_data.py {args}"
 
 [[envs.hatch-test.matrix]]
 deps = ["stable"]
-python = ["3.11", "3.12", "3.13"]
+python = ["3.12", "3.13"]
 
 [[envs.hatch-test.matrix]]
 deps = ["pre"]

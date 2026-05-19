@@ -18,6 +18,7 @@ from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 
+from squidpy._backends import backend_dispatch
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
@@ -27,6 +28,7 @@ __all__ = ["calculate_niche"]
 
 @d.dedent
 @inject_docs(fla=NicheDefinitions)
+@backend_dispatch
 def calculate_niche(
     data: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],

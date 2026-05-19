@@ -34,7 +34,15 @@ class TestNhoodEnrichment:
     def test_parallel_works(self, adata: AnnData, backend: str):
         spatial_neighbors(adata)
 
-        nhood_enrichment(adata, cluster_key=_CK, n_jobs=2, n_perms=20, backend=backend)
+        nhood_enrichment(adata, cluster_key=_CK, n_jobs=2, n_perms=20, parallel_backend=backend)
+
+        self._assert_common(adata)
+
+    def test_legacy_parallel_backend(self, adata: AnnData):
+        spatial_neighbors(adata)
+
+        with pytest.warns(FutureWarning, match="parallel_backend"):
+            nhood_enrichment(adata, cluster_key=_CK, n_jobs=1, n_perms=20, backend="threading")
 
         self._assert_common(adata)
 

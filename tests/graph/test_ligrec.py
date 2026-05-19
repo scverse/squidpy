@@ -220,6 +220,52 @@ class TestValidBehavior:
         assert isinstance(r["pvalues"], pd.DataFrame)
         assert isinstance(r["metadata"], pd.DataFrame)
 
+    def test_parallel_backend(self, adata: AnnData, interactions: Interactions_t):
+        r = ligrec(
+            adata,
+            _CK,
+            interactions=interactions,
+            n_perms=5,
+            copy=True,
+            n_jobs=1,
+            parallel_backend="threading",
+            show_progress_bar=False,
+        )
+
+        assert len(r) == 3
+        assert isinstance(r["means"], pd.DataFrame)
+        assert isinstance(r["pvalues"], pd.DataFrame)
+
+    def test_legacy_parallel_backend(self, adata: AnnData, interactions: Interactions_t):
+        with pytest.warns(FutureWarning, match="parallel_backend"):
+            r = ligrec(
+                adata,
+                _CK,
+                interactions=interactions,
+                n_perms=5,
+                backend="threading",
+                copy=True,
+                n_jobs=1,
+                show_progress_bar=False,
+            )
+
+        assert len(r) == 3
+
+    def test_permutation_test_legacy_parallel_backend(self, adata: AnnData, interactions: Interactions_t):
+        pt = PermutationTest(adata).prepare(interactions=interactions)
+
+        with pytest.warns(FutureWarning, match="parallel_backend"):
+            r = pt.test(
+                _CK,
+                backend="threading",
+                copy=True,
+                n_jobs=1,
+                n_perms=5,
+                show_progress_bar=False,
+            )
+
+        assert len(r) == 3
+
     @pytest.mark.parametrize("fdr_method", [None, "fdr_bh"])
     def test_pvals_in_correct_range(self, adata: AnnData, interactions: Interactions_t, fdr_method: str | None):
         r = ligrec(

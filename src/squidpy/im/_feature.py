@@ -8,9 +8,10 @@ import pandas as pd
 from anndata import AnnData
 from scanpy import logging as logg
 
+from squidpy._backends import backend_dispatch
 from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import Signal, SigQueue, _deprecate_backend_as_parallel_backend, _get_n_cores, parallelize
 from squidpy.gr._utils import _save_data
 from squidpy.im._container import ImageContainer
 
@@ -19,6 +20,8 @@ __all__ = ["calculate_image_features"]
 
 @d.dedent
 @inject_docs(f=ImageFeature)
+@_deprecate_backend_as_parallel_backend
+@backend_dispatch
 def calculate_image_features(
     adata: AnnData,
     img: ImageContainer,
@@ -29,7 +32,7 @@ def calculate_image_features(
     key_added: str = "img_features",
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
+    parallel_backend: str = "loky",
     show_progress_bar: bool = True,
     **kwargs: Any,
 ) -> pd.DataFrame | None:
@@ -63,6 +66,8 @@ def calculate_image_features(
         Key in :attr:`anndata.AnnData.obsm` where to store the calculated features.
     %(copy)s
     %(parallelize)s
+    parallel_backend
+        Which joblib backend to use for parallel image feature extraction.
     kwargs
         Keyword arguments for :meth:`squidpy.im.ImageContainer.generate_spot_crops`.
 
@@ -92,7 +97,7 @@ def calculate_image_features(
         collection=adata.obs_names,
         extractor=pd.concat,
         n_jobs=n_jobs,
-        backend=backend,
+        backend=parallel_backend,
         show_progress_bar=show_progress_bar,
     )(adata, img, layer=layer, library_id=library_id, features=features, features_kwargs=features_kwargs, **kwargs)
 

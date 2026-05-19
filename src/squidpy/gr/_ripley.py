@@ -15,6 +15,7 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import LabelEncoder
 from spatialdata import SpatialData
 
+from squidpy._backends import backend_dispatch
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -26,6 +27,7 @@ __all__ = ["ripley"]
 
 @d.dedent
 @inject_docs(key=Key.obsm.spatial, rp=RipleyStat)
+@backend_dispatch
 def ripley(
     adata: AnnData | SpatialData,
     cluster_key: str,
