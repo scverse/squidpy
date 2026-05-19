@@ -112,6 +112,7 @@ optional-dependencies.test = [
   # Just for VS Code
   "pytest-cov>=4",
   "pytest-mock>=3.5",
+  "pytest-rerunfailures",
   "pytest-timeout>=2.1",
   "pytest-xdist>=3",
   "scanpy[leiden]",
