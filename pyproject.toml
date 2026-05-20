@@ -261,7 +261,10 @@ addopts = [
 ]
 markers = [
   "internet: tests that require internet",
+  # the below markers are just there because we import from anndata.tests.helpers,
+  # which means pytest sees them despite us not using them.
   "gpu: tests that require GPU",
+  "array_api: tests that require array-api-compat",
 ]
 
 [tool.coverage]
