@@ -698,7 +698,7 @@ def spatial_neighbors_grid(
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
-    n_neighs: Literal[4, 6] = 6,
+    n_neighs: int = 6,
     n_rings: int = 1,
     delaunay: bool = False,
     transform: str | Transform | None = None,
@@ -722,10 +722,7 @@ def spatial_neighbors_grid(
     %(library_key)s
     n_neighs
         Number of neighboring tiles used to form the base grid connectivity.
-        Defaults to ``6``. Use ``4`` for a square grid or ``6`` for a hexagonal
-        grid such as Visium; other values are accepted at runtime but their
-        geometric interpretation on a regular grid is not part of the public
-        API.
+        Defaults to ``6`` for Visium-like grid coordinates.
     n_rings
         Number of rings of neighbors. Defaults to ``1``. ``n_rings=1`` keeps
         only immediate neighbors; larger values add progressively more distant
