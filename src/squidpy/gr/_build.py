@@ -206,7 +206,7 @@ def spatial_neighbors(
     n_rings: int | None = None,
     percentile: float | None = None,
     transform: str | Transform | None = None,
-    set_diag: bool | None = None,
+    set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
 ) -> SpatialNeighborsResult | None:
@@ -259,7 +259,6 @@ def spatial_neighbors(
             - :class:`tuple` - prune the final graph to only contain edges in interval `[min(radius), max(radius)]`.
     delaunay
         Whether to compute the graph from Delaunay triangulation. Only used when ``coord_type = {c.GENERIC.s!r}``.
-        Defaults to ``False``.
     n_rings
         Number of rings of neighbors for grid data. Only used when ``coord_type = {c.GRID.s!r}``.
         Defaults to ``1``.
