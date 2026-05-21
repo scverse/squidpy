@@ -259,6 +259,7 @@ def spatial_neighbors(
             - :class:`tuple` - prune the final graph to only contain edges in interval `[min(radius), max(radius)]`.
     delaunay
         Whether to compute the graph from Delaunay triangulation. Only used when ``coord_type = {c.GENERIC.s!r}``.
+        Defaults to ``False``.
     n_rings
         Number of rings of neighbors for grid data. Only used when ``coord_type = {c.GRID.s!r}``.
         Defaults to ``1``.
@@ -273,7 +274,6 @@ def spatial_neighbors(
             - `{t.NONE.v}` - no transformation of the adjacency matrix.
     set_diag
         Whether to set the diagonal of the spatial connectivities to `1.0`.
-        Defaults to ``False``.
     key_added
         Key which controls where the results are saved if ``copy = False``.
     %(copy)s
