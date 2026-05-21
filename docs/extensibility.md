@@ -59,6 +59,7 @@ example below swaps the backend while keeping full compatibility with the rest
 of the Squidpy graph pipeline:
 
 ```python
+# Following code is only illustrative and probably not runnable.
 import numpy as np
 from scipy.sparse import csr_matrix
 from snnpy import build_snn_model
