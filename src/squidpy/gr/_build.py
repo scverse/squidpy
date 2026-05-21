@@ -381,7 +381,12 @@ def spatial_neighbors(
     )
 
     return _run_spatial_neighbors(
-        adata, builder, spatial_key=spatial_key, library_key=library_key, key_added=key_added, copy=copy
+        adata,
+        builder,
+        spatial_key=spatial_key,
+        library_key=library_key,
+        key_added=key_added,
+        copy=copy,
     )
 
 
@@ -549,10 +554,10 @@ def spatial_neighbors_radius(
     data: AnnData | SpatialData,
     *,
     spatial_key: str = Key.obsm.spatial,
+    radius: float | tuple[float, float],
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
-    radius: float | tuple[float, float] = 1.0,
     percentile: float | None = None,
     transform: str | Transform | None = None,
     set_diag: bool = False,
@@ -810,11 +815,7 @@ def _run_spatial_neighbors(
     neighbors_dict = {
         "connectivities_key": conns_key,
         "distances_key": dists_key,
-        "params": {
-            "n_neighbors": getattr(builder, "n_neighs", 6),
-            "radius": getattr(builder, "radius", None),
-            "transform": builder.transform.v,
-        },
+        "params": builder.uns_params(),
     }
 
     if copy:

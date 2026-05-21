@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from itertools import chain
-from typing import Generic, TypeVar, cast
+from typing import Any, Generic, TypeVar, cast
 
 import numpy as np
 from fast_array_utils import stats as fau_stats
@@ -27,7 +27,7 @@ from scipy.spatial import Delaunay
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 from sklearn.neighbors import NearestNeighbors
 
-from squidpy._constants._constants import Transform
+from squidpy._constants._constants import CoordType, Transform
 from squidpy._utils import NDArrayA
 from squidpy._validators import assert_positive
 
@@ -85,6 +85,10 @@ class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
     def postprocessors(self) -> Sequence[GraphPostprocessor[GraphMatrixT]]:
         """Return post-build processing steps for ``(adj, dst)``."""
         return self._postprocessors
+
+    @abstractmethod
+    def uns_params(self) -> dict[str, Any]:
+        """Parameters stored in :attr:`anndata.AnnData.uns` after graph construction."""
 
     def combine(
         self,
@@ -166,6 +170,13 @@ class KNNBuilder(GraphBuilderCSR):
         )
         self.n_neighs = n_neighs
 
+    def uns_params(self) -> dict[str, Any]:
+        return {
+            "coord_type": CoordType.GENERIC.v,
+            "n_neighbors": self.n_neighs,
+            "transform": self.transform.v,
+        }
+
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
         tree = NearestNeighbors(n_neighbors=self.n_neighs, radius=1, metric="euclidean")
@@ -215,6 +226,13 @@ class RadiusBuilder(GraphBuilderCSR):
             postprocessors=postprocessors,
         )
         self.radius = radius
+
+    def uns_params(self) -> dict[str, Any]:
+        return {
+            "coord_type": CoordType.GENERIC.v,
+            "radius": self.radius,
+            "transform": self.transform.v,
+        }
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
@@ -278,6 +296,13 @@ class DelaunayBuilder(GraphBuilderCSR):
         )
         self.radius = radius
 
+    def uns_params(self) -> dict[str, Any]:
+        return {
+            "coord_type": CoordType.GENERIC.v,
+            "radius": self.radius,
+            "transform": self.transform.v,
+        }
+
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
         tri = Delaunay(coords)
@@ -325,6 +350,15 @@ class GridBuilder(GraphBuilderCSR):
         self.n_neighs = n_neighs
         self.n_rings = n_rings
         self.delaunay = delaunay
+
+    def uns_params(self) -> dict[str, Any]:
+        return {
+            "coord_type": CoordType.GRID.v,
+            "n_neighbors": self.n_neighs,
+            "n_rings": self.n_rings,
+            "delaunay": self.delaunay,
+            "transform": self.transform.v,
+        }
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         if self.n_rings > 1:
