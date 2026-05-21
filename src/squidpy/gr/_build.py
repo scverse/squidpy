@@ -551,9 +551,9 @@ def spatial_neighbors_knn(
 @d.dedent
 def spatial_neighbors_radius(
     data: AnnData | SpatialData,
+    radius: float | tuple[float, float],
     *,
     spatial_key: str = Key.obsm.spatial,
-    radius: float | tuple[float, float],
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
