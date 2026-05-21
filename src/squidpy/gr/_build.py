@@ -102,10 +102,10 @@ def _resolve_graph_builder(
             )
         return GridBuilder(n_neighs=n_neighs, **common, n_rings=n_rings, delaunay=delaunay)
     if delaunay:
-        # TODO: below check should be removed once legacy mode spatial_neighbors is deprecated
+        # TODO: below check should be removed when spatial_neighbors is deprecated
         if n_neighs_was_set:
             warnings.warn(
-                "Parameter `n_neighs` is ignored when `delaunay=True` and will be removed in squidpy v2.0.0.",
+                "Parameter `n_neighs` is ignored when `delaunay=True` use `spatial_neighbors_delaunay` instead.",
                 FutureWarning,
                 stacklevel=3,
             )
@@ -117,10 +117,10 @@ def _resolve_graph_builder(
         legacy_radius = radius if isinstance(radius, tuple) else None
         return DelaunayBuilder(**common, radius=legacy_radius, percentile=percentile)
     if radius is not None:
-        # TODO: below check should be removed once legacy mode spatial_neighbors is deprecated
+        # TODO: below check should be removed when spatial_neighbors is deprecated
         if n_neighs_was_set:
             warnings.warn(
-                "Parameter `n_neighs` is ignored when `radius` is set and will be removed in squidpy v2.0.0.",
+                "Parameter `n_neighs` is ignored when `radius` is set use `spatial_neighbors_radius` instead.",
                 FutureWarning,
                 stacklevel=3,
             )
@@ -213,9 +213,9 @@ def spatial_neighbors(
     """
     Create a graph from spatial coordinates.
 
-    .. deprecated:: 1.6.0
+    .. deprecated:: 1.7.0
         ``spatial_neighbors`` is deprecated and will be removed in squidpy
-        v1.7.0. Use one of the mode-specific functions instead:
+        v1.9.0. Use one of the mode-specific functions instead:
 
         - :func:`spatial_neighbors_knn`
         - :func:`spatial_neighbors_radius`
@@ -294,14 +294,14 @@ def spatial_neighbors(
         - Generic radius mode:
           ``coord_type='generic'``, ``delaunay=False``, ``radius`` set.
           Uses ``radius`` and builds a radius-based neighbor graph.
-          ``n_neighs`` is ignored and passing it is deprecated.
+          ``n_neighs`` is ignored and will throw a warning if passed.
           If ``radius`` is a tuple, the graph is built with the maximum
           radius and then pruned to the interval
           ``[min(radius), max(radius)]``.
         - Generic Delaunay mode:
           ``coord_type='generic'``, ``delaunay=True``.
           Builds a Delaunay triangulation graph. ``n_neighs`` is
-          ignored by the triangulation and passing it is deprecated.
+          ignored by the triangulation and will throw a warning if passed.
           If ``radius`` is a tuple, it is used only as a
           post-construction pruning interval.
 
@@ -321,11 +321,11 @@ def spatial_neighbors(
         - If ``coord_type`` resolves to ``'grid'``, grid mode is used.
           In that case ``radius`` is ignored.
         - Otherwise, if ``delaunay=True``, Delaunay mode is used.
-          ``n_neighs`` is ignored (deprecated).
+          ``n_neighs`` is ignored (deprecated, removed in v1.9.0).
           A tuple ``radius`` is only used afterward as a pruning
           interval. A scalar ``radius`` is ignored.
         - Otherwise, if ``radius`` is set, radius mode is used.
-          In this mode ``n_neighs`` is ignored (deprecated).
+          In this mode ``n_neighs`` is ignored (deprecated, removed in v1.9.0).
         - Otherwise, k-nearest-neighbor mode is used.
 
     Grid-specific behavior
@@ -355,7 +355,7 @@ def spatial_neighbors(
     """
     warnings.warn(
         "Calling `spatial_neighbors` is deprecated and will be removed in squidpy "
-        "v1.7.0. Use `spatial_neighbors_knn`, `spatial_neighbors_radius`, "
+        "v1.9.0. Use `spatial_neighbors_knn`, `spatial_neighbors_radius`, "
         "`spatial_neighbors_delaunay`, `spatial_neighbors_grid`, or "
         "`spatial_neighbors_from_builder` instead.",
         FutureWarning,
