@@ -24,7 +24,7 @@ from spatialdata.transformations import get_transformation
 
 from squidpy._utils import _ensure_dim_order, _get_scale_factors, _yx_from_shape
 
-from ._utils import _flatten_channels, _get_element_data
+from ._utils import flatten_channels, get_element_data
 
 
 class DetectTissueMethod(enum.Enum):
@@ -357,7 +357,7 @@ def detect_tissue(
 
     # Load smallest available or explicit scale
     img_node = sdata.images[image_key]
-    img_da = _get_element_data(img_node, scale if manual_scale else "auto", "image", image_key)
+    img_da = get_element_data(img_node, scale if manual_scale else "auto", "image", image_key)
     img_src = _ensure_dim_order(img_da, "yxc")
     src_h = int(img_src.sizes["y"])
     src_w = int(img_src.sizes["x"])
@@ -375,7 +375,7 @@ def detect_tissue(
     # Channel flattening (greyscale) for threshold-based methods
     img_grey = None
     if method != DetectTissueMethod.WEKA:
-        img_grey_da: xr.DataArray = _flatten_channels(img=img_src, channel_format=channel_format)
+        img_grey_da: xr.DataArray = flatten_channels(img=img_src, channel_format=channel_format)
         if need_downscale:
             logger.info("Downscaling for faster computation.")
             img_grey = _downscale_with_dask(img_grey=img_grey_da, target_pixels=auto_max_pixels)
