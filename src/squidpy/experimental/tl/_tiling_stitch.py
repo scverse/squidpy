@@ -1,8 +1,8 @@
-"""Stitching of tile-cut cells flagged by :func:`calculate_tiling_qc`.
+"""Stitching of tile-cut cells flagged by :func:`~squidpy.experimental.tl.calculate_tiling_qc`.
 
 When segmentation is run tile-by-tile (Cellpose, Stardist, Mesmer, ...) cells
 that straddle tile boundaries get cut into 2-4 pieces with characteristic
-straight, axis-aligned cut edges.  :func:`calculate_tiling_qc` flags these
+straight, axis-aligned cut edges.  :func:`~squidpy.experimental.tl.calculate_tiling_qc` flags these
 as ``is_outlier=True``.  This module pairs facing cut edges across boundaries
 and assigns each candidate pair a heuristic geometric score in [0, 1].
 
@@ -666,7 +666,7 @@ def stitch_tile_cuts(
     close_radius: int = _DEFAULT_CLOSE_RADIUS,
     inplace: bool = True,
 ) -> ad.AnnData | None:
-    """Stitch tile-cut cells flagged by :func:`calculate_tiling_qc`.
+    """Stitch tile-cut cells flagged by :func:`~squidpy.experimental.tl.calculate_tiling_qc`.
 
     Reads ``is_outlier=True`` cells from the QC table, pairs facing cut edges
     across tile boundaries, scores each pair via a transparent geometric
@@ -688,7 +688,7 @@ def stitch_tile_cuts(
     ----------
     sdata
         :class:`~spatialdata.SpatialData` with a labels element and a QC
-        table from :func:`calculate_tiling_qc`.
+        table from :func:`~squidpy.experimental.tl.calculate_tiling_qc`.
     labels_key
         Key in ``sdata.labels``.
     qc_table_key
