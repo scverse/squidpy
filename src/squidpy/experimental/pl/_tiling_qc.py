@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import spatialdata as sd
 
 __all__ = ["tiling_qc"]
@@ -11,7 +13,14 @@ def tiling_qc(
     sdata: sd.SpatialData,
     labels_key: str,
     qc_key: str | None = None,
-    score_col: str = "nhood_outlier_fraction",
+    score_col: Literal[
+        "nhood_outlier_fraction",
+        "smoothed_cut_score",
+        "cut_score",
+        "max_straight_edge_ratio",
+        "cardinal_alignment_score",
+        "is_outlier",
+    ] = "nhood_outlier_fraction",
     cmap: str = "RdYlGn_r",
     figsize: tuple[float, float] | None = None,
 ) -> None:
@@ -35,7 +44,7 @@ def tiling_qc(
         Which ``.obs`` column to colour by.  One of
         ``"nhood_outlier_fraction"``, ``"smoothed_cut_score"``,
         ``"cut_score"``, ``"max_straight_edge_ratio"``,
-        ``"cardinal_alignment_score"``.
+        ``"cardinal_alignment_score"``, ``"is_outlier"``.
     cmap
         Matplotlib colormap name.
     figsize

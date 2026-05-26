@@ -96,11 +96,13 @@ def compute_cell_info_multiscale(
     if not available:
         return {}
 
-    def _scale_idx(k: str) -> int:
-        num = "".join(c for c in k if c.isdigit())
-        return int(num) if num else 0
+    def _spatial_size(k: str) -> int:
+        da = labels_node[k].ds["image"]
+        h = int(da.sizes.get("y", da.shape[-2]))
+        w = int(da.sizes.get("x", da.shape[-1]))
+        return h * w
 
-    coarsest = max(available, key=_scale_idx)
+    coarsest = min(available, key=_spatial_size)
     coarse_da = labels_node[coarsest].ds["image"]
     coarse_labels = np.asarray(coarse_da.values).squeeze()
 

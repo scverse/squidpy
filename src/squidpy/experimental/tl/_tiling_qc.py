@@ -27,7 +27,7 @@ in :mod:`squidpy.experimental.im._tiling`, so this scales to
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import anndata as ad
 import dask
@@ -42,10 +42,7 @@ from sklearn.neighbors import BallTree
 from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
 
-if TYPE_CHECKING:
-    from dask.distributed import Client
-
-from squidpy._utils import cpu_count
+from squidpy._utils import _get_n_cores
 from squidpy.experimental.im._tiling import (
     build_tile_specs,
     compute_cell_info,
@@ -79,6 +76,22 @@ _TILE_SCORE_COLUMNS = ["max_straight_edge_ratio", "cardinal_alignment_score", "c
 _POST_SCORE_COLUMNS = ["smoothed_cut_score", "is_outlier", "nhood_outlier_fraction"]
 _SCORE_COLUMNS = _TILE_SCORE_COLUMNS + _POST_SCORE_COLUMNS
 _NAN_TILE_SCORES = dict.fromkeys(_TILE_SCORE_COLUMNS, np.nan)
+
+
+def _has_distributed_client() -> bool:
+    """Return True iff a :class:`dask.distributed.Client` is active in this process.
+
+    Mirrors the public dask idiom: if a Client is in scope, ``dask.compute``
+    will pick it up automatically — we only need to know whether to fall
+    back to the local threaded scheduler.
+    """
+    try:
+        from dask.distributed import get_client
+
+        get_client()
+    except (ImportError, ValueError):
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -418,8 +431,7 @@ def calculate_tiling_qc(
     nmads_smoothed: float = 3,
     n_neighbors: int = 10,
     n_jobs: int = -1,
-    client: Client | None = None,
-    adata_key_added: str | None = None,
+    table_key_added: str | None = None,
     inplace: bool = True,
 ) -> ad.AnnData | None:
     """Score cells for tile-boundary segmentation artifacts.
@@ -479,14 +491,10 @@ def calculate_tiling_qc(
         without wasting compute on distant cells.
     n_jobs
         Number of threads for tile processing.  ``-1`` (default) uses
-        all available CPUs.  Ignored when ``client`` is provided.
-    client
-        A :class:`dask.distributed.Client` for distributed execution.
-        When provided, tile processing is submitted to this client,
-        ``n_jobs`` is ignored, and progress is reported via the dask
-        dashboard.  Workers must have access to the underlying data
-        store (e.g. shared filesystem or cloud storage for zarr).
-    adata_key_added
+        all available CPUs.  Ignored when an active
+        :class:`dask.distributed.Client` is in scope (the client's own
+        worker pool is used instead).
+    table_key_added
         Key under which to store the result in ``sdata.tables``.
         Defaults to ``"{labels_key}_qc"``.
     inplace
@@ -515,10 +523,10 @@ def calculate_tiling_qc(
 
     Notes
     -----
-    Tile processing is parallelised via :func:`dask.compute`.  By
-    default a threaded scheduler with ``n_jobs`` workers is used.
-    Pass a :class:`~dask.distributed.Client` to use a distributed
-    cluster instead.
+    Tile processing is parallelised via :func:`dask.compute`.  When an
+    active :class:`dask.distributed.Client` is in scope it is picked up
+    automatically and used for execution; otherwise a local threaded
+    scheduler with ``n_jobs`` workers is used.
     """
     if labels_key not in sdata.labels:
         raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
@@ -558,12 +566,15 @@ def calculate_tiling_qc(
 
     tasks = [_process_one(spec) for spec in specs]
 
-    if client is not None:
+    if _has_distributed_client():
         if n_jobs != -1:
-            logg.warning("`n_jobs` is ignored when a `client` is provided. Parallelism is controlled by the client.")
-        results = dask.compute(*tasks, scheduler=client)
+            logg.warning(
+                "`n_jobs` is ignored when an active dask.distributed Client is in scope. "
+                "Parallelism is controlled by the client."
+            )
+        results = dask.compute(*tasks)
     else:
-        num_workers = cpu_count() if n_jobs == -1 else n_jobs
+        num_workers = _get_n_cores(n_jobs)
         with ProgressBar():
             results = dask.compute(*tasks, scheduler="threads", num_workers=num_workers)
 
@@ -662,7 +673,7 @@ def calculate_tiling_qc(
     }
 
     if inplace:
-        table_key = adata_key_added if adata_key_added is not None else f"{labels_key}_qc"
+        table_key = table_key_added if table_key_added is not None else f"{labels_key}_qc"
         sdata.tables[table_key] = TableModel.parse(adata)
         return None
     return adata

@@ -46,7 +46,7 @@ from numpy.typing import NDArray
 NDArrayA = NDArray[Any]
 
 
-def cpu_count() -> int:
+def _cpu_count() -> int:
     """Number of CPUs available to this process.
 
     Uses :func:`os.sched_getaffinity` to respect cgroup limits set by
@@ -217,7 +217,7 @@ def parallelize(
     if n_jobs == 0:
         raise ValueError("Number of jobs cannot be `0`.")
     elif n_jobs < 0:
-        n_jobs = cpu_count() + 1 + n_jobs
+        n_jobs = _cpu_count() + 1 + n_jobs
 
     if n_split is None:
         n_split = n_jobs
@@ -263,7 +263,7 @@ def _get_n_cores(n_cores: int | None) -> int:
     if n_cores is None:
         return 1
     if n_cores < 0:
-        return cpu_count() + 1 + n_cores
+        return _cpu_count() + 1 + n_cores
 
     return n_cores
 
