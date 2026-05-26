@@ -43,6 +43,7 @@ from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
 
 from squidpy._utils import _get_n_cores
+from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS
 from squidpy.experimental.im._tiling import (
     build_tile_specs,
     compute_cell_info,
@@ -554,10 +555,11 @@ def calculate_tiling_qc(
 
     Re-running ``calculate_tiling_qc`` on a labels element whose QC
     table already carries ``stitch_*`` columns from a previous run of
-    :func:`stitch_tile_cuts` replaces the table wholesale, dropping
-    those columns.  A warning is logged with the previous stitch
-    parameters and a copy-pasteable invocation so they can be
-    re-derived from the new outlier set.
+    :func:`stitch_tile_cuts` produces a fresh AnnData without those
+    columns.  A warning is logged (in both ``inplace=True`` and
+    ``inplace=False`` modes) listing the previous stitch parameters
+    and a copy-pasteable invocation so they can be re-derived from
+    the new outlier set.
     """
     if labels_key not in sdata.labels:
         raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
@@ -717,15 +719,12 @@ def calculate_tiling_qc(
         "max_contour_points": max_contour_points,
     }
 
+    table_key = table_key_added if table_key_added is not None else f"{labels_key}_qc"
+    _warn_if_dropping_stitch_columns(sdata, table_key, labels_key)
     if inplace:
-        table_key = table_key_added if table_key_added is not None else f"{labels_key}_qc"
-        _warn_if_dropping_stitch_columns(sdata, table_key, labels_key)
         sdata.tables[table_key] = TableModel.parse(adata)
         return None
     return adata
-
-
-_STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence")
 
 
 def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labels_key: str) -> None:
@@ -745,7 +744,10 @@ def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labe
         return
 
     prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
-    kwargs = ", ".join(f"{k}={v!r}" for k, v in prev_params.items() if not k.startswith("_"))
+    # `tiling_stitch` mixes constructor kwargs with diagnostic outputs
+    # (n_outliers, n_pieces_distribution, score_formula, ...).  Filter to
+    # the parameter allowlist so the rerun string is a valid Python call.
+    kwargs = ", ".join(f"{k}={v!r}" for k, v in prev_params.items() if k in _STITCH_PARAM_KEYS)
     rerun = (
         f"sq.experimental.tl.stitch_tile_cuts(sdata, labels_key={labels_key!r}"
         + (f", {kwargs}" if kwargs else "")

@@ -29,6 +29,10 @@ from squidpy.experimental.utils._labels import resolve_labels_array
 __all__ = ["make_stitched_labels"]
 
 
+_LUT_DENSITY_RATIO = 8  # max_id <= len(label_ids) * 8 -> LUT is reasonable
+_LUT_ABSOLUTE_CAP = 100_000_000  # never allocate more than 100M entries
+
+
 def _build_lookup(adata_obs: pd.DataFrame, dtype: np.dtype) -> np.ndarray:
     """Build an int->int LUT from ``label_id`` to ``stitch_group_id``.
 
@@ -41,6 +45,10 @@ def _build_lookup(adata_obs: pd.DataFrame, dtype: np.dtype) -> np.ndarray:
     ValueError
         If ``stitch_group_id`` (or ``label_id``) values exceed the labels'
         dtype range -- silent truncation here would alias unrelated cells.
+    ValueError
+        If ``max(label_id)`` is so much larger than the number of cells that
+        the dense LUT would be wasteful (sparse-but-large ID spaces).  Users
+        with this label scheme should remap to contiguous IDs first.
     """
     label_ids = adata_obs["label_id"].astype(np.int64).to_numpy()
     group_ids = adata_obs["stitch_group_id"].astype(np.int64).to_numpy()
@@ -53,6 +61,13 @@ def _build_lookup(adata_obs: pd.DataFrame, dtype: np.dtype) -> np.ndarray:
                 f"dtype range {dtype} (max {info.max}); cannot build a safe LUT."
             )
     max_id = int(label_ids.max(initial=0))
+    n_cells = int(label_ids.size)
+    if max_id > _LUT_ABSOLUTE_CAP or (n_cells > 0 and max_id > _LUT_DENSITY_RATIO * n_cells and max_id > 1000):
+        raise ValueError(
+            f"Cannot allocate a {max_id + 1}-entry LUT for {n_cells} cells "
+            f"(sparse label IDs).  Remap your labels to contiguous IDs starting "
+            f"from 1 before calling make_stitched_labels."
+        )
     lut = np.arange(max_id + 1, dtype=dtype)
     lut[label_ids] = group_ids.astype(dtype)
     return lut
@@ -159,6 +174,9 @@ def _resolve_strategy(strategy: str | Callable[[pd.Series], object]) -> Callable
     return _BUILTIN_STRATEGIES[strategy]
 
 
+_INTEGER_PRESERVING_STRATEGIES = frozenset({"sum", "min", "max", "first"})
+
+
 def _aggregate_X(
     X,
     group_indices: list[np.ndarray],
@@ -169,12 +187,23 @@ def _aggregate_X(
     Built-in string strategies use vectorised numpy reductions.  Callable
     strategies fall back to a per-column ``pd.Series`` loop -- slow on wide
     matrices but expressive.  Sparse input is densified once up front.
+
+    For integer ``X`` the output dtype is preserved only for integer-safe
+    strategies (``sum``, ``min``, ``max``, ``first``); mean/median and
+    callables promote to ``float64`` so a uint16 count matrix doesn't
+    silently truncate fractional results.
     """
     if hasattr(X, "toarray"):
         X = X.toarray()
     X = np.asarray(X)
     n_groups = len(group_indices)
-    out = np.empty((n_groups, X.shape[1]), dtype=X.dtype)
+    if np.issubdtype(X.dtype, np.integer) and (
+        not isinstance(strategy, str) or strategy not in _INTEGER_PRESERVING_STRATEGIES
+    ):
+        out_dtype = np.float64
+    else:
+        out_dtype = X.dtype
+    out = np.empty((n_groups, X.shape[1]), dtype=out_dtype)
     reducer = None
     if isinstance(strategy, str) and strategy in _BUILTIN_X_REDUCERS:
         reducer = _BUILTIN_X_REDUCERS[strategy]

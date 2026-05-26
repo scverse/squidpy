@@ -71,7 +71,26 @@ _DEFAULT_CANDIDATE_MIN_IOU = 0.2
 _DEFAULT_CLOSE_RADIUS = 3
 
 _METHOD_KEY = "tiling_stitch"
+
+# Single source of truth for the contract between calculate_tiling_qc and
+# stitch_tile_cuts: the column names that stitch writes into the QC table,
+# and the subset of ``uns["tiling_stitch"]`` keys that are valid constructor
+# kwargs (the rest are diagnostic outputs and must not be re-emitted by the
+# stale-stitch-column warning in _tiling_qc.py).
 _STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence")
+_STITCH_PARAM_KEYS = frozenset(
+    {
+        "min_confidence",
+        "max_gap",
+        "max_group_size",
+        "distance_tol",
+        "min_edge_length",
+        "min_edge_length_ratio",
+        "min_edge_coverage",
+        "candidate_min_iou",
+        "close_radius",
+    }
+)
 
 # Features combined into ``stitch_confidence`` (arithmetic mean).  All four
 # are dataset-independent geometry / shape signals in [0, 1].  ``gap_score``
@@ -544,36 +563,58 @@ class _UnionFind:
             self.parent[ra] = rb
 
 
-def _validate_corner_junction(
+def _validate_group_geometry(
     pairs_in_group: list[_StitchPair],
+    size: int,
     max_gap: float,
 ) -> bool:
-    """For 4-piece groups, require the cut edges' endpoints to converge near
-    a single junction point.
+    """Geometric sanity check for groups of size >= 3.
 
-    Two perpendicular cuts (one h, one v) define the junction; the four
-    pieces' edges should share endpoints there.  If the spread is greater
-    than ``max_gap``, the group geometry is implausible.
+    Two cases:
+
+    - **Corner group** (size 4, both axes present): the cut edges' endpoints
+      must converge near a single junction point (one ``h`` cut crossing one
+      ``v`` cut defines the junction).  If the spread of edge extents from
+      the junction is greater than ``max_gap``, the group is implausible.
+
+    - **Chain group** (size 3 or 4, all pairs share one axis): legitimate
+      same-axis chains (e.g., a cell split by 3 horizontal seams into 4
+      vertically-stacked pieces) have pairs at N-1 *distinct* seam
+      coordinates.  Multiple pairs at the same seam coord would imply
+      geometrically impossible "two cuts at the same seam" pairings -- a
+      signature of a false-positive cluster -- so we reject.
     """
-    h_edges = [p.edge_a for p in pairs_in_group if p.axis == "h"] + [p.edge_b for p in pairs_in_group if p.axis == "h"]
-    v_edges = [p.edge_a for p in pairs_in_group if p.axis == "v"] + [p.edge_b for p in pairs_in_group if p.axis == "v"]
-    if not h_edges or not v_edges:
-        return True  # not a corner; nothing to validate
+    h_pairs = [p for p in pairs_in_group if p.axis == "h"]
+    v_pairs = [p for p in pairs_in_group if p.axis == "v"]
 
-    # Junction y is roughly the mean h-edge coord; junction x is mean v-edge coord.
-    junction_y = float(np.mean([e.coord for e in h_edges if e is not None]))
-    junction_x = float(np.mean([e.coord for e in v_edges if e is not None]))
+    # Chain case: only one axis present and size >= 3.
+    if not h_pairs or not v_pairs:
+        if size < 3:
+            return True  # 2-piece groups are trivially valid on one axis
+        # Each pair's seam coord is roughly midway between its two edges.
+        seam_coords = [round((p.edge_a.coord + p.edge_b.coord) / 2.0, 1) for p in pairs_in_group]
+        # Allow a max_gap-sized tolerance for "distinct" seams.
+        sorted_coords = sorted(seam_coords)
+        for prev, cur in zip(sorted_coords, sorted_coords[1:], strict=False):
+            if cur - prev <= max_gap:
+                return False
+        return True
 
-    # Each h edge's extent should reach to junction_x within max_gap; each v
-    # edge's extent should reach to junction_y within max_gap.
+    # Mixed-axis case: only validate the 4-piece corner pattern.  3-piece
+    # L-shapes (one h pair + one v pair sharing a corner cell) are
+    # geometrically valid and don't have a junction to converge on.
+    if size != 4:
+        return True
+
+    # Corner case: both axes present, size 4.  Junction y/x is the mean of edge coords.
+    h_edges = [p.edge_a for p in h_pairs] + [p.edge_b for p in h_pairs]
+    v_edges = [p.edge_a for p in v_pairs] + [p.edge_b for p in v_pairs]
+    junction_y = float(np.mean([e.coord for e in h_edges]))
+    junction_x = float(np.mean([e.coord for e in v_edges]))
     for e in h_edges:
-        if e is None:
-            continue
         if min(abs(e.extent[0] - junction_x), abs(e.extent[1] - junction_x)) > max_gap:
             return False
     for e in v_edges:
-        if e is None:
-            continue
         if min(abs(e.extent[0] - junction_y), abs(e.extent[1] - junction_y)) > max_gap:
             return False
     return True
@@ -625,8 +666,9 @@ def _assemble_groups(
                 confidences[m] = 1.0
             continue
 
-        # Corner validation for 4-piece groups.
-        if size == 4 and not _validate_corner_junction(group_pairs, max_gap):
+        # Geometric validation for 3+ piece groups: corner-junction for
+        # mixed-axis 4-groups, chain (distinct seam coords) for same-axis 3+.
+        if size >= 3 and not _validate_group_geometry(group_pairs, size, max_gap):
             for m in mem:
                 groups[m] = m
                 confidences[m] = 1.0
