@@ -142,7 +142,7 @@ def spatial_neighbors(
         - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - :class:`dict` containing parameters.
     """
 
-    adata, library_key = _resolve_sdata(
+    adata, library_key = _resolve_data(
         adata=adata,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
@@ -395,7 +395,7 @@ def _build_connectivity(
     return Adj
 
 
-def _resolve_sdata(
+def _resolve_data(
     adata: AnnData | SpatialData,
     elements_to_coordinate_systems: dict[str, str] | None,
     table_key: str | None = None,
