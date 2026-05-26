@@ -54,24 +54,12 @@ from squidpy.experimental.im._tiling import (
 
 __all__ = ["calculate_tiling_qc"]
 
-# Minimum cell area in pixels - smaller cells produce noisy contours
+# Defaults for the exposed parameters of ``calculate_tiling_qc``; see that
+# function's docstring for the meaning of each.  _MAD_TO_SD is the standard
+# consistency factor sd ~ 1.4826 x MAD for normal distributions.
 _MIN_CELL_AREA = 20
-
-# Default perpendicular distance tolerance for collinearity (pixels).
-# Points within this distance of the start→end line are considered
-# part of the same straight segment.  0.75 px works well for
-# sub-pixel contours from marching squares.
 _DEFAULT_DISTANCE_TOL = 0.75
-
-# Default maximum contour points to analyse.  Longer contours are
-# resampled to this length via equidistant arc-length interpolation
-# to bound the O(n²) two-pointer scan.  Exposed as the
-# ``max_contour_points`` argument of :func:`calculate_tiling_qc`.
 _DEFAULT_MAX_CONTOUR_POINTS = 500
-
-# Consistency factor for normal distributions: sd ~ 1.4826 x MAD.
-# Used to convert MAD-based thresholds to standard-deviation units so
-# `nmads_*` parameters behave like z-score multipliers.
 _MAD_TO_SD = 1.4826
 
 _TILE_SCORE_COLUMNS = ["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"]

@@ -43,42 +43,21 @@ if TYPE_CHECKING:
 
 __all__ = ["stitch_tile_cuts"]
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-# Sub-pixel tolerance for "lies on a bbox edge".  ``find_contours`` returns
-# half-pixel coordinates, so a real edge run sits within ~0.5 px of the line.
+# Defaults for the exposed parameters of ``stitch_tile_cuts``; see that
+# function's docstring for the meaning of each.
 _DEFAULT_DISTANCE_TOL = 0.75
-
-# Cut-edge length must exceed both an absolute floor (filters tiny cells) and
-# this fraction of the cell's equivalent diameter (filters arc-tops on
-# naturally curved cells, where the bbox-edge contact is a single pixel).
 _DEFAULT_MIN_EDGE_LENGTH = 5.0
 _DEFAULT_MIN_EDGE_LENGTH_RATIO = 0.4
-
-# Density check: of the integer parallel-axis positions within a candidate
-# run, what fraction has at least one near-edge contour point?  A single-
-# point arc-top fails this; a real chord across the cut passes trivially.
 _DEFAULT_MIN_EDGE_COVERAGE = 0.5
-
-# Loose IoU floor used at candidate enumeration -- selection happens at the
-# calibrated score stage.  Keeping this loose lets the model see borderline
-# negatives during scoring rather than excluding them upstream.
 _DEFAULT_CANDIDATE_MIN_IOU = 0.2
-
-# Morphological closing radius used to bridge the gap when materialising the
-# union mask for shape-quality features.  Larger than ``max_gap`` to be
-# robust to small cells where the gap is a meaningful fraction of cell size.
 _DEFAULT_CLOSE_RADIUS = 3
 
 _METHOD_KEY = "tiling_stitch"
 
-# Single source of truth for the contract between calculate_tiling_qc and
-# stitch_tile_cuts: the column names that stitch writes into the QC table,
-# and the subset of ``uns["tiling_stitch"]`` keys that are valid constructor
-# kwargs (the rest are diagnostic outputs and must not be re-emitted by the
-# stale-stitch-column warning in _tiling_qc.py).
+# Contract between calculate_tiling_qc and stitch_tile_cuts.  _STITCH_COLUMNS
+# is the obs columns stitch writes back into the QC table; _STITCH_PARAM_KEYS
+# is the subset of uns["tiling_stitch"] keys that are valid constructor kwargs
+# (the rest are diagnostic outputs).
 _STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence")
 _STITCH_PARAM_KEYS = frozenset(
     {
@@ -94,16 +73,7 @@ _STITCH_PARAM_KEYS = frozenset(
     }
 )
 
-# Features combined into ``stitch_confidence`` (arithmetic mean).  All four
-# are dataset-independent geometry / shape signals in [0, 1].  ``gap_score``
-# is also computed but only used as a hard filter (already inside
-# ``max_gap`` by construction); it does not enter the score.
-_SCORE_FEATURES: tuple[str, ...] = (
-    "iou",
-    "endpoint_match",
-    "merge_compactness",
-    "merge_solidity",
-)
+_SCORE_FEATURES: tuple[str, ...] = ("iou", "endpoint_match", "merge_compactness", "merge_solidity")
 _SCORE_FORMULA = "arithmetic_mean(iou, endpoint_match, merge_compactness, merge_solidity)"
 
 # ---------------------------------------------------------------------------
