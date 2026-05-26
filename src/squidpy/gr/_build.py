@@ -143,7 +143,7 @@ def spatial_neighbors(
     """
 
     adata, library_key = _resolve_data(
-        adata=adata,
+        data=adata,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         spatial_key=spatial_key,
