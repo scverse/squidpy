@@ -396,20 +396,20 @@ def _build_connectivity(
 
 
 def _resolve_data(
-    adata: AnnData | SpatialData,
+    data: AnnData | SpatialData,
     elements_to_coordinate_systems: dict[str, str] | None,
     table_key: str | None = None,
     spatial_key: str = Key.obsm.spatial,
     library_key: str | None = None,
 ) -> tuple[AnnData, str | None]:
-    if not isinstance(adata, SpatialData):
-        return adata, library_key
+    if not isinstance(data, SpatialData):
+        return data, library_key
 
     assert elements_to_coordinate_systems is not None, (
-        "Since `adata` is a :class:`spatialdata.SpatialData`, `elements_to_coordinate_systems` must not be `None`."
+        "Since input is a :class:`spatialdata.SpatialData`, `elements_to_coordinate_systems` must not be `None`."
     )
-    table = extract_adata_if_sdata(adata, table_key=table_key)
-    elements, matched_table = match_element_to_table(adata, list(elements_to_coordinate_systems), table_key)
+    table = extract_adata_if_sdata(data, table_key=table_key)
+    elements, matched_table = match_element_to_table(data, list(elements_to_coordinate_systems), table_key)
     assert matched_table.obs_names.equals(table.obs_names), (
         "The spatialdata table must annotate all elements keys. Some elements are missing, please check the `elements_to_coordinate_systems` dictionary."
     )
@@ -440,7 +440,7 @@ def _resolve_data(
     centroids = []
     for region_ in ordered_regions_in_table:
         cs = elements_to_coordinate_systems[region_]
-        centroid = get_centroids(adata[region_], coordinate_system=cs)[["x", "y"]].compute()
+        centroid = get_centroids(data[region_], coordinate_system=cs)[["x", "y"]].compute()
 
         # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
         if remove_centroids[region_]:
