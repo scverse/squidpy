@@ -356,6 +356,7 @@ def co_occurrence(
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
+    table_key: str = "table",
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -369,6 +370,9 @@ def co_occurrence(
         Distances interval at which co-occurrence is computed. If :class:`int`, uniformly spaced interval
         of the given size will be used.
     %(copy)s
+    table_key
+        Key in :attr:`spatialdata.SpatialData.tables` where the table is stored.
+        Only used if ``adata`` is a :class:`spatialdata.SpatialData`.
 
     Returns
     -------
