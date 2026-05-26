@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import dask.array as da
 import numpy as np
 import pytest
+import xarray as xr
 
 import squidpy as sq
+from squidpy.experimental.im._tiling import compute_cell_info, compute_cell_info_tiled
 from tests.conftest import PlotTester, PlotTesterMeta
 
 # ---------------------------------------------------------------------------
@@ -209,6 +212,59 @@ class TestCalculateTilingQC:
             outlier_use_smoothed=True,
         )
         assert adata.obs["is_outlier"].dtype == bool
+
+
+# ---------------------------------------------------------------------------
+# Tiled centroid backend
+# ---------------------------------------------------------------------------
+
+
+class TestComputeCellInfoTiled:
+    """Direct tests for compute_cell_info_tiled against the in-memory reference.
+
+    The tiled implementation must produce identical centroids and bounding
+    boxes to :func:`compute_cell_info` for any chunking, including chunk
+    sizes small enough that cells span multiple chunks.
+    """
+
+    def _reference_and_tiled(self, sdata, chunk_size: int):
+        labels_da = sdata.labels["labels"]
+        labels_np = np.asarray(labels_da.values)
+        if labels_np.ndim > 2:
+            labels_np = labels_np.squeeze()
+
+        # Re-chunk explicitly so the tiled backend has to merge cells across
+        # chunk boundaries.
+        rechunked = da.from_array(labels_np, chunks=(chunk_size, chunk_size))
+        tiled_da = xr.DataArray(rechunked, dims=["y", "x"])
+
+        ref = compute_cell_info(labels_np)
+        tiled = compute_cell_info_tiled(tiled_da, chunk_size=chunk_size)
+        return ref, tiled
+
+    def test_matches_reference_small_chunks(self, sdata_clean):
+        """Small chunks force most cells to straddle chunk borders."""
+        ref, tiled = self._reference_and_tiled(sdata_clean, chunk_size=50)
+
+        assert set(tiled) == set(ref), "Tiled backend produced a different set of label IDs"
+        for lid, ci_ref in ref.items():
+            ci_tiled = tiled[lid]
+            np.testing.assert_allclose(ci_tiled.centroid_y, ci_ref.centroid_y, atol=1e-9)
+            np.testing.assert_allclose(ci_tiled.centroid_x, ci_ref.centroid_x, atol=1e-9)
+            assert ci_tiled.bbox_h == ci_ref.bbox_h
+            assert ci_tiled.bbox_w == ci_ref.bbox_w
+
+    def test_matches_reference_single_chunk(self, sdata_clean):
+        """Chunk larger than the image: tiled path must agree exactly with the reference."""
+        ref, tiled = self._reference_and_tiled(sdata_clean, chunk_size=10_000)
+
+        assert set(tiled) == set(ref)
+        for lid, ci_ref in ref.items():
+            ci_tiled = tiled[lid]
+            np.testing.assert_allclose(ci_tiled.centroid_y, ci_ref.centroid_y, atol=1e-12)
+            np.testing.assert_allclose(ci_tiled.centroid_x, ci_ref.centroid_x, atol=1e-12)
+            assert ci_tiled.bbox_h == ci_ref.bbox_h
+            assert ci_tiled.bbox_w == ci_ref.bbox_w
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ never materialize the full image or label array.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
@@ -50,7 +50,7 @@ class TileSpec:
 
     base: tuple[int, int, int, int]
     crop: tuple[int, int, int, int]
-    owned_ids: frozenset[int] = field(default_factory=frozenset)
+    owned_ids: frozenset[int]
 
 
 # ---------------------------------------------------------------------------
@@ -160,13 +160,13 @@ def compute_cell_info_tiled(
 
             for p in regionprops(chunk):
                 lid = p.label
-                cy_global = p.centroid[0] + y0
-                cx_global = p.centroid[1] + x0
-                area = p.area
-                min_row = p.bbox[0] + y0
-                max_row = p.bbox[2] + y0
-                min_col = p.bbox[1] + x0
-                max_col = p.bbox[3] + x0
+                cy_global = float(p.centroid[0] + y0)
+                cx_global = float(p.centroid[1] + x0)
+                area = float(p.area)
+                min_row = float(p.bbox[0] + y0)
+                max_row = float(p.bbox[2] + y0)
+                min_col = float(p.bbox[1] + x0)
+                max_col = float(p.bbox[3] + x0)
 
                 if lid not in stats:
                     stats[lid] = [cy_global * area, cx_global * area, area, min_row, max_row, min_col, max_col]
@@ -376,10 +376,33 @@ def extract_labels_tile_lazy(
 
 
 def _zero_non_owned(tile_labels: np.ndarray, owned_ids: frozenset[int]) -> None:
-    """Zero out labels not in *owned_ids* (in-place)."""
-    owned_arr = np.array(list(owned_ids), dtype=tile_labels.dtype)
-    mask = ~np.isin(tile_labels, owned_arr) & (tile_labels != 0)
-    tile_labels[mask] = 0
+    """Zero out labels not in *owned_ids* (in-place).
+
+    Uses a boolean lookup table indexed by label ID for O(n) per-pixel
+    cost when label IDs are dense.  Falls back to :func:`numpy.isin`
+    when the maximum label ID is large relative to the tile size, so
+    sparse-but-large ID spaces (e.g. globally-unique segmentation IDs
+    from multi-FOV pipelines) don't allocate an oversized LUT.
+    """
+    if tile_labels.size == 0:
+        return
+
+    if not owned_ids:
+        tile_labels[:] = 0
+        return
+
+    max_id = int(tile_labels.max())
+    # LUT is cheaper than np.isin only when max_id fits in roughly one
+    # tile's worth of bool entries; above that, the alloc dominates.
+    if max_id < tile_labels.size:
+        lut = np.zeros(max_id + 1, dtype=bool)
+        for lid in owned_ids:
+            if lid <= max_id:
+                lut[lid] = True
+        tile_labels[~lut[tile_labels]] = 0
+    else:
+        owned_arr = np.fromiter(owned_ids, dtype=tile_labels.dtype, count=len(owned_ids))
+        tile_labels[~np.isin(tile_labels, owned_arr)] = 0
 
 
 # ---------------------------------------------------------------------------

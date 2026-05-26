@@ -62,10 +62,11 @@ _MIN_CELL_AREA = 20
 # sub-pixel contours from marching squares.
 _DEFAULT_DISTANCE_TOL = 0.75
 
-# Maximum contour points to analyse.  Longer contours are resampled
-# to this length via equidistant arc-length interpolation to bound
-# the O(n²) two-pointer scan.
-_MAX_CONTOUR_POINTS = 500
+# Default maximum contour points to analyse.  Longer contours are
+# resampled to this length via equidistant arc-length interpolation
+# to bound the O(n²) two-pointer scan.  Exposed as the
+# ``max_contour_points`` argument of :func:`calculate_tiling_qc`.
+_DEFAULT_MAX_CONTOUR_POINTS = 500
 
 # Consistency factor for normal distributions: sd ~ 1.4826 x MAD.
 # Used to convert MAD-based thresholds to standard-deviation units so
@@ -86,6 +87,8 @@ def _has_distributed_client() -> bool:
     back to the local threaded scheduler.
     """
     try:
+        # ImportError guards against partial dask installs without the distributed extra;
+        # ValueError is what get_client() raises when no Client is currently active.
         from dask.distributed import get_client
 
         get_client()
@@ -185,12 +188,13 @@ def _resample_contour(contour: np.ndarray, max_points: int) -> np.ndarray:
 def _longest_collinear_segment(
     contour: np.ndarray,
     distance_tol: float = _DEFAULT_DISTANCE_TOL,
+    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
 ) -> tuple[float, float]:
     """Find the longest collinear run of contour points.
 
     Uses a numba-compiled two-pointer scan with three contour
     rotations to handle the closure point.  Long contours are
-    resampled to at most :data:`_MAX_CONTOUR_POINTS` via arc-length
+    resampled to at most ``max_contour_points`` via arc-length
     interpolation to bound worst-case runtime.
 
     Parameters
@@ -200,6 +204,9 @@ def _longest_collinear_segment(
     distance_tol
         Maximum perpendicular distance (pixels) from the start→end
         line for a point to be considered part of the straight segment.
+    max_contour_points
+        Cap on contour resolution; longer contours are resampled to
+        this length before the collinearity scan.
 
     Returns
     -------
@@ -213,7 +220,7 @@ def _longest_collinear_segment(
         return 0.0, 0.0
 
     pts = np.asarray(contour, dtype=np.float64)
-    pts = _resample_contour(pts, _MAX_CONTOUR_POINTS)
+    pts = _resample_contour(pts, max_contour_points)
     n = len(pts)
 
     # find_contours returns closed contours (first ≈ last point)
@@ -274,6 +281,7 @@ def _straight_edge_metrics(
     contour: np.ndarray,
     cell_area: float,
     distance_tol: float = _DEFAULT_DISTANCE_TOL,
+    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
 ) -> tuple[float, float, float]:
     """Compute straight-edge metrics for a single cell contour.
 
@@ -299,7 +307,7 @@ def _straight_edge_metrics(
     if eq_diam == 0:
         return 0.0, 0.0, 0.0
 
-    run_length, run_angle = _longest_collinear_segment(contour, distance_tol)
+    run_length, run_angle = _longest_collinear_segment(contour, distance_tol, max_contour_points)
     straight_ratio = run_length / eq_diam
     cardinal = _cardinal_alignment(run_angle)
     cut_score = straight_ratio * cardinal
@@ -317,6 +325,7 @@ def _score_tile(
     distance_tol: float = _DEFAULT_DISTANCE_TOL,
     min_area: int = _MIN_CELL_AREA,
     downsample: int = 1,
+    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
 ) -> pd.DataFrame:
     """Compute tiling QC metrics for all cells in a numpy label tile.
 
@@ -370,7 +379,7 @@ def _score_tile(
 
         contour = max(contours, key=len)
         analysis_area = area / (downsample**2) if downsample > 1 else area
-        ser, cas, cs = _straight_edge_metrics(contour, analysis_area, distance_tol)
+        ser, cas, cs = _straight_edge_metrics(contour, analysis_area, distance_tol, max_contour_points)
 
         rows[lid] = {
             "max_straight_edge_ratio": ser,
@@ -430,6 +439,7 @@ def calculate_tiling_qc(
     nmads_cut: float = 1.5,
     nmads_smoothed: float = 3,
     n_neighbors: int = 10,
+    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
     n_jobs: int = -1,
     table_key_added: str | None = None,
     inplace: bool = True,
@@ -489,6 +499,13 @@ def calculate_tiling_qc(
         perfect grid each cell has 8 immediate neighbours; the default
         of 10 leaves a little wiggle room for biological irregularity
         without wasting compute on distant cells.
+    max_contour_points
+        Cap on contour resolution for the collinearity scan.  Cells
+        with longer contours are resampled to this length via
+        arc-length interpolation before the ``O(n^2)`` two-pointer
+        scan, bounding worst-case runtime on very large cells.  The
+        default of 500 keeps results stable for typical cells; raise
+        only if cells are unusually large or ragged.
     n_jobs
         Number of threads for tile processing.  ``-1`` (default) uses
         all available CPUs.  Ignored when an active
@@ -527,6 +544,13 @@ def calculate_tiling_qc(
     active :class:`dask.distributed.Client` is in scope it is picked up
     automatically and used for execution; otherwise a local threaded
     scheduler with ``n_jobs`` workers is used.
+
+    If you invoke this function from inside a dask worker task (e.g.,
+    via ``client.submit(calculate_tiling_qc, ...)``), wrap the call in
+    :func:`distributed.secede` / :func:`distributed.rejoin` to release
+    the worker slot before the inner tile tasks are submitted; without
+    that, the cluster can deadlock when all workers are busy holding
+    the outer job.
     """
     if labels_key not in sdata.labels:
         raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
@@ -545,6 +569,8 @@ def calculate_tiling_qc(
             raise ValueError("When using multi-scale labels, please specify the scale.")
         labels_da = labels_node[scale].ds["image"]
     else:
+        if scale is not None:
+            logg.warning(f"`scale={scale!r}` ignored: labels at {labels_key!r} are single-scale.")
         labels_da = labels_node
 
     cell_info = _compute_centroids_for_labels(sdata, labels_key, labels_da, scale)
@@ -562,7 +588,13 @@ def calculate_tiling_qc(
     @dask.delayed
     def _process_one(spec):
         tile_lbl = extract_labels_tile_lazy(labels_da, spec)
-        return _score_tile(tile_lbl, distance_tol=distance_tol, min_area=min_area, downsample=downsample)
+        return _score_tile(
+            tile_lbl,
+            distance_tol=distance_tol,
+            min_area=min_area,
+            downsample=downsample,
+            max_contour_points=max_contour_points,
+        )
 
     tasks = [_process_one(spec) for spec in specs]
 
@@ -612,24 +644,29 @@ def calculate_tiling_qc(
         smoothed = cut_scores * neighbor_mean
         combined["smoothed_cut_score"] = smoothed
 
-        # Build is_outlier from enabled gates (AND when both active)
+        # Build is_outlier from enabled gates (AND when both active).
+        # A gate whose MAD is degenerate has no signal — treat it as a
+        # no-op so it cannot poison the other gate's result.  If no gate
+        # produced a meaningful filter, fall back to "no outliers".
         is_outlier = np.ones(n_cells, dtype=bool)
+        gates_applied = 0
 
         if outlier_use_cut:
             median_c = np.median(cut_scores)
             mad_c = np.median(np.abs(cut_scores - median_c))
-            if mad_c < 1e-12:
-                is_outlier[:] = False
-            else:
+            if mad_c >= 1e-12:
                 is_outlier &= cut_scores >= median_c + nmads_cut * mad_c * _MAD_TO_SD
+                gates_applied += 1
 
         if outlier_use_smoothed:
             median_s = np.median(smoothed)
             mad_s = np.median(np.abs(smoothed - median_s))
-            if mad_s < 1e-12:
-                is_outlier[:] = False
-            else:
+            if mad_s >= 1e-12:
                 is_outlier &= smoothed >= median_s + nmads_smoothed * mad_s * _MAD_TO_SD
+                gates_applied += 1
+
+        if gates_applied == 0:
+            is_outlier[:] = False
 
         combined["is_outlier"] = is_outlier
 
@@ -670,6 +707,7 @@ def calculate_tiling_qc(
         "nmads_cut": nmads_cut,
         "nmads_smoothed": nmads_smoothed,
         "n_neighbors": n_neighbors,
+        "max_contour_points": max_contour_points,
     }
 
     if inplace:
