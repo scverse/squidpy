@@ -151,11 +151,6 @@ class TestMakeStitchedLabels:
             agg.obs["n_pieces"].to_numpy(),
         )
 
-    def test_invalid_merge_strategy_raises(self, sdata_tile_boundary):
-        sdata, _ = sdata_tile_boundary
-        _qc_and_stitch(sdata)
-        with pytest.raises(ValueError, match="Unknown merge_strategy"):
-            sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", merge_strategy="bogus")
 
     def test_group_invariant_columns_take_first(self, sdata_tile_boundary):
         """is_stitched, n_pieces, stitch_confidence are not affected by sum strategy."""
@@ -219,17 +214,23 @@ class TestMakeStitchedLabels:
         # Every row in the table must reference an existing instance in the labels element.
         assert unique_in_table.issubset(unique_in_image), f"orphan rows: {unique_in_table - unique_in_image}"
 
-    def test_errors_when_stitch_not_run(self, sdata_tile_boundary):
+    @pytest.mark.parametrize(
+        ("setup", "kwargs", "match"),
+        [
+            ("qc_only", {"labels_key": "labels"}, "stitch_group_id"),
+            ("qc_and_stitch", {"labels_key": "bogus"}, "not found"),
+            ("qc_and_stitch", {"labels_key": "labels", "merge_strategy": "bogus"}, "Unknown merge_strategy"),
+        ],
+        ids=["stitch_not_run", "missing_labels_key", "invalid_merge_strategy"],
+    )
+    def test_invalid_input_raises(self, sdata_tile_boundary, setup, kwargs, match):
         sdata, _ = sdata_tile_boundary
-        sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200)
-        with pytest.raises(ValueError, match="stitch_group_id"):
-            sq.experimental.im.make_stitched_labels(sdata, labels_key="labels")
-
-    def test_errors_on_missing_labels_key(self, sdata_tile_boundary):
-        sdata, _ = sdata_tile_boundary
-        _qc_and_stitch(sdata)
-        with pytest.raises(ValueError, match="not found"):
-            sq.experimental.im.make_stitched_labels(sdata, labels_key="bogus")
+        if setup == "qc_only":
+            sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200)
+        else:
+            _qc_and_stitch(sdata)
+        with pytest.raises(ValueError, match=match):
+            sq.experimental.im.make_stitched_labels(sdata, **kwargs)
 
     def test_idempotent(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary

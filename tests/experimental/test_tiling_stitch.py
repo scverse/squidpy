@@ -142,20 +142,19 @@ class TestRecoveryVsGroundTruth:
 
 
 class TestErrors:
-    def test_missing_qc_table_errors(self, sdata_tile_boundary):
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"labels_key": "labels"}, "QC table"),
+            ({"labels_key": "bogus"}, "not found in sdata.labels"),
+            ({"labels_key": "labels", "min_confidence": 1.5}, "min_confidence"),
+        ],
+        ids=["missing_qc_table", "missing_labels_key", "invalid_min_confidence"],
+    )
+    def test_invalid_input_raises(self, sdata_tile_boundary, kwargs, match):
         sdata, _ = sdata_tile_boundary
-        with pytest.raises(ValueError, match="QC table"):
-            sq.experimental.tl.stitch_tile_cuts(sdata, labels_key="labels")
-
-    def test_missing_labels_key_errors(self, sdata_tile_boundary):
-        sdata, _ = sdata_tile_boundary
-        with pytest.raises(ValueError, match="not found in sdata.labels"):
-            sq.experimental.tl.stitch_tile_cuts(sdata, labels_key="bogus")
-
-    def test_invalid_min_confidence(self, sdata_tile_boundary):
-        sdata, _ = sdata_tile_boundary
-        with pytest.raises(ValueError, match="min_confidence"):
-            sq.experimental.tl.stitch_tile_cuts(sdata, labels_key="labels", min_confidence=1.5)
+        with pytest.raises(ValueError, match=match):
+            sq.experimental.tl.stitch_tile_cuts(sdata, **kwargs)
 
 
 # ---------------------------------------------------------------------------

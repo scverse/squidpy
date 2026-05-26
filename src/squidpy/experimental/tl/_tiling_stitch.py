@@ -27,6 +27,8 @@ import numpy as np
 import spatialdata as sd
 import xarray as xr
 from scipy.ndimage import binary_closing
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import connected_components
 from skimage.measure import find_contours, regionprops
 from skimage.measure import label as cc_label
 from skimage.morphology import disk as morph_disk
@@ -540,29 +542,6 @@ def _score_pairs(
 # ---------------------------------------------------------------------------
 
 
-class _UnionFind:
-    """Union-find with smallest-label-as-root for deterministic group IDs."""
-
-    def __init__(self) -> None:
-        self.parent: dict[int, int] = {}
-
-    def find(self, x: int) -> int:
-        self.parent.setdefault(x, x)
-        while self.parent[x] != x:
-            self.parent[x] = self.parent[self.parent[x]]
-            x = self.parent[x]
-        return x
-
-    def union(self, a: int, b: int) -> None:
-        ra, rb = self.find(a), self.find(b)
-        if ra == rb:
-            return
-        if ra < rb:
-            self.parent[rb] = ra
-        else:
-            self.parent[ra] = rb
-
-
 def _validate_group_geometry(
     pairs_in_group: list[_StitchPair],
     size: int,
@@ -636,21 +615,41 @@ def _assemble_groups(
         ``cell_id -> stitch_confidence`` -- min over pairwise confidences in
         the cell's group; ``1.0`` for confirmed-solo (no surviving pair).
     """
-    uf = _UnionFind()
-    candidate_list = [int(c) for c in candidate_ids]
-    for cid in candidate_list:
-        uf.find(cid)
-    for p in pairs:
-        uf.union(p.cell_a, p.cell_b)
+    # Build undirected connected components via scipy.  Cells map to a
+    # contiguous [0, n) index space; pairs become symmetric edges in a CSR
+    # adjacency matrix.  We then re-key components by the smallest cell_id
+    # they contain so the group root is deterministic.
+    candidate_list = sorted({int(c) for c in candidate_ids})
+    if not candidate_list:
+        return {}, {}
+    id_to_idx = {cid: i for i, cid in enumerate(candidate_list)}
+    n = len(candidate_list)
 
-    # Collect group members + the pairs internal to each group.
+    valid_pairs = [p for p in pairs if p.cell_a in id_to_idx and p.cell_b in id_to_idx]
+    if valid_pairs:
+        rows = [id_to_idx[p.cell_a] for p in valid_pairs]
+        cols = [id_to_idx[p.cell_b] for p in valid_pairs]
+        adj = csr_matrix((np.ones(len(rows), dtype=np.int8), (rows, cols)), shape=(n, n))
+        _, comp_labels = connected_components(adj, directed=False)
+    else:
+        comp_labels = np.arange(n)
+
+    cells_by_comp: dict[int, list[int]] = {}
+    for i, comp in enumerate(comp_labels):
+        cells_by_comp.setdefault(int(comp), []).append(candidate_list[i])
+
     members: dict[int, list[int]] = {}
-    for cid in candidate_list:
-        members.setdefault(uf.find(cid), []).append(cid)
+    root_of_cell: dict[int, int] = {}
+    for comp_members in cells_by_comp.values():
+        comp_members.sort()
+        root = comp_members[0]
+        members[root] = comp_members
+        for cid in comp_members:
+            root_of_cell[cid] = root
+
     pairs_by_group: dict[int, list[_StitchPair]] = {}
-    for p in pairs:
-        root = uf.find(p.cell_a)
-        pairs_by_group.setdefault(root, []).append(p)
+    for p in valid_pairs:
+        pairs_by_group.setdefault(root_of_cell[p.cell_a], []).append(p)
 
     groups: dict[int, int] = {}
     confidences: dict[int, float] = {}
