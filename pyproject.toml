@@ -76,7 +76,17 @@ dependencies = [
   "xarray>=2024.10",
   "zarr>=3",
 ]
-optional-dependencies.dev = [
+optional-dependencies.leiden = [
+  "leidenalg",
+  "spatialleiden>=0.4",
+]
+urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
+urls.Documentation = "https://squidpy.readthedocs.io"
+urls.Home-page = "https://github.com/scverse/squidpy"
+urls.Source = "https://github.com/scverse/squidpy"
+
+[dependency-groups]
+dev = [
   "hatch>=1.9",
   "ipykernel",
   "ipywidgets",
@@ -86,7 +96,18 @@ optional-dependencies.dev = [
   "pre-commit>=3",
   "ruff",
 ]
-optional-dependencies.docs = [
+test = [
+  "coverage[toml]>=7",
+  "pytest>=7",
+  # Just for VS Code
+  "pytest-cov>=4",
+  "pytest-mock>=3.5",
+  "pytest-rerunfailures",
+  "pytest-timeout>=2.1",
+  "pytest-xdist>=3",
+  "scanpy[leiden]",
+]
+docs = [
   "docutils<0.22",                    # Pin to avoid sphinx-tabs KeyError with backrefs
   "ipython",
   "ipywidgets>=8",
@@ -102,24 +123,6 @@ optional-dependencies.docs = [
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
 ]
-optional-dependencies.leiden = [
-  "leidenalg",
-  "spatialleiden>=0.4",
-]
-optional-dependencies.test = [
-  "coverage[toml]>=7",
-  "pytest>=7",
-  # Just for VS Code
-  "pytest-cov>=4",
-  "pytest-mock>=3.5",
-  "pytest-timeout>=2.1",
-  "pytest-xdist>=3",
-  "scanpy[leiden]",
-]
-urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
-urls.Documentation = "https://squidpy.readthedocs.io"
-urls.Home-page = "https://github.com/scverse/squidpy"
-urls.Source = "https://github.com/scverse/squidpy"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -260,7 +263,10 @@ addopts = [
 ]
 markers = [
   "internet: tests that require internet",
+  # the below markers are just there because we import from anndata.tests.helpers,
+  # which means pytest sees them despite us not using them.
   "gpu: tests that require GPU",
+  "array_api: tests that require array-api-compat",
 ]
 
 [tool.coverage]
