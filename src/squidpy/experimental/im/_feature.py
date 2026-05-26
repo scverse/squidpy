@@ -275,7 +275,8 @@ def _featurize_tile(
     tile_labels: np.ndarray,
     parsed: _ParsedFeatures,
     channel_names: list[str],
-    cp_config: dict | None,
+    *,
+    cp_config: dict | None = None,
 ) -> pd.DataFrame:
     """Compute all requested features for a single tile.
 
@@ -290,9 +291,10 @@ def _featurize_tile(
     channel_names
         Channel names for column naming.
     cp_config
-        Pre-built cp_measure featurizer config, or ``None`` when no cp_measure
-        features are requested. Built once by the caller and reused across
-        every tile.
+        Pre-built cp_measure featurizer config. When ``None`` (default), the
+        config is built locally from ``parsed.cp_flags``. ``calculate_image_features``
+        builds it once and reuses it across tiles; direct callers can rely on
+        the fallback.
 
     Returns
     -------
@@ -306,6 +308,8 @@ def _featurize_tile(
     parts: list[pd.DataFrame] = []
 
     # --- cp_measure features ---
+    if cp_config is None and parsed.cp_flags is not None:
+        cp_config = _build_cp_config(parsed.cp_flags, channel_names)
     if cp_config is not None:
         # cp_measure assumes dense 1..N IDs and index-errors on sparse IDs.
         contiguous_labels, _, inverse = relabel_sequential(tile_labels)
@@ -935,7 +939,7 @@ def calculate_image_features(
     # --- Process tiles (each worker materializes only its own ~2k x 2k crop) ---
     def _process_one(spec):
         tile_img, tile_lbl = extract_tile_lazy(image_da, labels_da, spec)
-        return _featurize_tile(tile_img, tile_lbl, parsed, channel_names, cp_config)
+        return _featurize_tile(tile_img, tile_lbl, parsed, channel_names, cp_config=cp_config)
 
     log_every = max(1, total_tiles // 10)
     start_t = time.monotonic()
