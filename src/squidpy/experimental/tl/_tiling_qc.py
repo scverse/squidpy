@@ -551,6 +551,13 @@ def calculate_tiling_qc(
     worker slot before the inner tile tasks are submitted; without
     that, the cluster can deadlock when all workers are busy holding
     the outer job.
+
+    Re-running ``calculate_tiling_qc`` on a labels element whose QC
+    table already carries ``stitch_*`` columns from a previous run of
+    :func:`stitch_tile_cuts` replaces the table wholesale, dropping
+    those columns.  A warning is logged with the previous stitch
+    parameters and a copy-pasteable invocation so they can be
+    re-derived from the new outlier set.
     """
     if labels_key not in sdata.labels:
         raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
@@ -712,6 +719,40 @@ def calculate_tiling_qc(
 
     if inplace:
         table_key = table_key_added if table_key_added is not None else f"{labels_key}_qc"
+        _warn_if_dropping_stitch_columns(sdata, table_key, labels_key)
         sdata.tables[table_key] = TableModel.parse(adata)
         return None
     return adata
+
+
+_STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence")
+
+
+def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labels_key: str) -> None:
+    """Warn if re-running QC would drop downstream stitch results.
+
+    ``calculate_tiling_qc`` replaces the QC table wholesale, so any columns
+    added by :func:`stitch_tile_cuts` to a previous version of this table
+    are about to disappear.  We emit an actionable warning listing the
+    previous stitch parameters (from ``.uns["tiling_stitch"]``) and a
+    copy-pasteable invocation to restore them.
+    """
+    if table_key not in sdata.tables:
+        return
+    existing = sdata.tables[table_key]
+    present = [c for c in _STITCH_COLUMNS if c in existing.obs.columns]
+    if not present:
+        return
+
+    prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
+    kwargs = ", ".join(f"{k}={v!r}" for k, v in prev_params.items() if not k.startswith("_"))
+    rerun = (
+        f"sq.experimental.tl.stitch_tile_cuts(sdata, labels_key={labels_key!r}"
+        + (f", {kwargs}" if kwargs else "")
+        + ")"
+    )
+    logg.warning(
+        f"Re-running calculate_tiling_qc dropped previous stitch columns "
+        f"({', '.join(present)}) from sdata.tables[{table_key!r}].  "
+        f"To restore them, run: {rerun}"
+    )
