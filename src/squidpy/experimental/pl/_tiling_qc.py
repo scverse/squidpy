@@ -26,7 +26,7 @@ def tiling_qc(
 ) -> None:
     """Plot labels coloured by their tiling-artifact score.
 
-    Uses :mod:`spatialdata_plot` to render the label element coloured
+    Uses ``spatialdata_plot`` to render the label element coloured
     by the chosen QC score from the linked table.  If tile-boundary
     artifacts are present the tile grid emerges as lines of
     high-scoring cells.
@@ -48,7 +48,7 @@ def tiling_qc(
     cmap
         Matplotlib colormap name.
     figsize
-        Figure size passed to :meth:`spatialdata.SpatialData.pl.show`.
+        Figure size passed to ``spatialdata.SpatialData.pl.show``.
     """
     table_key = qc_key if qc_key is not None else f"{labels_key}_qc"
     if table_key not in sdata.tables:

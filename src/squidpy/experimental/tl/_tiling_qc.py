@@ -80,7 +80,7 @@ _NAN_TILE_SCORES = dict.fromkeys(_TILE_SCORE_COLUMNS, np.nan)
 
 
 def _has_distributed_client() -> bool:
-    """Return True iff a :class:`dask.distributed.Client` is active in this process.
+    """Return True iff a ``dask.distributed.Client`` is active in this process.
 
     Mirrors the public dask idiom: if a Client is in scope, ``dask.compute``
     will pick it up automatically — we only need to know whether to fall
@@ -448,8 +448,8 @@ def calculate_tiling_qc(
 
     Computes per-cell metrics that detect artificially straight edges
     caused by tiled segmentation.  Large images are processed via the
-    same tiling infrastructure as
-    :func:`~squidpy.experimental.im.calculate_image_features`.
+    cell-aware tiling infrastructure in
+    ``squidpy.experimental.im._tiling``.
 
     Results are stored in a QC table (default
     ``sdata.tables["{labels_key}_qc"]``).  Scores live in ``.obs``;
@@ -509,7 +509,7 @@ def calculate_tiling_qc(
     n_jobs
         Number of threads for tile processing.  ``-1`` (default) uses
         all available CPUs.  Ignored when an active
-        :class:`dask.distributed.Client` is in scope (the client's own
+        ``dask.distributed.Client`` is in scope (the client's own
         worker pool is used instead).
     table_key_added
         Key under which to store the result in ``sdata.tables``.
@@ -541,14 +541,14 @@ def calculate_tiling_qc(
     Notes
     -----
     Tile processing is parallelised via :func:`dask.compute`.  When an
-    active :class:`dask.distributed.Client` is in scope it is picked up
+    active ``dask.distributed.Client`` is in scope it is picked up
     automatically and used for execution; otherwise a local threaded
     scheduler with ``n_jobs`` workers is used.
 
     If you invoke this function from inside a dask worker task (e.g.,
     via ``client.submit(calculate_tiling_qc, ...)``), wrap the call in
-    :func:`distributed.secede` / :func:`distributed.rejoin` to release
-    the worker slot before the inner tile tasks are submitted; without
+    ``distributed.secede`` / ``distributed.rejoin`` to release the
+    worker slot before the inner tile tasks are submitted; without
     that, the cluster can deadlock when all workers are busy holding
     the outer job.
     """
