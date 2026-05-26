@@ -20,8 +20,9 @@ written.  Materialising a stitched labels element is opt-in via
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field, fields
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import spatialdata as sd
@@ -41,37 +42,74 @@ if TYPE_CHECKING:
 
     import anndata as ad
 
-__all__ = ["stitch_tile_cuts"]
+__all__ = ["StitchParams", "stitch_tile_cuts"]
 
-# Defaults for the exposed parameters of ``stitch_tile_cuts``; see that
-# function's docstring for the meaning of each.
-_DEFAULT_DISTANCE_TOL = 0.75
-_DEFAULT_MIN_EDGE_LENGTH = 5.0
-_DEFAULT_MIN_EDGE_LENGTH_RATIO = 0.4
-_DEFAULT_MIN_EDGE_COVERAGE = 0.5
-_DEFAULT_CANDIDATE_MIN_IOU = 0.2
-_DEFAULT_CLOSE_RADIUS = 3
+
+@dataclass(slots=True)
+class StitchParams:
+    """Advanced tuning knobs for :func:`stitch_tile_cuts`.
+
+    The defaults below work for typical 2D segmentation tiles produced by
+    cellpose-like pipelines.  Pass an instance (or a ``Mapping`` of field
+    names to values) as ``stitch_params`` to override.
+
+    Attributes
+    ----------
+    distance_tol
+        Sub-pixel tolerance for "lies on a bbox edge".  ``find_contours``
+        returns half-pixel coordinates, so a real edge run sits within
+        ~0.5 px of the line.
+    min_edge_length
+        Absolute floor on cut-edge length (pixels).  Filters tiny cells
+        whose bbox-edge contact is sub-pixel noise.
+    min_edge_length_ratio
+        Minimum cut-edge length relative to the cell's equivalent
+        diameter.  Filters arc-tops on naturally curved cells where the
+        bbox-edge contact is a single point.
+    min_edge_coverage
+        Minimum fraction of integer parallel-axis positions in a
+        candidate run that must have at least one near-edge contour
+        point.  Filters single-point arc-tops.
+    candidate_min_iou
+        Loose 1-D IoU floor at candidate enumeration.  Confidence-based
+        selection happens later via ``min_confidence``.
+    close_radius
+        Morphological closing disk radius used when materialising the
+        union mask for the shape-quality features.  Should be larger
+        than ``max_gap``.
+    """
+
+    distance_tol: float = 0.75
+    min_edge_length: float = 5.0
+    min_edge_length_ratio: float = 0.4
+    min_edge_coverage: float = 0.5
+    candidate_min_iou: float = 0.2
+    close_radius: int = 3
+
+
+def _resolve_stitch_params(stitch_params: StitchParams | Mapping[str, Any] | None) -> StitchParams:
+    """Normalise the ``stitch_params`` argument to a :class:`StitchParams` instance."""
+    if stitch_params is None:
+        return StitchParams()
+    if isinstance(stitch_params, StitchParams):
+        return stitch_params
+    if isinstance(stitch_params, Mapping):
+        valid = {f.name for f in fields(StitchParams)}
+        unknown = set(stitch_params) - valid
+        if unknown:
+            raise ValueError(f"Unknown stitch_params field(s): {sorted(unknown)}; expected from {sorted(valid)}.")
+        return StitchParams(**stitch_params)
+    raise TypeError(f"stitch_params must be StitchParams, Mapping, or None; got {type(stitch_params).__name__}.")
 
 _METHOD_KEY = "tiling_stitch"
+_STITCH_DEFAULTS = StitchParams()
 
 # Contract between calculate_tiling_qc and stitch_tile_cuts.  _STITCH_COLUMNS
 # is the obs columns stitch writes back into the QC table; _STITCH_PARAM_KEYS
-# is the subset of uns["tiling_stitch"] keys that are valid constructor kwargs
-# (the rest are diagnostic outputs).
+# is the subset of top-level kwargs valid for re-running stitch_tile_cuts
+# (the advanced tuning lives in a nested ``stitch_params`` dict).
 _STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence")
-_STITCH_PARAM_KEYS = frozenset(
-    {
-        "min_confidence",
-        "max_gap",
-        "max_group_size",
-        "distance_tol",
-        "min_edge_length",
-        "min_edge_length_ratio",
-        "min_edge_coverage",
-        "candidate_min_iou",
-        "close_radius",
-    }
-)
+_STITCH_PARAM_KEYS = frozenset({"min_confidence", "max_gap", "max_group_size"})
 
 _SCORE_FEATURES: tuple[str, ...] = ("iou", "endpoint_match", "merge_compactness", "merge_solidity")
 _SCORE_FORMULA = "arithmetic_mean(iou, endpoint_match, merge_compactness, merge_solidity)"
@@ -199,8 +237,8 @@ def _bbox_edge_run(
     contour: np.ndarray,
     perp_axis: int,
     target: float,
-    distance_tol: float = _DEFAULT_DISTANCE_TOL,
-    min_coverage: float = _DEFAULT_MIN_EDGE_COVERAGE,
+    distance_tol: float = _STITCH_DEFAULTS.distance_tol,
+    min_coverage: float = _STITCH_DEFAULTS.min_edge_coverage,
 ) -> tuple[float, float, float] | None:
     """Find the extent of contour points lying near a single bbox edge.
 
@@ -234,10 +272,10 @@ def _extract_cut_edges(
     labels_da: xr.DataArray | np.ndarray,
     outlier_ids: Iterable[int],
     bboxes: dict[int, tuple[int, int, int, int]] | None = None,
-    distance_tol: float = _DEFAULT_DISTANCE_TOL,
-    min_edge_length: float = _DEFAULT_MIN_EDGE_LENGTH,
-    min_edge_length_ratio: float = _DEFAULT_MIN_EDGE_LENGTH_RATIO,
-    min_edge_coverage: float = _DEFAULT_MIN_EDGE_COVERAGE,
+    distance_tol: float = _STITCH_DEFAULTS.distance_tol,
+    min_edge_length: float = _STITCH_DEFAULTS.min_edge_length,
+    min_edge_length_ratio: float = _STITCH_DEFAULTS.min_edge_length_ratio,
+    min_edge_coverage: float = _STITCH_DEFAULTS.min_edge_coverage,
 ) -> list[_CutEdge]:
     """Extract cardinal-aligned bbox-edge runs (cut-edge candidates) per outlier.
 
@@ -329,7 +367,7 @@ def _merge_shape_features(
     labels_da: xr.DataArray | np.ndarray,
     cell_ids: Iterable[int],
     bboxes: dict[int, tuple[int, int, int, int]],
-    close_radius: int = _DEFAULT_CLOSE_RADIUS,
+    close_radius: int = _STITCH_DEFAULTS.close_radius,
 ) -> dict[str, float]:
     """Materialise the union of given pieces, close the gap, and return shape stats.
 
@@ -379,7 +417,7 @@ def _pair_geometry_features(
     e: _CutEdge,
     c: _CutEdge,
     max_gap: float,
-    candidate_min_iou: float = _DEFAULT_CANDIDATE_MIN_IOU,
+    candidate_min_iou: float = _STITCH_DEFAULTS.candidate_min_iou,
 ) -> dict[str, float] | None:
     """Compute geometry-only features for a candidate pair, returning ``None``
     if the pair fails the basic facing/overlap/IoU filters.
@@ -413,7 +451,7 @@ def _pair_geometry_features(
 def _enumerate_pair_candidates(
     edges: list[_CutEdge],
     max_gap: float,
-    candidate_min_iou: float = _DEFAULT_CANDIDATE_MIN_IOU,
+    candidate_min_iou: float = _STITCH_DEFAULTS.candidate_min_iou,
 ) -> list[tuple[_CutEdge, _CutEdge, dict[str, float]]]:
     """Find all (e, c) pairs of facing cut edges with their geometry features.
 
@@ -463,7 +501,7 @@ def _score_pairs(
     labels_da: xr.DataArray | np.ndarray,
     bboxes: dict[int, tuple[int, int, int, int]],
     min_confidence: float,
-    close_radius: int = _DEFAULT_CLOSE_RADIUS,
+    close_radius: int = _STITCH_DEFAULTS.close_radius,
 ) -> list[_StitchPair]:
     """Compute shape features per candidate, score, and apply confidence filter.
 
@@ -669,12 +707,7 @@ def stitch_tile_cuts(
     min_confidence: float = 0.7,
     max_gap: float = 3.0,
     max_group_size: int = 4,
-    distance_tol: float = _DEFAULT_DISTANCE_TOL,
-    min_edge_length: float = _DEFAULT_MIN_EDGE_LENGTH,
-    min_edge_length_ratio: float = _DEFAULT_MIN_EDGE_LENGTH_RATIO,
-    min_edge_coverage: float = _DEFAULT_MIN_EDGE_COVERAGE,
-    candidate_min_iou: float = _DEFAULT_CANDIDATE_MIN_IOU,
-    close_radius: int = _DEFAULT_CLOSE_RADIUS,
+    stitch_params: StitchParams | Mapping[str, Any] | None = None,
     inplace: bool = True,
 ) -> ad.AnnData | None:
     """Stitch tile-cut cells flagged by :func:`~squidpy.experimental.tl.calculate_tiling_qc`.
@@ -715,30 +748,11 @@ def stitch_tile_cuts(
     max_group_size
         Cap on group size; oversized groups (likely false merges) collapse
         to singletons.
-    distance_tol
-        Sub-pixel tolerance for "lies on a bbox edge" when extracting cut
-        edges from each outlier's contour.  Default 0.75 px is tuned for
-        ``find_contours``'s half-pixel coordinates.
-    min_edge_length
-        Absolute floor on cut-edge length (pixels).  Filters out tiny
-        cells whose bbox-edge contact is sub-pixel noise.
-    min_edge_length_ratio
-        Minimum cut-edge length relative to the cell's equivalent
-        diameter.  Filters arc-tops on naturally curved cells where the
-        bbox-edge contact is a single point.
-    min_edge_coverage
-        Minimum fraction of integer parallel-axis positions in a
-        candidate run that must have at least one near-edge contour
-        point.  Filters single-point arc-tops; a real chord passes
-        trivially.
-    candidate_min_iou
-        Loose 1-D IoU floor at candidate enumeration.  Confidence-based
-        selection happens later via ``min_confidence``; keep this loose.
-    close_radius
-        Morphological closing disk radius used when materialising the
-        union mask for the shape-quality features.  Should be larger
-        than ``max_gap`` so small cells whose gap is a meaningful
-        fraction of the cell don't drop the closed-mask features.
+    stitch_params
+        Advanced tuning knobs as a :class:`StitchParams` instance or a
+        ``Mapping`` of its field names to values.  See :class:`StitchParams`
+        for each field's meaning and default.  ``None`` (default) uses
+        all defaults.
     inplace
         If ``True``, write back into ``sdata.tables[qc_table_key]``.
         Otherwise return the modified AnnData.
@@ -756,6 +770,7 @@ def stitch_tile_cuts(
         raise ValueError(f"max_gap must be non-negative, got {max_gap}.")
     if max_group_size < 1:
         raise ValueError(f"max_group_size must be >= 1, got {max_group_size}.")
+    params = _resolve_stitch_params(stitch_params)
 
     table_key = qc_table_key if qc_table_key is not None else f"{labels_key}_qc"
     if table_key not in sdata.tables:
@@ -802,18 +817,18 @@ def stitch_tile_cuts(
             labels_da,
             outlier_ids,
             bboxes=bboxes,
-            distance_tol=distance_tol,
-            min_edge_length=min_edge_length,
-            min_edge_length_ratio=min_edge_length_ratio,
-            min_edge_coverage=min_edge_coverage,
+            distance_tol=params.distance_tol,
+            min_edge_length=params.min_edge_length,
+            min_edge_length_ratio=params.min_edge_length_ratio,
+            min_edge_coverage=params.min_edge_coverage,
         )
-        candidates = _enumerate_pair_candidates(edges, max_gap=max_gap, candidate_min_iou=candidate_min_iou)
+        candidates = _enumerate_pair_candidates(edges, max_gap=max_gap, candidate_min_iou=params.candidate_min_iou)
         pairs = _score_pairs(
             candidates,
             labels_da,
             bboxes,
             min_confidence=min_confidence,
-            close_radius=close_radius,
+            close_radius=params.close_radius,
         )
         groups, confidences = _assemble_groups(pairs, outlier_ids, max_group_size=max_group_size, max_gap=max_gap)
 
@@ -859,12 +874,7 @@ def stitch_tile_cuts(
         "min_confidence": float(min_confidence),
         "max_gap": float(max_gap),
         "max_group_size": int(max_group_size),
-        "distance_tol": float(distance_tol),
-        "min_edge_length": float(min_edge_length),
-        "min_edge_length_ratio": float(min_edge_length_ratio),
-        "min_edge_coverage": float(min_edge_coverage),
-        "candidate_min_iou": float(candidate_min_iou),
-        "close_radius": int(close_radius),
+        "stitch_params": asdict(params),
         "n_outliers": int(n_outliers),
         "n_candidate_pairs": int(len(pairs)),
         "n_stitched_groups": int(n_groups),
