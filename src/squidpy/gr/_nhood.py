@@ -294,6 +294,8 @@ def centrality_scores(
         centrality = [score]
     elif score is None:
         centrality = [c.s for c in Centrality]
+    else:
+        centrality = list(score)
 
     centralities = [Centrality(c) for c in centrality]
 
