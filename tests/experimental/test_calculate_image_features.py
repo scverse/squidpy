@@ -404,7 +404,7 @@ class TestCalculateImageFeatures:
 
 
 # ---------------------------------------------------------------------------
-# Per-PR-#982-concern regression tests
+# Behavioural regression tests
 # ---------------------------------------------------------------------------
 
 
