@@ -99,3 +99,21 @@ def test_bad_background_intensity() -> None:
             stain_matrix=_ruifrok_matrix(),
             background_intensity=np.array([255.0, -1.0, 255.0]),
         )
+
+
+def test_rejects_bad_shape() -> None:
+    with pytest.raises(ValueError, match=r"stain_matrix must have shape"):
+        StainReference(
+            method="macenko",
+            stain_matrix=np.zeros((2, 3)),
+            background_intensity=_TEST_BACKGROUND,
+        )
+
+
+def test_rejects_non_finite() -> None:
+    with pytest.raises(ValueError, match=r"mu contains non-finite values"):
+        StainReference(
+            method="reinhard",
+            mu=np.array([np.nan, 0.0, 0.0]),
+            sigma=np.ones(3),
+        )
