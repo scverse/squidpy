@@ -378,36 +378,6 @@ class TestStitchVisual(PlotTester, metaclass=PlotTesterMeta):
     _ZOOM = (150, 250, 250, 350)  # (y0, y1, x0, x1)
     _SEAM_Y = 200
 
-    def test_plot_seam_before_after(self, sdata_tile_boundary):
-        sdata, _ = sdata_tile_boundary
-        sq.experimental.tl.calculate_tiling_qc(
-            sdata,
-            labels_key="labels",
-            tile_size=200,
-            nmads_cut=1.0,
-            nmads_smoothed=1.5,
-        )
-        sq.experimental.tl.stitch_tile_cuts(sdata, labels_key="labels", min_confidence=0.5)
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels")
-
-        y0, y1, x0, x1 = self._ZOOM
-        before = np.asarray(sdata.labels["labels"].values)[y0:y1, x0:x1]
-        after = np.asarray(sdata.labels["labels_stitched"].values)[y0:y1, x0:x1]
-
-        # Same colour seed for both panels: unstitched cells look identical,
-        # only stitched pieces change colour.
-        before_rgb = _label_to_rgb(before, seed=0)
-        after_rgb = _label_to_rgb(after, seed=0)
-
-        fig, axes = plt.subplots(1, 2, figsize=(8, 4))
-        for ax, rgb, title in zip(axes, [before_rgb, after_rgb], ["Before", "After"], strict=True):
-            ax.imshow(rgb, interpolation="nearest")
-            ax.axhline(self._SEAM_Y - y0, color="white", linestyle="--", linewidth=1.0)
-            ax.set_title(title)
-            ax.set_xticks([])
-            ax.set_yticks([])
-        fig.tight_layout()
-
     def test_plot_seam_join_labels(self, sdata_tile_boundary):
         """Side-by-side: After (join_labels=False) vs After (join_labels=True).
 

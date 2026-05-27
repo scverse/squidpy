@@ -47,44 +47,30 @@ __all__ = ["StitchParams", "stitch_tile_cuts"]
 
 @dataclass(slots=True)
 class StitchParams:
-    """Advanced tuning knobs for :func:`stitch_tile_cuts`.
+    """Advanced tuning knobs for :func:`~squidpy.experimental.tl.stitch_tile_cuts`.
 
-    The defaults below work for typical 2D segmentation tiles produced by
-    cellpose-like pipelines.  Pass an instance (or a ``Mapping`` of field
-    names to values) as ``stitch_params`` to override.
-
-    Attributes
-    ----------
-    distance_tol
-        Sub-pixel tolerance for "lies on a bbox edge".  ``find_contours``
-        returns half-pixel coordinates, so a real edge run sits within
-        ~0.5 px of the line.
-    min_edge_length
-        Absolute floor on cut-edge length (pixels).  Filters tiny cells
-        whose bbox-edge contact is sub-pixel noise.
-    min_edge_length_ratio
-        Minimum cut-edge length relative to the cell's equivalent
-        diameter.  Filters arc-tops on naturally curved cells where the
-        bbox-edge contact is a single point.
-    min_edge_coverage
-        Minimum fraction of integer parallel-axis positions in a
-        candidate run that must have at least one near-edge contour
-        point.  Filters single-point arc-tops.
-    candidate_min_iou
-        Loose 1-D IoU floor at candidate enumeration.  Confidence-based
-        selection happens later via ``min_confidence``.
-    close_radius
-        Morphological closing disk radius used when materialising the
-        union mask for the shape-quality features.  Should be larger
-        than ``max_gap``.
+    Defaults work for typical 2D segmentation tiles produced by
+    cellpose-like pipelines.  Pass an instance (or a ``Mapping`` of
+    field names to values) as ``stitch_params`` to override.
     """
 
     distance_tol: float = 0.75
+    """Sub-pixel tolerance for "lies on a bbox edge"."""
+
     min_edge_length: float = 5.0
+    """Absolute floor on cut-edge length (pixels)."""
+
     min_edge_length_ratio: float = 0.4
+    """Minimum cut-edge length relative to the cell's equivalent diameter."""
+
     min_edge_coverage: float = 0.5
+    """Minimum fraction of parallel-axis positions covered by near-edge contour points."""
+
     candidate_min_iou: float = 0.2
+    """Loose 1-D IoU floor at candidate enumeration."""
+
     close_radius: int = 3
+    """Morphological closing disk radius for the union mask; keep > ``max_gap``."""
 
     def __post_init__(self) -> None:
         # Coerce numeric types (accept numpy scalars cleanly) and bounds-check.

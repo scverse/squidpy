@@ -59,29 +59,20 @@ __all__ = ["TilingQCParams", "calculate_tiling_qc"]
 
 @dataclass(slots=True)
 class TilingQCParams:
-    """Advanced tuning knobs for :func:`calculate_tiling_qc`.
+    """Advanced tuning knobs for :func:`~squidpy.experimental.tl.calculate_tiling_qc`.
 
     Pass an instance (or a ``Mapping`` of field names to values) as
-    ``tiling_qc_params`` to override.  All fields default to the values
-    below.
-
-    Attributes
-    ----------
-    distance_tol
-        Maximum perpendicular distance (pixels) from the fitted line for a
-        contour point to be considered part of a straight segment.
-    min_area
-        Cells smaller than this (pixels at analysis resolution) are skipped
-        and assigned NaN scores.
-    max_contour_points
-        Cap on contour resolution; longer contours are resampled to this
-        length via arc-length interpolation before the O(n^2) two-pointer
-        scan, bounding worst-case runtime on very large cells.
+    ``tiling_qc_params`` to override.
     """
 
     distance_tol: float = 0.75
+    """Maximum perpendicular distance (pixels) from the fitted line for a contour point to count as straight."""
+
     min_area: int = 20
+    """Cells smaller than this (pixels at analysis resolution) are skipped (NaN scores)."""
+
     max_contour_points: int = 500
+    """Cap on contour resolution; longer contours are arc-length-resampled before the O(n^2) collinearity scan."""
 
     def __post_init__(self) -> None:
         # Coerce numeric types (accept numpy scalars cleanly) and bounds-check.
