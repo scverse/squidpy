@@ -8,12 +8,11 @@ from collections.abc import Iterable, Mapping, Sequence
 from functools import partial
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numba import njit, prange  # noqa: F401
 from scanpy import logging as logg
 from scipy.sparse import csc_matrix
 from spatialdata import SpatialData
@@ -22,11 +21,9 @@ from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._validators import assert_positive, check_tuple_needles
 from squidpy.gr._utils import (
     _assert_categorical_obs,
-    _assert_positive,
-    _check_tuple_needles,
-    _create_sparse_df,
     _genesymbols,
     _save_data,
 )
@@ -45,15 +42,20 @@ TARGET = "target"
 TempResult = namedtuple("TempResult", ["means", "pvalues"])
 
 _template = """
+from __future__ import annotations
+
+from numba import njit, prange
+import numpy as np
+
 @njit(parallel={parallel}, cache=False, fastmath=False)
 def _test_{n_cls}_{ret_means}_{parallel}(
-    interactions: NDArrayA,  # [np.uint32],
-    interaction_clusters: NDArrayA,  # [np.uint32],
-    data: NDArrayA,  # [np.float64],
-    clustering: NDArrayA,  # [np.uint32],
-    mean: NDArrayA,  # [np.float64],
-    mask: NDArrayA,  # [np.bool_],
-    res: NDArrayA,  # [np.float64],
+    interactions: NDArrayA[np.uint32],
+    interaction_clusters: NDArrayA[np.uint32],
+    data: NDArrayA[np.float64],
+    clustering: NDArrayA[np.uint32],
+    mean: NDArrayA[np.float64],
+    mask: NDArrayA[np.bool_],
+    res: NDArrayA[np.float64],
     {args}
 ) -> None:
 
@@ -208,7 +210,7 @@ class PermutationTestABC(ABC):
 
         self._data = pd.DataFrame.sparse.from_spmatrix(
             csc_matrix(adata.X), index=adata.obs_names, columns=adata.var_names
-        )
+        ).fillna(0.0)
 
         self._interactions: pd.DataFrame | None = None
         self._filtered_data: pd.DataFrame | None = None
@@ -232,7 +234,7 @@ class PermutationTestABC(ABC):
                 - :class:`typing.Sequence` - Either a sequence of :class:`str`, in which case all combinations are
                   produced, or a sequence of :class:`tuple` of 2 :class:`str` or a :class:`tuple` of 2 sequences.
 
-            If `None`, the interactions are extracted from :mod:`omnipath`. Protein complexes can be specified by
+            If `None`, the interactions are extracted from :doc:`omnipath <omnipath:api>`. Protein complexes can be specified by
             delimiting the components with `'_'`, such as `'alpha_beta_gamma'`.
         complex_policy
             Policy on how to handle complexes. Valid options are:
@@ -359,7 +361,7 @@ class PermutationTestABC(ABC):
         -------
         %(ligrec_test_returns)s
         """
-        _assert_positive(n_perms, name="n_perms")
+        assert_positive(n_perms, name="n_perms")
         _assert_categorical_obs(self._adata, key=cluster_key)
 
         if corr_method is not None:
@@ -383,7 +385,7 @@ class PermutationTestABC(ABC):
         if all(isinstance(c, str) for c in clusters):
             clusters = list(product(clusters, repeat=2))  # type: ignore[assignment]
         clusters = sorted(
-            _check_tuple_needles(
+            check_tuple_needles(
                 clusters,  # type: ignore[arg-type]
                 self._filtered_data["clusters"].cat.categories,
                 msg="Invalid cluster `{0!r}`.",
@@ -422,18 +424,16 @@ class PermutationTestABC(ABC):
             numba_parallel=numba_parallel,
             **kwargs,
         )
+        index = pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET])
+        columns = pd.MultiIndex.from_tuples(clusters, names=["cluster_1", "cluster_2"])
         res = {
-            "means": _create_sparse_df(
-                res.means,
-                index=pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET]),
-                columns=pd.MultiIndex.from_tuples(clusters, names=["cluster_1", "cluster_2"]),
-                fill_value=0,
+            "means": pd.DataFrame(
+                {c: pd.arrays.SparseArray(res.means[:, i], fill_value=0) for i, c in enumerate(columns)},
+                index=index,
             ),
-            "pvalues": _create_sparse_df(
-                res.pvalues,
-                index=pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET]),
-                columns=pd.MultiIndex.from_tuples(clusters, names=["cluster_1", "cluster_2"]),
-                fill_value=np.nan,
+            "pvalues": pd.DataFrame(
+                {c: pd.arrays.SparseArray(res.pvalues[:, i], fill_value=np.nan) for i, c in enumerate(columns)},
+                index=index,
             ),
             "metadata": self.interactions[self.interactions.columns.difference([SOURCE, TARGET])],
         }
@@ -708,7 +708,7 @@ def _analysis(
     n_jobs
         Number of parallel jobs to launch.
     numba_parallel
-        Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
+        Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
     kwargs
         Keyword arguments for :func:`squidpy._utils.parallelize`, such as ``n_jobs`` or ``backend``.
 
@@ -734,8 +734,11 @@ def _analysis(
 
         return TempResult(means=means, pvalues=pvalues)
 
-    groups = data.groupby("clusters", observed=True)
     clustering = np.array(data["clusters"].values, dtype=np.int32)
+    # densify the data earlier to avoid concatenating sparse arrays
+    # with multiple fill values: '[0.0, nan]' (which leads to PerformanceWarning)
+    data = data.astype({c: np.float64 for c in data.columns if c != "clusters"})
+    groups = data.groupby("clusters", observed=True)
 
     mean = groups.mean().values.T  # (n_genes, n_clusters)
     # see https://github.com/scverse/squidpy/pull/991#issuecomment-2888506296
@@ -801,7 +804,7 @@ def _analysis_helper(
     seed
         Random seed for :class:`numpy.random.RandomState`.
     numba_parallel
-        Whether to use :class:`numba.prange` or not. If `None`, it's determined automatically.
+        Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
     queue
         Signalling queue to update progress bar.
 

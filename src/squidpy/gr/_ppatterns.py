@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from importlib.util import find_spec
-from itertools import chain
-from typing import TYPE_CHECKING, Any, Literal
+from collections.abc import Sequence
+from typing import Any, Literal
 
 import numba.types as nt
 import numpy as np
@@ -14,9 +12,7 @@ from anndata import AnnData
 from numba import njit, prange
 from numpy.random import default_rng
 from scanpy import logging as logg
-from scanpy.get import _get_obs_rep
-from scanpy.metrics._gearys_c import _gearys_c
-from scanpy.metrics._morans_i import _morans_i
+from scanpy.metrics import gearys_c, morans_i
 from scipy import stats
 from scipy.sparse import spmatrix
 from sklearn.metrics import pairwise_distances
@@ -27,12 +23,11 @@ from statsmodels.stats.multitest import multipletests
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, deprecated_params, parallelize
+from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
-    _assert_non_empty_sequence,
-    _assert_positive,
     _assert_spatial_basis,
     _save_data,
 )
@@ -147,7 +142,8 @@ def spatial_autocorr(
             genes = [genes]
 
         if not use_raw:
-            return _get_obs_rep(adata[:, genes], use_raw=False, layer=layer).T, genes
+            subset = adata[:, genes]
+            return (subset.X if layer is None else subset.layers[layer]).T, genes
         if adata.raw is None:
             raise AttributeError("No `.raw` attribute found. Try specifying `use_raw=False`.")
         genes = list(set(genes) & set(adata.raw.var_names))
@@ -162,8 +158,7 @@ def spatial_autocorr(
         return adata.obs[cols].T.to_numpy(), cols
 
     def extract_obsm(adata: AnnData, ixs: int | Sequence[int] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
-        if layer not in adata.obsm:
-            raise KeyError(f"Key `{layer!r}` not found in `adata.obsm`.")
+        assert_key_in_adata(adata, layer, attr="obsm")
         if ixs is None:
             ixs = list(np.arange(adata.obsm[layer].shape[1]))
         ixs = list(np.ravel([ixs]))
@@ -183,12 +178,12 @@ def spatial_autocorr(
     params = {"mode": mode.s, "transformation": transformation, "two_tailed": two_tailed}
 
     if mode == SpatialAutocorr.MORAN:
-        params["func"] = _morans_i
+        params["func"] = morans_i
         params["stat"] = "I"
         params["expected"] = -1.0 / (adata.shape[0] - 1)  # expected score
         params["ascending"] = False
     elif mode == SpatialAutocorr.GEARY:
-        params["func"] = _gearys_c
+        params["func"] = gearys_c
         params["stat"] = "C"
         params["expected"] = 1.0
         params["ascending"] = True
@@ -204,7 +199,7 @@ def spatial_autocorr(
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
-        _assert_positive(n_perms, name="n_perms")
+        assert_positive(n_perms, name="n_perms")
         perms = list(np.arange(n_perms))
 
         score_perms = parallelize(
@@ -252,7 +247,7 @@ def _score_helper(
 ) -> pd.DataFrame:
     score_perms = np.empty((len(perms), vals.shape[0]))
     rng = default_rng(None if seed is None else ix + seed)
-    func = _morans_i if mode == SpatialAutocorr.MORAN else _gearys_c
+    func = morans_i if mode == SpatialAutocorr.MORAN else gearys_c
 
     for i in range(len(perms)):
         idx_shuffle = rng.permutation(g.shape[0])
@@ -346,16 +341,13 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 
 @d.dedent
+@deprecated_params({"n_splits": "1.10.0", "n_jobs": "1.10.0", "backend": "1.10.0", "show_progress_bar": "1.10.0"})
 def co_occurrence(
     adata: AnnData | SpatialData,
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
-    n_splits: int | None = None,
-    n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -369,10 +361,6 @@ def co_occurrence(
         Distances interval at which co-occurrence is computed. If :class:`int`, uniformly spaced interval
         of the given size will be used.
     %(copy)s
-    n_splits
-        Number of splits in which to divide the spatial coordinates in
-        :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
-    %(parallelize)s
 
     Returns
     -------
@@ -410,9 +398,7 @@ def co_occurrence(
 
     # Compute co-occurrence probabilities using the fast numba routine.
     out = _co_occurrence_helper(spatial_x, spatial_y, interval, labs)
-    start = logg.info(
-        f"Calculating co-occurrence probabilities for `{len(interval)}` intervals using `{n_jobs}` core(s) and `{n_splits}` splits"
-    )
+    start = logg.info(f"Calculating co-occurrence probabilities for `{len(interval)}` intervals")
 
     if copy:
         logg.info("Finish", time=start)

@@ -9,12 +9,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from scanpy import logging as logg
 from scipy.sparse import csr_matrix
+from spatialdata._logging import logger as logg
 
 from squidpy._constants._pkg_constants import Key
-from squidpy.datasets._utils import PathLike
-from squidpy.read._utils import _load_image, _read_counts
+from squidpy.read._utils import PathLike, _load_image, _read_counts
 
 __all__ = ["visium", "vizgen", "nanostring"]
 
@@ -49,7 +48,7 @@ def visium(
     library_id
         Identifier for the *Visium* library. Useful when concatenating multiple :class:`anndata.AnnData` objects.
     kwargs
-        Keyword arguments for :func:`scanpy.read_10x_h5`, :func:`anndata.read_mtx` or :func:`read_text`.
+        Keyword arguments for :func:`scanpy.read_10x_h5`, :func:`scanpy.read_10x_mtx` or :func:`anndata.io.read_text`.
 
     Returns
     -------
@@ -73,15 +72,24 @@ def visium(
         (path / f"{Key.uns.spatial}/scalefactors_json.json").read_bytes()
     )
 
+    # Space Ranger versions use different file formats:
+    #   - v1: tissue_positions.csv (no header)
+    #   - v2: tissue_positions_list.csv (with header)
+    #   - v3: tissue_positions.csv (with header)
     tissue_positions_file = (
         path / "spatial/tissue_positions.csv"
         if (path / "spatial/tissue_positions.csv").exists()
         else path / "spatial/tissue_positions_list.csv"
     )
 
+    # Detect header by checking if first cell is 'barcode' (header) or a barcode value
+    with open(tissue_positions_file) as f:
+        first_cell = f.readline().split(",")[0].strip()
+    has_header = first_cell.lower() == "barcode"
+
     coords = pd.read_csv(
         tissue_positions_file,
-        header=1 if tissue_positions_file.name == "tissue_positions.csv" else None,
+        header=0 if has_header else None,
         index_col=0,
     )
     coords.columns = ["in_tissue", "array_row", "array_col", "pxl_col_in_fullres", "pxl_row_in_fullres"]

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import warnings
 from typing import Any, Literal
 
 import anndata as ad
@@ -21,6 +20,7 @@ from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
+from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
 
 __all__ = ["calculate_niche"]
 
@@ -29,13 +29,13 @@ __all__ = ["calculate_niche"]
 @inject_docs(fla=NicheDefinitions)
 def calculate_niche(
     data: AnnData | SpatialData,
-    flavor: Literal["neighborhood", "utag", "cellcharter"],
+    flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
     library_key: str | None = None,
     table_key: str | None = None,
     mask: pd.core.series.Series = None,
     groups: str | None = None,
     n_neighbors: int | None = None,
-    resolutions: float | list[float] | None = None,
+    resolutions: float | tuple[float, float] | list[float | tuple[float, float]] | None = None,
     min_niche_size: int | None = None,
     scale: bool = True,
     abs_nhood: bool = False,
@@ -45,6 +45,11 @@ def calculate_niche(
     n_components: int | None = None,
     random_state: int = 42,
     spatial_connectivities_key: str = "spatial_connectivities",
+    latent_connectivities_key: str = "connectivities",
+    layer_ratio: float = 1.0,
+    n_iterations: int = -1,
+    use_weights: bool | tuple[bool, bool] = True,
+    use_rep: str | None = None,
     inplace: bool = True,
 ) -> AnnData:
     """
@@ -58,7 +63,8 @@ def calculate_niche(
         Method to use for niche calculation. Available options are:
             - `{fla.NEIGHBORHOOD.s!r}` - cluster the neighborhood profile.
             - `{fla.UTAG.s!r}` - use utag algorithm (matrix multiplication).
-            - `{fla.CELLCHARTER.s!r}` - cluster adjacency matrix with Gaussian Mixture Model (GMM) using CellCharter's approach.
+            - `{fla.SPATIALLEIDEN.s!r}` - cluster spatially resolved omics data using Multiplex Leiden.
+            - `{fla.CELLCHARTER.s!r}` - a simplified version of CellCharter's approach, using PCA for dimensionality reduction. An arbitrary embedding can be used instead of PCA by setting the `use_rep` parameter which will try to find the embedding in `adata.obsm`.
     %(library_key)s
         If provided, niches will be calculated separately for each unique value in this column.
         Each niche will be prefixed with the library identifier.
@@ -75,7 +81,9 @@ def calculate_niche(
         Required if flavor == `{fla.NEIGHBORHOOD.s!r}` or flavor == `{fla.UTAG.s!r}`.
     resolutions
         List of resolutions to use for leiden clustering.
+        In the case of spatialleiden you can pass a tuple. Resolution for the latent space and spatial layer, respectively. A single float applies to both layers.
         Required if flavor == `{fla.NEIGHBORHOOD.s!r}` or flavor == `{fla.UTAG.s!r}`.
+        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
     min_niche_size
         Minimum required size of a niche. Niches with fewer cells will be labeled as 'not_a_niche'.
         Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
@@ -99,10 +107,26 @@ def calculate_niche(
         Number of components to use for GMM.
         Required if flavor == `{fla.CELLCHARTER.s!r}`.
     random_state
-        Random state to use for GMM.
-        Optional if flavor == `{fla.CELLCHARTER.s!r}`.
+        Random state to use for GMM or SpatialLeiden.
+        Optional if flavor == `{fla.CELLCHARTER.s!r}` or flavor == `{fla.SPATIALLEIDEN.s!r}`.
     spatial_connectivities_key
         Key in `adata.obsp` where spatial connectivities are stored.
+        Required if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    latent_connectivities_key
+        Key in `adata.obsp` where gene expression connectivities are stored.
+        Required if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    layer_ratio
+        The ratio of the weighting of the layers; latent space vs spatial. A higher ratio will increase relevance of the spatial neighbors and lead to more spatially homogeneous clusters.
+        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    n_iterations
+        Number of iterations to run the Leiden algorithm. If the number is negative it runs until convergence.
+        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    use_weights
+        Whether to use weights for the edges for latent space and spatial neighbors, respectively. A single bool applies to both layers.
+        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    use_rep
+        Key in `adata.obsm` where the embedding is stored. If provided, this embedding will be used instead of PCA for dimensionality reduction.
+        Optional if flavor == `{fla.CELLCHARTER.s!r}`.
     inplace
         If 'True', perform the operation in place.
         If 'False', return a new AnnData object with the niche labels.
@@ -110,6 +134,12 @@ def calculate_niche(
 
     if flavor == "cellcharter" and aggregation is None:
         aggregation = "mean"
+
+    if distance is None:
+        distance = 3 if flavor == "cellcharter" else 1
+
+    if flavor == "cellcharter" and n_components is None:
+        n_components = 10
 
     _validate_niche_args(
         data,
@@ -127,14 +157,17 @@ def calculate_niche(
         aggregation,
         n_components,
         random_state,
+        spatial_connectivities_key,
+        latent_connectivities_key,
+        layer_ratio,
+        n_iterations,
+        use_weights,
+        use_rep,
         inplace,
     )
 
     if resolutions is None:
         resolutions = [0.5]
-
-    if distance is None:
-        distance = 1
 
     if isinstance(data, SpatialData):
         orig_adata = data.tables[table_key]
@@ -143,10 +176,19 @@ def calculate_niche(
         orig_adata = data
         adata = data.copy()
 
-    if spatial_connectivities_key not in adata.obsp.keys():
-        raise KeyError(
-            f"Key '{spatial_connectivities_key}' not found in `adata.obsp`. "
-            "If you haven't computed a spatial neighborhood graph yet, use `sq.gr.spatial_neighbors`."
+    assert_key_in_adata(
+        adata,
+        spatial_connectivities_key,
+        attr="obsp",
+        extra_msg="If you haven't computed a spatial neighborhood graph yet, use `sq.gr.spatial_neighbors`.",
+    )
+
+    if flavor == "spatialleiden":
+        assert_key_in_adata(
+            adata,
+            latent_connectivities_key,
+            attr="obsp",
+            extra_msg="If you haven't computed a latent neighborhood graph yet, use `sc.pp.neighbors`.",
         )
 
     result_columns = _get_result_columns(
@@ -157,8 +199,7 @@ def calculate_niche(
     )
 
     if library_key is not None:
-        if library_key not in adata.obs.columns:
-            raise KeyError(f"'{library_key}' not found in `adata.obs`.")
+        assert_key_in_adata(adata, library_key, attr="obs")
 
         logg.info(f"Stratifying by library_key '{library_key}'")
 
@@ -197,13 +238,17 @@ def calculate_niche(
                 n_components=n_components,
                 random_state=random_state,
                 spatial_connectivities_key=spatial_connectivities_key,
+                latent_connectivities_key=latent_connectivities_key,
+                layer_ratio=layer_ratio,
+                n_iterations=n_iterations,
+                use_weights=use_weights,
                 inplace=False,
             )
 
             for col in result_columns:
                 if col in lib_result.obs.columns:
                     prefixed_values = lib_result.obs[col].apply(
-                        lambda x, lib=lib_id: (f"lib={lib}_{x}" if x != "not_a_niche" else x)
+                        lambda x, lib=lib_id: f"lib={lib}_{x}" if x != "not_a_niche" else x
                     )
 
                     adata.obs.loc[lib_indices, col] = prefixed_values.values
@@ -225,6 +270,11 @@ def calculate_niche(
             n_components,
             random_state,
             spatial_connectivities_key,
+            latent_connectivities_key,
+            layer_ratio,
+            n_iterations,
+            use_weights,
+            use_rep,
         )
 
     if not inplace:
@@ -250,7 +300,7 @@ def calculate_niche(
 
 def _get_result_columns(
     flavor: str,
-    resolutions: float | list[float],
+    resolutions: float | tuple[float, float] | list[float | tuple[float, float]],
     library_key: str | None,
     libraries: list[str] | None,
 ) -> list[str]:
@@ -265,11 +315,17 @@ def _get_result_columns(
         elif libraries is not None and len(libraries) > 0:
             return [f"{base_column}_{lib}" for lib in libraries]
 
-    # For neighborhood and utag, we need to handle resolutions
+    # For neighborhood, utag and spatialleiden, we need to handle resolutions
     if not isinstance(resolutions, list):
         resolutions = [resolutions]
 
-    prefix = f"nhood_niche{library_str}" if flavor == "neighborhood" else f"utag_niche{library_str}"
+    if flavor == "neighborhood":
+        prefix = f"nhood_niche{library_str}"
+    elif flavor == "utag":
+        prefix = f"utag_niche{library_str}"
+    elif flavor == "spatialleiden":
+        prefix = f"spatialleiden{library_str}"
+
     if library_key is None:
         return [f"{prefix}_res={res}" for res in resolutions]
     else:
@@ -283,7 +339,7 @@ def _calculate_niches(
     flavor: str,
     groups: str | None,
     n_neighbors: int | None,
-    resolutions: float | list[float],
+    resolutions: float | tuple[float, float] | list[float | tuple[float, float]],
     min_niche_size: int | None,
     scale: bool,
     abs_nhood: bool,
@@ -293,9 +349,15 @@ def _calculate_niches(
     n_components: int | None,
     random_state: int,
     spatial_connectivities_key: str,
+    latent_connectivities_key: str,
+    layer_ratio: float,
+    n_iterations: int,
+    use_weights: bool | tuple[bool, bool],
+    use_rep: str | None,
 ) -> None:
     """Calculate niches using the specified flavor and parameters."""
     if flavor == "neighborhood":
+        assert isinstance(resolutions, float | list)
         _get_nhood_profile_niches(
             adata,
             mask,
@@ -310,6 +372,7 @@ def _calculate_niches(
             spatial_connectivities_key,
         )
     elif flavor == "utag":
+        assert isinstance(resolutions, float | list)
         _get_utag_niches(adata, n_neighbors, resolutions, spatial_connectivities_key)
     elif flavor == "cellcharter":
         assert isinstance(aggregation, str)  # for mypy
@@ -321,6 +384,18 @@ def _calculate_niches(
             n_components,
             random_state,
             spatial_connectivities_key,
+            use_rep,
+        )
+    elif flavor == "spatialleiden":
+        _get_spatialleiden_domains(
+            adata,
+            spatial_connectivities_key,
+            latent_connectivities_key,
+            resolutions,
+            layer_ratio,
+            use_weights,
+            n_iterations,
+            random_state,
         )
 
 
@@ -329,7 +404,7 @@ def _get_nhood_profile_niches(
     mask: pd.core.series.Series | None,
     groups: str | None,
     n_neighbors: int | None,
-    resolutions: float | list[float],
+    resolutions: float | tuple[float, float] | list[float | tuple[float, float]],
     min_niche_size: int | None,
     scale: bool,
     abs_nhood: bool,
@@ -384,7 +459,9 @@ def _get_nhood_profile_niches(
         nhood_profile = weighted_profile
 
     # create AnnData object from neighborhood profile to perform scanpy functions
-    adata_neighborhood = ad.AnnData(X=nhood_profile)
+    # Use .to_numpy(copy=True) to ensure the array is writeable (required for pandas CoW compatibility)
+    # Preserve the DataFrame index for later matching with adata_masked
+    adata_neighborhood = ad.AnnData(X=nhood_profile.to_numpy(copy=True), obs=pd.DataFrame(index=nhood_profile.index))
 
     # reason for scaling see https://monkeybread.readthedocs.io/en/latest/notebooks/tutorial.html#niche-analysis
     if scale:
@@ -441,7 +518,7 @@ def _get_nhood_profile_niches(
 def _get_utag_niches(
     adata: AnnData,
     n_neighbors: int | None,
-    resolutions: float | list[float],
+    resolutions: float | tuple[float, float] | list[float | tuple[float, float]],
     spatial_connectivities_key: str,
 ) -> None:
     """
@@ -470,6 +547,7 @@ def _get_cellcharter_niches(
     n_components: int,
     random_state: int,
     spatial_connectivities_key: str,
+    use_rep: str | None = None,
 ) -> None:
     """adapted from https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/gr/_aggr.py
     and https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/tl/_gmm.py"""
@@ -494,11 +572,29 @@ def _get_cellcharter_niches(
 
     concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
     arr = concatenated_matrix.toarray()  # Densify
-    arr_ad = ad.AnnData(X=arr)
-    sc.tl.pca(arr_ad)
+
+    if use_rep is not None:
+        # Use provided embedding from adata.obsm
+        assert_key_in_adata(adata, use_rep, attr="obsm")
+        embedding = adata.obsm[use_rep]
+        # Ensure embedding has the right number of components
+        if embedding.shape[1] < n_components:
+            raise ValueError(
+                f"Embedding has {embedding.shape[1]} components, but n_components={n_components}. Please provide an embedding with at least {n_components} components."
+            )
+        # Use only the first n_components
+        embedding = embedding[:, :n_components]
+    else:
+        logg.warning(
+            "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
+        )
+
+        arr_ad = ad.AnnData(X=arr)
+        sc.tl.pca(arr_ad)
+        embedding = arr_ad.obsm["X_pca"]
 
     # cluster concatenated matrix with GMM, each cluster label equals to a niche label
-    niches = _get_GMM_clusters(arr_ad.obsm["X_pca"], n_components, random_state)
+    niches = _get_GMM_clusters(embedding, n_components, random_state)
 
     adata.obs["cellcharter_niche"] = pd.Categorical(niches)
     return
@@ -628,6 +724,49 @@ def _get_GMM_clusters(A: NDArray[np.float64], n_components: int, random_state: i
     return labels
 
 
+def _get_spatialleiden_domains(
+    adata: AnnData,
+    spatial_connectivities_key: str,
+    latent_connectivities_key: str,
+    resolutions: float | tuple[float, float] | list[float | tuple[float, float]],
+    layer_ratio: float,
+    use_weights: bool | tuple[bool, bool],
+    n_iterations: int,
+    random_state: int,
+) -> None:
+    """
+    Perform SpatialLeiden clustering.
+
+    This is a wrapper around :py:func:`spatialleiden.multiplex_leiden` that uses :py:class:`anndata.AnnData` as input and works with two layers; one latent space and one spatial layer.
+
+    Adapted from https://github.com/HiDiHlabs/SpatialLeiden/.
+    """
+    try:
+        import spatialleiden as sl
+    except ImportError as e:
+        msg = "Please install the spatialleiden algorithm: `pip install squidpy[leiden]` or `conda install bioconda::spatialleiden` or `pip install spatialleiden`."
+        raise ImportError(msg) from e
+
+    if not isinstance(resolutions, list):
+        resolutions = [resolutions]
+
+    for res in resolutions:
+        sl.spatialleiden(
+            adata,
+            resolution=res,
+            use_weights=use_weights,
+            n_iterations=n_iterations,
+            layer_ratio=layer_ratio,
+            latent_neighbors_key=latent_connectivities_key,
+            spatial_neighbors_key=spatial_connectivities_key,
+            random_state=random_state,
+            directed=False,
+            key_added=f"spatialleiden_res={res}",
+        )
+
+    return
+
+
 def _fide_score(adata: AnnData, niche_key: str, average: bool) -> Any:
     """
     F1-score of intra-domain edges (FIDE). A high score indicates a great domain continuity.
@@ -667,12 +806,12 @@ def _jensen_shannon_divergence(adata: AnnData, niche_key: str, library_key: str)
 
 def _validate_niche_args(
     data: AnnData | SpatialData,
-    flavor: Literal["neighborhood", "utag", "cellcharter"],
+    flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
     library_key: str | None,
     table_key: str | None,
     groups: str | None,
     n_neighbors: int | None,
-    resolutions: float | list[float] | None,
+    resolutions: float | tuple[float, float] | list[float | tuple[float, float]] | None,
     min_niche_size: int | None,
     scale: bool,
     abs_nhood: bool,
@@ -681,6 +820,12 @@ def _validate_niche_args(
     aggregation: str | None,
     n_components: int | None,
     random_state: int,
+    spatial_connectivities_key: str,
+    latent_connectivities_key: str,
+    layer_ratio: float,
+    n_iterations: int,
+    use_weights: bool | tuple[bool, bool],
+    use_rep: str | None,
     inplace: bool,
 ) -> None:
     """
@@ -694,15 +839,12 @@ def _validate_niche_args(
     TypeError
         If arguments are of incorrect type.
     """
-    if not isinstance(data, AnnData | SpatialData):
-        raise TypeError(f"'data' must be an AnnData or SpatialData object, got {type(data).__name__}")
+    assert_isinstance(data, (AnnData, SpatialData), name="data")
 
-    if flavor not in ["neighborhood", "utag", "cellcharter"]:
-        raise ValueError(f"Invalid flavor '{flavor}'. Please choose one of 'neighborhood', 'utag', 'cellcharter'.")
+    assert_one_of(flavor, ["neighborhood", "utag", "cellcharter", "spatialleiden"], name="flavor")
 
     if library_key is not None:
-        if not isinstance(library_key, str):
-            raise TypeError(f"'library_key' must be a string, got {type(library_key).__name__}")
+        assert_isinstance(library_key, str, name="library_key")
         if isinstance(data, AnnData):
             if library_key not in data.obs.columns:
                 raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
@@ -714,23 +856,31 @@ def _validate_niche_args(
             if library_key not in data.tables[table_key].obs.columns:
                 raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
 
-    if n_neighbors is not None and not isinstance(n_neighbors, int):
-        raise TypeError(f"'n_neighbors' must be an integer, got {type(n_neighbors).__name__}")
+    if n_neighbors is not None:
+        assert_isinstance(n_neighbors, int, name="n_neighbors")
 
     if resolutions is not None:
-        if not isinstance(resolutions, float | list):
-            raise TypeError(f"'resolutions' must be a float or list of floats, got {type(resolutions).__name__}")
-        if isinstance(resolutions, list) and not all(isinstance(res, float) for res in resolutions):
-            raise TypeError("All elements in 'resolutions' list must be floats")
+        if not isinstance(resolutions, float | tuple | list):
+            raise TypeError(
+                f"'resolutions' must be a float, a tuple of floats, a list of floats, or a list containing floats and/or tuples of floats, got {type(resolutions).__name__}"
+            )
 
-    if n_hop_weights is not None and not isinstance(n_hop_weights, list):
-        raise TypeError(f"'n_hop_weights' must be a list of floats, got {type(n_hop_weights).__name__}")
+        if isinstance(resolutions, tuple):
+            if not all(isinstance(x, float) for x in resolutions):
+                raise TypeError("All elements in the tuple 'resolutions' must be floats.")
+        elif isinstance(resolutions, list):
+            for item in resolutions:
+                if not (
+                    isinstance(item, float) or (isinstance(item, tuple) and all(isinstance(i, float) for i in item))
+                ):
+                    raise TypeError("Each item in the list 'resolutions' must be a float or a tuple of floats.")
 
-    if not isinstance(scale, bool):
-        raise TypeError(f"'scale' must be a boolean, got {type(scale).__name__}")
+    if n_hop_weights is not None:
+        assert_isinstance(n_hop_weights, list, name="n_hop_weights")
 
-    if not isinstance(abs_nhood, bool):
-        raise TypeError(f"'abs_nhood' must be a boolean, got {type(abs_nhood).__name__}")
+    assert_isinstance(scale, bool, name="scale")
+
+    assert_isinstance(abs_nhood, bool, name="abs_nhood")
 
     # Define parameters used by each flavor
     flavor_param_specs = {
@@ -761,8 +911,8 @@ def _validate_niche_args(
             ],
         },
         "cellcharter": {
-            "required": ["distance", "aggregation", "n_components", "random_state"],
-            "optional": [],
+            "required": ["distance", "aggregation", "random_state"],
+            "optional": ["n_components", "use_rep"],
             "unused": [
                 "groups",
                 "min_niche_size",
@@ -770,6 +920,24 @@ def _validate_niche_args(
                 "abs_nhood",
                 "n_neighbors",
                 "resolutions",
+                "n_hop_weights",
+            ],
+        },
+        "spatialleiden": {
+            "required": ["latent_connectivities_key", "spatial_connectivities_key"],
+            "optional": [
+                "resolutions",
+                "layer_ratio",
+                "n_iterations",
+                "use_weights",
+                "random_state",
+            ],
+            "unused": [
+                "groups",
+                "min_niche_size",
+                "scale",
+                "abs_nhood",
+                "n_neighbors",
                 "n_hop_weights",
             ],
         },
@@ -794,46 +962,65 @@ def _validate_niche_args(
             "aggregation": aggregation,
             "n_components": n_components,
             "random_state": random_state,
+            "use_rep": use_rep,
         },
         flavor_param_specs[flavor],
     )
 
     # Flavor-specific validations
     if flavor == "neighborhood":
-        if not isinstance(groups, str):
-            raise TypeError(f"'groups' must be a string, got {type(groups).__name__}")
+        assert_isinstance(groups, str, name="groups")
 
-        if min_niche_size is not None and not isinstance(min_niche_size, int):
-            raise TypeError(f"'min_niche_size' must be an integer, got {type(min_niche_size).__name__}")
+        if min_niche_size is not None:
+            assert_isinstance(min_niche_size, int, name="min_niche_size")
 
         if distance is not None and isinstance(distance, int) and distance < 1:
             raise ValueError(f"'distance' must be at least 1, got {distance}")
 
     elif flavor == "cellcharter":
-        if distance is not None and not isinstance(distance, int):
-            raise TypeError(f"'distance' must be an integer, got {type(distance).__name__}")
+        if distance is not None:
+            assert_isinstance(distance, int, name="distance")
         if distance is not None and distance < 1:
             raise ValueError(f"'distance' must be at least 1, got {distance}")
 
-        if aggregation is not None and not isinstance(aggregation, str):
-            raise TypeError(f"'aggregation' must be a string, got {type(aggregation).__name__}")
-        if aggregation not in ["mean", "variance"]:
-            raise ValueError(f"'aggregation' must be one of 'mean' or 'variance', got {aggregation}")
+        if aggregation is not None:
+            assert_isinstance(aggregation, str, name="aggregation")
+            assert_one_of(aggregation, ["mean", "variance"], name="aggregation")
 
-        if not isinstance(n_components, int):
-            raise TypeError(f"'n_components' must be an integer, got {type(n_components).__name__}")
+        assert_isinstance(n_components, int, name="n_components")
         if n_components < 1:
             raise ValueError(f"'n_components' must be at least 1, got {n_components}")
 
-        if not isinstance(random_state, int):
-            raise TypeError(f"'random_state' must be an integer, got {type(random_state).__name__}")
+        assert_isinstance(random_state, int, name="random_state")
+
+        if use_rep is not None:
+            assert_isinstance(use_rep, str, name="use_rep")
 
         # for mypy
         if resolutions is None:
             resolutions = [0.0]
 
-    if not isinstance(inplace, bool):
-        raise TypeError(f"'inplace' must be a boolean, got {type(inplace).__name__}")
+    elif flavor == "spatialleiden":
+        assert_isinstance(latent_connectivities_key, str, name="latent_connectivities_key")
+        assert_isinstance(spatial_connectivities_key, str, name="spatial_connectivities_key")
+
+        assert_isinstance(layer_ratio, (float, int), name="layer_ratio")
+        assert_isinstance(n_iterations, int, name="n_iterations")
+        if not (
+            isinstance(use_weights, bool)
+            or (
+                isinstance(use_weights, tuple)
+                and len(use_weights) == 2
+                and all(isinstance(x, bool) for x in use_weights)
+            )
+        ):
+            raise TypeError(f"'use_weights' must be a bool or a tuple of two bools, got {use_weights!r}")
+        assert_isinstance(random_state, int, name="random_state")
+
+        if resolutions is None:
+            resolutions = [1.0]
+
+    assert_isinstance(inplace, bool, name="inplace")
 
 
 def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs: dict[str, Any]) -> None:
@@ -843,7 +1030,7 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
     Parameters
     ----------
     flavor
-        The flavor being used ('neighborhood', 'utag', or 'cellcharter')
+        The flavor being used ('neighborhood', 'utag', 'cellcharter', or 'spatialleiden')
     param_dict
         Dictionary of parameter names to their values
     param_specs

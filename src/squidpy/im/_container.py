@@ -7,7 +7,7 @@ from functools import partial
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import dask.array as da
 import matplotlib as mpl
@@ -26,14 +26,14 @@ from skimage.util import img_as_float
 from squidpy._constants._constants import InferDimensions
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, deprecated, singledispatchmethod
-from squidpy.gr._utils import (
-    _assert_in_range,
-    _assert_non_empty_sequence,
-    _assert_non_negative,
-    _assert_positive,
-    _assert_spatial_basis,
+from squidpy._utils import NDArrayA, singledispatchmethod
+from squidpy._validators import (
+    assert_in_range,
+    assert_non_empty_sequence,
+    assert_non_negative,
+    assert_positive,
 )
+from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.im._coords import (
     _NULL_COORDS,
     _NULL_PADDING,
@@ -51,7 +51,6 @@ Pathlike_t: TypeAlias = str | Path
 Arraylike_t: TypeAlias = NDArrayA | xr.DataArray
 InferDims_t: TypeAlias = Literal["default", "prefer_channels", "prefer_z"] | Sequence[str]
 Input_t: TypeAlias = Pathlike_t | Arraylike_t | Literal["ImageContainer"]
-Interactive = TypeVar("Interactive")  # cannot import because of cyclic dependencies
 _ERROR_NOTIMPLEMENTED_LIBID = f"It seems there are multiple `library_id` in `adata.uns[{Key.uns.spatial!r}]`.\n \
                                 Loading multiple images is not implemented (yet), please specify a `library_id`."
 
@@ -67,7 +66,7 @@ class ImageContainer(FeatureMixin):
     Wraps :class:`xarray.Dataset` to store several image layers with the same `x`, `y` and `z` dimensions in one object.
     Dimensions of stored images are ``(y, x, z, channels)``. The channel dimension may vary between image layers.
 
-    This class also allows for lazy loading and processing using :mod:`dask`, and is given to all image
+    This class also allows for lazy loading and processing using :doc:`dask:index`, and is given to all image
     processing functions, along with :class:`anndata.AnnData` instance, if necessary.
 
     Parameters
@@ -131,7 +130,7 @@ class ImageContainer(FeatureMixin):
 
         Returns
         -------
-        Concatenated :class:`squidpy.img.ImageContainer` with ``imgs`` stacks in Z-dimension.
+        Concatenated :class:`squidpy.im.ImageContainer` with ``imgs`` stacks in Z-dimension.
 
         Raises
         ------
@@ -187,9 +186,9 @@ class ImageContainer(FeatureMixin):
         path
             Path to *Zarr* store.
         lazy
-            Whether to use :mod:`dask` to lazily load image.
+            Whether to use :doc:`dask:index` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`. Only used when ``lazy = True``.
+            Chunk size for :doc:`dask:index`. Only used when ``lazy = True``.
 
         Returns
         -------
@@ -259,9 +258,9 @@ class ImageContainer(FeatureMixin):
             Name for each Z-dimension of the image. This should correspond to the ``library_id``
             in :attr:`anndata.AnnData.uns`.
         lazy
-            Whether to use :mod:`dask` to lazily load image.
+            Whether to use :doc:`dask:index` to lazily load image.
         chunks
-            Chunk size for :mod:`dask`. Only used when ``lazy = True``.
+            Chunk size for :doc:`dask:index`. Only used when ``lazy = True``.
         copy
             Whether to copy the underlying data if ``img`` is an in-memory array.
 
@@ -519,9 +518,9 @@ class ImageContainer(FeatureMixin):
         size = self._convert_to_pixel_space(size)
 
         ys, xs = size
-        _assert_positive(ys, name="height")
-        _assert_positive(xs, name="width")
-        _assert_positive(scale, name="scale")
+        assert_positive(ys, name="height")
+        assert_positive(xs, name="width")
+        assert_positive(scale, name="scale")
 
         orig = CropCoords(x0=x, y0=y, x1=x + xs, y1=y + ys)
 
@@ -660,15 +659,15 @@ class ImageContainer(FeatureMixin):
         %(crop_corner.returns)s
         """
         y, x = self._convert_to_pixel_space((y, x))
-        _assert_in_range(y, 0, self.shape[0], name="height")
-        _assert_in_range(x, 0, self.shape[1], name="width")
+        assert_in_range(y, 0, self.shape[0], name="height")
+        assert_in_range(x, 0, self.shape[1], name="width")
 
         if not isinstance(radius, Iterable):
             radius = (radius, radius)
 
         (yr, xr) = self._convert_to_pixel_space(radius)
-        _assert_non_negative(yr, name="radius height")
-        _assert_non_negative(xr, name="radius width")
+        assert_non_negative(yr, name="radius height")
+        assert_non_negative(xr, name="radius width")
 
         return self.crop_corner(  # type: ignore[no-any-return]
             y=y - yr, x=x - xr, size=(yr * 2 + 1, xr * 2 + 1), **kwargs
@@ -709,8 +708,8 @@ class ImageContainer(FeatureMixin):
 
         y, x = self.shape
         ys, xs = size
-        _assert_in_range(ys, 0, y, name="height")
-        _assert_in_range(xs, 0, x, name="width")
+        assert_in_range(ys, 0, y, name="height")
+        assert_in_range(xs, 0, x, name="width")
 
         unique_ycoord = np.arange(start=0, stop=(y // ys + (y % ys != 0)) * ys, step=ys)
         unique_xcoord = np.arange(start=0, stop=(x // xs + (x % xs != 0)) * xs, step=xs)
@@ -771,13 +770,13 @@ class ImageContainer(FeatureMixin):
         The type of the crops depends on ``as_array`` and the number of dimensions on ``squeeze``.
         """
         self._assert_not_empty()
-        _assert_positive(spot_scale, name="scale")
+        assert_positive(spot_scale, name="scale")
         _assert_spatial_basis(adata, spatial_key)
 
         # limit to obs_names
         if obs_names is None:
             obs_names = adata.obs_names
-        obs_names = _assert_non_empty_sequence(obs_names, name="observations")
+        obs_names = assert_non_empty_sequence(obs_names, name="observations")
         adata = adata[obs_names, :]
 
         scale = self.data.attrs.get(Key.img.scale, 1)
@@ -1076,78 +1075,6 @@ class ImageContainer(FeatureMixin):
             if save and fig is not None:
                 save_fig(fig, save)
 
-    @d.get_sections(base="_interactive", sections=["Parameters"])
-    @d.dedent
-    @deprecated(
-        reason="The squidpy napari plugin is deprecated, please use https://github.com/scverse/napari-spatialdata",
-    )
-    def interactive(
-        self,
-        adata: AnnData,
-        spatial_key: str = Key.obsm.spatial,
-        library_key: str | None = None,
-        library_id: str | Sequence[str] | None = None,
-        cmap: str = "viridis",
-        palette: str | None = None,
-        blending: Literal["opaque", "translucent", "additive"] = "opaque",
-        symbol: Literal["disc", "square"] = "disc",
-        key_added: str = "shapes",
-    ) -> Interactive:  # type: ignore[type-var]
-        """
-        Launch :mod:`napari` viewer.
-
-        Parameters
-        ----------
-        %(adata)s
-        %(spatial_key)s
-        library_key
-            Key in :attr:`adata.AnnData.obs` specifying mapping between observations and library ids.
-            Required if the container has more than 1 Z-dimension.
-        library_id
-            Subset of library ids to visualize. If `None`, visualize all library ids.
-        cmap
-            Colormap for continuous variables.
-        palette
-            Colormap for categorical variables in :attr:`anndata.AnnData.obs`. If `None`, use :mod:`scanpy`'s default.
-        blending
-            Method which determines how RGB and alpha values of :class:`napari.layers.Shapes` are mixed.
-        symbol
-            Symbol to use for the spots. Valid options are:
-
-                - `'disc'` - circle.
-                - `'square'`  - square.
-
-        key_added
-            Key where to store :class:`napari.layers.Shapes`, which can be exported by pressing `SHIFT-E`:
-
-                - :attr:`anndata.AnnData.obs` ``['{layer_name}_{key_added}']`` - boolean mask containing the selected
-                  cells.
-                - :attr:`anndata.AnnData.uns` ``['{layer_name}_{key_added}']['meshes']`` - list of :class:`numpy.array`,
-                  defining a mesh in the spatial coordinates.
-
-            See :mod:`napari`'s `tutorial <https://napari.org/howtos/layers/shapes.html>`_ for more
-            information about different mesh types, such as circles, squares etc.
-
-        Returns
-        -------
-        Interactive view of this container. Screenshot of the canvas can be taken by
-        :meth:`squidpy.pl.Interactive.screenshot`.
-        """
-        from squidpy.pl import Interactive  # type: ignore[attr-defined]
-
-        return Interactive(  # type: ignore[no-any-return]
-            img=self,
-            adata=adata,
-            spatial_key=spatial_key,
-            library_key=library_key,
-            library_id=library_id,
-            cmap=cmap,
-            palette=palette,
-            blending=blending,
-            key_added=key_added,
-            symbol=symbol,
-        ).show()
-
     @d.dedent
     def apply(
         self,
@@ -1179,7 +1106,7 @@ class ImageContainer(FeatureMixin):
         channel
             Apply ``func`` only over a specific ``channel``. If `None`, use all channels.
         chunks
-            Chunk size for :mod:`dask`. If `None`, don't use :mod:`dask`.
+            Chunk size for :doc:`dask:index`. If `None`, don't use :doc:`dask:index`.
         %(copy_cont)s
         drop
             Whether to drop Z-dimensions that were not selected by ``func``. Only used when ``copy = True``.
@@ -1570,10 +1497,10 @@ class ImageContainer(FeatureMixin):
     def _convert_to_pixel_space(self, size: tuple[FoI_t, FoI_t]) -> tuple[int, int]:
         y, x = size
         if isinstance(y, float):
-            _assert_in_range(y, 0, 1, name="y")
+            assert_in_range(y, 0, 1, name="y")
             y = int(self.shape[0] * y)
         if isinstance(x, float):
-            _assert_in_range(x, 0, 1, name="x")
+            assert_in_range(x, 0, 1, name="x")
             x = int(self.shape[1] * x)
 
         return y, x

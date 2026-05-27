@@ -1,7 +1,12 @@
-# Byte-compiled / optimized / DLL files
+# Temp files
+.DS_Store
+*~
+buck-out/
+
+# Compiled files
+.venv/
 __pycache__/
-*.py[cod]
-*$py.class
+.*cache/
 
 # C extensions
 *.so
@@ -11,31 +16,12 @@ __pycache__/
 .idea
 notebooks/data
 # Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+/dist/
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+# Tests and coverage
+/data/
+/node_modules/
+/.coverage*
 
 # Installer logs
 pip-log.txt
@@ -79,6 +65,12 @@ instance/
 docs/build/
 docs/api
 docs/classes
+/docs/generated/
+/docs/_build/
+docs/source/api/*rst
+docs/source/auto_*
+docs/source/gen_modules
+docs/source/external_tutorials
 
 # PyBuilder
 target/
@@ -143,15 +135,14 @@ dmypy.json
 # data
 data
 
-# docs
-docs/source/api/*rst
-docs/source/classes/*rst
-docs/source/auto_*
-docs/source/gen_modules
-docs/source/external_tutorials
-
 # Vim .swp
 *.swp
 
 # vscode
 .vscode
+
+# pixi
+.pixi
+pixi.lock
+
+_version.py

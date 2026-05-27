@@ -12,7 +12,7 @@ import numba.types as nt
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numba import njit, prange  # noqa: F401
+from numba import njit
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
@@ -22,10 +22,10 @@ from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
-    _assert_positive,
     _save_data,
     _shuffle_group,
 )
@@ -55,6 +55,11 @@ class NhoodEnrichmentResult(NamedTuple):
 dt = nt.uint32
 ndt = np.uint32
 _template = """
+from __future__ import annotations
+
+from numba import njit, prange
+import numpy as np
+
 @njit(dt[:, :](dt[:], dt[:], dt[:]), parallel={parallel}, fastmath=True)
 def _nenrich_{n_cls}_{parallel}(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA) -> np.ndarray:
     '''
@@ -234,7 +239,7 @@ def nhood_enrichment(
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
-    _assert_positive(n_perms, name="n_perms")
+    assert_positive(n_perms, name="n_perms")
 
     adj = adata.obsp[connectivity_key]
     original_clust = adata.obs[cluster_key]
