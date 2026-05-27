@@ -50,50 +50,61 @@ with matching sparsity structure:
 - By convention, ``dst`` should have a zero diagonal, and ``adj`` should only
   have a non-zero diagonal when ``set_diag=True``.
 
-### Example: fast radius search with SNN
+### Example: approximate kNN search with pynndescent
 
-The built-in {class}`~squidpy.gr.neighbors.RadiusBuilder` uses scikit-learn's
-``NearestNeighbors``. The [snnpy](https://github.com/nla-group/snn) library
-provides a faster exact fixed-radius search based on PCA-based pruning. The
-example below swaps the backend while keeping full compatibility with the rest
-of the Squidpy graph pipeline:
+The built-in {class}`~squidpy.gr.neighbors.KNNBuilder` uses scikit-learn's
+``NearestNeighbors``. The [pynndescent](https://github.com/lmcinnes/pynndescent)
+library provides an approximate nearest-neighbor search backend that is often
+faster on larger datasets. The example below swaps the backend while keeping
+the Squidpy graph pipeline contract intact.
+
+To run the example, install the optional backend into the same environment as
+Squidpy:
+
+```bash
+python -m pip install pynndescent
+```
 
 ```python
-# Following code is only illustrative and probably not runnable.
+# Following code is illustrative and requires ``pynndescent`` to be installed.
 import numpy as np
 from scipy.sparse import csr_matrix
-from snnpy import build_snn_model
+from pynndescent import NNDescent
 
 from squidpy.gr.neighbors import GraphBuilderCSR
 
 
-class SNNRadiusBuilder(GraphBuilderCSR):
-    """Radius graph using the SNN fixed-radius search backend."""
+class PynndescentKNNBuilder(GraphBuilderCSR):
+  """KNN graph using the pynndescent approximate nearest-neighbor backend."""
 
-    def __init__(self, radius: float, **kwargs):
-        super().__init__(**kwargs)
-        self.radius = radius
+  def __init__(self, n_neighs: int = 6, **kwargs):
+    super().__init__(**kwargs)
+    self.n_neighs = n_neighs
 
-    def build_graph(self, coords):
-        N = coords.shape[0]
-        model = build_snn_model(coords, verbose=0)
-        indices, dists = model.batch_query_radius(
-            coords, self.radius, return_distance=True,
-        )
+  def uns_params(self):
+    return {
+      "n_neighbors": self.n_neighs,
+      "set_diag": self.set_diag,
+    }
 
-        row = np.repeat(np.arange(N), [len(idx) for idx in indices])
-        col = np.concatenate(indices)
-        d = np.concatenate(dists).astype(np.float64)
+  def build_graph(self, coords):
+    n_obs = coords.shape[0]
+    model = NNDescent(coords, metric="euclidean")
+    indices, dists = model.query(coords, k=self.n_neighs)
 
-        adj = csr_matrix(
-            (np.ones(len(row), dtype=np.float32), (row, col)),
-            shape=(N, N),
-        )
-        dst = csr_matrix((d, (row, col)), shape=(N, N))
+    row_indices = np.repeat(np.arange(n_obs), self.n_neighs)
+    col_indices = indices.reshape(-1)
+    dists = dists.reshape(-1).astype(np.float64)
 
-        adj.setdiag(1.0 if self.set_diag else adj.diagonal())
-        dst.setdiag(0.0)
-        return adj, dst
+    adj = csr_matrix(
+      (np.ones_like(row_indices, dtype=np.float32), (row_indices, col_indices)),
+      shape=(n_obs, n_obs),
+    )
+    dst = csr_matrix((dists, (row_indices, col_indices)), shape=(n_obs, n_obs))
+
+    adj.setdiag(1.0 if self.set_diag else adj.diagonal())
+    dst.setdiag(0.0)
+    return adj, dst
 ```
 
 Use it like any other builder:
@@ -101,5 +112,5 @@ Use it like any other builder:
 ```python
 import squidpy as sq
 
-sq.gr.spatial_neighbors_from_builder(adata, SNNRadiusBuilder(radius=100.0))
+sq.gr.spatial_neighbors_from_builder(adata, PynndescentKNNBuilder(n_neighs=6))
 ```
