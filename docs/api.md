@@ -117,7 +117,6 @@ import squidpy as sq
     datasets.visium_fluo_image_crop
 ```
 
-
 ## Extensibility
 
 See the {doc}`extensibility guide </extensibility>` for how to implement a custom graph builder.
@@ -140,3 +139,13 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     gr.neighbors.DelaunayBuilder
     gr.neighbors.GridBuilder
 ```
+
+## Experimental
+```{eval-rst}
+.. module:: squidpy.experimental
+.. currentmodule:: squidpy
+.. autosummary::
+    :toctree: api
+
+    experimental.tl.calculate_tiling_qc
+    experimental.pl.tiling_qc

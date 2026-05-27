@@ -67,7 +67,7 @@ dependencies = [
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
   "spatialdata>=0.7.1",
-  "spatialdata-plot",
+  "spatialdata-plot>=0.3.3",
   "statsmodels>=0.12",
   # https://github.com/scverse/squidpy/issues/526
   "tifffile!=2022.4.22",
