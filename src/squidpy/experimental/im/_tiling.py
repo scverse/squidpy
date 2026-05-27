@@ -33,6 +33,7 @@ __all__ = [
     "compute_cell_info",
     "compute_cell_info_multiscale",
     "compute_cell_info_tiled",
+    "extract_labels_tile_lazy",
     "extract_tile",
     "extract_tile_lazy",
     "verify_coverage",
@@ -440,6 +441,33 @@ def extract_tile_lazy(
         tile_labels_raw = tile_labels_raw.squeeze()
     tile_labels = _zero_non_owned(tile_labels_raw, spec.owned_ids)
     return tile_image, tile_labels
+
+
+def extract_labels_tile_lazy(
+    labels_da: xr.DataArray,
+    spec: TileSpec,
+) -> np.ndarray:
+    """Extract a labels-only tile from a lazy DataArray.
+
+    Like :func:`extract_tile_lazy` but skips the image entirely. Materializes
+    only the crop region.
+
+    Parameters
+    ----------
+    labels_da
+        Lazy 2-D DataArray of labels.
+    spec
+        Tile specification.
+
+    Returns
+    -------
+    Numpy ``(crop_h, crop_w)`` with non-owned cells zeroed out.
+    """
+    cy0, cx0, cy1, cx1 = spec.crop
+    tile_labels_raw = labels_da.isel(y=slice(cy0, cy1), x=slice(cx0, cx1)).values
+    if tile_labels_raw.ndim > 2:
+        tile_labels_raw = tile_labels_raw.squeeze()
+    return _zero_non_owned(tile_labels_raw, spec.owned_ids)
 
 
 # ---------------------------------------------------------------------------
