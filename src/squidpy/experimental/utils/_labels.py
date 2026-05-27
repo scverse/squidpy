@@ -15,12 +15,8 @@ def resolve_labels_array(sdata: sd.SpatialData, labels_key: str, scale: str | No
     """Resolve a labels element to its 2-D ``xarray.DataArray``.
 
     Single-scale elements pass through; multi-scale (``xarray.DataTree``)
-    elements require an explicit ``scale``.  Passing ``scale`` for a
-    single-scale element logs a warning and is ignored.
-
-    A strict variant of :func:`squidpy.experimental.im._utils.get_element_data`:
-    that helper falls back to a default scale and warns; this one raises
-    so callers cannot silently process the wrong resolution.
+    elements require an explicit ``scale`` and raise otherwise.  Passing
+    ``scale`` for a single-scale element logs a warning and is ignored.
     """
     node = sdata.labels[labels_key]
     if isinstance(node, xr.DataTree):
