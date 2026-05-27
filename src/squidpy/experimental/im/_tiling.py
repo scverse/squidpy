@@ -193,7 +193,7 @@ def compute_cell_info_multiscale(
 
 def compute_cell_info_tiled(
     labels_da: xr.DataArray,
-    chunk: int = 4096,
+    chunk_size: int = 4096,
 ) -> dict[int, CellInfo]:
     """Compute cell info by tile-streaming the labels array.
 
@@ -205,7 +205,7 @@ def compute_cell_info_tiled(
     ----------
     labels_da
         Lazy/eager 2-D xarray DataArray of integer labels.
-    chunk
+    chunk_size
         Tile side length for streaming reads.
 
     Returns
@@ -227,10 +227,10 @@ def compute_cell_info_tiled(
     max_y: dict[int, int] = {}
     max_x: dict[int, int] = {}
 
-    for y0 in range(0, H, chunk):
-        y1 = min(y0 + chunk, H)
-        for x0 in range(0, W, chunk):
-            x1 = min(x0 + chunk, W)
+    for y0 in range(0, H, chunk_size):
+        y1 = min(y0 + chunk_size, H)
+        for x0 in range(0, W, chunk_size):
+            x1 = min(x0 + chunk_size, W)
             tile = labels_da.isel(y=slice(y0, y1), x=slice(x0, x1)).values
             if tile.ndim > 2:
                 tile = tile.squeeze()

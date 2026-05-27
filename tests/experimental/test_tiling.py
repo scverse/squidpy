@@ -450,7 +450,7 @@ class TestComputeCellInfoTiled:
     def test_matches_eager_no_cell_spans_tiles(self):
         labels, _ = _make_brick_labels(gap=10)  # cells are 20x30, well below chunk
         labels_da = xr.DataArray(labels, dims=("y", "x"))
-        info_tiled = compute_cell_info_tiled(labels_da, chunk=128)
+        info_tiled = compute_cell_info_tiled(labels_da, chunk_size=128)
         info_eager = compute_cell_info(labels)
         assert set(info_tiled.keys()) == set(info_eager.keys())
         for lid in info_eager:
@@ -464,7 +464,7 @@ class TestComputeCellInfoTiled:
         labels = np.zeros((200, 200), dtype=np.int32)
         labels[30:130, 30:130] = 1
         labels_da = xr.DataArray(labels, dims=("y", "x"))
-        info_tiled = compute_cell_info_tiled(labels_da, chunk=50)
+        info_tiled = compute_cell_info_tiled(labels_da, chunk_size=50)
         info_eager = compute_cell_info(labels)
         assert set(info_tiled.keys()) == set(info_eager.keys())
         for lid in info_eager:
@@ -476,7 +476,7 @@ class TestComputeCellInfoTiled:
     def test_empty_labels(self):
         labels = np.zeros((100, 100), dtype=np.int32)
         labels_da = xr.DataArray(labels, dims=("y", "x"))
-        assert compute_cell_info_tiled(labels_da, chunk=32) == {}
+        assert compute_cell_info_tiled(labels_da, chunk_size=32) == {}
 
 
 class TestExtractTileLazy:
