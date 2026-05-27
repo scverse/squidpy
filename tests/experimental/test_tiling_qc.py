@@ -260,10 +260,10 @@ class TestTilingQCParamsResolution:
     @pytest.mark.parametrize(
         ("kwargs", "match"),
         [
-            ({"bogus": 1}, "Unknown tiling_qc_params"),
-            ({"distance_tol": -1.0}, "distance_tol must be >= 0"),
-            ({"min_area": 0}, "min_area must be >= 1"),
-            ({"max_contour_points": 2}, "max_contour_points must be >= 3"),
+            ({"bogus": 1}, "Unknown `tiling_qc_params`"),
+            ({"distance_tol": -1.0}, "`distance_tol` must be >= 0"),
+            ({"min_area": 0}, "`min_area` must be >= 1"),
+            ({"max_contour_points": 2}, "`max_contour_points` must be >= 3"),
         ],
         ids=["unknown_field", "negative_distance_tol", "zero_min_area", "tiny_max_contour_points"],
     )
@@ -278,6 +278,36 @@ class TestTilingQCParamsResolution:
 
         with pytest.raises(TypeError, match="TilingQCParams, Mapping, or None"):
             _resolve_qc_params(42)
+
+
+# ---------------------------------------------------------------------------
+# resolve_labels_array helper
+# ---------------------------------------------------------------------------
+
+
+class TestResolveLabelsArray:
+    def test_single_scale_passthrough(self, sdata_clean):
+        from squidpy.experimental.utils._labels import resolve_labels_array
+
+        da = resolve_labels_array(sdata_clean, "labels", scale=None)
+        assert da is sdata_clean.labels["labels"]
+
+    def test_multi_scale_without_scale_raises(self):
+        from spatialdata import SpatialData
+        from spatialdata.models import Labels2DModel
+
+        from squidpy.experimental.utils._labels import resolve_labels_array
+
+        labels = np.zeros((128, 128), dtype=np.int32)
+        labels[20:40, 20:40] = 1
+        ms_labels = Labels2DModel.parse(
+            xr.DataArray(da.from_array(labels, chunks=(64, 64)), dims=["y", "x"]),
+            scale_factors=[2],
+        )
+        sdata = SpatialData(labels={"labels": ms_labels})
+
+        with pytest.raises(ValueError, match="multi-scale"):
+            resolve_labels_array(sdata, "labels", scale=None)
 
 
 # ---------------------------------------------------------------------------

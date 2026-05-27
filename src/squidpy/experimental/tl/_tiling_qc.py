@@ -57,12 +57,13 @@ from squidpy.experimental.utils._labels import resolve_labels_array
 __all__ = ["TilingQCParams", "calculate_tiling_qc"]
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class TilingQCParams:
     """Advanced tuning knobs for :func:`~squidpy.experimental.tl.calculate_tiling_qc`.
 
     Pass an instance (or a ``Mapping`` of field names to values) as
-    ``tiling_qc_params`` to override.
+    ``tiling_qc_params`` to override.  Frozen so that validation done in
+    :meth:`__post_init__` cannot be silently bypassed by later mutation.
     """
 
     distance_tol: float = 0.75
@@ -75,35 +76,39 @@ class TilingQCParams:
     """Cap on contour resolution; longer contours are arc-length-resampled before the O(n^2) collinearity scan."""
 
     def __post_init__(self) -> None:
-        self.distance_tol = float(self.distance_tol)
-        self.min_area = int(self.min_area)
-        self.max_contour_points = int(self.max_contour_points)
+        # frozen=True forbids direct assignment; use object.__setattr__ for coercion.
+        object.__setattr__(self, "distance_tol", float(self.distance_tol))
+        object.__setattr__(self, "min_area", int(self.min_area))
+        object.__setattr__(self, "max_contour_points", int(self.max_contour_points))
         if self.distance_tol < 0:
-            raise ValueError(f"distance_tol must be >= 0, got {self.distance_tol}.")
+            raise ValueError(f"`distance_tol` must be >= 0, got {self.distance_tol}.")
         if self.min_area < 1:
-            raise ValueError(f"min_area must be >= 1, got {self.min_area}.")
+            raise ValueError(f"`min_area` must be >= 1, got {self.min_area}.")
         if self.max_contour_points < 3:
             raise ValueError(
-                f"max_contour_points must be >= 3 (collinearity needs 3 points), got {self.max_contour_points}."
+                f"`max_contour_points` must be >= 3 (collinearity needs 3 points), got {self.max_contour_points}."
             )
+
+
+_QC_DEFAULTS = TilingQCParams()
+_QC_FIELDS = frozenset(f.name for f in fields(TilingQCParams))
 
 
 def _resolve_qc_params(qc_params: TilingQCParams | Mapping[str, Any] | None) -> TilingQCParams:
     """Normalise the ``tiling_qc_params`` argument to a :class:`TilingQCParams` instance."""
     if qc_params is None:
-        return TilingQCParams()
+        return _QC_DEFAULTS
     if isinstance(qc_params, TilingQCParams):
         return qc_params
     if isinstance(qc_params, Mapping):
-        valid = {f.name for f in fields(TilingQCParams)}
-        unknown = set(qc_params) - valid
+        unknown = set(qc_params) - _QC_FIELDS
         if unknown:
-            raise ValueError(f"Unknown tiling_qc_params field(s): {sorted(unknown)}; expected from {sorted(valid)}.")
+            raise ValueError(
+                f"Unknown `tiling_qc_params` field(s): {sorted(unknown)}; expected from {sorted(_QC_FIELDS)}."
+            )
         return TilingQCParams(**qc_params)
-    raise TypeError(f"tiling_qc_params must be TilingQCParams, Mapping, or None; got {type(qc_params).__name__}.")
+    raise TypeError(f"`tiling_qc_params` must be TilingQCParams, Mapping, or None; got {type(qc_params).__name__}.")
 
-
-_QC_DEFAULTS = TilingQCParams()
 
 # Standard consistency factor sd ~ 1.4826 x MAD for normal distributions.
 _MAD_TO_SD = 1.4826
@@ -589,8 +594,6 @@ def calculate_tiling_qc(
         raise ValueError(f"n_neighbors must be >= 1, got {n_neighbors}.")
     qc_params = _resolve_qc_params(tiling_qc_params)
 
-    if not isinstance(sdata.labels[labels_key], xr.DataTree) and scale is not None:
-        logg.warning(f"`scale={scale!r}` ignored: labels at {labels_key!r} are single-scale.")
     labels_da = resolve_labels_array(sdata, labels_key, scale)
 
     cell_info = _compute_centroids_for_labels(sdata, labels_key, labels_da, scale)
