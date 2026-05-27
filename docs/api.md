@@ -118,6 +118,7 @@ import squidpy as sq
 .. autosummary::
     :toctree: api
 
+    experimental.im.calculate_image_features
     experimental.tl.calculate_tiling_qc
     experimental.pl.tiling_qc
 ```

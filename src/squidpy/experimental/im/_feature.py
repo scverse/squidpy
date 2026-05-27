@@ -4,19 +4,12 @@ Extracts per-cell features from segmentation masks using scikit-image
 ``regionprops`` and squidpy-specific metrics (summary statistics, GLCM
 texture, colour histograms).  Large images are automatically tiled so
 that each tile is processed independently.
-
-cp_measure integration (``cpmeasure:*`` feature flags) lands in a
-follow-up PR; the flag names are recognised here so they raise a clear
-``NotImplementedError`` rather than failing as unknown features.
-
-``align_mode="rasterize"`` likewise lands in a follow-up; only
-``align_mode="strict"`` is currently supported.
 """
 
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple
 
 import anndata as ad
@@ -46,31 +39,14 @@ from squidpy.experimental.im._tiling import (
 
 @dataclass
 class DropReport:
-    """Counters for cells that were excluded during a featurization run.
+    """Counters for cells/tiles excluded during a featurization run."""
 
-    Emitted once at the end of ``calculate_image_features`` so users know
-    why their cell count shrank.
-    """
-
-    outside_image_extent: int = 0
-    partial_at_image_boundary: int = 0
-    cp_measure_no_data: int = 0
     empty_tiles: int = 0
-    other: dict[str, int] = field(default_factory=dict)
 
     def summary(self) -> str:
-        lines = ["Cell drop report:"]
-        for f in fields(self):
-            v = getattr(self, f.name)
-            if isinstance(v, int) and v > 0:
-                lines.append(f"  {f.name}: {v}")
-            elif isinstance(v, dict):
-                for k, vv in v.items():
-                    if vv:
-                        lines.append(f"  {k}: {vv}")
-        if len(lines) == 1:
-            return "Cell drop report: no cells dropped."
-        return "\n".join(lines)
+        if self.empty_tiles == 0:
+            return "No empty tiles."
+        return f"Skipped {self.empty_tiles} empty tile(s)."
 
 
 __all__ = ["calculate_image_features"]
@@ -109,10 +85,9 @@ _INTENSITY_PROPS = frozenset(
     }
 )
 
-# cp_measure flag names recognised by `_parse_features`.  Implementation
-# lands in a follow-up PR; PR-2 raises NotImplementedError when any of
-# these is requested so the error is clear ("not implemented") rather
-# than confusing ("unknown feature").
+# cp_measure flag names recognised by `_parse_features`.  These currently
+# raise NotImplementedError so the error is "not implemented" rather than
+# the confusing "unknown feature".
 _CPMEASURE_FLAG_NAMES = frozenset(
     {
         "cpmeasure:intensity",
@@ -154,16 +129,14 @@ class _ParsedFeatures(NamedTuple):
 def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
     """Parse user-facing feature names into structured config.
 
-    ``features=None`` requires an explicit choice; the cp_measure-as-default
-    behaviour from PR #982 lands with the cp_measure follow-up.
-    Any ``cpmeasure:*`` flag raises ``NotImplementedError``.
+    ``features=None`` requires an explicit choice.  Any ``cpmeasure:*``
+    flag raises ``NotImplementedError``.
     """
     if features is None:
         raise ValueError(
             "`features` must be specified explicitly.  "
-            "Use e.g. `features=['skimage:label']` for skimage regionprops, "
-            "`features=['squidpy:summary', 'squidpy:texture', 'squidpy:color_hist']` for squidpy-native features.  "
-            "`cpmeasure:*` flags land in a follow-up PR."
+            "Use e.g. `features=['skimage:label']` for skimage regionprops or "
+            "`features=['squidpy:summary', 'squidpy:texture', 'squidpy:color_hist']` for squidpy-native features."
         )
 
     if isinstance(features, str):
@@ -176,14 +149,19 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
     sq_color_hist = False
 
     for f in features:
-        # cp_measure: recognised but not implemented in this PR.
         if f in _CPMEASURE_FLAG_NAMES:
-            raise NotImplementedError(f"cp_measure feature `{f}` is not yet implemented; lands in a follow-up PR.")
+            raise NotImplementedError(f"cp_measure feature `{f}` is not yet implemented.")
 
         # skimage group-level
         if f == "skimage:label":
+            if label_props is not None:
+                raise ValueError("Mixing 'skimage:label' with 'skimage:label:<prop>' is ambiguous; pick one form.")
             label_props = set(_MASK_PROPS)
         elif f == "skimage:label+image":
+            if intensity_props is not None:
+                raise ValueError(
+                    "Mixing 'skimage:label+image' with 'skimage:label+image:<prop>' is ambiguous; pick one form."
+                )
             intensity_props = set(_INTENSITY_PROPS)
 
         # skimage fine-grained: "skimage:label:prop" or "skimage:label+image:prop"
@@ -191,11 +169,17 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
             prop = f.split(":", 2)[2]
             if prop not in _MASK_PROPS:
                 raise ValueError(f"Unknown skimage label property: '{prop}'. Available: {sorted(_MASK_PROPS)}")
+            if label_props is not None and label_props >= _MASK_PROPS:
+                raise ValueError("Mixing 'skimage:label' with 'skimage:label:<prop>' is ambiguous; pick one form.")
             label_props = (label_props or set()) | {prop}
         elif f.startswith("skimage:label+image:"):
             prop = f.split(":", 2)[2]
             if prop not in _INTENSITY_PROPS:
                 raise ValueError(f"Unknown skimage intensity property: '{prop}'. Available: {sorted(_INTENSITY_PROPS)}")
+            if intensity_props is not None and intensity_props >= _INTENSITY_PROPS:
+                raise ValueError(
+                    "Mixing 'skimage:label+image' with 'skimage:label+image:<prop>' is ambiguous; pick one form."
+                )
             intensity_props = (intensity_props or set()) | {prop}
 
         # squidpy features
@@ -207,8 +191,11 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
             sq_color_hist = True
 
         else:
+            # cp_measure flags get a specific NotImplementedError above; don't
+            # advertise them in the "available" list since they always raise.
+            supported = sorted(_ALL_FEATURES - _CPMEASURE_FLAG_NAMES)
             raise ValueError(
-                f"Unknown feature: '{f}'. Available top-level features: {sorted(_ALL_FEATURES)}, "
+                f"Unknown feature: '{f}'. Available top-level features: {supported}, "
                 f"or use 'skimage:label:property' / 'skimage:label+image:property' for individual properties."
             )
 
@@ -265,9 +252,6 @@ def _featurize_tile(
         return pd.DataFrame()
 
     parts: list[pd.DataFrame] = []
-
-    # cp_measure features land in a follow-up PR; the dispatcher is
-    # intentionally empty here so PR-4 can slot its branch in cleanly.
 
     # --- skimage regionprops ---
     if parsed.skimage_label_props is not None or parsed.skimage_intensity_props is not None:
@@ -439,13 +423,6 @@ def _histogram_features(masked_vals: np.ndarray, ch_name: str, bins: int = 16) -
 # ---------------------------------------------------------------------------
 
 
-# Alignment helpers (_shared_coordinate_system, _relative_affine,
-# _rasterize_to_image_grid, _is_close_identity, _decompose_pixel_translation,
-# _align_to_image_grid) and _classify_dropped_cells land in follow-up PRs.
-# In this PR `_prepare_lazy` enforces axis-aligned image/labels via a strict
-# isel-based check.
-
-
 def _resolve_da(node: xr.DataTree | xr.DataArray, scale: str | None) -> xr.DataArray:
     """Get a DataArray from a DataTree or single-scale element (stays lazy)."""
     if not isinstance(node, xr.DataTree):
@@ -488,7 +465,7 @@ def _prepare_lazy(
     shapes_key: str | None,
     scale: str | None,
     channels: list[str] | None,
-    align_mode: Literal["strict", "rasterize"],
+    align_mode: Literal["strict"],
 ) -> tuple[xr.DataArray, xr.DataArray, list[str]]:
     """Return lazy (dask-backed) image and labels DataArrays, plus channel names.
 
@@ -529,20 +506,17 @@ def _prepare_lazy(
         else:
             labels_da = xr.DataArray(np.asarray(labels_result), dims=["y", "x"])
 
-    # PR-2 only supports strict, axis-aligned image/labels.  align_mode="rasterize"
-    # and the transform-handling helpers land in a follow-up PR.
+    # Only strict, axis-aligned image/labels are supported.  The Literal narrows
+    # align_mode statically; this guard catches callers passing the value
+    # dynamically (e.g. from config).
     if align_mode != "strict":
-        raise NotImplementedError(
-            f"align_mode={align_mode!r} is not yet implemented; lands in a follow-up PR. "
-            f"Pre-align image and labels (e.g. via spatialdata.rasterize) and use align_mode='strict'."
-        )
+        raise ValueError(f"`align_mode` must be 'strict'; got {align_mode!r}.")
     if labels_key is not None:
         if image_da.sizes.get("y") != labels_da.sizes.get("y") or image_da.sizes.get("x") != labels_da.sizes.get("x"):
             raise ValueError(
                 f"Image (y={image_da.sizes.get('y')}, x={image_da.sizes.get('x')}) and labels "
                 f"(y={labels_da.sizes.get('y')}, x={labels_da.sizes.get('x')}) have different "
-                f"pixel grids.  Pre-align with `spatialdata.rasterize`, or wait for "
-                f"align_mode='rasterize' in a follow-up PR."
+                f"pixel grids.  Pre-align with `spatialdata.rasterize`."
             )
 
     # Resolve channel names through spatialdata's canonical accessor so we
@@ -614,7 +588,7 @@ def calculate_image_features(
     features: list[str] | str | None = None,
     tile_size: int = 2048,
     overlap_margin: int | Literal["auto"] = "auto",
-    align_mode: Literal["strict", "rasterize"] = "strict",
+    align_mode: Literal["strict"] = "strict",
     adata_key_added: str = "morphology",
     invalid_as_zero: bool = True,
     n_jobs: int = 1,
@@ -628,10 +602,6 @@ def calculate_image_features(
     colour histograms).  Large images are automatically tiled into
     ``tile_size x tile_size`` chunks with overlap so that every cell is
     fully contained in exactly one tile.
-
-    cp_measure integration (``cpmeasure:*`` feature flags) and
-    ``align_mode="rasterize"`` land in follow-up PRs; both raise
-    ``NotImplementedError`` here.
 
     Parameters
     ----------
@@ -650,7 +620,8 @@ def calculate_image_features(
         :func:`spatialdata.models.get_channel_names`. ``None`` uses all
         channels. Integer indices are not accepted -- always pass names.
     features
-        Which features to compute.  Accepts a list of strings:
+        Which features to compute.  Required (``None`` is rejected).
+        Accepts a list of strings:
 
         - ``"skimage:label"`` (all mask props), ``"skimage:label:area"``
           (single prop), ``"skimage:label+image"`` (all intensity props),
@@ -658,22 +629,16 @@ def calculate_image_features(
         - ``"squidpy:summary"``, ``"squidpy:texture"``,
           ``"squidpy:color_hist"``
 
-        ``cpmeasure:*`` flag names are recognised but raise
-        ``NotImplementedError`` in this PR; they activate in a follow-up.
-        ``None`` is rejected -- the cp_measure-as-default behaviour from
-        PR #982 lands with the cp_measure follow-up.
+        ``cpmeasure:*`` flag names are recognised but currently raise
+        ``NotImplementedError``.
     tile_size
         Side length of the tiling grid (pixels).
     overlap_margin
         Overlap around each tile to capture boundary cells.
         ``"auto"`` computes the minimum from the largest cell's bounding box.
     align_mode
-        How to handle image/labels coordinate-system alignment.
-
-        * ``"strict"`` (default): require image and labels to share the
-          same pixel grid (same y/x sizes).  Raise otherwise.
-        * ``"rasterize"``: not yet implemented; raises
-          ``NotImplementedError``.  Land in a follow-up PR.
+        Only ``"strict"`` is supported: require image and labels to
+        share the same pixel grid (same y/x sizes).  Raise otherwise.
     adata_key_added
         Key under which to store the result in ``sdata.tables``.
     invalid_as_zero
@@ -739,27 +704,27 @@ def calculate_image_features(
         logg.info(drop_report.summary())
         raise ValueError("No features computed for any tile.")
 
-    combined = pd.concat(tile_dfs, axis=0)
-
-    # --- Post-process ---
-    if invalid_as_zero:
-        combined = combined.replace([np.inf, -np.inf], 0).fillna(0)
-
-    # Sort by cell label for deterministic output
-    combined = combined.sort_index()
+    # Sort by cell label for deterministic output.  inf/NaN handling happens
+    # in one numpy pass below to avoid two extra full-table allocations.
+    combined = pd.concat(tile_dfs, axis=0).sort_index()
 
     # --- Build AnnData ---
-    adata = ad.AnnData(X=combined.values.astype(np.float32))
+    # Exactly one of labels_key / shapes_key is set (enforced in _validate_inputs).
+    region_key_value = labels_key or shapes_key
+
+    arr = combined.to_numpy(dtype=np.float32, copy=True)
+    if invalid_as_zero:
+        np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+    adata = ad.AnnData(X=arr)
     adata.obs_names = [f"cell_{i}" for i in combined.index]
     adata.var_names = list(combined.columns)
 
-    region_key_value = labels_key if labels_key is not None else shapes_key
     adata.uns["spatialdata_attrs"] = {
         "region": region_key_value,
         "region_key": "region",
         "instance_key": "label_id",
     }
-    adata.obs["region"] = pd.Categorical([region_key_value] * len(adata))
+    adata.obs["region"] = pd.Categorical.from_codes(np.zeros(len(adata), dtype=np.int8), categories=[region_key_value])
 
     if shapes_key is not None and len(sdata.shapes[shapes_key]) == len(adata):
         adata.obs["label_id"] = sdata.shapes[shapes_key].index.values

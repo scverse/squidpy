@@ -143,7 +143,7 @@ class TestCalculateImageFeatures:
             )
 
     def test_features_none_raises(self, sdata_synthetic):
-        """features=None requires explicit choice; cp_measure-as-default lands later."""
+        """features=None must be rejected; require an explicit choice."""
         with pytest.raises(ValueError, match="must be specified explicitly"):
             sq.experimental.im.calculate_image_features(
                 sdata_synthetic,
@@ -152,15 +152,16 @@ class TestCalculateImageFeatures:
                 inplace=False,
             )
 
-    def test_align_mode_rasterize_raises(self, sdata_synthetic):
-        """align_mode='rasterize' is not yet implemented."""
-        with pytest.raises(NotImplementedError, match="align_mode='rasterize'"):
+    def test_align_mode_rasterize_rejected(self, sdata_synthetic):
+        """The Literal narrows align_mode to 'strict' statically; a runtime guard
+        catches dynamic callers passing other values."""
+        with pytest.raises(ValueError, match="`align_mode` must be 'strict'"):
             sq.experimental.im.calculate_image_features(
                 sdata_synthetic,
                 image_key="test_img",
                 labels_key="test_labels",
                 features=["skimage:label:area"],
-                align_mode="rasterize",
+                align_mode="rasterize",  # type: ignore[arg-type]
                 inplace=False,
             )
 
@@ -239,12 +240,28 @@ class TestCalculateImageFeatures:
             )
 
     def test_invalid_feature(self, sdata_synthetic):
-        with pytest.raises(ValueError, match="Unknown feature"):
+        with pytest.raises(ValueError, match="Unknown feature") as excinfo:
             sq.experimental.im.calculate_image_features(
                 sdata_synthetic,
                 image_key="test_img",
                 labels_key="test_labels",
                 features=["nonexistent:measurement"],
+            )
+        # cpmeasure:* names are recognised but always raise NotImplementedError;
+        # don't advertise them as "available" in the unknown-feature error.
+        assert "cpmeasure:" not in str(excinfo.value)
+        assert "squidpy:summary" in str(excinfo.value)
+
+    def test_mixed_group_and_fine_grained_raises(self, sdata_synthetic):
+        """Mixing 'skimage:label' (all props) with 'skimage:label:area' (one prop)
+        is ambiguous; raise rather than silently take one or the other."""
+        with pytest.raises(ValueError, match="ambiguous"):
+            sq.experimental.im.calculate_image_features(
+                sdata_synthetic,
+                image_key="test_img",
+                labels_key="test_labels",
+                features=["skimage:label", "skimage:label:area"],
+                inplace=False,
             )
 
     def test_no_valid_features(self, sdata_synthetic):
@@ -258,11 +275,7 @@ class TestCalculateImageFeatures:
             )
 
     def test_dimension_mismatch_strict_raises(self):
-        """In PR-2, mismatched image/labels pixel grids raise under align_mode='strict'.
-
-        The full overlap-rectangle handling lands with align_mode='rasterize' in a
-        follow-up PR.
-        """
+        """Mismatched image/labels pixel grids must raise under align_mode='strict'."""
         rng = np.random.default_rng(42)
         image_xr = xr.DataArray(
             rng.integers(0, 255, (3, 200, 200), dtype=np.uint8),
@@ -443,10 +456,10 @@ def _toy_sdata(
     return SpatialData(images={"img": img_el}, labels={"lbl": lbl_el})
 
 
-class TestPR982Concerns:
-    """Regression tests for the six open concerns on PR #982."""
+class TestBehaviouralRegressions:
+    """Regression tests for previously-reported issues."""
 
-    # -- Concern 1: channel names are str-typed in output columns --
+    # -- channel names are str-typed in output columns --
 
     def test_concern1_channel_str_names_in_columns(self):
         sdata = _toy_sdata(channel_names=["DAPI", "CD3", "CD8"])
@@ -464,7 +477,7 @@ class TestPR982Concerns:
         # Make sure the numeric-fallback names did not slip in:
         assert not any(c.endswith("_0") or c.endswith("_1") or c.endswith("_2") for c in cols)
 
-    # -- Concern 2: progress logs are emitted --
+    # -- progress logs are emitted --
 
     def test_concern2_progress_log_emitted(self, capsys):
         sdata = _toy_sdata()
@@ -485,11 +498,7 @@ class TestPR982Concerns:
         plain = ansi_re.sub("", captured.out)
         assert re.search(r"Tile \d+/\d+", plain), f"no progress log in:\n{plain}"
 
-    # -- Concern 3 (a): identity transforms, dim mismatch -> overlap path --
-
-    # Concern 3 (coordinate alignment) lands with align_mode="rasterize" in a follow-up PR.
-
-    # -- Concern 4: channel subset selection --
+    # -- channel subset selection --
 
     def test_concern4_channel_subset_by_name(self):
         sdata = _toy_sdata(n_channels=4, channel_names=["c0", "c1", "c2", "c3"])
@@ -507,7 +516,7 @@ class TestPR982Concerns:
         assert not any("_c1" in c for c in cols)
         assert not any("_c3" in c for c in cols)
 
-    # -- Concern 5: spatialdata_attrs on output table --
+    # -- spatialdata_attrs on output table --
 
     def test_concern5_spatialdata_attrs_present(self):
         sdata = _toy_sdata()
@@ -525,7 +534,7 @@ class TestPR982Concerns:
         assert "instance_key" in attrs
         assert attrs["region"] == "lbl"
 
-    # -- Concern 6: non-contiguous label IDs survive cp_measure roundtrip --
+    # -- non-contiguous label IDs survive the roundtrip --
 
     def test_concern6_non_contiguous_label_ids(self):
         sdata = _toy_sdata(label_ids=[1, 37, 82])
