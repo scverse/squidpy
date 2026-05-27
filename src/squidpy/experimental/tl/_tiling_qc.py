@@ -45,7 +45,7 @@ from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
 
 from squidpy._utils import _get_n_cores
-from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS
+from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS, StitchParams
 from squidpy.experimental.im._tiling import (
     build_tile_specs,
     compute_cell_info,
@@ -82,6 +82,18 @@ class TilingQCParams:
     distance_tol: float = 0.75
     min_area: int = 20
     max_contour_points: int = 500
+
+    def __post_init__(self) -> None:
+        # Coerce numeric types (accept numpy scalars cleanly) and bounds-check.
+        self.distance_tol = float(self.distance_tol)
+        self.min_area = int(self.min_area)
+        self.max_contour_points = int(self.max_contour_points)
+        if self.distance_tol < 0:
+            raise ValueError(f"distance_tol must be >= 0, got {self.distance_tol}.")
+        if self.min_area < 1:
+            raise ValueError(f"min_area must be >= 1, got {self.min_area}.")
+        if self.max_contour_points < 3:
+            raise ValueError(f"max_contour_points must be >= 3 (collinearity needs 3 points), got {self.max_contour_points}.")
 
 
 def _resolve_qc_params(qc_params: TilingQCParams | Mapping[str, Any] | None) -> TilingQCParams:
@@ -769,13 +781,16 @@ def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labe
     prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
     # `tiling_stitch` mixes top-level constructor kwargs with the nested
     # ``stitch_params`` bundle and diagnostic outputs (n_outliers, ...).
-    # Filter to the allowlist + the nested bundle so the rerun string is
-    # a valid Python call.
+    # Filter to the allowlist + only the bundle fields that differ from
+    # defaults, so the rerun string is both valid Python and minimal.
     parts = [f"labels_key={labels_key!r}"]
     parts.extend(f"{k}={v!r}" for k, v in prev_params.items() if k in _STITCH_PARAM_KEYS)
     nested = prev_params.get("stitch_params")
     if isinstance(nested, dict) and nested:
-        parts.append(f"stitch_params={nested!r}")
+        defaults = asdict(StitchParams())
+        diff = {k: v for k, v in nested.items() if k in defaults and defaults[k] != v}
+        if diff:
+            parts.append(f"stitch_params={diff!r}")
     rerun = f"sq.experimental.tl.stitch_tile_cuts(sdata, {', '.join(parts)})"
     logg.warning(
         f"Re-running calculate_tiling_qc dropped previous stitch columns "

@@ -86,6 +86,27 @@ class StitchParams:
     candidate_min_iou: float = 0.2
     close_radius: int = 3
 
+    def __post_init__(self) -> None:
+        # Coerce numeric types (accept numpy scalars cleanly) and bounds-check.
+        self.distance_tol = float(self.distance_tol)
+        self.min_edge_length = float(self.min_edge_length)
+        self.min_edge_length_ratio = float(self.min_edge_length_ratio)
+        self.min_edge_coverage = float(self.min_edge_coverage)
+        self.candidate_min_iou = float(self.candidate_min_iou)
+        self.close_radius = int(self.close_radius)
+        if self.distance_tol < 0:
+            raise ValueError(f"distance_tol must be >= 0, got {self.distance_tol}.")
+        if self.min_edge_length < 0:
+            raise ValueError(f"min_edge_length must be >= 0, got {self.min_edge_length}.")
+        if not 0.0 <= self.min_edge_length_ratio <= 1.0:
+            raise ValueError(f"min_edge_length_ratio must be in [0, 1], got {self.min_edge_length_ratio}.")
+        if not 0.0 <= self.min_edge_coverage <= 1.0:
+            raise ValueError(f"min_edge_coverage must be in [0, 1], got {self.min_edge_coverage}.")
+        if not 0.0 <= self.candidate_min_iou <= 1.0:
+            raise ValueError(f"candidate_min_iou must be in [0, 1], got {self.candidate_min_iou}.")
+        if self.close_radius < 0:
+            raise ValueError(f"close_radius must be >= 0, got {self.close_radius}.")
+
 
 def _resolve_stitch_params(stitch_params: StitchParams | Mapping[str, Any] | None) -> StitchParams:
     """Normalise the ``stitch_params`` argument to a :class:`StitchParams` instance."""

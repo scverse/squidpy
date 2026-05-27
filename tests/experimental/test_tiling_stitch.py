@@ -91,6 +91,58 @@ class TestStitchObsContract:
 # ---------------------------------------------------------------------------
 
 
+class TestStitchParamsResolution:
+    def test_none_uses_defaults(self):
+        from squidpy.experimental.tl._tiling_stitch import StitchParams, _resolve_stitch_params
+
+        p = _resolve_stitch_params(None)
+        assert isinstance(p, StitchParams)
+        assert p.distance_tol == 0.75
+        assert p.close_radius == 3
+
+    def test_instance_passthrough(self):
+        from squidpy.experimental.tl._tiling_stitch import StitchParams, _resolve_stitch_params
+
+        inst = StitchParams(distance_tol=1.0)
+        assert _resolve_stitch_params(inst) is inst
+
+    def test_mapping_construction(self):
+        from squidpy.experimental.tl._tiling_stitch import _resolve_stitch_params
+
+        p = _resolve_stitch_params({"distance_tol": 1.5, "close_radius": 5})
+        assert p.distance_tol == 1.5
+        assert p.close_radius == 5
+
+    def test_numpy_scalars_coerced(self):
+        from squidpy.experimental.tl._tiling_stitch import _resolve_stitch_params
+
+        p = _resolve_stitch_params({"distance_tol": np.float32(0.8), "close_radius": np.int64(4)})
+        assert type(p.distance_tol) is float
+        assert type(p.close_radius) is int
+
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"bogus": 1}, "Unknown stitch_params"),
+            ({"distance_tol": -1.0}, "distance_tol must be >= 0"),
+            ({"close_radius": -1}, "close_radius must be >= 0"),
+            ({"candidate_min_iou": 1.5}, r"candidate_min_iou must be in \[0, 1\]"),
+        ],
+        ids=["unknown_field", "negative_distance_tol", "negative_close_radius", "iou_out_of_range"],
+    )
+    def test_invalid_raises_value_error(self, kwargs, match):
+        from squidpy.experimental.tl._tiling_stitch import _resolve_stitch_params
+
+        with pytest.raises(ValueError, match=match):
+            _resolve_stitch_params(kwargs)
+
+    def test_wrong_type_raises_type_error(self):
+        from squidpy.experimental.tl._tiling_stitch import _resolve_stitch_params
+
+        with pytest.raises(TypeError, match="StitchParams, Mapping, or None"):
+            _resolve_stitch_params(42)
+
+
 class TestUnsMetadata:
     def test_uns_records_params_and_score_formula(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
@@ -100,6 +152,12 @@ class TestUnsMetadata:
         assert meta["min_confidence"] == 0.7
         assert meta["max_gap"] == 4.0
         assert meta["max_group_size"] == 4
+        # Advanced tunables are bundled, not flat.
+        assert "distance_tol" not in meta
+        assert "stitch_params" in meta
+        assert isinstance(meta["stitch_params"], dict)
+        assert meta["stitch_params"]["distance_tol"] == 0.75
+        assert meta["stitch_params"]["close_radius"] == 3
         # No fitted coefficients -- transparent formula instead.
         assert "model_coefficients" not in meta
         assert "model_intercept" not in meta
