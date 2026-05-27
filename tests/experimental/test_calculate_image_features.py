@@ -342,19 +342,17 @@ class TestCalculateImageFeatures:
         assert result_one.n_vars == 1
         assert "intensity_mean_0" in result_one.var_names
 
-    def test_channel_selection_by_index(self, sdata_synthetic):
-        """Channel selection by integer index."""
-        result = sq.experimental.im.calculate_image_features(
-            sdata_synthetic,
-            image_key="test_img",
-            labels_key="test_labels",
-            channels=[0],
-            features=["squidpy:summary"],
-            inplace=False,
-        )
-        assert result.n_obs > 0
-        # Only channel 0 features
-        assert all("_0" in col for col in result.var_names)
+    def test_channel_selection_rejects_int(self, sdata_synthetic):
+        """Integer channel indices are no longer accepted -- names only."""
+        with pytest.raises(TypeError, match="channels must contain strings"):
+            sq.experimental.im.calculate_image_features(
+                sdata_synthetic,
+                image_key="test_img",
+                labels_key="test_labels",
+                channels=[0],  # int, not str -- should fail validation
+                features=["squidpy:summary"],
+                inplace=False,
+            )
 
     def test_channel_selection_invalid(self, sdata_synthetic):
         with pytest.raises(ValueError, match="Channel 'DAPI' not found"):
@@ -593,14 +591,14 @@ class TestPR982Concerns:
 
     # -- Concern 4: channel subset selection --
 
-    def test_concern4_channel_subset_by_index(self):
+    def test_concern4_channel_subset_by_name(self):
         sdata = _toy_sdata(n_channels=4, channel_names=["c0", "c1", "c2", "c3"])
         adata = sq.experimental.im.calculate_image_features(
             sdata,
             image_key="img",
             labels_key="lbl",
             features=["squidpy:summary"],
-            channels=[0, 2],
+            channels=["c0", "c2"],
             inplace=False,
         )
         cols = list(adata.var_names)

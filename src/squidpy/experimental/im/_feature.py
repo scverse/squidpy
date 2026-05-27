@@ -711,7 +711,7 @@ def _prepare_lazy(
     labels_key: str | None,
     shapes_key: str | None,
     scale: str | None,
-    channels: list[str] | list[int] | None,
+    channels: list[str] | None,
     align_mode: Literal["strict", "rasterize"],
     drop_report: DropReport,
 ) -> tuple[xr.DataArray, xr.DataArray, list[str]]:
@@ -775,17 +775,15 @@ def _prepare_lazy(
         selected_idx: list[int] = []
         ch_names = []
         for ch in channels:
-            if isinstance(ch, int):
-                if ch < 0 or ch >= len(all_ch):
-                    raise ValueError(f"Channel index {ch} out of range [0, {len(all_ch)}).")
-                selected_idx.append(ch)
-                ch_names.append(all_ch[ch])
-            else:
-                ch_str = str(ch)
-                if ch_str not in all_ch:
-                    raise ValueError(f"Channel '{ch}' not found. Available: {all_ch}")
-                selected_idx.append(all_ch.index(ch_str))
-                ch_names.append(ch_str)
+            if not isinstance(ch, str):
+                raise TypeError(
+                    f"channels must contain strings (channel names); got {type(ch).__name__} {ch!r}. "
+                    f"Available channel names: {all_ch}."
+                )
+            if ch not in all_ch:
+                raise ValueError(f"Channel '{ch}' not found. Available: {all_ch}")
+            selected_idx.append(all_ch.index(ch))
+            ch_names.append(ch)
         image_da = image_da.isel(c=selected_idx)
     else:
         ch_names = all_ch
@@ -864,7 +862,9 @@ def calculate_image_features(
     scale
         Scale level for multi-scale data.
     channels
-        Subset of channels to use.  ``None`` uses all channels.
+        Subset of channel names to use, matching those returned by
+        :func:`spatialdata.models.get_channel_names`. ``None`` uses all
+        channels. Integer indices are not accepted -- always pass names.
     features
         Which features to compute.  Accepts a list of strings:
 
