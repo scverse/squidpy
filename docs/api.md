@@ -29,6 +29,7 @@ import squidpy as sq
     gr.ligrec
     gr.spatial_autocorr
     gr.sepal
+    gr.calculate_niche
 ```
 
 ## Image
@@ -108,4 +109,15 @@ import squidpy as sq
     datasets.visium_hne_image
     datasets.visium_hne_image_crop
     datasets.visium_fluo_image_crop
+```
+
+## Experimental
+```{eval-rst}
+.. module:: squidpy.experimental
+.. currentmodule:: squidpy
+.. autosummary::
+    :toctree: api
+
+    experimental.tl.calculate_tiling_qc
+    experimental.pl.tiling_qc
 ```
