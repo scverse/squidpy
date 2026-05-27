@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import functools
 import inspect
+import os
 import warnings
 from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
 from contextlib import contextmanager
 from enum import Enum
-from multiprocessing import Manager, cpu_count
+from multiprocessing import Manager
 from queue import Queue
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Literal
@@ -43,6 +44,19 @@ except ImportError:
 from numpy.typing import NDArray
 
 NDArrayA = NDArray[Any]
+
+
+def _cpu_count() -> int:
+    """Number of CPUs available to this process.
+
+    Uses :func:`os.sched_getaffinity` to respect cgroup limits set by
+    SLURM, Docker, or ``taskset``.  Falls back to :func:`os.cpu_count`
+    on platforms where affinity queries are unavailable (e.g. macOS).
+    """
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return os.cpu_count() or 1
 
 
 class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
@@ -203,7 +217,7 @@ def parallelize(
     if n_jobs == 0:
         raise ValueError("Number of jobs cannot be `0`.")
     elif n_jobs < 0:
-        n_jobs = cpu_count() + 1 + n_jobs
+        n_jobs = _cpu_count() + 1 + n_jobs
 
     if n_split is None:
         n_split = n_jobs
@@ -249,7 +263,7 @@ def _get_n_cores(n_cores: int | None) -> int:
     if n_cores is None:
         return 1
     if n_cores < 0:
-        return cpu_count() + 1 + n_cores
+        return _cpu_count() + 1 + n_cores
 
     return n_cores
 
