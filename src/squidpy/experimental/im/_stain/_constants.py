@@ -49,3 +49,9 @@ _MIX = np.array(
 )
 RUDERMAN_LMS_TO_LAB: np.ndarray = _DIAG @ _MIX
 RUDERMAN_LAB_TO_LMS: np.ndarray = np.linalg.inv(RUDERMAN_LMS_TO_LAB)
+
+# Pixels whose Ruderman Lab-L luminosity (normalised to [0, 1]) exceeds this
+# are treated as near-white background and excluded when fitting stain
+# statistics. Semantics follow HistomicsTK's `reinhard` so luminosity
+# thresholds from the H&E literature transfer directly.
+DEFAULT_LUMINOSITY_THRESHOLD: float = 0.8

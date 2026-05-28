@@ -120,4 +120,8 @@ import squidpy as sq
 
     experimental.tl.calculate_tiling_qc
     experimental.pl.tiling_qc
+    experimental.im.fit_stain_reference
+    experimental.im.apply_stain_normalization
+    experimental.im.StainReference
+    experimental.im.ReinhardParams
 ```
