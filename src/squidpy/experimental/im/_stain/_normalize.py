@@ -15,8 +15,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Literal
 
+import spatialdata as sd
 import xarray as xr
-from spatialdata import SpatialData
 from spatialdata.models import Image2DModel
 from spatialdata.transformations import get_transformation
 
@@ -35,7 +35,7 @@ _DECOMPOSITION_NOT_IMPLEMENTED = "macenko/vahadane decomposition is not yet impl
 
 
 def _resolve_image(
-    sdata: SpatialData,
+    sdata: sd.SpatialData,
     image_key: str,
     scale: str,
     *,
@@ -50,14 +50,14 @@ def _resolve_image(
 
 
 def fit_stain_reference(
-    sdata: SpatialData,
+    sdata: sd.SpatialData,
     image_key: str,
     *,
     method: StainMethod = "reinhard",
     scale: str | Literal["auto"] = "auto",
     method_params: ReinhardParams | Mapping[str, Any] | None = None,
 ) -> StainReference:
-    """Fit a stain reference from an image in a :class:`SpatialData` object.
+    """Fit a stain reference from an image in a :class:`~spatialdata.SpatialData` object.
 
     Parameters
     ----------
@@ -88,7 +88,7 @@ def fit_stain_reference(
 
 
 def apply_stain_normalization(
-    sdata: SpatialData,
+    sdata: sd.SpatialData,
     image_key: str,
     reference: StainReference,
     *,
