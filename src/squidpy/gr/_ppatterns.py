@@ -30,6 +30,7 @@ from squidpy.gr._utils import (
     _assert_connectivity_key,
     _assert_spatial_basis,
     _save_data,
+    extract_adata_if_sdata,
 )
 
 __all__ = ["spatial_autocorr", "co_occurrence"]
@@ -62,6 +63,8 @@ def spatial_autocorr(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    *,
+    table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
     Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
@@ -71,6 +74,7 @@ def spatial_autocorr(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(conn_key)s
     genes
         Depending on the ``attr``:
@@ -128,8 +132,7 @@ def spatial_autocorr(
         - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe, if ``mode = {sp.MORAN.s!r}``.
         - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     _assert_connectivity_key(adata, connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
@@ -348,6 +351,8 @@ def co_occurrence(
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
+    *,
+    table_key: str | None = None,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -355,6 +360,7 @@ def co_occurrence(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(cluster_key)s
     %(spatial_key)s
     interval
@@ -373,9 +379,7 @@ def co_occurrence(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
           computed at ``interval``.
     """
-
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
 
