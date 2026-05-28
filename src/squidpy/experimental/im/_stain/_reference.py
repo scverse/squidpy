@@ -27,7 +27,7 @@ def _coerce_finite(arr: Any, *, shape: tuple[int, ...], name: str) -> np.ndarray
     return out
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class StainReference:
     """Container for a fitted stain reference.
 
@@ -48,7 +48,14 @@ class StainReference:
         decomposition methods (apply consumes it). Forbidden for Reinhard
         because Reinhard's color transfer operates in Ruderman Lab and
         does not model absorbance. There is no universal default; pass an
-        estimate from your data (PR 3 ships the estimator).
+        estimate from your data (see ``estimate_background_intensity``).
+    max_concentrations
+        Shape ``(2,)`` reference per-stain (H, E) maximum concentrations.
+        Decomposition only. Stored because at apply time the reference image
+        is gone, so the target concentration scale must travel with the
+        reference. Optional (Reinhard references and externally-built
+        decomposition references without it remain valid); forbidden for
+        Reinhard.
     """
 
     method: StainMethod
@@ -56,6 +63,25 @@ class StainReference:
     mu: np.ndarray | None = None
     sigma: np.ndarray | None = None
     background_intensity: np.ndarray | None = None
+    max_concentrations: np.ndarray | None = None
+
+    def __eq__(self, other: object) -> bool:
+        # The numpy-array fields make the dataclass-generated __eq__ raise
+        # ("truth value of an array is ambiguous"), so compare explicitly:
+        # equal method plus element-wise-equal arrays.
+        if not isinstance(other, StainReference):
+            return NotImplemented
+        if self.method != other.method:
+            return False
+        return all(
+            np.array_equal(getattr(self, name), getattr(other, name))
+            for name in ("stain_matrix", "mu", "sigma", "background_intensity", "max_concentrations")
+        )
+
+    # eq=False keeps the default identity-based __hash__ (the array fields are
+    # unhashable, so a value-based hash is impossible); references remain usable
+    # as set members / dict keys by identity.
+    __hash__ = object.__hash__
 
     def __post_init__(self) -> None:
         if self.method not in _VALID_METHODS:
@@ -77,6 +103,11 @@ class StainReference:
             if np.any(bg <= 0):
                 raise ValueError("background_intensity must be strictly positive.")
             object.__setattr__(self, "background_intensity", bg)
+            if self.max_concentrations is not None:
+                maxc = _coerce_finite(self.max_concentrations, shape=(2,), name="max_concentrations")
+                if np.any(maxc <= 0):
+                    raise ValueError("max_concentrations must be strictly positive.")
+                object.__setattr__(self, "max_concentrations", maxc)
         else:
             if self.mu is None or self.sigma is None:
                 raise ValueError("method='reinhard' requires both mu and sigma.")
@@ -87,6 +118,8 @@ class StainReference:
                     "method='reinhard' forbids background_intensity; Reinhard's color "
                     "transfer is in Ruderman Lab and does not use a white point."
                 )
+            if self.max_concentrations is not None:
+                raise ValueError("method='reinhard' forbids max_concentrations.")
             mu = _coerce_finite(self.mu, shape=(3,), name="mu")
             sigma = _coerce_finite(self.sigma, shape=(3,), name="sigma")
             if np.any(sigma <= 0):

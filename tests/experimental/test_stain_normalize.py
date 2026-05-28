@@ -7,7 +7,7 @@ import pytest
 import spatialdata as sd
 import spatialdata_plot as sdp
 import xarray as xr
-from spatialdata.models import Image2DModel
+from spatialdata.models import Image2DModel, Labels2DModel
 from spatialdata.transformations import Scale, get_transformation, set_transformation
 
 import squidpy as sq
@@ -23,9 +23,15 @@ from tests.conftest import PlotTester, PlotTesterMeta
 _ = sdp  # registers the `.pl` spatialdata accessor
 
 
-def _make_sdata(values: np.ndarray, *, scale_factors: list[int] | None = None) -> sd.SpatialData:
+def _make_sdata(
+    values: np.ndarray, *, scale_factors: list[int] | None = None, with_tissue: bool = True
+) -> sd.SpatialData:
     img = Image2DModel.parse(values, dims=("c", "y", "x"), scale_factors=scale_factors)
-    return sd.SpatialData(images={"img": img})
+    sdata = sd.SpatialData(images={"img": img})
+    if with_tissue:
+        h, w = values.shape[-2], values.shape[-1]
+        sdata.labels["img_tissue"] = Labels2DModel.parse(np.ones((h, w), dtype=np.uint32), dims=("y", "x"))
+    return sdata
 
 
 @pytest.fixture
@@ -45,11 +51,6 @@ class TestFitStainReference:
         sdata = _make_sdata(rgb_values)
         with pytest.raises(ValueError, match="not found, valid keys"):
             fit_stain_reference(sdata, "nope")
-
-    def test_macenko_not_implemented(self, rgb_values: np.ndarray) -> None:
-        sdata = _make_sdata(rgb_values)
-        with pytest.raises(NotImplementedError, match="decomposition is not yet implemented"):
-            fit_stain_reference(sdata, "img", method="macenko")
 
     def test_unknown_method_raises(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
@@ -93,6 +94,8 @@ class TestApplyStainNormalization:
         img = Image2DModel.parse(rgb_values, dims=("c", "y", "x"), c_coords=["r", "g", "b"])
         set_transformation(img, Scale([2.0, 2.0], axes=("y", "x")), to_coordinate_system="global")
         sdata = sd.SpatialData(images={"img": img})
+        h, w = rgb_values.shape[-2], rgb_values.shape[-1]
+        sdata.labels["img_tissue"] = Labels2DModel.parse(np.ones((h, w), dtype=np.uint32), dims=("y", "x"))
         ref = fit_stain_reference(sdata, "img")
         apply_stain_normalization(sdata, "img", ref, image_key_added="norm")
         out = sdata.images["norm"]
@@ -105,14 +108,14 @@ class TestApplyStainNormalization:
         with pytest.raises(ValueError, match="already exists"):
             apply_stain_normalization(sdata, "img", ref, image_key_added="img")
 
-    def test_decomposition_reference_not_implemented(self, rgb_values: np.ndarray) -> None:
+    def test_decomposition_reference_without_max_concentrations_raises(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
         ref = StainReference(
             method="macenko",
             stain_matrix=np.eye(3),
             background_intensity=np.array([255.0, 255.0, 255.0]),
         )
-        with pytest.raises(NotImplementedError, match="decomposition is not yet implemented"):
+        with pytest.raises(ValueError, match="max_concentrations"):
             apply_stain_normalization(sdata, "img", ref)
 
     def test_method_params_mapping(self, rgb_values: np.ndarray) -> None:
@@ -122,9 +125,67 @@ class TestApplyStainNormalization:
         assert isinstance(out, xr.DataArray)
 
 
+class TestTissueMaskMandate:
+    def test_fit_requires_tissue_mask(self, rgb_values: np.ndarray) -> None:
+        sdata = _make_sdata(rgb_values, with_tissue=False)
+        with pytest.raises(KeyError, match="detect_tissue"):
+            fit_stain_reference(sdata, "img")
+
+    def test_apply_requires_tissue_mask(self, rgb_values: np.ndarray) -> None:
+        sdata = _make_sdata(rgb_values)  # has a mask -> fit works
+        ref = fit_stain_reference(sdata, "img")
+        del sdata.labels["img_tissue"]  # ... but now the source has none
+        with pytest.raises(KeyError, match="detect_tissue"):
+            apply_stain_normalization(sdata, "img", ref)
+
+    def test_explicit_missing_key_raises(self, rgb_values: np.ndarray) -> None:
+        sdata = _make_sdata(rgb_values)
+        with pytest.raises(KeyError, match="not found in sdata.labels"):
+            fit_stain_reference(sdata, "img", tissue_mask_key="nope")
+
+    def test_mask_is_used_in_the_fit(self, rgb_values: np.ndarray) -> None:
+        # A different tissue region yields different channel statistics, proving
+        # the mask actually drives the fit (not silently ignored).
+        ref_full = fit_stain_reference(_make_sdata(rgb_values), "img")
+
+        sdata_part = _make_sdata(rgb_values, with_tissue=False)
+        h, w = rgb_values.shape[-2], rgb_values.shape[-1]
+        partial = np.zeros((h, w), dtype=np.uint32)
+        partial[: h // 2] = 1  # only the top half is tissue
+        sdata_part.labels["img_tissue"] = Labels2DModel.parse(partial, dims=("y", "x"))
+        ref_part = fit_stain_reference(sdata_part, "img")
+
+        assert not np.allclose(ref_full.mu, ref_part.mu)
+
+
+class TestPreserveBackground:
+    def test_background_passthrough_vs_full_frame(self, rgb_values: np.ndarray) -> None:
+        # tissue = top half only; bottom half is background
+        h, w = rgb_values.shape[-2], rgb_values.shape[-1]
+        sdata = _make_sdata(rgb_values, with_tissue=False)
+        partial = np.zeros((h, w), dtype=np.uint32)
+        partial[: h // 2] = 1
+        sdata.labels["img_tissue"] = Labels2DModel.parse(partial, dims=("y", "x"))
+
+        # a differently-coloured reference so the transform is non-trivial
+        shifted = np.clip(rgb_values * np.array([1.3, 0.8, 1.1])[:, None, None], 0, 255).astype(np.float32)
+        sdata.images["ref_img"] = Image2DModel.parse(shifted, dims=("c", "y", "x"))
+        sdata.labels["ref_img_tissue"] = Labels2DModel.parse(np.ones((h, w), dtype=np.uint32), dims=("y", "x"))
+        ref = fit_stain_reference(sdata, "ref_img")
+
+        original = get_element_data(sdata.images["img"], "auto", "image", "img").values
+        kept = apply_stain_normalization(sdata, "img", ref).values  # preserve_background=True (default)
+        full = apply_stain_normalization(sdata, "img", ref, preserve_background=False).values
+
+        bg = slice(h // 2, None)
+        np.testing.assert_allclose(kept[:, bg], original[:, bg])  # background untouched
+        assert not np.allclose(full[:, bg], original[:, bg])  # full-frame recolours it
+
+
 class TestStainNormalizationOnHnE:
     def test_fit_apply_smoke(self, sdata_hne) -> None:
         image_key = next(iter(sdata_hne.images))
+        sq.experimental.im.detect_tissue(sdata_hne, image_key)
         ref = sq.experimental.im.fit_stain_reference(sdata_hne, image_key)
         assert ref.method == "reinhard"
         out = sq.experimental.im.apply_stain_normalization(sdata_hne, image_key, ref)
@@ -136,6 +197,7 @@ class TestStainNormalizationVisual(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_reinhard_before_after(self, sdata_hne) -> None:
         """Visual: a re-stained source (left) normalized back to the H&E reference (right)."""
         image_key = next(iter(sdata_hne.images))
+        sq.experimental.im.detect_tissue(sdata_hne, image_key)
         reference = fit_stain_reference(sdata_hne, image_key)
 
         # Deterministically warm/cool the channels to simulate a different
@@ -145,7 +207,10 @@ class TestStainNormalizationVisual(PlotTester, metaclass=PlotTesterMeta):
         shifted = (da_rgb * weights).clip(0, 255)
         sdata_hne.images["hne_shifted"] = Image2DModel.parse(shifted.data, dims=shifted.dims)
 
-        apply_stain_normalization(sdata_hne, "hne_shifted", reference, image_key_added="hne_normalized")
+        # `hne_shifted` shares geometry with `image_key`; reuse its tissue mask.
+        apply_stain_normalization(
+            sdata_hne, "hne_shifted", reference, image_key_added="hne_normalized", tissue_mask_key=f"{image_key}_tissue"
+        )
 
         _, axes = plt.subplots(1, 2, figsize=(8, 4))
         sdata_hne.pl.render_images("hne_shifted").pl.show(ax=axes[0], title="before")

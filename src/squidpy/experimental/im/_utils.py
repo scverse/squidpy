@@ -9,8 +9,10 @@ import xarray as xr
 from shapely import box
 from spatialdata import SpatialData
 from spatialdata._logging import logger
-from spatialdata.models import ShapesModel
+from spatialdata.models import Labels2DModel, ShapesModel
 from spatialdata.transformations import get_transformation, set_transformation
+
+from squidpy._utils import _yx_from_shape
 
 
 class TileGrid:
@@ -252,22 +254,45 @@ def get_mask_materialized(sdata: SpatialData, mask_key: str, scale: str) -> np.n
     return np.asarray(arr.compute())
 
 
+def _choose_label_scale_for_image(label_node: Labels2DModel, target_hw: tuple[int, int]) -> str:
+    """Pick the label scale closest to the target image height/width."""
+    if not hasattr(label_node, "keys"):
+        return "scale0"  # single-scale labels default to their only scale
+    target_h, target_w = target_hw
+    best = None
+    best_diff = float("inf")
+    for k in label_node.keys():
+        y, x = _yx_from_shape(label_node[k].image.shape)
+        diff = abs(y - target_h) + abs(x - target_w)
+        if diff == 0:
+            return k
+        if diff < best_diff:
+            best_diff = diff
+            best = k
+    return best or "scale0"
+
+
 def resolve_tissue_mask(
     sdata: SpatialData,
     image_key: str,
     scale: str,
     tissue_mask_key: str | None = None,
+    *,
+    auto_create: bool = True,
 ) -> str:
     """Return the key of a tissue mask in ``sdata.labels``, creating one if needed.
 
     If *tissue_mask_key* is given and exists, it is returned as-is.
-    Otherwise falls back to ``f"{image_key}_tissue"``, running ``detect_tissue``
-    to create it when missing.
+    Otherwise falls back to ``f"{image_key}_tissue"``. When that key is missing,
+    the behaviour depends on *auto_create*: if ``True`` (default) ``detect_tissue``
+    is run to create it; if ``False`` a :class:`KeyError` is raised asking the
+    caller to run ``detect_tissue`` first.
 
     Raises
     ------
     KeyError
-        If *tissue_mask_key* is given but not found in ``sdata.labels``.
+        If *tissue_mask_key* is given but not found in ``sdata.labels``, or if
+        *auto_create* is ``False`` and no tissue mask exists.
     Exception
         Any exception raised by ``detect_tissue`` if auto-creation fails.
         Callers needing graceful fallback should wrap this call in try/except.
@@ -279,6 +304,12 @@ def resolve_tissue_mask(
 
     mask_key = f"{image_key}_tissue"
     if mask_key not in sdata.labels:
+        if not auto_create:
+            raise KeyError(
+                f"No tissue mask found in sdata.labels (looked for {mask_key!r}). Run "
+                f"`squidpy.experimental.im.detect_tissue(sdata, {image_key!r})` first, "
+                "or pass an explicit `tissue_mask_key`."
+            )
         from squidpy.experimental.im._detect_tissue import detect_tissue
 
         detect_tissue(sdata=sdata, image_key=image_key, scale=scale, inplace=True, new_labels_key=mask_key)

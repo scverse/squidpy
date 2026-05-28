@@ -152,6 +152,10 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     experimental.pl.tiling_qc
     experimental.im.fit_stain_reference
     experimental.im.apply_stain_normalization
+    experimental.im.decompose_stains
+    experimental.im.estimate_background_intensity
     experimental.im.StainReference
     experimental.im.ReinhardParams
+    experimental.im.MacenkoParams
+    experimental.im.VahadaneParams
 ```

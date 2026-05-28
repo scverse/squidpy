@@ -117,3 +117,15 @@ def test_rejects_non_finite() -> None:
             mu=np.array([np.nan, 0.0, 0.0]),
             sigma=np.ones(3),
         )
+
+
+def test_equality_is_array_aware_and_hashable() -> None:
+    # distinct-but-equal references compare equal (array-aware __eq__), and
+    # references remain hashable (identity) despite the numpy-array fields.
+    a = StainReference(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
+    b = StainReference(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
+    c = StainReference(method="reinhard", mu=np.array([9.0, 2.0, 3.0]), sigma=np.ones(3))
+    assert a == b
+    assert a != c
+    assert len({a, b, c}) == 3  # identity-hashed, no TypeError
+    assert a != "not a reference"
