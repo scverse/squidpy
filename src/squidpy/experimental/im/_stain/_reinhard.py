@@ -22,7 +22,7 @@ from squidpy.experimental.im._stain._conversion import (
     lab_ruderman_to_rgb,
     rgb_to_lab_ruderman,
 )
-from squidpy.experimental.im._stain._mask import luminosity_foreground_mask
+from squidpy.experimental.im._stain._mask import foreground_mask_from_lab
 from squidpy.experimental.im._stain._reference import StainReference
 
 # Numerical safeguard against divide-by-zero on flat (constant-colour)
@@ -121,7 +121,7 @@ def fit_reinhard(image_rgb: xr.DataArray, params: ReinhardParams) -> StainRefere
     """
     _check_channel_dim(image_rgb)
     lab = rgb_to_lab_ruderman(image_rgb)
-    mask = luminosity_foreground_mask(image_rgb, params.luminosity_threshold) if params.mask_background else None
+    mask = foreground_mask_from_lab(lab, params.luminosity_threshold) if params.mask_background else None
     mu, sigma = _masked_channel_stats(lab, mask)
     return StainReference(method="reinhard", mu=mu, sigma=sigma)
 
@@ -136,7 +136,7 @@ def apply_reinhard(image_rgb: xr.DataArray, reference: StainReference, params: R
     """
     _check_channel_dim(image_rgb)
     lab = rgb_to_lab_ruderman(image_rgb)
-    mask = luminosity_foreground_mask(image_rgb, params.luminosity_threshold) if params.mask_background else None
+    mask = foreground_mask_from_lab(lab, params.luminosity_threshold) if params.mask_background else None
     mu_src, sigma_src = _masked_channel_stats(lab, mask)
     sigma_src = np.maximum(sigma_src, _SIGMA_FLOOR)
 

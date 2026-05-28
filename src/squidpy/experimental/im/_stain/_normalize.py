@@ -34,29 +34,17 @@ from squidpy.experimental.im._utils import get_element_data
 _DECOMPOSITION_NOT_IMPLEMENTED = "macenko/vahadane decomposition is not yet implemented"
 
 
-def _resolve_scale(node: Any, scale: str, *, prefer_finest: bool) -> str:
-    """Map ``scale="auto"`` to a concrete level on a multiscale node.
-
-    Fitting colour statistics wants the coarsest (cheapest) level; producing
-    a normalized image wants the finest so the stored result is not silently
-    downsampled. Concrete scales and single-scale nodes pass through.
-    """
-    if scale != "auto" or not hasattr(node, "keys"):
-        return scale
-
-    def _idx(k: str) -> int:
-        num = "".join(ch for ch in k if ch.isdigit())
-        return int(num) if num else -1
-
-    keys = list(node.keys())
-    return min(keys, key=_idx) if prefer_finest else max(keys, key=_idx)
-
-
-def _resolve_image(sdata: SpatialData, image_key: str, scale: str, *, prefer_finest: bool) -> xr.DataArray:
+def _resolve_image(
+    sdata: SpatialData,
+    image_key: str,
+    scale: str,
+    *,
+    prefer: Literal["coarsest", "finest"],
+) -> xr.DataArray:
     if image_key not in sdata.images:
         raise ValueError(f"image_key {image_key!r} not found, valid keys: {list(sdata.images.keys())}")
     node = sdata.images[image_key]
-    da = get_element_data(node, _resolve_scale(node, scale, prefer_finest=prefer_finest), "image", image_key)
+    da = get_element_data(node, scale, "image", image_key, prefer=prefer)
     _check_channel_dim(da)
     return da
 
@@ -91,7 +79,7 @@ def fit_stain_reference(
     -------
     The fitted :class:`StainReference`. Nothing is written to ``sdata``.
     """
-    da = _resolve_image(sdata, image_key, scale, prefer_finest=False)
+    da = _resolve_image(sdata, image_key, scale, prefer="coarsest")
     if method == "reinhard":
         return fit_reinhard(da, _resolve_reinhard_params(method_params))
     if method in {"macenko", "vahadane"}:
@@ -138,7 +126,7 @@ def apply_stain_normalization(
     The lazy normalized :class:`xarray.DataArray` if ``image_key_added`` is
     ``None``, otherwise ``None``.
     """
-    da = _resolve_image(sdata, image_key, scale, prefer_finest=True)
+    da = _resolve_image(sdata, image_key, scale, prefer="finest")
     if reference.method == "reinhard":
         normalized = apply_reinhard(da, reference, _resolve_reinhard_params(method_params))
     elif reference.method in {"macenko", "vahadane"}:

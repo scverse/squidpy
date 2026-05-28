@@ -39,6 +39,18 @@ def _white_luminosity() -> float:
 _L_WHITE: float = _white_luminosity()
 
 
+def foreground_mask_from_lab(lab: xr.DataArray, threshold: float) -> xr.DataArray:
+    """Tissue mask from an already-computed Ruderman Lab image.
+
+    Lets callers that have converted to Lab already (the fit/apply paths)
+    derive the mask without a second RGB->Lab conversion: both the mask and
+    the channel statistics then read from the same lazy ``lab`` graph, so
+    dask materialises the conversion once.
+    """
+    luminosity = lab.isel(c=0, drop=True) / _L_WHITE
+    return luminosity <= threshold
+
+
 def luminosity_foreground_mask(rgb: xr.DataArray, threshold: float) -> xr.DataArray:
     """Boolean tissue mask from normalised Ruderman Lab luminosity.
 
@@ -61,6 +73,4 @@ def luminosity_foreground_mask(rgb: xr.DataArray, threshold: float) -> xr.DataAr
     background. Lazy if and only if ``rgb`` was lazy.
     """
     _check_channel_dim(rgb)
-    lab = rgb_to_lab_ruderman(rgb)
-    luminosity = lab.isel(c=0, drop=True) / _L_WHITE
-    return luminosity <= threshold
+    return foreground_mask_from_lab(rgb_to_lab_ruderman(rgb), threshold)

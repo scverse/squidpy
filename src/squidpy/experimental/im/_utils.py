@@ -102,6 +102,8 @@ def get_element_data(
     scale: str | Literal["auto"],
     element_type: str = "element",
     element_key: str = "",
+    *,
+    prefer: Literal["coarsest", "finest"] = "coarsest",
 ) -> xr.DataArray:
     """
     Extract data array from a spatialdata element (image or label) node.
@@ -112,11 +114,15 @@ def get_element_data(
     element_node
         The element node from sdata.images[key] or sdata.labels[key]
     scale
-        Scale level to use, or "auto" for images (picks coarsest).
+        Scale level to use, or "auto" to pick a level according to ``prefer``.
     element_type
         Type of element for error messages (e.g., "image", "label").
     element_key
         Key of the element for error messages.
+    prefer
+        Which level ``scale="auto"`` resolves to on a multiscale element:
+        ``"coarsest"`` (smallest, cheapest) or ``"finest"`` (full resolution).
+        Ignored for explicit scales and single-scale elements.
 
     Returns
     -------
@@ -133,7 +139,7 @@ def get_element_data(
                 num = "".join(ch for ch in k if ch.isdigit())
                 return int(num) if num else -1
 
-            chosen = max(available, key=_idx)
+            chosen = min(available, key=_idx) if prefer == "finest" else max(available, key=_idx)
         elif scale not in available:
             logger.warning(f"Scale {scale!r} not found. Available: {available}")
             # Try scale0 as fallback, otherwise use first available
