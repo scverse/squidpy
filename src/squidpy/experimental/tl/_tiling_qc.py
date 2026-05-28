@@ -63,7 +63,7 @@ class TilingQCParams:
 
     Pass an instance (or a ``Mapping`` of field names to values) as
     ``tiling_qc_params`` to override.  Frozen so that validation done in
-    :meth:`__post_init__` cannot be silently bypassed by later mutation.
+    ``__post_init__`` cannot be silently bypassed by later mutation.
     """
 
     distance_tol: float = 0.75
