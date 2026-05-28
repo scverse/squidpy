@@ -27,7 +27,9 @@ in :mod:`squidpy.experimental.im._tiling`, so this scales to
 from __future__ import annotations
 
 import math
-from typing import Literal
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, fields
+from typing import Any, Literal
 
 import anndata as ad
 import dask
@@ -43,6 +45,7 @@ from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
 
 from squidpy._utils import _get_n_cores
+from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS, StitchParams
 from squidpy.experimental.im._tiling import (
     build_tile_specs,
     compute_cell_info,
@@ -51,26 +54,61 @@ from squidpy.experimental.im._tiling import (
     extract_labels_tile_lazy,
 )
 
-__all__ = ["calculate_tiling_qc"]
+__all__ = ["TilingQCParams", "calculate_tiling_qc"]
 
-# Minimum cell area in pixels - smaller cells produce noisy contours
-_MIN_CELL_AREA = 20
 
-# Default perpendicular distance tolerance for collinearity (pixels).
-# Points within this distance of the start→end line are considered
-# part of the same straight segment.  0.75 px works well for
-# sub-pixel contours from marching squares.
-_DEFAULT_DISTANCE_TOL = 0.75
+@dataclass(slots=True)
+class TilingQCParams:
+    """Advanced tuning knobs for :func:`~squidpy.experimental.tl.calculate_tiling_qc`.
 
-# Default maximum contour points to analyse.  Longer contours are
-# resampled to this length via equidistant arc-length interpolation
-# to bound the O(n²) two-pointer scan.  Exposed as the
-# ``max_contour_points`` argument of :func:`calculate_tiling_qc`.
-_DEFAULT_MAX_CONTOUR_POINTS = 500
+    Pass an instance (or a ``Mapping`` of field names to values) as
+    ``tiling_qc_params`` to override.
+    """
 
-# Consistency factor for normal distributions: sd ~ 1.4826 x MAD.
-# Used to convert MAD-based thresholds to standard-deviation units so
-# `nmads_*` parameters behave like z-score multipliers.
+    distance_tol: float = 0.75
+    """Maximum perpendicular distance (pixels) from the fitted line for a contour point to count as straight."""
+
+    min_area: int = 20
+    """Cells smaller than this (pixels at analysis resolution) are skipped (NaN scores)."""
+
+    max_contour_points: int = 500
+    """Cap on contour resolution; longer contours are arc-length-resampled before the O(n^2) collinearity scan."""
+
+    def __post_init__(self) -> None:
+        # Coerce numeric types (accept numpy scalars cleanly) and bounds-check.
+        self.distance_tol = float(self.distance_tol)
+        self.min_area = int(self.min_area)
+        self.max_contour_points = int(self.max_contour_points)
+        if self.distance_tol < 0:
+            raise ValueError(f"distance_tol must be >= 0, got {self.distance_tol}.")
+        if self.min_area < 1:
+            raise ValueError(f"min_area must be >= 1, got {self.min_area}.")
+        if self.max_contour_points < 3:
+            raise ValueError(f"max_contour_points must be >= 3 (collinearity needs 3 points), got {self.max_contour_points}.")
+
+
+def _resolve_qc_params(qc_params: TilingQCParams | Mapping[str, Any] | None) -> TilingQCParams:
+    """Normalise the ``tiling_qc_params`` argument to a :class:`TilingQCParams` instance."""
+    if qc_params is None:
+        return TilingQCParams()
+    if isinstance(qc_params, TilingQCParams):
+        return qc_params
+    if isinstance(qc_params, Mapping):
+        valid = {f.name for f in fields(TilingQCParams)}
+        unknown = set(qc_params) - valid
+        if unknown:
+            raise ValueError(
+                f"Unknown tiling_qc_params field(s): {sorted(unknown)}; expected from {sorted(valid)}."
+            )
+        return TilingQCParams(**qc_params)
+    raise TypeError(
+        f"tiling_qc_params must be TilingQCParams, Mapping, or None; got {type(qc_params).__name__}."
+    )
+
+
+_QC_DEFAULTS = TilingQCParams()
+
+# Standard consistency factor sd ~ 1.4826 x MAD for normal distributions.
 _MAD_TO_SD = 1.4826
 
 _TILE_SCORE_COLUMNS = ["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"]
@@ -187,8 +225,8 @@ def _resample_contour(contour: np.ndarray, max_points: int) -> np.ndarray:
 
 def _longest_collinear_segment(
     contour: np.ndarray,
-    distance_tol: float = _DEFAULT_DISTANCE_TOL,
-    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
+    distance_tol: float = _QC_DEFAULTS.distance_tol,
+    max_contour_points: int = _QC_DEFAULTS.max_contour_points,
 ) -> tuple[float, float]:
     """Find the longest collinear run of contour points.
 
@@ -280,8 +318,8 @@ def _cardinal_alignment(angle: float) -> float:
 def _straight_edge_metrics(
     contour: np.ndarray,
     cell_area: float,
-    distance_tol: float = _DEFAULT_DISTANCE_TOL,
-    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
+    distance_tol: float = _QC_DEFAULTS.distance_tol,
+    max_contour_points: int = _QC_DEFAULTS.max_contour_points,
 ) -> tuple[float, float, float]:
     """Compute straight-edge metrics for a single cell contour.
 
@@ -322,10 +360,10 @@ def _straight_edge_metrics(
 
 def _score_tile(
     tile_labels: np.ndarray,
-    distance_tol: float = _DEFAULT_DISTANCE_TOL,
-    min_area: int = _MIN_CELL_AREA,
+    distance_tol: float = _QC_DEFAULTS.distance_tol,
+    min_area: int = _QC_DEFAULTS.min_area,
     downsample: int = 1,
-    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
+    max_contour_points: int = _QC_DEFAULTS.max_contour_points,
 ) -> pd.DataFrame:
     """Compute tiling QC metrics for all cells in a numpy label tile.
 
@@ -431,15 +469,13 @@ def calculate_tiling_qc(
     scale: str | None = None,
     tile_size: int = 2048,
     overlap_margin: int | Literal["auto"] = "auto",
-    distance_tol: float = _DEFAULT_DISTANCE_TOL,
-    min_area: int = _MIN_CELL_AREA,
     downsample: int = 1,
     outlier_use_cut: bool = True,
     outlier_use_smoothed: bool = True,
     nmads_cut: float = 1.5,
     nmads_smoothed: float = 3,
     n_neighbors: int = 10,
-    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
+    tiling_qc_params: TilingQCParams | Mapping[str, Any] | None = None,
     n_jobs: int = -1,
     table_key_added: str | None = None,
     inplace: bool = True,
@@ -469,12 +505,6 @@ def calculate_tiling_qc(
     overlap_margin
         Overlap around each tile.  ``"auto"`` computes the minimum from
         the largest cell's bounding box.
-    distance_tol
-        Maximum perpendicular distance (pixels) from the fitted line
-        for a contour point to be considered part of a straight
-        segment.  Default 0.75 px.
-    min_area
-        Cells smaller than this (pixels) are skipped (NaN scores).
     downsample
         Factor by which to downsample each cell's bounding-box crop
         before contour extraction.  Straightness is scale-invariant,
@@ -499,13 +529,11 @@ def calculate_tiling_qc(
         perfect grid each cell has 8 immediate neighbours; the default
         of 10 leaves a little wiggle room for biological irregularity
         without wasting compute on distant cells.
-    max_contour_points
-        Cap on contour resolution for the collinearity scan.  Cells
-        with longer contours are resampled to this length via
-        arc-length interpolation before the ``O(n^2)`` two-pointer
-        scan, bounding worst-case runtime on very large cells.  The
-        default of 500 keeps results stable for typical cells; raise
-        only if cells are unusually large or ragged.
+    tiling_qc_params
+        Advanced tuning knobs as a :class:`TilingQCParams` instance or
+        a ``Mapping`` of its field names to values.  See
+        :class:`TilingQCParams` for each field's meaning and default.
+        ``None`` (default) uses all defaults.
     n_jobs
         Number of threads for tile processing.  ``-1`` (default) uses
         all available CPUs.  Ignored when an active
@@ -551,6 +579,14 @@ def calculate_tiling_qc(
     worker slot before the inner tile tasks are submitted; without
     that, the cluster can deadlock when all workers are busy holding
     the outer job.
+
+    Re-running ``calculate_tiling_qc`` on a labels element whose QC
+    table already carries ``stitch_*`` columns from a previous run of
+    :func:`stitch_tile_cuts` produces a fresh AnnData without those
+    columns.  A warning is logged (in both ``inplace=True`` and
+    ``inplace=False`` modes) listing the previous stitch parameters
+    and a copy-pasteable invocation so they can be re-derived from
+    the new outlier set.
     """
     if labels_key not in sdata.labels:
         raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
@@ -562,6 +598,7 @@ def calculate_tiling_qc(
         raise ValueError(f"nmads_smoothed must be positive, got {nmads_smoothed}.")
     if n_neighbors < 1:
         raise ValueError(f"n_neighbors must be >= 1, got {n_neighbors}.")
+    qc_params = _resolve_qc_params(tiling_qc_params)
 
     labels_node = sdata.labels[labels_key]
     if isinstance(labels_node, xr.DataTree):
@@ -590,10 +627,10 @@ def calculate_tiling_qc(
         tile_lbl = extract_labels_tile_lazy(labels_da, spec)
         return _score_tile(
             tile_lbl,
-            distance_tol=distance_tol,
-            min_area=min_area,
+            distance_tol=qc_params.distance_tol,
+            min_area=qc_params.min_area,
             downsample=downsample,
-            max_contour_points=max_contour_points,
+            max_contour_points=qc_params.max_contour_points,
         )
 
     tasks = [_process_one(spec) for spec in specs]
@@ -699,19 +736,55 @@ def calculate_tiling_qc(
         "scale": scale,
         "tile_size": tile_size,
         "overlap_margin": overlap_margin,
-        "distance_tol": distance_tol,
-        "min_area": min_area,
         "downsample": downsample,
         "outlier_use_cut": outlier_use_cut,
         "outlier_use_smoothed": outlier_use_smoothed,
         "nmads_cut": nmads_cut,
         "nmads_smoothed": nmads_smoothed,
         "n_neighbors": n_neighbors,
-        "max_contour_points": max_contour_points,
+        "tiling_qc_params": asdict(qc_params),
     }
 
+    table_key = table_key_added if table_key_added is not None else f"{labels_key}_qc"
+    _warn_if_dropping_stitch_columns(sdata, table_key, labels_key)
     if inplace:
-        table_key = table_key_added if table_key_added is not None else f"{labels_key}_qc"
         sdata.tables[table_key] = TableModel.parse(adata)
         return None
     return adata
+
+
+def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labels_key: str) -> None:
+    """Warn if re-running QC would drop downstream stitch results.
+
+    ``calculate_tiling_qc`` replaces the QC table wholesale, so any columns
+    added by :func:`stitch_tile_cuts` to a previous version of this table
+    are about to disappear.  We emit an actionable warning listing the
+    previous stitch parameters (from ``.uns["tiling_stitch"]``) and a
+    copy-pasteable invocation to restore them.
+    """
+    if table_key not in sdata.tables:
+        return
+    existing = sdata.tables[table_key]
+    present = [c for c in _STITCH_COLUMNS if c in existing.obs.columns]
+    if not present:
+        return
+
+    prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
+    # `tiling_stitch` mixes top-level constructor kwargs with the nested
+    # ``stitch_params`` bundle and diagnostic outputs (n_outliers, ...).
+    # Filter to the allowlist + only the bundle fields that differ from
+    # defaults, so the rerun string is both valid Python and minimal.
+    parts = [f"labels_key={labels_key!r}"]
+    parts.extend(f"{k}={v!r}" for k, v in prev_params.items() if k in _STITCH_PARAM_KEYS)
+    nested = prev_params.get("stitch_params")
+    if isinstance(nested, dict) and nested:
+        defaults = asdict(StitchParams())
+        diff = {k: v for k, v in nested.items() if k in defaults and defaults[k] != v}
+        if diff:
+            parts.append(f"stitch_params={diff!r}")
+    rerun = f"sq.experimental.tl.stitch_tile_cuts(sdata, {', '.join(parts)})"
+    logg.warning(
+        f"Re-running calculate_tiling_qc dropped previous stitch columns "
+        f"({', '.join(present)}) from sdata.tables[{table_key!r}].  "
+        f"To restore them, run: {rerun}"
+    )

@@ -119,5 +119,9 @@ import squidpy as sq
     :toctree: api
 
     experimental.tl.calculate_tiling_qc
+    experimental.tl.TilingQCParams
+    experimental.tl.stitch_tile_cuts
+    experimental.tl.StitchParams
+    experimental.im.make_stitched_labels
     experimental.pl.tiling_qc
 ```
