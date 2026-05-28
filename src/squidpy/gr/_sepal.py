@@ -21,6 +21,7 @@ from squidpy.gr._utils import (
     _assert_spatial_basis,
     _extract_expression,
     _save_data,
+    extract_adata_if_sdata,
 )
 
 __all__ = ["sepal"]
@@ -43,6 +44,8 @@ def sepal(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    *,
+    table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
     Identify spatially variable genes with *Sepal*.
@@ -53,6 +56,7 @@ def sepal(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     max_neighs
         Maximum number of neighbors of a node in the graph. Valid options are:
 
@@ -93,8 +97,7 @@ def sepal(
     If some genes in :attr:`anndata.AnnData.uns` ``['sepal_score']`` are `NaN`,
     consider re-running the function with increased ``n_iter``.
     """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     _assert_connectivity_key(adata, connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
     if max_neighs not in (4, 6):
