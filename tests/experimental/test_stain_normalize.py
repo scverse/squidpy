@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import dask.array as da
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import spatialdata as sd
+import spatialdata_plot as sdp
 import xarray as xr
 from spatialdata.models import Image2DModel
 from spatialdata.transformations import Scale, get_transformation, set_transformation
@@ -15,6 +17,10 @@ from squidpy.experimental.im import (
     apply_stain_normalization,
     fit_stain_reference,
 )
+from squidpy.experimental.im._utils import get_element_data
+from tests.conftest import PlotTester, PlotTesterMeta
+
+_ = sdp  # registers the `.pl` spatialdata accessor
 
 
 def _make_sdata(values: np.ndarray, *, scale_factors: list[int] | None = None) -> sd.SpatialData:
@@ -124,3 +130,23 @@ class TestStainNormalizationOnHnE:
         out = sq.experimental.im.apply_stain_normalization(sdata_hne, image_key, ref)
         assert "c" in out.dims
         assert out.sizes["c"] == 3
+
+
+class TestStainNormalizationVisual(PlotTester, metaclass=PlotTesterMeta):
+    def test_plot_reinhard_before_after(self, sdata_hne) -> None:
+        """Visual: a re-stained source (left) normalized back to the H&E reference (right)."""
+        image_key = next(iter(sdata_hne.images))
+        reference = fit_stain_reference(sdata_hne, image_key)
+
+        # Deterministically warm/cool the channels to simulate a different
+        # staining batch, so the before/after panels are visibly distinct.
+        da_rgb = get_element_data(sdata_hne.images[image_key], "auto", "image", image_key).astype("float32")
+        weights = xr.DataArray([1.4, 1.0, 0.6], dims="c", coords={"c": da_rgb.coords["c"]})
+        shifted = (da_rgb * weights).clip(0, 255)
+        sdata_hne.images["hne_shifted"] = Image2DModel.parse(shifted.data, dims=shifted.dims)
+
+        apply_stain_normalization(sdata_hne, "hne_shifted", reference, image_key_added="hne_normalized")
+
+        _, axes = plt.subplots(1, 2, figsize=(8, 4))
+        sdata_hne.pl.render_images("hne_shifted").pl.show(ax=axes[0], title="before")
+        sdata_hne.pl.render_images("hne_normalized").pl.show(ax=axes[1], title="after")
