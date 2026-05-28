@@ -32,6 +32,7 @@ from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_spatial_basis,
     _save_data,
+    extract_adata_if_sdata,
 )
 from squidpy.gr.neighbors import (
     DelaunayBuilder,
@@ -874,8 +875,7 @@ def mask_graph(
     if not isinstance(polygon_mask, Polygon | MultiPolygon):
         raise ValueError(f"`polygon_mask` should be of type `Polygon` or `MultiPolygon`, got {type(polygon_mask)}")
 
-    # get elements
-    table = sdata.tables[table_key]
+    table = extract_adata_if_sdata(sdata, table_key=table_key)
     coords = table.obsm[spatial_key]
     adj = table.obsp[conns_key]
     dst = table.obsp[dists_key]
