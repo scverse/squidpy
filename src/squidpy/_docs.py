@@ -29,6 +29,10 @@ _ConnKey = Key.obsp.spatial_conn()
 _adata = """\
 adata
     Annotated data object."""
+_table_key = """\
+table_key
+    Key in :attr:`spatialdata.SpatialData.tables` where the table is stored. Required when ``adata`` is a
+    :class:`spatialdata.SpatialData` object and ignored otherwise."""
 _img_container = """\
 img
     High-resolution image."""
@@ -361,6 +365,7 @@ library_key
 
 d = DocstringProcessor(
     adata=_adata,
+    table_key=_table_key,
     img_container=_img_container,
     copy=_copy,
     copy_cont=_copy_cont,
