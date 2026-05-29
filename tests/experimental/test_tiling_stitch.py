@@ -299,6 +299,23 @@ class TestRecoveryVsGroundTruth:
                 break
         assert found, "expected at least one group composed solely of cut pieces"
 
+    def test_recovery_meets_quantitative_bounds(self, sdata_tile_boundary):
+        """Quantitative floor from the validation sweep (deterministic fixture).
+
+        At ``min_confidence=0.5`` the sweep recovers ~64% of cut pieces with zero
+        intact false-merges; assert a conservative recall floor and a near-zero
+        false-merge bound (small tolerance for skimage version drift).
+        """
+        sdata, gt = sdata_tile_boundary
+        adata = _run_qc_and_stitch(sdata, min_confidence=0.5)
+        lid = adata.obs["label_id"].astype(int)
+        stitched = adata.obs["is_stitched"].astype(bool)
+        n_cut_stitched = int((lid.isin(gt.cut_cell_ids) & stitched).sum())
+        n_false = int((lid.isin(gt.intact_cell_ids) & stitched).sum())
+        recall = n_cut_stitched / max(len(gt.cut_cell_ids), 1)
+        assert recall >= 0.5, f"recall {recall:.2f} below 0.5 floor"
+        assert n_false <= 2, f"too many intact false merges: {n_false}"
+
 
 # ---------------------------------------------------------------------------
 # Error handling
