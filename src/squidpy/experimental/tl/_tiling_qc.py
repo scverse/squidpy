@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 import anndata as ad
@@ -39,7 +39,7 @@ import spatialdata as sd
 import xarray as xr
 from dask.diagnostics import ProgressBar
 from numba import njit
-from skimage.measure import find_contours, regionprops
+from skimage.measure import regionprops
 from sklearn.neighbors import BallTree
 from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
@@ -52,7 +52,10 @@ from squidpy.experimental.im._tiling import (
     compute_cell_info_tiled,
     extract_labels_tile_lazy,
 )
+from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS, StitchParams
+from squidpy.experimental.utils._geometry import equivalent_diameter, largest_contour
 from squidpy.experimental.utils._labels import resolve_labels_array
+from squidpy.experimental.utils._params import resolve_params
 
 __all__ = ["TilingQCParams", "calculate_tiling_qc"]
 
@@ -91,23 +94,11 @@ class TilingQCParams:
 
 
 _QC_DEFAULTS = TilingQCParams()
-_QC_FIELDS = frozenset(f.name for f in fields(TilingQCParams))
 
 
 def _resolve_qc_params(qc_params: TilingQCParams | Mapping[str, Any] | None) -> TilingQCParams:
     """Normalise the ``tiling_qc_params`` argument to a :class:`TilingQCParams` instance."""
-    if qc_params is None:
-        return _QC_DEFAULTS
-    if isinstance(qc_params, TilingQCParams):
-        return qc_params
-    if isinstance(qc_params, Mapping):
-        unknown = set(qc_params) - _QC_FIELDS
-        if unknown:
-            raise ValueError(
-                f"Unknown `tiling_qc_params` field(s): {sorted(unknown)}; expected from {sorted(_QC_FIELDS)}."
-            )
-        return TilingQCParams(**qc_params)
-    raise TypeError(f"`tiling_qc_params` must be TilingQCParams, Mapping, or None; got {type(qc_params).__name__}.")
+    return resolve_params(qc_params, TilingQCParams, label="`tiling_qc_params`")
 
 
 # Standard consistency factor sd ~ 1.4826 x MAD for normal distributions.
@@ -343,7 +334,7 @@ def _straight_edge_metrics(
     cut_score
         Product of the two.
     """
-    eq_diam = np.sqrt(4 * cell_area / np.pi)
+    eq_diam = equivalent_diameter(cell_area)
     if eq_diam == 0:
         return 0.0, 0.0, 0.0
 
@@ -412,12 +403,12 @@ def _score_tile(
         if downsample > 1:
             crop = crop[::downsample, ::downsample]
 
-        contours = find_contours(crop, 0.5)
-        if not contours:
+        # crop is already 1px-padded above (before optional downsample).
+        contour = largest_contour(crop)
+        if contour is None:
             rows[lid] = dict(_NAN_TILE_SCORES)
             continue
 
-        contour = max(contours, key=len)
         analysis_area = area / (downsample**2) if downsample > 1 else area
         ser, cas, cs = _straight_edge_metrics(contour, analysis_area, distance_tol, max_contour_points)
 
@@ -733,6 +724,44 @@ def calculate_tiling_qc(
 
     if inplace:
         table_key = table_key_added if table_key_added is not None else f"{labels_key}_qc"
+        _warn_if_dropping_stitch_columns(sdata, table_key, labels_key)
         sdata.tables[table_key] = TableModel.parse(adata)
         return None
     return adata
+
+
+def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labels_key: str) -> None:
+    """Warn if re-running QC would drop downstream stitch results.
+
+    ``calculate_tiling_qc`` replaces the QC table wholesale, so any columns
+    added by :func:`~squidpy.experimental.tl.assign_stitch_groups` to a previous
+    version of this table are about to disappear.  We emit an actionable warning
+    listing the previous stitch parameters (from ``.uns["tiling_stitch"]``) and a
+    copy-pasteable invocation to restore them.
+    """
+    if table_key not in sdata.tables:
+        return
+    existing = sdata.tables[table_key]
+    present = [c for c in _STITCH_COLUMNS if c in existing.obs.columns]
+    if not present:
+        return
+
+    prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
+    # `tiling_stitch` mixes top-level constructor kwargs with the nested
+    # ``stitch_params`` bundle and diagnostic outputs (n_outliers, ...).
+    # Filter to the allowlist + only the bundle fields that differ from
+    # defaults, so the rerun string is both valid Python and minimal.
+    parts = [f"labels_key={labels_key!r}"]
+    parts.extend(f"{k}={v!r}" for k, v in prev_params.items() if k in _STITCH_PARAM_KEYS)
+    nested = prev_params.get("stitch_params")
+    if isinstance(nested, dict) and nested:
+        defaults = asdict(StitchParams())
+        diff = {k: v for k, v in nested.items() if k in defaults and defaults[k] != v}
+        if diff:
+            parts.append(f"stitch_params={diff!r}")
+    rerun = f"sq.experimental.tl.assign_stitch_groups(sdata, {', '.join(parts)})"
+    logg.warning(
+        f"Re-running calculate_tiling_qc dropped previous stitch columns "
+        f"({', '.join(present)}) from sdata.tables[{table_key!r}].  "
+        f"To restore them, run: {rerun}"
+    )

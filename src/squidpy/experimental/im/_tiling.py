@@ -19,6 +19,8 @@ import numpy as np
 import xarray as xr
 from skimage.measure import regionprops
 
+from squidpy.experimental.utils._labels import iter_chunked_regionprops
+
 
 @dataclass(frozen=True)
 class CellInfo:
@@ -144,41 +146,29 @@ def compute_cell_info_tiled(
     chunk_size
         Size of chunks to read at a time.
     """
-    H = int(labels_da.sizes.get("y", labels_da.shape[-2]))
-    W = int(labels_da.sizes.get("x", labels_da.shape[-1]))
-
     # Per-label accumulators: [sum_y*area, sum_x*area, total_area, min_y, max_y, min_x, max_x]
     stats: dict[int, list[float]] = {}
 
-    for y0 in range(0, H, chunk_size):
-        y1 = min(y0 + chunk_size, H)
-        for x0 in range(0, W, chunk_size):
-            x1 = min(x0 + chunk_size, W)
-            chunk = labels_da.isel(y=slice(y0, y1), x=slice(x0, x1)).values
-            if chunk.ndim > 2:
-                chunk = chunk.squeeze()
+    for lid, p, y0, x0 in iter_chunked_regionprops(labels_da, chunk_size=chunk_size):
+        cy_global = float(p.centroid[0] + y0)
+        cx_global = float(p.centroid[1] + x0)
+        area = float(p.area)
+        min_row = float(p.bbox[0] + y0)
+        max_row = float(p.bbox[2] + y0)
+        min_col = float(p.bbox[1] + x0)
+        max_col = float(p.bbox[3] + x0)
 
-            for p in regionprops(chunk):
-                lid = p.label
-                cy_global = float(p.centroid[0] + y0)
-                cx_global = float(p.centroid[1] + x0)
-                area = float(p.area)
-                min_row = float(p.bbox[0] + y0)
-                max_row = float(p.bbox[2] + y0)
-                min_col = float(p.bbox[1] + x0)
-                max_col = float(p.bbox[3] + x0)
-
-                if lid not in stats:
-                    stats[lid] = [cy_global * area, cx_global * area, area, min_row, max_row, min_col, max_col]
-                else:
-                    s = stats[lid]
-                    s[0] += cy_global * area
-                    s[1] += cx_global * area
-                    s[2] += area
-                    s[3] = min(s[3], min_row)
-                    s[4] = max(s[4], max_row)
-                    s[5] = min(s[5], min_col)
-                    s[6] = max(s[6], max_col)
+        if lid not in stats:
+            stats[lid] = [cy_global * area, cx_global * area, area, min_row, max_row, min_col, max_col]
+        else:
+            s = stats[lid]
+            s[0] += cy_global * area
+            s[1] += cx_global * area
+            s[2] += area
+            s[3] = min(s[3], min_row)
+            s[4] = max(s[4], max_row)
+            s[5] = min(s[5], min_col)
+            s[6] = max(s[6], max_col)
 
     result: dict[int, CellInfo] = {}
     for lid, s in stats.items():
