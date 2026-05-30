@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from typing import Any, Literal
 
 import anndata as ad
@@ -39,7 +39,7 @@ import spatialdata as sd
 import xarray as xr
 from dask.diagnostics import ProgressBar
 from numba import njit
-from skimage.measure import regionprops
+from skimage.measure import find_contours, regionprops
 from sklearn.neighbors import BallTree
 from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
@@ -53,9 +53,7 @@ from squidpy.experimental.im._tiling import (
     extract_labels_tile_lazy,
 )
 from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS, StitchParams
-from squidpy.experimental.utils._geometry import equivalent_diameter, largest_contour
 from squidpy.experimental.utils._labels import resolve_labels_array
-from squidpy.experimental.utils._params import resolve_params
 
 __all__ = ["TilingQCParams", "calculate_tiling_qc"]
 
@@ -94,11 +92,23 @@ class TilingQCParams:
 
 
 _QC_DEFAULTS = TilingQCParams()
+_QC_FIELDS = frozenset(f.name for f in fields(TilingQCParams))
 
 
 def _resolve_qc_params(qc_params: TilingQCParams | Mapping[str, Any] | None) -> TilingQCParams:
     """Normalise the ``tiling_qc_params`` argument to a :class:`TilingQCParams` instance."""
-    return resolve_params(qc_params, TilingQCParams, label="`tiling_qc_params`")
+    if qc_params is None:
+        return _QC_DEFAULTS
+    if isinstance(qc_params, TilingQCParams):
+        return qc_params
+    if isinstance(qc_params, Mapping):
+        unknown = set(qc_params) - _QC_FIELDS
+        if unknown:
+            raise ValueError(
+                f"Unknown `tiling_qc_params` field(s): {sorted(unknown)}; expected from {sorted(_QC_FIELDS)}."
+            )
+        return TilingQCParams(**qc_params)
+    raise TypeError(f"`tiling_qc_params` must be TilingQCParams, Mapping, or None; got {type(qc_params).__name__}.")
 
 
 # Standard consistency factor sd ~ 1.4826 x MAD for normal distributions.
@@ -334,7 +344,7 @@ def _straight_edge_metrics(
     cut_score
         Product of the two.
     """
-    eq_diam = equivalent_diameter(cell_area)
+    eq_diam = np.sqrt(4 * cell_area / np.pi)
     if eq_diam == 0:
         return 0.0, 0.0, 0.0
 
@@ -403,12 +413,12 @@ def _score_tile(
         if downsample > 1:
             crop = crop[::downsample, ::downsample]
 
-        # crop is already 1px-padded above (before optional downsample).
-        contour = largest_contour(crop)
-        if contour is None:
+        contours = find_contours(crop, 0.5)
+        if not contours:
             rows[lid] = dict(_NAN_TILE_SCORES)
             continue
 
+        contour = max(contours, key=len)
         analysis_area = area / (downsample**2) if downsample > 1 else area
         ser, cas, cs = _straight_edge_metrics(contour, analysis_area, distance_tol, max_contour_points)
 
@@ -747,10 +757,6 @@ def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labe
         return
 
     prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
-    # `tiling_stitch` mixes top-level constructor kwargs with the nested
-    # ``stitch_params`` bundle and diagnostic outputs (n_outliers, ...).
-    # Filter to the allowlist + only the bundle fields that differ from
-    # defaults, so the rerun string is both valid Python and minimal.
     parts = [f"labels_key={labels_key!r}"]
     parts.extend(f"{k}={v!r}" for k, v in prev_params.items() if k in _STITCH_PARAM_KEYS)
     nested = prev_params.get("stitch_params")

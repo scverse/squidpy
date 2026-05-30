@@ -162,12 +162,6 @@ _STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confide
 _STITCH_PARAM_KEYS = frozenset({"min_confidence", "max_gap", "max_group_size"})
 
 
-def _score_formula_str(weights: dict[str, float]) -> str:
-    """Human-readable, reproducible score formula reflecting the applied weights."""
-    terms = " + ".join(f"{weights[f]:.4g}*{f}" for f in _SCORE_FEATURES)
-    return f"weighted_mean = {terms}"
-
-
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
@@ -794,11 +788,8 @@ def _build_diagnostics(
         out["cell_a"][i] = int(p.cell_a)
         out["cell_b"][i] = int(p.cell_b)
         out["axis"][i] = p.axis
-        out["iou"][i] = float(p.iou)
-        out["endpoint_match"][i] = float(p.endpoint_match)
-        out["merge_compactness"][i] = float(p.merge_compactness)
-        out["merge_solidity"][i] = float(p.merge_solidity)
-        out["gap_proximity"][i] = float(p.gap_proximity)
+        for f in _SCORE_FEATURES:
+            out[f][i] = float(getattr(p, f))
         out["confidence"][i] = float(p.confidence)
         out["group_id"][i] = int(root)
         out["status"][i] = status
@@ -1010,7 +1001,6 @@ def assign_stitch_groups(
         "n_pieces_distribution": pieces_dist,
         "score_features": list(_SCORE_FEATURES),
         "feature_weights": {k: float(v) for k, v in weights.items()},
-        "score_formula": _score_formula_str(weights),
     }
 
     if save_diagnostics:
