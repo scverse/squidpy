@@ -138,9 +138,7 @@ def _has_distributed_client() -> bool:
     return True
 
 
-# ---------------------------------------------------------------------------
 # Core geometry
-# ---------------------------------------------------------------------------
 
 
 @njit(cache=True, nogil=True)
@@ -356,9 +354,7 @@ def _straight_edge_metrics(
     return float(straight_ratio), float(cardinal), float(cut_score)
 
 
-# ---------------------------------------------------------------------------
 # Per-tile scoring
-# ---------------------------------------------------------------------------
 
 
 def _score_tile(
@@ -431,9 +427,7 @@ def _score_tile(
     return pd.DataFrame.from_dict(rows, orient="index")
 
 
-# ---------------------------------------------------------------------------
 # Centroid computation (shared logic with _feature.py)
-# ---------------------------------------------------------------------------
 
 
 def _compute_centroids_for_labels(
@@ -458,9 +452,7 @@ def _compute_centroids_for_labels(
     return compute_cell_info_tiled(labels_da)
 
 
-# ---------------------------------------------------------------------------
 # Public API
-# ---------------------------------------------------------------------------
 
 
 _METHOD_KEY = "tiling_qc"
