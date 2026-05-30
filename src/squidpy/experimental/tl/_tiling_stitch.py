@@ -6,14 +6,13 @@ straight, axis-aligned cut edges.  :func:`~squidpy.experimental.tl.calculate_til
 as ``is_outlier=True``.  This module pairs facing cut edges across boundaries
 and assigns each candidate pair a heuristic geometric score in [0, 1].
 
-The score is a weighted mean of five dataset-independent geometric features --
-``iou``, ``endpoint_match``, ``merge_compactness``, ``merge_solidity`` and
-``gap_proximity`` -- computed from the cut-edge geometry and the union mask
-after closing the seam gap.  No model is fitted or shipped: the weights
-default to flat-equal and are user-tunable via ``StitchParams.feature_weights``;
-the features actually used, the weights applied, and the formula are recorded
-in ``.uns["tiling_stitch"]``.  Users should tune ``min_confidence`` for their
-data; ``0.7`` is a reasonable starting point, not a calibrated probability.
+The score is the flat (unweighted) mean of five dataset-independent geometric
+features -- ``iou``, ``endpoint_match``, ``merge_compactness``,
+``merge_solidity`` and ``gap_proximity`` -- computed from the cut-edge geometry
+and the union mask after closing the seam gap.  No model is fitted or shipped;
+the features are recorded in ``.uns["tiling_stitch"]``.  Users should tune
+``min_confidence`` for their data; ``0.7`` is a reasonable starting point, not
+a calibrated probability.
 
 The labels element is **never** modified here -- only ``.obs`` columns are
 written.  Materialising a stitched labels element is opt-in via
@@ -48,8 +47,7 @@ if TYPE_CHECKING:
 
 __all__ = ["StitchParams", "assign_stitch_groups"]
 
-# The scored geometric features and their formula.  Defined before StitchParams
-# so __post_init__ can validate feature_weights keys against this tuple.
+# The geometric features whose flat mean is the stitch score.
 _SCORE_FEATURES: tuple[str, ...] = ("iou", "endpoint_match", "merge_compactness", "merge_solidity", "gap_proximity")
 
 
@@ -59,9 +57,8 @@ class StitchParams:
 
     Defaults work for typical 2D segmentation tiles produced by
     cellpose-like pipelines.  Pass an instance (or a ``Mapping`` of
-    field names to values) as ``stitch_params`` to override.  Most fields
-    are *advanced* -- the defaults rarely need changing; ``feature_weights``
-    is the main knob a user might reach for.
+    field names to values) as ``stitch_params`` to override.  These are
+    advanced knobs -- the defaults rarely need changing.
     """
 
     distance_tol: float = 0.75
@@ -83,13 +80,6 @@ class StitchParams:
     """Advanced: morphological closing disk radius for the union mask.  Also the
     length scale for ``gap_proximity`` (normalised by ``2 * close_radius``)."""
 
-    feature_weights: Mapping[str, float] | None = None
-    """Per-feature weights for the score, keyed by names in :data:`_SCORE_FEATURES`.
-
-    ``None`` (default) means flat-equal weights.  A partial mapping is allowed:
-    unspecified features keep weight ``1.0``.  Weights must be non-negative and
-    are renormalised to sum to 1, so ``stitch_confidence`` stays in [0, 1]."""
-
     def __post_init__(self) -> None:
         # Coerce numeric types (accept numpy scalars cleanly) and bounds-check.
         self.distance_tol = float(self.distance_tol)
@@ -110,45 +100,11 @@ class StitchParams:
             raise ValueError(f"candidate_min_iou must be in [0, 1], got {self.candidate_min_iou}.")
         if self.close_radius < 0:
             raise ValueError(f"close_radius must be >= 0, got {self.close_radius}.")
-        if self.feature_weights is not None:
-            if not isinstance(self.feature_weights, Mapping):
-                raise TypeError(
-                    f"feature_weights must be a Mapping or None, got {type(self.feature_weights).__name__}."
-                )
-            unknown = set(self.feature_weights) - set(_SCORE_FEATURES)
-            if unknown:
-                raise ValueError(
-                    f"Unknown feature_weights key(s): {sorted(unknown)}; expected from {list(_SCORE_FEATURES)}."
-                )
-            coerced = {}
-            for k, v in self.feature_weights.items():
-                fv = float(v)
-                if fv < 0:
-                    raise ValueError(f"feature_weights[{k!r}] must be >= 0, got {fv}.")
-                coerced[k] = fv
-            # Store a plain dict of floats (drops numpy scalars, deterministic order).
-            self.feature_weights = {k: coerced[k] for k in _SCORE_FEATURES if k in coerced}
 
 
 def _resolve_stitch_params(stitch_params: StitchParams | Mapping[str, Any] | None) -> StitchParams:
     """Normalise the ``stitch_params`` argument to a :class:`StitchParams` instance."""
     return resolve_params(stitch_params, StitchParams, label="stitch_params")
-
-
-def _resolve_feature_weights(feature_weights: Mapping[str, float] | None) -> dict[str, float]:
-    """Return a full ``{feature: weight}`` dict over :data:`_SCORE_FEATURES`, renormalised to sum 1.
-
-    ``None`` -> flat-equal.  A partial mapping fills unspecified features with
-    weight ``1.0`` before renormalising.  Validation (unknown keys, negatives)
-    happens in :meth:`StitchParams.__post_init__`; this helper assumes clean input.
-    """
-    base = dict.fromkeys(_SCORE_FEATURES, 1.0)
-    if feature_weights:
-        base.update(feature_weights)
-    total = sum(base.values())
-    if total <= 0:
-        raise ValueError("feature_weights must have a positive sum (at least one feature with weight > 0).")
-    return {f: base[f] / total for f in _SCORE_FEATURES}
 
 
 _METHOD_KEY = "tiling_stitch"
@@ -539,35 +495,34 @@ def _gap_proximity(gap: float, close_radius: int) -> float:
     return max(0.0, 1.0 - gap / reach)
 
 
-def _score_pair_features(features: dict[str, float], weights: dict[str, float]) -> float:
+def _score_pair_features(features: dict[str, float]) -> float:
     """Return the heuristic stitch score in [0, 1].
 
-    Weighted mean of the features in :data:`_SCORE_FEATURES` (``weights`` are
-    pre-normalised to sum 1).  The score is dataset-independent and not a
-    calibrated probability -- users pick ``min_confidence`` based on their
-    false-merge tolerance.
+    Flat (unweighted) mean of the five features in :data:`_SCORE_FEATURES`.
+    The score is dataset-independent and not a calibrated probability -- users
+    pick ``min_confidence`` based on their false-merge tolerance.
     """
-    return float(sum(weights[name] * features[name] for name in _SCORE_FEATURES))
+    return float(sum(features[name] for name in _SCORE_FEATURES) / len(_SCORE_FEATURES))
 
 
 def _score_pairs(
     candidates: list[tuple[_CutEdge, _CutEdge, dict[str, float]]],
     labels_da: xr.DataArray | np.ndarray,
     bboxes: dict[int, tuple[int, int, int, int]],
-    weights: dict[str, float],
+    min_confidence: float,
     close_radius: int = _STITCH_DEFAULTS.close_radius,
 ) -> list[_StitchPair]:
-    """Compute shape features per candidate and score every pair (no filtering).
+    """Compute shape features per candidate, score, and keep pairs >= min_confidence.
 
-    Returns all scored pairs (one per ``(cell_a, cell_b, axis)``, keeping max
-    confidence on duplicates); the ``min_confidence`` cut is applied by the
-    caller so diagnostics can also see below-threshold pairs.
+    One entry per ``(cell_a, cell_b, axis)`` (keeping max confidence on duplicates).
     """
     scored: list[_StitchPair] = []
     for e, c, geom in candidates:
         shape = _merge_shape_features(labels_da, [e.cell_id, c.cell_id], bboxes, close_radius=close_radius)
         feats = {**geom, **shape, "gap_proximity": _gap_proximity(geom["gap"], close_radius)}
-        confidence = _score_pair_features(feats, weights)
+        confidence = _score_pair_features(feats)
+        if confidence < min_confidence:
+            continue
         # Canonicalise so cell_a < cell_b for deterministic union-find.
         if e.cell_id < c.cell_id:
             ea, eb = e, c
@@ -748,54 +703,6 @@ def _assemble_groups(
     return groups, confidences
 
 
-def _build_diagnostics(
-    all_pairs: list[_StitchPair],
-    groups: dict[int, int],
-    group_sizes: dict[int, int],
-    min_confidence: float,
-) -> dict[str, np.ndarray]:
-    """Per-pair diagnostics for ``save_diagnostics``, as a zarr-safe dict of arrays.
-
-    One entry per scored candidate (including below-threshold ones), with each
-    feature, the confidence, the assigned ``group_id``, and a ``status``:
-
-    - ``"accepted"``       -- passed the confidence cut and landed in a multi-piece group;
-    - ``"below_threshold"`` -- confidence < ``min_confidence``;
-    - ``"collapsed_group"`` -- passed the cut but its group was collapsed to a
-      singleton by geometry validation or the size cap.
-
-    Returned as a ``dict`` of equal-length :class:`numpy.ndarray` (rather than a
-    DataFrame) so it round-trips cleanly through zarr/h5ad-backed ``.uns``.
-    """
-    n = len(all_pairs)
-    out: dict[str, np.ndarray] = {
-        "cell_a": np.empty(n, dtype=np.int64),
-        "cell_b": np.empty(n, dtype=np.int64),
-        "axis": np.empty(n, dtype="<U1"),
-        **{f: np.empty(n, dtype=np.float64) for f in _SCORE_FEATURES},
-        "confidence": np.empty(n, dtype=np.float64),
-        "group_id": np.empty(n, dtype=np.int64),
-        "status": np.empty(n, dtype="<U16"),
-    }
-    for i, p in enumerate(all_pairs):
-        root = groups.get(p.cell_a, p.cell_a)
-        if p.confidence < min_confidence:
-            status = "below_threshold"
-        elif group_sizes.get(root, 1) > 1:
-            status = "accepted"
-        else:
-            status = "collapsed_group"
-        out["cell_a"][i] = int(p.cell_a)
-        out["cell_b"][i] = int(p.cell_b)
-        out["axis"][i] = p.axis
-        for f in _SCORE_FEATURES:
-            out[f][i] = float(getattr(p, f))
-        out["confidence"][i] = float(p.confidence)
-        out["group_id"][i] = int(root)
-        out["status"][i] = status
-    return out
-
-
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -809,7 +716,6 @@ def assign_stitch_groups(
     max_gap: float = 3.0,
     max_group_size: int = 4,
     stitch_params: StitchParams | Mapping[str, Any] | None = None,
-    save_diagnostics: bool = False,
     inplace: bool = True,
 ) -> ad.AnnData | None:
     """Assign tile-cut cell pieces to stitch groups.
@@ -822,15 +728,12 @@ def assign_stitch_groups(
     **not** modify the labels element.  Materialising a stitched labels element
     is opt-in via :func:`squidpy.experimental.im.make_stitched_labels`.
 
-    The score per pair is a weighted mean of five geometric features in [0, 1]:
-    ``iou`` (1-D extent overlap), ``endpoint_match`` (chord endpoints coincide),
-    ``merge_compactness`` (``4*pi*A / P^2`` of the closed union mask),
+    The score per pair is the flat (unweighted) mean of five geometric features
+    in [0, 1]: ``iou`` (1-D extent overlap), ``endpoint_match`` (chord endpoints
+    coincide), ``merge_compactness`` (``4*pi*A / P^2`` of the closed union mask),
     ``merge_solidity`` (union area / convex hull area), and ``gap_proximity``
-    (seam gap relative to the morphological closing reach).  Weights default to
-    flat-equal and are tunable via ``StitchParams.feature_weights``.  No
-    coefficients are fitted or shipped; the features, weights, and formula are
-    recorded in ``.uns["tiling_stitch"]`` so a run is re-derivable from its own
-    metadata.
+    (seam gap relative to the morphological closing reach).  No coefficients are
+    fitted or shipped; the features are recorded in ``.uns["tiling_stitch"]``.
 
     Parameters
     ----------
@@ -857,12 +760,6 @@ def assign_stitch_groups(
         ``Mapping`` of its field names to values.  See :class:`StitchParams`
         for each field's meaning and default.  ``None`` (default) uses
         all defaults.
-    save_diagnostics
-        If ``True``, write a per-pair diagnostics table (every scored candidate:
-        its feature values, confidence, assigned ``group_id``, and a ``status`` of
-        ``"accepted"`` / ``"below_threshold"`` / ``"collapsed_group"``) to
-        ``.uns["tiling_stitch"]["diagnostics"]`` as a dict of equal-length arrays.
-        Useful for tuning ``min_confidence``; off by default to keep ``.uns`` lean.
     inplace
         If ``True``, write back into ``sdata.tables[qc_table_key]``.
         Otherwise return the modified AnnData.
@@ -881,7 +778,6 @@ def assign_stitch_groups(
     if max_group_size < 1:
         raise ValueError(f"max_group_size must be >= 1, got {max_group_size}.")
     params = _resolve_stitch_params(stitch_params)
-    weights = _resolve_feature_weights(params.feature_weights)
 
     table_key = qc_table_key if qc_table_key is not None else f"{labels_key}_qc"
     if table_key not in sdata.tables:
@@ -915,7 +811,6 @@ def assign_stitch_groups(
         groups: dict[int, int] = {}
         confidences: dict[int, float] = {}
         edges: list[_CutEdge] = []
-        all_pairs: list[_StitchPair] = []
         pairs: list[_StitchPair] = []
     else:
         bboxes = _compute_outlier_bboxes(labels_da, outlier_ids)
@@ -935,17 +830,8 @@ def assign_stitch_groups(
             min_edge_coverage=params.min_edge_coverage,
         )
         candidates = _enumerate_pair_candidates(edges, max_gap=max_gap, candidate_min_iou=params.candidate_min_iou)
-        # Score every candidate, then apply the confidence cut.  Keeping the
-        # full list lets save_diagnostics expose below-threshold pairs too.
-        all_pairs = _score_pairs(candidates, labels_da, bboxes, weights=weights, close_radius=params.close_radius)
-        pairs = [p for p in all_pairs if p.confidence >= min_confidence]
+        pairs = _score_pairs(candidates, labels_da, bboxes, min_confidence, close_radius=params.close_radius)
         groups, confidences = _assemble_groups(pairs, outlier_ids, max_group_size=max_group_size, max_gap=max_gap)
-
-    # True candidate count (pre-threshold) for the audit block; then release the
-    # below-threshold pairs unless diagnostics needs them.
-    n_candidates = len(all_pairs)
-    if not save_diagnostics:
-        all_pairs = []
 
     # Write .obs columns with three states distinguished by stitch_confidence:
     # - non-outlier cell      -> own label_id, False, 1, NaN  (not evaluated)
@@ -985,26 +871,18 @@ def assign_stitch_groups(
             key = str(int(s))
             pieces_dist[key] = pieces_dist.get(key, 0) + 1
 
-    # asdict(params) may carry feature_weights=None; drop it so no None is nested
-    # in .uns (not reliably zarr-serialisable). The resolved, renormalised weights
-    # are recorded separately under "feature_weights" for reproducibility.
-    stitch_params_dump = {k: v for k, v in asdict(params).items() if v is not None}
     adata.uns[_METHOD_KEY] = {
         "min_confidence": float(min_confidence),
         "max_gap": float(max_gap),
         "max_group_size": int(max_group_size),
-        "stitch_params": stitch_params_dump,
+        "stitch_params": asdict(params),
         "n_outliers": int(n_outliers),
-        "n_candidate_pairs": int(n_candidates),
+        "n_candidate_pairs": int(len(pairs)),
         "n_stitched_groups": int(n_groups),
         "n_stitched_cells": int(n_stitched),
         "n_pieces_distribution": pieces_dist,
         "score_features": list(_SCORE_FEATURES),
-        "feature_weights": {k: float(v) for k, v in weights.items()},
     }
-
-    if save_diagnostics:
-        adata.uns[_METHOD_KEY]["diagnostics"] = _build_diagnostics(all_pairs, groups, group_sizes, min_confidence)
 
     if not inplace:
         return adata

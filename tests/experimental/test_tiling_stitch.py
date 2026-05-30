@@ -67,19 +67,19 @@ class TestStitchObsContract:
 
 
 # ---------------------------------------------------------------------------
-# Uns audit block (params, weights, formula)
+# Uns audit block
 # ---------------------------------------------------------------------------
 
 
 class TestUnsMetadata:
-    def test_uns_records_params_weights_and_formula(self, sdata_tile_boundary):
+    def test_uns_records_params_and_features(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         adata = _run_qc_and_stitch(sdata, min_confidence=0.7, max_gap=4.0)
         meta = adata.uns["tiling_stitch"]
         assert meta["min_confidence"] == 0.7
         assert meta["max_gap"] == 4.0
         assert isinstance(meta["stitch_params"], dict)
-        # Transparent formula, no fitted-model artefacts.
+        # Transparent score, no fitted-model artefacts.
         assert "model_coefficients" not in meta and "model_intercept" not in meta
         assert set(meta["score_features"]) == {
             "iou",
@@ -88,15 +88,6 @@ class TestUnsMetadata:
             "merge_solidity",
             "gap_proximity",
         }
-        assert abs(sum(meta["feature_weights"].values()) - 1.0) < 1e-9
-
-    def test_custom_weights_recorded(self, sdata_tile_boundary):
-        sdata, _ = sdata_tile_boundary
-        adata = _run_qc_and_stitch(sdata, stitch_params={"feature_weights": {"merge_compactness": 4.0}})
-        meta = adata.uns["tiling_stitch"]
-        # 4 vs 1 for the other four -> 4/8 vs 1/8; recorded weights are the applied ones.
-        assert abs(meta["feature_weights"]["merge_compactness"] - 0.5) < 1e-9
-        assert abs(meta["feature_weights"]["iou"] - 0.125) < 1e-9
 
 
 # ---------------------------------------------------------------------------
@@ -189,28 +180,21 @@ class TestMultiScale:
 
 
 # ---------------------------------------------------------------------------
-# Diagnostics: opt-in, and it survives a zarr round-trip (I/O contract)
+# Persistence: the obs columns + uns block survive a zarr round-trip
 # ---------------------------------------------------------------------------
 
 
-class TestSaveDiagnostics:
-    def test_absent_by_default(self, sdata_tile_boundary):
-        sdata, _ = sdata_tile_boundary
-        adata = _run_qc_and_stitch(sdata, min_confidence=0.5)
-        assert "diagnostics" not in adata.uns["tiling_stitch"]
-
-    def test_diagnostics_and_obs_survive_zarr_roundtrip(self, sdata_tile_boundary, tmp_path):
+class TestPersistence:
+    def test_obs_and_uns_survive_zarr_roundtrip(self, sdata_tile_boundary, tmp_path):
         from spatialdata import read_zarr
 
         sdata, _ = sdata_tile_boundary
-        _run_qc_and_stitch(sdata, min_confidence=0.5, save_diagnostics=True)
+        _run_qc_and_stitch(sdata, min_confidence=0.5)
         sdata.write(tmp_path / "roundtrip.zarr")
         a2 = read_zarr(tmp_path / "roundtrip.zarr").tables["labels_qc"]
         for col in ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence"):
             assert col in a2.obs.columns
-        diag = a2.uns["tiling_stitch"]["diagnostics"]
-        assert set(diag) >= {"cell_a", "cell_b", "axis", "confidence", "status"}
-        assert "feature_weights" not in a2.uns["tiling_stitch"]["stitch_params"]  # no None leaked
+        assert "tiling_stitch" in a2.uns
 
 
 # ---------------------------------------------------------------------------
