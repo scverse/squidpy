@@ -1,8 +1,4 @@
-"""Tests for sq.experimental.tl.assign_stitch_groups.
-
-Scope: user-observable behaviour and the obs/uns contract that
-``make_stitched_labels`` (PR-C) consumes -- not the private scoring internals.
-"""
+"""Tests for tile-cut cell stitching."""
 
 from __future__ import annotations
 
@@ -19,29 +15,25 @@ from tests.conftest import PlotTester, PlotTesterMeta
 
 
 def _run_qc_and_stitch(sdata, **stitch_kwargs):
-    """Run QC + stitch on the fixture sdata; return the resulting AnnData."""
     sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200, nmads_cut=1.0, nmads_smoothed=1.5)
     sq.experimental.tl.assign_stitch_groups(sdata, labels_key="labels", **stitch_kwargs)
     return sdata.tables["labels_qc"]
 
 
-# ---------------------------------------------------------------------------
-# Obs contract (the four columns PR-C consumes) + confidence convention
-# ---------------------------------------------------------------------------
+class TestAssignStitchGroups:
+    """Tests for sq.experimental.tl.assign_stitch_groups using the tile-boundary fixture."""
 
-
-class TestStitchObsContract:
     def test_columns_present(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         adata = _run_qc_and_stitch(sdata)
         for col in ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence"):
-            assert col in adata.obs.columns, f"missing {col}"
+            assert col in adata.obs.columns
 
     def test_confidence_convention(self, sdata_tile_boundary):
-        """NaN = not evaluated (non-outlier), 1.0 = solo outlier, composite = stitched."""
+        # NaN = not evaluated (non-outlier), 1.0 = solo outlier, composite = stitched.
         sdata, _ = sdata_tile_boundary
-        adata = _run_qc_and_stitch(sdata, min_confidence=0.5)
-        obs = adata.obs
+        obs = _run_qc_and_stitch(sdata, min_confidence=0.5).obs
+
         non_outliers = ~obs["is_outlier"].astype(bool)
         assert non_outliers.sum() > 0
         assert obs.loc[non_outliers, "stitch_confidence"].isna().all()
@@ -62,24 +54,32 @@ class TestStitchObsContract:
         sdata, _ = sdata_tile_boundary
         adata = _run_qc_and_stitch(sdata, min_confidence=0.5)
         stitched = adata.obs[adata.obs["is_stitched"].astype(bool)]
-        for gid, members in stitched.groupby("stitch_group_id"):
-            assert len(members) == members["n_pieces"].iloc[0], f"group {gid} size mismatch"
+        for _gid, members in stitched.groupby("stitch_group_id"):
+            assert len(members) == members["n_pieces"].iloc[0]
 
+    def test_stitched_group_is_made_of_cut_pieces(self, sdata_tile_boundary):
+        sdata, gt = sdata_tile_boundary
+        adata = _run_qc_and_stitch(sdata, min_confidence=0.5)
+        stitched = adata.obs[adata.obs["is_stitched"].astype(bool)]
+        found = any(
+            len(set(m["label_id"].astype(int))) >= 2 and set(m["label_id"].astype(int)) <= set(gt.cut_cell_ids)
+            for _gid, m in stitched.groupby("stitch_group_id")
+        )
+        assert found
 
-# ---------------------------------------------------------------------------
-# Uns audit block
-# ---------------------------------------------------------------------------
+    def test_no_intact_cells_stitched_at_high_threshold(self, sdata_tile_boundary):
+        sdata, gt = sdata_tile_boundary
+        adata = _run_qc_and_stitch(sdata, min_confidence=0.9)
+        intact = adata.obs["label_id"].isin(gt.intact_cell_ids)
+        n_false = int((intact & adata.obs["is_stitched"].astype(bool)).sum())
+        assert n_false <= 5
 
-
-class TestUnsMetadata:
     def test_uns_records_params_and_features(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
-        adata = _run_qc_and_stitch(sdata, min_confidence=0.7, max_gap=4.0)
-        meta = adata.uns["tiling_stitch"]
+        meta = _run_qc_and_stitch(sdata, min_confidence=0.7, max_gap=4.0).uns["tiling_stitch"]
         assert meta["min_confidence"] == 0.7
         assert meta["max_gap"] == 4.0
         assert isinstance(meta["stitch_params"], dict)
-        # Transparent score, no fitted-model artefacts.
         assert "model_coefficients" not in meta and "model_intercept" not in meta
         assert set(meta["score_features"]) == {
             "iou",
@@ -89,37 +89,6 @@ class TestUnsMetadata:
             "gap_proximity",
         }
 
-
-# ---------------------------------------------------------------------------
-# Behaviour vs ground truth
-# ---------------------------------------------------------------------------
-
-
-class TestRecoveryVsGroundTruth:
-    def test_a_stitched_group_is_made_of_cut_pieces(self, sdata_tile_boundary):
-        sdata, gt = sdata_tile_boundary
-        adata = _run_qc_and_stitch(sdata, min_confidence=0.5)
-        stitched = adata.obs[adata.obs["is_stitched"].astype(bool)]
-        found = any(
-            len(set(m["label_id"].astype(int))) >= 2 and set(m["label_id"].astype(int)) <= set(gt.cut_cell_ids)
-            for _gid, m in stitched.groupby("stitch_group_id")
-        )
-        assert found, "expected at least one group composed solely of cut pieces"
-
-    def test_no_intact_cells_stitched_at_high_threshold(self, sdata_tile_boundary):
-        sdata, gt = sdata_tile_boundary
-        adata = _run_qc_and_stitch(sdata, min_confidence=0.9)
-        intact = adata.obs["label_id"].isin(gt.intact_cell_ids)
-        n_false = int((intact & adata.obs["is_stitched"].astype(bool)).sum())
-        assert n_false <= 5, f"too many intact cells flagged stitched: {n_false}"
-
-
-# ---------------------------------------------------------------------------
-# Errors, idempotency, the QC-rerun hook, multiscale
-# ---------------------------------------------------------------------------
-
-
-class TestErrors:
     @pytest.mark.parametrize(
         ("kwargs", "match"),
         [
@@ -134,8 +103,6 @@ class TestErrors:
         with pytest.raises(ValueError, match=match):
             sq.experimental.tl.assign_stitch_groups(sdata, **kwargs)
 
-
-class TestIdempotencyAndInplace:
     def test_rerun_overwrites_without_growing_columns(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         _run_qc_and_stitch(sdata)
@@ -151,8 +118,6 @@ class TestIdempotencyAndInplace:
         assert result is not None and "stitch_group_id" in result.obs.columns
         assert len(sdata.tables["labels_qc"].obs.columns) == n_before
 
-
-class TestQCRerunDropsStitch:
     def test_qc_rerun_removes_stitch_columns(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         _run_qc_and_stitch(sdata)
@@ -160,9 +125,7 @@ class TestQCRerunDropsStitch:
         for col in ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence"):
             assert col not in sdata.tables["labels_qc"].obs.columns
 
-
-class TestMultiScale:
-    def test_stitch_runs_on_multiscale(self):
+    def test_runs_on_multiscale(self):
         from tests.experimental.conftest import make_tile_boundary_sdata
 
         base, _ = make_tile_boundary_sdata()
@@ -178,13 +141,6 @@ class TestMultiScale:
         for col in ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence"):
             assert col in sdata.tables["labels_qc"].obs.columns
 
-
-# ---------------------------------------------------------------------------
-# Persistence: the obs columns + uns block survive a zarr round-trip
-# ---------------------------------------------------------------------------
-
-
-class TestPersistence:
     def test_obs_and_uns_survive_zarr_roundtrip(self, sdata_tile_boundary, tmp_path):
         from spatialdata import read_zarr
 
@@ -197,17 +153,7 @@ class TestPersistence:
         assert "tiling_stitch" in a2.uns
 
 
-# ---------------------------------------------------------------------------
-# Visual: before/after group recolour, zoomed on a tile seam
-# ---------------------------------------------------------------------------
-
-
 class TestStitchVisual(PlotTester, metaclass=PlotTesterMeta):
-    """Recolour the labels by ``label_id`` (before) vs ``stitch_group_id`` (after),
-    zoomed on a tile seam.  Baseline lives in ``tests/_images/StitchVisual_*.png``
-    and is downloaded from CI artifacts, not generated locally.
-    """
-
     _ZOOM = (150, 250, 250, 350)
     _SEAM_Y = 200
 

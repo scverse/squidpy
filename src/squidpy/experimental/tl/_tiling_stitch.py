@@ -118,9 +118,7 @@ _STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confide
 _STITCH_PARAM_KEYS = frozenset({"min_confidence", "max_gap", "max_group_size"})
 
 
-# ---------------------------------------------------------------------------
 # Dataclasses
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -157,7 +155,7 @@ class _CutEdge:
 class _StitchPair:
     """A scored candidate pairing of two cut edges across a tile boundary.
 
-    ``confidence`` is the weighted mean of the geometric features (see
+    ``confidence`` is the flat mean of the geometric features (see
     :data:`_SCORE_FEATURES`); the individual feature components are kept for
     diagnostics and for the ``min``-based group-confidence aggregation.
     """
@@ -175,9 +173,7 @@ class _StitchPair:
     edge_b: _CutEdge | None = field(default=None, repr=False)
 
 
-# ---------------------------------------------------------------------------
-# Stage 1: cut-edge extraction
-# ---------------------------------------------------------------------------
+# Cut-edge extraction
 
 
 def _read_bbox_slice(labels_da: xr.DataArray | np.ndarray, y0: int, y1: int, x0: int, x1: int) -> np.ndarray:
@@ -342,9 +338,7 @@ def _extract_cut_edges(
     return edges
 
 
-# ---------------------------------------------------------------------------
-# Stage 2: pair candidate enumeration + features
-# ---------------------------------------------------------------------------
+# Pair candidate enumeration + features
 
 
 def _extent_overlap(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -473,9 +467,7 @@ def _enumerate_pair_candidates(
     return out
 
 
-# ---------------------------------------------------------------------------
-# Stage 4: scoring (weighted mean of geometry + shape features)
-# ---------------------------------------------------------------------------
+# Scoring
 
 
 def _gap_proximity(gap: float, close_radius: int) -> float:
@@ -553,9 +545,7 @@ def _score_pairs(
     return sorted(by_pair.values(), key=lambda p: (-p.confidence, p.cell_a, p.cell_b))
 
 
-# ---------------------------------------------------------------------------
-# Stage 5: group assembly via union-find + validation
-# ---------------------------------------------------------------------------
+# Group assembly (union-find + validation)
 
 
 def _validate_group_geometry(
@@ -703,9 +693,7 @@ def _assemble_groups(
     return groups, confidences
 
 
-# ---------------------------------------------------------------------------
 # Public entry point
-# ---------------------------------------------------------------------------
 
 
 def assign_stitch_groups(
