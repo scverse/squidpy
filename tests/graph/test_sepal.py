@@ -57,3 +57,21 @@ def test_sepal_square_seq_par(adata_squaregrid: AnnData):
     np.testing.assert_array_equal(sorted(idx_df), sorted(idx_adata))
     # check parallel gives same results
     assert_frame_equal(adata.uns[UNS_KEY], df_parallel)
+
+
+def test_sepal_dense(adata: AnnData):
+    """Check whether sepal results are identical for sparse and dense data."""
+    spatial_neighbors(adata, coord_type="grid")
+    rng = np.random.default_rng(42)
+    adata.var["highly_variable"] = rng.choice([True, False], size=adata.var_names.shape, p=[0.05, 0.95])
+
+    # Compute sepal score for sparse data
+    df_sparse = sepal(adata, max_neighs=6, copy=True)
+
+    # Convert to dense and compute sepal score
+    adata.X = adata.X.toarray()
+    df_dense = sepal(adata, max_neighs=6, copy=True)
+
+    # Assert results are identical
+    assert_frame_equal(df_sparse, df_dense)
+
