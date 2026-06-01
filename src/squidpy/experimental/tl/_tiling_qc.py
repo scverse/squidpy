@@ -50,6 +50,7 @@ from squidpy.experimental.im._tiling import (
     compute_cell_info_tiled,
     extract_labels_tile_lazy,
 )
+from squidpy.experimental.utils._labels import resolve_labels_array
 
 __all__ = ["calculate_tiling_qc"]
 
@@ -563,15 +564,7 @@ def calculate_tiling_qc(
     if n_neighbors < 1:
         raise ValueError(f"n_neighbors must be >= 1, got {n_neighbors}.")
 
-    labels_node = sdata.labels[labels_key]
-    if isinstance(labels_node, xr.DataTree):
-        if scale is None:
-            raise ValueError("When using multi-scale labels, please specify the scale.")
-        labels_da = labels_node[scale].ds["image"]
-    else:
-        if scale is not None:
-            logg.warning(f"`scale={scale!r}` ignored: labels at {labels_key!r} are single-scale.")
-        labels_da = labels_node
+    labels_da = resolve_labels_array(sdata, labels_key, scale)
 
     cell_info = _compute_centroids_for_labels(sdata, labels_key, labels_da, scale)
     if not cell_info:
