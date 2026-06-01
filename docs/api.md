@@ -154,4 +154,3 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     experimental.im.apply_stain_normalization
     experimental.im.StainReference
     experimental.im.ReinhardParams
-```
