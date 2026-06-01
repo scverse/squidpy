@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
-    from squidpy.experimental.fit._result import FitResult
+    from squidpy.experimental._fit._result import FitResult
 
 
 class Estimator(ABC):

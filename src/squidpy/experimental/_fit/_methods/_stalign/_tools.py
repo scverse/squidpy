@@ -3,7 +3,7 @@
 Lifted from scverse/squidpy#1150 (Selman Özleyen) with import paths adjusted
 and minor cleanups (config unpacking, lazy dtype resolution). The container
 write-back path (``STalignResult.transform_adata``) was dropped on the move
-into :mod:`squidpy.experimental.fit`: results stay in memory and the caller
+into :mod:`squidpy.experimental._fit`: results stay in memory and the caller
 owns write-back.
 """
 
@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 import jax.numpy as jnp
 import numpy as np
 
-from ._stalign_core import jax_dtype, lddmm, transform_points_row_col
-from ._stalign_helpers import (
+from ._core import jax_dtype, lddmm, transform_points_row_col
+from ._helpers import (
     PointOrder,
     affine_from_points,
     from_row_col,

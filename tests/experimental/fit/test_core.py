@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from squidpy.experimental.fit import Estimator, FitResult, Registry
+from squidpy.experimental._fit import Estimator, FitResult, Registry
 
 
 @dataclass

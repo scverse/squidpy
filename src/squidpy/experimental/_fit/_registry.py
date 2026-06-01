@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
-    from squidpy.experimental.fit._estimator import Estimator
+    from squidpy.experimental._fit._estimator import Estimator
 
 E = TypeVar("E", bound="type[Estimator]")
 

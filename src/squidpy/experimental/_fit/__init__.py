@@ -17,7 +17,7 @@ dependencies (e.g. JAX) in lazily, so importing this package stays cheap.
 Example
 -------
 >>> import numpy as np
->>> from squidpy.experimental.fit import Estimator, FitResult, Registry
+>>> from squidpy.experimental._fit import Estimator, FitResult, Registry
 >>> demo = Registry("demo")
 >>> class Shift(FitResult):
 ...     def __init__(self, delta):
@@ -39,8 +39,8 @@ Example
 
 from __future__ import annotations
 
-from squidpy.experimental.fit._estimator import Estimator
-from squidpy.experimental.fit._registry import Registry
-from squidpy.experimental.fit._result import FitResult
+from squidpy.experimental._fit._estimator import Estimator
+from squidpy.experimental._fit._registry import Registry
+from squidpy.experimental._fit._result import FitResult
 
 __all__ = ["Estimator", "FitResult", "Registry"]

@@ -6,6 +6,6 @@ These features may change or be removed in future releases.
 
 from __future__ import annotations
 
-from . import fit, im, pl, tl, utils
+from . import im, pl, tl, utils
 
-__all__ = ["fit", "im", "pl", "tl", "utils"]
+__all__ = ["im", "pl", "tl", "utils"]

@@ -1,9 +1,9 @@
 """STalign estimator: JAX LDDMM point-cloud registration.
 
 The JAX solver is lifted from scverse/squidpy#1150 (Selman Özleyen); see
-:mod:`._stalign_core`, :mod:`._stalign_helpers` and :mod:`._stalign_tools`.
-This module only adds the thin :class:`Estimator` / :class:`FitResult` adapter
-onto the :mod:`squidpy.experimental.fit` core. JAX is imported lazily inside
+:mod:`._core`, :mod:`._helpers` and :mod:`._tools`. This module only adds the
+thin :class:`Estimator` / :class:`FitResult` adapter onto the
+:mod:`squidpy.experimental._fit` core. JAX is imported lazily inside
 :meth:`StalignEstimator.fit`, so importing this module is cheap and does not
 require JAX.
 """
@@ -15,15 +15,12 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from squidpy.experimental.fit._estimator import Estimator
-from squidpy.experimental.fit._registry import Registry
-from squidpy.experimental.fit._result import FitResult
+from squidpy.experimental._fit._estimator import Estimator
+from squidpy.experimental._fit._methods._families import ALIGN
+from squidpy.experimental._fit._result import FitResult
 
 if TYPE_CHECKING:
-    from ._stalign_tools import STalignConfig
-
-#: Registry for the ``align`` family of estimators.
-ALIGN = Registry("align")
+    from ._tools import STalignConfig
 
 
 @dataclass
@@ -99,7 +96,7 @@ class StalignEstimator(Estimator):
         # Import the JAX-backed solver only after requirements pass, so callers
         # without JAX get the clean ImportError from check_requirements rather
         # than a confusing failure from a module-level `import jax`.
-        from ._stalign_tools import stalign_points
+        from ._tools import stalign_points
 
         ref_xy = np.asarray(ref, dtype=float)
         query_xy = np.asarray(query, dtype=float)
