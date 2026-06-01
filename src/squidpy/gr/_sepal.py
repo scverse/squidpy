@@ -182,7 +182,7 @@ def _diffusion_genes(
         if sparse:
             conc = np.ascontiguousarray(vals[:, i].toarray().ravel(), dtype=np.float64)
         else:
-            conc = vals[:, i]
+            conc = np.ascontiguousarray(vals[:, i], dtype=np.float64)
         time_iter = _diffusion(
             conc,
             use_hex,
