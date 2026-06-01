@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+import numpy as np
+import pytest
+
+from squidpy.experimental.fit import Estimator, FitResult, Registry
+
+
+@dataclass
+class _MeanShiftResult(FitResult):
+    """Toy result: a constant per-axis offset baked into ``transform``."""
+
+    delta: np.ndarray
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def transform(self, x: np.ndarray) -> np.ndarray:
+        return np.asarray(x, dtype=float) + self.delta
+
+
+class _MeanShiftEstimator(Estimator):
+    """Toy estimator: fit the offset that maps the query centroid onto the ref centroid."""
+
+    name = "mean_shift"
+
+    def fit(self, ref: np.ndarray, query: np.ndarray) -> _MeanShiftResult:
+        delta = np.asarray(ref, dtype=float).mean(0) - np.asarray(query, dtype=float).mean(0)
+        return _MeanShiftResult(delta=delta, metadata={"method": self.name})
+
+
+def test_fit_then_transform_round_trip() -> None:
+    ref = np.array([[1.0, 1.0], [3.0, 3.0]])  # centroid (2, 2)
+    query = np.array([[0.0, 0.0], [2.0, 2.0]])  # centroid (1, 1)
+
+    result = _MeanShiftEstimator().fit(ref, query)
+
+    assert isinstance(result, FitResult)
+    np.testing.assert_allclose(result.delta, [1.0, 1.0])
+    np.testing.assert_allclose(result.transform(query), query + 1.0)
+    assert result.metadata == {"method": "mean_shift"}
+
+
+def test_fit_result_transform_default_not_implemented() -> None:
+    @dataclass
+    class _Bare(FitResult):
+        metadata: dict[str, Any] = field(default_factory=dict)
+
+    with pytest.raises(NotImplementedError, match="does not implement `transform`"):
+        _Bare().transform(np.zeros((2, 2)))
+
+
+def test_registry_register_get_keys() -> None:
+    reg = Registry("demo")
+
+    @reg.register("mean_shift")
+    class _Registered(_MeanShiftEstimator):
+        pass
+
+    assert reg.keys() == ("mean_shift",)
+    assert reg.get("mean_shift") is _Registered
+    assert isinstance(reg.get("mean_shift")().fit(np.ones((2, 2)), np.zeros((2, 2))), FitResult)
+
+
+def test_registry_unknown_key_lists_available() -> None:
+    reg = Registry("demo")
+    reg.register("a")(_MeanShiftEstimator)
+
+    with pytest.raises(ValueError, match=r"Unknown demo method 'b'. Available: \['a'\]"):
+        reg.get("b")
+
+
+def test_registry_rejects_duplicate_key() -> None:
+    reg = Registry("demo")
+    reg.register("dup")(_MeanShiftEstimator)
+
+    with pytest.raises(ValueError, match="already registered"):
+        reg.register("dup")(_MeanShiftEstimator)
+
+
+def test_check_requirements_passes_when_none() -> None:
+    # _MeanShiftEstimator has the default empty `requires`.
+    _MeanShiftEstimator().check_requirements()
+
+
+def test_check_requirements_raises_for_missing_dependency() -> None:
+    class _NeedsGhost(_MeanShiftEstimator):
+        name = "needs_ghost"
+        requires = ("squidpy_nonexistent_pkg_xyz",)
+
+    with pytest.raises(
+        ImportError, match=r"requires 'squidpy_nonexistent_pkg_xyz'.*squidpy\[squidpy_nonexistent_pkg_xyz\]"
+    ):
+        _NeedsGhost().check_requirements()
