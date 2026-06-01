@@ -14,13 +14,14 @@ automatic correspondence matching is performed.
 
 from __future__ import annotations
 
+from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Literal
+from typing import Any
 
 import numpy as np
 
 from squidpy.experimental._fit._estimator import Estimator
-from squidpy.experimental._fit._methods._families import LANDMARK
+from squidpy.experimental._fit._families import ALIGN_LANDMARKS
 from squidpy.experimental._fit._result import FitResult
 
 
@@ -46,9 +47,13 @@ class AffineFitResult(FitResult):
 
 
 class _LandmarkEstimator(Estimator):
-    """Base for closed-form landmark fits; subclasses pin :attr:`model`."""
+    """Shared logic for closed-form landmark fits.
 
-    model: ClassVar[Literal["similarity", "affine"]]
+    The base :meth:`fit` does all the work that is common across models --
+    validate inputs, enforce ``N >= 3``, build the :class:`AffineFitResult`.
+    Subclasses only provide the matrix solver via :meth:`_solve`, so there is
+    no per-model branching here.
+    """
 
     def fit(
         self,
@@ -75,31 +80,39 @@ class _LandmarkEstimator(Estimator):
                 f"`landmarks_ref` and `landmarks_query` must have the same shape; got {ref.shape} and {query.shape}."
             )
         if ref.shape[0] < 3:
-            raise ValueError(f"`model={self.model!r}` needs at least 3 landmark pairs, got {ref.shape[0]}.")
+            raise ValueError(f"`{self.name}` needs at least 3 landmark pairs, got {ref.shape[0]}.")
 
-        matrix = _fit_similarity(ref, query) if self.model == "similarity" else _fit_affine(ref, query)
+        matrix = self._solve(ref, query)
         return AffineFitResult(
             matrix=matrix,
             source_cs=source_cs,
             target_cs=target_cs,
-            metadata={"method": self.model},
+            metadata={"method": self.name},
         )
 
+    @abstractmethod
+    def _solve(self, ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarray:
+        """Return the ``(3, 3)`` matrix mapping ``query_xy`` onto ``ref_xy``."""
 
-@LANDMARK.register("similarity")
+
+@ALIGN_LANDMARKS.register("similarity")
 class LandmarkSimilarityEstimator(_LandmarkEstimator):
-    """4-DOF similarity fit (rotation + uniform scale + translation)."""
+    """4-DOF similarity fit (rotation + uniform scale + translation), via spatialdata."""
 
     name = "similarity"
-    model = "similarity"
+
+    def _solve(self, ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarray:
+        return _fit_similarity(ref_xy, query_xy)
 
 
-@LANDMARK.register("affine")
+@ALIGN_LANDMARKS.register("affine")
 class LandmarkAffineEstimator(_LandmarkEstimator):
-    """6-DOF affine fit (rotation + non-uniform scale + shear + translation)."""
+    """6-DOF affine fit (rotation + non-uniform scale + shear + translation), via skimage."""
 
     name = "affine"
-    model = "affine"
+
+    def _solve(self, ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarray:
+        return _fit_affine(ref_xy, query_xy)
 
 
 def _validate_landmarks(points: np.ndarray, *, name: str) -> np.ndarray:

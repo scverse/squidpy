@@ -11,8 +11,8 @@ import pytest
 
 pytest.importorskip("jax")
 
-from squidpy.experimental._fit._methods import ALIGN, StalignEstimator, StalignFitResult
-from squidpy.experimental._fit._methods._stalign._tools import (
+from squidpy.experimental._fit.align_samples import ALIGN_SAMPLES, StalignEstimator, StalignFitResult
+from squidpy.experimental._fit.align_samples._stalign_impl._tools import (
     STalignConfig,
     STalignPreprocessConfig,
     STalignRegistrationConfig,
@@ -40,8 +40,8 @@ def _tiny_config() -> STalignConfig:
 
 
 def test_stalign_registered_in_align_family() -> None:
-    assert "stalign" in ALIGN.keys()
-    assert ALIGN.get("stalign") is StalignEstimator
+    assert "stalign" in ALIGN_SAMPLES.keys()
+    assert ALIGN_SAMPLES.get("stalign") is StalignEstimator
 
 
 def test_stalign_fit_returns_displacement_result() -> None:

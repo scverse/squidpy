@@ -11,8 +11,9 @@ imputation, ...) out of any particular container or write-back path:
   function, not here.
 - :class:`Registry` -- a flat ``name -> Estimator`` map, one per family.
 
-Concrete estimators live in :mod:`._methods` and pull their optional
-dependencies (e.g. JAX) in lazily, so importing this package stays cheap.
+Concrete estimators live in per-family subpackages (``align_samples``,
+``align_landmarks``, ...) and pull their optional dependencies (e.g. JAX) in
+lazily, so importing this package stays cheap.
 
 Example
 -------
