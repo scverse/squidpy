@@ -119,5 +119,6 @@ import squidpy as sq
     :toctree: api
 
     experimental.tl.calculate_tiling_qc
+    experimental.tl.TilingQCParams
     experimental.pl.tiling_qc
 ```
