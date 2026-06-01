@@ -39,7 +39,7 @@ from squidpy.experimental.im._stain._reinhard import (
     apply_reinhard,
     fit_reinhard,
 )
-from squidpy.experimental.im._stain._white_point import DEFAULT_WHITE_POINT
+from squidpy.experimental.im._stain._white_point import default_white_point, white_point_from_background
 from squidpy.experimental.im._utils import (
     _choose_label_scale_for_image,
     get_element_data,
@@ -157,6 +157,40 @@ def _write_image(
     )
 
 
+def estimate_white_point(
+    sdata: sd.SpatialData,
+    image_key: str,
+    *,
+    tissue_mask_key: str | None = None,
+    scale: str | Literal["auto"] = "auto",
+) -> np.ndarray:
+    """Estimate the white point ``I_0`` from a slide's background (non-tissue median).
+
+    Opt-in alternative to the fixed dtype-aware default white point, for a slide
+    whose unstained background is genuinely not full white. Samples the
+    per-channel median over **non-tissue** pixels (background = the complement of
+    the :func:`~squidpy.experimental.im.detect_tissue` mask).
+
+    Parameters
+    ----------
+    sdata, image_key
+        The SpatialData object and the RGB image key.
+    tissue_mask_key
+        Tissue-label element key (defaults to ``f"{image_key}_tissue"``); a
+        tissue mask is required, as for :func:`fit_stain_reference`.
+    scale
+        Scale level to sample on. ``"auto"`` (default) uses the coarsest level.
+
+    Returns
+    -------
+    Shape-``(3,)`` white point; pass it as ``white_point`` to
+    :func:`fit_stain_reference` / :func:`decompose_stains`.
+    """
+    da = _resolve_image(sdata, image_key, scale, prefer="coarsest")
+    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, da, tissue_mask_key)
+    return white_point_from_background(da, ~tissue_mask)
+
+
 def fit_stain_reference(
     sdata: sd.SpatialData,
     image_key: str,
@@ -209,7 +243,7 @@ def fit_stain_reference(
     tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, da, tissue_mask_key)
     if method == "reinhard":
         return fit_reinhard(da, params, tissue_mask=tissue_mask)
-    bg = DEFAULT_WHITE_POINT.copy() if white_point is None else np.asarray(white_point, np.float64)
+    bg = default_white_point(da) if white_point is None else np.asarray(white_point, np.float64)
     return fit_decomposition(da, method, params, bg, tissue_mask=tissue_mask, image_key=image_key)
 
 
@@ -270,10 +304,13 @@ def normalize_stains(
     # then applied to the full-resolution `da`.
     fit_rgb = _resolve_image(sdata, image_key, scale, prefer="coarsest")
     tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, fit_rgb, tissue_mask_key)
+    out_dtype = da.dtype  # reconstruct into the source image's dtype (clip + cast happen together)
     if reference.method == "reinhard":
-        normalized = apply_reinhard(da, reference, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask)
+        normalized = apply_reinhard(da, reference, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask, out_dtype=out_dtype)
     else:
-        normalized = apply_decomposition(da, reference, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask)
+        normalized = apply_decomposition(
+            da, reference, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask, out_dtype=out_dtype
+        )
 
     if preserve_background:
         # Keep non-tissue pixels byte-identical to the source: the global colour

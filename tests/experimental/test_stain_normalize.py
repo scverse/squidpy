@@ -37,7 +37,7 @@ def _make_sdata(
 @pytest.fixture
 def rgb_values() -> np.ndarray:
     rng = np.random.default_rng(3)
-    return rng.uniform(40.0, 200.0, size=(3, 64, 64)).astype(np.float32)
+    return rng.uniform(40.0, 200.0, size=(3, 64, 64)).astype(np.uint8)
 
 
 class TestFitStainReference:

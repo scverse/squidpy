@@ -146,6 +146,7 @@ def apply_reinhard(
     *,
     fit_rgb: xr.DataArray | None = None,
     tissue_mask: np.ndarray | None = None,
+    out_dtype: np.dtype | type = np.uint8,
 ) -> xr.DataArray:
     """Apply a Reinhard reference to a source image.
 
@@ -175,4 +176,4 @@ def apply_reinhard(
         sigma_ref=np.asarray(reference.sigma, dtype=dtype),
         dtype=dtype,
     )
-    return lab_ruderman_to_rgb(lab_out)
+    return lab_ruderman_to_rgb(lab_out, out_dtype=out_dtype)

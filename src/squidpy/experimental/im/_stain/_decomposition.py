@@ -228,6 +228,7 @@ def apply_decomposition(
     *,
     fit_rgb: xr.DataArray | None = None,
     tissue_mask: np.ndarray | None = None,
+    out_dtype: np.dtype | type = np.uint8,
 ) -> xr.DataArray:
     """Normalize a source image to a decomposition reference.
 
@@ -259,7 +260,7 @@ def apply_decomposition(
     sda = rgb_to_sda(image_rgb, bg)
     dtype = _working_dtype(sda)
     sda_out = _apply_along_channel(sda, _matmul_kernel, out_dtype=dtype, matrix=operator.astype(dtype), dtype=dtype)
-    return sda_to_rgb(sda_out, bg)
+    return sda_to_rgb(sda_out, bg, out_dtype=out_dtype)
 
 
 def decompose_to_concentrations(

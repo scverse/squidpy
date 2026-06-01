@@ -24,6 +24,16 @@ from squidpy.experimental.im._stain._constants import (
 _CHANNEL_DIM = "c"
 
 
+def dtype_max(dtype: np.dtype | type) -> float:
+    """Valid-intensity upper bound for an image dtype (255 / 65535 / 1.0).
+
+    Integer dtypes use their full range; float RGB is assumed to live in
+    ``[0, 1]``.
+    """
+    dt = np.dtype(dtype)
+    return float(np.iinfo(dt).max) if np.issubdtype(dt, np.integer) else 1.0
+
+
 def _check_channel_dim(arr: xr.DataArray) -> None:
     if _CHANNEL_DIM not in arr.dims:
         raise ValueError(f"Input must have a dimension named {_CHANNEL_DIM!r}; got dims {arr.dims}.")
@@ -68,9 +78,9 @@ def _rgb_to_sda_kernel(x: np.ndarray, *, bg: np.ndarray, dtype: np.dtype) -> np.
     return (-np.log((x + 1.0) / (bg + 1.0)) * SDA_SCALE).astype(dtype, copy=False)
 
 
-def _sda_to_rgb_kernel(x: np.ndarray, *, bg: np.ndarray, dtype: np.dtype) -> np.ndarray:
+def _sda_to_rgb_kernel(x: np.ndarray, *, bg: np.ndarray, max_value: float, dtype: np.dtype) -> np.ndarray:
     rgb = (bg + 1.0) * np.exp(-x.astype(dtype, copy=False) / SDA_SCALE) - 1.0
-    np.clip(rgb, 0.0, 255.0, out=rgb)
+    np.clip(rgb, 0.0, max_value, out=rgb)
     return rgb.astype(dtype, copy=False)
 
 
@@ -81,14 +91,14 @@ def _rgb_to_lab_kernel(x: np.ndarray, *, dtype: np.dtype) -> np.ndarray:
     return (lms @ RUDERMAN_LMS_TO_LAB.T.astype(dtype, copy=False)).astype(dtype, copy=False)
 
 
-def _lab_to_rgb_kernel(x: np.ndarray, *, dtype: np.dtype) -> np.ndarray:
+def _lab_to_rgb_kernel(x: np.ndarray, *, max_value: float, dtype: np.dtype) -> np.ndarray:
     x = x.astype(dtype, copy=False)
     log_lms = x @ RUDERMAN_LAB_TO_LMS.T.astype(dtype, copy=False)
     # The +1.0 / -1.0 pair is paired with the matching offset in
     # `_rgb_to_lab_kernel` so the round trip remains exact for valid RGB.
     lms = np.exp(log_lms) - 1.0
     rgb = lms @ RUDERMAN_LMS_TO_RGB.T.astype(dtype, copy=False)
-    np.clip(rgb, 0.0, 255.0, out=rgb)
+    np.clip(rgb, 0.0, max_value, out=rgb)
     return rgb.astype(dtype, copy=False)
 
 
@@ -132,17 +142,22 @@ def rgb_to_sda(
 def sda_to_rgb(
     sda: xr.DataArray,
     white_point: np.ndarray,
+    *,
+    out_dtype: np.dtype | type = np.uint8,
 ) -> xr.DataArray:
-    """Convert SDA back to RGB intensities in ``[0, 255]``.
+    """Convert SDA back to RGB, clipped to ``out_dtype``'s valid range.
 
-    Inverse of :func:`rgb_to_sda`. Pass the same ``white_point``
-    used at encode time. The result is clipped to ``[0, 255]`` but kept in
-    float dtype; uint8 conversion is the caller's choice.
+    Inverse of :func:`rgb_to_sda`. Pass the same ``white_point`` used at encode
+    time. ``out_dtype`` is the eventual image dtype: the reconstruction is
+    clipped to that dtype's valid range (``dtype_max`` = 255 / 65535 / 1.0) but
+    kept in float; the final cast to ``out_dtype`` is the caller's choice.
     """
     _check_channel_dim(sda)
     dtype = _working_dtype(sda)
     bg = np.asarray(white_point, dtype=dtype)
-    return _apply_along_channel(sda, _sda_to_rgb_kernel, out_dtype=dtype, bg=bg, dtype=dtype)
+    return _apply_along_channel(
+        sda, _sda_to_rgb_kernel, out_dtype=dtype, bg=bg, max_value=dtype_max(out_dtype), dtype=dtype
+    )
 
 
 def rgb_to_lab_ruderman(rgb: xr.DataArray) -> xr.DataArray:
@@ -161,12 +176,12 @@ def rgb_to_lab_ruderman(rgb: xr.DataArray) -> xr.DataArray:
     return _apply_along_channel(rgb, _rgb_to_lab_kernel, out_dtype=dtype, dtype=dtype)
 
 
-def lab_ruderman_to_rgb(lab: xr.DataArray) -> xr.DataArray:
+def lab_ruderman_to_rgb(lab: xr.DataArray, *, out_dtype: np.dtype | type = np.uint8) -> xr.DataArray:
     """Inverse of :func:`rgb_to_lab_ruderman`.
 
-    Returns RGB clipped to ``[0, 255]`` in float dtype; uint8 conversion is
-    the caller's choice.
+    Clips the reconstruction to ``out_dtype``'s valid range (the eventual image
+    dtype) but keeps it in float; the final cast is the caller's choice.
     """
     _check_channel_dim(lab)
     dtype = _working_dtype(lab)
-    return _apply_along_channel(lab, _lab_to_rgb_kernel, out_dtype=dtype, dtype=dtype)
+    return _apply_along_channel(lab, _lab_to_rgb_kernel, out_dtype=dtype, max_value=dtype_max(out_dtype), dtype=dtype)

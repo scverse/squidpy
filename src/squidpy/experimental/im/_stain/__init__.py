@@ -27,6 +27,7 @@ from squidpy.experimental.im._stain._mask import (
 )
 from squidpy.experimental.im._stain._normalize import (
     decompose_stains,
+    estimate_white_point,
     fit_stain_reference,
     normalize_stains,
 )
@@ -42,7 +43,6 @@ from squidpy.experimental.im._stain._validation import (
     reorder_to_canonical,
     validate_stain_matrix,
 )
-from squidpy.experimental.im._stain._white_point import estimate_white_point
 
 __all__ = [
     "DEFAULT_LUMINOSITY_THRESHOLD",

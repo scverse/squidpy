@@ -11,7 +11,6 @@ import squidpy as sq
 from squidpy.experimental.im import (
     StainReference,
     decompose_stains,
-    estimate_white_point,
     fit_stain_reference,
     normalize_stains,
 )
@@ -34,7 +33,7 @@ def _synthetic_rgb(seed: int = 0, n_side: int = 48, white: np.ndarray = _WHITE) 
     conc[third : 2 * third, 0] = 0.0
     od = (conc @ w[:, :2].T).T.reshape(3, n_side, n_side)
     rgb = sda_to_rgb(xr.DataArray(od, dims=("c", "y", "x")), white)
-    return np.asarray(rgb.data)
+    return np.asarray(rgb.data).astype(np.uint8)
 
 
 def _make_sdata(values: np.ndarray, *, with_tissue: bool = True) -> sd.SpatialData:
@@ -114,11 +113,6 @@ class TestBackgroundDefault:
         sdata = _make_sdata(_synthetic_rgb(white=I0))
         ref = fit_stain_reference(sdata, "img", method="vahadane", white_point=I0)
         np.testing.assert_array_equal(ref.white_point, I0)
-
-    def test_estimate_background_public(self) -> None:
-        sdata = _make_sdata(_synthetic_rgb())
-        bg = estimate_white_point(sdata.images["img"])
-        assert bg.shape == (3,)
 
 
 class TestUnknownMethod:

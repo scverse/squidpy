@@ -1,8 +1,13 @@
-"""Background (white-point) intensity estimation for absorbance methods.
+"""White-point (``I_0``) handling for the absorbance methods.
 
-The decomposition methods convert RGB to absorbance against a per-channel
-white point ``I_0``. Rather than assume pure white (255), estimate it from the
-brightest pixels of the slide, which are the unstained background.
+The decomposition methods measure absorbance against a per-channel white point
+``I_0`` (the intensity that counts as fully unstained). The default is a fixed
+full-white reference at the image's bit depth (255 for uint8, 65535 for uint16,
+1.0 for float), matching HistomicsTK (255/256) and the Macenko literature (240):
+``I_0`` must be at least as bright as the slide background, otherwise unstained
+pixels get a non-zero absorbance and cannot round-trip back to white. Use
+:func:`estimate_white_point` only for a slide with a genuinely non-white
+background you want to anchor to.
 """
 
 from __future__ import annotations
@@ -10,58 +15,59 @@ from __future__ import annotations
 import numpy as np
 import xarray as xr
 
-from squidpy.experimental.im._stain._conversion import _check_channel_dim
+from squidpy.experimental.im._stain._conversion import _check_channel_dim, dtype_max
 from squidpy.experimental.im._stain._validation import StainFittingError
 
-#: Default per-channel white point ``I_0`` for the absorbance methods. A fixed
-#: full-white reference (8-bit), matching HistomicsTK (255/256) and the Macenko
-#: literature (240). The absorbance origin must be at least as bright as the
-#: slide background, otherwise unstained pixels get a non-zero absorbance and
-#: cannot round-trip back to white. Estimate from the image (see
-#: ``estimate_white_point``) only when the slide has a genuinely
-#: non-white background you want to anchor to.
-DEFAULT_WHITE_POINT: np.ndarray = np.array([255.0, 255.0, 255.0])
+
+def default_white_point(rgb: xr.DataArray) -> np.ndarray:
+    """Dtype-aware default white point ``I_0`` (full white), with a range check.
+
+    Returns ``(3,)`` filled with the dtype's full-white value. Raises with
+    guidance when the data clearly does not match its dtype's range (e.g. 8-bit
+    values stored in a uint16 container, or 0-255 values stored as float), since
+    that would silently mis-scale the absorbance.
+    """
+    m = dtype_max(rgb.dtype)
+    data_max = float(np.asarray(rgb.max()))
+    if np.issubdtype(rgb.dtype, np.integer):
+        if m >= 256 and data_max <= 255:
+            raise ValueError(
+                f"{rgb.dtype} image but the maximum value is {data_max:.0f} (<= 255) - this looks like "
+                f"8-bit data stored in a {rgb.dtype} container. Convert to uint8, or pass `white_point`."
+            )
+    elif data_max > 1.5:
+        raise ValueError(
+            f"float image but the maximum value is {data_max:.1f} (> 1) - this looks like 0-255 data "
+            "stored as float. Rescale to [0, 1], or pass `white_point`."
+        )
+    return np.full(3, m, dtype=np.float64)
 
 
-def estimate_white_point(rgb: xr.DataArray, *, percentile: float = 99.0) -> np.ndarray:
-    """Estimate the per-channel white point from the brightest pixels.
+def white_point_from_background(rgb: xr.DataArray, background_mask: np.ndarray) -> np.ndarray:
+    """Per-channel median intensity over background pixels -> ``(3,)`` white point.
 
-    Parameters
-    ----------
-    rgb
-        Image with a ``"c"`` dimension of length 3. Numpy- or dask-backed.
-    percentile
-        Per-channel intensity percentile to take as the white point. The
-        default (99) picks near-saturated background while ignoring the few
-        truly-saturated outlier pixels.
-
-    Returns
-    -------
-    Shape-``(3,)`` float64 white point, suitable as ``white_point``
-    for :func:`~squidpy.experimental.im._stain._conversion.rgb_to_sda`.
-
-    Notes
-    -----
-    The exact percentile is computed eagerly (the input is materialised), so
-    the result is identical for numpy- and dask-backed inputs and independent
-    of chunking - important for reproducible references across a cohort. Pass
-    a coarse pyramid level for whole-slide images.
+    ``background_mask`` is a ``(y, x)`` boolean, ``True`` over non-tissue
+    (background) pixels. Sampling the *median* of true background (rather than a
+    whole-image percentile) anchors ``I_0`` to the actual unstained intensity,
+    matching HistomicsTK's ``background_intensity`` semantics.
 
     Raises
     ------
     StainFittingError
-        If the estimate is not strictly positive in every channel (e.g. a
-        blank/black image with no bright background).
+        If the mask selects no background pixels, or the median is non-positive
+        (e.g. a black background).
     """
-    if not 0.0 < percentile <= 100.0:
-        raise ValueError(f"`percentile` must be in (0, 100], got {percentile}.")
     _check_channel_dim(rgb)
-    flat = np.asarray(rgb.transpose("c", "y", "x").data, dtype=np.float64).reshape(3, -1)
-    bg = np.percentile(flat, percentile, axis=1)
-
-    if np.any(bg <= 0):
+    flat = np.asarray(rgb.transpose("c", "y", "x").data, dtype=np.float64)  # (3, y, x)
+    bg_pixels = flat[:, np.asarray(background_mask, dtype=bool)]  # (3, N_background)
+    if bg_pixels.shape[1] == 0:
         raise StainFittingError(
-            "estimated background intensity is non-positive; the image may be blank or all-tissue. "
-            "Pass an explicit `white_point` if this is expected."
+            "no background pixels to estimate the white point; the tissue mask covers the whole image. "
+            "Pass an explicit `white_point`."
         )
-    return bg
+    wp = np.median(bg_pixels, axis=1)
+    if np.any(wp <= 0):
+        raise StainFittingError(
+            "estimated white point is non-positive; the background may be black. Pass an explicit `white_point`."
+        )
+    return wp
