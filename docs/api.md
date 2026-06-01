@@ -150,4 +150,8 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     experimental.tl.calculate_tiling_qc
     experimental.tl.TilingQCParams
     experimental.pl.tiling_qc
+    experimental.im.fit_stain_reference
+    experimental.im.apply_stain_normalization
+    experimental.im.StainReference
+    experimental.im.ReinhardParams
 ```
