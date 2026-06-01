@@ -18,6 +18,12 @@ import squidpy as sq
     :toctree: api
 
     gr.spatial_neighbors
+    gr.spatial_neighbors_from_builder
+    gr.spatial_neighbors_knn
+    gr.spatial_neighbors_radius
+    gr.spatial_neighbors_delaunay
+    gr.spatial_neighbors_grid
+    gr.GraphMatrixT
     gr.SpatialNeighborsResult
     gr.mask_graph
     gr.nhood_enrichment
@@ -109,6 +115,29 @@ import squidpy as sq
     datasets.visium_hne_image
     datasets.visium_hne_image_crop
     datasets.visium_fluo_image_crop
+```
+
+## Extensibility
+
+See the {doc}`extensibility guide </extensibility>` for how to implement a custom graph builder.
+
+```{eval-rst}
+.. module:: squidpy.gr.neighbors
+.. currentmodule:: squidpy
+.. autosummary::
+    :toctree: api
+
+    gr.neighbors.GraphBuilder
+    gr.neighbors.GraphBuilderCSR
+    gr.neighbors.GraphMatrixT
+    gr.neighbors.GraphPostprocessor
+    gr.neighbors.DistanceIntervalPostprocessor
+    gr.neighbors.PercentilePostprocessor
+    gr.neighbors.TransformPostprocessor
+    gr.neighbors.KNNBuilder
+    gr.neighbors.RadiusBuilder
+    gr.neighbors.DelaunayBuilder
+    gr.neighbors.GridBuilder
 ```
 
 ## Experimental

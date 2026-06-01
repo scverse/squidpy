@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
-from squidpy.gr._build import SpatialNeighborsResult, mask_graph, spatial_neighbors
+from squidpy.gr import neighbors
+from squidpy.gr._build import (
+    GraphMatrixT,
+    SpatialNeighborsResult,
+    mask_graph,
+    spatial_neighbors,
+    spatial_neighbors_delaunay,
+    spatial_neighbors_from_builder,
+    spatial_neighbors_grid,
+    spatial_neighbors_knn,
+    spatial_neighbors_radius,
+)
 from squidpy.gr._ligrec import ligrec
 from squidpy.gr._nhood import (
     NhoodEnrichmentResult,
@@ -16,10 +27,17 @@ from squidpy.gr._ripley import ripley
 from squidpy.gr._sepal import sepal
 
 __all__ = [
+    "GraphMatrixT",
     "SpatialNeighborsResult",
     "NhoodEnrichmentResult",
+    "neighbors",
     "mask_graph",
     "spatial_neighbors",
+    "spatial_neighbors_from_builder",
+    "spatial_neighbors_knn",
+    "spatial_neighbors_radius",
+    "spatial_neighbors_delaunay",
+    "spatial_neighbors_grid",
     "ligrec",
     "centrality_scores",
     "interaction_matrix",
