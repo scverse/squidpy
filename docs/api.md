@@ -120,5 +120,6 @@ import squidpy as sq
 
     experimental.im.calculate_image_features
     experimental.tl.calculate_tiling_qc
+    experimental.tl.TilingQCParams
     experimental.pl.tiling_qc
 ```
