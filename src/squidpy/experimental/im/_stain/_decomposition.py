@@ -113,7 +113,7 @@ def _resolve_vahadane_params(params: VahadaneParams | Mapping[str, Any] | None) 
 
 def _tissue_od(
     image_rgb: xr.DataArray,
-    background_intensity: np.ndarray,
+    white_point: np.ndarray,
     beta: float,
     *,
     tissue_mask: np.ndarray | None = None,
@@ -127,7 +127,7 @@ def _tissue_od(
     given it selects the tissue pixels; otherwise the absorbance threshold
     ``beta`` is used.
     """
-    sda = rgb_to_sda(image_rgb, background_intensity)
+    sda = rgb_to_sda(image_rgb, white_point)
     mask = as_spatial_mask(tissue_mask, sda) if tissue_mask is not None else foreground_mask_from_sda(sda, beta)
     od = np.asarray(sda.where(mask).transpose("c", "y", "x").data.reshape(3, -1)).T
     od = od[np.all(np.isfinite(od), axis=1)]
@@ -201,18 +201,18 @@ def fit_decomposition(
     image_rgb: xr.DataArray,
     method: StainMethod,
     params: Any,
-    background_intensity: np.ndarray,
+    white_point: np.ndarray,
     *,
     tissue_mask: np.ndarray | None = None,
     image_key: str | None = None,
 ) -> StainReference:
     """Fit a decomposition :class:`StainReference` (stain matrix + max concentrations)."""
-    od = _tissue_od(image_rgb, background_intensity, params.beta, tissue_mask=tissue_mask, image_key=image_key)
+    od = _tissue_od(image_rgb, white_point, params.beta, tissue_mask=tissue_mask, image_key=image_key)
     matrix = _stain_matrix(od, method, params, image_key=image_key)
     return StainReference(
         method=method,
         stain_matrix=matrix,
-        background_intensity=np.asarray(background_intensity, dtype=np.float64),
+        white_point=np.asarray(white_point, dtype=np.float64),
         max_concentrations=_max_concentrations(_concentrations(od, matrix)),
     )
 
@@ -243,7 +243,7 @@ def apply_decomposition(
     _check_channel_dim(image_rgb)
     if reference.max_concentrations is None:
         raise ValueError("reference is missing max_concentrations; refit it with fit_stain_reference.")
-    bg = reference.background_intensity
+    bg = reference.white_point
 
     od_src = _tissue_od(
         fit_rgb if fit_rgb is not None else image_rgb, bg, params.beta, tissue_mask=tissue_mask, image_key=None
@@ -263,7 +263,7 @@ def apply_decomposition(
 
 
 def decompose_to_concentrations(
-    image_rgb: xr.DataArray, stain_matrix: np.ndarray, background_intensity: np.ndarray
+    image_rgb: xr.DataArray, stain_matrix: np.ndarray, white_point: np.ndarray
 ) -> xr.DataArray:
     """Project an image onto a stain matrix, returning a 3-channel concentration image.
 
@@ -271,7 +271,7 @@ def decompose_to_concentrations(
     concentration along the complement vector and is a diagnostic, not a stain.
     """
     _check_channel_dim(image_rgb)
-    sda = rgb_to_sda(image_rgb, background_intensity)
+    sda = rgb_to_sda(image_rgb, white_point)
     dtype = _working_dtype(sda)
     pinv = np.linalg.pinv(stain_matrix)
     return _apply_along_channel(sda, _matmul_kernel, out_dtype=dtype, matrix=pinv.astype(dtype), dtype=dtype)

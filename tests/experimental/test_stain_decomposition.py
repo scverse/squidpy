@@ -93,7 +93,7 @@ class TestApplyDecomposition:
         ref = StainReference(
             method="macenko",
             stain_matrix=_canonical(RUIFROK_HE["hematoxylin"], RUIFROK_HE["eosin"]),
-            background_intensity=_WHITE,
+            white_point=_WHITE,
         )
         img = _synthetic_he(ref.stain_matrix)
         with pytest.raises(ValueError, match="max_concentrations"):

@@ -43,12 +43,12 @@ class StainReference:
     sigma
         Shape ``(3,)`` Ruderman Lab channel standard deviations. Reinhard
         only.
-    background_intensity
+    white_point
         Shape ``(3,)`` per-channel white-point estimate. Required for
         decomposition methods (apply consumes it). Forbidden for Reinhard
         because Reinhard's color transfer operates in Ruderman Lab and
         does not model absorbance. There is no universal default; pass an
-        estimate from your data (see ``estimate_background_intensity``).
+        estimate from your data (see ``estimate_white_point``).
     max_concentrations
         Shape ``(2,)`` reference per-stain (H, E) maximum concentrations.
         Decomposition only. Stored because at apply time the reference image
@@ -62,7 +62,7 @@ class StainReference:
     stain_matrix: np.ndarray | None = None
     mu: np.ndarray | None = None
     sigma: np.ndarray | None = None
-    background_intensity: np.ndarray | None = None
+    white_point: np.ndarray | None = None
     max_concentrations: np.ndarray | None = None
 
     def __eq__(self, other: object) -> bool:
@@ -75,7 +75,7 @@ class StainReference:
             return False
         return all(
             np.array_equal(getattr(self, name), getattr(other, name))
-            for name in ("stain_matrix", "mu", "sigma", "background_intensity", "max_concentrations")
+            for name in ("stain_matrix", "mu", "sigma", "white_point", "max_concentrations")
         )
 
     # eq=False keeps the default identity-based __hash__ (the array fields are
@@ -92,17 +92,17 @@ class StainReference:
                 raise ValueError(f"method={self.method!r} requires stain_matrix.")
             if self.mu is not None or self.sigma is not None:
                 raise ValueError(f"method={self.method!r} forbids mu/sigma; pass them only for Reinhard.")
-            if self.background_intensity is None:
-                raise ValueError(f"method={self.method!r} requires background_intensity.")
+            if self.white_point is None:
+                raise ValueError(f"method={self.method!r} requires white_point.")
             object.__setattr__(
                 self,
                 "stain_matrix",
                 _coerce_finite(self.stain_matrix, shape=(3, 3), name="stain_matrix"),
             )
-            bg = _coerce_finite(self.background_intensity, shape=(3,), name="background_intensity")
+            bg = _coerce_finite(self.white_point, shape=(3,), name="white_point")
             if np.any(bg <= 0):
-                raise ValueError("background_intensity must be strictly positive.")
-            object.__setattr__(self, "background_intensity", bg)
+                raise ValueError("white_point must be strictly positive.")
+            object.__setattr__(self, "white_point", bg)
             if self.max_concentrations is not None:
                 maxc = _coerce_finite(self.max_concentrations, shape=(2,), name="max_concentrations")
                 if np.any(maxc <= 0):
@@ -113,9 +113,9 @@ class StainReference:
                 raise ValueError("method='reinhard' requires both mu and sigma.")
             if self.stain_matrix is not None:
                 raise ValueError("method='reinhard' forbids stain_matrix.")
-            if self.background_intensity is not None:
+            if self.white_point is not None:
                 raise ValueError(
-                    "method='reinhard' forbids background_intensity; Reinhard's color "
+                    "method='reinhard' forbids white_point; Reinhard's color "
                     "transfer is in Ruderman Lab and does not use a white point."
                 )
             if self.max_concentrations is not None:

@@ -94,7 +94,7 @@ def _lab_to_rgb_kernel(x: np.ndarray, *, dtype: np.dtype) -> np.ndarray:
 
 def rgb_to_sda(
     rgb: xr.DataArray,
-    background_intensity: np.ndarray,
+    white_point: np.ndarray,
 ) -> xr.DataArray:
     """Convert RGB intensities to standard deviation per absorbance (SDA).
 
@@ -112,7 +112,7 @@ def rgb_to_sda(
     rgb
         Image with a ``"c"`` dimension of length 3. May be numpy- or
         dask-backed; the operation is purely elementwise and stays lazy.
-    background_intensity
+    white_point
         Per-channel white-point ``I_0`` as a shape-``(3,)`` numpy array.
         Required: no scanner produces a pure-white background, so the
         caller must supply either an estimate (PR 3 will ship the
@@ -125,23 +125,23 @@ def rgb_to_sda(
     """
     _check_channel_dim(rgb)
     dtype = _working_dtype(rgb)
-    bg = np.asarray(background_intensity, dtype=dtype)
+    bg = np.asarray(white_point, dtype=dtype)
     return _apply_along_channel(rgb, _rgb_to_sda_kernel, out_dtype=dtype, bg=bg, dtype=dtype)
 
 
 def sda_to_rgb(
     sda: xr.DataArray,
-    background_intensity: np.ndarray,
+    white_point: np.ndarray,
 ) -> xr.DataArray:
     """Convert SDA back to RGB intensities in ``[0, 255]``.
 
-    Inverse of :func:`rgb_to_sda`. Pass the same ``background_intensity``
+    Inverse of :func:`rgb_to_sda`. Pass the same ``white_point``
     used at encode time. The result is clipped to ``[0, 255]`` but kept in
     float dtype; uint8 conversion is the caller's choice.
     """
     _check_channel_dim(sda)
     dtype = _working_dtype(sda)
-    bg = np.asarray(background_intensity, dtype=dtype)
+    bg = np.asarray(white_point, dtype=dtype)
     return _apply_along_channel(sda, _sda_to_rgb_kernel, out_dtype=dtype, bg=bg, dtype=dtype)
 
 

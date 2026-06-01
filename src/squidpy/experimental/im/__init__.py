@@ -14,10 +14,10 @@ from ._stain import (
     ReinhardParams,
     StainReference,
     VahadaneParams,
-    apply_stain_normalization,
     decompose_stains,
-    estimate_background_intensity,
+    estimate_white_point,
     fit_stain_reference,
+    normalize_stains,
 )
 
 __all__ = [
@@ -29,10 +29,10 @@ __all__ = [
     "StainReference",
     "VahadaneParams",
     "WekaParams",
-    "apply_stain_normalization",
+    "normalize_stains",
     "decompose_stains",
     "detect_tissue",
-    "estimate_background_intensity",
+    "estimate_white_point",
     "fit_stain_reference",
     "make_tiles",
     "make_tiles_from_spots",

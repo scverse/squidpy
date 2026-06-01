@@ -10,10 +10,10 @@ from spatialdata.transformations import get_transformation
 import squidpy as sq
 from squidpy.experimental.im import (
     StainReference,
-    apply_stain_normalization,
     decompose_stains,
-    estimate_background_intensity,
+    estimate_white_point,
     fit_stain_reference,
+    normalize_stains,
 )
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import sda_to_rgb
@@ -49,19 +49,19 @@ def _make_sdata(values: np.ndarray, *, with_tissue: bool = True) -> sd.SpatialDa
 class TestDecompositionThroughDispatchers:
     def test_fit_and_apply_end_to_end(self, method: str) -> None:
         sdata = _make_sdata(_synthetic_rgb(seed=1))
-        ref = fit_stain_reference(sdata, "img", method=method, background_intensity=_WHITE)
+        ref = fit_stain_reference(sdata, "img", method=method, white_point=_WHITE)
         assert ref.method == method
         assert ref.stain_matrix.shape == (3, 3)
         assert ref.max_concentrations.shape == (2,)
 
-        out = apply_stain_normalization(sdata, "img", ref)
+        out = normalize_stains(sdata, "img", ref)
         assert isinstance(out, xr.DataArray)
         assert out.sizes["c"] == 3
 
     def test_apply_writes_back(self, method: str) -> None:
         sdata = _make_sdata(_synthetic_rgb(seed=2))
-        ref = fit_stain_reference(sdata, "img", method=method, background_intensity=_WHITE)
-        result = apply_stain_normalization(sdata, "img", ref, image_key_added="norm")
+        ref = fit_stain_reference(sdata, "img", method=method, white_point=_WHITE)
+        result = normalize_stains(sdata, "img", ref, image_key_added="norm")
         assert result is None
         assert get_transformation(sdata.images["norm"], get_all=True).keys() == (
             get_transformation(sdata.images["img"], get_all=True).keys()
@@ -71,18 +71,18 @@ class TestDecompositionThroughDispatchers:
 class TestDecomposeStains:
     def test_returns_named_concentration_maps(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
-        conc = decompose_stains(sdata, "img", "macenko", background_intensity=_WHITE)
+        conc = decompose_stains(sdata, "img", "macenko", white_point=_WHITE)
         assert set(conc) == {"hematoxylin", "eosin", "residual"}
         assert all(set(c.dims) == {"y", "x"} for c in conc.values())  # one (y, x) map per stain
 
     def test_drop_residual(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
-        conc = decompose_stains(sdata, "img", "macenko", background_intensity=_WHITE, include_residual=False)
+        conc = decompose_stains(sdata, "img", "macenko", white_point=_WHITE, include_residual=False)
         assert set(conc) == {"hematoxylin", "eosin"}
 
     def test_with_reference_writes_separate_images(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
-        ref = fit_stain_reference(sdata, "img", method="macenko", background_intensity=_WHITE)
+        ref = fit_stain_reference(sdata, "img", method="macenko", white_point=_WHITE)
         out = decompose_stains(sdata, "img", ref, image_key_added="conc")
         assert out is None
         for stain in ("hematoxylin", "eosin", "residual"):
@@ -106,18 +106,18 @@ class TestBackgroundDefault:
         sdata = _make_sdata(_synthetic_rgb())
         ref = fit_stain_reference(sdata, "img", method="macenko")
         # default I_0 is a fixed full-white point, not an image-derived estimate
-        np.testing.assert_array_equal(ref.background_intensity, [255.0, 255.0, 255.0])
+        np.testing.assert_array_equal(ref.white_point, [255.0, 255.0, 255.0])
 
     def test_explicit_background_is_used(self) -> None:
         I0 = np.array([240.0, 245.0, 250.0])
         # build the synthetic image against this white point so the fit is consistent
         sdata = _make_sdata(_synthetic_rgb(white=I0))
-        ref = fit_stain_reference(sdata, "img", method="vahadane", background_intensity=I0)
-        np.testing.assert_array_equal(ref.background_intensity, I0)
+        ref = fit_stain_reference(sdata, "img", method="vahadane", white_point=I0)
+        np.testing.assert_array_equal(ref.white_point, I0)
 
     def test_estimate_background_public(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
-        bg = estimate_background_intensity(sdata.images["img"])
+        bg = estimate_white_point(sdata.images["img"])
         assert bg.shape == (3,)
 
 
@@ -143,7 +143,7 @@ class TestDecompositionOnHnE:
         ref = sq.experimental.im.fit_stain_reference(sdata_hne, image_key, method=method)
         assert isinstance(ref, StainReference)
         assert ref.stain_matrix.shape == (3, 3)
-        normalized = sq.experimental.im.apply_stain_normalization(sdata_hne, image_key, ref)
+        normalized = sq.experimental.im.normalize_stains(sdata_hne, image_key, ref)
         assert normalized.sizes["c"] == 3
         conc = sq.experimental.im.decompose_stains(sdata_hne, image_key, ref)
         assert set(conc) == {"hematoxylin", "eosin", "residual"}

@@ -151,9 +151,9 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     experimental.tl.TilingQCParams
     experimental.pl.tiling_qc
     experimental.im.fit_stain_reference
-    experimental.im.apply_stain_normalization
+    experimental.im.normalize_stains
     experimental.im.decompose_stains
-    experimental.im.estimate_background_intensity
+    experimental.im.estimate_white_point
     experimental.im.StainReference
     experimental.im.ReinhardParams
     experimental.im.MacenkoParams

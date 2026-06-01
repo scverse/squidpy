@@ -98,7 +98,7 @@ def foreground_mask_from_sda(sda: xr.DataArray, beta: float = 0.15) -> xr.DataAr
     return sda.mean(dim="c") > beta
 
 
-def absorbance_foreground_mask(rgb: xr.DataArray, background_intensity: np.ndarray, beta: float = 0.15) -> xr.DataArray:
+def absorbance_foreground_mask(rgb: xr.DataArray, white_point: np.ndarray, beta: float = 0.15) -> xr.DataArray:
     """Boolean tissue mask in optical-density (absorbance) space.
 
     The convention the Macenko/Vahadane fits expect: a pixel is tissue if its
@@ -109,7 +109,7 @@ def absorbance_foreground_mask(rgb: xr.DataArray, background_intensity: np.ndarr
     ----------
     rgb
         Image with a ``"c"`` dimension of length 3. Numpy- or dask-backed.
-    background_intensity
+    white_point
         Per-channel white point ``I_0`` (shape ``(3,)``), as used by
         :func:`~squidpy.experimental.im._stain._conversion.rgb_to_sda`.
     beta
@@ -120,4 +120,4 @@ def absorbance_foreground_mask(rgb: xr.DataArray, background_intensity: np.ndarr
     Boolean ``(y, x)`` DataArray: ``True`` = tissue. Lazy if ``rgb`` was lazy.
     """
     _check_channel_dim(rgb)
-    return foreground_mask_from_sda(rgb_to_sda(rgb, background_intensity), beta)
+    return foreground_mask_from_sda(rgb_to_sda(rgb, white_point), beta)

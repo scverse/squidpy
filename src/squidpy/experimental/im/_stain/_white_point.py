@@ -18,12 +18,12 @@ from squidpy.experimental.im._stain._validation import StainFittingError
 #: literature (240). The absorbance origin must be at least as bright as the
 #: slide background, otherwise unstained pixels get a non-zero absorbance and
 #: cannot round-trip back to white. Estimate from the image (see
-#: ``estimate_background_intensity``) only when the slide has a genuinely
+#: ``estimate_white_point``) only when the slide has a genuinely
 #: non-white background you want to anchor to.
-DEFAULT_BACKGROUND_INTENSITY: np.ndarray = np.array([255.0, 255.0, 255.0])
+DEFAULT_WHITE_POINT: np.ndarray = np.array([255.0, 255.0, 255.0])
 
 
-def estimate_background_intensity(rgb: xr.DataArray, *, percentile: float = 99.0) -> np.ndarray:
+def estimate_white_point(rgb: xr.DataArray, *, percentile: float = 99.0) -> np.ndarray:
     """Estimate the per-channel white point from the brightest pixels.
 
     Parameters
@@ -37,7 +37,7 @@ def estimate_background_intensity(rgb: xr.DataArray, *, percentile: float = 99.0
 
     Returns
     -------
-    Shape-``(3,)`` float64 white point, suitable as ``background_intensity``
+    Shape-``(3,)`` float64 white point, suitable as ``white_point``
     for :func:`~squidpy.experimental.im._stain._conversion.rgb_to_sda`.
 
     Notes
@@ -62,6 +62,6 @@ def estimate_background_intensity(rgb: xr.DataArray, *, percentile: float = 99.0
     if np.any(bg <= 0):
         raise StainFittingError(
             "estimated background intensity is non-positive; the image may be blank or all-tissue. "
-            "Pass an explicit `background_intensity` if this is expected."
+            "Pass an explicit `white_point` if this is expected."
         )
     return bg

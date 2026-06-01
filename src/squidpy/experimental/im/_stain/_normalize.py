@@ -22,7 +22,6 @@ from spatialdata.models import Image2DModel
 from spatialdata.transformations import get_transformation
 
 from squidpy._utils import _get_scale_factors
-from squidpy.experimental.im._stain._background import DEFAULT_BACKGROUND_INTENSITY
 from squidpy.experimental.im._stain._conversion import _check_channel_dim
 from squidpy.experimental.im._stain._decomposition import (
     MacenkoParams,
@@ -40,6 +39,7 @@ from squidpy.experimental.im._stain._reinhard import (
     apply_reinhard,
     fit_reinhard,
 )
+from squidpy.experimental.im._stain._white_point import DEFAULT_WHITE_POINT
 from squidpy.experimental.im._utils import (
     _choose_label_scale_for_image,
     get_element_data,
@@ -164,7 +164,7 @@ def fit_stain_reference(
     method: StainMethod = "reinhard",
     scale: str | Literal["auto"] = "auto",
     method_params: MethodParams = None,
-    background_intensity: np.ndarray | None = None,
+    white_point: np.ndarray | None = None,
     tissue_mask_key: str | None = None,
 ) -> StainReference:
     """Fit a stain reference from an image in a :class:`~spatialdata.SpatialData` object.
@@ -185,11 +185,11 @@ def fit_stain_reference(
         A :class:`ReinhardParams`/:class:`MacenkoParams`/:class:`VahadaneParams`
         instance, a mapping of its fields, or ``None`` for defaults. Must match
         ``method``.
-    background_intensity
+    white_point
         Per-channel white point ``I_0`` ``(3,)`` for the decomposition methods.
         If ``None``, a fixed full-white ``[255, 255, 255]`` is used (the
         HistomicsTK/Macenko convention), so unstained pixels round-trip to
-        white. Pass :func:`estimate_background_intensity` only for slides with a
+        white. Pass :func:`estimate_white_point` only for slides with a
         known non-white background. Ignored by Reinhard.
     tissue_mask_key
         Key of a tissue-label element in ``sdata.labels`` (as produced by
@@ -209,15 +209,11 @@ def fit_stain_reference(
     tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, da, tissue_mask_key)
     if method == "reinhard":
         return fit_reinhard(da, params, tissue_mask=tissue_mask)
-    bg = (
-        DEFAULT_BACKGROUND_INTENSITY.copy()
-        if background_intensity is None
-        else np.asarray(background_intensity, np.float64)
-    )
+    bg = DEFAULT_WHITE_POINT.copy() if white_point is None else np.asarray(white_point, np.float64)
     return fit_decomposition(da, method, params, bg, tissue_mask=tissue_mask, image_key=image_key)
 
 
-def apply_stain_normalization(
+def normalize_stains(
     sdata: sd.SpatialData,
     image_key: str,
     reference: StainReference,
@@ -299,7 +295,7 @@ def decompose_stains(
     *,
     scale: str | Literal["auto"] = "auto",
     method_params: MethodParams = None,
-    background_intensity: np.ndarray | None = None,
+    white_point: np.ndarray | None = None,
     image_key_added: str | None = None,
     tissue_mask_key: str | None = None,
     include_residual: bool = True,
@@ -315,7 +311,7 @@ def decompose_stains(
         white point are used) or a method name (``"macenko"``/``"vahadane"``)
         to fit on this image first. The reference is the provenance record of
         how the maps were produced (method, stain matrix, white point).
-    scale, method_params, background_intensity, tissue_mask_key
+    scale, method_params, white_point, tissue_mask_key
         As for :func:`fit_stain_reference` (only used when a method name is
         given; a reference is projected as-is and needs no tissue mask).
     image_key_added
@@ -342,7 +338,7 @@ def decompose_stains(
         reference = reference_or_method
         if reference.method not in _DECOMPOSITION_METHODS or reference.stain_matrix is None:
             raise ValueError("decompose_stains requires a macenko/vahadane reference with a stain matrix.")
-        stain_matrix, bg = reference.stain_matrix, reference.background_intensity
+        stain_matrix, bg = reference.stain_matrix, reference.white_point
     else:
         if reference_or_method not in _DECOMPOSITION_METHODS:
             raise ValueError(f"method must be one of {list(_DECOMPOSITION_METHODS)}; got {reference_or_method!r}.")
@@ -352,10 +348,10 @@ def decompose_stains(
             method=reference_or_method,
             scale=scale,
             method_params=method_params,
-            background_intensity=background_intensity,
+            white_point=white_point,
             tissue_mask_key=tissue_mask_key,
         )
-        stain_matrix, bg = reference.stain_matrix, reference.background_intensity
+        stain_matrix, bg = reference.stain_matrix, reference.white_point
 
     concentrations = decompose_to_concentrations(da, stain_matrix, bg).assign_coords(c=_CONCENTRATION_CHANNELS)
     names = ["hematoxylin", "eosin"] + (["residual"] if include_residual else [])

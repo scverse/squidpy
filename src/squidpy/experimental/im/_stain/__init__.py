@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from squidpy.experimental.im._stain._background import estimate_background_intensity
 from squidpy.experimental.im._stain._constants import (
     DEFAULT_LUMINOSITY_THRESHOLD,
     RUDERMAN_LAB_TO_LMS,
@@ -27,9 +26,9 @@ from squidpy.experimental.im._stain._mask import (
     luminosity_foreground_mask,
 )
 from squidpy.experimental.im._stain._normalize import (
-    apply_stain_normalization,
     decompose_stains,
     fit_stain_reference,
+    normalize_stains,
 )
 from squidpy.experimental.im._stain._reference import StainMethod, StainReference
 from squidpy.experimental.im._stain._reinhard import (
@@ -43,6 +42,7 @@ from squidpy.experimental.im._stain._validation import (
     reorder_to_canonical,
     validate_stain_matrix,
 )
+from squidpy.experimental.im._stain._white_point import estimate_white_point
 
 __all__ = [
     "DEFAULT_LUMINOSITY_THRESHOLD",
@@ -61,10 +61,10 @@ __all__ = [
     "absorbance_foreground_mask",
     "apply_decomposition",
     "apply_reinhard",
-    "apply_stain_normalization",
+    "normalize_stains",
     "complement_third_column",
     "decompose_stains",
-    "estimate_background_intensity",
+    "estimate_white_point",
     "fit_decomposition",
     "fit_reinhard",
     "fit_stain_reference",
