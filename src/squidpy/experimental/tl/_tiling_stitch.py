@@ -16,7 +16,7 @@ a calibrated probability.
 
 The labels element is **never** modified here -- only ``.obs`` columns are
 written.  Materialising a stitched labels element is opt-in via
-:func:`squidpy.experimental.im.make_stitched_labels`.
+:func:`!make_stitched_labels`.
 """
 
 from __future__ import annotations
@@ -62,22 +62,22 @@ class StitchParams:
     """
 
     distance_tol: float = 0.75
-    """Advanced: sub-pixel tolerance for "lies on a bbox edge"."""
+    """Sub-pixel tolerance for "lies on a bbox edge"."""
 
     min_edge_length: float = 5.0
-    """Advanced: absolute floor on cut-edge length (pixels)."""
+    """Absolute floor on cut-edge length (pixels)."""
 
     min_edge_length_ratio: float = 0.4
-    """Advanced: minimum cut-edge length relative to the cell's equivalent diameter."""
+    """Minimum cut-edge length relative to the cell's equivalent diameter."""
 
     min_edge_coverage: float = 0.5
-    """Advanced: minimum fraction of parallel-axis positions covered by near-edge contour points."""
+    """Minimum fraction of parallel-axis positions covered by near-edge contour points."""
 
     candidate_min_iou: float = 0.2
-    """Advanced: loose 1-D IoU floor at candidate enumeration."""
+    """Loose 1-D IoU floor at candidate enumeration."""
 
     close_radius: int = 3
-    """Advanced: morphological closing disk radius for the union mask.  Also the
+    """Morphological closing disk radius for the union mask.  Also the
     length scale for ``gap_proximity`` (normalised by ``2 * close_radius``)."""
 
     def __post_init__(self) -> None:
@@ -741,7 +741,7 @@ def assign_stitch_groups(
     composite, and assembles high-confidence pairs into stitch groups via
     union-find.  This only *annotates* which pieces belong together -- it does
     **not** modify the labels element.  Materialising a stitched labels element
-    is opt-in via :func:`squidpy.experimental.im.make_stitched_labels`.
+    is opt-in via :func:`!make_stitched_labels`.
 
     The score per pair is the flat (unweighted) mean of five geometric features
     in [0, 1]: ``iou`` (1-D extent overlap), ``endpoint_match`` (chord endpoints
