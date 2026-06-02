@@ -11,7 +11,7 @@ from spatialdata import SpatialData
 from spatialdata.models import Labels2DModel
 
 import squidpy as sq
-from tests.conftest import PlotTester, PlotTesterMeta
+from tests.conftest import DPI, PlotTester, PlotTesterMeta
 
 
 def _run_qc_and_stitch(sdata, **stitch_kwargs):
@@ -212,14 +212,20 @@ class TestStitchVisual(PlotTester, metaclass=PlotTesterMeta):
         colors[0] = 0.0
 
         y0, y1, x0, x1 = self._ZOOM
-        # Fixed subplot geometry (no tight_layout / titles): tight_layout sizes the
-        # axes from the title text extents, which differ across platforms (fonts),
-        # shifting the imshow sub-pixel so every cell edge mismatches. With a fixed
-        # layout the image renders to identical pixels on every platform.
-        fig, axes = plt.subplots(1, 2, figsize=(8, 4))
-        fig.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.98, wspace=0.04)
-        for ax, arr in zip(axes, [labels, regrouped], strict=True):  # left = before, right = after
-            ax.imshow(colors[arr][y0:y1, x0:x1], interpolation="nearest")
-            ax.axhline(self._SEAM_Y - y0, color="white", linestyle="--", linewidth=1.0)
-            ax.set_xticks([])
-            ax.set_yticks([])
+        before = colors[labels][y0:y1, x0:x1]  # coloured by label_id (cut pieces differ)
+        after = colors[regrouped][y0:y1, x0:x1]  # coloured by stitch_group_id (pieces share a colour)
+        seam = self._SEAM_Y - y0
+        for panel in (before, after):
+            panel[seam, ::4] = 1.0  # dashed seam marker, drawn into the array (no mpl line AA)
+        sep = np.ones((before.shape[0], 4, 3))  # white column between the two panels
+        combined = np.concatenate([before, sep, after], axis=1)
+
+        # Render 1:1 (figsize * DPI == array shape) on a full-figure axis. No
+        # upscaling -> no nearest-neighbour resampling, no text, no line AA, so the
+        # PNG is pixel-identical across platforms/matplotlib versions (the earlier
+        # tight_layout + upscaled imshow drifted by RMS ~53/28 between Linux/macOS).
+        h, w = combined.shape[:2]
+        fig = plt.figure(figsize=(w / DPI, h / DPI))
+        ax = fig.add_axes((0, 0, 1, 1))
+        ax.imshow(combined, interpolation="nearest")
+        ax.set_axis_off()
