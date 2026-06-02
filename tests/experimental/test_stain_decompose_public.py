@@ -53,7 +53,7 @@ class TestDecompositionThroughDispatchers:
         assert ref.stain_matrix.shape == (3, 3)
         assert ref.max_concentrations.shape == (2,)
 
-        out = normalize_stains(sdata, "img", ref)
+        out = normalize_stains(sdata, "img", ref, inplace=False)
         assert isinstance(out, xr.DataArray)
         assert out.sizes["c"] == 3
 
@@ -70,14 +70,28 @@ class TestDecompositionThroughDispatchers:
 class TestDecomposeStains:
     def test_returns_named_concentration_maps(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
-        conc = decompose_stains(sdata, "img", "macenko", white_point=_WHITE)
+        conc = decompose_stains(sdata, "img", "macenko", white_point=_WHITE, inplace=False)
         assert set(conc) == {"hematoxylin", "eosin", "residual"}
         assert all(set(c.dims) == {"y", "x"} for c in conc.values())  # one (y, x) map per stain
+        assert all(c.dtype == np.float16 for c in conc.values())  # default output_dtype
 
     def test_drop_residual(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
-        conc = decompose_stains(sdata, "img", "macenko", white_point=_WHITE, include_residual=False)
+        conc = decompose_stains(sdata, "img", "macenko", white_point=_WHITE, include_residual=False, inplace=False)
         assert set(conc) == {"hematoxylin", "eosin"}
+
+    def test_output_dtype_override(self) -> None:
+        sdata = _make_sdata(_synthetic_rgb())
+        conc = decompose_stains(sdata, "img", "macenko", white_point=_WHITE, output_dtype=np.float32, inplace=False)
+        assert all(c.dtype == np.float32 for c in conc.values())
+
+    def test_inplace_default_writes_derived_keys(self) -> None:
+        sdata = _make_sdata(_synthetic_rgb())
+        ref = fit_stain_reference(sdata, "img", method="macenko", white_point=_WHITE)
+        out = decompose_stains(sdata, "img", ref)  # inplace=True, prefix defaults to image_key
+        assert out is None
+        for stain in ("hematoxylin", "eosin", "residual"):
+            assert f"img_{stain}" in sdata.images
 
     def test_with_reference_writes_separate_images(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
@@ -87,6 +101,17 @@ class TestDecomposeStains:
         for stain in ("hematoxylin", "eosin", "residual"):
             assert f"conc_{stain}" in sdata.images
             assert list(sdata.images[f"conc_{stain}"].coords["c"].values) == [stain]
+
+    def test_atomic_write_aborts_on_any_existing_key(self) -> None:
+        sdata = _make_sdata(_synthetic_rgb())
+        ref = fit_stain_reference(sdata, "img", method="macenko", white_point=_WHITE)
+        # pre-occupy only the *eosin* target; the whole write must abort, leaving
+        # no half-written hematoxylin/residual behind.
+        sdata.images["conc_eosin"] = sdata.images["img"]
+        with pytest.raises(ValueError, match="would overwrite"):
+            decompose_stains(sdata, "img", ref, image_key_added="conc")
+        assert "conc_hematoxylin" not in sdata.images
+        assert "conc_residual" not in sdata.images
 
     def test_reinhard_reference_rejected(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
@@ -137,7 +162,7 @@ class TestDecompositionOnHnE:
         ref = sq.experimental.im.fit_stain_reference(sdata_hne, image_key, method=method)
         assert isinstance(ref, StainReference)
         assert ref.stain_matrix.shape == (3, 3)
-        normalized = sq.experimental.im.normalize_stains(sdata_hne, image_key, ref)
+        normalized = sq.experimental.im.normalize_stains(sdata_hne, image_key, ref, inplace=False)
         assert normalized.sizes["c"] == 3
-        conc = sq.experimental.im.decompose_stains(sdata_hne, image_key, ref)
+        conc = sq.experimental.im.decompose_stains(sdata_hne, image_key, ref, inplace=False)
         assert set(conc) == {"hematoxylin", "eosin", "residual"}

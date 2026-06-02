@@ -34,6 +34,18 @@ def dtype_max(dtype: np.dtype | type) -> float:
     return float(np.iinfo(dt).max) if np.issubdtype(dt, np.integer) else 1.0
 
 
+def cast_to_image_dtype(arr: xr.DataArray, out_dtype: np.dtype | type) -> xr.DataArray:
+    """Cast a clipped working-float image to its final dtype at the write boundary.
+
+    The reconstruction kernels (:func:`sda_to_rgb`, :func:`lab_ruderman_to_rgb`)
+    clip to ``out_dtype``'s valid range but stay in float; this performs the
+    deferred cast. Integer targets are **rounded** (so ``254.6 -> 255``, not
+    ``254``); float targets cast directly. Stays lazy on dask-backed input.
+    """
+    dt = np.dtype(out_dtype)
+    return arr.round().astype(dt) if np.issubdtype(dt, np.integer) else arr.astype(dt)
+
+
 def _check_channel_dim(arr: xr.DataArray) -> None:
     if _CHANNEL_DIM not in arr.dims:
         raise ValueError(f"Input must have a dimension named {_CHANNEL_DIM!r}; got dims {arr.dims}.")

@@ -18,11 +18,12 @@ from typing import Any, Literal
 import numpy as np
 import spatialdata as sd
 import xarray as xr
+from numpy.typing import DTypeLike
 from spatialdata.models import Image2DModel
 from spatialdata.transformations import get_transformation
 
 from squidpy._utils import _get_scale_factors
-from squidpy.experimental.im._stain._conversion import _check_channel_dim
+from squidpy.experimental.im._stain._conversion import _check_channel_dim, cast_to_image_dtype
 from squidpy.experimental.im._stain._decomposition import (
     MacenkoParams,
     VahadaneParams,
@@ -272,6 +273,8 @@ def normalize_stains(
     scale: str | Literal["auto"] = "auto",
     method_params: MethodParams = None,
     image_key_added: str | None = None,
+    inplace: bool = True,
+    output_dtype: DTypeLike | None = None,
     tissue_mask_key: str | None = None,
     preserve_background: bool = True,
 ) -> xr.DataArray | None:
@@ -293,11 +296,18 @@ def normalize_stains(
     method_params
         Params matching ``reference.method`` (instance, mapping, or ``None``).
     image_key_added
-        If ``None`` (default), return the lazy normalized DataArray and leave
-        ``sdata`` untouched. If given, write the result to
-        ``sdata.images[image_key_added]`` (rebuilding the pyramid for
-        multiscale sources, preserving transforms) and return ``None``.
-        Raises if the key already exists.
+        Key for the written image when ``inplace=True``. If ``None`` (default),
+        ``f"{image_key}_normalized"`` is used. Ignored when ``inplace=False``.
+    inplace
+        If ``True`` (default), write the normalized image to
+        ``sdata.images[image_key_added]`` (rebuilding the pyramid for multiscale
+        sources, preserving transforms) and return ``None``; raises if the key
+        already exists. If ``False``, leave ``sdata`` untouched and return the
+        lazy normalized :class:`~xarray.DataArray`.
+    output_dtype
+        Dtype of the result. If ``None`` (default), the source image's dtype is
+        used. The reconstruction is clipped to that dtype's valid range and
+        rounded (for integer dtypes) at the write boundary.
     tissue_mask_key
         Key of a tissue-label element in ``sdata.labels`` restricting the
         *source* statistics to tissue pixels. As for
@@ -311,10 +321,13 @@ def normalize_stains(
 
     Returns
     -------
-    The lazy normalized :class:`xarray.DataArray` if ``image_key_added`` is
-    ``None``, otherwise ``None``.
+    ``None`` if ``inplace=True`` (the image is written), otherwise the lazy
+    normalized :class:`xarray.DataArray`.
     """
     da = _resolve_image(sdata, image_key, scale, prefer="finest")
+    target_key = image_key_added if image_key_added is not None else f"{image_key}_normalized"
+    if inplace and target_key in sdata.images:
+        raise ValueError(f"image_key_added={target_key!r} already exists in sdata.images.")
     params = _resolve_method_params(reference.method, method_params)
     # Source statistics (Reinhard mu/sigma or the decomposition source matrix)
     # are reduced on a coarse level with a tissue mask; the lazy transform is
@@ -322,9 +335,11 @@ def normalize_stains(
     fit_rgb = _resolve_image(sdata, image_key, scale, prefer="coarsest")
     validate_rgb_range(fit_rgb)  # reject mis-typed source (e.g. 0-255 float) before the dtype-clipped reconstruction
     tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, fit_rgb, tissue_mask_key)
-    out_dtype = da.dtype  # reconstruct into the source image's dtype (clip + cast happen together)
+    out_dtype = da.dtype if output_dtype is None else np.dtype(output_dtype)  # clip range + final cast
     if reference.method == "reinhard":
-        normalized = apply_reinhard(da, reference, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask, out_dtype=out_dtype)
+        normalized = apply_reinhard(
+            da, reference, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask, out_dtype=out_dtype
+        )
     else:
         normalized = apply_decomposition(
             da, reference, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask, out_dtype=out_dtype
@@ -337,9 +352,14 @@ def normalize_stains(
         keep = _resolve_output_tissue_mask(sdata, image_key, da, tissue_mask_key)
         normalized = normalized.where(keep, da)
 
-    if image_key_added is None:
+    # Deferred cast at the write boundary: the reconstruction was kept in float
+    # (clipped to `out_dtype`'s range); round + cast here so the stored image is
+    # the requested dtype and integer background stays byte-identical.
+    normalized = cast_to_image_dtype(normalized, out_dtype)
+
+    if not inplace:
         return normalized
-    _write_image(sdata, sdata.images[image_key], image_key_added, normalized)
+    _write_image(sdata, sdata.images[image_key], target_key, normalized)
     return None
 
 
@@ -352,6 +372,8 @@ def decompose_stains(
     method_params: MethodParams = None,
     white_point: np.ndarray | None = None,
     image_key_added: str | None = None,
+    inplace: bool = True,
+    output_dtype: DTypeLike = np.float16,
     tissue_mask_key: str | None = None,
     include_residual: bool = True,
 ) -> dict[str, xr.DataArray] | None:
@@ -370,11 +392,20 @@ def decompose_stains(
         As for :func:`fit_stain_reference` (only used when a method name is
         given; a reference is projected as-is and needs no tissue mask).
     image_key_added
-        If ``None`` (default), return the concentration maps as a dict. If
-        given, used as a key *prefix*: each stain is written as its own
-        single-channel image ``sdata.images[f"{image_key_added}_{stain}"]``
-        (e.g. ``f"{image_key_added}_hematoxylin"``), and ``None`` is returned.
-        Raises if any target key already exists.
+        Key *prefix* for the written images when ``inplace=True``. If ``None``
+        (default), ``image_key`` is used, so each stain is written as its own
+        single-channel image ``sdata.images[f"{image_key}_{stain}"]`` (e.g.
+        ``f"{image_key}_hematoxylin"``). Ignored when ``inplace=False``.
+    inplace
+        If ``True`` (default), write each stain as a separate single-channel
+        image under the ``image_key_added`` prefix and return ``None``; the
+        write is atomic (all target keys are validated free before any is
+        written). If ``False``, leave ``sdata`` untouched and return the maps
+        as a dict.
+    output_dtype
+        Dtype of the concentration maps. Defaults to ``float16`` (half the
+        storage; ~3 significant figures, adequate for concentrations); pass
+        ``float32`` for strict quantification.
     include_residual
         If ``True`` (default), also produce the ``"residual"`` map. The residual
         is the absorbance along the complement direction - a diagnostic of
@@ -383,10 +414,10 @@ def decompose_stains(
 
     Returns
     -------
-    If ``image_key_added`` is ``None``, a ``dict`` mapping each stain name to
-    its ``(y, x)`` concentration :class:`~xarray.DataArray`
-    (``"hematoxylin"``, ``"eosin"``, and ``"residual"`` unless dropped).
-    Otherwise ``None`` (the maps are written as separate images).
+    ``None`` if ``inplace=True`` (the maps are written as separate images),
+    otherwise a ``dict`` mapping each stain name to its ``(y, x)`` concentration
+    :class:`~xarray.DataArray` (``"hematoxylin"``, ``"eosin"``, and
+    ``"residual"`` unless dropped).
     """
     da = _resolve_image(sdata, image_key, scale, prefer="finest")
     if isinstance(reference_or_method, StainReference):
@@ -408,14 +439,22 @@ def decompose_stains(
         )
         stain_matrix, bg = reference.stain_matrix, reference.white_point
 
-    concentrations = decompose_to_concentrations(da, stain_matrix, bg).assign_coords(c=_CONCENTRATION_CHANNELS)
     names = ["hematoxylin", "eosin"] + (["residual"] if include_residual else [])
+    prefix = image_key_added if image_key_added is not None else image_key
+    target_keys = [f"{prefix}_{name}" for name in names]
+    if inplace:  # validate all keys free up front, so a partial write can't leave a half-decomposed sdata
+        clashes = [k for k in target_keys if k in sdata.images]
+        if clashes:
+            raise ValueError(f"decompose_stains would overwrite existing image(s): {clashes}.")
 
-    if image_key_added is None:
+    concentrations = decompose_to_concentrations(da, stain_matrix, bg).assign_coords(c=_CONCENTRATION_CHANNELS)
+    concentrations = concentrations.astype(np.dtype(output_dtype))
+
+    if not inplace:
         return {name: concentrations.sel(c=name) for name in names}
 
     source = sdata.images[image_key]
-    for name in names:
+    for name, key in zip(names, target_keys, strict=True):
         # keep the c dim (length 1) so Image2DModel.parse accepts it
-        _write_image(sdata, source, f"{image_key_added}_{name}", concentrations.sel(c=[name]), c_coords=[name])
+        _write_image(sdata, source, key, concentrations.sel(c=[name]), c_coords=[name])
     return None
