@@ -212,13 +212,14 @@ class TestStitchVisual(PlotTester, metaclass=PlotTesterMeta):
         colors[0] = 0.0
 
         y0, y1, x0, x1 = self._ZOOM
+        # Fixed subplot geometry (no tight_layout / titles): tight_layout sizes the
+        # axes from the title text extents, which differ across platforms (fonts),
+        # shifting the imshow sub-pixel so every cell edge mismatches. With a fixed
+        # layout the image renders to identical pixels on every platform.
         fig, axes = plt.subplots(1, 2, figsize=(8, 4))
-        for ax, arr, title in zip(
-            axes, [labels, regrouped], ["by label_id (before)", "by stitch_group_id (after)"], strict=True
-        ):
+        fig.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.98, wspace=0.04)
+        for ax, arr in zip(axes, [labels, regrouped], strict=True):  # left = before, right = after
             ax.imshow(colors[arr][y0:y1, x0:x1], interpolation="nearest")
             ax.axhline(self._SEAM_Y - y0, color="white", linestyle="--", linewidth=1.0)
-            ax.set_title(title)
             ax.set_xticks([])
             ax.set_yticks([])
-        fig.tight_layout()
