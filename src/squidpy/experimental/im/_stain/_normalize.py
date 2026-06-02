@@ -23,6 +23,7 @@ from spatialdata.models import Image2DModel
 from spatialdata.transformations import get_transformation
 
 from squidpy._utils import _get_scale_factors
+from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import _check_channel_dim, cast_to_image_dtype
 from squidpy.experimental.im._stain._decomposition import (
     MacenkoParams,
@@ -212,11 +213,13 @@ def fit_stain_reference(
     sdata: sd.SpatialData,
     image_key: str,
     *,
-    method: StainMethod = "reinhard",
+    method: StainMethod = "macenko",
     scale: str | Literal["auto"] = "auto",
     method_params: MethodParams = None,
     white_point: np.ndarray | None = None,
     tissue_mask_key: str | None = None,
+    max_angle_deg: float = 45.0,
+    canonical_reference: Mapping[str, np.ndarray] | None = None,
 ) -> StainReference:
     """Fit a stain reference from an image in a :class:`~spatialdata.SpatialData` object.
 
@@ -227,8 +230,12 @@ def fit_stain_reference(
     image_key
         Key of the RGB image in ``sdata.images`` to fit on.
     method
-        Fitting method: ``"reinhard"`` (colour transfer), ``"macenko"`` or
-        ``"vahadane"`` (stain-matrix decomposition).
+        Fitting method: ``"macenko"`` (default) or ``"vahadane"`` (physical
+        stain-matrix decomposition, usable by both :func:`normalize_stains` and
+        :func:`decompose_stains`), or ``"reinhard"`` (faster statistical colour
+        transfer, no stain separation). Macenko is the default because its one
+        documented weakness - artifact pixels contaminating the fit - is removed
+        by the mandatory tissue mask.
     scale
         Scale level to fit on. ``"auto"`` (default) uses the coarsest level,
         which is cheap and sufficient for colour statistics.
@@ -248,6 +255,16 @@ def fit_stain_reference(
         tissue pixels. If ``None``, ``f"{image_key}_tissue"`` is used. A tissue
         mask is **required**: if neither exists, a :class:`KeyError` asks you to
         run :func:`!detect_tissue` first.
+    max_angle_deg
+        Tolerance of the H/E sanity gate for the decomposition methods: the fit
+        raises :class:`StainFittingError` if either recovered stain vector
+        deviates more than this many degrees from its canonical reference.
+        Default ``45``. Ignored by Reinhard.
+    canonical_reference
+        Canonical H/E reference for the decomposition methods, a mapping with
+        ``"hematoxylin"`` and ``"eosin"`` keys to ``(3,)`` RGB optical-density
+        unit vectors. Drives both the H/E column ordering and the deviation
+        gate. If ``None``, the Ruifrok H&E vectors are used. Ignored by Reinhard.
 
     Returns
     -------
@@ -262,7 +279,17 @@ def fit_stain_reference(
     if method == "reinhard":
         return fit_reinhard(da, params, tissue_mask=tissue_mask)
     bg = default_white_point(da) if white_point is None else np.asarray(white_point, np.float64)
-    return fit_decomposition(da, method, params, bg, tissue_mask=tissue_mask, image_key=image_key)
+    reference = RUIFROK_HE if canonical_reference is None else dict(canonical_reference)
+    return fit_decomposition(
+        da,
+        method,
+        params,
+        bg,
+        tissue_mask=tissue_mask,
+        image_key=image_key,
+        reference=reference,
+        max_angle_deg=max_angle_deg,
+    )
 
 
 def normalize_stains(

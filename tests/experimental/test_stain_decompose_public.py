@@ -16,7 +16,11 @@ from squidpy.experimental.im import (
 )
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import sda_to_rgb
-from squidpy.experimental.im._stain._validation import complement_third_column, reorder_to_canonical
+from squidpy.experimental.im._stain._validation import (
+    StainFittingError,
+    complement_third_column,
+    reorder_to_canonical,
+)
 
 _WHITE = np.array([255.0, 255.0, 255.0])
 
@@ -145,6 +149,26 @@ class TestUnknownMethod:
         sdata = _make_sdata(_synthetic_rgb())
         with pytest.raises(ValueError, match="Unknown method"):
             fit_stain_reference(sdata, "img", method="bogus")
+
+
+class TestDefaultMethodAndGate:
+    def test_default_method_is_macenko(self) -> None:
+        sdata = _make_sdata(_synthetic_rgb())
+        ref = fit_stain_reference(sdata, "img")  # no method -> default
+        assert ref.method == "macenko"
+
+    def test_max_angle_deg_gate_too_strict_raises(self) -> None:
+        # an impossibly tight tolerance trips the H/E sanity gate
+        sdata = _make_sdata(_synthetic_rgb())
+        with pytest.raises(StainFittingError, match="deviates"):
+            fit_stain_reference(sdata, "img", method="macenko", white_point=_WHITE, max_angle_deg=0.01)
+
+    def test_canonical_reference_passthrough(self) -> None:
+        # passing the Ruifrok canonical explicitly reproduces the default fit
+        sdata = _make_sdata(_synthetic_rgb())
+        default = fit_stain_reference(sdata, "img", method="macenko", white_point=_WHITE)
+        custom = fit_stain_reference(sdata, "img", method="macenko", white_point=_WHITE, canonical_reference=RUIFROK_HE)
+        np.testing.assert_allclose(default.stain_matrix, custom.stain_matrix)
 
 
 class TestDecompositionOnHnE:

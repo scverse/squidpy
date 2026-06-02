@@ -50,7 +50,11 @@ def _check_channel_dim(arr: xr.DataArray) -> None:
     if _CHANNEL_DIM not in arr.dims:
         raise ValueError(f"Input must have a dimension named {_CHANNEL_DIM!r}; got dims {arr.dims}.")
     if arr.sizes[_CHANNEL_DIM] != 3:
-        raise ValueError(f"Channel dimension {_CHANNEL_DIM!r} must have length 3; got {arr.sizes[_CHANNEL_DIM]}.")
+        raise ValueError(
+            f"stain normalization expects a 3-channel RGB image, but the {_CHANNEL_DIM!r} dimension has "
+            f"length {arr.sizes[_CHANNEL_DIM]}. RGBA (4-channel) and multi-channel images are not supported - "
+            "drop the alpha or extra channels first (e.g. keep the first 3 channels)."
+        )
 
 
 def _working_dtype(arr: xr.DataArray) -> np.dtype:

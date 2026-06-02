@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 import xarray as xr
 
+from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import (
     _apply_along_channel,
     _check_channel_dim,
@@ -179,11 +180,23 @@ def _vahadane_stain_matrix(od: np.ndarray, params: VahadaneParams) -> np.ndarray
     return _unit_columns(stains)
 
 
-def _stain_matrix(od: np.ndarray, method: StainMethod, params: Any, *, image_key: str | None) -> np.ndarray:
-    """Fit, canonicalise, complete and validate a ``(3, 3)`` stain matrix."""
+def _stain_matrix(
+    od: np.ndarray,
+    method: StainMethod,
+    params: Any,
+    *,
+    image_key: str | None,
+    reference: dict[str, np.ndarray] = RUIFROK_HE,
+    max_angle_deg: float = 45.0,
+) -> np.ndarray:
+    """Fit, canonicalise, complete and validate a ``(3, 3)`` stain matrix.
+
+    ``reference`` (the canonical H/E vectors) drives both the column ordering and
+    the deviation gate; ``max_angle_deg`` is the gate tolerance.
+    """
     raw = _macenko_stain_matrix(od, params.alpha) if method == "macenko" else _vahadane_stain_matrix(od, params)
-    matrix = complement_third_column(reorder_to_canonical(raw))
-    validate_stain_matrix(matrix, image_key=image_key)
+    matrix = complement_third_column(reorder_to_canonical(raw, reference))
+    validate_stain_matrix(matrix, reference=reference, max_angle_deg=max_angle_deg, image_key=image_key)
     return matrix
 
 
@@ -205,10 +218,12 @@ def fit_decomposition(
     *,
     tissue_mask: np.ndarray | None = None,
     image_key: str | None = None,
+    reference: dict[str, np.ndarray] = RUIFROK_HE,
+    max_angle_deg: float = 45.0,
 ) -> StainReference:
     """Fit a decomposition :class:`StainReference` (stain matrix + max concentrations)."""
     od = _tissue_od(image_rgb, white_point, params.beta, tissue_mask=tissue_mask, image_key=image_key)
-    matrix = _stain_matrix(od, method, params, image_key=image_key)
+    matrix = _stain_matrix(od, method, params, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg)
     return StainReference(
         method=method,
         stain_matrix=matrix,

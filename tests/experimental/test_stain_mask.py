@@ -46,7 +46,7 @@ class TestLuminosityForegroundMask:
 
     def test_non_three_channel_raises(self) -> None:
         values = np.zeros((2, 8, 8))
-        with pytest.raises(ValueError, match="length 3"):
+        with pytest.raises(ValueError, match="3-channel RGB"):
             luminosity_foreground_mask(xr.DataArray(values, dims=("c", "y", "x")), 0.8)
 
 
@@ -66,5 +66,5 @@ class TestAbsorbanceForegroundMask:
 
     def test_non_three_channel_raises(self) -> None:
         values = np.zeros((2, 8, 8))
-        with pytest.raises(ValueError, match="length 3"):
+        with pytest.raises(ValueError, match="3-channel RGB"):
             absorbance_foreground_mask(xr.DataArray(values, dims=("c", "y", "x")), _WHITE)

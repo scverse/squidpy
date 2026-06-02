@@ -103,5 +103,5 @@ class TestInputValidation:
 
     def test_wrong_channel_length_raises(self) -> None:
         arr = xr.DataArray(np.zeros((4, 4, 4)), dims=("y", "x", "c"))
-        with pytest.raises(ValueError, match="length 3"):
+        with pytest.raises(ValueError, match="3-channel RGB"):
             rgb_to_sda(arr, _TEST_WHITE)
