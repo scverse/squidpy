@@ -261,7 +261,7 @@ def _extract_cut_edges(
     min_edge_length: float = _STITCH_DEFAULTS.min_edge_length,
     min_edge_length_ratio: float = _STITCH_DEFAULTS.min_edge_length_ratio,
     min_edge_coverage: float = _STITCH_DEFAULTS.min_edge_coverage,
-) -> list[_CutEdge]:
+) -> tuple[list[_CutEdge], dict[int, np.ndarray]]:
     """Extract cardinal-aligned bbox-edge runs (cut-edge candidates) per outlier.
 
     For each outlier cell:
@@ -275,12 +275,19 @@ def _extract_cut_edges(
 
     Cells at a 4-tile corner produce 2 perpendicular edges; mid-stripe pieces
     can produce 2 parallel edges.
+
+    Returns
+    -------
+    The list of cut edges and, as a by-product of the per-cell crop already
+    read here, a ``{label_id -> boolean bbox mask}`` dict that lets the scoring
+    pass reconstruct merge unions in memory without re-reading the labels array.
     """
     outlier_list = [int(x) for x in outlier_ids]
     if bboxes is None:
         bboxes = _compute_outlier_bboxes(labels_da, outlier_list)
 
     edges: list[_CutEdge] = []
+    outlier_crops: dict[int, np.ndarray] = {}
     for lid in outlier_list:
         bbox = bboxes.get(lid)
         if bbox is None:
@@ -288,10 +295,11 @@ def _extract_cut_edges(
         min_r, min_c, max_r, max_c = bbox
 
         crop_arr = _read_bbox_slice(labels_da, min_r, max_r, min_c, max_c)
-        mask = (crop_arr == lid).astype(np.float32)
-        if not mask.any():
+        cell_mask = crop_arr == lid  # boolean bbox mask; reused by the scoring pass
+        if not cell_mask.any():
             continue
-        mask = np.pad(mask, 1, mode="constant", constant_values=0)
+        outlier_crops[lid] = cell_mask
+        mask = np.pad(cell_mask.astype(np.float32), 1, mode="constant", constant_values=0)
         contour = largest_contour(mask)
         if contour is None:
             continue
@@ -335,7 +343,7 @@ def _extract_cut_edges(
                 )
             )
 
-    return edges
+    return edges, outlier_crops
 
 
 # Pair candidate enumeration + features
@@ -346,46 +354,54 @@ def _extent_overlap(a: tuple[float, float], b: tuple[float, float]) -> float:
 
 
 def _merge_shape_features(
-    labels_da: xr.DataArray | np.ndarray,
-    cell_ids: Iterable[int],
+    cell_a: int,
+    cell_b: int,
     bboxes: dict[int, tuple[int, int, int, int]],
+    outlier_crops: dict[int, np.ndarray],
     close_radius: int = _STITCH_DEFAULTS.close_radius,
+    *,
+    H: int,
+    W: int,
 ) -> dict[str, float]:
-    """Materialise the union of given pieces, close the gap, and return shape stats.
+    """Reconstruct the union of two pieces, close the gap, and return shape stats.
 
     Solidity (area / convex_hull_area) and compactness (4*pi*A / P^2) drop
     sharply when two unrelated cells are joined -- the union is concave at the
     join.  ``merge_compactness`` is typically the strongest single
     discriminator between true cuts and false merges.
+
+    The union mask is assembled in memory from the per-cell boolean crops
+    already collected by :func:`_extract_cut_edges`, so this never re-reads the
+    (possibly dask-backed) labels array -- which was the hot-loop cost, as the
+    old version fetched a crop once per candidate pair.
     """
-    cell_list = [int(c) for c in cell_ids]
-    if not cell_list:
-        return {"merge_solidity": 0.0, "merge_compactness": 0.0}
+    zero = {"merge_solidity": 0.0, "merge_compactness": 0.0}
+    if cell_a not in bboxes or cell_b not in bboxes:
+        return zero
+    if cell_a not in outlier_crops or cell_b not in outlier_crops:
+        return zero
 
-    # Union bbox + padding to give morphological closing room.
-    rs = [bboxes[c][0] for c in cell_list if c in bboxes]
-    cs = [bboxes[c][1] for c in cell_list if c in bboxes]
-    re = [bboxes[c][2] for c in cell_list if c in bboxes]
-    ce = [bboxes[c][3] for c in cell_list if c in bboxes]
-    if not rs:
-        return {"merge_solidity": 0.0, "merge_compactness": 0.0}
+    r0a, c0a, r1a, c1a = bboxes[cell_a]
+    r0b, c0b, r1b, c1b = bboxes[cell_b]
+    # Padded + border-clamped union bbox. Identical bounds to the old single
+    # `np.isin` crop, so the reconstructed mask matches it pixel-for-pixel.
     pad = close_radius + 2
-    H = labels_da.shape[-2] if hasattr(labels_da, "shape") else int(labels_da.sizes["y"])
-    W = labels_da.shape[-1] if hasattr(labels_da, "shape") else int(labels_da.sizes["x"])
-    r0 = max(min(rs) - pad, 0)
-    c0 = max(min(cs) - pad, 0)
-    r1 = min(max(re) + pad, H)
-    c1 = min(max(ce) + pad, W)
+    r0 = max(min(r0a, r0b) - pad, 0)
+    c0 = max(min(c0a, c0b) - pad, 0)
+    r1 = min(max(r1a, r1b) + pad, H)
+    c1 = min(max(c1a, c1b) + pad, W)
 
-    crop = _read_bbox_slice(labels_da, r0, r1, c0, c1)
-    mask = np.isin(crop, cell_list)
+    mask = np.zeros((r1 - r0, c1 - c0), dtype=bool)
+    # Place each cell's pre-fetched bbox mask at its offset within the union.
+    mask[r0a - r0 : r1a - r0, c0a - c0 : c1a - c0] |= outlier_crops[cell_a]
+    mask[r0b - r0 : r1b - r0, c0b - c0 : c1b - c0] |= outlier_crops[cell_b]
     if not mask.any():
-        return {"merge_solidity": 0.0, "merge_compactness": 0.0}
+        return zero
 
     closed = binary_closing(mask, structure=morph_disk(close_radius))
     cc = cc_label(closed, connectivity=2)
     if cc.max() == 0:
-        return {"merge_solidity": 0.0, "merge_compactness": 0.0}
+        return zero
     sizes = np.bincount(cc.ravel())
     sizes[0] = 0
     biggest = int(sizes.argmax())
@@ -499,19 +515,30 @@ def _score_pair_features(features: dict[str, float]) -> float:
 
 def _score_pairs(
     candidates: list[tuple[_CutEdge, _CutEdge, dict[str, float]]],
-    labels_da: xr.DataArray | np.ndarray,
     bboxes: dict[int, tuple[int, int, int, int]],
+    outlier_crops: dict[int, np.ndarray],
     min_confidence: float,
     close_radius: int = _STITCH_DEFAULTS.close_radius,
+    *,
+    H: int,
+    W: int,
 ) -> list[_StitchPair]:
     """Compute shape features per candidate, score, and keep pairs >= min_confidence.
 
     One entry per ``(cell_a, cell_b, axis)`` (keeping max confidence on duplicates).
     """
     scored: list[_StitchPair] = []
+    n_features = len(_SCORE_FEATURES)
     for e, c, geom in candidates:
-        shape = _merge_shape_features(labels_da, [e.cell_id, c.cell_id], bboxes, close_radius=close_radius)
-        feats = {**geom, **shape, "gap_proximity": _gap_proximity(geom["gap"], close_radius)}
+        gap_prox = _gap_proximity(geom["gap"], close_radius)
+        # Optimistic upper bound on the flat-mean score: the two shape features
+        # (merge_compactness, merge_solidity) are each <= 1, so if even the best
+        # case can't reach min_confidence, skip the costly union reconstruction.
+        max_possible = (geom["iou"] + geom["endpoint_match"] + gap_prox + 2.0) / n_features
+        if max_possible < min_confidence:
+            continue
+        shape = _merge_shape_features(e.cell_id, c.cell_id, bboxes, outlier_crops, close_radius=close_radius, H=H, W=W)
+        feats = {**geom, **shape, "gap_proximity": gap_prox}
         confidence = _score_pair_features(feats)
         if confidence < min_confidence:
             continue
@@ -808,7 +835,7 @@ def assign_stitch_groups(
                 f"{len(missing)} outlier label_id(s) flagged in the QC table do not appear "
                 f"in '{labels_key}' (e.g. {missing[:5]}); they will not be stitched."
             )
-        edges = _extract_cut_edges(
+        edges, outlier_crops = _extract_cut_edges(
             labels_da,
             outlier_ids,
             bboxes=bboxes,
@@ -817,8 +844,11 @@ def assign_stitch_groups(
             min_edge_length_ratio=params.min_edge_length_ratio,
             min_edge_coverage=params.min_edge_coverage,
         )
+        H, W = labels_da.shape[-2], labels_da.shape[-1]
         candidates = _enumerate_pair_candidates(edges, max_gap=max_gap, candidate_min_iou=params.candidate_min_iou)
-        pairs = _score_pairs(candidates, labels_da, bboxes, min_confidence, close_radius=params.close_radius)
+        pairs = _score_pairs(
+            candidates, bboxes, outlier_crops, min_confidence, close_radius=params.close_radius, H=H, W=W
+        )
         groups, confidences = _assemble_groups(pairs, outlier_ids, max_group_size=max_group_size, max_gap=max_gap)
 
     # Write .obs columns with three states distinguished by stitch_confidence:
