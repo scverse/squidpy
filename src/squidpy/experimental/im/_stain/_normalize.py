@@ -81,7 +81,7 @@ def _resolve_mask_key_and_scale(
     """Resolve the (mandatory) tissue-mask key and the label scale closest to ``target_da``.
 
     Shared by the two mask consumers below. Consumes a
-    :func:`~squidpy.experimental.im.detect_tissue` labels element - raises if
+    :func:`!detect_tissue` labels element - raises if
     none exists.
     """
     mask_key = resolve_tissue_mask(sdata, image_key, "auto", tissue_mask_key, auto_create=False)
@@ -183,7 +183,7 @@ def estimate_white_point(
     Opt-in alternative to the fixed dtype-aware default white point, for a slide
     whose unstained background is genuinely not full white. Samples the
     per-channel median over **non-tissue** pixels (background = the complement of
-    the :func:`~squidpy.experimental.im.detect_tissue` mask).
+    the :func:`!detect_tissue` mask).
 
     Parameters
     ----------
@@ -244,10 +244,10 @@ def fit_stain_reference(
         known non-white background. Ignored by Reinhard.
     tissue_mask_key
         Key of a tissue-label element in ``sdata.labels`` (as produced by
-        :func:`~squidpy.experimental.im.detect_tissue`) restricting the fit to
+        :func:`!detect_tissue`) restricting the fit to
         tissue pixels. If ``None``, ``f"{image_key}_tissue"`` is used. A tissue
         mask is **required**: if neither exists, a :class:`KeyError` asks you to
-        run :func:`~squidpy.experimental.im.detect_tissue` first.
+        run :func:`!detect_tissue` first.
 
     Returns
     -------
