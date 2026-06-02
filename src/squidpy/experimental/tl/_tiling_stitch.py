@@ -49,6 +49,9 @@ __all__ = ["StitchParams", "assign_stitch_groups"]
 
 # The geometric features whose flat mean is the stitch score.
 _SCORE_FEATURES: tuple[str, ...] = ("iou", "endpoint_match", "merge_compactness", "merge_solidity", "gap_proximity")
+# The subset computed by the expensive merge-union step; the rest are cheap
+# geometry features known before it, which drives the scoring early-prune.
+_SHAPE_FEATURES: tuple[str, ...] = ("merge_compactness", "merge_solidity")
 
 
 @dataclass(slots=True)
@@ -513,6 +516,16 @@ def _score_pair_features(features: dict[str, float]) -> float:
     return float(sum(features[name] for name in _SCORE_FEATURES) / len(_SCORE_FEATURES))
 
 
+def _max_achievable_score(known_features: dict[str, float]) -> float:
+    """Upper bound on the stitch score from the cheap geometry features alone.
+
+    The deferred shape features (:data:`_SHAPE_FEATURES`) are each in ``[0, 1]``,
+    so assume their best case. Built on :func:`_score_pair_features` so the bound
+    can never drift from the real score if the feature set or weighting changes.
+    """
+    return _score_pair_features({**known_features, **dict.fromkeys(_SHAPE_FEATURES, 1.0)})
+
+
 def _score_pairs(
     candidates: list[tuple[_CutEdge, _CutEdge, dict[str, float]]],
     bboxes: dict[int, tuple[int, int, int, int]],
@@ -528,17 +541,14 @@ def _score_pairs(
     One entry per ``(cell_a, cell_b, axis)`` (keeping max confidence on duplicates).
     """
     scored: list[_StitchPair] = []
-    n_features = len(_SCORE_FEATURES)
     for e, c, geom in candidates:
-        gap_prox = _gap_proximity(geom["gap"], close_radius)
-        # Optimistic upper bound on the flat-mean score: the two shape features
-        # (merge_compactness, merge_solidity) are each <= 1, so if even the best
-        # case can't reach min_confidence, skip the costly union reconstruction.
-        max_possible = (geom["iou"] + geom["endpoint_match"] + gap_prox + 2.0) / n_features
-        if max_possible < min_confidence:
+        known = {**geom, "gap_proximity": _gap_proximity(geom["gap"], close_radius)}
+        # Skip the costly union reconstruction when even the best case for the
+        # deferred shape features can't reach min_confidence.
+        if _max_achievable_score(known) < min_confidence:
             continue
         shape = _merge_shape_features(e.cell_id, c.cell_id, bboxes, outlier_crops, close_radius=close_radius, H=H, W=W)
-        feats = {**geom, **shape, "gap_proximity": gap_prox}
+        feats = {**known, **shape}
         confidence = _score_pair_features(feats)
         if confidence < min_confidence:
             continue
