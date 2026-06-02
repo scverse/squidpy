@@ -257,7 +257,7 @@ def fit_stain_reference(
         run :func:`!detect_tissue` first.
     max_angle_deg
         Tolerance of the H/E sanity gate for the decomposition methods: the fit
-        raises :class:`StainFittingError` if either recovered stain vector
+        raises :class:`!StainFittingError` if either recovered stain vector
         deviates more than this many degrees from its canonical reference.
         Default ``45``. Ignored by Reinhard.
     canonical_reference
