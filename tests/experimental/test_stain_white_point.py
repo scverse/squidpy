@@ -9,7 +9,7 @@ from spatialdata.models import Image2DModel, Labels2DModel
 from squidpy.experimental.im import estimate_white_point
 from squidpy.experimental.im._stain._conversion import dtype_max
 from squidpy.experimental.im._stain._validation import StainFittingError
-from squidpy.experimental.im._stain._white_point import default_white_point
+from squidpy.experimental.im._stain._white_point import default_white_point, validate_rgb_range
 
 
 def _rgb(values: np.ndarray) -> xr.DataArray:
@@ -36,15 +36,21 @@ class TestDefaultWhitePoint:
         rgb = _rgb(np.full((3, 8, 8), 0.8, dtype=np.float32))
         np.testing.assert_array_equal(default_white_point(rgb), [1.0, 1.0, 1.0])
 
+
+class TestValidateRgbRange:
+    def test_passes_on_uint8(self) -> None:
+        validate_rgb_range(_rgb(np.full((3, 8, 8), 200, dtype=np.uint8)))  # no raise
+
+    def test_passes_on_float_unit_range(self) -> None:
+        validate_rgb_range(_rgb(np.full((3, 8, 8), 0.8, dtype=np.float32)))  # no raise
+
     def test_raises_on_8bit_in_uint16(self) -> None:
-        rgb = _rgb(np.full((3, 8, 8), 200, dtype=np.uint16))  # uint16 container, 8-bit values
         with pytest.raises(ValueError, match="8-bit data stored in"):
-            default_white_point(rgb)
+            validate_rgb_range(_rgb(np.full((3, 8, 8), 200, dtype=np.uint16)))
 
     def test_raises_on_0_255_float(self) -> None:
-        rgb = _rgb(np.full((3, 8, 8), 200.0, dtype=np.float32))  # float, but 0-255 valued
         with pytest.raises(ValueError, match="stored as float"):
-            default_white_point(rgb)
+            validate_rgb_range(_rgb(np.full((3, 8, 8), 200.0, dtype=np.float32)))
 
 
 class TestEstimateWhitePoint:

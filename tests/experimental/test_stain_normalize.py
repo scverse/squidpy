@@ -143,6 +143,19 @@ class TestTissueMaskMandate:
         with pytest.raises(KeyError, match="not found in sdata.labels"):
             fit_stain_reference(sdata, "img", tissue_mask_key="nope")
 
+    def test_float_0_255_source_rejected_on_apply(self, rgb_values: np.ndarray) -> None:
+        # A float image holding 0-255 values would otherwise clip to [0, 1] in the
+        # reconstruction (dtype_max(float)=1.0); apply must reject it, not silently destroy it.
+        sdata = _make_sdata(rgb_values)  # uint8
+        ref = fit_stain_reference(sdata, "img")
+        floaty = rgb_values.astype(np.float32)
+        sdata.images["floaty"] = Image2DModel.parse(floaty, dims=("c", "y", "x"))
+        sdata.labels["floaty_tissue"] = Labels2DModel.parse(
+            np.ones(floaty.shape[-2:], dtype=np.uint32), dims=("y", "x")
+        )
+        with pytest.raises(ValueError, match="stored as float"):
+            normalize_stains(sdata, "floaty", ref)
+
     def test_mask_is_used_in_the_fit(self, rgb_values: np.ndarray) -> None:
         # A different tissue region yields different channel statistics, proving
         # the mask actually drives the fit (not silently ignored).
@@ -168,7 +181,7 @@ class TestPreserveBackground:
         sdata.labels["img_tissue"] = Labels2DModel.parse(partial, dims=("y", "x"))
 
         # a differently-coloured reference so the transform is non-trivial
-        shifted = np.clip(rgb_values * np.array([1.3, 0.8, 1.1])[:, None, None], 0, 255).astype(np.float32)
+        shifted = np.clip(rgb_values * np.array([1.3, 0.8, 1.1])[:, None, None], 0, 255).astype(np.uint8)
         sdata.images["ref_img"] = Image2DModel.parse(shifted, dims=("c", "y", "x"))
         sdata.labels["ref_img_tissue"] = Labels2DModel.parse(np.ones((h, w), dtype=np.uint32), dims=("y", "x"))
         ref = fit_stain_reference(sdata, "ref_img")
@@ -204,7 +217,7 @@ class TestStainNormalizationVisual(PlotTester, metaclass=PlotTesterMeta):
         # staining batch, so the before/after panels are visibly distinct.
         da_rgb = get_element_data(sdata_hne.images[image_key], "auto", "image", image_key).astype("float32")
         weights = xr.DataArray([1.4, 1.0, 0.6], dims="c", coords={"c": da_rgb.coords["c"]})
-        shifted = (da_rgb * weights).clip(0, 255)
+        shifted = (da_rgb * weights).clip(0, 255).astype("uint8")
         sdata_hne.images["hne_shifted"] = Image2DModel.parse(shifted.data, dims=shifted.dims)
 
         # `hne_shifted` shares geometry with `image_key`; reuse its tissue mask.

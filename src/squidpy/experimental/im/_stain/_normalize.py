@@ -39,7 +39,11 @@ from squidpy.experimental.im._stain._reinhard import (
     apply_reinhard,
     fit_reinhard,
 )
-from squidpy.experimental.im._stain._white_point import default_white_point, white_point_from_background
+from squidpy.experimental.im._stain._white_point import (
+    default_white_point,
+    validate_rgb_range,
+    white_point_from_background,
+)
 from squidpy.experimental.im._utils import (
     _choose_label_scale_for_image,
     get_element_data,
@@ -70,20 +74,31 @@ def _resolve_image(
     return da
 
 
+def _resolve_mask_key_and_scale(
+    sdata: sd.SpatialData, image_key: str, target_da: xr.DataArray, tissue_mask_key: str | None
+) -> tuple[str, str, tuple[int, int]]:
+    """Resolve the (mandatory) tissue-mask key and the label scale closest to ``target_da``.
+
+    Shared by the two mask consumers below. Consumes a
+    :func:`~squidpy.experimental.im.detect_tissue` labels element - raises if
+    none exists.
+    """
+    mask_key = resolve_tissue_mask(sdata, image_key, "auto", tissue_mask_key, auto_create=False)
+    target_hw = (int(target_da.sizes["y"]), int(target_da.sizes["x"]))
+    label_scale = _choose_label_scale_for_image(sdata.labels[mask_key], target_hw)
+    return mask_key, label_scale, target_hw
+
+
 def _resolve_tissue_bool_mask(
     sdata: sd.SpatialData, image_key: str, fit_da: xr.DataArray, tissue_mask_key: str | None
 ) -> np.ndarray:
-    """Return a ``(y, x)`` boolean tissue mask aligned to ``fit_da``.
+    """Return a materialised ``(y, x)`` boolean tissue mask aligned to ``fit_da``.
 
-    Consumes a :func:`~squidpy.experimental.im.detect_tissue` labels element
-    (mandatory - raises if none exists), picks the label scale closest to
-    ``fit_da``, materialises it, and nearest-resizes to ``fit_da``'s ``(y, x)``
-    when the resolutions differ. The stain fits run on a coarse level, so the
-    mask stays small.
+    For the (coarse) fit: nearest-resizes to ``fit_da``'s ``(y, x)`` when the
+    closest label scale differs. The fits run on a coarse level, so the mask
+    stays small.
     """
-    mask_key = resolve_tissue_mask(sdata, image_key, "auto", tissue_mask_key, auto_create=False)
-    target_hw = (int(fit_da.sizes["y"]), int(fit_da.sizes["x"]))
-    label_scale = _choose_label_scale_for_image(sdata.labels[mask_key], target_hw)
+    mask_key, label_scale, target_hw = _resolve_mask_key_and_scale(sdata, image_key, fit_da, tissue_mask_key)
     mask = get_mask_materialized(sdata, mask_key, label_scale) > 0
     if mask.shape != target_hw:
         from skimage.transform import resize
@@ -103,9 +118,7 @@ def _resolve_output_tissue_mask(
     shares the image's scale factors, so the matching level usually lines up
     exactly; only a residual size mismatch forces a (small) eager resize.
     """
-    mask_key = resolve_tissue_mask(sdata, image_key, "auto", tissue_mask_key, auto_create=False)
-    target_hw = (int(target_da.sizes["y"]), int(target_da.sizes["x"]))
-    label_scale = _choose_label_scale_for_image(sdata.labels[mask_key], target_hw)
+    mask_key, label_scale, target_hw = _resolve_mask_key_and_scale(sdata, image_key, target_da, tissue_mask_key)
     coords = {d: target_da.coords[d] for d in ("y", "x") if d in target_da.coords}
     mask = get_element_data(sdata.labels[mask_key], label_scale, "label", mask_key).squeeze() > 0
     if (int(mask.sizes["y"]), int(mask.sizes["x"])) == target_hw:
@@ -180,6 +193,8 @@ def estimate_white_point(
         tissue mask is required, as for :func:`fit_stain_reference`.
     scale
         Scale level to sample on. ``"auto"`` (default) uses the coarsest level.
+        The sampled level is materialised to take the median, so keep this
+        coarse - do not pass a fine level on a whole-slide image.
 
     Returns
     -------
@@ -187,6 +202,7 @@ def estimate_white_point(
     :func:`fit_stain_reference` / :func:`decompose_stains`.
     """
     da = _resolve_image(sdata, image_key, scale, prefer="coarsest")
+    validate_rgb_range(da)
     tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, da, tissue_mask_key)
     return white_point_from_background(da, ~tissue_mask)
 
@@ -239,6 +255,7 @@ def fit_stain_reference(
     if method not in _VALID_METHODS:
         raise ValueError(f"Unknown method {method!r}; expected one of {list(_VALID_METHODS)}.")
     da = _resolve_image(sdata, image_key, scale, prefer="coarsest")
+    validate_rgb_range(da)
     params = _resolve_method_params(method, method_params)
     tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, da, tissue_mask_key)
     if method == "reinhard":
@@ -303,6 +320,7 @@ def normalize_stains(
     # are reduced on a coarse level with a tissue mask; the lazy transform is
     # then applied to the full-resolution `da`.
     fit_rgb = _resolve_image(sdata, image_key, scale, prefer="coarsest")
+    validate_rgb_range(fit_rgb)  # reject mis-typed source (e.g. 0-255 float) before the dtype-clipped reconstruction
     tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, fit_rgb, tissue_mask_key)
     out_dtype = da.dtype  # reconstruct into the source image's dtype (clip + cast happen together)
     if reference.method == "reinhard":

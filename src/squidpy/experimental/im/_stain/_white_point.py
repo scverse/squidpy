@@ -20,12 +20,20 @@ from squidpy.experimental.im._stain._validation import StainFittingError
 
 
 def default_white_point(rgb: xr.DataArray) -> np.ndarray:
-    """Dtype-aware default white point ``I_0`` (full white), with a range check.
+    """Dtype-aware default white point ``I_0`` (full white) - pure, no validation.
 
-    Returns ``(3,)`` filled with the dtype's full-white value. Raises with
-    guidance when the data clearly does not match its dtype's range (e.g. 8-bit
-    values stored in a uint16 container, or 0-255 values stored as float), since
-    that would silently mis-scale the absorbance.
+    Returns ``(3,)`` filled with the dtype's full-white value (255 / 65535 / 1.0).
+    Call :func:`validate_rgb_range` separately to reject mis-typed data.
+    """
+    return np.full(3, dtype_max(rgb.dtype), dtype=np.float64)
+
+
+def validate_rgb_range(rgb: xr.DataArray) -> None:
+    """Raise if the image's values clearly don't match its dtype's range.
+
+    Guards every absorbance entry point (fit / apply / estimate) against silently
+    mis-scaling or clipping: 8-bit values in a wider integer container, or 0-255
+    values stored as float. The escape is to pass an explicit ``white_point``.
     """
     m = dtype_max(rgb.dtype)
     data_max = float(np.asarray(rgb.max()))
@@ -38,9 +46,8 @@ def default_white_point(rgb: xr.DataArray) -> np.ndarray:
     elif data_max > 1.5:
         raise ValueError(
             f"float image but the maximum value is {data_max:.1f} (> 1) - this looks like 0-255 data "
-            "stored as float. Rescale to [0, 1], or pass `white_point`."
+            "stored as float. Rescale to [0, 1] or store as uint8."
         )
-    return np.full(3, m, dtype=np.float64)
 
 
 def white_point_from_background(rgb: xr.DataArray, background_mask: np.ndarray) -> np.ndarray:
