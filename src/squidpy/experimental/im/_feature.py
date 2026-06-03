@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Literal, NamedTuple
+from typing import Literal, NamedTuple
 
 import anndata as ad
 import numpy as np
@@ -280,25 +280,15 @@ def _featurize_tile(
 # ---------------------------------------------------------------------------
 
 
-def _regionprops_to_row(region: Any, props: frozenset[str]) -> dict[str, float]:
-    """Extract scalar features from a single regionprops object."""
-    row: dict[str, float] = {}
-    for prop in props:
-        try:
-            value = getattr(region, prop)
-            arr = np.asarray(value)
-            if arr.ndim == 0:
-                row[prop] = float(arr)
-            elif arr.ndim == 1:
-                for i, v in enumerate(arr):
-                    row[f"{prop}_{i}"] = float(v)
-            elif arr.ndim == 2:
-                for i in range(arr.shape[0]):
-                    for j in range(arr.shape[1]):
-                        row[f"{prop}_{i}x{j}"] = float(arr[i, j])
-        except (ValueError, TypeError, AttributeError):
-            continue
-    return row
+def _rename_intensity_col(col: str, channel_names: list[str]) -> str:
+    """Map a multichannel ``regionprops_table`` column to ``<prop>_<channel>``.
+
+    A multichannel ``intensity_image`` makes skimage suffix each intensity prop
+    with the channel index (``intensity_mean-0``); rename that to the channel's
+    name (``intensity_mean_DAPI``).
+    """
+    prop, _, idx = col.rpartition("-")
+    return f"{prop}_{channel_names[int(idx)]}"
 
 
 def _compute_skimage_features(
@@ -308,21 +298,32 @@ def _compute_skimage_features(
     intensity_props: frozenset[str] | None,
     channel_names: list[str],
 ) -> pd.DataFrame:
-    """Compute skimage regionprops features for all cells in a tile."""
+    """Compute skimage regionprops features for all cells in a tile.
+
+    Uses :func:`skimage.measure.regionprops_table` (one vectorised Cython pass
+    over all cells, all channels) instead of a per-region Python loop. Morphology
+    props keep skimage's native flattened names (e.g. ``centroid-0``,
+    ``inertia_tensor-0-0``); intensity props are computed for every channel in a
+    single multichannel call and renamed ``<prop>_<channel>``.
+    """
     parts: list[pd.DataFrame] = []
 
     if label_props is not None:
-        regions = measure.regionprops(labels)
-        rows = {r.label: _regionprops_to_row(r, label_props) for r in regions}
-        parts.append(pd.DataFrame.from_dict(rows, orient="index"))
+        table = measure.regionprops_table(labels, properties=["label", *sorted(label_props)])
+        index = table.pop("label")
+        parts.append(pd.DataFrame(table, index=index))
 
     if intensity_props is not None:
-        for ch_idx, ch_name in enumerate(channel_names):
-            regions = measure.regionprops(labels, intensity_image=image[ch_idx])
-            rows = {r.label: _regionprops_to_row(r, intensity_props) for r in regions}
-            df = pd.DataFrame.from_dict(rows, orient="index")
-            df = df.rename(columns=lambda c, _ch=ch_name: f"{c}_{_ch}")
-            parts.append(df)
+        # One multichannel pass: moveaxis -> (y, x, c) so skimage treats the last
+        # axis as channels and computes every channel at once.
+        table = measure.regionprops_table(
+            labels,
+            intensity_image=np.moveaxis(image, 0, -1),
+            properties=["label", *sorted(intensity_props)],
+        )
+        index = table.pop("label")
+        renamed = {_rename_intensity_col(col, channel_names): vals for col, vals in table.items()}
+        parts.append(pd.DataFrame(renamed, index=index))
 
     if not parts:
         return pd.DataFrame()
@@ -584,7 +585,7 @@ def calculate_image_features(
     labels_key: str | None = None,
     shapes_key: str | None = None,
     scale: str | None = None,
-    channels: list[str] | list[int] | None = None,
+    channels: list[str] | None = None,
     features: list[str] | str | None = None,
     tile_size: int = 2048,
     overlap_margin: int | Literal["auto"] = "auto",
@@ -620,17 +621,19 @@ def calculate_image_features(
         :func:`spatialdata.models.get_channel_names`. ``None`` uses all
         channels. Integer indices are not accepted -- always pass names.
     features
-        Which features to compute.  Required (``None`` is rejected).
-        Accepts a list of strings:
+        Which features to compute (required; ``None`` is rejected). A list of
+        flag strings drawn from two groups:
 
-        - ``"skimage:label"`` (all mask props), ``"skimage:label:area"``
-          (single prop), ``"skimage:label+image"`` (all intensity props),
-          ``"skimage:label+image:intensity_mean"`` (single prop)
-        - ``"squidpy:summary"``, ``"squidpy:texture"``,
-          ``"squidpy:color_hist"``
-
-        ``cpmeasure:*`` flag names are recognised but currently raise
-        ``NotImplementedError``.
+        - **skimage regionprops** -- ``"skimage:label"`` (all morphology props)
+          or ``"skimage:label:<prop>"`` for one (e.g. ``area``);
+          ``"skimage:label+image"`` (all per-channel intensity props) or
+          ``"skimage:label+image:<prop>"`` for one (e.g. ``intensity_mean``).
+          Morphology columns use skimage's native names (``area``, ``centroid-0``);
+          intensity columns are suffixed with the channel name.
+        - **squidpy per-cell** -- ``"squidpy:summary"`` (per-channel mean / std /
+          min / max), ``"squidpy:texture"`` (per-channel GLCM contrast,
+          dissimilarity, homogeneity, energy, ASM, correlation), and
+          ``"squidpy:color_hist"`` (per-channel intensity histogram).
     tile_size
         Side length of the tiling grid (pixels).
     overlap_margin
@@ -651,6 +654,18 @@ def calculate_image_features(
     Returns
     -------
     :class:`~anndata.AnnData` when ``inplace=False``, otherwise ``None``.
+
+    Examples
+    --------
+    >>> import squidpy as sq
+    >>> sq.experimental.im.calculate_image_features(
+    ...     sdata,
+    ...     image_key="image",
+    ...     labels_key="cells",
+    ...     features=["skimage:label", "skimage:label+image", "squidpy:summary"],
+    ... )  # doctest: +SKIP
+
+    The per-cell table is stored in ``sdata.tables["morphology"]``.
     """
     # --- Parse & validate ---
     parsed = _parse_features(features)
