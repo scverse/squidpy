@@ -130,8 +130,6 @@ def _resolve_graph_builder(
     return KNNBuilder(n_neighs=n_neighs, **common, percentile=percentile)
 
 
-
-
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)
 def spatial_neighbors(
@@ -811,12 +809,11 @@ def _run_spatial_neighbors(
 
     start = logg.info(f"Creating graph using `{builder.transform}` transform and `{len(libs)}` libraries.")
     if library_key is not None:
-        # Extract the per-library coordinate arrays once. Subsetting the full AnnData
-        # inside the loop recomputes the library mask repeatedly (twice per library in
-        # the previous implementation) and creates a view per library, which dominates
-        # the runtime for many cells. Slicing the coordinate array by precomputed
-        # category codes is far cheaper and, because the resulting arrays are small,
-        # makes the per-library graph construction cheap to parallelize.
+        # Extract the per-library coordinate arrays once.
+        # Subsetting the full AnnData inside the loop recomputes the library mask repeatedly and
+        # creates a view per library, which dominates the runtime for many cells.
+        # Slicing the coordinate array by precomputed category codes is far cheaper and,
+        # because the resulting arrays are small, makes the per-library graph construction cheap to parallelize.
         codes = adata.obs[library_key].cat.codes.to_numpy()
         coords = adata.obsm[spatial_key]
         per_lib_coords: list[np.ndarray] = []
