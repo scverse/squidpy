@@ -136,9 +136,18 @@ class GraphBuilderCSR(GraphBuilder[NDArrayA, csr_matrix], ABC):
         mats: Sequence[tuple[csr_matrix, csr_matrix]],
         ixs: Sequence[int],
     ) -> tuple[csr_matrix, csr_matrix]:
-        order = cast(list[int], np.argsort(ixs).tolist())
-        adj = block_diag([m[0] for m in mats], format="csr")[order, :][:, order]
-        dst = block_diag([m[1] for m in mats], format="csr")[order, :][:, order]
+        adj = block_diag([m[0] for m in mats], format="csr")
+        dst = block_diag([m[1] for m in mats], format="csr")
+        # ``block_diag`` stacks the per-library blocks in library order. Only when
+        # libraries are interleaved in the original observation order do we need to
+        # permute rows/columns back. Skipping this reordering when ``ixs`` is already
+        # sorted (the common case of contiguous libraries) avoids two full fancy-index
+        # copies of a potentially very large sparse matrix.
+        ixs_arr = np.asarray(ixs)
+        if ixs_arr.size and np.any(np.diff(ixs_arr) < 0):
+            order = np.argsort(ixs_arr)
+            adj = adj[order, :][:, order]
+            dst = dst[order, :][:, order]
         return cast(csr_matrix, adj), cast(csr_matrix, dst)
 
 
