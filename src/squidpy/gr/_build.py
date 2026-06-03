@@ -817,21 +817,21 @@ def _run_spatial_neighbors(
         codes = adata.obs[library_key].cat.codes.to_numpy()
         coords = adata.obsm[spatial_key]
         per_lib_coords: list[np.ndarray] = []
-        ixs: list[int] = []
+        idxs: list[int] = []
         for code in range(len(libs)):
             idx = np.where(codes == code)[0]
             per_lib_coords.append(np.ascontiguousarray(coords[idx]))
-            ixs.extend(idx.tolist())
+            idxs.extend(idx.tolist())
 
         if n_jobs == 1:
-            mats: list[tuple[Any, Any]] = [builder.build(c) for c in per_lib_coords]
+            mats = [builder.build(c) for c in per_lib_coords]
         else:
             # Parallelize across libraries: each graph is independent. The coordinate
             # arrays are small, so the default (loky) backend memmaps them to workers
             # at negligible cost; sub-linear speedups are expected (memory-bandwidth
             # bound) and a one-time worker start-up cost applies.
             mats = Parallel(n_jobs=n_jobs)(delayed(builder.build)(c) for c in per_lib_coords)
-        adj, dst = builder.combine(mats, ixs)
+        adj, dst = builder.combine(mats, idxs)
     else:
         adj, dst = builder.build(adata.obsm[spatial_key])
 
