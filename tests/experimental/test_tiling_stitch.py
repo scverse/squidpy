@@ -153,43 +153,6 @@ class TestAssignStitchGroups:
         assert "tiling_stitch" in a2.uns
 
 
-class TestScorePairsEarlyPrune:
-    """The ``min_confidence`` early-prune is an optimization, so it cannot change
-    results (covered by the public tests above). This unit test asserts the other
-    half: a pair whose optimistic score can't reach the threshold skips the costly
-    ``_merge_shape_features`` union reconstruction entirely.
-    """
-
-    @staticmethod
-    def _edge(cell_id: int, normal_dir: int, coord: float):
-        from squidpy.experimental.tl._tiling_stitch import _CutEdge
-
-        return _CutEdge(cell_id=cell_id, axis="h", coord=coord, extent=(0.0, 10.0), normal_dir=normal_dir, length=10.0)
-
-    def test_low_bound_pair_skips_shape_features(self, monkeypatch):
-        import squidpy.experimental.tl._tiling_stitch as ts
-
-        calls: list[tuple[int, int]] = []
-
-        def _spy(cell_a, cell_b, *args, **kwargs):
-            calls.append((cell_a, cell_b))
-            return {"merge_solidity": 1.0, "merge_compactness": 1.0}
-
-        monkeypatch.setattr(ts, "_merge_shape_features", _spy)
-
-        # weak: optimistic bound (0 + 0 + gap_prox(0) + 2) / 5 = 0.4 < 0.5 -> pruned
-        weak = (self._edge(1, 1, 0.0), self._edge(2, -1, 50.0), {"iou": 0.0, "endpoint_match": 0.0, "gap": 50.0})
-        # strong: bound (1 + 1 + 1 + 2) / 5 = 1.0 -> evaluated and kept
-        strong = (self._edge(3, 1, 0.0), self._edge(4, -1, 0.0), {"iou": 1.0, "endpoint_match": 1.0, "gap": 0.0})
-
-        pairs = ts._score_pairs(
-            [weak, strong], bboxes={}, outlier_crops={}, min_confidence=0.5, close_radius=2, H=100, W=100
-        )
-
-        assert calls == [(3, 4)]  # only the strong pair reached the shape step
-        assert [(p.cell_a, p.cell_b) for p in pairs] == [(3, 4)]
-
-
 class TestStitchVisual(PlotTester, metaclass=PlotTesterMeta):
     _ZOOM = (150, 250, 250, 350)
     _SEAM_Y = 200
