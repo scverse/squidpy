@@ -9,6 +9,7 @@ that each tile is processed independently.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, NamedTuple
 
@@ -291,6 +292,17 @@ def _rename_intensity_col(col: str, channel_names: list[str]) -> str:
     return f"{prop}_{channel_names[int(idx)]}"
 
 
+def _regionprops_table_to_df(table: dict[str, np.ndarray], rename: Callable[[str], str] | None = None) -> pd.DataFrame:
+    """Build a label-indexed DataFrame from a ``regionprops_table`` dict.
+
+    ``rename`` optionally maps each (non-label) column name.
+    """
+    index = table.pop("label")
+    if rename is not None:
+        table = {rename(col): vals for col, vals in table.items()}
+    return pd.DataFrame(table, index=index)
+
+
 def _compute_skimage_features(
     labels: np.ndarray,
     image: np.ndarray,
@@ -310,8 +322,7 @@ def _compute_skimage_features(
 
     if label_props is not None:
         table = measure.regionprops_table(labels, properties=["label", *sorted(label_props)])
-        index = table.pop("label")
-        parts.append(pd.DataFrame(table, index=index))
+        parts.append(_regionprops_table_to_df(table))
 
     if intensity_props is not None:
         # One multichannel pass: moveaxis -> (y, x, c) so skimage treats the last
@@ -321,9 +332,7 @@ def _compute_skimage_features(
             intensity_image=np.moveaxis(image, 0, -1),
             properties=["label", *sorted(intensity_props)],
         )
-        index = table.pop("label")
-        renamed = {_rename_intensity_col(col, channel_names): vals for col, vals in table.items()}
-        parts.append(pd.DataFrame(renamed, index=index))
+        parts.append(_regionprops_table_to_df(table, lambda col: _rename_intensity_col(col, channel_names)))
 
     if not parts:
         return pd.DataFrame()
