@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
-from joblib import Parallel, delayed
 from numba import njit
 from shapely import LineString, MultiPolygon, Polygon
 from spatialdata import SpatialData
@@ -27,7 +26,7 @@ from spatialdata.models.models import (
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, thread_map
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -823,14 +822,12 @@ def _run_spatial_neighbors(
             per_lib_coords.append(np.ascontiguousarray(coords[idx]))
             idxs.extend(idx.tolist())
 
-        if n_jobs == 1:
-            mats = [builder.build(c) for c in per_lib_coords]
-        else:
-            # Parallelize across libraries: each graph is independent. The coordinate
-            # arrays are small, so the default (loky) backend memmaps them to workers
-            # at negligible cost; sub-linear speedups are expected (memory-bandwidth
-            # bound) and a one-time worker start-up cost applies.
-            mats = Parallel(n_jobs=n_jobs)(delayed(builder.build)(c) for c in per_lib_coords)
+        mats = thread_map(
+            builder.build,
+            per_lib_coords,
+            n_jobs=n_jobs,
+            unit="library",
+        )
         adj, dst = builder.combine(mats, idxs)
     else:
         adj, dst = builder.build(adata.obsm[spatial_key])
