@@ -9,7 +9,6 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from itertools import chain
 from typing import Any, Generic, TypeVar, cast
 
 import numpy as np
@@ -24,7 +23,7 @@ from scipy.sparse import (
     spmatrix,
 )
 from scipy.spatial import Delaunay
-from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 
 from squidpy._constants._constants import CoordType, Transform
@@ -318,13 +317,8 @@ class DelaunayBuilder(GraphBuilderCSR):
         indptr, indices = tri.vertex_neighbor_vertices
         adj = csr_matrix((np.ones_like(indices, dtype=np.float32), indices, indptr), shape=(N, N))
 
-        # fmt: off
-        dists = np.array(list(chain(*(
-            euclidean_distances(coords[indices[indptr[i] : indptr[i + 1]], :], coords[np.newaxis, i, :])
-            for i in range(N)
-            if len(indices[indptr[i] : indptr[i + 1]])
-        )))).squeeze()
-        # fmt: on
+        rows = np.repeat(np.arange(N), np.diff(indptr))
+        dists = np.linalg.norm(coords[rows] - coords[indices], axis=1)
         dst = csr_matrix((dists, indices, indptr), shape=(N, N))
 
         adj.setdiag(1.0 if self.set_diag else adj.diagonal())
