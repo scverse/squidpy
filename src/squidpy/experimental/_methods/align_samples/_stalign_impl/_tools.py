@@ -3,7 +3,7 @@
 Lifted from scverse/squidpy#1150 (Selman Özleyen) with import paths adjusted
 and minor cleanups (config unpacking, lazy dtype resolution). The container
 write-back path (``STalignResult.transform_adata``) was dropped on the move
-into :mod:`squidpy.experimental._fit`: results stay in memory and the caller
+into :mod:`squidpy.experimental._methods`: results stay in memory and the caller
 owns write-back.
 """
 

@@ -12,8 +12,8 @@ from anndata import AnnData
 
 pytest.importorskip("jax")
 
-from squidpy.experimental._fit.align_samples import StalignFitResult
-from squidpy.experimental._fit.align_samples._stalign_impl._tools import (
+from squidpy.experimental._methods.align_samples import StalignFitResult
+from squidpy.experimental._methods.align_samples._stalign_impl._tools import (
     STalignConfig,
     STalignPreprocessConfig,
     STalignRegistrationConfig,

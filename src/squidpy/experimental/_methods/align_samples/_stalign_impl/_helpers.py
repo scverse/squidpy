@@ -2,7 +2,7 @@
 
 Lifted from scverse/squidpy#1150 (Selman Özleyen). Container readers
 (``extract_points`` / ``extract_landmarks``) were dropped on the move into
-:mod:`squidpy.experimental._fit`: reading coordinates out of an ``AnnData`` /
+:mod:`squidpy.experimental._methods`: reading coordinates out of an ``AnnData`` /
 ``SpatialData`` is the caller's concern, so everything here operates purely on
 in-memory NumPy arrays.
 """

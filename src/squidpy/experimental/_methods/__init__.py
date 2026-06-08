@@ -15,7 +15,7 @@ lazily, so importing this package stays cheap.
 Example
 -------
 >>> import numpy as np
->>> from squidpy.experimental._fit import FitResult, Registry
+>>> from squidpy.experimental._methods import FitResult, Registry
 >>> demo = Registry("demo")
 >>> class Shift(FitResult):
 ...     def __init__(self, delta):
@@ -33,7 +33,7 @@ Example
 
 from __future__ import annotations
 
-from squidpy.experimental._fit._registry import Registry
-from squidpy.experimental._fit._result import FitResult
+from squidpy.experimental._methods._registry import Registry
+from squidpy.experimental._methods._result import FitResult
 
 __all__ = ["FitResult", "Registry"]

@@ -11,8 +11,8 @@ import pytest
 
 pytest.importorskip("jax")
 
-from squidpy.experimental._fit.align_samples import ALIGN_SAMPLES, StalignFitResult, fit_stalign
-from squidpy.experimental._fit.align_samples._stalign_impl._tools import (
+from squidpy.experimental._methods.align_samples import ALIGN_SAMPLES, StalignFitResult, fit_stalign
+from squidpy.experimental._methods.align_samples._stalign_impl._tools import (
     STalignConfig,
     STalignPreprocessConfig,
     STalignRegistrationConfig,

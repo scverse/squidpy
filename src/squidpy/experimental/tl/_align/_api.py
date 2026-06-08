@@ -1,4 +1,4 @@
-"""Public alignment functions built on the :mod:`squidpy.experimental._fit` core.
+"""Public alignment functions built on the :mod:`squidpy.experimental._methods` core.
 
 These are thin orchestrators: resolve inputs to in-memory arrays, dispatch to a
 fit-core estimator, write the result back. All container I/O and write-back live
@@ -14,8 +14,8 @@ import numpy as np
 from anndata import AnnData
 from spatialdata import SpatialData
 
-from squidpy.experimental._fit.align_landmarks import ALIGN_LANDMARKS
-from squidpy.experimental._fit.align_samples import ALIGN_SAMPLES
+from squidpy.experimental._methods.align_landmarks import ALIGN_LANDMARKS
+from squidpy.experimental._methods.align_samples import ALIGN_SAMPLES
 from squidpy.experimental.tl._align._io import (
     get_coords,
     resolve_obs_pair,
@@ -25,7 +25,7 @@ from squidpy.experimental.tl._align._io import (
 from squidpy.experimental.tl._align._validation import validate_on, validate_output_mode
 
 if TYPE_CHECKING:
-    from squidpy.experimental._fit import FitResult
+    from squidpy.experimental._methods import FitResult
 
 __all__ = ["align", "align_by_landmarks"]
 

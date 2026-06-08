@@ -2,7 +2,7 @@
 
 This is the *only* layer that knows about the ``AnnData | SpatialData`` argument
 shapes and the ``output_mode`` write-back strategies. The fit estimators in
-:mod:`squidpy.experimental._fit` operate on plain arrays and never see a
+:mod:`squidpy.experimental._methods` operate on plain arrays and never see a
 container.
 """
 
@@ -17,8 +17,8 @@ from spatialdata import SpatialData
 from squidpy._validators import assert_key_in_sdata
 
 if TYPE_CHECKING:
-    from squidpy.experimental._fit import FitResult
-    from squidpy.experimental._fit.align_landmarks import AffineFitResult
+    from squidpy.experimental._methods import FitResult
+    from squidpy.experimental._methods.align_landmarks import AffineFitResult
 
 
 # ---------------------------------------------------------------------------
