@@ -1,16 +1,4 @@
-"""Closed-form landmark alignment estimators.
-
-Ported from scverse/squidpy#1162 (``fit_landmark_affine``). Two pure models, no
-JAX:
-
-- ``"similarity"`` (4 DOF: rotation + uniform scale + translation) via
-  :func:`spatialdata.transformations.get_transformation_between_landmarks`.
-- ``"affine"`` (6 DOF) via :func:`skimage.transform.estimate_transform`.
-
-Both consume **pre-paired** ``(N, 2)`` ``(x, y)`` landmark arrays (row ``i`` of
-the query matches row ``i`` of the reference); ``N`` must be at least 3. No
-automatic correspondence matching is performed.
-"""
+"""Closed-form landmark alignment estimators."""
 
 from __future__ import annotations
 
