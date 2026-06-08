@@ -14,6 +14,7 @@ import numpy as np
 from anndata import AnnData
 from spatialdata import SpatialData
 
+from squidpy._validators import assert_one_of
 from squidpy.experimental._methods.align_landmarks import ALIGN_LANDMARKS
 from squidpy.experimental._methods.align_samples import ALIGN_SAMPLES
 from squidpy.experimental.tl._align._io import (
@@ -22,8 +23,9 @@ from squidpy.experimental.tl._align._io import (
     writeback_affine_sdata,
     writeback_obs,
 )
-from squidpy.experimental.tl._align._validation import validate_on, validate_output_mode
 
+OUTPUT_MODES = ("object", "copy", "inplace")
+ON_VALUES = ("obs", "image")
 if TYPE_CHECKING:
     from squidpy.experimental._methods.align_landmarks import AffineFitResult
     from squidpy.experimental._methods.align_samples._stalign_impl._tools import StalignResult
@@ -73,8 +75,8 @@ def align(
     method_kwargs
         Forwarded to the estimator's ``fit`` (e.g. ``config=STalignConfig(...)``).
     """
-    validate_on(on)
-    validate_output_mode(output_mode)
+    assert_one_of(output_mode, OUTPUT_MODES, name="output_mode")
+    assert_one_of(on, ON_VALUES, name="on")
     if on == "image":
         raise NotImplementedError("`align(on='image')` is not implemented yet; use `on='obs'`.")
 
