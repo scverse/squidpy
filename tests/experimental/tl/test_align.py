@@ -12,11 +12,11 @@ from anndata import AnnData
 
 pytest.importorskip("jax")
 
-from squidpy.experimental._methods.align_samples import StalignFitResult
 from squidpy.experimental._methods.align_samples._stalign_impl._tools import (
     STalignConfig,
     STalignPreprocessConfig,
     STalignRegistrationConfig,
+    StalignResult,
 )
 from squidpy.experimental.tl import align
 
@@ -38,8 +38,8 @@ def _tiny() -> STalignConfig:
 def test_object_mode_returns_result_and_touches_nothing() -> None:
     ref, query = _adata(), _adata()
     result = align(ref, query, method="stalign", output_mode="object", config=_tiny())
-    assert isinstance(result, StalignFitResult)
-    assert result.deltas.shape == query.obsm["spatial"].shape
+    assert isinstance(result, StalignResult)
+    assert result.aligned_points.shape == query.obsm["spatial"].shape
     assert "aligned_spatial" not in query.obsm
 
 
@@ -97,6 +97,5 @@ def test_align_with_landmarks() -> None:
         config=_tiny(),
     )
 
-    assert isinstance(result, StalignFitResult)
-    assert result.deltas.shape == query.obsm["spatial"].shape
-    assert "stalign_result" in result.metadata
+    assert isinstance(result, StalignResult)
+    assert result.aligned_points.shape == query.obsm["spatial"].shape

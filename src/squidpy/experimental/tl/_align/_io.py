@@ -17,8 +17,8 @@ from spatialdata import SpatialData
 from squidpy._validators import assert_key_in_sdata
 
 if TYPE_CHECKING:
-    from squidpy.experimental._methods import FitResult
     from squidpy.experimental._methods.align_landmarks import AffineFitResult
+    from squidpy.experimental._methods.align_samples._stalign_impl._tools import StalignResult
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ def get_coords(adata: AnnData, spatial_key: str) -> np.ndarray:
 
 
 def writeback_obs(
-    result: FitResult,
+    result: StalignResult | AffineFitResult,
     *,
     output_mode: str,
     query_adata: AnnData,
@@ -88,13 +88,13 @@ def writeback_obs(
     element_key: str | None,
     spatial_key: str,
     key_added: str | None,
-) -> FitResult | AnnData | SpatialData | None:
+) -> StalignResult | AffineFitResult | AnnData | SpatialData | None:
     """Bake ``result.transform(coords)`` into the query ``obsm`` per ``output_mode``."""
     if output_mode == "object":
         return result
 
     dest = _resolve_dest(query_adata, spatial_key=spatial_key, key_added=key_added)
-    new_coords = result.transform(get_coords(query_adata, spatial_key))
+    new_coords = np.asarray(result.transform(get_coords(query_adata, spatial_key)))
 
     if container is None:
         target = query_adata if output_mode == "inplace" else query_adata.copy()

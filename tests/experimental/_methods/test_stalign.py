@@ -1,7 +1,7 @@
 """Integration tests for the ported STalign estimator.
 
 Tiny synthetic fixtures with ``niter=1`` keep these fast; they verify wiring
-and shapes (dispatch -> JAX LDDMM -> StalignFitResult), not solver quality.
+and shapes (dispatch -> JAX LDDMM -> StalignResult), not solver quality.
 """
 
 from __future__ import annotations
@@ -11,11 +11,12 @@ import pytest
 
 pytest.importorskip("jax")
 
-from squidpy.experimental._methods.align_samples import ALIGN_SAMPLES, StalignFitResult, fit_stalign
+from squidpy.experimental._methods.align_samples import ALIGN_SAMPLES, fit_stalign
 from squidpy.experimental._methods.align_samples._stalign_impl._tools import (
     STalignConfig,
     STalignPreprocessConfig,
     STalignRegistrationConfig,
+    StalignResult,
 )
 
 
@@ -44,34 +45,40 @@ def test_stalign_registered_in_align_family() -> None:
     assert ALIGN_SAMPLES.get("stalign") is fit_stalign
 
 
-def test_stalign_fit_returns_displacement_result() -> None:
+def test_stalign_fit_returns_diffeomorphism() -> None:
     ref, query = _points_xy(), _points_xy()
 
     result = fit_stalign(ref, query, config=_tiny_config())
 
-    assert isinstance(result, StalignFitResult)
-    assert result.deltas.shape == query.shape
-    assert np.all(np.isfinite(result.deltas))
-    assert result.affine is None
-    assert result.metadata["method"] == "stalign"
-    # Escape hatch: the full diffeomorphic map is preserved for power users.
-    assert "stalign_result" in result.metadata
+    assert isinstance(result, StalignResult)
+    assert result.aligned_points.shape == query.shape
+    assert np.all(np.isfinite(np.asarray(result.aligned_points)))
+    assert result.affine.shape == (3, 3)
+    assert result.velocity.ndim == 4
 
 
-def test_stalign_transform_bakes_in_deltas() -> None:
+def test_stalign_transform_matches_aligned_points() -> None:
     ref, query = _points_xy(), _points_xy()
 
     result = fit_stalign(ref, query, config=_tiny_config())
 
-    np.testing.assert_allclose(result.transform(query), query + result.deltas)
+    np.testing.assert_allclose(np.asarray(result.transform(query)), np.asarray(result.aligned_points), atol=1e-5)
 
 
-def test_stalign_transform_rejects_wrong_shape() -> None:
+def test_stalign_transform_accepts_arbitrary_points() -> None:
     ref, query = _points_xy(), _points_xy()
     result = fit_stalign(ref, query, config=_tiny_config())
 
-    with pytest.raises(ValueError, match="expects coordinates of shape"):
-        result.transform(np.zeros((1, 2)))
+    out = result.transform(np.zeros((1, 2)))
+    assert np.asarray(out).shape == (1, 2)
+
+
+def test_stalign_transform_rejects_non_2d() -> None:
+    ref, query = _points_xy(), _points_xy()
+    result = fit_stalign(ref, query, config=_tiny_config())
+
+    with pytest.raises(ValueError, match=r"Expected an \(N, 2\)"):
+        result.transform(np.zeros((5, 3)))
 
 
 def test_stalign_fit_with_landmarks() -> None:
@@ -86,10 +93,9 @@ def test_stalign_fit_with_landmarks() -> None:
         landmarks_target=landmarks,
     )
 
-    assert result.deltas.shape == query.shape
-    assert "stalign_result" in result.metadata
+    assert result.aligned_points.shape == query.shape
 
 
 def test_stalign_fit_rejects_non_2d_input() -> None:
-    with pytest.raises(ValueError, match=r"Expected `query` to be an \(N, 2\) array"):
+    with pytest.raises(ValueError, match=r"Expected `query` to have shape `\(n, 2\)`"):
         fit_stalign(_points_xy(), np.zeros((5, 3)), config=_tiny_config())

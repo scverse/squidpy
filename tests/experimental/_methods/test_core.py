@@ -6,11 +6,11 @@ from typing import Any
 import numpy as np
 import pytest
 
-from squidpy.experimental._methods import FitResult, Registry
+from squidpy.experimental._methods import Registry
 
 
 @dataclass
-class _MeanShiftResult(FitResult):
+class _MeanShiftResult:
     """Toy result: a constant per-axis offset baked into ``transform``."""
 
     delta: np.ndarray
@@ -32,19 +32,9 @@ def test_fit_then_transform_round_trip() -> None:
 
     result = fit_mean_shift(ref, query)
 
-    assert isinstance(result, FitResult)
     np.testing.assert_allclose(result.delta, [1.0, 1.0])
     np.testing.assert_allclose(result.transform(query), query + 1.0)
     assert result.metadata == {"method": "mean_shift"}
-
-
-def test_fit_result_transform_default_not_implemented() -> None:
-    @dataclass
-    class _Bare(FitResult):
-        metadata: dict[str, Any] = field(default_factory=dict)
-
-    with pytest.raises(NotImplementedError, match="does not implement `transform`"):
-        _Bare().transform(np.zeros((2, 2)))
 
 
 def test_registry_register_get_keys() -> None:
@@ -56,7 +46,7 @@ def test_registry_register_get_keys() -> None:
 
     assert reg.keys() == ("mean_shift",)
     assert reg.get("mean_shift") is _registered
-    assert isinstance(reg.get("mean_shift")(np.ones((2, 2)), np.zeros((2, 2))), FitResult)
+    assert isinstance(reg.get("mean_shift")(np.ones((2, 2)), np.zeros((2, 2))), _MeanShiftResult)
 
 
 def test_registry_unknown_key_lists_available() -> None:
@@ -80,7 +70,7 @@ def test_check_requirements_passes_when_none() -> None:
     # By default, registering without requires parameter does not wrap/check.
     reg.register("mean_shift")(fit_mean_shift)
     result = reg.get("mean_shift")(np.ones((2, 2)), np.zeros((2, 2)))
-    assert isinstance(result, FitResult)
+    assert isinstance(result, _MeanShiftResult)
 
 
 def test_check_requirements_raises_for_missing_dependency() -> None:

@@ -25,7 +25,8 @@ from squidpy.experimental.tl._align._io import (
 from squidpy.experimental.tl._align._validation import validate_on, validate_output_mode
 
 if TYPE_CHECKING:
-    from squidpy.experimental._methods import FitResult
+    from squidpy.experimental._methods.align_landmarks import AffineFitResult
+    from squidpy.experimental._methods.align_samples._stalign_impl._tools import StalignResult
 
 __all__ = ["align", "align_by_landmarks"]
 
@@ -42,7 +43,7 @@ def align(
     output_mode: Literal["object", "copy", "inplace"] = "object",
     key_added: str | None = None,
     **method_kwargs: Any,
-) -> FitResult | AnnData | SpatialData | None:
+) -> StalignResult | AnnData | SpatialData | None:
     """Align a query sample onto a reference sample.
 
     Parameters
@@ -61,7 +62,7 @@ def align(
     spatial_key
         ``obsm`` key holding the ``(x, y)`` coordinates. Defaults to ``"spatial"``.
     output_mode
-        - ``"object"`` (default) -- return the raw :class:`FitResult`; nothing is written.
+        - ``"object"`` (default) -- return the raw :class:`StalignResult`; nothing is written.
         - ``"inplace"`` -- write the aligned coordinates into the query and return ``None``.
         - ``"copy"`` -- write into a copy of the query and return the copy.
     key_added
@@ -105,7 +106,7 @@ def align_by_landmarks(
     spatial_key: str = "spatial",
     output_mode: Literal["object", "copy", "inplace"] = "object",
     key_added: str | None = None,
-) -> FitResult | AnnData | SpatialData | None:
+) -> AffineFitResult | AnnData | SpatialData | None:
     """Align by a closed-form fit on pre-paired landmarks.
 
     Parameters
@@ -126,7 +127,7 @@ def align_by_landmarks(
     spatial_key
         ``obsm`` key when ``data`` is an :class:`~anndata.AnnData`.
     output_mode
-        See :func:`align`. ``"object"`` (default) returns the :class:`FitResult`.
+        See :func:`align`. ``"object"`` (default) returns the :class:`AffineFitResult`.
     key_added
         Destination ``obsm`` key when ``data`` is an AnnData (see :func:`align`).
     """

@@ -4,77 +4,62 @@ Lifted from scverse/squidpy#1150 (Selman Özleyen). Container readers
 (``extract_points`` / ``extract_landmarks``) were dropped on the move into
 :mod:`squidpy.experimental._methods`: reading coordinates out of an ``AnnData`` /
 ``SpatialData`` is the caller's concern, so everything here operates purely on
-in-memory NumPy arrays.
+in-memory arrays. Rasterization runs on JAX so the point cloud never leaves the
+device between preprocessing and the LDDMM solve.
 """
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Any
 
+import jax.numpy as jnp
 import numpy as np
 
-PointOrder = Literal["row_col", "xy"]
+from ._core import jax_dtype
+
+if TYPE_CHECKING:
+    import jax
+
+    JaxArray = jax.Array
+else:  # pragma: no cover - typing only
+    JaxArray = Any
 
 __all__ = [
-    "PointOrder",
     "affine_from_points",
-    "from_row_col",
     "rasterize",
-    "to_row_col",
+    "validate_points",
 ]
 
 
-def _validate_points(points: np.ndarray, *, name: str) -> np.ndarray:
-    arr = np.asarray(points, dtype=float)
+def validate_points(points: Any, *, name: str) -> JaxArray:
+    """Coerce ``points`` to a finite ``(n, 2)`` JAX array."""
+    arr = jnp.asarray(points, dtype=jax_dtype())
     if arr.ndim != 2 or arr.shape[1] != 2:
         raise ValueError(f"Expected `{name}` to have shape `(n, 2)`, found `{arr.shape}`.")
-    if not np.all(np.isfinite(arr)):
+    if not bool(jnp.all(jnp.isfinite(arr))):
         raise ValueError(f"Expected `{name}` to contain only finite values.")
     return arr
 
 
-def to_row_col(points: np.ndarray, *, point_order: PointOrder) -> np.ndarray:
-    """Convert coordinates to row-column order."""
-    arr = _validate_points(points, name="points")
-    if point_order == "row_col":
-        return arr
-    if point_order == "xy":
-        return arr[:, [1, 0]]
-    raise ValueError(f"Unknown `point_order`: `{point_order}`.")
-
-
-def from_row_col(points: np.ndarray, *, point_order: PointOrder) -> np.ndarray:
-    """Convert row-column coordinates to the requested order."""
-    arr = _validate_points(points, name="points")
-    if point_order == "row_col":
-        return arr
-    if point_order == "xy":
-        return arr[:, [1, 0]]
-    raise ValueError(f"Unknown `point_order`: `{point_order}`.")
-
-
-def _normalize(values: np.ndarray) -> np.ndarray:
-    values = np.asarray(values, dtype=float)
-    vmin = np.min(values)
-    vmax = np.max(values)
-    if np.isclose(vmin, vmax):
-        return np.ones_like(values, dtype=float)
-    return (values - vmin) / (vmax - vmin)
-
-
 def rasterize(
-    x: np.ndarray,
-    y: np.ndarray,
+    x: JaxArray,
+    y: JaxArray,
     *,
-    g: np.ndarray | None = None,
+    g: JaxArray | None = None,
     dx: float = 30.0,
     blur: float | list[float] = 1.0,
     expand: float = 1.1,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Rasterize a point cloud into a multi-scale density image."""
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    if x.ndim != 1 or y.ndim != 1 or x.shape != y.shape:
+) -> tuple[JaxArray, JaxArray, JaxArray]:
+    """Rasterize a point cloud into a multi-scale Gaussian density image.
+
+    Each point splats a normalized Gaussian over a fixed ``(2r + 1)`` patch and
+    the patches are scatter-added onto the grid -- the JAX analogue of the
+    original per-point NumPy loop. Out-of-grid patch pixels are masked out.
+    """
+    dtype = jax_dtype()
+    x = jnp.asarray(x, dtype=dtype).reshape(-1)
+    y = jnp.asarray(y, dtype=dtype).reshape(-1)
+    if x.shape != y.shape:
         raise ValueError("Expected `x` and `y` to be 1D arrays with the same length.")
     if x.size == 0:
         raise ValueError("Expected at least one point to rasterize.")
@@ -83,66 +68,91 @@ def rasterize(
     if expand <= 0:
         raise ValueError("Expected `expand` to be positive.")
 
-    blur_values = np.atleast_1d(np.asarray(blur, dtype=float))
-    if blur_values.ndim != 1 or np.any(blur_values <= 0):
+    blur_values = jnp.atleast_1d(jnp.asarray(blur, dtype=dtype))
+    if blur_values.ndim != 1 or bool(jnp.any(blur_values <= 0)):
         raise ValueError("Expected `blur` to be a positive scalar or a 1D sequence of positive values.")
 
     if g is None:
-        weights = np.ones_like(x, dtype=float)
+        weights = jnp.ones_like(x)
     else:
-        weights = np.asarray(g, dtype=float)
+        weights = jnp.asarray(g, dtype=dtype).reshape(-1)
         if weights.shape != x.shape:
             raise ValueError("Expected `g` to have the same shape as `x` and `y`.")
-        if not np.allclose(weights, 1.0):
+        if not bool(jnp.allclose(weights, 1.0)):
             weights = _normalize(weights)
 
-    min_x = float(np.min(x))
-    max_x = float(np.max(x))
-    min_y = float(np.min(y))
-    max_y = float(np.max(y))
+    min_x = float(jnp.min(x))
+    max_x = float(jnp.max(x))
+    min_y = float(jnp.min(y))
+    max_y = float(jnp.max(y))
 
     center_x = (min_x + max_x) / 2.0
     center_y = (min_y + max_y) / 2.0
     half_x = (max_x - min_x) * expand / 2.0
     half_y = (max_y - min_y) * expand / 2.0
 
-    grid_x = np.arange(center_x - half_x, center_x + half_x + dx, dx, dtype=float)
-    grid_y = np.arange(center_y - half_y, center_y + half_y + dx, dx, dtype=float)
-    if grid_x.size < 2 or grid_y.size < 2:
+    grid_x = jnp.arange(center_x - half_x, center_x + half_x + dx, dx, dtype=dtype)
+    grid_y = jnp.arange(center_y - half_y, center_y + half_y + dx, dx, dtype=dtype)
+    n_cols = int(grid_x.shape[0])
+    n_rows = int(grid_y.shape[0])
+    if n_cols < 2 or n_rows < 2:
         raise ValueError("Rasterized grid is too small. Increase the point spread or lower `dx`.")
 
-    mesh_x, mesh_y = np.meshgrid(grid_x, grid_y)
-    out = np.zeros((len(blur_values), grid_y.size, grid_x.size), dtype=float)
-    radius = int(np.ceil(float(np.max(blur_values)) * 4.0))
+    radius = int(np.ceil(float(jnp.max(blur_values)) * 4.0))
+    offsets = jnp.arange(-radius, radius + 1)
 
-    for x_i, y_i, w_i in zip(x, y, weights, strict=False):
-        col = int(np.rint((x_i - grid_x[0]) / dx))
-        row = int(np.rint((y_i - grid_y[0]) / dx))
+    # Nearest grid cell for every point, then its fixed (2r+1) patch indices.
+    col0 = jnp.round((x - grid_x[0]) / dx).astype(jnp.int32)  # (N,)
+    row0 = jnp.round((y - grid_y[0]) / dx).astype(jnp.int32)  # (N,)
+    patch_cols = col0[:, None] + offsets[None, :]  # (N, K)
+    patch_rows = row0[:, None] + offsets[None, :]  # (N, K)
 
-        row0 = max(row - radius, 0)
-        row1 = min(row + radius, out.shape[1] - 1)
-        col0 = max(col - radius, 0)
-        col1 = min(col + radius, out.shape[2] - 1)
+    patch_x = grid_x[0] + patch_cols.astype(dtype) * dx  # (N, K)
+    patch_y = grid_y[0] + patch_rows.astype(dtype) * dx  # (N, K)
 
-        patch_x = mesh_x[row0 : row1 + 1, col0 : col1 + 1]
-        patch_y = mesh_y[row0 : row1 + 1, col0 : col1 + 1]
-        denom = 2.0 * (dx * blur_values * 2.0) ** 2
+    # (N, K, K) squared distance from each patch pixel to its source point.
+    dist2 = (patch_x[:, None, :] - x[:, None, None]) ** 2 + (patch_y[:, :, None] - y[:, None, None]) ** 2
 
-        kernels = np.exp(-((patch_x[..., None] - x_i) ** 2 + (patch_y[..., None] - y_i) ** 2) / denom)
-        kernels_sum = kernels.sum(axis=(0, 1), keepdims=True)
-        kernels /= np.where(kernels_sum == 0.0, 1.0, kernels_sum)
-        out[:, row0 : row1 + 1, col0 : col1 + 1] += np.moveaxis(kernels * w_i, -1, 0)
+    denom = 2.0 * (dx * blur_values * 2.0) ** 2  # (B,)
+    kernels = jnp.exp(-dist2[None] / denom[:, None, None, None])  # (B, N, K, K)
+    kernels_sum = kernels.sum(axis=(2, 3), keepdims=True)
+    kernels = kernels / jnp.where(kernels_sum == 0.0, 1.0, kernels_sum)
+    kernels = kernels * weights[None, :, None, None]
 
+    valid = (
+        (patch_rows >= 0)[:, :, None]
+        & (patch_rows < n_rows)[:, :, None]
+        & (patch_cols >= 0)[:, None, :]
+        & (patch_cols < n_cols)[:, None, :]
+    )  # (N, K, K)
+    kernels = kernels * valid[None]
+
+    rows = jnp.broadcast_to(jnp.clip(patch_rows, 0, n_rows - 1)[:, :, None], dist2.shape)  # (N, K, K)
+    cols = jnp.broadcast_to(jnp.clip(patch_cols, 0, n_cols - 1)[:, None, :], dist2.shape)  # (N, K, K)
+
+    out = jnp.zeros((blur_values.shape[0], n_rows, n_cols), dtype=dtype)
+    out = out.at[:, rows, cols].add(kernels)
     return grid_x, grid_y, out
 
 
+def _normalize(values: JaxArray) -> JaxArray:
+    vmin = jnp.min(values)
+    vmax = jnp.max(values)
+    return jnp.where(jnp.isclose(vmin, vmax), jnp.ones_like(values), (values - vmin) / (vmax - vmin))
+
+
 def affine_from_points(
-    points_source: np.ndarray,
-    points_target: np.ndarray,
+    points_source: JaxArray,
+    points_target: JaxArray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Compute an affine initialization from corresponding landmarks."""
-    source = _validate_points(points_source, name="points_source")
-    target = _validate_points(points_target, name="points_target")
+    """Compute an affine initialization from corresponding landmarks.
+
+    Delegates to skimage's least-squares estimator, so this is the one place
+    that drops to NumPy on the CPU; the small ``(2, 2)`` / ``(2,)`` result is
+    lifted back to JAX by the caller.
+    """
+    source = np.asarray(points_source, dtype=float)
+    target = np.asarray(points_target, dtype=float)
     if source.shape != target.shape:
         raise ValueError(
             f"Expected `points_source` and `points_target` to have the same shape, found "

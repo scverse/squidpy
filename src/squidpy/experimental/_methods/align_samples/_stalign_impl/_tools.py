@@ -1,10 +1,11 @@
 """Low-level point-cloud tools for experimental STalign.
 
 Lifted from scverse/squidpy#1150 (Selman Özleyen) with import paths adjusted
-and minor cleanups (config unpacking, lazy dtype resolution). The container
-write-back path (``STalignResult.transform_adata``) was dropped on the move
-into :mod:`squidpy.experimental._methods`: results stay in memory and the caller
-owns write-back.
+and minor cleanups. The fitted map is returned as a single :class:`StalignResult`
+container that keeps everything on JAX -- the affine, velocity field and
+velocity grid stay device-side and :meth:`StalignResult.transform` applies them
+to arbitrary points without round-tripping through NumPy. Container write-back
+lives in the caller, not here.
 """
 
 from __future__ import annotations
@@ -13,16 +14,9 @@ from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import jax.numpy as jnp
-import numpy as np
 
 from ._core import jax_dtype, lddmm, transform_points_row_col
-from ._helpers import (
-    PointOrder,
-    affine_from_points,
-    from_row_col,
-    rasterize,
-    to_row_col,
-)
+from ._helpers import affine_from_points, rasterize, validate_points
 
 if TYPE_CHECKING:
     import jax
@@ -38,7 +32,7 @@ __all__ = [
     "STalignPreprocessConfig",
     "STalignPreprocessResult",
     "STalignRegistrationConfig",
-    "STalignResult",
+    "StalignResult",
     "stalign_points",
     "stalign_preprocess",
 ]
@@ -84,50 +78,58 @@ class STalignConfig:
 
 @dataclass(slots=True)
 class STalignPreprocessResult:
-    source_grid: tuple[np.ndarray, np.ndarray]
-    source_image: np.ndarray
-    target_grid: tuple[np.ndarray, np.ndarray]
-    target_image: np.ndarray
+    source_grid: tuple[JaxArray, JaxArray]
+    source_image: JaxArray
+    target_grid: tuple[JaxArray, JaxArray]
+    target_image: JaxArray
 
 
 @dataclass(slots=True)
-class STalignResult:
+class StalignResult:
+    """A fitted STalign diffeomorphism, ready to transform arbitrary points.
+
+    The map (``affine`` + diffeomorphic ``velocity`` field on ``velocity_grid``)
+    is held as JAX arrays in the solver's internal row-column frame.
+    :meth:`transform` takes care of the ``(x, y)`` boundary, so callers work in
+    ``(x, y)`` throughout. ``aligned_points`` is the fitted query cloud already
+    mapped into the reference frame (``transform`` of the query).
+    """
+
     affine: JaxArray
     velocity: JaxArray
     velocity_grid: tuple[JaxArray, JaxArray]
     aligned_points: JaxArray
-    point_order: PointOrder = "row_col"
 
-    def transform_points(
+    def transform(
         self,
-        points: np.ndarray,
+        points: JaxArray,
         *,
         direction: Literal["forward", "backward"] = "forward",
-        point_order: PointOrder | None = None,
     ) -> JaxArray:
-        """Transform arbitrary point arrays with the fitted map."""
-        order = self.point_order if point_order is None else point_order
-        points_rc = to_row_col(points, point_order=order)
-        transformed = transform_points_row_col(
+        """Map ``(N, 2)`` ``(x, y)`` points with the fitted diffeomorphism."""
+        pts = jnp.asarray(points, dtype=jax_dtype())
+        if pts.ndim != 2 or pts.shape[1] != 2:
+            raise ValueError(f"Expected an (N, 2) `(x, y)` array, found shape {pts.shape}.")
+        transformed_rc = transform_points_row_col(
             self.velocity_grid,
-            jnp.asarray(self.velocity),
-            jnp.asarray(self.affine),
-            jnp.asarray(points_rc, dtype=jax_dtype()),
+            self.velocity,
+            self.affine,
+            pts[:, ::-1],
             direction=direction,
         )
-        return jnp.asarray(from_row_col(np.asarray(transformed), point_order=order))
+        return transformed_rc[:, ::-1]
 
 
 def stalign_preprocess(
-    source_points: np.ndarray,
-    target_points: np.ndarray,
+    source_points: JaxArray,
+    target_points: JaxArray,
     *,
     config: STalignPreprocessConfig | None = None,
 ) -> STalignPreprocessResult:
-    """Rasterize source and target point clouds for LDDMM registration."""
+    """Rasterize source and target point clouds (row-col) for LDDMM registration."""
     config = STalignPreprocessConfig() if config is None else config
-    source_points = to_row_col(source_points, point_order="row_col")
-    target_points = to_row_col(target_points, point_order="row_col")
+    source_points = validate_points(source_points, name="source_points")
+    target_points = validate_points(target_points, name="target_points")
 
     source_x, source_y, source_image = rasterize(
         source_points[:, 1],
@@ -153,60 +155,63 @@ def stalign_preprocess(
 
 
 def stalign_points(
-    source_points: np.ndarray,
-    target_points: np.ndarray,
+    source_points: JaxArray,
+    target_points: JaxArray,
     *,
     preprocessed: STalignPreprocessResult | None = None,
     config: STalignConfig | None = None,
-    landmarks_source: np.ndarray | None = None,
-    landmarks_target: np.ndarray | None = None,
-) -> STalignResult:
-    """Align source point cloud to target with a JAX LDDMM solver."""
+    landmarks_source: JaxArray | None = None,
+    landmarks_target: JaxArray | None = None,
+) -> StalignResult:
+    """Align a source point cloud onto a target with a JAX LDDMM solver.
+
+    All point arrays are in the solver's row-column frame; the returned
+    :class:`StalignResult` speaks ``(x, y)``.
+    """
     config = STalignConfig() if config is None else config
     registration = config.registration
-    source_points = to_row_col(source_points, point_order="row_col")
-    target_points = to_row_col(target_points, point_order="row_col")
+    source_points = validate_points(source_points, name="source_points")
+    target_points = validate_points(target_points, name="target_points")
     if preprocessed is None:
         preprocessed = stalign_preprocess(source_points, target_points, config=config.preprocess)
 
     if (landmarks_source is None) != (landmarks_target is None):
         raise ValueError("Expected both landmark arrays to be provided together.")
 
+    dtype = jax_dtype()
     if landmarks_source is None:
-        linear = np.eye(2, dtype=float)
-        translation = np.zeros(2, dtype=float)
+        linear = jnp.eye(2, dtype=dtype)
+        translation = jnp.zeros(2, dtype=dtype)
         source_landmarks = None
         target_landmarks = None
     else:
-        source_landmarks = to_row_col(landmarks_source, point_order="row_col")
-        target_landmarks = to_row_col(landmarks_target, point_order="row_col")
-        linear, translation = affine_from_points(source_landmarks, target_landmarks)
+        source_landmarks = validate_points(landmarks_source, name="landmarks_source")
+        target_landmarks = validate_points(landmarks_target, name="landmarks_target")
+        linear_np, translation_np = affine_from_points(source_landmarks, target_landmarks)
+        linear = jnp.asarray(linear_np, dtype=dtype)
+        translation = jnp.asarray(translation_np, dtype=dtype)
 
-    dtype = jax_dtype()
     result = lddmm(
         preprocessed.source_grid,
         preprocessed.source_image,
         preprocessed.target_grid,
         preprocessed.target_image,
-        L=jnp.asarray(linear, dtype=dtype),
-        T=jnp.asarray(translation, dtype=dtype),
-        points_source=None if source_landmarks is None else jnp.asarray(source_landmarks, dtype=dtype),
-        points_target=None if target_landmarks is None else jnp.asarray(target_landmarks, dtype=dtype),
+        L=linear,
+        T=translation,
+        points_source=source_landmarks,
+        points_target=target_landmarks,
         **asdict(registration),
     )
-    points_rc = to_row_col(source_points, point_order="row_col")
-    transformed = transform_points_row_col(
+    transformed_rc = transform_points_row_col(
         result["xv"],
-        jnp.asarray(result["v"]),
-        jnp.asarray(result["A"]),
-        jnp.asarray(points_rc, dtype=dtype),
+        result["v"],
+        result["A"],
+        source_points,
         direction="forward",
     )
-    aligned_points = jnp.asarray(from_row_col(np.asarray(transformed), point_order="row_col"))
-    return STalignResult(
+    return StalignResult(
         affine=result["A"],
         velocity=result["v"],
         velocity_grid=result["xv"],
-        aligned_points=aligned_points,
-        point_order="row_col",
+        aligned_points=transformed_rc[:, ::-1],
     )

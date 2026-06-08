@@ -21,11 +21,10 @@ from typing import Any
 import numpy as np
 
 from squidpy.experimental._methods._families import ALIGN_LANDMARKS
-from squidpy.experimental._methods._result import FitResult
 
 
 @dataclass
-class AffineFitResult(FitResult):
+class AffineFitResult:
     """A fitted ``(3, 3)`` homogeneous affine mapping query onto ref, in ``(x, y)``."""
 
     matrix: np.ndarray
