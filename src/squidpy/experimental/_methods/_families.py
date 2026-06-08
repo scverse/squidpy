@@ -1,11 +1,4 @@
-"""Estimator family registries.
-
-A *family* is the set of interchangeable algorithms behind one public function,
-selected by ``method=`` and sharing one ``fit`` contract. One :class:`Registry`
-per family. Registries live in this small module so the estimator modules can
-register into them without importing their package ``__init__`` (which imports
-the estimator modules in turn -- that would be circular).
-"""
+"""Estimator family registries."""
 
 from __future__ import annotations
 
