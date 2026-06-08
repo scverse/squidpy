@@ -220,6 +220,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+          use_pypi: true
 
 
   # Check that all tests defined above pass. This makes it easy to set a single "required" test in branch
