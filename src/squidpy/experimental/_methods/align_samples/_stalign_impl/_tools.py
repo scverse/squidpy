@@ -41,7 +41,6 @@ __all__ = [
     "STalignResult",
     "stalign_points",
     "stalign_preprocess",
-    "transform_points",
 ]
 
 
@@ -107,14 +106,16 @@ class STalignResult:
         point_order: PointOrder | None = None,
     ) -> JaxArray:
         """Transform arbitrary point arrays with the fitted map."""
-        return transform_points(
+        order = self.point_order if point_order is None else point_order
+        points_rc = to_row_col(points, point_order=order)
+        transformed = transform_points_row_col(
             self.velocity_grid,
-            self.velocity,
-            self.affine,
-            points,
+            jnp.asarray(self.velocity),
+            jnp.asarray(self.affine),
+            jnp.asarray(points_rc, dtype=jax_dtype()),
             direction=direction,
-            point_order=self.point_order if point_order is None else point_order,
         )
+        return jnp.asarray(from_row_col(np.asarray(transformed), point_order=order))
 
 
 def stalign_preprocess(
@@ -149,27 +150,6 @@ def stalign_preprocess(
         target_grid=(target_y, target_x),
         target_image=target_image,
     )
-
-
-def transform_points(
-    xv: tuple[JaxArray, JaxArray],
-    v: JaxArray,
-    A: JaxArray,
-    points: np.ndarray,
-    *,
-    direction: Literal["forward", "backward"] = "forward",
-    point_order: PointOrder = "row_col",
-) -> JaxArray:
-    """Transform point arrays with a fitted STalign map."""
-    points_rc = to_row_col(points, point_order=point_order)
-    transformed = transform_points_row_col(
-        xv,
-        jnp.asarray(v),
-        jnp.asarray(A),
-        jnp.asarray(points_rc, dtype=jax_dtype()),
-        direction=direction,
-    )
-    return jnp.asarray(from_row_col(np.asarray(transformed), point_order=point_order))
 
 
 def stalign_points(
@@ -214,14 +194,15 @@ def stalign_points(
         points_target=None if target_landmarks is None else jnp.asarray(target_landmarks, dtype=dtype),
         **asdict(registration),
     )
-    aligned_points = transform_points(
+    points_rc = to_row_col(source_points, point_order="row_col")
+    transformed = transform_points_row_col(
         result["xv"],
-        result["v"],
-        result["A"],
-        source_points,
+        jnp.asarray(result["v"]),
+        jnp.asarray(result["A"]),
+        jnp.asarray(points_rc, dtype=dtype),
         direction="forward",
-        point_order="row_col",
     )
+    aligned_points = jnp.asarray(from_row_col(np.asarray(transformed), point_order="row_col"))
     return STalignResult(
         affine=result["A"],
         velocity=result["v"],
