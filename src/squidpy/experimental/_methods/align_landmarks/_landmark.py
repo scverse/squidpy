@@ -20,8 +20,8 @@ from typing import Any
 
 import numpy as np
 
-from squidpy.experimental._fit._families import ALIGN_LANDMARKS
-from squidpy.experimental._fit._result import FitResult
+from squidpy.experimental._methods._families import ALIGN_LANDMARKS
+from squidpy.experimental._methods._result import FitResult
 
 
 @dataclass

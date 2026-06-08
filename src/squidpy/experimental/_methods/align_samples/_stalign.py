@@ -2,7 +2,7 @@
 
 The JAX solver is lifted from scverse/squidpy#1150 (Selman Özleyen); see
 :mod:`._stalign_impl`. This module only adds the thin :class:`Estimator` /
-:class:`FitResult` adapter onto the :mod:`squidpy.experimental._fit` core. JAX
+:class:`FitResult` adapter onto the :mod:`squidpy.experimental._methods` core. JAX
 is imported lazily inside :meth:`StalignEstimator.fit`, so importing this module
 is cheap and does not require JAX.
 """
@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from squidpy.experimental._fit._families import ALIGN_SAMPLES
-from squidpy.experimental._fit._result import FitResult
+from squidpy.experimental._methods._families import ALIGN_SAMPLES
+from squidpy.experimental._methods._result import FitResult
 
 if TYPE_CHECKING:
     from ._stalign_impl._tools import STalignConfig

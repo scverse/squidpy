@@ -9,7 +9,7 @@ the estimator modules in turn -- that would be circular).
 
 from __future__ import annotations
 
-from squidpy.experimental._fit._registry import Registry
+from squidpy.experimental._methods._registry import Registry
 
 #: Sample-to-sample alignment estimators -- ref/query point clouds in, transform out.
 #: Consumed by ``squidpy.experimental.tl.align``.
