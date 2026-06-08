@@ -1,7 +1,4 @@
-"""Core JAX implementation for experimental STalign point registration.
-
-Lifted byte-for-byte from scverse/squidpy#1150 (Selman Özleyen).
-"""
+"""Core JAX implementation for experimental STalign point registration."""
 
 from __future__ import annotations
 
