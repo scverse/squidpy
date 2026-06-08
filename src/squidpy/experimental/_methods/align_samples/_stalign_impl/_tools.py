@@ -9,11 +9,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
-import jax.numpy as jnp
-
-from ._core import jax_dtype, lddmm, transform_points_row_col
-from ._helpers import affine_from_points, rasterize, validate_points
-
 if TYPE_CHECKING:
     import jax
 
@@ -90,6 +85,10 @@ class StalignResult:
         direction: Literal["forward", "backward"] = "forward",
     ) -> JaxArray:
         """Map ``(N, 2)`` ``(x, y)`` points with the fitted diffeomorphism."""
+        import jax.numpy as jnp
+
+        from ._core import jax_dtype, transform_points_row_col
+
         pts = jnp.asarray(points, dtype=jax_dtype())
         if pts.ndim != 2 or pts.shape[1] != 2:
             raise ValueError(f"Expected an (N, 2) `(x, y)` array, found shape {pts.shape}.")
@@ -105,6 +104,8 @@ class StalignResult:
 
 def _rasterize_cloud(points_rc: JaxArray, config: STalignPreprocessConfig) -> tuple[tuple[JaxArray, JaxArray], JaxArray]:
     """Rasterize a row-col cloud into a ``((grid_y, grid_x), image)`` density."""
+    from ._helpers import rasterize
+
     grid_x, grid_y, image = rasterize(
         points_rc[:, 1],
         points_rc[:, 0],
@@ -128,6 +129,11 @@ def stalign_points(
     All point arrays are in the solver's row-column frame; the returned
     :class:`StalignResult` speaks ``(x, y)``.
     """
+    import jax.numpy as jnp
+
+    from ._core import jax_dtype, lddmm, transform_points_row_col
+    from ._helpers import affine_from_points, validate_points
+
     config = STalignConfig() if config is None else config
     registration = config.registration
     source_points = validate_points(source_points, name="source_points")

@@ -83,6 +83,12 @@ def test_missing_spatial_key() -> None:
         align(ref, query, spatial_key="missing", config=_tiny())
 
 
+def test_public_exports_are_reachable() -> None:
+    import squidpy.experimental.tl as tl
+
+    assert tl.StalignResult is StalignResult
+
+
 def test_align_with_landmarks() -> None:
     ref, query = _adata(), _adata()
     landmarks = ref.obsm["spatial"][:3]
