@@ -154,7 +154,8 @@ def affine_from_points(
         translation = np.mean(target, axis=0) - np.mean(source, axis=0)
         return linear, translation
 
-    source_h = np.concatenate((source, np.ones((source.shape[0], 1), dtype=float)), axis=1)
-    target_h = np.concatenate((target, np.ones((target.shape[0], 1), dtype=float)), axis=1)
-    affine = np.linalg.lstsq(source_h, target_h, rcond=None)[0].T
+    from skimage.transform import estimate_transform
+
+    model_obj = estimate_transform("affine", src=source, dst=target)
+    affine = np.asarray(model_obj.params)
     return affine[:2, :2], affine[:2, -1]

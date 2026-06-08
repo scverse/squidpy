@@ -81,3 +81,22 @@ def test_missing_spatial_key() -> None:
     ref, query = _adata(), _adata()
     with pytest.raises(KeyError, match="missing.*not found"):
         align(ref, query, spatial_key="missing", config=_tiny())
+
+
+def test_align_with_landmarks() -> None:
+    ref, query = _adata(), _adata()
+    landmarks = ref.obsm["spatial"][:3]
+
+    result = align(
+        ref,
+        query,
+        method="stalign",
+        output_mode="object",
+        landmarks_source=landmarks,
+        landmarks_target=landmarks,
+        config=_tiny(),
+    )
+
+    assert isinstance(result, StalignFitResult)
+    assert result.deltas.shape == query.obsm["spatial"].shape
+    assert "stalign_result" in result.metadata
