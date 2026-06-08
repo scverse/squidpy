@@ -133,7 +133,7 @@ def align_by_landmarks(
     key_added
         Destination ``obsm`` key when ``data`` is an AnnData (see :func:`align`).
     """
-    validate_output_mode(output_mode)
+    assert_one_of(output_mode, OUTPUT_MODES, name="output_mode")
 
     result = ALIGN_LANDMARKS.get(method)(
         landmarks_ref,
