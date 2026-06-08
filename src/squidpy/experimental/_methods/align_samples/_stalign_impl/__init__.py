@@ -1,10 +1,6 @@
-"""Ported STalign JAX LDDMM solver (provenance: scverse/squidpy#1150).
+"""Ported STalign JAX LDDMM solver
 
-Pure numerics only -- no :class:`~squidpy.experimental._methods.Estimator`. The
-estimator adapter lives one level up in
-:mod:`squidpy.experimental._methods.align_samples._stalign`. JAX is imported at
-module load here, so this subpackage must only be imported lazily (the adapter
-does so inside ``fit``, after checking requirements).
+Pure numerics only and these functions are gated by the jax requirement.
 """
 
 from __future__ import annotations

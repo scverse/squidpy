@@ -20,7 +20,7 @@ def jax_dtype() -> jnp.dtype:
     return jnp.float64 if jax.config.x64_enabled else jnp.float32
 
 
-def _to_affine(linear: Any, translation: Any) -> Any:
+def _to_affine(linear: jax.Array, translation: jax.Array) -> jax.Array:
     return jnp.array(
         [
             [linear[0, 0], linear[0, 1], translation[0]],
@@ -31,23 +31,24 @@ def _to_affine(linear: Any, translation: Any) -> Any:
     )
 
 
-def _grid_points(x: tuple[Any, Any]) -> Any:
+def _grid_points(x: tuple[jax.Array, jax.Array]) -> jax.Array:
     yy, xx = jnp.meshgrid(x[0], x[1], indexing="ij")
     return jnp.stack((yy, xx))
 
 
 def _interp(
-    x: tuple[Any, Any],
-    image: Any,
-    phii: Any,
+    x: tuple[jax.Array, jax.Array],
+    image: jax.Array,
+    phii: jax.Array,
     *,
     mode: str = "nearest",
-) -> Any:
+) -> jax.Array:
     """Interpolate a channels-first image on physical row-column coordinates."""
     arr = jnp.asarray(image)
     coords = jnp.asarray(phii)
     if coords.shape[0] != 2:
         raise ValueError(f"Expected interpolation coordinates to have leading axis of size 2, found `{coords.shape}`.")
+
     if arr.ndim == 2:
         arr = arr[None, ...]
 
@@ -57,7 +58,7 @@ def _interp(
     col_idx = (coords[1] - x[1][0]) / col_step
     idx = jnp.stack((row_idx.reshape(-1), col_idx.reshape(-1)))
 
-    def _sample(channel: Any) -> Any:
+    def _sample(channel: jax.Array) -> jax.Array:
         values = jsp.ndimage.map_coordinates(channel, idx, order=1, mode=mode)
         return values.reshape(coords.shape[1:])
 
@@ -65,13 +66,13 @@ def _interp(
 
 
 def transform_points_row_col(
-    xv: tuple[Any, Any],
-    velocity: Any,
-    affine: Any,
-    points: Any,
+    xv: tuple[jax.Array, jax.Array],
+    velocity: jax.Array,
+    affine: jax.Array,
+    points: np.ndarray | jax.Array,
     *,
     direction: Literal["forward", "backward"] = "forward",
-) -> Any:
+) -> jax.Array:
     pts = jnp.asarray(points)
     n_steps = velocity.shape[0]
     time_steps = range(n_steps)
@@ -98,11 +99,11 @@ def transform_points_row_col(
 
 
 def _transform_grid_backward(
-    x_target: tuple[Any, Any],
-    xv: tuple[Any, Any],
-    velocity: Any,
-    affine: Any,
-) -> Any:
+    x_target: tuple[jax.Array, jax.Array],
+    xv: tuple[jax.Array, jax.Array],
+    velocity: jax.Array,
+    affine: jax.Array,
+) -> jax.Array:
     target_grid = _grid_points(x_target)
     affine_inv = jnp.linalg.inv(affine)
     source_grid = jnp.einsum("ij,jhw->ihw", affine_inv[:2, :2], target_grid) + affine_inv[:2, -1][:, None, None]
@@ -114,7 +115,7 @@ def _transform_grid_backward(
     return source_grid
 
 
-def _contrast_transform(source_image: Any, target_image: Any, weights: Any) -> Any:
+def _contrast_transform(source_image: jax.Array, target_image: jax.Array, weights: jax.Array) -> jax.Array:
     flat_source = source_image.reshape(source_image.shape[0], -1)
     flat_target = target_image.reshape(target_image.shape[0], -1)
     flat_weights = weights.reshape(-1)
@@ -128,7 +129,7 @@ def _contrast_transform(source_image: Any, target_image: Any, weights: Any) -> A
     return (coefficients.T @ design).reshape(target_image.shape)
 
 
-def _build_velocity_grid(x_source: tuple[Any, Any], *, a: float, expand: float) -> tuple[Any, Any]:
+def _build_velocity_grid(x_source: tuple[jax.Array, jax.Array], *, a: float, expand: float) -> tuple[jax.Array, jax.Array]:
     minimum = jnp.array([x_source[0][0], x_source[1][0]])
     maximum = jnp.array([x_source[0][-1], x_source[1][-1]])
     center = (minimum + maximum) / 2.0
@@ -141,11 +142,11 @@ def _build_velocity_grid(x_source: tuple[Any, Any], *, a: float, expand: float) 
 
 
 def _build_regularizer(
-    xv: tuple[Any, Any],
+    xv: tuple[jax.Array, jax.Array],
     *,
     a: float,
     p: float,
-) -> tuple[Any, Any, Any]:
+) -> tuple[jax.Array, jax.Array, float | jax.Array]:
     dv = jnp.array([xv[0][1] - xv[0][0], xv[1][1] - xv[1][0]])
     shape = (xv[0].shape[0], xv[1].shape[0])
     fy = jnp.arange(shape[0], dtype=xv[0].dtype) / (shape[0] * dv[0])
@@ -160,21 +161,21 @@ def _build_regularizer(
 
 
 def _update_mixture_weights(
-    transformed_source: Any,
-    target_image: Any,
-    match_weights: Any,
-    artifact_weights: Any,
-    background_weights: Any,
+    transformed_source: jax.Array,
+    target_image: jax.Array,
+    match_weights: jax.Array,
+    artifact_weights: jax.Array,
+    background_weights: jax.Array,
     *,
     sigmaM: float,
     sigmaA: float,
     sigmaB: float,
     estimate_muA: bool,
     estimate_muB: bool,
-    muA: Any,
-    muB: Any,
+    muA: jax.Array,
+    muB: jax.Array,
     iteration: int,
-) -> tuple[Any, Any, Any, Any, Any]:
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
     if estimate_muA:
         muA = jnp.sum(artifact_weights * target_image, axis=(-1, -2)) / jnp.maximum(jnp.sum(artifact_weights), 1e-12)
     if estimate_muB:
@@ -212,24 +213,24 @@ def _update_mixture_weights(
 
 
 def _lddmm_loss(
-    linear: Any,
-    translation: Any,
-    velocity: Any,
+    linear: jax.Array,
+    translation: jax.Array,
+    velocity: jax.Array,
     *,
-    x_source: tuple[Any, Any],
-    source_image: Any,
-    x_target: tuple[Any, Any],
-    target_image: Any,
-    xv: tuple[Any, Any],
-    match_weights: Any,
-    ll: Any,
-    dv_prod: Any,
-    points_source: Any,
-    points_target: Any,
+    x_source: tuple[jax.Array, jax.Array],
+    source_image: jax.Array,
+    x_target: tuple[jax.Array, jax.Array],
+    target_image: jax.Array,
+    xv: tuple[jax.Array, jax.Array],
+    match_weights: jax.Array,
+    ll: jax.Array,
+    dv_prod: float | jax.Array,
+    points_source: jax.Array,
+    points_target: jax.Array,
     sigmaM: float,
     sigmaR: float,
     sigmaP: float,
-) -> tuple[Any, tuple[Any, Any, Any, Any, Any]]:
+) -> tuple[jax.Array, tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]]:
     affine = _to_affine(linear, translation)
     source_grid = _transform_grid_backward(x_target, xv, velocity, affine)
     warped_source = _interp(x_source, source_image, source_grid, mode="nearest")
@@ -257,15 +258,15 @@ def _lddmm_loss(
 
 
 def lddmm(
-    xI: tuple[Any, Any],
-    I: Any,
-    xJ: tuple[Any, Any],
-    J: Any,
+    xI: tuple[np.ndarray | jax.Array, np.ndarray | jax.Array],
+    I: np.ndarray | jax.Array,
+    xJ: tuple[np.ndarray | jax.Array, np.ndarray | jax.Array],
+    J: np.ndarray | jax.Array,
     *,
-    L: Any,
-    T: Any,
-    points_source: Any | None = None,
-    points_target: Any | None = None,
+    L: np.ndarray | jax.Array,
+    T: np.ndarray | jax.Array,
+    points_source: np.ndarray | jax.Array | None = None,
+    points_target: np.ndarray | jax.Array | None = None,
     a: float = 500.0,
     p: float = 2.0,
     expand: float = 2.0,
