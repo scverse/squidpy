@@ -1,9 +1,4 @@
-"""``align_landmarks`` family: closed-form alignment from paired landmarks.
-
-Importing this package registers the family's estimators into
-:data:`~squidpy.experimental._methods._families.ALIGN_LANDMARKS`. Pure NumPy /
-spatialdata / skimage -- no JAX.
-"""
+"""``align_landmarks`` family: closed-form alignment from paired landmarks."""
 
 from __future__ import annotations
 
