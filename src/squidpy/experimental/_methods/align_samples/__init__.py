@@ -8,6 +8,6 @@ JAX is pulled in lazily, only when an estimator's ``fit`` runs.
 from __future__ import annotations
 
 from squidpy.experimental._fit._families import ALIGN_SAMPLES
-from squidpy.experimental._fit.align_samples._stalign import StalignEstimator, StalignFitResult
+from squidpy.experimental._fit.align_samples._stalign import StalignFitResult, fit_stalign
 
-__all__ = ["ALIGN_SAMPLES", "StalignEstimator", "StalignFitResult"]
+__all__ = ["ALIGN_SAMPLES", "fit_stalign", "StalignFitResult"]

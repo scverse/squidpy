@@ -14,13 +14,12 @@ automatic correspondence matching is performed.
 
 from __future__ import annotations
 
-from abc import abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 
-from squidpy.experimental._fit._estimator import Estimator
 from squidpy.experimental._fit._families import ALIGN_LANDMARKS
 from squidpy.experimental._fit._result import FitResult
 
@@ -46,73 +45,87 @@ class AffineFitResult(FitResult):
         return coords @ self.matrix[:2, :2].T + self.matrix[:2, 2]
 
 
-class _LandmarkEstimator(Estimator):
-    """Shared logic for closed-form landmark fits.
-
-    The base :meth:`fit` does all the work that is common across models --
-    validate inputs, enforce ``N >= 3``, build the :class:`AffineFitResult`.
-    Subclasses only provide the matrix solver via :meth:`_solve`, so there is
-    no per-model branching here.
-    """
-
-    def fit(
-        self,
-        landmarks_ref: np.ndarray,
-        landmarks_query: np.ndarray,
-        *,
-        source_cs: str | None = None,
-        target_cs: str | None = None,
-    ) -> AffineFitResult:
-        """Fit an affine mapping ``landmarks_query`` onto ``landmarks_ref``.
-
-        Parameters
-        ----------
-        landmarks_ref, landmarks_query
-            Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``).
-        source_cs, target_cs
-            Optional coordinate-system labels stamped onto the result for
-            traceability; they do not affect the fit.
-        """
-        ref = _validate_landmarks(landmarks_ref, name="landmarks_ref")
-        query = _validate_landmarks(landmarks_query, name="landmarks_query")
-        if ref.shape != query.shape:
-            raise ValueError(
-                f"`landmarks_ref` and `landmarks_query` must have the same shape; got {ref.shape} and {query.shape}."
-            )
-        if ref.shape[0] < 3:
-            raise ValueError(f"`{self.name}` needs at least 3 landmark pairs, got {ref.shape[0]}.")
-
-        matrix = self._solve(ref, query)
-        return AffineFitResult(
-            matrix=matrix,
-            source_cs=source_cs,
-            target_cs=target_cs,
-            metadata={"method": self.name},
+def _fit_landmark_relation(
+    landmarks_ref: np.ndarray,
+    landmarks_query: np.ndarray,
+    *,
+    method: str,
+    solve_fn: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    source_cs: str | None = None,
+    target_cs: str | None = None,
+) -> AffineFitResult:
+    ref = _validate_landmarks(landmarks_ref, name="landmarks_ref")
+    query = _validate_landmarks(landmarks_query, name="landmarks_query")
+    if ref.shape != query.shape:
+        raise ValueError(
+            f"`landmarks_ref` and `landmarks_query` must have the same shape; got {ref.shape} and {query.shape}."
         )
+    if ref.shape[0] < 3:
+        raise ValueError(f"`{method}` needs at least 3 landmark pairs, got {ref.shape[0]}.")
 
-    @abstractmethod
-    def _solve(self, ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarray:
-        """Return the ``(3, 3)`` matrix mapping ``query_xy`` onto ``ref_xy``."""
+    matrix = solve_fn(ref, query)
+    return AffineFitResult(
+        matrix=matrix,
+        source_cs=source_cs,
+        target_cs=target_cs,
+        metadata={"method": method},
+    )
 
 
 @ALIGN_LANDMARKS.register("similarity")
-class LandmarkSimilarityEstimator(_LandmarkEstimator):
-    """4-DOF similarity fit (rotation + uniform scale + translation), via spatialdata."""
+def fit_similarity(
+    landmarks_ref: np.ndarray,
+    landmarks_query: np.ndarray,
+    *,
+    source_cs: str | None = None,
+    target_cs: str | None = None,
+) -> AffineFitResult:
+    """4-DOF similarity fit (rotation + uniform scale + translation), via spatialdata.
 
-    name = "similarity"
-
-    def _solve(self, ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarray:
-        return _fit_similarity(ref_xy, query_xy)
+    Parameters
+    ----------
+    landmarks_ref, landmarks_query
+        Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``).
+    source_cs, target_cs
+        Optional coordinate-system labels stamped onto the result for
+        traceability; they do not affect the fit.
+    """
+    return _fit_landmark_relation(
+        landmarks_ref,
+        landmarks_query,
+        method="similarity",
+        solve_fn=_fit_similarity,
+        source_cs=source_cs,
+        target_cs=target_cs,
+    )
 
 
 @ALIGN_LANDMARKS.register("affine")
-class LandmarkAffineEstimator(_LandmarkEstimator):
-    """6-DOF affine fit (rotation + non-uniform scale + shear + translation), via skimage."""
+def fit_affine(
+    landmarks_ref: np.ndarray,
+    landmarks_query: np.ndarray,
+    *,
+    source_cs: str | None = None,
+    target_cs: str | None = None,
+) -> AffineFitResult:
+    """6-DOF affine fit (rotation + non-uniform scale + shear + translation), via skimage.
 
-    name = "affine"
-
-    def _solve(self, ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarray:
-        return _fit_affine(ref_xy, query_xy)
+    Parameters
+    ----------
+    landmarks_ref, landmarks_query
+        Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``).
+    source_cs, target_cs
+        Optional coordinate-system labels stamped onto the result for
+        traceability; they do not affect the fit.
+    """
+    return _fit_landmark_relation(
+        landmarks_ref,
+        landmarks_query,
+        method="affine",
+        solve_fn=_fit_affine,
+        source_cs=source_cs,
+        target_cs=target_cs,
+    )
 
 
 def _validate_landmarks(points: np.ndarray, *, name: str) -> np.ndarray:

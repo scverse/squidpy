@@ -81,7 +81,7 @@ def align(
     ref_xy = get_coords(ref_adata, spatial_key)
     query_xy = get_coords(query_adata, spatial_key)
 
-    result = ALIGN_SAMPLES.get(method)().fit(ref_xy, query_xy, **method_kwargs)
+    result = ALIGN_SAMPLES.get(method)(ref_xy, query_xy, **method_kwargs)
 
     return writeback_obs(
         result,
@@ -132,7 +132,7 @@ def align_by_landmarks(
     """
     validate_output_mode(output_mode)
 
-    result = ALIGN_LANDMARKS.get(method)().fit(
+    result = ALIGN_LANDMARKS.get(method)(
         landmarks_ref,
         landmarks_query,
         source_cs=cs_name_query,
