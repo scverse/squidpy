@@ -73,6 +73,15 @@ def test_stalign_transform_accepts_arbitrary_points() -> None:
     assert np.asarray(out).shape == (1, 2)
 
 
+def test_stalign_transform_backward_inverts_forward() -> None:
+    ref, query = _points_xy(), _points_xy()
+    result = fit_stalign(ref, query, config=_tiny_config())
+
+    forward = result.transform(query, direction="forward")
+    roundtrip = result.transform(forward, direction="backward")
+    np.testing.assert_allclose(np.asarray(roundtrip), query, atol=1e-3)
+
+
 def test_stalign_transform_rejects_non_2d() -> None:
     ref, query = _points_xy(), _points_xy()
     result = fit_stalign(ref, query, config=_tiny_config())

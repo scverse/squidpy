@@ -1,11 +1,7 @@
-"""Low-level point-cloud tools for experimental STalign.
+"""Point-cloud tools for experimental STalign.
 
-Lifted from scverse/squidpy#1150 (Selman Özleyen) with import paths adjusted
-and minor cleanups. The fitted map is returned as a single :class:`StalignResult`
-container that keeps everything on JAX -- the affine, velocity field and
-velocity grid stay device-side and :meth:`StalignResult.transform` applies them
-to arbitrary points without round-tripping through NumPy. Container write-back
-lives in the caller, not here.
+The fitted map is returned as a single :class:`StalignResult`; container
+write-back lives in the caller, not here.
 """
 
 from __future__ import annotations
@@ -30,11 +26,9 @@ BlurScales: TypeAlias = float | tuple[float, ...] | list[float]
 __all__ = [
     "STalignConfig",
     "STalignPreprocessConfig",
-    "STalignPreprocessResult",
     "STalignRegistrationConfig",
     "StalignResult",
     "stalign_points",
-    "stalign_preprocess",
 ]
 
 
@@ -77,22 +71,11 @@ class STalignConfig:
 
 
 @dataclass(slots=True)
-class STalignPreprocessResult:
-    source_grid: tuple[JaxArray, JaxArray]
-    source_image: JaxArray
-    target_grid: tuple[JaxArray, JaxArray]
-    target_image: JaxArray
-
-
-@dataclass(slots=True)
 class StalignResult:
     """A fitted STalign diffeomorphism, ready to transform arbitrary points.
 
-    The map (``affine`` + diffeomorphic ``velocity`` field on ``velocity_grid``)
-    is held as JAX arrays in the solver's internal row-column frame.
-    :meth:`transform` takes care of the ``(x, y)`` boundary, so callers work in
-    ``(x, y)`` throughout. ``aligned_points`` is the fitted query cloud already
-    mapped into the reference frame (``transform`` of the query).
+    :meth:`transform` works in ``(x, y)``; ``aligned_points`` is the fitted query
+    cloud already mapped into the reference frame.
     """
 
     affine: JaxArray
@@ -120,45 +103,22 @@ class StalignResult:
         return transformed_rc[:, ::-1]
 
 
-def stalign_preprocess(
-    source_points: JaxArray,
-    target_points: JaxArray,
-    *,
-    config: STalignPreprocessConfig | None = None,
-) -> STalignPreprocessResult:
-    """Rasterize source and target point clouds (row-col) for LDDMM registration."""
-    config = STalignPreprocessConfig() if config is None else config
-    source_points = validate_points(source_points, name="source_points")
-    target_points = validate_points(target_points, name="target_points")
-
-    source_x, source_y, source_image = rasterize(
-        source_points[:, 1],
-        source_points[:, 0],
+def _rasterize_cloud(points_rc: JaxArray, config: STalignPreprocessConfig) -> tuple[tuple[JaxArray, JaxArray], JaxArray]:
+    """Rasterize a row-col cloud into a ``((grid_y, grid_x), image)`` density."""
+    grid_x, grid_y, image = rasterize(
+        points_rc[:, 1],
+        points_rc[:, 0],
         dx=config.dx,
         blur=config.blur,
         expand=config.expand,
     )
-    target_x, target_y, target_image = rasterize(
-        target_points[:, 1],
-        target_points[:, 0],
-        dx=config.dx,
-        blur=config.blur,
-        expand=config.expand,
-    )
-
-    return STalignPreprocessResult(
-        source_grid=(source_y, source_x),
-        source_image=source_image,
-        target_grid=(target_y, target_x),
-        target_image=target_image,
-    )
+    return (grid_y, grid_x), image
 
 
 def stalign_points(
     source_points: JaxArray,
     target_points: JaxArray,
     *,
-    preprocessed: STalignPreprocessResult | None = None,
     config: STalignConfig | None = None,
     landmarks_source: JaxArray | None = None,
     landmarks_target: JaxArray | None = None,
@@ -172,8 +132,8 @@ def stalign_points(
     registration = config.registration
     source_points = validate_points(source_points, name="source_points")
     target_points = validate_points(target_points, name="target_points")
-    if preprocessed is None:
-        preprocessed = stalign_preprocess(source_points, target_points, config=config.preprocess)
+    source_grid, source_image = _rasterize_cloud(source_points, config.preprocess)
+    target_grid, target_image = _rasterize_cloud(target_points, config.preprocess)
 
     if (landmarks_source is None) != (landmarks_target is None):
         raise ValueError("Expected both landmark arrays to be provided together.")
@@ -192,10 +152,10 @@ def stalign_points(
         translation = jnp.asarray(translation_np, dtype=dtype)
 
     result = lddmm(
-        preprocessed.source_grid,
-        preprocessed.source_image,
-        preprocessed.target_grid,
-        preprocessed.target_image,
+        source_grid,
+        source_image,
+        target_grid,
+        target_image,
         L=linear,
         T=translation,
         points_source=source_landmarks,

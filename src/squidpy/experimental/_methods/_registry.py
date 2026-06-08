@@ -43,7 +43,6 @@ class Registry:
                         )
                     return func(*args, **kwargs)
 
-                wrapped.__requires__ = requires  # type: ignore[attr-defined]
                 self._registry[key] = wrapped
                 return wrapped  # type: ignore[return-value]
             else:

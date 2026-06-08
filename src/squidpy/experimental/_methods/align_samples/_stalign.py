@@ -1,11 +1,4 @@
-"""STalign estimator: JAX LDDMM point-cloud registration.
-
-The JAX solver is lifted from scverse/squidpy#1150 (Selman Özleyen); see
-:mod:`._stalign_impl`. This module only adds the thin registry entry that swaps
-``(x, y)`` inputs into the solver's row-column frame and returns the fitted
-:class:`StalignResult`. JAX is imported lazily inside :func:`fit_stalign`, so
-importing this module is cheap and does not require JAX.
-"""
+"""STalign estimator: JAX LDDMM point-cloud registration."""
 
 from __future__ import annotations
 
