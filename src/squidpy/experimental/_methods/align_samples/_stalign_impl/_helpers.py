@@ -145,12 +145,7 @@ def affine_from_points(
     points_source: JaxArray,
     points_target: JaxArray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Compute an affine initialization from corresponding landmarks.
-
-    Delegates to skimage's least-squares estimator, so this is the one place
-    that drops to NumPy on the CPU; the small ``(2, 2)`` / ``(2,)`` result is
-    lifted back to JAX by the caller.
-    """
+    """Compute an affine initialization from corresponding landmarks."""
     source = np.asarray(points_source, dtype=float)
     target = np.asarray(points_target, dtype=float)
     if source.shape != target.shape:
