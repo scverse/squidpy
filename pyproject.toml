@@ -66,8 +66,8 @@ dependencies = [
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
-  "spatialdata>=0.7.1",
-  "spatialdata-plot",
+  "spatialdata>=0.7.2",  # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
+  "spatialdata-plot>=0.3.3",
   "statsmodels>=0.12",
   # https://github.com/scverse/squidpy/issues/526
   "tifffile!=2022.4.22",
@@ -76,7 +76,17 @@ dependencies = [
   "xarray>=2024.10",
   "zarr>=3",
 ]
-optional-dependencies.dev = [
+optional-dependencies.leiden = [
+  "leidenalg",
+  "spatialleiden>=0.4",
+]
+urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
+urls.Documentation = "https://squidpy.readthedocs.io"
+urls.Home-page = "https://github.com/scverse/squidpy"
+urls.Source = "https://github.com/scverse/squidpy"
+
+[dependency-groups]
+dev = [
   "hatch>=1.9",
   "ipykernel",
   "ipywidgets",
@@ -86,7 +96,18 @@ optional-dependencies.dev = [
   "pre-commit>=3",
   "ruff",
 ]
-optional-dependencies.docs = [
+test = [
+  "coverage[toml]>=7",
+  "pytest>=7",
+  # Just for VS Code
+  "pytest-cov>=4",
+  "pytest-mock>=3.5",
+  "pytest-rerunfailures",
+  "pytest-timeout>=2.1",
+  "pytest-xdist>=3",
+  "scanpy[leiden]",
+]
+docs = [
   "docutils<0.22",                    # Pin to avoid sphinx-tabs KeyError with backrefs
   "ipython",
   "ipywidgets>=8",
@@ -102,24 +123,6 @@ optional-dependencies.docs = [
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
 ]
-optional-dependencies.leiden = [
-  "leidenalg",
-  "spatialleiden>=0.4",
-]
-optional-dependencies.test = [
-  "coverage[toml]>=7",
-  "pytest>=7",
-  # Just for VS Code
-  "pytest-cov>=4",
-  "pytest-mock>=3.5",
-  "pytest-timeout>=2.1",
-  "pytest-xdist>=3",
-  "scanpy[leiden]",
-]
-urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
-urls."Documentation" = "https://squidpy.readthedocs.io"
-urls."Home-page" = "https://github.com/scverse/squidpy"
-urls."Source" = "https://github.com/scverse/squidpy"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -132,6 +135,27 @@ build.hooks.vcs.version-file = "_version.py"
 build.targets.wheel.packages = [ "src/squidpy" ]
 metadata.allow-direct-references = true
 version.source = "vcs"
+
+[tool.pixi]
+workspace.channels = [ "conda-forge" ]
+workspace.platforms = [ "linux-64", "osx-arm64" ]
+dependencies.python = ">=3.11"
+pypi-dependencies.squidpy = { path = ".", editable = true }
+tasks.format = "ruff format ."
+tasks.kernel-install = 'python -m ipykernel install --user --name pixi-dev --display-name "squidpy (dev)"'
+tasks.lab = "jupyter lab"
+tasks.lint = "ruff check ."
+tasks.pre-commit = "pre-commit run"
+tasks.pre-commit-install = "pre-commit install"
+tasks.test = "pytest -v --color=yes --tb=short --durations=10"
+feature.py311.dependencies.python = "3.11.*"
+feature.py313.dependencies.python = "3.13.*"
+environments.default = { features = [ "py313" ], solve-group = "py313" }
+environments.dev-py311 = { features = [ "dev", "test", "py311" ], solve-group = "py311" }
+environments.dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
+environments.docs-py311 = { features = [ "docs", "py311" ], solve-group = "py311" }
+environments.docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
+environments.test-py313 = { features = [ "test", "py313" ], solve-group = "py313" }
 
 [tool.ruff]
 line-length = 120
@@ -225,17 +249,24 @@ lint.flake8-tidy-imports.ban-relative-imports = "all"
 lint.isort.required-imports = [ "from __future__ import annotations" ]
 
 [tool.pytest]
-ini_options.filterwarnings = [
+strict = true
+filterwarnings = [
   "error::numba.NumbaPerformanceWarning",
   "ignore::UserWarning",
   "ignore::anndata.OldFormatWarning",
   "ignore:.*pkg_resources:DeprecationWarning",
 ]
-ini_options.python_files = "test_*.py"
-ini_options.testpaths = [ "tests/" ]
-ini_options.xfail_strict = true
-ini_options.addopts = [
+python_files = [ "test_*.py" ]
+testpaths = [ "tests/" ]
+addopts = [
   "--ignore=docs",
+]
+markers = [
+  "internet: tests that require internet",
+  # the below markers are just there because we import from anndata.tests.helpers,
+  # which means pytest sees them despite us not using them.
+  "gpu: tests that require GPU",
+  "array_api: tests that require array-api-compat",
 ]
 
 [tool.coverage]
@@ -274,24 +305,3 @@ skip = [
   "docs/references.md",
   "docs/notebooks/example.ipynb",
 ]
-
-[tool.pixi]
-dependencies.python = ">=3.11"
-environments.dev-py311 = { features = [ "dev", "test", "py311" ], solve-group = "py311" }
-environments.docs-py311 = { features = [ "docs", "py311" ], solve-group = "py311" }
-environments.default = { features = [ "py313" ], solve-group = "py313" }
-environments.dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
-environments.docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
-environments.test-py313 = { features = [ "test", "py313" ], solve-group = "py313" }
-feature.py311.dependencies.python = "3.11.*"
-feature.py313.dependencies.python = "3.13.*"
-pypi-dependencies.squidpy = { path = ".", editable = true }
-tasks.lab = "jupyter lab"
-tasks.kernel-install = 'python -m ipykernel install --user --name pixi-dev --display-name "squidpy (dev)"'
-tasks.test = "pytest -v --color=yes --tb=short --durations=10"
-tasks.lint = "ruff check ."
-tasks.format = "ruff format ."
-tasks.pre-commit-install = "pre-commit install"
-tasks.pre-commit = "pre-commit run"
-workspace.channels = [ "conda-forge" ]
-workspace.platforms = [ "osx-arm64", "linux-64" ]
