@@ -11,9 +11,7 @@ import squidpy as sq
 from squidpy.experimental.im._tiling import compute_cell_info, compute_cell_info_tiled
 from tests.conftest import PlotTester, PlotTesterMeta
 
-# ---------------------------------------------------------------------------
 # Core behavioural tests
-# ---------------------------------------------------------------------------
 
 
 class TestCalculateTilingQC:
@@ -222,9 +220,7 @@ class TestCalculateTilingQC:
         assert adata.obs["is_outlier"].dtype == bool
 
 
-# ---------------------------------------------------------------------------
 # Params resolution
-# ---------------------------------------------------------------------------
 
 
 class TestTilingQCParamsResolution:
@@ -280,9 +276,7 @@ class TestTilingQCParamsResolution:
             _resolve_qc_params(42)
 
 
-# ---------------------------------------------------------------------------
 # resolve_labels_array helper
-# ---------------------------------------------------------------------------
 
 
 class TestResolveLabelsArray:
@@ -310,9 +304,7 @@ class TestResolveLabelsArray:
             resolve_labels_array(sdata, "labels", scale=None)
 
 
-# ---------------------------------------------------------------------------
 # Tiled centroid backend
-# ---------------------------------------------------------------------------
 
 
 class TestComputeCellInfoTiled:
@@ -363,9 +355,7 @@ class TestComputeCellInfoTiled:
             assert ci_tiled.bbox_w == ci_ref.bbox_w
 
 
-# ---------------------------------------------------------------------------
 # Visual regression tests (PlotTester)
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()

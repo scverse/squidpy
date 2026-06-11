@@ -53,9 +53,7 @@ class TileSpec:
     owned_ids: frozenset[int]
 
 
-# ---------------------------------------------------------------------------
 # Centroid computation
-# ---------------------------------------------------------------------------
 
 
 def compute_cell_info(labels: np.ndarray) -> dict[int, CellInfo]:
@@ -194,9 +192,7 @@ def compute_cell_info_tiled(
     return result
 
 
-# ---------------------------------------------------------------------------
 # Tile spec building
-# ---------------------------------------------------------------------------
 
 
 def _auto_margin(cell_info: dict[int, CellInfo]) -> int:
@@ -281,9 +277,7 @@ def build_tile_specs(
     return specs
 
 
-# ---------------------------------------------------------------------------
 # Tile extraction
-# ---------------------------------------------------------------------------
 
 
 def extract_tile(
@@ -405,9 +399,7 @@ def _zero_non_owned(tile_labels: np.ndarray, owned_ids: frozenset[int]) -> None:
         tile_labels[~np.isin(tile_labels, owned_arr)] = 0
 
 
-# ---------------------------------------------------------------------------
 # Coverage verification
-# ---------------------------------------------------------------------------
 
 
 def verify_coverage(
