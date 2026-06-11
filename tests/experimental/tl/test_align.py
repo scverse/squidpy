@@ -83,10 +83,20 @@ def test_missing_spatial_key() -> None:
         align(ref, query, spatial_key="missing", config=_tiny())
 
 
-def test_public_exports_are_reachable() -> None:
+def test_public_surface_is_align_result_only() -> None:
     import squidpy.experimental.tl as tl
 
-    assert tl.StalignResult is StalignResult
+    # `AlignResult` is the only result type exposed; concretes stay in their home modules.
+    assert "AlignResult" in tl.__all__
+    assert not hasattr(tl, "StalignResult")
+    assert not hasattr(tl, "AffineFitResult")
+
+
+def test_object_result_satisfies_align_result_protocol() -> None:
+    from squidpy.experimental.tl import AlignResult
+
+    result = align(_adata(), _adata(), method="stalign", output_mode="object", config=_tiny())
+    assert isinstance(result, AlignResult)
 
 
 def _sdata_tables(**tables: AnnData):
