@@ -9,5 +9,6 @@ from __future__ import annotations
 
 from squidpy.experimental._methods._families import ALIGN_SAMPLES
 from squidpy.experimental._methods.align_samples._stalign import fit_stalign
+from squidpy.experimental._methods.align_samples._stalign_impl._tools import StalignResult
 
-__all__ = ["ALIGN_SAMPLES", "fit_stalign"]
+__all__ = ["ALIGN_SAMPLES", "fit_stalign", "StalignResult"]

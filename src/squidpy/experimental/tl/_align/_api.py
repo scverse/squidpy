@@ -27,8 +27,7 @@ from squidpy.experimental.tl._align._io import (
 OUTPUT_MODES = ("object", "copy", "inplace")
 ON_VALUES = ("obs", "image")
 if TYPE_CHECKING:
-    from squidpy.experimental._methods.align_landmarks import AffineFitResult
-    from squidpy.experimental._methods.align_samples._stalign_impl._tools import StalignResult
+    from squidpy.experimental._methods import AlignResult
 
 __all__ = ["align", "align_by_landmarks"]
 
@@ -45,7 +44,7 @@ def align(
     output_mode: Literal["object", "copy", "inplace"] = "object",
     key_added: str | None = None,
     **method_kwargs: Any,
-) -> StalignResult | AnnData | SpatialData | None:
+) -> AlignResult | AnnData | SpatialData | None:
     """Align a query sample onto a reference sample.
 
     Parameters
@@ -64,7 +63,7 @@ def align(
     spatial_key
         ``obsm`` key holding the ``(x, y)`` coordinates. Defaults to ``"spatial"``.
     output_mode
-        - ``"object"`` (default) -- return the raw :class:`StalignResult`; nothing is written.
+        - ``"object"`` (default) -- return the fitted :class:`~squidpy.experimental._methods.AlignResult`; nothing is written.
         - ``"inplace"`` -- write the aligned coordinates into the query and return ``None``.
         - ``"copy"`` -- write into a copy of the query and return the copy.
     key_added
@@ -84,7 +83,7 @@ def align(
     ref_xy = get_coords(ref_adata, spatial_key)
     query_xy = get_coords(query_adata, spatial_key)
 
-    result = ALIGN_SAMPLES.get(method)(ref_xy, query_xy, **method_kwargs)
+    result = ALIGN_SAMPLES.get(method)(ref=ref_xy, query=query_xy, **method_kwargs)
 
     return writeback_obs(
         result,
@@ -108,7 +107,7 @@ def align_by_landmarks(
     spatial_key: str = "spatial",
     output_mode: Literal["object", "copy", "inplace"] = "object",
     key_added: str | None = None,
-) -> AffineFitResult | AnnData | SpatialData | None:
+) -> AlignResult | AnnData | SpatialData | None:
     """Align by a closed-form fit on pre-paired landmarks.
 
     Parameters
@@ -129,7 +128,8 @@ def align_by_landmarks(
     spatial_key
         ``obsm`` key when ``data`` is an :class:`~anndata.AnnData`.
     output_mode
-        See :func:`align`. ``"object"`` (default) returns the :class:`AffineFitResult`.
+        See :func:`align`. ``"object"`` (default) returns the fitted
+        :class:`~squidpy.experimental._methods.align_landmarks.AffineFitResult`.
     key_added
         Destination ``obsm`` key when ``data`` is an AnnData (see :func:`align`).
     """

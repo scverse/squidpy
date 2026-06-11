@@ -87,6 +87,40 @@ def test_unknown_method_lists_available() -> None:
         align_by_landmarks(_REF, _QUERY, method="nope", output_mode="object")
 
 
+def test_non_finite_landmarks_rejected() -> None:
+    bad = _QUERY.copy()
+    bad[0, 0] = np.nan
+    with pytest.raises(ValueError, match="must contain only finite values"):
+        align_by_landmarks(_REF, bad, method="affine", output_mode="object")
+
+
+def test_bad_data_type_raises() -> None:
+    with pytest.raises(TypeError, match="must be AnnData or SpatialData"):
+        align_by_landmarks(_REF, _QUERY, method="affine", data=object(), output_mode="inplace")  # type: ignore[arg-type]
+
+
+def test_spatialdata_copy_leaves_original_untouched() -> None:
+    sd = pytest.importorskip("spatialdata")
+    from spatialdata.models import PointsModel
+    from spatialdata.transformations import Identity, get_transformation
+
+    pts = PointsModel.parse(_QUERY, transformations={"query_cs": Identity()})
+    sdata = sd.SpatialData(points={"pts": pts})
+
+    out = align_by_landmarks(
+        _REF,
+        _QUERY,
+        method="affine",
+        data=sdata,
+        cs_name_query="query_cs",
+        cs_name_ref="ref_cs",
+        output_mode="copy",
+    )
+    assert out is not sdata
+    assert "ref_cs" in get_transformation(out.points["pts"], get_all=True)
+    assert "ref_cs" not in get_transformation(sdata.points["pts"], get_all=True)
+
+
 def test_spatialdata_registers_transformation() -> None:
     sd = pytest.importorskip("spatialdata")
     from spatialdata.models import PointsModel

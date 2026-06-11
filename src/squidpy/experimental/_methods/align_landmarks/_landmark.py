@@ -7,7 +7,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 
+from squidpy._utils import NDArrayA
 from squidpy.experimental._methods._families import ALIGN_LANDMARKS
 
 
@@ -24,7 +26,7 @@ class AffineFitResult:
         if self.matrix.shape != (3, 3):
             raise ValueError(f"Expected a (3, 3) homogeneous matrix, found shape {self.matrix.shape}.")
 
-    def transform(self, x: np.ndarray) -> np.ndarray:
+    def transform(self, x: npt.ArrayLike) -> NDArrayA:
         """Apply the affine to an ``(N, 2)`` ``(x, y)`` coordinate array."""
         coords = np.asarray(x, dtype=float)
         if coords.ndim != 2 or coords.shape[1] != 2:

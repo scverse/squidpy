@@ -1,0 +1,59 @@
+"""Structural contracts shared across the alignment estimator families.
+
+These :class:`~typing.Protocol` types are what the public API and the registries
+are typed against, so the orchestration layer never names a concrete estimator
+result (e.g. ``StalignResult``). A new estimator only has to satisfy
+:class:`AlignResult` -- a ``transform`` that maps points into the reference
+frame -- to plug into :func:`squidpy.experimental.tl.align`.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+import numpy.typing as npt
+
+from squidpy._utils import NDArrayA
+
+if TYPE_CHECKING:
+    from squidpy.experimental._methods.align_landmarks._landmark import AffineFitResult
+
+__all__ = ["AlignResult", "AlignSamplesFn", "AlignLandmarksFn"]
+
+
+@runtime_checkable
+class AlignResult(Protocol):
+    """A fitted alignment that maps ``(N, 2)`` ``(x, y)`` points into the reference frame.
+
+    This is the only thing the public ``align*`` functions require of an
+    estimator's result, so ``output_mode="object"`` is agnostic to the method
+    that produced it.
+    """
+
+    def transform(self, points: npt.ArrayLike, /) -> NDArrayA:
+        """Map an ``(N, 2)`` ``(x, y)`` array into the reference frame."""
+        ...
+
+
+class AlignSamplesFn(Protocol):
+    """Calling convention for ``align_samples`` estimators.
+
+    Two point clouds in (passed by keyword as ``ref`` / ``query`` so the
+    direction can never be silently swapped), one :class:`AlignResult` out.
+    Solver-specific options arrive through ``**kwargs``.
+    """
+
+    def __call__(self, ref: npt.ArrayLike, query: npt.ArrayLike, **kwargs: Any) -> AlignResult: ...
+
+
+class AlignLandmarksFn(Protocol):
+    """Calling convention for ``align_landmarks`` estimators: paired landmarks in, affine out."""
+
+    def __call__(
+        self,
+        landmarks_ref: npt.ArrayLike,
+        landmarks_query: npt.ArrayLike,
+        *,
+        source_cs: str | None = ...,
+        target_cs: str | None = ...,
+    ) -> AffineFitResult: ...

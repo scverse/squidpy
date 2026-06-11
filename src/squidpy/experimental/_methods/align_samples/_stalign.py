@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+
+import numpy.typing as npt
 
 from squidpy.experimental._methods._families import ALIGN_SAMPLES
 
@@ -12,12 +14,12 @@ if TYPE_CHECKING:
 
 @ALIGN_SAMPLES.register("stalign", requires=("jax",))
 def fit_stalign(
-    ref: Any,
-    query: Any,
+    ref: npt.ArrayLike,
+    query: npt.ArrayLike,
     *,
     config: STalignConfig | None = None,
-    landmarks_source: Any | None = None,
-    landmarks_target: Any | None = None,
+    landmarks_source: npt.ArrayLike | None = None,
+    landmarks_target: npt.ArrayLike | None = None,
 ) -> StalignResult:
     """Fit a deformation mapping ``query`` onto ``ref``.
 

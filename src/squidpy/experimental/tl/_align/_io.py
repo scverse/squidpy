@@ -17,8 +17,8 @@ from spatialdata import SpatialData
 from squidpy._validators import assert_key_in_sdata
 
 if TYPE_CHECKING:
+    from squidpy.experimental._methods import AlignResult
     from squidpy.experimental._methods.align_landmarks import AffineFitResult
-    from squidpy.experimental._methods.align_samples._stalign_impl._tools import StalignResult
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ def get_coords(adata: AnnData, spatial_key: str) -> np.ndarray:
 
 
 def writeback_obs(
-    result: StalignResult | AffineFitResult,
+    result: AlignResult,
     *,
     output_mode: str,
     query_adata: AnnData,
@@ -88,7 +88,7 @@ def writeback_obs(
     element_key: str | None,
     spatial_key: str,
     key_added: str | None,
-) -> StalignResult | AffineFitResult | AnnData | SpatialData | None:
+) -> AlignResult | AnnData | SpatialData | None:
     """Bake ``result.transform(coords)`` into the query ``obsm`` per ``output_mode``."""
     if output_mode == "object":
         return result
@@ -102,7 +102,13 @@ def writeback_obs(
         return None if output_mode == "inplace" else target
 
     sdata = container if output_mode == "inplace" else shallow_copy_sdata(container)
-    sdata.tables[element_key].obsm[dest] = new_coords
+    target_table = sdata.tables[element_key]
+    if output_mode == "copy":
+        # `shallow_copy_sdata` shares table objects with the original; copy the single
+        # table we mutate so `output_mode="copy"` truly leaves the input untouched.
+        target_table = target_table.copy()
+        sdata.tables[element_key] = target_table
+    target_table.obsm[dest] = new_coords
     return None if output_mode == "inplace" else sdata
 
 
@@ -119,6 +125,7 @@ def writeback_affine_sdata(
     Non-destructive: it adds a transformation into ``target_cs`` so the whole
     coordinate system inherits the alignment. Nothing is materialised.
     """
+    from spatialdata import deepcopy as sd_deepcopy
     from spatialdata.transformations import Affine, get_transformation, set_transformation
 
     if moving_cs is None or target_cs is None:
@@ -127,11 +134,16 @@ def writeback_affine_sdata(
     out = sdata if output_mode == "inplace" else shallow_copy_sdata(sdata)
     sd_affine = Affine(np.asarray(result.matrix), input_axes=("x", "y"), output_axes=("x", "y"))
     touched = False
-    for _etype, _name, element in out.gen_elements():
+    for etype, name, element in list(out.gen_elements()):
         if isinstance(element, AnnData):
             continue
         if moving_cs not in get_transformation(element, get_all=True):
             continue
+        if output_mode == "copy":
+            # `shallow_copy_sdata` shares element objects with the original; deep-copy each
+            # element we register a transform on so `output_mode="copy"` leaves the input untouched.
+            element = sd_deepcopy(element)
+            getattr(out, etype)[name] = element
         set_transformation(element, sd_affine, to_coordinate_system=target_cs)
         touched = True
     if not touched:

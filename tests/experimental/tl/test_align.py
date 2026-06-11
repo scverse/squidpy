@@ -89,6 +89,30 @@ def test_public_exports_are_reachable() -> None:
     assert tl.StalignResult is StalignResult
 
 
+def _sdata_tables(**tables: AnnData):
+    sd = pytest.importorskip("spatialdata")
+    from spatialdata.models import TableModel
+
+    return sd.SpatialData(tables={name: TableModel.parse(adata) for name, adata in tables.items()})
+
+
+def test_sdata_object_mode() -> None:
+    sdata = _sdata_tables(ref=_adata(), query=_adata())
+    result = align(sdata, method="stalign", ref_key="ref", query_key="query", output_mode="object", config=_tiny())
+    assert isinstance(result, StalignResult)
+    assert "aligned_spatial" not in sdata.tables["query"].obsm
+
+
+def test_sdata_copy_leaves_original_untouched() -> None:
+    sd = pytest.importorskip("spatialdata")
+
+    sdata = _sdata_tables(ref=_adata(), query=_adata())
+    out = align(sdata, ref_key="ref", query_key="query", output_mode="copy", key_added="aligned", config=_tiny())
+    assert isinstance(out, sd.SpatialData) and out is not sdata
+    assert "aligned" in out.tables["query"].obsm
+    assert "aligned" not in sdata.tables["query"].obsm
+
+
 def test_align_with_landmarks() -> None:
     ref, query = _adata(), _adata()
     landmarks = ref.obsm["spatial"][:3]
