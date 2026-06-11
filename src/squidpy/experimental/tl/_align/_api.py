@@ -129,15 +129,16 @@ def align_by_landmarks(
         ``obsm`` key when ``data`` is an :class:`~anndata.AnnData`.
     output_mode
         See :func:`align`. ``"object"`` (default) returns the fitted
-        :class:`~squidpy.experimental._methods.align_landmarks.AffineFitResult`.
+        :class:`~squidpy.experimental._methods.AlignResult` (an
+        :class:`~squidpy.experimental._methods.align_landmarks.AffineFitResult`).
     key_added
         Destination ``obsm`` key when ``data`` is an AnnData (see :func:`align`).
     """
     assert_one_of(output_mode, OUTPUT_MODES, name="output_mode")
 
     result = ALIGN_LANDMARKS.get(method)(
-        landmarks_ref,
-        landmarks_query,
+        landmarks_ref=landmarks_ref,
+        landmarks_query=landmarks_query,
         source_cs=cs_name_query,
         target_cs=cs_name_ref,
     )
