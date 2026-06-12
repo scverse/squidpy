@@ -31,12 +31,12 @@ import xarray as xr
 from scipy.ndimage import binary_closing
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
+from skimage.measure import find_contours
 from skimage.measure import label as cc_label
 from skimage.measure import regionprops
 from skimage.morphology import disk as morph_disk
 from spatialdata._logging import logger as logg
 
-from squidpy.experimental.utils._geometry import equivalent_diameter, largest_contour
 from squidpy.experimental.utils._labels import iter_chunked_regionprops, resolve_labels_array
 from squidpy.experimental.utils._params import resolve_params
 
@@ -302,10 +302,12 @@ def _extract_cut_edges(
         if not cell_mask.any():
             continue
         outlier_crops[lid] = cell_mask
+        # 1px zero-pad so cells filling their bbox still trace a closed contour.
         mask = np.pad(cell_mask.astype(np.float32), 1, mode="constant", constant_values=0)
-        contour = largest_contour(mask)
-        if contour is None:
+        contours = find_contours(mask, 0.5)
+        if not contours:  # degenerate mask traces nothing; skip it
             continue
+        contour = max(contours, key=len)
         contour_global = contour.copy()
         contour_global[:, 0] += min_r - 1
         contour_global[:, 1] += min_c - 1
@@ -315,7 +317,7 @@ def _extract_cut_edges(
         cy = float(ys.mean()) + min_r - 1
         cx = float(xs.mean()) + min_c - 1
         area = float(mask.sum())
-        eq_diameter = equivalent_diameter(area)
+        eq_diameter = float(np.sqrt(4 * area / np.pi))  # diameter of the equal-area circle
         min_len = max(min_edge_length, min_edge_length_ratio * eq_diameter)
 
         # find_contours places level set 0.5 outside the integer pixel boundary.
