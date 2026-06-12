@@ -168,6 +168,23 @@ _BUILTIN_X_REDUCERS: dict[str, Callable[[np.ndarray], np.ndarray]] = {
 # take the first member's value rather than aggregating.
 _GROUP_INVARIANT_COLS = frozenset({"stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence", "region"})
 
+# QC-contract columns that calculate_tiling_qc always writes and that must NOT be
+# summed: a stitched cell's centroid is the (unweighted) mean of its pieces', and
+# the per-piece cut-artifact scores keep the group's worst (max) value.  Summing
+# either produces out-of-range / out-of-bounds garbage (the merge_strategy default
+# is "sum", aimed at additive *user* features like area/intensity).
+_CENTROID_COLS = frozenset({"centroid_y", "centroid_x"})
+_QC_SCORE_COLS = frozenset(
+    {
+        "max_straight_edge_ratio",
+        "cardinal_alignment_score",
+        "cut_score",
+        "smoothed_cut_score",
+        "nhood_outlier_fraction",
+        "is_outlier",
+    }
+)
+
 
 def _resolve_strategy(strategy: str | Callable[[pd.Series], object]) -> Callable[[pd.Series], object]:
     if callable(strategy):
@@ -179,7 +196,10 @@ def _resolve_strategy(strategy: str | Callable[[pd.Series], object]) -> Callable
     return _BUILTIN_STRATEGIES[strategy]
 
 
-_INTEGER_PRESERVING_STRATEGIES = frozenset({"sum", "min", "max", "first"})
+# Strategies whose result is always one of the input values, so an integer
+# input dtype is safe to keep.  ``sum`` is deliberately excluded: it can exceed
+# the input range and would wrap/saturate on cast-back (e.g. uint16 200000 -> 3392).
+_INTEGER_PRESERVING_STRATEGIES = frozenset({"min", "max", "first"})
 
 
 def _aggregate_X(
@@ -196,9 +216,11 @@ def _aggregate_X(
     ``max`` / ``median`` / callables) pass singleton groups through and densify
     only each multi-member group's small block.
 
-    For integer ``X`` the output dtype is preserved only for integer-safe
-    strategies (``sum``, ``min``, ``max``, ``first``); mean/median and callables
-    promote to ``float64`` so a uint16 count matrix doesn't truncate.
+    For integer ``X`` the output dtype is preserved only for range-preserving
+    strategies (``min`` / ``max`` / ``first``, whose result is always an input
+    value); ``sum`` (which can exceed the input range), ``mean`` / ``median``
+    and callables promote to ``float64`` so a uint16 count matrix neither
+    overflows nor truncates.
     """
     n_groups = len(group_indices)
     n_cols = X.shape[1]
@@ -236,7 +258,10 @@ def _aggregate_X(
     Xc = X.tocsr() if sparse_in else np.asarray(X)
     out = sp.lil_matrix((n_groups, n_cols), dtype=out_dtype) if sparse_in else np.zeros((n_groups, n_cols), out_dtype)
     for i, idx in enumerate(group_indices):
-        if len(idx) == 1:
+        # A builtin reducer on a 1-row block returns that row, so the singleton
+        # short-circuit is exact -- but a *callable* must still be applied (it may
+        # be non-idempotent, e.g. len), matching the obs aggregation path.
+        if reducer is not None and len(idx) == 1:
             out[i] = Xc[idx[0]].toarray().ravel() if sparse_in else Xc[idx[0]]
             continue
         block = Xc[idx].toarray() if sparse_in else Xc[idx]
@@ -265,16 +290,23 @@ def _collapse_groups(
     - ``label_id``: rewritten to the group id (matches new labels element).
     - ``stitch_group_id``, ``is_stitched``, ``n_pieces``, ``stitch_confidence``,
       ``region``: members agree -> first value.
-    - Other numeric obs columns and all of ``X``: ``merge_strategy`` (default
-      ``"sum"``).  Built-ins: ``sum``, ``min``, ``max``, ``mean``, ``median``,
-      ``first``.  A callable receives a :class:`pandas.Series` and returns a
-      scalar; it's applied column-wise to both ``.obs`` and ``.X``.
-    - Non-numeric obs columns: ``"first"`` regardless of ``merge_strategy``
-      (sum/mean don't make sense for strings/categoricals).
+    - ``centroid_y`` / ``centroid_x``: mean of the pieces' centroids (the merged
+      cell's position) -- never summed.
+    - QC cut-artifact scores (``cut_score``, ``smoothed_cut_score``,
+      ``max_straight_edge_ratio``, ``cardinal_alignment_score``,
+      ``nhood_outlier_fraction``, ``is_outlier``): max -> keep the worst piece's
+      value; summing per-piece diagnostics is meaningless.
+    - Remaining numeric obs columns (genuine user features) and all of ``X``:
+      ``merge_strategy`` (default ``"sum"``).  Built-ins: ``sum``, ``min``,
+      ``max``, ``mean``, ``median``, ``first``.  A callable receives a
+      :class:`pandas.Series` and returns a scalar; applied column-wise to both
+      ``.obs`` and ``.X``.
+    - Non-numeric obs columns: first member's value regardless of
+      ``merge_strategy`` (sum/mean don't make sense for strings/categoricals).
 
-    Note: ``merge_strategy="sum"`` is the right default for additive features
-    (area, intensity, count) but wrong for centroids, scores, fractions.
-    Override accordingly for those.
+    ``merge_strategy="sum"`` is the right default for additive user features
+    (area, intensity, count); the QC contract columns above are handled
+    automatically and ignore it.
 
     .. warning::
         ``.obsm``, ``.obsp``, ``.layers`` are passed through but not
@@ -296,26 +328,31 @@ def _collapse_groups(
     indices_by_group = np.split(order, first_idx[1:])
 
     # ---- Aggregate obs via vectorised groupby ----
-    # Group-invariant + non-numeric columns take the first member's value;
-    # numeric columns use merge_strategy.  label_id is set to the group id.
+    # Column policy: invariant + non-numeric -> first member; centroids -> mean
+    # (the merged cell's position); QC cut-artifact scores -> max (keep the worst
+    # piece); remaining numeric (genuine user features) -> merge_strategy.
+    # label_id is set to the group id.  We deliberately do NOT cast aggregated
+    # columns back to the source dtype: a summed/averaged int column must keep its
+    # promoted (int64/float) dtype or it would overflow / truncate.
     cols = [c for c in obs.columns if c != "label_id"]
     numeric_cols = [c for c in cols if c not in _GROUP_INVARIANT_COLS and pd.api.types.is_numeric_dtype(obs[c])]
+    centroid_cols = [c for c in numeric_cols if c in _CENTROID_COLS]
+    score_cols = [c for c in numeric_cols if c in _QC_SCORE_COLS]
+    user_cols = [c for c in numeric_cols if c not in _CENTROID_COLS and c not in _QC_SCORE_COLS]
     first_cols = [c for c in cols if c not in numeric_cols]
     gb = obs.groupby(group_ids, sort=True)
     pieces = []
     if first_cols:
         pieces.append(gb[first_cols].first())
-    if numeric_cols:
-        pieces.append(gb[numeric_cols].agg(merge_strategy))
+    if centroid_cols:
+        pieces.append(gb[centroid_cols].mean())
+    if score_cols:
+        pieces.append(gb[score_cols].max())
+    if user_cols:
+        pieces.append(gb[user_cols].agg(merge_strategy))
     new_obs = pd.concat(pieces, axis=1) if pieces else pd.DataFrame(index=unique_groups)
     new_obs["label_id"] = unique_groups
     new_obs = new_obs[list(obs.columns)]
-    # Preserve dtypes where possible (agg can promote/lose categorical).
-    for col in new_obs.columns:
-        try:
-            new_obs[col] = new_obs[col].astype(obs[col].dtype)
-        except (TypeError, ValueError):
-            pass
     # Update the region column to point at the new labels element.
     if "region" in new_obs.columns:
         new_obs["region"] = pd.Categorical([new_labels_key] * len(new_obs))
@@ -335,6 +372,11 @@ def _collapse_groups(
         "instance_key": "label_id",
     }
     out = ad.AnnData(X=new_X, obs=new_obs, var=adata.var.copy(), uns=new_uns)
+
+    # The var axis is unchanged by a row collapse, so varm stays consistent and
+    # is carried over verbatim (unlike the obs-dimensioned fields below).
+    for key in getattr(adata, "varm", {}):
+        out.varm[key] = adata.varm[key].copy()
 
     # Warn if there are row-dimensioned fields we didn't aggregate; user can
     # decide whether to drop them.
@@ -394,33 +436,34 @@ def make_stitched_labels(
         If ``True``, also write the collapsed AnnData to
         ``sdata.tables[table_key_added]``.
     merge_strategy
-        How to aggregate numeric ``.obs`` columns and ``.X`` across the
-        2-4 pieces of each stitched cell.  String options:
-        ``"sum"`` (default), ``"min"``, ``"max"``, ``"mean"``, ``"median"``,
-        ``"first"``.  Callable: receives a :class:`pandas.Series` (one
-        column of one group's members) and returns a scalar; applied
-        column-wise.
+        How to aggregate genuine numeric user feature columns in ``.obs`` and
+        all of ``.X`` across the 2-4 pieces of each stitched cell.  String
+        options: ``"sum"`` (default, for additive features like area /
+        intensity), ``"min"``, ``"max"``, ``"mean"``, ``"median"``, ``"first"``.
+        Callable: receives a :class:`pandas.Series` (one column of one group's
+        members) and returns a scalar; applied column-wise to ``.obs`` and ``.X``.
 
-        ``"sum"`` is the right default for additive features (area,
-        intensity); for centroids, scores, or fractions, override with
-        ``"mean"`` or pass a callable.
+        ``merge_strategy`` does **not** apply to the columns below, which are
+        handled automatically (so a stray ``"sum"`` can't corrupt them):
 
-        Two classes of columns are **always** taken from the first member
-        regardless of ``merge_strategy`` (including callables):
-
-        - Group-invariant columns -- ``stitch_group_id``, ``is_stitched``,
-          ``n_pieces``, ``stitch_confidence``, ``region`` -- because every
-          member of a group already shares the same value.
-        - Non-numeric columns (strings, categoricals, booleans) -- because
-          ``sum`` / ``mean`` / etc. don't have a meaningful interpretation.
+        - Group-invariant columns (``stitch_group_id``, ``is_stitched``,
+          ``n_pieces``, ``stitch_confidence``, ``region``) and any non-numeric
+          column -> first member's value.
+        - ``centroid_y`` / ``centroid_x`` -> mean of the pieces' centroids.
+        - QC cut-artifact scores (``cut_score``, ``smoothed_cut_score``,
+          ``max_straight_edge_ratio``, ``cardinal_alignment_score``,
+          ``nhood_outlier_fraction``, ``is_outlier``) -> max (worst piece).
     join_labels
         If ``True``, morphologically close the gap between pieces of each
-        stitched group so the resulting labels are single connected
-        components instead of multi-component regions sharing an ID.  Only
-        background pixels inside each group's closed hull are filled;
-        other cells are never overwritten.  **Forces materialisation of
-        the labels array** -- cost is O(image_size) plus O(stitched x bbox).
-        Default ``False`` preserves the original gap pixels.
+        stitched group, so a group that the basic remap leaves as several
+        components sharing an ID becomes a single connected component.  Only
+        background pixels inside each group's closed hull are filled; other
+        cells are never overwritten.  This stays lazy on dask input (a
+        per-block :func:`dask.array.map_overlap` pass, never materialising the
+        whole image).  Closing bridges seams up to ``2 * join_close_radius`` px
+        wide; pieces separated by a wider gap stay disconnected -- raise
+        ``join_close_radius`` for those.  Default ``False`` preserves the
+        original gap pixels.
     join_close_radius
         Radius (px) of the disk structuring element used when
         ``join_labels=True``.  Default ``3`` matches the closing radius
@@ -445,6 +488,23 @@ def make_stitched_labels(
         raise ValueError(
             f"QC table '{table_key}' is missing {missing}; run squidpy.experimental.tl.assign_stitch_groups first."
         )
+    # Validate merge_strategy up front so an invalid value fails fast even when
+    # write_table=False (the aggregation that would otherwise raise is skipped).
+    _resolve_strategy(merge_strategy)
+    # label_id is the instance key that drives the LUT remap; a NaN, non-positive,
+    # or duplicated id would crash cryptically or silently mis-map pixels (0 is the
+    # background sentinel; duplicates make lut[label_id]=group_id keep only the last).
+    label_id = adata.obs["label_id"]
+    if label_id.isna().any():
+        raise ValueError(f"QC table '{table_key}' has NaN in 'label_id'; cannot build the relabel lookup.")
+    label_id = label_id.astype(np.int64)
+    if (label_id <= 0).any():
+        raise ValueError(
+            f"QC table '{table_key}' has non-positive 'label_id' (0 is the background sentinel); "
+            "label ids must be positive instance keys."
+        )
+    if label_id.duplicated().any():
+        raise ValueError(f"QC table '{table_key}' has duplicate 'label_id' values; each cell must appear once.")
 
     qc_params = adata.uns.get("tiling_qc", {})
     scale = qc_params.get("scale")
@@ -457,10 +517,14 @@ def make_stitched_labels(
         new_data = _join_stitched_labels(new_data, {int(g) for g in stitched_gids}, close_radius=join_close_radius)
 
     out_key = labels_key_added if labels_key_added is not None else f"{labels_key}_stitched"
+    # Take the transform from the RESOLVED array (the chosen scale's DataArray),
+    # not the DataTree: a multi-scale element's base transform is Identity, but the
+    # resolved level carries the Scale that maps it back to global coordinates.  The
+    # output is a single-scale element at the QC scale's resolution (see docstring).
     new_labels = Labels2DModel.parse(
         data=new_data,
         dims=("y", "x"),
-        transformations=get_transformation(sdata.labels[labels_key], get_all=True),
+        transformations=get_transformation(labels_da, get_all=True),
     )
     new_table = None
     if write_table:

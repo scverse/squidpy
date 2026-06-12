@@ -31,9 +31,8 @@ import xarray as xr
 from scipy.ndimage import binary_closing
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
-from skimage.measure import find_contours
+from skimage.measure import find_contours, regionprops
 from skimage.measure import label as cc_label
-from skimage.measure import regionprops
 from skimage.morphology import disk as morph_disk
 from spatialdata._logging import logger as logg
 
