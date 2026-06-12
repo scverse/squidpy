@@ -7,12 +7,14 @@ run in seconds without downloading real data.
 from __future__ import annotations
 
 import anndata as ad
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
+from shapely import Polygon
 from spatialdata import SpatialData
-from spatialdata.models import Image2DModel, Labels2DModel
+from spatialdata.models import Image2DModel, Labels2DModel, ShapesModel
 
 import squidpy as sq
 
@@ -547,3 +549,278 @@ class TestBehaviouralRegressions:
         )
         observed = set(adata.obs["label_id"].astype(int).tolist())
         assert {1, 37, 82}.issubset(observed)
+
+
+# ---------------------------------------------------------------------------
+# Feature-string parsing: accepted scalar form + contract error messages
+# ---------------------------------------------------------------------------
+
+
+class TestFeatureParsing:
+    """Parsing of the ``features`` argument and its error contract."""
+
+    def test_features_as_bare_string(self, sdata_synthetic):
+        """A single feature may be passed as a string, not just a list."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="test_labels",
+            features="skimage:label:area",
+            inplace=False,
+        )
+        assert list(result.var_names) == ["area"]
+
+    @pytest.mark.parametrize(
+        ("features", "match"),
+        [
+            # group flag after a fine-grained prop of the same group (reverse of
+            # the already-tested fine-after-group order).
+            (["skimage:label:area", "skimage:label"], "ambiguous"),
+            (["skimage:label+image:intensity_mean", "skimage:label+image"], "ambiguous"),
+            # unknown fine-grained property names, per group.
+            (["skimage:label:bogus"], "Unknown skimage label property"),
+            (["skimage:label+image:bogus"], "Unknown skimage intensity property"),
+        ],
+    )
+    def test_parse_errors(self, sdata_synthetic, features, match):
+        with pytest.raises(ValueError, match=match):
+            sq.experimental.im.calculate_image_features(
+                sdata_synthetic,
+                image_key="test_img",
+                labels_key="test_labels",
+                features=features,
+                inplace=False,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Shapes input: rasterized to labels internally
+# ---------------------------------------------------------------------------
+
+
+def _sdata_with_shapes() -> tuple[SpatialData, dict[int, float]]:
+    """3-channel image plus four square polygons of *distinct* sizes.
+
+    Each polygon has a unique edge length (hence a unique rasterized area) and a
+    non-default index, so the label_id<->cell correspondence can be checked
+    instead of trivially comparing a default RangeIndex against itself.
+
+    Returns the SpatialData and the expected ``{label_id: area}`` mapping.
+    """
+    rng = np.random.default_rng(7)
+    image_xr = xr.DataArray(
+        rng.integers(0, 255, (3, 200, 200), dtype=np.uint8),
+        dims=["c", "y", "x"],
+        coords={"c": ["R", "G", "B"]},
+    )
+    centers = [(50, 50), (150, 50), (50, 150), (150, 150)]
+    edges = [20, 30, 40, 50]
+    index = [10, 20, 30, 40]
+    polys = []
+    for (cx, cy), e in zip(centers, edges, strict=True):
+        h = e / 2.0
+        polys.append(Polygon([(cx - h, cy - h), (cx + h, cy - h), (cx + h, cy + h), (cx - h, cy + h)]))
+    shapes = ShapesModel.parse(gpd.GeoDataFrame(geometry=polys, index=index))
+    expected_area = {idx: float(e * e) for idx, e in zip(index, edges, strict=True)}
+    sdata = SpatialData(images={"test_img": Image2DModel.parse(image_xr)}, shapes={"cells": shapes})
+    return sdata, expected_area
+
+
+class TestShapesInput:
+    """The ``shapes_key`` path rasterizes polygons to labels internally."""
+
+    def test_shapes_input_featurized(self):
+        sdata, expected_area = _sdata_with_shapes()
+        adata = sq.experimental.im.calculate_image_features(
+            sdata,
+            image_key="test_img",
+            shapes_key="cells",
+            features=["skimage:label:area"],
+            inplace=False,
+        )
+        # One row per polygon; region attr points at the shapes element.
+        assert adata.n_obs == 4
+        assert adata.uns["spatialdata_attrs"]["region"] == "cells"
+        # label_id carries the (non-default) shapes index; the per-polygon distinct
+        # area proves each index maps to the *correct* cell, not just that the index
+        # equals itself.
+        observed_area = {
+            int(lid): float(ar)
+            for lid, ar in zip(adata.obs["label_id"].values, adata[:, "area"].X.ravel(), strict=True)
+        }
+        assert observed_area == expected_area
+
+    def test_invalid_shapes_key(self, sdata_synthetic):
+        with pytest.raises(ValueError, match="Shapes key 'nope' not found"):
+            sq.experimental.im.calculate_image_features(
+                sdata_synthetic,
+                image_key="test_img",
+                shapes_key="nope",
+                features=["skimage:label"],
+                inplace=False,
+            )
+
+
+# ---------------------------------------------------------------------------
+# All-zero labels
+# ---------------------------------------------------------------------------
+
+
+def test_all_zero_labels_raises(sdata_synthetic):
+    """Labels with no foreground cells must raise a clear error."""
+    zero_labels = xr.DataArray(np.zeros((200, 200), dtype=np.int32), dims=["y", "x"])
+    sdata_synthetic.labels["empty"] = Labels2DModel.parse(zero_labels)
+    with pytest.raises(ValueError, match="No cells found in labels"):
+        sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="empty",
+            features=["skimage:label:area"],
+            inplace=False,
+        )
+
+
+# ---------------------------------------------------------------------------
+# GLCM texture on a flat (constant-intensity) channel
+# ---------------------------------------------------------------------------
+
+
+def test_texture_on_constant_channel():
+    """A flat cell hits the degenerate GLCM branch and yields its forced values.
+
+    With zero intensity variation, GLCM contrast and dissimilarity must be 0 and
+    homogeneity 1 (and nothing NaN) -- asserting the values, not just that texture
+    columns exist, locks the degenerate-branch behaviour against regressions.
+    """
+    image_xr = xr.DataArray(
+        np.full((1, 100, 100), 100, dtype=np.uint8),
+        dims=["c", "y", "x"],
+        coords={"c": ["flat"]},
+    )
+    labels = np.zeros((100, 100), dtype=np.int32)
+    labels[20:50, 20:50] = 1
+    labels_xr = xr.DataArray(labels, dims=["y", "x"])
+    sdata = SpatialData(
+        images={"img": Image2DModel.parse(image_xr)},
+        labels={"lbl": Labels2DModel.parse(labels_xr)},
+    )
+    adata = sq.experimental.im.calculate_image_features(
+        sdata,
+        image_key="img",
+        labels_key="lbl",
+        features=["squidpy:texture"],
+        inplace=False,
+    )
+    assert adata.n_obs == 1
+    vals = {c: float(adata[:, c].X[0, 0]) for c in adata.var_names}
+    assert not np.isnan(list(vals.values())).any()
+    assert next(v for c, v in vals.items() if c.startswith("texture_contrast_")) == 0.0
+    assert next(v for c, v in vals.items() if c.startswith("texture_dissimilarity_")) == 0.0
+    assert next(v for c, v in vals.items() if c.startswith("texture_homogeneity_")) == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Multiscale (DataTree) image / labels
+# ---------------------------------------------------------------------------
+
+
+def _multiscale_sdata(multiscale_image: bool = True, multiscale_labels: bool = True) -> SpatialData:
+    """SpatialData whose image and/or labels are multiscale (DataTree-backed)."""
+    rng = np.random.default_rng(3)
+    image_xr = xr.DataArray(
+        rng.integers(0, 255, (3, 256, 256), dtype=np.uint8),
+        dims=["c", "y", "x"],
+        coords={"c": ["R", "G", "B"]},
+    )
+    labels = np.zeros((256, 256), dtype=np.int32)
+    cid = 0
+    for y in range(20, 220, 60):
+        for x in range(20, 220, 60):
+            cid += 1
+            labels[y : y + 30, x : x + 30] = cid
+    labels_xr = xr.DataArray(labels, dims=["y", "x"])
+
+    img = Image2DModel.parse(image_xr, scale_factors=[2] if multiscale_image else None)
+    lbl = Labels2DModel.parse(labels_xr, scale_factors=[2] if multiscale_labels else None)
+    return SpatialData(images={"img": img}, labels={"lbl": lbl})
+
+
+class TestMultiscale:
+    """Multi-scale (DataTree) inputs require an explicit ``scale`` and then work."""
+
+    def test_multiscale_image_requires_scale(self):
+        sdata = _multiscale_sdata(multiscale_image=True, multiscale_labels=False)
+        with pytest.raises(ValueError, match="multi-scale images"):
+            sq.experimental.im.calculate_image_features(
+                sdata,
+                image_key="img",
+                labels_key="lbl",
+                features=["skimage:label:area"],
+                inplace=False,
+            )
+
+    def test_multiscale_labels_requires_scale(self):
+        sdata = _multiscale_sdata(multiscale_image=False, multiscale_labels=True)
+        with pytest.raises(ValueError, match="multi-scale labels"):
+            sq.experimental.im.calculate_image_features(
+                sdata,
+                image_key="img",
+                labels_key="lbl",
+                features=["skimage:label:area"],
+                inplace=False,
+            )
+
+    def test_multiscale_featurized_with_scale(self):
+        sdata = _multiscale_sdata(multiscale_image=True, multiscale_labels=True)
+        adata = sq.experimental.im.calculate_image_features(
+            sdata,
+            image_key="img",
+            labels_key="lbl",
+            scale="scale0",
+            features=["skimage:label:area"],
+            inplace=False,
+        )
+        # The fixture places 16 cells of 30x30=900 px at full resolution. Asserting
+        # the exact count, label IDs, and area proves scale0 was read (scale1 would
+        # give area ~225) and that no cell was silently dropped.
+        assert adata.n_obs == 16
+        assert set(adata.obs["label_id"].astype(int)) == set(range(1, 17))
+        np.testing.assert_array_equal(adata[:, "area"].X.ravel(), np.full(16, 900.0))
+
+    def test_invalid_scale_name(self):
+        sdata = _multiscale_sdata(multiscale_image=True, multiscale_labels=True)
+        with pytest.raises(ValueError, match="Scale 'scale9' not found"):
+            sq.experimental.im.calculate_image_features(
+                sdata,
+                image_key="img",
+                labels_key="lbl",
+                scale="scale9",
+                features=["skimage:label:area"],
+                inplace=False,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Shapes that fail to rasterize
+# ---------------------------------------------------------------------------
+
+
+def test_shapes_rasterize_failure_raises():
+    """Empty geometries raise a clear, actionable error during rasterization."""
+    image_xr = xr.DataArray(
+        np.random.default_rng(5).integers(0, 255, (3, 100, 100), dtype=np.uint8),
+        dims=["c", "y", "x"],
+        coords={"c": ["R", "G", "B"]},
+    )
+    # An empty polygon is unsupported by rasterize; the function should wrap the
+    # failure in an actionable error rather than let the raw one surface.
+    degenerate = ShapesModel.parse(gpd.GeoDataFrame(geometry=[Polygon()]))
+    sdata = SpatialData(images={"img": Image2DModel.parse(image_xr)}, shapes={"cells": degenerate})
+    with pytest.raises(ValueError, match="Failed to rasterize shapes"):
+        sq.experimental.im.calculate_image_features(
+            sdata,
+            image_key="img",
+            shapes_key="cells",
+            features=["skimage:label:area"],
+            inplace=False,
+        )
