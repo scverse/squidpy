@@ -251,3 +251,103 @@ class TestStainNormalizationVisual(PlotTester, metaclass=PlotTesterMeta):
         _, axes = plt.subplots(1, 2, figsize=(8, 4))
         sdata_hne.pl.render_images("hne_shifted").pl.show(ax=axes[0], title="before")
         sdata_hne.pl.render_images("hne_normalized").pl.show(ax=axes[1], title="after")
+
+
+# ---------------------------------------------------------------------------
+# Multi-slide pooled fit (one reference from several images in one sdata)
+# ---------------------------------------------------------------------------
+
+from squidpy.experimental.im._stain._constants import RUIFROK_HE  # noqa: E402
+
+
+class TestPooledFit:
+    @staticmethod
+    def _he(seed: int, shape: tuple[int, int] = (48, 48), dtype=np.uint8) -> np.ndarray:
+        """Synthetic H&E from the Ruifrok H/E vectors so macenko/vahadane can fit."""
+        rng = np.random.default_rng(seed)
+        h, w = shape
+        wmat = np.stack([RUIFROK_HE["hematoxylin"], RUIFROK_HE["eosin"]], axis=1)  # (3, 2)
+        conc = rng.uniform(0.05, 1.3, (h * w, 2))
+        rgb = np.clip(255.0 * np.exp(-(conc @ wmat.T)), 0, 255).reshape(h, w, 3).transpose(2, 0, 1)
+        arr = rgb.astype(np.uint8)
+        return (arr.astype(np.uint16) * 257) if dtype == np.uint16 else arr
+
+    def _cohort(self, n: int = 3, dtype=np.uint8) -> tuple[sd.SpatialData, list[str]]:
+        sdata = sd.SpatialData()
+        keys = []
+        for i in range(n):
+            k = f"img{i}"
+            arr = self._he(seed=i + 1, dtype=dtype)
+            sdata.images[k] = Image2DModel.parse(arr, dims=("c", "y", "x"))
+            h, w = arr.shape[-2], arr.shape[-1]
+            sdata.labels[f"{k}_tissue"] = Labels2DModel.parse(np.ones((h, w), dtype=np.uint32), dims=("y", "x"))
+            keys.append(k)
+        return sdata, keys
+
+    @pytest.mark.parametrize("method", ["reinhard", "macenko", "vahadane"])
+    def test_pooled_fit_runs(self, method: str) -> None:
+        sdata, keys = self._cohort()
+        ref = fit_stain_reference(sdata, keys, method=method)
+        assert ref.method == method
+        assert (ref.mu.shape == (3,)) if method == "reinhard" else (ref.stain_matrix.shape == (3, 3))
+
+    @pytest.mark.parametrize("method", ["reinhard", "macenko", "vahadane"])
+    def test_pooled_of_one_matches_single(self, method: str) -> None:
+        sdata, keys = self._cohort(n=1)
+        single = fit_stain_reference(sdata, keys[0], method=method)
+        pooled = fit_stain_reference(sdata, keys, method=method)
+        if method == "reinhard":
+            # pooled path materialises + np-reduces; single uses xarray lazy reduction
+            np.testing.assert_allclose(pooled.mu, single.mu)
+            np.testing.assert_allclose(pooled.sigma, single.sigma)
+        else:
+            np.testing.assert_array_equal(pooled.stain_matrix, single.stain_matrix)
+            np.testing.assert_array_equal(pooled.max_concentrations, single.max_concentrations)
+
+    def test_order_matched_non_convention_masks(self) -> None:
+        # non-convention mask names selecting different halves; swapping the order
+        # must change the fit (proves order is honoured, not name-matched).
+        sdata, keys = self._cohort(n=2)
+        h, w = 48, 48
+        top = np.zeros((h, w), np.uint32)
+        top[: h // 2] = 1
+        bot = np.zeros((h, w), np.uint32)
+        bot[h // 2 :] = 1
+        sdata.labels["m_a"] = Labels2DModel.parse(top, dims=("y", "x"))
+        sdata.labels["m_b"] = Labels2DModel.parse(bot, dims=("y", "x"))
+        ref = fit_stain_reference(sdata, keys, method="reinhard", tissue_mask_key=["m_a", "m_b"])
+        swapped = fit_stain_reference(sdata, keys, method="reinhard", tissue_mask_key=["m_b", "m_a"])
+        assert not np.allclose(ref.mu, swapped.mu)
+
+    @pytest.mark.parametrize("method", ["reinhard", "macenko"])
+    def test_empty_slide_is_named(self, method: str) -> None:
+        sdata, keys = self._cohort(n=2)
+        sdata.labels[f"{keys[1]}_tissue"] = Labels2DModel.parse(np.zeros((48, 48), np.uint32), dims=("y", "x"))
+        with pytest.raises((ValueError, RuntimeError), match=keys[1]):
+            fit_stain_reference(sdata, keys, method=method)
+
+    def test_mixed_dtype_raises(self) -> None:
+        sdata, _ = self._cohort(n=1)
+        sdata.images["img16"] = Image2DModel.parse(self._he(seed=9, dtype=np.uint16), dims=("c", "y", "x"))
+        sdata.labels["img16_tissue"] = Labels2DModel.parse(np.ones((48, 48), np.uint32), dims=("y", "x"))
+        with pytest.raises(ValueError, match="share a dtype"):
+            fit_stain_reference(sdata, ["img0", "img16"], method="macenko")
+
+    @pytest.mark.parametrize(
+        ("image_key", "tissue_mask_key", "match"),
+        [
+            ([], None, "empty"),
+            (["img0", "img0"], None, "duplicate"),
+            (["img0", "img1"], "img0_tissue", "list of `tissue_mask_key`"),
+            (["img0", "img1"], ["img0_tissue"], "length"),
+        ],
+    )
+    def test_validation(self, image_key, tissue_mask_key, match: str) -> None:
+        sdata, _ = self._cohort(n=2)
+        with pytest.raises(ValueError, match=match):
+            fit_stain_reference(sdata, image_key, method="macenko", tissue_mask_key=tissue_mask_key)
+
+    def test_list_mask_with_str_image_raises(self) -> None:
+        sdata, _ = self._cohort(n=1)
+        with pytest.raises(ValueError, match="single `tissue_mask_key`"):
+            fit_stain_reference(sdata, "img0", method="macenko", tissue_mask_key=["img0_tissue"])

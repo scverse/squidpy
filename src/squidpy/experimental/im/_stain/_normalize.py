@@ -33,6 +33,7 @@ from squidpy.experimental.im._stain._decomposition import (
     apply_decomposition,
     decompose_to_concentrations,
     fit_decomposition,
+    fit_decomposition_pooled,
 )
 from squidpy.experimental.im._stain._reference import StainMethod, StainReference
 from squidpy.experimental.im._stain._reinhard import (
@@ -40,6 +41,7 @@ from squidpy.experimental.im._stain._reinhard import (
     _resolve_reinhard_params,
     apply_reinhard,
     fit_reinhard,
+    fit_reinhard_pooled,
 )
 from squidpy.experimental.im._stain._white_point import (
     default_white_point,
@@ -211,13 +213,13 @@ def estimate_white_point(
 
 def fit_stain_reference(
     sdata: sd.SpatialData,
-    image_key: str,
+    image_key: str | list[str],
     *,
     method: StainMethod = "macenko",
     scale: str | Literal["auto"] = "auto",
     method_params: MethodParams = None,
     white_point: np.ndarray | None = None,
-    tissue_mask_key: str | None = None,
+    tissue_mask_key: str | list[str] | None = None,
     max_angle_deg: float = 45.0,
     canonical_reference: Mapping[str, np.ndarray] | None = None,
 ) -> StainReference:
@@ -228,7 +230,9 @@ def fit_stain_reference(
     sdata
         SpatialData object containing the image.
     image_key
-        Key of the RGB image in ``sdata.images`` to fit on.
+        Key of the RGB image in ``sdata.images`` to fit on, or a **list of keys**
+        to fit one reference from the pooled tissue pixels of several images
+        (e.g. a representative cohort). Pooled images must share a dtype.
     method
         Fitting method: ``"macenko"`` (default) or ``"vahadane"`` (physical
         stain-matrix decomposition, usable by both :func:`normalize_stains` and
@@ -254,7 +258,9 @@ def fit_stain_reference(
         :func:`!detect_tissue`) restricting the fit to
         tissue pixels. If ``None``, ``f"{image_key}_tissue"`` is used. A tissue
         mask is **required**: if neither exists, a :class:`KeyError` asks you to
-        run :func:`!detect_tissue` first.
+        run :func:`!detect_tissue` first. When ``image_key`` is a list, pass a
+        list of mask keys **order-matched** to it (or ``None`` for the
+        ``{key}_tissue`` convention per image).
     max_angle_deg
         Tolerance of the H/E sanity gate for the decomposition methods: the fit
         raises :class:`!StainFittingError` if either recovered stain vector
@@ -272,6 +278,20 @@ def fit_stain_reference(
     """
     if method not in _VALID_METHODS:
         raise ValueError(f"Unknown method {method!r}; expected one of {list(_VALID_METHODS)}.")
+    if not isinstance(image_key, str):
+        return _fit_pooled(
+            sdata,
+            list(image_key),
+            tissue_mask_key,
+            method=method,
+            scale=scale,
+            method_params=method_params,
+            white_point=white_point,
+            max_angle_deg=max_angle_deg,
+            canonical_reference=canonical_reference,
+        )
+    if tissue_mask_key is not None and not isinstance(tissue_mask_key, str):
+        raise ValueError("a single `image_key` takes a single `tissue_mask_key` (str) or None.")
     da = _resolve_image(sdata, image_key, scale, prefer="coarsest")
     validate_rgb_range(da)
     params = _resolve_method_params(method, method_params)
@@ -289,6 +309,63 @@ def fit_stain_reference(
         image_key=image_key,
         reference=reference,
         max_angle_deg=max_angle_deg,
+    )
+
+
+def _fit_pooled(
+    sdata: sd.SpatialData,
+    image_keys: list[str],
+    tissue_mask_key: str | list[str] | None,
+    *,
+    method: StainMethod,
+    scale: str | Literal["auto"],
+    method_params: MethodParams,
+    white_point: np.ndarray | None,
+    max_angle_deg: float,
+    canonical_reference: Mapping[str, np.ndarray] | None,
+) -> StainReference:
+    """Fit one reference by pooling the tissue pixels of several same-dtype images.
+
+    Each image is resolved + validated and masked by its own `tissue_mask_key`
+    (order-matched) or the `{key}_tissue` convention; decomposition pools tissue
+    OD, Reinhard pools tissue Lab pixels. Images must share a dtype so the white
+    point is well-defined. A blank slide raises (named); no silent skip.
+    """
+    if not image_keys:
+        raise ValueError("`image_key` list is empty; pass at least one image key.")
+    if len(set(image_keys)) != len(image_keys):
+        raise ValueError("`image_key` list has duplicate keys.")
+    if tissue_mask_key is None:
+        mask_keys: list[str | None] = [None] * len(image_keys)
+    elif isinstance(tissue_mask_key, str):
+        raise ValueError(
+            "for multiple images, pass a list of `tissue_mask_key` (order-matched to `image_key`), "
+            "or None to use the `{image_key}_tissue` convention."
+        )
+    elif len(tissue_mask_key) != len(image_keys):
+        raise ValueError(
+            f"`tissue_mask_key` length ({len(tissue_mask_key)}) must match `image_key` ({len(image_keys)})."
+        )
+    else:
+        mask_keys = list(tissue_mask_key)
+
+    params = _resolve_method_params(method, method_params)
+    das = []
+    for k in image_keys:
+        da = _resolve_image(sdata, k, scale, prefer="coarsest")
+        validate_rgb_range(da)
+        das.append(da)
+    dtypes = {str(da.dtype) for da in das}
+    if len(dtypes) != 1:
+        raise ValueError(f"pooled images must share a dtype; got {sorted(dtypes)}.")
+    masks = [_resolve_tissue_bool_mask(sdata, k, da, mk) for k, da, mk in zip(image_keys, das, mask_keys, strict=True)]
+
+    if method == "reinhard":
+        return fit_reinhard_pooled(das, masks, params, image_keys)
+    bg = default_white_point(das[0]) if white_point is None else np.asarray(white_point, np.float64)
+    reference = RUIFROK_HE if canonical_reference is None else dict(canonical_reference)
+    return fit_decomposition_pooled(
+        das, masks, image_keys, method, params, bg, reference=reference, max_angle_deg=max_angle_deg
     )
 
 
