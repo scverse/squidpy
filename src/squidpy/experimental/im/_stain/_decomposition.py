@@ -248,12 +248,10 @@ def apply_decomposition(
     """Normalize a source image to a decomposition reference (colour-basis transfer).
 
     Deconvolves with the *source's* own stain matrix and reconvolves with the
-    reference matrix: only the stain *colour basis* changes; stain *amount*
-    (concentration magnitude) is left untouched. This is HistomicsTK's
-    ``deconvolution_based_normalization`` behaviour, and - unlike the canonical
-    Macenko ``maxC_ref / maxC_src`` intensity rescale - it cannot blow up on
-    weakly or atypically stained sources. Use ``method="reinhard"`` when
-    intensity/appearance matching is wanted; that is the method built for it.
+    reference matrix: only the stain *colour basis* changes, the *amount*
+    (concentration magnitude) is untouched (HistomicsTK's
+    ``deconvolution_based_normalization``). Use ``method="reinhard"`` for
+    intensity/appearance matching.
 
     The source matrix is a colour property, so it is fit on ``fit_rgb`` (a
     coarse level) when given, while ``image_rgb`` (which may be full
