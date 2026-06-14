@@ -154,7 +154,6 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
         if f in _CPMEASURE_FLAG_NAMES:
             raise NotImplementedError(f"cp_measure feature `{f}` is not yet implemented.")
 
-        # skimage group-level
         if f == "skimage:morphology":
             if morphology_props is not None:
                 raise ValueError(
@@ -188,7 +187,6 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
                 )
             intensity_props = (intensity_props or set()) | {prop}
 
-        # squidpy features
         elif f == "squidpy:summary":
             sq_summary = True
         elif f == "squidpy:texture":
@@ -226,16 +224,13 @@ def _has_any_features(parsed: _ParsedFeatures) -> bool:
 
 def _image_requiring_features(parsed: _ParsedFeatures) -> list[str]:
     """User-facing flags in the request that need pixel data (i.e. an image)."""
-    needed: list[str] = []
-    if parsed.skimage_intensity_props is not None:
-        needed.append("skimage:intensity")
-    if parsed.squidpy_summary:
-        needed.append("squidpy:summary")
-    if parsed.squidpy_texture:
-        needed.append("squidpy:texture")
-    if parsed.squidpy_color_hist:
-        needed.append("squidpy:color_hist")
-    return needed
+    flags = [
+        (parsed.skimage_intensity_props is not None, "skimage:intensity"),
+        (parsed.squidpy_summary, "squidpy:summary"),
+        (parsed.squidpy_texture, "squidpy:texture"),
+        (parsed.squidpy_color_hist, "squidpy:color_hist"),
+    ]
+    return [name for cond, name in flags if cond]
 
 
 # ---------------------------------------------------------------------------
@@ -384,7 +379,6 @@ def _compute_squidpy_per_cell(
         bbox = region.bbox  # (min_row, min_col, max_row, max_col)
         cell_features: dict[str, float] = {}
 
-        # Extract cell's bounding box from image
         img_crop = image[:, bbox[0] : bbox[2], bbox[1] : bbox[3]]
         mask_crop = labels[bbox[0] : bbox[2], bbox[1] : bbox[3]] == lid
 
@@ -397,10 +391,8 @@ def _compute_squidpy_per_cell(
                 continue
 
             if parsed.squidpy_summary:
-                cell_features[f"summary_mean_{ch_name}"] = float(np.mean(masked_vals))
-                cell_features[f"summary_std_{ch_name}"] = float(np.std(masked_vals))
-                cell_features[f"summary_min_{ch_name}"] = float(np.min(masked_vals))
-                cell_features[f"summary_max_{ch_name}"] = float(np.max(masked_vals))
+                for stat, fn in (("mean", np.mean), ("std", np.std), ("min", np.min), ("max", np.max)):
+                    cell_features[f"summary_{stat}_{ch_name}"] = float(fn(masked_vals))
 
             if parsed.squidpy_texture:
                 cell_features.update(_glcm_features(ch_crop, mask_crop, ch_name))
@@ -453,7 +445,7 @@ def _histogram_features(masked_vals: np.ndarray, ch_name: str, bins: int = 16) -
 
 
 # ---------------------------------------------------------------------------
-# Input preparation (lazy — returns xarray DataArrays, not numpy)
+# Input preparation (lazy - returns xarray DataArrays, not numpy)
 # ---------------------------------------------------------------------------
 
 
@@ -509,8 +501,8 @@ def _prepare_lazy(
     """Return lazy image and labels DataArrays, plus channel names.
 
     ``image_da`` is ``None`` (and ``channel_names`` empty) for a morphology-only
-    run with no ``image_key``.  Does NOT call ``.compute()`` — arrays stay lazy
-    for on-demand tile reads.  For the shapes→labels path, labels are
+    run with no ``image_key``.  Does NOT call ``.compute()`` - arrays stay lazy
+    for on-demand tile reads.  For the shapes->labels path, labels are
     materialized but wrapped in a DataArray for a uniform interface.
     """
     _validate_inputs(sdata, image_key, labels_key, shapes_key, scale)
@@ -520,7 +512,6 @@ def _prepare_lazy(
     if align_mode != "strict":
         raise ValueError(f"`align_mode` must be 'strict'; got {align_mode!r}.")
 
-    # Image DataArray (lazy), or None for a morphology-only run.
     image_da = None
     if image_key is not None:
         image_da = _resolve_da(sdata.images[image_key], scale)
@@ -550,21 +541,22 @@ def _prepare_lazy(
                 "Failed to rasterize shapes; geometries may be empty or unsupported. "
                 "Filter out empty/non-polygon geometries or choose a different shapes_key."
             ) from e
-        if isinstance(labels_result, xr.DataArray):
-            labels_da = labels_result
-        else:
-            labels_da = xr.DataArray(np.asarray(labels_result), dims=["y", "x"])
+        labels_da = (
+            labels_result
+            if isinstance(labels_result, xr.DataArray)
+            else xr.DataArray(np.asarray(labels_result), dims=["y", "x"])
+        )
 
     # Image and labels must share a pixel grid (only checkable with an image).
     if image_da is not None and labels_key is not None:
-        if image_da.sizes.get("y") != labels_da.sizes.get("y") or image_da.sizes.get("x") != labels_da.sizes.get("x"):
+        iy, ix = image_da.sizes.get("y"), image_da.sizes.get("x")
+        ly, lx = labels_da.sizes.get("y"), labels_da.sizes.get("x")
+        if (iy, ix) != (ly, lx):
             raise ValueError(
-                f"Image (y={image_da.sizes.get('y')}, x={image_da.sizes.get('x')}) and labels "
-                f"(y={labels_da.sizes.get('y')}, x={labels_da.sizes.get('x')}) have different "
+                f"Image (y={iy}, x={ix}) and labels (y={ly}, x={lx}) have different "
                 f"pixel grids.  Pre-align with `spatialdata.rasterize`."
             )
 
-    # No image -> no channels.
     if image_da is None:
         return image_da, labels_da, []
 
@@ -604,12 +596,12 @@ def _compute_centroids(
     scale: str | None,
 ) -> dict:
     """Compute cell centroids using the most efficient strategy available."""
-    # Multiscale labels → use coarsest scale
+    # Multiscale labels - use coarsest scale
     if labels_key is not None and isinstance(sdata.labels[labels_key], xr.DataTree):
         logg.info("Computing centroids from coarse scale.")
         return compute_cell_info_multiscale(sdata.labels[labels_key], target_scale=scale or "scale0")
 
-    # Small enough to fit in memory → direct regionprops
+    # Small enough to fit in memory - direct regionprops
     n_pixels = labels_da.sizes.get("y", 1) * labels_da.sizes.get("x", 1)
     if n_pixels <= 4096 * 4096:
         lbl_np = labels_da.values
@@ -617,7 +609,7 @@ def _compute_centroids(
             lbl_np = lbl_np.squeeze()
         return compute_cell_info(lbl_np)
 
-    # Large single-scale → tiled centroid computation
+    # Large single-scale - tiled centroid computation
     logg.info("Computing centroids in tiled mode (large single-scale labels).")
     return compute_cell_info_tiled(labels_da)
 

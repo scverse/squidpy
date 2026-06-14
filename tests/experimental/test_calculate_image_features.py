@@ -1,6 +1,6 @@
 """Tests for calculate_image_features.
 
-Uses a small synthetic SpatialData (200×200 image, ~20 cells) so tests
+Uses a small synthetic SpatialData (200x200 image, ~20 cells) so tests
 run in seconds without downloading real data.
 """
 
@@ -32,7 +32,7 @@ def sdata_synthetic():
         coords={"c": ["R", "G", "B"]},
     )
 
-    # Place ~20 rectangular cells in a grid (non-overlapping, 30×30 each)
+    # Place ~20 rectangular cells in a grid (non-overlapping, 30x30 each)
     labels_data = np.zeros((H, W), dtype=np.int32)
     cell_id = 0
     for y in range(10, H - 30, 40):
@@ -84,30 +84,11 @@ class TestCalculateImageFeatures:
         assert isinstance(result, ad.AnnData)
         assert result.n_obs > 0
         assert result.n_vars > 0
-
-    # --- Feature sources ---
-
-    def test_skimage_morphology_properties(self, sdata_synthetic):
-        """skimage:morphology produces mask-only morphological features."""
-        result = sq.experimental.im.calculate_image_features(
-            sdata_synthetic,
-            image_key="test_img",
-            labels_key="test_labels",
-            features=["skimage:morphology"],
-            inplace=False,
-        )
         assert "area" in result.var_names
 
-    def test_skimage_morphology_single_property(self, sdata_synthetic):
-        """Fine-grained: skimage:morphology:area → only area column."""
-        result = sq.experimental.im.calculate_image_features(
-            sdata_synthetic,
-            image_key="test_img",
-            labels_key="test_labels",
-            features=["skimage:morphology:area"],
-            inplace=False,
-        )
-        assert list(result.var_names) == ["area"]
+    # --- Feature sources ---
+    # (the single-property `== ["area"]` contract is covered by the bare-string and
+    # morphology-only tests below.)
 
     def test_skimage_intensity(self, sdata_synthetic):
         """skimage:intensity produces per-channel intensity features."""
@@ -321,7 +302,7 @@ class TestCalculateImageFeatures:
             features=["skimage:intensity:intensity_mean"],
             inplace=False,
         )
-        # All channels → 3 columns; one channel → 1 column
+        # All channels -> 3 columns; one channel -> 1 column
         assert result_all.n_vars == 3
         assert result_one.n_vars == 1
         assert "intensity_mean_0" in result_one.var_names
@@ -364,9 +345,9 @@ class TestCalculateImageFeatures:
             "inplace": False,
             "invalid_as_zero": True,
         }
-        # Single tile (tile_size >= image → no tiling)
+        # Single tile (tile_size >= image -> no tiling)
         result_single = sq.experimental.im.calculate_image_features(sdata_synthetic, tile_size=1000, **kw)
-        # Multiple tiles (tile_size=100 → 4 tiles on 200×200)
+        # Multiple tiles (tile_size=100 -> 4 tiles on 200x200)
         result_tiled = sq.experimental.im.calculate_image_features(sdata_synthetic, tile_size=100, **kw)
 
         # Same cells, same features
@@ -858,42 +839,21 @@ class TestOptionalImage:
         )
         assert result.n_obs > 0
 
-    def test_intensity_without_image_raises(self, sdata_synthetic):
-        with pytest.raises(ValueError, match=r"require pixel data.*image_key"):
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"features": ["skimage:intensity"]}, r"require pixel data.*image_key"),
+            # mixed request: the error must name the offending (intensity) flag
+            ({"features": ["skimage:morphology", "skimage:intensity"]}, "skimage:intensity"),
+            ({"features": ["squidpy:summary"]}, "squidpy:summary"),
+            ({"features": ["skimage:morphology:area"], "channels": ["R"]}, "`channels` selection requires `image_key`"),
+        ],
+    )
+    def test_requires_image_key_raises(self, sdata_synthetic, kwargs, match):
+        """Intensity / squidpy features and channel selection need image_key."""
+        with pytest.raises(ValueError, match=match):
             sq.experimental.im.calculate_image_features(
-                sdata_synthetic,
-                labels_key="test_labels",
-                features=["skimage:intensity"],
-                inplace=False,
-            )
-
-    def test_mixed_features_error_names_the_offender(self, sdata_synthetic):
-        """A morphology+intensity mix with no image names the intensity flag."""
-        with pytest.raises(ValueError, match="skimage:intensity"):
-            sq.experimental.im.calculate_image_features(
-                sdata_synthetic,
-                labels_key="test_labels",
-                features=["skimage:morphology", "skimage:intensity"],
-                inplace=False,
-            )
-
-    def test_squidpy_without_image_raises(self, sdata_synthetic):
-        with pytest.raises(ValueError, match="squidpy:summary"):
-            sq.experimental.im.calculate_image_features(
-                sdata_synthetic,
-                labels_key="test_labels",
-                features=["squidpy:summary"],
-                inplace=False,
-            )
-
-    def test_channels_without_image_raises(self, sdata_synthetic):
-        with pytest.raises(ValueError, match="`channels` selection requires `image_key`"):
-            sq.experimental.im.calculate_image_features(
-                sdata_synthetic,
-                labels_key="test_labels",
-                channels=["R"],
-                features=["skimage:morphology:area"],
-                inplace=False,
+                sdata_synthetic, labels_key="test_labels", inplace=False, **kwargs
             )
 
     def test_shapes_without_image_raises(self):
