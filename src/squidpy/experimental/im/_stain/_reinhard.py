@@ -22,7 +22,7 @@ from squidpy.experimental.im._stain._conversion import (
     lab_ruderman_to_rgb,
     rgb_to_lab_ruderman,
 )
-from squidpy.experimental.im._stain._mask import foreground_mask_from_lab
+from squidpy.experimental.im._stain._mask import as_spatial_mask, foreground_mask_from_lab
 from squidpy.experimental.im._stain._reference import StainReference
 
 # Numerical safeguard against divide-by-zero on flat (constant-colour)
@@ -112,33 +112,58 @@ def _transfer_kernel(
     return ((x - mu_src) / sigma_src * sigma_ref + mu_ref).astype(dtype, copy=False)
 
 
-def fit_reinhard(image_rgb: xr.DataArray, params: ReinhardParams) -> StainReference:
+def _reinhard_mask(lab: xr.DataArray, params: ReinhardParams, tissue_mask: np.ndarray | None) -> xr.DataArray | None:
+    """Resolve the tissue mask for the Reinhard stats: external mask wins, else
+    the param-driven luminosity mask (or ``None`` for vanilla Reinhard)."""
+    if tissue_mask is not None:
+        return as_spatial_mask(tissue_mask, lab)
+    if params.mask_background:
+        return foreground_mask_from_lab(lab, params.luminosity_threshold)
+    return None
+
+
+def fit_reinhard(
+    image_rgb: xr.DataArray, params: ReinhardParams, *, tissue_mask: np.ndarray | None = None
+) -> StainReference:
     """Fit Reinhard channel statistics on a reference image.
 
     Converts to Ruderman Lab, computes per-channel ``mu``/``sigma`` over
-    tissue pixels (or all pixels when ``mask_background=False``), and packs
-    them into a ``StainReference(method="reinhard")``.
+    tissue pixels, and packs them into a ``StainReference(method="reinhard")``.
+    ``tissue_mask`` (a ``(y, x)`` boolean aligned to ``image_rgb``) selects the
+    tissue pixels when given; otherwise the ``mask_background`` /
+    ``luminosity_threshold`` params drive the mask.
     """
     _check_channel_dim(image_rgb)
     lab = rgb_to_lab_ruderman(image_rgb)
-    mask = foreground_mask_from_lab(lab, params.luminosity_threshold) if params.mask_background else None
-    mu, sigma = _masked_channel_stats(lab, mask)
+    mu, sigma = _masked_channel_stats(lab, _reinhard_mask(lab, params, tissue_mask))
     return StainReference(method="reinhard", mu=mu, sigma=sigma)
 
 
-def apply_reinhard(image_rgb: xr.DataArray, reference: StainReference, params: ReinhardParams) -> xr.DataArray:
+def apply_reinhard(
+    image_rgb: xr.DataArray,
+    reference: StainReference,
+    params: ReinhardParams,
+    *,
+    fit_rgb: xr.DataArray | None = None,
+    tissue_mask: np.ndarray | None = None,
+    out_dtype: np.dtype | type = np.uint8,
+) -> xr.DataArray:
     """Apply a Reinhard reference to a source image.
 
     Standardises by the source's own tissue statistics, rescales to the
     reference statistics, and converts back to RGB. The transform is applied
-    to every pixel (the map is global); only the statistics that define it
-    are tissue-only. Lazy if and only if the input is lazy.
+    to every pixel of ``image_rgb`` (the map is global); the defining
+    statistics are reduced on ``fit_rgb`` (a coarse level) when given, so the
+    full-resolution image is never materialised to compute them.
+    ``tissue_mask`` (aligned to ``fit_rgb``) selects the source tissue pixels.
+    Lazy if and only if ``image_rgb`` is lazy.
     """
     _check_channel_dim(image_rgb)
-    lab = rgb_to_lab_ruderman(image_rgb)
-    mask = foreground_mask_from_lab(lab, params.luminosity_threshold) if params.mask_background else None
-    mu_src, sigma_src = _masked_channel_stats(lab, mask)
+    fit_lab = rgb_to_lab_ruderman(fit_rgb if fit_rgb is not None else image_rgb)
+    mu_src, sigma_src = _masked_channel_stats(fit_lab, _reinhard_mask(fit_lab, params, tissue_mask))
     sigma_src = np.maximum(sigma_src, _SIGMA_FLOOR)
+
+    lab = rgb_to_lab_ruderman(image_rgb)
 
     dtype = _working_dtype(lab)
     lab_out = _apply_along_channel(
@@ -151,4 +176,4 @@ def apply_reinhard(image_rgb: xr.DataArray, reference: StainReference, params: R
         sigma_ref=np.asarray(reference.sigma, dtype=dtype),
         dtype=dtype,
     )
-    return lab_ruderman_to_rgb(lab_out)
+    return lab_ruderman_to_rgb(lab_out, out_dtype=out_dtype)
