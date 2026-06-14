@@ -132,16 +132,6 @@ class TestApplyStainNormalization:
         with pytest.raises(ValueError, match="already exists"):
             normalize_stains(sdata, "img", ref, image_key_added="img")
 
-    def test_decomposition_reference_without_max_concentrations_raises(self, rgb_values: np.ndarray) -> None:
-        sdata = _make_sdata(rgb_values)
-        ref = StainReference(
-            method="macenko",
-            stain_matrix=np.eye(3),
-            white_point=np.array([255.0, 255.0, 255.0]),
-        )
-        with pytest.raises(ValueError, match="max_concentrations"):
-            normalize_stains(sdata, "img", ref)
-
     def test_method_params_mapping(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
         ref = fit_stain_reference(sdata, "img", method="reinhard", method_params={"mask_background": False})

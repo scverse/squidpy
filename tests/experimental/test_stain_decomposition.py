@@ -87,17 +87,24 @@ class TestApplyDecomposition:
         out = apply_decomposition(_synthetic_he(truth, chunked=True), ref, MacenkoParams())
         assert isinstance(out.data, da.Array)
 
-    def test_missing_max_concentrations_raises(self) -> None:
+    def test_max_concentrations_ignored_on_apply(self) -> None:
+        # Colour-basis transfer carries no maxC_ref/maxC_src term: two references
+        # with the same stain matrix + white point but different max_concentrations
+        # produce identical output. A canonical-Macenko intensity rescale would not.
         from squidpy.experimental.im._stain._reference import StainReference
 
-        ref = StainReference(
+        truth = _canonical(RUIFROK_HE["hematoxylin"], RUIFROK_HE["eosin"])
+        img = _synthetic_he(truth, seed=2)
+        ref1 = fit_decomposition(_synthetic_he(truth, seed=1), "macenko", MacenkoParams(), _WHITE)
+        ref2 = StainReference(
             method="macenko",
-            stain_matrix=_canonical(RUIFROK_HE["hematoxylin"], RUIFROK_HE["eosin"]),
-            white_point=_WHITE,
+            stain_matrix=ref1.stain_matrix,
+            white_point=ref1.white_point,
+            max_concentrations=ref1.max_concentrations * 5.0,
         )
-        img = _synthetic_he(ref.stain_matrix)
-        with pytest.raises(ValueError, match="max_concentrations"):
-            apply_decomposition(img, ref, MacenkoParams())
+        out1 = apply_decomposition(img, ref1, MacenkoParams()).values
+        out2 = apply_decomposition(img, ref2, MacenkoParams()).values
+        np.testing.assert_array_equal(out1, out2)
 
 
 class TestDegenerate:

@@ -245,11 +245,15 @@ def apply_decomposition(
     tissue_mask: np.ndarray | None = None,
     out_dtype: np.dtype | type = np.uint8,
 ) -> xr.DataArray:
-    """Normalize a source image to a decomposition reference.
+    """Normalize a source image to a decomposition reference (colour-basis transfer).
 
-    Fits the *source's* own stain matrix and concentration scale, then maps
-    source absorbance to reference absorbance via a single ``(3, 3)`` linear
-    operator so the per-pixel transform stays lazy.
+    Deconvolves with the *source's* own stain matrix and reconvolves with the
+    reference matrix: only the stain *colour basis* changes; stain *amount*
+    (concentration magnitude) is left untouched. This is HistomicsTK's
+    ``deconvolution_based_normalization`` behaviour, and - unlike the canonical
+    Macenko ``maxC_ref / maxC_src`` intensity rescale - it cannot blow up on
+    weakly or atypically stained sources. Use ``method="reinhard"`` when
+    intensity/appearance matching is wanted; that is the method built for it.
 
     The source matrix is a colour property, so it is fit on ``fit_rgb`` (a
     coarse level) when given, while ``image_rgb`` (which may be full
@@ -257,20 +261,13 @@ def apply_decomposition(
     materialised to fit a matrix.
     """
     _check_channel_dim(image_rgb)
-    if reference.max_concentrations is None:
-        raise ValueError("reference is missing max_concentrations; refit it with fit_stain_reference.")
     bg = reference.white_point
 
     od_src = _tissue_od(
         fit_rgb if fit_rgb is not None else image_rgb, bg, params.beta, tissue_mask=tissue_mask, image_key=None
     )
     w_src = _stain_matrix(od_src, reference.method, params, image_key=None)
-    pinv_src = np.linalg.pinv(w_src)  # reused for the source concentrations and the operator
-    maxc_src = _max_concentrations(od_src @ pinv_src.T)
-
-    scale = np.ones(3)
-    scale[:2] = reference.max_concentrations / maxc_src
-    operator = reference.stain_matrix @ np.diag(scale) @ pinv_src
+    operator = reference.stain_matrix @ np.linalg.pinv(w_src)
 
     sda = rgb_to_sda(image_rgb, bg)
     dtype = _working_dtype(sda)

@@ -50,12 +50,11 @@ class StainReference:
         does not model absorbance. There is no universal default; pass an
         estimate from your data (see ``estimate_white_point``).
     max_concentrations
-        Shape ``(2,)`` reference per-stain (H, E) maximum concentrations.
-        Decomposition only. Stored because at apply time the reference image
-        is gone, so the target concentration scale must travel with the
-        reference. Optional (Reinhard references and externally-built
-        decomposition references without it remain valid); forbidden for
-        Reinhard.
+        Shape ``(2,)`` reference per-stain (H, E) 99th-percentile concentrations
+        - a fitted characterization of the reference's staining strength.
+        Decomposition only, and diagnostic: the colour-basis ``apply`` transfers
+        stain colour, not amount, so it does not consume this. Optional; forbidden
+        for Reinhard.
     """
 
     method: StainMethod
