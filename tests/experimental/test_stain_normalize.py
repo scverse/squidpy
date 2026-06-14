@@ -126,6 +126,15 @@ class TestApplyStainNormalization:
         assert list(out.coords["c"].values) == ["r", "g", "b"]
         assert get_transformation(out, get_all=True) == get_transformation(img, get_all=True)
 
+    def test_output_is_tagged_rgb(self, rgb_values: np.ndarray) -> None:
+        # The result is a 3-channel RGB image; it is tagged r/g/b (regardless of
+        # the source's channel names) so RGB-aware viewers render it faithfully.
+        sdata = _make_sdata(rgb_values)  # parsed without explicit c_coords
+        assert list(sdata.images["img"].coords["c"].values) != ["r", "g", "b"]
+        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        out = normalize_stains(sdata, "img", ref, inplace=False)
+        assert list(out.coords["c"].values) == ["r", "g", "b"]
+
     def test_existing_key_raises(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
         ref = fit_stain_reference(sdata, "img", method="reinhard")

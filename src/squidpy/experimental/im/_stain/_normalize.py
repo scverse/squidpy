@@ -384,6 +384,13 @@ def normalize_stains(
     # the requested dtype and integer background stays byte-identical.
     normalized = cast_to_image_dtype(normalized, out_dtype)
 
+    # Tag the result as RGB. The output is, by construction, a 3-channel RGB
+    # image; naming the channels r/g/b lets RGB-aware viewers (spatialdata-plot)
+    # use a single hue-preserving scale instead of per-channel auto-contrast,
+    # which would otherwise tint the (unchanged) background when normalization
+    # shifts the per-channel balance.
+    normalized = normalized.assign_coords(c=["r", "g", "b"])
+
     if not inplace:
         return normalized
     _write_image(sdata, sdata.images[image_key], target_key, normalized)
