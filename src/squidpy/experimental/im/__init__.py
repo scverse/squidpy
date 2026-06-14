@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ._calculate_image_features import calculate_image_features
 from ._detect_tissue import (
     BackgroundDetectionParams,
     FelzenszwalbParams,
@@ -24,6 +25,7 @@ __all__ = [
     "StainReference",
     "WekaParams",
     "apply_stain_normalization",
+    "calculate_image_features",
     "detect_tissue",
     "fit_stain_reference",
     "make_tiles",
