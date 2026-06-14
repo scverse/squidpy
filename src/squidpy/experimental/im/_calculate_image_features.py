@@ -30,6 +30,7 @@ from squidpy.experimental.im._tiling import (
     compute_cell_info,
     compute_cell_info_multiscale,
     compute_cell_info_tiled,
+    extract_labels_tile_lazy,
     extract_tile_lazy,
 )
 
@@ -109,7 +110,7 @@ _CPMEASURE_FLAG_NAMES = frozenset(
 # All known top-level feature group names (used for validation).
 _ALL_FEATURES = (
     _CPMEASURE_FLAG_NAMES
-    | {"skimage:label", "skimage:label+image"}
+    | {"skimage:morphology", "skimage:intensity"}
     | {"squidpy:summary", "squidpy:texture", "squidpy:color_hist"}
 )
 
@@ -120,7 +121,7 @@ _ALL_FEATURES = (
 
 
 class _ParsedFeatures(NamedTuple):
-    skimage_label_props: frozenset[str] | None
+    skimage_morphology_props: frozenset[str] | None
     skimage_intensity_props: frozenset[str] | None
     squidpy_summary: bool
     squidpy_texture: bool
@@ -136,14 +137,14 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
     if features is None:
         raise ValueError(
             "`features` must be specified explicitly.  "
-            "Use e.g. `features=['skimage:label']` for skimage regionprops or "
+            "Use e.g. `features=['skimage:morphology']` for skimage regionprops or "
             "`features=['squidpy:summary', 'squidpy:texture', 'squidpy:color_hist']` for squidpy-native features."
         )
 
     if isinstance(features, str):
         features = [features]
 
-    label_props: set[str] | None = None
+    morphology_props: set[str] | None = None
     intensity_props: set[str] | None = None
     sq_summary = False
     sq_texture = False
@@ -154,32 +155,36 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
             raise NotImplementedError(f"cp_measure feature `{f}` is not yet implemented.")
 
         # skimage group-level
-        if f == "skimage:label":
-            if label_props is not None:
-                raise ValueError("Mixing 'skimage:label' with 'skimage:label:<prop>' is ambiguous; pick one form.")
-            label_props = set(_MASK_PROPS)
-        elif f == "skimage:label+image":
+        if f == "skimage:morphology":
+            if morphology_props is not None:
+                raise ValueError(
+                    "Mixing 'skimage:morphology' with 'skimage:morphology:<prop>' is ambiguous; pick one form."
+                )
+            morphology_props = set(_MASK_PROPS)
+        elif f == "skimage:intensity":
             if intensity_props is not None:
                 raise ValueError(
-                    "Mixing 'skimage:label+image' with 'skimage:label+image:<prop>' is ambiguous; pick one form."
+                    "Mixing 'skimage:intensity' with 'skimage:intensity:<prop>' is ambiguous; pick one form."
                 )
             intensity_props = set(_INTENSITY_PROPS)
 
-        # skimage fine-grained: "skimage:label:prop" or "skimage:label+image:prop"
-        elif f.startswith("skimage:label:"):
+        # skimage fine-grained: "skimage:morphology:prop" or "skimage:intensity:prop"
+        elif f.startswith("skimage:morphology:"):
             prop = f.split(":", 2)[2]
             if prop not in _MASK_PROPS:
-                raise ValueError(f"Unknown skimage label property: '{prop}'. Available: {sorted(_MASK_PROPS)}")
-            if label_props is not None and label_props >= _MASK_PROPS:
-                raise ValueError("Mixing 'skimage:label' with 'skimage:label:<prop>' is ambiguous; pick one form.")
-            label_props = (label_props or set()) | {prop}
-        elif f.startswith("skimage:label+image:"):
+                raise ValueError(f"Unknown skimage morphology property: '{prop}'. Available: {sorted(_MASK_PROPS)}")
+            if morphology_props is not None and morphology_props >= _MASK_PROPS:
+                raise ValueError(
+                    "Mixing 'skimage:morphology' with 'skimage:morphology:<prop>' is ambiguous; pick one form."
+                )
+            morphology_props = (morphology_props or set()) | {prop}
+        elif f.startswith("skimage:intensity:"):
             prop = f.split(":", 2)[2]
             if prop not in _INTENSITY_PROPS:
                 raise ValueError(f"Unknown skimage intensity property: '{prop}'. Available: {sorted(_INTENSITY_PROPS)}")
             if intensity_props is not None and intensity_props >= _INTENSITY_PROPS:
                 raise ValueError(
-                    "Mixing 'skimage:label+image' with 'skimage:label+image:<prop>' is ambiguous; pick one form."
+                    "Mixing 'skimage:intensity' with 'skimage:intensity:<prop>' is ambiguous; pick one form."
                 )
             intensity_props = (intensity_props or set()) | {prop}
 
@@ -197,11 +202,11 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
             supported = sorted(_ALL_FEATURES - _CPMEASURE_FLAG_NAMES)
             raise ValueError(
                 f"Unknown feature: '{f}'. Available top-level features: {supported}, "
-                f"or use 'skimage:label:property' / 'skimage:label+image:property' for individual properties."
+                f"or use 'skimage:morphology:property' / 'skimage:intensity:property' for individual properties."
             )
 
     return _ParsedFeatures(
-        skimage_label_props=frozenset(label_props) if label_props else None,
+        skimage_morphology_props=frozenset(morphology_props) if morphology_props else None,
         skimage_intensity_props=frozenset(intensity_props) if intensity_props else None,
         squidpy_summary=sq_summary,
         squidpy_texture=sq_texture,
@@ -211,12 +216,26 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
 
 def _has_any_features(parsed: _ParsedFeatures) -> bool:
     return (
-        parsed.skimage_label_props is not None
+        parsed.skimage_morphology_props is not None
         or parsed.skimage_intensity_props is not None
         or parsed.squidpy_summary
         or parsed.squidpy_texture
         or parsed.squidpy_color_hist
     )
+
+
+def _image_requiring_features(parsed: _ParsedFeatures) -> list[str]:
+    """User-facing flags in the request that need pixel data (i.e. an image)."""
+    needed: list[str] = []
+    if parsed.skimage_intensity_props is not None:
+        needed.append("skimage:intensity")
+    if parsed.squidpy_summary:
+        needed.append("squidpy:summary")
+    if parsed.squidpy_texture:
+        needed.append("squidpy:texture")
+    if parsed.squidpy_color_hist:
+        needed.append("squidpy:color_hist")
+    return needed
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +244,7 @@ def _has_any_features(parsed: _ParsedFeatures) -> bool:
 
 
 def _featurize_tile(
-    tile_image: np.ndarray,
+    tile_image: np.ndarray | None,
     tile_labels: np.ndarray,
     parsed: _ParsedFeatures,
     channel_names: list[str],
@@ -235,7 +254,7 @@ def _featurize_tile(
     Parameters
     ----------
     tile_image
-        ``(C, H, W)`` image tile.
+        ``(C, H, W)`` image tile, or ``None`` for a morphology-only run.
     tile_labels
         ``(H, W)`` label tile with only owned cells.
     parsed
@@ -255,9 +274,9 @@ def _featurize_tile(
     parts: list[pd.DataFrame] = []
 
     # --- skimage regionprops ---
-    if parsed.skimage_label_props is not None or parsed.skimage_intensity_props is not None:
+    if parsed.skimage_morphology_props is not None or parsed.skimage_intensity_props is not None:
         df = _compute_skimage_features(
-            tile_labels, tile_image, parsed.skimage_label_props, parsed.skimage_intensity_props, channel_names
+            tile_labels, tile_image, parsed.skimage_morphology_props, parsed.skimage_intensity_props, channel_names
         )
         if not df.empty:
             parts.append(df)
@@ -305,8 +324,8 @@ def _regionprops_table_to_df(table: dict[str, np.ndarray], rename: Callable[[str
 
 def _compute_skimage_features(
     labels: np.ndarray,
-    image: np.ndarray,
-    label_props: frozenset[str] | None,
+    image: np.ndarray | None,
+    morphology_props: frozenset[str] | None,
     intensity_props: frozenset[str] | None,
     channel_names: list[str],
 ) -> pd.DataFrame:
@@ -316,12 +335,13 @@ def _compute_skimage_features(
     over all cells, all channels) instead of a per-region Python loop. Morphology
     props keep skimage's native flattened names (e.g. ``centroid-0``,
     ``inertia_tensor-0-0``); intensity props are computed for every channel in a
-    single multichannel call and renamed ``<prop>_<channel>``.
+    single multichannel call and renamed ``<prop>_<channel>``.  ``image`` is only
+    read for ``intensity_props`` and may be ``None`` for a morphology-only run.
     """
     parts: list[pd.DataFrame] = []
 
-    if label_props is not None:
-        table = measure.regionprops_table(labels, properties=["label", *sorted(label_props)])
+    if morphology_props is not None:
+        table = measure.regionprops_table(labels, properties=["label", *sorted(morphology_props)])
         parts.append(_regionprops_table_to_df(table))
 
     if intensity_props is not None:
@@ -350,7 +370,11 @@ def _compute_squidpy_per_cell(
     parsed: _ParsedFeatures,
     channel_names: list[str],
 ) -> pd.DataFrame:
-    """Compute squidpy features per cell within a tile."""
+    """Compute squidpy features per cell within a tile.
+
+    Only reached when a squidpy feature is requested, which always requires an
+    image (enforced by validation), so ``image`` is never ``None`` here.
+    """
     regions = measure.regionprops(labels)
     n_channels = image.shape[0]
     rows: dict[int, dict[str, float]] = {}
@@ -446,14 +470,16 @@ def _resolve_da(node: xr.DataTree | xr.DataArray, scale: str | None) -> xr.DataA
 
 def _validate_inputs(
     sdata: SpatialData,
-    image_key: str,
+    image_key: str | None,
     labels_key: str | None,
     shapes_key: str | None,
     scale: str | None,
 ) -> None:
-    """Run all input validation checks (no data loading)."""
-    if image_key not in sdata.images:
-        raise ValueError(f"Image key '{image_key}' not found, valid keys: {list(sdata.images.keys())}")
+    """Run structural input validation (no data loading).
+
+    Feature-dependent rules (whether an image is required at all) live in
+    :func:`calculate_image_features`, which has the parsed feature set.
+    """
     if labels_key is None and shapes_key is None:
         raise ValueError("Provide either `labels_key` or `shapes_key`.")
     if labels_key is not None and shapes_key is not None:
@@ -464,36 +490,49 @@ def _validate_inputs(
         raise ValueError(f"Shapes key '{shapes_key}' not found, valid keys: {list(sdata.shapes.keys())}")
     if labels_key is not None and isinstance(sdata.labels[labels_key], xr.DataTree) and scale is None:
         raise ValueError("When using multi-scale labels, please specify the scale.")
-    if isinstance(sdata.images[image_key], xr.DataTree) and scale is None:
-        raise ValueError("When using multi-scale images, please specify the scale.")
+    if image_key is not None:
+        if image_key not in sdata.images:
+            raise ValueError(f"Image key '{image_key}' not found, valid keys: {list(sdata.images.keys())}")
+        if isinstance(sdata.images[image_key], xr.DataTree) and scale is None:
+            raise ValueError("When using multi-scale images, please specify the scale.")
 
 
 def _prepare_lazy(
     sdata: SpatialData,
-    image_key: str,
+    image_key: str | None,
     labels_key: str | None,
     shapes_key: str | None,
     scale: str | None,
     channels: list[str] | None,
     align_mode: Literal["strict"],
-) -> tuple[xr.DataArray, xr.DataArray, list[str]]:
-    """Return lazy (dask-backed) image and labels DataArrays, plus channel names.
+) -> tuple[xr.DataArray | None, xr.DataArray, list[str]]:
+    """Return lazy image and labels DataArrays, plus channel names.
 
-    Does NOT call ``.compute()`` — arrays stay lazy for on-demand tile reads.
-    For the shapes→labels path, labels are materialized (rasterize returns
-    an in-memory array) but wrapped in a DataArray for a uniform interface.
+    ``image_da`` is ``None`` (and ``channel_names`` empty) for a morphology-only
+    run with no ``image_key``.  Does NOT call ``.compute()`` — arrays stay lazy
+    for on-demand tile reads.  For the shapes→labels path, labels are
+    materialized but wrapped in a DataArray for a uniform interface.
     """
     _validate_inputs(sdata, image_key, labels_key, shapes_key, scale)
 
-    # Image DataArray (lazy)
-    image_da = _resolve_da(sdata.images[image_key], scale)
-    if "c" not in image_da.dims:
-        image_da = image_da.expand_dims("c")
+    # Only strict, axis-aligned image/labels are supported.  The Literal narrows
+    # align_mode statically; this guard catches callers passing it dynamically.
+    if align_mode != "strict":
+        raise ValueError(f"`align_mode` must be 'strict'; got {align_mode!r}.")
 
-    # Labels DataArray (lazy for labels_key, materialized for shapes_key)
+    # Image DataArray (lazy), or None for a morphology-only run.
+    image_da = None
+    if image_key is not None:
+        image_da = _resolve_da(sdata.images[image_key], scale)
+        if "c" not in image_da.dims:
+            image_da = image_da.expand_dims("c")
+
+    # Labels DataArray (lazy for labels_key, materialized for shapes_key).
     if labels_key is not None:
         labels_da = _resolve_da(sdata.labels[labels_key], scale)
     else:
+        # shapes_key requires an image to size the rasterization grid (enforced
+        # by calculate_image_features), so image_da is not None here.
         logg.info("Converting shapes to labels.")
         img_shape = {d: image_da.sizes[d] for d in ("y", "x")}
         try:
@@ -516,18 +555,18 @@ def _prepare_lazy(
         else:
             labels_da = xr.DataArray(np.asarray(labels_result), dims=["y", "x"])
 
-    # Only strict, axis-aligned image/labels are supported.  The Literal narrows
-    # align_mode statically; this guard catches callers passing the value
-    # dynamically (e.g. from config).
-    if align_mode != "strict":
-        raise ValueError(f"`align_mode` must be 'strict'; got {align_mode!r}.")
-    if labels_key is not None:
+    # Image and labels must share a pixel grid (only checkable with an image).
+    if image_da is not None and labels_key is not None:
         if image_da.sizes.get("y") != labels_da.sizes.get("y") or image_da.sizes.get("x") != labels_da.sizes.get("x"):
             raise ValueError(
                 f"Image (y={image_da.sizes.get('y')}, x={image_da.sizes.get('x')}) and labels "
                 f"(y={labels_da.sizes.get('y')}, x={labels_da.sizes.get('x')}) have different "
                 f"pixel grids.  Pre-align with `spatialdata.rasterize`."
             )
+
+    # No image -> no channels.
+    if image_da is None:
+        return image_da, labels_da, []
 
     # Resolve channel names through spatialdata's canonical accessor so we
     # honor c_coords set at parse time. Always cast to str.
@@ -590,7 +629,7 @@ def _compute_centroids(
 
 def calculate_image_features(
     sdata: SpatialData,
-    image_key: str,
+    image_key: str | None = None,
     labels_key: str | None = None,
     shapes_key: str | None = None,
     scale: str | None = None,
@@ -618,7 +657,8 @@ def calculate_image_features(
     sdata
         SpatialData object.
     image_key
-        Key in ``sdata.images``.
+        Key in ``sdata.images``. Optional: required only for intensity / squidpy
+        features (and for ``shapes_key``). Morphology-only runs need no image.
     labels_key
         Key in ``sdata.labels`` with segmentation masks.
     shapes_key
@@ -633,12 +673,13 @@ def calculate_image_features(
         Which features to compute (required; ``None`` is rejected). A list of
         flag strings drawn from two groups:
 
-        - **skimage regionprops** -- ``"skimage:label"`` (all morphology props)
-          or ``"skimage:label:<prop>"`` for one (e.g. ``area``);
-          ``"skimage:label+image"`` (all per-channel intensity props) or
-          ``"skimage:label+image:<prop>"`` for one (e.g. ``intensity_mean``).
-          Morphology columns use skimage's native names (``area``, ``centroid-0``);
-          intensity columns are suffixed with the channel name.
+        - **skimage regionprops** -- ``"skimage:morphology"`` (all shape props,
+          from the mask alone) or ``"skimage:morphology:<prop>"`` for one
+          (e.g. ``area``); ``"skimage:intensity"`` (all per-channel intensity
+          props, needs an image) or ``"skimage:intensity:<prop>"`` for one
+          (e.g. ``intensity_mean``). Morphology columns use skimage's native
+          names (``area``, ``centroid-0``); intensity columns are suffixed with
+          the channel name.
         - **squidpy per-cell** -- ``"squidpy:summary"`` (per-channel mean / std /
           min / max), ``"squidpy:texture"`` (per-channel GLCM contrast,
           dissimilarity, homogeneity, energy, ASM, correlation), and
@@ -671,7 +712,13 @@ def calculate_image_features(
     ...     sdata,
     ...     image_key="image",
     ...     labels_key="cells",
-    ...     features=["skimage:label", "skimage:label+image", "squidpy:summary"],
+    ...     features=["skimage:morphology", "skimage:intensity", "squidpy:summary"],
+    ... )  # doctest: +SKIP
+
+    Morphology-only needs no image:
+
+    >>> sq.experimental.im.calculate_image_features(
+    ...     sdata, labels_key="cells", features=["skimage:morphology:area"]
     ... )  # doctest: +SKIP
 
     The per-cell table is stored in ``sdata.tables["morphology"]``.
@@ -680,6 +727,17 @@ def calculate_image_features(
     parsed = _parse_features(features)
     if not _has_any_features(parsed):
         raise ValueError("No valid features requested.")
+
+    # An image is needed only for intensity / squidpy features; morphology runs
+    # from the labels alone.  Reject the cases that genuinely cannot proceed.
+    if image_key is None:
+        needs_image = _image_requiring_features(parsed)
+        if needs_image:
+            raise ValueError(f"Features {needs_image} require pixel data; pass `image_key`.")
+        if shapes_key is not None:
+            raise ValueError("`shapes_key` requires `image_key` (rasterization needs the image grid).")
+        if channels is not None:
+            raise ValueError("`channels` selection requires `image_key`.")
 
     drop_report = DropReport()
 
@@ -703,6 +761,9 @@ def calculate_image_features(
 
     # --- Process tiles (each worker materializes only its own ~2k x 2k crop) ---
     def _process_one(spec):
+        if image_da is None:
+            tile_lbl = extract_labels_tile_lazy(labels_da, spec)
+            return _featurize_tile(None, tile_lbl, parsed, channel_names)
         tile_img, tile_lbl = extract_tile_lazy(image_da, labels_da, spec)
         return _featurize_tile(tile_img, tile_lbl, parsed, channel_names)
 

@@ -53,13 +53,13 @@ class TestCalculateImageFeatures:
 
     # --- Basic functionality ---
 
-    def test_skimage_label_inplace(self, sdata_synthetic):
+    def test_skimage_morphology_inplace(self, sdata_synthetic):
         """Inplace stores AnnData in sdata.tables."""
         sq.experimental.im.calculate_image_features(
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["skimage:label"],
+            features=["skimage:morphology"],
             adata_key_added="morphology",
             inplace=True,
         )
@@ -78,7 +78,7 @@ class TestCalculateImageFeatures:
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["skimage:label"],
+            features=["skimage:morphology"],
             inplace=False,
         )
         assert isinstance(result, ad.AnnData)
@@ -87,35 +87,35 @@ class TestCalculateImageFeatures:
 
     # --- Feature sources ---
 
-    def test_skimage_label_properties(self, sdata_synthetic):
-        """skimage:label produces mask-only morphological features."""
+    def test_skimage_morphology_properties(self, sdata_synthetic):
+        """skimage:morphology produces mask-only morphological features."""
         result = sq.experimental.im.calculate_image_features(
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["skimage:label"],
+            features=["skimage:morphology"],
             inplace=False,
         )
         assert "area" in result.var_names
 
-    def test_skimage_label_single_property(self, sdata_synthetic):
-        """Fine-grained: skimage:label:area → only area column."""
+    def test_skimage_morphology_single_property(self, sdata_synthetic):
+        """Fine-grained: skimage:morphology:area → only area column."""
         result = sq.experimental.im.calculate_image_features(
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["skimage:label:area"],
+            features=["skimage:morphology:area"],
             inplace=False,
         )
         assert list(result.var_names) == ["area"]
 
     def test_skimage_intensity(self, sdata_synthetic):
-        """skimage:label+image produces per-channel intensity features."""
+        """skimage:intensity produces per-channel intensity features."""
         result = sq.experimental.im.calculate_image_features(
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["skimage:label+image"],
+            features=["skimage:intensity"],
             inplace=False,
         )
         assert result.n_vars > 0
@@ -127,7 +127,7 @@ class TestCalculateImageFeatures:
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["skimage:label+image:intensity_mean"],
+            features=["skimage:intensity:intensity_mean"],
             inplace=False,
         )
         assert all(col.startswith("intensity_mean_") for col in result.var_names)
@@ -162,7 +162,7 @@ class TestCalculateImageFeatures:
                 sdata_synthetic,
                 image_key="test_img",
                 labels_key="test_labels",
-                features=["skimage:label:area"],
+                features=["skimage:morphology:area"],
                 align_mode="rasterize",  # type: ignore[arg-type]
                 inplace=False,
             )
@@ -211,7 +211,7 @@ class TestCalculateImageFeatures:
                 sdata_synthetic,
                 image_key="nonexistent",
                 labels_key="test_labels",
-                features=["skimage:label"],
+                features=["skimage:morphology"],
             )
 
     def test_invalid_labels_key(self, sdata_synthetic):
@@ -220,7 +220,7 @@ class TestCalculateImageFeatures:
                 sdata_synthetic,
                 image_key="test_img",
                 labels_key="nonexistent",
-                features=["skimage:label"],
+                features=["skimage:morphology"],
             )
 
     def test_both_labels_and_shapes_error(self, sdata_synthetic):
@@ -230,7 +230,7 @@ class TestCalculateImageFeatures:
                 image_key="test_img",
                 labels_key="test_labels",
                 shapes_key="fake",
-                features=["skimage:label"],
+                features=["skimage:morphology"],
             )
 
     def test_missing_labels_and_shapes(self, sdata_synthetic):
@@ -238,7 +238,7 @@ class TestCalculateImageFeatures:
             sq.experimental.im.calculate_image_features(
                 sdata_synthetic,
                 image_key="test_img",
-                features=["skimage:label"],
+                features=["skimage:morphology"],
             )
 
     def test_invalid_feature(self, sdata_synthetic):
@@ -255,14 +255,14 @@ class TestCalculateImageFeatures:
         assert "squidpy:summary" in str(excinfo.value)
 
     def test_mixed_group_and_fine_grained_raises(self, sdata_synthetic):
-        """Mixing 'skimage:label' (all props) with 'skimage:label:area' (one prop)
+        """Mixing 'skimage:morphology' (all props) with 'skimage:morphology:area' (one prop)
         is ambiguous; raise rather than silently take one or the other."""
         with pytest.raises(ValueError, match="ambiguous"):
             sq.experimental.im.calculate_image_features(
                 sdata_synthetic,
                 image_key="test_img",
                 labels_key="test_labels",
-                features=["skimage:label", "skimage:label:area"],
+                features=["skimage:morphology", "skimage:morphology:area"],
                 inplace=False,
             )
 
@@ -297,7 +297,7 @@ class TestCalculateImageFeatures:
                 sdata,
                 image_key="img",
                 labels_key="lbl",
-                features=["skimage:label"],
+                features=["skimage:morphology"],
                 inplace=False,
             )
 
@@ -309,7 +309,7 @@ class TestCalculateImageFeatures:
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["skimage:label+image:intensity_mean"],
+            features=["skimage:intensity:intensity_mean"],
             inplace=False,
         )
         # Image2DModel.parse converts channel coords to integers [0,1,2]
@@ -318,7 +318,7 @@ class TestCalculateImageFeatures:
             image_key="test_img",
             labels_key="test_labels",
             channels=["0"],
-            features=["skimage:label+image:intensity_mean"],
+            features=["skimage:intensity:intensity_mean"],
             inplace=False,
         )
         # All channels → 3 columns; one channel → 1 column
@@ -345,7 +345,7 @@ class TestCalculateImageFeatures:
                 image_key="test_img",
                 labels_key="test_labels",
                 channels=["DAPI"],
-                features=["skimage:label"],
+                features=["skimage:morphology"],
             )
 
     # --- Tiled vs non-tiled equivalence ---
@@ -360,7 +360,7 @@ class TestCalculateImageFeatures:
         kw = {
             "image_key": "test_img",
             "labels_key": "test_labels",
-            "features": ["skimage:label:area", "squidpy:summary"],
+            "features": ["skimage:morphology:area", "squidpy:summary"],
             "inplace": False,
             "invalid_as_zero": True,
         }
@@ -392,7 +392,7 @@ class TestCalculateImageFeatures:
         kw = {
             "image_key": "test_img",
             "labels_key": "test_labels",
-            "features": ["skimage:label:area"],
+            "features": ["skimage:morphology:area"],
             "inplace": False,
         }
         result_seq = sq.experimental.im.calculate_image_features(sdata_synthetic, n_jobs=1, **kw)
@@ -487,7 +487,7 @@ class TestBehaviouralRegressions:
             sdata,
             image_key="img",
             labels_key="lbl",
-            features=["skimage:label:area"],
+            features=["skimage:morphology:area"],
             tile_size=80,  # forces >1 tile on 200x200
             inplace=False,
         )
@@ -526,7 +526,7 @@ class TestBehaviouralRegressions:
             sdata,
             image_key="img",
             labels_key="lbl",
-            features=["skimage:label:area"],
+            features=["skimage:morphology:area"],
             inplace=True,
             adata_key_added="morphology",
         )
@@ -544,7 +544,7 @@ class TestBehaviouralRegressions:
             sdata,
             image_key="img",
             labels_key="lbl",
-            features=["skimage:label:area"],
+            features=["skimage:morphology:area"],
             inplace=False,
         )
         observed = set(adata.obs["label_id"].astype(int).tolist())
@@ -565,7 +565,7 @@ class TestFeatureParsing:
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features="skimage:label:area",
+            features="skimage:morphology:area",
             inplace=False,
         )
         assert list(result.var_names) == ["area"]
@@ -575,11 +575,11 @@ class TestFeatureParsing:
         [
             # group flag after a fine-grained prop of the same group (reverse of
             # the already-tested fine-after-group order).
-            (["skimage:label:area", "skimage:label"], "ambiguous"),
-            (["skimage:label+image:intensity_mean", "skimage:label+image"], "ambiguous"),
+            (["skimage:morphology:area", "skimage:morphology"], "ambiguous"),
+            (["skimage:intensity:intensity_mean", "skimage:intensity"], "ambiguous"),
             # unknown fine-grained property names, per group.
-            (["skimage:label:bogus"], "Unknown skimage label property"),
-            (["skimage:label+image:bogus"], "Unknown skimage intensity property"),
+            (["skimage:morphology:bogus"], "Unknown skimage morphology property"),
+            (["skimage:intensity:bogus"], "Unknown skimage intensity property"),
         ],
     )
     def test_parse_errors(self, sdata_synthetic, features, match):
@@ -635,7 +635,7 @@ class TestShapesInput:
             sdata,
             image_key="test_img",
             shapes_key="cells",
-            features=["skimage:label:area"],
+            features=["skimage:morphology:area"],
             inplace=False,
         )
         # One row per polygon; region attr points at the shapes element.
@@ -656,7 +656,7 @@ class TestShapesInput:
                 sdata_synthetic,
                 image_key="test_img",
                 shapes_key="nope",
-                features=["skimage:label"],
+                features=["skimage:morphology"],
                 inplace=False,
             )
 
@@ -675,7 +675,7 @@ def test_all_zero_labels_raises(sdata_synthetic):
             sdata_synthetic,
             image_key="test_img",
             labels_key="empty",
-            features=["skimage:label:area"],
+            features=["skimage:morphology:area"],
             inplace=False,
         )
 
@@ -755,7 +755,7 @@ class TestMultiscale:
                 sdata,
                 image_key="img",
                 labels_key="lbl",
-                features=["skimage:label:area"],
+                features=["skimage:morphology:area"],
                 inplace=False,
             )
 
@@ -766,7 +766,7 @@ class TestMultiscale:
                 sdata,
                 image_key="img",
                 labels_key="lbl",
-                features=["skimage:label:area"],
+                features=["skimage:morphology:area"],
                 inplace=False,
             )
 
@@ -777,7 +777,7 @@ class TestMultiscale:
             image_key="img",
             labels_key="lbl",
             scale="scale0",
-            features=["skimage:label:area"],
+            features=["skimage:morphology:area"],
             inplace=False,
         )
         # The fixture places 16 cells of 30x30=900 px at full resolution. Asserting
@@ -795,7 +795,7 @@ class TestMultiscale:
                 image_key="img",
                 labels_key="lbl",
                 scale="scale9",
-                features=["skimage:label:area"],
+                features=["skimage:morphology:area"],
                 inplace=False,
             )
 
@@ -821,6 +821,93 @@ def test_shapes_rasterize_failure_raises():
             sdata,
             image_key="img",
             shapes_key="cells",
-            features=["skimage:label:area"],
+            features=["skimage:morphology:area"],
             inplace=False,
         )
+
+
+# ---------------------------------------------------------------------------
+# Optional image_key: morphology needs only the labels
+# ---------------------------------------------------------------------------
+
+
+class TestOptionalImage:
+    """`image_key` is required only for intensity / squidpy features."""
+
+    def test_morphology_only_without_image(self, sdata_synthetic):
+        """skimage:morphology runs from the labels alone, no image_key."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            labels_key="test_labels",
+            features=["skimage:morphology:area"],
+            inplace=False,
+        )
+        assert isinstance(result, ad.AnnData)
+        assert result.n_obs > 0
+        assert list(result.var_names) == ["area"]
+
+    def test_morphology_only_without_image_parallel(self, sdata_synthetic):
+        """The no-image path also works under threaded tile dispatch."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            labels_key="test_labels",
+            features=["skimage:morphology:area"],
+            tile_size=100,  # >1 tile on the 200x200 grid
+            n_jobs=2,
+            inplace=False,
+        )
+        assert result.n_obs > 0
+
+    def test_intensity_without_image_raises(self, sdata_synthetic):
+        with pytest.raises(ValueError, match=r"require pixel data.*image_key"):
+            sq.experimental.im.calculate_image_features(
+                sdata_synthetic,
+                labels_key="test_labels",
+                features=["skimage:intensity"],
+                inplace=False,
+            )
+
+    def test_mixed_features_error_names_the_offender(self, sdata_synthetic):
+        """A morphology+intensity mix with no image names the intensity flag."""
+        with pytest.raises(ValueError, match="skimage:intensity"):
+            sq.experimental.im.calculate_image_features(
+                sdata_synthetic,
+                labels_key="test_labels",
+                features=["skimage:morphology", "skimage:intensity"],
+                inplace=False,
+            )
+
+    def test_squidpy_without_image_raises(self, sdata_synthetic):
+        with pytest.raises(ValueError, match="squidpy:summary"):
+            sq.experimental.im.calculate_image_features(
+                sdata_synthetic,
+                labels_key="test_labels",
+                features=["squidpy:summary"],
+                inplace=False,
+            )
+
+    def test_channels_without_image_raises(self, sdata_synthetic):
+        with pytest.raises(ValueError, match="`channels` selection requires `image_key`"):
+            sq.experimental.im.calculate_image_features(
+                sdata_synthetic,
+                labels_key="test_labels",
+                channels=["R"],
+                features=["skimage:morphology:area"],
+                inplace=False,
+            )
+
+    def test_shapes_without_image_raises(self):
+        rng = np.random.default_rng(7)
+        shapes = ShapesModel.parse(gpd.GeoDataFrame(geometry=[Polygon([(40, 40), (70, 40), (70, 70), (40, 70)])]))
+        # An image exists in the object, but we deliberately do not pass image_key.
+        image_xr = xr.DataArray(
+            rng.integers(0, 255, (1, 200, 200), dtype=np.uint8), dims=["c", "y", "x"], coords={"c": ["x"]}
+        )
+        sdata = SpatialData(images={"img": Image2DModel.parse(image_xr)}, shapes={"cells": shapes})
+        with pytest.raises(ValueError, match="`shapes_key` requires `image_key`"):
+            sq.experimental.im.calculate_image_features(
+                sdata,
+                shapes_key="cells",
+                features=["skimage:morphology:area"],
+                inplace=False,
+            )
