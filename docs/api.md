@@ -147,6 +147,7 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 .. autosummary::
     :toctree: api
 
+    experimental.im.calculate_image_features
     experimental.tl.calculate_tiling_qc
     experimental.tl.TilingQCParams
     experimental.tl.assign_stitch_groups
