@@ -281,7 +281,7 @@ def _occur_count(
             dy = spatial_y[i] - spatial_y[j]
             d2 = dx * dx + dy * dy
 
-            pair = label_idx[i] * k + label_idx[j]  # fixed in r–loop
+            pair = label_idx[i] * k + label_idx[j]  # fixed in r-loop
             base = pair * l_val  # first cell for that pair
 
             for r in range(l_val):
@@ -303,9 +303,9 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
     Parameters
     ----------
     v_x : np.ndarray, float64
-         x–coordinates.
+         x-coordinates.
     v_y : np.ndarray, float64
-         y–coordinates.
+         y-coordinates.
     v_radium : np.ndarray, float64
          Distance thresholds (in ascending order).
     labs : np.ndarray

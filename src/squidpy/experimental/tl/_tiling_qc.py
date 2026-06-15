@@ -124,7 +124,7 @@ def _has_distributed_client() -> bool:
     """Return True iff a ``dask.distributed.Client`` is active in this process.
 
     Mirrors the public dask idiom: if a Client is in scope, ``dask.compute``
-    will pick it up automatically — we only need to know whether to fall
+    will pick it up automatically - we only need to know whether to fall
     back to the local threaded scheduler.
     """
     try:
@@ -379,7 +379,7 @@ def _score_tile(
         Factor by which to downsample each cell's bounding-box crop
         before contour extraction.  ``1`` = full resolution, ``2`` =
         half, etc.  Straight edges are scale-invariant so moderate
-        downsampling (2–4x) is safe and much faster for large cells.
+        downsampling (2-4x) is safe and much faster for large cells.
 
     Returns
     -------
@@ -661,7 +661,7 @@ def calculate_tiling_qc(
         combined["smoothed_cut_score"] = smoothed
 
         # Build is_outlier from enabled gates (AND when both active).
-        # A gate whose MAD is degenerate has no signal — treat it as a
+        # A gate whose MAD is degenerate has no signal - treat it as a
         # no-op so it cannot poison the other gate's result.  If no gate
         # produced a meaningful filter, fall back to "no outliers".
         is_outlier = np.ones(n_cells, dtype=bool)
