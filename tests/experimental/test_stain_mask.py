@@ -5,7 +5,12 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from squidpy.experimental.im._stain._mask import luminosity_foreground_mask
+from squidpy.experimental.im._stain._mask import (
+    absorbance_foreground_mask,
+    luminosity_foreground_mask,
+)
+
+_WHITE = np.array([255.0, 255.0, 255.0])
 
 
 def _rgb_dataarray(values: np.ndarray, *, chunked: bool) -> xr.DataArray:
@@ -41,5 +46,25 @@ class TestLuminosityForegroundMask:
 
     def test_non_three_channel_raises(self) -> None:
         values = np.zeros((2, 8, 8))
-        with pytest.raises(ValueError, match="length 3"):
+        with pytest.raises(ValueError, match="3-channel RGB"):
             luminosity_foreground_mask(xr.DataArray(values, dims=("c", "y", "x")), 0.8)
+
+
+class TestAbsorbanceForegroundMask:
+    def test_white_is_background_dark_is_tissue(self) -> None:
+        values = np.full((3, 8, 16), 255.0)
+        values[:, :, 8:] = 30.0  # dark right half = high absorbance = tissue
+        mask = absorbance_foreground_mask(_rgb_dataarray(values, chunked=False), _WHITE)
+        assert mask.dims == ("y", "x")
+        assert not bool(mask.values[:, :8].any())
+        assert bool(mask.values[:, 8:].all())
+
+    def test_lazy_in_lazy_out(self) -> None:
+        values = np.full((3, 16, 16), 50.0)
+        mask = absorbance_foreground_mask(_rgb_dataarray(values, chunked=True), _WHITE)
+        assert isinstance(mask.data, da.Array)
+
+    def test_non_three_channel_raises(self) -> None:
+        values = np.zeros((2, 8, 8))
+        with pytest.raises(ValueError, match="3-channel RGB"):
+            absorbance_foreground_mask(xr.DataArray(values, dims=("c", "y", "x")), _WHITE)
