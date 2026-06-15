@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from scanpy import settings
 
 from squidpy.datasets._downloader import get_downloader
-from squidpy.datasets._registry import DatasetType, get_registry
+from squidpy.datasets._registry import dataset_names, get_registry
 from squidpy.read._utils import PathLike
 
 if TYPE_CHECKING:
@@ -127,7 +127,7 @@ def visium(
 
     if sample_id not in downloader.registry:
         msg = f"Unknown Visium sample: {sample_id}. "
-        msg += f"Available samples: {downloader.registry.visium_datasets}"
+        msg += f"Available samples: {dataset_names('visium_10x')}"
         raise ValueError(msg)
 
     # Use scanpy.settings.datasetdir/visium if base_dir not specified
@@ -204,9 +204,9 @@ _IMAGE_DOC = _DocParts(
     return_type=":class:`squidpy.im.ImageContainer`\n        The image data.",
 )
 
-_DOC_PARTS_BY_TYPE: dict[DatasetType, _DocParts] = {
-    DatasetType.ANNDATA: _ANNDATA_DOC,
-    DatasetType.IMAGE: _IMAGE_DOC,
+_DOC_PARTS_BY_TYPE: dict[str, _DocParts] = {
+    "anndata": _ANNDATA_DOC,
+    "image": _IMAGE_DOC,
 }
 
 
@@ -215,7 +215,7 @@ def _make_loader(dataset_name: str):
 
     Automatically derives documentation from the registry based on dataset type.
     """
-    entry = get_registry().get(dataset_name)
+    entry = get_registry().datasets.get(dataset_name)
 
     if entry is None:
         raise ValueError(f"Unknown dataset: {dataset_name}")
@@ -230,7 +230,7 @@ def _make_loader(dataset_name: str):
     loader.__doc__ = f"""
     {entry.doc_header}
 
-    {doc_parts.shape_prefix} ``{entry.shape}``.
+    {doc_parts.shape_prefix} ``{entry.metadata.get("shape")}``.
 
     Parameters
     ----------
