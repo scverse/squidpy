@@ -28,11 +28,25 @@ class TestFileEntry:
     def test_get_urls_with_s3(self):
         entry = FileEntry(
             name="test.h5ad",
-            s3_key="figshare/test.h5ad",
+            s3_key="test.h5ad",
         )
         urls = entry.get_urls("https://s3.example.com")
         assert len(urls) == 1
-        assert urls[0] == "https://s3.example.com/figshare/test.h5ad"
+        assert urls[0] == "https://s3.example.com/test.h5ad"
+
+        entry_cells = FileEntry(
+            name="cells.zip",
+            s3_key="cells.zip",
+        )
+        urls_cells = entry_cells.get_urls("https://s3.example.com")
+        assert urls_cells[0] == "https://s3.example.com/cells.zip"
+
+        entry_10x = FileEntry(
+            name="filtered_feature_bc_matrix.h5",
+            s3_key="10x_genomics/sample/matrix.h5",
+        )
+        urls_10x = entry_10x.get_urls("https://s3.example.com")
+        assert urls_10x[0] == "https://s3.example.com/10x_genomics/sample/matrix.h5"
 
 
 class TestDatasetEntry:
@@ -181,11 +195,20 @@ class TestDatasetRegistry:
         visium_10x_entries = list(registry.iter_by_type(DatasetType.VISIUM_10X))
         assert len(visium_10x_entries) == 35  # 35 Visium samples
 
+    def test_cells_dataset_loaded(self):
+        registry = DatasetRegistry.from_yaml()
+        assert "cells" in registry
+        cells = registry["cells"]
+        assert cells.type == DatasetType.SPATIALDATA
+        assert len(cells.files) == 1
+        assert cells.files[0].name == "cells.zip"
+        assert cells.files[0].s3_key == "cells.zip"
+
     def test_property_lists(self):
         registry = DatasetRegistry.from_yaml()
         assert len(registry.anndata_datasets) == 11
         assert len(registry.image_datasets) == 3
-        assert len(registry.spatialdata_datasets) == 1
+        assert len(registry.spatialdata_datasets) == 2
         assert len(registry.visium_datasets) == 35
 
     def test_all_names(self):
@@ -194,8 +217,9 @@ class TestDatasetRegistry:
         assert "four_i" in names
         assert "visium_hne_image" in names
         assert "V1_Adult_Mouse_Brain" in names
-        # Total: 11 + 3 + 1 + 35 = 50
-        assert len(names) == 50
+        assert "cells" in names
+        # Total: 11 + 3 + 2 + 35 = 51
+        assert len(names) == 51
 
 
 class TestGetRegistry:
