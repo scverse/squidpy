@@ -160,7 +160,7 @@ datasets:
     files:
       - name: cells.zip
         s3_key: cells.zip
-        sha256: null
+        sha256: dc9613cb9e16fd2cd8d83f3a9586eeda4af5ba8ba366f1066efb51305820c5fb
 
   # ===========================================================================
   # 10x Genomics Visium datasets (3 files each)

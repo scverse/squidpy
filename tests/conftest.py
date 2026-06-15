@@ -382,6 +382,11 @@ def sdata_hne():
     return sq.datasets.visium_hne_sdata()
 
 
+@pytest.fixture()
+def sdata_cells():
+    return sq.datasets.cells()
+
+
 def _decorate(fn: Callable, clsname: str, name: str | None = None) -> Callable:
     @wraps(fn)
     def save_and_compare(self, *args, **kwargs):
