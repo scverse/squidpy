@@ -25,6 +25,7 @@ from squidpy.datasets._datasets import (
     visium_hne_image,
     visium_hne_image_crop,
     visium_hne_sdata,
+    cells,
 )
 
 __all__ = [
@@ -54,4 +55,5 @@ __all__ = [
     "visium_hne_image",
     # SpatialData
     "visium_hne_sdata",
+    "cells",
 ]

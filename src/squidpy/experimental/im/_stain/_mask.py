@@ -1,11 +1,10 @@
 """Foreground (tissue) masking for stain fitting.
 
 Method-agnostic on purpose: Reinhard fits its channel statistics over tissue
-pixels only, and the Macenko/Vahadane fits added later need the same kind of
-mask. The luminosity variant lives here; the absorbance variant
-(``absorbance_foreground_mask``) is added beside it when decomposition lands,
-both returning the same ``(y, x)`` boolean contract so downstream statistics
-code stays mask-source-agnostic.
+pixels only, and the Macenko/Vahadane fits need the same kind of mask. Two
+variants live here - luminosity (Reinhard, intensity space) and absorbance
+(decomposition, optical-density space) - both returning the same ``(y, x)``
+boolean contract so downstream statistics code stays mask-source-agnostic.
 """
 
 from __future__ import annotations
@@ -20,6 +19,7 @@ from squidpy.experimental.im._stain._constants import (
 from squidpy.experimental.im._stain._conversion import (
     _check_channel_dim,
     rgb_to_lab_ruderman,
+    rgb_to_sda,
 )
 
 
@@ -74,3 +74,50 @@ def luminosity_foreground_mask(rgb: xr.DataArray, threshold: float) -> xr.DataAr
     """
     _check_channel_dim(rgb)
     return foreground_mask_from_lab(rgb_to_lab_ruderman(rgb), threshold)
+
+
+def as_spatial_mask(mask: np.ndarray, like: xr.DataArray) -> xr.DataArray:
+    """Wrap a ``(y, x)`` boolean array as a DataArray aligned to ``like``'s y/x.
+
+    Copies ``like``'s ``y``/``x`` coords (when present) so ``like.where(...)``
+    aligns by coordinate rather than silently broadcasting. ``mask`` must match
+    ``like`` in the spatial dims.
+    """
+    coords = {d: like.coords[d] for d in ("y", "x") if d in like.coords}
+    return xr.DataArray(np.asarray(mask, dtype=bool), dims=("y", "x"), coords=coords)
+
+
+def foreground_mask_from_sda(sda: xr.DataArray, beta: float = 0.15) -> xr.DataArray:
+    """Tissue mask from an already-computed optical-density (SDA) image.
+
+    The absorbance-space sibling of :func:`foreground_mask_from_lab`: lets the
+    decomposition fit derive the mask from the same lazy ``sda`` graph it
+    already needs for the optical densities, so dask materialises the
+    RGB->SDA conversion once. ``True`` = tissue (mean absorbance ``> beta``).
+    """
+    return sda.mean(dim="c") > beta
+
+
+def absorbance_foreground_mask(rgb: xr.DataArray, white_point: np.ndarray, beta: float = 0.15) -> xr.DataArray:
+    """Boolean tissue mask in optical-density (absorbance) space.
+
+    The convention the Macenko/Vahadane fits expect: a pixel is tissue if its
+    mean absorbance across channels exceeds ``beta``. Near-white background
+    has near-zero absorbance and is excluded.
+
+    Parameters
+    ----------
+    rgb
+        Image with a ``"c"`` dimension of length 3. Numpy- or dask-backed.
+    white_point
+        Per-channel white point ``I_0`` (shape ``(3,)``), as used by
+        :func:`~squidpy.experimental.im._stain._conversion.rgb_to_sda`.
+    beta
+        Mean-absorbance cutoff. Pixels with mean SDA ``> beta`` are tissue.
+
+    Returns
+    -------
+    Boolean ``(y, x)`` DataArray: ``True`` = tissue. Lazy if ``rgb`` was lazy.
+    """
+    _check_channel_dim(rgb)
+    return foreground_mask_from_sda(rgb_to_sda(rgb, white_point), beta)
