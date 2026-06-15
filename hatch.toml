@@ -15,8 +15,8 @@ scripts.download = "python ./.scripts/ci/download_data.py {args}"
 dependency-groups = ["test"]
 extra-dependencies = ["diff-cover"]
 matrix = [
-  { deps = ["stable"], python = ["3.11", "3.12", "3.13"] },
-  { deps = ["pre"], python = ["3.13"] },
+  { deps = ["stable"], python = ["3.11", "3.12", "3.13", "3.14"] },
+  { deps = ["pre"], python = ["3.14"] },
 ]
 overrides.matrix.deps.env-vars = [
   { key = "UV_PRERELEASE", value = "allow", if = ["pre"] },
