@@ -10,8 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from scanpy import settings
-
 from squidpy.datasets._downloader import get_downloader
 from squidpy.datasets._registry import dataset_names, get_registry
 from squidpy.read._utils import PathLike
@@ -130,10 +128,7 @@ def visium(
         msg += f"Available samples: {dataset_names('visium_10x')}"
         raise ValueError(msg)
 
-    # Use scanpy.settings.datasetdir/visium if base_dir not specified
-    if base_dir is None:
-        base_dir = Path(settings.datasetdir) / "visium"
-
+    # downloads land in <datasetdir>/visium_10x/<sample_id>/
     return downloader.download(sample_id, base_dir, include_hires_tiff=include_hires_tiff)
 
 
