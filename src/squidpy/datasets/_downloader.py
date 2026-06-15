@@ -1,10 +1,10 @@
 """squidpy's dataset loaders, registered against :mod:`scverse_misc.datasets`.
 
-The generic download/extract/verify machinery lives in ``scverse-misc``. squidpy only
-registers loaders for its domain-specific dataset types (``image`` ->
-:class:`~squidpy.im.ImageContainer`, ``visium_10x`` -> :func:`squidpy.read.visium`,
-``spatialdata`` -> :func:`spatialdata.read_zarr`) and overrides the built-in ``anndata``
-loader to emit squidpy's shape warning.
+The generic download/extract/verify machinery and the ``anndata``/``spatialdata`` loaders
+live in ``scverse-misc``. squidpy only registers loaders for its domain-specific dataset
+types (``image`` -> :class:`~squidpy.im.ImageContainer`, ``visium_10x`` ->
+:func:`squidpy.read.visium`) and overrides the built-in ``anndata`` loader to emit
+squidpy's shape warning.
 """
 
 from __future__ import annotations
@@ -47,22 +47,6 @@ def _load_image(ctx: FetchContext, /, **kwargs: Any) -> Any:
     img = ImageContainer()
     img.add_img(path, layer="image", library_id=ctx.entry.metadata.get("library_id"), **kwargs)
     return img
-
-
-@register_loader("spatialdata")
-def _load_spatialdata(ctx: FetchContext, /, **kwargs: Any) -> Any:
-    import spatialdata as sd
-
-    zarr_path = ctx.target_dir / f"{ctx.entry.name}.zarr"
-    if zarr_path.exists():
-        logg.info(f"Loading existing dataset from {zarr_path}")
-        return sd.read_zarr(zarr_path)
-
-    zip_path = ctx.download(ctx.entry.file(suffix=".zip"))
-    ctx.extract_archive(zip_path)
-    if not zarr_path.exists():
-        raise RuntimeError(f"Expected extracted data at {zarr_path}, but not found")
-    return sd.read_zarr(zarr_path)
 
 
 @register_loader("visium_10x")
