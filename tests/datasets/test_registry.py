@@ -2,28 +2,29 @@
 
 from __future__ import annotations
 
-import pytest
-from scverse_misc.datasets import DatasetRegistry
+from scverse_misc.datasets import DatasetEntry
 
-from squidpy.datasets._registry import dataset_names, get_registry
+from squidpy.datasets._registry import dataset_names, get_base_url, get_registry
 
 
 class TestGetRegistry:
-    def test_returns_registry(self):
-        assert isinstance(get_registry(), DatasetRegistry)
+    def test_returns_mapping_of_entries(self):
+        reg = get_registry()
+        assert isinstance(reg, dict)
+        assert all(isinstance(e, DatasetEntry) for e in reg.values())
 
-    def test_returns_same_instance(self):
+    def test_cached(self):
         assert get_registry() is get_registry()
 
     def test_base_url(self):
-        assert get_registry().base_url == "https://exampledata.scverse.org/squidpy/"
+        assert get_base_url() == "https://exampledata.scverse.org/squidpy/"
 
 
 class TestRegistryContents:
     def test_anndata_entry(self):
         four_i = get_registry()["four_i"]
         assert four_i.type == "anndata"
-        assert four_i.metadata["shape"] == (270876, 43)
+        assert four_i.metadata["shape"] == [270876, 43]
         assert four_i.file(suffix=".h5ad").s3_key == "four_i.h5ad"
 
     def test_image_entry_has_library_id(self):
@@ -43,9 +44,7 @@ class TestRegistryContents:
         assert len(sample.files) == 3
         assert any(f.name.startswith("image.") for f in sample.files)
 
-    def test_unknown_dataset_raises(self):
-        with pytest.raises(KeyError):
-            _ = get_registry()["nonexistent"]
+    def test_unknown_dataset(self):
         assert "nonexistent" not in get_registry()
 
 

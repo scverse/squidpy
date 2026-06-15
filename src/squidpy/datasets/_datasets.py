@@ -123,7 +123,7 @@ def visium(
     # Validate sample_id against known names
     downloader = get_downloader()
 
-    if sample_id not in downloader.registry:
+    if sample_id not in downloader.datasets:
         msg = f"Unknown Visium sample: {sample_id}. "
         msg += f"Available samples: {dataset_names('visium_10x')}"
         raise ValueError(msg)
@@ -210,7 +210,7 @@ def _make_loader(dataset_name: str):
 
     Automatically derives documentation from the registry based on dataset type.
     """
-    entry = get_registry().datasets.get(dataset_name)
+    entry = get_registry().get(dataset_name)
 
     if entry is None:
         raise ValueError(f"Unknown dataset: {dataset_name}")
@@ -223,7 +223,7 @@ def _make_loader(dataset_name: str):
         return get_downloader().download(dataset_name, path, **kwargs)
 
     loader.__doc__ = f"""
-    {entry.doc_header}
+    {entry.metadata.get("doc_header")}
 
     {doc_parts.shape_prefix} ``{entry.metadata.get("shape")}``.
 
