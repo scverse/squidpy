@@ -27,6 +27,7 @@ from spatialdata import SpatialData, rasterize
 from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel, get_channel_names
 from spatialdata.transformations import get_transformation
+from threadpoolctl import threadpool_limits
 from tqdm.auto import tqdm
 
 from squidpy.experimental.im._tiling import (
@@ -1076,12 +1077,18 @@ def calculate_image_features(
     logg.info(f"Processing {total_tiles} tiles ({tile_size}x{tile_size}, margin={overlap_margin}).")
 
     # --- Process tiles (each worker materializes only its own ~2k x 2k crop) ---
+    # cp_measure/skimage featurize per cell on tiny arrays; the default
+    # multi-threaded BLAS/OpenMP pools add pure dispatch overhead there (and
+    # oversubscribe under parallelism). Clamp to one thread for the featurize
+    # body. The clamp lives inside the per-tile fn so it also applies in worker
+    # processes, where a driver-side limit would not reach.
     def _process_one(spec):
-        if image_da is None:
-            tile_lbl = extract_labels_tile_lazy(labels_da, spec)
-            return _featurize_tile(None, tile_lbl, parsed, channel_names, cp_config=cp_config)
-        tile_img, tile_lbl = extract_tile_lazy(image_da, labels_da, spec)
-        return _featurize_tile(tile_img, tile_lbl, parsed, channel_names, cp_config=cp_config)
+        with threadpool_limits(limits=1):
+            if image_da is None:
+                tile_lbl = extract_labels_tile_lazy(labels_da, spec)
+                return _featurize_tile(None, tile_lbl, parsed, channel_names, cp_config=cp_config)
+            tile_img, tile_lbl = extract_tile_lazy(image_da, labels_da, spec)
+            return _featurize_tile(tile_img, tile_lbl, parsed, channel_names, cp_config=cp_config)
 
     log_every = max(1, total_tiles // 10)
     start_t = time.monotonic()
