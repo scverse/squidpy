@@ -543,10 +543,10 @@ def calculate_tiling_qc(
 
     Notes
     -----
-    Tile processing is parallelised via :func:`dask.compute`.  When an
-    active ``dask.distributed.Client`` is in scope it is picked up
-    automatically and used for execution; otherwise a local threaded
-    scheduler with ``n_jobs`` workers is used.
+    Tile processing is parallelised via dask.  When an active
+    ``dask.distributed.Client`` is in scope it is picked up automatically
+    and used for execution; otherwise a local threaded scheduler with
+    ``n_jobs`` workers is used (the per-tile work releases the GIL).
 
     If you invoke this function from inside a dask worker task (e.g.,
     via ``client.submit(calculate_tiling_qc, ...)``), wrap the call in

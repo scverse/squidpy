@@ -438,8 +438,9 @@ def _run_on_client(
     """Submit one task per spec to ``client`` and collect results in spec order.
 
     ``scatter`` objects are sent to the workers once (broadcast) so their backing
-    graph is not re-embedded in every task; each result is gathered and freed as
-    it completes (``as_completed``), never holding the whole task graph.
+    graph is not re-embedded in every task. Each result is gathered and its future
+    released as it completes (``as_completed``), so worker memory is reclaimed
+    incrementally rather than pinning every per-tile result until the end.
     """
     from dask.distributed import as_completed
 
@@ -449,6 +450,7 @@ def _run_on_client(
     results: list[Any] = [None] * len(futures)
     for done, (fut, res) in enumerate(as_completed(futures, with_results=True), start=1):
         results[order[fut.key]] = res
+        fut.release()  # the driver now holds the result; free the worker-side copy
         _log_progress(done, len(futures), desc)
     return results
 
@@ -492,7 +494,11 @@ def _run_tiled(
     if _has_distributed_client():
         from dask.distributed import get_client
 
-        if n_jobs not in (None, -1):
+        # Warn only when the caller explicitly asked for a worker count that the
+        # Client overrides. The two callers' defaults (1 and -1) and None are not
+        # an explicit request, so they stay quiet on the documented "reuse your
+        # own Client" path.
+        if n_jobs not in (None, 1, -1):
             logg.warning(_CLIENT_OVERRIDES_NJOBS)
         return _run_on_client(get_client(), specs, process_fn, scatter, desc)
 
