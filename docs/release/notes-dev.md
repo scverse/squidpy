@@ -6,4 +6,3 @@
 - Update :attr:`squidpy.pl.var_by_distance` to show multiple variables on same plot.
   [@LLehner](https://github.com/LLehner)
   [#929](https://github.com/scverse/squidpy/pull/929)
-  
