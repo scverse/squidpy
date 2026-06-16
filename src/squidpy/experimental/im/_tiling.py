@@ -34,6 +34,18 @@ def _as_2d(arr: np.ndarray) -> np.ndarray:
     return arr.squeeze() if arr.ndim > 2 else arr
 
 
+def _materialize(da_slice: xr.DataArray) -> np.ndarray:
+    """Materialize a (possibly dask-backed) crop to numpy with a LOCAL scheduler.
+
+    A bare ``.values`` triggers ``.compute()`` with the ambient scheduler; inside
+    a distributed worker that routes the sub-computation back to the scheduler and
+    deadlocks (the worker thread blocks waiting on itself). Forcing the synchronous
+    scheduler keeps each per-tile crop read worker-local. No-op for numpy-backed
+    arrays.
+    """
+    return da_slice.compute(scheduler="synchronous").values
+
+
 @dataclass(frozen=True)
 class CellInfo:
     """Centroid and bounding box for a single label."""
@@ -315,7 +327,7 @@ def extract_tile_lazy(
         ``(crop_h, crop_w)`` numpy array with non-owned cells zeroed.
     """
     cy0, cx0, cy1, cx1 = spec.crop
-    tile_image = image_da.isel(y=slice(cy0, cy1), x=slice(cx0, cx1)).values
+    tile_image = _materialize(image_da.isel(y=slice(cy0, cy1), x=slice(cx0, cx1)))
     return tile_image, extract_labels_tile_lazy(labels_da, spec)
 
 
@@ -340,7 +352,7 @@ def extract_labels_tile_lazy(
     ``(crop_h, crop_w)`` numpy array with non-owned cells zeroed.
     """
     cy0, cx0, cy1, cx1 = spec.crop
-    tile_labels = _as_2d(labels_da.isel(y=slice(cy0, cy1), x=slice(cx0, cx1)).values.copy())
+    tile_labels = _as_2d(_materialize(labels_da.isel(y=slice(cy0, cy1), x=slice(cx0, cx1))).copy())
     _zero_non_owned(tile_labels, spec.owned_ids)
     return tile_labels
 

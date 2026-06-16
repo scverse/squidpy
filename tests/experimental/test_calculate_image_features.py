@@ -553,10 +553,10 @@ class TestBehaviouralRegressions:
         import re
 
         # spatialdata's logger renders via rich and injects ANSI escapes
-        # between tokens, so the digits in "Tile 1/9" are wrapped.
+        # between tokens, so the digits in "Processed 1/9 tiles" are wrapped.
         ansi_re = re.compile(r"\x1b\[[0-9;]*m")
         plain = ansi_re.sub("", captured.out)
-        assert re.search(r"Tile \d+/\d+", plain), f"no progress log in:\n{plain}"
+        assert re.search(r"Processed \d+/\d+ tiles", plain), f"no progress log in:\n{plain}"
 
     # -- channel subset selection --
 

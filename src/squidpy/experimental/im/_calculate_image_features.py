@@ -8,7 +8,6 @@ automatically tiled so that each tile is processed independently.
 
 from __future__ import annotations
 
-import time
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -19,7 +18,6 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from cp_measure.featurizer import featurize, make_featurizer_config
-from joblib import Parallel, delayed
 from skimage import measure
 from skimage.feature import graycomatrix, graycoprops
 from skimage.segmentation import relabel_sequential
@@ -28,10 +26,10 @@ from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel, get_channel_names
 from spatialdata.transformations import get_transformation
 from threadpoolctl import threadpool_limits
-from tqdm.auto import tqdm
 
 from squidpy.experimental.im._tiling import (
     CellInfo,
+    _run_tiled,
     build_tile_specs,
     compute_cell_info,
     compute_cell_info_multiscale,
@@ -1082,7 +1080,9 @@ def calculate_image_features(
     # oversubscribe under parallelism). Clamp to one thread for the featurize
     # body. The clamp lives inside the per-tile fn so it also applies in worker
     # processes, where a driver-side limit would not reach.
-    def _process_one(spec):
+    # The arrays arrive as arguments (scattered once on the distributed path)
+    # rather than captured, so the backing graph is not embedded in every task.
+    def _process_one(spec, image_da, labels_da):
         with threadpool_limits(limits=1):
             if image_da is None:
                 tile_lbl = extract_labels_tile_lazy(labels_da, spec)
@@ -1090,23 +1090,14 @@ def calculate_image_features(
             tile_img, tile_lbl = extract_tile_lazy(image_da, labels_da, spec)
             return _featurize_tile(tile_img, tile_lbl, parsed, channel_names, cp_config=cp_config)
 
-    log_every = max(1, total_tiles // 10)
-    start_t = time.monotonic()
-    tile_dfs: list[pd.DataFrame] = []
-    results_iter = Parallel(n_jobs=n_jobs, prefer="threads", return_as="generator_unordered")(
-        delayed(_process_one)(spec) for spec in specs
+    # cp_measure is GIL-bound Python, so featurization needs worker processes
+    # (kind="processes"); an active distributed Client is used if present.
+    results = _run_tiled(
+        specs, _process_one, n_jobs=n_jobs, kind="processes", scatter=(image_da, labels_da), desc="tiles"
     )
-    for done, df in enumerate(
-        tqdm(results_iter, total=total_tiles, desc="Featurizing tiles", unit="tile"),
-        start=1,
-    ):
-        if df.empty:
-            drop_report.empty_tiles += 1
-        else:
-            tile_dfs.append(df)
-        if done == 1 or done == total_tiles or done % log_every == 0:
-            elapsed = time.monotonic() - start_t
-            logg.info(f"Tile {done}/{total_tiles} done (elapsed {elapsed:.1f}s).")
+
+    tile_dfs = [df for df in results if not df.empty]
+    drop_report.empty_tiles += len(results) - len(tile_dfs)
 
     if not tile_dfs:
         logg.info(drop_report.summary())
