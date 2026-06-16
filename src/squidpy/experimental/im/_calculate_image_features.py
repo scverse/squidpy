@@ -2,7 +2,7 @@
 
 Extracts per-cell features from segmentation masks using cp_measure,
 scikit-image ``regionprops``, and squidpy-specific metrics (summary
-statistics, GLCM texture, colour histograms).  Large images are
+statistics, GLCM texture, intensity histograms).  Large images are
 automatically tiled so that each tile is processed independently.
 """
 
@@ -138,7 +138,7 @@ _CP_CORRELATION_KEYS = frozenset(_CPMEASURE_FLAGS["cpmeasure:correlation"])
 _ALL_FEATURES = (
     set(_CPMEASURE_FLAGS)
     | {"skimage:morphology", "skimage:intensity"}
-    | {"squidpy:summary", "squidpy:texture", "squidpy:color_hist"}
+    | {"squidpy:summary", "squidpy:texture", "squidpy:histogram"}
 )
 
 
@@ -153,7 +153,7 @@ class _ParsedFeatures(NamedTuple):
     skimage_intensity_props: frozenset[str] | None
     squidpy_summary: bool
     squidpy_texture: bool
-    squidpy_color_hist: bool
+    squidpy_histogram: bool
 
 
 def _ambiguous_mix(group: str) -> str:
@@ -201,7 +201,7 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
             skimage_intensity_props=frozenset(_INTENSITY_PROPS),
             squidpy_summary=True,
             squidpy_texture=True,
-            squidpy_color_hist=True,
+            squidpy_histogram=True,
         )
 
     if isinstance(features, str):
@@ -213,7 +213,7 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
     intensity_props: set[str] | None = None
     sq_summary = False
     sq_texture = False
-    sq_color_hist = False
+    sq_histogram = False
 
     for f in features:
         if f in _CPMEASURE_FLAGS:
@@ -249,8 +249,8 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
             sq_summary = True
         elif f == "squidpy:texture":
             sq_texture = True
-        elif f == "squidpy:color_hist":
-            sq_color_hist = True
+        elif f == "squidpy:histogram":
+            sq_histogram = True
 
         else:
             raise ValueError(
@@ -266,7 +266,7 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
         skimage_intensity_props=frozenset(intensity_props) if intensity_props else None,
         squidpy_summary=sq_summary,
         squidpy_texture=sq_texture,
-        squidpy_color_hist=sq_color_hist,
+        squidpy_histogram=sq_histogram,
     )
 
 
@@ -277,7 +277,7 @@ def _has_any_features(parsed: _ParsedFeatures) -> bool:
         or parsed.skimage_intensity_props is not None
         or parsed.squidpy_summary
         or parsed.squidpy_texture
-        or parsed.squidpy_color_hist
+        or parsed.squidpy_histogram
     )
 
 
@@ -288,9 +288,36 @@ def _image_requiring_features(parsed: _ParsedFeatures) -> list[str]:
         (parsed.skimage_intensity_props is not None, "skimage:intensity"),
         (parsed.squidpy_summary, "squidpy:summary"),
         (parsed.squidpy_texture, "squidpy:texture"),
-        (parsed.squidpy_color_hist, "squidpy:color_hist"),
+        (parsed.squidpy_histogram, "squidpy:histogram"),
     ]
     return [name for cond, name in flags if cond]
+
+
+# cp_measure groups whose feature columns are per-channel (or channel-pair);
+# sizeshape/zernike/feret are channel-independent shape descriptors.
+_CP_PER_CHANNEL = frozenset(
+    {
+        "intensity",
+        "texture",
+        "granularity",
+        "radial_distribution",
+        "radial_zernikes",
+        "correlation_pearson",
+        "correlation_costes",
+        "correlation_manders_fold",
+        "correlation_rwc",
+    }
+)
+
+
+def _uses_channels(parsed: _ParsedFeatures) -> bool:
+    """True if any requested feature is per-channel (its column name carries a channel)."""
+    if parsed.skimage_intensity_props or parsed.squidpy_summary or parsed.squidpy_texture or parsed.squidpy_histogram:
+        return True
+    if parsed.cp_flags is not None:
+        # Empty cp_flags ({}) means "all cp groups on", which includes per-channel ones.
+        return not parsed.cp_flags or any(parsed.cp_flags.get(k) for k in _CP_PER_CHANNEL)
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -351,7 +378,7 @@ def _featurize_tile(
             )
         )
 
-    if parsed.squidpy_summary or parsed.squidpy_texture or parsed.squidpy_color_hist:
+    if parsed.squidpy_summary or parsed.squidpy_texture or parsed.squidpy_histogram:
         feature_blocks.append(_compute_squidpy_per_cell(tile_labels, tile_image, parsed, channel_names))
 
     feature_blocks = [df for df in feature_blocks if not df.empty]
@@ -385,14 +412,15 @@ def _compute_cpmeasure_features(
 
 
 def _rename_intensity_col(col: str, channel_names: list[str]) -> str:
-    """Map a multichannel ``regionprops_table`` column to ``<prop>_<channel>``.
+    """Map a multichannel ``regionprops_table`` column to ``<prop>__<channel>``.
 
     A multichannel ``intensity_image`` makes skimage suffix each intensity prop
     with the channel index (``intensity_mean-0``); rename that to the channel's
-    name (``intensity_mean_DAPI``).
+    name (``intensity_mean__DAPI``).  The channel is joined with a double
+    underscore so the marker is unambiguously separable from the property name.
     """
     prop, _, idx = col.rpartition("-")
-    return f"{prop}_{channel_names[int(idx)]}"
+    return f"{prop}__{channel_names[int(idx)]}"
 
 
 def _regionprops_table_to_df(table: dict[str, np.ndarray], rename: Callable[[str], str] | None = None) -> pd.DataFrame:
@@ -481,12 +509,12 @@ def _compute_squidpy_per_cell(
 
             if parsed.squidpy_summary:
                 for stat, fn in (("mean", np.mean), ("std", np.std), ("min", np.min), ("max", np.max)):
-                    cell_features[f"summary_{stat}_{ch_name}"] = float(fn(masked_vals))
+                    cell_features[f"summary_{stat}__{ch_name}"] = float(fn(masked_vals))
 
             if parsed.squidpy_texture:
                 cell_features.update(_glcm_features(ch_crop, mask_crop, ch_name))
 
-            if parsed.squidpy_color_hist:
+            if parsed.squidpy_histogram:
                 cell_features.update(_histogram_features(masked_vals, ch_name))
 
         rows[lid] = cell_features
@@ -510,12 +538,12 @@ def _glcm_features(channel_crop: np.ndarray, mask: np.ndarray, ch_name: str) -> 
     try:
         glcm = graycomatrix(chan_quant, distances=[1], angles=[0], levels=_GLCM_LEVELS, symmetric=True, normed=True)
         return {
-            f"texture_contrast_{ch_name}": float(graycoprops(glcm, "contrast")[0, 0]),
-            f"texture_dissimilarity_{ch_name}": float(graycoprops(glcm, "dissimilarity")[0, 0]),
-            f"texture_homogeneity_{ch_name}": float(graycoprops(glcm, "homogeneity")[0, 0]),
-            f"texture_energy_{ch_name}": float(graycoprops(glcm, "energy")[0, 0]),
-            f"texture_ASM_{ch_name}": float(graycoprops(glcm, "ASM")[0, 0]),
-            f"texture_correlation_{ch_name}": float(graycoprops(glcm, "correlation")[0, 0]),
+            f"texture_contrast__{ch_name}": float(graycoprops(glcm, "contrast")[0, 0]),
+            f"texture_dissimilarity__{ch_name}": float(graycoprops(glcm, "dissimilarity")[0, 0]),
+            f"texture_homogeneity__{ch_name}": float(graycoprops(glcm, "homogeneity")[0, 0]),
+            f"texture_energy__{ch_name}": float(graycoprops(glcm, "energy")[0, 0]),
+            f"texture_ASM__{ch_name}": float(graycoprops(glcm, "ASM")[0, 0]),
+            f"texture_correlation__{ch_name}": float(graycoprops(glcm, "correlation")[0, 0]),
         }
     except (ValueError, IndexError):
         return {}
@@ -529,7 +557,7 @@ def _histogram_features(masked_vals: np.ndarray, ch_name: str) -> dict[str, floa
     hist_sum = hist.sum()
     if hist_sum > 0:
         hist = hist / hist_sum
-    return {f"color_hist_bin{b}_{ch_name}": float(v) for b, v in enumerate(hist)}
+    return {f"histogram_bin{b}__{ch_name}": float(v) for b, v in enumerate(hist)}
 
 
 # ---------------------------------------------------------------------------
@@ -908,7 +936,7 @@ def calculate_image_features(
     Uses `cp_measure <https://github.com/afermg/cp_measure>`_ for
     CellProfiler-derived features, scikit-image ``regionprops`` for
     morphological/intensity features, and squidpy-specific per-cell metrics
-    (summary statistics, GLCM texture, colour histograms).  Large images are
+    (summary statistics, GLCM texture, intensity histograms).  Large images are
     automatically tiled into ``tile_size x tile_size`` chunks with overlap so
     that every cell is fully contained in exactly one tile.
 
@@ -955,7 +983,7 @@ def calculate_image_features(
         - **squidpy per-cell** -- ``"squidpy:summary"`` (per-channel mean / std /
           min / max), ``"squidpy:texture"`` (per-channel GLCM contrast,
           dissimilarity, homogeneity, energy, ASM, correlation), and
-          ``"squidpy:color_hist"`` (per-channel intensity histogram).
+          ``"squidpy:histogram"`` (per-channel intensity histogram).
 
         If a request computes both ``"cpmeasure:sizeshape"`` and skimage
         morphology props, the overlapping skimage props (which cp_measure
@@ -1061,6 +1089,19 @@ def calculate_image_features(
         sdata, image_key, labels_key, shapes_key, scale, channels, align_mode, drop_report
     )
 
+    # Per-channel feature columns embed the channel name. If the image has no real
+    # channel names (positional integers, the default for unlabeled data), those
+    # columns become index-named (e.g. ``intensity_mean__0``); warn so the user
+    # can set marker names via ``Image2DModel.parse(..., c_coords=[...])``.
+    if channel_names and _uses_channels(parsed) and all(str(c).lstrip("-").isdigit() for c in channel_names):
+        warnings.warn(
+            f"Image '{image_key}' has positional channel names {channel_names}; per-channel "
+            f"features will be index-named (e.g. 'intensity_mean__0'). Assign marker names via "
+            f"`Image2DModel.parse(..., c_coords=[...])` for marker-named features.",
+            UserWarning,
+            stacklevel=2,
+        )
+
     # Correlation-only cp_measure with a single channel produces no features and
     # would crash cp_measure downstream; fail fast with an actionable message.
     if parsed.cp_flags and set(parsed.cp_flags) <= _CP_CORRELATION_KEYS and len(channel_names) < 2:
@@ -1126,7 +1167,8 @@ def calculate_image_features(
     if invalid_as_zero:
         np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
     adata = ad.AnnData(X=arr)
-    adata.obs_names = [f"cell_{i}" for i in combined.index]
+    # obs_names are the cell IDs from the label image (str for AnnData).
+    adata.obs_names = [str(i) for i in combined.index]
     adata.var_names = list(combined.columns)
 
     adata.uns["spatialdata_attrs"] = {

@@ -504,34 +504,31 @@ def _run_tiled(
 
     workers = 1 if n_jobs in (None, 0) else _get_n_cores(n_jobs)
 
-    # Serial in-process: no scheduler/cluster overhead. Covers n_jobs=1 and the
-    # single-tile case. (The per-tile clamp lives in process_fn.)
-    if workers == 1 or n <= 1:
-        results = []
-        for done, spec in enumerate(specs, start=1):
-            results.append(process_fn(spec, *scatter))
-            _log_progress(done, n, desc)
-        return results
+    # GIL-bound work with >1 worker needs real worker processes: the local
+    # multiprocessing scheduler does not fork for this graph, so use a
+    # distributed LocalCluster. (dask's ProgressBar cannot observe a distributed
+    # cluster; _run_on_client emits its own heartbeat.)
+    if kind == "processes" and workers > 1 and n > 1:
+        from dask.distributed import Client, LocalCluster
 
-    if kind == "threads":
-        import dask
-        from dask.diagnostics import ProgressBar
+        cluster = client = None
+        try:
+            cluster = LocalCluster(n_workers=workers, threads_per_worker=1, processes=True, dashboard_address=None)
+            client = Client(cluster)
+            return _run_on_client(client, specs, process_fn, scatter, desc)
+        finally:
+            if client is not None:
+                client.close()
+            if cluster is not None:
+                cluster.close()
 
-        tasks = [dask.delayed(process_fn)(spec, *scatter) for spec in specs]
-        with ProgressBar():
-            return list(dask.compute(*tasks, scheduler="threads", num_workers=workers))
+    # Local dask scheduler with a ProgressBar: synchronous for serial / single
+    # tile (zero cluster overhead), threads for GIL-releasing work. The per-tile
+    # clamp lives in process_fn. (ProgressBar works for both local schedulers.)
+    import dask
+    from dask.diagnostics import ProgressBar
 
-    # kind == "processes": GIL-bound work needs real worker processes. The local
-    # "processes" scheduler does not fork for this graph; use a LocalCluster.
-    from dask.distributed import Client, LocalCluster
-
-    cluster = client = None
-    try:
-        cluster = LocalCluster(n_workers=workers, threads_per_worker=1, processes=True, dashboard_address=None)
-        client = Client(cluster)
-        return _run_on_client(client, specs, process_fn, scatter, desc)
-    finally:
-        if client is not None:
-            client.close()
-        if cluster is not None:
-            cluster.close()
+    scheduler = "synchronous" if (workers == 1 or n <= 1) else "threads"
+    tasks = [dask.delayed(process_fn)(spec, *scatter) for spec in specs]
+    with ProgressBar():
+        return list(dask.compute(*tasks, scheduler=scheduler, num_workers=workers))

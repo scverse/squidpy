@@ -6,6 +6,8 @@ run in seconds without downloading real data.
 
 from __future__ import annotations
 
+import warnings
+
 import anndata as ad
 import geopandas as gpd
 import numpy as np
@@ -212,7 +214,8 @@ class TestCalculateImageFeatures:
         )
         assert isinstance(result, ad.AnnData)
         assert result.n_obs > 0
-        assert any(col.startswith("summary_mean") for col in result.var_names)
+        # per-channel features join the channel with a double underscore.
+        assert "summary_mean__0" in result.var_names
 
     def test_squidpy_texture(self, sdata_synthetic):
         result = sq.experimental.im.calculate_image_features(
@@ -226,17 +229,18 @@ class TestCalculateImageFeatures:
         assert result.n_obs > 0
         assert any(col.startswith("texture_contrast") for col in result.var_names)
 
-    def test_squidpy_color_hist(self, sdata_synthetic):
+    def test_squidpy_histogram(self, sdata_synthetic):
         result = sq.experimental.im.calculate_image_features(
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["squidpy:color_hist"],
+            features=["squidpy:histogram"],
             inplace=False,
         )
         assert isinstance(result, ad.AnnData)
         assert result.n_obs > 0
-        assert any(col.startswith("color_hist_bin") for col in result.var_names)
+        assert any(col.startswith("histogram_bin") for col in result.var_names)
+        assert "histogram_bin0__0" in result.var_names  # per-channel: double-underscore join
 
     # --- Validation errors ---
 
@@ -383,7 +387,7 @@ class TestCalculateImageFeatures:
         # All channels -> 3 columns; one channel -> 1 column
         assert result_all.n_vars == 3
         assert result_one.n_vars == 1
-        assert "intensity_mean_0" in result_one.var_names
+        assert "intensity_mean__0" in result_one.var_names
 
     def test_channel_selection_rejects_int(self, sdata_synthetic):
         """Integer channel indices are no longer accepted -- names only."""
@@ -534,32 +538,43 @@ class TestBehaviouralRegressions:
             inplace=False,
         )
         cols = list(adata.var_names)
-        assert any("_DAPI" in c for c in cols)
-        assert any("_CD3" in c for c in cols)
-        assert any("_CD8" in c for c in cols)
+        assert any("__DAPI" in c for c in cols)
+        assert any("__CD3" in c for c in cols)
+        assert any("__CD8" in c for c in cols)
         # Make sure the numeric-fallback names did not slip in:
-        assert not any(c.endswith("_0") or c.endswith("_1") or c.endswith("_2") for c in cols)
+        assert not any(c.endswith("__0") or c.endswith("__1") or c.endswith("__2") for c in cols)
 
-    # -- progress logs are emitted --
+    def test_unnamed_channels_warn(self, sdata_synthetic):
+        """Per-channel features on positional-integer channels warn the user."""
+        with pytest.warns(UserWarning, match="positional channel names"):
+            sq.experimental.im.calculate_image_features(
+                sdata_synthetic,
+                image_key="test_img",
+                labels_key="test_labels",
+                features=["skimage:intensity"],
+                inplace=False,
+            )
 
-    def test_concern2_progress_log_emitted(self, capsys):
-        sdata = _toy_sdata()
-        sq.experimental.im.calculate_image_features(
-            sdata,
-            image_key="img",
-            labels_key="lbl",
+    def test_named_channels_do_not_warn(self):
+        """Named channels do not trigger the unnamed-channel warning."""
+        sdata = _toy_sdata(channel_names=["DAPI", "CD3", "CD8"])
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            sq.experimental.im.calculate_image_features(
+                sdata, image_key="img", labels_key="lbl", features=["squidpy:summary"], inplace=False
+            )
+        assert not any("positional channel names" in str(w.message) for w in rec)
+
+    def test_obs_names_are_label_ids(self, sdata_synthetic):
+        """obs_names are the cell IDs from the label image (as strings)."""
+        adata = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="test_labels",
             features=["skimage:morphology:area"],
-            tile_size=80,  # forces >1 tile on 200x200
             inplace=False,
         )
-        captured = capsys.readouterr()
-        import re
-
-        # spatialdata's logger renders via rich and injects ANSI escapes
-        # between tokens, so the digits in "Processed 1/9 tiles" are wrapped.
-        ansi_re = re.compile(r"\x1b\[[0-9;]*m")
-        plain = ansi_re.sub("", captured.out)
-        assert re.search(r"Processed \d+/\d+ tiles", plain), f"no progress log in:\n{plain}"
+        assert list(adata.obs_names) == [str(i) for i in adata.obs["label_id"]]
 
     # -- channel subset selection --
 
