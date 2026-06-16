@@ -987,7 +987,11 @@ def calculate_image_features(
         Replace ``inf`` and ``NaN`` values with zero (cp_measure can emit NaN
         for undefined features on small cells).
     n_jobs
-        Number of parallel jobs for tile processing.
+        Number of worker processes for tile featurization (``-1`` uses all
+        cores). ``1`` runs serially in-process. cp_measure is GIL-bound, so
+        ``n_jobs > 1`` uses a :class:`dask.distributed.LocalCluster`; if an
+        active ``dask.distributed.Client`` is already in scope it is used instead
+        and ``n_jobs`` is ignored.
     inplace
         If ``True``, store result in ``sdata.tables``.  Otherwise return it.
 
@@ -996,6 +1000,13 @@ def calculate_image_features(
     Cells dropped at the image boundary (under alignment) emit a ``UserWarning``
     as they are dropped, and an end-of-run summary of all drops (boundary cells
     and empty tiles) is logged at INFO level.
+
+    With ``n_jobs > 1`` a ``LocalCluster`` is started, which spawns worker
+    processes. On macOS/Windows (spawn start method) the calling code must be
+    guarded by ``if __name__ == "__main__":`` (the standard Python multiprocessing
+    requirement), or run from a notebook. For repeated calls or multi-node
+    scale-out, create and reuse your own ``Client`` so the worker pool is started
+    once. Worker BLAS/OpenMP threads are pinned to 1 to avoid oversubscription.
 
     Returns
     -------
