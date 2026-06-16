@@ -293,29 +293,23 @@ def _image_requiring_features(parsed: _ParsedFeatures) -> list[str]:
     return [name for cond, name in flags if cond]
 
 
-# cp_measure groups whose feature columns are per-channel (or channel-pair);
-# sizeshape/zernike/feret are channel-independent shape descriptors.
-_CP_PER_CHANNEL = frozenset(
-    {
-        "intensity",
-        "texture",
-        "granularity",
-        "radial_distribution",
-        "radial_zernikes",
-        "correlation_pearson",
-        "correlation_costes",
-        "correlation_manders_fold",
-        "correlation_rwc",
-    }
-)
+# cp_measure groups with per-channel (or channel-pair) columns; sizeshape,
+# zernike and feret are channel-independent.
+_CP_PER_CHANNEL = _CP_CORRELATION_KEYS | {
+    "intensity",
+    "texture",
+    "granularity",
+    "radial_distribution",
+    "radial_zernikes",
+}
 
 
 def _uses_channels(parsed: _ParsedFeatures) -> bool:
     """True if any requested feature is per-channel (its column name carries a channel)."""
     if parsed.skimage_intensity_props or parsed.squidpy_summary or parsed.squidpy_texture or parsed.squidpy_histogram:
         return True
+    # Empty cp_flags ({}) means "all cp groups on", which includes per-channel ones.
     if parsed.cp_flags is not None:
-        # Empty cp_flags ({}) means "all cp groups on", which includes per-channel ones.
         return not parsed.cp_flags or any(parsed.cp_flags.get(k) for k in _CP_PER_CHANNEL)
     return False
 
@@ -1124,14 +1118,8 @@ def calculate_image_features(
     total_tiles = len(specs)
     logg.info(f"Processing {total_tiles} tiles ({tile_size}x{tile_size}, margin={overlap_margin}).")
 
-    # --- Process tiles (each worker materializes only its own ~2k x 2k crop) ---
-    # cp_measure/skimage featurize per cell on tiny arrays; the default
-    # multi-threaded BLAS/OpenMP pools add pure dispatch overhead there (and
-    # oversubscribe under parallelism). Clamp to one thread for the featurize
-    # body. The clamp lives inside the per-tile fn so it also applies in worker
-    # processes, where a driver-side limit would not reach.
-    # The arrays arrive as arguments (scattered once on the distributed path)
-    # rather than captured, so the backing graph is not embedded in every task.
+    # Clamp BLAS/OpenMP per tile (tiny per-cell arrays oversubscribe otherwise);
+    # the clamp lives inside the fn so it also reaches worker processes.
     def _process_one(spec, image_da, labels_da):
         with threadpool_limits(limits=1):
             if image_da is None:
@@ -1140,8 +1128,7 @@ def calculate_image_features(
             tile_img, tile_lbl = extract_tile_lazy(image_da, labels_da, spec)
             return _featurize_tile(tile_img, tile_lbl, parsed, channel_names, cp_config=cp_config)
 
-    # cp_measure is GIL-bound Python, so featurization needs worker processes
-    # (kind="processes"); an active distributed Client is used if present.
+    # cp_measure is GIL-bound, so kind="processes" (an active Client wins if set).
     results = _run_tiled(
         specs, _process_one, n_jobs=n_jobs, kind="processes", scatter=(image_da, labels_da), desc="tiles"
     )

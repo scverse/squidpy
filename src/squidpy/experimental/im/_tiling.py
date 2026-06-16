@@ -35,13 +35,11 @@ def _as_2d(arr: np.ndarray) -> np.ndarray:
 
 
 def _materialize(da_slice: xr.DataArray) -> np.ndarray:
-    """Materialize a (possibly dask-backed) crop to numpy with a LOCAL scheduler.
+    """Materialize a crop to numpy with the synchronous scheduler.
 
-    A bare ``.values`` triggers ``.compute()`` with the ambient scheduler; inside
-    a distributed worker that routes the sub-computation back to the scheduler and
-    deadlocks (the worker thread blocks waiting on itself). Forcing the synchronous
-    scheduler keeps each per-tile crop read worker-local. No-op for numpy-backed
-    arrays.
+    A bare ``.values`` inside a distributed worker would route ``.compute()`` back
+    to the scheduler and deadlock; forcing synchronous keeps the read worker-local.
+    No-op for numpy-backed arrays.
     """
     return da_slice.compute(scheduler="synchronous").values
 
@@ -397,10 +395,6 @@ def _zero_non_owned(tile_labels: np.ndarray, owned_ids: frozenset[int]) -> None:
 # (needs processes).  Everything else - client detection, worker-count
 # resolution, streaming collection, progress - is common.
 
-_CLIENT_OVERRIDES_NJOBS = (
-    "`n_jobs` is ignored when an active dask.distributed Client is in scope; parallelism is controlled by the client."
-)
-
 
 def _has_distributed_client() -> bool:
     """Return ``True`` iff a ``dask.distributed.Client`` is active in this process.
@@ -466,27 +460,13 @@ def _run_tiled(
 ) -> list[Any]:
     """Run ``process_fn(spec, *scatter)`` over tile ``specs``; return results in spec order.
 
-    Parameters
-    ----------
-    specs
-        Tile specifications from :func:`build_tile_specs`.
-    process_fn
-        ``process_fn(spec, *scatter) -> Any`` (typically a DataFrame). Must be
-        picklable for ``kind="processes"``.
-    n_jobs
-        Worker count (repo convention via :func:`squidpy._utils._get_n_cores`;
-        ``-1`` = all cores). ``1`` / ``0`` / ``None`` run serially in-process.
-        Ignored when an active ``Client`` is in scope.
-    kind
-        ``"threads"`` for GIL-releasing work (e.g. numba ``nogil``);
-        ``"processes"`` for GIL-bound Python (e.g. cp_measure), which the local
-        multiprocessing scheduler does not fork, so a transient
-        ``distributed.LocalCluster`` is used.
-    scatter
-        Large objects to pass to ``process_fn`` after ``spec``; broadcast once on
-        the distributed path instead of embedded per task.
-    desc
-        Noun used in progress logs.
+    Engine selection: an active ``distributed.Client`` wins; else ``n_jobs`` (repo
+    ``_get_n_cores`` convention, ``1``/``0``/``None`` serial) picks workers and
+    ``kind`` picks the scheduler -- ``"threads"`` for GIL-releasing work (numba
+    ``nogil``), ``"processes"`` for GIL-bound work (a ``LocalCluster``, since the
+    local multiprocessing scheduler does not fork). ``scatter`` holds large objects
+    passed after ``spec`` (broadcast once on the distributed path); ``process_fn``
+    must be picklable for ``kind="processes"``.
     """
     n = len(specs)
 
@@ -494,12 +474,9 @@ def _run_tiled(
     if _has_distributed_client():
         from dask.distributed import get_client
 
-        # Warn only when the caller explicitly asked for a worker count that the
-        # Client overrides. The two callers' defaults (1 and -1) and None are not
-        # an explicit request, so they stay quiet on the documented "reuse your
-        # own Client" path.
+        # Warn only when an explicit worker count (not a default) is overridden.
         if n_jobs not in (None, 1, -1):
-            logg.warning(_CLIENT_OVERRIDES_NJOBS)
+            logg.warning("`n_jobs` is ignored when an active dask.distributed Client is in scope.")
         return _run_on_client(get_client(), specs, process_fn, scatter, desc)
 
     workers = 1 if n_jobs in (None, 0) else _get_n_cores(n_jobs)
