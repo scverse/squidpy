@@ -1011,9 +1011,9 @@ def calculate_image_features(
     n_jobs
         Number of worker processes for tile featurization (``-1`` uses all
         cores). ``1`` runs serially in-process. cp_measure is GIL-bound, so
-        ``n_jobs > 1`` uses a :class:`dask.distributed.LocalCluster`; if an
-        active ``dask.distributed.Client`` is already in scope it is used instead
-        and ``n_jobs`` is ignored.
+        ``n_jobs > 1`` uses a ``dask.distributed.LocalCluster``; if an active
+        ``dask.distributed.Client`` is already in scope it is used instead and
+        ``n_jobs`` is ignored.
     inplace
         If ``True``, store result in ``sdata.tables``.  Otherwise return it.
 
