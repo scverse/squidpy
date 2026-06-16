@@ -523,12 +523,18 @@ def _run_tiled(
                 cluster.close()
 
     # Local dask scheduler with a ProgressBar: synchronous for serial / single
-    # tile (zero cluster overhead), threads for GIL-releasing work. The per-tile
-    # clamp lives in process_fn. (ProgressBar works for both local schedulers.)
+    # tile, threads for GIL-releasing work. Bind scatter into the closure rather
+    # than passing the dask-backed arrays as delayed args -- dask materializes a
+    # collection given to delayed in full before the call, reading the whole
+    # image per tile instead of each tile's crop.
     import dask
     from dask.diagnostics import ProgressBar
 
     scheduler = "synchronous" if (workers == 1 or n <= 1) else "threads"
-    tasks = [dask.delayed(process_fn)(spec, *scatter) for spec in specs]
+
+    def _task(spec):
+        return process_fn(spec, *scatter)
+
+    tasks = [dask.delayed(_task)(spec) for spec in specs]
     with ProgressBar():
         return list(dask.compute(*tasks, scheduler=scheduler, num_workers=workers))

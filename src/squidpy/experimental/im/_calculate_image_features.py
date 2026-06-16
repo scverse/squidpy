@@ -1089,11 +1089,9 @@ def calculate_image_features(
         sdata, image_key, labels_key, shapes_key, scale, channels, align_mode, drop_report
     )
 
-    # Per-channel feature columns embed the channel name. If the image has no real
-    # channel names (positional integers, the default for unlabeled data), those
-    # columns become index-named (e.g. ``intensity_mean__0``); warn so the user
-    # can set marker names via ``Image2DModel.parse(..., c_coords=[...])``.
-    if channel_names and _uses_channels(parsed) and all(str(c).lstrip("-").isdigit() for c in channel_names):
+    # Warn when per-channel features would be named by positional index because
+    # the image carries the default integer channel names (0, 1, ...).
+    if _uses_channels(parsed) and channel_names == [str(i) for i in range(len(channel_names))]:
         warnings.warn(
             f"Image '{image_key}' has positional channel names {channel_names}; per-channel "
             f"features will be index-named (e.g. 'intensity_mean__0'). Assign marker names via "
@@ -1167,8 +1165,6 @@ def calculate_image_features(
     if invalid_as_zero:
         np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
     adata = ad.AnnData(X=arr)
-    # obs_names are the cell IDs from the label image (str for AnnData).
-    adata.obs_names = [str(i) for i in combined.index]
     adata.var_names = list(combined.columns)
 
     adata.uns["spatialdata_attrs"] = {
@@ -1182,6 +1178,8 @@ def calculate_image_features(
         adata.obs["label_id"] = sdata.shapes[shapes_key].index.values
     else:
         adata.obs["label_id"] = combined.index.values
+    # obs_names are the cell's label-image ID (the label_id), as str for AnnData.
+    adata.obs_names = adata.obs["label_id"].astype(str).values
 
     logg.info(drop_report.summary())
 

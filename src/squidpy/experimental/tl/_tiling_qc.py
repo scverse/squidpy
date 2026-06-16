@@ -660,7 +660,8 @@ def calculate_tiling_qc(
     adata = ad.AnnData(
         X=np.empty((n_cells, 0), dtype=np.float32),
     )
-    adata.obs_names = [f"cell_{i}" for i in combined.index]
+    # obs_names are the cell's label-image ID, matching calculate_image_features.
+    adata.obs_names = [str(i) for i in combined.index]
 
     adata.obs["region"] = pd.Categorical([labels_key] * n_cells)
     adata.obs["label_id"] = combined.index.values
