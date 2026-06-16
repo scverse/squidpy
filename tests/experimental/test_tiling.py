@@ -26,9 +26,7 @@ from squidpy.experimental.im._tiling import (
 )
 from tests.conftest import PlotTester, PlotTesterMeta
 
-# ---------------------------------------------------------------------------
 # Brick-pattern fixture
-# ---------------------------------------------------------------------------
 
 _IMAGE_SIZE = 500
 _CELL_H = 20
@@ -121,9 +119,7 @@ def _make_ci(label: int, cy: float, cx: float, h: int = 4, w: int = 4) -> CellIn
     return CellInfo(label=label, centroid_y=cy, centroid_x=cx, bbox_h=h, bbox_w=w)
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(params=[10, 0], ids=["gap=10", "gap=0"])
@@ -137,9 +133,7 @@ def brick_image():
     return _make_image()
 
 
-# ---------------------------------------------------------------------------
 # build_tile_specs - deterministic checks
-# ---------------------------------------------------------------------------
 
 
 class TestBuildTileSpecs:
@@ -264,9 +258,7 @@ class TestBuildTileSpecsEdgeCases:
         assert len(specs) == 1
 
 
-# ---------------------------------------------------------------------------
 # extract_tile
-# ---------------------------------------------------------------------------
 
 
 class TestExtractTile:
@@ -314,9 +306,7 @@ class TestExtractTile:
             assert tile_lbl.shape == (cy1 - cy0, cx1 - cx0)
 
 
-# ---------------------------------------------------------------------------
 # End-to-end roundtrip
-# ---------------------------------------------------------------------------
 
 
 class TestEndToEnd:
@@ -341,9 +331,7 @@ class TestEndToEnd:
 # test_roundtrip_no_cells_lost via the brick_labels fixture's parametrisation.
 
 
-# ---------------------------------------------------------------------------
 # Visual test - tile assignment plot
-# ---------------------------------------------------------------------------
 
 # Tile colors: one distinct color per tile quadrant
 _TILE_COLORS = [
@@ -388,9 +376,7 @@ def _plot_tile_assignment(labels, specs, title=""):
     ax.set_ylabel("y")
 
 
-# ---------------------------------------------------------------------------
 # Lazy / multiscale helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_multiscale_tree(labels: np.ndarray, n_scales: int = 3) -> xr.DataTree:
