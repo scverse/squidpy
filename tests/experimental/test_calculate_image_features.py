@@ -447,11 +447,14 @@ class TestCalculateImageFeatures:
     # --- Parallelization ---
 
     def test_n_jobs_produces_same_result(self, sdata_synthetic):
-        """n_jobs>1 produces the same result as n_jobs=1."""
+        """n_jobs>1 (a real LocalCluster) produces the same result as serial."""
+        # tile_size < image forces >1 tile so n_jobs=2 actually forks worker
+        # processes (the default tile_size yields a single tile -> serial path).
         kw = {
             "image_key": "test_img",
             "labels_key": "test_labels",
             "features": ["skimage:morphology:area"],
+            "tile_size": 64,
             "inplace": False,
         }
         result_seq = sq.experimental.im.calculate_image_features(sdata_synthetic, n_jobs=1, **kw)
@@ -1037,11 +1040,13 @@ class TestCpMeasure:
             )
 
     def test_cpmeasure_n_jobs_equivalence(self, sdata_synthetic):
-        """cp_measure under threads (n_jobs>1) matches serial output."""
+        """cp_measure on a real LocalCluster (n_jobs>1) matches serial output."""
+        # Small tile_size -> multiple tiles -> n_jobs>1 forks worker processes.
         kw = {
             "image_key": "test_img",
             "labels_key": "test_labels",
             "features": ["cpmeasure:sizeshape"],
+            "tile_size": 64,
             "inplace": False,
         }
         r1 = sq.experimental.im.calculate_image_features(sdata_synthetic, n_jobs=1, **kw)
@@ -1050,3 +1055,63 @@ class TestCpMeasure:
         r4 = r4[r4.obs_names.sort_values()]
         assert list(r1.var_names) == list(r4.var_names)
         np.testing.assert_allclose(r1.X, r4[:, r1.var_names].X, rtol=1e-5, atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Distributed execution: active Client, zarr backing, rasterize path
+# ---------------------------------------------------------------------------
+
+
+def _sorted_frame(adata: ad.AnnData) -> pd.DataFrame:
+    return pd.DataFrame(adata.X, index=adata.obs["label_id"].to_numpy(), columns=list(adata.var_names)).sort_index()
+
+
+class TestParallelEngine:
+    """The dask/distributed execution path matches serial on the real code paths."""
+
+    def test_active_client_zarr_matches_serial(self, sdata_synthetic, tmp_path):
+        """An active Client featurizes zarr-backed data identically to serial.
+
+        Exercises the Client-first dispatch, scatter of a zarr-backed dask graph,
+        and cp_measure running in worker processes (picklability of the config).
+        """
+        from dask.distributed import Client, LocalCluster
+        from spatialdata import read_zarr
+
+        sdata_synthetic.write(tmp_path / "data.zarr")
+        sdata = read_zarr(tmp_path / "data.zarr")  # zarr/dask-backed
+        kw = {
+            "image_key": "test_img",
+            "labels_key": "test_labels",
+            "features": ["cpmeasure:sizeshape", "skimage:morphology:area"],
+            "tile_size": 64,
+            "inplace": False,
+        }
+        # Serial baseline must be computed with no Client in scope.
+        serial = _sorted_frame(sq.experimental.im.calculate_image_features(sdata, n_jobs=1, **kw))
+
+        with LocalCluster(n_workers=2, threads_per_worker=1, processes=True, dashboard_address=None) as cluster:
+            with Client(cluster):  # Client-first dispatch picks this up
+                parallel = _sorted_frame(sq.experimental.im.calculate_image_features(sdata, **kw))
+
+        pd.testing.assert_frame_equal(serial, parallel[serial.columns], rtol=1e-5, atol=1e-6)
+
+    def test_rasterize_parallel_matches_serial(self):
+        """The align_mode='rasterize' path featurizes identically under a LocalCluster."""
+        kw = {
+            "image_key": "img",
+            "labels_key": "lbl",
+            "features": ["skimage:morphology:area"],
+            "align_mode": "rasterize",
+            "tile_size": 64,
+            "inplace": False,
+        }
+        with pytest.warns(UserWarning, match="Materializing labels onto the image grid"):
+            serial = _sorted_frame(
+                sq.experimental.im.calculate_image_features(_toy_sdata(labels_scale=(1.3, 1.3)), n_jobs=1, **kw)
+            )
+        with pytest.warns(UserWarning, match="Materializing labels onto the image grid"):
+            parallel = _sorted_frame(
+                sq.experimental.im.calculate_image_features(_toy_sdata(labels_scale=(1.3, 1.3)), n_jobs=2, **kw)
+            )
+        pd.testing.assert_frame_equal(serial, parallel[serial.columns], rtol=1e-5, atol=1e-6)
