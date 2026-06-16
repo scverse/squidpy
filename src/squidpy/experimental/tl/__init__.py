@@ -9,6 +9,7 @@ from squidpy.experimental._methods import AlignResult
 
 from ._align import align, align_by_landmarks
 from ._tiling_qc import TilingQCParams, calculate_tiling_qc
+from ._tiling_stitch import StitchParams, assign_stitch_groups
 
 __all__ = [
     "align",
@@ -16,4 +17,8 @@ __all__ = [
     "calculate_tiling_qc",
     "TilingQCParams",
     "AlignResult",
+    "StitchParams",
+    "TilingQCParams",
+  "assign_stitch_groups",
+  "calculate_tiling_qc",
 ]
