@@ -12,12 +12,16 @@ never materialize the full image or label array.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import xarray as xr
 from skimage.measure import regionprops
+from spatialdata._logging import logger as logg
+
+from squidpy._utils import _get_n_cores
 
 
 def yx_size(da: xr.DataArray) -> tuple[int, int]:
@@ -369,3 +373,147 @@ def _zero_non_owned(tile_labels: np.ndarray, owned_ids: frozenset[int]) -> None:
     else:
         owned_arr = np.fromiter(owned_ids, dtype=tile_labels.dtype, count=len(owned_ids))
         tile_labels[~np.isin(tile_labels, owned_arr)] = 0
+
+
+# Tiled execution engine
+# ----------------------
+#
+# Shared by the tiled featurizers (calculate_image_features, calculate_tiling_qc):
+# run a per-tile function over `build_tile_specs` output across an appropriate
+# scheduler.  The two callers differ only in `kind`: tiling QC's per-tile work is
+# numba `nogil` (threads scale), while image featurization is GIL-bound Python
+# (needs processes).  Everything else - client detection, worker-count
+# resolution, streaming collection, progress - is common.
+
+_CLIENT_OVERRIDES_NJOBS = (
+    "`n_jobs` is ignored when an active dask.distributed Client is in scope; parallelism is controlled by the client."
+)
+
+
+def _has_distributed_client() -> bool:
+    """Return ``True`` iff a ``dask.distributed.Client`` is active in this process.
+
+    Mirrors the public dask idiom: if a Client is in scope, work submitted to it
+    runs there automatically.  ``ImportError`` guards a dask install without the
+    distributed extra; ``ValueError`` is what ``get_client`` raises when no
+    Client is active.
+    """
+    try:
+        from dask.distributed import get_client
+
+        get_client()
+    except (ImportError, ValueError):
+        return False
+    return True
+
+
+def _log_progress(done: int, total: int, desc: str) -> None:
+    """Emit a ~10% heartbeat so long (Xenium-scale) runs show liveness."""
+    if total <= 0:
+        return
+    step = max(1, total // 10)
+    if done == 1 or done == total or done % step == 0:
+        logg.info(f"Processed {done}/{total} {desc}.")
+
+
+def _run_on_client(
+    client: Any,
+    specs: Sequence[Any],
+    process_fn: Callable[..., Any],
+    scatter: Sequence[Any],
+    desc: str,
+) -> list[Any]:
+    """Submit one task per spec to ``client`` and collect results in spec order.
+
+    ``scatter`` objects are sent to the workers once (broadcast) so their backing
+    graph is not re-embedded in every task; each result is gathered and freed as
+    it completes (``as_completed``), never holding the whole task graph.
+    """
+    from dask.distributed import as_completed
+
+    scattered = client.scatter(list(scatter), broadcast=True) if scatter else []
+    futures = [client.submit(process_fn, spec, *scattered, pure=False) for spec in specs]
+    order = {fut.key: i for i, fut in enumerate(futures)}
+    results: list[Any] = [None] * len(futures)
+    for done, (fut, res) in enumerate(as_completed(futures, with_results=True), start=1):
+        results[order[fut.key]] = res
+        _log_progress(done, len(futures), desc)
+    return results
+
+
+def _run_tiled(
+    specs: Sequence[Any],
+    process_fn: Callable[..., Any],
+    *,
+    n_jobs: int = 1,
+    kind: Literal["threads", "processes"] = "processes",
+    scatter: Sequence[Any] = (),
+    desc: str = "tiles",
+) -> list[Any]:
+    """Run ``process_fn(spec, *scatter)`` over tile ``specs``; return results in spec order.
+
+    Parameters
+    ----------
+    specs
+        Tile specifications from :func:`build_tile_specs`.
+    process_fn
+        ``process_fn(spec, *scatter) -> Any`` (typically a DataFrame). Must be
+        picklable for ``kind="processes"``.
+    n_jobs
+        Worker count (repo convention via :func:`squidpy._utils._get_n_cores`;
+        ``-1`` = all cores). ``1`` / ``0`` / ``None`` run serially in-process.
+        Ignored when an active ``Client`` is in scope.
+    kind
+        ``"threads"`` for GIL-releasing work (e.g. numba ``nogil``);
+        ``"processes"`` for GIL-bound Python (e.g. cp_measure), which the local
+        multiprocessing scheduler does not fork, so a transient
+        ``distributed.LocalCluster`` is used.
+    scatter
+        Large objects to pass to ``process_fn`` after ``spec``; broadcast once on
+        the distributed path instead of embedded per task.
+    desc
+        Noun used in progress logs.
+    """
+    n = len(specs)
+
+    # An active Client always wins, regardless of `kind` or `n_jobs`.
+    if _has_distributed_client():
+        from dask.distributed import get_client
+
+        if n_jobs not in (None, -1):
+            logg.warning(_CLIENT_OVERRIDES_NJOBS)
+        return _run_on_client(get_client(), specs, process_fn, scatter, desc)
+
+    workers = 1 if n_jobs in (None, 0) else _get_n_cores(n_jobs)
+
+    # Serial in-process: no scheduler/cluster overhead. Covers n_jobs=1 and the
+    # single-tile case. (The per-tile clamp lives in process_fn.)
+    if workers == 1 or n <= 1:
+        results = []
+        for done, spec in enumerate(specs, start=1):
+            results.append(process_fn(spec, *scatter))
+            _log_progress(done, n, desc)
+        return results
+
+    if kind == "threads":
+        import dask
+        from dask.diagnostics import ProgressBar
+
+        tasks = [dask.delayed(process_fn)(spec, *scatter) for spec in specs]
+        with ProgressBar():
+            return list(dask.compute(*tasks, scheduler="threads", num_workers=workers))
+
+    # kind == "processes": GIL-bound work needs real worker processes. The local
+    # "processes" scheduler does not fork for this graph; use a LocalCluster.
+    from dask.distributed import Client, LocalCluster
+
+    cluster = client = None
+    try:
+        cluster = LocalCluster(n_workers=workers, threads_per_worker=1, processes=True, dashboard_address=None)
+        client = Client(cluster)
+        return _run_on_client(client, specs, process_fn, scatter, desc)
+    finally:
+        if client is not None:
+            client.close()
+        if cluster is not None:
+            cluster.close()
