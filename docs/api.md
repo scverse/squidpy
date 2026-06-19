@@ -18,6 +18,12 @@ import squidpy as sq
     :toctree: api
 
     gr.spatial_neighbors
+    gr.spatial_neighbors_from_builder
+    gr.spatial_neighbors_knn
+    gr.spatial_neighbors_radius
+    gr.spatial_neighbors_delaunay
+    gr.spatial_neighbors_grid
+    gr.GraphMatrixT
     gr.SpatialNeighborsResult
     gr.mask_graph
     gr.nhood_enrichment
@@ -111,6 +117,29 @@ import squidpy as sq
     datasets.visium_fluo_image_crop
 ```
 
+## Extensibility
+
+See the {doc}`extensibility guide </extensibility>` for how to implement a custom graph builder.
+
+```{eval-rst}
+.. module:: squidpy.gr.neighbors
+.. currentmodule:: squidpy
+.. autosummary::
+    :toctree: api
+
+    gr.neighbors.GraphBuilder
+    gr.neighbors.GraphBuilderCSR
+    gr.neighbors.GraphMatrixT
+    gr.neighbors.GraphPostprocessor
+    gr.neighbors.DistanceIntervalPostprocessor
+    gr.neighbors.PercentilePostprocessor
+    gr.neighbors.TransformPostprocessor
+    gr.neighbors.KNNBuilder
+    gr.neighbors.RadiusBuilder
+    gr.neighbors.DelaunayBuilder
+    gr.neighbors.GridBuilder
+```
+
 ## Experimental
 ```{eval-rst}
 .. module:: squidpy.experimental
@@ -118,7 +147,18 @@ import squidpy as sq
 .. autosummary::
     :toctree: api
 
+    experimental.im.calculate_image_features
     experimental.tl.calculate_tiling_qc
     experimental.tl.TilingQCParams
+    experimental.tl.assign_stitch_groups
+    experimental.tl.StitchParams
     experimental.pl.tiling_qc
+    experimental.im.fit_stain_reference
+    experimental.im.normalize_stains
+    experimental.im.decompose_stains
+    experimental.im.estimate_white_point
+    experimental.im.StainReference
+    experimental.im.ReinhardParams
+    experimental.im.MacenkoParams
+    experimental.im.VahadaneParams
 ```
