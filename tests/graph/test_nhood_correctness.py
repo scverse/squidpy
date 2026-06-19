@@ -252,9 +252,7 @@ def test_zscore_matches_reference_tiny(adata_tiny: AnnData, normalization: str, 
         n_jobs=n_jobs,
         copy=True,
     )
-    expected = _reference_nhood_enrichment(
-        adj, int_clust, 3, n_perms=n_perms, seed=seed, normalization=normalization
-    )
+    expected = _reference_nhood_enrichment(adj, int_clust, 3, n_perms=n_perms, seed=seed, normalization=normalization)
     np.testing.assert_allclose(result.zscore, expected, equal_nan=True)
 
 
@@ -272,9 +270,7 @@ def test_zscore_reference_holds_on_real_data(adata: AnnData, n_jobs: int):
     seed, n_perms = 7, 30
 
     result = nhood_enrichment(adata, cluster_key=_CK, n_perms=n_perms, seed=seed, n_jobs=n_jobs, copy=True)
-    expected = _reference_nhood_enrichment(
-        adj, int_clust, n_cls, n_perms=n_perms, seed=seed, normalization="none"
-    )
+    expected = _reference_nhood_enrichment(adj, int_clust, n_cls, n_perms=n_perms, seed=seed, normalization="none")
     np.testing.assert_allclose(result.zscore, expected, equal_nan=True)
 
 

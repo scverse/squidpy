@@ -56,7 +56,7 @@ dependencies = [
   "matplotlib-scalebar>=0.8",
   "networkx>=2.6",
   "numba>=0.56.4",
-  "numba-progress>=1.1.0",
+  "numba-progress>=1.1",
   "numpy>=1.23",
   "omnipath>=1.0.7",
   "pandas>=2.1",
@@ -67,7 +67,7 @@ dependencies = [
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
-  "spatialdata>=0.7.2",  # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
+  "spatialdata>=0.7.2",          # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
   "spatialdata-plot>=0.3.3",
   "statsmodels>=0.12",
   # https://github.com/scverse/squidpy/issues/526
