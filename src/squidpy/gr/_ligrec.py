@@ -26,6 +26,7 @@ from squidpy.gr._utils import (
     _assert_categorical_obs,
     _genesymbols,
     _save_data,
+    extract_adata_if_sdata,
 )
 
 __all__ = ["ligrec", "PermutationTest"]
@@ -652,6 +653,7 @@ def ligrec(
     interactions_params: Mapping[str, Any] = MappingProxyType({}),
     transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
     receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
+    table_key: str | None = None,
 ) -> Mapping[str, pd.DataFrame] | None:
     """
     %(PT_test.full_desc)s
@@ -659,6 +661,7 @@ def ligrec(
     Parameters
     ----------
     %(PT.parameters)s
+    %(table_key)s
     %(PT_prepare_full.parameters)s
     %(PT_test.parameters)s
     gene_symbols
@@ -668,8 +671,7 @@ def ligrec(
     -------
     %(ligrec_test_returns)s
     """  # noqa: D400
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)
