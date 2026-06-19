@@ -217,9 +217,7 @@ def test_counts_invariant_to_normalization(adata_tiny: AnnData, normalization: s
     """Raw ``counts`` must be the observed edge counts regardless of normalization."""
     adj = adata_tiny.obsp["spatial_connectivities"]
     expected = _ref_count(adj, _int_clust(adata_tiny), 3)
-    result = nhood_enrichment(
-        adata_tiny, cluster_key=_CK, normalization=normalization, n_perms=20, seed=0, copy=True
-    )
+    result = nhood_enrichment(adata_tiny, cluster_key=_CK, normalization=normalization, n_perms=20, seed=0, copy=True)
     np.testing.assert_array_equal(result.counts, expected)
 
 
@@ -231,17 +229,13 @@ def test_conditional_ratio_matches_reference_tiny(adata_tiny: AnnData):
     int_clust = _int_clust(adata_tiny)
     _, expected_ratio = _ref_conditional(adj, int_clust, 3)
 
-    result = nhood_enrichment(
-        adata_tiny, cluster_key=_CK, normalization="conditional", n_perms=20, seed=0, copy=True
-    )
+    result = nhood_enrichment(adata_tiny, cluster_key=_CK, normalization="conditional", n_perms=20, seed=0, copy=True)
     np.testing.assert_allclose(result.conditional_ratio, expected_ratio)
 
 
 def test_conditional_ratio_is_a_fraction(adata_tiny: AnnData):
     """Conditional ratios are fractions of cells, so they live in ``[0, 1]``."""
-    result = nhood_enrichment(
-        adata_tiny, cluster_key=_CK, normalization="conditional", n_perms=20, seed=0, copy=True
-    )
+    result = nhood_enrichment(adata_tiny, cluster_key=_CK, normalization="conditional", n_perms=20, seed=0, copy=True)
     ratio = result.conditional_ratio
     assert np.all((ratio >= 0) & (ratio <= 1))
 
@@ -292,9 +286,7 @@ def test_zscore_reference_holds_on_real_data(adata: AnnData, n_jobs: int):
     n_cls = adata.obs[_CK].cat.categories.shape[0]
     seed, n_perms = 7, 30
 
-    result = nhood_enrichment(
-        adata, cluster_key=_CK, n_perms=n_perms, seed=seed, n_jobs=n_jobs, copy=True
-    )
+    result = nhood_enrichment(adata, cluster_key=_CK, n_perms=n_perms, seed=seed, n_jobs=n_jobs, copy=True)
     expected = _reference_nhood_enrichment(
         adj, int_clust, n_cls, n_perms=n_perms, seed=seed, normalization="none", n_jobs=n_jobs
     )
