@@ -35,21 +35,14 @@ __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
 
 
 class NhoodEnrichmentResult(NamedTuple):
-    """Result of nhood_enrichment function.
-
-    Attributes
-    ----------
-    zscore : NDArray[np.number]
-        Z-score values of enrichment statistic.
-    count : NDArray[np.number]
-        Enrichment count.
-    conditional_ratio : NDArray[np.number] | None
-        Conditional ratio (only present if normalization='conditional').
-    """
+    """Result of nhood_enrichment function."""
 
     zscore: NDArray[np.number]
+    """Z-score values of enrichment statistic."""
     counts: NDArray[np.number]  # NamedTuple inherits from tuple so cannot use 'count' as attribute name
+    """Enrichment count."""
     conditional_ratio: NDArray[np.number] | None = None
+    """Conditional ratio. Only present if ``normalization='conditional'``."""
 
 
 # data type aliases (both for numpy and numba should match)
