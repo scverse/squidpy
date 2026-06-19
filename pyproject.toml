@@ -67,7 +67,7 @@ dependencies = [
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
-  "spatialdata>=0.7.2",  # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
+  "spatialdata>=0.7.2",          # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
   "spatialdata-plot>=0.3.3",
   "statsmodels>=0.12",
   # https://github.com/scverse/squidpy/issues/526
