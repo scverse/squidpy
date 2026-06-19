@@ -45,9 +45,8 @@ __all__ = [
 ]
 
 
-# `GraphMatrixT` stays a module-level TypeVar: it backs the public `GraphPostprocessor`
-# alias and is itself part of the public `squidpy.gr` API. `GraphBuilder` declares its own
-# (same-named) PEP 695 parameter, which shadows it within the class body.
+# Kept module-level (not folded into GraphBuilder's params): types the public
+# `GraphPostprocessor` alias and is itself a public `squidpy.gr` export.
 GraphMatrixT = TypeVar("GraphMatrixT")
 GraphPostprocessor = Callable[[GraphMatrixT, GraphMatrixT], tuple[GraphMatrixT, GraphMatrixT]]
 
