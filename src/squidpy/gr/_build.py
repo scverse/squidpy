@@ -37,14 +37,12 @@ from squidpy.gr._utils import (
 from squidpy.gr.neighbors import (
     DelaunayBuilder,
     GraphBuilder,
-    GraphMatrixT,
     GridBuilder,
     KNNBuilder,
     RadiusBuilder,
 )
 
 __all__ = [
-    "GraphMatrixT",
     "SpatialNeighborsResult",
     "spatial_neighbors",
     "spatial_neighbors_from_builder",
