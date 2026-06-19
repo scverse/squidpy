@@ -254,30 +254,7 @@ def progress_bar(
     unit: str = "item",
     desc: str | None = None,
 ) -> AbstractContextManager[ProgressBar | None]:
-    """Create a progress bar usable both inside and outside :mod:`numba` functions.
-
-    Wraps :class:`numba_progress.ProgressBar`, which polls an atomic counter from a background
-    thread. The same object can be ``.update()``-ed from pure Python *and* passed into an
-    ``njit(nogil=True)`` function, so squidpy uses a single progress-bar implementation instead of
-    one for numba and one for everything else. Functions built on :func:`parallelize` keep their own
-    queue-based bar and do not use this.
-
-    Parameters
-    ----------
-    total
-        Total number of iterations.
-    show_progress_bar
-        Whether to display the progress bar. When ``False`` a no-op context yielding ``None`` is
-        returned, so call sites guard updates with ``if pbar is not None``.
-    unit
-        Label shown next to the counter.
-    desc
-        Optional prefix description.
-
-    Returns
-    -------
-    A context manager yielding a :class:`numba_progress.ProgressBar` (or ``None`` when disabled).
-    """
+    """Create a progress bar usable both inside and outside :mod:`numba` functions."""
     if not show_progress_bar:
         return nullcontext(None)
 
