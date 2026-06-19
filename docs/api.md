@@ -147,11 +147,18 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 .. autosummary::
     :toctree: api
 
+    experimental.im.calculate_image_features
     experimental.tl.calculate_tiling_qc
     experimental.tl.TilingQCParams
+    experimental.tl.assign_stitch_groups
+    experimental.tl.StitchParams
     experimental.pl.tiling_qc
     experimental.im.fit_stain_reference
-    experimental.im.apply_stain_normalization
+    experimental.im.normalize_stains
+    experimental.im.decompose_stains
+    experimental.im.estimate_white_point
     experimental.im.StainReference
     experimental.im.ReinhardParams
+    experimental.im.MacenkoParams
+    experimental.im.VahadaneParams
 ```
