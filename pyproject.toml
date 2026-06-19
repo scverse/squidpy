@@ -77,7 +77,7 @@ dependencies = [
   "zarr>=3",
 ]
 optional-dependencies.jax = [
-  "jax",
+  "jax>=0.4.0",
 ]
 optional-dependencies.leiden = [
   "leidenalg",
