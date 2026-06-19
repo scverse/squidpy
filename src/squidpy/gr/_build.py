@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Generic, NamedTuple
+from typing import Any, NamedTuple
 
 import geopandas as gpd
 import numpy as np
@@ -55,7 +55,7 @@ __all__ = [
 ]
 
 
-class SpatialNeighborsResult(NamedTuple, Generic[GraphMatrixT]):
+class SpatialNeighborsResult[GraphMatrixT](NamedTuple):
     """Result of spatial_neighbors function."""
 
     connectivities: GraphMatrixT

@@ -9,7 +9,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 import numpy as np
 from fast_array_utils import stats as fau_stats
@@ -45,12 +45,14 @@ __all__ = [
 ]
 
 
-CoordT = TypeVar("CoordT")
+# `GraphMatrixT` stays a module-level TypeVar: it backs the public `GraphPostprocessor`
+# alias and is itself part of the public `squidpy.gr` API. `GraphBuilder` declares its own
+# (same-named) PEP 695 parameter, which shadows it within the class body.
 GraphMatrixT = TypeVar("GraphMatrixT")
 GraphPostprocessor = Callable[[GraphMatrixT, GraphMatrixT], tuple[GraphMatrixT, GraphMatrixT]]
 
 
-class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
+class GraphBuilder[CoordT, GraphMatrixT](ABC):
     """Base class for spatial graph construction strategies.
 
     Custom builders must implement :meth:`build_graph`. Overriding
