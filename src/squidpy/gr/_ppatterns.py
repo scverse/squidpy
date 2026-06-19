@@ -71,6 +71,13 @@ def spatial_autocorr(
 
     See :cite:`pysal` for reference.
 
+    .. versionchanged:: 1.8.2
+        The analytic (normality-assumption) variance for Geary's C was corrected; previously the
+        Moran's I variance was reused for ``mode = 'geary'``. As a result, ``'var_norm'`` and
+        ``'pval_norm'`` for Geary's C differ from earlier versions. Permutation-based p-values
+        (``'pval_sim'``, ``'pval_z_sim'``) are unaffected.
+        See `#1183 <https://github.com/scverse/squidpy/issues/1183>`_.
+
     Parameters
     ----------
     %(adata)s
