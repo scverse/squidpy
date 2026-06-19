@@ -1,6 +1,6 @@
 name: Feature request
 description: Propose a new feature for squidpy
-labels: enhancement
+type: Enhancement
 body:
   - type: textarea
     id: description

@@ -3,7 +3,8 @@ version: 2
 build:
   os: ubuntu-24.04
   tools:
-    python: "3.12"
+    python: "3.13"
+    nodejs: latest
   jobs:
     create_environment:
       - asdf plugin add uv
@@ -11,10 +12,5 @@ build:
       - asdf global uv latest
     build:
       html:
-        # TODO: remove UV_CONSTRAINT once hatch is compatible with virtualenv 21+ (pypa/hatch#2193)
-        - UV_CONSTRAINT=$READTHEDOCS_REPOSITORY_PATH/.github/uv-constraints.txt uvx hatch run docs:build
+        - uvx hatch run docs:build
         - mv docs/_build $READTHEDOCS_OUTPUT
-
-submodules:
-  include: [docs/notebooks]
-  recursive: true
