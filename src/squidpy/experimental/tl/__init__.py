@@ -18,7 +18,5 @@ __all__ = [
     "TilingQCParams",
     "AlignResult",
     "StitchParams",
-    "TilingQCParams",
     "assign_stitch_groups",
-    "calculate_tiling_qc",
 ]

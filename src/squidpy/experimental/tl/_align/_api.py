@@ -63,7 +63,7 @@ def align(
     spatial_key
         ``obsm`` key holding the ``(x, y)`` coordinates. Defaults to ``"spatial"``.
     output_mode
-        - ``"object"`` (default) -- return the fitted :class:`~squidpy.experimental._methods.AlignResult`; nothing is written.
+        - ``"object"`` (default) -- return the fitted :class:`~squidpy.experimental.tl.AlignResult`; nothing is written.
         - ``"inplace"`` -- write the aligned coordinates into the query and return ``None``.
         - ``"copy"`` -- write into a copy of the query and return the copy.
     key_added
@@ -129,8 +129,7 @@ def align_by_landmarks(
         ``obsm`` key when ``data`` is an :class:`~anndata.AnnData`.
     output_mode
         See :func:`align`. ``"object"`` (default) returns the fitted
-        :class:`~squidpy.experimental._methods.AlignResult` (an
-        :class:`~squidpy.experimental._methods.align_landmarks.AffineFitResult`).
+        :class:`~squidpy.experimental.tl.AlignResult`.
     key_added
         Destination ``obsm`` key when ``data`` is an AnnData (see :func:`align`).
     """
