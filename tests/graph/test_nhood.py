@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -30,11 +32,37 @@ class TestNhoodEnrichment:
 
         self._assert_common(adata)
 
-    @pytest.mark.parametrize("backend", ["threading", "multiprocessing", "loky"])
-    def test_parallel_works(self, adata: AnnData, backend: str):
+    @pytest.mark.parametrize("n_jobs", [1, 2, 3])
+    def test_parallel_works(self, adata: AnnData, n_jobs: int):
         spatial_neighbors(adata)
 
-        nhood_enrichment(adata, cluster_key=_CK, n_jobs=2, n_perms=20, backend=backend)
+        nhood_enrichment(adata, cluster_key=_CK, n_jobs=n_jobs, n_perms=20)
+
+        self._assert_common(adata)
+
+    @pytest.mark.parametrize("backend", ["threading", "multiprocessing", "loky"])
+    def test_backend_is_deprecated(self, adata: AnnData, backend: str):
+        spatial_neighbors(adata)
+
+        with pytest.warns(FutureWarning, match="`backend` is deprecated"):
+            nhood_enrichment(adata, cluster_key=_CK, n_jobs=2, n_perms=20, backend=backend)
+
+        self._assert_common(adata)
+
+    def test_numba_parallel_is_deprecated(self, adata: AnnData):
+        spatial_neighbors(adata)
+
+        with pytest.warns(FutureWarning, match="`numba_parallel` is deprecated"):
+            nhood_enrichment(adata, cluster_key=_CK, n_perms=20, numba_parallel=True)
+
+        self._assert_common(adata)
+
+    def test_no_deprecation_warning_by_default(self, adata: AnnData):
+        spatial_neighbors(adata)  # kept outside the block: it emits its own FutureWarning
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            nhood_enrichment(adata, cluster_key=_CK, n_perms=20)
 
         self._assert_common(adata)
 

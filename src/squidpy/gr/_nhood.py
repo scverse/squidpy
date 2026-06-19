@@ -8,7 +8,6 @@ from functools import partial
 from typing import Any, NamedTuple
 
 import networkx as nx
-import numba.types as nt
 import numpy as np
 import pandas as pd
 from anndata import AnnData
@@ -21,7 +20,7 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize, thread_map
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -45,19 +44,13 @@ class NhoodEnrichmentResult(NamedTuple):
     """Conditional ratio. Only present if ``normalization='conditional'``."""
 
 
-# data type aliases (both for numpy and numba should match)
-dt = nt.uint32
+# integer dtype used for cluster labels and CSR index arrays (numpy/numba must match)
 ndt = np.uint32
-_template = """
-from __future__ import annotations
 
-from numba import njit, prange
-import numpy as np
 
-@njit(dt[:, :](dt[:], dt[:], dt[:]), parallel={parallel}, fastmath=True)
-def _nenrich_{n_cls}_{parallel}(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA) -> np.ndarray:
-    '''
-    Count how many times clusters :math:`i` and :math:`j` are connected.
+@njit(nogil=True, cache=True)
+def _nenrich(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA, n_cls: int) -> NDArrayA:
+    """Count how many times clusters are connected.
 
     Parameters
     ----------
@@ -66,76 +59,40 @@ def _nenrich_{n_cls}_{parallel}(indices: NDArrayA, indptr: NDArrayA, clustering:
     indptr
         :attr:`scipy.sparse.csr_matrix.indptr`.
     clustering
-        Array of shape ``(n_cells,)`` containig cluster labels ranging from `0` to `n_clusters - 1` inclusive.
-
-    Returns
-    -------
-    :class:`numpy.ndarray`
-        Array of shape ``(n_clusters, n_clusters)`` containing the pairwise counts.
-    '''
-    res = np.zeros((indptr.shape[0] - 1, {n_cls}), dtype=ndt)
-
-    for i in prange(res.shape[0]):
-        xs, xe = indptr[i], indptr[i + 1]
-        cols = indices[xs:xe]
-        for c in cols:
-            res[i, clustering[c]] += 1
-    {init}
-    {loop}
-    {finalize}
-"""
-
-
-def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, NDArrayA, NDArrayA], NDArrayA]:
-    """
-    Create a :mod:`numba` function which counts the number of connections between clusters.
-
-    Parameters
-    ----------
+        Array of shape ``(n_cells,)`` containing cluster labels ranging from ``0`` to ``n_cls - 1`` inclusive.
     n_cls
-        Number of clusters. We're assuming that cluster labels are `0`, `1`, ..., `n_cls - 1`.
-    parallel
-        Whether to enable :mod:`numba` parallelization.
+        Number of clusters.
 
     Returns
     -------
-    The aforementioned function.
+    Array of shape ``(n_cls, n_cls)`` where entry ``(a, b)`` is the number of directed edges
+    from a cluster-``a`` cell to a cluster-``b`` neighbor.
     """
-    if n_cls <= 1:
-        raise ValueError(f"Expected at least `2` clusters, found `{n_cls}`.")
+    out = np.zeros((n_cls, n_cls), dtype=np.uint32)
+    for i in range(indptr.shape[0] - 1):
+        a = clustering[i]
+        for c in indices[indptr[i] : indptr[i + 1]]:
+            out[a, clustering[c]] += 1
+    return out
 
-    rng = range(n_cls)
-    init = "".join(
-        f"""
-    g{i} = np.zeros(({n_cls},), dtype=ndt)"""
-        for i in rng
-    )
 
-    loop_body = """
-        if cl == 0:
-            g0 += res[row]"""
-    loop_body = loop_body + "".join(
-        f"""
-        elif cl == {i}:
-            g{i} += res[row]"""
-        for i in range(1, n_cls)
-    )
-    loop = f"""
-    for row in prange(res.shape[0]):
-        cl = clustering[row]
-        {loop_body}
-        else:
-            assert False, "Unhandled case."
+@njit(nogil=True, cache=True)
+def _conditional_counts(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA, n_cls: int) -> NDArrayA:
+    """Count, per cluster pair ``(a, b)``, how many cluster-``a`` cells have at least one cluster-``b`` neighbor.
+
+    This is the COZI conditional denominator. Returns an ``(n_cls, n_cls)`` float array.
     """
-    finalize = ", ".join(f"g{i}" for i in rng)
-    finalize = f"return np.stack(({finalize}))"  # must really be a tuple
-
-    fn_key = f"_nenrich_{n_cls}_{parallel}"
-    if fn_key not in globals():
-        template = _template.format(init=init, loop=loop, finalize=finalize, n_cls=n_cls, parallel=parallel)
-        exec(compile(template, "", "exec"), globals())
-
-    return globals()[fn_key]  # type: ignore[no-any-return]
+    cond = np.zeros((n_cls, n_cls), dtype=np.float64)
+    seen = np.zeros(n_cls, dtype=np.bool_)
+    for i in range(indptr.shape[0] - 1):
+        seen[:] = False
+        for c in indices[indptr[i] : indptr[i + 1]]:
+            seen[clustering[c]] = True
+        a = clustering[i]
+        for b in range(n_cls):
+            if seen[b]:
+                cond[a, b] += 1.0
+    return cond
 
 
 def filter_clusters_by_min_cell_count(
@@ -187,7 +144,7 @@ def nhood_enrichment(
     seed: int | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
+    backend: str | None = None,
     normalization: str = "none",
     min_cell_count: int = 0,
     handle_nan: str = "keep",
@@ -237,6 +194,21 @@ def nhood_enrichment(
     _assert_connectivity_key(adata, connectivity_key)
     assert_positive(n_perms, name="n_perms")
 
+    if numba_parallel:
+        warnings.warn(
+            "`numba_parallel` is deprecated and no longer has any effect; permutations are now "
+            "parallelized across threads. It will be removed in a future version.",
+            FutureWarning,
+            stacklevel=2,
+        )
+    if backend is not None:
+        warnings.warn(
+            "`backend` is deprecated and no longer has any effect; permutations now run on a "
+            "thread pool. It will be removed in a future version.",
+            FutureWarning,
+            stacklevel=2,
+        )
+
     adj = adata.obsp[connectivity_key]
     original_clust = adata.obs[cluster_key]
     clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
@@ -257,9 +229,10 @@ def nhood_enrichment(
 
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
     n_cls = len(clust_map)
+    if n_cls <= 1:
+        raise ValueError(f"Expected at least `2` clusters, found `{n_cls}`.")
 
-    _test = _create_function(n_cls, parallel=numba_parallel)
-    count = _test(indices, indptr, int_clust)
+    count = _nenrich(indices, indptr, int_clust, n_cls)
     conditional_ratio = np.full((n_cls, n_cls), np.nan, dtype=np.float64)
 
     if normalization == "total":
@@ -267,27 +240,11 @@ def nhood_enrichment(
         row_sums[row_sums == 0] = 1
         count_normalized = count / row_sums
     elif normalization == "conditional":
-        res = np.zeros((len(int_clust), n_cls), dtype=np.uint32)
-        for i in range(len(int_clust)):
-            xs, xe = indptr[i], indptr[i + 1]
-            neighbors = indices[xs:xe]
-            for n in neighbors:
-                res[i, int_clust[n]] += 1
+        cond_counts = _conditional_counts(indices, indptr, int_clust, n_cls)
 
-        per_cell_neighbor_matrix = res > 0
-
-        cond_counts = np.zeros((n_cls, n_cls), dtype=np.float64)
-        conditional_ratio = np.full((n_cls, n_cls), np.nan, dtype=np.float64)
-
-        for a in range(n_cls):
-            a_cells = int_clust == a
-            if not np.any(a_cells):
-                continue
-            n_type_a_cells = a_cells.sum()
-            for b in range(n_cls):
-                has_b_neighbor = per_cell_neighbor_matrix[a_cells, b]
-                cond_counts[a, b] = has_b_neighbor.sum()
-            conditional_ratio[a, :] = cond_counts[a, :] / n_type_a_cells
+        cluster_sizes = np.bincount(int_clust, minlength=n_cls).astype(np.float64)
+        nonempty = cluster_sizes > 0
+        conditional_ratio[nonempty] = cond_counts[nonempty] / cluster_sizes[nonempty, None]
 
         safe_cond_counts = cond_counts.copy()
         safe_cond_counts[safe_cond_counts == 0] = 1.0
@@ -313,23 +270,30 @@ def nhood_enrichment(
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
 
-    perms = parallelize(
-        _nhood_enrichment_helper,
-        collection=np.arange(n_perms).tolist(),
-        extractor=np.vstack,
+    # Split the permutations into ``n_jobs`` contiguous chunks. Each chunk is seeded by its first
+    # permutation index (``seed + chunk_start``), so the permutation stream is independent of how
+    # the work is distributed and reproducible for a given ``seed``.
+    step = int(np.ceil(n_perms / n_jobs))
+    chunks = [np.arange(k * step, min((k + 1) * step, n_perms)) for k in range(int(np.ceil(n_perms / step)))]
+    chunks = [c for c in chunks if len(c)]
+
+    results = thread_map(
+        partial(
+            _nhood_enrichment_helper,
+            indices=indices,
+            indptr=indptr,
+            int_clust=int_clust,
+            libraries=libraries,
+            n_cls=n_cls,
+            seed=seed,
+            normalization=normalization,
+        ),
+        chunks,
         n_jobs=n_jobs,
-        backend=backend,
         show_progress_bar=show_progress_bar,
-    )(
-        callback=_test,
-        indices=indices,
-        indptr=indptr,
-        int_clust=int_clust,
-        libraries=libraries,
-        n_cls=n_cls,
-        seed=seed,
-        normalization=normalization,
+        unit="chunk",
     )
+    perms = np.vstack(results)
 
     std = perms.std(axis=0)
     std[std == 0] = np.nan
@@ -569,16 +533,19 @@ def _centrality_scores_helper(
 
 def _nhood_enrichment_helper(
     ixs: NDArrayA,
-    callback: Callable[[NDArrayA, NDArrayA, NDArrayA], NDArrayA],
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
     libraries: pd.Series[CategoricalDtype] | None,
     n_cls: int,
     seed: int | None = None,
-    queue: SigQueue | None = None,
     normalization: str = "none",
 ) -> NDArrayA:
+    """Compute the normalized permutation counts for one contiguous chunk of permutation indices.
+
+    The RNG is seeded with ``seed + ixs[0]`` and the labels are shuffled in place once per
+    permutation, so a chunk fully determines its own random stream.
+    """
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
     int_clust = int_clust.copy()
     rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])
@@ -589,45 +556,17 @@ def _nhood_enrichment_helper(
         else:
             rs.shuffle(int_clust)
 
-        count_perms = callback(indices, indptr, int_clust)
+        count_perms = _nenrich(indices, indptr, int_clust, n_cls).astype(np.float64)
 
         if normalization == "total":
             row_sums = count_perms.sum(axis=1, keepdims=True)
             row_sums[row_sums == 0] = 1
             count_perms = count_perms / row_sums
         elif normalization == "conditional":
-            res = np.zeros((len(int_clust), n_cls), dtype=np.uint32)
-            for i_cell in range(len(int_clust)):
-                xs, xe = indptr[i_cell], indptr[i_cell + 1]
-                neighbors = indices[xs:xe]
-                for n in neighbors:
-                    res[i_cell, int_clust[n]] += 1
-
-            per_cell_neighbor_matrix = res > 0
-
-            cond_counts = np.zeros((n_cls, n_cls), dtype=np.float64)
-            cluster_sizes = np.zeros(n_cls, dtype=np.float64)
-            for a in range(n_cls):
-                a_cells = int_clust == a
-                cluster_sizes[a] = a_cells.sum()
-                if not np.any(a_cells):
-                    continue
-                for b in range(n_cls):
-                    has_b_neighbor = per_cell_neighbor_matrix[a_cells, b]
-                    cond_counts[a, b] = has_b_neighbor.sum()
-
+            cond_counts = _conditional_counts(indices, indptr, int_clust, n_cls)
             cond_counts[cond_counts == 0] = 1.0
             count_perms = count_perms / cond_counts
 
-        elif normalization == "none":
-            pass
-
         perms[i, ...] = count_perms
-
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
 
     return perms
