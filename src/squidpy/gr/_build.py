@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Generic, Literal, NamedTuple
+from typing import Any, Generic, NamedTuple
 
 import geopandas as gpd
 import numpy as np
