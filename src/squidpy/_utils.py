@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import functools
 import inspect
+import os
 import warnings
 from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
 from contextlib import contextmanager
 from enum import Enum
-from multiprocessing import Manager, cpu_count
+from multiprocessing import Manager
 from queue import Queue
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Literal
@@ -44,6 +45,19 @@ except ImportError:
 from numpy.typing import NDArray
 
 NDArrayA = NDArray[Any]
+
+
+def _cpu_count() -> int:
+    """Number of CPUs available to this process.
+
+    Uses :func:`os.sched_getaffinity` to respect cgroup limits set by
+    SLURM, Docker, or ``taskset``.  Falls back to :func:`os.cpu_count`
+    on platforms where affinity queries are unavailable (e.g. macOS).
+    """
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return os.cpu_count() or 1
 
 
 class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
@@ -204,7 +218,7 @@ def parallelize(
     if n_jobs == 0:
         raise ValueError("Number of jobs cannot be `0`.")
     elif n_jobs < 0:
-        n_jobs = cpu_count() + 1 + n_jobs
+        n_jobs = _cpu_count() + 1 + n_jobs
 
     if n_split is None:
         n_split = n_jobs
@@ -231,12 +245,11 @@ def parallelize(
 
 def thread_map(
     fn: Callable[..., Any],
-    items: Iterable[Any],
+    items: Sequence[Any],
     *,
     n_jobs: int = 1,
     show_progress_bar: bool = False,
     unit: str = "item",
-    total: int | None = None,
 ) -> list[Any]:
     """Map *fn* over *items* using a thread pool with an optional progress bar.
 
@@ -245,15 +258,13 @@ def thread_map(
     fn
         Callable applied to each element of *items*.
     items
-        Iterable of inputs passed one-by-one to *fn*.
+        Sequence of inputs passed one-by-one to *fn*.
     n_jobs
         Number of worker threads. ``1`` runs sequentially (no pool overhead).
     show_progress_bar
         Whether to display a ``tqdm`` progress bar.
     unit
         Label shown next to the ``tqdm`` counter.
-    total
-        Length hint passed to ``tqdm`` when *items* has no ``__len__``.
 
     Returns
     -------
@@ -261,6 +272,12 @@ def thread_map(
         Results in the same order as *items*.
     """
     from concurrent.futures import ThreadPoolExecutor
+
+    if n_jobs == 1:
+        it: Iterable[Any] = map(fn, items)
+        if show_progress_bar and tqdm is not None:
+            it = tqdm(it, total=len(items), unit=unit)
+        return list(it)
 
     with ThreadPoolExecutor(max_workers=n_jobs) as pool:
         it = pool.map(fn, items)
@@ -290,7 +307,7 @@ def _get_n_cores(n_cores: int | None) -> int:
     if n_cores is None:
         return 1
     if n_cores < 0:
-        return cpu_count() + 1 + n_cores
+        return _cpu_count() + 1 + n_cores
 
     return n_cores
 
