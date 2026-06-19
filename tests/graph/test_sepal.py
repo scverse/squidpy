@@ -74,4 +74,3 @@ def test_sepal_dense(adata: AnnData):
 
     # Assert results are identical
     assert_frame_equal(df_sparse, df_dense)
-
