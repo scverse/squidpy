@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable, Iterable, Sequence
-from contextlib import nullcontext
 from functools import partial
 from typing import Any, NamedTuple
 
@@ -13,7 +12,6 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit
-from numba_progress import ProgressBar
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
@@ -282,25 +280,22 @@ def nhood_enrichment(
     chunks = [np.arange(k * step, min((k + 1) * step, n_perms)) for k in range(int(np.ceil(n_perms / step)))]
     chunks = [c for c in chunks if len(c)]
 
-    # The progress bar is driven per permutation from inside the worker threads (chunks are too
-    # coarse to be informative at ``n_jobs=1``). ``numba_progress.ProgressBar`` is thread-safe.
-    progress_cm = ProgressBar(total=n_perms, unit="perm", desc="nhood_enrichment") if show_progress_bar else nullcontext()
-    with progress_cm as progress:
-        results = thread_map(
-            partial(
-                _nhood_enrichment_helper,
-                indices=indices,
-                indptr=indptr,
-                int_clust=int_clust,
-                libraries=libraries,
-                n_cls=n_cls,
-                seed=seed,
-                normalization=normalization,
-                progress=progress,
-            ),
-            chunks,
-            n_jobs=n_jobs,
-        )
+    results = thread_map(
+        partial(
+            _nhood_enrichment_helper,
+            indices=indices,
+            indptr=indptr,
+            int_clust=int_clust,
+            libraries=libraries,
+            n_cls=n_cls,
+            seed=seed,
+            normalization=normalization,
+        ),
+        chunks,
+        n_jobs=n_jobs,
+        show_progress_bar=show_progress_bar,
+        unit="chunk",
+    )
     perms = np.vstack(results)
 
     std = perms.std(axis=0)
@@ -548,13 +543,11 @@ def _nhood_enrichment_helper(
     n_cls: int,
     seed: int | None = None,
     normalization: str = "none",
-    progress: ProgressBar | None = None,
 ) -> NDArrayA:
     """Compute the normalized permutation counts for one contiguous chunk of permutation indices.
 
     The RNG is seeded with ``seed + ixs[0]`` and the labels are shuffled in place once per
-    permutation, so a chunk fully determines its own random stream. ``progress``, if given, is
-    ticked once per permutation (thread-safe).
+    permutation, so a chunk fully determines its own random stream.
     """
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
     int_clust = int_clust.copy()
@@ -578,8 +571,5 @@ def _nhood_enrichment_helper(
             count_perms = count_perms / cond_counts
 
         perms[i, ...] = count_perms
-
-        if progress is not None:
-            progress.update(1)
 
     return perms
