@@ -8,17 +8,19 @@ from squidpy.tl import _calculate_window_corners, sliding_window
 
 class TestSlidingWindow:
     @pytest.mark.parametrize(
-        "windowsize_overlap_drop",
+        "windowsize_overlap_partial",
         [
-            (300, 0, False),
-            (300, 50, False),
-            (300, 50, True),
+            (300, 0, None),
+            (300, 50, None),
+            (300, 50, "drop"),
+            (300, 0, "adaptive"),
+            (300, 50, "adaptive"),
         ],
     )
     def test_sliding_window_several_slices(
         self,
         adata_mibitof: AnnData,
-        windowsize_overlap_drop: tuple[int, int, bool],
+        windowsize_overlap_partial: tuple[int, int, str | None],
         sliding_window_key: str = "sliding_window_key",
         library_key: str = "library_id",
     ):
@@ -30,7 +32,7 @@ class TestSlidingWindow:
                     total_cells += df[col].sum()
             return total_cells
 
-        window_size, overlap, drop_partial_windows = windowsize_overlap_drop
+        window_size, overlap, partial_windows = windowsize_overlap_partial
         df = sliding_window(
             adata_mibitof,
             library_key=library_key,
@@ -39,7 +41,7 @@ class TestSlidingWindow:
             coord_columns=("globalX", "globalY"),
             sliding_window_key=sliding_window_key,
             copy=True,
-            drop_partial_windows=drop_partial_windows,
+            partial_windows=partial_windows,
         )
 
         if overlap == 0:
@@ -50,9 +52,12 @@ class TestSlidingWindow:
         else:
             sliding_window_cols = df.columns[df.columns.str.contains("sliding_window")]
 
-            if drop_partial_windows:
+            if partial_windows == "drop":
                 assert len(sliding_window_cols) == 27
                 assert _count_total_assignments() == 2536
+            elif partial_windows == "adaptive":
+                assert len(sliding_window_cols) == 48
+                assert _count_total_assignments() == 4411
             else:
                 assert len(sliding_window_cols) == 70
                 assert _count_total_assignments() == 4569
@@ -110,6 +115,53 @@ class TestSlidingWindow:
                 copy=True,
             )
 
+        with pytest.raises(ValueError, match="`max_nr_cells` must be set when `partial_windows == split`."):
+            sliding_window(
+                adata_squaregrid,
+                window_size=None,
+                overlap=0,
+                partial_windows="split",
+                coord_columns=("globalX", "globalY"),
+                copy=True,
+            )
+
+    def test_sliding_window_split_nr_cells(
+        self,
+        adata_mibitof: AnnData,
+        sliding_window_key: str = "sliding_window_key",
+        library_key: str = "library_id",
+    ):
+        """
+        Test that when using 'split', each window contains at most max_nr_cells
+        and at least max_nr_cells // 2 cells,
+        unless the total number of cells is smaller than max_nr_cells // 2.
+        """
+        max_nr_cells = 100
+        total_cells = adata_mibitof.n_obs
+
+        df = sliding_window(
+            adata_mibitof,
+            library_key=library_key,
+            sliding_window_key=sliding_window_key,
+            partial_windows="split",
+            max_nr_cells=max_nr_cells,
+            copy=True,
+        )
+
+        counts = df[sliding_window_key].value_counts()
+
+        # all windows respect the upper bound
+        assert counts.max() <= max_nr_cells
+
+        # determine strict lower bound
+        lower_bound = max_nr_cells // 2
+        if total_cells < lower_bound:
+            # if total cells are too few, just one window is allowed smaller
+            assert counts.max() == total_cells
+        else:
+            # otherwise, every window must satisfy the lower bound
+            assert (counts >= lower_bound).all()
+
     def test_calculate_window_corners_overlap(self):
         min_x = 0
         max_x = 200
@@ -125,7 +177,7 @@ class TestSlidingWindow:
             max_y=max_y,
             window_size=window_size,
             overlap=overlap,
-            drop_partial_windows=False,
+            partial_windows=None,
         )
 
         assert windows.shape == (9, 4)
@@ -147,7 +199,7 @@ class TestSlidingWindow:
             max_y=max_y,
             window_size=window_size,
             overlap=overlap,
-            drop_partial_windows=False,
+            partial_windows=None,
         )
 
         assert windows.shape == (4, 4)
@@ -169,9 +221,31 @@ class TestSlidingWindow:
             max_y=max_y,
             window_size=window_size,
             overlap=overlap,
-            drop_partial_windows=True,
+            partial_windows="drop",
         )
 
         assert windows.shape == (4, 4)
         assert windows.iloc[0].values.tolist() == [0, 100, 0, 100]
         assert windows.iloc[-1].values.tolist() == [80, 180, 80, 180]
+
+    def test_calculate_window_corners_adaptive_partial_windows(self):
+        min_x = 0
+        max_x = 200
+        min_y = 0
+        max_y = 200
+        window_size = 100
+        overlap = 20
+
+        windows = _calculate_window_corners(
+            min_x=min_x,
+            max_x=max_x,
+            min_y=min_y,
+            max_y=max_y,
+            window_size=window_size,
+            overlap=overlap,
+            partial_windows="adaptive",
+        )
+
+        assert windows.shape == (9, 4)
+        assert windows.iloc[0].values.tolist() == [0, 80, 0, 80]
+        assert windows.iloc[-1].values.tolist() == [120, 200, 120, 200]
