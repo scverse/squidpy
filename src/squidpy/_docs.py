@@ -29,6 +29,10 @@ _ConnKey = Key.obsp.spatial_conn()
 _adata = """\
 adata
     Annotated data object."""
+_table_key = """\
+table_key
+    Key in :attr:`spatialdata.SpatialData.tables` where the table is stored. Required when ``adata`` is a
+    :class:`spatialdata.SpatialData` object and ignored otherwise."""
 _img_container = """\
 img
     High-resolution image."""
@@ -359,8 +363,45 @@ library_key
     If multiple `library_id`, column in :attr:`anndata.AnnData.obs`
     which stores mapping between ``library_id`` and obs."""
 
+_sdata_params = """\
+elements_to_coordinate_systems
+    A dictionary mapping element names of the SpatialData object to coordinate systems.
+    The elements can be either Shapes or Labels. For compatibility, the spatialdata table must annotate
+    all regions keys. Must not be ``None`` if ``adata`` is a :class:`spatialdata.SpatialData`.
+table_key
+    Key in :attr:`spatialdata.SpatialData.tables` where the spatialdata table is stored. Must not be ``None`` if
+    ``adata`` is a :class:`spatialdata.SpatialData`."""
+_graph_common_params = """\
+percentile
+    Percentile of the distances to use as threshold.
+transform
+    Adjacency matrix transform (``'spectral'``, ``'cosine'``, or ``None``).
+set_diag
+    Whether to set the diagonal of the connectivities to ``1.0``.
+key_added
+    Key which controls where the results are saved if ``copy = False``."""
+_n_jobs_libraries = """\
+n_jobs
+    Number of parallel jobs used to build the per-library graphs when ``library_key``
+    is set. Each library's graph is computed independently, so this only has an effect
+    for multi-library data. ``1`` (default) builds the graphs sequentially and does not
+    change behavior; ``-1`` uses all available CPUs. Has no effect when ``library_key``
+    is ``None``. Speedup is sub-linear (memory-bandwidth bound), and process-based
+    backends pay a one-time worker start-up cost, so parallelism mainly pays off for
+    many large libraries."""
+_spatial_neighbors_returns = """\
+If ``copy = True``, returns a :class:`~squidpy.gr.SpatialNeighborsResult` with the
+spatial connectivities and distances matrices.
+
+Otherwise, modifies the ``adata`` with the following keys:
+
+    - :attr:`anndata.AnnData.obsp` ``['{key_added}_connectivities']`` - the spatial connectivities.
+    - :attr:`anndata.AnnData.obsp` ``['{key_added}_distances']`` - the spatial distances.
+    - :attr:`anndata.AnnData.uns`  ``['{key_added}']`` - :class:`dict` containing parameters."""
+
 d = DocstringProcessor(
     adata=_adata,
+    table_key=_table_key,
     img_container=_img_container,
     copy=_copy,
     copy_cont=_copy_cont,
@@ -401,4 +442,8 @@ d = DocstringProcessor(
     groups=_groups,
     plotting_library_id=_plotting_library_id,
     library_key=_library_key,
+    sdata_params=_sdata_params,
+    graph_common_params=_graph_common_params,
+    n_jobs_libraries=_n_jobs_libraries,
+    spatial_neighbors_returns=_spatial_neighbors_returns,
 )

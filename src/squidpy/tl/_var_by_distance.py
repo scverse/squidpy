@@ -72,7 +72,7 @@ def var_by_distance(
             raise ValueError(f"Expected a 1D array for 'groups', but got shape {groups.shape}.")
         anchor = cast(list[str], groups.astype(str).tolist())
     else:
-        raise TypeError(f"Invalid type for groups: {type(groups)}.")
+        raise TypeError(f"Expected `groups` to be of type `str or list or ndarray`, got `{type(groups).__name__}`.")
 
     # prepare batch key for iteration (None alone in product will result in neutral element)
     batch: list[str] | list[None]  # mypy
@@ -89,7 +89,7 @@ def var_by_distance(
         else:
             batch = adata.obs[library_key].unique().tolist()
     else:
-        raise TypeError(f"Invalid type for library_key: {type(library_key)}.")
+        raise TypeError(f"Expected `library_key` to be of type `str`, got `{type(library_key).__name__}`.")
 
     batch_design_matrices = {}
     max_distances = {}

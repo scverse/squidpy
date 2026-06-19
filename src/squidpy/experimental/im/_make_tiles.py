@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-import itertools
-from typing import Literal
-
-import dask.array as da
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -12,104 +8,20 @@ import xarray as xr
 from dask.base import is_dask_collection
 from shapely.geometry import Polygon
 from spatialdata._logging import logger
-from spatialdata.models import Labels2DModel, ShapesModel
+from spatialdata.models import ShapesModel
 from spatialdata.models._utils import SpatialElement
 from spatialdata.transformations import get_transformation, set_transformation
 
-from squidpy._utils import _yx_from_shape
-
-from ._utils import _get_element_data
+from squidpy._validators import assert_in_range, assert_key_in_sdata, assert_positive
+from squidpy.experimental.im._utils import (
+    TileGrid,
+    _choose_label_scale_for_image,
+    get_element_data,
+    get_mask_materialized,
+    save_tile_grid_to_shapes,
+)
 
 __all__ = ["make_tiles", "make_tiles_from_spots"]
-
-
-class _TileGrid:
-    """Immutable tile grid definition with cached bounds and centroids."""
-
-    def __init__(
-        self,
-        H: int,
-        W: int,
-        tile_size: Literal["auto"] | tuple[int, int] = "auto",
-        target_tiles: int = 100,
-        offset_y: int = 0,
-        offset_x: int = 0,
-    ):
-        self.H = H
-        self.W = W
-        if tile_size == "auto":
-            size = max(min(self.H // target_tiles, self.W // target_tiles), 100)
-            self.ty = int(size)
-            self.tx = int(size)
-        else:
-            self.ty = int(tile_size[0])
-            self.tx = int(tile_size[1])
-        self.offset_y = offset_y
-        self.offset_x = offset_x
-        # Calculate number of tiles needed to cover entire image, accounting for offset
-        # The grid starts at offset_y, offset_x (can be negative)
-        # We need tiles from min(0, offset_y) to at least H
-        # So total coverage needed is from min(0, offset_y) to H
-        grid_start_y = min(0, self.offset_y)
-        grid_start_x = min(0, self.offset_x)
-        total_h_needed = self.H - grid_start_y
-        total_w_needed = self.W - grid_start_x
-        self.tiles_y = (total_h_needed + self.ty - 1) // self.ty
-        self.tiles_x = (total_w_needed + self.tx - 1) // self.tx
-        # Cache immutable derived values
-        self._indices = np.array([[iy, ix] for iy in range(self.tiles_y) for ix in range(self.tiles_x)], dtype=int)
-        self._names = [f"tile_x{ix}_y{iy}" for iy in range(self.tiles_y) for ix in range(self.tiles_x)]
-        self._bounds = self._compute_bounds()
-        self._centroids_polys = self._compute_centroids_and_polygons()
-
-    def indices(self) -> np.ndarray:
-        return self._indices
-
-    def names(self) -> list[str]:
-        return self._names
-
-    def bounds(self) -> np.ndarray:
-        return self._bounds
-
-    def _compute_bounds(self) -> np.ndarray:
-        b: list[list[int]] = []
-        for iy, ix in itertools.product(range(self.tiles_y), range(self.tiles_x)):
-            y0 = iy * self.ty + self.offset_y
-            x0 = ix * self.tx + self.offset_x
-            y1 = ((iy + 1) * self.ty + self.offset_y) if iy < self.tiles_y - 1 else self.H
-            x1 = ((ix + 1) * self.tx + self.offset_x) if ix < self.tiles_x - 1 else self.W
-            # Clamp bounds to image dimensions
-            y0 = max(0, min(y0, self.H))
-            x0 = max(0, min(x0, self.W))
-            y1 = max(0, min(y1, self.H))
-            x1 = max(0, min(x1, self.W))
-            b.append([y0, x0, y1, x1])
-        return np.array(b, dtype=int)
-
-    def centroids_and_polygons(self) -> tuple[np.ndarray, list[Polygon]]:
-        return self._centroids_polys
-
-    def _compute_centroids_and_polygons(self) -> tuple[np.ndarray, list[Polygon]]:
-        cents: list[list[float]] = []
-        polys: list[Polygon] = []
-        for y0, x0, y1, x1 in self._bounds:
-            cy = (y0 + y1) / 2
-            cx = (x0 + x1) / 2
-            cents.append([cy, cx])
-            polys.append(Polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]))
-        return np.array(cents, dtype=float), polys
-
-    def rechunk_and_pad(self, arr_yx: da.Array) -> da.Array:
-        if arr_yx.ndim != 2:
-            raise ValueError("Expected a 2D array shaped (y, x).")
-        pad_y = self.tiles_y * self.ty - int(arr_yx.shape[0])
-        pad_x = self.tiles_x * self.tx - int(arr_yx.shape[1])
-        a = arr_yx.rechunk((self.ty, self.tx))
-        return da.pad(a, ((0, pad_y), (0, pad_x)), mode="edge") if (pad_y > 0 or pad_x > 0) else a
-
-    def coarsen(self, arr_yx: da.Array, reduce: Literal["mean", "sum"] = "mean") -> da.Array:
-        reducer = np.mean if reduce == "mean" else np.sum
-        return da.coarsen(reducer, arr_yx, {0: self.ty, 1: self.tx}, trim_excess=False)
 
 
 class _SpotTileGrid:
@@ -169,12 +81,15 @@ def _get_largest_scale_dimensions(
     sdata: sd.SpatialData,
     image_key: str,
 ) -> tuple[int, int]:
-    """Get the dimensions (H, W) of the largest/finest scale of an image."""
+    """Get the dimensions (H, W) of the largest/finest scale of an image.
+
+    Callers must validate *image_key* before calling this helper.
+    """
     img_node = sdata.images[image_key]
 
-    # Use _get_element_data with "scale0" which is always the largest scale
+    # Use get_element_data with "scale0" which is always the largest scale
     # It handles both datatree (multiscale) and single-scale images
-    img_da = _get_element_data(img_node, "scale0", "image", image_key)
+    img_da = get_element_data(img_node, "scale0", "image", image_key)
 
     # Get spatial dimensions (y, x)
     if "y" in img_da.sizes and "x" in img_da.sizes:
@@ -184,54 +99,14 @@ def _get_largest_scale_dimensions(
         return int(img_da.shape[-2]), int(img_da.shape[-1])
 
 
-def _choose_label_scale_for_image(label_node: Labels2DModel, target_hw: tuple[int, int]) -> str:
-    """Pick the label scale closest to the target image height/width."""
-    if not hasattr(label_node, "keys"):
-        return "scale0"  # single-scale labels default to their only scale
-    target_h, target_w = target_hw
-    best = None
-    best_diff = float("inf")
-    for k in label_node.keys():
-        y, x = _yx_from_shape(label_node[k].image.shape)
-        diff = abs(y - target_h) + abs(x - target_w)
-        if diff == 0:
-            return k
-        if diff < best_diff:
-            best_diff = diff
-            best = k
-    return best or "scale0"
-
-
 def _save_tiles_to_shapes(
     sdata: sd.SpatialData,
-    tg: _TileGrid,
+    tg: TileGrid,
     image_key: str,
     shapes_key: str,
 ) -> None:
     """Save a TileGrid to sdata.shapes as a GeoDataFrame."""
-    tile_indices = tg.indices()
-    pixel_bounds = tg.bounds()
-    _, polys = tg.centroids_and_polygons()
-
-    tile_gdf = gpd.GeoDataFrame(
-        {
-            "tile_id": tg.names(),
-            "tile_y": tile_indices[:, 0],
-            "tile_x": tile_indices[:, 1],
-            "pixel_y0": pixel_bounds[:, 0],
-            "pixel_x0": pixel_bounds[:, 1],
-            "pixel_y1": pixel_bounds[:, 2],
-            "pixel_x1": pixel_bounds[:, 3],
-            "geometry": polys,
-        },
-        geometry="geometry",
-    )
-
-    sdata.shapes[shapes_key] = ShapesModel.parse(tile_gdf)
-    # we know that a) the element exists and b) it has at least an Identity transformation
-    transformations = get_transformation(sdata.images[image_key], get_all=True)
-    set_transformation(sdata.shapes[shapes_key], transformations, set_all=True)
-    logger.info(f"Saved tile grid as 'sdata.shapes[\"{shapes_key}\"]'")
+    save_tile_grid_to_shapes(sdata, tg, shapes_key, copy_transforms_from_key=image_key)
 
 
 def _save_spot_tiles_to_shapes(
@@ -357,6 +232,11 @@ def make_tiles(
     make_tiles_from_spots
         Create tiles centered on Visium spots instead of a regular grid.
     """
+    assert_key_in_sdata(sdata, image_key, attr="images")
+    assert_positive(tile_size[0], name="tile_size[0]")
+    assert_positive(tile_size[1], name="tile_size[1]")
+    assert_in_range(min_tissue_fraction, 0, 1, name="min_tissue_fraction")
+
     # Derive mask key for centering if needed
     mask_key_for_grid = image_mask_key
     default_mask_key = tissue_mask_key or f"{image_key}_tissue"
@@ -366,7 +246,7 @@ def make_tiles(
             mask_key_for_grid = default_mask_key
         else:
             try:
-                from ._detect_tissue import detect_tissue
+                from squidpy.experimental.im._detect_tissue import detect_tissue
 
                 detect_tissue(
                     sdata,
@@ -411,7 +291,7 @@ def make_tiles(
                 classification_mask_key,
             )
             try:
-                from ._detect_tissue import detect_tissue
+                from squidpy.experimental.im._detect_tissue import detect_tissue
 
                 detect_tissue(
                     sdata,
@@ -422,8 +302,7 @@ def make_tiles(
                 )
             except (ImportError, KeyError, ValueError, RuntimeError) as e:  # pragma: no cover - defensive
                 logger.warning("detect_tissue failed (%s); tiles will not be classified.", e)
-        if classification_mask_key not in sdata.labels:
-            raise KeyError(f"Tissue mask '{classification_mask_key}' not found in sdata.labels.")
+        assert_key_in_sdata(sdata, classification_mask_key, attr="labels")
         # Use a mask scale that aligns with the full-resolution image; avoid coarsest "auto" selection.
         if scale == "auto":
             label_node = sdata.labels.get(classification_mask_key)
@@ -523,8 +402,10 @@ def make_tiles_from_spots(
         Helper used to derive tissue masks automatically when needed.
     """
 
-    if spots_key not in sdata.shapes:
-        raise KeyError(f"Spots key '{spots_key}' not found in sdata.shapes")
+    assert_key_in_sdata(sdata, spots_key, attr="shapes")
+    if image_key is not None:
+        assert_key_in_sdata(sdata, image_key, attr="images")
+    assert_in_range(min_tissue_fraction, 0, 1, name="min_tissue_fraction")
 
     target_cs: str | None = None
     if image_key is not None:
@@ -558,7 +439,7 @@ def make_tiles_from_spots(
                 classification_mask_key,
             )
             try:
-                from ._detect_tissue import detect_tissue
+                from squidpy.experimental.im._detect_tissue import detect_tissue
 
                 detect_tissue(
                     sdata,
@@ -572,9 +453,6 @@ def make_tiles_from_spots(
 
     if classification_mask_key is not None:
         if image_key is not None:
-            if image_key not in sdata.images:
-                raise KeyError(f"Image key '{image_key}' not found in sdata.images")
-
             mask_key = classification_mask_key
             if mask_key in sdata.labels:
                 target_hw = _get_largest_scale_dimensions(sdata, image_key)
@@ -592,8 +470,7 @@ def make_tiles_from_spots(
                 shapes_key=shapes_key,
             )
         else:
-            if classification_mask_key not in sdata.labels:
-                raise KeyError(f"Tissue mask '{classification_mask_key}' not found in sdata.labels.")
+            assert_key_in_sdata(sdata, classification_mask_key, attr="labels")
             # Without an image we cannot infer the best scale; default to finest scale unless user specified.
             scale_used = "scale0" if scale == "auto" else scale
             _filter_tiles(
@@ -633,7 +510,7 @@ def make_tiles_from_spots(
 
 def _filter_tiles(
     sdata: sd.SpatialData,
-    tg: _TileGrid,
+    tg: TileGrid,
     image_key: str | None,
     *,
     tissue_mask_key: str | None = None,
@@ -684,9 +561,8 @@ def _filter_tiles(
         mask_key = f"{image_key}_tissue"
     else:
         raise ValueError("tissue_mask_key must be provided when image_key is None.")
-    if mask_key not in sdata.labels:
-        raise KeyError(f"Tissue mask '{mask_key}' not found in sdata.labels.")
-    mask = _get_mask_from_labels(sdata, mask_key, scale)
+    assert_key_in_sdata(sdata, mask_key, attr="labels")
+    mask = get_mask_materialized(sdata, mask_key, scale)
     H_mask, W_mask = mask.shape
 
     # Check tissue coverage for each tile
@@ -751,12 +627,11 @@ def _make_tiles(
     tile_size: tuple[int, int] = (224, 224),
     center_grid_on_tissue: bool = False,
     scale: str = "auto",
-) -> _TileGrid:
-    """Construct a tile grid for an image, optionally centered on a tissue mask."""
-    # Validate image key
-    if image_key not in sdata.images:
-        raise KeyError(f"Image key '{image_key}' not found in sdata.images")
+) -> TileGrid:
+    """Construct a tile grid for an image, optionally centered on a tissue mask.
 
+    Callers must validate *image_key* before calling this helper.
+    """
     # Get image dimensions from the largest/finest scale
     H, W = _get_largest_scale_dimensions(sdata, image_key)
 
@@ -764,17 +639,14 @@ def _make_tiles(
 
     # Path 1: Regular grid starting from top-left
     if not center_grid_on_tissue or image_mask_key is None:
-        return _TileGrid(H, W, tile_size=tile_size)
+        return TileGrid(H, W, tile_size=tile_size)
 
     # Path 2: Center grid on tissue mask centroid
-    if image_mask_key not in sdata.labels:
-        raise KeyError(
-            f"Mask key '{image_mask_key}' not found in sdata.labels. Available keys: {list(sdata.labels.keys())}"
-        )
+    assert_key_in_sdata(sdata, image_mask_key, attr="labels")
 
     # Get mask and compute centroid
     label_node = sdata.labels[image_mask_key]
-    mask_da = _get_element_data(label_node, scale, "label", image_mask_key)
+    mask_da = get_element_data(label_node, scale, "label", image_mask_key)
 
     # Convert to numpy array if needed
     if is_dask_collection(mask_da):
@@ -806,7 +678,7 @@ def _make_tiles(
     mask_bool = mask > 0
     if not mask_bool.any():
         logger.warning("Mask is empty. Using regular grid starting from top-left.")
-        return _TileGrid(H, W, tile_size=tile_size)
+        return TileGrid(H, W, tile_size=tile_size)
 
     # Calculate centroid using center of mass
     y_coords, x_coords = np.where(mask_bool)
@@ -821,14 +693,17 @@ def _make_tiles(
     offset_y = int(round(centroid_y - tile_center_y_standard))
     offset_x = int(round(centroid_x - tile_center_x_standard))
 
-    return _TileGrid(H, W, tile_size=tile_size, offset_y=offset_y, offset_x=offset_x)
+    return TileGrid(H, W, tile_size=tile_size, offset_y=offset_y, offset_x=offset_x)
 
 
 def _get_spot_coordinates(
     sdata: sd.SpatialData,
     spots_key: str,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Extract spot centers (x, y) and IDs from a shapes table."""
+    """Extract spot centers (x, y) and IDs from a shapes table.
+
+    Callers must validate *spots_key* before calling this helper.
+    """
     gdf = sdata.shapes[spots_key]
     if "geometry" not in gdf:
         raise ValueError(f"Shapes '{spots_key}' lack geometry column required for spot coordinates.")
@@ -842,10 +717,7 @@ def _get_spot_coordinates(
 
 def _get_primary_coordinate_system(element: SpatialElement) -> str | None:
     """Return the first available coordinate system, preferring 'global'."""
-    try:
-        transformations = get_transformation(element, get_all=True)
-    except (KeyError, ValueError):
-        return None
+    transformations = get_transformation(element, get_all=True)
     if not transformations:
         return None
     # Prefer 'global' if present
@@ -877,27 +749,3 @@ def _derive_tile_size_from_spots(coords: np.ndarray) -> tuple[int, int]:
         )
     side = max(1, int(np.floor(row_spacing)))
     return side, side
-
-
-def _get_mask_from_labels(sdata: sd.SpatialData, mask_key: str, scale: str) -> np.ndarray:
-    """Extract a 2D mask array from ``sdata.labels`` at the requested scale."""
-    if mask_key not in sdata.labels:
-        raise KeyError(f"Mask key '{mask_key}' not found in sdata.labels")
-
-    label_node = sdata.labels[mask_key]
-    mask_da = _get_element_data(label_node, scale, "label", mask_key)
-
-    if is_dask_collection(mask_da):
-        mask_da = mask_da.compute()
-
-    if isinstance(mask_da, xr.DataArray):
-        mask = np.asarray(mask_da.data)
-    else:
-        mask = np.asarray(mask_da)
-
-    if mask.ndim > 2:
-        mask = mask.squeeze()
-    if mask.ndim != 2:
-        raise ValueError(f"Expected 2D mask with shape (y, x), got shape {mask.shape}")
-
-    return mask

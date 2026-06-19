@@ -54,8 +54,16 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
-
-    name: ${{ matrix.env.label }}
+        exclude:
+          - os: macos-latest
+            env: { name: hatch-test.py3.11-stable }
+          - os: macos-latest
+            env: { name: hatch-test.py3.12-stable }
+          - os: macos-latest
+            env: { name: hatch-test.py3.14-pre } # pre-release only needs one OS
+          - os: ubuntu-latest
+            env: { name: hatch-test.py3.13-stable } # skipping because we run this as a coverage job
+    name: ${{ matrix.env.label }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ contains(matrix.env.name, 'pre') }}  # make "all-green" pass even if pre-release job fails
 
@@ -83,7 +91,7 @@ jobs:
           uvx hatch run ${{ matrix.env.name }}:cov-report   # report visibly
           uvx hatch run ${{ matrix.env.name }}:coverage xml # create report for upload
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           fail_ci_if_error: true
           use_oidc: true

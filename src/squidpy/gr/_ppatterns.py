@@ -23,13 +23,14 @@ from statsmodels.stats.multitest import multipletests
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, deprecated_params, parallelize
+from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
-    _assert_positive,
     _assert_spatial_basis,
     _save_data,
+    extract_adata_if_sdata,
 )
 
 __all__ = ["spatial_autocorr", "co_occurrence"]
@@ -62,15 +63,25 @@ def spatial_autocorr(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
+    *,
+    table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
     Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
 
     See :cite:`pysal` for reference.
 
+    .. versionchanged:: 1.8.2
+        The analytic (normality-assumption) variance for Geary's C was corrected; previously the
+        Moran's I variance was reused for ``mode = 'geary'``. As a result, ``'var_norm'`` and
+        ``'pval_norm'`` for Geary's C differ from earlier versions. Permutation-based p-values
+        (``'pval_sim'``, ``'pval_z_sim'``) are unaffected.
+        See `#1183 <https://github.com/scverse/squidpy/issues/1183>`_.
+
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(conn_key)s
     genes
         Depending on the ``attr``:
@@ -128,8 +139,7 @@ def spatial_autocorr(
         - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe, if ``mode = {sp.MORAN.s!r}``.
         - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     _assert_connectivity_key(adata, connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
@@ -158,8 +168,7 @@ def spatial_autocorr(
         return adata.obs[cols].T.to_numpy(), cols
 
     def extract_obsm(adata: AnnData, ixs: int | Sequence[int] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
-        if layer not in adata.obsm:
-            raise KeyError(f"Key `{layer!r}` not found in `adata.obsm`.")
+        assert_key_in_adata(adata, layer, attr="obsm")
         if ixs is None:
             ixs = list(np.arange(adata.obsm[layer].shape[1]))
         ixs = list(np.ravel([ixs]))
@@ -200,7 +209,7 @@ def spatial_autocorr(
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
-        _assert_positive(n_perms, name="n_perms")
+        assert_positive(n_perms, name="n_perms")
         perms = list(np.arange(n_perms))
 
         score_perms = parallelize(
@@ -342,16 +351,15 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 
 @d.dedent
+@deprecated_params({"n_splits": "1.10.0", "n_jobs": "1.10.0", "backend": "1.10.0", "show_progress_bar": "1.10.0"})
 def co_occurrence(
     adata: AnnData | SpatialData,
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
-    n_splits: int | None = None,
-    n_jobs: int | None = None,
-    backend: str = "loky",
-    show_progress_bar: bool = True,
+    *,
+    table_key: str | None = None,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
     Compute co-occurrence probability of clusters.
@@ -359,16 +367,13 @@ def co_occurrence(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(cluster_key)s
     %(spatial_key)s
     interval
         Distances interval at which co-occurrence is computed. If :class:`int`, uniformly spaced interval
         of the given size will be used.
     %(copy)s
-    n_splits
-        Number of splits in which to divide the spatial coordinates in
-        :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``.
-    %(parallelize)s
 
     Returns
     -------
@@ -381,9 +386,7 @@ def co_occurrence(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_co_occurrence']['interval']`` - the distance thresholds
           computed at ``interval``.
     """
-
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_spatial_basis(adata, key=spatial_key)
 
@@ -406,9 +409,7 @@ def co_occurrence(
 
     # Compute co-occurrence probabilities using the fast numba routine.
     out = _co_occurrence_helper(spatial_x, spatial_y, interval, labs)
-    start = logg.info(
-        f"Calculating co-occurrence probabilities for `{len(interval)}` intervals using `{n_jobs}` core(s) and `{n_splits}` splits"
-    )
+    start = logg.info(f"Calculating co-occurrence probabilities for `{len(interval)}` intervals")
 
     if copy:
         logg.info("Finish", time=start)
@@ -499,11 +500,23 @@ def _analytic_pval(score: NDArrayA, g: spmatrix | NDArrayA, params: dict[str, An
     s0, s1, s2 = _g_moments(g)
     n = g.shape[0]
     s02 = s0 * s0
-    n2 = n * n
-    v_num = n2 * s1 - n * s2 + 3 * s02
-    v_den = (n - 1) * (n + 1) * s02
 
-    Vscore_norm = v_num / v_den - (1.0 / (n - 1)) ** 2
+    match params["mode"]:
+        case SpatialAutocorr.GEARY.s:
+            # Geary's C and Moran's I have different sampling variances under the
+            # normality assumption (Cliff & Ord 1981). Use the Geary's C variance
+            # (matching pysal/esda ``Geary``); reusing Moran's variance here gives a
+            # miscalibrated analytic p-value (see #1183).
+            Vscore_norm = ((2 * s1 + s2) * (n - 1) - 4 * s02) / (2 * (n + 1) * s02)
+        case SpatialAutocorr.MORAN.s:
+            # Moran's I normality variance (Cliff & Ord 1981; pysal/esda ``Moran``).
+            n2 = n * n
+            v_num = n2 * s1 - n * s2 + 3 * s02
+            v_den = (n - 1) * (n + 1) * s02
+            Vscore_norm = v_num / v_den - (1.0 / (n - 1)) ** 2
+        case mode:
+            raise AssertionError(f"Unexpected mode `{mode}`.")
+
     seScore_norm = Vscore_norm ** (1 / 2.0)
 
     z_norm = (score - params["expected"]) / seScore_norm
