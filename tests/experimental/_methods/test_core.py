@@ -81,6 +81,7 @@ def test_check_requirements_raises_for_missing_dependency() -> None:
         return fit_mean_shift(ref, query)
 
     with pytest.raises(
-        ImportError, match=r"Method 'needs_ghost' requires 'squidpy_nonexistent_pkg_xyz'.*squidpy\[squidpy_nonexistent_pkg_xyz\]"
+        ImportError,
+        match=r"Method 'needs_ghost' requires 'squidpy_nonexistent_pkg_xyz'.*squidpy\[squidpy_nonexistent_pkg_xyz\]",
     ):
         reg.get("needs_ghost")(np.ones((2, 2)), np.zeros((2, 2)))

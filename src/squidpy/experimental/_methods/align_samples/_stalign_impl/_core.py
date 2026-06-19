@@ -126,7 +126,9 @@ def _contrast_transform(source_image: jax.Array, target_image: jax.Array, weight
     return (coefficients.T @ design).reshape(target_image.shape)
 
 
-def _build_velocity_grid(x_source: tuple[jax.Array, jax.Array], *, a: float, expand: float) -> tuple[jax.Array, jax.Array]:
+def _build_velocity_grid(
+    x_source: tuple[jax.Array, jax.Array], *, a: float, expand: float
+) -> tuple[jax.Array, jax.Array]:
     minimum = jnp.array([x_source[0][0], x_source[1][0]])
     maximum = jnp.array([x_source[0][-1], x_source[1][-1]])
     center = (minimum + maximum) / 2.0

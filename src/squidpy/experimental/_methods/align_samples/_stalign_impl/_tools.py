@@ -102,7 +102,9 @@ class StalignResult:
         return transformed_rc[:, ::-1]
 
 
-def _rasterize_cloud(points_rc: JaxArray, config: STalignPreprocessConfig) -> tuple[tuple[JaxArray, JaxArray], JaxArray]:
+def _rasterize_cloud(
+    points_rc: JaxArray, config: STalignPreprocessConfig
+) -> tuple[tuple[JaxArray, JaxArray], JaxArray]:
     """Rasterize a row-col cloud into a ``((grid_y, grid_x), image)`` density."""
     from ._helpers import rasterize
 
