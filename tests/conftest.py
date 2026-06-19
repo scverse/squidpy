@@ -258,12 +258,6 @@ def complexes(adata: AnnData) -> Sequence[tuple[str, str]]:
 
 @pytest.fixture(scope="session")
 def ligrec_pvalues_reference() -> Mapping[str, pd.DataFrame]:
-    with open("tests/_data/ligrec_pvalues_reference.pickle", "rb") as fin:
-        return pickle.load(fin)
-
-
-@pytest.fixture(scope="session")
-def ligrec_pvalues_reference() -> Mapping[str, pd.DataFrame]:
     # means/pvalues are cluster-pair x gene-pair matrices with a MultiIndex on both
     # axes, stored as an AnnData (X=pvalues, layers["means"]=means) with the index
     # levels kept as obs/var columns.
