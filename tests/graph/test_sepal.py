@@ -5,14 +5,14 @@ import numpy as np
 from anndata import AnnData
 from pandas.testing import assert_frame_equal
 
-from squidpy.gr import sepal, spatial_neighbors
+from squidpy.gr import sepal, spatial_neighbors_grid, spatial_neighbors_radius
 
 UNS_KEY = "sepal_score"
 
 
 def test_sepal_seq_par(adata: AnnData):
     """Check whether sepal results are the same for seq. and parallel computation."""
-    spatial_neighbors(adata, coord_type="grid")
+    spatial_neighbors_grid(adata)
     rng = np.random.default_rng(42)
     adata.var["highly_variable"] = rng.choice([True, False], size=adata.var_names.shape, p=[0.005, 0.995])
 
@@ -38,7 +38,7 @@ def test_sepal_seq_par(adata: AnnData):
 def test_sepal_square_seq_par(adata_squaregrid: AnnData):
     """Test sepal for square grid."""
     adata = adata_squaregrid
-    spatial_neighbors(adata, radius=1.0)
+    spatial_neighbors_radius(adata, radius=1.0)
     rng = np.random.default_rng(42)
     adata.var["highly_variable"] = rng.choice([True, False], size=adata.var_names.shape)
 
@@ -61,7 +61,7 @@ def test_sepal_square_seq_par(adata_squaregrid: AnnData):
 
 def test_sepal_dense(adata: AnnData):
     """Check whether sepal results are identical for sparse and dense data."""
-    spatial_neighbors(adata, coord_type="grid")
+    spatial_neighbors_grid(adata)
     rng = np.random.default_rng(42)
     adata.var["highly_variable"] = rng.choice([True, False], size=adata.var_names.shape, p=[0.05, 0.95])
 
