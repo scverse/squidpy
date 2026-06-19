@@ -11,7 +11,8 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numba import njit
+from numba import njit, prange, set_num_threads
+from numba_progress import ProgressBar
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
@@ -20,13 +21,12 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize, thread_map
+from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
     _save_data,
-    _shuffle_group,
     extract_adata_if_sdata,
 )
 
@@ -93,6 +93,78 @@ def _conditional_counts(indices: NDArrayA, indptr: NDArrayA, clustering: NDArray
             if seen[b]:
                 cond[a, b] += 1.0
     return cond
+
+
+@njit(parallel=True, nogil=True)
+def _permutation_counts(
+    indices: NDArrayA,
+    indptr: NDArrayA,
+    int_clust: NDArrayA,
+    group_offsets: NDArrayA,
+    group_indices: NDArrayA,
+    n_cls: int,
+    n_perms: int,
+    seed: int,
+    norm_code: int,
+    progress: ProgressBar,
+) -> NDArrayA:
+    """Compute the (normalized) cluster-connection counts for ``n_perms`` label permutations.
+
+    Parallelizes over permutations with ``prange``: each iteration ``p`` reseeds its thread-local
+    RNG with ``seed + p`` and shuffles a private copy of the labels, so the result is reproducible
+    and independent of the thread count. ``numba``'s ``np.random`` reproduces numpy's legacy
+    ``RandomState`` bit-for-bit, so this matches a ``RandomState(seed + p)`` reference exactly.
+    ``norm_code`` is ``0`` (none), ``1`` (total) or ``2`` (conditional).
+
+    Labels are shuffled *within groups*: ``group_indices[group_offsets[g]:group_offsets[g + 1]]``
+    are the cell indices of group ``g`` (e.g. one library/slide). A single group spanning all cells
+    reproduces a plain global shuffle, so this handles the no-``library_key`` case too. Groups are
+    shuffled in order off one RNG stream, matching :func:`squidpy.gr._utils._shuffle_group`.
+
+    ``progress`` is a :class:`numba_progress.ProgressBar` proxy, ticked once per permutation from
+    inside the parallel loop (atomic, GIL-free); pass a ``disable=True`` bar to suppress it.
+    """
+    perms = np.empty((n_perms, n_cls, n_cls), dtype=np.float64)
+    for p in prange(n_perms):
+        np.random.seed(seed + p)
+        shuffled = int_clust.copy()
+        for g in range(group_offsets.shape[0] - 1):
+            s, e = group_offsets[g], group_offsets[g + 1]
+            sub = np.empty(e - s, dtype=int_clust.dtype)
+            for t in range(e - s):
+                sub[t] = int_clust[group_indices[s + t]]
+            np.random.shuffle(sub)
+            for t in range(e - s):
+                shuffled[group_indices[s + t]] = sub[t]
+
+        out = np.zeros((n_cls, n_cls), dtype=np.float64)
+        for i in range(indptr.shape[0] - 1):
+            a = shuffled[i]
+            for c in indices[indptr[i] : indptr[i + 1]]:
+                out[a, shuffled[c]] += 1.0
+
+        if norm_code == 1:  # total
+            for a in range(n_cls):
+                s = 0.0
+                for b in range(n_cls):
+                    s += out[a, b]
+                if s == 0.0:
+                    s = 1.0
+                for b in range(n_cls):
+                    out[a, b] /= s
+        elif norm_code == 2:  # conditional
+            cond = _conditional_counts(indices, indptr, shuffled, n_cls)
+            for a in range(n_cls):
+                for b in range(n_cls):
+                    d = cond[a, b] if cond[a, b] != 0.0 else 1.0
+                    out[a, b] /= d
+
+        perms[p] = out
+        progress.update(1)
+    return perms
+
+
+_NORM_CODES = {"none": 0, "total": 1, "conditional": 2}
 
 
 def filter_clusters_by_min_cell_count(
@@ -273,30 +345,24 @@ def nhood_enrichment(
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
 
-    # Split the permutations into ``n_jobs`` contiguous chunks. Each chunk is seeded by its first
-    # permutation index (``seed + chunk_start``), so the permutation stream is independent of how
-    # the work is distributed and reproducible for a given ``seed``.
-    step = int(np.ceil(n_perms / n_jobs))
-    chunks = [np.arange(k * step, min((k + 1) * step, n_perms)) for k in range(int(np.ceil(n_perms / step)))]
-    chunks = [c for c in chunks if len(c)]
+    # Every permutation is seeded by its global index (``seed + p``), so results are reproducible
+    # and independent of the thread count. A user seed is used directly; otherwise a random base
+    # seed is drawn once so a single call is internally consistent.
+    norm_code = _NORM_CODES[normalization]
+    base_seed = int(seed) if seed is not None else int(np.random.SeedSequence().generate_state(1)[0]) % 1_000_000_000
 
-    results = thread_map(
-        partial(
-            _nhood_enrichment_helper,
-            indices=indices,
-            indptr=indptr,
-            int_clust=int_clust,
-            libraries=libraries,
-            n_cls=n_cls,
-            seed=seed,
-            normalization=normalization,
-        ),
-        chunks,
-        n_jobs=n_jobs,
-        show_progress_bar=show_progress_bar,
-        unit="chunk",
-    )
-    perms = np.vstack(results)
+    # Group structure for within-group shuffling, as a CSR-like (offsets, indices) pair in category
+    # order with ascending indices per group (matching `_shuffle_group`). Without a `library_key`,
+    # a single group spanning all cells reproduces a plain global shuffle.
+    group_offsets, group_indices = _build_shuffle_groups(libraries, len(int_clust))
+
+    # A single numba ``prange`` kernel shuffles + counts + normalizes per thread with the GIL
+    # released, and ticks the progress bar from inside the loop; numba owns the parallelism.
+    set_num_threads(n_jobs)
+    with ProgressBar(total=n_perms, unit="perm", desc="nhood_enrichment", disable=not show_progress_bar) as progress:
+        perms = _permutation_counts(
+            indices, indptr, int_clust, group_offsets, group_indices, n_cls, n_perms, base_seed, norm_code, progress
+        )
 
     std = perms.std(axis=0)
     std[std == 0] = np.nan
@@ -534,42 +600,21 @@ def _centrality_scores_helper(
     return pd.DataFrame(res_list, columns=[method], index=cat)
 
 
-def _nhood_enrichment_helper(
-    ixs: NDArrayA,
-    indices: NDArrayA,
-    indptr: NDArrayA,
-    int_clust: NDArrayA,
+def _build_shuffle_groups(
     libraries: pd.Series[CategoricalDtype] | None,
-    n_cls: int,
-    seed: int | None = None,
-    normalization: str = "none",
-) -> NDArrayA:
-    """Compute the normalized permutation counts for one contiguous chunk of permutation indices.
+    n_cells: int,
+) -> tuple[NDArrayA, NDArrayA]:
+    """Build a CSR-like ``(offsets, indices)`` description of the within-group shuffling.
 
-    The RNG is seeded with ``seed + ixs[0]`` and the labels are shuffled in place once per
-    permutation, so a chunk fully determines its own random stream.
+    ``indices[offsets[g]:offsets[g + 1]]`` are the cell indices of group ``g`` in ascending order,
+    with groups in category order — matching :func:`squidpy.gr._utils._shuffle_group`. Without a
+    ``library_key`` there is a single group spanning all cells, which reproduces a global shuffle.
     """
-    perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
-    int_clust = int_clust.copy()
-    rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])
+    if libraries is None:
+        return np.array([0, n_cells], dtype=np.int64), np.arange(n_cells, dtype=np.int64)
 
-    for i in range(len(ixs)):
-        if libraries is not None:
-            int_clust = _shuffle_group(int_clust, libraries, rs)
-        else:
-            rs.shuffle(int_clust)
-
-        count_perms = _nenrich(indices, indptr, int_clust, n_cls).astype(np.float64)
-
-        if normalization == "total":
-            row_sums = count_perms.sum(axis=1, keepdims=True)
-            row_sums[row_sums == 0] = 1
-            count_perms = count_perms / row_sums
-        elif normalization == "conditional":
-            cond_counts = _conditional_counts(indices, indptr, int_clust, n_cls)
-            cond_counts[cond_counts == 0] = 1.0
-            count_perms = count_perms / cond_counts
-
-        perms[i, ...] = count_perms
-
-    return perms
+    codes = libraries.cat.codes.to_numpy()
+    n_groups = len(libraries.cat.categories)
+    group_indices = np.argsort(codes, kind="stable").astype(np.int64)
+    group_offsets = np.concatenate(([0], np.cumsum(np.bincount(codes, minlength=n_groups)))).astype(np.int64)
+    return group_offsets, group_indices

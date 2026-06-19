@@ -6,13 +6,14 @@ opposed to the shape/dtype smoke tests in ``test_nhood.py``.
 The reference implementations below are written from scratch with plain Python
 loops and share no code with the numba kernels in ``squidpy.gr._nhood``. Their
 only purpose is to be an independent specification: when the reference and the
-real implementation agree, the numba codegen *and* the normalization math are
+real implementation agree, the numba kernels *and* the normalization math are
 validated. They are deliberately slow and simple.
 
-They also act as the regression guard for refactors of the permutation /
-parallelization machinery: as long as the numpy ``RandomState`` ordering is
-preserved, :func:`_reference_nhood_enrichment` reproduces the exact z-score for
-``n_jobs=1``.
+They also act as the regression guard for the permutation / parallelization
+machinery. Each permutation is seeded by its global index (``seed + p``), and
+numba's ``np.random`` reproduces numpy's ``RandomState`` bit-for-bit, so
+:func:`_reference_nhood_enrichment` reproduces the exact z-score independently
+of the thread count.
 """
 
 from __future__ import annotations
@@ -23,7 +24,6 @@ import pytest
 from anndata import AnnData
 from scipy.sparse import csr_matrix
 
-from squidpy._constants._pkg_constants import Key
 from squidpy.gr import nhood_enrichment, spatial_neighbors
 from squidpy.gr._utils import _shuffle_group
 
@@ -89,18 +89,6 @@ def _ref_normalize(adj: csr_matrix, int_clust: np.ndarray, n_cls: int, normaliza
     raise ValueError(normalization)
 
 
-def _chunk_perms(n_perms: int, n_jobs: int) -> list[list[int]]:
-    """Split ``range(n_perms)`` into contiguous chunks the way ``parallelize`` does.
-
-    ``parallelize`` uses ``n_split = n_jobs`` and ``step = ceil(n_perms / n_split)``,
-    then keeps the non-empty contiguous slices. Each chunk is seeded by its first
-    permutation index, so the chunk boundaries determine the RNG streams.
-    """
-    step = int(np.ceil(n_perms / n_jobs))
-    chunks = [list(range(k * step, min((k + 1) * step, n_perms))) for k in range(int(np.ceil(n_perms / step)))]
-    return [c for c in chunks if c]
-
-
 def _reference_nhood_enrichment(
     adj: csr_matrix,
     int_clust: np.ndarray,
@@ -110,29 +98,26 @@ def _reference_nhood_enrichment(
     seed: int,
     normalization: str,
     libraries: pd.Series | None = None,
-    n_jobs: int = 1,
 ) -> np.ndarray:
-    """Full z-score reference replicating the production seeding scheme for any ``n_jobs``.
+    """Full z-score reference replicating the production per-permutation seeding scheme.
 
-    The permutation indices are split into ``n_jobs`` contiguous chunks. Each chunk
-    gets its own ``RandomState(seed + chunk_start)`` and shuffles a private copy of
-    the labels in place, once per permutation. The chunks are concatenated in order,
-    exactly mirroring ``parallelize(..., extractor=np.vstack)``.
+    Each permutation ``p`` gets its own ``RandomState(seed + p)`` and shuffles a private copy of
+    the original labels once. Because the seed depends only on the global permutation index, the
+    result is independent of how permutations are grouped across workers (i.e. of ``n_jobs``).
+    Numba's ``np.random`` reproduces numpy's legacy ``RandomState`` bit-for-bit, so this matches
+    :func:`squidpy.gr._nhood._permutation_counts` exactly.
     """
     observed = _ref_normalize(adj, int_clust, n_cls, normalization)
 
     perms = np.empty((n_perms, n_cls, n_cls), dtype=np.float64)
-    pos = 0
-    for chunk in _chunk_perms(n_perms, n_jobs):
-        rs = np.random.RandomState(None if seed is None else seed + chunk[0])
-        shuffled = int_clust.copy()
-        for _ in chunk:
-            if libraries is not None:
-                shuffled = _shuffle_group(shuffled, libraries, rs)
-            else:
-                rs.shuffle(shuffled)
-            perms[pos] = _ref_normalize(adj, shuffled, n_cls, normalization)
-            pos += 1
+    for p in range(n_perms):
+        rs = np.random.RandomState(seed + p)
+        if libraries is not None:
+            shuffled = _shuffle_group(int_clust, libraries, rs)
+        else:
+            shuffled = int_clust.copy()
+            rs.shuffle(shuffled)
+        perms[p] = _ref_normalize(adj, shuffled, n_cls, normalization)
 
     std = perms.std(axis=0)
     std[std == 0] = np.nan
@@ -249,7 +234,7 @@ def test_conditional_ratio_none_for_other_modes(adata_tiny: AnnData):
 
 
 # --------------------------------------------------------------------------- #
-# Full z-score: independent reference for the n_jobs=1 path
+# Full z-score: independent numpy reference for the numba permutation kernel
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("n_jobs", [1, 2, 3])
 @pytest.mark.parametrize("normalization", ["none", "total", "conditional"])
@@ -268,17 +253,17 @@ def test_zscore_matches_reference_tiny(adata_tiny: AnnData, normalization: str, 
         copy=True,
     )
     expected = _reference_nhood_enrichment(
-        adj, int_clust, 3, n_perms=n_perms, seed=seed, normalization=normalization, n_jobs=n_jobs
+        adj, int_clust, 3, n_perms=n_perms, seed=seed, normalization=normalization
     )
     np.testing.assert_allclose(result.zscore, expected, equal_nan=True)
 
 
 @pytest.mark.parametrize("n_jobs", [1, 2, 3])
 def test_zscore_reference_holds_on_real_data(adata: AnnData, n_jobs: int):
-    """The same independent reference must reproduce z-scores on a realistic graph, for every n_jobs.
+    """The numpy per-index reference must reproduce z-scores on a realistic graph, for every n_jobs.
 
-    This locks the chunked ``seed + chunk_start`` seeding scheme: a refactor that
-    preserves the exact permutation stream (the stated goal) keeps this green.
+    Numba's ``np.random`` matches numpy's ``RandomState`` bit-for-bit, so the kernel and this
+    reference agree exactly regardless of thread count.
     """
     spatial_neighbors(adata)
     adj = adata.obsp["spatial_connectivities"]
@@ -288,7 +273,43 @@ def test_zscore_reference_holds_on_real_data(adata: AnnData, n_jobs: int):
 
     result = nhood_enrichment(adata, cluster_key=_CK, n_perms=n_perms, seed=seed, n_jobs=n_jobs, copy=True)
     expected = _reference_nhood_enrichment(
-        adj, int_clust, n_cls, n_perms=n_perms, seed=seed, normalization="none", n_jobs=n_jobs
+        adj, int_clust, n_cls, n_perms=n_perms, seed=seed, normalization="none"
+    )
+    np.testing.assert_allclose(result.zscore, expected, equal_nan=True)
+
+
+@pytest.mark.parametrize("normalization", ["none", "total", "conditional"])
+def test_zscore_independent_of_n_jobs(adata_tiny: AnnData, normalization: str):
+    """Per-index seeding makes the z-score identical regardless of the worker/thread count."""
+    kw = {"cluster_key": _CK, "normalization": normalization, "n_perms": 50, "seed": 0, "copy": True}
+    r1 = nhood_enrichment(adata_tiny, n_jobs=1, **kw)
+    r8 = nhood_enrichment(adata_tiny, n_jobs=8, **kw)
+    np.testing.assert_array_equal(r1.zscore, r8.zscore)
+
+
+@pytest.mark.parametrize("n_jobs", [1, 3])
+@pytest.mark.parametrize("normalization", ["none", "total", "conditional"])
+def test_zscore_library_key_matches_reference(adata_tiny: AnnData, normalization: str, n_jobs: int):
+    """The numba within-group shuffle must reproduce the ``_shuffle_group`` reference, per ``library_key``."""
+    adata = adata_tiny.copy()
+    # two libraries over the six cells, intentionally uneven and interleaved
+    adata.obs["library"] = pd.Categorical.from_codes([0, 0, 1, 1, 0, 1], categories=["s1", "s2"])
+    adj = adata.obsp["spatial_connectivities"]
+    int_clust = _int_clust(adata)
+    seed, n_perms = 0, 50
+
+    result = nhood_enrichment(
+        adata,
+        cluster_key=_CK,
+        library_key="library",
+        normalization=normalization,
+        n_perms=n_perms,
+        seed=seed,
+        n_jobs=n_jobs,
+        copy=True,
+    )
+    expected = _reference_nhood_enrichment(
+        adj, int_clust, 3, n_perms=n_perms, seed=seed, normalization=normalization, libraries=adata.obs["library"]
     )
     np.testing.assert_allclose(result.zscore, expected, equal_nan=True)
 
