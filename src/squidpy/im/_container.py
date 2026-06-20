@@ -7,7 +7,7 @@ from functools import partial
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal
 
 import dask.array as da
 import matplotlib as mpl
@@ -46,11 +46,11 @@ from squidpy.im._coords import (
 from squidpy.im._feature_mixin import FeatureMixin
 from squidpy.im._io import _assert_dims_present, _infer_dimensions, _lazy_load_image
 
-FoI_t: TypeAlias = int | float
-Pathlike_t: TypeAlias = str | Path
-Arraylike_t: TypeAlias = NDArrayA | xr.DataArray
-InferDims_t: TypeAlias = Literal["default", "prefer_channels", "prefer_z"] | Sequence[str]
-Input_t: TypeAlias = Pathlike_t | Arraylike_t | Literal["ImageContainer"]
+type FoI_t = int | float
+type Pathlike_t = str | Path
+type Arraylike_t = NDArrayA | xr.DataArray
+type InferDims_t = Literal["default", "prefer_channels", "prefer_z"] | Sequence[str]
+type Input_t = Pathlike_t | Arraylike_t | Literal["ImageContainer"]
 _ERROR_NOTIMPLEMENTED_LIBID = f"It seems there are multiple `library_id` in `adata.uns[{Key.uns.spatial!r}]`.\n \
                                 Loading multiple images is not implemented (yet), please specify a `library_id`."
 
