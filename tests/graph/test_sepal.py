@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import numba
 import numpy as np
 from anndata import AnnData
 from pandas.testing import assert_frame_equal
@@ -74,4 +73,3 @@ def test_sepal_dense(adata: AnnData):
 
     # Assert results are identical
     assert_frame_equal(df_sparse, df_dense)
-
