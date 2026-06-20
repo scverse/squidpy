@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import numpy.typing as npt
 
-from squidpy.experimental._methods._families import ALIGN_SAMPLES
+from squidpy.experimental.method_registry._families import ALIGN_SAMPLES
 
 if TYPE_CHECKING:
     from ._stalign_impl._tools import StalignResult

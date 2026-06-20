@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from squidpy.experimental._methods._protocols import AlignLandmarksFn, AlignSamplesFn
-from squidpy.experimental._methods._registry import Registry
+from squidpy.experimental.method_registry._protocols import AlignLandmarksFn, AlignSamplesFn
+from squidpy.experimental.method_registry._registry import Registry
 
 #: Sample-to-sample alignment estimators -- ref/query point clouds in, transform out.
 #: Consumed by ``squidpy.experimental.tl.align``.

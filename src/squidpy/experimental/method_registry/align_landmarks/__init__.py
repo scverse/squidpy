@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from squidpy.experimental._methods._families import ALIGN_LANDMARKS
-from squidpy.experimental._methods.align_landmarks._landmark import (
+from squidpy.experimental.method_registry._families import ALIGN_LANDMARKS
+from squidpy.experimental.method_registry.align_landmarks._landmark import (
     AffineFitResult,
     fit_affine,
     fit_similarity,

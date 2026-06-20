@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from anndata import AnnData
 
-from squidpy.experimental._methods.align_landmarks import AffineFitResult
+from squidpy.experimental.method_registry.align_landmarks import AffineFitResult
 from squidpy.experimental.tl import align_by_landmarks
 
 # square corners; query = ref shifted by (5, 7) -> a pure translation both models recover

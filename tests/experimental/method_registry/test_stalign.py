@@ -11,8 +11,8 @@ import pytest
 
 pytest.importorskip("jax")
 
-from squidpy.experimental._methods.align_samples import ALIGN_SAMPLES, fit_stalign
-from squidpy.experimental._methods.align_samples._stalign_impl._tools import StalignResult
+from squidpy.experimental.method_registry.align_samples import ALIGN_SAMPLES, fit_stalign
+from squidpy.experimental.method_registry.align_samples._stalign_impl._tools import StalignResult
 
 # Flat solver kwargs (assembled into the config internally) -- smallest possible solve.
 _TINY = {"dx": 0.5, "blur": 1.0, "a": 1.0, "expand": 1.0, "nt": 1, "niter": 1, "epV": 1.0}

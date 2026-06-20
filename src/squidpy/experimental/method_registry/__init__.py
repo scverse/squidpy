@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from squidpy.experimental._methods._protocols import AlignLandmarksFn, AlignResult, AlignSamplesFn
-from squidpy.experimental._methods._registry import Registry
+from squidpy.experimental.method_registry._protocols import AlignLandmarksFn, AlignResult, AlignSamplesFn
+from squidpy.experimental.method_registry._registry import Registry
 
 __all__ = ["Registry", "AlignResult", "AlignSamplesFn", "AlignLandmarksFn"]

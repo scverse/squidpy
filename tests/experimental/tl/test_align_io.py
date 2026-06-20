@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from anndata import AnnData
 
-from squidpy.experimental._methods.align_landmarks import AffineFitResult
+from squidpy.experimental.method_registry.align_landmarks import AffineFitResult
 from squidpy.experimental.tl._align._io import (
     get_coords,
     resolve_obs_pair,

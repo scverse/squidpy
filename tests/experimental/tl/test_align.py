@@ -12,7 +12,7 @@ from anndata import AnnData
 
 pytest.importorskip("jax")
 
-from squidpy.experimental._methods.align_samples._stalign_impl._tools import StalignResult
+from squidpy.experimental.method_registry.align_samples._stalign_impl._tools import StalignResult
 from squidpy.experimental.tl import align
 
 # Flat solver kwargs (assembled into the config internally) -- smallest possible solve.
