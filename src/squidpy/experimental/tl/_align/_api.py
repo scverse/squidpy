@@ -7,8 +7,8 @@ in :mod:`._io`; the estimators themselves never see a container.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 import numpy as np
 from anndata import AnnData
@@ -24,14 +24,44 @@ from squidpy.experimental.tl._align._io import (
     writeback_obs,
 )
 
+if TYPE_CHECKING:
+    from squidpy.experimental._methods import AlignResult, Registry
+
 OUTPUT_MODES = ("object", "copy", "inplace")
 ON_VALUES = ("obs", "image")
-if TYPE_CHECKING:
-    from squidpy.experimental._methods import AlignResult
 
 __all__ = ["align", "align_by_landmarks"]
 
+F = TypeVar("F", bound="Callable[..., Any]")
 
+
+def _methods_rst(registry: Registry, indent: str = " " * 8) -> str:
+    """Render a registry's methods as a reST list linking to each implementation."""
+    items = [
+        f"- ``{key}`` -- :func:`~{(fn := registry.get(key)).__module__}.{fn.__name__}`" for key in registry.keys()
+    ]
+    return ("\n" + indent).join(items)
+
+
+def _document_methods(**registries: Registry) -> Callable[[F], F]:
+    """Fill ``{<name>}`` docstring placeholders with each registry's method list.
+
+    First-party and deterministic -- the registries are fully populated by import
+    time, so this only templates known content (nothing from optional packages).
+    ``str.replace`` (not ``str.format``) leaves other ``{...}`` in the docstring
+    untouched.
+    """
+
+    def decorator(fn: F) -> F:
+        if fn.__doc__:
+            for token, registry in registries.items():
+                fn.__doc__ = fn.__doc__.replace("{" + token + "}", _methods_rst(registry))
+        return fn
+
+    return decorator
+
+
+@_document_methods(align_samples_methods=ALIGN_SAMPLES)
 def align(
     data_ref: AnnData | SpatialData,
     data_query: AnnData | SpatialData | None = None,
@@ -54,7 +84,10 @@ def align(
         or ``data_ref`` a SpatialData with ``data_query=None`` to align two of its
         own tables (selected by ``ref_key`` / ``query_key``).
     method
-        Estimator in the ``align_samples`` family. ``"stalign"`` (JAX LDDMM).
+        Fitting method in the ``align_samples`` family. See each implementation
+        for its method-specific arguments:
+
+        {align_samples_methods}
     on
         ``"obs"`` aligns the ``obsm`` point clouds. ``"image"`` is reserved and
         currently raises :class:`NotImplementedError`.
@@ -72,7 +105,10 @@ def align(
         ``key_added`` was not given explicitly, a :class:`ValueError` is raised
         (pass ``key_added`` to overwrite intentionally).
     method_kwargs
-        Forwarded to the estimator's ``fit`` (e.g. ``config=STalignConfig(...)``).
+        Method-specific solver arguments, forwarded flat to the chosen
+        ``method``'s implementation:
+
+        {align_samples_methods}
     """
     assert_one_of(output_mode, OUTPUT_MODES, name="output_mode")
     assert_one_of(on, ON_VALUES, name="on")
@@ -96,6 +132,7 @@ def align(
     )
 
 
+@_document_methods(align_landmarks_methods=ALIGN_LANDMARKS)
 def align_by_landmarks(
     landmarks_ref: np.ndarray | Sequence[tuple[float, float]],
     landmarks_query: np.ndarray | Sequence[tuple[float, float]],
@@ -116,8 +153,10 @@ def align_by_landmarks(
         Equal-length ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``), paired by
         row order. No automatic correspondence matching is performed.
     method
-        Estimator in the ``align_landmarks`` family: ``"similarity"`` (4 DOF) or
-        ``"affine"`` (6 DOF).
+        Fitting method in the ``align_landmarks`` family. See each implementation
+        for its method-specific arguments:
+
+        {align_landmarks_methods}
     data
         Target to write the alignment into. Required for ``output_mode`` other
         than ``"object"``.

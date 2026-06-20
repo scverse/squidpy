@@ -140,6 +140,24 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     gr.neighbors.GridBuilder
 ```
 
+The ``method=`` argument of {func}`~squidpy.experimental.tl.align` and
+{func}`~squidpy.experimental.tl.align_by_landmarks` dispatches to a registered
+fitting function. The method-specific arguments are documented on each function
+below; the fitted maps are returned (with ``output_mode="object"``) as the
+result types listed alongside.
+
+```{eval-rst}
+.. currentmodule:: squidpy
+.. autosummary::
+    :toctree: api
+
+    experimental._methods.align_samples._stalign.fit_stalign
+    experimental._methods.align_landmarks._landmark.fit_similarity
+    experimental._methods.align_landmarks._landmark.fit_affine
+    experimental._methods.align_samples._stalign_impl._tools.StalignResult
+    experimental._methods.align_landmarks._landmark.AffineFitResult
+```
+
 ## Experimental
 ```{eval-rst}
 .. module:: squidpy.experimental
