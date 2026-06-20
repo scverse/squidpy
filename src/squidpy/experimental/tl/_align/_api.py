@@ -37,9 +37,7 @@ F = TypeVar("F", bound="Callable[..., Any]")
 
 def _methods_rst(registry: Registry, indent: str = " " * 8) -> str:
     """Render a registry's methods as a reST list linking to each implementation."""
-    items = [
-        f"- ``{key}`` -- :func:`~{(fn := registry.get(key)).__module__}.{fn.__name__}`" for key in registry.keys()
-    ]
+    items = [f"- ``{key}`` -- :func:`~{(fn := registry.get(key)).__module__}.{fn.__name__}`" for key in registry.keys()]
     return ("\n" + indent).join(items)
 
 
