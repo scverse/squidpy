@@ -8,7 +8,7 @@ LDDMM) lives in the estimator adapter :func:`...align_samples._stalign.fit_stali
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     import jax
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 else:  # pragma: no cover - typing only
     JaxArray = Any
 
-BlurScales: TypeAlias = float | tuple[float, ...] | list[float]
+type BlurScales = float | tuple[float, ...] | list[float]
 
 __all__ = ["StalignResult"]
 
