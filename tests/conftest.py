@@ -25,7 +25,7 @@ from shapely import Point, Polygon
 
 import squidpy as sq
 from squidpy._constants._pkg_constants import Key
-from squidpy.gr import spatial_neighbors_grid, spatial_neighbors_knn
+from squidpy.gr import spatial_neighbors_grid
 from squidpy.im._container import ImageContainer
 
 HERE: Path = Path(__file__).parent
