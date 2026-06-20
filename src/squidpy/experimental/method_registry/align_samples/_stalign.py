@@ -78,45 +78,57 @@ def fit_stalign(
     # confusing failure from a module-level `import jax`.
     import jax.numpy as jnp
 
-    from ._stalign_impl._helpers import validate_points
-    from ._stalign_impl._tools import (
-        STalignConfig,
-        STalignPreprocessConfig,
-        STalignRegistrationConfig,
-        stalign_points,
-    )
+    from ._stalign_impl._core import jax_dtype, lddmm, transform_points_row_col
+    from ._stalign_impl._helpers import affine_from_points, validate_points
+    from ._stalign_impl._tools import StalignResult, _rasterize_cloud
 
-    config = STalignConfig(
-        preprocess=STalignPreprocessConfig(dx=dx, blur=blur, expand=raster_expand),
-        registration=STalignRegistrationConfig(
-            a=a,
-            p=p,
-            expand=expand,
-            nt=nt,
-            niter=niter,
-            diffeo_start=diffeo_start,
-            epL=epL,
-            epT=epT,
-            epV=epV,
-            sigmaM=sigmaM,
-            sigmaB=sigmaB,
-            sigmaA=sigmaA,
-            sigmaR=sigmaR,
-            sigmaP=sigmaP,
-        ),
-    )
-
-    ref_xy = validate_points(ref, name="ref")
-    query_xy = validate_points(query, name="query")
+    if (landmarks_source is None) != (landmarks_target is None):
+        raise ValueError("Expected both landmark arrays to be provided together.")
 
     # The solver runs internally in row-col (y, x); inputs are (x, y) -- swap at the boundary.
-    lm_src = None if landmarks_source is None else jnp.asarray(landmarks_source)[:, ::-1]
-    lm_tgt = None if landmarks_target is None else jnp.asarray(landmarks_target)[:, ::-1]
+    source_rc = validate_points(query, name="query")[:, ::-1]
+    target_rc = validate_points(ref, name="ref")[:, ::-1]
+    source_grid, source_image = _rasterize_cloud(source_rc, dx=dx, blur=blur, expand=raster_expand)
+    target_grid, target_image = _rasterize_cloud(target_rc, dx=dx, blur=blur, expand=raster_expand)
 
-    return stalign_points(
-        source_points=query_xy[:, ::-1],
-        target_points=ref_xy[:, ::-1],
-        config=config,
-        landmarks_source=lm_src,
-        landmarks_target=lm_tgt,
+    dtype = jax_dtype()
+    if landmarks_source is None:
+        linear, translation = jnp.eye(2, dtype=dtype), jnp.zeros(2, dtype=dtype)
+        src_lm = tgt_lm = None
+    else:
+        src_lm = validate_points(landmarks_source, name="landmarks_source")[:, ::-1]
+        tgt_lm = validate_points(landmarks_target, name="landmarks_target")[:, ::-1]
+        linear_np, translation_np = affine_from_points(src_lm, tgt_lm)
+        linear, translation = jnp.asarray(linear_np, dtype=dtype), jnp.asarray(translation_np, dtype=dtype)
+
+    result = lddmm(
+        source_grid,
+        source_image,
+        target_grid,
+        target_image,
+        L=linear,
+        T=translation,
+        points_source=src_lm,
+        points_target=tgt_lm,
+        a=a,
+        p=p,
+        expand=expand,
+        nt=nt,
+        niter=niter,
+        diffeo_start=diffeo_start,
+        epL=epL,
+        epT=epT,
+        epV=epV,
+        sigmaM=sigmaM,
+        sigmaB=sigmaB,
+        sigmaA=sigmaA,
+        sigmaR=sigmaR,
+        sigmaP=sigmaP,
+    )
+    aligned_rc = transform_points_row_col(result["xv"], result["v"], result["A"], source_rc, direction="forward")
+    return StalignResult(
+        affine=result["A"],
+        velocity=result["v"],
+        velocity_grid=result["xv"],
+        aligned_points=aligned_rc[:, ::-1],
     )
