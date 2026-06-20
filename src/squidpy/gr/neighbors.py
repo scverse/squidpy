@@ -9,7 +9,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 import numpy as np
 from fast_array_utils import stats as fau_stats
@@ -31,7 +31,6 @@ from squidpy._utils import NDArrayA
 from squidpy._validators import assert_positive
 
 __all__ = [
-    "GraphMatrixT",
     "GraphBuilder",
     "GraphBuilderCSR",
     "GraphPostprocessor",
@@ -45,10 +44,9 @@ __all__ = [
 ]
 
 
-# Kept module-level (not folded into GraphBuilder's params): types the public
-# `GraphPostprocessor` alias and is itself a public `squidpy.gr` export.
-GraphMatrixT = TypeVar("GraphMatrixT")
-GraphPostprocessor = Callable[[GraphMatrixT, GraphMatrixT], tuple[GraphMatrixT, GraphMatrixT]]
+# Public PEP 695 type alias for graph postprocessors. The type parameter is
+# scoped to the alias itself, so no module-level `TypeVar` is needed.
+type GraphPostprocessor[GraphMatrixT] = Callable[[GraphMatrixT, GraphMatrixT], tuple[GraphMatrixT, GraphMatrixT]]
 
 
 class GraphBuilder[CoordT, GraphMatrixT](ABC):
