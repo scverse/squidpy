@@ -205,6 +205,15 @@ lint.ignore = [
   "E731",
   # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
   "E741",
+  # PEP 695 generics (`class C[T]` / `def f[T]`) -> deferred to a dedicated rewrite.
+  # `GraphMatrixT`/`CoordT` are a shared TypeVar pair: defined in `gr.neighbors`, used by a
+  # module-level `Callable` alias, imported by `gr._build`, and re-exported from the public
+  # `squidpy.gr` API. ruff cannot autofix the cross-module use (`SpatialNeighborsResult`, which
+  # imports the TypeVar) and its fix for the local use (`GraphBuilder`) leaves the still-required
+  # exported TypeVars in place, creating dual same-name definitions. Converting correctly means
+  # deciding whether to keep exporting `GraphMatrixT` -- a public-API change, not a version bump.
+  "UP046",
+  "UP047",
   ## Flake8 rules not supported by ruff:
   # RST201 Block quote ends without a blank line; unexpected unindent.
   # "RST201",
