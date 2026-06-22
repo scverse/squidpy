@@ -90,7 +90,7 @@ def rasterize(
     radius = int(np.ceil(float(np.max(blur_values)) * 4.0))
     denom = 2.0 * (dx * blur_values * 2.0) ** 2
 
-    for x_i, y_i in zip(x, y, strict=False):
+    for x_i, y_i in zip(x, y, strict=True):
         col = int(np.rint((x_i - grid_x[0]) / dx))
         row = int(np.rint((y_i - grid_y[0]) / dx))
 
