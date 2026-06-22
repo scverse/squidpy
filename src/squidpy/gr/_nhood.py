@@ -233,6 +233,13 @@ def nhood_enrichment(
     _assert_connectivity_key(adata, connectivity_key)
     assert_positive(n_perms, name="n_perms")
 
+    if normalization not in _NORM_CODES:
+        raise ValueError(
+            f"Invalid normalization mode `{normalization}`. Choose from {sorted(_NORM_CODES)}."
+        )
+    if handle_nan not in ("keep", "zero"):
+        raise ValueError(f"Invalid `handle_nan` mode `{handle_nan}`. Choose from 'keep', 'zero'.")
+
     if numba_parallel:
         warnings.warn(
             "`numba_parallel` is deprecated and no longer has any effect; permutations are now "
@@ -267,6 +274,15 @@ def nhood_enrichment(
     else:
         libraries = None
 
+    n_filtered = n_total_cells - len(int_clust)
+    if n_filtered > 0:
+        warnings.warn(
+            f"{n_filtered / n_total_cells * 100:.3f}% of cells were excluded because their clusters "
+            f"had fewer than {min_cell_count} cells.",
+            UserWarning,
+            stacklevel=2,
+        )
+
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
     n_cls = len(clust_map)
     if n_cls <= 1:
@@ -290,22 +306,8 @@ def nhood_enrichment(
         safe_cond_counts[safe_cond_counts == 0] = 1.0
 
         count_normalized = count / safe_cond_counts
-
-        n_retained_cells = len(int_clust)
-        n_filtered = n_total_cells - n_retained_cells
-        frac_filtered = n_filtered / n_total_cells * 100
-
-        if n_filtered > 0:
-            warnings.warn(
-                f"{frac_filtered:.3f}% of cells were excluded because their clusters had fewer than {min_cell_count} cells.",
-                UserWarning,
-                stacklevel=2,
-            )
-
-    elif normalization == "none":
+    else:  # "none"
         count_normalized = count.copy()
-    else:
-        raise ValueError(f"Invalid normalization mode `{normalization}`. Choose from 'none', 'total', 'conditional'.")
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
@@ -335,10 +337,6 @@ def nhood_enrichment(
 
     if handle_nan == "zero":
         zscore = np.nan_to_num(zscore, nan=0.0)
-    elif handle_nan == "keep":
-        pass
-    else:
-        raise ValueError("handle_nan must be 'keep' or 'zero'")
 
     result_kwargs = {"zscore": zscore, "count": count}
     if normalization == "conditional":

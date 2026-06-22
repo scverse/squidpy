@@ -243,11 +243,9 @@ def nhood_enrichment(
 def nhood_enrichment_dotplot(
     adata: AnnData,
     cluster_key: str,
-    zscore_key: str = "ct_nhood_enrichment",
     annotate: bool = False,
     title: str | None = None,
-    cmap: str = "coolwarm",
-    palette: Palette_t = None,
+    cmap: str = "YlGnBu",
     cbar_kwargs: Mapping[str, Any] = MappingProxyType({}),
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
@@ -269,16 +267,12 @@ def nhood_enrichment_dotplot(
         Annotated data matrix.
     cluster_key : str
         Key in `adata.obs` where the cluster (cell type) annotation is stored.
-    zscore_key : str, optional
-        Key in `adata.uns` where the enrichment results are stored.
     annotate : bool, optional
         Whether to annotate dots with CCR values.
     title : str, optional
         Title of the plot.
     cmap : str, optional
         Colormap used for the z-score values.
-    palette : Palette_t, optional
-        Not used, reserved for compatibility.
     cbar_kwargs : dict, optional
         Keyword arguments for `fig.colorbar`.
     figsize : tuple, optional
@@ -329,7 +323,6 @@ def nhood_enrichment_dotplot(
     df["size"] = size_min + ccr_norm * (size_max - size_min)
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi) if ax is None else (ax.figure, ax)
-    cmap = "YlGnBu"
     sc = ax.scatter(
         df["x"],
         df["y"],
