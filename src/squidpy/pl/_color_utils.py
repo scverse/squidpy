@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, TypeAlias
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,7 +15,7 @@ from scanpy import logging as logg
 from squidpy._compat import add_colors_for_categorical_sample_annotation
 from squidpy._constants._pkg_constants import Key
 
-Palette_t: TypeAlias = str | ListedColormap | None
+type Palette_t = str | ListedColormap | None
 
 
 def _maybe_set_colors(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Generic, Literal, NamedTuple
+from typing import Any, NamedTuple
 
 import geopandas as gpd
 import numpy as np
@@ -37,14 +37,12 @@ from squidpy.gr._utils import (
 from squidpy.gr.neighbors import (
     DelaunayBuilder,
     GraphBuilder,
-    GraphMatrixT,
     GridBuilder,
     KNNBuilder,
     RadiusBuilder,
 )
 
 __all__ = [
-    "GraphMatrixT",
     "SpatialNeighborsResult",
     "spatial_neighbors",
     "spatial_neighbors_from_builder",
@@ -55,7 +53,7 @@ __all__ = [
 ]
 
 
-class SpatialNeighborsResult(NamedTuple, Generic[GraphMatrixT]):
+class SpatialNeighborsResult[GraphMatrixT](NamedTuple):
     """Result of spatial_neighbors function."""
 
     connectivities: GraphMatrixT
