@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 from anndata import AnnData
-from squidpy.experimental.method_registry.align_landmarks import AffineFitResult
+from squidpy.experimental.methods.align_landmarks import AffineFitResult
 
 from squidpy.experimental.tl._align._io import (
     get_coords,
