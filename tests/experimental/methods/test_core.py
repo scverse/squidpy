@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+
 from squidpy.experimental.methods.registry import Registry
 
 
