@@ -52,9 +52,14 @@ def rasterize(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rasterize a point cloud into a multi-scale Gaussian density image.
 
-    Each point splats a normalized Gaussian over a fixed ``(2r + 1)`` patch and
-    the patches are accumulated onto the grid.
+    Each point deposits unit mass into its nearest cell of a regular
+    ``dx``-spaced grid; every ``blur`` scale is then an isotropic Gaussian blur
+    of that histogram, so each point becomes a unit-integral Gaussian. ``blur``
+    is the kernel width in units of ``2 * dx`` (``sigma = 2 * blur`` cells).
+    Mass within ~``blur`` cells of the border leaks off-grid (``mode="constant"``).
     """
+    from scipy.ndimage import gaussian_filter
+
     x = np.asarray(x, dtype=float).reshape(-1)
     y = np.asarray(y, dtype=float).reshape(-1)
     if x.shape != y.shape:
@@ -85,28 +90,15 @@ def rasterize(
     if grid_x.size < 2 or grid_y.size < 2:
         raise ValueError("Rasterized grid is too small. Increase the point spread or lower `dx`.")
 
-    mesh_x, mesh_y = np.meshgrid(grid_x, grid_y)
-    out = np.zeros((len(blur_values), grid_y.size, grid_x.size), dtype=float)
-    radius = int(np.ceil(float(np.max(blur_values)) * 4.0))
-    denom = 2.0 * (dx * blur_values * 2.0) ** 2
+    # Bin each point onto its nearest grid cell (unit mass each), dropping any
+    # whose nearest cell falls outside the padded grid.
+    col = np.rint((x - grid_x[0]) / dx).astype(np.intp)
+    row = np.rint((y - grid_y[0]) / dx).astype(np.intp)
+    inside = (col >= 0) & (col < grid_x.size) & (row >= 0) & (row < grid_y.size)
+    histogram = np.zeros((grid_y.size, grid_x.size), dtype=float)
+    np.add.at(histogram, (row[inside], col[inside]), 1.0)
 
-    for x_i, y_i in zip(x, y, strict=True):
-        col = int(np.rint((x_i - grid_x[0]) / dx))
-        row = int(np.rint((y_i - grid_y[0]) / dx))
-
-        row0 = max(row - radius, 0)
-        row1 = min(row + radius, out.shape[1] - 1)
-        col0 = max(col - radius, 0)
-        col1 = min(col + radius, out.shape[2] - 1)
-
-        patch_x = mesh_x[row0 : row1 + 1, col0 : col1 + 1]
-        patch_y = mesh_y[row0 : row1 + 1, col0 : col1 + 1]
-
-        kernels = np.exp(-((patch_x[..., None] - x_i) ** 2 + (patch_y[..., None] - y_i) ** 2) / denom)
-        kernels_sum = kernels.sum(axis=(0, 1), keepdims=True)
-        kernels /= np.where(kernels_sum == 0.0, 1.0, kernels_sum)
-        out[:, row0 : row1 + 1, col0 : col1 + 1] += np.moveaxis(kernels, -1, 0)
-
+    out = np.stack([gaussian_filter(histogram, sigma=2.0 * float(b), mode="constant") for b in blur_values])
     return grid_x, grid_y, out
 
 
