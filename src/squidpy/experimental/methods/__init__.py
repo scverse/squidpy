@@ -11,6 +11,8 @@ actually runs.
 
 from __future__ import annotations
 
+# Import for side effects: populates ALIGN_SAMPLES / ALIGN_LANDMARKS.
+from squidpy.experimental.methods import align_landmarks, align_samples  # noqa: F401
 from squidpy.experimental.methods.registry import (
     ALIGN_LANDMARKS,
     ALIGN_SAMPLES,
@@ -19,9 +21,6 @@ from squidpy.experimental.methods.registry import (
     AlignSamplesFn,
     Registry,
 )
-
-# Import for side effects: populates ALIGN_SAMPLES / ALIGN_LANDMARKS.
-from squidpy.experimental.methods import align_landmarks, align_samples  # noqa: F401
 
 __all__ = [
     "Registry",
