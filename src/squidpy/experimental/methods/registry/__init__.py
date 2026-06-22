@@ -24,7 +24,7 @@ import numpy.typing as npt
 from squidpy._utils import NDArrayA
 
 if TYPE_CHECKING:
-    from squidpy.experimental.method_registry.methods.align_landmarks._landmark import AffineFitResult
+    from squidpy.experimental.methods.align_landmarks._landmark import AffineFitResult
 
 __all__ = [
     "Registry",

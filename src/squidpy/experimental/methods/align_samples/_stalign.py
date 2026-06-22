@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy.typing as npt
 
-from squidpy.experimental.method_registry.registry import ALIGN_SAMPLES
+from squidpy.experimental.methods.registry import ALIGN_SAMPLES
 
 if TYPE_CHECKING:
     import jax

@@ -151,11 +151,11 @@ result types listed alongside.
 .. autosummary::
     :toctree: api
 
-    experimental.method_registry.align_samples._stalign.fit_stalign
-    experimental.method_registry.align_landmarks._landmark.fit_similarity
-    experimental.method_registry.align_landmarks._landmark.fit_affine
-    experimental.method_registry.align_samples._stalign_impl._tools.StalignResult
-    experimental.method_registry.align_landmarks._landmark.AffineFitResult
+    experimental.methods.align_samples._stalign.fit_stalign
+    experimental.methods.align_landmarks._landmark.fit_similarity
+    experimental.methods.align_landmarks._landmark.fit_affine
+    experimental.methods.align_samples._stalign.StalignResult
+    experimental.methods.align_landmarks._landmark.AffineFitResult
 ```
 
 ## Experimental

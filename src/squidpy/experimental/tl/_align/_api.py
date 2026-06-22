@@ -1,4 +1,4 @@
-"""Public alignment functions built on the :mod:`squidpy.experimental.method_registry` core.
+"""Public alignment functions built on the :mod:`squidpy.experimental.methods` core.
 
 These are thin orchestrators: resolve inputs to in-memory arrays, dispatch to a
 fit-core estimator, write the result back. All container I/O and write-back live
@@ -15,7 +15,7 @@ from anndata import AnnData
 from spatialdata import SpatialData
 
 from squidpy._validators import assert_one_of
-from squidpy.experimental.method_registry import ALIGN_LANDMARKS, ALIGN_SAMPLES
+from squidpy.experimental.methods import ALIGN_LANDMARKS, ALIGN_SAMPLES
 from squidpy.experimental.tl._align._io import (
     get_coords,
     resolve_obs_pair,
@@ -24,7 +24,7 @@ from squidpy.experimental.tl._align._io import (
 )
 
 if TYPE_CHECKING:
-    from squidpy.experimental.method_registry import AlignResult, Registry
+    from squidpy.experimental.methods import AlignResult, Registry
 
 OUTPUT_MODES = ("object", "copy", "inplace")
 ON_VALUES = ("obs", "image")

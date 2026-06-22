@@ -10,7 +10,7 @@ import numpy as np
 import numpy.typing as npt
 
 from squidpy._utils import NDArrayA
-from squidpy.experimental.method_registry.registry import ALIGN_LANDMARKS
+from squidpy.experimental.methods.registry import ALIGN_LANDMARKS
 
 
 @dataclass
