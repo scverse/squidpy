@@ -234,9 +234,7 @@ def nhood_enrichment(
     assert_positive(n_perms, name="n_perms")
 
     if normalization not in _NORM_CODES:
-        raise ValueError(
-            f"Invalid normalization mode `{normalization}`. Choose from {sorted(_NORM_CODES)}."
-        )
+        raise ValueError(f"Invalid normalization mode `{normalization}`. Choose from {sorted(_NORM_CODES)}.")
     if handle_nan not in ("keep", "zero"):
         raise ValueError(f"Invalid `handle_nan` mode `{handle_nan}`. Choose from 'keep', 'zero'.")
 
