@@ -148,6 +148,8 @@ nitpick_ignore = [
     ("py:class", "NDArray"),
     ("py:class", "np.number"),
     ("py:class", "csr_matrix"),
+    # optional dep mocked at build time (see autodoc_mock_imports), so no resolvable target
+    ("py:class", "jax.Array"),
     # no idea why those aren’t exported
     ("py:class", "squidpy._constants._constants.SpatialAutocorr"),
     ("py:class", "squidpy._constants._constants.CoordType"),
