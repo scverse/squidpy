@@ -126,7 +126,7 @@ def writeback_affine_sdata(
     coordinate system inherits the alignment. Nothing is materialised.
     """
     from spatialdata import deepcopy as sd_deepcopy
-    from spatialdata.transformations import Affine, get_transformation, set_transformation
+    from spatialdata.transformations import Affine, Sequence, get_transformation, set_transformation
 
     if moving_cs is None or target_cs is None:
         raise ValueError("`cs_name_query` and `cs_name_ref` are required to register a transform on a SpatialData.")
@@ -144,7 +144,11 @@ def writeback_affine_sdata(
             # element we register a transform on so `output_mode="copy"` leaves the input untouched.
             element = sd_deepcopy(element)
             getattr(out, etype)[name] = element
-        set_transformation(element, sd_affine, to_coordinate_system=target_cs)
+        # The fitted affine maps `moving_cs` coords into `target_cs`, not the element's
+        # intrinsic frame. Compose it after the element's existing intrinsic -> `moving_cs`
+        # transform so a non-identity placement into `moving_cs` is preserved.
+        existing = get_transformation(element, to_coordinate_system=moving_cs)
+        set_transformation(element, Sequence([existing, sd_affine]), to_coordinate_system=target_cs)
         touched = True
     if not touched:
         raise KeyError(f"No elements in the SpatialData are registered to coordinate system {moving_cs!r}.")

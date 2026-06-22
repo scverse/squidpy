@@ -140,3 +140,34 @@ def test_spatialdata_registers_transformation() -> None:
     )
     assert out is None
     assert "ref_cs" in get_transformation(sdata.points["pts"], get_all=True)
+
+
+def test_spatialdata_composes_with_existing_transform() -> None:
+    # The fitted affine maps `query_cs` coords -> `ref_cs`. When the element already has a
+    # non-identity transform into `query_cs`, the registered `ref_cs` transform must compose
+    # the two so the element's *intrinsic* coords still land on the reference.
+    sd = pytest.importorskip("spatialdata")
+    from spatialdata.models import PointsModel
+    from spatialdata.transformations import Translation, get_transformation
+
+    offset = np.array([100.0, 200.0])
+    # `pts` lives in `query_cs` via a non-identity (translation) transform.
+    pts = PointsModel.parse(_QUERY, transformations={"query_cs": Translation(offset, axes=("x", "y"))})
+    sdata = sd.SpatialData(points={"pts": pts})
+
+    # Landmarks are expressed in `query_cs`: the intrinsic coords shifted by `offset`.
+    align_by_landmarks(
+        _REF,
+        _QUERY + offset,
+        method="affine",
+        data=sdata,
+        cs_name_query="query_cs",
+        cs_name_ref="ref_cs",
+        output_mode="inplace",
+    )
+
+    matrix = get_transformation(sdata.points["pts"], to_coordinate_system="ref_cs").to_affine_matrix(
+        input_axes=("x", "y"), output_axes=("x", "y")
+    )
+    mapped = _QUERY @ matrix[:2, :2].T + matrix[:2, 2]
+    np.testing.assert_allclose(mapped, _REF, atol=1e-6)
