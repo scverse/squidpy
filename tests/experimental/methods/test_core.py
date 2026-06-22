@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from squidpy.experimental.method_registry import Registry
+from squidpy.experimental.methods import Registry
 
 
 @dataclass
