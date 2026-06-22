@@ -19,8 +19,17 @@ else:  # pragma: no cover - typing only
 __all__ = [
     "affine_from_points",
     "rasterize",
+    "rasterize_cloud",
     "validate_points",
 ]
+
+
+def rasterize_cloud(
+    points_rc: JaxArray, *, dx: float, blur: float | list[float], expand: float
+) -> tuple[tuple[JaxArray, JaxArray], JaxArray]:
+    """Rasterize a row-col cloud into a ``((grid_y, grid_x), image)`` density."""
+    grid_x, grid_y, image = rasterize(points_rc[:, 1], points_rc[:, 0], dx=dx, blur=blur, expand=expand)
+    return (grid_y, grid_x), image
 
 
 def validate_points(points: Any, *, name: str) -> JaxArray:

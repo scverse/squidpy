@@ -1,16 +1,62 @@
-"""STalign estimator: JAX LDDMM point-cloud registration."""
+"""STalign estimator: JAX LDDMM point-cloud registration.
+
+Holds both the estimator adapter :func:`fit_stalign` and its result type
+:class:`StalignResult`; the pure numerics live under :mod:`._stalign_impl`.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy.typing as npt
 
-from squidpy.experimental.method_registry._families import ALIGN_SAMPLES
+from squidpy.experimental.method_registry.registry import ALIGN_SAMPLES
 
 if TYPE_CHECKING:
-    from ._stalign_impl._tools import StalignResult
+    import jax
+
+    JaxArray = jax.Array
+else:  # pragma: no cover - typing only
+    JaxArray = Any
+
+
+@dataclass(slots=True)
+class StalignResult:
+    """A fitted STalign diffeomorphism, ready to transform arbitrary points.
+
+    :meth:`transform` works in ``(x, y)``; ``aligned_points`` is the fitted query
+    cloud already mapped into the reference frame.
+    """
+
+    affine: JaxArray
+    velocity: JaxArray
+    velocity_grid: tuple[JaxArray, JaxArray]
+    aligned_points: JaxArray
+
+    def transform(
+        self,
+        points: JaxArray,
+        *,
+        direction: Literal["forward", "backward"] = "forward",
+    ) -> JaxArray:
+        """Map ``(N, 2)`` ``(x, y)`` points with the fitted diffeomorphism."""
+        import jax.numpy as jnp
+
+        from ._stalign_impl._core import jax_dtype, transform_points_row_col
+
+        pts = jnp.asarray(points, dtype=jax_dtype())
+        if pts.ndim != 2 or pts.shape[1] != 2:
+            raise ValueError(f"Expected an (N, 2) `(x, y)` array, found shape {pts.shape}.")
+        transformed_rc = transform_points_row_col(
+            self.velocity_grid,
+            self.velocity,
+            self.affine,
+            pts[:, ::-1],
+            direction=direction,
+        )
+        return transformed_rc[:, ::-1]
 
 
 @ALIGN_SAMPLES.register("stalign", requires=("jax",))
@@ -79,8 +125,7 @@ def fit_stalign(
     import jax.numpy as jnp
 
     from ._stalign_impl._core import jax_dtype, lddmm, transform_points_row_col
-    from ._stalign_impl._helpers import affine_from_points, validate_points
-    from ._stalign_impl._tools import StalignResult, _rasterize_cloud
+    from ._stalign_impl._helpers import affine_from_points, rasterize_cloud, validate_points
 
     if (landmarks_source is None) != (landmarks_target is None):
         raise ValueError("Expected both landmark arrays to be provided together.")
@@ -88,8 +133,8 @@ def fit_stalign(
     # The solver runs internally in row-col (y, x); inputs are (x, y) -- swap at the boundary.
     source_rc = validate_points(query, name="query")[:, ::-1]
     target_rc = validate_points(ref, name="ref")[:, ::-1]
-    source_grid, source_image = _rasterize_cloud(source_rc, dx=dx, blur=blur, expand=raster_expand)
-    target_grid, target_image = _rasterize_cloud(target_rc, dx=dx, blur=blur, expand=raster_expand)
+    source_grid, source_image = rasterize_cloud(source_rc, dx=dx, blur=blur, expand=raster_expand)
+    target_grid, target_image = rasterize_cloud(target_rc, dx=dx, blur=blur, expand=raster_expand)
 
     dtype = jax_dtype()
     if landmarks_source is None:

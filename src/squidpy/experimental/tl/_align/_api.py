@@ -15,8 +15,7 @@ from anndata import AnnData
 from spatialdata import SpatialData
 
 from squidpy._validators import assert_one_of
-from squidpy.experimental.method_registry.align_landmarks import ALIGN_LANDMARKS
-from squidpy.experimental.method_registry.align_samples import ALIGN_SAMPLES
+from squidpy.experimental.method_registry import ALIGN_LANDMARKS, ALIGN_SAMPLES
 from squidpy.experimental.tl._align._io import (
     get_coords,
     resolve_obs_pair,

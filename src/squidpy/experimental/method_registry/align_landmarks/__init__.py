@@ -1,16 +1,20 @@
-"""``align_landmarks`` family: closed-form alignment from paired landmarks."""
+"""``align_landmarks`` family: closed-form alignment from paired landmarks.
+
+Importing this package registers the family's estimators into
+:data:`~squidpy.experimental.method_registry.registry.ALIGN_LANDMARKS`. Only the
+implementations are re-exported here; the registry itself lives in (and is public
+from) :mod:`squidpy.experimental.method_registry`.
+"""
 
 from __future__ import annotations
 
-from squidpy.experimental.method_registry._families import ALIGN_LANDMARKS
-from squidpy.experimental.method_registry.align_landmarks._landmark import (
+from squidpy.experimental.method_registry.methods.align_landmarks._landmark import (
     AffineFitResult,
     fit_affine,
     fit_similarity,
 )
 
 __all__ = [
-    "ALIGN_LANDMARKS",
     "AffineFitResult",
     "fit_affine",
     "fit_similarity",
