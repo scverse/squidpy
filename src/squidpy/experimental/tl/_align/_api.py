@@ -132,8 +132,8 @@ def align(
 
 @_document_methods(align_landmarks_methods=ALIGN_LANDMARKS)
 def align_by_landmarks(
-    landmarks_ref: np.ndarray | Sequence[tuple[float, float]],
-    landmarks_query: np.ndarray | Sequence[tuple[float, float]],
+    ref: np.ndarray | Sequence[tuple[float, float]],
+    query: np.ndarray | Sequence[tuple[float, float]],
     *,
     method: Literal["similarity", "affine"] = "similarity",
     data: AnnData | SpatialData | None = None,
@@ -147,7 +147,7 @@ def align_by_landmarks(
 
     Parameters
     ----------
-    landmarks_ref, landmarks_query
+    ref, query
         Equal-length ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``), paired by
         row order. No automatic correspondence matching is performed.
     method
@@ -173,8 +173,8 @@ def align_by_landmarks(
     assert_one_of(output_mode, OUTPUT_MODES, name="output_mode")
 
     result = ALIGN_LANDMARKS.get(method)(
-        landmarks_ref=landmarks_ref,
-        landmarks_query=landmarks_query,
+        ref=ref,
+        query=query,
         source_cs=cs_name_query,
         target_cs=cs_name_ref,
     )

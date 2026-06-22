@@ -35,20 +35,18 @@ class AffineFitResult:
 
 
 def _fit_landmark_relation(
-    landmarks_ref: np.ndarray,
-    landmarks_query: np.ndarray,
+    ref: np.ndarray,
+    query: np.ndarray,
     *,
     method: str,
     solve_fn: Callable[[np.ndarray, np.ndarray], np.ndarray],
     source_cs: str | None = None,
     target_cs: str | None = None,
 ) -> AffineFitResult:
-    ref = _validate_landmarks(landmarks_ref, name="landmarks_ref")
-    query = _validate_landmarks(landmarks_query, name="landmarks_query")
+    ref = _validate_landmarks(ref, name="ref")
+    query = _validate_landmarks(query, name="query")
     if ref.shape != query.shape:
-        raise ValueError(
-            f"`landmarks_ref` and `landmarks_query` must have the same shape; got {ref.shape} and {query.shape}."
-        )
+        raise ValueError(f"`ref` and `query` must have the same shape; got {ref.shape} and {query.shape}.")
     if ref.shape[0] < 3:
         raise ValueError(f"`{method}` needs at least 3 landmark pairs, got {ref.shape[0]}.")
 
@@ -63,8 +61,8 @@ def _fit_landmark_relation(
 
 @ALIGN_LANDMARKS.register("similarity")
 def fit_similarity(
-    landmarks_ref: np.ndarray,
-    landmarks_query: np.ndarray,
+    ref: np.ndarray,
+    query: np.ndarray,
     *,
     source_cs: str | None = None,
     target_cs: str | None = None,
@@ -73,15 +71,15 @@ def fit_similarity(
 
     Parameters
     ----------
-    landmarks_ref, landmarks_query
+    ref, query
         Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``).
     source_cs, target_cs
         Optional coordinate-system labels stamped onto the result for
         traceability; they do not affect the fit.
     """
     return _fit_landmark_relation(
-        landmarks_ref,
-        landmarks_query,
+        ref,
+        query,
         method="similarity",
         solve_fn=_fit_similarity,
         source_cs=source_cs,
@@ -91,8 +89,8 @@ def fit_similarity(
 
 @ALIGN_LANDMARKS.register("affine")
 def fit_affine(
-    landmarks_ref: np.ndarray,
-    landmarks_query: np.ndarray,
+    ref: np.ndarray,
+    query: np.ndarray,
     *,
     source_cs: str | None = None,
     target_cs: str | None = None,
@@ -101,15 +99,15 @@ def fit_affine(
 
     Parameters
     ----------
-    landmarks_ref, landmarks_query
+    ref, query
         Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``).
     source_cs, target_cs
         Optional coordinate-system labels stamped onto the result for
         traceability; they do not affect the fit.
     """
     return _fit_landmark_relation(
-        landmarks_ref,
-        landmarks_query,
+        ref,
+        query,
         method="affine",
         solve_fn=_fit_affine,
         source_cs=source_cs,
