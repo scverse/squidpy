@@ -491,6 +491,12 @@ def make_stitched_labels(
     # Validate merge_strategy up front so an invalid value fails fast even when
     # write_table=False (the aggregation that would otherwise raise is skipped).
     _resolve_strategy(merge_strategy)
+    # table_key_added implies the user wants a table; reject the contradictory combo
+    # rather than silently ignoring the key.
+    if table_key_added is not None and not write_table:
+        raise ValueError(
+            "table_key_added was provided but write_table=False; drop table_key_added or set write_table=True."
+        )
     # label_id is the instance key that drives the LUT remap; a NaN, non-positive,
     # or duplicated id would crash cryptically or silently mis-map pixels (0 is the
     # background sentinel; duplicates make lut[label_id]=group_id keep only the last).
@@ -534,12 +540,24 @@ def make_stitched_labels(
     if not inplace:
         return {"labels": new_labels, "table": new_table}
 
+    # Resolve and validate the table key before any mutation: SpatialData requires
+    # element names to be unique across element types, so a table key equal to the
+    # labels key would crash on assign (with a cryptic message) after the labels
+    # element was already written, leaving a half-written sdata.
+    tbl_key = None
+    if new_table is not None:
+        tbl_key = table_key_added if table_key_added is not None else f"{out_key}_table"
+        if tbl_key == out_key:
+            raise ValueError(
+                f"table_key_added '{tbl_key}' must differ from the labels element key "
+                f"'{out_key}'; SpatialData element names are unique across element types."
+            )
+
     if out_key in sdata.labels:
         logg.warning(f"Overwriting existing labels element '{out_key}'.")
     sdata.labels[out_key] = new_labels
 
     if new_table is not None:
-        tbl_key = table_key_added if table_key_added is not None else f"{out_key}_table"
         if tbl_key in sdata.tables:
             logg.warning(f"Overwriting existing table '{tbl_key}'.")
         sdata.tables[tbl_key] = new_table

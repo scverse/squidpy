@@ -40,8 +40,10 @@ class TestMakeStitchedLabels:
         _qc_and_stitch(sdata, min_confidence=0.5)
         adata = sdata.tables["labels_qc"]
         stitched = adata.obs[adata.obs["is_stitched"].astype(bool)]
-        if len(stitched) == 0:
-            pytest.skip("no stitched cells in this fixture realisation")
+        # Fixture is seeded (default_rng(42)), so this is a deterministic precondition,
+        # not a maybe: if it ever fails, the fixture or stitching changed and the test
+        # below would otherwise silently pass without exercising the remap.
+        assert len(stitched) > 0, "seeded fixture should yield stitched cells at min_confidence=0.5"
 
         sq.experimental.im.make_stitched_labels(sdata, labels_key="labels")
         new_arr = np.asarray(sdata.labels["labels_stitched"].values)
@@ -112,8 +114,8 @@ class TestMakeStitchedLabels:
         sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="sum")
         agg = sdata.tables["labels_stitched_table"]
         stitched = agg.obs[agg.obs["is_stitched"].astype(bool)]
-        if len(stitched) == 0:
-            pytest.skip("no stitched groups in this realisation")
+        # Seeded fixture (default_rng(42)): deterministic precondition, not a maybe.
+        assert len(stitched) > 0, "seeded fixture should yield stitched groups at min_confidence=0.5"
         # Each stitched group has n_pieces members each contributing 100.
         np.testing.assert_array_equal(
             stitched["fake_area"].to_numpy(),
@@ -219,8 +221,24 @@ class TestMakeStitchedLabels:
             ("qc_only", {"labels_key": "labels"}, "stitch_group_id"),
             ("qc_and_stitch", {"labels_key": "bogus"}, "not found"),
             ("qc_and_stitch", {"labels_key": "labels", "merge_strategy": "bogus"}, "Unknown merge_strategy"),
+            (
+                "qc_and_stitch",
+                {"labels_key": "labels", "write_table": False, "table_key_added": "x"},
+                "write_table=False",
+            ),
+            (
+                "qc_and_stitch",
+                {"labels_key": "labels", "labels_key_added": "x", "table_key_added": "x"},
+                "must differ from the labels element key",
+            ),
         ],
-        ids=["stitch_not_run", "missing_labels_key", "invalid_merge_strategy"],
+        ids=[
+            "stitch_not_run",
+            "missing_labels_key",
+            "invalid_merge_strategy",
+            "table_key_without_write",
+            "table_key_equals_labels_key",
+        ],
     )
     def test_invalid_input_raises(self, sdata_tile_boundary, setup, kwargs, match):
         sdata, _ = sdata_tile_boundary
@@ -247,8 +265,8 @@ class TestMakeStitchedLabels:
         _qc_and_stitch(sdata, min_confidence=0.5)
         adata = sdata.tables["labels_qc"]
         stitched = adata.obs[adata.obs["is_stitched"].astype(bool)]
-        if len(stitched) == 0:
-            pytest.skip("no stitched cells in this fixture realisation")
+        # Seeded fixture (default_rng(42)): deterministic precondition, not a maybe.
+        assert len(stitched) > 0, "seeded fixture should yield stitched cells at min_confidence=0.5"
         sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", join_labels=False)
         arr = np.asarray(sdata.labels["labels_stitched"].values)
         # At least one stitched group should have >1 connected component
@@ -270,8 +288,8 @@ class TestMakeStitchedLabels:
         _qc_and_stitch(sdata, min_confidence=0.5)
         adata = sdata.tables["labels_qc"]
         stitched = adata.obs[adata.obs["is_stitched"].astype(bool)]
-        if len(stitched) == 0:
-            pytest.skip("no stitched cells in this fixture realisation")
+        # Seeded fixture (default_rng(42)): deterministic precondition, not a maybe.
+        assert len(stitched) > 0, "seeded fixture should yield stitched cells at min_confidence=0.5"
         sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", join_labels=True)
         arr = np.asarray(sdata.labels["labels_stitched"].values)
         for gid in stitched["stitch_group_id"].astype(int).unique():
@@ -357,8 +375,8 @@ class TestReviewFixes:
         _qc_and_stitch(sdata, min_confidence=0.5)
         qc = sdata.tables["labels_qc"].obs
         stitched = qc[qc["is_stitched"].astype(bool)]
-        if stitched.empty:
-            pytest.skip("no stitched cells in this realisation")
+        # Seeded fixture (default_rng(42)): deterministic precondition, not a maybe.
+        assert not stitched.empty, "seeded fixture should yield stitched cells at min_confidence=0.5"
         sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="sum")
         agg = sdata.tables["labels_stitched_table"].obs
         h, w = np.asarray(sdata.labels["labels"].values).shape[-2:]
