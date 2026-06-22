@@ -108,22 +108,6 @@ def _permutation_counts(
     norm_code: int,
     progress: ProgressBar,
 ) -> NDArrayA:
-    """Compute the (normalized) cluster-connection counts for ``n_perms`` label permutations.
-
-    Parallelizes over permutations with ``prange``: each iteration ``p`` reseeds its thread-local
-    RNG with ``seed + p`` and shuffles a private copy of the labels, so the result is reproducible
-    and independent of the thread count. ``numba``'s ``np.random`` reproduces numpy's legacy
-    ``RandomState`` bit-for-bit, so this matches a ``RandomState(seed + p)`` reference exactly.
-    ``norm_code`` is ``0`` (none), ``1`` (total) or ``2`` (conditional).
-
-    Labels are shuffled *within groups*: ``group_indices[group_offsets[g]:group_offsets[g + 1]]``
-    are the cell indices of group ``g`` (e.g. one library/slide). A single group spanning all cells
-    reproduces a plain global shuffle, so this handles the no-``library_key`` case too. Groups are
-    shuffled in order off one RNG stream, matching :func:`squidpy.gr._utils._shuffle_group`.
-
-    ``progress`` is a :class:`numba_progress.ProgressBar` proxy, ticked once per permutation from
-    inside the parallel loop (atomic, GIL-free); pass a ``disable=True`` bar to suppress it.
-    """
     perms = np.empty((n_perms, n_cls, n_cls), dtype=np.float64)
     for p in prange(n_perms):
         np.random.seed(seed + p)
