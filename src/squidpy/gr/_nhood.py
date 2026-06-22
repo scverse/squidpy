@@ -151,32 +151,12 @@ def _permutation_counts(
 _NORM_CODES = {"none": 0, "total": 1, "conditional": 2}
 
 
-def filter_clusters_by_min_cell_count(
+def _filter_clusters_by_min_cell_count(
     adata: AnnData,
     int_clust: NDArrayA,
     connectivity_key: str,
     min_cell_count: int,
-) -> tuple[NDArrayA, NDArrayA]:
-    """
-    Filter clusters by minimum cell count.
-
-    Parameters
-    ----------
-    %(adata)s
-    int_clust
-        Array of cluster labels per cell
-    connectivity_key
-        Key in adata.obsp with adjacency matrix
-    min_cell_count
-        Minimum number of cells required to keep a cluster
-
-    Returns
-    -------
-    int_clust_filtered
-        Filtered cluster labels
-    adj
-        Adjacency matrix corresponding to filtered cells
-    """
+) -> tuple[NDArrayA, NDArrayA, NDArrayA]:
     clust_sizes = pd.Series(int_clust).value_counts()
     valid_clusters = clust_sizes[clust_sizes >= min_cell_count].index.to_numpy()
 
@@ -185,7 +165,7 @@ def filter_clusters_by_min_cell_count(
     int_clust = int_clust[valid_mask]
 
     adj = adata.obsp[connectivity_key][np.ix_(valid_cells_idx, valid_cells_idx)]
-    return int_clust, adj
+    return int_clust, adj, valid_mask
 
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
@@ -274,7 +254,7 @@ def nhood_enrichment(
     int_clust = np.array([clust_map[c] for c in original_clust], dtype=ndt)
     n_total_cells = len(int_clust)
 
-    int_clust, adj = filter_clusters_by_min_cell_count(
+    int_clust, adj, valid_mask = _filter_clusters_by_min_cell_count(
         adata=adata,
         int_clust=int_clust,
         connectivity_key=connectivity_key,
@@ -282,7 +262,8 @@ def nhood_enrichment(
     )
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
-        libraries: pd.Series | None = adata.obs[library_key]
+        # subset to the kept cells so the per-cell series stays aligned with the filtered
+        libraries: pd.Series | None = adata.obs[library_key].iloc[valid_mask].cat.remove_unused_categories()
     else:
         libraries = None
 

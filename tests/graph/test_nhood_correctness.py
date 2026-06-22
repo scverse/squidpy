@@ -310,6 +310,57 @@ def test_zscore_library_key_matches_reference(adata_tiny: AnnData, normalization
     np.testing.assert_allclose(result.zscore, expected, equal_nan=True)
 
 
+@pytest.mark.parametrize("n_jobs", [1, 3])
+@pytest.mark.parametrize("normalization", ["none", "conditional"])
+def test_zscore_library_key_with_min_cell_count(normalization: str, n_jobs: int):
+    """``min_cell_count`` must keep ``library_key`` aligned with the filtered cells."""
+    # 8-cell ring; cluster C is a single cell so it is dropped by ``min_cell_count=2``.
+    n = 8
+    edges = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 0), (0, 4)]
+    rows, cols = [], []
+    for i, j in edges:
+        rows += [i, j]
+        cols += [j, i]
+    adj_full = csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(n, n))
+
+    codes = np.array([0, 0, 0, 1, 1, 1, 1, 2])  # A x3, B x4, C x1
+    clusters = pd.Categorical.from_codes(codes, categories=["A", "B", "C"])
+    lib = pd.Categorical.from_codes([0, 1, 0, 1, 0, 1, 0, 1], categories=["s1", "s2"])
+    adata = AnnData(
+        np.zeros((n, n)),
+        obs={_CK: clusters, "library": lib},
+        obsp={"spatial_connectivities": adj_full},
+    )
+
+    min_cell_count, seed, n_perms = 2, 0, 50
+    result = nhood_enrichment(
+        adata,
+        cluster_key=_CK,
+        library_key="library",
+        normalization=normalization,
+        min_cell_count=min_cell_count,
+        n_perms=n_perms,
+        seed=seed,
+        n_jobs=n_jobs,
+        copy=True,
+    )
+
+    # Replicate the production filtering: drop cells of clusters below ``min_cell_count``,
+    # keeping the full category count (``n_cls = 3``) and the filtered per-cell arrays aligned.
+    sizes = pd.Series(codes).value_counts()
+    keep_clusters = sizes[sizes >= min_cell_count].index.to_numpy()
+    mask = np.isin(codes, keep_clusters)
+    idx = np.where(mask)[0]
+    adj_f = adj_full[np.ix_(idx, idx)]
+    int_clust_f = codes[mask]
+    lib_f = adata.obs["library"].iloc[mask]
+
+    expected = _reference_nhood_enrichment(
+        adj_f, int_clust_f, 3, n_perms=n_perms, seed=seed, normalization=normalization, libraries=lib_f
+    )
+    np.testing.assert_allclose(result.zscore, expected, equal_nan=True)
+
+
 # --------------------------------------------------------------------------- #
 # Statistical sanity: structure that survives RNG changes
 # --------------------------------------------------------------------------- #
