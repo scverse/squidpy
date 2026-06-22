@@ -68,7 +68,7 @@ def get_coords(adata: AnnData, spatial_key: str) -> np.ndarray:
     """Return a validated ``(N, 2)`` ``(x, y)`` coordinate array from ``obsm``."""
     if spatial_key not in adata.obsm:
         raise KeyError(f"`obsm[{spatial_key!r}]` not found; pass `spatial_key=` to select the coordinate key.")
-    arr = np.asarray(adata.obsm[spatial_key], dtype=float)
+    arr = np.asarray(adata.obsm[spatial_key])
     if arr.ndim != 2 or arr.shape[1] != 2:
         raise ValueError(f"`obsm[{spatial_key!r}]` must be an (N, 2) array, found shape {arr.shape}.")
     return arr
