@@ -7,7 +7,7 @@ from collections import namedtuple
 from collections.abc import Iterable, Mapping, Sequence
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -32,11 +32,11 @@ from squidpy.gr._utils import (
 
 __all__ = ["ligrec", "PermutationTest"]
 
-StrSeq: TypeAlias = Sequence[str]
-SeqTuple: TypeAlias = Sequence[tuple[str, str]]
-Interaction_t: TypeAlias = pd.DataFrame | Mapping[str, StrSeq] | StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
+type StrSeq = Sequence[str]
+type SeqTuple = Sequence[tuple[str, str]]
+type Interaction_t = pd.DataFrame | Mapping[str, StrSeq] | StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
 
-Cluster_t: TypeAlias = StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
+type Cluster_t = StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
 
 SOURCE = "source"
 TARGET = "target"
