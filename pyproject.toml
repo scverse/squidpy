@@ -15,13 +15,13 @@ keywords = [
 ]
 license = "BSD-3-Clause"
 maintainers = [
-  { name = "Tim Treis", email = "tim.treis@scverse.org" },
   { name = "Selman Ozleyen", email = "selman.ozleyen@helmholtz-munich.de" },
+  { name = "Tim Treis", email = "tim.treis@scverse.org" },
 ]
 authors = [
   { name = "scverse" },
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
@@ -31,7 +31,6 @@ classifiers = [
   "Operating System :: MacOS :: MacOS X",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
@@ -46,7 +45,7 @@ dependencies = [
   "aiohttp>=3.8.1",
   "anndata>=0.9",
   "cycler>=0.11",
-  "dask[array]>=2021.2,<=2024.11.2",
+  "dask[array]>=2021.2",
   "dask-image>=0.5",
   "docrep>=0.3.1",
   "fast-array-utils",
@@ -66,8 +65,8 @@ dependencies = [
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
-  "spatialdata>=0.6",
-  "spatialdata-plot",
+  "spatialdata>=0.7.2",          # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
+  "spatialdata-plot>=0.3.3",
   "statsmodels>=0.12",
   # https://github.com/scverse/squidpy/issues/526
   "tifffile!=2022.4.22",
@@ -76,8 +75,17 @@ dependencies = [
   "xarray>=2024.10",
   "zarr>=3",
 ]
+optional-dependencies.leiden = [
+  "leidenalg",
+  "spatialleiden>=0.4",
+]
+urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
+urls.Documentation = "https://squidpy.readthedocs.io"
+urls.Home-page = "https://github.com/scverse/squidpy"
+urls.Source = "https://github.com/scverse/squidpy"
 
-optional-dependencies.dev = [
+[dependency-groups]
+dev = [
   "hatch>=1.9",
   "ipykernel",
   "ipywidgets",
@@ -87,7 +95,22 @@ optional-dependencies.dev = [
   "pre-commit>=3",
   "ruff",
 ]
-optional-dependencies.docs = [
+test = [
+  "coverage[toml]>=7",
+  # Image-comparison baselines are matplotlib-version-sensitive; matplotlib 3.11.0 (released
+  # 2026-06-12) shifts scatter/alpha rendering past the RMS tolerance. Cap for tests only
+  # (the runtime dependency stays open) until the baselines are regenerated against 3.11.
+  "matplotlib<3.11",
+  "pytest>=7",
+  # Just for VS Code
+  "pytest-cov>=4",
+  "pytest-mock>=3.5",
+  "pytest-rerunfailures",
+  "pytest-timeout>=2.1",
+  "pytest-xdist>=3",
+  "scanpy[leiden]",
+]
+docs = [
   "docutils<0.22",                    # Pin to avoid sphinx-tabs KeyError with backrefs
   "ipython",
   "ipywidgets>=8",
@@ -103,24 +126,6 @@ optional-dependencies.docs = [
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
 ]
-optional-dependencies.leiden = [
-  "leidenalg",
-  "spatialleiden>=0.4",
-]
-optional-dependencies.test = [
-  "coverage[toml]>=7",
-  "pytest>=7",
-  # Just for VS Code
-  "pytest-cov>=4",
-  "pytest-mock>=3.5",
-  "pytest-timeout>=2.1",
-  "pytest-xdist>=3",
-  "scanpy[leiden]",
-]
-urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
-urls."Documentation" = "https://squidpy.readthedocs.io"
-urls."Home-page" = "https://github.com/scverse/squidpy"
-urls."Source" = "https://github.com/scverse/squidpy"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -128,17 +133,32 @@ include-package-data = true
 
 [tool.setuptools_scm]
 
-[tool.hatch.version]
-source = "vcs"
+[tool.hatch]
+build.hooks.vcs.version-file = "_version.py"
+build.targets.wheel.packages = [ "src/squidpy" ]
+metadata.allow-direct-references = true
+version.source = "vcs"
 
-[tool.hatch.build.hooks.vcs]
-version-file = "_version.py"
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.hatch.build.targets.wheel]
-packages = [ "src/squidpy" ]
+[tool.pixi]
+workspace.channels = [ "conda-forge" ]
+workspace.platforms = [ "linux-64", "osx-arm64" ]
+dependencies.python = ">=3.12"
+pypi-dependencies.squidpy = { path = ".", editable = true }
+tasks.format = "ruff format ."
+tasks.kernel-install = 'python -m ipykernel install --user --name pixi-dev --display-name "squidpy (dev)"'
+tasks.lab = "jupyter lab"
+tasks.lint = "ruff check ."
+tasks.pre-commit = "pre-commit run"
+tasks.pre-commit-install = "pre-commit install"
+tasks.test = "pytest -v --color=yes --tb=short --durations=10"
+feature.py312.dependencies.python = "3.12.*"
+feature.py314.dependencies.python = "3.14.*"
+environments.default = { features = [ "py314" ], solve-group = "py314" }
+environments.dev-py312 = { features = [ "dev", "test", "py312" ], solve-group = "py312" }
+environments.dev-py314 = { features = [ "dev", "test", "py314" ], solve-group = "py314" }
+environments.docs-py312 = { features = [ "docs", "py312" ], solve-group = "py312" }
+environments.docs-py314 = { features = [ "docs", "py314" ], solve-group = "py314" }
+environments.test-py314 = { features = [ "test", "py314" ], solve-group = "py314" }
 
 [tool.ruff]
 line-length = 120
@@ -151,7 +171,6 @@ exclude = [
   "docs/_build",
   "setup.py",
 ]
-
 format.docstring-code-format = true
 lint.select = [
   "B",   # flake8-bugbear
@@ -161,8 +180,8 @@ lint.select = [
   "F",   # pyflakes
   "I",   # isort
   # below are not autofixed
-  "UP", # pyupgrade
-  "W",  # pycodestyle
+  "UP",  # pyupgrade
+  "W",   # pycodestyle
 ]
 # "squidpy/*.py"= ["RST303"]
 lint.ignore = [
@@ -186,6 +205,15 @@ lint.ignore = [
   "E731",
   # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
   "E741",
+  # PEP 695 generics (`class C[T]` / `def f[T]`) -> deferred to a dedicated rewrite.
+  # `GraphMatrixT`/`CoordT` are a shared TypeVar pair: defined in `gr.neighbors`, used by a
+  # module-level `Callable` alias, imported by `gr._build`, and re-exported from the public
+  # `squidpy.gr` API. ruff cannot autofix the cross-module use (`SpatialNeighborsResult`, which
+  # imports the TypeVar) and its fix for the local use (`GraphBuilder`) leaves the still-required
+  # exported TypeVars in place, creating dual same-name definitions. Converting correctly means
+  # deciding whether to keep exporting `GraphMatrixT` -- a public-API change, not a version bump.
+  "UP046",
+  "UP047",
   ## Flake8 rules not supported by ruff:
   # RST201 Block quote ends without a blank line; unexpected unindent.
   # "RST201",
@@ -220,8 +248,6 @@ lint.per-file-ignores.".scripts/ci/download_data.py" = [ "B", "D" ]
 lint.per-file-ignores."docs/*" = [ "B", "D" ]
 lint.per-file-ignores."src/squidpy/_constants/_constants.py" = [ "D101" ]
 lint.per-file-ignores."src/squidpy/_constants/_pkg_constants.py" = [ "D101", "D102", "D106" ]
-lint.per-file-ignores."src/squidpy/pl/_interactive/_widgets.py" = [ "D" ]
-lint.per-file-ignores."src/squidpy/pl/_interactive/interactive.py" = [ "E", "F" ]
 lint.per-file-ignores."src/squidpy/pl/_ligrec.py" = [ "B", "D" ]
 lint.per-file-ignores."tests/*" = [ "D" ]
 lint.unfixable = [
@@ -234,84 +260,51 @@ lint.unfixable = [
 lint.flake8-tidy-imports.ban-relative-imports = "all"
 lint.isort.required-imports = [ "from __future__ import annotations" ]
 
-[tool.pytest.ini_options]
+[tool.pytest]
+strict = true
 filterwarnings = [
   "error::numba.NumbaPerformanceWarning",
   "ignore::UserWarning",
   "ignore::anndata.OldFormatWarning",
   "ignore:.*pkg_resources:DeprecationWarning",
 ]
-python_files = "test_*.py"
+python_files = [ "test_*.py" ]
 testpaths = [ "tests/" ]
-xfail_strict = true
 addopts = [
-  "--ignore=tests/plotting/test_interactive.py",
   "--ignore=docs",
 ]
-
-[tool.coverage.run]
-branch = true
-parallel = true
-source = [ "squidpy" ]
-omit = [
-  "*/__init__.py",
-  "*/_version.py",
-  "squidpy/pl/_interactive/*",
-  "tox/*",
+markers = [
+  "internet: tests that require internet",
+  # the below markers are just there because we import from anndata.tests.helpers,
+  # which means pytest sees them despite us not using them.
+  "gpu: tests that require GPU",
+  "array_api: tests that require array-api-compat",
 ]
 
-[tool.coverage.paths]
-source = [
+[tool.coverage]
+run.branch = true
+run.omit = [
+  "*/__init__.py",
+  "*/_version.py",
+  "tox/*",
+]
+run.parallel = true
+run.source = [ "squidpy" ]
+paths.source = [
   "squidpy",
   "*/site-packages/squidpy",
 ]
-
-[tool.coverage.report]
-exclude_lines = [
+report.exclude_lines = [
   "\\#.*pragma:\\s*no.?cover",
-  "^if __name__ == .__main__.:$",
   "^\\s*raise AssertionError\\b",
   "^\\s*raise NotImplementedError\\b",
   "^\\s*return NotImplemented\\b",
+  "^if __name__ == .__main__.:$",
 ]
-show_missing = true
-precision = 2
-skip_empty = true
-sort = "Miss"
-
-[tool.pixi.workspace]
-channels = [ "conda-forge" ]
-platforms = [ "osx-arm64", "linux-64" ]
-
-[tool.pixi.dependencies]
-python = ">=3.11"
-
-[tool.pixi.pypi-dependencies]
-squidpy = { path = ".", editable = true }
-
-[tool.pixi.feature.py311.dependencies]
-python = "3.11.*"
-
-[tool.pixi.feature.py313.dependencies]
-python = "3.13.*"
-
-[tool.pixi.environments]
-dev-py311 = { features = [ "dev", "test", "py311" ], solve-group = "py311" }
-docs-py311 = { features = [ "docs", "py311" ], solve-group = "py311" }
-
-default = { features = [ "py313" ], solve-group = "py313" }
-dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
-docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
-test-py313 = { features = [ "test", "py313" ], solve-group = "py313" }
-
-[tool.pixi.tasks]
-lab = "jupyter lab"
-kernel-install = "python -m ipykernel install --user --name pixi-dev --display-name \"squidpy (dev)\""
-test = "pytest -v --color=yes --tb=short --durations=10"
-lint = "ruff check ."
-format = "ruff format ."
-pre-commit-install = "pre-commit install"
-pre-commit = "pre-commit run"
+report.precision = 2
+report.show_missing = true
+report.skip_empty = true
+report.sort = "Miss"
 
 [tool.cruft]
 skip = [

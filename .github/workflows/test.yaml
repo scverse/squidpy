@@ -17,6 +17,8 @@ env:
   MPLBACKEND: agg
   UV_COMPILE_BYTECODE: "1"
   COVERAGE_FILE: ${{ github.workspace }}/.coverage
+  # TODO: remove once hatch is compatible with virtualenv 21+ (pypa/hatch#2193)
+  UV_CONSTRAINT: ${{ github.workspace }}/.github/uv-constraints.txt
 
 defaults:
   run:
@@ -36,7 +38,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Restore data cache
         id: data-cache
@@ -97,13 +99,14 @@ jobs:
         env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
         exclude:
           - os: macos-latest
-            env: { name: hatch-test.py3.11-stable }
-          - os: macos-latest
             env: { name: hatch-test.py3.12-stable }
+          - os: macos-latest
+            env: { name: hatch-test.py3.14-pre } # pre-release only needs one OS
           - os: ubuntu-latest
-            env: { name: hatch-test.py3.13-stable } # skipping because we run this as a coverage job
+            env: { name: hatch-test.py3.14-stable } # skipping because we run this as a coverage job
     name: ${{ matrix.env.label }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ contains(matrix.env.name, 'pre') }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -160,7 +163,7 @@ jobs:
           path: ${{ github.workspace }}/tests/figures/*
 
   coverage:
-    name: Coverage (ubuntu-latest, hatch-test.py3.13-stable)
+    name: Coverage (ubuntu-latest, hatch-test.py3.14-stable)
     needs: [ensure-data-is-cached]
     runs-on: ubuntu-latest
     steps:
@@ -172,7 +175,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache-dependency-glob: pyproject.toml
 
       - name: Ensure figure directory exists
@@ -198,20 +201,20 @@ jobs:
           sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
 
       - name: create hatch environment
-        run: uvx hatch env create hatch-test.py3.13-stable
+        run: uvx hatch env create hatch-test.py3.14-stable
 
       - name: run coverage tests
         env:
           PLATFORM: ubuntu-latest
           DISPLAY: :42
         run: |
-          uvx hatch run hatch-test.py3.13-stable:cov-erase
-          uvx hatch run hatch-test.py3.13-stable:run-cov -v --color=yes
-          uvx hatch run hatch-test.py3.13-stable:cov-combine
-          uvx hatch run hatch-test.py3.13-stable:cov-report
+          uvx hatch run hatch-test.py3.14-stable:cov-erase
+          uvx hatch run hatch-test.py3.14-stable:run-cov -v --color=yes
+          uvx hatch run hatch-test.py3.14-stable:cov-combine
+          uvx hatch run hatch-test.py3.14-stable:cov-report
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true

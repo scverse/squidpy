@@ -6,7 +6,7 @@ from copy import copy
 from functools import partial
 from numbers import Number
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import dask.array as da
 import numpy as np
@@ -39,19 +39,20 @@ from squidpy._compat import add_categorical_legend
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
+from squidpy._validators import assert_key_in_adata
 from squidpy.im._coords import CropCoords
 from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
 
-_AvailShapes: TypeAlias = Literal["circle", "square", "hex"]
-Palette_t: TypeAlias = str | ListedColormap | None
-_Normalize: TypeAlias = Normalize | Sequence[Normalize]
-_SeqStr: TypeAlias = str | Sequence[str]
-_SeqFloat: TypeAlias = float | Sequence[float]
-_SeqArray: TypeAlias = NDArrayA | Sequence[NDArrayA]
-_CoordTuple: TypeAlias = tuple[int, int, int, int]
-_FontWeight: TypeAlias = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
-_FontSize: TypeAlias = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
+type _AvailShapes = Literal["circle", "square", "hex"]
+type Palette_t = str | ListedColormap | None
+type _Normalize = Normalize | Sequence[Normalize]
+type _SeqStr = str | Sequence[str]
+type _SeqFloat = float | Sequence[float]
+type _SeqArray = NDArrayA | Sequence[NDArrayA]
+type _CoordTuple = tuple[int, int, int, int]
+type _FontWeight = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
+type _FontSize = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
 
 
 # named tuples
@@ -130,8 +131,7 @@ def _get_library_id(
             raise ValueError(f"Could not fetch `library_id`, check that `spatial_key: {spatial_key}` is correct.")
         return library_id
     if library_key is not None:
-        if library_key not in adata.obs:
-            raise KeyError(f"`library_key: {library_key}` not in `adata.obs`.")
+        assert_key_in_adata(adata, library_key, attr="obs")
         if library_id is None:
             library_id = adata.obs[library_key].cat.categories.tolist()
         _assert_value_in_obs(adata, key=library_key, val=library_id)
@@ -555,10 +555,7 @@ def _plot_edges(
     from networkx import Graph
     from networkx.drawing import draw_networkx_edges
 
-    if connectivity_key not in adata.obsp:
-        raise KeyError(
-            f"Unable to find `connectivity_key: {connectivity_key}` in `adata.obsp`. Please set `connectivity_key`."
-        )
+    assert_key_in_adata(adata, connectivity_key, attr="obsp", extra_msg="Please set `connectivity_key`.")
 
     g = Graph(adata.obsp[connectivity_key])
     if not len(g.edges):

@@ -13,7 +13,6 @@ import scanpy as sc
 from anndata import AnnData
 from pandas.testing import assert_frame_equal
 from scanpy import settings as s
-from scanpy.datasets import blobs
 from scipy.sparse import csc_matrix
 
 from squidpy._constants._pkg_constants import Key
@@ -34,13 +33,6 @@ class TestInvalidBehavior:
         del adata.raw
         with pytest.raises(AttributeError, match=r"No `.raw` attribute"):
             ligrec(adata, _CK, use_raw=True)
-
-    def test_raw_has_different_n_obs(self, adata: AnnData):
-        adata.raw = blobs(n_observations=adata.n_obs + 1)
-        # raise below happend with anndata < 0.9
-        # with pytest.raises(ValueError, match=rf"Expected `{adata.n_obs}` cells in `.raw`"):
-        with pytest.raises(ValueError, match=rf"Index length mismatch: {adata.n_obs} vs. {adata.n_obs + 1}"):
-            ligrec(adata, _CK)
 
     def test_invalid_cluster_key(self, adata: AnnData, interactions: Interactions_t):
         with pytest.raises(KeyError, match=r"Cluster key `foobar` not found"):

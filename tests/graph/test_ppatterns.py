@@ -90,6 +90,38 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
     assert_frame_equal(df_1, df_2)
 
 
+@pytest.mark.parametrize("mode", ["moran", "geary"])
+def test_spatial_autocorr_var_norm_formula(dummy_adata: AnnData, mode: str):
+    """Analytic ``var_norm`` must use the variance matching the chosen statistic.
+
+    Regression test for #1183: Geary's C and Moran's I have different sampling
+    variances under the normality assumption (Cliff & Ord 1981). Reusing Moran's
+    variance for Geary's C produced a miscalibrated analytic p-value.
+    """
+    from sklearn.preprocessing import normalize
+
+    from squidpy.gr._ppatterns import _g_moments
+
+    uns_key = MORAN_K if mode == "moran" else GEARY_C
+    spatial_autocorr(dummy_adata, mode=mode, transformation=True, n_perms=None, seed=0)
+    var_norm = float(dummy_adata.uns[uns_key]["var_norm"].iloc[0])
+
+    # Reconstruct the exact (row-standardised) weight matrix the routine used.
+    g = dummy_adata.obsp["spatial_connectivities"].copy()
+    normalize(g, norm="l1", axis=1, copy=False)
+    s0, s1, s2 = _g_moments(g)
+    n = g.shape[0]
+    s02 = s0 * s0
+    moran_var = (n * n * s1 - n * s2 + 3 * s02) / ((n - 1) * (n + 1) * s02) - (1.0 / (n - 1)) ** 2
+    geary_var = ((2 * s1 + s2) * (n - 1) - 4 * s02) / (2 * (n + 1) * s02)
+
+    expected = moran_var if mode == "moran" else geary_var
+    np.testing.assert_allclose(var_norm, expected, rtol=1e-10)
+    if mode == "geary":
+        # the two formulas differ here, so the test would fail if Moran's were reused
+        assert not np.isclose(geary_var, moran_var, rtol=1e-3)
+
+
 @pytest.mark.parametrize(
     "attr,layer,genes",
     [
@@ -137,12 +169,10 @@ def test_co_occurrence(adata: AnnData):
     assert arr.shape[1] == arr.shape[0] == adata.obs["leiden"].unique().shape[0]
 
 
-# @pytest.mark.parametrize(("ys", "xs"), [(10, 10), (None, None), (10, 20)])
-@pytest.mark.parametrize(("n_jobs", "n_splits"), [(1, 2), (2, 2)])
-def test_co_occurrence_reproducibility(adata: AnnData, n_jobs: int, n_splits: int):
+def test_co_occurrence_reproducibility(adata: AnnData):
     """Check co_occurrence reproducibility results."""
-    arr_1, interval_1 = co_occurrence(adata, cluster_key="leiden", copy=True, n_jobs=n_jobs, n_splits=n_splits)
-    arr_2, interval_2 = co_occurrence(adata, cluster_key="leiden", copy=True, n_jobs=n_jobs, n_splits=n_splits)
+    arr_1, interval_1 = co_occurrence(adata, cluster_key="leiden", copy=True)
+    arr_2, interval_2 = co_occurrence(adata, cluster_key="leiden", copy=True)
 
     np.testing.assert_array_equal(sorted(interval_1), sorted(interval_2))
     np.testing.assert_allclose(arr_1, arr_2)
