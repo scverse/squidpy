@@ -103,6 +103,7 @@ autosummary_generate = True
 autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
 autodoc_docstring_signature = True
+autodoc_mock_imports = ["jax"]
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
@@ -147,6 +148,8 @@ nitpick_ignore = [
     ("py:class", "NDArray"),
     ("py:class", "np.number"),
     ("py:class", "csr_matrix"),
+    # optional dep mocked at build time (see autodoc_mock_imports), so no resolvable target
+    ("py:class", "jax.Array"),
     # no idea why those aren’t exported
     ("py:class", "squidpy._constants._constants.SpatialAutocorr"),
     ("py:class", "squidpy._constants._constants.CoordType"),
