@@ -6,6 +6,8 @@ run in seconds without downloading real data.
 
 from __future__ import annotations
 
+import warnings
+
 import anndata as ad
 import geopandas as gpd
 import numpy as np
@@ -15,6 +17,7 @@ import xarray as xr
 from shapely import Polygon
 from spatialdata import SpatialData
 from spatialdata.models import Image2DModel, Labels2DModel, ShapesModel
+from spatialdata.transformations import Scale, Translation, set_transformation
 
 import squidpy as sq
 
@@ -60,7 +63,7 @@ class TestCalculateImageFeatures:
             image_key="test_img",
             labels_key="test_labels",
             features=["skimage:morphology"],
-            adata_key_added="morphology",
+            key_added="morphology",
             inplace=True,
         )
 
@@ -114,39 +117,92 @@ class TestCalculateImageFeatures:
         assert all(col.startswith("intensity_mean_") for col in result.var_names)
         assert not any(col.startswith("intensity_max") for col in result.var_names)
 
-    def test_cpmeasure_flag_raises_not_implemented(self, sdata_synthetic):
-        """cpmeasure:* flags are recognised but not yet implemented."""
-        with pytest.raises(NotImplementedError, match="cp_measure feature `cpmeasure:sizeshape`"):
+    def test_cpmeasure_sizeshape(self, sdata_synthetic):
+        """cpmeasure:sizeshape yields cp_measure shape columns (CellProfiler names)."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="test_labels",
+            features=["cpmeasure:sizeshape"],
+            inplace=False,
+        )
+        assert isinstance(result, ad.AnnData)
+        assert result.n_obs > 0
+        assert "Area" in result.var_names
+
+    def test_cpmeasure_intensity(self, sdata_synthetic):
+        """cpmeasure:intensity yields per-channel cp_measure intensity columns."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="test_labels",
+            features=["cpmeasure:intensity"],
+            inplace=False,
+        )
+        # cp_measure suffixes intensity columns with the positional channel index.
+        assert any("Intensity_MeanIntensity__0" in c for c in result.var_names)
+
+    def test_features_none_runs_all_backends(self, sdata_synthetic):
+        """features=None computes cp_measure + skimage + squidpy together."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="test_labels",
+            features=None,
+            inplace=False,
+        )
+        cols = list(result.var_names)
+        assert "Area" in cols  # cp_measure sizeshape
+        assert "feret_diameter_max" in cols  # skimage-only morphology (kept)
+        assert any(c.startswith("summary_mean") for c in cols)  # squidpy
+        # cp:sizeshape covers skimage morphology, so the redundant skimage copy is deduped.
+        assert "area" not in cols
+
+    def test_features_none_without_image_raises(self, sdata_synthetic):
+        """features=None needs pixels; without image_key it raises a clear error."""
+        with pytest.raises(ValueError, match="require pixel data"):
             sq.experimental.im.calculate_image_features(
                 sdata_synthetic,
-                image_key="test_img",
                 labels_key="test_labels",
-                features=["cpmeasure:sizeshape"],
+                features=None,
                 inplace=False,
             )
 
-    def test_features_none_raises(self, sdata_synthetic):
-        """features=None must be rejected; require an explicit choice."""
-        with pytest.raises(ValueError, match="must be specified explicitly"):
-            sq.experimental.im.calculate_image_features(
-                sdata_synthetic,
-                image_key="test_img",
-                labels_key="test_labels",
-                inplace=False,
-            )
+    def test_skimage_morphology_deduped_against_cp_sizeshape(self, sdata_synthetic):
+        """A skimage morphology prop that cp:sizeshape reproduces is dropped (cp wins)."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="test_labels",
+            features=["cpmeasure:sizeshape", "skimage:morphology:area"],
+            inplace=False,
+        )
+        cols = list(result.var_names)
+        assert "Area" in cols  # cp_measure keeps it
+        assert "area" not in cols  # redundant skimage copy dropped
+        assert len(cols) == len(set(cols))
 
-    def test_align_mode_rasterize_rejected(self, sdata_synthetic):
-        """The Literal narrows align_mode to 'strict' statically; a runtime guard
-        catches dynamic callers passing other values."""
-        with pytest.raises(ValueError, match="`align_mode` must be 'strict'"):
-            sq.experimental.im.calculate_image_features(
-                sdata_synthetic,
-                image_key="test_img",
-                labels_key="test_labels",
-                features=["skimage:morphology:area"],
-                align_mode="rasterize",  # type: ignore[arg-type]
-                inplace=False,
-            )
+    def test_skimage_only_morphology_prop_survives_dedup(self, sdata_synthetic):
+        """skimage-only props (no cp:sizeshape twin) are kept alongside cp."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="test_labels",
+            features=["cpmeasure:sizeshape", "skimage:morphology:feret_diameter_max"],
+            inplace=False,
+        )
+        assert "feret_diameter_max" in result.var_names  # cp:sizeshape has no identical twin
+
+    def test_no_dedup_without_cp_sizeshape(self, sdata_synthetic):
+        """cp without sizeshape does not trigger morphology dedup."""
+        result = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="test_labels",
+            features=["cpmeasure:intensity", "skimage:morphology:area"],
+            inplace=False,
+        )
+        assert "area" in result.var_names  # cp:intensity does not compute shape
 
     def test_squidpy_summary(self, sdata_synthetic):
         result = sq.experimental.im.calculate_image_features(
@@ -158,7 +214,8 @@ class TestCalculateImageFeatures:
         )
         assert isinstance(result, ad.AnnData)
         assert result.n_obs > 0
-        assert any(col.startswith("summary_mean") for col in result.var_names)
+        # per-channel features join the channel with a double underscore.
+        assert "summary_mean__0" in result.var_names
 
     def test_squidpy_texture(self, sdata_synthetic):
         result = sq.experimental.im.calculate_image_features(
@@ -172,17 +229,18 @@ class TestCalculateImageFeatures:
         assert result.n_obs > 0
         assert any(col.startswith("texture_contrast") for col in result.var_names)
 
-    def test_squidpy_color_hist(self, sdata_synthetic):
+    def test_squidpy_histogram(self, sdata_synthetic):
         result = sq.experimental.im.calculate_image_features(
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["squidpy:color_hist"],
+            features=["squidpy:histogram"],
             inplace=False,
         )
         assert isinstance(result, ad.AnnData)
         assert result.n_obs > 0
-        assert any(col.startswith("color_hist_bin") for col in result.var_names)
+        assert any(col.startswith("histogram_bin") for col in result.var_names)
+        assert "histogram_bin0__0" in result.var_names  # per-channel: double-underscore join
 
     # --- Validation errors ---
 
@@ -230,9 +288,8 @@ class TestCalculateImageFeatures:
                 labels_key="test_labels",
                 features=["nonexistent:measurement"],
             )
-        # cpmeasure:* names are recognised but always raise NotImplementedError;
-        # don't advertise them as "available" in the unknown-feature error.
-        assert "cpmeasure:" not in str(excinfo.value)
+        # All real feature groups are advertised in the unknown-feature error.
+        assert "cpmeasure:intensity" in str(excinfo.value)
         assert "squidpy:summary" in str(excinfo.value)
 
     def test_mixed_group_and_fine_grained_raises(self, sdata_synthetic):
@@ -248,7 +305,7 @@ class TestCalculateImageFeatures:
             )
 
     def test_no_valid_features(self, sdata_synthetic):
-        with pytest.raises(ValueError, match="No valid features requested"):
+        with pytest.raises(ValueError, match="No features requested"):
             sq.experimental.im.calculate_image_features(
                 sdata_synthetic,
                 image_key="test_img",
@@ -257,8 +314,35 @@ class TestCalculateImageFeatures:
                 inplace=False,
             )
 
-    def test_dimension_mismatch_strict_raises(self):
-        """Mismatched image/labels pixel grids must raise under align_mode='strict'."""
+    def test_non_integer_transform_strict_raises(self):
+        """A non-pixel-aligned (non-integer) transform must raise under 'strict'."""
+        rng = np.random.default_rng(42)
+        image_xr = xr.DataArray(
+            rng.integers(0, 255, (3, 200, 200), dtype=np.uint8),
+            dims=["c", "y", "x"],
+            coords={"c": ["R", "G", "B"]},
+        )
+        labels_arr = np.zeros((200, 200), dtype=np.int32)
+        labels_arr[10:40, 10:40] = 1
+        sdata = SpatialData(
+            images={"img": Image2DModel.parse(image_xr)},
+            labels={"lbl": Labels2DModel.parse(xr.DataArray(labels_arr, dims=["y", "x"]))},
+        )
+        # Non-integer scale -> not pixel-aligned -> strict raises with a hint.
+        set_transformation(sdata.labels["lbl"], Scale([1.5, 1.5], axes=("x", "y")), to_coordinate_system="global")
+
+        with pytest.raises(ValueError, match="different pixel grids"):
+            sq.experimental.im.calculate_image_features(
+                sdata,
+                image_key="img",
+                labels_key="lbl",
+                features=["skimage:morphology"],
+                align_mode="strict",
+                inplace=False,
+            )
+
+    def test_identity_size_mismatch_uses_overlap(self):
+        """Identity transform + different sizes is not an error: features run on the overlap."""
         rng = np.random.default_rng(42)
         image_xr = xr.DataArray(
             rng.integers(0, 255, (3, 200, 200), dtype=np.uint8),
@@ -267,20 +351,18 @@ class TestCalculateImageFeatures:
         )
         labels_arr = np.zeros((100, 100), dtype=np.int32)
         labels_arr[10:40, 10:40] = 1
-        labels_xr = xr.DataArray(labels_arr, dims=["y", "x"])
         sdata = SpatialData(
             images={"img": Image2DModel.parse(image_xr)},
-            labels={"lbl": Labels2DModel.parse(labels_xr)},
+            labels={"lbl": Labels2DModel.parse(xr.DataArray(labels_arr, dims=["y", "x"]))},
         )
-
-        with pytest.raises(ValueError, match="different .*pixel grids"):
-            sq.experimental.im.calculate_image_features(
-                sdata,
-                image_key="img",
-                labels_key="lbl",
-                features=["skimage:morphology"],
-                inplace=False,
-            )
+        result = sq.experimental.im.calculate_image_features(
+            sdata,
+            image_key="img",
+            labels_key="lbl",
+            features=["skimage:morphology"],
+            inplace=False,
+        )
+        assert result.n_obs == 1
 
     # --- Channel selection ---
 
@@ -305,7 +387,7 @@ class TestCalculateImageFeatures:
         # All channels -> 3 columns; one channel -> 1 column
         assert result_all.n_vars == 3
         assert result_one.n_vars == 1
-        assert "intensity_mean_0" in result_one.var_names
+        assert "intensity_mean__0" in result_one.var_names
 
     def test_channel_selection_rejects_int(self, sdata_synthetic):
         """Integer channel indices are no longer accepted -- names only."""
@@ -369,11 +451,14 @@ class TestCalculateImageFeatures:
     # --- Parallelization ---
 
     def test_n_jobs_produces_same_result(self, sdata_synthetic):
-        """n_jobs>1 produces the same result as n_jobs=1."""
+        """n_jobs>1 (a real LocalCluster) produces the same result as serial."""
+        # tile_size < image forces >1 tile so n_jobs=2 actually forks worker
+        # processes (the default tile_size yields a single tile -> serial path).
         kw = {
             "image_key": "test_img",
             "labels_key": "test_labels",
             "features": ["skimage:morphology:area"],
+            "tile_size": 64,
             "inplace": False,
         }
         result_seq = sq.experimental.im.calculate_image_features(sdata_synthetic, n_jobs=1, **kw)
@@ -399,10 +484,9 @@ def _toy_sdata(
     labels_translation: tuple[float, float] | None = None,
     labels_scale: tuple[float, float] | None = None,
     label_ids: list[int] | None = None,
+    multiscale: bool = False,
 ) -> SpatialData:
     """Build a synthetic SpatialData with controllable label/image transforms."""
-    from spatialdata.transformations import Scale, Translation, set_transformation
-
     rng = np.random.default_rng(0)
     H, W = image_shape
     image_data = rng.integers(0, 255, (n_channels, H, W), dtype=np.uint8)
@@ -427,7 +511,7 @@ def _toy_sdata(
         if channel_names is not None
         else Image2DModel.parse(image_xr)
     )
-    lbl_el = Labels2DModel.parse(labels_xr)
+    lbl_el = Labels2DModel.parse(labels_xr, scale_factors=[2] if multiscale else None)
 
     if labels_translation is not None:
         ty, tx = labels_translation
@@ -454,32 +538,43 @@ class TestBehaviouralRegressions:
             inplace=False,
         )
         cols = list(adata.var_names)
-        assert any("_DAPI" in c for c in cols)
-        assert any("_CD3" in c for c in cols)
-        assert any("_CD8" in c for c in cols)
+        assert any("__DAPI" in c for c in cols)
+        assert any("__CD3" in c for c in cols)
+        assert any("__CD8" in c for c in cols)
         # Make sure the numeric-fallback names did not slip in:
-        assert not any(c.endswith("_0") or c.endswith("_1") or c.endswith("_2") for c in cols)
+        assert not any(c.endswith("__0") or c.endswith("__1") or c.endswith("__2") for c in cols)
 
-    # -- progress logs are emitted --
+    def test_unnamed_channels_warn(self, sdata_synthetic):
+        """Per-channel features on positional-integer channels warn the user."""
+        with pytest.warns(UserWarning, match="positional channel names"):
+            sq.experimental.im.calculate_image_features(
+                sdata_synthetic,
+                image_key="test_img",
+                labels_key="test_labels",
+                features=["skimage:intensity"],
+                inplace=False,
+            )
 
-    def test_concern2_progress_log_emitted(self, capsys):
-        sdata = _toy_sdata()
-        sq.experimental.im.calculate_image_features(
-            sdata,
-            image_key="img",
-            labels_key="lbl",
+    def test_named_channels_do_not_warn(self):
+        """Named channels do not trigger the unnamed-channel warning."""
+        sdata = _toy_sdata(channel_names=["DAPI", "CD3", "CD8"])
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            sq.experimental.im.calculate_image_features(
+                sdata, image_key="img", labels_key="lbl", features=["squidpy:summary"], inplace=False
+            )
+        assert not any("positional channel names" in str(w.message) for w in rec)
+
+    def test_obs_names_are_label_ids(self, sdata_synthetic):
+        """obs_names are the cell IDs from the label image (as strings)."""
+        adata = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="test_labels",
             features=["skimage:morphology:area"],
-            tile_size=80,  # forces >1 tile on 200x200
             inplace=False,
         )
-        captured = capsys.readouterr()
-        import re
-
-        # spatialdata's logger renders via rich and injects ANSI escapes
-        # between tokens, so the digits in "Tile 1/9" are wrapped.
-        ansi_re = re.compile(r"\x1b\[[0-9;]*m")
-        plain = ansi_re.sub("", captured.out)
-        assert re.search(r"Tile \d+/\d+", plain), f"no progress log in:\n{plain}"
+        assert list(adata.obs_names) == [str(i) for i in adata.obs["label_id"]]
 
     # -- channel subset selection --
 
@@ -509,7 +604,7 @@ class TestBehaviouralRegressions:
             labels_key="lbl",
             features=["skimage:morphology:area"],
             inplace=True,
-            adata_key_added="morphology",
+            key_added="morphology",
         )
         attrs = sdata.tables["morphology"].uns["spatialdata_attrs"]
         assert "region" in attrs
@@ -554,8 +649,7 @@ class TestFeatureParsing:
     @pytest.mark.parametrize(
         ("features", "match"),
         [
-            # group flag after a fine-grained prop of the same group (reverse of
-            # the already-tested fine-after-group order).
+            # group flag after a fine-grained prop of the same group.
             (["skimage:morphology:area", "skimage:morphology"], "ambiguous"),
             (["skimage:intensity:intensity_mean", "skimage:intensity"], "ambiguous"),
             # unknown fine-grained property names, per group.
@@ -871,3 +965,168 @@ class TestOptionalImage:
                 features=["skimage:morphology:area"],
                 inplace=False,
             )
+
+
+class TestAlignment:
+    """Coordinate-system alignment and the rasterize fallback."""
+
+    @pytest.mark.parametrize("multiscale", [False, True])
+    def test_integer_translation_strict_succeeds(self, multiscale):
+        sdata = _toy_sdata(labels_translation=(10, 10), multiscale=multiscale)
+        result = sq.experimental.im.calculate_image_features(
+            sdata,
+            image_key="img",
+            labels_key="lbl",
+            scale="scale0" if multiscale else None,
+            features=["skimage:morphology"],
+            inplace=False,
+        )
+        assert result.n_obs > 0
+
+    def test_rasterize_resamples_and_warns(self):
+        sdata = _toy_sdata(labels_scale=(1.3, 1.3))
+        with pytest.warns(UserWarning, match="Materializing labels onto the image grid"):
+            result = sq.experimental.im.calculate_image_features(
+                sdata,
+                image_key="img",
+                labels_key="lbl",
+                features=["skimage:morphology"],
+                align_mode="rasterize",
+                inplace=False,
+            )
+        assert result.n_obs > 0
+
+    def test_translation_drops_outside_and_partial_cells(self):
+        # Shift labels so some cells straddle / fall outside the overlap edge.
+        sdata = _toy_sdata(labels_translation=(120, 120))
+        n_cells = int((np.unique(sdata.labels["lbl"].values) != 0).sum())
+        with pytest.warns(UserWarning, match="Dropping"):
+            result = sq.experimental.im.calculate_image_features(
+                sdata, image_key="img", labels_key="lbl", features=["skimage:morphology:area"], inplace=False
+            )
+        # Dropped cells (outside + partial) leave the output; every survivor is
+        # fully inside the overlap, so its area is untruncated (cells are 25x25).
+        assert 0 < result.n_obs < n_cells
+        np.testing.assert_array_equal(result[:, "area"].X.ravel(), 625.0)
+
+    def test_multiscale_rasterize_raises(self):
+        sdata = _toy_sdata(labels_scale=(1.3, 1.3), multiscale=True)
+        with pytest.raises(ValueError, match="not supported for multiscale"):
+            sq.experimental.im.calculate_image_features(
+                sdata,
+                image_key="img",
+                labels_key="lbl",
+                scale="scale0",
+                features=["skimage:morphology"],
+                align_mode="rasterize",
+                inplace=False,
+            )
+
+
+class TestCpMeasure:
+    """cp_measure feature paths."""
+
+    def test_cpmeasure_correlation(self, sdata_synthetic):
+        result = sq.experimental.im.calculate_image_features(
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="test_labels",
+            features=["cpmeasure:correlation"],
+            inplace=False,
+        )
+        assert any("Correlation" in c for c in result.var_names)
+
+    def test_cpmeasure_correlation_single_channel_raises(self):
+        """Correlation-only with one channel fails fast instead of crashing cp_measure."""
+        img = xr.DataArray(
+            np.random.default_rng(0).integers(0, 255, (1, 100, 100), dtype=np.uint8),
+            dims=["c", "y", "x"],
+            coords={"c": ["DAPI"]},
+        )
+        labels = np.zeros((100, 100), dtype=np.int32)
+        labels[10:40, 10:40] = 1
+        sdata = SpatialData(
+            images={"img": Image2DModel.parse(img)},
+            labels={"lbl": Labels2DModel.parse(xr.DataArray(labels, dims=["y", "x"]))},
+        )
+        with pytest.raises(ValueError, match="require >=2 channels"):
+            sq.experimental.im.calculate_image_features(
+                sdata, image_key="img", labels_key="lbl", features=["cpmeasure:correlation"], inplace=False
+            )
+
+    def test_cpmeasure_n_jobs_equivalence(self, sdata_synthetic):
+        """cp_measure on a real LocalCluster (n_jobs>1) matches serial output."""
+        # Small tile_size -> multiple tiles -> n_jobs>1 forks worker processes.
+        kw = {
+            "image_key": "test_img",
+            "labels_key": "test_labels",
+            "features": ["cpmeasure:sizeshape"],
+            "tile_size": 64,
+            "inplace": False,
+        }
+        r1 = sq.experimental.im.calculate_image_features(sdata_synthetic, n_jobs=1, **kw)
+        r4 = sq.experimental.im.calculate_image_features(sdata_synthetic, n_jobs=4, **kw)
+        r1 = r1[r1.obs_names.sort_values()]
+        r4 = r4[r4.obs_names.sort_values()]
+        assert list(r1.var_names) == list(r4.var_names)
+        np.testing.assert_allclose(r1.X, r4[:, r1.var_names].X, rtol=1e-5, atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Distributed execution: active Client, zarr backing, rasterize path
+# ---------------------------------------------------------------------------
+
+
+def _sorted_frame(adata: ad.AnnData) -> pd.DataFrame:
+    return pd.DataFrame(adata.X, index=adata.obs["label_id"].to_numpy(), columns=list(adata.var_names)).sort_index()
+
+
+class TestParallelEngine:
+    """The dask/distributed execution path matches serial on the real code paths."""
+
+    def test_active_client_zarr_matches_serial(self, sdata_synthetic, tmp_path):
+        """An active Client featurizes zarr-backed data identically to serial.
+
+        Exercises the Client-first dispatch, scatter of a zarr-backed dask graph,
+        and cp_measure running in worker processes (picklability of the config).
+        """
+        from dask.distributed import Client, LocalCluster
+        from spatialdata import read_zarr
+
+        sdata_synthetic.write(tmp_path / "data.zarr")
+        sdata = read_zarr(tmp_path / "data.zarr")  # zarr/dask-backed
+        kw = {
+            "image_key": "test_img",
+            "labels_key": "test_labels",
+            "features": ["cpmeasure:sizeshape", "skimage:morphology:area"],
+            "tile_size": 64,
+            "inplace": False,
+        }
+        # Serial baseline must be computed with no Client in scope.
+        serial = _sorted_frame(sq.experimental.im.calculate_image_features(sdata, n_jobs=1, **kw))
+
+        with LocalCluster(n_workers=2, threads_per_worker=1, processes=True, dashboard_address=None) as cluster:
+            with Client(cluster):  # Client-first dispatch picks this up
+                parallel = _sorted_frame(sq.experimental.im.calculate_image_features(sdata, **kw))
+
+        pd.testing.assert_frame_equal(serial, parallel[serial.columns], rtol=1e-5, atol=1e-6)
+
+    def test_rasterize_parallel_matches_serial(self):
+        """The align_mode='rasterize' path featurizes identically under a LocalCluster."""
+        kw = {
+            "image_key": "img",
+            "labels_key": "lbl",
+            "features": ["skimage:morphology:area"],
+            "align_mode": "rasterize",
+            "tile_size": 64,
+            "inplace": False,
+        }
+        with pytest.warns(UserWarning, match="Materializing labels onto the image grid"):
+            serial = _sorted_frame(
+                sq.experimental.im.calculate_image_features(_toy_sdata(labels_scale=(1.3, 1.3)), n_jobs=1, **kw)
+            )
+        with pytest.warns(UserWarning, match="Materializing labels onto the image grid"):
+            parallel = _sorted_frame(
+                sq.experimental.im.calculate_image_features(_toy_sdata(labels_scale=(1.3, 1.3)), n_jobs=2, **kw)
+            )
+        pd.testing.assert_frame_equal(serial, parallel[serial.columns], rtol=1e-5, atol=1e-6)
