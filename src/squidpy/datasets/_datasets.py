@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from squidpy.datasets._downloader import get_downloader
+from squidpy.datasets._downloader import download
 from squidpy.datasets._registry import dataset_names, get_registry
 from squidpy.read._utils import PathLike
 
@@ -120,16 +120,11 @@ def visium(
     :class:`anndata.AnnData`
         Spatial AnnData object.
     """
-    # Validate sample_id against known names
-    downloader = get_downloader()
-
-    if sample_id not in downloader.datasets:
-        msg = f"Unknown Visium sample: {sample_id}. "
-        msg += f"Available samples: {dataset_names('visium_10x')}"
-        raise ValueError(msg)
+    if sample_id not in get_registry():
+        raise ValueError(f"Unknown Visium sample: {sample_id}. Available samples: {dataset_names('visium_10x')}")
 
     # downloads land in <datasetdir>/visium_10x/<sample_id>/
-    return downloader.download(sample_id, base_dir, include_hires_tiff=include_hires_tiff)
+    return download(sample_id, base_dir, include_hires_tiff=include_hires_tiff)
 
 
 def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
@@ -147,8 +142,7 @@ def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
     :class:`spatialdata.SpatialData`
         The downloaded and extracted Visium H&E dataset.
     """
-    downloader = get_downloader()
-    return downloader.download("visium_hne_sdata", folderpath)
+    return download("visium_hne_sdata", folderpath)
 
 
 def cells(folderpath: Path | str | None = None) -> sd.SpatialData:
@@ -166,8 +160,7 @@ def cells(folderpath: Path | str | None = None) -> sd.SpatialData:
     :class:`spatialdata.SpatialData`
         The downloaded and extracted cells dataset.
     """
-    downloader = get_downloader()
-    return downloader.download("cells", folderpath)
+    return download("cells", folderpath)
 
 
 # =============================================================================
@@ -220,7 +213,7 @@ def _make_loader(dataset_name: str):
         raise ValueError(f"Unsupported type for loader factory: {entry.type}")
 
     def loader(path: PathLike | None = None, **kwargs: Any):
-        return get_downloader().download(dataset_name, path, **kwargs)
+        return download(dataset_name, path, **kwargs)
 
     loader.__doc__ = f"""
     {entry.metadata.get("doc_header")}

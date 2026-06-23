@@ -8,7 +8,6 @@ and overrides the built-in ``anndata`` loader to emit squidpy's shape warning.
 
 from __future__ import annotations
 
-from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -24,7 +23,7 @@ if TYPE_CHECKING:
     from anndata import AnnData
     from scverse_misc.datasets import DatasetEntry
 
-__all__ = ["DatasetDownloader", "download", "get_downloader"]
+__all__ = ["download"]
 
 
 @register_loader("anndata")
@@ -77,40 +76,13 @@ def _load_visium_10x(
     return read_visium(sample_dir)
 
 
-class DatasetDownloader:
-    """Thin squidpy wrapper over :func:`scverse_misc.datasets.fetch`.
-
-    Parameters
-    ----------
-    datasets
-        Mapping of dataset name to :class:`~scverse_misc.datasets.DatasetEntry`.
-    base_url
-        Base URL used to resolve ``s3_key`` files.
-    cache_dir
-        Base download directory. Defaults to :attr:`scanpy.settings.datasetdir`.
-    """
-
-    def __init__(
-        self, datasets: dict[str, DatasetEntry], base_url: str | None, cache_dir: Path | str | None = None
-    ) -> None:
-        self.datasets = datasets
-        self.base_url = base_url
-        self.cache_dir = Path(cache_dir or settings.datasetdir)
-
-    def download(self, name: str, path: Path | str | None = None, **kwargs: Any) -> Any:
-        """Download and load a dataset by name, optionally into a custom ``path``."""
-        if name not in self.datasets:
-            raise ValueError(f"Unknown dataset: {name}. Available: {sorted(self.datasets)}")
-        cache_dir = Path(path) if path is not None else self.cache_dir
-        return fetch(self.datasets[name], cache_dir, base_url=self.base_url, **kwargs)
-
-
-@lru_cache(maxsize=1)
-def get_downloader() -> DatasetDownloader:
-    """Get the singleton downloader instance."""
-    return DatasetDownloader(get_registry(), get_base_url())
-
-
 def download(name: str, path: Path | str | None = None, **kwargs: Any) -> Any:
-    """Download a dataset by name (convenience wrapper around :func:`get_downloader`)."""
-    return get_downloader().download(name, path, **kwargs)
+    """Download and load a dataset by name via :func:`scverse_misc.datasets.fetch`.
+
+    Files are cached under ``path / <type>`` (or ``settings.datasetdir / <type>`` if ``path`` is None).
+    """
+    registry = get_registry()
+    if name not in registry:
+        raise ValueError(f"Unknown dataset: {name}. Available: {sorted(registry)}")
+    cache_dir = Path(path) if path is not None else Path(settings.datasetdir)
+    return fetch(registry[name], cache_dir, base_url=get_base_url(), **kwargs)
