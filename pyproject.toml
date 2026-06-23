@@ -59,7 +59,7 @@ dependencies = [
   "omnipath>=1.0.7",
   "pandas>=2.1",
   "pillow>=8",
-  "pooch>=1.6",  # used directly (pooch.Untar) in the visium loader
+  "pooch>=1.6",                    # used directly (pooch.Untar) in the visium loader
   "scanpy>=1.9.3",
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
