@@ -293,13 +293,13 @@ def thread_map(
         with ThreadPoolExecutor(max_workers=n_jobs) as pool:
             return _consume(pool.map(fn, items))
 
-    if not show_progress_bar:
-        return _run(None)
+    if show_progress_bar:
+        from numba_progress import ProgressBar
 
-    from numba_progress import ProgressBar
+        with ProgressBar(total=len(items), unit=unit) as pbar:
+            return _run(pbar)
 
-    with ProgressBar(total=len(items), unit=unit) as pbar:
-        return _run(pbar)
+    return _run(None)
 
 
 def _get_n_cores(n_cores: int | None) -> int:
