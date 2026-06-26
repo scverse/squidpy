@@ -97,7 +97,7 @@ def test_ripley_results(
 def test_ripley_seed(adata_ripley: AnnData, mode: RipleyStat):
     """Same seed reproduces simulations, different seeds change them, and simulations are not all identical."""
     adata = adata_ripley
-    kw = dict(cluster_key=CLUSTER_KEY, mode=mode.s, n_simulations=20, copy=True)
+    kw = {"cluster_key": CLUSTER_KEY, "mode": mode.s, "n_simulations": 20, "copy": True}
 
     res1 = ripley(adata, seed=42, **kw)
     res2 = ripley(adata, seed=42, **kw)

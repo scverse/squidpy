@@ -95,9 +95,9 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_spatial_autocorr_n_jobs_invariance(dummy_adata: AnnData, mode: str):
     """The number of workers must not change the permutation-based results (seed spawned per permutation)."""
-    kwargs = {"mode": mode, "copy": True, "seed": 42, "n_perms": 50}
-    df_serial = spatial_autocorr(dummy_adata, n_jobs=1, **kwargs)
-    df_parallel = spatial_autocorr(dummy_adata, n_jobs=2, **kwargs)
+    kw = {"mode": mode, "copy": True, "seed": 42, "n_perms": 50}
+    df_serial = spatial_autocorr(dummy_adata, n_jobs=1, **kw)
+    df_parallel = spatial_autocorr(dummy_adata, n_jobs=2, **kw)
 
     # align on the gene index in case the stat-based sort order ties differently
     df_parallel = df_parallel.loc[df_serial.index]
