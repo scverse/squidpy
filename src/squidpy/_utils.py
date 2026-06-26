@@ -6,8 +6,8 @@ import functools
 import inspect
 import os
 import warnings
-from collections.abc import Callable, Generator, Hashable, Iterable, Iterator, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
+from contextlib import contextmanager, nullcontext
 from enum import Enum
 from multiprocessing import Manager
 from queue import Queue
@@ -21,6 +21,8 @@ import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
 
 if TYPE_CHECKING:
+    from contextlib import AbstractContextManager
+
     from numba_progress import ProgressBar
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
@@ -245,28 +247,6 @@ def parallelize(
     return wrapper
 
 
-@contextmanager
-def progress_bar(
-    total: int,
-    *,
-    show_progress_bar: bool = True,
-    unit: str = "item",
-    desc: str | None = None,
-) -> Iterator[ProgressBar | None]:
-    """Create a progress bar usable both inside and outside :mod:`numba` functions."""
-    if not show_progress_bar:
-        yield None
-        return
-
-    from numba_progress import ProgressBar
-
-    kwargs: dict[str, Any] = {"total": total, "unit": unit}
-    if desc is not None:
-        kwargs["desc"] = desc
-    with ProgressBar(**kwargs) as pbar:
-        yield pbar
-
-
 def thread_map(
     fn: Callable[..., Any],
     items: Sequence[Any],
@@ -286,7 +266,7 @@ def thread_map(
     n_jobs
         Number of worker threads. ``1`` runs sequentially (no pool overhead).
     show_progress_bar
-        Whether to display a progress bar (see :func:`progress_bar`).
+        Whether to display a ``numba_progress`` progress bar.
     unit
         Label shown next to the progress counter.
 
@@ -308,7 +288,14 @@ def thread_map(
                 pbar.update(1)
         return results
 
-    with progress_bar(len(items), show_progress_bar=show_progress_bar, unit=unit) as pbar:
+    if show_progress_bar:
+        from numba_progress import ProgressBar
+
+        pbar_cm: AbstractContextManager[ProgressBar | None] = ProgressBar(total=len(items), unit=unit)
+    else:
+        pbar_cm = nullcontext(None)
+
+    with pbar_cm as pbar:
         if n_jobs == 1:
             return _consume(map(fn, items), pbar)
 
