@@ -243,8 +243,11 @@ def parallelize(
     return wrapper
 
 
-def _spawn_seeds(seed: int | None, n: int) -> list[np.random.SeedSequence]:
-    return np.random.SeedSequence(seed).spawn(n)
+def _spawn_seeds(seed: int | None, n: int) -> list[int]:
+    # uint32 integer seeds, derived from independent SeedSequence children (avoids the correlation
+    # of sequential seeds). uint32 is required to stay reproducible with numba/legacy RandomState,
+    # which only accept uint32 integer seeds.
+    return [int(s.generate_state(1)[0]) for s in np.random.SeedSequence(seed).spawn(n)]
 
 
 def thread_map(

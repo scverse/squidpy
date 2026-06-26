@@ -788,7 +788,7 @@ def _analysis_helper(
     interactions: NDArrayA,
     interaction_clusters: NDArrayA,
     clustering: NDArrayA,
-    seeds: Sequence[np.random.SeedSequence],
+    seeds: Sequence[int],
     numba_parallel: bool | None = None,
     queue: SigQueue | None = None,
 ) -> TempResult:
@@ -813,7 +813,7 @@ def _analysis_helper(
     clustering
         Array of shape `(n_cells,)` containing the original clustering.
     seeds
-        One :class:`numpy.random.SeedSequence` per permutation, indexed by the values in ``perms``.
+        One ``uint32`` integer seed per permutation, indexed by the values in ``perms``.
     numba_parallel
         Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
     queue
@@ -858,7 +858,7 @@ def _analysis_helper(
     for p in perms:
         # shuffle from the same base with a per-permutation seed, so each permutation is
         # independent of the others and of how the permutations are split across jobs
-        rs = np.random.RandomState(np.random.MT19937(seeds[p]))
+        rs = np.random.RandomState(seeds[p])
         clustering = clustering_base.copy()
         rs.shuffle(clustering)
         error = test(interactions, interaction_clusters, data, clustering, mean, mask, res=res)

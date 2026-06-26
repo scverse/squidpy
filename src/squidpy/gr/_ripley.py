@@ -137,7 +137,7 @@ def ripley(
     for i in np.arange(np.max(cluster_idx) + 1):
         coord_c = coordinates[cluster_idx == i, :]
         if mode == RipleyStat.F:
-            random = _ppp(hull, n_simulations=1, n_observations=n_observations, seed_sequence=obs_seed)
+            random = _ppp(hull, n_simulations=1, n_observations=n_observations, seed=obs_seed)
             tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(coord_c)
             distances, _ = tree_c.kneighbors(random, n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
@@ -156,7 +156,7 @@ def ripley(
     pvalues = np.ones((le.classes_.shape[0], len(bins)))
 
     for i in range(n_simulations):
-        random_i = _ppp(hull, n_simulations=1, n_observations=n_observations, seed_sequence=sim_seeds[i])
+        random_i = _ppp(hull, n_simulations=1, n_observations=n_observations, seed=sim_seeds[i])
         if mode == RipleyStat.F:
             tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(random_i)
             distances_i, _ = tree_i.kneighbors(random, n_neighbors=1)
@@ -220,7 +220,7 @@ def _ppp(
     hull: ConvexHull,
     n_simulations: int,
     n_observations: int,
-    seed_sequence: np.random.SeedSequence,
+    seed: int,
 ) -> NDArrayA:
     """
     Simulate Poisson Point Process on a polygon.
@@ -233,14 +233,14 @@ def _ppp(
         Number of simulated point processes.
     n_observations
         Number of observations to sample from each simulation.
-    seed_sequence
-        Seed sequence used to seed the legacy :class:`numpy.random.RandomState`.
+    seed
+        ``uint32`` integer seed for the legacy :class:`numpy.random.RandomState`.
 
     Returns
     -------
     An Array with shape ``(n_simulation, n_observations, 2)``.
     """
-    rs = np.random.RandomState(np.random.MT19937(seed_sequence))
+    rs = np.random.RandomState(seed)
     vxs = hull.points[hull.vertices]
     deln = Delaunay(vxs)
 

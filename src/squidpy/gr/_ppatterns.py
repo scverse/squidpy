@@ -258,14 +258,14 @@ def _score_helper(
     mode: SpatialAutocorr,
     g: spmatrix,
     vals: NDArrayA,
-    seeds: Sequence[np.random.SeedSequence],
+    seeds: Sequence[int],
     queue: SigQueue | None = None,
 ) -> pd.DataFrame:
     score_perms = np.empty((len(perms), vals.shape[0]))
     func = morans_i if mode == SpatialAutocorr.MORAN else gearys_c
 
     for i, p in enumerate(perms):
-        rs = np.random.RandomState(np.random.MT19937(seeds[p]))
+        rs = np.random.RandomState(seeds[p])
         idx_shuffle = rs.permutation(g.shape[0])
         score_perms[i, :] = func(g[idx_shuffle, :], vals)
 

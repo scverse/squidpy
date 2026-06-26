@@ -452,7 +452,7 @@ def _nhood_enrichment_helper(
     int_clust: NDArrayA,
     libraries: pd.Series[CategoricalDtype] | None,
     n_cls: int,
-    seeds: Sequence[np.random.SeedSequence],
+    seeds: Sequence[int],
     queue: SigQueue | None = None,
 ) -> NDArrayA:
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
@@ -461,7 +461,7 @@ def _nhood_enrichment_helper(
     for i, ix in enumerate(ixs):
         # shuffle from the same base with a per-permutation seed, so each permutation is
         # independent of the others and of how the permutations are split across jobs
-        rs = np.random.RandomState(np.random.MT19937(seeds[ix]))
+        rs = np.random.RandomState(seeds[ix])
         if libraries is not None:
             shuffled = _shuffle_group(int_clust, libraries, rs)
         else:
