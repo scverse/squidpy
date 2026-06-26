@@ -104,7 +104,7 @@ def test_spatial_autocorr_n_jobs_invariance(dummy_adata: AnnData, mode: str):
     for col in ["pval_sim", "pval_z_sim", "var_sim"]:
         np.testing.assert_allclose(df_serial[col].values, df_parallel[col].values, atol=1e-12)
 
-        
+
 def test_spatial_autocorr_var_norm_formula(dummy_adata: AnnData, mode: str):
     """Analytic ``var_norm`` must use the variance matching the chosen statistic.
 
