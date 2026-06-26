@@ -6,8 +6,8 @@ import functools
 import inspect
 import os
 import warnings
-from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
-from contextlib import contextmanager, nullcontext
+from collections.abc import Callable, Generator, Hashable, Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from enum import Enum
 from multiprocessing import Manager
 from queue import Queue
@@ -21,8 +21,6 @@ import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
 
 if TYPE_CHECKING:
-    from contextlib import AbstractContextManager
-
     from numba_progress import ProgressBar
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
@@ -247,23 +245,26 @@ def parallelize(
     return wrapper
 
 
+@contextmanager
 def progress_bar(
     total: int,
     *,
     show_progress_bar: bool = True,
     unit: str = "item",
     desc: str | None = None,
-) -> AbstractContextManager[ProgressBar | None]:
+) -> Iterator[ProgressBar | None]:
     """Create a progress bar usable both inside and outside :mod:`numba` functions."""
     if not show_progress_bar:
-        return nullcontext(None)
+        yield None
+        return
 
     from numba_progress import ProgressBar
 
     kwargs: dict[str, Any] = {"total": total, "unit": unit}
     if desc is not None:
         kwargs["desc"] = desc
-    return ProgressBar(**kwargs)
+    with ProgressBar(**kwargs) as pbar:
+        yield pbar
 
 
 def thread_map(
