@@ -299,23 +299,21 @@ def thread_map(
 
     items = list(items)
 
+    def _consume(results_it: Iterable[Any], pbar: ProgressBar | None) -> list[Any]:
+        results = []
+        # ``map``/``pool.map`` yield in submission order, so results stay aligned with *items*.
+        for res in results_it:
+            results.append(res)
+            if pbar is not None:
+                pbar.update(1)
+        return results
+
     with progress_bar(len(items), show_progress_bar=show_progress_bar, unit=unit) as pbar:
         if n_jobs == 1:
-            results = []
-            for item in items:
-                results.append(fn(item))
-                if pbar is not None:
-                    pbar.update(1)
-            return results
+            return _consume(map(fn, items), pbar)
 
         with ThreadPoolExecutor(max_workers=n_jobs) as pool:
-            results = []
-            # ``pool.map`` yields in submission order, so results stay aligned with *items*.
-            for res in pool.map(fn, items):
-                results.append(res)
-                if pbar is not None:
-                    pbar.update(1)
-            return results
+            return _consume(pool.map(fn, items), pbar)
 
 
 def _get_n_cores(n_cores: int | None) -> int:
