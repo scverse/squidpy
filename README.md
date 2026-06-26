@@ -20,7 +20,7 @@ Head over to the [documentation](https://squidpy.readthedocs.io/en/stable/) for 
 
 ## Installation
 
-We recommend running Squidpy on a recent Linux or macOS system with Python ≥3.11, but it also works on Windows via WSL.
+We recommend running Squidpy on a recent Linux or macOS system with Python ≥3.12, but it also works on Windows via WSL.
 
 Install from [PyPI](https://pypi.org/project/squidpy) with:
 
