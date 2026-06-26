@@ -46,9 +46,11 @@ def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
     assert not np.array_equal(idx_df, idx_adata)
     np.testing.assert_array_equal(sorted(idx_df), sorted(idx_adata))
     # check parallel gives same results
-    with pytest.raises(AssertionError, match=r'.*\(column name="pval_z_sim"\) are different.*'):
-        # because the seeds will be different, we don't expect the pval_sim values to be the same
-        assert_frame_equal(df, df_parallel)
+    # each permutation now gets its own seed (spawned from a SeedSequence), so the
+    # simulated p-values no longer depend on how the permutations are split across jobs
+    np.testing.assert_allclose(df["pval_sim"].values, df_parallel["pval_sim"].values, atol=1e-12)
+    np.testing.assert_allclose(df["pval_z_sim"].values, df_parallel["pval_z_sim"].values, atol=1e-12)
+    np.testing.assert_allclose(df["var_sim"].values, df_parallel["var_sim"].values, atol=1e-12)
 
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
@@ -88,6 +90,19 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
     np.testing.assert_array_equal(sorted(idx_df), sorted(idx_adata))
     # check parallel gives same results
     assert_frame_equal(df_1, df_2)
+
+
+@pytest.mark.parametrize("mode", ["moran", "geary"])
+def test_spatial_autocorr_n_jobs_invariance(dummy_adata: AnnData, mode: str):
+    """The number of workers must not change the permutation-based results (seed spawned per permutation)."""
+    kwargs = {"mode": mode, "copy": True, "seed": 42, "n_perms": 50}
+    df_serial = spatial_autocorr(dummy_adata, n_jobs=1, **kwargs)
+    df_parallel = spatial_autocorr(dummy_adata, n_jobs=2, **kwargs)
+
+    # align on the gene index in case the stat-based sort order ties differently
+    df_parallel = df_parallel.loc[df_serial.index]
+    for col in ["pval_sim", "pval_z_sim", "var_sim"]:
+        np.testing.assert_allclose(df_serial[col].values, df_parallel[col].values, atol=1e-12)
 
 
 @pytest.mark.parametrize(
