@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Generic, Literal, NamedTuple
+from typing import Any, NamedTuple
 
 import geopandas as gpd
 import numpy as np
@@ -26,7 +26,7 @@ from spatialdata.models.models import (
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, thread_map
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -37,14 +37,12 @@ from squidpy.gr._utils import (
 from squidpy.gr.neighbors import (
     DelaunayBuilder,
     GraphBuilder,
-    GraphMatrixT,
     GridBuilder,
     KNNBuilder,
     RadiusBuilder,
 )
 
 __all__ = [
-    "GraphMatrixT",
     "SpatialNeighborsResult",
     "spatial_neighbors",
     "spatial_neighbors_from_builder",
@@ -55,7 +53,7 @@ __all__ = [
 ]
 
 
-class SpatialNeighborsResult(NamedTuple, Generic[GraphMatrixT]):
+class SpatialNeighborsResult[GraphMatrixT](NamedTuple):
     """Result of spatial_neighbors function."""
 
     connectivities: GraphMatrixT
@@ -129,8 +127,6 @@ def _resolve_graph_builder(
     return KNNBuilder(n_neighs=n_neighs, **common, percentile=percentile)
 
 
-
-
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)
 def spatial_neighbors(
@@ -149,6 +145,7 @@ def spatial_neighbors(
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
+    n_jobs: int = 1,
 ) -> SpatialNeighborsResult | None:
     """
     Create a graph from spatial coordinates.
@@ -217,6 +214,7 @@ def spatial_neighbors(
     key_added
         Key which controls where the results are saved if ``copy = False``.
     %(copy)s
+    %(n_jobs_libraries)s
 
     Notes
     -----
@@ -326,6 +324,7 @@ def spatial_neighbors(
         library_key=library_key,
         key_added=key_added,
         copy=copy,
+        n_jobs=n_jobs,
     )
 
 
@@ -396,6 +395,7 @@ def spatial_neighbors_from_builder(
     library_key: str | None = None,
     key_added: str = "spatial",
     copy: bool = False,
+    n_jobs: int = 1,
 ) -> SpatialNeighborsResult | None:
     """Create a graph from spatial coordinates using an explicit builder instance.
 
@@ -428,6 +428,7 @@ def spatial_neighbors_from_builder(
     key_added
         Key which controls where the results are saved if ``copy = False``.
     %(copy)s
+    %(n_jobs_libraries)s
 
     Returns
     -------
@@ -455,6 +456,7 @@ def spatial_neighbors_from_builder(
         library_key=library_key,
         key_added=key_added,
         copy=copy,
+        n_jobs=n_jobs,
     )
 
 
@@ -492,6 +494,7 @@ def spatial_neighbors_knn(
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
+    n_jobs: int = 1,
 ) -> SpatialNeighborsResult | None:
     """Create a k-nearest-neighbor graph from spatial coordinates.
 
@@ -510,6 +513,7 @@ def spatial_neighbors_knn(
         sparser, more local graph; larger values connect broader neighborhoods.
     %(graph_common_params)s
     %(copy)s
+    %(n_jobs_libraries)s
 
     Returns
     -------
@@ -541,6 +545,7 @@ def spatial_neighbors_knn(
         library_key=library_key,
         key_added=key_added,
         copy=copy,
+        n_jobs=n_jobs,
     )
 
 
@@ -558,6 +563,7 @@ def spatial_neighbors_radius(
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
+    n_jobs: int = 1,
 ) -> SpatialNeighborsResult | None:
     """Create a radius-based graph from spatial coordinates.
 
@@ -579,6 +585,7 @@ def spatial_neighbors_radius(
         specified distance interval.
     %(graph_common_params)s
     %(copy)s
+    %(n_jobs_libraries)s
 
     Returns
     -------
@@ -610,6 +617,7 @@ def spatial_neighbors_radius(
         library_key=library_key,
         key_added=key_added,
         copy=copy,
+        n_jobs=n_jobs,
     )
 
 
@@ -627,6 +635,7 @@ def spatial_neighbors_delaunay(
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
+    n_jobs: int = 1,
 ) -> SpatialNeighborsResult | None:
     """Create a Delaunay triangulation graph from spatial coordinates.
 
@@ -652,6 +661,7 @@ def spatial_neighbors_delaunay(
             - ``None``: keep every Delaunay edge.
     %(graph_common_params)s
     %(copy)s
+    %(n_jobs_libraries)s
 
     Returns
     -------
@@ -683,6 +693,7 @@ def spatial_neighbors_delaunay(
         library_key=library_key,
         key_added=key_added,
         copy=copy,
+        n_jobs=n_jobs,
     )
 
 
@@ -701,6 +712,7 @@ def spatial_neighbors_grid(
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
+    n_jobs: int = 1,
 ) -> SpatialNeighborsResult | None:
     """Create a grid-based graph from spatial coordinates.
 
@@ -735,6 +747,7 @@ def spatial_neighbors_grid(
         distances.
     %(graph_common_params)s
     %(copy)s
+    %(n_jobs_libraries)s
 
     Returns
     -------
@@ -769,6 +782,7 @@ def spatial_neighbors_grid(
         library_key=library_key,
         key_added=key_added,
         copy=copy,
+        n_jobs=n_jobs,
     )
 
 
@@ -780,6 +794,7 @@ def _run_spatial_neighbors(
     library_key: str | None = None,
     key_added: str = "spatial",
     copy: bool = False,
+    n_jobs: int = 1,
 ) -> SpatialNeighborsResult | None:
     """Shared core: build the graph from a resolved builder and save results."""
     if library_key is not None:
@@ -791,12 +806,27 @@ def _run_spatial_neighbors(
 
     start = logg.info(f"Creating graph using `{builder.transform}` transform and `{len(libs)}` libraries.")
     if library_key is not None:
-        mats: list[tuple[Any, Any]] = []
-        ixs: list[int] = []
-        for lib in libs:
-            ixs.extend(np.where(adata.obs[library_key] == lib)[0])
-            mats.append(builder.build(adata[adata.obs[library_key] == lib].obsm[spatial_key]))
-        adj, dst = builder.combine(mats, ixs)
+        # Extract the per-library coordinate arrays once.
+        # Subsetting the full AnnData inside the loop recomputes the library mask repeatedly and
+        # creates a view per library, which dominates the runtime for many cells.
+        # Slicing the coordinate array by precomputed category codes is far cheaper and,
+        # because the resulting arrays are small, makes the per-library graph construction cheap to parallelize.
+        codes = adata.obs[library_key].cat.codes.to_numpy()
+        coords = adata.obsm[spatial_key]
+        per_lib_coords: list[np.ndarray] = []
+        idxs: list[int] = []
+        for code in range(len(libs)):
+            idx = np.where(codes == code)[0]
+            per_lib_coords.append(np.ascontiguousarray(coords[idx]))
+            idxs.extend(idx.tolist())
+
+        mats = thread_map(
+            builder.build,
+            per_lib_coords,
+            n_jobs=n_jobs,
+            unit="library",
+        )
+        adj, dst = builder.combine(mats, idxs)
     else:
         adj, dst = builder.build(adata.obsm[spatial_key])
 

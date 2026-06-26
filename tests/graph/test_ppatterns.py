@@ -104,6 +104,37 @@ def test_spatial_autocorr_n_jobs_invariance(dummy_adata: AnnData, mode: str):
     for col in ["pval_sim", "pval_z_sim", "var_sim"]:
         np.testing.assert_allclose(df_serial[col].values, df_parallel[col].values, atol=1e-12)
 
+        
+def test_spatial_autocorr_var_norm_formula(dummy_adata: AnnData, mode: str):
+    """Analytic ``var_norm`` must use the variance matching the chosen statistic.
+
+    Regression test for #1183: Geary's C and Moran's I have different sampling
+    variances under the normality assumption (Cliff & Ord 1981). Reusing Moran's
+    variance for Geary's C produced a miscalibrated analytic p-value.
+    """
+    from sklearn.preprocessing import normalize
+
+    from squidpy.gr._ppatterns import _g_moments
+
+    uns_key = MORAN_K if mode == "moran" else GEARY_C
+    spatial_autocorr(dummy_adata, mode=mode, transformation=True, n_perms=None, seed=0)
+    var_norm = float(dummy_adata.uns[uns_key]["var_norm"].iloc[0])
+
+    # Reconstruct the exact (row-standardised) weight matrix the routine used.
+    g = dummy_adata.obsp["spatial_connectivities"].copy()
+    normalize(g, norm="l1", axis=1, copy=False)
+    s0, s1, s2 = _g_moments(g)
+    n = g.shape[0]
+    s02 = s0 * s0
+    moran_var = (n * n * s1 - n * s2 + 3 * s02) / ((n - 1) * (n + 1) * s02) - (1.0 / (n - 1)) ** 2
+    geary_var = ((2 * s1 + s2) * (n - 1) - 4 * s02) / (2 * (n + 1) * s02)
+
+    expected = moran_var if mode == "moran" else geary_var
+    np.testing.assert_allclose(var_norm, expected, rtol=1e-10)
+    if mode == "geary":
+        # the two formulas differ here, so the test would fail if Moran's were reused
+        assert not np.isclose(geary_var, moran_var, rtol=1e-3)
+
 
 @pytest.mark.parametrize(
     "attr,layer,genes",

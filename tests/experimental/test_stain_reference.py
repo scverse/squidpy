@@ -21,19 +21,19 @@ def test_macenko_basic() -> None:
     ref = StainReference(
         method="macenko",
         stain_matrix=_ruifrok_matrix(),
-        background_intensity=_TEST_BACKGROUND,
+        white_point=_TEST_BACKGROUND,
     )
     assert ref.method == "macenko"
     assert ref.stain_matrix.shape == (3, 3)
     assert ref.mu is None and ref.sigma is None
-    np.testing.assert_array_equal(ref.background_intensity, _TEST_BACKGROUND)
+    np.testing.assert_array_equal(ref.white_point, _TEST_BACKGROUND)
 
 
 def test_reinhard_basic() -> None:
     ref = StainReference(method="reinhard", mu=np.array([1.0, 0.5, -0.2]), sigma=np.array([0.1, 0.1, 0.1]))
     assert ref.method == "reinhard"
     assert ref.stain_matrix is None
-    assert ref.background_intensity is None
+    assert ref.white_point is None
 
 
 def test_unknown_method_raises() -> None:
@@ -43,11 +43,11 @@ def test_unknown_method_raises() -> None:
 
 def test_decomposition_requires_stain_matrix() -> None:
     with pytest.raises(ValueError, match="requires stain_matrix"):
-        StainReference(method="macenko", background_intensity=_TEST_BACKGROUND)
+        StainReference(method="macenko", white_point=_TEST_BACKGROUND)
 
 
-def test_decomposition_requires_background_intensity() -> None:
-    with pytest.raises(ValueError, match="requires background_intensity"):
+def test_decomposition_requires_white_point() -> None:
+    with pytest.raises(ValueError, match="requires white_point"):
         StainReference(method="macenko", stain_matrix=_ruifrok_matrix())
 
 
@@ -56,7 +56,7 @@ def test_decomposition_forbids_mu_sigma() -> None:
         StainReference(
             method="macenko",
             stain_matrix=_ruifrok_matrix(),
-            background_intensity=_TEST_BACKGROUND,
+            white_point=_TEST_BACKGROUND,
             mu=np.zeros(3),
             sigma=np.ones(3),
         )
@@ -82,22 +82,22 @@ def test_reinhard_forbids_stain_matrix() -> None:
         )
 
 
-def test_reinhard_forbids_background_intensity() -> None:
-    with pytest.raises(ValueError, match="forbids background_intensity"):
+def test_reinhard_forbids_white_point() -> None:
+    with pytest.raises(ValueError, match="forbids white_point"):
         StainReference(
             method="reinhard",
             mu=np.zeros(3),
             sigma=np.ones(3),
-            background_intensity=_TEST_BACKGROUND,
+            white_point=_TEST_BACKGROUND,
         )
 
 
-def test_bad_background_intensity() -> None:
-    with pytest.raises(ValueError, match="background_intensity"):
+def test_bad_white_point() -> None:
+    with pytest.raises(ValueError, match="white_point"):
         StainReference(
             method="macenko",
             stain_matrix=_ruifrok_matrix(),
-            background_intensity=np.array([255.0, -1.0, 255.0]),
+            white_point=np.array([255.0, -1.0, 255.0]),
         )
 
 
@@ -106,7 +106,7 @@ def test_rejects_bad_shape() -> None:
         StainReference(
             method="macenko",
             stain_matrix=np.zeros((2, 3)),
-            background_intensity=_TEST_BACKGROUND,
+            white_point=_TEST_BACKGROUND,
         )
 
 
@@ -117,3 +117,15 @@ def test_rejects_non_finite() -> None:
             mu=np.array([np.nan, 0.0, 0.0]),
             sigma=np.ones(3),
         )
+
+
+def test_equality_is_array_aware_and_hashable() -> None:
+    # distinct-but-equal references compare equal (array-aware __eq__), and
+    # references remain hashable (identity) despite the numpy-array fields.
+    a = StainReference(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
+    b = StainReference(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
+    c = StainReference(method="reinhard", mu=np.array([9.0, 2.0, 3.0]), sigma=np.ones(3))
+    assert a == b
+    assert a != c
+    assert len({a, b, c}) == 3  # identity-hashed, no TypeError
+    assert a != "not a reference"

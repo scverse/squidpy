@@ -78,6 +78,13 @@ def spatial_autocorr(
 
     See :cite:`pysal` for reference.
 
+    .. versionchanged:: 1.8.2
+        The analytic (normality-assumption) variance for Geary's C was corrected; previously the
+        Moran's I variance was reused for ``mode = 'geary'``. As a result, ``'var_norm'`` and
+        ``'pval_norm'`` for Geary's C differ from earlier versions. Permutation-based p-values
+        (``'pval_sim'``, ``'pval_z_sim'``) are unaffected.
+        See `#1183 <https://github.com/scverse/squidpy/issues/1183>`_.
+
     Parameters
     ----------
     %(adata)s
@@ -499,11 +506,23 @@ def _analytic_pval(score: NDArrayA, g: spmatrix | NDArrayA, params: dict[str, An
     s0, s1, s2 = _g_moments(g)
     n = g.shape[0]
     s02 = s0 * s0
-    n2 = n * n
-    v_num = n2 * s1 - n * s2 + 3 * s02
-    v_den = (n - 1) * (n + 1) * s02
 
-    Vscore_norm = v_num / v_den - (1.0 / (n - 1)) ** 2
+    match params["mode"]:
+        case SpatialAutocorr.GEARY.s:
+            # Geary's C and Moran's I have different sampling variances under the
+            # normality assumption (Cliff & Ord 1981). Use the Geary's C variance
+            # (matching pysal/esda ``Geary``); reusing Moran's variance here gives a
+            # miscalibrated analytic p-value (see #1183).
+            Vscore_norm = ((2 * s1 + s2) * (n - 1) - 4 * s02) / (2 * (n + 1) * s02)
+        case SpatialAutocorr.MORAN.s:
+            # Moran's I normality variance (Cliff & Ord 1981; pysal/esda ``Moran``).
+            n2 = n * n
+            v_num = n2 * s1 - n * s2 + 3 * s02
+            v_den = (n - 1) * (n + 1) * s02
+            Vscore_norm = v_num / v_den - (1.0 / (n - 1)) ** 2
+        case mode:
+            raise AssertionError(f"Unexpected mode `{mode}`.")
+
     seScore_norm = Vscore_norm ** (1 / 2.0)
 
     z_norm = (score - params["expected"]) / seScore_norm
