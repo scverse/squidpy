@@ -7,7 +7,7 @@ import inspect
 import os
 import warnings
 from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from enum import Enum
 from multiprocessing import Manager
 from queue import Queue
@@ -21,8 +21,6 @@ import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
 
 if TYPE_CHECKING:
-    from contextlib import AbstractContextManager
-
     from numba_progress import ProgressBar
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
@@ -279,28 +277,29 @@ def thread_map(
 
     items = list(items)
 
-    def _consume(results_it: Iterable[Any], pbar: ProgressBar | None) -> list[Any]:
-        results = []
-        # ``map``/``pool.map`` yield in submission order, so results stay aligned with *items*.
-        for res in results_it:
-            results.append(res)
-            if pbar is not None:
-                pbar.update(1)
-        return results
+    def _run(pbar: ProgressBar | None) -> list[Any]:
+        def _consume(results_it: Iterable[Any]) -> list[Any]:
+            results = []
+            # ``map``/``pool.map`` yield in submission order, so results stay aligned with *items*.
+            for res in results_it:
+                results.append(res)
+                if pbar is not None:
+                    pbar.update(1)
+            return results
 
-    if show_progress_bar:
-        from numba_progress import ProgressBar
-
-        pbar_cm: AbstractContextManager[ProgressBar | None] = ProgressBar(total=len(items), unit=unit)
-    else:
-        pbar_cm = nullcontext(None)
-
-    with pbar_cm as pbar:
         if n_jobs == 1:
-            return _consume(map(fn, items), pbar)
+            return _consume(map(fn, items))
 
         with ThreadPoolExecutor(max_workers=n_jobs) as pool:
-            return _consume(pool.map(fn, items), pbar)
+            return _consume(pool.map(fn, items))
+
+    if not show_progress_bar:
+        return _run(None)
+
+    from numba_progress import ProgressBar
+
+    with ProgressBar(total=len(items), unit=unit) as pbar:
+        return _run(pbar)
 
 
 def _get_n_cores(n_cores: int | None) -> int:
