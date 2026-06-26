@@ -386,6 +386,15 @@ set_diag
     Whether to set the diagonal of the connectivities to ``1.0``.
 key_added
     Key which controls where the results are saved if ``copy = False``."""
+_n_jobs_libraries = """\
+n_jobs
+    Number of parallel jobs used to build the per-library graphs when ``library_key``
+    is set. Each library's graph is computed independently, so this only has an effect
+    for multi-library data. ``1`` (default) builds the graphs sequentially and does not
+    change behavior; ``-1`` uses all available CPUs. Has no effect when ``library_key``
+    is ``None``. Speedup is sub-linear (memory-bandwidth bound), and process-based
+    backends pay a one-time worker start-up cost, so parallelism mainly pays off for
+    many large libraries."""
 _spatial_neighbors_returns = """\
 If ``copy = True``, returns a :class:`~squidpy.gr.SpatialNeighborsResult` with the
 spatial connectivities and distances matrices.
@@ -443,5 +452,6 @@ d = DocstringProcessor(
     library_key=_library_key,
     sdata_params=_sdata_params,
     graph_common_params=_graph_common_params,
+    n_jobs_libraries=_n_jobs_libraries,
     spatial_neighbors_returns=_spatial_neighbors_returns,
 )

@@ -245,12 +245,11 @@ def parallelize(
 
 def thread_map(
     fn: Callable[..., Any],
-    items: Iterable[Any],
+    items: Sequence[Any],
     *,
     n_jobs: int = 1,
     show_progress_bar: bool = False,
     unit: str = "item",
-    total: int | None = None,
 ) -> list[Any]:
     """Map *fn* over *items* using a thread pool with an optional progress bar.
 
@@ -259,15 +258,13 @@ def thread_map(
     fn
         Callable applied to each element of *items*.
     items
-        Iterable of inputs passed one-by-one to *fn*.
+        Sequence of inputs passed one-by-one to *fn*.
     n_jobs
         Number of worker threads. ``1`` runs sequentially (no pool overhead).
     show_progress_bar
         Whether to display a ``tqdm`` progress bar.
     unit
         Label shown next to the ``tqdm`` counter.
-    total
-        Length hint passed to ``tqdm`` when *items* has no ``__len__``.
 
     Returns
     -------
@@ -275,6 +272,12 @@ def thread_map(
         Results in the same order as *items*.
     """
     from concurrent.futures import ThreadPoolExecutor
+
+    if n_jobs == 1:
+        it: Iterable[Any] = map(fn, items)
+        if show_progress_bar and tqdm is not None:
+            it = tqdm(it, total=len(items), unit=unit)
+        return list(it)
 
     with ThreadPoolExecutor(max_workers=n_jobs) as pool:
         it = pool.map(fn, items)
