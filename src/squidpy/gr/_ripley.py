@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numpy.random import default_rng
 from scanpy import logging as logg
 from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.distance import pdist
@@ -18,7 +17,7 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, _spawn_seeds
 from squidpy.gr._utils import _assert_categorical_obs, _assert_spatial_basis, _save_data, extract_adata_if_sdata
 
 __all__ = ["ripley"]
@@ -47,6 +46,15 @@ def ripley(
 
     According to the `'mode'` argument, it calculates one of the following Ripley's statistics:
     `{rp.F.s!r}`, `{rp.G.s!r}` or `{rp.L.s!r}` statistics.
+
+    .. versionchanged:: 1.8.4
+        Every simulation now draws from an independent seed spawned from a
+        :class:`numpy.random.SeedSequence`, following `NumPy's guidance on parallel random
+        number generation <https://numpy.org/doc/stable/reference/random/parallel.html>`_.
+        Previously every simulation reused the same ``seed`` and therefore produced an identical
+        point pattern; the simulated statistics (and hence the p-values) are now genuinely
+        independent across simulations, but results obtained with a given ``seed`` differ from
+        those produced by squidpy < 1.8.4.
 
     `{rp.F.s!r}`, `{rp.G.s!r}` are defined as:
 
@@ -133,11 +141,12 @@ def ripley(
     start = logg.info(
         f"Calculating Ripley's {mode} statistic for `{le.classes_.shape[0]}` clusters and `{n_simulations}` simulations"
     )
+    obs_seed, *sim_seeds = _spawn_seeds(seed, n_simulations + 1)
 
     for i in np.arange(np.max(cluster_idx) + 1):
         coord_c = coordinates[cluster_idx == i, :]
         if mode == RipleyStat.F:
-            random = _ppp(hull, n_simulations=1, n_observations=n_observations, seed=seed)
+            random = _ppp(hull, n_simulations=1, n_observations=n_observations, seed=obs_seed)
             tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(coord_c)
             distances, _ = tree_c.kneighbors(random, n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
@@ -156,7 +165,7 @@ def ripley(
     pvalues = np.ones((le.classes_.shape[0], len(bins)))
 
     for i in range(n_simulations):
-        random_i = _ppp(hull, n_simulations=1, n_observations=n_observations, seed=seed)
+        random_i = _ppp(hull, n_simulations=1, n_observations=n_observations, seed=sim_seeds[i])
         if mode == RipleyStat.F:
             tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(random_i)
             distances_i, _ = tree_i.kneighbors(random, n_neighbors=1)
@@ -216,7 +225,12 @@ def _l_function(distances: NDArrayA, support: NDArrayA, n: int, area: float) -> 
     return support, l_estimate
 
 
-def _ppp(hull: ConvexHull, n_simulations: int, n_observations: int, seed: int | None = None) -> NDArrayA:
+def _ppp(
+    hull: ConvexHull,
+    n_simulations: int,
+    n_observations: int,
+    seed: int,
+) -> NDArrayA:
     """
     Simulate Poisson Point Process on a polygon.
 
@@ -229,13 +243,13 @@ def _ppp(hull: ConvexHull, n_simulations: int, n_observations: int, seed: int | 
     n_observations
         Number of observations to sample from each simulation.
     seed
-        Random seed.
+        ``uint32`` integer seed for the legacy :class:`numpy.random.RandomState`.
 
     Returns
     -------
     An Array with shape ``(n_simulation, n_observations, 2)``.
     """
-    rng = default_rng(None if seed is None else seed)
+    rs = np.random.RandomState(seed)
     vxs = hull.points[hull.vertices]
     deln = Delaunay(vxs)
 
@@ -246,8 +260,8 @@ def _ppp(hull: ConvexHull, n_simulations: int, n_observations: int, seed: int | 
         i_obs = 0
         while i_obs < n_observations:
             x, y = (
-                rng.uniform(bbox[0], bbox[2]),
-                rng.uniform(bbox[1], bbox[3]),
+                rs.uniform(bbox[0], bbox[2]),
+                rs.uniform(bbox[1], bbox[3]),
             )
             if deln.find_simplex((x, y)) >= 0:
                 result[i_sim, i_obs] = (x, y)
