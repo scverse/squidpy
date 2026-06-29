@@ -339,6 +339,8 @@ class PermutationTestABC(ABC):
         """
         Perform the permutation test as described in :cite:`cellphonedb`.
 
+        %(seed_versionchanged)s
+
         Parameters
         ----------
         %(cluster_key)s

@@ -160,6 +160,8 @@ def nhood_enrichment(
     """
     Compute neighborhood enrichment by permutation test.
 
+    %(seed_versionchanged)s
+
     Parameters
     ----------
     %(adata)s

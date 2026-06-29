@@ -85,6 +85,8 @@ def spatial_autocorr(
         (``'pval_sim'``, ``'pval_z_sim'``) are unaffected.
         See `#1183 <https://github.com/scverse/squidpy/issues/1183>`_.
 
+    %(seed_versionchanged)s
+
     Parameters
     ----------
     %(adata)s
