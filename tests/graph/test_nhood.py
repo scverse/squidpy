@@ -10,7 +10,7 @@ from squidpy.gr import (
     centrality_scores,
     interaction_matrix,
     nhood_enrichment,
-    spatial_neighbors,
+    spatial_neighbors_grid,
 )
 
 _CK = "leiden"
@@ -25,14 +25,14 @@ class TestNhoodEnrichment:
         assert adata.uns[key]["count"].shape[0] == adata.obs.leiden.cat.categories.shape[0]
 
     def test_nhood_enrichment(self, adata: AnnData):
-        spatial_neighbors(adata)
+        spatial_neighbors_grid(adata)
         nhood_enrichment(adata, cluster_key=_CK)
 
         self._assert_common(adata)
 
     @pytest.mark.parametrize("backend", ["threading", "multiprocessing", "loky"])
     def test_parallel_works(self, adata: AnnData, backend: str):
-        spatial_neighbors(adata)
+        spatial_neighbors_grid(adata)
 
         nhood_enrichment(adata, cluster_key=_CK, n_jobs=2, n_perms=20, backend=backend)
 
@@ -40,7 +40,7 @@ class TestNhoodEnrichment:
 
     @pytest.mark.parametrize("n_jobs", [1, 2])
     def test_reproducibility(self, adata: AnnData, n_jobs: int):
-        spatial_neighbors(adata)
+        spatial_neighbors_grid(adata)
 
         res1 = nhood_enrichment(adata, cluster_key=_CK, seed=42, n_jobs=n_jobs, n_perms=20, copy=True)
         res2 = nhood_enrichment(adata, cluster_key=_CK, seed=42, n_jobs=n_jobs, n_perms=20, copy=True)
