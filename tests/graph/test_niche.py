@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from anndata import AnnData
+from pandas import DataFrame
 from pandas.testing import assert_frame_equal
 from scipy.sparse import issparse
 
@@ -10,6 +11,31 @@ from squidpy.gr._niche import _calculate_neighborhood_profile, _utag
 SPATIAL_CONNECTIVITIES_KEY = "spatial_connectivities"
 N_NEIGHBORS = 20
 GROUPS = "celltype_mapped_refined"
+
+
+def test_calculate_neighborhood_profile(dummy_adata2: AnnData):
+    "calculate_neighborhood_profile function needs to be tested, as it is at the base of the functionality of neighborhood flavor"
+    matrix = dummy_adata2.obsp["spatial_connectivities"].tocoo()
+    nhood_profile = _calculate_neighborhood_profile(dummy_adata2, "celltype", matrix, True)
+    relative_nhood_profile = _calculate_neighborhood_profile(dummy_adata2, "celltype", matrix, False)
+
+    # nhood_profile and relative_nhood_profile should have same entries as this manually determined version for dummy_adata2
+    expected_nhood_profile = DataFrame(
+        {
+            0: [0, 1, 0, 1, 0, 0, 0, 0, 0, 0],
+            1: [1, 0, 0, 0, 3, 1, 1, 3, 0, 1],
+            2: [1, 1, 1, 0, 1, 1, 1, 0, 0, 0],
+        },
+        index=list("abcdefghij"),
+        dtype="float",
+    )
+    total_neighs = expected_nhood_profile.sum(axis=1)
+    expected_relative_nhood_profile = expected_nhood_profile.div(total_neighs, axis=0)
+    expected_relative_nhood_profile = expected_relative_nhood_profile.fillna(0.0)
+
+    # compare
+    assert (nhood_profile.values == expected_nhood_profile.values).all()
+    assert (relative_nhood_profile.values == expected_relative_nhood_profile.values).all()
 
 
 def test_niche_calc_nhood(adata_seqfish: AnnData):
