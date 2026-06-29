@@ -264,6 +264,20 @@ def ligrec_no_numba() -> Mapping[str, pd.DataFrame]:
 
 
 @pytest.fixture(scope="session")
+def ligrec_pvalues_reference() -> Mapping[str, pd.DataFrame]:
+    # means/pvalues are cluster-pair x gene-pair matrices with a MultiIndex on both
+    # axes, stored as an AnnData (X=pvalues, layers["means"]=means) with the index
+    # levels kept as obs/var columns.
+    adata = ad.read_h5ad("tests/_data/ligrec_pvalues_reference.h5ad")
+    index = pd.MultiIndex.from_frame(adata.obs[["source", "target"]])
+    columns = pd.MultiIndex.from_frame(adata.var[["cluster_1", "cluster_2"]])
+    return {
+        "means": pd.DataFrame(adata.layers["means"], index=index, columns=columns),
+        "pvalues": pd.DataFrame(adata.X, index=index, columns=columns),
+    }
+
+
+@pytest.fixture(scope="session")
 def ligrec_result() -> Mapping[str, pd.DataFrame]:
     adata = _adata.copy()
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
