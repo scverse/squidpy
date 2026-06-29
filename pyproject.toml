@@ -55,6 +55,7 @@ dependencies = [
   "matplotlib-scalebar>=0.8",
   "networkx>=2.6",
   "numba>=0.56.4",
+  "numba-progress>=1.1",
   "numpy>=1.23",
   "omnipath>=1.0.7",
   "pandas>=2.1",
