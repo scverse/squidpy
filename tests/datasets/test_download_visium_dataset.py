@@ -39,7 +39,7 @@ def test_visium_datasets(sample):
 
     # Test that downloading tissue image works
     sample_dataset = visium(sample, include_hires_tiff=True)
-    expected_image_path = (Path(settings.datasetdir) / "visium" / sample / "image.tif").resolve()
+    expected_image_path = (Path(settings.datasetdir) / "visium_10x" / sample / "image.tif").resolve()
     spatial_metadata = sample_dataset.uns["spatial"][sample]["metadata"]
     image_path = Path(spatial_metadata["source_image_path"]).resolve()
     assert image_path == expected_image_path
