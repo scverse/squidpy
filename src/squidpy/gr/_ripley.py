@@ -213,10 +213,9 @@ def _l_function(points: NDArrayA, support: NDArrayA, n: int, area: float, metric
     # Ripley's K(d) is the number of ordered point pairs within distance d. `two_point_correlation`
     # computes exactly that (cumulatively over `support`, in a single tree pass) without
     # materializing the O(m^2) pairwise distances.
-    # KDTree accepts the same metric names as the F/G modes (sklearn.metrics.DistanceMetric).
     tree = KDTree(points, metric=metric)
     # `two_point_correlation` counts ordered pairs incl. the `m` self-matches at distance 0;
-    # subtracting `m` gives ordered non-self pairs == the previous `n_pairs_less_than_d * 2`.
+    # subtracting `m` gives ordered non-self pairs.
     # `dualtree=True` has been observed to be roughly 2x faster than the single-tree default.
     num_points = points.shape[0]
     n_ordered_pairs_less_than_d = tree.two_point_correlation(points, support, dualtree=True) - num_points
