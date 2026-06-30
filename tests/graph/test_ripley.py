@@ -11,7 +11,7 @@ CLUSTER_KEY = "leiden"
 
 
 def test_ripley_L_unsupported_metric_raises(adata_ripley: AnnData):
-    with pytest.raises(ValueError, match="metric"):
+    with pytest.raises(ValueError, match="Unsupported metric"):
         ripley(adata_ripley, cluster_key=CLUSTER_KEY, mode="L", metric="cosine")
 
 

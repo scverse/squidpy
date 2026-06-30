@@ -83,6 +83,8 @@ def ripley(
     metric
         Which metric to use for computing distances.
         For available metrics, check out :class:`sklearn.metrics.DistanceMetric`.
+        For Ripley's L specifically, only metrics supported by :class:`sklearn.neighbors.KDTree`
+        are valid (see its ``valid_metrics`` attribute).
     n_neigh
         Number of neighbors to consider for the KNN graph.
     n_simulations
@@ -206,6 +208,8 @@ def _f_g_function(distances: NDArrayA, support: NDArrayA) -> tuple[NDArrayA, NDA
 
 
 def _l_function(points: NDArrayA, support: NDArrayA, n: int, area: float, metric: str) -> tuple[NDArrayA, NDArrayA]:
+    if metric not in KDTree.valid_metrics:
+        raise ValueError(f"Unsupported metric '{metric}'. Ripley's L supports {KDTree.valid_metrics}")
     # Ripley's K(d) is the number of ordered point pairs within distance d. `two_point_correlation`
     # computes exactly that (cumulatively over `support`, in a single tree pass) without
     # materializing the O(m^2) pairwise distances.
