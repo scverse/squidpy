@@ -10,8 +10,7 @@ from anndata import AnnData
 from numpy.random import default_rng
 from scanpy import logging as logg
 from scipy.spatial import ConvexHull, Delaunay
-from scipy.spatial.distance import pdist
-from sklearn.neighbors import NearestNeighbors
+from sklearn.neighbors import KDTree, NearestNeighbors
 from sklearn.preprocessing import LabelEncoder
 from spatialdata import SpatialData
 
@@ -146,8 +145,7 @@ def ripley(
             distances, _ = tree_c.kneighbors(coordinates[cluster_idx != i, :], n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
         elif mode == RipleyStat.L:
-            distances = pdist(coord_c, metric=metric)
-            bins, obs_stats = _l_function(distances, support, N, area)
+            bins, obs_stats = _l_function(coord_c, support, N, area, metric)
         else:
             raise NotImplementedError(f"Mode `{mode.s!r}` is not yet implemented.")
         obs_arr[i] = obs_stats
@@ -166,8 +164,7 @@ def ripley(
             distances_i, _ = tree_i.kneighbors(coordinates, n_neighbors=1)
             _, stats_i = _f_g_function(distances_i.squeeze(), support)
         elif mode == RipleyStat.L:
-            distances_i = pdist(random_i, metric=metric)
-            _, stats_i = _l_function(distances_i, support, N, area)
+            _, stats_i = _l_function(random_i, support, N, area, metric)
         else:
             raise NotImplementedError(f"Mode `{mode.s!r}` is not yet implemented.")
 
@@ -208,10 +205,19 @@ def _f_g_function(distances: NDArrayA, support: NDArrayA) -> tuple[NDArrayA, NDA
     return bins, np.concatenate((np.zeros((1,), dtype=float), fracs))
 
 
-def _l_function(distances: NDArrayA, support: NDArrayA, n: int, area: float) -> tuple[NDArrayA, NDArrayA]:
-    n_pairs_less_than_d = (distances < support.reshape(-1, 1)).sum(axis=1)
+def _l_function(points: NDArrayA, support: NDArrayA, n: int, area: float, metric: str) -> tuple[NDArrayA, NDArrayA]:
+    # Ripley's K(d) is the number of ordered point pairs within distance d. `two_point_correlation`
+    # computes exactly that (cumulatively over `support`, in a single tree pass) without
+    # materializing the O(m^2) pairwise distances.
+    # KDTree accepts the same metric names as the F/G modes (sklearn.metrics.DistanceMetric).
+    tree = KDTree(points, metric=metric)
+    # `two_point_correlation` counts ordered pairs incl. the `m` self-matches at distance 0;
+    # subtracting `m` gives ordered non-self pairs == the previous `n_pairs_less_than_d * 2`.
+    # `dualtree=True` has been observed to be roughly 2x faster than the single-tree default.
+    num_points = points.shape[0]
+    n_ordered_pairs_less_than_d = tree.two_point_correlation(points, support, dualtree=True) - num_points
     intensity = n / area
-    k_estimate = ((n_pairs_less_than_d * 2) / n) / intensity
+    k_estimate = (n_ordered_pairs_less_than_d / n) / intensity
     l_estimate = np.sqrt(k_estimate / np.pi)
     return support, l_estimate
 
