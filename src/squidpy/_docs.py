@@ -51,7 +51,7 @@ seed
     Random seed for reproducibility."""
 _seed_versionchanged = """\
 .. versionchanged:: 1.8.4
-    Every permutation now draws from an independent seed spawned from a
+    Every permutation now uses an independent :class:`numpy.random.Generator` spawned from a
     :class:`numpy.random.SeedSequence`, following `NumPy's guidance on parallel random
     number generation <https://numpy.org/doc/stable/reference/random/parallel.html>`_.
     Consequently the permutation-based results no longer depend on ``n_jobs`` / ``backend``, but

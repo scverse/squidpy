@@ -25,8 +25,8 @@ from squidpy._utils import (
     Signal,
     SigQueue,
     _get_n_cores,
-    _spawn_seeds,
     parallelize,
+    spawn_generators,
 )
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
@@ -209,7 +209,7 @@ def nhood_enrichment(
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
-    seeds = _spawn_seeds(seed, n_perms)
+    generators = spawn_generators(seed, n_perms)
 
     perms = parallelize(
         _nhood_enrichment_helper,
@@ -225,7 +225,7 @@ def nhood_enrichment(
         int_clust=int_clust,
         libraries=libraries,
         n_cls=n_cls,
-        seeds=seeds,
+        generators=generators,
     )
     zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
@@ -454,21 +454,21 @@ def _nhood_enrichment_helper(
     int_clust: NDArrayA,
     libraries: pd.Series[CategoricalDtype] | None,
     n_cls: int,
-    seeds: Sequence[int],
+    generators: Sequence[np.random.Generator],
     queue: SigQueue | None = None,
 ) -> NDArrayA:
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
     int_clust = int_clust.copy()  # threading; used as a read-only base for each permutation
 
     for i, ix in enumerate(ixs):
-        # shuffle from the same base with a per-permutation seed, so each permutation is
+        # shuffle from the same base with a per-permutation generator, so each permutation is
         # independent of the others and of how the permutations are split across jobs
-        rs = np.random.RandomState(seeds[ix])
+        rng = generators[ix]
         if libraries is not None:
-            shuffled = _shuffle_group(int_clust, libraries, rs)
+            shuffled = _shuffle_group(int_clust, libraries, rng)
         else:
             shuffled = int_clust.copy()
-            rs.shuffle(shuffled)
+            rng.shuffle(shuffled)
         perms[i, ...] = callback(indices, indptr, shuffled)
 
         if queue is not None:

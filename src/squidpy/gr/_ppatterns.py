@@ -27,9 +27,9 @@ from squidpy._utils import (
     Signal,
     SigQueue,
     _get_n_cores,
-    _spawn_seeds,
     deprecated_params,
     parallelize,
+    spawn_generators,
 )
 from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
@@ -220,7 +220,7 @@ def spatial_autocorr(
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
         perms = list(np.arange(n_perms))
-        seeds = _spawn_seeds(seed, n_perms)
+        generators = spawn_generators(seed, n_perms)
 
         score_perms = parallelize(
             _score_helper,
@@ -229,7 +229,7 @@ def spatial_autocorr(
             n_jobs=n_jobs,
             backend=backend,
             show_progress_bar=show_progress_bar,
-        )(mode=mode, g=g, vals=vals, seeds=seeds)
+        )(mode=mode, g=g, vals=vals, generators=generators)
     else:
         score_perms = None
 
@@ -260,15 +260,15 @@ def _score_helper(
     mode: SpatialAutocorr,
     g: spmatrix,
     vals: NDArrayA,
-    seeds: Sequence[int],
+    generators: Sequence[np.random.Generator],
     queue: SigQueue | None = None,
 ) -> pd.DataFrame:
     score_perms = np.empty((len(perms), vals.shape[0]))
     func = morans_i if mode == SpatialAutocorr.MORAN else gearys_c
 
     for i, p in enumerate(perms):
-        rs = np.random.RandomState(seeds[p])
-        idx_shuffle = rs.permutation(g.shape[0])
+        rng = generators[p]
+        idx_shuffle = rng.permutation(g.shape[0])
         score_perms[i, :] = func(g[idx_shuffle, :], vals)
 
         if queue is not None:
