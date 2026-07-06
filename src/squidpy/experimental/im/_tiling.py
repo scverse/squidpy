@@ -487,6 +487,7 @@ def _run_tiled(
     # cluster; _run_on_client emits its own heartbeat.)
     if kind == "processes" and workers > 1 and n > 1:
         from dask.distributed import Client, LocalCluster
+
         with (
             LocalCluster(n_workers=workers, threads_per_worker=1, processes=True, dashboard_address=None) as cluster,
             Client(cluster) as client,
