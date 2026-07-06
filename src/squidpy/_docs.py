@@ -123,6 +123,12 @@ backend
     Parallelization backend to use. See :class:`joblib.Parallel` for available options.
 show_progress_bar
     Whether to show the progress bar or not."""
+_n_jobs = """\
+n_jobs
+    Number of parallel jobs to use."""
+_show_progress_bar = """\
+show_progress_bar
+    Whether to show the progress bar or not."""
 _channels = """\
 channels
     Channels for this feature is computed. If `None`, use all channels."""
@@ -420,6 +426,8 @@ d = DocstringProcessor(
     cat_plotting=_cat_plotting,
     plotting_returns=_plotting_returns,
     parallelize=_parallelize,
+    n_jobs=_n_jobs,
+    show_progress_bar=_show_progress_bar,
     channels=_channels,
     segment_kwargs=_segment_kwargs,
     ligrec_test_returns=_ligrec_test_returns,
