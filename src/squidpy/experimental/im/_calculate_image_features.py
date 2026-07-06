@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple
 
 import anndata as ad
@@ -40,29 +39,6 @@ from squidpy.experimental.im._tiling import (
 )
 
 __all__ = ["calculate_image_features"]
-
-# ---------------------------------------------------------------------------
-# Drop accounting
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class DropReport:
-    """Counters for cells/tiles excluded during a featurization run."""
-
-    outside_image_extent: int = 0
-    partial_at_image_boundary: int = 0
-    empty_tiles: int = 0
-
-    def summary(self) -> str:
-        counts = {
-            "outside_image_extent": self.outside_image_extent,
-            "partial_at_image_boundary": self.partial_at_image_boundary,
-            "empty_tiles": self.empty_tiles,
-        }
-        lines = [f"  {name}: {n}" for name, n in counts.items() if n > 0]
-        return "\n".join(["Cell drop report:", *lines]) if lines else "Cell drop report: no cells dropped."
-
 
 # ---------------------------------------------------------------------------
 # Skimage property sets
@@ -112,27 +88,27 @@ _HIST_BINS = 16  # bins for the per-cell intensity histogram
 
 # cp_measure feature name -> make_featurizer_config keyword(s).
 _CPMEASURE_FLAGS: dict[str, dict[str, bool]] = {
-    "cpmeasure:intensity": {"intensity": True},
-    "cpmeasure:sizeshape": {"sizeshape": True},
-    "cpmeasure:texture": {"texture": True},
-    "cpmeasure:granularity": {"granularity": True},
-    "cpmeasure:zernike": {"zernike": True},
-    "cpmeasure:feret": {"feret": True},
-    "cpmeasure:radial": {"radial_distribution": True, "radial_zernikes": True},
-    "cpmeasure:correlation": {
+    "cp_measure:intensity": {"intensity": True},
+    "cp_measure:sizeshape": {"sizeshape": True},
+    "cp_measure:texture": {"texture": True},
+    "cp_measure:granularity": {"granularity": True},
+    "cp_measure:zernike": {"zernike": True},
+    "cp_measure:feret": {"feret": True},
+    "cp_measure:radial": {"radial_distribution": True, "radial_zernikes": True},
+    "cp_measure:correlation": {
         "correlation_pearson": True,
         "correlation_costes": True,
         "correlation_manders_fold": True,
         "correlation_rwc": True,
     },
-    "cpmeasure:correlation_pearson": {"correlation_pearson": True},
-    "cpmeasure:correlation_costes": {"correlation_costes": True},
-    "cpmeasure:correlation_manders_fold": {"correlation_manders_fold": True},
-    "cpmeasure:correlation_rwc": {"correlation_rwc": True},
+    "cp_measure:correlation_pearson": {"correlation_pearson": True},
+    "cp_measure:correlation_costes": {"correlation_costes": True},
+    "cp_measure:correlation_manders_fold": {"correlation_manders_fold": True},
+    "cp_measure:correlation_rwc": {"correlation_rwc": True},
 }
 
 # cp_measure correlation features need >=2 channels (they correlate channel pairs).
-_CP_CORRELATION_KEYS = frozenset(_CPMEASURE_FLAGS["cpmeasure:correlation"])
+_CP_CORRELATION_KEYS = frozenset(_CPMEASURE_FLAGS["cp_measure:correlation"])
 
 # All known top-level feature group names (used for validation).
 _ALL_FEATURES = (
@@ -161,13 +137,14 @@ def _ambiguous_mix(group: str) -> str:
 
 
 def _dedupe_morphology_against_cp(
-    morphology_props: frozenset[str] | None, cp_flags: dict[str, bool] | None
+    morphology_props: frozenset[str] | None, cp_flags: dict[str, bool] | None, *, notify: bool = True
 ) -> frozenset[str] | None:
     """Drop skimage morphology props that cp_measure's ``sizeshape`` already yields.
 
     Only applies when ``sizeshape`` is part of the cp_measure request (an empty
     ``cp_flags`` means "all cp groups on"). Keeps the skimage-only props; returns
-    ``None`` if nothing skimage-specific remains.
+    ``None`` if nothing skimage-specific remains. ``notify=False`` silences the
+    log on the default (``features=None``) path, where the overlap is implicit.
     """
     if morphology_props is None or cp_flags is None:
         return morphology_props
@@ -175,7 +152,7 @@ def _dedupe_morphology_against_cp(
     if not sizeshape_on:
         return morphology_props
     kept = morphology_props & _SKIMAGE_MORPH_ONLY
-    if kept != morphology_props:
+    if notify and kept != morphology_props:
         logg.info(
             f"Dropping {len(morphology_props - kept)} skimage morphology prop(s) already "
             f"computed by cp_measure:sizeshape; keeping skimage-only {sorted(kept) or 'none'}."
@@ -197,7 +174,7 @@ def _parse_features(features: list[str] | str | None) -> _ParsedFeatures:
         # skimage-only props to avoid duplicate columns.
         return _ParsedFeatures(
             cp_flags={},
-            skimage_morphology_props=_dedupe_morphology_against_cp(frozenset(_MASK_PROPS), {}),
+            skimage_morphology_props=_dedupe_morphology_against_cp(frozenset(_MASK_PROPS), {}, notify=False),
             skimage_intensity_props=frozenset(_INTENSITY_PROPS),
             squidpy_summary=True,
             squidpy_texture=True,
@@ -284,7 +261,7 @@ def _has_any_features(parsed: _ParsedFeatures) -> bool:
 def _image_requiring_features(parsed: _ParsedFeatures) -> list[str]:
     """User-facing flags in the request that need pixel data (i.e. an image)."""
     flags = [
-        (parsed.cp_flags is not None, "cpmeasure:*"),
+        (parsed.cp_flags is not None, "cp_measure:*"),
         (parsed.skimage_intensity_props is not None, "skimage:intensity"),
         (parsed.squidpy_summary, "squidpy:summary"),
         (parsed.squidpy_texture, "squidpy:texture"),
@@ -363,7 +340,7 @@ def _featurize_tile(
     feature_blocks: list[pd.DataFrame] = []
 
     if cp_config is not None and tile_image is not None:
-        feature_blocks.append(_compute_cpmeasure_features(tile_image, tile_labels, cp_config))
+        feature_blocks.append(_compute_cp_measure_features(tile_image, tile_labels, cp_config))
 
     if parsed.skimage_morphology_props is not None or parsed.skimage_intensity_props is not None:
         feature_blocks.append(
@@ -382,7 +359,7 @@ def _featurize_tile(
     return pd.concat(feature_blocks, axis=1).reindex(cell_ids)
 
 
-def _compute_cpmeasure_features(
+def _compute_cp_measure_features(
     tile_image: np.ndarray, tile_labels: np.ndarray, cp_config: dict[str, Any]
 ) -> pd.DataFrame:
     """cp_measure features for a tile, indexed by original label ID.
@@ -664,14 +641,12 @@ def _align_to_image_grid(
     image_da: xr.DataArray,
     labels_da: xr.DataArray,
     align_mode: Literal["strict", "rasterize"],
-    drop_report: DropReport,
 ) -> tuple[xr.DataArray, xr.DataArray]:
     """Crop image and labels to their pixel-grid overlap, honoring transforms.
 
-    Mutates ``drop_report`` to count cells dropped because they fall outside
-    the overlap rectangle.  Under ``align_mode='strict'`` a non-pixel-aligned
-    relative transform raises; under ``'rasterize'`` the labels are resampled
-    onto the image grid.
+    Cells falling outside the overlap rectangle are dropped (logged). Under
+    ``align_mode='strict'`` a non-pixel-aligned relative transform raises; under
+    ``'rasterize'`` the labels are resampled onto the image grid.
     """
     cs = _shared_coordinate_system(sdata, image_key, labels_key)
     affine = _relative_affine(sdata, image_key, labels_key, cs)
@@ -729,11 +704,9 @@ def _align_to_image_grid(
     if partial_ids:
         labels_crop = labels_crop.where(~labels_crop.isin(partial_ids), 0)
     if cells_outside or partial_ids:
-        drop_report.outside_image_extent += cells_outside
-        drop_report.partial_at_image_boundary += len(partial_ids)
         warnings.warn(
-            f"Dropping {cells_outside} cells outside the image extent and "
-            f"{len(partial_ids)} cells partially outside. See the end-of-run drop report.",
+            f"Dropped {cells_outside} cell(s) fully and {len(partial_ids)} cell(s) partially "
+            f"outside the image extent.",
             UserWarning,
             stacklevel=2,
         )
@@ -794,7 +767,6 @@ def _prepare_lazy(
     scale: str | None,
     channels: list[str] | None,
     align_mode: Literal["strict", "rasterize"],
-    drop_report: DropReport,
 ) -> tuple[xr.DataArray | None, xr.DataArray, list[str]]:
     """Return lazy image and labels DataArrays, plus channel names.
 
@@ -820,7 +792,6 @@ def _prepare_lazy(
     else:
         # shapes_key requires an image to size the rasterization grid (enforced
         # by calculate_image_features), so image_da is not None here.
-        logg.info("Converting shapes to labels.")
         try:
             labels_da = _rasterize_to_grid(sdata.shapes[shapes_key], image_da, "global")
         except ValueError as e:
@@ -834,7 +805,7 @@ def _prepare_lazy(
     # path already rasterized onto the image grid (identity transform -> no-op).
     if image_da is not None and labels_key is not None:
         image_da, labels_da = _align_to_image_grid(
-            sdata, image_key, labels_key, image_da, labels_da, align_mode, drop_report
+            sdata, image_key, labels_key, image_da, labels_da, align_mode
         )
 
     if image_da is None:
@@ -916,11 +887,11 @@ def calculate_image_features(
     scale: str | None = None,
     channels: list[str] | None = None,
     features: list[str] | str | None = None,
-    tile_size: int = 2048,
-    overlap_margin: int | Literal["auto"] = "auto",
+    tile_size: int = 1024,
     align_mode: Literal["strict", "rasterize"] = "strict",
-    key_added: str = "morphology",
-    invalid_as_zero: bool = True,
+    key_added: str | None = None,
+    invalid_as_zero: bool = False,
+    drop_constant_features: bool = True,
     n_jobs: int = 1,
     inplace: bool = True,
 ) -> ad.AnnData | None:
@@ -959,11 +930,11 @@ def calculate_image_features(
         ``image_key`` is missing).  Otherwise a list of flag strings from three
         groups:
 
-        - **cp_measure** -- ``"cpmeasure:intensity"``, ``"cpmeasure:sizeshape"``,
-          ``"cpmeasure:texture"``, ``"cpmeasure:granularity"``,
-          ``"cpmeasure:zernike"``, ``"cpmeasure:feret"``, ``"cpmeasure:radial"``,
-          ``"cpmeasure:correlation"`` (or a single correlation kind via
-          ``"cpmeasure:correlation_<pearson|costes|manders_fold|rwc>"``).
+        - **cp_measure** -- ``"cp_measure:intensity"``, ``"cp_measure:sizeshape"``,
+          ``"cp_measure:texture"``, ``"cp_measure:granularity"``,
+          ``"cp_measure:zernike"``, ``"cp_measure:feret"``, ``"cp_measure:radial"``,
+          ``"cp_measure:correlation"`` (or a single correlation kind via
+          ``"cp_measure:correlation_<pearson|costes|manders_fold|rwc>"``).
           Columns keep cp_measure's native CellProfiler names (e.g. ``Area``,
           ``Intensity_MeanIntensity__<channel>``). Correlation features need
           an image with >=2 channels.
@@ -979,16 +950,13 @@ def calculate_image_features(
           dissimilarity, homogeneity, energy, ASM, correlation), and
           ``"squidpy:histogram"`` (per-channel intensity histogram).
 
-        If a request computes both ``"cpmeasure:sizeshape"`` and skimage
+        If a request computes both ``"cp_measure:sizeshape"`` and skimage
         morphology props, the overlapping skimage props (which cp_measure
         reproduces identically) are dropped to avoid duplicate columns; only
         the skimage-only props (``centroid_local``, ``feret_diameter_max``) are
         kept. cp_measure computes its groups all-or-nothing, so it wins.
     tile_size
         Side length of the tiling grid (pixels).
-    overlap_margin
-        Overlap around each tile to capture boundary cells.
-        ``"auto"`` computes the minimum from the largest cell's bounding box.
     align_mode
         How to handle image/labels whose pixel grids do not match (via their
         SpatialData transformations).
@@ -1001,13 +969,22 @@ def calculate_image_features(
           because this materializes the full label grid). Not supported for
           multiscale labels under a non-integer transform -- pre-align instead.
 
-        Cells falling outside the image/labels overlap are dropped and counted
-        in the end-of-run drop report.
+        Cells falling outside the image/labels overlap are dropped (logged at
+        INFO).
     key_added
-        Key under which to store the result in ``sdata.tables``.
+        Key under which to store the result in ``sdata.tables``. If ``None``
+        (default), the key is derived from the region and, when an image is
+        used, the image key: ``f"morphology_{labels_key or shapes_key}_{image_key}"``
+        (or ``f"morphology_{labels_key or shapes_key}"`` for a morphology-only
+        run). This keeps per-region / per-image runs from clobbering each other.
     invalid_as_zero
-        Replace ``inf`` and ``NaN`` values with zero (cp_measure can emit NaN
-        for undefined features on small cells).
+        If ``True``, replace ``inf``/``NaN`` with zero. ``False`` (default) keeps
+        them, so undefined features stay distinguishable from genuine zeros.
+    drop_constant_features
+        If ``True`` (default), drop zero-variance feature columns (they break
+        scaling/PCA downstream). Applied per call and skipped for a single cell;
+        when comparing samples, prefer dropping constants on the concatenated
+        table so column sets stay aligned.
     n_jobs
         Number of worker processes for tile featurization (``-1`` uses all
         cores). ``1`` runs serially in-process. cp_measure is GIL-bound, so
@@ -1019,9 +996,9 @@ def calculate_image_features(
 
     Notes
     -----
-    Cells dropped at the image boundary (under alignment) emit a ``UserWarning``
-    as they are dropped, and an end-of-run summary of all drops (boundary cells
-    and empty tiles) is logged at INFO level.
+    Cells dropped during alignment (fully/partially outside the image) and
+    constant features removed by ``drop_constant_features`` each emit a
+    ``UserWarning``.
 
     With ``n_jobs > 1`` a ``LocalCluster`` is started, which spawns worker
     processes. On macOS/Windows (spawn start method) the calling code must be
@@ -1041,7 +1018,7 @@ def calculate_image_features(
     ...     sdata,
     ...     image_key="image",
     ...     labels_key="cells",
-    ...     features=["cpmeasure:sizeshape", "skimage:morphology", "squidpy:summary"],
+    ...     features=["cp_measure:sizeshape", "skimage:morphology", "squidpy:summary"],
     ... )  # doctest: +SKIP
 
     All features across every backend (needs an image):
@@ -1056,7 +1033,8 @@ def calculate_image_features(
     ...     sdata, labels_key="cells", features=["skimage:morphology:area"]
     ... )  # doctest: +SKIP
 
-    The per-cell table is stored in ``sdata.tables["morphology"]``.
+    The per-cell table is stored in ``sdata.tables["morphology_cells"]`` (the
+    key is derived from the region/image keys; see ``key_added``).
     """
     # --- Parse & validate ---
     parsed = _parse_features(features)
@@ -1077,10 +1055,8 @@ def calculate_image_features(
         if channels is not None:
             raise ValueError("`channels` selection requires `image_key`.")
 
-    drop_report = DropReport()
-
     image_da, labels_da, channel_names = _prepare_lazy(
-        sdata, image_key, labels_key, shapes_key, scale, channels, align_mode, drop_report
+        sdata, image_key, labels_key, shapes_key, scale, channels, align_mode
     )
 
     # Warn when per-channel features would be named by positional index because
@@ -1108,15 +1084,16 @@ def calculate_image_features(
     # --- Warmup: compute centroids without materializing full arrays ---
     cell_info = _compute_centroids(sdata, labels_key, labels_da, scale)
     if not cell_info:
-        logg.info(drop_report.summary())
         raise ValueError("No cells found in labels (all zeros).")
 
     H, W = yx_size(labels_da)
 
     # --- Tile ---
-    specs = build_tile_specs((H, W), cell_info, tile_size=tile_size, overlap_margin=overlap_margin)
+    # overlap_margin="auto" derives the minimum safe margin from the largest cell;
+    # not exposed -- any manual value either truncates boundary cells or wastes reads.
+    specs = build_tile_specs((H, W), cell_info, tile_size=tile_size, overlap_margin="auto")
     total_tiles = len(specs)
-    logg.info(f"Processing {total_tiles} tiles ({tile_size}x{tile_size}, margin={overlap_margin}).")
+    logg.info(f"Tiling input into {total_tiles} tile(s) of size {tile_size} px.")
 
     # Clamp BLAS/OpenMP per tile (tiny per-cell arrays oversubscribe otherwise);
     # the clamp lives inside the fn so it also reaches worker processes.
@@ -1134,15 +1111,26 @@ def calculate_image_features(
     )
 
     tile_dfs = [df for df in results if not df.empty]
-    drop_report.empty_tiles += len(results) - len(tile_dfs)
 
     if not tile_dfs:
-        logg.info(drop_report.summary())
         raise ValueError("No features computed for any tile.")
 
     # Sort by cell label for deterministic output.  inf/NaN handling happens
     # in one numpy pass below to avoid two extra full-table allocations.
     combined = pd.concat(tile_dfs, axis=0).sort_index()
+
+    # Drop zero-variance features (nunique(dropna=False) treats an all-NaN column
+    # as constant too). Skipped for a single cell, where every column is trivially
+    # constant and the filter would drop everything.
+    if drop_constant_features and len(combined) > 1:
+        constant_cols = list(combined.columns[combined.nunique(dropna=False) <= 1])
+        if constant_cols:
+            warnings.warn(
+                f"Dropped {len(constant_cols)} constant feature(s) with no variance across cells.",
+                UserWarning,
+                stacklevel=2,
+            )
+            combined = combined.drop(columns=constant_cols)
 
     # --- Build AnnData ---
     # Exactly one of labels_key / shapes_key is set (enforced in _validate_inputs).
@@ -1168,9 +1156,14 @@ def calculate_image_features(
     # obs_names are the cell's label-image ID (the label_id), as str for AnnData.
     adata.obs_names = adata.obs["label_id"].astype(str).values
 
-    logg.info(drop_report.summary())
-
     if inplace:
+        # Key off the region (always set) plus the image key when present, so
+        # image-derived tables are distinct from a morphology-only one and all
+        # "morphology_*" tables group together in sdata.tables.
+        if key_added is None:
+            suffix = f"_{image_key}" if image_key is not None else ""
+            key_added = f"morphology_{region_key_value}{suffix}"
         sdata.tables[key_added] = TableModel.parse(adata)
+        logg.info(f"Added {adata.n_obs} cells x {adata.n_vars} features to sdata.tables['{key_added}'].")
         return None
     return adata

@@ -83,6 +83,7 @@ class TestCalculateImageFeatures:
             labels_key="test_labels",
             features=["skimage:morphology"],
             inplace=False,
+            drop_constant_features=False,
         )
         assert isinstance(result, ad.AnnData)
         assert result.n_obs > 0
@@ -118,25 +119,26 @@ class TestCalculateImageFeatures:
         assert not any(col.startswith("intensity_max") for col in result.var_names)
 
     def test_cpmeasure_sizeshape(self, sdata_synthetic):
-        """cpmeasure:sizeshape yields cp_measure shape columns (CellProfiler names)."""
+        """cp_measure:sizeshape yields cp_measure shape columns (CellProfiler names)."""
         result = sq.experimental.im.calculate_image_features(
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["cpmeasure:sizeshape"],
+            features=["cp_measure:sizeshape"],
             inplace=False,
+            drop_constant_features=False,
         )
         assert isinstance(result, ad.AnnData)
         assert result.n_obs > 0
         assert "Area" in result.var_names
 
     def test_cpmeasure_intensity(self, sdata_synthetic):
-        """cpmeasure:intensity yields per-channel cp_measure intensity columns."""
+        """cp_measure:intensity yields per-channel cp_measure intensity columns."""
         result = sq.experimental.im.calculate_image_features(
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["cpmeasure:intensity"],
+            features=["cp_measure:intensity"],
             inplace=False,
         )
         # cp_measure suffixes intensity columns with the positional channel index.
@@ -150,6 +152,7 @@ class TestCalculateImageFeatures:
             labels_key="test_labels",
             features=None,
             inplace=False,
+            drop_constant_features=False,
         )
         cols = list(result.var_names)
         assert "Area" in cols  # cp_measure sizeshape
@@ -174,8 +177,9 @@ class TestCalculateImageFeatures:
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["cpmeasure:sizeshape", "skimage:morphology:area"],
+            features=["cp_measure:sizeshape", "skimage:morphology:area"],
             inplace=False,
+            drop_constant_features=False,
         )
         cols = list(result.var_names)
         assert "Area" in cols  # cp_measure keeps it
@@ -188,8 +192,9 @@ class TestCalculateImageFeatures:
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["cpmeasure:sizeshape", "skimage:morphology:feret_diameter_max"],
+            features=["cp_measure:sizeshape", "skimage:morphology:feret_diameter_max"],
             inplace=False,
+            drop_constant_features=False,
         )
         assert "feret_diameter_max" in result.var_names  # cp:sizeshape has no identical twin
 
@@ -199,8 +204,9 @@ class TestCalculateImageFeatures:
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["cpmeasure:intensity", "skimage:morphology:area"],
+            features=["cp_measure:intensity", "skimage:morphology:area"],
             inplace=False,
+            drop_constant_features=False,
         )
         assert "area" in result.var_names  # cp:intensity does not compute shape
 
@@ -289,7 +295,7 @@ class TestCalculateImageFeatures:
                 features=["nonexistent:measurement"],
             )
         # All real feature groups are advertised in the unknown-feature error.
-        assert "cpmeasure:intensity" in str(excinfo.value)
+        assert "cp_measure:intensity" in str(excinfo.value)
         assert "squidpy:summary" in str(excinfo.value)
 
     def test_mixed_group_and_fine_grained_raises(self, sdata_synthetic):
@@ -643,6 +649,7 @@ class TestFeatureParsing:
             labels_key="test_labels",
             features="skimage:morphology:area",
             inplace=False,
+            drop_constant_features=False,
         )
         assert list(result.var_names) == ["area"]
 
@@ -792,6 +799,26 @@ def test_texture_on_constant_channel():
     assert next(v for c, v in vals.items() if c.startswith("texture_contrast_")) == 0.0
     assert next(v for c, v in vals.items() if c.startswith("texture_dissimilarity_")) == 0.0
     assert next(v for c, v in vals.items() if c.startswith("texture_homogeneity_")) == 1.0
+    # n_obs == 1 also exercises the drop_constant_features single-cell guard: every
+    # column is trivially constant, so without the skip all texture cols would be
+    # dropped and the `next(...)` lookups above would raise StopIteration.
+
+
+def test_drop_constant_features(sdata_synthetic):
+    """Constant columns are dropped by default (with a warning) and kept when disabled."""
+    # sdata_synthetic has uniform 30x30 cells, so 'area' is constant across cells.
+    with pytest.warns(UserWarning, match="constant feature"):
+        dropped = sq.experimental.im.calculate_image_features(
+            sdata_synthetic, image_key="test_img", labels_key="test_labels",
+            features=["skimage:morphology:area"], inplace=False,
+        )
+    assert dropped.n_vars == 0  # the only feature was constant -> empty table
+
+    kept = sq.experimental.im.calculate_image_features(
+        sdata_synthetic, image_key="test_img", labels_key="test_labels",
+        features=["skimage:morphology:area"], inplace=False, drop_constant_features=False,
+    )
+    assert list(kept.var_names) == ["area"]
 
 
 # ---------------------------------------------------------------------------
@@ -854,6 +881,7 @@ class TestMultiscale:
             scale="scale0",
             features=["skimage:morphology:area"],
             inplace=False,
+            drop_constant_features=False,
         )
         # The fixture places 16 cells of 30x30=900 px at full resolution. Asserting
         # the exact count, label IDs, and area proves scale0 was read (scale1 would
@@ -916,6 +944,7 @@ class TestOptionalImage:
             labels_key="test_labels",
             features=["skimage:morphology:area"],
             inplace=False,
+            drop_constant_features=False,
         )
         assert isinstance(result, ad.AnnData)
         assert result.n_obs > 0
@@ -1000,9 +1029,10 @@ class TestAlignment:
         # Shift labels so some cells straddle / fall outside the overlap edge.
         sdata = _toy_sdata(labels_translation=(120, 120))
         n_cells = int((np.unique(sdata.labels["lbl"].values) != 0).sum())
-        with pytest.warns(UserWarning, match="Dropping"):
+        with pytest.warns(UserWarning, match="Dropped"):
             result = sq.experimental.im.calculate_image_features(
-                sdata, image_key="img", labels_key="lbl", features=["skimage:morphology:area"], inplace=False
+                sdata, image_key="img", labels_key="lbl", features=["skimage:morphology:area"],
+                inplace=False, drop_constant_features=False,
             )
         # Dropped cells (outside + partial) leave the output; every survivor is
         # fully inside the overlap, so its area is untruncated (cells are 25x25).
@@ -1031,7 +1061,7 @@ class TestCpMeasure:
             sdata_synthetic,
             image_key="test_img",
             labels_key="test_labels",
-            features=["cpmeasure:correlation"],
+            features=["cp_measure:correlation"],
             inplace=False,
         )
         assert any("Correlation" in c for c in result.var_names)
@@ -1051,7 +1081,7 @@ class TestCpMeasure:
         )
         with pytest.raises(ValueError, match="require >=2 channels"):
             sq.experimental.im.calculate_image_features(
-                sdata, image_key="img", labels_key="lbl", features=["cpmeasure:correlation"], inplace=False
+                sdata, image_key="img", labels_key="lbl", features=["cp_measure:correlation"], inplace=False
             )
 
     def test_cpmeasure_n_jobs_equivalence(self, sdata_synthetic):
@@ -1060,7 +1090,7 @@ class TestCpMeasure:
         kw = {
             "image_key": "test_img",
             "labels_key": "test_labels",
-            "features": ["cpmeasure:sizeshape"],
+            "features": ["cp_measure:sizeshape"],
             "tile_size": 64,
             "inplace": False,
         }
@@ -1098,7 +1128,7 @@ class TestParallelEngine:
         kw = {
             "image_key": "test_img",
             "labels_key": "test_labels",
-            "features": ["cpmeasure:sizeshape", "skimage:morphology:area"],
+            "features": ["cp_measure:sizeshape", "skimage:morphology:area"],
             "tile_size": 64,
             "inplace": False,
         }

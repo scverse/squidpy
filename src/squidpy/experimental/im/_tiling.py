@@ -20,8 +20,9 @@ import numpy as np
 import xarray as xr
 from skimage.measure import regionprops
 from spatialdata._logging import logger as logg
+from tqdm.auto import tqdm
 
-from squidpy._utils import _get_n_cores
+from squidpy._utils import _get_n_cores, thread_map
 
 
 def yx_size(da: xr.DataArray) -> tuple[int, int]:
@@ -413,15 +414,6 @@ def _has_distributed_client() -> bool:
     return True
 
 
-def _log_progress(done: int, total: int, desc: str) -> None:
-    """Emit a ~10% heartbeat so long (Xenium-scale) runs show liveness."""
-    if total <= 0:
-        return
-    step = max(1, total // 10)
-    if done == 1 or done == total or done % step == 0:
-        logg.info(f"Processed {done}/{total} {desc}.")
-
-
 def _run_on_client(
     client: Any,
     specs: Sequence[Any],
@@ -442,10 +434,9 @@ def _run_on_client(
     futures = [client.submit(process_fn, spec, *scattered, pure=False) for spec in specs]
     order = {fut.key: i for i, fut in enumerate(futures)}
     results: list[Any] = [None] * len(futures)
-    for done, (fut, res) in enumerate(as_completed(futures, with_results=True), start=1):
+    for fut, res in tqdm(as_completed(futures, with_results=True), total=len(futures), desc=desc):
         results[order[fut.key]] = res
         fut.release()  # the driver now holds the result; free the worker-side copy
-        _log_progress(done, len(futures), desc)
     return results
 
 
@@ -480,11 +471,14 @@ def _run_tiled(
         return _run_on_client(get_client(), specs, process_fn, scatter, desc)
 
     workers = 1 if n_jobs in (None, 0) else _get_n_cores(n_jobs)
+    # Never spin up more workers than tiles: idle workers only add process-startup
+    # and scatter cost. (n <= 1 also routes to the serial path below.)
+    workers = min(workers, n)
 
     # GIL-bound work with >1 worker needs real worker processes: the local
-    # multiprocessing scheduler does not fork for this graph, so use a
-    # distributed LocalCluster. (dask's ProgressBar cannot observe a distributed
-    # cluster; _run_on_client emits its own heartbeat.)
+    # multiprocessing scheduler does not fork for this graph, so use a distributed
+    # LocalCluster. (dask's ProgressBar cannot observe a distributed cluster; the
+    # tqdm bar in _run_on_client drives progress there.)
     if kind == "processes" and workers > 1 and n > 1:
         from dask.distributed import Client, LocalCluster
 
@@ -494,19 +488,11 @@ def _run_tiled(
         ):
             return _run_on_client(client, specs, process_fn, scatter, desc)
 
-    # Local dask scheduler with a ProgressBar: synchronous for serial / single
-    # tile, threads for GIL-releasing work. Bind scatter into the closure rather
-    # than passing the dask-backed arrays as delayed args -- dask materializes a
-    # collection given to delayed in full before the call, reading the whole
-    # image per tile instead of each tile's crop.
-    import dask
-    from dask.diagnostics import ProgressBar
-
-    scheduler = "synchronous" if (workers == 1 or n <= 1) else "threads"
-
+    # Local path: reuse the shared threaded map (serial for 1 worker / 1 tile,
+    # threads otherwise). Bind scatter into the closure rather than passing the
+    # dask-backed arrays as args -- otherwise the collection is materialized in
+    # full before the call, reading the whole image per tile instead of its crop.
     def _task(spec):
         return process_fn(spec, *scatter)
 
-    tasks = [dask.delayed(_task)(spec) for spec in specs]
-    with ProgressBar():
-        return list(dask.compute(*tasks, scheduler=scheduler, num_workers=workers))
+    return thread_map(_task, specs, n_jobs=1 if n <= 1 else workers, show_progress_bar=True, unit=desc)
