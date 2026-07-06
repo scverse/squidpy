@@ -185,7 +185,7 @@ def _genesymbols(
 def _shuffle_group(
     cluster_annotation: NDArrayA,
     libraries: pd.Series[CategoricalDtype],
-    rs: np.random.RandomState,
+    rs: np.random.Generator,
 ) -> NDArrayA:
     """
     Shuffle values in ``arr`` for each category in ``categories``.
