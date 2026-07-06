@@ -44,17 +44,10 @@ def ripley(
     r"""
     Calculate various Ripley's statistics for point processes.
 
+    %(seed_versionchanged)s
+
     According to the `'mode'` argument, it calculates one of the following Ripley's statistics:
     `{rp.F.s!r}`, `{rp.G.s!r}` or `{rp.L.s!r}` statistics.
-
-    .. versionchanged:: 1.8.4
-        Every simulation now uses an independent :class:`numpy.random.Generator` spawned from a
-        :class:`numpy.random.SeedSequence`, following `NumPy's guidance on parallel random
-        number generation <https://numpy.org/doc/stable/reference/random/parallel.html>`_.
-        Previously every simulation reused the same ``seed`` and therefore produced an identical
-        point pattern; the simulated statistics (and hence the p-values) are now genuinely
-        independent across simulations, but results obtained with a given ``seed`` differ from
-        those produced by squidpy < 1.8.4.
 
     `{rp.F.s!r}`, `{rp.G.s!r}` are defined as:
 
