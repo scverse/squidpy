@@ -809,14 +809,21 @@ def test_drop_constant_features(sdata_synthetic):
     # sdata_synthetic has uniform 30x30 cells, so 'area' is constant across cells.
     with pytest.warns(UserWarning, match="constant feature"):
         dropped = sq.experimental.im.calculate_image_features(
-            sdata_synthetic, image_key="test_img", labels_key="test_labels",
-            features=["skimage:morphology:area"], inplace=False,
+            sdata_synthetic,
+            image_key="test_img",
+            labels_key="test_labels",
+            features=["skimage:morphology:area"],
+            inplace=False,
         )
     assert dropped.n_vars == 0  # the only feature was constant -> empty table
 
     kept = sq.experimental.im.calculate_image_features(
-        sdata_synthetic, image_key="test_img", labels_key="test_labels",
-        features=["skimage:morphology:area"], inplace=False, drop_constant_features=False,
+        sdata_synthetic,
+        image_key="test_img",
+        labels_key="test_labels",
+        features=["skimage:morphology:area"],
+        inplace=False,
+        drop_constant_features=False,
     )
     assert list(kept.var_names) == ["area"]
 
@@ -1031,8 +1038,12 @@ class TestAlignment:
         n_cells = int((np.unique(sdata.labels["lbl"].values) != 0).sum())
         with pytest.warns(UserWarning, match="Dropped"):
             result = sq.experimental.im.calculate_image_features(
-                sdata, image_key="img", labels_key="lbl", features=["skimage:morphology:area"],
-                inplace=False, drop_constant_features=False,
+                sdata,
+                image_key="img",
+                labels_key="lbl",
+                features=["skimage:morphology:area"],
+                inplace=False,
+                drop_constant_features=False,
             )
         # Dropped cells (outside + partial) leave the output; every survivor is
         # fully inside the overlap, so its area is untruncated (cells are 25x25).

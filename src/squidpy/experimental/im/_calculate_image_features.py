@@ -705,8 +705,7 @@ def _align_to_image_grid(
         labels_crop = labels_crop.where(~labels_crop.isin(partial_ids), 0)
     if cells_outside or partial_ids:
         warnings.warn(
-            f"Dropped {cells_outside} cell(s) fully and {len(partial_ids)} cell(s) partially "
-            f"outside the image extent.",
+            f"Dropped {cells_outside} cell(s) fully and {len(partial_ids)} cell(s) partially outside the image extent.",
             UserWarning,
             stacklevel=2,
         )
@@ -804,9 +803,7 @@ def _prepare_lazy(
     # Only meaningful with a real labels element + an image; the shapes->labels
     # path already rasterized onto the image grid (identity transform -> no-op).
     if image_da is not None and labels_key is not None:
-        image_da, labels_da = _align_to_image_grid(
-            sdata, image_key, labels_key, image_da, labels_da, align_mode
-        )
+        image_da, labels_da = _align_to_image_grid(sdata, image_key, labels_key, image_da, labels_da, align_mode)
 
     if image_da is None:
         return image_da, labels_da, []
