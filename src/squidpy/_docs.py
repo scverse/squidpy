@@ -53,7 +53,7 @@ _seed_versionchanged = """\
 .. versionchanged:: 1.8.4
     Every permutation now uses an independent :class:`numpy.random.Generator` spawned from a
     :class:`numpy.random.SeedSequence`. Consequently the permutation-based results no
-    longer depend on ``n_jobs`` / ``backend``, but results obtained with a given ``seed`` 
+    longer depend on ``n_jobs`` / ``backend``, but results obtained with a given ``seed``
     differ from those produced by squidpy < 1.8.4. See `#1232 <https://github.com/scverse/squidpy/issues/1232>`_ and
     `#1233 <https://github.com/scverse/squidpy/issues/1233>`_."""
 _n_perms = """\
