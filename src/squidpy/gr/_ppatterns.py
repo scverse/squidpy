@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit, prange
-from numpy.random import default_rng
 from scanpy import logging as logg
 from scanpy.metrics import gearys_c, morans_i
 from scipy import stats
@@ -23,7 +22,15 @@ from statsmodels.stats.multitest import multipletests
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, deprecated_params, parallelize
+from squidpy._utils import (
+    NDArrayA,
+    Signal,
+    SigQueue,
+    _get_n_cores,
+    deprecated_params,
+    parallelize,
+    spawn_generators,
+)
 from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -77,6 +84,8 @@ def spatial_autocorr(
         ``'pval_norm'`` for Geary's C differ from earlier versions. Permutation-based p-values
         (``'pval_sim'``, ``'pval_z_sim'``) are unaffected.
         See `#1183 <https://github.com/scverse/squidpy/issues/1183>`_.
+
+    %(seed_versionchanged)s
 
     Parameters
     ----------
@@ -211,16 +220,16 @@ def spatial_autocorr(
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
         perms = list(np.arange(n_perms))
+        generators = spawn_generators(seed, n_perms)
 
         score_perms = parallelize(
             _score_helper,
             collection=perms,
             extractor=np.concatenate,
-            use_ixs=True,
             n_jobs=n_jobs,
             backend=backend,
             show_progress_bar=show_progress_bar,
-        )(mode=mode, g=g, vals=vals, seed=seed)
+        )(mode=mode, g=g, vals=vals, generators=generators)
     else:
         score_perms = None
 
@@ -247,19 +256,18 @@ def spatial_autocorr(
 
 
 def _score_helper(
-    ix: int,
     perms: Sequence[int],
     mode: SpatialAutocorr,
     g: spmatrix,
     vals: NDArrayA,
-    seed: int | None = None,
+    generators: Sequence[np.random.Generator],
     queue: SigQueue | None = None,
 ) -> pd.DataFrame:
     score_perms = np.empty((len(perms), vals.shape[0]))
-    rng = default_rng(None if seed is None else ix + seed)
     func = morans_i if mode == SpatialAutocorr.MORAN else gearys_c
 
-    for i in range(len(perms)):
+    for i, p in enumerate(perms):
+        rng = generators[p]
         idx_shuffle = rng.permutation(g.shape[0])
         score_perms[i, :] = func(g[idx_shuffle, :], vals)
 
