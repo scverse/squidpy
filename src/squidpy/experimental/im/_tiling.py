@@ -487,17 +487,11 @@ def _run_tiled(
     # cluster; _run_on_client emits its own heartbeat.)
     if kind == "processes" and workers > 1 and n > 1:
         from dask.distributed import Client, LocalCluster
-
-        cluster = client = None
-        try:
-            cluster = LocalCluster(n_workers=workers, threads_per_worker=1, processes=True, dashboard_address=None)
-            client = Client(cluster)
+        with (
+            LocalCluster(n_workers=workers, threads_per_worker=1, processes=True, dashboard_address=None) as cluster,
+            Client(cluster) as client,
+        ):
             return _run_on_client(client, specs, process_fn, scatter, desc)
-        finally:
-            if client is not None:
-                client.close()
-            if cluster is not None:
-                cluster.close()
 
     # Local dask scheduler with a ProgressBar: synchronous for serial / single
     # tile, threads for GIL-releasing work. Bind scatter into the closure rather
