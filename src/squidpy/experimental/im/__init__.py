@@ -20,6 +20,7 @@ from ._stain import (
     fit_stain_reference,
     normalize_stains,
 )
+from ._stitched_labels import make_stitched_labels
 
 __all__ = [
     "BackgroundDetectionParams",
@@ -37,6 +38,7 @@ __all__ = [
     "detect_tissue",
     "estimate_white_point",
     "fit_stain_reference",
+    "make_stitched_labels",
     "make_tiles",
     "make_tiles_from_spots",
     "qc_image",

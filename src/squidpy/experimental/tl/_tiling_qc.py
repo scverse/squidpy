@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 import anndata as ad
@@ -52,6 +52,7 @@ from squidpy.experimental.im._tiling import (
 )
 from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS, StitchParams
 from squidpy.experimental.utils._labels import resolve_labels_array
+from squidpy.experimental.utils._params import resolve_params
 
 __all__ = ["TilingQCParams", "calculate_tiling_qc"]
 
@@ -90,23 +91,13 @@ class TilingQCParams:
 
 
 _QC_DEFAULTS = TilingQCParams()
-_QC_FIELDS = frozenset(f.name for f in fields(TilingQCParams))
 
 
 def _resolve_qc_params(qc_params: TilingQCParams | Mapping[str, Any] | None) -> TilingQCParams:
     """Normalise the ``tiling_qc_params`` argument to a :class:`TilingQCParams` instance."""
     if qc_params is None:
         return _QC_DEFAULTS
-    if isinstance(qc_params, TilingQCParams):
-        return qc_params
-    if isinstance(qc_params, Mapping):
-        unknown = set(qc_params) - _QC_FIELDS
-        if unknown:
-            raise ValueError(
-                f"Unknown `tiling_qc_params` field(s): {sorted(unknown)}; expected from {sorted(_QC_FIELDS)}."
-            )
-        return TilingQCParams(**qc_params)
-    raise TypeError(f"`tiling_qc_params` must be TilingQCParams, Mapping, or None; got {type(qc_params).__name__}.")
+    return resolve_params(qc_params, TilingQCParams, label="`tiling_qc_params`")
 
 
 # Standard consistency factor sd ~ 1.4826 x MAD for normal distributions.
