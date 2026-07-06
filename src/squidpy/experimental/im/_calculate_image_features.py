@@ -580,11 +580,9 @@ def _rasterize_to_grid(element: Any, image_da: xr.DataArray, cs: str) -> xr.Data
 
 def _rasterize_to_image_grid(element: Any, image_da: xr.DataArray, cs: str) -> xr.DataArray:
     """Rasterize labels onto the image grid, warning that laziness is lost."""
-    warnings.warn(
+    logg.warning(
         f"Materializing labels onto the image grid via spatialdata.rasterize in '{cs}'. "
-        f"Lazy behavior is lost for this run.",
-        UserWarning,
-        stacklevel=2,
+        f"Lazy behavior is lost for this run."
     )
     return _rasterize_to_grid(element, image_da, cs)
 
@@ -704,10 +702,8 @@ def _align_to_image_grid(
     if partial_ids:
         labels_crop = labels_crop.where(~labels_crop.isin(partial_ids), 0)
     if cells_outside or partial_ids:
-        warnings.warn(
-            f"Dropped {cells_outside} cell(s) fully and {len(partial_ids)} cell(s) partially outside the image extent.",
-            UserWarning,
-            stacklevel=2,
+        logg.warning(
+            f"Dropped {cells_outside} cell(s) fully and {len(partial_ids)} cell(s) partially outside the image extent."
         )
 
     return image_crop, labels_crop
@@ -994,8 +990,8 @@ def calculate_image_features(
     Notes
     -----
     Cells dropped during alignment (fully/partially outside the image) and
-    constant features removed by ``drop_constant_features`` each emit a
-    ``UserWarning``.
+    constant features removed by ``drop_constant_features`` are logged at
+    WARNING level.
 
     With ``n_jobs > 1`` a ``LocalCluster`` is started, which spawns worker
     processes. On macOS/Windows (spawn start method) the calling code must be
@@ -1059,12 +1055,10 @@ def calculate_image_features(
     # Warn when per-channel features would be named by positional index because
     # the image carries the default integer channel names (0, 1, ...).
     if _uses_channels(parsed) and channel_names == [str(i) for i in range(len(channel_names))]:
-        warnings.warn(
+        logg.warning(
             f"Image '{image_key}' has positional channel names {channel_names}; per-channel "
             f"features will be index-named (e.g. 'intensity_mean__0'). Assign marker names via "
-            f"`Image2DModel.parse(..., c_coords=[...])` for marker-named features.",
-            UserWarning,
-            stacklevel=2,
+            f"`Image2DModel.parse(..., c_coords=[...])` for marker-named features."
         )
 
     # Correlation-only cp_measure with a single channel produces no features and
@@ -1122,11 +1116,7 @@ def calculate_image_features(
     if drop_constant_features and len(combined) > 1:
         constant_cols = list(combined.columns[combined.nunique(dropna=False) <= 1])
         if constant_cols:
-            warnings.warn(
-                f"Dropped {len(constant_cols)} constant feature(s) with no variance across cells.",
-                UserWarning,
-                stacklevel=2,
-            )
+            logg.warning(f"Dropped {len(constant_cols)} constant feature(s) with no variance across cells.")
             combined = combined.drop(columns=constant_cols)
 
     # --- Build AnnData ---

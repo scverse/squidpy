@@ -6,7 +6,8 @@ run in seconds without downloading real data.
 
 from __future__ import annotations
 
-import warnings
+import logging
+from contextlib import contextmanager
 
 import anndata as ad
 import geopandas as gpd
@@ -20,6 +21,24 @@ from spatialdata.models import Image2DModel, Labels2DModel, ShapesModel
 from spatialdata.transformations import Scale, Translation, set_transformation
 
 import squidpy as sq
+
+
+@contextmanager
+def capture_logs(level=logging.WARNING):
+    """Capture squidpy/spatialdata log records.
+
+    The spatialdata logger has ``propagate=False``, so pytest's ``caplog`` can't
+    see it; attach a handler directly instead. Yields the record list.
+    """
+    logger = logging.getLogger("spatialdata._logging")
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler(level)
+    handler.emit = records.append
+    logger.addHandler(handler)
+    try:
+        yield records
+    finally:
+        logger.removeHandler(handler)
 
 
 @pytest.fixture()
@@ -552,7 +571,7 @@ class TestBehaviouralRegressions:
 
     def test_unnamed_channels_warn(self, sdata_synthetic):
         """Per-channel features on positional-integer channels warn the user."""
-        with pytest.warns(UserWarning, match="positional channel names"):
+        with capture_logs() as recs:
             sq.experimental.im.calculate_image_features(
                 sdata_synthetic,
                 image_key="test_img",
@@ -560,16 +579,16 @@ class TestBehaviouralRegressions:
                 features=["skimage:intensity"],
                 inplace=False,
             )
+        assert any("positional channel names" in r.getMessage() for r in recs)
 
     def test_named_channels_do_not_warn(self):
         """Named channels do not trigger the unnamed-channel warning."""
         sdata = _toy_sdata(channel_names=["DAPI", "CD3", "CD8"])
-        with warnings.catch_warnings(record=True) as rec:
-            warnings.simplefilter("always")
+        with capture_logs() as recs:
             sq.experimental.im.calculate_image_features(
                 sdata, image_key="img", labels_key="lbl", features=["squidpy:summary"], inplace=False
             )
-        assert not any("positional channel names" in str(w.message) for w in rec)
+        assert not any("positional channel names" in r.getMessage() for r in recs)
 
     def test_obs_names_are_label_ids(self, sdata_synthetic):
         """obs_names are the cell IDs from the label image (as strings)."""
@@ -807,7 +826,7 @@ def test_texture_on_constant_channel():
 def test_drop_constant_features(sdata_synthetic):
     """Constant columns are dropped by default (with a warning) and kept when disabled."""
     # sdata_synthetic has uniform 30x30 cells, so 'area' is constant across cells.
-    with pytest.warns(UserWarning, match="constant feature"):
+    with capture_logs() as recs:
         dropped = sq.experimental.im.calculate_image_features(
             sdata_synthetic,
             image_key="test_img",
@@ -815,6 +834,7 @@ def test_drop_constant_features(sdata_synthetic):
             features=["skimage:morphology:area"],
             inplace=False,
         )
+    assert any("constant feature" in r.getMessage() for r in recs)
     assert dropped.n_vars == 0  # the only feature was constant -> empty table
 
     kept = sq.experimental.im.calculate_image_features(
@@ -1021,7 +1041,7 @@ class TestAlignment:
 
     def test_rasterize_resamples_and_warns(self):
         sdata = _toy_sdata(labels_scale=(1.3, 1.3))
-        with pytest.warns(UserWarning, match="Materializing labels onto the image grid"):
+        with capture_logs() as recs:
             result = sq.experimental.im.calculate_image_features(
                 sdata,
                 image_key="img",
@@ -1030,13 +1050,14 @@ class TestAlignment:
                 align_mode="rasterize",
                 inplace=False,
             )
+        assert any("Materializing labels onto the image grid" in r.getMessage() for r in recs)
         assert result.n_obs > 0
 
     def test_translation_drops_outside_and_partial_cells(self):
         # Shift labels so some cells straddle / fall outside the overlap edge.
         sdata = _toy_sdata(labels_translation=(120, 120))
         n_cells = int((np.unique(sdata.labels["lbl"].values) != 0).sum())
-        with pytest.warns(UserWarning, match="Dropped"):
+        with capture_logs() as recs:
             result = sq.experimental.im.calculate_image_features(
                 sdata,
                 image_key="img",
@@ -1045,6 +1066,7 @@ class TestAlignment:
                 inplace=False,
                 drop_constant_features=False,
             )
+        assert any("Dropped" in r.getMessage() for r in recs)
         # Dropped cells (outside + partial) leave the output; every survivor is
         # fully inside the overlap, so its area is untruncated (cells are 25x25).
         assert 0 < result.n_obs < n_cells
@@ -1162,12 +1184,14 @@ class TestParallelEngine:
             "tile_size": 64,
             "inplace": False,
         }
-        with pytest.warns(UserWarning, match="Materializing labels onto the image grid"):
+        with capture_logs() as recs_serial:
             serial = _sorted_frame(
                 sq.experimental.im.calculate_image_features(_toy_sdata(labels_scale=(1.3, 1.3)), n_jobs=1, **kw)
             )
-        with pytest.warns(UserWarning, match="Materializing labels onto the image grid"):
+        assert any("Materializing labels onto the image grid" in r.getMessage() for r in recs_serial)
+        with capture_logs() as recs_parallel:
             parallel = _sorted_frame(
                 sq.experimental.im.calculate_image_features(_toy_sdata(labels_scale=(1.3, 1.3)), n_jobs=2, **kw)
             )
+        assert any("Materializing labels onto the image grid" in r.getMessage() for r in recs_parallel)
         pd.testing.assert_frame_equal(serial, parallel[serial.columns], rtol=1e-5, atol=1e-6)
