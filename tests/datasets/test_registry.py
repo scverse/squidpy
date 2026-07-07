@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
+import pytest
 from scverse_misc.datasets import DatasetEntry
 
 from squidpy.datasets._registry import dataset_names, get_base_url, get_registry
@@ -10,11 +13,16 @@ from squidpy.datasets._registry import dataset_names, get_base_url, get_registry
 class TestGetRegistry:
     def test_returns_mapping_of_entries(self):
         reg = get_registry()
-        assert isinstance(reg, dict)
+        assert isinstance(reg, Mapping)
         assert all(isinstance(e, DatasetEntry) for e in reg.values())
 
     def test_cached(self):
         assert get_registry() is get_registry()
+
+    def test_read_only(self):
+        # the cached registry must not be mutable, or a caller could corrupt the singleton
+        with pytest.raises(TypeError):
+            get_registry()["four_i"] = None  # type: ignore[index]
 
     def test_base_url(self):
         assert get_base_url() == "https://exampledata.scverse.org/squidpy/"

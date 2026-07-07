@@ -26,6 +26,9 @@ if TYPE_CHECKING:
 __all__ = ["download"]
 
 
+# NB: ``register_loader`` mutates scverse-misc's process-global loader registry at import
+# time. Overriding the built-in ``anndata`` loader here is intentional (it adds squidpy's
+# shape warning) and applies process-wide to any scverse-misc consumer in the same process.
 @register_loader("anndata")
 def _load_anndata(entry: DatasetEntry, target: Path, download: Callable[..., Any], **kwargs: Any) -> AnnData:
     import anndata

@@ -120,8 +120,12 @@ def visium(
     :class:`anndata.AnnData`
         Spatial AnnData object.
     """
-    if sample_id not in get_registry():
-        raise ValueError(f"Unknown Visium sample: {sample_id}. Available samples: {dataset_names('visium_10x')}")
+    # guard against the visium_10x names specifically: a valid-but-wrong-type name
+    # (e.g. "imc", an AnnData dataset) would otherwise pass and fail deep in the
+    # anndata loader with a confusing ``unexpected keyword argument 'include_hires_tiff'``.
+    visium_samples = dataset_names("visium_10x")
+    if sample_id not in visium_samples:
+        raise ValueError(f"Unknown Visium sample: {sample_id}. Available samples: {visium_samples}")
 
     # downloads land in <datasetdir>/visium_10x/<sample_id>/
     return download(sample_id, base_dir, include_hires_tiff=include_hires_tiff)
