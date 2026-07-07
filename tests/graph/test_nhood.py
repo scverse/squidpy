@@ -60,7 +60,7 @@ class TestNhoodEnrichment:
 
     def test_n_jobs_invariance(self, adata: AnnData):
         """The number of workers must not change the result (one seed is spawned per permutation)."""
-        spatial_neighbors(adata)
+        spatial_neighbors_grid(adata)
 
         kw = {"cluster_key": _CK, "seed": 42, "n_perms": 20, "copy": True}
         res_serial = nhood_enrichment(adata, n_jobs=1, **kw)
