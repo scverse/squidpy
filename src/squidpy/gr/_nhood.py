@@ -20,7 +20,14 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import (
+    NDArrayA,
+    Signal,
+    SigQueue,
+    _get_n_cores,
+    parallelize,
+    spawn_generators,
+)
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -153,6 +160,8 @@ def nhood_enrichment(
     """
     Compute neighborhood enrichment by permutation test.
 
+    %(seed_versionchanged)s
+
     Parameters
     ----------
     %(adata)s
@@ -200,6 +209,7 @@ def nhood_enrichment(
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
+    generators = spawn_generators(seed, n_perms)
 
     perms = parallelize(
         _nhood_enrichment_helper,
@@ -215,7 +225,7 @@ def nhood_enrichment(
         int_clust=int_clust,
         libraries=libraries,
         n_cls=n_cls,
-        seed=seed,
+        generators=generators,
     )
     zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
@@ -444,19 +454,22 @@ def _nhood_enrichment_helper(
     int_clust: NDArrayA,
     libraries: pd.Series[CategoricalDtype] | None,
     n_cls: int,
-    seed: int | None = None,
+    generators: Sequence[np.random.Generator],
     queue: SigQueue | None = None,
 ) -> NDArrayA:
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
-    int_clust = int_clust.copy()  # threading
-    rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])
+    int_clust = int_clust.copy()  # threading; used as a read-only base for each permutation
 
-    for i in range(len(ixs)):
+    for i, ix in enumerate(ixs):
+        # shuffle from the same base with a per-permutation generator, so each permutation is
+        # independent of the others and of how the permutations are split across jobs
+        rng = generators[ix]
         if libraries is not None:
-            int_clust = _shuffle_group(int_clust, libraries, rs)
+            shuffled = _shuffle_group(int_clust, libraries, rng)
         else:
-            rs.shuffle(int_clust)
-        perms[i, ...] = callback(indices, indptr, int_clust)
+            shuffled = int_clust.copy()
+            rng.shuffle(shuffled)
+        perms[i, ...] = callback(indices, indptr, shuffled)
 
         if queue is not None:
             queue.put(Signal.UPDATE)

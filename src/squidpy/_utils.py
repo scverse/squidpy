@@ -245,6 +245,10 @@ def parallelize(
     return wrapper
 
 
+def spawn_generators(seed: int | None, n: int) -> list[np.random.Generator]:
+    return [np.random.default_rng(s) for s in np.random.SeedSequence(seed).spawn(n)]
+
+
 def thread_map(
     fn: Callable[..., Any],
     items: Sequence[Any],

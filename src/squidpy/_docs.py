@@ -49,6 +49,13 @@ numba_parallel
 _seed = """\
 seed
     Random seed for reproducibility."""
+_seed_versionchanged = """\
+.. versionchanged:: 1.8.4
+    Every permutation now uses an independent :class:`numpy.random.Generator` spawned from a
+    :class:`numpy.random.SeedSequence`. Consequently the permutation-based results no
+    longer depend on ``n_jobs`` / ``backend``, but results obtained with a given ``seed``
+    differ from those produced by squidpy < 1.8.4. See `#1232 <https://github.com/scverse/squidpy/issues/1232>`_ and
+    `#1233 <https://github.com/scverse/squidpy/issues/1233>`_."""
 _n_perms = """\
 n_perms
     Number of permutations for the permutation test."""
@@ -413,6 +420,7 @@ d = DocstringProcessor(
     copy_cont=_copy_cont,
     numba_parallel=_numba_parallel,
     seed=_seed,
+    seed_versionchanged=_seed_versionchanged,
     n_perms=_n_perms,
     img_layer=_img_layer,
     feature_name=_feature_name,
