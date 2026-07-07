@@ -1,14 +1,5 @@
 # Squidpy dev (the-future)
 
-## Breaking changes
-
-- The dataset registry and downloader now come from
-  [scverse-misc](https://github.com/scverse/scverse-misc); downloads cache under
-  `<datasetdir>/<type>/`. Visium samples move from `visium/` to `visium_10x/` and
-  images from `images/` to `image/`, so existing caches are re-downloaded once into
-  the new layout. `sq.datasets.*` signatures and return types are unchanged.
-  [#1213](https://github.com/scverse/squidpy/pull/1213)
-
 ## Features
 
 - {func}`squidpy.experimental.im.calculate_image_features` now featurizes tiles on a shared dask engine: `n_jobs > 1` runs worker processes via a `dask.distributed.LocalCluster` (or an active `Client`), and per-tile BLAS/OpenMP threads are pinned to avoid oversubscription. This also speeds up the serial path. {func}`squidpy.experimental.tl.calculate_tiling_qc` shares the same engine. Adds `distributed` and `threadpoolctl` as dependencies.
