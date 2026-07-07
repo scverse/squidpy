@@ -91,3 +91,26 @@ def test_ripley_results(
     # assert n_zeros == n_clusters
     idx = np.nonzero(obs_df.bins.values)[0]
     assert idx.shape[0] == n_steps * n_clusters - n_clusters
+
+
+@pytest.mark.parametrize("mode", [RipleyStat.F, RipleyStat.G, RipleyStat.L])
+def test_ripley_seed(adata_ripley: AnnData, mode: RipleyStat):
+    """Same seed reproduces simulations, different seeds change them, and simulations are not all identical."""
+    adata = adata_ripley
+    kw = {"cluster_key": CLUSTER_KEY, "mode": mode.s, "n_simulations": 20, "copy": True}
+
+    res1 = ripley(adata, seed=42, **kw)
+    res2 = ripley(adata, seed=42, **kw)
+    res3 = ripley(adata, seed=43, **kw)
+
+    sims1 = res1["sims_stat"].pivot(index="bins", columns="simulations", values="stats").to_numpy()
+    sims2 = res2["sims_stat"].pivot(index="bins", columns="simulations", values="stats").to_numpy()
+    sims3 = res3["sims_stat"].pivot(index="bins", columns="simulations", values="stats").to_numpy()
+
+    # same seed -> identical simulations
+    np.testing.assert_array_equal(sims1, sims2)
+    # different seed -> different simulations
+    assert not np.array_equal(sims1, sims3)
+    # regression: simulations must not all be identical to each other
+    # (previously every simulation reused the same seed and produced the same point pattern)
+    assert not np.allclose(sims1, sims1[:, [0]])
