@@ -44,8 +44,10 @@ dynamic = [
 dependencies = [
   "aiohttp>=3.8.1",
   "anndata>=0.9",
+  "centrosome>=1.2.3",
+  "cp-measure>=0.1.19,<0.2",
   "cycler>=0.11",
-  "dask[array]>=2021.2",
+  "dask[array,distributed]>=2021.2", # distributed is the only scheduler that forks for GIL-bound featurization
   "dask-image>=0.5",
   "docrep>=0.3.1",
   "fast-array-utils",
@@ -69,6 +71,7 @@ dependencies = [
   "spatialdata>=0.7.2",              # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
   "spatialdata-plot>=0.3.3",
   "statsmodels>=0.12",
+  "threadpoolctl>=3",                # clamp BLAS/OpenMP per worker in tiled featurization
   # https://github.com/scverse/squidpy/issues/526
   "tifffile!=2022.4.22",
   "tqdm>=4.50.2",

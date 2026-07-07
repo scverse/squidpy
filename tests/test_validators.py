@@ -204,7 +204,7 @@ class TestAssertKeyInSdata:
 # assert_isinstance edge cases
 class TestAssertIsinstanceEdgeCases:
     def test_bool_is_subclass_of_int(self):
-        """bool is a subclass of int — assert_isinstance(True, int) passes."""
+        """bool is a subclass of int - assert_isinstance(True, int) passes."""
         assert_isinstance(True, int, name="x")
 
     def test_none_type(self):
