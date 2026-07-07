@@ -46,9 +46,11 @@ def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
     assert not np.array_equal(idx_df, idx_adata)
     np.testing.assert_array_equal(sorted(idx_df), sorted(idx_adata))
     # check parallel gives same results
-    with pytest.raises(AssertionError, match=r'.*\(column name="pval_z_sim"\) are different.*'):
-        # because the seeds will be different, we don't expect the pval_sim values to be the same
-        assert_frame_equal(df, df_parallel)
+    # each permutation now gets its own seed (spawned from a SeedSequence), so the
+    # simulated p-values no longer depend on how the permutations are split across jobs
+    np.testing.assert_allclose(df["pval_sim"].values, df_parallel["pval_sim"].values, atol=1e-12)
+    np.testing.assert_allclose(df["pval_z_sim"].values, df_parallel["pval_z_sim"].values, atol=1e-12)
+    np.testing.assert_allclose(df["var_sim"].values, df_parallel["var_sim"].values, atol=1e-12)
 
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
@@ -88,6 +90,51 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
     np.testing.assert_array_equal(sorted(idx_df), sorted(idx_adata))
     # check parallel gives same results
     assert_frame_equal(df_1, df_2)
+
+
+@pytest.mark.parametrize("mode", ["moran", "geary"])
+def test_spatial_autocorr_n_jobs_invariance(dummy_adata: AnnData, mode: str):
+    """The number of workers must not change the permutation-based results (seed spawned per permutation)."""
+    kw = {"mode": mode, "copy": True, "seed": 42, "n_perms": 50}
+    df_serial = spatial_autocorr(dummy_adata, n_jobs=1, **kw)
+    df_parallel = spatial_autocorr(dummy_adata, n_jobs=2, **kw)
+
+    # align on the gene index in case the stat-based sort order ties differently
+    df_parallel = df_parallel.loc[df_serial.index]
+    for col in ["pval_sim", "pval_z_sim", "var_sim"]:
+        np.testing.assert_allclose(df_serial[col].values, df_parallel[col].values, atol=1e-12)
+
+
+@pytest.mark.parametrize("mode", ["moran", "geary"])
+def test_spatial_autocorr_var_norm_formula(dummy_adata: AnnData, mode: str):
+    """Analytic ``var_norm`` must use the variance matching the chosen statistic.
+
+    Regression test for #1183: Geary's C and Moran's I have different sampling
+    variances under the normality assumption (Cliff & Ord 1981). Reusing Moran's
+    variance for Geary's C produced a miscalibrated analytic p-value.
+    """
+    from sklearn.preprocessing import normalize
+
+    from squidpy.gr._ppatterns import _g_moments
+
+    uns_key = MORAN_K if mode == "moran" else GEARY_C
+    spatial_autocorr(dummy_adata, mode=mode, transformation=True, n_perms=None, seed=0)
+    var_norm = float(dummy_adata.uns[uns_key]["var_norm"].iloc[0])
+
+    # Reconstruct the exact (row-standardised) weight matrix the routine used.
+    g = dummy_adata.obsp["spatial_connectivities"].copy()
+    normalize(g, norm="l1", axis=1, copy=False)
+    s0, s1, s2 = _g_moments(g)
+    n = g.shape[0]
+    s02 = s0 * s0
+    moran_var = (n * n * s1 - n * s2 + 3 * s02) / ((n - 1) * (n + 1) * s02) - (1.0 / (n - 1)) ** 2
+    geary_var = ((2 * s1 + s2) * (n - 1) - 4 * s02) / (2 * (n + 1) * s02)
+
+    expected = moran_var if mode == "moran" else geary_var
+    np.testing.assert_allclose(var_norm, expected, rtol=1e-10)
+    if mode == "geary":
+        # the two formulas differ here, so the test would fail if Moran's were reused
+        assert not np.isclose(geary_var, moran_var, rtol=1e-3)
 
 
 @pytest.mark.parametrize(

@@ -13,7 +13,6 @@ import scanpy as sc
 from anndata import AnnData
 from pandas.testing import assert_frame_equal
 from scanpy import settings as s
-from scanpy.datasets import blobs
 from scipy.sparse import csc_matrix
 
 from squidpy._constants._pkg_constants import Key
@@ -305,6 +304,15 @@ class TestValidBehavior:
 
         assert not np.allclose(r3["pvalues"], r1["pvalues"])
         assert not np.allclose(r3["pvalues"], r2["pvalues"])
+
+    def test_n_jobs_invariance(self, adata: AnnData, interactions: Interactions_t):
+        """The number of workers must not change the result (one seed is spawned per permutation)."""
+        kw = {"interactions": interactions, "n_perms": 25, "copy": True, "show_progress_bar": False, "seed": 42}
+        res_serial = ligrec(adata, _CK, n_jobs=1, **kw)
+        res_parallel = ligrec(adata, _CK, n_jobs=2, **kw)
+
+        np.testing.assert_allclose(res_serial["means"], res_parallel["means"])
+        np.testing.assert_allclose(res_serial["pvalues"], res_parallel["pvalues"])
 
     def test_reproducibility_numba_parallel_off(self, adata: AnnData, interactions: Interactions_t):
         t1 = time()

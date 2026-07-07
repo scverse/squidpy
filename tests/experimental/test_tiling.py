@@ -16,19 +16,45 @@ import xarray as xr
 
 from squidpy.experimental.im._tiling import (
     CellInfo,
+    _zero_non_owned,
     build_tile_specs,
     compute_cell_info,
     compute_cell_info_multiscale,
     compute_cell_info_tiled,
-    extract_tile,
     extract_tile_lazy,
-    verify_coverage,
 )
 from tests.conftest import PlotTester, PlotTesterMeta
 
-# ---------------------------------------------------------------------------
+
+# Test-only helpers: an eager tile-extraction reference (the production path is
+# extract_tile_lazy) and a coverage-invariant checker for build_tile_specs.
+# Neither is used in production, so they live with the tests rather than ship.
+def extract_tile(image, labels, spec):
+    """Eager numpy tile extraction; reference for extract_tile_lazy."""
+    cy0, cx0, cy1, cx1 = spec.crop
+    tile_image = image[:, cy0:cy1, cx0:cx1]
+    tile_labels = labels[cy0:cy1, cx0:cx1].copy()
+    _zero_non_owned(tile_labels, spec.owned_ids)
+    return tile_image, tile_labels
+
+
+def verify_coverage(all_label_ids, specs):
+    """Assert tile specs give full, non-overlapping cell coverage."""
+    owned_union: set[int] = set()
+    for spec in specs:
+        overlap = owned_union & spec.owned_ids
+        if overlap:
+            raise ValueError(f"Cells {overlap} assigned to multiple tiles")
+        owned_union |= spec.owned_ids
+    missing = all_label_ids - owned_union
+    if missing:
+        raise ValueError(f"Cells {missing} not assigned to any tile")
+    extra = owned_union - all_label_ids
+    if extra:
+        raise ValueError(f"Tile specs reference non-existent labels {extra}")
+
+
 # Brick-pattern fixture
-# ---------------------------------------------------------------------------
 
 _IMAGE_SIZE = 500
 _CELL_H = 20
@@ -121,9 +147,7 @@ def _make_ci(label: int, cy: float, cx: float, h: int = 4, w: int = 4) -> CellIn
     return CellInfo(label=label, centroid_y=cy, centroid_x=cx, bbox_h=h, bbox_w=w)
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(params=[10, 0], ids=["gap=10", "gap=0"])
@@ -137,9 +161,7 @@ def brick_image():
     return _make_image()
 
 
-# ---------------------------------------------------------------------------
 # build_tile_specs - deterministic checks
-# ---------------------------------------------------------------------------
 
 
 class TestBuildTileSpecs:
@@ -264,9 +286,7 @@ class TestBuildTileSpecsEdgeCases:
         assert len(specs) == 1
 
 
-# ---------------------------------------------------------------------------
 # extract_tile
-# ---------------------------------------------------------------------------
 
 
 class TestExtractTile:
@@ -314,9 +334,7 @@ class TestExtractTile:
             assert tile_lbl.shape == (cy1 - cy0, cx1 - cx0)
 
 
-# ---------------------------------------------------------------------------
 # End-to-end roundtrip
-# ---------------------------------------------------------------------------
 
 
 class TestEndToEnd:
@@ -341,9 +359,7 @@ class TestEndToEnd:
 # test_roundtrip_no_cells_lost via the brick_labels fixture's parametrisation.
 
 
-# ---------------------------------------------------------------------------
 # Visual test - tile assignment plot
-# ---------------------------------------------------------------------------
 
 # Tile colors: one distinct color per tile quadrant
 _TILE_COLORS = [
@@ -388,9 +404,7 @@ def _plot_tile_assignment(labels, specs, title=""):
     ax.set_ylabel("y")
 
 
-# ---------------------------------------------------------------------------
 # Lazy / multiscale helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_multiscale_tree(labels: np.ndarray, n_scales: int = 3) -> xr.DataTree:

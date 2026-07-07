@@ -28,31 +28,31 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 import anndata as ad
-import dask
 import numpy as np
 import pandas as pd
 import spatialdata as sd
 import xarray as xr
-from dask.diagnostics import ProgressBar
 from numba import njit
 from skimage.measure import find_contours, regionprops
 from sklearn.neighbors import BallTree
 from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
 
-from squidpy._utils import _get_n_cores
 from squidpy.experimental.im._tiling import (
+    _run_tiled,
     build_tile_specs,
     compute_cell_info,
     compute_cell_info_multiscale,
     compute_cell_info_tiled,
     extract_labels_tile_lazy,
 )
+from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS, StitchParams
 from squidpy.experimental.utils._labels import resolve_labels_array
+from squidpy.experimental.utils._params import resolve_params
 
 __all__ = ["TilingQCParams", "calculate_tiling_qc"]
 
@@ -91,23 +91,13 @@ class TilingQCParams:
 
 
 _QC_DEFAULTS = TilingQCParams()
-_QC_FIELDS = frozenset(f.name for f in fields(TilingQCParams))
 
 
 def _resolve_qc_params(qc_params: TilingQCParams | Mapping[str, Any] | None) -> TilingQCParams:
     """Normalise the ``tiling_qc_params`` argument to a :class:`TilingQCParams` instance."""
     if qc_params is None:
         return _QC_DEFAULTS
-    if isinstance(qc_params, TilingQCParams):
-        return qc_params
-    if isinstance(qc_params, Mapping):
-        unknown = set(qc_params) - _QC_FIELDS
-        if unknown:
-            raise ValueError(
-                f"Unknown `tiling_qc_params` field(s): {sorted(unknown)}; expected from {sorted(_QC_FIELDS)}."
-            )
-        return TilingQCParams(**qc_params)
-    raise TypeError(f"`tiling_qc_params` must be TilingQCParams, Mapping, or None; got {type(qc_params).__name__}.")
+    return resolve_params(qc_params, TilingQCParams, label="`tiling_qc_params`")
 
 
 # Standard consistency factor sd ~ 1.4826 x MAD for normal distributions.
@@ -119,27 +109,7 @@ _SCORE_COLUMNS = _TILE_SCORE_COLUMNS + _POST_SCORE_COLUMNS
 _NAN_TILE_SCORES = dict.fromkeys(_TILE_SCORE_COLUMNS, np.nan)
 
 
-def _has_distributed_client() -> bool:
-    """Return True iff a ``dask.distributed.Client`` is active in this process.
-
-    Mirrors the public dask idiom: if a Client is in scope, ``dask.compute``
-    will pick it up automatically — we only need to know whether to fall
-    back to the local threaded scheduler.
-    """
-    try:
-        # ImportError guards against partial dask installs without the distributed extra;
-        # ValueError is what get_client() raises when no Client is currently active.
-        from dask.distributed import get_client
-
-        get_client()
-    except (ImportError, ValueError):
-        return False
-    return True
-
-
-# ---------------------------------------------------------------------------
 # Core geometry
-# ---------------------------------------------------------------------------
 
 
 @njit(cache=True, nogil=True)
@@ -355,9 +325,7 @@ def _straight_edge_metrics(
     return float(straight_ratio), float(cardinal), float(cut_score)
 
 
-# ---------------------------------------------------------------------------
 # Per-tile scoring
-# ---------------------------------------------------------------------------
 
 
 def _score_tile(
@@ -382,7 +350,7 @@ def _score_tile(
         Factor by which to downsample each cell's bounding-box crop
         before contour extraction.  ``1`` = full resolution, ``2`` =
         half, etc.  Straight edges are scale-invariant so moderate
-        downsampling (2–4x) is safe and much faster for large cells.
+        downsampling (2-4x) is safe and much faster for large cells.
 
     Returns
     -------
@@ -430,9 +398,7 @@ def _score_tile(
     return pd.DataFrame.from_dict(rows, orient="index")
 
 
-# ---------------------------------------------------------------------------
 # Centroid computation (shared logic with _feature.py)
-# ---------------------------------------------------------------------------
 
 
 def _compute_centroids_for_labels(
@@ -457,9 +423,7 @@ def _compute_centroids_for_labels(
     return compute_cell_info_tiled(labels_da)
 
 
-# ---------------------------------------------------------------------------
 # Public API
-# ---------------------------------------------------------------------------
 
 
 _METHOD_KEY = "tiling_qc"
@@ -570,10 +534,10 @@ def calculate_tiling_qc(
 
     Notes
     -----
-    Tile processing is parallelised via :func:`dask.compute`.  When an
-    active ``dask.distributed.Client`` is in scope it is picked up
-    automatically and used for execution; otherwise a local threaded
-    scheduler with ``n_jobs`` workers is used.
+    Tile processing is parallelised via dask.  When an active
+    ``dask.distributed.Client`` is in scope it is picked up automatically
+    and used for execution; otherwise a local threaded scheduler with
+    ``n_jobs`` workers is used (the per-tile work releases the GIL).
 
     If you invoke this function from inside a dask worker task (e.g.,
     via ``client.submit(calculate_tiling_qc, ...)``), wrap the call in
@@ -608,7 +572,6 @@ def calculate_tiling_qc(
         f"Tiling QC: {len(specs)} tiles ({tile_size}x{tile_size}, margin={overlap_margin}, downsample={downsample}x)."
     )
 
-    @dask.delayed
     def _process_one(spec):
         tile_lbl = extract_labels_tile_lazy(labels_da, spec)
         return _score_tile(
@@ -619,19 +582,8 @@ def calculate_tiling_qc(
             max_contour_points=qc_params.max_contour_points,
         )
 
-    tasks = [_process_one(spec) for spec in specs]
-
-    if _has_distributed_client():
-        if n_jobs != -1:
-            logg.warning(
-                "`n_jobs` is ignored when an active dask.distributed Client is in scope. "
-                "Parallelism is controlled by the client."
-            )
-        results = dask.compute(*tasks)
-    else:
-        num_workers = _get_n_cores(n_jobs)
-        with ProgressBar():
-            results = dask.compute(*tasks, scheduler="threads", num_workers=num_workers)
+    # `_score_tile` is numba `nogil`, so threads scale (no process/pickle cost).
+    results = _run_tiled(specs, _process_one, n_jobs=n_jobs, kind="threads", desc="tiles")
 
     tile_dfs = [df for df in results if not df.empty]
 
@@ -668,7 +620,7 @@ def calculate_tiling_qc(
         combined["smoothed_cut_score"] = smoothed
 
         # Build is_outlier from enabled gates (AND when both active).
-        # A gate whose MAD is degenerate has no signal — treat it as a
+        # A gate whose MAD is degenerate has no signal - treat it as a
         # no-op so it cannot poison the other gate's result.  If no gate
         # produced a meaningful filter, fall back to "no outliers".
         is_outlier = np.ones(n_cells, dtype=bool)
@@ -699,7 +651,8 @@ def calculate_tiling_qc(
     adata = ad.AnnData(
         X=np.empty((n_cells, 0), dtype=np.float32),
     )
-    adata.obs_names = [f"cell_{i}" for i in combined.index]
+    # obs_names are the cell's label-image ID, matching calculate_image_features.
+    adata.obs_names = [str(i) for i in combined.index]
 
     adata.obs["region"] = pd.Categorical([labels_key] * n_cells)
     adata.obs["label_id"] = combined.index.values
@@ -733,6 +686,40 @@ def calculate_tiling_qc(
 
     if inplace:
         table_key = table_key_added if table_key_added is not None else f"{labels_key}_qc"
+        _warn_if_dropping_stitch_columns(sdata, table_key, labels_key)
         sdata.tables[table_key] = TableModel.parse(adata)
         return None
     return adata
+
+
+def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labels_key: str) -> None:
+    """Warn if re-running QC would drop downstream stitch results.
+
+    ``calculate_tiling_qc`` replaces the QC table wholesale, so any columns
+    added by :func:`~squidpy.experimental.tl.assign_stitch_groups` to a previous
+    version of this table are about to disappear.  We emit an actionable warning
+    listing the previous stitch parameters (from ``.uns["tiling_stitch"]``) and a
+    copy-pasteable invocation to restore them.
+    """
+    if table_key not in sdata.tables:
+        return
+    existing = sdata.tables[table_key]
+    present = [c for c in _STITCH_COLUMNS if c in existing.obs.columns]
+    if not present:
+        return
+
+    prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
+    parts = [f"labels_key={labels_key!r}"]
+    parts.extend(f"{k}={v!r}" for k, v in prev_params.items() if k in _STITCH_PARAM_KEYS)
+    nested = prev_params.get("stitch_params")
+    if isinstance(nested, dict) and nested:
+        defaults = asdict(StitchParams())
+        diff = {k: v for k, v in nested.items() if k in defaults and defaults[k] != v}
+        if diff:
+            parts.append(f"stitch_params={diff!r}")
+    rerun = f"sq.experimental.tl.assign_stitch_groups(sdata, {', '.join(parts)})"
+    logg.warning(
+        f"Re-running calculate_tiling_qc dropped previous stitch columns "
+        f"({', '.join(present)}) from sdata.tables[{table_key!r}].  "
+        f"To restore them, run: {rerun}"
+    )
