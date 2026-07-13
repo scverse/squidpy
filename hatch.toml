@@ -17,9 +17,13 @@ extra-dependencies = ["diff-cover"]
 matrix = [
   { deps = ["stable"], python = ["3.12", "3.13", "3.14"] },
   { deps = ["pre"], python = ["3.14"] },
+    { deps = ["stable"], python = ["3.13"], extras = ["jax"] },
 ]
 overrides.matrix.deps.env-vars = [
   { key = "UV_PRERELEASE", value = "allow", if = ["pre"] },
+]
+overrides.matrix.extras.features = [
+  { value = "jax", if = ["jax"] },
 ]
 # default commands (only `cov-report` is overridden)
 scripts.run = "pytest{env:HATCH_TEST_ARGS:} -p no:cov {args}"

@@ -79,6 +79,9 @@ dependencies = [
   "xarray>=2024.10",
   "zarr>=3",
 ]
+optional-dependencies.jax = [
+  "jax>=0.4",
+]
 optional-dependencies.leiden = [
   "leidenalg",
   "spatialleiden>=0.4",
