@@ -14,7 +14,7 @@ from matplotlib.colors import ListedColormap
 
 from squidpy import pl
 from squidpy._constants._pkg_constants import Key
-from squidpy.gr import spatial_neighbors
+from squidpy.gr import spatial_neighbors_grid, spatial_neighbors_radius
 from squidpy.pl._spatial_utils import _get_library_id
 from tests.conftest import PlotTester, PlotTesterMeta
 
@@ -80,7 +80,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
         )
 
     def test_plot_spatial_scatter_group_multi(self, adata_hne: AnnData):
-        spatial_neighbors(adata_hne)
+        spatial_neighbors_grid(adata_hne)
         pl.spatial_scatter(
             adata_hne,
             shape="circle",
@@ -109,7 +109,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
 
     def test_plot_spatial_scatter_nospatial(self, adata_hne_concat: AnnData):
         adata = adata_hne_concat.copy()
-        spatial_neighbors(adata)
+        spatial_neighbors_grid(adata)
         adata.uns.pop("spatial")
         pl.spatial_scatter(
             adata_hne_concat,
@@ -134,7 +134,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
 
     @pytest.mark.skipif(platform.system() == "Darwin", reason="Fails on macOS 3.8 CI")
     def test_plot_spatial_scatter_novisium(self, adata_mibitof: AnnData):
-        spatial_neighbors(adata_mibitof, coord_type="generic", radius=50)
+        spatial_neighbors_radius(adata_mibitof, radius=50)
         pl.spatial_scatter(
             adata_mibitof,
             library_key="library_id",
