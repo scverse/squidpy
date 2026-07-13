@@ -118,6 +118,63 @@ def dummy_adata() -> AnnData:
 
 
 @pytest.fixture()
+def dummy_adata2() -> AnnData:
+    r = np.random.RandomState(100)
+    adata = AnnData(r.rand(10, 100), obs={"celltype": r.choice(["foo", "bar", "baz"], size=10)})
+    adata.obs.index = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
+
+    # Spatial layout of the 10 data points in the grid:
+    #
+    #   Y ▲
+    #     │
+    #   5 │       a    b         c    Points: (2,5), (3,5), (5,5)
+    #     │
+    #   4 │  d              e         Points: (1,4), (4,4)
+    #     │
+    #   3 │            f         g    Points: (3,3), (5,3)
+    #     │
+    #   2 │                 h         Points: (4,2)
+    #     │
+    #   1 │  i                   j    Points: (1,1), (5,1)
+    #     │
+    #     └─────────────────────────►
+    #        1    2    3    4    5   X
+    #
+    #
+    # celltypes-
+    # a      bar
+    # b      baz
+    # c      foo
+    # d      foo
+    # e      foo
+    # f      baz
+    # g      baz
+    # h      baz
+    # i      bar
+    # j      baz
+
+    adata.obsm["spatial"] = np.array(
+        [
+            [2, 5],
+            [3, 5],
+            [5, 5],
+            [1, 4],
+            [4, 4],
+            [3, 3],
+            [5, 3],
+            [4, 2],
+            [1, 1],
+            [5, 1],
+        ]
+    )
+
+    # using a radius of 1.5 will lead to, say e being a neighbor of b,c,f,g but not h. So all side-adjacent and diagonal-adjacent
+    # locations will be neighbors
+    sq.gr.spatial_neighbors_radius(adata, radius=1.5)
+    return adata
+
+
+@pytest.fixture()
 def adata_intmat() -> AnnData:
     graph = csr_matrix(
         np.array(

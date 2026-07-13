@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import warnings
 from typing import Any, Literal
 
 import anndata as ad
@@ -10,7 +11,7 @@ import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
 from numpy.typing import NDArray
-from scipy.sparse import coo_matrix, hstack, issparse, spdiags
+from scipy.sparse import coo_matrix, hstack, issparse, lil_matrix, spdiags
 from scipy.spatial import distance
 from sklearn.metrics import f1_score
 from sklearn.mixture import GaussianMixture
@@ -607,35 +608,48 @@ def _calculate_neighborhood_profile(
     Returns an obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
     """
 
-    nonzero_indices = np.split(matrix.col, matrix.row.searchsorted(np.arange(1, matrix.shape[0])))
-    neighbor_matrix = pd.DataFrame(nonzero_indices)
+    # ensure that adata.obs[group] is of categorical type, as that makes it explicit, which cols of the returned profile_df
+    # correspond to which categories in group
+    if adata.obs[groups].dtype.name != "category":
+        warnings.warn(
+            "Since adata.obs[groups] does not already have categorical dtype, converting it into categorical type.",
+            stacklevel=2,
+        )
+        adata.obs[groups] = adata.obs[groups].astype("category")
 
-    # get unique categories
-    unique_categories = np.unique(adata.obs[groups].values)
+    # ensure matrix is in csc format for efficient column slicing
+    if matrix.format != "csc":
+        matrix = matrix.tocsc()
 
-    # get obs x k matrix where each column is the category of the k-th neighbor
-    indices_with_nan = neighbor_matrix.to_numpy()
-    valid_indices = neighbor_matrix.fillna(-1).astype(int).to_numpy()
-    cat_by_id = adata.obs[groups].values[valid_indices]
-    cat_by_id[indices_with_nan == -1] = np.nan
-    # cat_by_id = np.take(category_arr, neighbor_matrix)
+    # get cell categories in order
+    categories_order = adata.obs[groups].cat.categories
+    n_categories = len(categories_order)
 
-    # in obs x k matrix convert categorical values to numerical values
-    cat_indices = {category: index for index, category in enumerate(unique_categories)}
-    cat_values = np.vectorize(cat_indices.get)(cat_by_id)
+    # map category to column index
+    category_to_idx = {ct: i for i, ct in enumerate(categories_order)}
 
-    # get obx x category matrix where each column is the absolute amount of a category in the neighborhood
-    m, k = cat_by_id.shape
-    abs_freq = np.zeros((m, len(unique_categories)), dtype=int)
-    np.add.at(abs_freq, (np.arange(m)[:, None], cat_values), 1)
+    # pre allocate sparse LIL matrix for efficient assignment (n_cells x n_categories)
+    profile_sparse = lil_matrix((matrix.shape[0], n_categories), dtype=np.float64)
 
-    # normalize by n_neighbors to get relative frequency of each category
-    rel_freq = abs_freq / k
+    # for each category, sum over cells of that category
+    for ct in categories_order:
+        ct_mask = adata.obs[groups] == ct  # boolean mask for cells of this category
+        col_indices = np.where(ct_mask)[0]  # indices of those cells
+        if len(col_indices) > 0:
+            col_slice = matrix[:, col_indices]  # sparse submatrix
+            profile_sparse[:, category_to_idx[ct]] = col_slice.sum(axis=1).A1
 
-    if abs_nhood:
-        return pd.DataFrame(abs_freq, index=adata.obs.index)
-    else:
-        return pd.DataFrame(rel_freq, index=adata.obs.index)
+    # convert to dataframe (csr for final storage, dense for pandas)
+    profile_df = pd.DataFrame(profile_sparse.tocsr().todense(), index=adata.obs[groups].index, columns=categories_order)
+
+    # now according to parameter abs_nhood, make raw counts into proportions or not
+    if not abs_nhood:
+        total_neighs = profile_df.sum(axis=1)
+        profile_df = profile_df.div(total_neighs, axis=0)
+        # this may lead to some values being nan, as some cells might have had no neighbors. Make those values as 0
+        profile_df = profile_df.fillna(0.0)
+
+    return profile_df
 
 
 def _utag(adata: AnnData, normalize_adj: bool, spatial_connectivity_key: str) -> AnnData:
