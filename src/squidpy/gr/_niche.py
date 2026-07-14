@@ -16,7 +16,7 @@ from scipy.spatial import distance
 from sklearn.metrics import f1_score
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import normalize
-from spatialdata import SpatialData
+from spatialdata import SpatialData, sanitize_table
 from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import NicheDefinitions
@@ -279,6 +279,7 @@ def calculate_niche(
         return adata
     # For SpatialData, update the table directly
     if isinstance(data, SpatialData):
+        sanitize_table(adata)
         data.tables[table_key] = adata
     else:
         # For AnnData, copy results back to original object
