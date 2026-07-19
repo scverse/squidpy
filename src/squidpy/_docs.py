@@ -49,6 +49,13 @@ numba_parallel
 _seed = """\
 seed
     Random seed for reproducibility."""
+_seed_versionchanged = """\
+.. versionchanged:: 1.8.4
+    Every permutation now uses an independent :class:`numpy.random.Generator` spawned from a
+    :class:`numpy.random.SeedSequence`. Consequently the permutation-based results no
+    longer depend on ``n_jobs`` / ``backend``, but results obtained with a given ``seed``
+    differ from those produced by squidpy < 1.8.4. See `#1232 <https://github.com/scverse/squidpy/issues/1232>`_ and
+    `#1233 <https://github.com/scverse/squidpy/issues/1233>`_."""
 _n_perms = """\
 n_perms
     Number of permutations for the permutation test."""
@@ -121,6 +128,12 @@ n_jobs
     ``NUMBA_NUM_THREADS`` before running the program.
 backend
     Parallelization backend to use. See :class:`joblib.Parallel` for available options.
+show_progress_bar
+    Whether to show the progress bar or not."""
+_n_jobs = """\
+n_jobs
+    Number of parallel jobs to use."""
+_show_progress_bar = """\
 show_progress_bar
     Whether to show the progress bar or not."""
 _channels = """\
@@ -407,6 +420,7 @@ d = DocstringProcessor(
     copy_cont=_copy_cont,
     numba_parallel=_numba_parallel,
     seed=_seed,
+    seed_versionchanged=_seed_versionchanged,
     n_perms=_n_perms,
     img_layer=_img_layer,
     feature_name=_feature_name,
@@ -420,6 +434,8 @@ d = DocstringProcessor(
     cat_plotting=_cat_plotting,
     plotting_returns=_plotting_returns,
     parallelize=_parallelize,
+    n_jobs=_n_jobs,
+    show_progress_bar=_show_progress_bar,
     channels=_channels,
     segment_kwargs=_segment_kwargs,
     ligrec_test_returns=_ligrec_test_returns,
