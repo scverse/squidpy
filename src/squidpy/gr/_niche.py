@@ -893,7 +893,7 @@ def _validate_niche_args(
     # Define parameters used by each flavor
     flavor_param_specs = {
         "neighborhood": {
-            "required": ["groups", "n_neighbors", "resolutions"],
+            "required": ["groups", "n_neighbors", "resolutions", "spatial_connectivities_key"],
             "optional": [
                 "min_niche_size",
                 "scale",
@@ -901,10 +901,19 @@ def _validate_niche_args(
                 "distance",
                 "n_hop_weights",
             ],
-            "unused": ["aggregation", "n_components", "random_state"],
+            "unused": [
+                "aggregation",
+                "n_components",
+                "random_state",
+                "latent_connectivities_key",
+                "layer_ratio",
+                "n_iterations",
+                "use_weights",
+                "use_rep"
+            ],
         },
         "utag": {
-            "required": ["n_neighbors", "resolutions"],
+            "required": ["n_neighbors", "resolutions", "spatial_connectivities_key"],
             "optional": [],
             "unused": [
                 "groups",
@@ -916,10 +925,15 @@ def _validate_niche_args(
                 "aggregation",
                 "n_components",
                 "random_state",
+                "latent_connectivities_key",
+                "layer_ratio",
+                "n_iterations",
+                "use_weights",
+                "use_rep"
             ],
         },
         "cellcharter": {
-            "required": ["distance", "aggregation", "random_state"],
+            "required": ["distance", "aggregation", "random_state", "spatial_connectivities_key"],
             "optional": ["n_components", "use_rep"],
             "unused": [
                 "groups",
@@ -929,6 +943,10 @@ def _validate_niche_args(
                 "n_neighbors",
                 "resolutions",
                 "n_hop_weights",
+                "latent_connectivities_key",
+                "layer_ratio",
+                "n_iterations",
+                "use_weights",
             ],
         },
         "spatialleiden": {
@@ -947,6 +965,7 @@ def _validate_niche_args(
                 "abs_nhood",
                 "n_neighbors",
                 "n_hop_weights",
+                "use_rep"
             ],
         },
     }
