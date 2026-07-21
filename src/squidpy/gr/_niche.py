@@ -55,85 +55,7 @@ def calculate_niche(
     *,
     table_key: str | None = None,
 ) -> AnnData | None:
-    """
-    Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
-    The resulting niche labels with be stored in 'adata.obs'.
-
-    Parameters
-    ----------
-    %(adata)s
-    flavor
-        Method to use for niche calculation. Available options are:
-            - `{fla.NEIGHBORHOOD.s!r}` - cluster the neighborhood profile.
-            - `{fla.UTAG.s!r}` - use utag algorithm (matrix multiplication).
-            - `{fla.SPATIALLEIDEN.s!r}` - cluster spatially resolved omics data using Multiplex Leiden.
-            - `{fla.CELLCHARTER.s!r}` - a simplified version of CellCharter's approach, using PCA for dimensionality reduction. An arbitrary embedding can be used instead of PCA by setting the `use_rep` parameter which will try to find the embedding in `adata.obsm`.
-    %(library_key)s
-        If provided, niches will be calculated separately for each unique value in this column.
-        Each niche will be prefixed with the library identifier.
-    %(table_key)s
-    mask
-        Boolean array to filter cells which won't get assigned to a niche.
-        Note that if you want to exclude these cells during neighborhood calculation already, you should subset your AnnData table before running 'sq.gr.spatial_neigbors'.
-    groups
-        Groups based on which to calculate neighborhood profile (E.g. columns of cell type annotations in adata.obs).
-        Required if flavor == `{fla.NEIGHBORHOOD.s!r}`.
-    n_neighbors
-        Number of neighbors to use for 'scanpy.pp.neighbors' before clustering using leiden algorithm.
-        Required if flavor == `{fla.NEIGHBORHOOD.s!r}` or flavor == `{fla.UTAG.s!r}`.
-    resolutions
-        List of resolutions to use for leiden clustering.
-        In the case of spatialleiden you can pass a tuple. Resolution for the latent space and spatial layer, respectively. A single float applies to both layers.
-        Required if flavor == `{fla.NEIGHBORHOOD.s!r}` or flavor == `{fla.UTAG.s!r}`.
-        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
-    min_niche_size
-        Minimum required size of a niche. Niches with fewer cells will be labeled as 'not_a_niche'.
-        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
-    scale
-        If 'True', compute z-scores of neighborhood profiles.
-        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
-    abs_nhood
-        If 'True', calculate niches based on absolute neighborhood profile.
-        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
-    distance
-        n-hop neighbor adjacency matrices to use e.g. [1,2,3] for 1-hop,2-hop,3-hop neighbors respectively or "5" for 1-hop,...,5-hop neighbors. 0 (self) is always included.
-        Required if flavor == `{fla.CELLCHARTER.s!r}`.
-        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
-    n_hop_weights
-        How to weight subsequent n-hop adjacency matrices. E.g. [1, 0.5, 0.25] for weights of 1-hop, 2-hop, 3-hop adjacency matrices respectively.
-        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}` and `distance` > 1.
-    aggregation
-        How to aggregate count matrices. Either 'mean' or 'variance'.
-        Required if flavor == `{fla.CELLCHARTER.s!r}`.
-    n_components
-        Number of components to use for GMM.
-        Required if flavor == `{fla.CELLCHARTER.s!r}`.
-    random_state
-        Random state to use for GMM or SpatialLeiden.
-        Optional if flavor == `{fla.CELLCHARTER.s!r}` or flavor == `{fla.SPATIALLEIDEN.s!r}`.
-    spatial_connectivities_key
-        Key in `adata.obsp` where spatial connectivities are stored.
-        Required if flavor == `{fla.SPATIALLEIDEN.s!r}`.
-    latent_connectivities_key
-        Key in `adata.obsp` where gene expression connectivities are stored.
-        Required if flavor == `{fla.SPATIALLEIDEN.s!r}`.
-    layer_ratio
-        The ratio of the weighting of the layers; latent space vs spatial. A higher ratio will increase relevance of the spatial neighbors and lead to more spatially homogeneous clusters.
-        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
-    n_iterations
-        Number of iterations to run the Leiden algorithm. If the number is negative it runs until convergence.
-        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
-    use_weights
-        Whether to use weights for the edges for latent space and spatial neighbors, respectively. A single bool applies to both layers.
-        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
-    use_rep
-        Key in `adata.obsm` where the embedding is stored. If provided, this embedding will be used instead of PCA for dimensionality reduction.
-        Optional if flavor == `{fla.CELLCHARTER.s!r}`.
-    inplace
-        If 'True', perform the operation in place.
-        If 'False', return a new AnnData object with the niche labels.
-    """
-
+    
     if flavor == "cellcharter" and aggregation is None:
         aggregation = "mean"
 
@@ -171,39 +93,279 @@ def calculate_niche(
     if resolutions is None:
         resolutions = [0.5]
 
-    orig_adata = extract_adata_if_sdata(data, table_key=table_key)
-    adata = orig_adata.copy()
-
-    assert_key_in_adata(
-        adata,
-        spatial_connectivities_key,
-        attr="obsp",
-        extra_msg="If you haven't computed a spatial neighborhood graph yet, use `sq.gr.spatial_neighbors`.",
-    )
-
-    if flavor == "spatialleiden":
-        assert_key_in_adata(
-            adata,
-            latent_connectivities_key,
-            attr="obsp",
-            extra_msg="If you haven't computed a latent neighborhood graph yet, use `sc.pp.neighbors`.",
+    if flavor == 'neighborhood':
+        return calculate_niche_neighborhood(
+            data,
+            groups, 
+            n_neighbors,
+            resolutions,
+            spatial_connectivities_key,
+            scale,
+            distance,
+            abs_nhood,
+            n_hop_weights,
+            min_niche_size,
+            mask,
+            library_key,
+            inplace,
+            table_key,
+        )
+    
+    elif flavor == 'utag':
+        return calculate_niche_utag(
+            data,
+            n_neighbors,
+            resolutions,
+            spatial_connectivities_key,
+            min_niche_size,
+            mask,
+            library_key,
+            inplace,
+            table_key,
+        )
+    
+    elif flavor == 'cellcharter':
+        return calculate_niche_cellcharter(
+            data,
+            distance,
+            aggregation,
+            random_state,
+            spatial_connectivities_key,
+            n_components,
+            use_rep,
+            min_niche_size,
+            mask,
+            library_key,
+            inplace,
+            table_key,
         )
 
-    result_columns = _get_result_columns(
-        flavor=flavor,
-        resolutions=resolutions,
-        library_key=None,
-        libraries=None,
+    elif flavor == 'spatialleiden':
+        return calculate_niche_spatialleiden(
+            data,
+            latent_connectivities_key,
+            spatial_connectivities_key,
+            resolutions,
+            layer_ratio,
+            n_iterations,
+            use_weights,
+            random_state,
+            min_niche_size,
+            mask,
+            prefix = None,
+            library_key = library_key,
+            inplace = inplace,
+            table_key = table_key,
+        )
+
+    return
+
+def calculate_niche_neighborhood(
+    data,
+    groups,
+    n_neighbors,
+    resolutions,
+    spatial_connectivities_key,
+    scale,
+    distance,
+    abs_nhood,
+    n_hop_weights,
+    min_niche_size,
+    mask,
+    library_key,
+    inplace,
+    table_key,
+) -> AnnData | None:
+    
+    # Create instance of NhoodProfileEmbedder using provided inputs
+    embedder = NhoodProfileEmbedder(
+        groups,
+        spatial_connectivities_key, 
+        scale, 
+        distance, 
+        abs_nhood, 
+        n_hop_weights,
     )
+
+    # Create instance of LeidenClusterer using provided inputs
+    clusterer = LeidenClusterer(n_neighbors, resolutions)
+
+    # generate the list of postprocessor objects using the supplied args
+    postprocessors_list = []
+    if mask is not None:
+        mask_postprocessor = MaskPostprocessor(mask)
+        postprocessors_list.append(mask_postprocessor)
+    if min_niche_size is not None:
+        min_niche_size_postprocessor = MinNicheSizePostprocessor(min_niche_size)
+        postprocessors_list.append(min_niche_size_postprocessor)
+
+    return calculate_niche_custom(
+        data, 
+        embedder, 
+        clusterer, 
+        postprocessors_list, 
+        library_key,
+        inplace,
+        table_key
+    )
+
+def calculate_niche_utag(
+    data,
+    n_neighbors,
+    resolutions,
+    spatial_connectivities_key,
+    min_niche_size,
+    mask,
+    library_key,
+    inplace,
+    table_key,
+) -> AnnData | None:
+    
+    embedder = UtagEmbedder(
+        spatial_connectivities_key
+    )
+
+    clusterer = LeidenClusterer(n_neighbors, resolutions)
+
+    # generate the list of postprocessor objects using the supplied args
+    postprocessors_list = []
+    if mask is not None:
+        mask_postprocessor = MaskPostprocessor(mask)
+        postprocessors_list.append(mask_postprocessor)
+    if min_niche_size is not None:
+        min_niche_size_postprocessor = MinNicheSizePostprocessor(min_niche_size)
+        postprocessors_list.append(min_niche_size_postprocessor)
+
+    return calculate_niche_custom(
+        data, 
+        embedder, 
+        clusterer, 
+        postprocessors_list, 
+        library_key,
+        inplace,
+        table_key
+    )
+
+def calculate_niche_cellcharter(
+    data,
+    distance,
+    aggregation,
+    random_state,
+    spatial_connectivities_key,
+    n_components,
+    use_rep,
+    min_niche_size,
+    mask,
+    library_key,
+    inplace,
+    table_key,
+) -> AnnData | None:
+    
+    embedder = CellcharterEmbedder(
+        distance,
+        aggregation,
+        spatial_connectivities_key,
+        n_components,
+        use_rep
+    )
+
+    clusterer = GMMClusterer(n_components, random_state)
+
+    # generate the list of postprocessor objects using the supplied args
+    postprocessors_list = []
+    if mask is not None:
+        mask_postprocessor = MaskPostprocessor(mask)
+        postprocessors_list.append(mask_postprocessor)
+    if min_niche_size is not None:
+        min_niche_size_postprocessor = MinNicheSizePostprocessor(min_niche_size)
+        postprocessors_list.append(min_niche_size_postprocessor)
+
+    return calculate_niche_custom(
+        data, 
+        embedder, 
+        clusterer, 
+        postprocessors_list, 
+        library_key,
+        inplace,
+        table_key
+    )
+
+def calculate_niche_spatialleiden(
+    data,
+    latent_connectivities_key,
+    spatial_connectivities_key,
+    resolutions,
+    layer_ratio,
+    n_iterations,
+    use_weights,
+    random_state,
+    min_niche_size,
+    mask,
+    prefix, # default value will be None
+    library_key,
+    inplace,
+    table_key,
+) -> AnnData | None:
+    """
+    Parameters
+    ----------
+    prefix
+        What to add as a prefix in the names of niches identified. Used implicitly when library_key is not None (adds "lib=").    
+    """
+    # obtain adata if data was of sdata type
+    orig_adata = extract_adata_if_sdata(data, table_key=table_key)
+    # make a copy of the adata object, with which we will work
+    adata = orig_adata.copy()
+
+    if library_key is not None:
+        # first assert that library_key was there in adata.obs, and then, stratify the object according to that library_key and 
+        # then re-call calculate_niche_spatialleiden for each subpart, with library_key = None and prefix with appropriate information like "lib="
+
+        # At the end of this if-block, the logic for aggregation of information from all the adata subsets into the full 
+        # adata will be there
+
+    else:
+        # Simply call sl.spatialleiden with the provided arguments
+
+        # obtain the result_columns, which are basically the difference in columns in orig_adata and adata
+        result_columns = list(set(orig_adata.obs.columns) - set(adata.obs.columns))
+        
+        # generate the list of postprocessor objects using the supplied args
+        postprocessors_list = []
+        if mask is not None:
+            mask_postprocessor = MaskPostprocessor(mask)
+            postprocessors_list.append(mask_postprocessor)
+        if min_niche_size is not None:
+            min_niche_size_postprocessor = MinNicheSizePostprocessor(min_niche_size)
+            postprocessors_list.append(min_niche_size_postprocessor)
+        if prefix is not None:
+            renaming_postprocessor = RenamePostprocessor(prefix)
+            postprocessors_list.append(renaming_postprocessor)
+
+        postprocess_niche_results(adata, result_columns, postprocessors_list)
+
+    return return_niche_output(data, orig_adata, adata, inplace, table_key)
+
+def calculate_niche_custom(
+    data, 
+    embedder,
+    clusterer,
+    postprocessors_list,
+    library_key,
+    inplace,
+    table_key,
+) -> AnnData | None:
+
+    # obtain adata if data was of sdata type
+    orig_adata = extract_adata_if_sdata(data, table_key=table_key)
+    # make a copy of the adata object, with which we will work
+    adata = orig_adata.copy()
 
     if library_key is not None:
         assert_key_in_adata(adata, library_key, attr="obs")
-
         logg.info(f"Stratifying by library_key '{library_key}'")
-
-        for col in result_columns:
-            adata.obs[col] = "not_a_niche"
-
+        
+        # go through each library_id and process the corresponding adata subset
         for lib_id in adata.obs[library_key].unique():
             logg.info(f"Processing library '{lib_id}'")
 
@@ -215,68 +377,47 @@ def calculate_niche(
 
             lib_adata = adata[lib_indices].copy()
 
-            lib_mask = None
-            if mask is not None:
-                lib_mask = mask[mask.index.isin(lib_indices)]
+            # append a renaming postprocessor to postprocessors_list
+            renaming_postprocessor = RenamePostprocessor(prefix_for_niches = f'lib={lib_id}')
+            postprocessors_list.append(renaming_postprocessor)
 
-            lib_result = calculate_niche(
-                lib_adata,
-                flavor=flavor,
-                library_key=None,
-                mask=lib_mask,
-                groups=groups,
-                n_neighbors=n_neighbors,
-                resolutions=None if flavor == "cellcharter" else resolutions,
-                min_niche_size=min_niche_size,
-                scale=scale,
-                abs_nhood=abs_nhood,
-                distance=None if flavor == "utag" else distance,
-                n_hop_weights=n_hop_weights,
-                aggregation=aggregation,
-                n_components=n_components,
-                random_state=random_state,
-                spatial_connectivities_key=spatial_connectivities_key,
-                latent_connectivities_key=latent_connectivities_key,
-                layer_ratio=layer_ratio,
-                n_iterations=n_iterations,
-                use_weights=use_weights,
-                inplace=False,
+            lib_result = calculate_niche_custom(
+                lib_adata, 
+                embedder,
+                clusterer,
+                postprocessors_list,
+                library_key = None,
+                inplace = False,
+                table_key = None,
             )
 
-            for col in result_columns:
-                if col in lib_result.obs.columns:
-                    prefixed_values = lib_result.obs[col].apply(
-                        lambda x, lib=lib_id: f"lib={lib}_{x}" if x != "not_a_niche" else x
-                    )
+            added_columns = list(set(adata.obs.columns) - set(lib_result.obs.columns))
 
-                    adata.obs.loc[lib_indices, col] = prefixed_values.values
+            for col in added_columns:
+                # ensure that adata has the columns in which we are adding the information
+                if col not in adata.obs:
+                    adata.obs[col] = 'not_a_niche'
+                adata.obs.loc[lib_indices, col] = list(lib_result.obs[col])
 
     else:
-        _calculate_niches(
-            adata,
-            mask,
-            flavor,
-            groups,
-            n_neighbors,
-            resolutions,
-            min_niche_size,
-            scale,
-            abs_nhood,
-            distance,
-            n_hop_weights,
-            aggregation,
-            n_components,
-            random_state,
-            spatial_connectivities_key,
-            latent_connectivities_key,
-            layer_ratio,
-            n_iterations,
-            use_weights,
-            use_rep,
-        )
+        # supply the adata object to the embedder object, and obtain appropriate embedding matrix
+        embedding = embedder.get_embedding(adata)
 
+        # Supply to the clusterer object, the embedding matrix just obtained, and get the appropriate clustering. 
+        result_columns = clusterer.cluster(adata, embedding)
+
+        # do postprocessing
+        postprocess_niche_results(adata, result_columns, postprocessors_list)
+
+    return return_niche_output(data, orig_adata, adata, inplace, table_key)
+
+def return_niche_output(data, orig_adata, adata, inplace, table_key):
     if not inplace:
         return adata
+    
+    # result_columns are the columns that are added to adata compared to orig_adata
+    result_columns = list(set(orig_adata.obs.columns) - set(adata.obs.columns))
+
     # For SpatialData, update the table directly
     if isinstance(data, SpatialData):
         sanitize_table(adata)
@@ -296,6 +437,258 @@ def calculate_niche(
 
     return None
 
+def postprocess_niche_results(adata, result_columns, postprocessors_list):
+    
+    # go through each postprocessor object, and apply it to the adata, and store 
+    # results in the form of new columns in adata
+    for postprocessor in postprocessors_list:
+        # obtain the new columns in this process
+        result_columns = postprocessor.postprocess(adata, result_columns)
+
+    return
+
+############
+### embedder classes
+############
+
+class NicheEmbedder():
+
+    def __init__(self, suffix):
+        self.suffix = suffix
+
+    @abstractmethod
+    def get_embedding(self, adata: AnnData) -> NDArrayA:
+        """return an embedding matrix, with cells as rows"""
+
+class NhoodProfileEmbedder(NicheEmbedder):
+
+    def __init__(
+        self, 
+        groups,
+        spatial_connectivities_key, 
+        scale, 
+        distance, 
+        abs_nhood, 
+        n_hop_weights,
+        suffix = '_nhood'
+    ):
+        super().__init__(suffix = suffix)
+        self.groups = groups
+        self.spatial_connectivities_key = spatial_connectivities_key 
+        self.scale = scale 
+        self.distance = distance 
+        self.abs_nhood = abs_nhood 
+        self.n_hop_weights = n_hop_weights
+    
+    def get_embedding(self, adata: AnnData) -> NDArrayA:
+        """
+        adapted from https://github.com/immunitastx/monkeybread/blob/main/src/monkeybread/calc/_neighborhood_profile.py
+        """
+
+        # get obs x neighbor matrix from sparse matrix
+        matrix = adata.obsp[self.spatial_connectivities_key].tocoo()
+
+        # get obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
+        nhood_profile = _calculate_neighborhood_profile(adata, self.groups, matrix, self.abs_nhood)
+
+        # Additionally use n-hop neighbors if distance > 1. This sums up the (weighted) neighborhood profiles of all n-hop neighbors.
+        if self.distance > 1:
+            n_hop_adjacency_matrix = adata.obsp[self.spatial_connectivities_key].copy()
+            # if no weights are provided, use 1 for all n_hop neighbors
+            if self.n_hop_weights is None:
+                self.n_hop_weights = [1] * self.distance
+            # if weights are provided, start with applying weight to the original neighborhood profile
+            elif len(self.n_hop_weights) < self.distance:
+                # Extend weights if too few provided
+                self.n_hop_weights = self.n_hop_weights + [self.n_hop_weights[-1]] * (self.distance - len(self.n_hop_weights))
+                logg.debug(f"Extended weights to match distance: {self.n_hop_weights}")
+
+            # Apply first weight to base profile
+            weighted_profile = self.n_hop_weights[0] * nhood_profile
+
+            # Calculate higher-order hop profiles
+            n_hop_adjacency_matrix = adata.obsp[self.spatial_connectivities_key].copy()
+
+            # get n_hop neighbor adjacency matrices by multiplying the original adjacency matrix with itself n times and get corresponding neighborhood profiles.
+            for n_hop in range(1, self.distance):
+                logg.debug(f"Calculating {n_hop + 1}-hop neighbors")
+                # Multiply adjacency matrix by itself to get n+1 hop adjacency
+                n_hop_adjacency_matrix = n_hop_adjacency_matrix @ adata.obsp[self.spatial_connectivities_key]
+                matrix = n_hop_adjacency_matrix.tocoo()
+
+                # Calculate and add weighted profile
+                hop_profile = _calculate_neighborhood_profile(adata, self.groups, matrix, self.abs_nhood)
+                weighted_profile += self.n_hop_weights[n_hop] * hop_profile
+
+            if not self.abs_nhood:
+                weighted_profile = weighted_profile / sum(self.n_hop_weights)
+
+            nhood_profile = weighted_profile
+
+        # create AnnData object from neighborhood profile to perform scanpy functions
+        # Use .to_numpy(copy=True) to ensure the array is writeable (required for pandas CoW compatibility)
+        # Preserve the DataFrame index for later matching with adata_masked
+        adata_neighborhood = ad.AnnData(X=nhood_profile.to_numpy(copy=True), obs=pd.DataFrame(index=nhood_profile.index))
+
+        # reason for scaling see https://monkeybread.readthedocs.io/en/latest/notebooks/tutorial.html#niche-analysis
+        if self.scale:
+            sc.pp.scale(adata_neighborhood, zero_center=True)
+        return adata_neighborhood.X
+
+# TODO: To implement
+class UtagEmbedder(NicheEmbedder):
+    def __init__(self, suffix):
+        super().__init__(suffix)
+    
+    def get_embedding(self, adata: AnnData) -> NDArrayA:
+        return super().get_embedding(adata)
+
+# TODO: To implement
+class CellcharterEmbedder(NicheEmbedder):
+
+    def __init__(self, suffix):
+        super().__init__(suffix)
+    
+    # this will hold an if block checking if use_rep is not None. If not None, then it will simply 
+    # return that representation from adata
+    def get_embedding(self, adata: AnnData) -> NDArrayA:
+        return super().get_embedding(adata)
+
+############
+### clusterer classes
+############
+
+class NicheClusterer():
+    def __init__(self, suffix):
+        self.suffix = suffix
+
+    @abstractmethod
+    def cluster(self, adata: AnnData, embedding: NDArrayA) -> list:
+        """Adds column/s in adata.obs with the clustering done. Returns the names of the columns just added."""
+
+class LeidenClusterer(NicheClusterer):
+    def __init__(self, n_neighbors, resolutions: float | list[float], suffix: str = '_leiden'):
+        super().__init__(suffix = suffix)
+        self.n_neighbors = n_neighbors
+        self.resolutions = resolutions if isinstance(self.resolutions, list) else [self.resolutions]
+    
+    def cluster(self, adata: Anndata, embedding: NDArrayA) -> list:  
+        # first create an adata object using the embedding provided
+        adata_embedding = ad.AnnData(X=embedding, obs=pd.DataFrame(index=adata.index)) # TODO: is supplying obs necessary here?
+
+        # required for leiden clustering (note: no dim reduction performed in original implementation)
+        sc.pp.neighbors(adata_embedding, n_neighbors=self.n_neighbors, use_rep="X")
+
+        # For each resolution, apply leiden on neighborhood profile. Each cluster label equals to a niche label
+        niche_keys = []
+        for res in self.resolutions:
+            niche_key = f"nhood_niche_res={res}"
+            niche_keys.append(niche_key)
+
+            if niche_key in adata.obs.columns:
+                logg.info(f"Overwriting existing column '{niche_key}'")
+                del adata.obs[niche_key]
+
+            sc.tl.leiden(
+                adata_embedding,
+                resolution=res,
+                key_added=niche_key,
+            )
+
+            adata.obs[niche_key] = list(adata_embedding.obs[niche_key]) # since constrain all embedders to return embedding with numrows==numcells and in same order, this should be fine
+        
+        return niche_keys
+
+# TODO: To implement
+class GMMClusterer(NicheClusterer):
+
+    def __init__(self, suffix):
+        super().__init__(suffix)
+    
+    def cluster(self, adata: AnnData, embedding: NDArrayA) -> list:
+        return super().cluster(adata, embedding)
+
+############
+### postprocessor classes
+############
+
+class NichePostprocessor():
+    def __init__(self, suffix):
+        self.suffix = suffix
+
+    @abstractmethod
+    def postprocess(self, adata: AnnData, result_columns: list[str]) -> list[str]:
+        """Logic to postprocess adata and return the names of columns added."""
+        # should append add self.suffix to the columns added
+
+class MinNicheSizePostprocessor(NichePostprocessor):
+
+    def __init__(self, min_niche_size, suffix = '_size_filter'):
+        super().__init__(suffix = suffix)
+        self.min_niche_size = min_niche_size
+    
+    def postprocess(self, adata: AnnData, result_columns: list[str]) -> list[str]:
+        new_result_columns = []
+        # filter niches with n_cells < min_niche_size
+        for result_column in result_columns:
+            # copy into new column
+            new_result_column = result_column + self.suffix
+            new_result_columns.append(new_result_column)
+            adata.obs[new_result_column] = list(adata.obs[result_column])
+
+            counts_by_niche = adata.obs[new_result_column].value_counts()
+            to_filter = counts_by_niche[counts_by_niche < self.min_niche_size].index
+            adata.obs[new_result_column] = adata.obs[new_result_column].apply(
+                lambda x, to_filter=to_filter: "not_a_niche" if x in to_filter else x
+            )
+            adata.obs[new_result_column] = adata.obs.index.map(adata.obs[new_result_column]).fillna("not_a_niche")
+
+        return new_result_columns
+    
+class MaskPostprocessor(NichePostprocessor):
+
+    def __init__(self, mask, suffix = '_mask'):
+        super().__init__(suffix = suffix)
+        self.mask = mask
+    
+    def postprocess(self, adata: AnnData, result_columns: list[str]) -> list[str]:
+        new_result_columns = []
+        # mask obs to exclude cells for which no niche shall be assigned
+        for result_column in result_columns:
+            # copy into new column
+            new_result_column = result_column + self.suffix
+            new_result_columns.append(new_result_column)
+            adata.obs[new_result_column] = list(adata.obs[result_column])
+
+            to_filter = self.mask[self.mask.index.isin(adata.obs.index)]
+            adata.obs[new_result_column] = adata.obs[new_result_column].apply(
+                lambda x, to_filter=to_filter: "not_a_niche" if x in to_filter else x
+            )
+
+        return new_result_columns
+
+class RenamePostprocessor(NichePostprocessor):
+
+    def __init__(self, prefix_for_niches, suffix = '_renamed'):
+        super().__init__(suffix = suffix)
+        self.prefix_for_niches = prefix_for_niches
+    
+    def postprocess(self, adata: AnnData, result_columns: list[str]) -> list[str]:
+        new_result_columns = []
+        # mask obs to exclude cells for which no niche shall be assigned
+        for result_column in result_columns:
+            # copy into new column
+            new_result_column = result_column + self.suffix
+            new_result_columns.append(new_result_column)
+
+            adata.obs[new_result_column] = self.prefix_for_niches + adata.obs[result_column].astype(str)
+            
+        return new_result_columns
+
+
+############
+### functions so far. Many may be removed
+############
 
 def _get_result_columns(
     flavor: str,
