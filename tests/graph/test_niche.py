@@ -9,6 +9,7 @@ from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
 from squidpy.gr import calculate_niche, spatial_neighbors_knn
+
 # from squidpy.gr._niche import _calculate_neighborhood_profile, _utag
 
 SPATIAL_CONNECTIVITIES_KEY = "spatial_connectivities"
