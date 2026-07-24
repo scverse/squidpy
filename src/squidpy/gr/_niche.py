@@ -787,9 +787,7 @@ class NhoodProfileEmbedder(NicheEmbedder):
     def _calculate_neighborhood_profile(
         self,
         adata: AnnData,
-        groups: str | None,
         matrix: coo_matrix,
-        abs_nhood: bool,
     ) -> pd.DataFrame:
         """
         Returns an obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
@@ -797,19 +795,19 @@ class NhoodProfileEmbedder(NicheEmbedder):
 
         # ensure that adata.obs[group] is of categorical type, as that makes it explicit, which cols of the returned profile_df
         # correspond to which categories in group
-        if adata.obs[groups].dtype.name != "category":
+        if adata.obs[self.groups].dtype.name != "category":
             warnings.warn(
                 "Since adata.obs[groups] does not already have categorical dtype, converting it into categorical type.",
                 stacklevel=2,
             )
-            adata.obs[groups] = adata.obs[groups].astype("category")
+            adata.obs[self.groups] = adata.obs[self.groups].astype("category")
 
         # ensure matrix is in csc format for efficient column slicing
         if matrix.format != "csc":
             matrix = matrix.tocsc()
 
         # get cell categories in order
-        categories_order = adata.obs[groups].cat.categories
+        categories_order = adata.obs[self.groups].cat.categories
         n_categories = len(categories_order)
 
         # map category to column index
@@ -820,7 +818,7 @@ class NhoodProfileEmbedder(NicheEmbedder):
 
         # for each category, sum over cells of that category
         for ct in categories_order:
-            ct_mask = adata.obs[groups] == ct  # boolean mask for cells of this category
+            ct_mask = adata.obs[self.groups] == ct  # boolean mask for cells of this category
             col_indices = np.where(ct_mask)[0]  # indices of those cells
             if len(col_indices) > 0:
                 col_slice = matrix[:, col_indices]  # sparse submatrix
@@ -828,11 +826,11 @@ class NhoodProfileEmbedder(NicheEmbedder):
 
         # convert to dataframe (csr for final storage, dense for pandas)
         profile_df = pd.DataFrame(
-            profile_sparse.tocsr().todense(), index=adata.obs[groups].index, columns=categories_order
+            profile_sparse.tocsr().todense(), index=adata.obs[self.groups].index, columns=categories_order
         )
 
         # now according to parameter abs_nhood, make raw counts into proportions or not
-        if not abs_nhood:
+        if not self.abs_nhood:
             total_neighs = profile_df.sum(axis=1)
             profile_df = profile_df.div(total_neighs, axis=0)
             # this may lead to some values being nan, as some cells might have had no neighbors. Make those values as 0
@@ -849,7 +847,7 @@ class NhoodProfileEmbedder(NicheEmbedder):
         matrix = adata.obsp[self.spatial_connectivities_key].tocoo()
 
         # get obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
-        nhood_profile = self._calculate_neighborhood_profile(adata, self.groups, matrix, self.abs_nhood)
+        nhood_profile = self._calculate_neighborhood_profile(adata, matrix)
 
         # Additionally use n-hop neighbors if distance > 1. This sums up the (weighted) neighborhood profiles of all n-hop neighbors.
         if self.distance > 1:
@@ -879,7 +877,7 @@ class NhoodProfileEmbedder(NicheEmbedder):
                 matrix = n_hop_adjacency_matrix.tocoo()
 
                 # Calculate and add weighted profile
-                hop_profile = self._calculate_neighborhood_profile(adata, self.groups, matrix, self.abs_nhood)
+                hop_profile = self._calculate_neighborhood_profile(adata, matrix)
                 weighted_profile += self.n_hop_weights[n_hop] * hop_profile
 
             if not self.abs_nhood:
