@@ -754,7 +754,6 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
             f"Parameters {', '.join([f'{arg}' for arg in unnecessary_args])} are not used for flavor '{flavor}'.",
         )
 
-
 ############
 ### embedder classes
 ############
@@ -1077,7 +1076,6 @@ class LeidenClusterer(NicheClusterer):
 
             if niche_key in adata.obs.columns:
                 logg.info(f"Overwriting existing column '{niche_key}'")
-                del adata.obs[niche_key]
 
             sc.tl.leiden(
                 adata_embedding,
@@ -1111,6 +1109,9 @@ class GMMClusterer(NicheClusterer):
         )
         gmm.fit(embedding)
         niches = gmm.predict(embedding)
+
+        if self.base_colname in adata.obs.columns:
+            logg.info(f"Overwriting existing column '{self.base_colname}'")
 
         adata.obs[self.base_colname] = pd.Categorical(niches)
         return [self.base_colname]
@@ -1147,6 +1148,10 @@ class MinNicheSizePostprocessor(NichePostprocessor):
 
             counts_by_niche = adata.obs[new_result_column].value_counts()
             to_filter = counts_by_niche[counts_by_niche < self.min_niche_size].index
+            
+            if new_result_column in adata.obs.columns:
+                logg.info(f"Overwriting existing column '{new_result_column}'")
+            
             adata.obs[new_result_column] = adata.obs[new_result_column].apply(
                 lambda x, to_filter=to_filter: "not_a_niche" if x in to_filter else x
             )
@@ -1170,6 +1175,10 @@ class MaskPostprocessor(NichePostprocessor):
             adata.obs[new_result_column] = list(adata.obs[result_column])
 
             to_filter = self.mask[self.mask.index.isin(adata.obs.index)]
+
+            if new_result_column in adata.obs.columns:
+                logg.info(f"Overwriting existing column '{new_result_column}'")
+
             adata.obs[new_result_column] = adata.obs[new_result_column].apply(
                 lambda x, to_filter=to_filter: "not_a_niche" if x in to_filter else x
             )
@@ -1189,6 +1198,9 @@ class RenamePostprocessor(NichePostprocessor):
             new_result_column = result_column + self.suffix
             new_result_columns.append(new_result_column)
 
+            if new_result_column in adata.obs.columns:
+                logg.info(f"Overwriting existing column '{new_result_column}'")
+            
             adata.obs[new_result_column] = self.prefix_for_niches + adata.obs[result_column].astype(str)
 
         return new_result_columns
