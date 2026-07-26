@@ -301,8 +301,11 @@ def calculate_niche_spatialleiden(
 
     # obtain adata if data was of sdata type
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
-    # make a copy of the adata object, with which we will work
-    adata = orig_adata.copy()
+    
+    if inplace:
+        adata = orig_adata
+    else:
+        adata = orig_adata.copy()
 
     if library_key is not None:
         # first assert that library_key was there in adata.obs, and then, stratify the object according to that library_key and
@@ -323,7 +326,7 @@ def calculate_niche_spatialleiden(
             lib_adata = adata[lib_indices].copy()
 
             # give prefix appropriate value so that the niche values indicate lib id.
-            lib_result = calculate_niche_spatialleiden(
+            calculate_niche_spatialleiden(
                 lib_adata,
                 latent_connectivities_key,
                 spatial_connectivities_key,
@@ -336,17 +339,17 @@ def calculate_niche_spatialleiden(
                 mask,
                 prefix=f"lib={lib_id}",
                 library_key=None,
-                inplace=False,
+                inplace=True, # to save memory
                 table_key=table_key,
             )
 
-            added_columns = list(set(lib_result.obs.columns) - set(adata.obs.columns))
+            added_columns = list(set(lib_adata.obs.columns) - set(adata.obs.columns))
 
             for col in added_columns:
                 # ensure that adata has the columns in which we are adding the information
                 if col not in adata.obs:
                     adata.obs[col] = "not_a_niche"
-                adata.obs.loc[lib_indices, col] = list(lib_result.obs[col])
+                adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col])
 
     else:
         # Simply call sl.spatialleiden with the provided arguments
@@ -384,8 +387,15 @@ def calculate_niche_spatialleiden(
 
         postprocess_niche_results(adata, result_columns, postprocessors_list)
 
-    return return_niche_output(data, orig_adata, adata, inplace, table_key)
+    # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
+    # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
+    if isinstance(data, SpatialData):
+        sanitize_table(adata)
 
+    if inplace:
+        return None
+    else:
+        return adata
 
 def calculate_niche_custom(
     data,
@@ -399,8 +409,11 @@ def calculate_niche_custom(
 
     # obtain adata if data was of sdata type
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
-    # make a copy of the adata object, with which we will work
-    adata = orig_adata.copy()
+    
+    if inplace:
+        adata = orig_adata
+    else:
+        adata = orig_adata.copy()
 
     if library_key is not None:
         assert_key_in_adata(adata, library_key, attr="obs")
@@ -422,26 +435,26 @@ def calculate_niche_custom(
             renaming_postprocessor = RenamePostprocessor(prefix_for_niches=f"lib={lib_id}_")
             postprocessors_list_lib = postprocessors_list + [renaming_postprocessor]
 
-            lib_result = calculate_niche_custom(
+            calculate_niche_custom(
                 lib_adata,
                 embedder,
                 clusterer,
                 postprocessors_list_lib,
                 library_key=None,
-                inplace=False,
+                inplace=True, # to save memory
                 table_key=None,
             )
 
             # from itr==1 onwards, adata will hold the columns that are being added hence,
             # added_columns will be empty. Hence only obtain added_columns when itr==0
             if itr == 0:
-                added_columns = list(set(lib_result.obs.columns) - set(adata.obs.columns))
+                added_columns = list(set(lib_adata.obs.columns) - set(adata.obs.columns))
 
             for col in added_columns:
                 # ensure that adata has the columns in which we are adding the information
                 if col not in adata.obs:
                     adata.obs[col] = "not_a_niche"
-                adata.obs.loc[lib_indices, col] = list(lib_result.obs[col])
+                adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col])
 
     else:
         # supply the adata object to the embedder object, and obtain appropriate embedding matrix
@@ -453,34 +466,15 @@ def calculate_niche_custom(
         # do postprocessing
         postprocess_niche_results(adata, result_columns, postprocessors_list)
 
-    return return_niche_output(data, orig_adata, adata, inplace, table_key)
-
-
-def return_niche_output(data, orig_adata, adata, inplace, table_key):
-    if not inplace:
-        return adata
-
-    # result_columns are the columns that are added to adata compared to orig_adata
-    result_columns = list(set(adata.obs.columns) - set(orig_adata.obs.columns))
-
-    # For SpatialData, update the table directly
+    # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
+    # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
     if isinstance(data, SpatialData):
         sanitize_table(adata)
-        data.tables[table_key] = adata
+
+    if inplace:
+        return None
     else:
-        # For AnnData, copy results back to original object
-        for col in result_columns:
-            if col in orig_adata.obs.columns:
-                logg.info(f"Overwriting existing column '{col}'")
-                with contextlib.suppress(KeyError):
-                    del orig_adata.obs[col]
-            if f"{col}_colors" in orig_adata.uns.keys():
-                with contextlib.suppress(KeyError):
-                    del orig_adata.uns[f"{col}_colors"]
-
-            orig_adata.obs[col] = adata.obs[col]
-
-    return None
+        return adata
 
 
 def postprocess_niche_results(adata, result_columns, postprocessors_list):
