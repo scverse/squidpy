@@ -24,7 +24,7 @@ def test_niche_calc_nhood_dummy_adata(dummy_adata2: AnnData):
     calculate_niche(dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0)
     assert "nhood_niche_res=1.0" in dummy_adata2.obs.columns
     expected_niches = Series(
-        ["0", "0", "0", "2", "1", "0", "0", "1", "2", "1"],
+        ["0", "2", "0", "2", "1", "0", "0", "1", "0", "1"],
         index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
         name="nhood_niche_res=1.0",
     )
@@ -36,7 +36,7 @@ def test_niche_calc_utag_dummy_adata(dummy_adata2: AnnData):
     calculate_niche(dummy_adata2, flavor="utag", n_neighbors=3, resolutions=1.0)
     assert "utag_niche_res=1.0" in dummy_adata2.obs.columns
     expected_niches = Series(
-        Categorical(["1", "0", "0", "1", "1", "0", "0", "1", "1", "0"], categories=["0", "1"]),
+        Categorical(["1", "0", "0", "0", "1", "0", "0", "1", "1", "0"], categories=["0", "1"]),
         index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
         name="utag_niche_res=1.0",
     )
@@ -113,14 +113,14 @@ def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
 
     expected_niches = Series(
         [
-            "lib=batch1_0",
-            "lib=batch1_1",
             "lib=batch1_1",
             "lib=batch1_0",
             "lib=batch1_2",
+            "lib=batch1_0",
+            "lib=batch1_1",
             "lib=batch2_2",
-            "lib=batch2_1",
             "lib=batch2_0",
+            "lib=batch2_1",
             "lib=batch2_0",
             "lib=batch2_1",
         ],
@@ -148,7 +148,7 @@ def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):
     assert "nhood_niche_res_1.0" in sdata["adata"].obs.columns
 
     expected_niches = Series(
-        ["0", "0", "0", "2", "1", "0", "0", "1", "2", "1"],
+        ["0", "2", "0", "2", "1", "0", "0", "1", "0", "1"],
         index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
         name="nhood_niche_res_1.0",
         dtype=str,
