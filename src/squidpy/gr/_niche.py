@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import warnings
 from abc import abstractmethod
 from typing import Any, Literal
@@ -11,10 +10,7 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
-from numpy.typing import NDArray
 from scipy.sparse import coo_matrix, hstack, issparse, lil_matrix, spdiags
-from scipy.spatial import distance
-from sklearn.metrics import f1_score
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData, sanitize_table
@@ -58,7 +54,92 @@ def calculate_niche(
     table_key: str | None = None,
 ) -> AnnData | None:
     """
-    Calculate Niche
+    Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
+    The resulting niche labels with be stored in 'adata.obs'.
+
+    .. deprecated:: 1.8.3
+            ``calculate_niche`` is deprecated and will be removed in squidpy
+            v1.9.0. Use one of the flavor-specific functions instead:
+    
+            - :func:`calculate_niche_neighborhood`
+            - :func:`calculate_niche_utag`
+            - :func:`calculate_niche_cellcharter`
+            - :func:`calculate_niche_spatialleiden`
+            - :func:`calculate_niche_custom`
+
+    Parameters
+    ----------
+    %(adata)s
+    flavor
+        Method to use for niche calculation. Available options are:
+            - `{fla.NEIGHBORHOOD.s!r}` - cluster the neighborhood profile.
+            - `{fla.UTAG.s!r}` - use utag algorithm (matrix multiplication).
+            - `{fla.SPATIALLEIDEN.s!r}` - cluster spatially resolved omics data using Multiplex Leiden.
+            - `{fla.CELLCHARTER.s!r}` - a simplified version of CellCharter's approach, using PCA for dimensionality reduction. An arbitrary embedding can be used instead of PCA by setting the `use_rep` parameter which will try to find the embedding in `adata.obsm`.
+    %(library_key)s
+        If provided, niches will be calculated separately for each unique value in this column.
+        Each niche will be prefixed with the library identifier.
+    %(table_key)s
+    mask
+        Boolean array to filter cells which won't get assigned to a niche.
+        Note that if you want to exclude these cells during neighborhood calculation already, you should subset your AnnData table before running 'sq.gr.spatial_neigbors'.
+    groups
+        Groups based on which to calculate neighborhood profile (E.g. columns of cell type annotations in adata.obs).
+        Required if flavor == `{fla.NEIGHBORHOOD.s!r}`.
+    n_neighbors
+        Number of neighbors to use for 'scanpy.pp.neighbors' before clustering using leiden algorithm.
+        Required if flavor == `{fla.NEIGHBORHOOD.s!r}` or flavor == `{fla.UTAG.s!r}`.
+    resolutions
+        List of resolutions to use for leiden clustering.
+        In the case of spatialleiden you can pass a tuple. Resolution for the latent space and spatial layer, respectively. A single float applies to both layers.
+        Required if flavor == `{fla.NEIGHBORHOOD.s!r}` or flavor == `{fla.UTAG.s!r}`.
+        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    min_niche_size
+        Minimum required size of a niche. Niches with fewer cells will be labeled as 'not_a_niche'.
+        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
+    scale
+        If 'True', compute z-scores of neighborhood profiles.
+        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
+    abs_nhood
+        If 'True', calculate niches based on absolute neighborhood profile.
+        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
+    distance
+        n-hop neighbor adjacency matrices to use e.g. [1,2,3] for 1-hop,2-hop,3-hop neighbors respectively or "5" for 1-hop,...,5-hop neighbors. 0 (self) is always included.
+        Required if flavor == `{fla.CELLCHARTER.s!r}`.
+        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
+    n_hop_weights
+        How to weight subsequent n-hop adjacency matrices. E.g. [1, 0.5, 0.25] for weights of 1-hop, 2-hop, 3-hop adjacency matrices respectively.
+        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}` and `distance` > 1.
+    aggregation
+        How to aggregate count matrices. Either 'mean' or 'variance'.
+        Required if flavor == `{fla.CELLCHARTER.s!r}`.
+    n_components
+        Number of components to use for GMM.
+        Required if flavor == `{fla.CELLCHARTER.s!r}`.
+    random_state
+        Random state to use for GMM or SpatialLeiden.
+        Optional if flavor == `{fla.CELLCHARTER.s!r}` or flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    spatial_connectivities_key
+        Key in `adata.obsp` where spatial connectivities are stored.
+        Required if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    latent_connectivities_key
+        Key in `adata.obsp` where gene expression connectivities are stored.
+        Required if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    layer_ratio
+        The ratio of the weighting of the layers; latent space vs spatial. A higher ratio will increase relevance of the spatial neighbors and lead to more spatially homogeneous clusters.
+        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    n_iterations
+        Number of iterations to run the Leiden algorithm. If the number is negative it runs until convergence.
+        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    use_weights
+        Whether to use weights for the edges for latent space and spatial neighbors, respectively. A single bool applies to both layers.
+        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+    use_rep
+        Key in `adata.obsm` where the embedding is stored. If provided, this embedding will be used instead of PCA for dimensionality reduction.
+        Optional if flavor == `{fla.CELLCHARTER.s!r}`.
+    inplace
+        If 'True', perform the operation in place.
+        If 'False', return a new AnnData object with the niche labels.
     """
 
     if flavor == "cellcharter" and aggregation is None:
@@ -165,7 +246,7 @@ def calculate_niche(
 
     return
 
-
+@d.dedent
 def calculate_niche_neighborhood(
     data,
     groups,
@@ -182,6 +263,53 @@ def calculate_niche_neighborhood(
     inplace,
     table_key,
 ) -> AnnData | None:
+    """Compute niche neighborhoods using a neighborhood profile embedding and Leiden clustering.
+
+    This is a high-level convenience wrapper that constructs a
+    :class:`NhoodProfileEmbedder`, a :class:`LeidenClusterer`, and optional
+    postprocessors to compute niche assignments for each observation.
+
+    Parameters
+    ----------
+    %(adata)s
+    groups
+        Column in ``adata.obs`` defining categorical groups (e.g. cell types)
+        used to compute neighborhood composition profiles.
+    n_neighbors
+        Number of neighbors used when constructing the graph for Leiden clustering.
+    resolutions
+        Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
+    spatial_connectivities_key
+        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    scale
+        Whether to z-score the neighborhood profile prior to clustering.
+    distance
+        Number of hops to consider when constructing neighborhood profiles.
+        Values greater than ``1`` incorporate higher-order neighbors.
+    abs_nhood
+        If ``True``, use absolute counts; otherwise normalize to proportions.
+    n_hop_weights
+        Weights for combining neighborhood profiles across hops.
+    min_niche_size
+        Minimum number of observations required for a niche; smaller niches are filtered.
+    mask
+        Boolean mask or index specifying observations to exclude from niche assignment.
+    %(library_key)s
+    inplace
+        Whether to modify ``adata`` in place.
+    %(table_key)s
+
+    Returns
+    -------
+    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
+    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+
+    See Also
+    --------
+    calculate_niche_custom : Lower-level API for custom embedding, clustering, and postprocessing.
+    NhoodProfileEmbedder : Default embedding strategy based on neighborhood composition.
+    LeidenClusterer : Default clustering strategy.
+    """
 
     # Create instance of NhoodProfileEmbedder using provided inputs
     embedder = NhoodProfileEmbedder(
@@ -207,7 +335,7 @@ def calculate_niche_neighborhood(
 
     return calculate_niche_custom(data, embedder, clusterer, postprocessors_list, library_key, inplace, table_key)
 
-
+@d.dedent
 def calculate_niche_utag(
     data,
     n_neighbors,
@@ -219,6 +347,41 @@ def calculate_niche_utag(
     inplace,
     table_key,
 ) -> AnnData | None:
+    """Compute niche assignments using a UTAG-style neighborhood embedding.
+
+    This wrapper constructs a :class:`UtagEmbedder`, a
+    :class:`LeidenClusterer`, and optional postprocessors to generate niche
+    labels from spatial neighborhoods.
+
+    Parameters
+    ----------
+    %(adata)s
+    n_neighbors
+        Number of neighbors used when constructing the graph for Leiden clustering.
+    resolutions
+        Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
+    spatial_connectivities_key
+        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    min_niche_size
+        Minimum number of observations required for a niche; smaller niches are filtered.
+    mask
+        Boolean mask or index specifying observations to exclude from niche assignment.
+    %(library_key)s
+    inplace
+        Whether to modify ``adata`` in place.
+    %(table_key)s
+
+    Returns
+    -------
+    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
+    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+
+    See Also
+    --------
+    UtagEmbedder : Embedding strategy based on UTAG neighborhood feature propagation.
+    LeidenClusterer : Leiden clustering backend used to assign niches.
+    calculate_niche_custom : Lower-level API for custom niche pipelines.
+    """
 
     embedder = UtagEmbedder(spatial_connectivities_key)
 
@@ -235,7 +398,7 @@ def calculate_niche_utag(
 
     return calculate_niche_custom(data, embedder, clusterer, postprocessors_list, library_key, inplace, table_key)
 
-
+@d.dedent
 def calculate_niche_cellcharter(
     data,
     distance,
@@ -250,6 +413,50 @@ def calculate_niche_cellcharter(
     inplace,
     table_key,
 ) -> AnnData | None:
+    """Compute niche assignments using a CellCharter-style aggregation embedding.
+
+    This wrapper constructs a :class:`CellcharterEmbedder`, a
+    :class:`GMMClusterer`, and optional postprocessors to generate niche labels
+    from spatial neighborhoods.
+
+    Parameters
+    ----------
+    %(adata)s
+    distance
+        Number of neighborhood hops to aggregate when building the embedding.
+    aggregation
+        Aggregation mode used for neighborhood features, typically ``"mean"`` or
+        ``"variance"``.
+    random_state
+        Random seed used by the Gaussian mixture clustering step.
+    spatial_connectivities_key
+        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    n_components
+        Number of embedding components to retain when ``use_rep`` is provided,
+        or number of mixture components used by the clusterer.
+    use_rep
+        Key in ``adata.obsm`` pointing to a precomputed representation to use
+        instead of deriving a spatially aggregated embedding.
+    min_niche_size
+        Minimum number of observations required for a niche; smaller niches are filtered.
+    mask
+        Boolean mask or index specifying observations to exclude from niche assignment.
+    %(library_key)s
+    inplace
+        Whether to modify ``adata`` in place.
+    %(table_key)s
+
+    Returns
+    -------
+    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
+    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+
+    See Also
+    --------
+    CellcharterEmbedder : Embedding strategy inspired by CellCharter.
+    GMMClusterer : Gaussian-mixture clustering backend used to assign niches.
+    calculate_niche_custom : Lower-level API for custom niche pipelines.
+    """
 
     embedder = CellcharterEmbedder(distance, aggregation, spatial_connectivities_key, n_components, use_rep)
 
@@ -266,7 +473,7 @@ def calculate_niche_cellcharter(
 
     return calculate_niche_custom(data, embedder, clusterer, postprocessors_list, library_key, inplace, table_key)
 
-
+@d.dedent
 def calculate_niche_spatialleiden(
     data,
     latent_connectivities_key,
@@ -283,16 +490,59 @@ def calculate_niche_spatialleiden(
     inplace,
     table_key,
 ) -> AnnData | None:
-    """
-    Perform SpatialLeiden clustering.
-    This is a wrapper around :py:func:`spatialleiden.multiplex_leiden` that uses :py:class:`anndata.AnnData` as input and works with two layers; one latent space and one spatial layer.
+    """Compute niche assignments using the SpatialLeiden algorithm.
+
+    This is a wrapper around :func:`spatialleiden.multiplex_leiden` that 
+    uses :class:`AnnData` as input and works with two layers; one latent 
+    space and one spatial layer.
     Adapted from https://github.com/HiDiHlabs/SpatialLeiden/.
 
     Parameters
     ----------
+    %(adata)s
+    latent_connectivities_key
+        Key in ``adata.obsp`` containing the latent-space connectivity matrix.
+    spatial_connectivities_key
+        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    resolutions
+        Resolution parameter(s) for the Leiden optimization. Can be a single
+        float or a list of floats.
+    layer_ratio
+        Relative weight assigned to the latent and spatial layers.
+    n_iterations
+        Number of optimization iterations used by SpatialLeiden.
+    use_weights
+        Whether to use edge weights during clustering.
+    random_state
+        Random seed passed to the SpatialLeiden routine.
+    min_niche_size
+        Minimum number of observations required for a niche; smaller niches are filtered.
+    mask
+        Boolean mask or index specifying observations to exclude from niche assignment.
     prefix
-        What to add as a prefix in the names of niches identified. Used implicitly when library_key is not None (adds "lib=").
+        Prefix added to niche labels produced by SpatialLeiden.
+        When stratifying by ``library_key``, a library-specific prefix is added
+        automatically (something like "lib=").
+    %(library_key)s
+    inplace
+        Whether to modify ``adata`` in place.
+    %(table_key)s
+
+    Returns
+    -------
+    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
+    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+
+    Notes
+    -----
+    If ``library_key`` is provided, clustering is performed independently for
+    each library and the results are merged back into the parent object.
+
+    See Also
+    --------
+    spatialleiden.multiplex_leiden : SpatialLeiden implementation used internally.
     """
+
     try:
         import spatialleiden as sl
     except ImportError as e:
@@ -388,7 +638,7 @@ def calculate_niche_spatialleiden(
             renaming_postprocessor = RenamePostprocessor(prefix)
             postprocessors_list.append(renaming_postprocessor)
 
-        postprocess_niche_results(adata, result_columns, postprocessors_list)
+        _postprocess_niche_results(adata, result_columns, postprocessors_list)
 
     # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
     # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
@@ -400,6 +650,7 @@ def calculate_niche_spatialleiden(
     else:
         return adata
 
+@d.dedent
 def calculate_niche_custom(
     data,
     embedder,
@@ -409,6 +660,45 @@ def calculate_niche_custom(
     inplace,
     table_key,
 ) -> AnnData | None:
+    """Compute niche assignments using user-defined embedding, clustering, and postprocessing.
+
+    This function provides a flexible pipeline where embedding, clustering,
+    and postprocessing are decoupled and customizable.
+
+    Parameters
+    ----------
+    %(adata)s
+    embedder
+        Instance of :class:`NicheEmbedder` used to compute an embedding from ``adata``.
+    clusterer
+        Instance of :class:`NicheClusterer` used to assign niches based on the embedding.
+    postprocessors_list
+        List of :class:`NichePostprocessor` objects applied sequentially to refine results.
+    %(library_key)s
+    inplace
+        Whether to modify ``adata`` in place.
+    %(table_key)s
+
+    Returns
+    -------
+    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
+    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+
+    Notes
+    -----
+    If ``library_key`` is provided, the computation is performed independently
+    for each library and results are merged back into ``adata``.
+
+    See Also
+    --------
+    calculate_niche_neighborhood : Convenience wrapper for neighborhood flavor niche analysis.
+    calculate_niche_utag : Convenience wrapper for utag flavor niche analysis.
+    calculate_niche_cellcharter : Convenience wrapper for cellcharter flavor niche analysis.
+    calculate_niche_spatialleiden : Convenience wrapper for spatialleiden flavor niche analysis.
+    NicheEmbedder : Base class for embedding strategies.
+    NicheClusterer : Base class for clustering strategies.
+    NichePostprocessor : Base class for postprocessing steps.
+    """
 
     # obtain adata if data was of sdata type
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
@@ -467,7 +757,7 @@ def calculate_niche_custom(
         result_columns = clusterer.cluster(adata, embedding)
 
         # do postprocessing
-        postprocess_niche_results(adata, result_columns, postprocessors_list)
+        _postprocess_niche_results(adata, result_columns, postprocessors_list)
 
     # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
     # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
@@ -480,8 +770,23 @@ def calculate_niche_custom(
         return adata
 
 
-def postprocess_niche_results(adata, result_columns, postprocessors_list):
+def _postprocess_niche_results(adata, result_columns, postprocessors_list):
+    """Apply a sequence of postprocessors to niche assignment results.
 
+    Parameters
+    ----------
+    adata
+        Annotated data matrix.
+    result_columns
+        List of column names in ``adata.obs`` containing initial niche assignments.
+    postprocessors_list
+        List of :class:`NichePostprocessor` objects applied sequentially.
+
+    Notes
+    -----
+    Each postprocessor may create new columns in ``adata.obs`` and returns
+    the updated list of result column names, which are passed to the next step.
+    """
     # go through each postprocessor object, and apply it to the adata, and store
     # results in the form of new columns in adata
     for postprocessor in postprocessors_list:
@@ -757,12 +1062,47 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
 
 
 class NicheEmbedder:
+    """Base class for computing embeddings used in niche analysis.
+
+    Subclasses must implement :meth:`get_embedding`, which transforms an
+    :class:`AnnData` object into a feature matrix suitable for clustering.
+    The 0-index dimension of returned embedding (embedding.shape[0]) 
+    should correspond to the rows in adata.obs (and adata.X), meaning in 
+    the same order and having same length.
+    """
     @abstractmethod
     def get_embedding(self, adata: AnnData) -> NDArrayA:
         """return an embedding matrix, with cells as rows"""
 
-
+@d.dedent
 class NhoodProfileEmbedder(NicheEmbedder):
+    """Compute neighborhood composition profiles as embeddings.
+
+    Each observation is represented by the frequency of categorical labels
+    (e.g. cell types) in its spatial neighborhood. Optionally, higher-order
+    neighborhoods (multi-hop) can be incorporated.
+
+    Parameters
+    ----------
+    groups
+        Column in ``adata.obs`` defining categorical labels.
+    spatial_connectivities_key
+        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    scale
+        Whether to z-score the resulting embedding.
+    distance
+        Number of hops to consider for neighborhood aggregation.
+    abs_nhood
+        If ``True``, use absolute counts of categories in neighborhood; otherwise 
+        normalize to proportions.
+    n_hop_weights
+        Weights for combining profiles across neighborhood hops.
+
+    Notes
+    -----
+    For ``distance > 1``, neighborhood profiles are iteratively aggregated using
+    powers of the adjacency matrix, optionally weighted per hop.
+    """
     def __init__(
         self,
         groups,
@@ -893,8 +1233,24 @@ class NhoodProfileEmbedder(NicheEmbedder):
             sc.pp.scale(adata_neighborhood, zero_center=True)
         return adata_neighborhood.X
 
-
+@d.dedent
 class UtagEmbedder(NicheEmbedder):
+    """Compute a UTAG-style embedding by propagating features over spatial neighbors.
+
+    The embedding is constructed by normalizing the spatial connectivity matrix,
+    multiplying it by ``adata.X``, and then applying PCA to the propagated
+    feature matrix.
+
+    Parameters
+    ----------
+    spatial_connectivities_key
+        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+
+    Notes
+    -----
+    This follows the general UTAG idea that each observation inherits information
+    from its immediate spatial neighborhood before dimensionality reduction.
+    """
     def __init__(
         self,
         spatial_connectivities_key,
@@ -918,7 +1274,35 @@ class UtagEmbedder(NicheEmbedder):
 # TODO: This function requires some work later on. Right now keeping the implementation just like how
 # it was before the refactor, and in that case, when use_rep was provided, then it simply returned
 # that as the embedding, so no cellcharter algorithm used in that case
+@d.dedent
 class CellcharterEmbedder(NicheEmbedder):
+    """Compute a CellCharter-style embedding from spatially aggregated features.
+
+    The embedding can either be derived from a precomputed representation in
+    ``adata.obsm`` or constructed by aggregating features across multi-hop
+    spatial neighborhoods.
+
+    Parameters
+    ----------
+    distance
+        Number of neighborhood hops to aggregate.
+    aggregation
+        Aggregation strategy to apply to neighborhood features, such as
+        ``"mean"`` or ``"variance"``.
+    spatial_connectivities_key
+        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    n_components
+        Number of components to keep from the input representation when ``use_rep``
+        is provided.
+    use_rep
+        Key in ``adata.obsm`` pointing to the representation to use. If ``None``,
+        a spatially aggregated embedding is constructed from ``adata.X``.
+
+    Notes
+    -----
+    When ``use_rep`` is ``None``, PCA is applied to the concatenated aggregated
+    feature matrix to produce the final embedding.
+    """
     def __init__(
         self,
         distance,
@@ -1044,12 +1428,36 @@ class CellcharterEmbedder(NicheEmbedder):
 
 
 class NicheClusterer:
+    """Base class for clustering embeddings into niche assignments.
+
+    Subclasses must implement :meth:`cluster`, which assigns cluster labels
+    and stores them in ``adata.obs``.
+    """
     @abstractmethod
     def cluster(self, adata: AnnData, embedding: NDArrayA) -> list:
         """Adds column/s in adata.obs with the clustering done. Returns the names of the columns just added."""
 
 
+@d.dedent
 class LeidenClusterer(NicheClusterer):
+    """Cluster embeddings using the Leiden algorithm.
+
+    Parameters
+    ----------
+    n_neighbors
+        Number of neighbors used to construct the kNN graph.
+    resolutions
+        Resolution parameter(s) for Leiden clustering. Can be a single 
+        float value or list of floats.
+    base_colname
+        Base name for columns added to ``adata.obs``. Resolution is 
+        appended to this to unique identify columns for each resolution.
+
+    Notes
+    -----
+    A separate clustering is computed for each resolution, producing multiple
+    niche annotation columns.
+    """
     def __init__(self, n_neighbors, resolutions: float | list[float], base_colname: str = "niche_leiden"):
         super().__init__()
         self.n_neighbors = n_neighbors
@@ -1086,8 +1494,23 @@ class LeidenClusterer(NicheClusterer):
 
         return niche_keys
 
-
+@d.dedent
 class GMMClusterer(NicheClusterer):
+    """Cluster embeddings with a Gaussian mixture model.
+
+    Parameters
+    ----------
+    n_components
+        Number of mixture components.
+    random_state
+        Random seed used by the Gaussian mixture model.
+    base_colname
+        Name of the output column added to ``adata.obs``.
+
+    Notes
+    -----
+    Cluster assignments are stored as categorical niche labels in ``adata.obs``.
+    """
     def __init__(self, n_components, random_state, base_colname="niche_gmm"):
         super().__init__()
         self.n_components = n_components
@@ -1120,6 +1543,11 @@ class GMMClusterer(NicheClusterer):
 
 
 class NichePostprocessor:
+    """Base class for postprocessing niche assignments.
+
+    Postprocessors operate on clustering results stored in ``adata.obs`` and
+    typically generate new columns derived from existing niche columns.
+    """
     def __init__(self, suffix):
         self.suffix = suffix
 
@@ -1128,8 +1556,22 @@ class NichePostprocessor:
         """Logic to postprocess adata and return the names of columns added."""
         # should append add self.suffix to the columns added
 
-
+@d.dedent
 class MinNicheSizePostprocessor(NichePostprocessor):
+    """Filter niches below a minimum size threshold.
+
+    Parameters
+    ----------
+    min_niche_size
+        Minimum number of observations required for a niche.
+    suffix
+        Suffix appended to result column names.
+
+    Notes
+    -----
+    Niche labels with fewer than ``min_niche_size`` observations are replaced
+    with ``"not_a_niche"``.
+    """
     def __init__(self, min_niche_size, suffix="_size_filter"):
         super().__init__(suffix=suffix)
         self.min_niche_size = min_niche_size
@@ -1156,8 +1598,21 @@ class MinNicheSizePostprocessor(NichePostprocessor):
 
         return new_result_columns
 
-
+@d.dedent
 class MaskPostprocessor(NichePostprocessor):
+    """Mask selected observations from niche assignments.
+
+    Parameters
+    ----------
+    mask
+        Boolean mask or index specifying observations to exclude.
+    suffix
+        Suffix appended to result column names.
+
+    Notes
+    -----
+    Observations included in ``mask`` are assigned the label ``"not_a_niche"``.
+    """
     def __init__(self, mask, suffix="_mask"):
         super().__init__(suffix=suffix)
         self.mask = mask
@@ -1182,8 +1637,22 @@ class MaskPostprocessor(NichePostprocessor):
 
         return new_result_columns
 
-
+@d.dedent
 class RenamePostprocessor(NichePostprocessor):
+    """Rename niche labels by adding a prefix.
+
+    Parameters
+    ----------
+    prefix_for_niches
+        Prefix added to each niche label.
+    suffix
+        Suffix appended to result column names.
+
+    Notes
+    -----
+    This is useful when combining results across subsets (e.g. libraries)
+    to ensure unique niche identifiers.
+    """
     def __init__(self, prefix_for_niches, suffix="_renamed"):
         super().__init__(suffix=suffix)
         self.prefix_for_niches = prefix_for_niches
