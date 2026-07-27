@@ -79,11 +79,11 @@ def calculate_niche(
             ``calculate_niche`` is deprecated and will be removed in squidpy
             v1.9.0. Use one of the flavor-specific functions instead:
 
-            - :func:`calculate_niche_neighborhood`
-            - :func:`calculate_niche_utag`
-            - :func:`calculate_niche_cellcharter`
-            - :func:`calculate_niche_spatialleiden`
-            - :func:`calculate_niche_custom`
+            - ``calculate_niche_neighborhood``
+            - ``calculate_niche_utag``
+            - ``calculate_niche_cellcharter``
+            - ``calculate_niche_spatialleiden``
+            - ``calculate_niche_custom``
 
     Parameters
     ----------

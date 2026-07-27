@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from anndata import AnnData
 from pandas import Categorical, DataFrame, Series
-from pandas.testing import assert_frame_equal
 from scanpy.pp import neighbors
-from scipy.sparse import csr_matrix, issparse
+from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
