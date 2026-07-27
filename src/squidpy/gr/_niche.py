@@ -22,7 +22,25 @@ from squidpy._utils import NDArrayA
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
 from squidpy.gr._utils import extract_adata_if_sdata
 
-__all__ = ["calculate_niche"]
+__all__ = [
+    "calculate_niche",
+    "calculate_niche_neighborhood",
+    "calculate_niche_utag",
+    "calculate_niche_cellcharter",
+    "calculate_niche_spatialleiden",
+    "calculate_niche_custom",
+    "NicheEmbedder",
+    "NhoodProfileEmbedder",
+    "UtagEmbedder",
+    "CellcharterEmbedder",
+    "NicheClusterer",
+    "LeidenClusterer",
+    "GMMClusterer",
+    "NichePostprocessor",
+    "MinNicheSizePostprocessor",
+    "MaskPostprocessor",
+    "RenamePostprocessor",
+]
 
 
 @d.dedent
@@ -60,7 +78,7 @@ def calculate_niche(
     .. deprecated:: 1.8.3
             ``calculate_niche`` is deprecated and will be removed in squidpy
             v1.9.0. Use one of the flavor-specific functions instead:
-    
+
             - :func:`calculate_niche_neighborhood`
             - :func:`calculate_niche_utag`
             - :func:`calculate_niche_cellcharter`
@@ -183,8 +201,8 @@ def calculate_niche(
         return calculate_niche_neighborhood(
             data,
             groups,
-            n_neighbors,
             resolutions,
+            n_neighbors,
             spatial_connectivities_key,
             scale,
             distance,
@@ -200,8 +218,8 @@ def calculate_niche(
     elif flavor == "utag":
         return calculate_niche_utag(
             data,
-            n_neighbors,
             resolutions,
+            n_neighbors,
             spatial_connectivities_key,
             min_niche_size,
             mask,
@@ -229,9 +247,9 @@ def calculate_niche(
     elif flavor == "spatialleiden":
         return calculate_niche_spatialleiden(
             data,
+            resolutions,
             latent_connectivities_key,
             spatial_connectivities_key,
-            resolutions,
             layer_ratio,
             n_iterations,
             use_weights,
@@ -246,22 +264,23 @@ def calculate_niche(
 
     return
 
+
 @d.dedent
 def calculate_niche_neighborhood(
-    data,
-    groups,
-    n_neighbors,
-    resolutions,
-    spatial_connectivities_key,
-    scale,
-    distance,
-    abs_nhood,
-    n_hop_weights,
-    min_niche_size,
-    mask,
-    library_key,
-    inplace,
-    table_key,
+    data: AnnData | SpatialData,
+    groups: str,
+    resolutions: float | list[float],
+    n_neighbors: int = 15,
+    spatial_connectivities_key: str = "spatial_connectivities",
+    scale: bool = True,
+    distance: int = 1,
+    abs_nhood: bool = False,
+    n_hop_weights: list[float] | None = None,
+    min_niche_size: int | None = None,
+    mask: pd.Series | None = None,
+    library_key: str | None = None,
+    inplace: bool = True,
+    table_key: str | None = None,
 ) -> AnnData | None:
     """Compute niche neighborhoods using a neighborhood profile embedding and Leiden clustering.
 
@@ -335,17 +354,18 @@ def calculate_niche_neighborhood(
 
     return calculate_niche_custom(data, embedder, clusterer, postprocessors_list, library_key, inplace, table_key)
 
+
 @d.dedent
 def calculate_niche_utag(
-    data,
-    n_neighbors,
-    resolutions,
-    spatial_connectivities_key,
-    min_niche_size,
-    mask,
-    library_key,
-    inplace,
-    table_key,
+    data: AnnData | SpatialData,
+    resolutions: float | list[float],
+    n_neighbors: int = 15,
+    spatial_connectivities_key: str = "spatial_connectivities",
+    min_niche_size: int | None = None,
+    mask: pd.Series | None = None,
+    library_key: str | None = None,
+    inplace: bool = True,
+    table_key: str | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using a UTAG-style neighborhood embedding.
 
@@ -398,20 +418,21 @@ def calculate_niche_utag(
 
     return calculate_niche_custom(data, embedder, clusterer, postprocessors_list, library_key, inplace, table_key)
 
+
 @d.dedent
 def calculate_niche_cellcharter(
-    data,
-    distance,
-    aggregation,
-    random_state,
-    spatial_connectivities_key,
-    n_components,
-    use_rep,
-    min_niche_size,
-    mask,
-    library_key,
-    inplace,
-    table_key,
+    data: AnnData | SpatialData,
+    distance: int = 2,
+    aggregation: str = "mean",
+    random_state: int = 0,
+    spatial_connectivities_key: str = "spatial_connectivities",
+    n_components: int = 10,
+    use_rep: str | None = None,
+    min_niche_size: int | None = None,
+    mask: pd.Series | None = None,
+    library_key: str | None = None,
+    inplace: bool = True,
+    table_key: str | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using a CellCharter-style aggregation embedding.
 
@@ -473,27 +494,28 @@ def calculate_niche_cellcharter(
 
     return calculate_niche_custom(data, embedder, clusterer, postprocessors_list, library_key, inplace, table_key)
 
+
 @d.dedent
 def calculate_niche_spatialleiden(
-    data,
-    latent_connectivities_key,
-    spatial_connectivities_key,
-    resolutions,
-    layer_ratio,
-    n_iterations,
-    use_weights,
-    random_state,
-    min_niche_size,
-    mask,
-    prefix,  # default value will be None
-    library_key,
-    inplace,
-    table_key,
+    data: AnnData | SpatialData,
+    resolutions: float | tuple[float, float] | list[float | tuple[float, float]],
+    latent_connectivities_key: str = "connectivities",
+    spatial_connectivities_key: str = "spatial_connectivities",
+    layer_ratio: float = 1.0,
+    n_iterations: int = -1,
+    use_weights: bool | tuple[bool, bool] = True,
+    random_state: int = 42,
+    min_niche_size: int | None = None,
+    mask: pd.Series | None = None,
+    prefix: str | None = None,
+    library_key: str | None = None,
+    inplace: bool = True,
+    table_key: str | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using the SpatialLeiden algorithm.
 
-    This is a wrapper around :func:`spatialleiden.multiplex_leiden` that 
-    uses :class:`AnnData` as input and works with two layers; one latent 
+    This is a wrapper around :func:`spatialleiden.multiplex_leiden` that
+    uses :class:`AnnData` as input and works with two layers; one latent
     space and one spatial layer.
     Adapted from https://github.com/HiDiHlabs/SpatialLeiden/.
 
@@ -551,7 +573,7 @@ def calculate_niche_spatialleiden(
 
     # obtain adata if data was of sdata type
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
-    
+
     if inplace:
         adata = orig_adata
     else:
@@ -578,9 +600,9 @@ def calculate_niche_spatialleiden(
             # give prefix appropriate value so that the niche values indicate lib id.
             calculate_niche_spatialleiden(
                 lib_adata,
+                resolutions,
                 latent_connectivities_key,
                 spatial_connectivities_key,
-                resolutions,
                 layer_ratio,
                 n_iterations,
                 use_weights,
@@ -589,7 +611,7 @@ def calculate_niche_spatialleiden(
                 mask,
                 prefix=f"lib={lib_id}_",
                 library_key=None,
-                inplace=True, # to save memory
+                inplace=True,  # to save memory
                 table_key=table_key,
             )
 
@@ -624,7 +646,7 @@ def calculate_niche_spatialleiden(
             )
 
         # obtain the result_columns, which are basically the difference in columns in orig_adata and adata
-        result_columns = [f'spatialleiden_res={res}' for res in resolutions]
+        result_columns = [f"spatialleiden_res={res}" for res in resolutions]
 
         # generate the list of postprocessor objects using the supplied args
         postprocessors_list = []
@@ -650,15 +672,16 @@ def calculate_niche_spatialleiden(
     else:
         return adata
 
+
 @d.dedent
 def calculate_niche_custom(
-    data,
-    embedder,
-    clusterer,
-    postprocessors_list,
-    library_key,
-    inplace,
-    table_key,
+    data: AnnData | SpatialData,
+    embedder: NicheEmbedder,
+    clusterer: NicheClusterer,
+    postprocessors_list: list[NichePostprocessor],
+    library_key: str | None,
+    inplace: bool,
+    table_key: str | None,
 ) -> AnnData | None:
     """Compute niche assignments using user-defined embedding, clustering, and postprocessing.
 
@@ -702,7 +725,7 @@ def calculate_niche_custom(
 
     # obtain adata if data was of sdata type
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
-    
+
     if inplace:
         adata = orig_adata
     else:
@@ -734,7 +757,7 @@ def calculate_niche_custom(
                 clusterer,
                 postprocessors_list_lib,
                 library_key=None,
-                inplace=True, # to save memory
+                inplace=True,  # to save memory
                 table_key=None,
             )
 
@@ -770,7 +793,11 @@ def calculate_niche_custom(
         return adata
 
 
-def _postprocess_niche_results(adata, result_columns, postprocessors_list):
+def _postprocess_niche_results(
+    adata: AnnData,
+    result_columns: list[str],
+    postprocessors_list: list[NichePostprocessor],
+) -> None:
     """Apply a sequence of postprocessors to niche assignment results.
 
     Parameters
@@ -1056,6 +1083,7 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
             f"Parameters {', '.join([f'{arg}' for arg in unnecessary_args])} are not used for flavor '{flavor}'.",
         )
 
+
 ############
 ### embedder classes
 ############
@@ -1066,13 +1094,15 @@ class NicheEmbedder:
 
     Subclasses must implement :meth:`get_embedding`, which transforms an
     :class:`AnnData` object into a feature matrix suitable for clustering.
-    The 0-index dimension of returned embedding (embedding.shape[0]) 
-    should correspond to the rows in adata.obs (and adata.X), meaning in 
+    The 0-index dimension of returned embedding (embedding.shape[0])
+    should correspond to the rows in adata.obs (and adata.X), meaning in
     the same order and having same length.
     """
+
     @abstractmethod
     def get_embedding(self, adata: AnnData) -> NDArrayA:
         """return an embedding matrix, with cells as rows"""
+
 
 @d.dedent
 class NhoodProfileEmbedder(NicheEmbedder):
@@ -1093,7 +1123,7 @@ class NhoodProfileEmbedder(NicheEmbedder):
     distance
         Number of hops to consider for neighborhood aggregation.
     abs_nhood
-        If ``True``, use absolute counts of categories in neighborhood; otherwise 
+        If ``True``, use absolute counts of categories in neighborhood; otherwise
         normalize to proportions.
     n_hop_weights
         Weights for combining profiles across neighborhood hops.
@@ -1103,14 +1133,15 @@ class NhoodProfileEmbedder(NicheEmbedder):
     For ``distance > 1``, neighborhood profiles are iteratively aggregated using
     powers of the adjacency matrix, optionally weighted per hop.
     """
+
     def __init__(
         self,
-        groups,
-        spatial_connectivities_key,
-        scale,
-        distance,
-        abs_nhood,
-        n_hop_weights,
+        groups: str,
+        spatial_connectivities_key: str,
+        scale: bool,
+        distance: int,
+        abs_nhood: bool,
+        n_hop_weights: list[float] | None,
     ):
         super().__init__()
         self.groups = groups
@@ -1233,6 +1264,7 @@ class NhoodProfileEmbedder(NicheEmbedder):
             sc.pp.scale(adata_neighborhood, zero_center=True)
         return adata_neighborhood.X
 
+
 @d.dedent
 class UtagEmbedder(NicheEmbedder):
     """Compute a UTAG-style embedding by propagating features over spatial neighbors.
@@ -1251,9 +1283,10 @@ class UtagEmbedder(NicheEmbedder):
     This follows the general UTAG idea that each observation inherits information
     from its immediate spatial neighborhood before dimensionality reduction.
     """
+
     def __init__(
         self,
-        spatial_connectivities_key,
+        spatial_connectivities_key: str,
     ):
         super().__init__()
         self.spatial_connectivities_key = spatial_connectivities_key
@@ -1303,13 +1336,14 @@ class CellcharterEmbedder(NicheEmbedder):
     When ``use_rep`` is ``None``, PCA is applied to the concatenated aggregated
     feature matrix to produce the final embedding.
     """
+
     def __init__(
         self,
-        distance,
-        aggregation,
-        spatial_connectivities_key,
-        n_components,
-        use_rep,
+        distance: int | None,
+        aggregation: str | None,
+        spatial_connectivities_key: str | None,
+        n_components: int | None,
+        use_rep: str | None,
     ):
         super().__init__()
         self.distance = distance
@@ -1433,8 +1467,9 @@ class NicheClusterer:
     Subclasses must implement :meth:`cluster`, which assigns cluster labels
     and stores them in ``adata.obs``.
     """
+
     @abstractmethod
-    def cluster(self, adata: AnnData, embedding: NDArrayA) -> list:
+    def cluster(self, adata: AnnData, embedding: NDArrayA) -> list[str]:
         """Adds column/s in adata.obs with the clustering done. Returns the names of the columns just added."""
 
 
@@ -1447,10 +1482,10 @@ class LeidenClusterer(NicheClusterer):
     n_neighbors
         Number of neighbors used to construct the kNN graph.
     resolutions
-        Resolution parameter(s) for Leiden clustering. Can be a single 
+        Resolution parameter(s) for Leiden clustering. Can be a single
         float value or list of floats.
     base_colname
-        Base name for columns added to ``adata.obs``. Resolution is 
+        Base name for columns added to ``adata.obs``. Resolution is
         appended to this to unique identify columns for each resolution.
 
     Notes
@@ -1458,7 +1493,13 @@ class LeidenClusterer(NicheClusterer):
     A separate clustering is computed for each resolution, producing multiple
     niche annotation columns.
     """
-    def __init__(self, n_neighbors, resolutions: float | list[float], base_colname: str = "niche_leiden"):
+
+    def __init__(
+        self,
+        n_neighbors: int,
+        resolutions: float | list[float],
+        base_colname: str = "niche_leiden",
+    ):
         super().__init__()
         self.n_neighbors = n_neighbors
         self.resolutions = resolutions if isinstance(resolutions, list) else [resolutions]
@@ -1466,9 +1507,7 @@ class LeidenClusterer(NicheClusterer):
 
     def cluster(self, adata: AnnData, embedding: NDArrayA) -> list:
         # first create an adata object using the embedding provided
-        adata_embedding = ad.AnnData(
-            X=embedding, obs=pd.DataFrame(index=adata.obs.index)
-        )  # TODO: is supplying obs necessary here?
+        adata_embedding = ad.AnnData(X=embedding, obs=pd.DataFrame(index=adata.obs.index))
 
         # required for leiden clustering (note: no dim reduction performed in original implementation)
         sc.pp.neighbors(adata_embedding, n_neighbors=self.n_neighbors, use_rep="X")
@@ -1494,6 +1533,7 @@ class LeidenClusterer(NicheClusterer):
 
         return niche_keys
 
+
 @d.dedent
 class GMMClusterer(NicheClusterer):
     """Cluster embeddings with a Gaussian mixture model.
@@ -1511,7 +1551,13 @@ class GMMClusterer(NicheClusterer):
     -----
     Cluster assignments are stored as categorical niche labels in ``adata.obs``.
     """
-    def __init__(self, n_components, random_state, base_colname="niche_gmm"):
+
+    def __init__(
+        self,
+        n_components: int,
+        random_state: int,
+        base_colname: str = "niche_gmm",
+    ):
         super().__init__()
         self.n_components = n_components
         self.random_state = random_state
@@ -1548,13 +1594,15 @@ class NichePostprocessor:
     Postprocessors operate on clustering results stored in ``adata.obs`` and
     typically generate new columns derived from existing niche columns.
     """
-    def __init__(self, suffix):
+
+    def __init__(self, suffix: str):
         self.suffix = suffix
 
     @abstractmethod
     def postprocess(self, adata: AnnData, result_columns: list[str]) -> list[str]:
         """Logic to postprocess adata and return the names of columns added."""
         # should append add self.suffix to the columns added
+
 
 @d.dedent
 class MinNicheSizePostprocessor(NichePostprocessor):
@@ -1572,7 +1620,8 @@ class MinNicheSizePostprocessor(NichePostprocessor):
     Niche labels with fewer than ``min_niche_size`` observations are replaced
     with ``"not_a_niche"``.
     """
-    def __init__(self, min_niche_size, suffix="_size_filter"):
+
+    def __init__(self, min_niche_size: int, suffix: str = "_size_filter"):
         super().__init__(suffix=suffix)
         self.min_niche_size = min_niche_size
 
@@ -1587,16 +1636,17 @@ class MinNicheSizePostprocessor(NichePostprocessor):
 
             counts_by_niche = adata.obs[new_result_column].value_counts()
             to_filter = counts_by_niche[counts_by_niche < self.min_niche_size].index
-            
+
             if new_result_column in adata.obs.columns:
                 logg.info(f"Overwriting existing column '{new_result_column}'")
-            
+
             adata.obs[new_result_column] = adata.obs[new_result_column].apply(
                 lambda x, to_filter=to_filter: "not_a_niche" if x in to_filter else x
             )
             adata.obs[new_result_column] = adata.obs.index.map(adata.obs[new_result_column]).fillna("not_a_niche")
 
         return new_result_columns
+
 
 @d.dedent
 class MaskPostprocessor(NichePostprocessor):
@@ -1613,7 +1663,8 @@ class MaskPostprocessor(NichePostprocessor):
     -----
     Observations included in ``mask`` are assigned the label ``"not_a_niche"``.
     """
-    def __init__(self, mask, suffix="_mask"):
+
+    def __init__(self, mask: pd.Series, suffix: str = "_mask"):
         super().__init__(suffix=suffix)
         self.mask = mask
 
@@ -1637,6 +1688,7 @@ class MaskPostprocessor(NichePostprocessor):
 
         return new_result_columns
 
+
 @d.dedent
 class RenamePostprocessor(NichePostprocessor):
     """Rename niche labels by adding a prefix.
@@ -1653,7 +1705,8 @@ class RenamePostprocessor(NichePostprocessor):
     This is useful when combining results across subsets (e.g. libraries)
     to ensure unique niche identifiers.
     """
-    def __init__(self, prefix_for_niches, suffix="_renamed"):
+
+    def __init__(self, prefix_for_niches: str, suffix: str = "_renamed"):
         super().__init__(suffix=suffix)
         self.prefix_for_niches = prefix_for_niches
 
@@ -1666,7 +1719,7 @@ class RenamePostprocessor(NichePostprocessor):
 
             if new_result_column in adata.obs.columns:
                 logg.info(f"Overwriting existing column '{new_result_column}'")
-            
+
             adata.obs[new_result_column] = self.prefix_for_niches + adata.obs[result_column].astype(str)
 
         return new_result_columns
