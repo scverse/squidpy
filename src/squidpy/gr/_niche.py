@@ -314,7 +314,7 @@ def calculate_niche_spatialleiden(
         logg.info(f"Stratifying by library_key '{library_key}'")
 
         # go through each library_id and process the corresponding adata subset
-        for lib_id in adata.obs[library_key].unique():
+        for itr, lib_id in enumerate(adata.obs[library_key].unique()):
             logg.info(f"Processing library '{lib_id}'")
 
             lib_indices = adata.obs[adata.obs[library_key] == lib_id].index
@@ -337,19 +337,22 @@ def calculate_niche_spatialleiden(
                 random_state,
                 min_niche_size,
                 mask,
-                prefix=f"lib={lib_id}",
+                prefix=f"lib={lib_id}_",
                 library_key=None,
                 inplace=True, # to save memory
                 table_key=table_key,
             )
 
-            added_columns = list(set(lib_adata.obs.columns) - set(adata.obs.columns))
+            # from itr==1 onwards, adata will hold the columns that are being added hence,
+            # added_columns will be empty. Hence only obtain added_columns when itr==0
+            if itr == 0:
+                added_columns = list(set(lib_adata.obs.columns) - set(adata.obs.columns))
 
             for col in added_columns:
                 # ensure that adata has the columns in which we are adding the information
                 if col not in adata.obs:
                     adata.obs[col] = "not_a_niche"
-                adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col])
+                adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
 
     else:
         # Simply call sl.spatialleiden with the provided arguments
@@ -371,7 +374,7 @@ def calculate_niche_spatialleiden(
             )
 
         # obtain the result_columns, which are basically the difference in columns in orig_adata and adata
-        result_columns = list(set(adata.obs.columns) - set(orig_adata.obs.columns))
+        result_columns = [f'spatialleiden_res={res}' for res in resolutions]
 
         # generate the list of postprocessor objects using the supplied args
         postprocessors_list = []
@@ -454,7 +457,7 @@ def calculate_niche_custom(
                 # ensure that adata has the columns in which we are adding the information
                 if col not in adata.obs:
                     adata.obs[col] = "not_a_niche"
-                adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col])
+                adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
 
     else:
         # supply the adata object to the embedder object, and obtain appropriate embedding matrix

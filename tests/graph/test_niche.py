@@ -130,6 +130,56 @@ def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
 
     assert (expected_niches == dummy_adata2.obs["nhood_niche_res=1.5_renamed"]).all()
 
+def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData):
+    "Check whether niche calculation for spatialleiden works as intended for dummy_adata2 when library_key is supplied."
+
+    # need the latent_connectivities_key, meaning have to run the graph construction
+    neighbors(dummy_adata2, n_neighbors = 3, use_rep = 'X')
+
+    # add library_key information in dummy_adata
+    dummy_adata2.obs["batch"] = [
+        "batch1",
+        "batch1",
+        "batch1",
+        "batch1",
+        "batch1",
+        "batch2",
+        "batch2",
+        "batch2",
+        "batch2",
+        "batch2",
+    ]
+
+    calculate_niche(dummy_adata2, 
+        flavor= 'spatialleiden', 
+        latent_connectivities_key = 'connectivities', 
+        spatial_connectivities_key = 'spatial_connectivities', 
+        resolutions = 1.0,
+        library_key = 'batch'
+    )
+
+    assert "spatialleiden_res=1.0_renamed" in dummy_adata2.obs.columns
+
+    expected_niches = Series(
+        [
+            'lib=batch1_1',
+            'lib=batch1_0',
+            'lib=batch1_0',
+            'lib=batch1_1',
+            'lib=batch1_0',
+            'lib=batch2_1',
+            'lib=batch2_1',
+            'lib=batch2_0',
+            'lib=batch2_0',
+            'lib=batch2_0',
+        ],
+        index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
+        name="spatialleiden_res=1.0",
+        dtype=str,
+    )
+
+    assert (expected_niches == dummy_adata2.obs["spatialleiden_res=1.0_renamed"]).all()
+
 
 def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):
     "Check whether niche calculation works as intended for the spatialdata version of dummy_adata2."
