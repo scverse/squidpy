@@ -83,7 +83,7 @@ def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
     assert (expected_niches == dummy_adata2.obs["spatialleiden_res=1.0"]).all()
 
 
-# test if calculate_niche() gives appropriate output with library_key and sdata format too
+# more special test cases
 
 
 def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
@@ -180,6 +180,30 @@ def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData)
     )
 
     assert (expected_niches == dummy_adata2.obs["spatialleiden_res=1.0_renamed"]).all()
+
+
+def test_niche_calc_nhood_multipostprocessor_dummy_adata(dummy_adata2: AnnData):
+    "Check whether niche calculation using neighborhood profile approach works as intended for dummy_adata2, when using both, mask and min_niche_size postprocessors"
+    mask = Series(
+        [False, False, True, True, True, True, True, True, True, True],
+        index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
+    )
+    calculate_niche(
+        dummy_adata2,
+        flavor="neighborhood",
+        groups="celltype",
+        n_neighbors=3,
+        resolutions=1.0,
+        mask=mask,
+        min_niche_size=3,
+    )
+    assert "nhood_niche_res=1.0_mask_size_filter" in dummy_adata2.obs.columns
+    expected_niches = Series(
+        ["not_a_niche", "not_a_niche", "0", "not_a_niche", "1", "0", "0", "1", "0", "1"],
+        index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
+        name="nhood_niche_res=1.0",
+    )
+    assert (expected_niches == dummy_adata2.obs["nhood_niche_res=1.0_mask_size_filter"]).all()
 
 
 def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):

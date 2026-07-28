@@ -101,6 +101,12 @@ def calculate_niche(
     mask
         Boolean array to filter cells which won't get assigned to a niche.
         Note that if you want to exclude these cells during neighborhood calculation already, you should subset your AnnData table before running 'sq.gr.spatial_neigbors'.
+        Mask can look like the following. Here, the index values would correspond to adata.obs.index.
+        The entries that are False are the ones ignored.
+        mask = Series(
+            [False, False, True, True, True, True, True, True, True, True],
+            index = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
+        )
     groups
         Groups based on which to calculate neighborhood profile (E.g. columns of cell type annotations in adata.obs).
         Required if flavor == `{fla.NEIGHBORHOOD.s!r}`.
@@ -1662,6 +1668,15 @@ class MaskPostprocessor(NichePostprocessor):
     Notes
     -----
     Observations included in ``mask`` are assigned the label ``"not_a_niche"``.
+
+    Examples
+    -----
+    Mask can look like the following. Here, the index values would correspond to adata.obs.index.
+    The entries that are False are the ones ignored.
+    mask = Series(
+        [False, False, True, True, True, True, True, True, True, True],
+        index = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
+    )
     """
 
     def __init__(self, mask: pd.Series, suffix: str = "_mask"):
@@ -1677,14 +1692,11 @@ class MaskPostprocessor(NichePostprocessor):
             new_result_columns.append(new_result_column)
             adata.obs[new_result_column] = list(adata.obs[result_column])
 
-            to_filter = self.mask[self.mask.index.isin(adata.obs.index)]
-
             if new_result_column in adata.obs.columns:
                 logg.info(f"Overwriting existing column '{new_result_column}'")
 
-            adata.obs[new_result_column] = adata.obs[new_result_column].apply(
-                lambda x, to_filter=to_filter: "not_a_niche" if x in to_filter else x
-            )
+            to_filter = self.mask[self.mask.index.isin(adata.obs.index)]
+            adata.obs.loc[~to_filter, new_result_column] = "not_a_niche"
 
         return new_result_columns
 
