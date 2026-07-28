@@ -103,10 +103,7 @@ def calculate_niche(
         Note that if you want to exclude these cells during neighborhood calculation already, you should subset your AnnData table before running 'sq.gr.spatial_neigbors'.
         Mask can look like the following. Here, the index values would correspond to adata.obs.index.
         The entries that are False are the ones ignored.
-        mask = Series(
-            [False, False, True, True, True, True, True, True, True, True],
-            index = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
-        )
+        mask = Series([False, False, True], index = ["a", "b", "c"])
     groups
         Groups based on which to calculate neighborhood profile (E.g. columns of cell type annotations in adata.obs).
         Required if flavor == `{fla.NEIGHBORHOOD.s!r}`.
@@ -1673,10 +1670,7 @@ class MaskPostprocessor(NichePostprocessor):
     -----
     Mask can look like the following. Here, the index values would correspond to adata.obs.index.
     The entries that are False are the ones ignored.
-    mask = Series(
-        [False, False, True, True, True, True, True, True, True, True],
-        index = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
-    )
+    mask = Series([False, False, True], index = ["a", "b", "c"])
     """
 
     def __init__(self, mask: pd.Series, suffix: str = "_mask"):
