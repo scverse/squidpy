@@ -156,6 +156,77 @@ def _blobs(seed: int = 0) -> np.ndarray:
     )
 
 
+def _solve_grids():
+    from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
+
+    ref = _blobs()
+    query = ref @ np.array([[np.cos(0.12), -np.sin(0.12)], [np.sin(0.12), np.cos(0.12)]]).T + np.array([6.0, -4.0])
+    source = rasterize_cloud(query[:, ::-1], dx=_SOLVE["dx"], blur=_SOLVE["blur"], expand=1.1)
+    target = rasterize_cloud(ref[:, ::-1], dx=_SOLVE["dx"], blur=_SOLVE["blur"], expand=1.1)
+    solve = {k: v for k, v in _SOLVE.items() if k not in {"dx", "blur"}}
+    return source, target, {"L": np.eye(2), "T": np.zeros(2), **solve}
+
+
+def test_lddmm_returns_an_energy_trace() -> None:
+    """Without this a caller cannot tell a converged run from a diverged one."""
+    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
+
+    source, target, common = _solve_grids()
+    result = lddmm(*source, *target, niter=30, **common)
+
+    assert result["energies"].shape == (30,)
+    assert int(result["n_iter"]) == 30
+    assert np.all(np.isfinite(np.asarray(result["energies"])))
+    # The reported final energy is the last one in the trace.
+    np.testing.assert_allclose(float(result["E"]), float(result["energies"][-1]), rtol=1e-12)
+
+
+def test_early_stopping_is_off_by_default() -> None:
+    """``tol=None`` must run every iteration, so the default is bit-for-bit unchanged."""
+    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
+
+    source, target, common = _solve_grids()
+    plain = lddmm(*source, *target, niter=40, **common)
+    explicit = lddmm(*source, *target, niter=40, tol=None, **common)
+
+    assert int(plain["n_iter"]) == 40
+    np.testing.assert_array_equal(np.asarray(plain["v"]), np.asarray(explicit["v"]))
+
+
+def test_early_stopping_never_fires_before_the_weights_switch_on() -> None:
+    """The objective changes definition at iteration 50 and its value jumps upward.
+
+    A stopping rule that compares across that boundary sees the jump as "no longer
+    improving" and quits immediately, which is what a naive implementation does.
+    """
+    from squidpy.experimental.methods.align_samples._stalign_impl._core import MIXTURE_E_STEP_START, lddmm
+
+    source, target, common = _solve_grids()
+    # A tolerance so loose it would stop at the first opportunity.
+    result = lddmm(*source, *target, niter=400, tol=1e9, patience=25, **common)
+
+    assert int(result["n_iter"]) >= MIXTURE_E_STEP_START + 2 + 25
+    trace = np.asarray(result["energies"])
+    assert trace[MIXTURE_E_STEP_START + 1] > trace[MIXTURE_E_STEP_START], (
+        "expected the objective to jump when the mixture-weight E step engages"
+    )
+
+
+def test_early_stopping_shortens_the_run() -> None:
+    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
+
+    source, target, common = _solve_grids()
+    # Loose enough to fire on this fixture but not at the first opportunity: it stops
+    # around iteration 157 of 400, whereas tol=1e-2 keeps improving through all 400.
+    stopped = lddmm(*source, *target, niter=400, tol=1e-1, patience=25, **common)
+
+    ran = int(stopped["n_iter"])
+    assert 77 < ran < 400
+    # Iterations that never ran stay NaN rather than reporting a bogus energy.
+    trace = np.asarray(stopped["energies"])
+    assert np.all(np.isfinite(trace[:ran])) and np.all(np.isnan(trace[ran:]))
+
+
 def test_lddmm_energy_decreases() -> None:
     """More iterations must buy a lower objective. Catches a broken gradient or step."""
     from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm

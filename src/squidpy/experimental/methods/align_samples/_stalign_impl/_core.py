@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any, Literal
 
 import jax
@@ -10,6 +11,11 @@ import jax.scipy as jsp
 import numpy as np
 
 __all__ = ["jax_dtype", "lddmm", "transform_points_row_col"]
+
+#: Iteration at which the mixture-weight E step switches on (STalign.py:1233). Before
+#: this the weights are frozen at their initial values, so the objective changes
+#: definition here and its value jumps discontinuously.
+MIXTURE_E_STEP_START = 50
 
 
 def jax_dtype() -> jnp.dtype:
@@ -201,33 +207,36 @@ def _update_mixture_weights(
             jnp.sum(background_weights), 1e-12
         )
 
-    if iteration < 50:
-        return match_weights, artifact_weights, background_weights, muA, muB
+    def _e_step() -> tuple[jax.Array, jax.Array, jax.Array]:
+        weights = jnp.stack((match_weights, artifact_weights, background_weights))
+        mixing = jnp.sum(weights, axis=(1, 2))
+        mixing = mixing + jnp.max(mixing) * 1e-6
+        mixing = mixing / jnp.sum(mixing)
 
-    weights = jnp.stack((match_weights, artifact_weights, background_weights))
-    mixing = jnp.sum(weights, axis=(1, 2))
-    mixing = mixing + jnp.max(mixing) * 1e-6
-    mixing = mixing / jnp.sum(mixing)
+        n_channels = target_image.shape[0]
+        norm_match = (2.0 * np.pi * sigmaM**2) ** (n_channels / 2.0)
+        norm_artifact = (2.0 * np.pi * sigmaA**2) ** (n_channels / 2.0)
+        norm_background = (2.0 * np.pi * sigmaB**2) ** (n_channels / 2.0)
 
-    n_channels = target_image.shape[0]
-    norm_match = (2.0 * np.pi * sigmaM**2) ** (n_channels / 2.0)
-    norm_artifact = (2.0 * np.pi * sigmaA**2) ** (n_channels / 2.0)
-    norm_background = (2.0 * np.pi * sigmaB**2) ** (n_channels / 2.0)
+        match = mixing[0] * jnp.exp(-jnp.sum((transformed_source - target_image) ** 2, axis=0) / (2.0 * sigmaM**2))
+        match = match / norm_match
+        artifact = mixing[1] * jnp.exp(-jnp.sum((muA[:, None, None] - target_image) ** 2, axis=0) / (2.0 * sigmaA**2))
+        artifact = artifact / norm_artifact
+        background = mixing[2] * jnp.exp(-jnp.sum((muB[:, None, None] - target_image) ** 2, axis=0) / (2.0 * sigmaB**2))
+        background = background / norm_background
 
-    match_weights = mixing[0] * jnp.exp(-jnp.sum((transformed_source - target_image) ** 2, axis=0) / (2.0 * sigmaM**2))
-    match_weights = match_weights / norm_match
-    artifact_weights = mixing[1] * jnp.exp(
-        -jnp.sum((muA[:, None, None] - target_image) ** 2, axis=0) / (2.0 * sigmaA**2)
+        total = match + artifact + background
+        total = total + jnp.max(total) * 1e-6
+        return match / total, artifact / total, background / total
+
+    # Before the E step switches on the weights stay at their initial 0.5/0.4/0.1,
+    # while muA/muB are still re-estimated every 5th iteration.
+    match_weights, artifact_weights, background_weights = jax.lax.cond(
+        iteration >= MIXTURE_E_STEP_START,
+        _e_step,
+        lambda: (match_weights, artifact_weights, background_weights),
     )
-    artifact_weights = artifact_weights / norm_artifact
-    background_weights = mixing[2] * jnp.exp(
-        -jnp.sum((muB[:, None, None] - target_image) ** 2, axis=0) / (2.0 * sigmaB**2)
-    )
-    background_weights = background_weights / norm_background
-
-    total = match_weights + artifact_weights + background_weights
-    total = total + jnp.max(total) * 1e-6
-    return match_weights / total, artifact_weights / total, background_weights / total, muA, muB
+    return match_weights, artifact_weights, background_weights, muA, muB
 
 
 def _lddmm_loss(
@@ -275,6 +284,183 @@ def _lddmm_loss(
     return total, (contrast_source, transformed_points, match_energy, reg_energy, point_energy)
 
 
+@partial(
+    jax.jit,
+    static_argnames=(
+        "niter",
+        "diffeo_start",
+        "epL",
+        "epT",
+        "epV",
+        "sigmaM",
+        "sigmaA",
+        "sigmaB",
+        "sigmaR",
+        "sigmaP",
+        "tol",
+        "patience",
+        "estimate_muA",
+        "estimate_muB",
+    ),
+)
+def _lddmm_run(
+    linear,
+    translation,
+    velocity,
+    match_weights,
+    artifact_weights,
+    background_weights,
+    muA,
+    muB,
+    *,
+    x_source,
+    source_image,
+    x_target,
+    target_image,
+    xv,
+    kernel,
+    ll,
+    dv_prod,
+    source_landmarks,
+    target_landmarks,
+    niter,
+    diffeo_start,
+    epL,
+    epT,
+    epV,
+    sigmaM,
+    sigmaA,
+    sigmaB,
+    sigmaR,
+    sigmaP,
+    tol,
+    patience,
+    estimate_muA,
+    estimate_muB,
+):
+    """The gradient descent, as one compiled loop.
+
+    Jitted as a whole rather than per-iteration: `lax.while_loop` outside a `jit` re-traces
+    its body on every call, and tracing `value_and_grad` through the interpolation and FFTs
+    costs about as much as a thousand iterations of actually running it.
+    """
+    loss_and_grad = jax.value_and_grad(_lddmm_loss, argnums=(0, 1, 2), has_aux=True)
+
+    # Precomputed in Python so the two step sizes are bit-identical to `epL / 1.0` and
+    # `epL / 10.0` -- the `(it >= diffeo_start) * 9` scaling at STalign.py:1205-1206.
+    steps_before = (epL, epT)
+    steps_after = (epL / 10.0, epT / 10.0)
+
+    dtype = jax_dtype()
+    # `niter=0` means "evaluate the initial state and stop"; the trace still needs a
+    # slot so the carry has a fixed shape.
+    energies = jnp.full((max(niter, 1),), jnp.nan, dtype=dtype)
+    initial = (
+        jnp.asarray(0),
+        linear,
+        translation,
+        velocity,
+        match_weights,
+        artifact_weights,
+        background_weights,
+        muA,
+        muB,
+        jnp.asarray(jnp.nan, dtype=dtype),
+        source_landmarks,
+        energies,
+    )
+
+    def _step(carry: tuple[Any, ...]) -> tuple[Any, ...]:
+        iteration, linear, translation, velocity, wm, wa, wb, muA, muB, _, _, energies = carry
+
+        (energy, aux), (grad_linear, grad_translation, grad_velocity) = loss_and_grad(
+            linear,
+            translation,
+            velocity,
+            x_source=x_source,
+            source_image=source_image,
+            x_target=x_target,
+            target_image=target_image,
+            xv=xv,
+            match_weights=wm,
+            ll=ll,
+            dv_prod=dv_prod,
+            points_source=source_landmarks,
+            points_target=target_landmarks,
+            sigmaM=sigmaM,
+            sigmaR=sigmaR,
+            sigmaP=sigmaP,
+        )
+        contrast_source, transformed_points, _, _, _ = aux
+
+        diffeo = iteration >= diffeo_start
+        step_linear = jnp.where(diffeo, steps_after[0], steps_before[0])
+        step_translation = jnp.where(diffeo, steps_after[1], steps_before[1])
+        linear = linear - step_linear * grad_linear
+        translation = translation - step_translation * grad_translation
+
+        grad_velocity = jnp.fft.ifftn(
+            jnp.fft.fftn(grad_velocity, axes=(1, 2)) * kernel[None, ..., None],
+            axes=(1, 2),
+        ).real
+        velocity = jnp.where(diffeo, velocity - epV * grad_velocity, velocity)
+
+        wm, wa, wb, muA, muB = jax.lax.cond(
+            iteration % 5 == 0,
+            lambda: _update_mixture_weights(
+                contrast_source,
+                target_image,
+                wm,
+                wa,
+                wb,
+                sigmaM=sigmaM,
+                sigmaA=sigmaA,
+                sigmaB=sigmaB,
+                estimate_muA=estimate_muA,
+                estimate_muB=estimate_muB,
+                muA=muA,
+                muB=muB,
+                iteration=iteration,
+            ),
+            lambda: (wm, wa, wb, muA, muB),
+        )
+        return (
+            iteration + 1,
+            linear,
+            translation,
+            velocity,
+            wm,
+            wa,
+            wb,
+            muA,
+            muB,
+            energy,
+            transformed_points,
+            energies.at[iteration].set(energy),
+        )
+
+    def _keep_going(carry: tuple[Any, ...]) -> jax.Array:
+        iteration, energies = carry[0], carry[-1]
+        if tol is None:
+            return iteration < niter
+        # Compare against `patience` iterations ago rather than the previous step: the
+        # weights only move every 5th iteration, so consecutive energies plateau and
+        # then jump, and a one-step test would stop on the plateau.
+        recent = energies[jnp.maximum(iteration - 1, 0)]
+        older = energies[jnp.maximum(iteration - 1 - patience, 0)]
+        improving = (older - recent) > tol * jnp.abs(older)
+        # The whole comparison window has to sit after the E step switches on. The
+        # objective changes definition at `MIXTURE_E_STEP_START` and its value jumps
+        # upward there, which reads as "no longer improving" to any stopping rule; the
+        # first energy computed with the new weights is at `MIXTURE_E_STEP_START + 1`, so
+        # the oldest index we may look at is that, hence the `+ 2` once the window and the
+        # one-step lag are accounted for.
+        warming_up = iteration < MIXTURE_E_STEP_START + 2 + patience
+        return (iteration < niter) & (warming_up | improving)
+
+    return jax.lax.while_loop(_keep_going, _step, initial)
+
+
 def lddmm(
     xI: tuple[np.ndarray | jax.Array, np.ndarray | jax.Array],
     I: np.ndarray | jax.Array,
@@ -299,7 +485,30 @@ def lddmm(
     sigmaA: float = 5.0,
     sigmaR: float = 5e5,
     sigmaP: float = 2e1,
+    tol: float | None = None,
+    patience: int = 25,
 ) -> dict[str, Any]:
+    """Fit an LDDMM registration of ``I`` onto ``J`` by gradient descent.
+
+    The whole descent runs as a single ``lax.while_loop``, so XLA compiles the loop body
+    once and fuses across it instead of paying per-iteration dispatch from Python.
+
+    Parameters
+    ----------
+    tol
+        Stop once the objective's relative improvement over the last ``patience``
+        iterations falls below this. ``None`` (default) always runs the full ``niter``.
+    patience
+        Window for the ``tol`` test. Compared against ``patience`` iterations ago rather
+        than the previous step because the mixture weights only move every 5th iteration,
+        so the objective plateaus and then jumps -- a one-step test would stop on a
+        plateau.
+
+    Returns
+    -------
+    A dict with the fitted ``A``/``v``/``xv``, the mixture weights, the final energy
+    ``E``, the per-iteration ``energies`` trace, and ``n_iter`` actually run.
+    """
     x_source = (jnp.asarray(xI[0]), jnp.asarray(xI[1]))
     x_target = (jnp.asarray(xJ[0]), jnp.asarray(xJ[1]))
     source_image = jnp.asarray(I, dtype=jax_dtype())
@@ -326,61 +535,54 @@ def lddmm(
     estimate_muA = True
     estimate_muB = True
 
-    loss_and_grad = jax.jit(jax.value_and_grad(_lddmm_loss, argnums=(0, 1, 2), has_aux=True))
-
-    # Bound up front so `niter=0` -- evaluate the initial state and stop -- returns a
-    # well-formed result instead of reading unbound locals off the end of the loop.
-    energy = jnp.asarray(jnp.nan, dtype=jax_dtype())
-    transformed_points = source_landmarks
-
-    for iteration in range(niter):
-        (energy, aux), (grad_linear, grad_translation, grad_velocity) = loss_and_grad(
-            linear,
-            translation,
-            velocity,
-            x_source=x_source,
-            source_image=source_image,
-            x_target=x_target,
-            target_image=target_image,
-            xv=xv,
-            match_weights=match_weights,
-            ll=ll,
-            dv_prod=dv_prod,
-            points_source=source_landmarks,
-            points_target=target_landmarks,
-            sigmaM=sigmaM,
-            sigmaR=sigmaR,
-            sigmaP=sigmaP,
-        )
-        contrast_source, transformed_points, _, _, _ = aux
-
-        affine_scale = 1.0 + 9.0 * float(iteration >= diffeo_start)
-        linear = linear - (epL / affine_scale) * grad_linear
-        translation = translation - (epT / affine_scale) * grad_translation
-
-        grad_velocity = jnp.fft.ifftn(
-            jnp.fft.fftn(grad_velocity, axes=(1, 2)) * kernel[None, ..., None],
-            axes=(1, 2),
-        ).real
-        if iteration >= diffeo_start:
-            velocity = velocity - epV * grad_velocity
-
-        if iteration % 5 == 0:
-            match_weights, artifact_weights, background_weights, muA, muB = _update_mixture_weights(
-                contrast_source,
-                target_image,
-                match_weights,
-                artifact_weights,
-                background_weights,
-                sigmaM=sigmaM,
-                sigmaA=sigmaA,
-                sigmaB=sigmaB,
-                estimate_muA=estimate_muA,
-                estimate_muB=estimate_muB,
-                muA=muA,
-                muB=muB,
-                iteration=iteration,
-            )
+    final = _lddmm_run(
+        linear,
+        translation,
+        velocity,
+        match_weights,
+        artifact_weights,
+        background_weights,
+        muA,
+        muB,
+        x_source=x_source,
+        source_image=source_image,
+        x_target=x_target,
+        target_image=target_image,
+        xv=xv,
+        kernel=kernel,
+        ll=ll,
+        dv_prod=dv_prod,
+        source_landmarks=source_landmarks,
+        target_landmarks=target_landmarks,
+        niter=niter,
+        diffeo_start=diffeo_start,
+        epL=epL,
+        epT=epT,
+        epV=epV,
+        sigmaM=sigmaM,
+        sigmaA=sigmaA,
+        sigmaB=sigmaB,
+        sigmaR=sigmaR,
+        sigmaP=sigmaP,
+        tol=tol,
+        patience=patience,
+        estimate_muA=estimate_muA,
+        estimate_muB=estimate_muB,
+    )
+    (
+        completed,
+        linear,
+        translation,
+        velocity,
+        match_weights,
+        artifact_weights,
+        background_weights,
+        muA,
+        muB,
+        energy,
+        transformed_points,
+        energies,
+    ) = final
 
     affine = _to_affine(linear, translation)
     return {
@@ -392,4 +594,8 @@ def lddmm(
         "WA": artifact_weights,
         "E": energy,
         "points": transformed_points,
+        # Per-iteration objective, so a caller can tell a converged run from a diverged
+        # one without running it again. Trailing entries stay NaN if `tol` stopped early.
+        "energies": energies[:niter],
+        "n_iter": completed,
     }

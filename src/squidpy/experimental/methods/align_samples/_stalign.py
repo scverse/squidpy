@@ -111,6 +111,8 @@ def fit_stalign(
     sigmaA: float = 5.0,
     sigmaR: float = 5e5,
     sigmaP: float = 2e1,
+    tol: float | None = None,
+    patience: int = 25,
 ) -> StalignResult:
     """Fit a deformation mapping ``query`` onto ``ref``.
 
@@ -138,6 +140,9 @@ def fit_stalign(
     sigmaM, sigmaB, sigmaA, sigmaR, sigmaP
         Noise scales for the matching, background, artifact, regularisation, and
         landmark-point terms of the objective.
+    tol, patience
+        Stop once the objective's relative improvement over the last ``patience``
+        iterations falls below ``tol``. ``tol=None`` (default) always runs ``niter``.
 
     Returns
     -------
@@ -206,6 +211,8 @@ def fit_stalign(
         sigmaA=sigmaA,
         sigmaR=sigmaR,
         sigmaP=sigmaP,
+        tol=tol,
+        patience=patience,
     )
     aligned_rc = transform_points_row_col(result["xv"], result["v"], result["A"], source_rc, direction="forward")
     return StalignResult(
@@ -241,6 +248,8 @@ def fit_stalign_image(
     sigmaA: float = 5.0,
     sigmaR: float = 5e5,
     sigmaP: float = 2e1,
+    tol: float | None = None,
+    patience: int = 25,
 ) -> StalignResult:
     """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
 
@@ -268,6 +277,9 @@ def fit_stalign_image(
     sigmaM, sigmaB, sigmaA, sigmaR, sigmaP
         Noise scales for the matching, background, artifact, regularisation, and
         landmark-point terms of the objective.
+    tol, patience
+        Stop once the objective's relative improvement over the last ``patience``
+        iterations falls below ``tol``. ``tol=None`` (default) always runs ``niter``.
 
     Returns
     -------
@@ -331,6 +343,8 @@ def fit_stalign_image(
         sigmaA=sigmaA,
         sigmaR=sigmaR,
         sigmaP=sigmaP,
+        tol=tol,
+        patience=patience,
     )
     return StalignResult(
         affine=result["A"],

@@ -20,6 +20,15 @@
   be expressed as a SpatialData transformation, so writing to an `images/...` path materialises the
   warped image rather than registering it lazily. Adds an `align_images` method family and
   `squidpy.experimental.methods.align_samples.fit_stalign_image`.
+- The experimental STalign solver now runs its whole gradient descent as a single compiled
+  `lax.while_loop` instead of a Python loop around a jitted step, about **4.6x faster** per
+  iteration (2.20 to 0.46 ms on the reference fixture, so `niter=5000` drops from ~11s to ~2.4s).
+  Numerically unchanged: the reference suite still matches the original implementation at 1, 5, 50
+  and 500 iterations.
+- The experimental STalign solver returns the per-iteration `energies` trace and `n_iter`, and
+  accepts optional `tol` / `patience` early stopping. Off by default. Note the objective changes
+  definition at iteration 50, when the mixture-weight E step engages, so the convergence window
+  deliberately never spans that point.
 - **Breaking (experimental):** {func}`squidpy.experimental.tl.align_by_landmarks` takes `in_` /
   `out` / `copy` in place of `spatial_key` / `key_added` / `output_mode`, and its coordinate-system
   arguments are renamed `cs_ref` / `cs_query`. Because `out` is always named explicitly, the guard

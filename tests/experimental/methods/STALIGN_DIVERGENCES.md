@@ -116,16 +116,43 @@ skimage's choice is the safer one, so this is not a request to revert — it is 
 *say so* in the docstring. If exact least-squares is wanted, `np.linalg.lstsq` on the
 padded design matrix gives upstream's answer without upstream's conditioning problem.
 
-### R5. `niter=5000` runs blind — open
+### R5. `niter=5000` ran blind — fixed
 
-No energy trace in the return value and no convergence criterion; `lddmm` returns only
-the final scalar `E`. Users cannot distinguish a converged run from a diverged one
-without re-running. Returning the per-iteration energies (upstream accumulates them in a
-local `Esave` and throws them away too) would cost nothing and make `niter` tunable.
+`lddmm` now returns the per-iteration `energies` trace and the `n_iter` actually run, so
+a converged run is distinguishable from a diverged one without running it again.
+(Upstream accumulates the same values in a local `Esave` and throws them away.)
 
-### R6. The Python loop forgoes most of JAX's advantage — open
+It also takes an optional `tol` / `patience` early stop: it halts once the objective's
+relative improvement over the last `patience` iterations falls below `tol`. Off by
+default, so the shipped behaviour is unchanged.
 
-`lddmm` calls a jitted `value_and_grad` from a Python `for` loop, paying dispatch per
-iteration and blocking XLA from fusing across steps. The mixture-weight update every 5th
-iteration is the only real obstacle and is expressible with `lax.cond`. Worth measuring
-before committing to, but at 5000 iterations the dispatch overhead is not negligible.
+**The window must clear iteration 50.** The mixture-weight E step switches on at
+`MIXTURE_E_STEP_START` (`STalign.py:1233`), which changes what the objective *is* — and
+its value jumps **upward** there, on the reference fixture from `3.259` to `5.489`. Any
+rule comparing across that boundary reads the jump as "no longer improving" and quits
+immediately: with a naive guard every tolerance from `1e-3` to `1e-5` stopped at
+iteration 76 regardless. The comparison window now has to sit entirely after the jump.
+`test_early_stopping_never_fires_before_the_weights_switch_on` pins this.
+
+### R6. The Python loop forgave most of JAX's advantage — fixed
+
+The descent was a Python `for` loop around a jitted `value_and_grad`, paying dispatch
+per iteration and blocking XLA from fusing across steps. It is now a single
+`lax.while_loop` inside one `jax.jit`, with `lax.cond` for the every-5th-iteration
+weight update and `jnp.where` for the `diffeo_start` gates.
+
+Measured on the reference fixture, warm:
+
+| | ms/iteration | `niter=5000` |
+| --- | --- | --- |
+| Python loop (was) | 2.20 | ~11.0 s |
+| `lax.while_loop`, not jitted | 0.91 | ~4.6 s |
+| **`lax.while_loop` inside `jit`** | **0.46** | **~2.4 s** |
+
+The middle row is worth keeping in mind: `lax.while_loop` outside a `jit` re-traces its
+body on *every call*, and tracing `value_and_grad` through the interpolation and FFTs
+costs roughly a second — about as much as a thousand iterations of running it. The loop
+has to be inside the `jit` to get the win.
+
+Reference parity is unchanged at 1 / 5 / 50 / 500 iterations, which is what makes this
+rewrite safe to make at all.
