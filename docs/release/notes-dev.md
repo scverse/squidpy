@@ -6,16 +6,24 @@
 - Add a numerical reference suite for the experimental STalign port, comparing it against the
   original PyTorch implementation. Deselected by default; runs on the scheduled job. Reference
   values are generated out of band by
-  [scverse/squidpy-ports](https://github.com/scverse/squidpy-ports), so `torch` is not a squidpy
+  [theislab/squidpy-ports](https://github.com/theislab/squidpy-ports), so `torch` is not a squidpy
   dependency.
   [#1243](https://github.com/scverse/squidpy/issues/1243)
 - **Breaking (experimental):** {func}`squidpy.experimental.tl.align` now locates data with `in_`
   and `out` paths instead of a stack of key arguments. `ref_key`, `query_key`, `spatial_key`,
-  `key_added`, `output_mode` and `on` are replaced by `in_` (e.g. `"obsm/spatial"`,
-  `"tables/slice1/obsm/spatial"`, `"images/he"`), `out`, and `copy`. `on` is gone because the path
-  already says which modality is meant. `out=None` (the default) returns the fitted alignment and
-  writes nothing. This follows the shape proposed for scanpy in
-  [scanpy#4007](https://github.com/scverse/scanpy/issues/4007).
+  `key_added` and `output_mode` are replaced by `in_` (e.g. `"obsm/spatial"`,
+  `"tables/slice1/obsm/spatial"`, `"images/he"`, `"shapes/landmarks"`), `out`, and `copy`.
+  `out=None` (the default) returns the fitted alignment and writes nothing. This follows the shape
+  proposed for scanpy in [scanpy#4007](https://github.com/scverse/scanpy/issues/4007).
+- **Breaking (experimental):** `squidpy.experimental.tl.align_by_landmarks` is folded into
+  {func}`squidpy.experimental.tl.align` as `by="landmarks"`. `on` becomes `by`, gaining a
+  `"landmarks"` value alongside `"obs"` and `"images"`; `in_` then names the correspondences and
+  `apply_to` names what moves. Writing to `out="cs/<name>"` registers the fitted affine on a whole
+  SpatialData coordinate system instead of materialising anything.
+- **Breaking (experimental):** the `align_samples`, `align_images` and `align_landmarks` registries
+  collapse into a single `ALIGN` registry of `AlignMethod` records, each declaring which modalities
+  it implements. Asking for one a method does not support now fails immediately and says what it
+  does support. `fit_stalign` is renamed `fit_stalign_obs` for symmetry with `fit_stalign_image`.
 - {func}`squidpy.experimental.tl.align` can now align on images. The fitted diffeomorphism cannot
   be expressed as a SpatialData transformation, so writing to an `images/...` path materialises the
   warped image rather than registering it lazily. Adds an `align_images` method family and

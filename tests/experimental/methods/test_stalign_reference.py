@@ -1,7 +1,7 @@
 """Numerical comparison of the STalign port against the original implementation.
 
 Implements scverse/squidpy#1243. The reference values in ``tests/_data/stalign_reference``
-are produced out of band by https://github.com/scverse/squidpy-ports, which vendors the
+are produced out of band by https://github.com/theislab/squidpy-ports, which vendors the
 PyTorch STalign at a pinned commit -- so torch never becomes a squidpy dependency.
 
 These are **excluded from normal runs**. See ``STALIGN_DIVERGENCES.md`` next to this file
@@ -61,7 +61,7 @@ def _skip_without_x64() -> None:
 def _load(name: str) -> np.lib.npyio.NpzFile:
     path = DATA / f"{name}.npz"
     if not path.is_file():
-        pytest.skip(f"reference bundle missing at {path}; regenerate it with scverse/squidpy-ports")
+        pytest.skip(f"reference bundle missing at {path}; regenerate it with theislab/squidpy-ports")
     return np.load(path)
 
 

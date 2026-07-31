@@ -42,10 +42,12 @@ def _sdata_image(name: str = "he", shape: tuple[int, int, int] = (2, 8, 6)):
 @pytest.mark.parametrize(
     ("path", "modality", "element", "key"),
     [
-        ("obsm/spatial", "points", None, "spatial"),
-        ("/obsm/spatial/", "points", None, "spatial"),
-        ("tables/s1/obsm/xy", "points", "s1", "xy"),
-        ("images/he", "image", "he", None),
+        ("obsm/spatial", "obs", None, "spatial"),
+        ("/obsm/spatial/", "obs", None, "spatial"),
+        ("tables/s1/obsm/xy", "obs", "s1", "xy"),
+        ("images/he", "images", "he", None),
+        ("shapes/lm", "landmarks", "lm", None),
+        ("cs/aligned", "landmarks", "aligned", None),
     ],
 )
 def test_parse_accepts_the_documented_forms(path, modality, element, key) -> None:
@@ -64,7 +66,9 @@ def test_parse_accepts_the_documented_forms(path, modality, element, key) -> Non
         ("tables/s1/obs/x", "Expected `tables/<table>/obsm/<key>`"),
         ("tables/s1", "Expected `tables/<table>/obsm/<key>`"),
         ("images", "Expected `images/<name>`"),
-        ("shapes/x", "does not read or write yet"),
+        ("shapes/a/b", "Expected `shapes/<name>`"),
+        ("cs/a/b", "Expected `cs/<name>`"),
+        ("labels/x", "does not read or write yet"),
         ("varm/x", "does not start with a known collection"),
     ],
 )
@@ -134,6 +138,12 @@ def test_bare_obsm_path_against_sdata_is_ambiguous() -> None:
 def test_image_path_against_anndata_is_rejected() -> None:
     with pytest.raises(TypeError, match="only a SpatialData holds"):
         read_path(_adata(), parse_path("images/he", name="in_"), name="in_")
+
+
+def test_coordinate_system_is_write_only() -> None:
+    """A coordinate system holds transformations, not data to align."""
+    with pytest.raises(ValueError, match="only valid as an `out`"):
+        read_path(_adata(), parse_path("cs/aligned", name="in_"), name="in_")
 
 
 # --- writing ---------------------------------------------------------------------------

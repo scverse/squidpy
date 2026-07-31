@@ -10,7 +10,7 @@ import numpy as np
 import numpy.typing as npt
 
 from squidpy._utils import NDArrayA
-from squidpy.experimental.methods.registry import ALIGN_LANDMARKS
+from squidpy.experimental.methods.registry import ALIGN
 
 
 @dataclass
@@ -59,7 +59,7 @@ def _fit_landmark_relation(
     )
 
 
-@ALIGN_LANDMARKS.register("similarity")
+@ALIGN.register("similarity", "landmarks")
 def fit_similarity(
     ref: np.ndarray,
     query: np.ndarray,
@@ -87,7 +87,7 @@ def fit_similarity(
     )
 
 
-@ALIGN_LANDMARKS.register("affine")
+@ALIGN.register("affine", "landmarks")
 def fit_affine(
     ref: np.ndarray,
     query: np.ndarray,

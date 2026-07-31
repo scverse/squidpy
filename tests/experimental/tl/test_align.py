@@ -157,7 +157,7 @@ def test_two_sdata_objects_share_one_path() -> None:
 
 def test_images_fit_returns_result() -> None:
     sdata = _sdata_images()
-    result = align(sdata, in_=("images/ref", "images/query"), **_TINY_IMAGE)
+    result = align(sdata, in_=("images/ref", "images/query"), by="images", **_TINY_IMAGE)
     assert isinstance(result, StalignResult)
     assert sorted(sdata.images) == ["query", "ref"]
 
@@ -167,7 +167,7 @@ def test_images_out_materialises_a_warped_image() -> None:
     sdata = _sdata_images()
     expected = np.asarray(sdata.images["query"].data).shape
 
-    align(sdata, in_=("images/ref", "images/query"), out="images/query_aligned", **_TINY_IMAGE)
+    align(sdata, in_=("images/ref", "images/query"), by="images", out="images/query_aligned", **_TINY_IMAGE)
 
     assert "query_aligned" in sdata.images
     assert np.asarray(sdata.images["query_aligned"].data).shape == expected
@@ -179,12 +179,40 @@ def test_image_alignment_recovers_a_known_shift() -> None:
     ref = np.asarray(sdata.images["ref"].data)
     query = np.asarray(sdata.images["query"].data)
 
-    align(sdata, in_=("images/ref", "images/query"), out="images/query_aligned", a=4.0, nt=2)
+    align(sdata, in_=("images/ref", "images/query"), by="images", out="images/query_aligned", a=4.0, nt=2)
     aligned = np.asarray(sdata.images["query_aligned"].data)
 
     before = float(np.sum((query - ref) ** 2))
     after = float(np.sum((aligned - ref) ** 2))
     assert after < before / 2.0, f"overlap barely improved: {before:.1f} -> {after:.1f}"
+
+
+# --- `by` ------------------------------------------------------------------------------
+
+
+def test_by_defaults_to_obs() -> None:
+    ref, query = _adata(), _adata()
+    explicit = align(ref, query, in_="obsm/spatial", by="obs", **_TINY)
+    assert isinstance(explicit, StalignResult)
+
+
+def test_by_images_needs_an_image_path() -> None:
+    """Caught here rather than as a shape error from inside the solver."""
+    ref, query = _adata(), _adata()
+    with pytest.raises(ValueError, match="`by='images'` needs an image path"):
+        align(ref, query, in_="obsm/spatial", by="images", **_TINY)
+
+
+def test_by_obs_rejects_an_image_path() -> None:
+    sdata = _sdata_images()
+    with pytest.raises(ValueError, match="needs an \\(N, 2\\) coordinate path"):
+        align(sdata, in_=("images/ref", "images/query"), by="obs", **_TINY)
+
+
+def test_unknown_by_lists_the_modalities() -> None:
+    ref, query = _adata(), _adata()
+    with pytest.raises(ValueError, match="Unknown `by='nope'`.*obs, images, landmarks"):
+        align(ref, query, in_="obsm/spatial", by="nope", **_TINY)
 
 
 def test_warp_image_rejects_a_point_cloud_fit() -> None:
@@ -237,13 +265,13 @@ def test_bare_obsm_path_on_sdata_is_ambiguous() -> None:
 def test_mixed_modalities_in_in_are_rejected() -> None:
     sdata = _sdata_images()
     with pytest.raises(ValueError, match="mixes modalities"):
-        align(sdata, in_=("images/ref", "tables/t/obsm/spatial"), **_TINY)
+        align(sdata, in_=("images/ref", "tables/t/obsm/spatial"), by="images", **_TINY)
 
 
 def test_out_modality_must_match_in() -> None:
     sdata = _sdata_images()
     with pytest.raises(ValueError, match="does not convert between the two"):
-        align(sdata, in_=("images/ref", "images/query"), out="tables/t/obsm/x", **_TINY_IMAGE)
+        align(sdata, in_=("images/ref", "images/query"), by="images", out="tables/t/obsm/x", **_TINY_IMAGE)
 
 
 def test_query_required_for_anndata() -> None:

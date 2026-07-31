@@ -141,7 +141,7 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 ```
 
 The ``method=`` argument of {func}`~squidpy.experimental.tl.align` and
-{func}`~squidpy.experimental.tl.align_by_landmarks` dispatches to a registered
+{func}`~squidpy.experimental.tl.align` dispatches to a registered
 fitting function. The method-specific arguments are documented on each function
 below; the fitted maps are returned (with ``output_mode="object"``) as the
 result types listed alongside.
@@ -170,7 +170,6 @@ result types listed alongside.
     experimental.tl.calculate_tiling_qc
     experimental.tl.TilingQCParams
     experimental.tl.align
-    experimental.tl.align_by_landmarks
     experimental.tl.AlignResult
     experimental.tl.assign_stitch_groups
     experimental.tl.StitchParams

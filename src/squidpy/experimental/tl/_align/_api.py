@@ -1,29 +1,35 @@
-"""Public alignment functions built on the :mod:`squidpy.experimental.methods` core.
+"""The public alignment function, built on the :mod:`squidpy.experimental.methods` core.
 
-These are thin orchestrators: resolve inputs to in-memory arrays, dispatch to a
-fit-core estimator, write the result back. All container I/O and write-back live
-in :mod:`._io`; the estimators themselves never see a container.
+A thin orchestrator: resolve ``in_`` to in-memory arrays, dispatch to a fit-core
+estimator, write the result back at ``out``. Path resolution lives in :mod:`._paths` and
+transformation write-back in :mod:`._io`; the estimators themselves never see a container.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Literal, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
 from anndata import AnnData
 from spatialdata import SpatialData
 
-from squidpy.experimental.methods import ALIGN_IMAGES, ALIGN_LANDMARKS, ALIGN_SAMPLES
+from squidpy.experimental.methods import ALIGN
+from squidpy.experimental.methods.registry import MODALITIES
 from squidpy.experimental.tl._align._io import shallow_copy_sdata, writeback_affine_sdata
 from squidpy.experimental.tl._align._paths import DataPath, parse_path, read_path, write_path
 
 if TYPE_CHECKING:
-    from squidpy.experimental.methods import AlignResult, Registry
+    from squidpy.experimental.methods import AlignResult, Modality, Registry
 
-__all__ = ["align", "align_by_landmarks"]
+__all__ = ["align"]
 
 F = TypeVar("F", bound="Callable[..., Any]")
+
+#: Method used when ``method`` is left unset, per modality. Point clouds and rasters both
+#: go to the diffeomorphic solver; landmarks default to the more constrained of the two
+#: closed-form fits, since a similarity cannot shear a sample that should not be sheared.
+DEFAULT_METHOD: dict[str, str] = {"obs": "stalign", "images": "stalign", "landmarks": "similarity"}
 
 
 def _resolve_in(in_: str | tuple[str, str]) -> tuple[DataPath, DataPath]:
@@ -36,6 +42,23 @@ def _resolve_in(in_: str | tuple[str, str]) -> tuple[DataPath, DataPath]:
     return parse_path(in_[0], name="in_[0]"), parse_path(in_[1], name="in_[1]")
 
 
+def _check_path_suits(by: Modality, path: DataPath, *, name: str) -> None:
+    """Reject a path whose contents the ``by`` slot could not consume.
+
+    ``by`` says what drives the fit; the path only says where to read it from. Those are
+    free to differ -- ``by="landmarks"`` with ``in_="obsm/lm"`` reads correspondences out
+    of an ``obsm`` key, so no SpatialData is needed to hold four points. What cannot
+    differ is the *shape*: raster slots need rasters and coordinate slots need ``(N, 2)``
+    arrays, and catching that here beats a shape error from deep inside a solver.
+    """
+    wants_raster = by == "images"
+    is_raster = path.modality == "images"
+    if wants_raster and not is_raster:
+        raise ValueError(f"`by='images'` needs an image path, but `{name}={path.raw!r}` reads coordinates.")
+    if not wants_raster and is_raster:
+        raise ValueError(f"`by={by!r}` needs an (N, 2) coordinate path, but `{name}={path.raw!r}` reads an image.")
+
+
 def _copy_for_write(container: AnnData | SpatialData, path: DataPath) -> AnnData | SpatialData:
     """Duplicate just enough of ``container`` that writing at ``path`` leaves it untouched."""
     if isinstance(container, AnnData):
@@ -44,43 +67,47 @@ def _copy_for_write(container: AnnData | SpatialData, path: DataPath) -> AnnData
     out = shallow_copy_sdata(container)
     # `shallow_copy_sdata` shares element objects with the original, so the one element
     # we are about to write through still has to be duplicated.
-    if path.modality == "points" and path.element in out.tables:
+    if path.modality == "obs" and path.element in out.tables:
         out.tables[path.element] = out.tables[path.element].copy()
     return out
 
 
-def _methods_rst(registry: Registry, indent: str = " " * 8) -> str:
-    """Render a registry's methods as a reST list linking to each implementation."""
-    items = [f"- ``{key}`` -- :func:`~{(fn := registry.get(key)).__module__}.{fn.__name__}`" for key in registry.keys()]
+def _methods_rst(registry: Registry, modality: Modality, indent: str = " " * 8) -> str:
+    """Render the methods supporting ``modality`` as a reST list."""
+    items = [
+        f"- ``{key}`` -- :func:`~{(fn := registry.get(key).implementation(modality)).__module__}.{fn.__name__}`"
+        for key in registry.supporting(modality)
+    ]
     return ("\n" + indent).join(items)
 
 
-def _document_methods(**registries: Registry) -> Callable[[F], F]:
-    """Fill ``{<name>}`` docstring placeholders with each registry's method list.
+def _document_methods(registry: Registry, **tokens: Modality) -> Callable[[F], F]:
+    """Fill ``{<name>}`` docstring placeholders with each modality's method list.
 
-    First-party and deterministic -- the registries are fully populated by import
-    time, so this only templates known content (nothing from optional packages).
-    ``str.replace`` (not ``str.format``) leaves other ``{...}`` in the docstring
-    untouched.
+    First-party and deterministic -- the registry is fully populated by import time, so
+    this only templates known content (nothing from optional packages). ``str.replace``
+    (not ``str.format``) leaves other ``{...}`` in the docstring untouched.
     """
 
     def decorator(fn: F) -> F:
         if fn.__doc__:
-            for token, registry in registries.items():
-                fn.__doc__ = fn.__doc__.replace("{" + token + "}", _methods_rst(registry))
+            for token, modality in tokens.items():
+                fn.__doc__ = fn.__doc__.replace("{" + token + "}", _methods_rst(registry, modality))
         return fn
 
     return decorator
 
 
-@_document_methods(align_samples_methods=ALIGN_SAMPLES, align_images_methods=ALIGN_IMAGES)
+@_document_methods(ALIGN, obs_methods="obs", image_methods="images", landmark_methods="landmarks")
 def align(
     data_ref: AnnData | SpatialData,
     data_query: AnnData | SpatialData | None = None,
     *,
     in_: str | tuple[str, str],
     out: str | None = None,
-    method: str = "stalign",
+    by: Modality = "obs",
+    apply_to: str | None = None,
+    method: str | None = None,
     copy: bool = False,
     **method_kwargs: Any,
 ) -> AlignResult | AnnData | SpatialData | None:
@@ -99,25 +126,52 @@ def align(
         - ``"obsm/spatial"`` -- an AnnData ``obsm`` key
         - ``"tables/slice1/obsm/spatial"`` -- an ``obsm`` key of a SpatialData table
         - ``"images/he"`` -- a SpatialData image
+        - ``"shapes/landmarks"`` -- a shapes element, as napari-spatialdata writes landmarks
 
-        The path also selects what is aligned: an ``obsm`` path fits on point clouds,
-        an ``images`` path fits on image intensities.
+        ``in_`` says only *where* to read. What the arrays mean is ``by``'s job, so
+        ``by="landmarks"`` can read correspondences straight out of an ``obsm`` key and
+        needs no SpatialData just to hold a handful of points.
     out
-        Where to write the aligned query, as a path into ``data_query``. ``None``
-        (default) writes nothing and returns the fitted alignment instead -- fitting is
-        expensive and usually worth inspecting before it overwrites anything.
+        Where to write, as a path into ``data_query``. ``None`` (default) writes nothing
+        and returns the fitted alignment instead -- fitting is expensive and usually worth
+        inspecting before it overwrites anything.
 
-        For an ``obsm`` path the transformed coordinates are written. For an ``images``
-        path the warped image is materialised: a diffeomorphism cannot be expressed as a
-        SpatialData transformation, so it cannot be registered lazily.
+        - an ``obsm`` path writes the transformed coordinates
+        - an ``images`` path materialises the warped image
+        - ``"cs/aligned"`` registers the fit as a transformation into that coordinate
+          system, leaving the data untouched. Only available for methods whose fit is an
+          affine; a diffeomorphism has no SpatialData transformation to be expressed as.
+    by
+        What drives the alignment:
+
+        - ``"obs"`` (default) -- the point clouds themselves
+        - ``"images"`` -- raster intensities
+        - ``"landmarks"`` -- paired correspondences, matched by row order
+
+        This also selects which of ``method``'s slots is used, so asking for a modality a
+        method does not implement fails immediately and says what it does implement.
+    apply_to
+        Which array the fitted transform is applied to before writing. Defaults to ``in_``
+        -- with ``by="obs"`` or ``"images"`` the thing you aligned is the thing you want
+        moved. ``by="landmarks"`` is the exception: ``in_`` holds correspondences rather
+        than data, so this must be given (or use ``out="cs/..."`` to move a whole
+        coordinate system at once).
     method
-        Fitting method. For ``obsm`` paths, one of the ``align_samples`` family:
+        Which method to fit with. Defaults to ``"stalign"`` for ``by="obs"`` and
+        ``by="images"``, and ``"similarity"`` for ``by="landmarks"``. Available per
+        modality:
 
-        {align_samples_methods}
+        ``by="obs"``:
 
-        For ``images`` paths, one of the ``align_images`` family:
+        {obs_methods}
 
-        {align_images_methods}
+        ``by="images"``:
+
+        {image_methods}
+
+        ``by="landmarks"``:
+
+        {landmark_methods}
     copy
         Write into a copy of the query container and return it, instead of mutating in
         place. Ignored when ``out`` is ``None``.
@@ -129,123 +183,116 @@ def align(
     The fitted :class:`~squidpy.experimental.tl.AlignResult` when ``out`` is ``None``;
     the modified copy when ``copy=True``; otherwise ``None``.
     """
+    if by not in MODALITIES:
+        raise ValueError(f"Unknown `by={by!r}`. Expected one of {', '.join(MODALITIES)}.")
+
     ref_path, query_path = _resolve_in(in_)
     if ref_path.modality != query_path.modality:
         raise ValueError(
             f"`in_` mixes modalities: {ref_path.raw!r} is {ref_path.modality}, "
             f"{query_path.raw!r} is {query_path.modality}. Both must address the same kind of data."
         )
+    _check_path_suits(by, ref_path, name="in_")
+    align_method = ALIGN.get(method if method is not None else DEFAULT_METHOD[by])
 
-    ref_container = data_ref
     query_container = data_ref if data_query is None else data_query
     if data_query is None and not isinstance(data_ref, SpatialData):
         raise ValueError("`data_query` is required unless `data_ref` is a SpatialData holding both elements.")
 
-    ref_array = read_path(ref_container, ref_path, name="in_")
+    ref_array = read_path(data_ref, ref_path, name="in_")
     query_array = read_path(query_container, query_path, name="in_")
 
-    registry = ALIGN_IMAGES if ref_path.modality == "image" else ALIGN_SAMPLES
-    result = registry.get(method)(ref=ref_array, query=query_array, **method_kwargs)
+    result = align_method.implementation(by)(ref=ref_array, query=query_array, **method_kwargs)
 
     if out is None:
         return result
 
     out_path = parse_path(out, name="out")
-    if out_path.modality != query_path.modality:
+    if out_path.coordinate_system:
+        return _register_transformation(result, query_container, query_path, out_path, copy=copy)
+
+    source_path = _resolve_apply_to(apply_to, query_path, by, out_path)
+    if out_path.modality != source_path.modality:
         raise ValueError(
-            f"`out={out!r}` is {out_path.modality} but `in_` is {query_path.modality}; "
-            f"alignment does not convert between the two."
+            f"`out={out!r}` is {out_path.modality} but the data being transformed "
+            f"({source_path.raw!r}) is {source_path.modality}; alignment does not convert between the two."
         )
 
     target = _copy_for_write(query_container, out_path) if copy else query_container
-    if out_path.modality == "points":
-        value = np.asarray(result.transform(query_array))
+    if out_path.modality == "images":
+        value = np.asarray(result.warp_image(read_path(target, source_path, name="apply_to")))
     else:
-        value = np.asarray(result.warp_image(query_array))
+        value = np.asarray(result.transform(read_path(target, source_path, name="apply_to")))
     write_path(target, out_path, value)
     return target if copy else None
 
 
-@_document_methods(align_landmarks_methods=ALIGN_LANDMARKS)
-def align_by_landmarks(
-    ref: np.ndarray | Sequence[tuple[float, float]],
-    query: np.ndarray | Sequence[tuple[float, float]],
-    *,
-    method: Literal["similarity", "affine"] = "similarity",
-    data: AnnData | SpatialData | None = None,
-    in_: str | None = None,
-    out: str | None = None,
-    copy: bool = False,
-    cs_ref: str | None = None,
-    cs_query: str | None = None,
-) -> AlignResult | AnnData | SpatialData | None:
-    """Align by a closed-form fit on pre-paired landmarks.
+def _resolve_apply_to(
+    apply_to: str | None,
+    query_path: DataPath,
+    by: Modality,
+    out_path: DataPath,
+) -> DataPath:
+    """Which array the fitted transform is applied to.
 
-    Kept separate from :func:`align` because the two write fundamentally different
-    things: a similarity or affine fit *is* representable as a SpatialData
-    transformation, so it can be registered lazily on a whole coordinate system, whereas
-    :func:`align`'s diffeomorphism has to be materialised.
-
-    Parameters
-    ----------
-    ref, query
-        Equal-length ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``), paired by
-        row order. No automatic correspondence matching is performed.
-    method
-        Fitting method in the ``align_landmarks`` family. See each implementation
-        for its method-specific arguments:
-
-        {align_landmarks_methods}
-    data
-        Container to write the alignment into. Required unless ``out`` is ``None``.
-    in_
-        For an AnnData ``data``, the path of the coordinates to transform, e.g.
-        ``"obsm/spatial"``. Unused when registering a transformation on a SpatialData.
-    out
-        Where to write. ``None`` (default) writes nothing and returns the fitted affine.
-        For an AnnData ``data``, a path such as ``"obsm/aligned"``. For a SpatialData,
-        the affine is registered rather than materialised, so ``out`` is ignored and
-        ``cs_ref`` / ``cs_query`` select the coordinate systems instead.
-    copy
-        Write into a copy of ``data`` and return it, instead of mutating in place.
-    cs_ref, cs_query
-        Coordinate-system names. For a SpatialData ``data`` the fitted affine is
-        registered on every element living in ``cs_query``, mapping it into ``cs_ref``.
-
-    Returns
-    -------
-    The fitted affine when ``out`` is ``None`` and ``data`` is ``None``; the modified
-    copy when ``copy=True``; otherwise ``None``.
+    For an ``obs`` or ``images`` fit this is just ``in_`` -- the thing you aligned is the
+    thing you want moved. A landmark fit is different: ``in_`` holds correspondences, not
+    data, so the target has to be named. There is no default for that; guessing
+    ``obsm/spatial`` would silently transform the wrong array in any dataset that happens
+    to key its coordinates differently.
     """
-    result = ALIGN_LANDMARKS.get(method)(ref=ref, query=query, source_cs=cs_query, target_cs=cs_ref)
-
-    if data is None:
-        if out is not None:
-            raise ValueError("`data` is required when `out` is given.")
-        return result
-
-    if isinstance(data, SpatialData):
-        # A similarity/affine transform is representable, so register it across the
-        # coordinate system rather than resampling anything.
-        return writeback_affine_sdata(
-            result,
-            data,
-            output_mode="copy" if copy else "inplace",
-            moving_cs=cs_query,
-            target_cs=cs_ref,
+    if apply_to is not None:
+        return parse_path(apply_to, name="apply_to")
+    if by == "landmarks":
+        raise ValueError(
+            f"`out={out_path.raw!r}` needs `apply_to` when aligning by landmarks: `in_` holds the "
+            f"landmark correspondences, so it does not say which array to transform. Pass e.g. "
+            f'`apply_to="obsm/spatial"`, or use `out="cs/<name>"` on a SpatialData to move every '
+            f"element in the coordinate system at once."
         )
+    return query_path
 
-    if not isinstance(data, AnnData):
-        raise TypeError(f"`data` must be AnnData or SpatialData, got {type(data).__name__}.")
 
-    if out is None:
-        return result
-    in_path = parse_path(in_ or "obsm/spatial", name="in_")
-    out_path = parse_path(out, name="out")
-    if in_path.modality != "points" or out_path.modality != "points":
-        raise ValueError("`align_by_landmarks` reads and writes point coordinates; use an `obsm/...` path.")
+def _register_transformation(
+    result: AlignResult,
+    container: AnnData | SpatialData,
+    query_path: DataPath,
+    out_path: DataPath,
+    *,
+    copy: bool,
+) -> SpatialData | None:
+    """Register an affine fit into a coordinate system instead of materialising it."""
+    if not isinstance(container, SpatialData):
+        raise TypeError(f"`out={out_path.raw!r}` names a coordinate system, which only a SpatialData has.")
+    if not hasattr(result, "matrix"):
+        raise ValueError(
+            f"`out={out_path.raw!r}` registers the fit as a transformation, but this method fits a "
+            f"deformation that SpatialData has no transformation type for -- its transformations are "
+            f"affine at most. Write to an `images/<name>` or `obsm/<key>` path to materialise it instead."
+        )
+    return writeback_affine_sdata(
+        result,
+        container,
+        output_mode="copy" if copy else "inplace",
+        moving_cs=_coordinate_system_of(container, query_path),
+        target_cs=out_path.element,
+    )
 
-    target = data.copy() if copy else data
-    coords = read_path(target, in_path, name="in_")
-    write_path(target, out_path, np.asarray(result.transform(coords)))
-    return target if copy else None
+
+def _coordinate_system_of(sdata: SpatialData, path: DataPath) -> str:
+    """The coordinate system the query landmarks were annotated in.
+
+    Everything registered to it moves with the fit, so it has to be unambiguous. Reading
+    it off the landmark element rather than taking it as an argument keeps the call site
+    to `in_`/`out`, and it is the same element the user picked the landmarks on.
+    """
+    from spatialdata.transformations import get_transformation
+
+    element = getattr(sdata, path.modality if path.modality != "landmarks" else "shapes")[path.element]
+    systems = sorted(get_transformation(element, get_all=True))
+    if len(systems) != 1:
+        raise ValueError(
+            f"`in_={path.raw!r}` is registered to {len(systems)} coordinate systems ({', '.join(systems)}), "
+            f"so which one the alignment should move is ambiguous. Register the landmarks to exactly one."
+        )
+    return systems[0]

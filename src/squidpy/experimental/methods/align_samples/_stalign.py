@@ -1,6 +1,6 @@
 """STalign estimator: JAX LDDMM point-cloud registration.
 
-Holds both the estimator adapter :func:`fit_stalign` and its result type
+Holds both the estimator adapter :func:`fit_stalign_obs` and its result type
 :class:`StalignResult`; the pure numerics live under :mod:`._stalign_impl`.
 """
 
@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy.typing as npt
 
-from squidpy.experimental.methods.registry import ALIGN_IMAGES, ALIGN_SAMPLES
+from squidpy.experimental.methods.registry import ALIGN
 
 if TYPE_CHECKING:
     import jax
@@ -85,8 +85,8 @@ class StalignResult:
         return transformed_rc[:, ::-1]
 
 
-@ALIGN_SAMPLES.register("stalign", requires=("jax",))
-def fit_stalign(
+@ALIGN.register("stalign", "obs", requires=("jax",))
+def fit_stalign_obs(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,
     *,
@@ -226,7 +226,7 @@ def fit_stalign(
     )
 
 
-@ALIGN_IMAGES.register("stalign", requires=("jax",))
+@ALIGN.register("stalign", "images", requires=("jax",))
 def fit_stalign_image(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,
@@ -263,9 +263,9 @@ def fit_stalign_image(
         element's scale when the two images have different resolutions, otherwise the
         fit is done in mismatched coordinates.
     a, p, expand, nt, niter, diffeo_start
-        LDDMM controls, as in :func:`fit_stalign`. Note ``a`` is a length in the *same*
+        LDDMM controls, as in :func:`fit_stalign_obs`. Note ``a`` is a length in the *same*
         units as ``ref_scale`` -- the default of 20 suits pixel units, where
-        :func:`fit_stalign`'s 500 would exceed most images. ``diffeo_start`` defaults to
+        :func:`fit_stalign_obs`'s 500 would exceed most images. ``diffeo_start`` defaults to
         half of ``niter`` so the affine settles before the deformable part switches on;
         starting both at once lets the velocity field absorb what is really a
         translation, and it fits it worse than the affine would have.

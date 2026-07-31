@@ -16,8 +16,8 @@ import pytest
 
 pytest.importorskip("jax")
 
-from squidpy.experimental.methods import ALIGN_SAMPLES
-from squidpy.experimental.methods.align_samples import StalignResult, fit_stalign
+from squidpy.experimental.methods import ALIGN
+from squidpy.experimental.methods.align_samples import StalignResult, fit_stalign_obs
 
 # Flat solver kwargs (assembled into the config internally) -- smallest possible solve.
 _TINY = {"dx": 0.5, "blur": 1.0, "a": 1.0, "expand": 1.0, "nt": 1, "niter": 1, "epV": 1.0}
@@ -35,15 +35,22 @@ def _points_xy() -> np.ndarray:
     )
 
 
-def test_stalign_registered_in_align_family() -> None:
-    assert "stalign" in ALIGN_SAMPLES.keys()
-    assert ALIGN_SAMPLES.get("stalign") is fit_stalign
+def test_stalign_registered_for_obs_and_images() -> None:
+    method = ALIGN.get("stalign")
+    assert method.supports() == ("obs", "images")
+    assert method.implementation("obs") is fit_stalign_obs
+
+
+def test_stalign_declines_landmarks() -> None:
+    """A diffeomorphic solver has nothing to do with paired correspondences."""
+    with pytest.raises(ValueError, match="does not support landmarks"):
+        ALIGN.get("stalign").implementation("landmarks")
 
 
 def test_stalign_fit_returns_diffeomorphism() -> None:
     ref, query = _points_xy(), _points_xy()
 
-    result = fit_stalign(ref, query, **_TINY)
+    result = fit_stalign_obs(ref, query, **_TINY)
 
     assert isinstance(result, StalignResult)
     assert result.aligned_points.shape == query.shape
@@ -55,14 +62,14 @@ def test_stalign_fit_returns_diffeomorphism() -> None:
 def test_stalign_transform_matches_aligned_points() -> None:
     ref, query = _points_xy(), _points_xy()
 
-    result = fit_stalign(ref, query, **_TINY)
+    result = fit_stalign_obs(ref, query, **_TINY)
 
     np.testing.assert_allclose(np.asarray(result.transform(query)), np.asarray(result.aligned_points), atol=1e-5)
 
 
 def test_stalign_transform_accepts_arbitrary_points() -> None:
     ref, query = _points_xy(), _points_xy()
-    result = fit_stalign(ref, query, **_TINY)
+    result = fit_stalign_obs(ref, query, **_TINY)
 
     out = result.transform(np.zeros((1, 2)))
     assert np.asarray(out).shape == (1, 2)
@@ -70,7 +77,7 @@ def test_stalign_transform_accepts_arbitrary_points() -> None:
 
 def test_stalign_transform_backward_inverts_forward() -> None:
     ref, query = _points_xy(), _points_xy()
-    result = fit_stalign(ref, query, **_TINY)
+    result = fit_stalign_obs(ref, query, **_TINY)
 
     forward = result.transform(query, direction="forward")
     roundtrip = result.transform(forward, direction="backward")
@@ -79,7 +86,7 @@ def test_stalign_transform_backward_inverts_forward() -> None:
 
 def test_stalign_transform_rejects_non_2d() -> None:
     ref, query = _points_xy(), _points_xy()
-    result = fit_stalign(ref, query, **_TINY)
+    result = fit_stalign_obs(ref, query, **_TINY)
 
     with pytest.raises(ValueError, match=r"Expected an \(N, 2\)"):
         result.transform(np.zeros((5, 3)))
@@ -89,20 +96,20 @@ def test_stalign_fit_with_landmarks() -> None:
     ref, query = _points_xy(), _points_xy()
     landmarks = ref[:3]
 
-    result = fit_stalign(ref, query, landmarks_source=landmarks, landmarks_target=landmarks, **_TINY)
+    result = fit_stalign_obs(ref, query, landmarks_source=landmarks, landmarks_target=landmarks, **_TINY)
 
     assert result.aligned_points.shape == query.shape
 
 
 def test_stalign_fit_rejects_non_2d_input() -> None:
     with pytest.raises(ValueError, match=r"Expected `query` to have shape `\(n, 2\)`"):
-        fit_stalign(_points_xy(), np.zeros((5, 3)), **_TINY)
+        fit_stalign_obs(_points_xy(), np.zeros((5, 3)), **_TINY)
 
 
 def test_stalign_rejects_unknown_kwarg() -> None:
     ref, query = _points_xy(), _points_xy()
     with pytest.raises(TypeError, match="unexpected keyword argument"):
-        fit_stalign(ref, query, not_a_real_param=1.0, **_TINY)
+        fit_stalign_obs(ref, query, not_a_real_param=1.0, **_TINY)
 
 
 def test_lddmm_accepts_zero_iterations() -> None:
@@ -258,7 +265,7 @@ def test_lddmm_recovers_a_known_rigid_transform() -> None:
     rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
     query = ref @ rotation.T + np.array([6.0, -4.0])
 
-    result = fit_stalign(ref, query, niter=250, **_SOLVE)
+    result = fit_stalign_obs(ref, query, niter=250, **_SOLVE)
     residual = np.linalg.norm(np.asarray(result.aligned_points) - ref, axis=1)
 
     before = np.median(np.linalg.norm(query - ref, axis=1))
