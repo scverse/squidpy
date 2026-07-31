@@ -38,28 +38,86 @@ class StalignResult:
     #: images. ``None`` for point-cloud fits, where no raster survives the call.
     query_axes: tuple[JaxArray, JaxArray] | None = None
     ref_axes: tuple[JaxArray, JaxArray] | None = None
+    match_weights: JaxArray | None = None
+    artifact_weights: JaxArray | None = None
+    background_weights: JaxArray | None = None
+    energies: JaxArray | None = None
+    n_iter: int | None = None
 
-    def warp_image(self, image: JaxArray) -> JaxArray:
-        """Resample a query-frame ``(c, y, x)`` image onto the reference grid.
+    def deformation_grid(
+        self,
+        *,
+        direction: Literal["forward", "backward"] = "forward",
+        query_axes: tuple[JaxArray, JaxArray] | None = None,
+        ref_axes: tuple[JaxArray, JaxArray] | None = None,
+    ) -> JaxArray:
+        """Return a dense row-column coordinate transform for visualisation.
 
-        A diffeomorphism cannot be expressed as a SpatialData transformation -- the
-        available types are affine at most -- so an aligned image has to be materialised
-        rather than registered.
+        ``direction="forward"`` evaluates the query grid in the reference frame;
+        ``"backward"`` evaluates the reference grid in the query frame. The returned
+        array has shape ``(2, rows, columns)``.
         """
         import jax.numpy as jnp
 
-        from ._stalign_impl._core import _interp, _transform_grid_backward, jax_dtype
+        from ._stalign_impl._core import _grid_points, _transform_grid_backward, transform_points_row_col
 
-        if self.query_axes is None or self.ref_axes is None:
+        source_axes = query_axes if query_axes is not None else self.query_axes
+        target_axes = ref_axes if ref_axes is not None else self.ref_axes
+        if source_axes is None or target_axes is None:
             raise ValueError(
-                "This result was fitted on point clouds, so it carries no raster axes to "
-                "warp an image with. Fit with `align(in_='images/<name>', ...)` instead."
+                "This result was fitted on point clouds and carries no raster axes. "
+                "Pass both `query_axes=` and `ref_axes=`, or fit with "
+                "`align(in_='images/<name>', ...)`."
             )
+        if direction == "backward":
+            return _transform_grid_backward(target_axes, self.velocity_grid, self.velocity, self.affine)
+        if direction != "forward":
+            raise ValueError(f"Expected `direction` to be 'forward' or 'backward', found {direction!r}.")
+
+        grid = _grid_points(source_axes)
+        points = jnp.moveaxis(grid, 0, -1).reshape((-1, 2))
+        transformed = transform_points_row_col(
+            self.velocity_grid, self.velocity, self.affine, points, direction="forward"
+        )
+        return jnp.moveaxis(transformed.reshape((*grid.shape[1:], 2)), -1, 0)
+
+    def warp_image(
+        self,
+        image: JaxArray,
+        *,
+        direction: Literal["forward", "backward"] = "forward",
+        query_axes: tuple[JaxArray, JaxArray] | None = None,
+        ref_axes: tuple[JaxArray, JaxArray] | None = None,
+    ) -> JaxArray:
+        """Resample an image through the fitted transformation.
+
+        A diffeomorphism cannot be expressed as a SpatialData transformation -- the
+        available types are affine at most -- so an aligned image has to be materialised
+        rather than registered. ``direction="forward"`` maps a query-frame image onto
+        the reference grid; ``"backward"`` maps a reference-frame image onto the query
+        grid. Explicit axes allow results fitted from point clouds to warp their density
+        rasters without pretending those rasters are original image elements.
+        """
+        import jax.numpy as jnp
+
+        from ._stalign_impl._core import _interp, jax_dtype
+
         arr = jnp.asarray(image, dtype=jax_dtype())
         if arr.ndim == 2:
             arr = arr[None]
-        grid = _transform_grid_backward(self.ref_axes, self.velocity_grid, self.velocity, self.affine)
-        return _interp(self.query_axes, arr, grid)
+        if direction not in {"forward", "backward"}:
+            raise ValueError(f"Expected `direction` to be 'forward' or 'backward', found {direction!r}.")
+        source_axes = query_axes if query_axes is not None else self.query_axes
+        target_axes = ref_axes if ref_axes is not None else self.ref_axes
+        grid = self.deformation_grid(
+            direction="backward" if direction == "forward" else "forward",
+            query_axes=source_axes,
+            ref_axes=target_axes,
+        )
+        sampling_axes = source_axes if direction == "forward" else target_axes
+        if sampling_axes is None:  # guarded by deformation_grid; keeps the type checker honest
+            raise AssertionError("missing sampling axes")
+        return _interp(sampling_axes, arr, grid)
 
     def transform(
         self,
@@ -92,6 +150,9 @@ def fit_stalign_obs(
     *,
     landmarks_source: npt.ArrayLike | None = None,
     landmarks_target: npt.ArrayLike | None = None,
+    initial_affine: npt.ArrayLike | None = None,
+    initial_velocity: npt.ArrayLike | None = None,
+    velocity_grid: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
     # rasterization
     dx: float = 30.0,
     blur: float | Sequence[float] = (2.0, 1.0, 0.5),
@@ -111,6 +172,8 @@ def fit_stalign_obs(
     sigmaA: float = 5.0,
     sigmaR: float = 5e5,
     sigmaP: float = 2e1,
+    muA: npt.ArrayLike | None = None,
+    muB: npt.ArrayLike | None = None,
     tol: float | None = None,
     patience: int = 25,
 ) -> StalignResult:
@@ -126,6 +189,12 @@ def fit_stalign_obs(
     landmarks_source, landmarks_target
         Optional corresponding ``(x, y)`` landmark arrays used to initialise the
         affine. Must be provided together.
+    initial_affine
+        Optional homogeneous ``(3, 3)`` affine in public ``(x, y)`` coordinates.
+        Mutually exclusive with landmark initialisation.
+    initial_velocity, velocity_grid
+        Optional continuation state. The velocity has shape ``(nt, rows, columns, 2)``;
+        its components and the two grid axes use the solver's row-column convention.
     dx, blur, raster_expand
         Rasterization of the point clouds into density images: grid spacing,
         Gaussian blur scale(s), and field-of-view padding factor.
@@ -140,6 +209,9 @@ def fit_stalign_obs(
     sigmaM, sigmaB, sigmaA, sigmaR, sigmaP
         Noise scales for the matching, background, artifact, regularisation, and
         landmark-point terms of the objective.
+    muA, muB
+        Optional per-channel artifact and background means. ``None`` estimates the
+        corresponding mean during fitting, matching upstream STalign's default.
     tol, patience
         Stop once the objective's relative improvement over the last ``patience``
         iterations falls below ``tol``. ``tol=None`` (default) always runs ``niter``.
@@ -171,6 +243,8 @@ def fit_stalign_obs(
 
     if (landmarks_source is None) != (landmarks_target is None):
         raise ValueError("Expected both landmark arrays to be provided together.")
+    if initial_affine is not None and landmarks_source is not None:
+        raise ValueError("`initial_affine` is mutually exclusive with landmark initialisation.")
 
     # The solver runs internally in row-col (y, x); inputs are (x, y) -- swap at the boundary.
     source_rc = validate_points(query, name="query")[:, ::-1]
@@ -179,7 +253,15 @@ def fit_stalign_obs(
     target_grid, target_image = rasterize_cloud(target_rc, dx=dx, blur=blur, expand=raster_expand)
 
     dtype = jax_dtype()
-    if landmarks_source is None:
+    if initial_affine is not None:
+        affine_xy = jnp.asarray(initial_affine, dtype=dtype)
+        if affine_xy.shape != (3, 3):
+            raise ValueError(f"Expected `initial_affine` to have shape (3, 3), found {affine_xy.shape}.")
+        swap = jnp.asarray([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=dtype)
+        affine_rc = swap @ affine_xy @ swap
+        linear, translation = affine_rc[:2, :2], affine_rc[:2, 2]
+        src_lm = tgt_lm = None
+    elif landmarks_source is None:
         linear, translation = jnp.eye(2, dtype=dtype), jnp.zeros(2, dtype=dtype)
         src_lm = tgt_lm = None
     else:
@@ -195,6 +277,8 @@ def fit_stalign_obs(
         target_image,
         L=linear,
         T=translation,
+        initial_velocity=initial_velocity,
+        velocity_grid=velocity_grid,
         points_source=src_lm,
         points_target=tgt_lm,
         a=a,
@@ -211,6 +295,8 @@ def fit_stalign_obs(
         sigmaA=sigmaA,
         sigmaR=sigmaR,
         sigmaP=sigmaP,
+        muA=muA,
+        muB=muB,
         tol=tol,
         patience=patience,
     )
@@ -220,6 +306,11 @@ def fit_stalign_obs(
         velocity=result["v"],
         velocity_grid=result["xv"],
         aligned_points=aligned_rc[:, ::-1],
+        match_weights=result["WM"],
+        artifact_weights=result["WA"],
+        background_weights=result["WB"],
+        energies=result["energies"],
+        n_iter=int(result["n_iter"]),
         # No raster axes: the grids here are the internal density rasters at `dx`
         # resolution, not a frame any real image lives on. Offering `warp_image` off them
         # would quietly resample the caller's image onto a coarse, unrelated grid.
@@ -233,6 +324,11 @@ def fit_stalign_image(
     *,
     ref_scale: tuple[float, float] = (1.0, 1.0),
     query_scale: tuple[float, float] = (1.0, 1.0),
+    ref_axes: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
+    query_axes: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
+    initial_affine: npt.ArrayLike | None = None,
+    initial_velocity: npt.ArrayLike | None = None,
+    velocity_grid: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
     # LDDMM registration
     a: float = 20.0,
     p: float = 2.0,
@@ -248,6 +344,8 @@ def fit_stalign_image(
     sigmaA: float = 5.0,
     sigmaR: float = 5e5,
     sigmaP: float = 2e1,
+    muA: npt.ArrayLike | None = None,
+    muB: npt.ArrayLike | None = None,
     tol: float | None = None,
     patience: int = 25,
 ) -> StalignResult:
@@ -262,6 +360,13 @@ def fit_stalign_image(
         Physical size of one pixel as ``(y, x)``. Defaults to pixel units. Pass the
         element's scale when the two images have different resolutions, otherwise the
         fit is done in mismatched coordinates.
+    ref_axes, query_axes
+        Optional explicit physical row and column axes. Both pairs must be supplied;
+        they are mutually exclusive with non-unit ``ref_scale``/``query_scale``.
+    initial_affine
+        Optional homogeneous ``(3, 3)`` affine in public ``(x, y)`` coordinates.
+    initial_velocity, velocity_grid
+        Optional continuation state in the solver's row-column convention.
     a, p, expand, nt, niter, diffeo_start
         LDDMM controls, as in :func:`fit_stalign_obs`. Note ``a`` is a length in the *same*
         units as ``ref_scale`` -- the default of 20 suits pixel units, where
@@ -277,6 +382,9 @@ def fit_stalign_image(
     sigmaM, sigmaB, sigmaA, sigmaR, sigmaP
         Noise scales for the matching, background, artifact, regularisation, and
         landmark-point terms of the objective.
+    muA, muB
+        Optional per-channel artifact and background means. ``None`` estimates the
+        corresponding mean during fitting, matching upstream STalign's default.
     tol, patience
         Stop once the objective's relative improvement over the last ``patience``
         iterations falls below ``tol``. ``tol=None`` (default) always runs ``niter``.
@@ -319,16 +427,46 @@ def fit_stalign_image(
             (jnp.arange(cols, dtype=dtype) - (cols - 1) / 2.0) * scale[1],
         )
 
-    source_grid = axes(source_image, query_scale)
-    target_grid = axes(target_image, ref_scale)
+    if (query_axes is None) != (ref_axes is None):
+        raise ValueError("Expected both `query_axes` and `ref_axes` to be provided together.")
+
+    def explicit_axes(value: tuple[npt.ArrayLike, npt.ArrayLike], image: JaxArray, name: str):
+        resolved = (jnp.asarray(value[0], dtype=dtype), jnp.asarray(value[1], dtype=dtype))
+        expected = image.shape[1:]
+        if resolved[0].ndim != 1 or resolved[1].ndim != 1 or tuple(map(len, resolved)) != expected:
+            raise ValueError(f"Expected `{name}` lengths {expected}, found {tuple(map(len, resolved))}.")
+        if len(resolved[0]) < 2 or len(resolved[1]) < 2:
+            raise ValueError(f"Expected each `{name}` axis to contain at least two coordinates.")
+        return resolved
+
+    if query_axes is None:
+        source_grid = axes(source_image, query_scale)
+        target_grid = axes(target_image, ref_scale)
+    else:
+        if query_scale != (1.0, 1.0) or ref_scale != (1.0, 1.0):
+            raise ValueError("Explicit axes are mutually exclusive with non-unit image scales.")
+        source_grid = explicit_axes(query_axes, source_image, "query_axes")
+        target_grid = explicit_axes(ref_axes, target_image, "ref_axes")
+
+    if initial_affine is None:
+        linear, translation = jnp.eye(2, dtype=dtype), jnp.zeros(2, dtype=dtype)
+    else:
+        affine_xy = jnp.asarray(initial_affine, dtype=dtype)
+        if affine_xy.shape != (3, 3):
+            raise ValueError(f"Expected `initial_affine` to have shape (3, 3), found {affine_xy.shape}.")
+        swap = jnp.asarray([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=dtype)
+        affine_rc = swap @ affine_xy @ swap
+        linear, translation = affine_rc[:2, :2], affine_rc[:2, 2]
 
     result = lddmm(
         source_grid,
         source_image,
         target_grid,
         target_image,
-        L=jnp.eye(2, dtype=dtype),
-        T=jnp.zeros(2, dtype=dtype),
+        L=linear,
+        T=translation,
+        initial_velocity=initial_velocity,
+        velocity_grid=velocity_grid,
         a=a,
         p=p,
         expand=expand,
@@ -343,6 +481,8 @@ def fit_stalign_image(
         sigmaA=sigmaA,
         sigmaR=sigmaR,
         sigmaP=sigmaP,
+        muA=muA,
+        muB=muB,
         tol=tol,
         patience=patience,
     )
@@ -353,4 +493,9 @@ def fit_stalign_image(
         aligned_points=jnp.zeros((0, 2), dtype=dtype),
         query_axes=source_grid,
         ref_axes=target_grid,
+        match_weights=result["WM"],
+        artifact_weights=result["WA"],
+        background_weights=result["WB"],
+        energies=result["energies"],
+        n_iter=int(result["n_iter"]),
     )

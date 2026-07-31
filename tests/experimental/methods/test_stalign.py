@@ -17,7 +17,7 @@ import pytest
 pytest.importorskip("jax")
 
 from squidpy.experimental.methods import ALIGN
-from squidpy.experimental.methods.align_samples import StalignResult, fit_stalign_obs
+from squidpy.experimental.methods.align_samples import StalignResult, fit_stalign_image, fit_stalign_obs
 
 # Flat solver kwargs (assembled into the config internally) -- smallest possible solve.
 _TINY = {"dx": 0.5, "blur": 1.0, "a": 1.0, "expand": 1.0, "nt": 1, "niter": 1, "epV": 1.0}
@@ -57,6 +57,11 @@ def test_stalign_fit_returns_diffeomorphism() -> None:
     assert np.all(np.isfinite(np.asarray(result.aligned_points)))
     assert result.affine.shape == (3, 3)
     assert result.velocity.ndim == 4
+    assert result.match_weights is not None
+    assert result.artifact_weights is not None
+    assert result.background_weights is not None
+    assert result.energies is not None
+    assert result.n_iter == 1
 
 
 def test_stalign_transform_matches_aligned_points() -> None:
@@ -101,6 +106,29 @@ def test_stalign_fit_with_landmarks() -> None:
     assert result.aligned_points.shape == query.shape
 
 
+def test_stalign_fit_with_explicit_affine_in_xy() -> None:
+    ref, query = _points_xy(), _points_xy()
+    affine = np.array([[1.0, 0.0, 3.0], [0.0, 1.0, 4.0], [0.0, 0.0, 1.0]])
+
+    result = fit_stalign_obs(
+        ref, query, initial_affine=affine, niter=0, **{k: v for k, v in _TINY.items() if k != "niter"}
+    )
+
+    np.testing.assert_allclose(np.asarray(result.aligned_points), query + np.array([3.0, 4.0]), atol=1e-5)
+
+
+def test_stalign_image_accepts_explicit_axes_and_warps_both_directions() -> None:
+    image = np.arange(20, dtype=float).reshape(4, 5)
+    axes = (np.linspace(10.0, 13.0, 4), np.linspace(20.0, 24.0, 5))
+
+    result = fit_stalign_image(image, image, query_axes=axes, ref_axes=axes, niter=0, a=1.0, nt=1)
+
+    np.testing.assert_allclose(np.asarray(result.warp_image(image, direction="forward"))[0], image, atol=1e-5)
+    np.testing.assert_allclose(np.asarray(result.warp_image(image, direction="backward"))[0], image, atol=1e-5)
+    assert result.deformation_grid(direction="forward").shape == (2, 4, 5)
+    assert result.deformation_grid(direction="backward").shape == (2, 4, 5)
+
+
 def test_stalign_fit_rejects_non_2d_input() -> None:
     with pytest.raises(ValueError, match=r"Expected `query` to have shape `\(n, 2\)`"):
         fit_stalign_obs(_points_xy(), np.zeros((5, 3)), **_TINY)
@@ -126,6 +154,38 @@ def test_lddmm_accepts_zero_iterations() -> None:
 
     assert result["v"].shape[0] == 1
     assert result["A"].shape == (3, 3)
+
+
+def test_lddmm_accepts_fixed_mixture_means() -> None:
+    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
+    from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
+
+    axes, image = rasterize_cloud(_points_xy()[:, ::-1], dx=0.5, blur=1.0, expand=1.1)
+    rgb = np.repeat(np.asarray(image), 3, axis=0)
+    result = lddmm(
+        axes,
+        rgb,
+        axes,
+        rgb,
+        L=np.eye(2),
+        T=np.zeros(2),
+        niter=1,
+        a=1.0,
+        nt=1,
+        muA=np.ones(3),
+        muB=np.zeros(3),
+    )
+
+    assert np.all(np.isfinite(np.asarray(result["A"])))
+
+
+def test_lddmm_rejects_wrong_mixture_mean_shape() -> None:
+    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
+    from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
+
+    grid = rasterize_cloud(_points_xy()[:, ::-1], dx=0.5, blur=1.0, expand=1.1)
+    with pytest.raises(ValueError, match=r"Expected `muA` to have shape \(1,\)"):
+        lddmm(*grid, *grid, L=np.eye(2), T=np.zeros(2), niter=0, a=1.0, nt=1, muA=np.ones(3))
 
 
 def test_default_dtype_is_unchanged() -> None:

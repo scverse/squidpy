@@ -469,6 +469,8 @@ def lddmm(
     *,
     L: np.ndarray | jax.Array,
     T: np.ndarray | jax.Array,
+    initial_velocity: np.ndarray | jax.Array | None = None,
+    velocity_grid: tuple[np.ndarray | jax.Array, np.ndarray | jax.Array] | None = None,
     points_source: np.ndarray | jax.Array | None = None,
     points_target: np.ndarray | jax.Array | None = None,
     a: float = 500.0,
@@ -485,6 +487,8 @@ def lddmm(
     sigmaA: float = 5.0,
     sigmaR: float = 5e5,
     sigmaP: float = 2e1,
+    muA: np.ndarray | jax.Array | None = None,
+    muB: np.ndarray | jax.Array | None = None,
     tol: float | None = None,
     patience: int = 25,
 ) -> dict[str, Any]:
@@ -523,17 +527,41 @@ def lddmm(
         source_landmarks = jnp.asarray(points_source, dtype=jax_dtype())
         target_landmarks = jnp.asarray(points_target, dtype=jax_dtype())
 
-    xv = _build_velocity_grid(x_source, a=a, expand=expand)
-    velocity = jnp.zeros((nt, xv[0].shape[0], xv[1].shape[0], 2), dtype=jax_dtype())
+    if (initial_velocity is None) != (velocity_grid is None):
+        raise ValueError("Expected `initial_velocity` and `velocity_grid` to be provided together.")
+    if velocity_grid is None:
+        xv = _build_velocity_grid(x_source, a=a, expand=expand)
+        velocity = jnp.zeros((nt, xv[0].shape[0], xv[1].shape[0], 2), dtype=jax_dtype())
+    else:
+        xv = (jnp.asarray(velocity_grid[0], dtype=jax_dtype()), jnp.asarray(velocity_grid[1], dtype=jax_dtype()))
+        velocity = jnp.asarray(initial_velocity, dtype=jax_dtype())
+        if velocity.ndim != 4:
+            raise ValueError(f"Expected `initial_velocity` to be four-dimensional, found {velocity.shape}.")
+        expected = (velocity.shape[0], xv[0].shape[0], xv[1].shape[0], 2)
+        if velocity.shape != expected:
+            raise ValueError(
+                "Expected `initial_velocity` to have shape "
+                f"(nt, {xv[0].shape[0]}, {xv[1].shape[0]}, 2), found {velocity.shape}."
+            )
     kernel, ll, dv_prod = _build_regularizer(xv, a=a, p=p)
 
     match_weights = jnp.full(target_image.shape[1:], 0.5, dtype=target_image.dtype)
     background_weights = jnp.full(target_image.shape[1:], 0.4, dtype=target_image.dtype)
     artifact_weights = jnp.full(target_image.shape[1:], 0.1, dtype=target_image.dtype)
-    muA = jnp.mean(target_image, axis=(1, 2))
-    muB = jnp.zeros_like(muA)
-    estimate_muA = True
-    estimate_muB = True
+    n_channels = target_image.shape[0]
+
+    def mixture_mean(value: np.ndarray | jax.Array | None, *, name: str, default: jax.Array) -> jax.Array:
+        if value is None:
+            return default
+        mean = jnp.asarray(value, dtype=target_image.dtype)
+        if mean.shape != (n_channels,):
+            raise ValueError(f"Expected `{name}` to have shape ({n_channels},), found {mean.shape}.")
+        return mean
+
+    artifact_mean = mixture_mean(muA, name="muA", default=jnp.mean(target_image, axis=(1, 2)))
+    background_mean = mixture_mean(muB, name="muB", default=jnp.zeros(n_channels, dtype=target_image.dtype))
+    estimate_muA = muA is None
+    estimate_muB = muB is None
 
     final = _lddmm_run(
         linear,
@@ -542,8 +570,8 @@ def lddmm(
         match_weights,
         artifact_weights,
         background_weights,
-        muA,
-        muB,
+        artifact_mean,
+        background_mean,
         x_source=x_source,
         source_image=source_image,
         x_target=x_target,
