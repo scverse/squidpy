@@ -26,7 +26,11 @@ jax = pytest.importorskip("jax")
 
 import jax.numpy as jnp  # noqa: E402
 
-from squidpy.experimental.methods.align_samples import StalignResult, fit_stalign_obs  # noqa: E402
+from squidpy.experimental.methods.align_samples import (  # noqa: E402
+    StalignResult,
+    fit_stalign_image,
+    fit_stalign_obs,
+)
 from squidpy.experimental.methods.align_samples._stalign_impl import _core, _helpers  # noqa: E402
 
 from . import _stalign_fixtures as F  # noqa: E402
@@ -147,7 +151,17 @@ def _transform_rc(result: StalignResult, points_rc, *, direction: str = "forward
 
 @pytest.mark.parametrize(
     "name",
-    ["primitives", "energy", "gradients", "trajectory_n1", "trajectory_n5", "trajectory_n50", "converged_n500"],
+    [
+        "primitives",
+        "energy",
+        "gradients",
+        "trajectory_n1",
+        "trajectory_n5",
+        "trajectory_n50",
+        "converged_n500",
+        "image_trajectory",
+        "image_trajectory_matched",
+    ],
 )
 def test_every_fixture_carries_provenance(name):
     """Without this the .npz files are unfalsifiable magic numbers within a year."""
@@ -673,6 +687,135 @@ def test_trajectory_matches_upstream(primitives, niter, record_property):
         error = rel(got, expected)
         record_property(f"rel_error_{name}", error)
         assert error < budget, f"n={niter} {name}: {error:.3e} exceeds {budget:.0e}"
+
+
+#: Matches ``IMAGE_PARAMS`` / ``IMAGE_ITERS`` in the generator. The image path works in
+#: pixel units, so the kernel width and velocity step are far below the micron-scale
+#: point-cloud defaults.
+_IMAGE_PARAMS = {"a": 8.0, "p": 2.0, "expand": 2.0, "nt": 2, "diffeo_start": 4, "epV": 1.0}
+_IMAGE_ITERS = 12
+
+
+@pytest.fixture(scope="module")
+def image_reference():
+    return _load("image_trajectory")
+
+
+def test_image_path_axes_match_the_reference(image_reference):
+    """The image entry point's coordinate convention, checked before its results.
+
+    ``fit_stalign_image`` centres pixel coordinates rather than using the point path's
+    physical microns. The solver agreeing on rasters says nothing about that convention,
+    so it is pinned separately -- if it drifted, the comparisons below would still pass
+    while aligning in a different frame.
+    """
+    fit = fit_stalign_image(image_reference["ref"], image_reference["query"], niter=0, **_IMAGE_PARAMS)
+
+    for got, expected in (
+        (fit.query_axes[0], image_reference["source_axis_0"]),
+        (fit.query_axes[1], image_reference["source_axis_1"]),
+        (fit.ref_axes[0], image_reference["target_axis_0"]),
+        (fit.ref_axes[1], image_reference["target_axis_1"]),
+    ):
+        np.testing.assert_allclose(np.asarray(got), expected, rtol=0, atol=1e-12)
+
+
+def _run_image(fixture, axes_ref: bool = True):
+    """Drive the solver on the image fixture, from the reference's own starting affine."""
+    source = (jnp.asarray(fixture["source_axis_0"]), jnp.asarray(fixture["source_axis_1"]))
+    target = (jnp.asarray(fixture["target_axis_0"]), jnp.asarray(fixture["target_axis_1"]))
+    return _core.lddmm(
+        source,
+        jnp.asarray(fixture["query"]),
+        target,
+        jnp.asarray(fixture["ref"]),
+        L=fixture["start_L"],
+        T=fixture["start_T"],
+        niter=_IMAGE_ITERS,
+        **_IMAGE_PARAMS,
+    )
+
+
+@pytest.mark.parametrize("name", ["A", "v", "WM", "WA", "WB"])
+def test_image_path_matches_upstream(image_reference, name, record_property):
+    """The image entry point vs upstream's LDDMM on the same images, axes and start.
+
+    Closes the last gap in the port's public surface: ``align(by="images")`` goes straight
+    through here and had no reference comparison at all.
+
+    Note that ~11 % of the target grid samples the source through padding, because the two
+    rasters have different shapes and each is centred on its own centre. That agrees to
+    1e-12 as well -- padding was the first suspect for an earlier disagreement and turned
+    out to be innocent on both values and gradients.
+    """
+    result = _run_image(image_reference)
+    error = rel(result[name], image_reference[name])
+    record_property("rel_error", error)
+    assert error < 1e-10, f"{name}: {error:.3e}"
+
+
+def test_image_energy_trace_matches_upstream(image_reference, record_property):
+    """Every iteration of the objective, not just the endpoint.
+
+    A trajectory can agree at the end while disagreeing throughout; comparing the whole
+    trace is what localises a disagreement to the step it starts at.
+    """
+    result = _run_image(image_reference)
+    got = np.asarray(result["energies"])
+    expected = np.asarray(image_reference["energies"])
+    worst = max(abs(got[i] - expected[i]) / abs(expected[i]) for i in range(expected.size))
+    record_property("worst_iteration_rel_error", worst)
+    assert worst < 1e-10
+
+
+def test_image_warp_matches_upstream(image_reference, record_property):
+    """``warp_image`` vs ``STalign.transform_image_source_to_target``.
+
+    Exactly what ``align(by="images", out="images/...")`` writes, against upstream's own
+    image-warping composition rather than a reassembled one.
+    """
+    result = _run_image(image_reference)
+    fit = StalignResult(
+        affine=result["A"],
+        velocity=result["v"],
+        velocity_grid=result["xv"],
+        aligned_points=jnp.zeros((0, 2)),
+        query_axes=(jnp.asarray(image_reference["source_axis_0"]), jnp.asarray(image_reference["source_axis_1"])),
+        ref_axes=(jnp.asarray(image_reference["target_axis_0"]), jnp.asarray(image_reference["target_axis_1"])),
+    )
+    error = rel(fit.warp_image(jnp.asarray(image_reference["query"])), image_reference["warped"])
+    record_property("rel_error", error)
+    assert error < 1e-9
+
+
+def test_on_grid_sampling_costs_six_orders_of_magnitude(record_property):
+    """Ledger row D10, measured rather than asserted.
+
+    The control fixture crops both rasters to a common extent, so their axes are the
+    *same* integers and interpolation samples keep landing exactly on grid lines -- where
+    upstream and squidpy can floor() to different neighbours. Same solver, same inputs
+    otherwise, yet accuracy drops from 1e-12 to ~1e-3 on the velocity field. This is why
+    both fixtures start from a deliberately off-grid affine, and why the point-cloud
+    fixture asserts `test_fixture_samples_are_off_grid`.
+    """
+    matched = _load("image_trajectory_matched")
+    axes = (jnp.asarray(matched["axis_0"]), jnp.asarray(matched["axis_1"]))
+    result = _core.lddmm(
+        axes,
+        jnp.asarray(matched["query"]),
+        axes,
+        jnp.asarray(matched["ref"]),
+        L=matched["start_L"],
+        T=matched["start_T"],
+        niter=_IMAGE_ITERS,
+        **_IMAGE_PARAMS,
+    )
+    degraded = rel(result["v"], matched["v"])
+    record_property("rel_error_on_grid", degraded)
+    assert 1e-6 < degraded < 1e-1, (
+        f"on-grid sampling now costs {degraded:.3e}; if this has become exact, D10 is gone "
+        f"and the off-grid fixture design can be simplified"
+    )
 
 
 def test_velocity_grid_is_the_one_the_reference_used(primitives, source_grid):

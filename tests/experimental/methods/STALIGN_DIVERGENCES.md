@@ -58,7 +58,7 @@ deliberately *not* bug-compatible with upstream (D4, D5, D6, D7, D9) — those s
 | **D7** | Landmark affine solve | normal equations for the plain least-squares fit, with explicit `np.linalg.inv` on the Gram matrix — `:897-910` | `skimage.transform.estimate_transform("affine")`, a Hartley-normalised homogeneous solve by SVD | `L` differs **6.4e-4**, `T` **7.2e-3**. Fit residual on clean landmarks: **21.7026** vs **21.6984** (1.9e-4 apart). On near-collinear landmarks: **7.4e-13** vs **5.6e+2** | **Different estimators, not the same one twice.** skimage minimises algebraic error, upstream geometric; upstream is a hair better on clean input and collapses when ill-conditioned. Keep squidpy's — see R7 |
 | **D8** | `lddmm()` cannot take a precomputed `xv`/`v` | `LDDMM` accepts both — `:1060-1064` | no such parameters | — | **No change needed.** The generator forces *upstream* onto squidpy's grid instead |
 | **D9** | Division guards | none | `jnp.maximum(…, 1e-12)` in `_update_mixture_weights` | inert for short runs | **squidpy is right.** Keep |
-| **D10** | On-grid interpolation kink | normalises `(c-x0)/(x[-1]-x0)`, then `grid_sample(align_corners=True)` scales by `(n-1)` | `(c-x0)/(x[1]-x0)` | equal to ~1 ulp, but a sample landing exactly on a grid line can `floor()` to different neighbours | Not a defect in either. Fixtures are built off-grid on purpose and assert it |
+| **D10** | On-grid interpolation kink | normalises `(c-x0)/(x[-1]-x0)`, then `grid_sample(align_corners=True)` scales by `(n-1)` | `(c-x0)/(x[1]-x0)` | equal to ~1 ulp, but a sample landing exactly on a grid line can `floor()` to different neighbours. **Measured cost: 1e-12 → 1e-3** on the velocity field (see below) | Not a defect in either. Every fixture is built off-grid on purpose and asserts it |
 
 ## Review — beyond the divergences
 
@@ -109,6 +109,33 @@ sets it — so the shipped default runs a 5000-iteration gradient descent with
 `sigmaR=5e5` in single precision, while every published STalign result is double.
 `fit_stalign` now says so and shows how to enable x64. This suite requires
 `JAX_ENABLE_X64=1` and skips without it.
+
+### D10 in practice: how the image path was nearly mis-assessed
+
+`fit_stalign_image` had no reference comparison at all — the last gap in the port's public
+surface. Adding one produced a **5.3e-2** disagreement on the affine and **2.6e-1** on the
+velocity field, which looked like a real port bug.
+
+It was not. The bisect is worth recording, because the same trap is waiting for anyone who
+adds a fixture without the off-grid guard:
+
+| step | finding |
+| --- | --- |
+| energy at iteration 0 | matched to **4.6e-16** — the objective is identical |
+| energy at iteration 1 | already 3e-3 apart — the *first gradient step* diverges |
+| conditioning check | a 1e-12 nudge in `epV` moved the answer by 1e-13, linearly — not chaos |
+| grids, axes, images, every parameter | verified identical on both sides |
+| first hypothesis: padding | 11 % of the target grid samples the source out of domain, because each raster is centred on its own centre. **Wrong** — padding agrees on values *and* gradients |
+| actual cause | centred pixel axes are **integers**, so an identity starting affine put every interpolation sample exactly on a grid line: D10, at full strength |
+
+Starting the fixture from a deliberately off-grid affine (a 0.0371449 rad rotation and a
+non-integer shift, mirroring `fixtures.THETA`/`SHIFT`) drops the disagreement to **3.95e-12**
+on the affine and **2.43e-12** on the velocity — with the 11 % padded samples still present.
+
+`image_trajectory_matched` keeps the degenerate case on purpose: both rasters cropped to a
+common extent, so their axes are the *same* integers and grid coincidence persists even
+off-grid. It still lands at ~1e-3, and `test_on_grid_sampling_costs_six_orders_of_magnitude`
+pins that gap so the cost of D10 stays a measured number rather than a warning.
 
 ### R7. `affine_from_points` silently changes the landmark estimator — open
 

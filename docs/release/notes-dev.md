@@ -34,6 +34,9 @@
   iteration (2.20 to 0.46 ms on the reference fixture, so `niter=5000` drops from ~11s to ~2.4s).
   Numerically unchanged: the reference suite still matches the original implementation at 1, 5, 50
   and 500 iterations.
+- The reference suite now covers `fit_stalign_image`, the last part of the experimental
+  STalign port without one. It reproduces the original to ~4e-12 on the affine and ~2e-12 on the
+  velocity field over a full trajectory.
 - The experimental STalign solver returns the per-iteration `energies` trace and `n_iter`, and
   accepts optional `tol` / `patience` early stopping. Off by default. Note the objective changes
   definition at iteration 50, when the mixture-weight E step engages, so the convergence window
