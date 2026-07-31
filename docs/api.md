@@ -152,6 +152,7 @@ result types listed alongside.
     :toctree: api
 
     experimental.methods.align_samples._stalign.fit_stalign
+    experimental.methods.align_samples._stalign.fit_stalign_image
     experimental.methods.align_landmarks._landmark.fit_similarity
     experimental.methods.align_landmarks._landmark.fit_affine
     experimental.methods.align_samples._stalign.StalignResult

@@ -9,6 +9,21 @@
   [scverse/squidpy-ports](https://github.com/scverse/squidpy-ports), so `torch` is not a squidpy
   dependency.
   [#1243](https://github.com/scverse/squidpy/issues/1243)
+- **Breaking (experimental):** {func}`squidpy.experimental.tl.align` now locates data with `in_`
+  and `out` paths instead of a stack of key arguments. `ref_key`, `query_key`, `spatial_key`,
+  `key_added`, `output_mode` and `on` are replaced by `in_` (e.g. `"obsm/spatial"`,
+  `"tables/slice1/obsm/spatial"`, `"images/he"`), `out`, and `copy`. `on` is gone because the path
+  already says which modality is meant. `out=None` (the default) returns the fitted alignment and
+  writes nothing. This follows the shape proposed for scanpy in
+  [scanpy#4007](https://github.com/scverse/scanpy/issues/4007).
+- {func}`squidpy.experimental.tl.align` can now align on images. The fitted diffeomorphism cannot
+  be expressed as a SpatialData transformation, so writing to an `images/...` path materialises the
+  warped image rather than registering it lazily. Adds an `align_images` method family and
+  `squidpy.experimental.methods.align_samples.fit_stalign_image`.
+- **Breaking (experimental):** {func}`squidpy.experimental.tl.align_by_landmarks` takes `in_` /
+  `out` / `copy` in place of `spatial_key` / `key_added` / `output_mode`, and its coordinate-system
+  arguments are renamed `cs_ref` / `cs_query`. Because `out` is always named explicitly, the guard
+  that refused to overwrite an auto-derived key is gone.
 
 ## Bugfixes
 

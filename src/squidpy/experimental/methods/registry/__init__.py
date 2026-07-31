@@ -8,7 +8,8 @@ This module holds three things that belong together:
   concrete estimator result (e.g. ``StalignResult``). A new estimator only has to
   satisfy :class:`AlignResult` -- a ``transform`` that maps points into the
   reference frame -- to plug into :func:`squidpy.experimental.tl.align`.
-* The family registry instances (:data:`ALIGN_SAMPLES`, :data:`ALIGN_LANDMARKS`)
+* The family registry instances (:data:`ALIGN_SAMPLES`, :data:`ALIGN_IMAGES`,
+  :data:`ALIGN_LANDMARKS`)
   the estimator implementations register into.
 """
 
@@ -30,8 +31,10 @@ __all__ = [
     "Registry",
     "AlignResult",
     "AlignSamplesFn",
+    "AlignImagesFn",
     "AlignLandmarksFn",
     "ALIGN_SAMPLES",
+    "ALIGN_IMAGES",
     "ALIGN_LANDMARKS",
 ]
 
@@ -126,6 +129,17 @@ class AlignSamplesFn(Protocol):
     def __call__(self, ref: npt.ArrayLike, query: npt.ArrayLike, **kwargs: Any) -> AlignResult: ...
 
 
+class AlignImagesFn(Protocol):
+    """Calling convention for ``align_images`` estimators.
+
+    Two channels-first ``(c, y, x)`` images in, one :class:`AlignResult` out. Separate
+    from :class:`AlignSamplesFn` because the inputs are rasters, not point clouds -- a
+    single family would have to guess which an ``(N, 2)`` array was meant to be.
+    """
+
+    def __call__(self, ref: npt.ArrayLike, query: npt.ArrayLike, **kwargs: Any) -> AlignResult: ...
+
+
 class AlignLandmarksFn(Protocol):
     """Calling convention for ``align_landmarks`` estimators: paired landmarks in, affine out."""
 
@@ -140,8 +154,12 @@ class AlignLandmarksFn(Protocol):
 
 
 #: Sample-to-sample alignment estimators -- ref/query point clouds in, transform out.
-#: Consumed by ``squidpy.experimental.tl.align``.
+#: Consumed by ``squidpy.experimental.tl.align`` for ``obsm`` paths.
 ALIGN_SAMPLES: Registry[AlignSamplesFn] = Registry("align_samples")
+
+#: Image alignment estimators -- ref/query rasters in, transform out.
+#: Consumed by ``squidpy.experimental.tl.align`` for ``images`` paths.
+ALIGN_IMAGES: Registry[AlignImagesFn] = Registry("align_images")
 
 #: Closed-form landmark alignment estimators -- paired landmarks in, affine out.
 #: Consumed by ``squidpy.experimental.tl.align_by_landmarks``.

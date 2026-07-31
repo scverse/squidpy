@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy.typing as npt
 
-from squidpy.experimental.methods.registry import ALIGN_SAMPLES
+from squidpy.experimental.methods.registry import ALIGN_IMAGES, ALIGN_SAMPLES
 
 if TYPE_CHECKING:
     import jax
@@ -34,6 +34,32 @@ class StalignResult:
     velocity: JaxArray
     velocity_grid: tuple[JaxArray, JaxArray]
     aligned_points: JaxArray
+    #: Row-col axes of the query and reference rasters the fit ran on, when it ran on
+    #: images. ``None`` for point-cloud fits, where no raster survives the call.
+    query_axes: tuple[JaxArray, JaxArray] | None = None
+    ref_axes: tuple[JaxArray, JaxArray] | None = None
+
+    def warp_image(self, image: JaxArray) -> JaxArray:
+        """Resample a query-frame ``(c, y, x)`` image onto the reference grid.
+
+        A diffeomorphism cannot be expressed as a SpatialData transformation -- the
+        available types are affine at most -- so an aligned image has to be materialised
+        rather than registered.
+        """
+        import jax.numpy as jnp
+
+        from ._stalign_impl._core import _interp, _transform_grid_backward, jax_dtype
+
+        if self.query_axes is None or self.ref_axes is None:
+            raise ValueError(
+                "This result was fitted on point clouds, so it carries no raster axes to "
+                "warp an image with. Fit with `align(in_='images/<name>', ...)` instead."
+            )
+        arr = jnp.asarray(image, dtype=jax_dtype())
+        if arr.ndim == 2:
+            arr = arr[None]
+        grid = _transform_grid_backward(self.ref_axes, self.velocity_grid, self.velocity, self.affine)
+        return _interp(self.query_axes, arr, grid)
 
     def transform(
         self,
@@ -187,4 +213,130 @@ def fit_stalign(
         velocity=result["v"],
         velocity_grid=result["xv"],
         aligned_points=aligned_rc[:, ::-1],
+        # No raster axes: the grids here are the internal density rasters at `dx`
+        # resolution, not a frame any real image lives on. Offering `warp_image` off them
+        # would quietly resample the caller's image onto a coarse, unrelated grid.
+    )
+
+
+@ALIGN_IMAGES.register("stalign", requires=("jax",))
+def fit_stalign_image(
+    ref: npt.ArrayLike,
+    query: npt.ArrayLike,
+    *,
+    ref_scale: tuple[float, float] = (1.0, 1.0),
+    query_scale: tuple[float, float] = (1.0, 1.0),
+    # LDDMM registration
+    a: float = 20.0,
+    p: float = 2.0,
+    expand: float = 2.0,
+    nt: int = 3,
+    niter: int = 200,
+    diffeo_start: int = 100,
+    epL: float = 2e-8,
+    epT: float = 2e-1,
+    epV: float = 1.0,
+    sigmaM: float = 1.0,
+    sigmaB: float = 2.0,
+    sigmaA: float = 5.0,
+    sigmaR: float = 5e5,
+    sigmaP: float = 2e1,
+) -> StalignResult:
+    """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
+
+    Parameters
+    ----------
+    ref, query
+        Channels-first ``(c, y, x)`` rasters (a bare ``(y, x)`` array is promoted). The
+        query is aligned onto the reference; they need not share a shape.
+    ref_scale, query_scale
+        Physical size of one pixel as ``(y, x)``. Defaults to pixel units. Pass the
+        element's scale when the two images have different resolutions, otherwise the
+        fit is done in mismatched coordinates.
+    a, p, expand, nt, niter, diffeo_start
+        LDDMM controls, as in :func:`fit_stalign`. Note ``a`` is a length in the *same*
+        units as ``ref_scale`` -- the default of 20 suits pixel units, where
+        :func:`fit_stalign`'s 500 would exceed most images. ``diffeo_start`` defaults to
+        half of ``niter`` so the affine settles before the deformable part switches on;
+        starting both at once lets the velocity field absorb what is really a
+        translation, and it fits it worse than the affine would have.
+    epL, epT, epV
+        Gradient-descent step sizes for the linear part, translation, and velocity field.
+        These are **scale dependent**: they are tuned here for images in pixel units, so
+        a non-unit ``ref_scale`` will need them rescaled to match. ``epV`` is the one to
+        reach for first -- too large and the deformation overwhelms the affine.
+    sigmaM, sigmaB, sigmaA, sigmaR, sigmaP
+        Noise scales for the matching, background, artifact, regularisation, and
+        landmark-point terms of the objective.
+
+    Returns
+    -------
+    A :class:`StalignResult`. Its :meth:`~StalignResult.transform` maps ``(x, y)`` points
+    in query pixel coordinates into the reference frame, and
+    :meth:`~StalignResult.warp_image` resamples a query image onto the reference grid.
+    """
+    import jax.numpy as jnp
+
+    from ._stalign_impl._core import jax_dtype, lddmm
+
+    dtype = jax_dtype()
+
+    def as_chw(image: npt.ArrayLike, name: str) -> JaxArray:
+        # Not `jnp.atleast_3d`: it appends the new axis, turning a (y, x) image into
+        # (y, x, 1) -- y channels of x by 1 -- instead of a single (1, y, x) channel.
+        arr = jnp.asarray(image, dtype=dtype)
+        if arr.ndim == 2:
+            return arr[None]
+        if arr.ndim != 3:
+            raise ValueError(f"Expected `{name}` to be a `(y, x)` or `(c, y, x)` image, found shape {arr.shape}.")
+        return arr
+
+    source_image = as_chw(query, "query")
+    target_image = as_chw(ref, "ref")
+    if source_image.shape[0] != target_image.shape[0]:
+        raise ValueError(
+            f"Expected `ref` and `query` to have the same number of channels, found "
+            f"{target_image.shape[0]} and {source_image.shape[0]}."
+        )
+
+    def axes(image: JaxArray, scale: tuple[float, float]) -> tuple[JaxArray, JaxArray]:
+        # Row-col physical coordinates, centred so the affine initialises near identity.
+        rows, cols = image.shape[1], image.shape[2]
+        return (
+            (jnp.arange(rows, dtype=dtype) - (rows - 1) / 2.0) * scale[0],
+            (jnp.arange(cols, dtype=dtype) - (cols - 1) / 2.0) * scale[1],
+        )
+
+    source_grid = axes(source_image, query_scale)
+    target_grid = axes(target_image, ref_scale)
+
+    result = lddmm(
+        source_grid,
+        source_image,
+        target_grid,
+        target_image,
+        L=jnp.eye(2, dtype=dtype),
+        T=jnp.zeros(2, dtype=dtype),
+        a=a,
+        p=p,
+        expand=expand,
+        nt=nt,
+        niter=niter,
+        diffeo_start=diffeo_start,
+        epL=epL,
+        epT=epT,
+        epV=epV,
+        sigmaM=sigmaM,
+        sigmaB=sigmaB,
+        sigmaA=sigmaA,
+        sigmaR=sigmaR,
+        sigmaP=sigmaP,
+    )
+    return StalignResult(
+        affine=result["A"],
+        velocity=result["v"],
+        velocity_grid=result["xv"],
+        aligned_points=jnp.zeros((0, 2), dtype=dtype),
+        query_axes=source_grid,
+        ref_axes=target_grid,
     )

@@ -21,7 +21,7 @@ def _adata(coords: np.ndarray = _QUERY, *, key: str = "spatial") -> AnnData:
 
 @pytest.mark.parametrize("method", ["similarity", "affine"])
 def test_object_mode_returns_affine_result(method: str) -> None:
-    result = align_by_landmarks(_REF, _QUERY, method=method, output_mode="object")
+    result = align_by_landmarks(_REF, _QUERY, method=method)
     assert isinstance(result, AffineFitResult)
     assert result.matrix.shape == (3, 3)
     # affine maps query -> ref
@@ -35,7 +35,7 @@ def test_object_is_default() -> None:
 
 def test_anndata_inplace_writes_default_key() -> None:
     adata = _adata()
-    out = align_by_landmarks(_REF, _QUERY, method="affine", data=adata, output_mode="inplace")
+    out = align_by_landmarks(_REF, _QUERY, method="affine", data=adata, out="obsm/aligned_spatial")
     assert out is None
     assert "aligned_spatial" in adata.obsm
     np.testing.assert_allclose(adata.obsm["aligned_spatial"], _REF, atol=1e-6)
@@ -45,58 +45,62 @@ def test_anndata_inplace_writes_default_key() -> None:
 
 def test_anndata_copy_leaves_original_untouched() -> None:
     adata = _adata()
-    out = align_by_landmarks(_REF, _QUERY, method="affine", data=adata, output_mode="copy", key_added="xy_aligned")
+    out = align_by_landmarks(_REF, _QUERY, method="affine", data=adata, copy=True, out="obsm/xy_aligned")
     assert isinstance(out, AnnData) and out is not adata
     assert "xy_aligned" in out.obsm
     assert "xy_aligned" not in adata.obsm
 
 
-def test_custom_spatial_key() -> None:
+def test_in_selects_which_coordinates_are_transformed() -> None:
     adata = _adata(key="loc")
-    align_by_landmarks(_REF, _QUERY, method="affine", data=adata, spatial_key="loc", output_mode="inplace")
-    assert "aligned_loc" in adata.obsm
+    align_by_landmarks(_REF, _QUERY, method="affine", data=adata, in_="obsm/loc", out="obsm/aligned")
+    np.testing.assert_allclose(adata.obsm["aligned"], _REF, atol=1e-6)
+    np.testing.assert_allclose(adata.obsm["loc"], _QUERY)
 
 
-def test_existing_default_key_requires_explicit_key_added() -> None:
+def test_out_overwrites_without_ceremony() -> None:
+    """There is no auto-derived destination any more, so there is nothing to guard.
+
+    The old API derived ``f"aligned_{spatial_key}"`` when ``key_added`` was omitted and
+    had to refuse to overwrite it, since the user had not chosen it. ``out`` is always
+    named explicitly, so writing where the caller pointed is the whole contract.
+    """
     adata = _adata()
     adata.obsm["aligned_spatial"] = np.zeros_like(_QUERY)
-    with pytest.raises(ValueError, match="aligned_spatial.*already exists"):
-        align_by_landmarks(_REF, _QUERY, method="affine", data=adata, output_mode="inplace")
-    # explicit key_added overwrites without error
-    align_by_landmarks(_REF, _QUERY, method="affine", data=adata, output_mode="inplace", key_added="aligned_spatial")
+    align_by_landmarks(_REF, _QUERY, method="affine", data=adata, out="obsm/aligned_spatial")
     np.testing.assert_allclose(adata.obsm["aligned_spatial"], _REF, atol=1e-6)
 
 
 def test_write_mode_requires_data() -> None:
     with pytest.raises(ValueError, match="`data` is required"):
-        align_by_landmarks(_REF, _QUERY, method="affine", output_mode="inplace")
+        align_by_landmarks(_REF, _QUERY, method="affine", out="obsm/aligned_spatial")
 
 
 def test_too_few_landmarks() -> None:
     with pytest.raises(ValueError, match="at least 3 landmark pairs"):
-        align_by_landmarks(_REF[:2], _QUERY[:2], method="affine", output_mode="object")
+        align_by_landmarks(_REF[:2], _QUERY[:2], method="affine")
 
 
 def test_length_mismatch() -> None:
     with pytest.raises(ValueError, match="same shape"):
-        align_by_landmarks(_REF, _QUERY[:3], method="affine", output_mode="object")
+        align_by_landmarks(_REF, _QUERY[:3], method="affine")
 
 
 def test_unknown_method_lists_available() -> None:
     with pytest.raises(ValueError, match=r"Unknown align_landmarks method 'nope'"):
-        align_by_landmarks(_REF, _QUERY, method="nope", output_mode="object")
+        align_by_landmarks(_REF, _QUERY, method="nope")
 
 
 def test_non_finite_landmarks_rejected() -> None:
     bad = _QUERY.copy()
     bad[0, 0] = np.nan
     with pytest.raises(ValueError, match="must contain only finite values"):
-        align_by_landmarks(_REF, bad, method="affine", output_mode="object")
+        align_by_landmarks(_REF, bad, method="affine")
 
 
 def test_bad_data_type_raises() -> None:
     with pytest.raises(TypeError, match="must be AnnData or SpatialData"):
-        align_by_landmarks(_REF, _QUERY, method="affine", data=object(), output_mode="inplace")  # type: ignore[arg-type]
+        align_by_landmarks(_REF, _QUERY, method="affine", data=object(), out="obsm/aligned_spatial")  # type: ignore[arg-type]
 
 
 def test_spatialdata_copy_leaves_original_untouched() -> None:
@@ -112,9 +116,9 @@ def test_spatialdata_copy_leaves_original_untouched() -> None:
         _QUERY,
         method="affine",
         data=sdata,
-        cs_name_query="query_cs",
-        cs_name_ref="ref_cs",
-        output_mode="copy",
+        cs_query="query_cs",
+        cs_ref="ref_cs",
+        copy=True,
     )
     assert out is not sdata
     assert "ref_cs" in get_transformation(out.points["pts"], get_all=True)
@@ -134,9 +138,9 @@ def test_spatialdata_registers_transformation() -> None:
         _QUERY,
         method="affine",
         data=sdata,
-        cs_name_query="query_cs",
-        cs_name_ref="ref_cs",
-        output_mode="inplace",
+        cs_query="query_cs",
+        cs_ref="ref_cs",
+        out="obsm/aligned_spatial",
     )
     assert out is None
     assert "ref_cs" in get_transformation(sdata.points["pts"], get_all=True)
@@ -161,9 +165,9 @@ def test_spatialdata_composes_with_existing_transform() -> None:
         _QUERY + offset,
         method="affine",
         data=sdata,
-        cs_name_query="query_cs",
-        cs_name_ref="ref_cs",
-        output_mode="inplace",
+        cs_query="query_cs",
+        cs_ref="ref_cs",
+        out="obsm/aligned_spatial",
     )
 
     matrix = get_transformation(sdata.points["pts"], to_coordinate_system="ref_cs").to_affine_matrix(

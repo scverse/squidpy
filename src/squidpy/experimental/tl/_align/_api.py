@@ -14,24 +14,39 @@ import numpy as np
 from anndata import AnnData
 from spatialdata import SpatialData
 
-from squidpy._validators import assert_one_of
-from squidpy.experimental.methods import ALIGN_LANDMARKS, ALIGN_SAMPLES
-from squidpy.experimental.tl._align._io import (
-    get_coords,
-    resolve_obs_pair,
-    writeback_affine_sdata,
-    writeback_obs,
-)
+from squidpy.experimental.methods import ALIGN_IMAGES, ALIGN_LANDMARKS, ALIGN_SAMPLES
+from squidpy.experimental.tl._align._io import shallow_copy_sdata, writeback_affine_sdata
+from squidpy.experimental.tl._align._paths import DataPath, parse_path, read_path, write_path
 
 if TYPE_CHECKING:
     from squidpy.experimental.methods import AlignResult, Registry
 
-OUTPUT_MODES = ("object", "copy", "inplace")
-ON_VALUES = ("obs", "image")
-
 __all__ = ["align", "align_by_landmarks"]
 
 F = TypeVar("F", bound="Callable[..., Any]")
+
+
+def _resolve_in(in_: str | tuple[str, str]) -> tuple[DataPath, DataPath]:
+    """Normalise ``in_`` to a ``(ref_path, query_path)`` pair."""
+    if isinstance(in_, str):
+        path = parse_path(in_, name="in_")
+        return path, path
+    if not (isinstance(in_, tuple | list) and len(in_) == 2):
+        raise ValueError(f"`in_` must be a path or a (ref_path, query_path) pair, got {in_!r}.")
+    return parse_path(in_[0], name="in_[0]"), parse_path(in_[1], name="in_[1]")
+
+
+def _copy_for_write(container: AnnData | SpatialData, path: DataPath) -> AnnData | SpatialData:
+    """Duplicate just enough of ``container`` that writing at ``path`` leaves it untouched."""
+    if isinstance(container, AnnData):
+        return container.copy()
+
+    out = shallow_copy_sdata(container)
+    # `shallow_copy_sdata` shares element objects with the original, so the one element
+    # we are about to write through still has to be duplicated.
+    if path.modality == "points" and path.element in out.tables:
+        out.tables[path.element] = out.tables[path.element].copy()
+    return out
 
 
 def _methods_rst(registry: Registry, indent: str = " " * 8) -> str:
@@ -58,18 +73,15 @@ def _document_methods(**registries: Registry) -> Callable[[F], F]:
     return decorator
 
 
-@_document_methods(align_samples_methods=ALIGN_SAMPLES)
+@_document_methods(align_samples_methods=ALIGN_SAMPLES, align_images_methods=ALIGN_IMAGES)
 def align(
     data_ref: AnnData | SpatialData,
     data_query: AnnData | SpatialData | None = None,
     *,
+    in_: str | tuple[str, str],
+    out: str | None = None,
     method: str = "stalign",
-    on: Literal["obs", "image"] = "obs",
-    ref_key: str | None = None,
-    query_key: str | None = None,
-    spatial_key: str = "spatial",
-    output_mode: Literal["object", "copy", "inplace"] = "object",
-    key_added: str | None = None,
+    copy: bool = False,
     **method_kwargs: Any,
 ) -> AlignResult | AnnData | SpatialData | None:
     """Align a query sample onto a reference sample.
@@ -77,56 +89,81 @@ def align(
     Parameters
     ----------
     data_ref, data_query
-        Both :class:`~anndata.AnnData`, or both :class:`~spatialdata.SpatialData`,
-        or ``data_ref`` a SpatialData with ``data_query=None`` to align two of its
-        own tables (selected by ``ref_key`` / ``query_key``).
+        Both :class:`~anndata.AnnData`, or both :class:`~spatialdata.SpatialData`, or
+        ``data_ref`` a SpatialData with ``data_query=None`` to align two of its own
+        elements (distinguished by passing a pair to ``in_``).
+    in_
+        Where to read from. One path applied to both containers, or a
+        ``(ref_path, query_path)`` pair. Accepted forms:
+
+        - ``"obsm/spatial"`` -- an AnnData ``obsm`` key
+        - ``"tables/slice1/obsm/spatial"`` -- an ``obsm`` key of a SpatialData table
+        - ``"images/he"`` -- a SpatialData image
+
+        The path also selects what is aligned: an ``obsm`` path fits on point clouds,
+        an ``images`` path fits on image intensities.
+    out
+        Where to write the aligned query, as a path into ``data_query``. ``None``
+        (default) writes nothing and returns the fitted alignment instead -- fitting is
+        expensive and usually worth inspecting before it overwrites anything.
+
+        For an ``obsm`` path the transformed coordinates are written. For an ``images``
+        path the warped image is materialised: a diffeomorphism cannot be expressed as a
+        SpatialData transformation, so it cannot be registered lazily.
     method
-        Fitting method in the ``align_samples`` family. See each implementation
-        for its method-specific arguments:
+        Fitting method. For ``obsm`` paths, one of the ``align_samples`` family:
 
         {align_samples_methods}
-    on
-        ``"obs"`` aligns the ``obsm`` point clouds. ``"image"`` is reserved and
-        currently raises :class:`NotImplementedError`.
-    ref_key, query_key
-        Table keys, required (and only valid) for SpatialData inputs.
-    spatial_key
-        ``obsm`` key holding the ``(x, y)`` coordinates. Defaults to ``"spatial"``.
-    output_mode
-        - ``"object"`` (default) -- return the fitted :class:`~squidpy.experimental.tl.AlignResult`; nothing is written.
-        - ``"inplace"`` -- write the aligned coordinates into the query and return ``None``.
-        - ``"copy"`` -- write into a copy of the query and return the copy.
-    key_added
-        Destination ``obsm`` key for the aligned coordinates. If ``None`` it
-        defaults to ``f"aligned_{spatial_key}"``; if that key already exists and
-        ``key_added`` was not given explicitly, a :class:`ValueError` is raised
-        (pass ``key_added`` to overwrite intentionally).
+
+        For ``images`` paths, one of the ``align_images`` family:
+
+        {align_images_methods}
+    copy
+        Write into a copy of the query container and return it, instead of mutating in
+        place. Ignored when ``out`` is ``None``.
     method_kwargs
-        Method-specific solver arguments, forwarded flat to the chosen
-        ``method``'s implementation:
+        Solver arguments, forwarded flat to the chosen ``method``.
 
-        {align_samples_methods}
+    Returns
+    -------
+    The fitted :class:`~squidpy.experimental.tl.AlignResult` when ``out`` is ``None``;
+    the modified copy when ``copy=True``; otherwise ``None``.
     """
-    assert_one_of(output_mode, OUTPUT_MODES, name="output_mode")
-    assert_one_of(on, ON_VALUES, name="on")
-    if on == "image":
-        raise NotImplementedError("`align(on='image')` is not implemented yet; use `on='obs'`.")
+    ref_path, query_path = _resolve_in(in_)
+    if ref_path.modality != query_path.modality:
+        raise ValueError(
+            f"`in_` mixes modalities: {ref_path.raw!r} is {ref_path.modality}, "
+            f"{query_path.raw!r} is {query_path.modality}. Both must address the same kind of data."
+        )
 
-    ref_adata, query_adata, container, element_key = resolve_obs_pair(data_ref, data_query, ref_key, query_key)
-    ref_xy = get_coords(ref_adata, spatial_key)
-    query_xy = get_coords(query_adata, spatial_key)
+    ref_container = data_ref
+    query_container = data_ref if data_query is None else data_query
+    if data_query is None and not isinstance(data_ref, SpatialData):
+        raise ValueError("`data_query` is required unless `data_ref` is a SpatialData holding both elements.")
 
-    result = ALIGN_SAMPLES.get(method)(ref=ref_xy, query=query_xy, **method_kwargs)
+    ref_array = read_path(ref_container, ref_path, name="in_")
+    query_array = read_path(query_container, query_path, name="in_")
 
-    return writeback_obs(
-        result,
-        output_mode=output_mode,
-        query_adata=query_adata,
-        container=container,
-        element_key=element_key,
-        spatial_key=spatial_key,
-        key_added=key_added,
-    )
+    registry = ALIGN_IMAGES if ref_path.modality == "image" else ALIGN_SAMPLES
+    result = registry.get(method)(ref=ref_array, query=query_array, **method_kwargs)
+
+    if out is None:
+        return result
+
+    out_path = parse_path(out, name="out")
+    if out_path.modality != query_path.modality:
+        raise ValueError(
+            f"`out={out!r}` is {out_path.modality} but `in_` is {query_path.modality}; "
+            f"alignment does not convert between the two."
+        )
+
+    target = _copy_for_write(query_container, out_path) if copy else query_container
+    if out_path.modality == "points":
+        value = np.asarray(result.transform(query_array))
+    else:
+        value = np.asarray(result.warp_image(query_array))
+    write_path(target, out_path, value)
+    return target if copy else None
 
 
 @_document_methods(align_landmarks_methods=ALIGN_LANDMARKS)
@@ -136,13 +173,18 @@ def align_by_landmarks(
     *,
     method: Literal["similarity", "affine"] = "similarity",
     data: AnnData | SpatialData | None = None,
-    cs_name_ref: str | None = None,
-    cs_name_query: str | None = None,
-    spatial_key: str = "spatial",
-    output_mode: Literal["object", "copy", "inplace"] = "object",
-    key_added: str | None = None,
+    in_: str | None = None,
+    out: str | None = None,
+    copy: bool = False,
+    cs_ref: str | None = None,
+    cs_query: str | None = None,
 ) -> AlignResult | AnnData | SpatialData | None:
     """Align by a closed-form fit on pre-paired landmarks.
+
+    Kept separate from :func:`align` because the two write fundamentally different
+    things: a similarity or affine fit *is* representable as a SpatialData
+    transformation, so it can be registered lazily on a whole coordinate system, whereas
+    :func:`align`'s diffeomorphism has to be materialised.
 
     Parameters
     ----------
@@ -155,46 +197,55 @@ def align_by_landmarks(
 
         {align_landmarks_methods}
     data
-        Target to write the alignment into. Required for ``output_mode`` other
-        than ``"object"``.
-    cs_name_ref, cs_name_query
+        Container to write the alignment into. Required unless ``out`` is ``None``.
+    in_
+        For an AnnData ``data``, the path of the coordinates to transform, e.g.
+        ``"obsm/spatial"``. Unused when registering a transformation on a SpatialData.
+    out
+        Where to write. ``None`` (default) writes nothing and returns the fitted affine.
+        For an AnnData ``data``, a path such as ``"obsm/aligned"``. For a SpatialData,
+        the affine is registered rather than materialised, so ``out`` is ignored and
+        ``cs_ref`` / ``cs_query`` select the coordinate systems instead.
+    copy
+        Write into a copy of ``data`` and return it, instead of mutating in place.
+    cs_ref, cs_query
         Coordinate-system names. For a SpatialData ``data`` the fitted affine is
-        registered on every element in ``cs_name_query``, mapping into
-        ``cs_name_ref``.
-    spatial_key
-        ``obsm`` key when ``data`` is an :class:`~anndata.AnnData`.
-    output_mode
-        See :func:`align`. ``"object"`` (default) returns the fitted
-        :class:`~squidpy.experimental.tl.AlignResult`.
-    key_added
-        Destination ``obsm`` key when ``data`` is an AnnData (see :func:`align`).
+        registered on every element living in ``cs_query``, mapping it into ``cs_ref``.
+
+    Returns
+    -------
+    The fitted affine when ``out`` is ``None`` and ``data`` is ``None``; the modified
+    copy when ``copy=True``; otherwise ``None``.
     """
-    assert_one_of(output_mode, OUTPUT_MODES, name="output_mode")
+    result = ALIGN_LANDMARKS.get(method)(ref=ref, query=query, source_cs=cs_query, target_cs=cs_ref)
 
-    result = ALIGN_LANDMARKS.get(method)(
-        ref=ref,
-        query=query,
-        source_cs=cs_name_query,
-        target_cs=cs_name_ref,
-    )
-
-    if output_mode == "object":
-        return result
     if data is None:
-        raise ValueError("`data` is required when `output_mode` is 'copy' or 'inplace'.")
+        if out is not None:
+            raise ValueError("`data` is required when `out` is given.")
+        return result
 
     if isinstance(data, SpatialData):
+        # A similarity/affine transform is representable, so register it across the
+        # coordinate system rather than resampling anything.
         return writeback_affine_sdata(
-            result, data, output_mode=output_mode, moving_cs=cs_name_query, target_cs=cs_name_ref
-        )
-    if isinstance(data, AnnData):
-        return writeback_obs(
             result,
-            output_mode=output_mode,
-            query_adata=data,
-            container=None,
-            element_key=None,
-            spatial_key=spatial_key,
-            key_added=key_added,
+            data,
+            output_mode="copy" if copy else "inplace",
+            moving_cs=cs_query,
+            target_cs=cs_ref,
         )
-    raise TypeError(f"`data` must be AnnData or SpatialData, got {type(data).__name__}.")
+
+    if not isinstance(data, AnnData):
+        raise TypeError(f"`data` must be AnnData or SpatialData, got {type(data).__name__}.")
+
+    if out is None:
+        return result
+    in_path = parse_path(in_ or "obsm/spatial", name="in_")
+    out_path = parse_path(out, name="out")
+    if in_path.modality != "points" or out_path.modality != "points":
+        raise ValueError("`align_by_landmarks` reads and writes point coordinates; use an `obsm/...` path.")
+
+    target = data.copy() if copy else data
+    coords = read_path(target, in_path, name="in_")
+    write_path(target, out_path, np.asarray(result.transform(coords)))
+    return target if copy else None

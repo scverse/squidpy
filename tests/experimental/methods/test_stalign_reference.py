@@ -89,17 +89,21 @@ def clouds():
 
 @pytest.fixture(scope="module")
 def source_grid(primitives):
-    """Upstream's rasterised reference image and its axes, as ``((y, x), image)``."""
-    return (jnp.asarray(primitives["raster_ref_y"]), jnp.asarray(primitives["raster_ref_x"])), jnp.asarray(
-        primitives["raster_ref"]
+    """The *moving* raster and its axes, as ``((y, x), image)``.
+
+    The query moves onto the reference, so the query raster is the source -- the same
+    role LDDMM's ``I``/``xI`` and ``pointsI`` play.
+    """
+    return (jnp.asarray(primitives["raster_query_y"]), jnp.asarray(primitives["raster_query_x"])), jnp.asarray(
+        primitives["raster_query"]
     )
 
 
 @pytest.fixture(scope="module")
 def target_grid(primitives):
-    """Upstream's rasterised query image and its axes."""
-    return (jnp.asarray(primitives["raster_query_y"]), jnp.asarray(primitives["raster_query_x"])), jnp.asarray(
-        primitives["raster_query"]
+    """The *fixed* raster and its axes: the reference."""
+    return (jnp.asarray(primitives["raster_ref_y"]), jnp.asarray(primitives["raster_ref_x"])), jnp.asarray(
+        primitives["raster_ref"]
     )
 
 
@@ -563,6 +567,119 @@ def test_affine_from_points_survives_ill_conditioning(primitives, record_propert
     record_property("residual_upstream", theirs)
     assert ours < theirs * 1e-6, (
         f"expected upstream to lose badly on near-collinear landmarks, got squidpy {ours:.3e} vs upstream {theirs:.3e}"
+    )
+
+
+# --------------------------------------------------------------------------------------
+# The whole iteration loop
+# --------------------------------------------------------------------------------------
+
+
+def _run_lddmm(primitives, snapshot, niter):
+    source_axes = (jnp.asarray(primitives["raster_query_y"]), jnp.asarray(primitives["raster_query_x"]))
+    target_axes = (jnp.asarray(primitives["raster_ref_y"]), jnp.asarray(primitives["raster_ref_x"]))
+    return _core.lddmm(
+        source_axes,
+        jnp.asarray(primitives["raster_query"]),
+        target_axes,
+        jnp.asarray(primitives["raster_ref"]),
+        L=jnp.asarray(snapshot["L"]),
+        T=jnp.asarray(snapshot["T"]),
+        points_source=jnp.asarray(primitives["landmarks_query"])[:, ::-1],
+        points_target=jnp.asarray(primitives["landmarks_ref"])[:, ::-1],
+        niter=niter,
+        **F.LDDMM_PARAMS,
+    )
+
+
+#: Relative-error budget after ``n`` gradient steps. Single steps agree to ~1e-14; the
+#: allowance grows because bilinear-resampling VJPs and FFTs accumulate in different
+#: orders on the two backends, and 50 steps of gradient descent amplify that.
+_TRAJECTORY_BUDGET = {1: 1e-10, 5: 1e-9, 50: 1e-6}
+
+
+@pytest.mark.parametrize("niter", [1, 5, 50])
+def test_trajectory_matches_upstream(primitives, niter, record_property):
+    """Run the real loop for ``n`` steps and compare every state it carries.
+
+    ``niter=50`` matters specifically: the mixture-weight E-step is gated on
+    ``it >= 50`` (STalign.py:1233), so below it the weights are frozen at their
+    initial 0.5/0.4/0.1 and that whole branch goes untested.
+
+    Note the affine offset. Upstream builds ``A`` at the *top* of each iteration and
+    returns it, so ``LDDMM(n)["A"]`` reflects ``n-1`` updates; squidpy builds it after
+    the loop. The fixture stores the un-lagged affine as ``A``. See ledger row D4.
+    """
+    snapshot = _load(f"trajectory_n{niter}")
+    result = _run_lddmm(primitives, snapshot, niter)
+
+    budget = _TRAJECTORY_BUDGET[niter]
+    for name, got, expected in (
+        ("A", result["A"], snapshot["A"]),
+        ("v", result["v"], snapshot["v"]),
+        ("WM", result["WM"], snapshot["WM"]),
+        ("WA", result["WA"], snapshot["WA"]),
+        ("WB", result["WB"], snapshot["WB"]),
+    ):
+        error = rel(got, expected)
+        record_property(f"rel_error_{name}", error)
+        assert error < budget, f"n={niter} {name}: {error:.3e} exceeds {budget:.0e}"
+
+
+def test_velocity_grid_is_the_one_the_reference_used(primitives, source_grid):
+    """The trajectory comparison is only meaningful on a shared velocity grid.
+
+    Upstream was driven onto this grid explicitly via its ``xv=``/``v=`` parameters, so
+    if squidpy's construction ever diverges again the trajectory numbers would be
+    comparing two different problems rather than two implementations.
+    """
+    axes, _ = source_grid
+    built = _core._build_velocity_grid(axes, a=F.LDDMM_PARAMS["a"], expand=F.LDDMM_PARAMS["expand"])
+    snapshot = _load("trajectory_n1")
+    np.testing.assert_allclose(np.asarray(built[0]), snapshot["xv_0"], rtol=0, atol=1e-9)
+    np.testing.assert_allclose(np.asarray(built[1]), snapshot["xv_1"], rtol=0, atol=1e-9)
+
+
+def test_converged_solution_matches_upstream(primitives, record_property):
+    """500 iterations -- "enough to actually converge", per #1243.
+
+    Elementwise equality is the wrong instrument this far in: 500 steps of descent
+    amplify last-ulp backend differences without either answer being wrong. What must
+    hold is that both converge to the same registration.
+    """
+    snapshot = _load("converged_n500")
+    result = _run_lddmm(primitives, snapshot, 500)
+
+    energy = rel(result["E"], snapshot["E_last"])
+    record_property("rel_error_E", energy)
+    assert energy < 0.01, f"final energy differs by {energy:.3%}"
+
+    # Convergence is a statement about the registration, not the objective: the affine
+    # initialised from landmarks is already near-optimal, so `E` barely moves over the
+    # run even though the fit is good. Target registration error is the honest measure.
+    clouds = F.make_clouds()
+    landmarks_ref = clouds.landmarks_ref_rc
+    before = float(np.mean(np.linalg.norm(clouds.landmarks_query_rc - landmarks_ref, axis=1)))
+    after = float(snapshot["tre_mean"])
+    record_property("tre_before", before)
+    record_property("tre_after", after)
+    assert after < 0.4 * F.RASTER_PARAMS["dx"], f"reference did not converge: TRE {after:.2f}"
+    assert after < before / 5.0, f"reference barely moved: TRE {before:.2f} -> {after:.2f}"
+
+    aligned = np.asarray(
+        _core.transform_points_row_col(
+            result["xv"],
+            result["v"],
+            result["A"],
+            jnp.asarray(primitives["query"])[:, ::-1],
+            direction="forward",
+        )
+    )
+    displacement = np.linalg.norm(aligned - np.asarray(snapshot["aligned_points_rc"]), axis=1)
+    percentile = float(np.percentile(displacement, 95))
+    record_property("p95_displacement", percentile)
+    assert percentile < 0.1 * F.RASTER_PARAMS["dx"], (
+        f"95th-percentile point disagreement {percentile:.4f} exceeds a tenth of a grid cell"
     )
 
 

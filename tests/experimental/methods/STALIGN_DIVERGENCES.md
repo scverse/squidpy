@@ -29,6 +29,11 @@ the optimisation:
 | forward point transform | 5e-17 |
 | regulariser `LL` / `K` / `DV` | ≤ 1e-15 |
 | raster and velocity grids | identical |
+| full loop, 1 / 5 / 50 steps | ≤ 1e-10 / 1e-9 / 1e-6 on `A`, `v`, `WM`, `WA`, `WB` |
+| converged (500 steps) | final `E` within 1 %; 95th-percentile point disagreement < 0.1·`dx` |
+
+The 50-step case matters on its own: the mixture-weight E step is gated on `it >= 50`
+(`STalign.py:1233`), so a shorter run leaves that branch entirely untested.
 
 Three findings were real bugs and are **fixed** (D2, D3, R1). One is a deliberate
 approximation, now measured and budgeted (D1). The rest are places where squidpy is

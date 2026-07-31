@@ -9,6 +9,6 @@ from) :mod:`squidpy.experimental.methods`.
 
 from __future__ import annotations
 
-from squidpy.experimental.methods.align_samples._stalign import StalignResult, fit_stalign
+from squidpy.experimental.methods.align_samples._stalign import StalignResult, fit_stalign, fit_stalign_image
 
-__all__ = ["fit_stalign", "StalignResult"]
+__all__ = ["fit_stalign", "fit_stalign_image", "StalignResult"]
