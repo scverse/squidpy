@@ -286,7 +286,10 @@ addopts = [
 ]
 markers = [
   "internet: tests that require internet",
-  "reference: numerical comparison against the vendored STalign reference (slow, needs JAX_ENABLE_X64=1, scheduled runs only)",
+  """\
+  reference: numerical comparison against the vendored STalign reference (slow, needs JAX_ENABLE_X64=1, scheduled runs \
+  only)\
+  """,
   # the below markers are just there because we import from anndata.tests.helpers,
   # which means pytest sees them despite us not using them.
   "gpu: tests that require GPU",
