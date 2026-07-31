@@ -19,7 +19,8 @@
   {func}`squidpy.experimental.tl.align` as `by="landmarks"`. `on` becomes `by`, gaining a
   `"landmarks"` value alongside `"obs"` and `"images"`; `in_` then names the correspondences and
   `apply_to` names what moves. Writing to `out="cs/<name>"` registers the fitted affine on a whole
-  SpatialData coordinate system instead of materialising anything.
+  SpatialData coordinate system instead of materialising anything; because that moves every element
+  registered there, it refuses when the reference shares the query's coordinate system.
 - **Breaking (experimental):** the `align_samples`, `align_images` and `align_landmarks` registries
   collapse into a single `ALIGN` registry of `AlignMethod` records, each declaring which modalities
   it implements. Asking for one a method does not support now fails immediately and says what it

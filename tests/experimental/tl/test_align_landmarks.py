@@ -126,7 +126,7 @@ def test_registers_a_transformation_on_the_coordinate_system() -> None:
     from spatialdata.transformations import Identity, get_transformation
 
     sdata = sd.SpatialData(
-        shapes={"lm_ref": _shapes(_REF, "query_cs"), "lm_query": _shapes(_QUERY, "query_cs")},
+        shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")},
         points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Identity()})},
     )
     out = align(sdata, in_=("shapes/lm_ref", "shapes/lm_query"), by="landmarks", method="affine", out="cs/ref_cs")
@@ -141,7 +141,7 @@ def test_registering_copy_leaves_original_untouched() -> None:
     from spatialdata.transformations import Identity, get_transformation
 
     sdata = sd.SpatialData(
-        shapes={"lm_ref": _shapes(_REF, "query_cs"), "lm_query": _shapes(_QUERY, "query_cs")},
+        shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")},
         points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Identity()})},
     )
     out = align(
@@ -166,7 +166,7 @@ def test_registration_composes_with_an_existing_transform() -> None:
     offset = np.array([100.0, 200.0])
     sdata = sd.SpatialData(
         # Landmarks are expressed in `query_cs`: intrinsic coords shifted by `offset`.
-        shapes={"lm_ref": _shapes(_REF, "query_cs"), "lm_query": _shapes(_QUERY + offset, "query_cs")},
+        shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY + offset, "query_cs")},
         points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Translation(offset, axes=("x", "y"))})},
     )
     align(sdata, in_=("shapes/lm_ref", "shapes/lm_query"), by="landmarks", method="affine", out="cs/ref_cs")
@@ -176,6 +176,70 @@ def test_registration_composes_with_an_existing_transform() -> None:
     )
     mapped = _QUERY @ matrix[:2, :2].T + matrix[:2, 2]
     np.testing.assert_allclose(mapped, _REF, atol=1e-6)
+
+
+def test_shared_coordinate_system_is_refused() -> None:
+    """Registering moves everything in the coordinate system -- including the reference.
+
+    With both samples in one coordinate system the write-back would drag the reference
+    along with the query and silently produce a wrong answer, so it has to refuse.
+    """
+    sdata = pytest.importorskip("spatialdata").SpatialData(
+        shapes={"lm_ref": _shapes(_REF, "global"), "lm_query": _shapes(_QUERY, "global")}
+    )
+    with pytest.raises(ValueError, match="both in coordinate system 'global'.*move the reference too"):
+        align(sdata, in_=("shapes/lm_ref", "shapes/lm_query"), by="landmarks", out="cs/aligned")
+
+
+def test_reference_in_another_object_is_fine() -> None:
+    """Only a *shared* coordinate system is a problem; two objects cannot collide."""
+    sd = pytest.importorskip("spatialdata")
+    from spatialdata.transformations import get_transformation
+
+    ref_sdata = sd.SpatialData(shapes={"lm": _shapes(_REF, "global")})
+    query_sdata = sd.SpatialData(shapes={"lm": _shapes(_QUERY, "global")})
+
+    align(ref_sdata, query_sdata, in_="shapes/lm", by="landmarks", out="cs/aligned")
+
+    assert "aligned" in get_transformation(query_sdata["lm"], get_all=True)
+    assert "aligned" not in get_transformation(ref_sdata["lm"], get_all=True)
+
+
+def test_ambiguous_coordinate_system_is_refused() -> None:
+    """Which system moves has to be unambiguous, so exactly one is required."""
+    sd = pytest.importorskip("spatialdata")
+    import geopandas
+    import shapely
+    from spatialdata.models import ShapesModel
+    from spatialdata.transformations import Identity
+
+    frame = geopandas.GeoDataFrame(geometry=[shapely.Point(*p) for p in _QUERY])
+    frame["radius"] = 1.0
+    both = ShapesModel.parse(frame, transformations={"a": Identity(), "b": Identity()})
+    sdata = sd.SpatialData(shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": both})
+
+    with pytest.raises(ValueError, match="registered to 2 coordinate systems"):
+        align(sdata, in_=("shapes/lm_ref", "shapes/lm_query"), by="landmarks", out="cs/aligned")
+
+
+def test_table_landmarks_cannot_target_a_coordinate_system() -> None:
+    """A table annotates elements; it has no coordinate system of its own to move."""
+    sd = pytest.importorskip("spatialdata")
+    from spatialdata.models import TableModel
+
+    def table(points: np.ndarray) -> AnnData:
+        adata = AnnData(np.zeros((points.shape[0], 1)))
+        adata.obsm["landmarks"] = points
+        return TableModel.parse(adata)
+
+    sdata = sd.SpatialData(tables={"r": table(_REF), "q": table(_QUERY)})
+    with pytest.raises(ValueError, match="a table has no coordinate system of its own"):
+        align(
+            sdata,
+            in_=("tables/r/obsm/landmarks", "tables/q/obsm/landmarks"),
+            by="landmarks",
+            out="cs/aligned",
+        )
 
 
 def test_diffeomorphism_cannot_be_registered() -> None:

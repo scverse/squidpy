@@ -209,7 +209,7 @@ def align(
 
     out_path = parse_path(out, name="out")
     if out_path.coordinate_system:
-        return _register_transformation(result, query_container, query_path, out_path, copy=copy)
+        return _register_transformation(result, data_ref, query_container, ref_path, query_path, out_path, copy=copy)
 
     source_path = _resolve_apply_to(apply_to, query_path, by, out_path)
     if out_path.modality != source_path.modality:
@@ -255,7 +255,9 @@ def _resolve_apply_to(
 
 def _register_transformation(
     result: AlignResult,
+    data_ref: AnnData | SpatialData,
     container: AnnData | SpatialData,
+    ref_path: DataPath,
     query_path: DataPath,
     out_path: DataPath,
     *,
@@ -270,29 +272,54 @@ def _register_transformation(
             f"deformation that SpatialData has no transformation type for -- its transformations are "
             f"affine at most. Write to an `images/<name>` or `obsm/<key>` path to materialise it instead."
         )
+
+    moving_cs = _coordinate_system_of(container, query_path, name="in_")
+    # Registering moves *everything* in `moving_cs`. If the reference sits in that same
+    # coordinate system of the same object, it would be dragged along with the query --
+    # silently producing a wrong answer rather than failing.
+    if data_ref is container and _coordinate_system_of(data_ref, ref_path, name="in_") == moving_cs:
+        raise ValueError(
+            f"The reference and query are both in coordinate system {moving_cs!r}, so registering "
+            f"the fit there would move the reference too. Put each sample in its own coordinate "
+            f"system (what napari-spatialdata does when landmarks are picked per sample), or write "
+            f"to a data path with `apply_to` to move only the query."
+        )
+
     return writeback_affine_sdata(
         result,
         container,
         output_mode="copy" if copy else "inplace",
-        moving_cs=_coordinate_system_of(container, query_path),
+        moving_cs=moving_cs,
         target_cs=out_path.element,
     )
 
 
-def _coordinate_system_of(sdata: SpatialData, path: DataPath) -> str:
-    """The coordinate system the query landmarks were annotated in.
+#: Element collections whose members carry transformations. Tables do not: they annotate
+#: elements rather than sitting in space themselves.
+_SPATIAL_COLLECTIONS = ("shapes", "points", "images", "labels")
+
+
+def _coordinate_system_of(sdata: SpatialData, path: DataPath, *, name: str) -> str:
+    """The coordinate system the element at ``path`` is annotated in.
 
     Everything registered to it moves with the fit, so it has to be unambiguous. Reading
-    it off the landmark element rather than taking it as an argument keeps the call site
-    to `in_`/`out`, and it is the same element the user picked the landmarks on.
+    it off the element rather than taking it as an argument keeps the call site to
+    ``in_``/``out``, and it is the same element the user picked the landmarks on.
     """
     from spatialdata.transformations import get_transformation
 
-    element = getattr(sdata, path.modality if path.modality != "landmarks" else "shapes")[path.element]
-    systems = sorted(get_transformation(element, get_all=True))
+    collection = path.raw.strip("/").split("/")[0]
+    if collection not in _SPATIAL_COLLECTIONS:
+        raise ValueError(
+            f'`out="cs/..."` needs `{name}={path.raw!r}` to name a spatial element, but a table has no '
+            f"coordinate system of its own. Store the landmarks as a shapes element, or write to a "
+            f"data path with `apply_to` to move only the query's coordinates."
+        )
+
+    systems = sorted(get_transformation(getattr(sdata, collection)[path.element], get_all=True))
     if len(systems) != 1:
         raise ValueError(
-            f"`in_={path.raw!r}` is registered to {len(systems)} coordinate systems ({', '.join(systems)}), "
-            f"so which one the alignment should move is ambiguous. Register the landmarks to exactly one."
+            f"`{name}={path.raw!r}` is registered to {len(systems)} coordinate systems ({', '.join(systems)}), "
+            f"so which one the alignment should move is ambiguous. Register it to exactly one."
         )
     return systems[0]
