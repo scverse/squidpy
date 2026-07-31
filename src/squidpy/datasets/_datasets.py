@@ -90,7 +90,7 @@ ImageDatasets = Literal[
 ]
 
 # SpatialData datasets (.zarr)
-SpatialDataDatasets = Literal["visium_hne_sdata",]
+SpatialDataDatasets = Literal["visium_hne_sdata", "cells"]
 
 
 # =============================================================================
@@ -154,6 +154,25 @@ def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
     """
     downloader = get_downloader()
     return downloader.download("visium_hne_sdata", folderpath)
+
+
+def cells(folderpath: Path | str | None = None) -> sd.SpatialData:
+    """
+    Download the cells dataset as a SpatialData object.
+
+    Parameters
+    ----------
+    folderpath
+        A folder path where the dataset will be downloaded and extracted.
+        If `None`, uses :attr:`scanpy.settings.datasetdir`.
+
+    Returns
+    -------
+    :class:`spatialdata.SpatialData`
+        The downloaded and extracted cells dataset.
+    """
+    downloader = get_downloader()
+    return downloader.download("cells", folderpath)
 
 
 # =============================================================================

@@ -17,7 +17,6 @@ from pandas import CategoricalDtype
 from scanpy import logging as logg
 from spatialdata import SpatialData
 
-from squidpy._backends import backend_dispatch
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -25,9 +24,9 @@ from squidpy._utils import (
     NDArrayA,
     Signal,
     SigQueue,
-    _deprecate_backend_as_parallel_backend,
     _get_n_cores,
     parallelize,
+    spawn_generators,
 )
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
@@ -35,6 +34,7 @@ from squidpy.gr._utils import (
     _assert_connectivity_key,
     _save_data,
     _shuffle_group,
+    extract_adata_if_sdata,
 )
 
 __all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
@@ -142,8 +142,6 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, 
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
 @d.dedent
-@_deprecate_backend_as_parallel_backend
-@backend_dispatch
 def nhood_enrichment(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -154,15 +152,20 @@ def nhood_enrichment(
     seed: int | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
-    parallel_backend: str = "loky",
+    backend: str = "loky",
     show_progress_bar: bool = True,
+    *,
+    table_key: str | None = None,
 ) -> NhoodEnrichmentResult | None:
     """
     Compute neighborhood enrichment by permutation test.
 
+    %(seed_versionchanged)s
+
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(cluster_key)s
     %(library_key)s
     %(conn_key)s
@@ -171,8 +174,6 @@ def nhood_enrichment(
     %(seed)s
     %(copy)s
     %(parallelize)s
-    parallel_backend
-        Which joblib backend to use for parallel neighborhood enrichment.
 
     Returns
     -------
@@ -183,8 +184,7 @@ def nhood_enrichment(
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - the enrichment z-score.
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
     """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -209,13 +209,14 @@ def nhood_enrichment(
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
+    generators = spawn_generators(seed, n_perms)
 
     perms = parallelize(
         _nhood_enrichment_helper,
         collection=np.arange(n_perms).tolist(),
         extractor=np.vstack,
         n_jobs=n_jobs,
-        backend=parallel_backend,
+        backend=backend,
         show_progress_bar=show_progress_bar,
     )(
         callback=_test,
@@ -224,7 +225,7 @@ def nhood_enrichment(
         int_clust=int_clust,
         libraries=libraries,
         n_cls=n_cls,
-        seed=seed,
+        generators=generators,
     )
     zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
@@ -242,8 +243,6 @@ def nhood_enrichment(
 
 @d.dedent
 @inject_docs(c=Centrality)
-@_deprecate_backend_as_parallel_backend
-@backend_dispatch
 def centrality_scores(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -251,8 +250,10 @@ def centrality_scores(
     connectivity_key: str | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
-    parallel_backend: str = "loky",
+    backend: str = "loky",
     show_progress_bar: bool = False,
+    *,
+    table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
     Compute centrality scores per cluster or cell type.
@@ -262,6 +263,7 @@ def centrality_scores(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(cluster_key)s
     score
         Centrality measures as described in :mod:`networkx.algorithms.centrality` :cite:`networkx`.
@@ -274,8 +276,6 @@ def centrality_scores(
     %(conn_key)s
     %(copy)s
     %(parallelize)s
-    parallel_backend
-        Which joblib backend to use for parallel centrality computation.
 
     Returns
     -------
@@ -284,8 +284,7 @@ def centrality_scores(
         - :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_centrality_scores']`` - the centrality scores,
           as mentioned above.
     """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -323,7 +322,7 @@ def centrality_scores(
             collection=cat,
             extractor=pd.concat,
             n_jobs=n_jobs,
-            backend=parallel_backend,
+            backend=backend,
             show_progress_bar=show_progress_bar,
         )(clusters=clusters, fun=v, method=k)
         res_list.append(df)
@@ -342,7 +341,6 @@ def centrality_scores(
 
 
 @d.dedent
-@backend_dispatch
 def interaction_matrix(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -350,6 +348,8 @@ def interaction_matrix(
     normalized: bool = False,
     copy: bool = False,
     weights: bool = False,
+    *,
+    table_key: str | None = None,
 ) -> NDArrayA | None:
     """
     Compute interaction matrix for clusters.
@@ -357,6 +357,7 @@ def interaction_matrix(
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(cluster_key)s
     %(conn_key)s
     normalized
@@ -373,8 +374,7 @@ def interaction_matrix(
 
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_interactions']`` - the interaction matrix.
     """
-    if isinstance(adata, SpatialData):
-        adata = adata.table
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
     _assert_categorical_obs(adata, cluster_key)
     _assert_connectivity_key(adata, connectivity_key)
@@ -454,19 +454,22 @@ def _nhood_enrichment_helper(
     int_clust: NDArrayA,
     libraries: pd.Series[CategoricalDtype] | None,
     n_cls: int,
-    seed: int | None = None,
+    generators: Sequence[np.random.Generator],
     queue: SigQueue | None = None,
 ) -> NDArrayA:
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
-    int_clust = int_clust.copy()  # threading
-    rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])
+    int_clust = int_clust.copy()  # threading; used as a read-only base for each permutation
 
-    for i in range(len(ixs)):
+    for i, ix in enumerate(ixs):
+        # shuffle from the same base with a per-permutation generator, so each permutation is
+        # independent of the others and of how the permutations are split across jobs
+        rng = generators[ix]
         if libraries is not None:
-            int_clust = _shuffle_group(int_clust, libraries, rs)
+            shuffled = _shuffle_group(int_clust, libraries, rng)
         else:
-            rs.shuffle(int_clust)
-        perms[i, ...] = callback(indices, indptr, int_clust)
+            shuffled = int_clust.copy()
+            rng.shuffle(shuffled)
+        perms[i, ...] = callback(indices, indptr, shuffled)
 
         if queue is not None:
             queue.put(Signal.UPDATE)

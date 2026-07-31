@@ -63,6 +63,7 @@ We are happy about any contributions! Before you start, check out our [contribut
     installation
     api
     classes
+    extensibility
     release_notes
     references
     contributing

@@ -1,4 +1,4 @@
-"""Testing utilities for squidpy backends."""
+"""Testing utilities for Squidpy backends."""
 
 from __future__ import annotations
 

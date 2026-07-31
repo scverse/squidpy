@@ -20,9 +20,7 @@ from squidpy._validators import (
 )
 
 
-# ---------------------------------------------------------------------------
 # assert_positive
-# ---------------------------------------------------------------------------
 class TestAssertPositive:
     def test_positive_value(self):
         assert_positive(1.0, name="x")
@@ -37,9 +35,7 @@ class TestAssertPositive:
             assert_positive(-1, name="x")
 
 
-# ---------------------------------------------------------------------------
 # assert_non_negative
-# ---------------------------------------------------------------------------
 class TestAssertNonNegative:
     def test_non_negative_value(self):
         assert_non_negative(0, name="x")
@@ -50,9 +46,7 @@ class TestAssertNonNegative:
             assert_non_negative(-0.1, name="x")
 
 
-# ---------------------------------------------------------------------------
 # assert_in_range
-# ---------------------------------------------------------------------------
 class TestAssertInRange:
     def test_in_range(self):
         assert_in_range(0.5, 0, 1, name="x")
@@ -66,9 +60,7 @@ class TestAssertInRange:
             assert_in_range(-0.1, 0, 1, name="x")
 
 
-# ---------------------------------------------------------------------------
 # assert_non_empty_sequence
-# ---------------------------------------------------------------------------
 class TestAssertNonEmptySequence:
     def test_list(self):
         assert assert_non_empty_sequence(["a", "b"], name="items") == ["a", "b"]
@@ -85,9 +77,7 @@ class TestAssertNonEmptySequence:
             assert_non_empty_sequence([], name="items")
 
 
-# ---------------------------------------------------------------------------
 # get_valid_values
-# ---------------------------------------------------------------------------
 class TestGetValidValues:
     def test_valid(self):
         assert get_valid_values(["a", "b"], ["a", "b", "c"]) == ["a", "b"]
@@ -100,9 +90,7 @@ class TestGetValidValues:
             get_valid_values(["z"], ["a", "b"])
 
 
-# ---------------------------------------------------------------------------
 # check_tuple_needles
-# ---------------------------------------------------------------------------
 class TestCheckTupleNeedles:
     def test_valid_needles(self):
         result = check_tuple_needles([("a", "b")], ["a", "b", "c"], "Value `{}` not found.")
@@ -125,9 +113,7 @@ class TestCheckTupleNeedles:
             check_tuple_needles([42], ["a"], "msg {}")
 
 
-# ---------------------------------------------------------------------------
 # assert_isinstance
-# ---------------------------------------------------------------------------
 class TestAssertIsinstance:
     def test_correct_type(self):
         assert_isinstance("hello", str, name="x")
@@ -146,9 +132,7 @@ class TestAssertIsinstance:
             assert_isinstance(3.14, (str, int), name="x")
 
 
-# ---------------------------------------------------------------------------
 # assert_one_of
-# ---------------------------------------------------------------------------
 class TestAssertOneOf:
     def test_valid(self):
         assert_one_of("a", ["a", "b", "c"], name="x")
@@ -158,9 +142,7 @@ class TestAssertOneOf:
             assert_one_of("z", ["a", "b"], name="x")
 
 
-# ---------------------------------------------------------------------------
 # assert_key_in_adata
-# ---------------------------------------------------------------------------
 class TestAssertKeyInAdata:
     def test_key_present(self):
         adata = MagicMock()
@@ -193,9 +175,7 @@ class TestAssertKeyInAdata:
             assert_key_in_adata(adata, "X_spatial", attr="obsm")
 
 
-# ---------------------------------------------------------------------------
 # assert_key_in_sdata
-# ---------------------------------------------------------------------------
 class TestAssertKeyInSdata:
     def test_key_present(self):
         sdata = MagicMock()
@@ -221,12 +201,10 @@ class TestAssertKeyInSdata:
             assert_key_in_sdata(sdata, "missing", attr="images")
 
 
-# ---------------------------------------------------------------------------
 # assert_isinstance edge cases
-# ---------------------------------------------------------------------------
 class TestAssertIsinstanceEdgeCases:
     def test_bool_is_subclass_of_int(self):
-        """bool is a subclass of int — assert_isinstance(True, int) passes."""
+        """bool is a subclass of int - assert_isinstance(True, int) passes."""
         assert_isinstance(True, int, name="x")
 
     def test_none_type(self):

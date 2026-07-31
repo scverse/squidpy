@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import functools
 import inspect
+import os
 import warnings
 from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
 from contextlib import contextmanager
 from enum import Enum
-from multiprocessing import Manager, cpu_count
+from multiprocessing import Manager
 from queue import Queue
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Literal
@@ -18,6 +19,9 @@ import numba
 import numpy as np
 import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
+
+if TYPE_CHECKING:
+    from numba_progress import ProgressBar
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
 
@@ -43,6 +47,19 @@ except ImportError:
 from numpy.typing import NDArray
 
 NDArrayA = NDArray[Any]
+
+
+def _cpu_count() -> int:
+    """Number of CPUs available to this process.
+
+    Uses :func:`os.sched_getaffinity` to respect cgroup limits set by
+    SLURM, Docker, or ``taskset``.  Falls back to :func:`os.cpu_count`
+    on platforms where affinity queries are unavailable (e.g. macOS).
+    """
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return os.cpu_count() or 1
 
 
 class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
@@ -203,7 +220,7 @@ def parallelize(
     if n_jobs == 0:
         raise ValueError("Number of jobs cannot be `0`.")
     elif n_jobs < 0:
-        n_jobs = cpu_count() + 1 + n_jobs
+        n_jobs = _cpu_count() + 1 + n_jobs
 
     if n_split is None:
         n_split = n_jobs
@@ -226,6 +243,67 @@ def parallelize(
     pass_queue = not hasattr(callback, "py_func")  # we'd be inside a numba function
 
     return wrapper
+
+
+def spawn_generators(seed: int | None, n: int) -> list[np.random.Generator]:
+    return [np.random.default_rng(s) for s in np.random.SeedSequence(seed).spawn(n)]
+
+
+def thread_map(
+    fn: Callable[..., Any],
+    items: Sequence[Any],
+    *,
+    n_jobs: int = 1,
+    show_progress_bar: bool = False,
+    unit: str = "item",
+) -> list[Any]:
+    """Map *fn* over *items* using a thread pool with an optional progress bar.
+
+    Parameters
+    ----------
+    fn
+        Callable applied to each element of *items*.
+    items
+        Sequence of inputs passed one-by-one to *fn*.
+    n_jobs
+        Number of worker threads. ``1`` runs sequentially (no pool overhead).
+    show_progress_bar
+        Whether to display a ``numba_progress`` progress bar.
+    unit
+        Label shown next to the progress counter.
+
+    Returns
+    -------
+    list
+        Results in the same order as *items*.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    items = list(items)
+
+    def _run(pbar: ProgressBar | None) -> list[Any]:
+        def _consume(results_it: Iterable[Any]) -> list[Any]:
+            results = []
+            # ``map``/``pool.map`` yield in submission order, so results stay aligned with *items*.
+            for res in results_it:
+                results.append(res)
+                if pbar is not None:
+                    pbar.update(1)
+            return results
+
+        if n_jobs == 1:
+            return _consume(map(fn, items))
+
+        with ThreadPoolExecutor(max_workers=n_jobs) as pool:
+            return _consume(pool.map(fn, items))
+
+    if show_progress_bar:
+        from numba_progress import ProgressBar
+
+        with ProgressBar(total=len(items), unit=unit) as pbar:
+            return _run(pbar)
+
+    return _run(None)
 
 
 _JOBLIB_BACKENDS = frozenset({"dask", "loky", "multiprocessing", "ray", "sequential", "threading"})
@@ -288,7 +366,7 @@ def _get_n_cores(n_cores: int | None) -> int:
     if n_cores is None:
         return 1
     if n_cores < 0:
-        return cpu_count() + 1 + n_cores
+        return _cpu_count() + 1 + n_cores
 
     return n_cores
 

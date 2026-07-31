@@ -44,8 +44,10 @@ dynamic = [
 dependencies = [
   "aiohttp>=3.8.1",
   "anndata>=0.9",
+  "centrosome>=1.2.3",
+  "cp-measure>=0.1.19,<0.2",
   "cycler>=0.11",
-  "dask[array]>=2021.2",
+  "dask[array,distributed]>=2021.2", # distributed is the only scheduler that forks for GIL-bound featurization
   "dask-image>=0.5",
   "docrep>=0.3.1",
   "fast-array-utils",
@@ -55,6 +57,7 @@ dependencies = [
   "matplotlib-scalebar>=0.8",
   "networkx>=2.6",
   "numba>=0.56.4",
+  "numba-progress>=1.1",
   "numpy>=1.23",
   "omnipath>=1.0.7",
   "pandas>=2.1",
@@ -65,10 +68,11 @@ dependencies = [
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
-  "scverse-backends>=0.0.2,<0.1",
-  "spatialdata>=0.7.1",
-  "spatialdata-plot",
+  "scverse-backends>=0.0.3",
+  "spatialdata>=0.7.2",              # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
+  "spatialdata-plot>=0.3.3",
   "statsmodels>=0.12",
+  "threadpoolctl>=3",                # clamp BLAS/OpenMP per worker in tiled featurization
   # https://github.com/scverse/squidpy/issues/526
   "tifffile!=2022.4.22",
   "tqdm>=4.50.2",
@@ -76,13 +80,17 @@ dependencies = [
   "xarray>=2024.10",
   "zarr>=3",
 ]
-optional-dependencies.cu12 = [
-  "rapids-singlecell-cu12[rapids]",
+optional-dependencies.leiden = [
+  "leidenalg",
+  "spatialleiden>=0.4",
 ]
-optional-dependencies.cu13 = [
-  "rapids-singlecell-cu13[rapids]",
-]
-optional-dependencies.dev = [
+urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
+urls.Documentation = "https://squidpy.readthedocs.io"
+urls.Home-page = "https://github.com/scverse/squidpy"
+urls.Source = "https://github.com/scverse/squidpy"
+
+[dependency-groups]
+dev = [
   "hatch>=1.9",
   "ipykernel",
   "ipywidgets",
@@ -92,7 +100,22 @@ optional-dependencies.dev = [
   "pre-commit>=3",
   "ruff",
 ]
-optional-dependencies.docs = [
+test = [
+  "coverage[toml]>=7",
+  # Image-comparison baselines are matplotlib-version-sensitive; matplotlib 3.11.0 (released
+  # 2026-06-12) shifts scatter/alpha rendering past the RMS tolerance. Cap for tests only
+  # (the runtime dependency stays open) until the baselines are regenerated against 3.11.
+  "matplotlib<3.11",
+  "pytest>=7",
+  # Just for VS Code
+  "pytest-cov>=4",
+  "pytest-mock>=3.5",
+  "pytest-rerunfailures",
+  "pytest-timeout>=2.1",
+  "pytest-xdist>=3",
+  "scanpy[leiden]",
+]
+docs = [
   "docutils<0.22",                    # Pin to avoid sphinx-tabs KeyError with backrefs
   "ipython",
   "ipywidgets>=8",
@@ -108,24 +131,6 @@ optional-dependencies.docs = [
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
 ]
-optional-dependencies.leiden = [
-  "leidenalg",
-  "spatialleiden>=0.4",
-]
-optional-dependencies.test = [
-  "coverage[toml]>=7",
-  "pytest>=7",
-  # Just for VS Code
-  "pytest-cov>=4",
-  "pytest-mock>=3.5",
-  "pytest-timeout>=2.1",
-  "pytest-xdist>=3",
-  "scanpy[leiden]",
-]
-urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
-urls.Documentation = "https://squidpy.readthedocs.io"
-urls.Home-page = "https://github.com/scverse/squidpy"
-urls.Source = "https://github.com/scverse/squidpy"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -152,13 +157,13 @@ tasks.pre-commit = "pre-commit run"
 tasks.pre-commit-install = "pre-commit install"
 tasks.test = "pytest -v --color=yes --tb=short --durations=10"
 feature.py312.dependencies.python = "3.12.*"
-feature.py313.dependencies.python = "3.13.*"
-environments.default = { features = [ "py313" ], solve-group = "py313" }
+feature.py314.dependencies.python = "3.14.*"
+environments.default = { features = [ "py314" ], solve-group = "py314" }
 environments.dev-py312 = { features = [ "dev", "test", "py312" ], solve-group = "py312" }
-environments.dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
+environments.dev-py314 = { features = [ "dev", "test", "py314" ], solve-group = "py314" }
 environments.docs-py312 = { features = [ "docs", "py312" ], solve-group = "py312" }
-environments.docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
-environments.test-py313 = { features = [ "test", "py313" ], solve-group = "py313" }
+environments.docs-py314 = { features = [ "docs", "py314" ], solve-group = "py314" }
+environments.test-py314 = { features = [ "test", "py314" ], solve-group = "py314" }
 
 [tool.ruff]
 line-length = 120
@@ -205,6 +210,15 @@ lint.ignore = [
   "E731",
   # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
   "E741",
+  # PEP 695 generics (`class C[T]` / `def f[T]`) -> deferred to a dedicated rewrite.
+  # `GraphMatrixT`/`CoordT` are a shared TypeVar pair: defined in `gr.neighbors`, used by a
+  # module-level `Callable` alias, imported by `gr._build`, and re-exported from the public
+  # `squidpy.gr` API. ruff cannot autofix the cross-module use (`SpatialNeighborsResult`, which
+  # imports the TypeVar) and its fix for the local use (`GraphBuilder`) leaves the still-required
+  # exported TypeVars in place, creating dual same-name definitions. Converting correctly means
+  # deciding whether to keep exporting `GraphMatrixT` -- a public-API change, not a version bump.
+  "UP046",
+  "UP047",
   ## Flake8 rules not supported by ruff:
   # RST201 Block quote ends without a blank line; unexpected unindent.
   # "RST201",
@@ -266,7 +280,10 @@ addopts = [
 ]
 markers = [
   "internet: tests that require internet",
+  # the below markers are just there because we import from anndata.tests.helpers,
+  # which means pytest sees them despite us not using them.
   "gpu: tests that require GPU",
+  "array_api: tests that require array-api-compat",
 ]
 
 [tool.coverage]

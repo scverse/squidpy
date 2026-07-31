@@ -17,7 +17,7 @@ datasets:
     doc_header: "Pre-processed subset 4i dataset from `Gut et al <https://doi.org/10.1126/science.aar7042>`__."
     files:
       - name: four_i.h5ad
-        s3_key: figshare/four_i.h5ad
+        s3_key: four_i.h5ad
         sha256: 894e54af155c8ce94bbeeac1056431de9cc0e86460e49cd38ca1a5f952e32124
 
   imc:
@@ -26,7 +26,7 @@ datasets:
     doc_header: "Pre-processed subset IMC dataset from `Jackson et al <https://www.nature.com/articles/s41586-019-1876-x>`__."
     files:
       - name: imc.h5ad
-        s3_key: figshare/imc.h5ad
+        s3_key: imc.h5ad
         sha256: 950c44c785ea86c4262140b0229e0b4f77110a765c3b6874cdb5e0e52973c6fe
 
   seqfish:
@@ -35,7 +35,7 @@ datasets:
     doc_header: "Pre-processed subset seqFISH dataset from `Lohoff et al <https://www.biorxiv.org/content/10.1101/2020.11.20.391896v1>`__."
     files:
       - name: seqfish.h5ad
-        s3_key: figshare/seqfish.h5ad
+        s3_key: seqfish.h5ad
         sha256: 7e544c0ede7538067537da69c52748ad01522ef7fc8691e077fd73c9434019f7
 
   visium_hne_adata:
@@ -44,7 +44,7 @@ datasets:
     doc_header: "Pre-processed `10x Genomics Visium H&E dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`__."
     files:
       - name: visium_hne_adata.h5ad
-        s3_key: figshare/visium_hne_adata.h5ad
+        s3_key: visium_hne_adata.h5ad
         sha256: 3571e6b84dd32c73ece8ae0bebbd4758e77c6fdd321b2bbe0d4ffa8ed56e1cbe
 
   visium_fluo_adata:
@@ -53,7 +53,7 @@ datasets:
     doc_header: "Pre-processed `10x Genomics Visium Fluorescent dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2>`__."
     files:
       - name: visium_fluo_adata.h5ad
-        s3_key: figshare/visium_fluo_adata.h5ad
+        s3_key: visium_fluo_adata.h5ad
         sha256: 8f92e2a03a669f939a80ba7299678377d43847983f9e0f9846c4462f7c02bdd6
 
   visium_hne_adata_crop:
@@ -62,7 +62,7 @@ datasets:
     doc_header: "Pre-processed subset `10x Genomics Visium H&E dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain>`__."
     files:
       - name: visium_hne_adata_crop.h5ad
-        s3_key: figshare/visium_hne_adata_crop.h5ad
+        s3_key: visium_hne_adata_crop.h5ad
         sha256: 9c9b277bde9f34a022df7f3e35b35ce7ecc80f006d6640b0786f4ace6f6eb5dd
 
   visium_fluo_adata_crop:
@@ -71,7 +71,7 @@ datasets:
     doc_header: "Pre-processed subset `10x Genomics Visium Fluorescent dataset <https://support.10xgenomics.com/spatial-gene-expression/datasets/1.1.0/V1_Adult_Mouse_Brain_Coronal_Section_2>`__."
     files:
       - name: visium_fluo_adata_crop.h5ad
-        s3_key: figshare/visium_fluo_adata_crop.h5ad
+        s3_key: visium_fluo_adata_crop.h5ad
         sha256: ea8776c281a364e8c30a8de55a17479aa6d3c9eb90fe756c55f02ffd79e053ec
 
   sc_mouse_cortex:
@@ -80,7 +80,7 @@ datasets:
     doc_header: "Pre-processed `scRNA-seq mouse cortex <https://doi.org/10.1038/s41586-018-0654-5>`__."
     files:
       - name: sc_mouse_cortex.h5ad
-        s3_key: figshare/sc_mouse_cortex.h5ad
+        s3_key: sc_mouse_cortex.h5ad
         sha256: 3e0a26e1af06c1ea8f53a808ee683bf950de8cc03ee48bd291f95eeca6056aac
 
   mibitof:
@@ -89,7 +89,7 @@ datasets:
     doc_header: "Pre-processed MIBI-TOF dataset from `Hartmann et al <https://doi.org/10.1101/2020.01.17.909796>`__."
     files:
       - name: mibitof.h5ad
-        s3_key: figshare/mibitof.h5ad
+        s3_key: mibitof.h5ad
         sha256: 3f125c51695d78ed1c36d5485dc390ab400154d021f0c7715b89f8ee83978690
 
   merfish:
@@ -98,7 +98,7 @@ datasets:
     doc_header: "Pre-processed MERFISH dataset from `Moffitt et al <https://doi.org/10.1126/science.aau5324>`__."
     files:
       - name: merfish.h5ad
-        s3_key: figshare/merfish.h5ad
+        s3_key: merfish.h5ad
         sha256: 371723d48413ba76aba49ccf7ea24867b1db940529216fe2902484f5c2a48904
 
   slideseqv2:
@@ -107,7 +107,7 @@ datasets:
     doc_header: "Pre-processed SlideseqV2 dataset from `Stickles et al <https://doi.org/10.1038/s41587-020-0739-1>`__."
     files:
       - name: slideseqv2.h5ad
-        s3_key: figshare/slideseqv2.h5ad
+        s3_key: slideseqv2.h5ad
         sha256: 224a0f2b3d4f6c0ac1583c93bb6bfa910a986df82302c4a927d61883b8b63d8b
 
   # ===========================================================================
@@ -120,7 +120,7 @@ datasets:
     doc_header: Cropped Fluorescent image from 10x Genomics Visium dataset.
     files:
       - name: visium_fluo_image_crop.tiff
-        s3_key: figshare/visium_fluo_image_crop.tiff
+        s3_key: visium_fluo_image_crop.tiff
         sha256: 2929fdd06e32fa25b38493e67f301fc5b22b1a32bfbe48ab7237d8d85fe8982d
 
   visium_hne_image_crop:
@@ -130,7 +130,7 @@ datasets:
     doc_header: Cropped H&E image from 10x Genomics Visium dataset.
     files:
       - name: visium_hne_image_crop.tiff
-        s3_key: figshare/visium_hne_image_crop.tiff
+        s3_key: visium_hne_image_crop.tiff
         sha256: 56d379d96da859ea963c4349bbc8de07da9b68ce133839ebef5fe1b033c9e7bb
 
   visium_hne_image:
@@ -140,7 +140,7 @@ datasets:
     doc_header: H&E image from 10x Genomics Visium dataset.
     files:
       - name: visium_hne_image.tiff
-        s3_key: figshare/visium_hne_image.tiff
+        s3_key: visium_hne_image.tiff
         sha256: 39d0a85a7cecb0bde9ad2566260d571bb49834d26fc443cb32b96475f30668b2
 
   # ===========================================================================
@@ -151,8 +151,16 @@ datasets:
     doc_header: Visium H&E dataset as SpatialData object.
     files:
       - name: visium_hne_sdata.zip
-        s3_key: figshare/visium_hne_sdata.zip
+        s3_key: visium_hne_sdata.zip
         sha256: 6f88b1624d072a362cb2b40a12f86b7649d3d2f2cc762dd6be23a078ac3093b6
+
+  cells:
+    type: spatialdata
+    doc_header: Cells dataset as SpatialData object.
+    files:
+      - name: cells.zip
+        s3_key: cells.zip
+        sha256: null
 
   # ===========================================================================
   # 10x Genomics Visium datasets (3 files each)

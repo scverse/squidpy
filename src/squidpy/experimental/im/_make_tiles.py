@@ -8,14 +8,14 @@ import xarray as xr
 from dask.base import is_dask_collection
 from shapely.geometry import Polygon
 from spatialdata._logging import logger
-from spatialdata.models import Labels2DModel, ShapesModel
+from spatialdata.models import ShapesModel
 from spatialdata.models._utils import SpatialElement
 from spatialdata.transformations import get_transformation, set_transformation
 
-from squidpy._utils import _yx_from_shape
 from squidpy._validators import assert_in_range, assert_key_in_sdata, assert_positive
 from squidpy.experimental.im._utils import (
     TileGrid,
+    _choose_label_scale_for_image,
     get_element_data,
     get_mask_materialized,
     save_tile_grid_to_shapes,
@@ -97,24 +97,6 @@ def _get_largest_scale_dimensions(
     else:
         # Fallback: assume last two dimensions are spatial
         return int(img_da.shape[-2]), int(img_da.shape[-1])
-
-
-def _choose_label_scale_for_image(label_node: Labels2DModel, target_hw: tuple[int, int]) -> str:
-    """Pick the label scale closest to the target image height/width."""
-    if not hasattr(label_node, "keys"):
-        return "scale0"  # single-scale labels default to their only scale
-    target_h, target_w = target_hw
-    best = None
-    best_diff = float("inf")
-    for k in label_node.keys():
-        y, x = _yx_from_shape(label_node[k].image.shape)
-        diff = abs(y - target_h) + abs(x - target_w)
-        if diff == 0:
-            return k
-        if diff < best_diff:
-            best_diff = diff
-            best = k
-    return best or "scale0"
 
 
 def _save_tiles_to_shapes(

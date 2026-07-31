@@ -12,7 +12,7 @@ import spatialdata as sd
 from anndata.tests.helpers import assert_adata_equal
 from scanpy import settings
 
-from squidpy.datasets import visium, visium_hne_sdata
+from squidpy.datasets import cells, visium, visium_hne_sdata
 
 
 @pytest.mark.timeout(120)
@@ -64,3 +64,10 @@ def test_visium_sdata_dataset():
     assert isinstance(sdata, sd.SpatialData)
     assert list(sdata.shapes.keys()) == ["spots"]
     assert list(sdata.images.keys()) == ["hne"]
+
+
+@pytest.mark.timeout(240)
+@pytest.mark.internet()
+def test_cells_sdata_dataset():
+    sdata = cells()
+    assert isinstance(sdata, sd.SpatialData)

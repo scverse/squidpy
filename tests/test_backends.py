@@ -1,235 +1,174 @@
-"""Integration tests for squidpy's scverse-backends configuration."""
-
 from __future__ import annotations
 
-import inspect
+from copy import copy
+from importlib import metadata
+from inspect import Parameter, signature
+from typing import TYPE_CHECKING
 
+import numpy as np
 import pytest
+from anndata import AnnData
 
 import squidpy as sq
-from squidpy._backends import _dispatcher, backend_dispatch, get_backend, settings
-from squidpy.testing.backend_conformance import validate_backend
+from squidpy._backends import dispatched_functions, dispatcher
+from squidpy._backends import settings as backend_settings
+from squidpy.testing import validate_backend
+
+if TYPE_CHECKING:
+    from typing import ClassVar
 
 
 class FakeRapidsBackend:
-    name = "rapids_singlecell"
-    aliases = ["rapids-singlecell", "rsc", "cuda"]
+    name = "rapids-singlecell"
+    aliases = ("cuda", "rapids", "rapids_singlecell")
 
-    def my_func(self, x, backend_param=None):
-        """Run my_func on a backend.
-
-        Parameters
-        ----------
-        x
-            Input value.
-        backend_param
-            Backend-specific parameter.
-        """
-        return f"backend:{x}:{backend_param}"
-
-    def spatial_autocorr(self, adata, mode="moran", copy=False):
+    def spatial_autocorr(
+        self,
+        adata: AnnData,
+        *,
+        mode: str = "moran",
+        copy: bool = False,
+        fake_param: str | None = None,
+    ):
+        adata.uns["fake_backend_called"] = {"function": "spatial_autocorr", "fake_param": fake_param}
         return sq.gr.spatial_autocorr(adata, mode=mode, copy=copy, backend="cpu")
 
-    def co_occurrence(self, adata, cluster_key, copy=False):
+    def co_occurrence(self, adata: AnnData, cluster_key: str, *, copy: bool = False):
         return sq.gr.co_occurrence(adata, cluster_key=cluster_key, copy=copy, backend="cpu")
 
-    def nhood_enrichment(
-        self,
-        adata,
-        cluster_key,
-        copy=False,
-        n_jobs=None,
-        n_perms=1000,
-        seed=None,
-        show_progress_bar=True,
-    ):
-        return sq.gr.nhood_enrichment(
-            adata,
-            cluster_key=cluster_key,
-            backend="cpu",
-            copy=copy,
-            n_jobs=n_jobs,
-            n_perms=n_perms,
-            seed=seed,
-            show_progress_bar=show_progress_bar,
-        )
+
+class FakeDistribution:
+    metadata: ClassVar = {"Name": "rapids-singlecell"}
 
 
-@pytest.fixture(autouse=True)
-def _reset_backend_state():
-    registry = _dispatcher._registry
-    dispatch_impl = _dispatcher._dispatch_impl
+class FakeEntryPoint:
+    name = "rapids-singlecell"
+    value = "rapids_singlecell.backends.squidpy:SquidpyBackend"
+    dist = FakeDistribution()
 
-    old_discovered = registry._discovered
-    old_backends = registry._backends.copy()
-    old_alias_map = registry._alias_map.copy()
-    old_load_errors = registry._load_errors.copy()
-    old_registration_errors = registry._registration_errors.copy()
-    old_warned_untrusted = registry._warned_untrusted.copy()
-    old_sig_cache = dispatch_impl._sig_cache.copy()
-    old_dispatched_functions = list(dispatch_impl._dispatched_functions)
-    backend_token = settings._backend_var.set("cpu")
+    @staticmethod
+    def load():
+        """Load the fake backend entry point."""
+        return FakeRapidsBackend
 
-    registry._discovered = True
+
+@pytest.fixture
+def fake_rapids_backend(monkeypatch):
+    registry = dispatcher._registry
+    dispatch_impl = dispatcher._dispatch_impl
+    old_backend = backend_settings.backend
+    old_state = {
+        "_backends": copy(registry._backends),
+        "_alias_map": copy(registry._alias_map),
+        "_load_errors": copy(registry._load_errors),
+        "_registration_errors": copy(registry._registration_errors),
+        "_warned_untrusted": copy(registry._warned_untrusted),
+        "_discovered": registry._discovered,
+        "_sig_cache": copy(dispatch_impl._sig_cache),
+    }
+
+    backend_settings._backend_var.set("cpu")
     registry._backends.clear()
     registry._alias_map.clear()
     registry._load_errors.clear()
     registry._registration_errors.clear()
     registry._warned_untrusted.clear()
-    dispatch_impl._sig_cache.clear()
-    dispatch_impl._dispatched_functions = []
+    registry._discovered = False
+    entry_points = metadata.entry_points
+
+    def _entry_points(*args, **kwargs):
+        if kwargs.get("group") == "squidpy.backends":
+            return [FakeEntryPoint()]
+        return entry_points(*args, **kwargs)
+
+    monkeypatch.setattr("scverse_backends._registry.importlib.metadata.entry_points", _entry_points)
+    dispatcher.discover()
 
     yield
 
-    registry._discovered = old_discovered
+    backend_settings._backend_var.set(old_backend)
     registry._backends.clear()
-    registry._backends.update(old_backends)
+    registry._backends.update(old_state["_backends"])
     registry._alias_map.clear()
-    registry._alias_map.update(old_alias_map)
+    registry._alias_map.update(old_state["_alias_map"])
     registry._load_errors.clear()
-    registry._load_errors.update(old_load_errors)
+    registry._load_errors.update(old_state["_load_errors"])
     registry._registration_errors.clear()
-    registry._registration_errors.update(old_registration_errors)
+    registry._registration_errors.update(old_state["_registration_errors"])
     registry._warned_untrusted.clear()
-    registry._warned_untrusted.update(old_warned_untrusted)
+    registry._warned_untrusted.update(old_state["_warned_untrusted"])
+    registry._discovered = old_state["_discovered"]
     dispatch_impl._sig_cache.clear()
-    dispatch_impl._sig_cache.update(old_sig_cache)
-    dispatch_impl._dispatched_functions = old_dispatched_functions
-    settings._backend_var.reset(backend_token)
+    dispatch_impl._sig_cache.update(old_state["_sig_cache"])
+    dispatch_impl._update_signatures()
 
 
-def _register_fake_rsc() -> FakeRapidsBackend:
-    backend = FakeRapidsBackend()
-    registry = _dispatcher._registry
-    registry._backends[backend.name] = backend
-    registry._alias_map[backend.name] = backend.name
-    for alias in backend.aliases:
-        registry._alias_map[alias] = backend.name
-    return backend
+def _spatial_adata() -> AnnData:
+    adata = AnnData(np.arange(18, dtype=np.float32).reshape(9, 2))
+    adata.obsm["spatial"] = np.mgrid[:3, :3].reshape(2, -1).T
+    sq.gr.spatial_neighbors_knn(adata)
+    return adata
 
 
-def test_trusted_rsc_policy_uses_concrete_cuda_alias():
-    trusted = _dispatcher._registry.trusted_backends["rapids_singlecell"]
+def test_dispatched_functions_have_backend_keyword():
+    assert {func.__name__ for func in dispatched_functions} == {
+        "calculate_niche",
+        "co_occurrence",
+        "ligrec",
+        "spatial_autocorr",
+    }
+    for func in dispatched_functions:
+        backend = signature(func).parameters["backend"]
 
-    assert trusted["aliases"] == ["rapids-singlecell", "rsc", "cuda"]
-    assert "gpu" not in trusted["aliases"]
-    assert _dispatcher._registry.reserved_backends == {"gpu": "Use a concrete backend alias such as 'cuda' or 'rsc'."}
-
-
-def test_gpu_alias_is_reserved():
-    with pytest.raises(ValueError, match="Use a concrete backend alias"):
-        settings.backend = "gpu"
-
-
-def test_trusted_rsc_not_installed_has_install_hint():
-    with pytest.raises(ImportError, match="pip install rapids-singlecell"):
-        settings.backend = "rsc"
+        assert backend.kind is Parameter.KEYWORD_ONLY
+        assert backend.default is None
 
 
-def test_get_backend_resolves_registered_rsc_aliases():
-    backend = _register_fake_rsc()
+def test_settings_resolve_rapids_alias(fake_rapids_backend):
+    backend_settings.backend = "cuda"
 
-    assert get_backend("rapids_singlecell") is backend
-    assert get_backend("rapids-singlecell") is backend
-    assert get_backend("rsc") is backend
-    assert get_backend("cuda") is backend
-    assert get_backend("cpu") is None
+    assert backend_settings.backend == "rapids-singlecell"
+    assert dispatcher.get_backend("rapids") is not None
+    assert backend_settings.available_backends() == ["rapids-singlecell"]
 
 
-def test_backend_conformance_accepts_matching_backend():
-    _register_fake_rsc()
+def test_settings_context_dispatches_and_restores(fake_rapids_backend):
+    adata = _spatial_adata()
 
-    assert validate_backend("cuda") == {
-        "spatial_autocorr": "PASSED",
-        "co_occurrence": "PASSED",
-        "nhood_enrichment": "PASSED",
+    with backend_settings.use_backend("rapids"):
+        assert backend_settings.backend == "rapids-singlecell"
+        sq.gr.spatial_autocorr(adata, mode="moran", fake_param="from-backend")
+
+    assert backend_settings.backend == "cpu"
+    assert adata.uns["fake_backend_called"] == {
+        "function": "spatial_autocorr",
+        "fake_param": "from-backend",
     }
 
 
-def test_dispatch_routes_to_registered_rsc_alias():
-    _register_fake_rsc()
+def test_call_backend_overrides_settings(fake_rapids_backend):
+    adata = _spatial_adata()
 
-    @backend_dispatch
-    def my_func(x, n_jobs=None):
-        return f"cpu:{x}:{n_jobs}"
+    with backend_settings.use_backend("cuda"):
+        sq.gr.spatial_autocorr(adata, mode="moran", backend="cpu")
 
-    with settings.use_backend("cuda"):
-        assert my_func(42, backend_param="value") == "backend:42:value"
+    assert "fake_backend_called" not in adata.uns
 
 
-def test_backend_specific_params_merge_into_signature_and_docstring():
-    _register_fake_rsc()
+def test_backend_only_parameters_are_injected(fake_rapids_backend):
+    fake_param = signature(sq.gr.spatial_autocorr).parameters["fake_param"]
 
-    @backend_dispatch
-    def my_func(x, n_jobs=None):
-        """Run my_func.
-
-        Parameters
-        ----------
-        x
-            Input value.
-        n_jobs
-            Host-only parameter.
-
-        Returns
-        -------
-        Result.
-        """
-        return f"cpu:{x}:{n_jobs}"
-
-    _dispatcher._dispatch_impl._update_signatures()
-
-    sig = inspect.signature(my_func)
-    assert list(sig.parameters) == ["x", "n_jobs", "backend_param", "backend"]
-    doc = my_func.__doc__
-    assert "backend_param (rapids_singlecell)" in doc
-    assert "Other Parameters" in doc
-    assert "Backend selector injected by ``scverse-backends``" in doc
+    assert fake_param.kind is Parameter.KEYWORD_ONLY
+    assert fake_param.default is None
 
 
-def test_untrusted_backend_cannot_claim_reserved_gpu_alias():
-    class BadBackend:
-        name = "bad_backend"
-        aliases = ["gpu"]
-
-    with pytest.warns(UserWarning, match="reserved by squidpy"):
-        _dispatcher._registry._register_backend(BadBackend(), entrypoint_name="bad_backend")
-
-    assert get_backend("bad_backend").name == "bad_backend"
-    assert get_backend("gpu") is None
-    with pytest.raises(ValueError, match="Use a concrete backend alias"):
-        settings.backend = "gpu"
+def test_backend_conformance_harness(fake_rapids_backend):
+    assert validate_backend("cuda") == {
+        "spatial_autocorr": "PASSED",
+        "co_occurrence": "PASSED",
+    }
 
 
-def test_backend_dispatch_surface():
-    dispatched = [
-        sq.gr.spatial_neighbors,
-        sq.gr.nhood_enrichment,
-        sq.gr.centrality_scores,
-        sq.gr.interaction_matrix,
-        sq.gr.ripley,
-        sq.gr.calculate_niche,
-        sq.gr.co_occurrence,
-        sq.gr.ligrec,
-        sq.gr.spatial_autocorr,
-        sq.gr.sepal,
-        sq.im.calculate_image_features,
-    ]
-    for func in dispatched:
-        param = inspect.signature(func).parameters["backend"]
-        assert param.kind == inspect.Parameter.KEYWORD_ONLY
-        assert param.default is None
-
-    assert "backend" not in inspect.signature(sq.gr.mask_graph).parameters
-
-    parallel_backed = [
-        sq.gr.spatial_autocorr,
-        sq.gr.nhood_enrichment,
-        sq.gr.centrality_scores,
-        sq.gr.ligrec,
-        sq.gr.sepal,
-        sq.im.calculate_image_features,
-    ]
-    for func in parallel_backed:
-        parallel_param = inspect.signature(func).parameters["parallel_backend"]
-        assert parallel_param.default == "loky"
+def test_reserved_gpu_backend_name():
+    with pytest.raises(ValueError, match="reserved by squidpy"):
+        backend_settings.backend = "gpu"

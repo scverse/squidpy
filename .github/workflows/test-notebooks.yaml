@@ -27,7 +27,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Restore data cache
         id: data-cache
