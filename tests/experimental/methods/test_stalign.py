@@ -105,6 +105,22 @@ def test_stalign_rejects_unknown_kwarg() -> None:
         fit_stalign(ref, query, not_a_real_param=1.0, **_TINY)
 
 
+def test_lddmm_accepts_zero_iterations() -> None:
+    """``niter=0`` means "evaluate the initial state and stop", not a crash.
+
+    ``energy`` and the transformed landmarks used to be bound only inside the loop, so
+    the return statement read unbound locals.
+    """
+    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
+    from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
+
+    grid = rasterize_cloud(_points_xy()[:, ::-1], dx=0.5, blur=1.0, expand=1.1)
+    result = lddmm(*grid, *grid, L=np.eye(2), T=np.zeros(2), niter=0, a=1.0, nt=1)
+
+    assert result["v"].shape[0] == 1
+    assert result["A"].shape == (3, 3)
+
+
 def test_default_dtype_is_unchanged() -> None:
     """Guards the reference suite's blast radius.
 

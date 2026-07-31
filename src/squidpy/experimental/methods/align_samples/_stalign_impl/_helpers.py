@@ -42,6 +42,18 @@ def validate_points(points: Any, *, name: str) -> JaxArray:
     return arr
 
 
+def _axis(start: float, stop: float, step: float) -> np.ndarray:
+    """``step``-spaced samples covering ``[start, stop)``, with a stable length.
+
+    ``np.arange`` on floats derives its length from the arguments by floating-point
+    division, so a ``stop`` that is itself a sum of floats can yield one more or one
+    fewer sample than intended. Taking the count first makes the length a function of
+    the interval alone.
+    """
+    count = max(int(np.ceil((stop - start) / step)), 1)
+    return start + step * np.arange(count, dtype=float)
+
+
 def rasterize(
     x: np.ndarray,
     y: np.ndarray,
@@ -52,14 +64,12 @@ def rasterize(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rasterize a point cloud into a multi-scale Gaussian density image.
 
-    Each point deposits unit mass into its nearest cell of a regular
-    ``dx``-spaced grid; every ``blur`` scale is then an isotropic Gaussian blur
-    of that histogram, so each point becomes a unit-integral Gaussian. ``blur``
-    is the kernel width in units of ``2 * dx`` (``sigma = 2 * blur`` cells).
-    Mass within ~``blur`` cells of the border leaks off-grid (``mode="constant"``).
+    Each point deposits unit mass bilinearly across its four neighbouring cells of a
+    regular ``dx``-spaced grid; every ``blur`` scale is then an isotropic Gaussian blur
+    of that histogram, so each point becomes a unit-integral Gaussian. ``blur`` sets the
+    kernel width: ``sigma = 2 * blur`` pixels, i.e. ``2 * blur * dx`` in physical units.
+    Total mass is preserved exactly, including for points near the border.
     """
-    from scipy.ndimage import gaussian_filter
-
     x = np.asarray(x, dtype=float).reshape(-1)
     y = np.asarray(y, dtype=float).reshape(-1)
     if x.shape != y.shape:
@@ -85,21 +95,58 @@ def rasterize(
     half_x = (max_x - min_x) * expand / 2.0
     half_y = (max_y - min_y) * expand / 2.0
 
-    grid_x = np.arange(center_x - half_x, center_x + half_x + dx, dx, dtype=float)
-    grid_y = np.arange(center_y - half_y, center_y + half_y + dx, dx, dtype=float)
+    grid_x = _axis(center_x - half_x, center_x + half_x, dx)
+    grid_y = _axis(center_y - half_y, center_y + half_y, dx)
     if grid_x.size < 2 or grid_y.size < 2:
         raise ValueError("Rasterized grid is too small. Increase the point spread or lower `dx`.")
 
-    # Bin each point onto its nearest grid cell (unit mass each), dropping any
-    # whose nearest cell falls outside the padded grid.
-    col = np.rint((x - grid_x[0]) / dx).astype(np.intp)
-    row = np.rint((y - grid_y[0]) / dx).astype(np.intp)
-    inside = (col >= 0) & (col < grid_x.size) & (row >= 0) & (row < grid_y.size)
-    histogram = np.zeros((grid_y.size, grid_x.size), dtype=float)
-    np.add.at(histogram, (row[inside], col[inside]), 1.0)
-
-    out = np.stack([gaussian_filter(histogram, sigma=2.0 * float(b), mode="constant") for b in blur_values])
+    histogram = _deposit(x, y, grid_x, grid_y, dx)
+    out = np.stack([_blur_conserving(histogram, sigma=2.0 * float(b)) for b in blur_values])
     return grid_x, grid_y, out
+
+
+def _deposit(x: np.ndarray, y: np.ndarray, grid_x: np.ndarray, grid_y: np.ndarray, dx: float) -> np.ndarray:
+    """Spread each point's unit mass bilinearly over its four neighbouring cells.
+
+    Snapping to the nearest cell instead would quantise every position by up to half a
+    cell before any blurring happens, which at a typical ``dx`` is comparable to the
+    features being registered. ``np.bincount`` keeps this a handful of vectorised passes
+    rather than a Python loop over points.
+    """
+    n_rows, n_cols = grid_y.size, grid_x.size
+    col_f = (x - grid_x[0]) / dx
+    row_f = (y - grid_y[0]) / dx
+    col_0 = np.floor(col_f).astype(np.intp)
+    row_0 = np.floor(row_f).astype(np.intp)
+    col_w = col_f - col_0
+    row_w = row_f - row_0
+
+    flat = np.zeros(n_rows * n_cols, dtype=float)
+    for row_offset, row_weight in ((0, 1.0 - row_w), (1, row_w)):
+        for col_offset, col_weight in ((0, 1.0 - col_w), (1, col_w)):
+            rows, cols = row_0 + row_offset, col_0 + col_offset
+            inside = (rows >= 0) & (rows < n_rows) & (cols >= 0) & (cols < n_cols)
+            flat += np.bincount(
+                rows[inside] * n_cols + cols[inside],
+                weights=(row_weight * col_weight)[inside],
+                minlength=flat.size,
+            )
+    return flat.reshape(n_rows, n_cols)
+
+
+def _blur_conserving(histogram: np.ndarray, *, sigma: float) -> np.ndarray:
+    """Gaussian blur that keeps every point's mass on the grid.
+
+    ``mode="constant"`` lets a kernel centred near the border spill off the edge, so
+    points there contribute less than one unit and the density is biased low around the
+    rim. The mass a point at cell ``c`` retains is ``sum_p K(p - c)``, which by symmetry
+    of ``K`` equals ``gaussian_filter(ones)[c]`` -- dividing by that before blurring
+    makes the total exactly the number of points, wherever they lie.
+    """
+    from scipy.ndimage import gaussian_filter
+
+    retained = gaussian_filter(np.ones_like(histogram), sigma=sigma, mode="constant")
+    return gaussian_filter(histogram / retained, sigma=sigma, mode="constant")
 
 
 def affine_from_points(

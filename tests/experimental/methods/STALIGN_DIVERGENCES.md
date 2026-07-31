@@ -2,7 +2,7 @@
 
 Where squidpy's JAX port
 (`src/squidpy/experimental/methods/align_samples/_stalign_impl/`) differs from the
-PyTorch original it was ported from, why, and what to do about it.
+PyTorch original it was ported from, why, and what was done about it.
 
 Every number below is **measured**, not estimated, by
 `tests/experimental/methods/test_stalign_reference.py` against the reference bundle in
@@ -15,132 +15,112 @@ Each row has an id. Every `xfail(strict=True)` in the test module cites its row 
 `test_divergences_doc_covers_all_xfails` asserts the citation resolves — so this file
 cannot silently rot.
 
-## Headline
+## Where it stands
 
-The **forward objective is identical**: `_lddmm_loss` reproduces upstream's `E` to a
-relative error of **0.0** (bit-for-bit, `131.057468`). So do `_interp` (4e-16),
-`_transform_grid_backward` (5e-18), the forward point transform (5e-17) and the
-regulariser `LL`/`K`/`DV` (≤1e-15). The port is faithful where it counts most.
+The port now reproduces the original **to machine precision** on everything that defines
+the optimisation:
 
-The differences are concentrated in three places: the **gradient** of the objective
-(D3), the **rasteriser** (D1), and **grid construction** (D2).
+| | relative error |
+| --- | --- |
+| objective `E` | **0.0** (bit-for-bit, `131.057468`) |
+| `dE/dL`, `dE/dT`, `dE/dv` | **≤ 6e-15** |
+| `_interp` | 4e-16 |
+| `_transform_grid_backward` | 5e-18 |
+| forward point transform | 5e-17 |
+| regulariser `LL` / `K` / `DV` | ≤ 1e-15 |
+| raster and velocity grids | identical |
+
+Three findings were real bugs and are **fixed** (D2, D3, R1). One is a deliberate
+approximation, now measured and budgeted (D1). The rest are places where squidpy is
+deliberately *not* bug-compatible with upstream (D4, D5, D6, D7, D9) — those stay, pinned.
 
 ## Ledger
 
-| id | What | Upstream | squidpy | Measured | Verdict |
+| id | What | Upstream | squidpy | Measured | Status |
 | --- | --- | --- | --- | --- | --- |
-| **D1** | Rasterisation algorithm | exact sub-pixel Gaussian splat per point, truncated to ±`ceil(4·max(blur))` px and renormalised over that window — `:178-201` | `np.rint` to nearest cell, then `scipy.ndimage.gaussian_filter(sigma=2·blur, mode="constant")` — [`_helpers.py:95-101`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_helpers.py#L95) | relL2 **6.20 % / 1.98 % / 5.96 %** at blur 2.0/1.0/0.5; mass **777.3 / 797.2 / 799.9** of 800 | Accept, budget it. Two fixable sub-issues — see below |
-| **D2** | Grid construction off-by-one | `np.arange(lo, hi, dx)` — `:137-138`, `:1069` | `np.arange(lo, hi + dx, dx)` — [`_helpers.py:88`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_helpers.py#L88), [`_core.py:138`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_core.py#L138) | +1 point per axis (raster 37×38 vs 36×37; velocity 23×22 vs 22×21). **Length is float-rounding dependent**: in a 9-case sweep it emitted `n+1` seven times and `n+2` twice | **Bug.** Pin now, fix in its own PR |
-| **D3** | Gradient of the contrast transform | ridge coefficients solved under `torch.no_grad()` — `:1184-1188` | differentiates through `jnp.linalg.solve` — [`_core.py:125`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_core.py#L125) | `dE/dL` **1.25e-3**, `dE/dT` **9.98e-4**, `dE/dv` **1.22e-3** relative — against ~1e-16 everywhere else | **Bug.** One-line fix, see below |
-| **D4** | Returned affine lags a step | `A = to_A(L,T)` built at the *top* of the loop and returned — `:1155`, `:1308` | built after the loop — [`_core.py:361`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_core.py#L361) | `LDDMM(n)["A"]` reflects `n-1` updates; asserted in squidpy-ports' `test_returned_affine_lags_one_step` | **squidpy is right** — upstream discards its last step. Comparisons use `squidpy(n).A ↔ upstream(n+1).A` |
-| **D5** | Padding when sampling outside the domain | `grid_sample` default `padding_mode='zeros'` for velocity *and* point warps (`:1163`, `:1167`); only the image warp uses `'border'` (`:1171`) | `map_coordinates(mode="nearest")` (≈`border`) everywhere — [`_core.py:59`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_core.py#L59) | outside the domain: **25 %** from upstream-`zeros`, **2.8e-16** from upstream-`border` | **squidpy is right.** Upstream's zeros make a point that drifts off the velocity grid snap to *no* displacement — a discontinuity. Latent at `expand=2.0` |
-| **D6** | Backward point transform, time order | integrates `-v[t]` for `t` in `range(nt)` — forward order — `:1828-1843` | `reversed(range(nt))` — [`_core.py:81`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_core.py#L81) | outputs differ by **1.03e-6**; forward∘backward round-trip error **5.79e-7 (squidpy)** vs **9.01e-7 (upstream)** | **squidpy is right** — it is the correct explicit-Euler inverse, and upstream contradicts its own image warp (`:1163`, which *does* reverse) |
-| **D7** | Landmark affine solve | normal equations for the plain least-squares fit, with explicit `np.linalg.inv` on the Gram matrix — `:897-910` | `skimage.transform.estimate_transform("affine")`, a Hartley-normalised homogeneous solve by SVD — [`_helpers.py:125`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_helpers.py#L125) | `L` differs **6.4e-4**, `T` **7.2e-3**. Fit residual on clean landmarks: **21.7026 (squidpy)** vs **21.6984 (upstream)** — a 1.9e-4 relative difference. On near-collinear landmarks: **7.4e-13 (squidpy)** vs **5.6e+2 (upstream)** | **Different estimators, not the same one twice.** skimage minimises algebraic error, upstream geometric, so they will never agree exactly; upstream is a hair better on clean input and collapses entirely when ill-conditioned. Keep squidpy's — but see R7 |
-| **D8** | `lddmm()` cannot take a precomputed `xv`/`v` | `LDDMM` accepts both — `:1060-1064` | no such parameters | — | **No change needed.** The reference generator forces *upstream* onto squidpy's grid instead, which isolates D2 without touching squidpy's source |
-| **D9** | Division guards | none | `jnp.maximum(…, 1e-12)` in `_update_mixture_weights` — [`_core.py:179`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_core.py#L179) | inert for short runs | **squidpy is right.** Keep |
-| **D10** | On-grid interpolation kink | normalises `(c-x0)/(x[-1]-x0)`, then `grid_sample(align_corners=True)` scales by `(n-1)` | `(c-x0)/(x[1]-x0)` — [`_core.py:52`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_core.py#L52) | equal to ~1 ulp, but a sample landing exactly on a grid line can `floor()` to different neighbours | Not a defect in either. Fixtures are built off-grid on purpose and assert it |
+| **D1** | Rasterisation algorithm | exact sub-pixel Gaussian splat per point, truncated to ±`ceil(4·max(blur))` px and renormalised over that window — `:178-201` | bilinear deposit onto the grid, then one `scipy.ndimage.gaussian_filter` per scale, mass-corrected — [`_helpers.py`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_helpers.py) | relL2 **4.08 % / 0.81 % / 2.87 %** at blur 2.0/1.0/0.5; mass exact | **Accepted, budgeted.** Improved from 6.20/1.98/5.96 % — see R2 |
+| **D2** | Grid construction off-by-one | `np.arange(lo, hi, dx)` — `:137-138`, `:1069` | was `np.arange(lo, hi + dx, dx)` | was +1 sample per axis, and *length varied with rounding* — `n+1` in 7 of 9 sweep cases, `n+2` in 2 | **Fixed.** Count derived from the interval first; grids now identical to upstream |
+| **D3** | Gradient of the contrast transform | ridge coefficients solved under `torch.no_grad()` — `:1184-1188` | was differentiating through `jnp.linalg.solve` | was `dE/dL` 1.25e-3, `dE/dT` 9.98e-4, `dE/dv` 1.22e-3; now **≤ 6e-15** | **Fixed** with `jax.lax.stop_gradient`. The ridge fit is an EM **M step**; differentiating through it turned alternating minimisation into joint optimisation |
+| **D4** | Returned affine lags a step | `A = to_A(L,T)` built at the *top* of the loop and returned — `:1155`, `:1308` | built after the loop | `LDDMM(n)["A"]` reflects `n-1` updates | **squidpy is right** — upstream discards its last step. Comparisons use `squidpy(n).A ↔ upstream(n+1).A` |
+| **D5** | Padding when sampling outside the domain | `grid_sample` default `padding_mode='zeros'` for velocity *and* point warps (`:1163`, `:1167`); only the image warp uses `'border'` (`:1171`) | `map_coordinates(mode="nearest")` (≈`border`) everywhere | outside the domain: **25 %** from upstream-`zeros`, **2.8e-16** from upstream-`border` | **squidpy is right.** Upstream's zeros make a point that drifts off the velocity grid snap to *no* displacement — a discontinuity. Pinned `xfail` |
+| **D6** | Backward point transform, time order | integrates `-v[t]` for `t` in `range(nt)` — forward order — `:1828-1843` | `reversed(range(nt))` | outputs differ by **1.03e-6**; forward∘backward round-trip error **5.79e-7 (squidpy)** vs **9.01e-7 (upstream)** | **squidpy is right** — it is the correct explicit-Euler inverse, and upstream contradicts its own image warp (`:1163`, which *does* reverse). Pinned `xfail` |
+| **D7** | Landmark affine solve | normal equations for the plain least-squares fit, with explicit `np.linalg.inv` on the Gram matrix — `:897-910` | `skimage.transform.estimate_transform("affine")`, a Hartley-normalised homogeneous solve by SVD | `L` differs **6.4e-4**, `T` **7.2e-3**. Fit residual on clean landmarks: **21.7026** vs **21.6984** (1.9e-4 apart). On near-collinear landmarks: **7.4e-13** vs **5.6e+2** | **Different estimators, not the same one twice.** skimage minimises algebraic error, upstream geometric; upstream is a hair better on clean input and collapses when ill-conditioned. Keep squidpy's — see R7 |
+| **D8** | `lddmm()` cannot take a precomputed `xv`/`v` | `LDDMM` accepts both — `:1060-1064` | no such parameters | — | **No change needed.** The generator forces *upstream* onto squidpy's grid instead |
+| **D9** | Division guards | none | `jnp.maximum(…, 1e-12)` in `_update_mixture_weights` | inert for short runs | **squidpy is right.** Keep |
+| **D10** | On-grid interpolation kink | normalises `(c-x0)/(x[-1]-x0)`, then `grid_sample(align_corners=True)` scales by `(n-1)` | `(c-x0)/(x[1]-x0)` | equal to ~1 ulp, but a sample landing exactly on a grid line can `floor()` to different neighbours | Not a defect in either. Fixtures are built off-grid on purpose and assert it |
 
 ## Review — beyond the divergences
 
-These are port-quality findings, not upstream comparisons. None are blocking; all are
-cheap.
+Port-quality findings, not upstream comparisons.
 
-### R1. `lddmm(niter=0)` raises `UnboundLocalError`
+### R1. `lddmm(niter=0)` raised `UnboundLocalError` — fixed
 
-`energy` and `transformed_points` are only bound inside the loop
-([`_core.py:313`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_core.py#L313)),
-so the `return` at the end reads unbound locals:
+`energy` and `transformed_points` were bound only inside the loop, so the `return`
+read unbound locals. `niter=0` is a reasonable request (evaluate the initial affine and
+stop); both are now initialised before the loop, and
+`test_lddmm_accepts_zero_iterations` covers it.
 
-```
-UnboundLocalError: cannot access local variable 'energy' where it is not associated with a value
-```
+### R2. Rasteriser accuracy — fixed, ~2× better
 
-`niter=0` is a reasonable thing to ask for (evaluate the initial affine and nothing
-else). Either initialise both before the loop or reject `niter < 1` explicitly.
+The gap was two separable problems, dominating at opposite ends of the blur range.
+Measured, all four combinations:
 
-### R2. Two independent fixes for D1, each worth about half the gap
+| variant | blur 2.0 | blur 1.0 | blur 0.5 | mass (of 800) |
+| --- | --- | --- | --- | --- |
+| nearest-cell + leaky border (was) | 6.20 % | 1.98 % | 5.96 % | 770.3 / 795.1 / 799.5 |
+| bilinear deposit only | 6.34 % | 1.25 % | 2.88 % | leaks |
+| mass conservation only | 3.92 % | 1.72 % | 5.97 % | exact |
+| **both (now)** | **4.08 %** | **0.81 %** | **2.87 %** | **exact** |
 
-The 1–6 % rasteriser gap is *two* problems, and they dominate at opposite ends of the
-blur range:
+1. **Sub-pixel quantisation.** `np.rint` snapped every point to a cell centre before any
+   blurring — up to half a cell of positional error, comparable to the features being
+   registered. Now deposited bilinearly across the four neighbouring cells, still fully
+   vectorised (`np.bincount`, no Python loop over points).
+2. **Border mass loss.** `mode="constant"` let kernels near the edge spill off-grid, so
+   the density was biased low around the whole rim — 3 % of total mass at `blur=2.0`. The
+   mass a point at cell `c` retains is `sum_p K(p-c)`, which by symmetry of `K` equals
+   `gaussian_filter(ones)[c]`; dividing by that before blurring conserves mass exactly,
+   for one extra filter pass.
 
-1. **Sub-pixel quantisation** (`np.rint` snaps every point to a cell centre) dominates at
-   small blur. Depositing each point bilinearly across its four neighbouring cells — still
-   fully vectorised, four `np.add.at` calls, no Python loop over points — measurably
-   halves the error where the kernel is narrow:
+Note the two are not additive: bilinear deposit alone made `blur=2.0` slightly *worse*,
+because the error there was dominated by mass loss.
 
-   | blur | current | bilinear deposit |
-   | --- | --- | --- |
-   | 2.0 | 6.20 % | 6.34 % |
-   | 1.0 | 1.98 % | **1.25 %** |
-   | 0.5 | 5.96 % | **2.88 %** |
+### R3. `blur` docstring — fixed
 
-2. **Border mass loss** dominates at large blur: `mode="constant"` lets **2.8 %** of the
-   total mass leak off-grid at `blur=2.0` (777.3 of 800), where upstream renormalises
-   each point's kernel over its window and so conserves mass exactly. Renormalising by
-   `gaussian_filter(np.ones_like(histogram))` restores it for one extra filter pass.
+It said blur was "the kernel width in units of `2 * dx`", which reads as if `blur` were
+scaled by `2·dx`. The code was always correct and matches upstream exactly; the docstring
+now says σ = `2·blur` pixels = `2·blur·dx` physical.
 
-Note that (1) does not help at `blur=2.0` precisely because (2) is what is wrong there —
-which is why they are worth doing as separate changes.
+### R4. The default dtype is float32; upstream is float64 throughout — documented
 
-### R3. `blur` semantics are right; the docstring is not
-
-`_helpers.rasterize`'s docstring says blur is "the kernel width in units of `2 * dx`".
-The code is correct and matches upstream exactly (σ = `2·blur` pixels = `2·blur·dx`
-physical), but that phrasing reads as if `blur` were scaled by `2·dx`. Say "σ = `2·blur`
-pixels" and stop.
-
-### R4. The default dtype is float32; upstream is float64 throughout
-
-`jax_dtype()`
-([`_core.py:15`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_core.py#L15))
-returns `float32` unless `jax_enable_x64` is set, and nothing in squidpy ever sets it —
-so the shipped default runs a 5000-iteration gradient descent with `sigmaR=5e5` in single
-precision, while every published STalign result is double. That is worth a line in
-`fit_stalign`'s docstring at minimum. This reference suite therefore requires
+`jax_dtype()` returns `float32` unless `jax_enable_x64` is set, and nothing in squidpy
+sets it — so the shipped default runs a 5000-iteration gradient descent with
+`sigmaR=5e5` in single precision, while every published STalign result is double.
+`fit_stalign` now says so and shows how to enable x64. This suite requires
 `JAX_ENABLE_X64=1` and skips without it.
 
-### R7. `affine_from_points` silently changes the landmark estimator
+### R7. `affine_from_points` silently changes the landmark estimator — open
 
 Following on from D7: `estimate_transform("affine")` is not a drop-in for upstream's
-normal-equations fit. It minimises **algebraic** error on Hartley-normalised coordinates,
+normal-equations fit. It minimises **algebraic** error on Hartley-normalised coordinates;
 upstream minimises **geometric** residual. Every landmark-initialised alignment therefore
-starts from a measurably different affine (`L` by 6.4e-4, `T` by 7.2e-3 here), which for
-a 5000-iteration gradient descent is a different starting point, not a rounding detail.
+starts from a measurably different affine (`L` by 6.4e-4, `T` by 7.2e-3), which for a
+5000-iteration descent is a different starting point, not a rounding detail.
 
-skimage's choice is the safer one — upstream's `inv(XᵀX)` produces a residual of 5.6e+2
-where skimage gets 7.4e-13 on near-collinear landmarks — so this is not a request to
-revert. It is a request to *say so*: `affine_from_points`' docstring claims only to
-"compute an affine initialization from corresponding landmarks", which reads as if the
-choice of estimator were immaterial. If exact least-squares is wanted instead,
-`np.linalg.lstsq` on the padded design matrix gives upstream's answer without upstream's
-conditioning problem.
+skimage's choice is the safer one, so this is not a request to revert — it is a request to
+*say so* in the docstring. If exact least-squares is wanted, `np.linalg.lstsq` on the
+padded design matrix gives upstream's answer without upstream's conditioning problem.
 
-### R5. `niter=5000` runs blind
+### R5. `niter=5000` runs blind — open
 
-There is no energy trace in the return value and no convergence criterion; `lddmm`
-returns only the final scalar `E`. Users cannot tell a converged run from a diverged one
+No energy trace in the return value and no convergence criterion; `lddmm` returns only
+the final scalar `E`. Users cannot distinguish a converged run from a diverged one
 without re-running. Returning the per-iteration energies (upstream accumulates them in a
-local `Esave` and also throws them away) would cost nothing and make `niter` tunable.
+local `Esave` and throws them away too) would cost nothing and make `niter` tunable.
 
-### R6. The Python loop forgoes most of JAX's advantage
+### R6. The Python loop forgoes most of JAX's advantage — open
 
-`lddmm` calls a jitted `value_and_grad` from a Python `for` loop
-([`_core.py:312`](../../../src/squidpy/experimental/methods/align_samples/_stalign_impl/_core.py#L312)),
-paying dispatch per iteration and blocking XLA from fusing across steps. The mixture-weight
-update every 5th iteration is the only real obstacle, and it is expressible with
-`lax.cond`. Worth measuring before committing to — but at 5000 iterations the dispatch
-overhead is not negligible.
-
-## Suggested PR order
-
-1. **This PR** — tests only. Nothing under `src/` changes; every divergence above is
-   pinned with its measured number.
-2. **D3** — `jax.lax.stop_gradient` around the ridge solve in `_contrast_transform`. One
-   line, no API or shape change. Upstream's `no_grad` is not incidental: the ridge fit is
-   an EM **M-step**, and differentiating through it turns alternating minimisation into
-   joint optimisation. Deletes three `xfail`s.
-3. **R1**, **R3**, **R4** — trivial, batchable.
-4. **D2** — `lo + dx * np.arange(int(np.ceil((hi - lo) / dx)))` in both places. Changes
-   user-visible output shapes, so it needs its own PR and a changelog entry. Deletes two
-   `xfail`s.
-5. **R2** — rasteriser accuracy, with the numbers above as the acceptance criterion.
+`lddmm` calls a jitted `value_and_grad` from a Python `for` loop, paying dispatch per
+iteration and blocking XLA from fusing across steps. The mixture-weight update every 5th
+iteration is the only real obstacle and is expressible with `lax.cond`. Worth measuring
+before committing to, but at 5000 iterations the dispatch overhead is not negligible.

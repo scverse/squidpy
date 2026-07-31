@@ -113,6 +113,13 @@ def _transform_grid_backward(
 
 
 def _contrast_transform(source_image: jax.Array, target_image: jax.Array, weights: jax.Array) -> jax.Array:
+    """Weighted ridge fit mapping source intensities onto target intensities.
+
+    The coefficients are held constant with respect to the optimisation. This is an
+    expectation-maximisation M step, solved exactly at the current estimate, not a
+    quantity to descend on -- differentiating through the solve would silently turn the
+    alternating minimisation into a joint one and change the search direction.
+    """
     flat_source = source_image.reshape(source_image.shape[0], -1)
     flat_target = target_image.reshape(target_image.shape[0], -1)
     flat_weights = weights.reshape(-1)
@@ -122,21 +129,33 @@ def _contrast_transform(source_image: jax.Array, target_image: jax.Array, weight
     design_cov = weighted_design @ design.T
     target_cov = weighted_design @ flat_target.T
     regularized = design_cov + 0.1 * jnp.eye(design_cov.shape[0], dtype=design_cov.dtype)
-    coefficients = jnp.linalg.solve(regularized, target_cov)
+    coefficients = jax.lax.stop_gradient(jnp.linalg.solve(regularized, target_cov))
     return (coefficients.T @ design).reshape(target_image.shape)
+
+
+def _axis(start: float, stop: float, step: float) -> jax.Array:
+    """``step``-spaced samples covering ``[start, stop)``, with a stable length.
+
+    ``jnp.arange(start, stop, step)`` on floats derives its length from the arguments by
+    floating-point division, so a ``stop`` that is itself a sum of floats can yield one
+    more or one fewer sample than intended. Taking the count first makes the length a
+    function of the interval alone.
+    """
+    count = max(int(np.ceil((stop - start) / step)), 1)
+    return start + step * jnp.arange(count, dtype=jax_dtype())
 
 
 def _build_velocity_grid(
     x_source: tuple[jax.Array, jax.Array], *, a: float, expand: float
 ) -> tuple[jax.Array, jax.Array]:
-    minimum = jnp.array([x_source[0][0], x_source[1][0]])
-    maximum = jnp.array([x_source[0][-1], x_source[1][-1]])
+    minimum = np.array([x_source[0][0], x_source[1][0]], dtype=float)
+    maximum = np.array([x_source[0][-1], x_source[1][-1]], dtype=float)
     center = (minimum + maximum) / 2.0
     half_width = (maximum - minimum) * expand / 2.0
     step = a * 0.5
     return (
-        jnp.arange(center[0] - half_width[0], center[0] + half_width[0] + step, step),
-        jnp.arange(center[1] - half_width[1], center[1] + half_width[1] + step, step),
+        _axis(center[0] - half_width[0], center[0] + half_width[0], step),
+        _axis(center[1] - half_width[1], center[1] + half_width[1], step),
     )
 
 
@@ -308,6 +327,11 @@ def lddmm(
     estimate_muB = True
 
     loss_and_grad = jax.jit(jax.value_and_grad(_lddmm_loss, argnums=(0, 1, 2), has_aux=True))
+
+    # Bound up front so `niter=0` -- evaluate the initial state and stop -- returns a
+    # well-formed result instead of reading unbound locals off the end of the loop.
+    energy = jnp.asarray(jnp.nan, dtype=jax_dtype())
+    transformed_points = source_landmarks
 
     for iteration in range(niter):
         (energy, aux), (grad_linear, grad_translation, grad_velocity) = loss_and_grad(

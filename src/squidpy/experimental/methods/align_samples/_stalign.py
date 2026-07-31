@@ -118,6 +118,17 @@ def fit_stalign(
     A :class:`StalignResult` whose :meth:`~StalignResult.transform` maps
     ``(x, y)`` points into the reference frame; ``aligned_points`` is the fitted
     ``query`` already mapped.
+
+    Notes
+    -----
+    Runs in JAX's active float precision, which is **single** unless x64 is enabled.
+    The original STalign is double throughout, so results differ correspondingly. For
+    ``niter`` in the thousands, or a large ``sigmaR``, enable double precision before
+    importing JAX::
+
+        import jax
+
+        jax.config.update("jax_enable_x64", True)
     """
     # Import the JAX-backed solver only after the registry's requirements check
     # passes, so callers without JAX get a clean ImportError rather than a

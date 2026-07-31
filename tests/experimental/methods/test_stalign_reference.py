@@ -339,43 +339,27 @@ def measured_gradients(request, primitives, source_grid, target_grid, velocity_g
 
 
 @pytest.mark.parametrize(("component", "key"), [("L", "grad_L"), ("T", "grad_T"), ("v", "grad_v_smoothed")])
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger row D3: _contrast_transform differentiates through jnp.linalg.solve, "
-        "while upstream solves the ridge coefficients under torch.no_grad "
-        "(STalign.py:1184-1188). The ridge fit is an EM M-step; differentiating through "
-        "it turns alternating minimisation into joint optimisation. Fix is "
-        "jax.lax.stop_gradient around the solve -- when it lands, delete this xfail, "
-        "update STALIGN_DIVERGENCES.md row D3, and add a changelog entry."
-    ),
-)
 def test_gradients_match_upstream(measured_gradients, component, key, record_property):
+    """``dE/dL``, ``dE/dT`` and the smoothed ``dE/dv`` vs upstream's, at iteration 0.
+
+    Together with the energy test this pins both halves of the optimisation: the same
+    objective *and* the same search direction. See ledger row D3 -- these disagreed by
+    ~1.2e-3 until ``_contrast_transform`` stopped differentiating through the ridge solve.
+    """
     gradients, computed, suffix = measured_gradients
     error = rel(computed[component], gradients[key + suffix])
     record_property("rel_error", error)
     assert error < EXACT
 
 
-def test_gradient_gap_is_the_contrast_transform(measured_gradients, record_property):
-    """The positive form of D3: the gap is real, bounded, and where we say it is.
+def test_contrast_transform_freezes_the_ridge_coefficients(record_property):
+    """Regression guard for ledger row D3, stated without reference to upstream.
 
-    Everything else in the objective agrees to ~1e-15, so a gradient discrepancy three
-    orders of magnitude larger cannot be floating-point noise.
-    """
-    gradients, computed, suffix = measured_gradients
-    for component, key in (("L", "grad_L"), ("T", "grad_T"), ("v", "grad_v_smoothed")):
-        error = rel(computed[component], gradients[key + suffix])
-        record_property(f"rel_error_{component}", error)
-        assert 1e-5 < error < 1e-2, f"{component}: {error:.3e} is outside the recorded D3 band"
-
-
-def test_contrast_transform_leaks_gradient_through_the_solve(record_property):
-    """Isolates D3 without reference to upstream at all.
-
-    Upstream's ``no_grad`` makes the ridge coefficients a constant of the optimisation.
-    Here, freezing them changes the gradient -- which is exactly the bug, stated as a
-    property of squidpy's own code rather than as a disagreement with someone else's.
+    The ridge fit is an EM M step solved exactly at the current estimate, so its
+    coefficients must be constant with respect to the optimisation. Dropping the
+    ``stop_gradient`` would leave the *value* untouched and change only the gradient --
+    invisible to any test that checks outputs rather than derivatives, which is how this
+    survived unnoticed in the first place.
     """
     rng = np.random.default_rng(F.SEED)
     warped = jnp.asarray(rng.normal(size=(3, 12, 15)) ** 2)
@@ -385,25 +369,23 @@ def test_contrast_transform_leaks_gradient_through_the_solve(record_property):
     def live(x):
         return jnp.sum(_core._contrast_transform(x, target, weights) ** 2)
 
-    def frozen(x):
-        # _contrast_transform verbatim, with the one change upstream's no_grad makes.
+    def leaky(x):
+        # _contrast_transform verbatim, minus the stop_gradient: the bug as it was.
         flat_source = x.reshape(x.shape[0], -1)
         flat_target = target.reshape(target.shape[0], -1)
         design = jnp.concatenate((jnp.ones((1, flat_source.shape[1]), dtype=x.dtype), flat_source), axis=0)
         weighted = design * weights.reshape(-1)[None, :]
-        coefficients = jax.lax.stop_gradient(
-            jnp.linalg.solve(
-                weighted @ design.T + 0.1 * jnp.eye(design.shape[0], dtype=x.dtype),
-                weighted @ flat_target.T,
-            )
+        coefficients = jnp.linalg.solve(
+            weighted @ design.T + 0.1 * jnp.eye(design.shape[0], dtype=x.dtype),
+            weighted @ flat_target.T,
         )
         return jnp.sum((coefficients.T @ design).reshape(target.shape) ** 2)
 
-    # Same value, different gradient: the leak is entirely in the backward pass.
-    np.testing.assert_allclose(float(live(warped)), float(frozen(warped)), rtol=1e-12)
-    error = rel(jax.grad(live)(warped), jax.grad(frozen)(warped))
-    record_property("rel_error", error)
-    assert error > 1e-6
+    # Identical value, different gradient -- which is exactly why this needs its own test.
+    np.testing.assert_allclose(float(live(warped)), float(leaky(warped)), rtol=1e-12)
+    error = rel(jax.grad(live)(warped), jax.grad(leaky)(warped))
+    record_property("rel_error_vs_leaky", error)
+    assert error > 1e-6, "the ridge coefficients are being differentiated through again"
 
 
 # --------------------------------------------------------------------------------------
@@ -411,43 +393,31 @@ def test_contrast_transform_leaks_gradient_through_the_solve(record_property):
 # --------------------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger row D2: squidpy uses np.arange(lo, hi + dx, dx) where upstream uses "
-        "np.arange(lo, hi, dx), so every axis is one point longer -- and because `hi` is "
-        "a float sum, the surplus is one or two points depending on rounding. Fix is "
-        "lo + dx * np.arange(int(np.ceil((hi - lo) / dx))). Needs its own PR: it changes "
-        "user-visible output shapes."
-    ),
-)
-def test_rasterize_grid_length_matches_upstream(primitives, clouds):
+def test_rasterize_grid_matches_upstream(primitives, clouds):
+    """Ledger row D2, fixed: the raster axes are identical to upstream's."""
     grid_x, grid_y, _ = _helpers.rasterize(clouds.ref[:, 0], clouds.ref[:, 1], **F.RASTER_PARAMS)
-    assert grid_x.size == primitives["raster_ref_x"].size
-    assert grid_y.size == primitives["raster_ref_y"].size
+    np.testing.assert_allclose(grid_x, primitives["raster_ref_x"], rtol=0, atol=1e-9)
+    np.testing.assert_allclose(grid_y, primitives["raster_ref_y"], rtol=0, atol=1e-9)
 
 
-def test_rasterize_grid_agrees_where_it_overlaps(primitives, clouds):
-    """The positive half of D2: the surplus is purely trailing, the spacing is right."""
-    grid_x, grid_y, _ = _helpers.rasterize(clouds.ref[:, 0], clouds.ref[:, 1], **F.RASTER_PARAMS)
-    upstream_x, upstream_y = primitives["raster_ref_x"], primitives["raster_ref_y"]
-    np.testing.assert_allclose(grid_x[: upstream_x.size], upstream_x, rtol=0, atol=1e-9)
-    np.testing.assert_allclose(grid_y[: upstream_y.size], upstream_y, rtol=0, atol=1e-9)
-    assert grid_x.size > upstream_x.size
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ledger row D2: _build_velocity_grid has the same np.arange(lo, hi + step, step) "
-        "off-by-one as rasterize. Fixed by the same change."
-    ),
-)
-def test_velocity_grid_length_matches_upstream(primitives, source_grid):
+def test_velocity_grid_matches_upstream(primitives, source_grid):
+    """Ledger row D2, fixed: same off-by-one, same fix, in ``_build_velocity_grid``."""
     axes, _ = source_grid
     built = _core._build_velocity_grid(axes, a=F.LDDMM_PARAMS["a"], expand=F.LDDMM_PARAMS["expand"])
-    assert built[0].shape[0] == primitives["xv_upstream_0"].size
-    assert built[1].shape[0] == primitives["xv_upstream_1"].size
+    np.testing.assert_allclose(np.asarray(built[0]), primitives["xv_upstream_0"], rtol=0, atol=1e-9)
+    np.testing.assert_allclose(np.asarray(built[1]), primitives["xv_upstream_1"], rtol=0, atol=1e-9)
+
+
+@pytest.mark.parametrize("step", [30.0, 7.3, 0.017])
+def test_grid_length_is_stable_against_float_rounding(step):
+    """The other half of D2: ``np.arange(lo, hi + step, step)`` had an unstable length.
+
+    Deriving the count from the interval first makes it exact for every case; the old
+    form emitted one extra point sometimes and two others, depending on how ``hi``
+    happened to round.
+    """
+    for start, n in ((-400.4123, 33), (0.1, 41), (-1234.567, 77)):
+        assert _helpers._axis(start, start + n * step, step).size == n
 
 
 @pytest.mark.xfail(
@@ -517,29 +487,43 @@ def test_interp_outside_domain_is_border_padding(primitives, source_grid, record
 # Budgeted divergences
 # --------------------------------------------------------------------------------------
 
-#: Per-blur relative-L2 budget for the rasteriser (ledger row D1). Measured 6.20 % /
-#: 1.98 % / 5.96 % at blur 2.0 / 1.0 / 0.5; 9 % leaves headroom without going vacuous.
-RASTER_BUDGET = 0.09
-#: Upstream conserves each point's mass exactly; squidpy's mode="constant" leaks at the
-#: border. Measured worst case 777.3 of 800 = 2.8 % at blur=2.0.
-RASTER_MASS_BUDGET = 0.95
+#: Per-blur relative-L2 budget for the rasteriser (ledger row D1). squidpy bins onto a
+#: grid and convolves once; upstream splats an exact sub-pixel Gaussian per point and
+#: renormalises it over a truncated window. Measured 4.08 % / 0.81 % / 2.87 % at blur
+#: 2.0 / 1.0 / 0.5 -- 6 % leaves headroom without going vacuous.
+RASTER_BUDGET = 0.06
 
 
 def test_rasterize_stays_within_budget(primitives, clouds, record_property):
     """D1 is a deliberate speedup, so it gets a measured budget rather than equality."""
     _, _, got = _helpers.rasterize(clouds.ref[:, 0], clouds.ref[:, 1], **F.RASTER_PARAMS)
     expected = primitives["raster_ref"]
-    cropped = np.asarray(got)[:, : expected.shape[1], : expected.shape[2]]
+    got = np.asarray(got)
+    assert got.shape == expected.shape
 
     for index, blur in enumerate(F.RASTER_PARAMS["blur"]):
-        error = rel(cropped[index], expected[index])
-        mass = float(np.asarray(got)[index].sum()) / float(expected[index].sum())
-        correlation = float(np.corrcoef(cropped[index].ravel(), expected[index].ravel())[0, 1])
+        error = rel(got[index], expected[index])
+        correlation = float(np.corrcoef(got[index].ravel(), expected[index].ravel())[0, 1])
         record_property(f"rel_error_blur{blur}", error)
-        record_property(f"mass_ratio_blur{blur}", mass)
         assert error < RASTER_BUDGET, f"blur={blur}: relL2 {error:.4%} exceeds {RASTER_BUDGET:.0%}"
         assert correlation > 0.99, f"blur={blur}: correlation {correlation:.5f}"
-        assert RASTER_MASS_BUDGET < mass <= 1.0, f"blur={blur}: mass ratio {mass:.4f}"
+
+
+def test_rasterize_conserves_mass(clouds, record_property):
+    """Every point contributes exactly one unit, wherever it sits.
+
+    Upstream renormalises each point's kernel over its (possibly clipped) window, so a
+    point near the border still carries unit mass. A plain ``mode="constant"`` blur does
+    not, and used to lose 3 % of the total at the coarsest scale -- a density biased low
+    around the whole rim.
+    """
+    n_points = clouds.ref.shape[0]
+    _, _, got = _helpers.rasterize(clouds.ref[:, 0], clouds.ref[:, 1], **F.RASTER_PARAMS)
+
+    for index, blur in enumerate(F.RASTER_PARAMS["blur"]):
+        mass = float(np.asarray(got)[index].sum())
+        record_property(f"mass_blur{blur}", mass)
+        assert mass == pytest.approx(n_points, rel=1e-9), f"blur={blur}: {mass:.2f} of {n_points}"
 
 
 def _residual(linear, translation, source, target) -> float:
