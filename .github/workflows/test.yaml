@@ -155,6 +155,40 @@ jobs:
           DISPLAY: :42
         run: uvx hatch run ${{ matrix.env.name }}:run -v --color=yes -n auto
 
+      # Numerical comparison against the vendored STalign reference (scverse/squidpy#1243).
+      # Scheduled runs only: it needs float64 and is far slower than the wiring tests.
+      #
+      # Deliberately confined to one cell. jax is only installed in the -jax env, and the
+      # tolerances are calibrated on Linux -- macOS Accelerate and Linux OpenBLAS reduce in
+      # different orders, which shows up over a few hundred gradient steps.
+      #
+      # HATCH_TEST_ARGS lands after the `-m "not reference"` in hatch.toml's run script,
+      # and pytest's -m is last-wins, so this selects exactly the reference tests.
+      - name: run STalign reference comparison
+        if: >-
+          github.event_name == 'schedule'
+          && matrix.os == 'ubuntu-latest'
+          && matrix.env.name == 'hatch-test.py3.13-stable-jax'
+        env:
+          HATCH_TEST_ARGS: " -m reference"
+          JAX_ENABLE_X64: "1"
+          JAX_PLATFORMS: cpu
+          MKL_NUM_THREADS: "1"
+          OMP_NUM_THREADS: "1"
+        run: >-
+          uvx hatch run ${{ matrix.env.name }}:run -v --color=yes
+          --junitxml=stalign-reference.xml
+
+      # Every comparison records its measured relative error via record_property, so this
+      # artifact is a running log of how far the port has drifted -- including on green runs.
+      - name: Archive STalign reference measurements
+        if: always() && github.event_name == 'schedule' && matrix.env.name == 'hatch-test.py3.13-stable-jax'
+        uses: actions/upload-artifact@v4
+        with:
+          name: stalign_reference_${{ runner.os }}
+          path: ${{ github.workspace }}/stalign-reference.xml
+          if-no-files-found: ignore
+
       - name: Archive figures generated during testing
         if: always()
         uses: actions/upload-artifact@v4

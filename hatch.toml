@@ -26,8 +26,13 @@ overrides.matrix.extras.features = [
   { value = "jax", if = ["jax"] },
 ]
 # default commands (only `cov-report` is overridden)
-scripts.run = "pytest{env:HATCH_TEST_ARGS:} -p no:cov {args}"
-scripts.run-cov = "coverage run -m pytest{env:HATCH_TEST_ARGS:} -p no:cov {args}"
+#
+# The `-m "not reference"` is the actual gate on the STalign reference suite: a CLI flag
+# works on every pytest, whereas pyproject's `[tool.pytest]` table is only read by
+# pytest >= 9. HATCH_TEST_ARGS is interpolated after it and pytest's `-m` is last-wins,
+# so the scheduled job re-enables the suite with HATCH_TEST_ARGS=' -m reference'.
+scripts.run = 'pytest -m "not reference"{env:HATCH_TEST_ARGS:} -p no:cov {args}'
+scripts.run-cov = 'coverage run -m pytest -m "not reference"{env:HATCH_TEST_ARGS:} -p no:cov {args}'
 scripts.cov-combine = ["coverage combine"]
 scripts.cov-report = [
     "coverage report",
