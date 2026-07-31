@@ -26,6 +26,7 @@ jax = pytest.importorskip("jax")
 
 import jax.numpy as jnp  # noqa: E402
 
+from squidpy.experimental.methods.align_samples import StalignResult, fit_stalign_obs  # noqa: E402
 from squidpy.experimental.methods.align_samples._stalign_impl import _core, _helpers  # noqa: E402
 
 from . import _stalign_fixtures as F  # noqa: E402
@@ -111,6 +112,32 @@ def target_grid(primitives):
 def velocity_grid(primitives):
     """Upstream's own velocity grid, which ``_lddmm_loss`` accepts directly."""
     return jnp.asarray(primitives["xv_upstream_0"]), jnp.asarray(primitives["xv_upstream_1"])
+
+
+@pytest.fixture(scope="module")
+def fitted(primitives, velocity_grid):
+    """A :class:`StalignResult` carrying upstream's own fitted deformation.
+
+    Point transforms are compared through the public result object rather than the
+    internal row-col helper, so what is pinned is what callers actually reach.
+    """
+    return StalignResult(
+        affine=jnp.asarray(primitives["to_A"]),
+        velocity=jnp.asarray(primitives["velocity"]),
+        velocity_grid=velocity_grid,
+        aligned_points=jnp.zeros((0, 2)),
+    )
+
+
+def _transform_rc(result: StalignResult, points_rc, *, direction: str = "forward") -> np.ndarray:
+    """``result.transform`` on row-col points, for comparison with upstream.
+
+    The public API speaks ``(x, y)`` and the reference speaks row-col, so the flip that
+    ``transform`` performs internally is undone on both sides here. Anything the flip
+    itself got wrong would still show up -- it is applied, not bypassed.
+    """
+    got = result.transform(np.asarray(points_rc)[:, ::-1], direction=direction)
+    return np.asarray(got)[:, ::-1]
 
 
 # --------------------------------------------------------------------------------------
@@ -215,15 +242,35 @@ def test_transform_grid_backward_matches_upstream(primitives, target_grid, veloc
     assert error < EXACT
 
 
-def test_transform_points_forward_matches_upstream(primitives, velocity_grid, record_property):
-    """``direction='forward'`` vs ``STalign.transform_points_source_to_target``."""
-    got = _core.transform_points_row_col(
-        velocity_grid,
-        jnp.asarray(primitives["velocity"]),
-        jnp.asarray(primitives["to_A"]),
-        jnp.asarray(primitives["points"]),
-        direction="forward",
+def test_warp_image_uses_the_upstream_grid(primitives, source_grid, target_grid, velocity_grid, record_property):
+    """``StalignResult.warp_image`` vs sampling on *upstream's own* backward grid.
+
+    This is what ``align(by="images", out="images/...")`` materialises, and it had no
+    reference coverage: the two halves were each compared to upstream separately, but
+    nothing checked that the public method composes them the way upstream does. Feeding
+    upstream's ``grid_backward`` through the same interpolation isolates the composition.
+    """
+    source_axes, source_image = source_grid
+    target_axes, _ = target_grid
+    result = StalignResult(
+        affine=jnp.asarray(primitives["to_A"]),
+        velocity=jnp.asarray(primitives["velocity"]),
+        velocity_grid=velocity_grid,
+        aligned_points=jnp.zeros((0, 2)),
+        query_axes=source_axes,
+        ref_axes=target_axes,
     )
+    upstream_grid = jnp.asarray(np.moveaxis(np.asarray(primitives["grid_backward"]), -1, 0))
+    expected = _core._interp(source_axes, source_image, upstream_grid)
+
+    error = rel(result.warp_image(source_image), expected)
+    record_property("rel_error", error)
+    assert error < EXACT
+
+
+def test_transform_points_forward_matches_upstream(fitted, primitives, record_property):
+    """``StalignResult.transform`` vs ``STalign.transform_points_source_to_target``."""
+    got = _transform_rc(fitted, primitives["points"])
     error = rel(got, primitives["points_forward"])
     record_property("rel_error", error)
     assert error < EXACT
@@ -434,27 +481,15 @@ def test_grid_length_is_stable_against_float_rounding(step):
         "squidpy ever deliberately adopts upstream's ordering."
     ),
 )
-def test_transform_points_backward_matches_upstream(primitives, velocity_grid):
-    got = _core.transform_points_row_col(
-        velocity_grid,
-        jnp.asarray(primitives["velocity"]),
-        jnp.asarray(primitives["to_A"]),
-        jnp.asarray(primitives["points"]),
-        direction="backward",
-    )
+def test_transform_points_backward_matches_upstream(fitted, primitives):
+    got = _transform_rc(fitted, primitives["points"], direction="backward")
     assert rel(got, primitives["points_backward"]) < EXACT
 
 
-def test_backward_transform_inverts_better(primitives, velocity_grid, record_property):
+def test_backward_transform_inverts_better(fitted, primitives, record_property):
     """D6, stated usefully: squidpy's backward map is the better inverse of the forward one."""
-    points = jnp.asarray(primitives["points"])
-    roundtrip = _core.transform_points_row_col(
-        velocity_grid,
-        jnp.asarray(primitives["velocity"]),
-        jnp.asarray(primitives["to_A"]),
-        jnp.asarray(primitives["points_forward"]),
-        direction="backward",
-    )
+    points = np.asarray(primitives["points"])
+    roundtrip = _transform_rc(fitted, primitives["points_forward"], direction="backward")
     ours = rel(roundtrip, points)
     theirs = rel(primitives["points_roundtrip"], points)
     record_property("roundtrip_squidpy", ours)
@@ -546,7 +581,21 @@ def test_affine_from_points_is_equivalent_when_well_conditioned(primitives, reco
     """
     source = np.asarray(primitives["landmarks_query"])[:, ::-1]
     target = np.asarray(primitives["landmarks_ref"])[:, ::-1]
-    linear, translation = _helpers.affine_from_points(jnp.asarray(source), jnp.asarray(target))
+    # Reached through the public estimator: `niter=0` fits nothing, so the returned
+    # affine *is* the landmark initialisation. That also pins the wiring -- that
+    # `landmarks_*` actually reach the solver as its starting affine.
+    fit = fit_stalign_obs(
+        primitives["ref"],
+        primitives["query"],
+        landmarks_source=primitives["landmarks_query"],
+        landmarks_target=primitives["landmarks_ref"],
+        niter=0,
+        dx=F.RASTER_PARAMS["dx"],
+        blur=F.RASTER_PARAMS["blur"],
+        raster_expand=F.RASTER_PARAMS["expand"],
+    )
+    affine = np.asarray(fit.affine)
+    linear, translation = affine[:2, :2], affine[:2, 2]
 
     ours = _residual(linear, translation, source, target)
     theirs = _residual(primitives["lt_well_L"], primitives["lt_well_T"], source, target)
@@ -666,15 +715,13 @@ def test_converged_solution_matches_upstream(primitives, record_property):
     assert after < 0.4 * F.RASTER_PARAMS["dx"], f"reference did not converge: TRE {after:.2f}"
     assert after < before / 5.0, f"reference barely moved: TRE {before:.2f} -> {after:.2f}"
 
-    aligned = np.asarray(
-        _core.transform_points_row_col(
-            result["xv"],
-            result["v"],
-            result["A"],
-            jnp.asarray(primitives["query"])[:, ::-1],
-            direction="forward",
-        )
+    converged = StalignResult(
+        affine=result["A"],
+        velocity=result["v"],
+        velocity_grid=result["xv"],
+        aligned_points=jnp.zeros((0, 2)),
     )
+    aligned = _transform_rc(converged, np.asarray(primitives["query"])[:, ::-1])
     displacement = np.linalg.norm(aligned - np.asarray(snapshot["aligned_points_rc"]), axis=1)
     percentile = float(np.percentile(displacement, 95))
     record_property("p95_displacement", percentile)

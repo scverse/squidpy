@@ -15,6 +15,12 @@ Each row has an id. Every `xfail(strict=True)` in the test module cites its row 
 `test_divergences_doc_covers_all_xfails` asserts the citation resolves — so this file
 cannot silently rot.
 
+Comparisons go through the public API wherever one exists: point transforms via
+`StalignResult.transform`, the image warp via `StalignResult.warp_image`, the landmark
+initialisation via `fit_stalign_obs(..., niter=0)`. What stays white-box is what has no
+public route — the objective and its gradients are not observable from outside, and the
+regulariser and grids are preconditions rather than results.
+
 ## Where it stands
 
 The port now reproduces the original **to machine precision** on everything that defines
