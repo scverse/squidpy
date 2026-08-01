@@ -3,6 +3,7 @@ from __future__ import annotations
 import platform
 from collections.abc import Sequence
 from functools import partial
+from types import SimpleNamespace
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,6 +13,7 @@ import scanpy as sc
 from anndata import AnnData
 from matplotlib.colors import ListedColormap
 
+import squidpy._compat as compat
 from squidpy import pl
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_neighbors_grid, spatial_neighbors_radius
@@ -26,6 +28,66 @@ sc.set_figure_params(dpi=40, color_map="viridis")
 # 3. if the tolerance needs to be change, don't prefix the function with `test_plot_`, but with something else
 #    the comp. function can be accessed as `self.compare(<your_filename>, tolerance=<your_tolerance>)`
 #    ".png" is appended to <your_filename>, no need to set it
+
+
+def test_scanpy_plotting_legacy_layout(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = object()
+    legacy = SimpleNamespace(mpl_settings=settings)
+    monkeypatch.setattr(compat, "import_module", lambda name: legacy)
+
+    assert compat._scanpy_plotting_layout() == ("scanpy.plotting.legacy", settings, None)
+
+
+def test_scanpy_plotting_released_layout(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = object()
+
+    def import_released(name: str):
+        if name == "scanpy.plotting.legacy":
+            raise ModuleNotFoundError(name=name)
+        return SimpleNamespace(settings=settings)
+
+    monkeypatch.setattr(compat, "import_module", import_released)
+
+    assert compat._scanpy_plotting_layout() == ("scanpy.plotting", None, settings)
+
+
+def test_scanpy_plotting_layout_preserves_import_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    def import_broken(name: str):
+        raise ModuleNotFoundError(name="scanpy_dependency")
+
+    monkeypatch.setattr(compat, "import_module", import_broken)
+
+    with pytest.raises(ModuleNotFoundError) as error:
+        compat._scanpy_plotting_layout()
+    assert error.value.name == "scanpy_dependency"
+
+
+@pytest.mark.parametrize(
+    ("accessor", "legacy_name", "released_name"),
+    [
+        (compat.scanpy_frameon, "FRAMEON", "_frameon"),
+        (compat.scanpy_vector_friendly, "VECTOR_FRIENDLY", "_vector_friendly"),
+    ],
+)
+def test_scanpy_plotting_setting_compatibility(
+    monkeypatch: pytest.MonkeyPatch,
+    accessor,
+    legacy_name: str,
+    released_name: str,
+) -> None:
+    legacy_settings = SimpleNamespace(**{legacy_name: False})
+    released_settings = SimpleNamespace(**{released_name: True})
+    monkeypatch.setattr(compat, "_scanpy_mpl_settings", legacy_settings)
+    monkeypatch.setattr(compat, "_scanpy_settings", released_settings)
+
+    assert accessor() is False
+    setattr(legacy_settings, legacy_name, True)
+    assert accessor() is True
+
+    monkeypatch.setattr(compat, "_scanpy_mpl_settings", None)
+    assert accessor() is True
+    setattr(released_settings, released_name, False)
+    assert accessor() is False
 
 
 class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):

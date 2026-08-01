@@ -29,13 +29,12 @@ from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib_scalebar.scalebar import ScaleBar
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scanpy import settings as sc_settings
 from skimage.color import label2rgb
 from skimage.morphology import erosion, square
 from skimage.segmentation import find_boundaries
 from skimage.util import map_array
 
-from squidpy._compat import add_categorical_legend
+from squidpy._compat import add_categorical_legend, scanpy_frameon, scanpy_vector_friendly
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
@@ -569,7 +568,7 @@ def _plot_edges(
         ax=ax,
         **kwargs,
     )
-    edge_collection.set_rasterized(sc_settings._vector_friendly)
+    edge_collection.set_rasterized(scanpy_vector_friendly())
     ax.add_collection(edge_collection)
 
 
@@ -904,7 +903,7 @@ def _panel_grid(
 
 def _set_ax_title(fig_params: FigParams, count: int, value_to_plot: str | None = None) -> Axes:
     ax = fig_params.axs[count] if fig_params.axs is not None else fig_params.ax
-    if not (sc_settings._frameon if fig_params.frameon is None else fig_params.frameon):
+    if not (scanpy_frameon() if fig_params.frameon is None else fig_params.frameon):
         ax.axis("off")
 
     if fig_params.title is None:
@@ -959,7 +958,7 @@ def _plot_scatter(
             coords[:, 1],
             s=outline_params.bg_size,
             c=outline_params.bg_color,
-            rasterized=sc_settings._vector_friendly,
+            rasterized=scanpy_vector_friendly(),
             cmap=cmap_params.cmap,
             norm=norm,
             **kwargs,
@@ -970,7 +969,7 @@ def _plot_scatter(
             coords[:, 1],
             s=outline_params.gap_size,
             c=outline_params.gap_color,
-            rasterized=sc_settings._vector_friendly,
+            rasterized=scanpy_vector_friendly(),
             cmap=cmap_params.cmap,
             norm=norm,
             **kwargs,
@@ -981,7 +980,7 @@ def _plot_scatter(
         coords[:, 1],
         c=np.array(color_vector),
         s=size,
-        rasterized=sc_settings._vector_friendly,
+        rasterized=scanpy_vector_friendly(),
         cmap=cmap_params.cmap,
         norm=norm,
         **kwargs,
