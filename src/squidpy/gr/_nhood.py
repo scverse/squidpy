@@ -87,22 +87,35 @@ def _nenrich(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA, n_cls: i
 
 
 @njit(nogil=True, cache=True)
-def _conditional_counts(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA, n_cls: int) -> NDArrayA:
-    """Count, per cluster pair ``(a, b)``, how many cluster-``a`` cells have at least one cluster-``b`` neighbor.
+def _counts_and_conditional(
+    indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA, n_cls: int
+) -> tuple[NDArrayA, NDArrayA]:
+    """One traversal yielding both the edge counts and the COZI conditional denominator.
 
-    This is the COZI conditional denominator. Returns an ``(n_cls, n_cls)`` float array.
+    ``normalization='conditional'`` needs :func:`_nenrich`'s directed-edge counts *and*, per cluster
+    pair ``(a, b)``, how many cluster-``a`` cells have at least one cluster-``b`` neighbor. Both are
+    row-local, so a single pass produces them: the ``seen`` flags cost one bool store per edge
+    instead of a second walk over every neighbor. That matters because the ``clustering[c]`` gather
+    is a random access into a scattered array — the expensive part, and the part a second walk
+    would repeat.
+
+    Returns ``(counts, cond)`` as ``(n_cls, n_cls)`` ``uint32`` / ``float64`` arrays. The counts are
+    bit-identical to :func:`_nenrich`: the same additions happen in the same per-row order.
     """
+    out = np.zeros((n_cls, n_cls), dtype=np.uint32)
     cond = np.zeros((n_cls, n_cls), dtype=np.float64)
     seen = np.zeros(n_cls, dtype=np.bool_)
     for i in range(indptr.shape[0] - 1):
+        a = clustering[i]
         seen[:] = False
         for c in indices[indptr[i] : indptr[i + 1]]:
-            seen[clustering[c]] = True
-        a = clustering[i]
+            b = clustering[c]
+            out[a, b] += 1
+            seen[b] = True
         for b in range(n_cls):
             if seen[b]:
                 cond[a, b] += 1.0
-    return cond
+    return out, cond
 
 
 @njit(nogil=True, cache=True)
@@ -206,12 +219,11 @@ def _permutation_moments_normalized(
         shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
 
         out = np.zeros((n_cls, n_cls), dtype=np.float64)
-        for i in range(indptr.shape[0] - 1):
-            a = shuffled[i]
-            for c in indices[indptr[i] : indptr[i + 1]]:
-                out[a, shuffled[c]] += 1.0
-
         if norm_code == 1:  # total
+            for i in range(indptr.shape[0] - 1):
+                a = shuffled[i]
+                for c in indices[indptr[i] : indptr[i + 1]]:
+                    out[a, shuffled[c]] += 1.0
             for a in range(n_cls):
                 s = 0.0
                 for b in range(n_cls):
@@ -220,12 +232,12 @@ def _permutation_moments_normalized(
                     s = 1.0
                 for b in range(n_cls):
                     out[a, b] /= s
-        else:  # conditional
-            cond = _conditional_counts(indices, indptr, shuffled, n_cls)
+        else:  # conditional: one fused walk yields both the numerator and its denominator
+            cnt, cond = _counts_and_conditional(indices, indptr, shuffled, n_cls)
             for a in range(n_cls):
                 for b in range(n_cls):
                     d = cond[a, b] if cond[a, b] != 0.0 else 1.0
-                    out[a, b] /= d
+                    out[a, b] = cnt[a, b] / d
 
         local_d = np.zeros((n_cls, n_cls), dtype=np.float64)
         local_d2 = np.zeros((n_cls, n_cls), dtype=np.float64)
@@ -372,15 +384,11 @@ def nhood_enrichment(
     if n_cls <= 1:
         raise ValueError(f"Expected at least `2` clusters, found `{n_cls}`.")
 
-    count = _nenrich(indices, indptr, int_clust, n_cls)
     conditional_ratio = np.full((n_cls, n_cls), np.nan, dtype=np.float64)
 
-    if normalization == "total":
-        row_sums = count.sum(axis=1, keepdims=True)
-        row_sums[row_sums == 0] = 1
-        count_normalized = count / row_sums
-    elif normalization == "conditional":
-        cond_counts = _conditional_counts(indices, indptr, int_clust, n_cls)
+    if normalization == "conditional":
+        # one fused walk: this mode is the only one that needs the conditional denominator too
+        count, cond_counts = _counts_and_conditional(indices, indptr, int_clust, n_cls)
 
         cluster_sizes = np.bincount(int_clust, minlength=n_cls).astype(np.float64)
         nonempty = cluster_sizes > 0
@@ -390,8 +398,14 @@ def nhood_enrichment(
         safe_cond_counts[safe_cond_counts == 0] = 1.0
 
         count_normalized = count / safe_cond_counts
-    else:  # "none"
-        count_normalized = count.copy()
+    else:
+        count = _nenrich(indices, indptr, int_clust, n_cls)
+        if normalization == "total":
+            row_sums = count.sum(axis=1, keepdims=True)
+            row_sums[row_sums == 0] = 1
+            count_normalized = count / row_sums
+        else:  # "none"
+            count_normalized = count.copy()
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
