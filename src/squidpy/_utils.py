@@ -249,6 +249,22 @@ def spawn_generators(seed: int | None, n: int) -> list[np.random.Generator]:
     return [np.random.default_rng(s) for s in np.random.SeedSequence(seed).spawn(n)]
 
 
+@contextmanager
+def numba_threads(n_jobs: int | None) -> Generator[None, None, None]:
+    """Temporarily cap numba's thread pool to ``n_jobs``, restoring the previous value on exit.
+
+    ``n_jobs`` is clamped to ``[1, NUMBA_NUM_THREADS]``; ``None`` leaves the current setting untouched.
+    Use around a ``@njit(parallel=True)`` kernel so ``n_jobs`` controls the number of threads it uses.
+    """
+    previous = numba.get_num_threads()
+    if n_jobs is not None:
+        numba.set_num_threads(max(1, min(n_jobs, numba.config.NUMBA_NUM_THREADS)))
+    try:
+        yield
+    finally:
+        numba.set_num_threads(previous)
+
+
 def thread_map(
     fn: Callable[..., Any],
     items: Sequence[Any],

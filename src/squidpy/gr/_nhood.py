@@ -11,7 +11,8 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numba import njit, prange, set_num_threads
+from numba import njit, prange
+from numba.typed import List
 from numba_progress import ProgressBar
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
@@ -21,7 +22,15 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import (
+    NDArrayA,
+    Signal,
+    SigQueue,
+    _get_n_cores,
+    numba_threads,
+    parallelize,
+    spawn_generators,
+)
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -95,7 +104,7 @@ def _conditional_counts(indices: NDArrayA, indptr: NDArrayA, clustering: NDArray
     return cond
 
 
-@njit(parallel=True, nogil=True)
+@njit(parallel=True, nogil=True, cache=True)
 def _permutation_counts(
     indices: NDArrayA,
     indptr: NDArrayA,
@@ -103,21 +112,23 @@ def _permutation_counts(
     group_offsets: NDArrayA,
     group_indices: NDArrayA,
     n_cls: int,
-    n_perms: int,
-    seed: int,
     norm_code: int,
-    progress: ProgressBar,
+    generators: Any,
+    progress: Any,
 ) -> NDArrayA:
+    n_perms = len(generators)
     perms = np.empty((n_perms, n_cls, n_cls), dtype=np.float64)
     for p in prange(n_perms):
-        np.random.seed(seed + p)
+        # explicit int64 index: under prange the loop var is uint64 and indexing the typed list
+        # would otherwise trigger a (harmless) uint64->int64 NumbaTypeSafetyWarning
+        rng = generators[np.int64(p)]
         shuffled = int_clust.copy()
         for g in range(group_offsets.shape[0] - 1):
             s, e = group_offsets[g], group_offsets[g + 1]
             sub = np.empty(e - s, dtype=int_clust.dtype)
             for t in range(e - s):
                 sub[t] = int_clust[group_indices[s + t]]
-            np.random.shuffle(sub)
+            rng.shuffle(sub)
             for t in range(e - s):
                 shuffled[group_indices[s + t]] = sub[t]
 
@@ -311,12 +322,12 @@ def nhood_enrichment(
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
-
-    # Every permutation is seeded by its global index (``seed + p``), so results are reproducible
-    # and independent of the thread count. A user seed is used directly; otherwise a random base
-    # seed is drawn once so a single call is internally consistent.
     norm_code = _NORM_CODES[normalization]
-    base_seed = int(seed) if seed is not None else int(np.random.SeedSequence().generate_state(1)[0]) % 1_000_000_000
+
+    # One independent PCG64 generator per permutation, spawned from a single ``SeedSequence``, held
+    # in a numba typed list so the kernel can index it under ``prange``. Because a permutation's
+    # stream depends only on its global index, the result is independent of the thread count.
+    generators = List(spawn_generators(seed, n_perms))
 
     # Group structure for within-group shuffling, as a CSR-like (offsets, indices) pair in category
     # order with ascending indices per group (matching `_shuffle_group`). Without a `library_key`,
@@ -325,10 +336,12 @@ def nhood_enrichment(
 
     # A single numba ``prange`` kernel shuffles + counts + normalizes per thread with the GIL
     # released, and ticks the progress bar from inside the loop; numba owns the parallelism.
-    set_num_threads(n_jobs)
-    with ProgressBar(total=n_perms, unit="perm", desc="nhood_enrichment", disable=not show_progress_bar) as progress:
+    with (
+        numba_threads(n_jobs),
+        ProgressBar(total=n_perms, unit="perm", desc="nhood_enrichment", disable=not show_progress_bar) as progress,
+    ):
         perms = _permutation_counts(
-            indices, indptr, int_clust, group_offsets, group_indices, n_cls, n_perms, base_seed, norm_code, progress
+            indices, indptr, int_clust, group_offsets, group_indices, n_cls, norm_code, generators, progress
         )
 
     std = perms.std(axis=0)

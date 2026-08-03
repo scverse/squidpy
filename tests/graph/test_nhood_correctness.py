@@ -10,10 +10,10 @@ real implementation agree, the numba kernels *and* the normalization math are
 validated. They are deliberately slow and simple.
 
 They also act as the regression guard for the permutation / parallelization
-machinery. Each permutation is seeded by its global index (``seed + p``), and
-numba's ``np.random`` reproduces numpy's ``RandomState`` bit-for-bit, so
-:func:`_reference_nhood_enrichment` reproduces the exact z-score independently
-of the thread count.
+machinery. Each permutation gets its own generator spawned from a single
+:class:`numpy.random.SeedSequence`, and numba's ``Generator.shuffle`` reproduces
+numpy's bit-for-bit, so :func:`_reference_nhood_enrichment` reproduces the exact
+z-score independently of the thread count.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ import pytest
 from anndata import AnnData
 from scipy.sparse import csr_matrix
 
+from squidpy._utils import spawn_generators
 from squidpy.gr import nhood_enrichment, spatial_neighbors_grid
 from squidpy.gr._utils import _shuffle_group
 
@@ -101,22 +102,23 @@ def _reference_nhood_enrichment(
 ) -> np.ndarray:
     """Full z-score reference replicating the production per-permutation seeding scheme.
 
-    Each permutation ``p`` gets its own ``RandomState(seed + p)`` and shuffles a private copy of
-    the original labels once. Because the seed depends only on the global permutation index, the
-    result is independent of how permutations are grouped across workers (i.e. of ``n_jobs``).
-    Numba's ``np.random`` reproduces numpy's legacy ``RandomState`` bit-for-bit, so this matches
+    Permutation ``p`` uses ``spawn_generators(seed, n_perms)[p]`` and shuffles a private copy of the
+    original labels once. Because a permutation's stream depends only on its global index, the
+    result is independent of how permutations are spread across threads (i.e. of ``n_jobs``).
+    Numba's ``Generator.shuffle`` reproduces numpy's bit-for-bit, so this matches
     :func:`squidpy.gr._nhood._permutation_counts` exactly.
     """
     observed = _ref_normalize(adj, int_clust, n_cls, normalization)
 
+    generators = spawn_generators(seed, n_perms)
     perms = np.empty((n_perms, n_cls, n_cls), dtype=np.float64)
     for p in range(n_perms):
-        rs = np.random.RandomState(seed + p)
+        rng = generators[p]
         if libraries is not None:
-            shuffled = _shuffle_group(int_clust, libraries, rs)
+            shuffled = _shuffle_group(int_clust, libraries, rng)
         else:
             shuffled = int_clust.copy()
-            rs.shuffle(shuffled)
+            rng.shuffle(shuffled)
         perms[p] = _ref_normalize(adj, shuffled, n_cls, normalization)
 
     std = perms.std(axis=0)
@@ -260,8 +262,8 @@ def test_zscore_matches_reference_tiny(adata_tiny: AnnData, normalization: str, 
 def test_zscore_reference_holds_on_real_data(adata: AnnData, n_jobs: int):
     """The numpy per-index reference must reproduce z-scores on a realistic graph, for every n_jobs.
 
-    Numba's ``np.random`` matches numpy's ``RandomState`` bit-for-bit, so the kernel and this
-    reference agree exactly regardless of thread count.
+    Numba's ``Generator.shuffle`` matches numpy's bit-for-bit, so the kernel and this reference
+    agree exactly regardless of thread count.
     """
     spatial_neighbors_grid(adata)
     adj = adata.obsp["spatial_connectivities"]
