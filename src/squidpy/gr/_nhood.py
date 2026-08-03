@@ -104,8 +104,78 @@ def _conditional_counts(indices: NDArrayA, indptr: NDArrayA, clustering: NDArray
     return cond
 
 
+@njit(nogil=True, cache=True)
+def _shuffled_labels(
+    int_clust: NDArrayA,
+    group_offsets: NDArrayA,
+    group_indices: NDArrayA,
+    rng: Any,
+) -> NDArrayA:
+    """Shuffle cluster labels within each group, drawing once per group from ``rng``.
+
+    Groups are visited in category order with ascending indices, so the draw sequence — and hence
+    the result for a given generator state — matches :func:`squidpy.gr._utils._shuffle_group`.
+    """
+    shuffled = int_clust.copy()
+    for g in range(group_offsets.shape[0] - 1):
+        s, e = group_offsets[g], group_offsets[g + 1]
+        sub = np.empty(e - s, dtype=int_clust.dtype)
+        for t in range(e - s):
+            sub[t] = int_clust[group_indices[s + t]]
+        rng.shuffle(sub)
+        for t in range(e - s):
+            shuffled[group_indices[s + t]] = sub[t]
+    return shuffled
+
+
 @njit(parallel=True, nogil=True, cache=True)
-def _permutation_moments(
+def _permutation_moments_counts(
+    indices: NDArrayA,
+    indptr: NDArrayA,
+    int_clust: NDArrayA,
+    group_offsets: NDArrayA,
+    group_indices: NDArrayA,
+    n_cls: int,
+    observed: NDArrayA,
+    generators: Any,
+    progress: Any,
+) -> tuple[NDArrayA, NDArrayA]:
+    """Exact integer moments of the permutation distribution for ``normalization='none'``.
+
+    The unnormalized statistic is a directed-edge count, so every ``d = permuted - observed`` is a
+    whole number. Accumulating in :obj:`numpy.int64` makes the ``prange`` reduction exactly
+    order-independent — the result is bit-identical for any thread count by construction rather
+    than by luck — and keeps ``sum(d * d)`` exact up to ``2**63`` instead of float64's ``2**53``,
+    which a large graph can genuinely exceed.
+
+    Returns ``(sum_d, sum_d2)``; the caller turns these into the mean, std and z-score.
+    """
+    n_perms = len(generators)
+    sum_d = np.zeros((n_cls, n_cls), dtype=np.int64)
+    sum_d2 = np.zeros((n_cls, n_cls), dtype=np.int64)
+    for p in prange(n_perms):
+        # explicit int64 index: under prange the loop var is uint64 and indexing the typed list
+        # would otherwise trigger a (harmless) uint64->int64 NumbaTypeSafetyWarning
+        rng = generators[np.int64(p)]
+        shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
+        out = _nenrich(indices, indptr, shuffled, n_cls)
+
+        # per-iteration locals folded into the accumulators, so numba recognises the array reduction
+        local_d = np.zeros((n_cls, n_cls), dtype=np.int64)
+        local_d2 = np.zeros((n_cls, n_cls), dtype=np.int64)
+        for a in range(n_cls):
+            for b in range(n_cls):
+                dev = np.int64(out[a, b]) - observed[a, b]
+                local_d[a, b] = dev
+                local_d2[a, b] = dev * dev
+        sum_d += local_d
+        sum_d2 += local_d2
+        progress.update(1)
+    return sum_d, sum_d2
+
+
+@njit(parallel=True, nogil=True, cache=True)
+def _permutation_moments_normalized(
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
@@ -117,13 +187,13 @@ def _permutation_moments(
     generators: Any,
     progress: Any,
 ) -> tuple[NDArrayA, NDArrayA]:
-    """Accumulate the first two moments of the permutation distribution as ``prange`` reductions.
+    """Moments of the permutation distribution for the ``'total'`` / ``'conditional'`` modes.
 
-    Rather than materializing every permutation, this sums ``d = permuted - observed`` and ``d * d``
-    into two ``(n_cls, n_cls)`` accumulators. Shifting by ``observed`` — which sits on the same scale
-    as the null distribution — keeps the variance well conditioned; a raw sum-of-squares reduction
-    would cancel catastrophically for ``normalization='none'``, where the counts are large and their
-    spread comparatively small.
+    Normalizing divides by a row sum or a conditional denominator, so the statistic is fractional
+    and has to be accumulated in float64. Deviations are still taken against ``observed``, which
+    sits on the same scale as the null distribution: a raw sum-of-squares would cancel badly.
+    The summation order depends on the thread count, so the result matches to rounding rather than
+    bit-for-bit (measured at <= 1e-14 relative).
 
     Returns ``(sum_d, sum_d2)``; the caller turns these into the mean, std and z-score.
     """
@@ -131,18 +201,8 @@ def _permutation_moments(
     sum_d = np.zeros((n_cls, n_cls), dtype=np.float64)
     sum_d2 = np.zeros((n_cls, n_cls), dtype=np.float64)
     for p in prange(n_perms):
-        # explicit int64 index: under prange the loop var is uint64 and indexing the typed list
-        # would otherwise trigger a (harmless) uint64->int64 NumbaTypeSafetyWarning
         rng = generators[np.int64(p)]
-        shuffled = int_clust.copy()
-        for g in range(group_offsets.shape[0] - 1):
-            s, e = group_offsets[g], group_offsets[g + 1]
-            sub = np.empty(e - s, dtype=int_clust.dtype)
-            for t in range(e - s):
-                sub[t] = int_clust[group_indices[s + t]]
-            rng.shuffle(sub)
-            for t in range(e - s):
-                shuffled[group_indices[s + t]] = sub[t]
+        shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
 
         out = np.zeros((n_cls, n_cls), dtype=np.float64)
         for i in range(indptr.shape[0] - 1):
@@ -159,14 +219,13 @@ def _permutation_moments(
                     s = 1.0
                 for b in range(n_cls):
                     out[a, b] /= s
-        elif norm_code == 2:  # conditional
+        else:  # conditional
             cond = _conditional_counts(indices, indptr, shuffled, n_cls)
             for a in range(n_cls):
                 for b in range(n_cls):
                     d = cond[a, b] if cond[a, b] != 0.0 else 1.0
                     out[a, b] /= d
 
-        # per-iteration locals folded into the accumulators, so numba recognises the array reduction
         local_d = np.zeros((n_cls, n_cls), dtype=np.float64)
         local_d2 = np.zeros((n_cls, n_cls), dtype=np.float64)
         for a in range(n_cls):
@@ -355,24 +414,45 @@ def nhood_enrichment(
     # a single group spanning all cells reproduces a plain global shuffle.
     group_offsets, group_indices = _build_shuffle_groups(libraries, len(int_clust))
 
-    # explicit float64: ``count_normalized`` is uint32 for ``normalization='none'`` and float64
-    # otherwise, which would compile the kernel twice for no reason
-    observed = np.ascontiguousarray(count_normalized, dtype=np.float64)
-
     # A single numba ``prange`` kernel shuffles + counts + normalizes per thread with the GIL
     # released, and ticks the progress bar from inside the loop; numba owns the parallelism.
+    # Unnormalized counts go through the integer kernel, which is exactly order-independent.
     with (
         numba_threads(n_jobs),
         ProgressBar(total=n_perms, unit="perm", desc="nhood_enrichment", disable=not show_progress_bar) as progress,
     ):
-        sum_d, sum_d2 = _permutation_moments(
-            indices, indptr, int_clust, group_offsets, group_indices, n_cls, norm_code, observed, generators, progress
-        )
+        if norm_code == 0:
+            sum_d, sum_d2 = _permutation_moments_counts(
+                indices,
+                indptr,
+                int_clust,
+                group_offsets,
+                group_indices,
+                n_cls,
+                np.ascontiguousarray(count_normalized, dtype=np.int64),
+                generators,
+                progress,
+            )
+        else:
+            sum_d, sum_d2 = _permutation_moments_normalized(
+                indices,
+                indptr,
+                int_clust,
+                group_offsets,
+                group_indices,
+                n_cls,
+                norm_code,
+                np.ascontiguousarray(count_normalized, dtype=np.float64),
+                generators,
+                progress,
+            )
 
     # ``sum_d``/``sum_d2`` are moments of ``permuted - observed``, so the mean deviation *is* the
-    # (negated) numerator of the z-score and no permutation ever has to be kept around.
-    mean_d = sum_d / n_perms
-    var = (sum_d2 - sum_d * mean_d) / n_perms  # population variance, matching the previous ddof=0
+    # (negated) numerator of the z-score and no permutation ever has to be kept around. The int64
+    # sums are exact, so converting here is a single deterministic rounding, not an accumulated one.
+    n = float(n_perms)
+    mean_d = sum_d / n
+    var = (sum_d2 - sum_d * mean_d) / n  # population variance, matching the previous ddof=0
     std = np.sqrt(np.maximum(var, 0.0))  # clamp: rounding can push an all-equal column just below 0
     std[std == 0] = np.nan
     zscore = -mean_d / std
