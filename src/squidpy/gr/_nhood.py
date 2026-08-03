@@ -300,7 +300,7 @@ def nhood_enrichment(
     %(seed)s
     %(copy)s
     n_jobs
-        Number of :mod:`numba` threads used for the permutation loop.
+        Number of ``numba`` threads used for the permutation loop.
     %(show_progress_bar)s
     normalization
         Normalization mode to use:
