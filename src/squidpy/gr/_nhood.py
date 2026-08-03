@@ -27,6 +27,7 @@ from squidpy._utils import (
     Signal,
     SigQueue,
     _get_n_cores,
+    deprecated_params,
     numba_threads,
     parallelize,
     spawn_generators,
@@ -261,28 +262,32 @@ def _filter_clusters_by_min_cell_count(
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
 @d.dedent
+@deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
 def nhood_enrichment(
     adata: AnnData | SpatialData,
     cluster_key: str,
     library_key: str | None = None,
     connectivity_key: str | None = None,
     n_perms: int = 1000,
-    numba_parallel: bool = False,
+    *,
     seed: int | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str | None = None,
     normalization: str = "none",
     min_cell_count: int = 0,
     handle_nan: str = "keep",
     show_progress_bar: bool = True,
-    *,
     table_key: str | None = None,
 ) -> NhoodEnrichmentResult | None:
     """
     Compute neighborhood enrichment by permutation test.
 
     %(seed_versionchanged)s
+
+    .. versionchanged:: 1.10.0
+        Every parameter after ``n_perms`` is keyword-only, and ``numba_parallel`` / ``backend`` are
+        deprecated: the permutations now run in a single :func:`numba.prange` kernel whose thread
+        count is set by ``n_jobs``.
 
     Parameters
     ----------
@@ -292,12 +297,14 @@ def nhood_enrichment(
     %(library_key)s
     %(conn_key)s
     %(n_perms)s
-    %(numba_parallel)s
     %(seed)s
     %(copy)s
-    %(parallelize)s
+    n_jobs
+        Number of :mod:`numba` threads used for the permutation loop.
+    %(show_progress_bar)s
     normalization
         Normalization mode to use:
+
         - ``'none'``: No normalization of neighbor counts
         - ``'total'``: Normalize neighbor counts by total number of cells per cluster (SEA)
         - ``'conditional'``: Normalize neighbor counts by number of cells with at least one neighbor of given type (COZI)
@@ -306,6 +313,7 @@ def nhood_enrichment(
         dropped before counting (default ``0`` keeps all clusters).
     handle_nan
         How to handle NaN values in z-scores:
+
         - ``'zero'``: Replace NaN values with 0
         - ``'keep'``: Keep NaN values (undefined enrichment)
 
@@ -330,21 +338,6 @@ def nhood_enrichment(
         raise ValueError(f"Invalid normalization mode `{normalization}`. Choose from {sorted(_NORM_CODES)}.")
     if handle_nan not in ("keep", "zero"):
         raise ValueError(f"Invalid `handle_nan` mode `{handle_nan}`. Choose from 'keep', 'zero'.")
-
-    if numba_parallel:
-        warnings.warn(
-            "`numba_parallel` is deprecated and no longer has any effect; permutations are now "
-            "parallelized across threads. It will be removed in a future version.",
-            FutureWarning,
-            stacklevel=2,
-        )
-    if backend is not None:
-        warnings.warn(
-            "`backend` is deprecated and no longer has any effect; permutations now run on a "
-            "thread pool. It will be removed in a future version.",
-            FutureWarning,
-            stacklevel=2,
-        )
 
     adj = adata.obsp[connectivity_key]
     original_clust = adata.obs[cluster_key]

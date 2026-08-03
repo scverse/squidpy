@@ -44,7 +44,7 @@ class TestNhoodEnrichment:
     def test_backend_is_deprecated(self, adata: AnnData, backend: str):
         spatial_neighbors_grid(adata)
 
-        with pytest.warns(FutureWarning, match="`backend` is deprecated"):
+        with pytest.warns(FutureWarning, match=r"`backend`.*is deprecated"):
             nhood_enrichment(adata, cluster_key=_CK, n_jobs=2, n_perms=20, backend=backend)
 
         self._assert_common(adata)
@@ -52,10 +52,34 @@ class TestNhoodEnrichment:
     def test_numba_parallel_is_deprecated(self, adata: AnnData):
         spatial_neighbors_grid(adata)
 
-        with pytest.warns(FutureWarning, match="`numba_parallel` is deprecated"):
+        with pytest.warns(FutureWarning, match=r"`numba_parallel`.*is deprecated"):
             nhood_enrichment(adata, cluster_key=_CK, n_perms=20, numba_parallel=True)
 
         self._assert_common(adata)
+
+    @pytest.mark.parametrize("param", ["numba_parallel", "backend"])
+    def test_deprecated_params_are_ignored(self, adata: AnnData, param: str):
+        """A deprecated argument is stripped before the call, so it cannot change the result."""
+        spatial_neighbors_grid(adata)
+
+        kw = {"cluster_key": _CK, "seed": 42, "n_perms": 20, "copy": True}
+        expected = nhood_enrichment(adata, **kw)
+        with pytest.warns(FutureWarning, match=rf"`{param}`.*is deprecated"):
+            got = nhood_enrichment(adata, **kw, **{param: "loky" if param == "backend" else True})
+
+        np.testing.assert_array_equal(got.zscore, expected.zscore)
+        np.testing.assert_array_equal(got.counts, expected.counts)
+
+    def test_params_after_n_perms_are_keyword_only(self, adata: AnnData):
+        """Positional args past ``n_perms`` are rejected rather than silently rebound.
+
+        ``numba_parallel``/``backend`` used to sit at positions 6 and 10; removing them would have
+        shifted every later positional argument, so they are keyword-only now.
+        """
+        spatial_neighbors_grid(adata)
+
+        with pytest.raises(TypeError, match="positional argument"):
+            nhood_enrichment(adata, _CK, None, None, 20, 42)
 
     def test_no_deprecation_warning_by_default(self, adata: AnnData):
         spatial_neighbors_grid(adata)
