@@ -20,7 +20,14 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import (
+    NDArrayA,
+    Signal,
+    SigQueue,
+    _get_n_cores,
+    parallelize,
+    spawn_generators,
+)
 from squidpy._validators import assert_positive, check_tuple_needles
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -331,6 +338,8 @@ class PermutationTestABC(ABC):
     ) -> Mapping[str, pd.DataFrame] | None:
         """
         Perform the permutation test as described in :cite:`cellphonedb`.
+
+        %(seed_versionchanged)s
 
         Parameters
         ----------
@@ -753,6 +762,7 @@ def _analysis(
     # (n_cells, n_genes)
     data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
     # all 3 should be C contiguous
+    generators = spawn_generators(seed, n_perms)
     return parallelize(  # type: ignore[no-any-return]
         _analysis_helper,
         np.arange(n_perms, dtype=np.int32).tolist(),
@@ -767,7 +777,7 @@ def _analysis(
         interactions,
         interaction_clusters=interaction_clusters,
         clustering=clustering,
-        seed=seed,
+        generators=generators,
         numba_parallel=numba_parallel,
     )
 
@@ -780,7 +790,7 @@ def _analysis_helper(
     interactions: NDArrayA,
     interaction_clusters: NDArrayA,
     clustering: NDArrayA,
-    seed: int | None = None,
+    generators: Sequence[np.random.Generator],
     numba_parallel: bool | None = None,
     queue: SigQueue | None = None,
 ) -> TempResult:
@@ -790,7 +800,7 @@ def _analysis_helper(
     Parameters
     ----------
     perms
-        Permutation indices. Only used to set the ``seed``.
+        Permutation indices. Used to index ``generators`` and to decide which worker returns the means.
     data
         Array of shape `(n_cells, n_genes)`.
     mean
@@ -804,8 +814,8 @@ def _analysis_helper(
         Array of shape `(n_interaction_clusters, 2)`.
     clustering
         Array of shape `(n_cells,)` containing the original clustering.
-    seed
-        Random seed for :class:`numpy.random.RandomState`.
+    generators
+        One independent :class:`numpy.random.Generator` per permutation, indexed by the values in ``perms``.
     numba_parallel
         Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
     queue
@@ -820,9 +830,8 @@ def _analysis_helper(
         - `'pvalues'` - array of shape `(n_interactions, n_interaction_clusters)`  containing `np.sum(T0 > T)`
           where `T0` is the test statistic under null hypothesis and `T` is the true test statistic.
     """
-    rs = np.random.RandomState(None if seed is None else perms[0] + seed)
-
-    clustering = clustering.copy()
+    # used as a read-only base; each permutation shuffles its own copy (see the loop below)
+    clustering_base = clustering.copy()
     n_cls = mean.shape[1]
     return_means = np.min(perms) == 0
 
@@ -848,8 +857,12 @@ def _analysis_helper(
         res_means = None
         test = _test
 
-    for _ in perms:
-        rs.shuffle(clustering)
+    for p in perms:
+        # shuffle from the same base with a per-permutation generator, so each permutation is
+        # independent of the others and of how the permutations are split across jobs
+        rng = generators[p]
+        clustering = clustering_base.copy()
+        rng.shuffle(clustering)
         error = test(interactions, interaction_clusters, data, clustering, mean, mask, res=res)
         if error:
             raise ValueError("In the execution of the numba function, an unhandled case was encountered. ")

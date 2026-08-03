@@ -24,7 +24,7 @@ import pytest
 from anndata import AnnData
 from scipy.sparse import csr_matrix
 
-from squidpy.gr import nhood_enrichment, spatial_neighbors
+from squidpy.gr import nhood_enrichment, spatial_neighbors_grid
 from squidpy.gr._utils import _shuffle_group
 
 _CK = "leiden"
@@ -263,7 +263,7 @@ def test_zscore_reference_holds_on_real_data(adata: AnnData, n_jobs: int):
     Numba's ``np.random`` matches numpy's ``RandomState`` bit-for-bit, so the kernel and this
     reference agree exactly regardless of thread count.
     """
-    spatial_neighbors(adata)
+    spatial_neighbors_grid(adata)
     adj = adata.obsp["spatial_connectivities"]
     int_clust = adata.obs[_CK].cat.codes.to_numpy()
     n_cls = adata.obs[_CK].cat.categories.shape[0]

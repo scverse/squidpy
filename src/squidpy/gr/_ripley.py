@@ -7,18 +7,16 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from numpy.random import default_rng
 from scanpy import logging as logg
 from scipy.spatial import ConvexHull, Delaunay
-from scipy.spatial.distance import pdist
-from sklearn.neighbors import NearestNeighbors
+from sklearn.neighbors import KDTree, NearestNeighbors
 from sklearn.preprocessing import LabelEncoder
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, spawn_generators
 from squidpy.gr._utils import _assert_categorical_obs, _assert_spatial_basis, _save_data, extract_adata_if_sdata
 
 __all__ = ["ripley"]
@@ -44,6 +42,8 @@ def ripley(
 ) -> dict[str, pd.DataFrame | NDArrayA]:
     r"""
     Calculate various Ripley's statistics for point processes.
+
+    %(seed_versionchanged)s
 
     According to the `'mode'` argument, it calculates one of the following Ripley's statistics:
     `{rp.F.s!r}`, `{rp.G.s!r}` or `{rp.L.s!r}` statistics.
@@ -84,6 +84,8 @@ def ripley(
     metric
         Which metric to use for computing distances.
         For available metrics, check out :class:`sklearn.metrics.DistanceMetric`.
+        For Ripley's L specifically, only metrics supported by :class:`sklearn.neighbors.KDTree`
+        are valid (see its ``valid_metrics`` attribute).
     n_neigh
         Number of neighbors to consider for the KNN graph.
     n_simulations
@@ -133,11 +135,12 @@ def ripley(
     start = logg.info(
         f"Calculating Ripley's {mode} statistic for `{le.classes_.shape[0]}` clusters and `{n_simulations}` simulations"
     )
+    obs_rng, *sim_rngs = spawn_generators(seed, n_simulations + 1)
 
     for i in np.arange(np.max(cluster_idx) + 1):
         coord_c = coordinates[cluster_idx == i, :]
         if mode == RipleyStat.F:
-            random = _ppp(hull, n_simulations=1, n_observations=n_observations, seed=seed)
+            random = _ppp(hull, n_simulations=1, n_observations=n_observations, rng=obs_rng)
             tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(coord_c)
             distances, _ = tree_c.kneighbors(random, n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
@@ -146,8 +149,7 @@ def ripley(
             distances, _ = tree_c.kneighbors(coordinates[cluster_idx != i, :], n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
         elif mode == RipleyStat.L:
-            distances = pdist(coord_c, metric=metric)
-            bins, obs_stats = _l_function(distances, support, N, area)
+            bins, obs_stats = _l_function(coord_c, support, N, area, metric)
         else:
             raise NotImplementedError(f"Mode `{mode.s!r}` is not yet implemented.")
         obs_arr[i] = obs_stats
@@ -156,7 +158,7 @@ def ripley(
     pvalues = np.ones((le.classes_.shape[0], len(bins)))
 
     for i in range(n_simulations):
-        random_i = _ppp(hull, n_simulations=1, n_observations=n_observations, seed=seed)
+        random_i = _ppp(hull, n_simulations=1, n_observations=n_observations, rng=sim_rngs[i])
         if mode == RipleyStat.F:
             tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(random_i)
             distances_i, _ = tree_i.kneighbors(random, n_neighbors=1)
@@ -166,8 +168,7 @@ def ripley(
             distances_i, _ = tree_i.kneighbors(coordinates, n_neighbors=1)
             _, stats_i = _f_g_function(distances_i.squeeze(), support)
         elif mode == RipleyStat.L:
-            distances_i = pdist(random_i, metric=metric)
-            _, stats_i = _l_function(distances_i, support, N, area)
+            _, stats_i = _l_function(random_i, support, N, area, metric)
         else:
             raise NotImplementedError(f"Mode `{mode.s!r}` is not yet implemented.")
 
@@ -208,15 +209,30 @@ def _f_g_function(distances: NDArrayA, support: NDArrayA) -> tuple[NDArrayA, NDA
     return bins, np.concatenate((np.zeros((1,), dtype=float), fracs))
 
 
-def _l_function(distances: NDArrayA, support: NDArrayA, n: int, area: float) -> tuple[NDArrayA, NDArrayA]:
-    n_pairs_less_than_d = (distances < support.reshape(-1, 1)).sum(axis=1)
+def _l_function(points: NDArrayA, support: NDArrayA, n: int, area: float, metric: str) -> tuple[NDArrayA, NDArrayA]:
+    if metric not in KDTree.valid_metrics:
+        raise ValueError(f"Unsupported metric '{metric}'. Ripley's L supports {KDTree.valid_metrics}")
+    # Ripley's K(d) is the number of ordered point pairs within distance d. `two_point_correlation`
+    # computes exactly that (cumulatively over `support`, in a single tree pass) without
+    # materializing the O(m^2) pairwise distances.
+    tree = KDTree(points, metric=metric)
+    # `two_point_correlation` counts ordered pairs incl. the `m` self-matches at distance 0;
+    # subtracting `m` gives ordered non-self pairs.
+    # `dualtree=True` has been observed to be roughly 2x faster than the single-tree default.
+    num_points = points.shape[0]
+    n_ordered_pairs_less_than_d = tree.two_point_correlation(points, support, dualtree=True) - num_points
     intensity = n / area
-    k_estimate = ((n_pairs_less_than_d * 2) / n) / intensity
+    k_estimate = (n_ordered_pairs_less_than_d / n) / intensity
     l_estimate = np.sqrt(k_estimate / np.pi)
     return support, l_estimate
 
 
-def _ppp(hull: ConvexHull, n_simulations: int, n_observations: int, seed: int | None = None) -> NDArrayA:
+def _ppp(
+    hull: ConvexHull,
+    n_simulations: int,
+    n_observations: int,
+    rng: np.random.Generator,
+) -> NDArrayA:
     """
     Simulate Poisson Point Process on a polygon.
 
@@ -228,14 +244,13 @@ def _ppp(hull: ConvexHull, n_simulations: int, n_observations: int, seed: int | 
         Number of simulated point processes.
     n_observations
         Number of observations to sample from each simulation.
-    seed
-        Random seed.
+    rng
+        Independent :class:`numpy.random.Generator` used to draw the points.
 
     Returns
     -------
     An Array with shape ``(n_simulation, n_observations, 2)``.
     """
-    rng = default_rng(None if seed is None else seed)
     vxs = hull.points[hull.vertices]
     deln = Delaunay(vxs)
 

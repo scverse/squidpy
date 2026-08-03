@@ -51,7 +51,7 @@ class TestCalculateTilingQC:
         assert cut.mean() > intact.mean()
 
     def test_tiled_vs_single_tile(self, sdata_tile_boundary):
-        """Tiling must not change results — scores should be identical."""
+        """Tiling must not change results - scores should be identical."""
         sdata, _ = sdata_tile_boundary
         adata_tiled = sq.experimental.tl.calculate_tiling_qc(
             sdata,

@@ -12,7 +12,7 @@ from squidpy.gr import (
     centrality_scores,
     interaction_matrix,
     nhood_enrichment,
-    spatial_neighbors,
+    spatial_neighbors_grid,
 )
 
 _CK = "leiden"
@@ -27,14 +27,14 @@ class TestNhoodEnrichment:
         assert adata.uns[key]["count"].shape[0] == adata.obs.leiden.cat.categories.shape[0]
 
     def test_nhood_enrichment(self, adata: AnnData):
-        spatial_neighbors(adata)
+        spatial_neighbors_grid(adata)
         nhood_enrichment(adata, cluster_key=_CK)
 
         self._assert_common(adata)
 
     @pytest.mark.parametrize("n_jobs", [1, 2, 3])
     def test_parallel_works(self, adata: AnnData, n_jobs: int):
-        spatial_neighbors(adata)
+        spatial_neighbors_grid(adata)
 
         nhood_enrichment(adata, cluster_key=_CK, n_jobs=n_jobs, n_perms=20)
 
@@ -42,7 +42,7 @@ class TestNhoodEnrichment:
 
     @pytest.mark.parametrize("backend", ["threading", "multiprocessing", "loky"])
     def test_backend_is_deprecated(self, adata: AnnData, backend: str):
-        spatial_neighbors(adata)
+        spatial_neighbors_grid(adata)
 
         with pytest.warns(FutureWarning, match="`backend` is deprecated"):
             nhood_enrichment(adata, cluster_key=_CK, n_jobs=2, n_perms=20, backend=backend)
@@ -50,7 +50,7 @@ class TestNhoodEnrichment:
         self._assert_common(adata)
 
     def test_numba_parallel_is_deprecated(self, adata: AnnData):
-        spatial_neighbors(adata)
+        spatial_neighbors_grid(adata)
 
         with pytest.warns(FutureWarning, match="`numba_parallel` is deprecated"):
             nhood_enrichment(adata, cluster_key=_CK, n_perms=20, numba_parallel=True)
@@ -58,7 +58,7 @@ class TestNhoodEnrichment:
         self._assert_common(adata)
 
     def test_no_deprecation_warning_by_default(self, adata: AnnData):
-        spatial_neighbors(adata)  # kept outside the block: it emits its own FutureWarning
+        spatial_neighbors_grid(adata)
 
         with warnings.catch_warnings():
             warnings.simplefilter("error", FutureWarning)
@@ -68,7 +68,7 @@ class TestNhoodEnrichment:
 
     @pytest.mark.parametrize("n_jobs", [1, 2])
     def test_reproducibility(self, adata: AnnData, n_jobs: int):
-        spatial_neighbors(adata)
+        spatial_neighbors_grid(adata)
 
         res1 = nhood_enrichment(adata, cluster_key=_CK, seed=42, n_jobs=n_jobs, n_perms=20, copy=True)
         res2 = nhood_enrichment(adata, cluster_key=_CK, seed=42, n_jobs=n_jobs, n_perms=20, copy=True)
@@ -85,6 +85,17 @@ class TestNhoodEnrichment:
         with pytest.raises(AssertionError):
             np.testing.assert_array_equal(res3.zscore, res2.zscore)
         np.testing.assert_array_equal(res3.counts, res2.counts)
+
+    def test_n_jobs_invariance(self, adata: AnnData):
+        """The number of workers must not change the result (one seed is spawned per permutation)."""
+        spatial_neighbors_grid(adata)
+
+        kw = {"cluster_key": _CK, "seed": 42, "n_perms": 20, "copy": True}
+        res_serial = nhood_enrichment(adata, n_jobs=1, **kw)
+        res_parallel = nhood_enrichment(adata, n_jobs=2, **kw)
+
+        np.testing.assert_array_equal(res_serial.zscore, res_parallel.zscore)
+        np.testing.assert_array_equal(res_serial.counts, res_parallel.counts)
 
 
 def test_centrality_scores(nhood_data: AnnData):
@@ -175,7 +186,7 @@ def test_interaction_matrix_nan_values(adata_intmat: AnnData):
 
 @pytest.mark.parametrize("normalization", ["none", "total", "conditional"])
 def test_nhood_enrichment_normalization_modes(adata: AnnData, normalization: str):
-    spatial_neighbors(adata)
+    spatial_neighbors_grid(adata)
     result = nhood_enrichment(adata, cluster_key=_CK, normalization=normalization, n_jobs=1, n_perms=20, copy=True)
 
     z, count, ccr = result
@@ -199,7 +210,7 @@ def test_conditional_normalization_zero_division(adata: AnnData):
         adata.obs[_CK] = adata.obs[_CK].astype("category")
     adata.obs[_CK] = adata.obs[_CK].cat.add_categories("isolated")
     adata.obs.loc[adata.obs.index[0], _CK] = "isolated"
-    spatial_neighbors(adata)
+    spatial_neighbors_grid(adata)
     valid_clusters = [c for c, count in adata.obs[_CK].value_counts().items() if count >= min_cells]
     valid_idx = [i for i, cat in enumerate(adata.obs[_CK].cat.categories) if cat in valid_clusters]
 
@@ -223,7 +234,7 @@ def test_conditional_normalization_zero_division(adata: AnnData):
     ],
 )
 def test_output_dtype(adata: AnnData, normalization: str, expected_dtype):
-    spatial_neighbors(adata)
+    spatial_neighbors_grid(adata)
     result = nhood_enrichment(
         adata,
         cluster_key=_CK,
@@ -239,6 +250,6 @@ def test_output_dtype(adata: AnnData, normalization: str, expected_dtype):
 
 
 def test_invalid_normalization_raises(adata: AnnData):
-    spatial_neighbors(adata)
+    spatial_neighbors_grid(adata)
     with pytest.raises(ValueError, match="Invalid normalization mode"):
         nhood_enrichment(adata, cluster_key=_CK, normalization="invalid_mode", copy=True)

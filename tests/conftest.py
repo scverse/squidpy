@@ -25,7 +25,7 @@ from shapely import Point, Polygon
 
 import squidpy as sq
 from squidpy._constants._pkg_constants import Key
-from squidpy.gr import spatial_neighbors
+from squidpy.gr import spatial_neighbors_grid
 from squidpy.im._container import ImageContainer
 
 HERE: Path = Path(__file__).parent
@@ -59,7 +59,7 @@ def adata_hne() -> AnnData:
 @pytest.fixture(scope="session")
 def adata_hne_concat() -> AnnData:
     adata1 = sq.datasets.visium_hne_adata_crop()
-    spatial_neighbors(adata1)
+    spatial_neighbors_grid(adata1)
     adata2 = adata1[:100, :].copy()
     adata2.uns["spatial"] = {}
     adata2.uns["spatial"]["V2_Adult_Mouse_Brain"] = adata1.uns["spatial"]["V1_Adult_Mouse_Brain"]
@@ -101,7 +101,7 @@ def nhood_data(adata: AnnData) -> AnnData:
     sc.pp.pca(adata)
     sc.pp.neighbors(adata)
     sc.tl.leiden(adata, key_added="leiden")
-    sq.gr.spatial_neighbors(adata)
+    sq.gr.spatial_neighbors_grid(adata)
 
     return adata
 
@@ -112,7 +112,7 @@ def dummy_adata() -> AnnData:
     adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
 
     adata.obsm[Key.obsm.spatial] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
-    sq.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
+    sq.gr.spatial_neighbors_knn(adata, spatial_key=Key.obsm.spatial)
 
     return adata
 
