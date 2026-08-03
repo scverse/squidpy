@@ -313,6 +313,18 @@ class TestValidBehavior:
         np.testing.assert_allclose(res_serial["means"], res_parallel["means"])
         np.testing.assert_allclose(res_serial["pvalues"], res_parallel["pvalues"])
 
+    @pytest.mark.parametrize("param", ["numba_parallel", "backend"])
+    def test_deprecated_parallelization_params(self, adata: AnnData, interactions: Interactions_t, param: str):
+        """The removed parallelization arguments warn instead of raising, on both entry points."""
+        kw = {"n_perms": 5, "copy": True, "show_progress_bar": False, "seed": 42}
+
+        with pytest.warns(FutureWarning, match=rf"Parameter `{param}` of `ligrec\(\)` is deprecated"):
+            ligrec(adata, _CK, interactions=interactions, **{param: True}, **kw)
+
+        pt = PermutationTest(adata).prepare(interactions=interactions)
+        with pytest.warns(FutureWarning, match=rf"Parameter `{param}` of `test\(\)` is deprecated"):
+            pt.test(_CK, **{param: True}, **kw)
+
     def test_paul15_correct_means(self, paul15: AnnData, paul15_means: pd.DataFrame):
         res = ligrec(
             paul15,

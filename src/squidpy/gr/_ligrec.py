@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC
-from collections import namedtuple
 from collections.abc import Iterable, Mapping, Sequence
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -15,6 +14,7 @@ from anndata import AnnData
 from numba import njit, prange
 from numba.typed import List
 from numba_progress import ProgressBar
+from numpy.typing import NDArray
 from scanpy import logging as logg
 from scipy.sparse import csc_matrix
 from spatialdata import SpatialData
@@ -42,7 +42,14 @@ type Cluster_t = StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
 SOURCE = "source"
 TARGET = "target"
 
-TempResult = namedtuple("TempResult", ["means", "pvalues"])
+
+class TempResult(NamedTuple):
+    """Result of the permutation analysis, both of shape ``(n_interactions, n_interaction_clusters)``."""
+
+    means: NDArray[np.float64]
+    """Mean of the two interacting means, `0` where either of them is `0`."""
+    pvalues: NDArray[np.float64]
+    """Fraction of permutations scoring above the observed statistic, `NaN` where not tested."""
 
 
 def _fdr_correct(
@@ -220,6 +227,7 @@ class PermutationTestABC(ABC):
     @d.get_sections(base="PT_test", sections=["Parameters"])
     @d.dedent
     @inject_docs(src=SOURCE, tgt=TARGET, fa=CorrAxis)
+    @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
     def test(
         self,
         cluster_key: str,
@@ -261,6 +269,10 @@ class PermutationTestABC(ABC):
         key_added
             Key in :attr:`anndata.AnnData.uns` where the result is stored if ``copy = False``.
             If `None`, ``'{{cluster_key}}_ligrec'`` will be used.
+        n_jobs
+            Number of numba threads used for the permutations. Peak memory grows linearly with it.
+            If `None`, only one thread is used.
+        %(show_progress_bar)s
 
         Returns
         -------
@@ -313,38 +325,35 @@ class PermutationTestABC(ABC):
         # much faster than applymap (tested on 1M interactions)
         interactions_ = np.vectorize(lambda g: gene_mapper[g])(interactions.values)
 
-        n_jobs = get_n_threads(n_jobs)
+        n_cores = get_n_threads(n_jobs)
         start = logg.info(
             f"Running `{n_perms}` permutations on `{len(interactions)}` interactions "
-            f"and `{len(clusters)}` cluster combinations using `{n_jobs}` core(s)"
+            f"and `{len(clusters)}` cluster combinations using `{n_cores}` core(s)"
         )
-        res = _analysis(
+        analysis = _analysis(
             data,
             interactions_,
             clusters_,
             threshold=threshold,
             n_perms=n_perms,
             seed=seed,
-            n_jobs=n_jobs,
+            n_jobs=n_cores,
             show_progress_bar=show_progress_bar,
         )
         index = pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET])
         columns = pd.MultiIndex.from_tuples(clusters, names=["cluster_1", "cluster_2"])
-        res = {
+        res: dict[str, pd.DataFrame] = {
             "means": pd.DataFrame(
-                {c: pd.arrays.SparseArray(res.means[:, i], fill_value=0) for i, c in enumerate(columns)},
+                {c: pd.arrays.SparseArray(analysis.means[:, i], fill_value=0) for i, c in enumerate(columns)},
                 index=index,
             ),
             "pvalues": pd.DataFrame(
-                {c: pd.arrays.SparseArray(res.pvalues[:, i], fill_value=np.nan) for i, c in enumerate(columns)},
+                {c: pd.arrays.SparseArray(analysis.pvalues[:, i], fill_value=np.nan) for i, c in enumerate(columns)},
                 index=index,
             ),
             "metadata": self.interactions[self.interactions.columns.difference([SOURCE, TARGET])],
         }
         res["metadata"].index = res["means"].index.copy()
-
-        if TYPE_CHECKING:
-            assert isinstance(res, dict)
 
         if corr_method is not None:
             logg.info(
@@ -547,6 +556,7 @@ def ligrec(
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
+    *,
     n_perms: int = 1000,
     seed: int | None = None,
     clusters: Cluster_t | None = None,
@@ -606,15 +616,18 @@ def ligrec(
 def _score_permutations(
     data: NDArrayA,
     clustering: NDArrayA,
-    generators: Any,
+    generators: list[np.random.Generator],
     inv_counts: NDArrayA,
     mean_obs: NDArrayA,
     interactions: NDArrayA,
     interaction_clusters: NDArrayA,
     valid: NDArrayA,
-    progress: Any,
+    progress: ProgressBar,
 ) -> NDArrayA:
-    """Shuffle and score one permutation per RNG in ``generators``; return accumulated p-value counts."""
+    """Shuffle and score one permutation per RNG in ``generators``; return accumulated p-value counts.
+
+    ``generators`` must be a :class:`numba.typed.List`, so that it can be indexed inside ``prange``.
+    """
     n_perms = len(generators)
     n_cells = data.shape[0]
     n_genes = data.shape[1]
@@ -639,16 +652,18 @@ def _score_permutations(
             for g in range(n_genes):
                 groups[k, g] *= inv_c
 
+        # this permutation's 0/1 indicators; the temporary is needed because numba only recognizes
+        # whole-array in-place updates as a reduction - `counts[i, j] += 1` here would race instead
         local_counts = np.zeros((n_inter, n_cpairs), dtype=np.int64)
         for i in range(n_inter):
-            r = interactions[i, 0]
-            l = interactions[i, 1]
+            rec = interactions[i, 0]
+            lig = interactions[i, 1]
             for j in range(n_cpairs):
                 if valid[i, j]:
                     a = interaction_clusters[j, 0]
                     b = interaction_clusters[j, 1]
-                    shuf = groups[a, r] + groups[b, l]
-                    obs = mean_obs[a, r] + mean_obs[b, l]
+                    shuf = groups[a, rec] + groups[b, lig]
+                    obs = mean_obs[a, rec] + mean_obs[b, lig]
                     if shuf > obs:
                         local_counts[i, j] = 1
         counts += local_counts
@@ -684,7 +699,9 @@ def _analysis(
     %(n_perms)s
     %(seed)s
     n_jobs
-        Number of numba threads to use.
+        Number of numba threads to use. Each thread holds two `(n_interactions, n_interaction_clusters)`
+        :class:`numpy.int64` arrays (its private reduction copy plus the per-permutation indicators),
+        so peak memory grows linearly with it.
     show_progress_bar
         Whether to show the progress bar.
 
@@ -706,22 +723,25 @@ def _analysis(
         lambda c: ((c > 0).astype(np.int64).sum() / len(c)) >= threshold
     ).values  # (n_clusters, n_genes)
 
-    counts = groups.size().values.astype(np.float64)
-    inv_counts = 1.0 / np.maximum(counts, 1)
+    cluster_sizes = groups.size().values.astype(np.float64)
+    inv_counts = 1.0 / np.maximum(cluster_sizes, 1)
 
     data_arr = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
 
-    interactions = np.array(interactions, dtype=np.int32)
-    interaction_clusters = np.array(interaction_clusters, dtype=np.int32)
-    rec = interactions[:, 0]
-    lig = interactions[:, 1]
-    c1 = interaction_clusters[:, 0]
-    c2 = interaction_clusters[:, 1]
+    # the kernel indexes with these, so keep the dtype in one place
+    interactions_i32 = np.array(interactions, dtype=np.int32)
+    clusters_i32 = np.array(interaction_clusters, dtype=np.int32)
+    rec = interactions_i32[:, 0]
+    lig = interactions_i32[:, 1]
+    c1 = clusters_i32[:, 0]
+    c2 = clusters_i32[:, 1]
 
-    obs_score = mean_obs[c1, :][:, rec].T + mean_obs[c2, :][:, lig].T
-    nonzero = (mean_obs[c1, :][:, rec].T > 0) & (mean_obs[c2, :][:, lig].T > 0)
+    # all of shape (n_interactions, n_interaction_clusters), as are `valid` and the kernel's counts
+    m_rec = mean_obs[c1, :][:, rec].T
+    m_lig = mean_obs[c2, :][:, lig].T
+    nonzero = (m_rec > 0) & (m_lig > 0)
     valid = nonzero & mask[c1, :][:, rec].T & mask[c2, :][:, lig].T
-    res_means = np.where(nonzero, obs_score / 2.0, 0.0)
+    res_means = np.where(nonzero, (m_rec + m_lig) / 2.0, 0.0)
 
     # one independent RNG per permutation; a numba typed list so the kernel can index it in prange
     generators = List(spawn_generators(seed, n_perms))
@@ -738,8 +758,8 @@ def _analysis(
             generators,
             inv_counts,
             mean_obs,
-            interactions,
-            interaction_clusters,
+            interactions_i32,
+            clusters_i32,
             valid,
             progress,
         )
