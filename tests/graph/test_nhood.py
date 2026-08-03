@@ -87,14 +87,19 @@ class TestNhoodEnrichment:
         np.testing.assert_array_equal(res3.counts, res2.counts)
 
     def test_n_jobs_invariance(self, adata: AnnData):
-        """The number of workers must not change the result (one seed is spawned per permutation)."""
+        """The number of workers must not change the result (one seed is spawned per permutation).
+
+        The z-score comes from a ``prange`` moment reduction, whose summation order depends on the
+        thread count, so it matches to rounding rather than bit-for-bit (see
+        ``test_zscore_independent_of_n_jobs`` for the measured magnitude). Counts are exact.
+        """
         spatial_neighbors_grid(adata)
 
         kw = {"cluster_key": _CK, "seed": 42, "n_perms": 20, "copy": True}
         res_serial = nhood_enrichment(adata, n_jobs=1, **kw)
         res_parallel = nhood_enrichment(adata, n_jobs=2, **kw)
 
-        np.testing.assert_array_equal(res_serial.zscore, res_parallel.zscore)
+        np.testing.assert_allclose(res_serial.zscore, res_parallel.zscore, rtol=1e-10, atol=1e-12)
         np.testing.assert_array_equal(res_serial.counts, res_parallel.counts)
 
 

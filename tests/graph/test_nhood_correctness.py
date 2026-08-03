@@ -106,7 +106,7 @@ def _reference_nhood_enrichment(
     original labels once. Because a permutation's stream depends only on its global index, the
     result is independent of how permutations are spread across threads (i.e. of ``n_jobs``).
     Numba's ``Generator.shuffle`` reproduces numpy's bit-for-bit, so this matches
-    :func:`squidpy.gr._nhood._permutation_counts` exactly.
+    :func:`squidpy.gr._nhood._permutation_moments` up to floating-point reduction order.
     """
     observed = _ref_normalize(adj, int_clust, n_cls, normalization)
 
@@ -278,11 +278,20 @@ def test_zscore_reference_holds_on_real_data(adata: AnnData, n_jobs: int):
 
 @pytest.mark.parametrize("normalization", ["none", "total", "conditional"])
 def test_zscore_independent_of_n_jobs(adata_tiny: AnnData, normalization: str):
-    """Per-index seeding makes the z-score identical regardless of the worker/thread count."""
+    """Per-index seeding makes the z-score independent of the worker/thread count.
+
+    The moments are accumulated as a ``prange`` reduction, so the summation order depends on how
+    many threads run and the z-score matches only to floating-point rounding, not bit-for-bit.
+    Measured thread-order error is 0 for ``'none'`` (integer counts are exact in float64) and
+    <= 1e-14 for the normalized modes; the tolerance below leaves several orders of headroom while
+    staying far tighter than the O(1) discrepancy a real thread-dependent bug would produce.
+    Counts are integer and must match exactly.
+    """
     kw = {"cluster_key": _CK, "normalization": normalization, "n_perms": 50, "seed": 0, "copy": True}
     r1 = nhood_enrichment(adata_tiny, n_jobs=1, **kw)
     r8 = nhood_enrichment(adata_tiny, n_jobs=8, **kw)
-    np.testing.assert_array_equal(r1.zscore, r8.zscore)
+    np.testing.assert_allclose(r1.zscore, r8.zscore, rtol=1e-10, atol=1e-12)
+    np.testing.assert_array_equal(r1.counts, r8.counts)
 
 
 @pytest.mark.parametrize("n_jobs", [1, 3])

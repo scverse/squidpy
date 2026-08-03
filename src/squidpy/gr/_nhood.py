@@ -105,7 +105,7 @@ def _conditional_counts(indices: NDArrayA, indptr: NDArrayA, clustering: NDArray
 
 
 @njit(parallel=True, nogil=True, cache=True)
-def _permutation_counts(
+def _permutation_moments(
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
@@ -113,11 +113,23 @@ def _permutation_counts(
     group_indices: NDArrayA,
     n_cls: int,
     norm_code: int,
+    observed: NDArrayA,
     generators: Any,
     progress: Any,
-) -> NDArrayA:
+) -> tuple[NDArrayA, NDArrayA]:
+    """Accumulate the first two moments of the permutation distribution as ``prange`` reductions.
+
+    Rather than materializing every permutation, this sums ``d = permuted - observed`` and ``d * d``
+    into two ``(n_cls, n_cls)`` accumulators. Shifting by ``observed`` — which sits on the same scale
+    as the null distribution — keeps the variance well conditioned; a raw sum-of-squares reduction
+    would cancel catastrophically for ``normalization='none'``, where the counts are large and their
+    spread comparatively small.
+
+    Returns ``(sum_d, sum_d2)``; the caller turns these into the mean, std and z-score.
+    """
     n_perms = len(generators)
-    perms = np.empty((n_perms, n_cls, n_cls), dtype=np.float64)
+    sum_d = np.zeros((n_cls, n_cls), dtype=np.float64)
+    sum_d2 = np.zeros((n_cls, n_cls), dtype=np.float64)
     for p in prange(n_perms):
         # explicit int64 index: under prange the loop var is uint64 and indexing the typed list
         # would otherwise trigger a (harmless) uint64->int64 NumbaTypeSafetyWarning
@@ -154,9 +166,18 @@ def _permutation_counts(
                     d = cond[a, b] if cond[a, b] != 0.0 else 1.0
                     out[a, b] /= d
 
-        perms[p] = out
+        # per-iteration locals folded into the accumulators, so numba recognises the array reduction
+        local_d = np.zeros((n_cls, n_cls), dtype=np.float64)
+        local_d2 = np.zeros((n_cls, n_cls), dtype=np.float64)
+        for a in range(n_cls):
+            for b in range(n_cls):
+                dev = out[a, b] - observed[a, b]
+                local_d[a, b] = dev
+                local_d2[a, b] = dev * dev
+        sum_d += local_d
+        sum_d2 += local_d2
         progress.update(1)
-    return perms
+    return sum_d, sum_d2
 
 
 _NORM_CODES = {"none": 0, "total": 1, "conditional": 2}
@@ -334,19 +355,27 @@ def nhood_enrichment(
     # a single group spanning all cells reproduces a plain global shuffle.
     group_offsets, group_indices = _build_shuffle_groups(libraries, len(int_clust))
 
+    # explicit float64: ``count_normalized`` is uint32 for ``normalization='none'`` and float64
+    # otherwise, which would compile the kernel twice for no reason
+    observed = np.ascontiguousarray(count_normalized, dtype=np.float64)
+
     # A single numba ``prange`` kernel shuffles + counts + normalizes per thread with the GIL
     # released, and ticks the progress bar from inside the loop; numba owns the parallelism.
     with (
         numba_threads(n_jobs),
         ProgressBar(total=n_perms, unit="perm", desc="nhood_enrichment", disable=not show_progress_bar) as progress,
     ):
-        perms = _permutation_counts(
-            indices, indptr, int_clust, group_offsets, group_indices, n_cls, norm_code, generators, progress
+        sum_d, sum_d2 = _permutation_moments(
+            indices, indptr, int_clust, group_offsets, group_indices, n_cls, norm_code, observed, generators, progress
         )
 
-    std = perms.std(axis=0)
+    # ``sum_d``/``sum_d2`` are moments of ``permuted - observed``, so the mean deviation *is* the
+    # (negated) numerator of the z-score and no permutation ever has to be kept around.
+    mean_d = sum_d / n_perms
+    var = (sum_d2 - sum_d * mean_d) / n_perms  # population variance, matching the previous ddof=0
+    std = np.sqrt(np.maximum(var, 0.0))  # clamp: rounding can push an all-equal column just below 0
     std[std == 0] = np.nan
-    zscore = (count_normalized - perms.mean(axis=0)) / std
+    zscore = -mean_d / std
 
     if handle_nan == "zero":
         zscore = np.nan_to_num(zscore, nan=0.0)
