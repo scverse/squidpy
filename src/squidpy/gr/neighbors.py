@@ -51,10 +51,6 @@ GraphMatrixT = TypeVar("GraphMatrixT")
 GraphPostprocessor = Callable[[GraphMatrixT, GraphMatrixT], tuple[GraphMatrixT, GraphMatrixT]]
 
 
-def _cast_to_tuple_if_list(radius: float | tuple[float, float] | None) -> float | list[float] | None:
-    return list(radius) if isinstance(radius, tuple) else radius
-
-
 class GraphBuilder[CoordT, GraphMatrixT](ABC):
     """Base class for spatial graph construction strategies.
 
@@ -241,12 +237,13 @@ class RadiusBuilder(GraphBuilderCSR):
             percentile=percentile,
             postprocessors=postprocessors,
         )
-        self.radius = radius
+        # Store intervals as a list: :mod:`anndata` cannot write tuples to ``uns``.
+        self.radius = list(radius) if isinstance(radius, tuple) else radius
 
     def uns_params(self) -> dict[str, Any]:
         return {
             "coord_type": CoordType.GENERIC.v,
-            "radius": _cast_to_tuple_if_list(self.radius),
+            "radius": self.radius,
             "transform": self.transform.v,
         }
 
@@ -310,12 +307,13 @@ class DelaunayBuilder(GraphBuilderCSR):
             percentile=percentile,
             postprocessors=postprocessors,
         )
-        self.radius = radius
+        # Store intervals as a list: :mod:`anndata` cannot write tuples to ``uns``.
+        self.radius = list(radius) if isinstance(radius, tuple) else radius
 
     def uns_params(self) -> dict[str, Any]:
         return {
             "coord_type": CoordType.GENERIC.v,
-            "radius": _cast_to_tuple_if_list(self.radius),
+            "radius": self.radius,
             "transform": self.transform.v,
         }
 
