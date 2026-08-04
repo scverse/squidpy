@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -30,11 +32,61 @@ class TestNhoodEnrichment:
 
         self._assert_common(adata)
 
-    @pytest.mark.parametrize("backend", ["threading", "multiprocessing", "loky"])
-    def test_parallel_works(self, adata: AnnData, backend: str):
+    @pytest.mark.parametrize("n_jobs", [1, 2, 3])
+    def test_parallel_works(self, adata: AnnData, n_jobs: int):
         spatial_neighbors_grid(adata)
 
-        nhood_enrichment(adata, cluster_key=_CK, n_jobs=2, n_perms=20, backend=backend)
+        nhood_enrichment(adata, cluster_key=_CK, n_jobs=n_jobs, n_perms=20)
+
+        self._assert_common(adata)
+
+    @pytest.mark.parametrize("backend", ["threading", "multiprocessing", "loky"])
+    def test_backend_is_deprecated(self, adata: AnnData, backend: str):
+        spatial_neighbors_grid(adata)
+
+        with pytest.warns(FutureWarning, match=r"`backend`.*is deprecated"):
+            nhood_enrichment(adata, cluster_key=_CK, n_jobs=2, n_perms=20, backend=backend)
+
+        self._assert_common(adata)
+
+    def test_numba_parallel_is_deprecated(self, adata: AnnData):
+        spatial_neighbors_grid(adata)
+
+        with pytest.warns(FutureWarning, match=r"`numba_parallel`.*is deprecated"):
+            nhood_enrichment(adata, cluster_key=_CK, n_perms=20, numba_parallel=True)
+
+        self._assert_common(adata)
+
+    @pytest.mark.parametrize("param", ["numba_parallel", "backend"])
+    def test_deprecated_params_are_ignored(self, adata: AnnData, param: str):
+        """A deprecated argument is stripped before the call, so it cannot change the result."""
+        spatial_neighbors_grid(adata)
+
+        kw = {"cluster_key": _CK, "seed": 42, "n_perms": 20, "copy": True}
+        expected = nhood_enrichment(adata, **kw)
+        with pytest.warns(FutureWarning, match=rf"`{param}`.*is deprecated"):
+            got = nhood_enrichment(adata, **kw, **{param: "loky" if param == "backend" else True})
+
+        np.testing.assert_array_equal(got.zscore, expected.zscore)
+        np.testing.assert_array_equal(got.counts, expected.counts)
+
+    def test_params_after_n_perms_are_keyword_only(self, adata: AnnData):
+        """Positional args past ``n_perms`` are rejected rather than silently rebound.
+
+        ``numba_parallel``/``backend`` used to sit at positions 6 and 10; removing them would have
+        shifted every later positional argument, so they are keyword-only now.
+        """
+        spatial_neighbors_grid(adata)
+
+        with pytest.raises(TypeError, match="positional argument"):
+            nhood_enrichment(adata, _CK, None, None, 20, 42)
+
+    def test_no_deprecation_warning_by_default(self, adata: AnnData):
+        spatial_neighbors_grid(adata)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            nhood_enrichment(adata, cluster_key=_CK, n_perms=20)
 
         self._assert_common(adata)
 
@@ -59,7 +111,12 @@ class TestNhoodEnrichment:
         np.testing.assert_array_equal(res3.counts, res2.counts)
 
     def test_n_jobs_invariance(self, adata: AnnData):
-        """The number of workers must not change the result (one seed is spawned per permutation)."""
+        """The number of workers must not change the result (one seed is spawned per permutation).
+
+        The default ``normalization='none'`` accumulates its moments in int64, where addition is
+        associative, so the reduction is bit-identical regardless of thread count. See
+        ``test_zscore_independent_of_n_jobs`` for the normalized modes, which are float64.
+        """
         spatial_neighbors_grid(adata)
 
         kw = {"cluster_key": _CK, "seed": 42, "n_perms": 20, "copy": True}
@@ -154,3 +211,74 @@ def test_interaction_matrix_nan_values(adata_intmat: AnnData):
 
     np.testing.assert_array_equal(expected_weighted, result_weighted)
     np.testing.assert_array_equal(expected_unweighted, result_unweighted)
+
+
+@pytest.mark.parametrize("normalization", ["none", "total", "conditional"])
+def test_nhood_enrichment_normalization_modes(adata: AnnData, normalization: str):
+    spatial_neighbors_grid(adata)
+    result = nhood_enrichment(adata, cluster_key=_CK, normalization=normalization, n_jobs=1, n_perms=20, copy=True)
+
+    z, count, ccr = result
+
+    assert isinstance(z, np.ndarray)
+    assert isinstance(count, np.ndarray)
+    if normalization == "conditional":
+        assert isinstance(ccr, np.ndarray)
+        assert z.shape == ccr.shape
+        assert count.shape == ccr.shape
+    assert z.shape == count.shape
+    assert z.shape[0] == adata.obs[_CK].cat.categories.shape[0]
+
+
+def test_conditional_normalization_zero_division(adata: AnnData):
+    adata = adata.copy()
+    min_cells = 10
+    if _CK not in adata.obs:
+        raise ValueError(f"Cluster key '{_CK}' not in adata.obs")
+    if not pd.api.types.is_categorical_dtype(adata.obs[_CK]):
+        adata.obs[_CK] = adata.obs[_CK].astype("category")
+    adata.obs[_CK] = adata.obs[_CK].cat.add_categories("isolated")
+    adata.obs.loc[adata.obs.index[0], _CK] = "isolated"
+    spatial_neighbors_grid(adata)
+    valid_clusters = [c for c, count in adata.obs[_CK].value_counts().items() if count >= min_cells]
+    valid_idx = [i for i, cat in enumerate(adata.obs[_CK].cat.categories) if cat in valid_clusters]
+
+    result = nhood_enrichment(adata, cluster_key=_CK, normalization="conditional", copy=True)
+    assert result is not None
+    zscore, count_normalized, conditional_ratio = result
+    assert not np.any(np.isinf(zscore))
+    assert not np.any(np.isinf(count_normalized))
+    assert not np.any(np.isinf(conditional_ratio))
+    assert not np.isnan(zscore[np.ix_(valid_idx, valid_idx)]).any()
+    assert not np.isnan(count_normalized[np.ix_(valid_idx, valid_idx)]).any()
+    assert not np.isnan(conditional_ratio[np.ix_(valid_idx, valid_idx)]).any()
+
+
+@pytest.mark.parametrize(
+    "normalization, expected_dtype",
+    [
+        ("none", np.uint32),
+        ("total", np.uint32),
+        ("conditional", np.uint32),
+    ],
+)
+def test_output_dtype(adata: AnnData, normalization: str, expected_dtype):
+    spatial_neighbors_grid(adata)
+    result = nhood_enrichment(
+        adata,
+        cluster_key=_CK,
+        normalization=normalization,
+        n_jobs=1,
+        n_perms=20,
+        copy=True,
+    )
+
+    count = result.counts
+
+    assert count.dtype == expected_dtype
+
+
+def test_invalid_normalization_raises(adata: AnnData):
+    spatial_neighbors_grid(adata)
+    with pytest.raises(ValueError, match="Invalid normalization mode"):
+        nhood_enrichment(adata, cluster_key=_CK, normalization="invalid_mode", copy=True)
