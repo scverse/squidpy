@@ -267,7 +267,7 @@ def centrality_scores(
     %(table_key)s
     %(cluster_key)s
     score
-        Group centrality measures as implemented in :mod:`rustworkx` :cite:`rustworkx`.
+        Group centrality measures as implemented in ``rustworkx`` :cite:`rustworkx`.
         If `None`, use all the options below. Valid options are:
 
             - `{c.CLOSENESS.s!r}` - measure of how close the group is to other nodes.
