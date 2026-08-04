@@ -100,9 +100,7 @@ def test_centrality_scores_networkx_parity(nhood_data: AnnData):
     clusters = adata.obs[_CK].values
     for cat in df.index:
         idx = list(np.where(clusters == cat)[0])
-        np.testing.assert_allclose(
-            df.loc[cat, "closeness_centrality"], nx.group_closeness_centrality(graph, idx)
-        )
+        np.testing.assert_allclose(df.loc[cat, "closeness_centrality"], nx.group_closeness_centrality(graph, idx))
         np.testing.assert_allclose(df.loc[cat, "degree_centrality"], nx.group_degree_centrality(graph, idx))
         np.testing.assert_allclose(df.loc[cat, "average_clustering"], nx.average_clustering(graph, idx))
 
