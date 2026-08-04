@@ -712,7 +712,9 @@ def _analysis(
         - `'means'` - array of shape `(n_interactions, n_interaction_clusters)` containing the means.
         - `'pvalues'` - array of shape `(n_interactions, n_interaction_clusters)` containing the p-values.
     """
+    # int cluster ids the kernel indexes `groups`/`mean_obs` rows with
     clustering = np.array(data["clusters"].values, dtype=np.int32)
+    # densify gene columns to float64 so the kernel does pure float math (no sparse/mixed dtypes)
     data = data.astype({c: np.float64 for c in data.columns if c != "clusters"})
     groups = data.groupby("clusters", observed=True)
 
@@ -723,9 +725,11 @@ def _analysis(
         lambda c: ((c > 0).astype(np.int64).sum() / len(c)) >= threshold
     ).values  # (n_clusters, n_genes)
 
+    # float sizes so `1.0 / max(...)` is a true reciprocal, not integer division that would zero the means
     cluster_sizes = groups.size().values.astype(np.float64)
     inv_counts = 1.0 / np.maximum(cluster_sizes, 1)
 
+    # contiguous C-order float64 (n_cells, n_genes) for cache-friendly kernel access
     data_arr = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
 
     # the kernel indexes with these, so keep the dtype in one place
@@ -764,6 +768,7 @@ def _analysis(
             progress,
         )
 
+    # float counts before dividing, so p-values are fractions and not truncated to 0
     pvalues = pval_counts.astype(np.float64) / n_perms
     pvalues[~valid] = np.nan
 
