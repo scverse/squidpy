@@ -51,8 +51,7 @@ GraphMatrixT = TypeVar("GraphMatrixT")
 GraphPostprocessor = Callable[[GraphMatrixT, GraphMatrixT], tuple[GraphMatrixT, GraphMatrixT]]
 
 
-def _radius_to_uns(radius: float | tuple[float, float] | None) -> float | list[float] | None:
-    """Store an interval radius as a list: :mod:`anndata` cannot write tuples."""
+def _cast_to_tuple_if_list(radius: float | tuple[float, float] | None) -> float | list[float] | None:
     return list(radius) if isinstance(radius, tuple) else radius
 
 
@@ -247,7 +246,7 @@ class RadiusBuilder(GraphBuilderCSR):
     def uns_params(self) -> dict[str, Any]:
         return {
             "coord_type": CoordType.GENERIC.v,
-            "radius": _radius_to_uns(self.radius),
+            "radius": _cast_to_tuple_if_list(self.radius),
             "transform": self.transform.v,
         }
 
@@ -316,7 +315,7 @@ class DelaunayBuilder(GraphBuilderCSR):
     def uns_params(self) -> dict[str, Any]:
         return {
             "coord_type": CoordType.GENERIC.v,
-            "radius": _radius_to_uns(self.radius),
+            "radius": _cast_to_tuple_if_list(self.radius),
             "transform": self.transform.v,
         }
 
