@@ -88,6 +88,25 @@ def test_centrality_scores(nhood_data: AnnData):
     assert adata.uns[key]["closeness_centrality"].dtype == np.dtype("float64")
 
 
+def test_centrality_scores_networkx_parity(nhood_data: AnnData):
+    # centrality_scores swapped networkx for rustworkx (+ a numba clustering kernel); pin the
+    # numeric parity of all three group measures against networkx (still a dependency).
+    import networkx as nx
+
+    adata = nhood_data
+    df = centrality_scores(adata, cluster_key=_CK, connectivity_key="spatial", copy=True)
+
+    graph = nx.Graph(adata.obsp["spatial_connectivities"])
+    clusters = adata.obs[_CK].values
+    for cat in df.index:
+        idx = list(np.where(clusters == cat)[0])
+        np.testing.assert_allclose(
+            df.loc[cat, "closeness_centrality"], nx.group_closeness_centrality(graph, idx)
+        )
+        np.testing.assert_allclose(df.loc[cat, "degree_centrality"], nx.group_degree_centrality(graph, idx))
+        np.testing.assert_allclose(df.loc[cat, "average_clustering"], nx.average_clustering(graph, idx))
+
+
 @pytest.mark.parametrize("copy", [True, False])
 def test_interaction_matrix_copy(nhood_data: AnnData, copy: bool):
     adata = nhood_data
