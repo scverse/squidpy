@@ -271,7 +271,8 @@ class PermutationTestABC(ABC):
             If `None`, ``'{{cluster_key}}_ligrec'`` will be used.
         n_jobs
             Number of numba threads used for the permutations. Peak memory grows linearly with it.
-            If `None`, only one thread is used.
+            If `None`, numba's default thread count (usually all cores) is used; negative values
+            count down from the maximum.
         %(show_progress_bar)s
 
         Returns
@@ -325,10 +326,10 @@ class PermutationTestABC(ABC):
         # much faster than applymap (tested on 1M interactions)
         interactions_ = np.vectorize(lambda g: gene_mapper[g])(interactions.values)
 
-        n_cores = get_n_threads(n_jobs)
+        n_threads = get_n_threads(n_jobs)
         start = logg.info(
             f"Running `{n_perms}` permutations on `{len(interactions)}` interactions "
-            f"and `{len(clusters)}` cluster combinations using `{n_cores}` core(s)"
+            f"and `{len(clusters)}` cluster combinations using `{n_threads}` thread(s)"
         )
         analysis = _analysis(
             data,
@@ -337,7 +338,7 @@ class PermutationTestABC(ABC):
             threshold=threshold,
             n_perms=n_perms,
             seed=seed,
-            n_jobs=n_cores,
+            n_jobs=n_threads,
             show_progress_bar=show_progress_bar,
         )
         index = pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET])
