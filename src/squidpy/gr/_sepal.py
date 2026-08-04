@@ -14,7 +14,7 @@ from spatialdata import SpatialData
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, _get_n_cores, deprecated_params, thread_map
+from squidpy._utils import NDArrayA, deprecated_params, get_n_processes, thread_map
 from squidpy._validators import assert_non_empty_sequence
 from squidpy.gr._utils import (
     _assert_connectivity_key,
@@ -111,7 +111,7 @@ def sepal(
             genes = genes[adata.var["highly_variable"].values]
     genes = assert_non_empty_sequence(genes, name="genes")
 
-    n_jobs = _get_n_cores(n_jobs)
+    n_jobs = get_n_processes(n_jobs)
 
     g = adata.obsp[connectivity_key]
     if not isspmatrix_csr(g):

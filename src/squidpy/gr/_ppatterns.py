@@ -26,8 +26,8 @@ from squidpy._utils import (
     NDArrayA,
     Signal,
     SigQueue,
-    _get_n_cores,
     deprecated_params,
+    get_n_processes,
     parallelize,
     spawn_generators,
 )
@@ -215,7 +215,7 @@ def spatial_autocorr(
 
     score = params["func"](g, vals)  # type: ignore
 
-    n_jobs = _get_n_cores(n_jobs)
+    n_jobs = get_n_processes(n_jobs)
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")

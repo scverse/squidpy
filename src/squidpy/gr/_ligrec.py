@@ -24,7 +24,7 @@ from squidpy._utils import (
     NDArrayA,
     Signal,
     SigQueue,
-    _get_n_cores,
+    get_n_processes,
     parallelize,
     spawn_generators,
 )
@@ -418,7 +418,7 @@ class PermutationTestABC(ABC):
         # much faster than applymap (tested on 1M interactions)
         interactions_ = np.vectorize(lambda g: gene_mapper[g])(interactions.values)
 
-        n_jobs = _get_n_cores(kwargs.pop("n_jobs", None))
+        n_jobs = get_n_processes(kwargs.pop("n_jobs", None))
         start = logg.info(
             f"Running `{n_perms}` permutations on `{len(interactions)}` interactions "
             f"and `{len(clusters)}` cluster combinations using `{n_jobs}` core(s)"

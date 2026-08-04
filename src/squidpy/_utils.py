@@ -306,16 +306,47 @@ def thread_map(
     return _run(None)
 
 
-def _get_n_cores(n_cores: int | None) -> int:
-    """
-    Make number of cores a positive integer.
+def get_n_threads(n_threads: int | None) -> int:
+    """Resolve a numba thread count, defaulting to numba's own default.
 
-    This is useful for especially logging.
+    Use for ``@njit(parallel=True)`` kernels whose parallelism is a single numba call.
+
+    Parameters
+    ----------
+    n_threads
+        Requested number of threads. ``None`` uses numba's default
+        (:attr:`numba.config.NUMBA_NUM_THREADS`, usually all cores); positive values are
+        clamped to ``[1, NUMBA_NUM_THREADS]``; negative values count down from the maximum
+        (``-1`` is all-but-one).
+
+    Returns
+    -------
+    int
+        Positive thread count in ``[1, NUMBA_NUM_THREADS]``.
+    """
+    max_threads = numba.config.NUMBA_NUM_THREADS
+    if n_threads is None:
+        return max_threads
+    if n_threads == 0:
+        raise ValueError("Number of threads cannot be `0`.")
+    if n_threads < 0:
+        return max(1, max_threads + 1 + n_threads)
+
+    return min(n_threads, max_threads)
+
+
+def get_n_processes(n_cores: int | None) -> int:
+    """Make number of processes a positive integer, mainly for :func:`parallelize` and logging.
+
+    .. deprecated::
+        Kept for the process-based :func:`parallelize`/:func:`thread_map` helpers; slated for
+        removal once those call sites migrate to numba threading (see :func:`get_n_threads`).
 
     Parameters
     ----------
     n_cores
-        Number of cores to use.
+        Number of cores to use. ``None`` is serial (``1``); negative values count down from
+        the cpu count (``-1`` is all-but-one).
 
     Returns
     -------
