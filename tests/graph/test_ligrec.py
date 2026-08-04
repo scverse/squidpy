@@ -383,7 +383,7 @@ class TestValidBehavior:
         assert "DEBUG: Creating all gene combinations within complexes" in err
         assert "DEBUG: Removing interactions with no genes in the data" in err
         assert "DEBUG: Removing genes not in any interaction" in err
-        assert "Running `5` permutations on `25` interactions and `25` cluster combinations using `2` core(s)" in err
+        assert "Running `5` permutations on `25` interactions and `25` cluster combinations using `2` thread(s)" in err
         assert "Adding `adata.uns['ligrec_test']`" in err
 
     def test_non_uniqueness(self, adata: AnnData, interactions: Interactions_t):
