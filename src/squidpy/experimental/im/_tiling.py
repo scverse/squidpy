@@ -444,15 +444,15 @@ def _run_tiled(
     specs: Sequence[Any],
     process_fn: Callable[..., Any],
     *,
-    n_jobs: int = 1,
+    n_jobs: int | None = 1,
     kind: Literal["threads", "processes"] = "processes",
     scatter: Sequence[Any] = (),
     desc: str = "tiles",
 ) -> list[Any]:
     """Run ``process_fn(spec, *scatter)`` over tile ``specs``; return results in spec order.
 
-    Engine selection: an active ``distributed.Client`` wins; else ``n_jobs`` (repo
-    ``get_n_processes`` convention, ``1``/``0``/``None`` serial) picks workers and
+    Engine selection: an active ``distributed.Client`` wins; else ``n_jobs`` (``1``/`None`
+    serial, ``-1`` numba's default thread count) picks workers and
     ``kind`` picks the scheduler -- ``"threads"`` for GIL-releasing work (numba
     ``nogil``), ``"processes"`` for GIL-bound work (a ``LocalCluster``, since the
     local multiprocessing scheduler does not fork). ``scatter`` holds large objects
@@ -470,7 +470,7 @@ def _run_tiled(
             logg.warning("`n_jobs` is ignored when an active dask.distributed Client is in scope.")
         return _run_on_client(get_client(), specs, process_fn, scatter, desc)
 
-    workers = 1 if n_jobs in (None, 0) else get_n_processes(n_jobs)
+    workers = get_n_processes(n_jobs)
     # Never spin up more workers than tiles: idle workers only add process-startup
     # and scatter cost. (n <= 1 also routes to the serial path below.)
     workers = min(workers, n)

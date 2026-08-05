@@ -733,7 +733,9 @@ def _analysis(
     """
 
     def extractor(res: Sequence[TempResult]) -> TempResult:
-        assert len(res) == n_jobs, f"Expected to find `{n_jobs}` results, found `{len(res)}`."
+        # `parallelize` chunks the permutations, so there is one result per non-empty chunk;
+        # with fewer permutations than jobs that is fewer than `n_jobs`.
+        assert 0 < len(res) <= n_jobs, f"Expected between `1` and `{n_jobs}` results, found `{len(res)}`."
 
         meanss: list[NDArrayA] = [r.means for r in res if r.means is not None]
         assert len(meanss) == 1, f"Only `1` job should've calculated the means, but found `{len(meanss)}`."

@@ -26,7 +26,7 @@ from spatialdata.models.models import (
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, thread_map
+from squidpy._utils import NDArrayA, get_n_threads, thread_map
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -823,7 +823,7 @@ def _run_spatial_neighbors(
         mats = thread_map(
             builder.build,
             per_lib_coords,
-            n_jobs=n_jobs,
+            n_jobs=get_n_threads(n_jobs),
             unit="library",
         )
         adj, dst = builder.combine(mats, idxs)
