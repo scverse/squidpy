@@ -153,8 +153,11 @@ jobs:
         env:
           PLATFORM: ${{ matrix.os }}
           DISPLAY: :42
-        # tests/experimental/plotting has its own job, see `spatialdata-plot` below.
-        run: uvx hatch run ${{ matrix.env.name }}:run -v --color=yes -n auto --ignore=tests/experimental/plotting
+        # The stable environments run tests/experimental/plotting as part of the suite.
+        # The pre-release one skips it and gets the dedicated `spatialdata-plot` job below.
+        run: |
+          uvx hatch run ${{ matrix.env.name }}:run -v --color=yes -n auto \
+            ${{ contains(matrix.env.name, 'pre') && '--ignore=tests/experimental/plotting' || '' }}
 
       - name: Archive figures generated during testing
         if: always()
@@ -208,10 +211,9 @@ jobs:
         env:
           PLATFORM: ubuntu-latest
           DISPLAY: :42
-        # tests/experimental/plotting has its own job, see `spatialdata-plot` below.
         run: |
           uvx hatch run hatch-test.py3.14-stable:cov-erase
-          uvx hatch run hatch-test.py3.14-stable:run-cov -v --color=yes --ignore=tests/experimental/plotting
+          uvx hatch run hatch-test.py3.14-stable:run-cov -v --color=yes
           uvx hatch run hatch-test.py3.14-stable:cov-combine
           uvx hatch run hatch-test.py3.14-stable:cov-report
 
@@ -221,15 +223,17 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
 
-  # `tests/experimental/plotting` renders through `spatialdata-plot`. It gets its own
-  # job so that breakage in that stack is attributable at a glance instead of turning
-  # every environment in the matrix above red -- most importantly the pre-release one,
-  # where spatialdata-plot's own compatibility is out of our hands and its collection
-  # errors would mask squidpy's.
+  # `tests/experimental/plotting` renders through `spatialdata-plot`, whose own
+  # pre-release compatibility is out of our hands -- its collection errors would mask
+  # squidpy's in the pre-release environment. So the pre-release run of those tests is
+  # carved out here: still visible (and still failing) on its own line, without turning
+  # the whole pre-release environment red. The stable environments keep running these
+  # tests as part of the suite in the `test` and `coverage` jobs above.
   spatialdata-plot:
-    name: spatialdata-plot tests (ubuntu-latest, hatch-test.py3.14-stable)
+    name: spatialdata-plot tests (PRE-RELEASE DEPENDENCIES) (ubuntu-latest)
     needs: [ensure-data-is-cached]
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v5
         with:
@@ -265,31 +269,20 @@ jobs:
           sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
 
       - name: create hatch environment
-        run: uvx hatch env create hatch-test.py3.14-stable
+        run: uvx hatch env create hatch-test.py3.14-pre
 
       - name: run tests using hatch
         env:
           PLATFORM: ubuntu-latest
           DISPLAY: :42
-        # Covered separately from the `coverage` job above, which skips these tests;
-        # codecov merges the two uploads for the commit.
-        run: |
-          uvx hatch run hatch-test.py3.14-stable:cov-erase
-          uvx hatch run hatch-test.py3.14-stable:run-cov -v --color=yes tests/experimental/plotting
-          uvx hatch run hatch-test.py3.14-stable:cov-combine
-          uvx hatch run hatch-test.py3.14-stable:cov-xml
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v6
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+        # No coverage upload: the stable `coverage` job above already covers these tests.
+        run: uvx hatch run hatch-test.py3.14-pre:run -v --color=yes -n auto tests/experimental/plotting
 
       - name: Archive figures generated during testing
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: visual_test_results_Linux_spatialdata-plot
+          name: visual_test_results_Linux_hatch-test.py3.14-pre_spatialdata-plot
           path: ${{ github.workspace }}/tests/figures/*
 
 

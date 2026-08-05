@@ -32,9 +32,6 @@ scripts.cov-report = [
 ]
 # extra commands
 scripts.cov-erase = "coverage erase"
-# `cov-report` without the diff-cover gate, for jobs that only cover a subset of
-# the suite and upload their coverage to be merged with the main run's.
-scripts.cov-xml = "coverage xml -o coverage.xml"
 scripts.download = "python ./.scripts/ci/download_data.py {args}"
 
 [envs.notebooks]
