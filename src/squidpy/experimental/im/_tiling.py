@@ -452,7 +452,7 @@ def _run_tiled(
     """Run ``process_fn(spec, *scatter)`` over tile ``specs``; return results in spec order.
 
     Engine selection: an active ``distributed.Client`` wins; else ``n_jobs`` (``1``/`None`
-    serial, ``-1`` numba's default thread count) picks workers and
+    serial, ``-1`` all available cores, ``0`` and ``< -1`` errors) picks workers and
     ``kind`` picks the scheduler -- ``"threads"`` for GIL-releasing work (numba
     ``nogil``), ``"processes"`` for GIL-bound work (a ``LocalCluster``, since the
     local multiprocessing scheduler does not fork). ``scatter`` holds large objects
@@ -465,8 +465,9 @@ def _run_tiled(
     if _has_distributed_client():
         from dask.distributed import get_client
 
-        # Warn only when an explicit worker count (not a default) is overridden.
-        if n_jobs not in (None, 1, -1):
+        # Warn only when an explicit worker count is overridden; every negative value means
+        # "the default", so none of them count as explicit.
+        if n_jobs is not None and n_jobs > 1:
             logg.warning("`n_jobs` is ignored when an active dask.distributed Client is in scope.")
         return _run_on_client(get_client(), specs, process_fn, scatter, desc)
 

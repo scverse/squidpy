@@ -118,9 +118,9 @@ Nothing, just plots the figure and optionally saves the plot.
 """
 _parallelize = """\
 n_jobs
-    Number of parallel jobs to use. `None` is serial and ``-1`` uses numba's default thread
-    count (:attr:`numba.config.NUMBA_NUM_THREADS`); asking for more than that warns and falls
-    back to it.
+    Number of parallel jobs to use. `None` is serial and ``-1`` uses all available cores;
+    asking for more cores than are available warns and falls back to all of them. ``0`` and
+    values below ``-1`` raise, since :doc:`scanpy <scanpy:index>` only supports ``n_jobs >= -1``.
     For ``backend="loky"``, the number of cores used by numba for
     each job spawned by the backend will be set to 1 in order to
     overcome the oversubscription issue in case you run
@@ -134,9 +134,15 @@ show_progress_bar
     Whether to show the progress bar or not."""
 _n_jobs = """\
 n_jobs
-    Number of parallel jobs to use. `None` is serial and ``-1`` uses numba's default thread
-    count (:attr:`numba.config.NUMBA_NUM_THREADS`); asking for more than that warns and falls
-    back to it."""
+    Number of parallel jobs to use. `None` is serial and ``-1`` uses all available cores;
+    asking for more cores than are available warns and falls back to all of them. ``0`` and
+    values below ``-1`` raise, since :doc:`scanpy <scanpy:index>` only supports ``n_jobs >= -1``."""
+_n_jobs_threads = """\
+n_jobs
+    Number of parallel threads to use. `None` and ``-1`` use numba's default thread count
+    (:attr:`numba.config.NUMBA_NUM_THREADS`); asking for more threads than that warns and falls
+    back to it. ``0`` and values below ``-1`` raise, since :doc:`scanpy <scanpy:index>` only
+    supports ``n_jobs >= -1``."""
 _show_progress_bar = """\
 show_progress_bar
     Whether to show the progress bar or not."""
@@ -402,9 +408,10 @@ n_jobs
     Number of parallel jobs used to build the per-library graphs when ``library_key``
     is set. Each library's graph is computed independently, so this only has an effect
     for multi-library data. ``1`` (default) builds the graphs sequentially and does not
-    change behavior; ``-1`` uses numba's default thread count
-    (:attr:`numba.config.NUMBA_NUM_THREADS`), and asking for more than that warns and falls
-    back to it. Has no effect when ``library_key`` is ``None``. Speedup is
+    change behavior; `None` and ``-1`` use numba's default thread count
+    (:attr:`numba.config.NUMBA_NUM_THREADS`), while ``0`` and values below ``-1`` raise; asking
+    for more threads than that warns and falls back to it. Has no effect when ``library_key``
+    is ``None``. Speedup is
     sub-linear (memory-bandwidth bound), so parallelism mainly pays off for many large
     libraries."""
 _spatial_neighbors_returns = """\
@@ -440,6 +447,7 @@ d = DocstringProcessor(
     plotting_returns=_plotting_returns,
     parallelize=_parallelize,
     n_jobs=_n_jobs,
+    n_jobs_threads=_n_jobs_threads,
     show_progress_bar=_show_progress_bar,
     channels=_channels,
     segment_kwargs=_segment_kwargs,

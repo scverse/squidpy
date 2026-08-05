@@ -6,15 +6,15 @@ import numba
 import pytest  # type: ignore[import]
 
 from squidpy import _utils
-from squidpy._utils import get_n_processes, get_n_threads, thread_map
+from squidpy._utils import _cpu_count, get_n_processes, get_n_threads, thread_map
 
 MAX_THREADS = numba.config.NUMBA_NUM_THREADS
+MAX_CORES = _cpu_count()
 
 
-@pytest.mark.parametrize("n_jobs", [-1, -2, -100])
-def test_negative_uses_the_numba_default(n_jobs: int):
-    assert get_n_processes(n_jobs) == MAX_THREADS
-    assert get_n_threads(n_jobs) == MAX_THREADS
+def test_minus_one_uses_the_default():
+    assert get_n_processes(-1) == MAX_CORES
+    assert get_n_threads(-1) == MAX_THREADS
 
 
 def test_none_is_serial_for_processes_and_the_numba_default_for_threads():
@@ -22,20 +22,26 @@ def test_none_is_serial_for_processes_and_the_numba_default_for_threads():
     assert get_n_threads(None) == MAX_THREADS
 
 
+# scanpy only supports `n_jobs >= -1`, so the countdown convention (`-2` == all but one) is
+# not silently reinterpreted -- it is rejected.
+@pytest.mark.parametrize("n_jobs", [0, -2, -3, -100])
 @pytest.mark.parametrize("resolve", [get_n_processes, get_n_threads])
-def test_zero_raises(resolve):
-    with pytest.raises(ValueError, match=r"cannot be `0`"):
-        resolve(0)
+def test_zero_and_below_minus_one_raise(resolve, n_jobs: int):
+    with pytest.raises(ValueError, match=r"must be `-1` or a positive integer"):
+        resolve(n_jobs)
 
 
-@pytest.mark.parametrize("resolve", [get_n_processes, get_n_threads])
-def test_too_many_warns_and_falls_back(resolve, monkeypatch):
+@pytest.mark.parametrize(
+    ("resolve", "maximum"),
+    [(get_n_processes, MAX_CORES), (get_n_threads, MAX_THREADS)],
+)
+def test_too_many_warns_and_falls_back(resolve, maximum: int, monkeypatch):
     messages: list[str] = []
     monkeypatch.setattr(_utils.logg, "warning", messages.append)
 
-    assert resolve(MAX_THREADS + 1) == MAX_THREADS
+    assert resolve(maximum + 1) == maximum
     assert len(messages) == 1
-    assert f"n_jobs={MAX_THREADS + 1}" in messages[0]
+    assert f"n_jobs={maximum + 1}" in messages[0]
 
 
 @pytest.mark.parametrize("n_jobs", [1, 2])

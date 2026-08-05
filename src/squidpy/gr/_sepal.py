@@ -14,7 +14,7 @@ from spatialdata import SpatialData
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, deprecated_params, get_n_processes, thread_map
+from squidpy._utils import NDArrayA, deprecated_params, get_n_threads, thread_map
 from squidpy._validators import assert_non_empty_sequence
 from squidpy.gr._utils import (
     _assert_connectivity_key,
@@ -82,7 +82,7 @@ def sepal(
     use_raw
         Whether to access :attr:`anndata.AnnData.raw`.
     %(copy)s
-    %(n_jobs)s
+    %(n_jobs_threads)s
     %(show_progress_bar)s
     Returns
     -------
@@ -111,7 +111,7 @@ def sepal(
             genes = genes[adata.var["highly_variable"].values]
     genes = assert_non_empty_sequence(genes, name="genes")
 
-    n_jobs = get_n_processes(n_jobs)
+    n_jobs = get_n_threads(n_jobs)
 
     g = adata.obsp[connectivity_key]
     if not isspmatrix_csr(g):
@@ -127,7 +127,7 @@ def sepal(
 
     # get counts
     vals, genes = _extract_expression(adata, genes=genes, use_raw=use_raw, layer=layer)
-    start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` core(s)")
+    start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` thread(s)")
 
     use_hex = max_neighs == 6
 

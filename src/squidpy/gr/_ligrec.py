@@ -732,10 +732,13 @@ def _analysis(
         - `'pvalues'` - array of shape `(n_interactions, n_interaction_clusters)` containing the p-values.
     """
 
+    # `parallelize` splits the permutations into equal-sized chunks and drops the empty ones,
+    # so there is 1 result per chunk -- fewer than `n_jobs` whenever the split doesn't divide
+    # evenly (e.g. `n_perms=10, n_jobs=6` -> 5 chunks of 2). Mirrors the chunking there.
+    n_chunks = int(np.ceil(n_perms / np.ceil(n_perms / n_jobs)))
+
     def extractor(res: Sequence[TempResult]) -> TempResult:
-        # `parallelize` chunks the permutations, so there is one result per non-empty chunk;
-        # with fewer permutations than jobs that is fewer than `n_jobs`.
-        assert 0 < len(res) <= n_jobs, f"Expected between `1` and `{n_jobs}` results, found `{len(res)}`."
+        assert len(res) == n_chunks, f"Expected to find `{n_chunks}` results, found `{len(res)}`."
 
         meanss: list[NDArrayA] = [r.means for r in res if r.means is not None]
         assert len(meanss) == 1, f"Only `1` job should've calculated the means, but found `{len(meanss)}`."

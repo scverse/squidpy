@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import os
 import warnings
 from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
 from contextlib import contextmanager
@@ -17,7 +18,7 @@ import joblib as jl
 import numba
 import numpy as np
 import xarray as xr
-from spatialdata._logging import logger as logg
+from scanpy import logging as logg
 from spatialdata.models import Image2DModel, Labels2DModel
 
 if TYPE_CHECKING:
@@ -47,6 +48,14 @@ except ImportError:
 from numpy.typing import NDArray
 
 NDArrayA = NDArray[Any]
+
+
+def _cpu_count() -> int:
+    """Number of CPUs available to this process, respecting cgroup/``taskset`` limits."""
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):  # no affinity query, e.g. macOS
+        return os.cpu_count() or 1
 
 
 class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
@@ -100,8 +109,8 @@ def parallelize(
     collection
         Sequence of items to split into chunks.
     n_jobs
-        Number of parallel jobs to use. `None` is serial and ``-1`` uses numba's default thread
-        count. If the function uses numba compiled functions, numba may use cores depending on the
+        Number of parallel jobs to use. `None` is serial and ``-1`` uses all available cores;
+        ``0`` and values below ``-1`` raise. If the function uses numba compiled functions, numba may use cores depending on the
         number of threads set in the environment regardless of this argument.
     n_split
         Split ``collection`` into ``n_split`` chunks.
@@ -291,63 +300,34 @@ def thread_map(
 
 
 def get_n_threads(n_threads: int | None) -> int:
-    """Resolve a numba thread count, following :doc:`scanpy <scanpy:index>`.
+    """Resolve a thread count: `None`/``-1`` is numba's default, the rest raises.
 
-    Use for ``@njit(parallel=True)`` kernels whose parallelism is a single numba call.
-
-    Parameters
-    ----------
-    n_threads
-        Requested number of threads. `None` and ``-1`` (any negative value) use numba's
-        default (:attr:`numba.config.NUMBA_NUM_THREADS`); ``0`` is an error; larger values
-        warn and fall back to the numba default instead of oversubscribing.
-
-    Returns
-    -------
-    int
-        Positive thread count in ``[1, NUMBA_NUM_THREADS]``.
+    Use for numba kernels and thread pools over them, whose ceiling is numba's thread pool
+    rather than the cpu count.
     """
     max_threads = numba.config.NUMBA_NUM_THREADS
-    if n_threads is None or n_threads < 0:
+    if n_threads is None or n_threads == -1:
         return max_threads
-    if n_threads == 0:
-        raise ValueError("Number of threads cannot be `0`.")
+    if n_threads < -1 or n_threads == 0:
+        raise ValueError(f"Number of threads must be `-1` or a positive integer, got `{n_threads}`.")
     if n_threads > max_threads:
-        logg.warning(f"Requested `n_jobs={n_threads}`, but only `{max_threads}` threads are available.")
+        logg.warning(f"Requested `n_jobs={n_threads}`, but numba allows at most `{max_threads}` thread(s).")
         return max_threads
 
     return n_threads
 
 
 def get_n_processes(n_cores: int | None) -> int:
-    """Make number of processes a positive integer, mainly for logging.
-
-    .. deprecated::
-        Kept for the process-based parallelization; slated for removal once those call
-        sites migrate to numba threading.
-
-    Parameters
-    ----------
-    n_cores
-        Number of cores to use. `None` is serial (``1``), since spawning processes is only
-        worth it when asked for explicitly; ``-1`` (any negative value) uses numba's default
-        thread count (:attr:`numba.config.NUMBA_NUM_THREADS`); ``0`` is an error; larger
-        values warn and fall back to that default.
-
-    Returns
-    -------
-    int
-        Positive integer corresponding to how many cores to use.
-    """
+    """Resolve a worker-process count: `None` is serial, ``-1`` is all cores, the rest raises."""
     if n_cores is None:
         return 1
-    max_cores = numba.config.NUMBA_NUM_THREADS
-    if n_cores < 0:
+    max_cores = _cpu_count()
+    if n_cores == -1:
         return max_cores
-    if n_cores == 0:
-        raise ValueError("Number of cores cannot be `0`.")
+    if n_cores < -1 or n_cores == 0:
+        raise ValueError(f"Number of cores must be `-1` or a positive integer, got `{n_cores}`.")
     if n_cores > max_cores:
-        logg.warning(f"Requested `n_jobs={n_cores}`, but only `{max_cores}` cores are available.")
+        logg.warning(f"Requested `n_jobs={n_cores}`, but only `{max_cores}` core(s) are available.")
         return max_cores
 
     return n_cores
