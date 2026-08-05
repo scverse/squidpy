@@ -11,6 +11,8 @@ __all__ = [
     "panel_grid",
     "add_colors_for_categorical_sample_annotation",
     "default_palette",
+    "default_frameon",
+    "vector_friendly",
     # anndata
     "ArrayView",
     "SparseCSCView",
@@ -43,6 +45,29 @@ except ImportError:
         )
     except ImportError:
         from scanpy.plotting._utils import set_default_colors_for_categorical_obs
+
+
+# Scanpy 1.13 also moved these two plotting defaults off ``Settings``, where they were the
+# private ``_frameon`` / ``_vector_friendly`` class attributes, and onto module-level
+# globals in ``scanpy.plotting.legacy.mpl_settings``. ``scanpy.set_figure_params`` rebinds
+# them in either layout, so they must be read at call time rather than imported once.
+try:
+    from scanpy.plotting.legacy import mpl_settings as _mpl_settings
+
+    def default_frameon() -> bool:
+        return _mpl_settings.FRAMEON
+
+    def vector_friendly() -> bool:
+        return _mpl_settings.VECTOR_FRIENDLY
+
+except ImportError:
+    from scanpy import settings as _sc_settings
+
+    def default_frameon() -> bool:
+        return _sc_settings._frameon
+
+    def vector_friendly() -> bool:
+        return _sc_settings._vector_friendly
 
 
 CAN_USE_SPARSE_ARRAY = Version(version("anndata")) >= Version("0.11.0rc1")
