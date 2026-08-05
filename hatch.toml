@@ -20,6 +20,10 @@ matrix = [
 ]
 overrides.matrix.deps.env-vars = [
   { key = "UV_PRERELEASE", value = "allow", if = ["pre"] },
+  # tests/experimental/plotting needs `spatialdata-plot`, whose own pre-release
+  # compatibility we do not control. Its breakage would mask squidpy's, so the
+  # pre-release env skips it; the stable envs still run it.
+  { key = "HATCH_TEST_ARGS", value = " --ignore=tests/experimental/plotting", if = ["pre"] },
 ]
 # default commands (only `cov-report` is overridden)
 scripts.run = "pytest{env:HATCH_TEST_ARGS:} -p no:cov {args}"
