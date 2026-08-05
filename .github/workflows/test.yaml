@@ -153,7 +153,8 @@ jobs:
         env:
           PLATFORM: ${{ matrix.os }}
           DISPLAY: :42
-        run: uvx hatch run ${{ matrix.env.name }}:run -v --color=yes -n auto
+        # tests/experimental/plotting has its own job, see `spatialdata-plot` below.
+        run: uvx hatch run ${{ matrix.env.name }}:run -v --color=yes -n auto --ignore=tests/experimental/plotting
 
       - name: Archive figures generated during testing
         if: always()
@@ -207,9 +208,10 @@ jobs:
         env:
           PLATFORM: ubuntu-latest
           DISPLAY: :42
+        # tests/experimental/plotting has its own job, see `spatialdata-plot` below.
         run: |
           uvx hatch run hatch-test.py3.14-stable:cov-erase
-          uvx hatch run hatch-test.py3.14-stable:run-cov -v --color=yes
+          uvx hatch run hatch-test.py3.14-stable:run-cov -v --color=yes --ignore=tests/experimental/plotting
           uvx hatch run hatch-test.py3.14-stable:cov-combine
           uvx hatch run hatch-test.py3.14-stable:cov-report
 
@@ -218,6 +220,77 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+
+  # `tests/experimental/plotting` renders through `spatialdata-plot`. It gets its own
+  # job so that breakage in that stack is attributable at a glance instead of turning
+  # every environment in the matrix above red -- most importantly the pre-release one,
+  # where spatialdata-plot's own compatibility is out of our hands and its collection
+  # errors would mask squidpy's.
+  spatialdata-plot:
+    name: spatialdata-plot tests (ubuntu-latest, hatch-test.py3.14-stable)
+    needs: [ensure-data-is-cached]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          filter: blob:none
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.14"
+          cache-dependency-glob: pyproject.toml
+
+      - name: Ensure figure directory exists
+        run: mkdir -p "$GITHUB_WORKSPACE/tests/figures"
+
+      - name: Restore data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
+          key: data-${{ hashFiles('**/download_data.py') }}
+          restore-keys: |
+            data-
+          enableCrossOsArchive: true
+
+      - name: System dependencies (Linux)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install automake -y
+
+          # PyQt5 related
+          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 -y
+          sudo Xvfb :42 -screen 0 1920x1080x24 -ac +extension GLX </dev/null &
+
+      - name: create hatch environment
+        run: uvx hatch env create hatch-test.py3.14-stable
+
+      - name: run tests using hatch
+        env:
+          PLATFORM: ubuntu-latest
+          DISPLAY: :42
+        # Covered separately from the `coverage` job above, which skips these tests;
+        # codecov merges the two uploads for the commit.
+        run: |
+          uvx hatch run hatch-test.py3.14-stable:cov-erase
+          uvx hatch run hatch-test.py3.14-stable:run-cov -v --color=yes tests/experimental/plotting
+          uvx hatch run hatch-test.py3.14-stable:cov-combine
+          uvx hatch run hatch-test.py3.14-stable:cov-xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+      - name: Archive figures generated during testing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual_test_results_Linux_spatialdata-plot
+          path: ${{ github.workspace }}/tests/figures/*
 
 
   # Check that all tests defined above pass. This makes it easy to set a single "required" test in branch
@@ -229,6 +302,7 @@ jobs:
       - get-environments
       - test
       - coverage
+      - spatialdata-plot
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1

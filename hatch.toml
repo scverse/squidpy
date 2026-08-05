@@ -20,10 +20,6 @@ matrix = [
 ]
 overrides.matrix.deps.env-vars = [
   { key = "UV_PRERELEASE", value = "allow", if = ["pre"] },
-  # tests/experimental/plotting needs `spatialdata-plot`, whose own pre-release
-  # compatibility we do not control. Its breakage would mask squidpy's, so the
-  # pre-release env skips it; the stable envs still run it.
-  { key = "HATCH_TEST_ARGS", value = " --ignore=tests/experimental/plotting", if = ["pre"] },
 ]
 # default commands (only `cov-report` is overridden)
 scripts.run = "pytest{env:HATCH_TEST_ARGS:} -p no:cov {args}"
@@ -36,6 +32,9 @@ scripts.cov-report = [
 ]
 # extra commands
 scripts.cov-erase = "coverage erase"
+# `cov-report` without the diff-cover gate, for jobs that only cover a subset of
+# the suite and upload their coverage to be merged with the main run's.
+scripts.cov-xml = "coverage xml -o coverage.xml"
 scripts.download = "python ./.scripts/ci/download_data.py {args}"
 
 [envs.notebooks]
