@@ -52,8 +52,10 @@ from squidpy.experimental.im._tiling import (
 )
 from squidpy.experimental.tl._seam import (
     SeamDetectionParams,
-    cell_flat_edge,
-    flag_seam_cells,
+    SeamScale,
+    cell_flat_edges,
+    estimate_membrane_width,
+    flag_cells_on_seams,
 )
 from squidpy.experimental.tl._seam import detect_seams as _detect_seam_bands
 from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS, StitchParams
@@ -61,9 +63,6 @@ from squidpy.experimental.utils._labels import resolve_labels_array
 from squidpy.experimental.utils._params import resolve_params
 
 __all__ = ["SeamDetectionParams", "TilingQCParams", "calculate_tiling_qc"]
-
-# Internal per-cell seam-edge columns (dropped from the final table after seam detection).
-_SEAM_EDGE_COLUMNS = ("_seam_edge_axis", "_seam_edge_coord", "_seam_edge_span", "_seam_edge_side")
 
 
 @dataclass(slots=True, frozen=True)
@@ -344,8 +343,11 @@ def _score_tile(
     downsample: int = 1,
     max_contour_points: int = _QC_DEFAULTS.max_contour_points,
     origin: tuple[int, int] = (0, 0),
-    seam_params: SeamDetectionParams | None = None,
-) -> pd.DataFrame:
+    seam_edges: bool = False,
+    seam_min_len: int = 0,
+    seam_flat_tol: float = 1.5,
+    seam_probe_depth: int = 8,
+) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     """Compute tiling QC metrics for all cells in a numpy label tile.
 
     Parameters
@@ -370,9 +372,10 @@ def _score_tile(
     """
     regions = regionprops(tile_labels)
     if not regions:
-        return pd.DataFrame(columns=_TILE_SCORE_COLUMNS, dtype=float)
+        return pd.DataFrame(columns=_TILE_SCORE_COLUMNS, dtype=float), []
 
     rows: dict[int, dict[str, float]] = {}
+    edges: list[dict[str, Any]] = []
 
     for region in regions:
         lid = region.label
@@ -400,28 +403,21 @@ def _score_tile(
         analysis_area = area / (downsample**2) if downsample > 1 else area
         ser, cas, cs = _straight_edge_metrics(contour, analysis_area, distance_tol, max_contour_points)
 
-        row = {
+        rows[lid] = {
             "max_straight_edge_ratio": ser,
             "cardinal_alignment_score": cas,
             "cut_score": cs,
         }
-        if seam_params is not None:
-            # Dominant cardinal flat edge with a wide background gap beyond it (for seam
-            # detection).  Uses the full-resolution mask/tile (independent of `downsample`).
-            edge = cell_flat_edge(region.image, tile_labels, region.bbox, origin, seam_params)
-            if edge is not None:
-                row["_seam_edge_axis"] = 1 if edge["axis"] == "v" else 2
-                row["_seam_edge_coord"] = edge["coord"]
-                row["_seam_edge_span"] = edge["span"]
-                row["_seam_edge_side"] = edge["side"]
-        rows[lid] = row
+        if seam_edges:
+            # All cardinal flat boundary runs of this cell (full-resolution mask/tile, so
+            # independent of `downsample`).  Seam detection + flagging happen globally later.
+            for e in cell_flat_edges(
+                region.image, tile_labels, region.bbox, origin, seam_min_len, seam_flat_tol, seam_probe_depth
+            ):
+                e["cell_id"] = lid
+                edges.append(e)
 
-    df = pd.DataFrame.from_dict(rows, orient="index")
-    if seam_params is not None and "_seam_edge_axis" not in df.columns:
-        # no qualifying edges in this tile - keep the column schema stable for concat
-        for col in _SEAM_EDGE_COLUMNS:
-            df[col] = np.nan
-    return df
+    return pd.DataFrame.from_dict(rows, orient="index"), edges
 
 
 # Centroid computation (shared logic with _feature.py)
@@ -622,6 +618,17 @@ def calculate_tiling_qc(
         f"Tiling QC: {len(specs)} tiles ({tile_size}x{tile_size}, margin={overlap_margin}, downsample={downsample}x)."
     )
 
+    # Data length scale D (median cell equivalent diameter) -> resolves every seam threshold to
+    # pixels at runtime, so no absolute-pixel constants are baked in.
+    _sizes = np.array([np.sqrt(ci.bbox_h * ci.bbox_w) for ci in cell_info.values()], dtype=float)
+    seam_diameter = float(np.median(_sizes)) if _sizes.size else 1.0
+    if resolved_seam is not None:
+        seam_min_len = max(3, int(round(resolved_seam.edge_len_frac * seam_diameter)))
+        seam_flat_tol = resolved_seam.flat_tol  # rasterisation constant (px), not size-scaled
+        seam_probe_depth = max(3, int(round(resolved_seam.probe_frac * seam_diameter)))
+    else:
+        seam_min_len, seam_flat_tol, seam_probe_depth = 0, 1.5, 8
+
     def _process_one(spec):
         tile_lbl = extract_labels_tile_lazy(labels_da, spec)
         return _score_tile(
@@ -631,13 +638,17 @@ def calculate_tiling_qc(
             downsample=downsample,
             max_contour_points=qc_params.max_contour_points,
             origin=(spec.crop[0], spec.crop[1]),
-            seam_params=resolved_seam,
+            seam_edges=resolved_seam is not None,
+            seam_min_len=seam_min_len,
+            seam_flat_tol=seam_flat_tol,
+            seam_probe_depth=seam_probe_depth,
         )
 
     # `_score_tile` is numba `nogil`, so threads scale (no process/pickle cost).
     results = _run_tiled(specs, _process_one, n_jobs=n_jobs, kind="threads", desc="tiles")
 
-    tile_dfs = [df for df in results if not df.empty]
+    tile_dfs = [df for df, _edges in results if not df.empty]
+    all_edges = [e for _df, edges in results for e in edges]
 
     if not tile_dfs:
         raise ValueError("No cells scored - labels may be empty or all below min_area.")
@@ -701,29 +712,22 @@ def calculate_tiling_qc(
         combined["nhood_outlier_fraction"] = neighbor_outlier_frac
 
     # --- Emergent-seam cut-cell detection (FOV-size-agnostic, single-sided-friendly) ---
+    # Two stages: (1) locate the seam grid from wide-gap edges (a consensus over many cells;
+    # a lone straight membrane between two touching cells is off-grid and ignored); (2) flag
+    # any cell with a cardinal edge on a detected seam -- the gap is no longer required, so
+    # partial-edge and two-sided close-gap cuts are caught. All thresholds derive from `scale`.
     seams_uns: dict[str, list[dict[str, float]]] = {"v": [], "h": []}
     if resolved_seam is not None:
-
-        def _col(name: str, fill: float) -> np.ndarray:
-            if name in combined.columns:
-                return np.nan_to_num(combined[name].to_numpy(dtype=float), nan=fill)
-            return np.full(n_cells, fill)
-
-        edge_axis = _col("_seam_edge_axis", 0.0).astype(np.int8)
-        edge_coord = (
-            _col("_seam_edge_coord", np.nan) if "_seam_edge_coord" in combined.columns else np.full(n_cells, np.nan)
-        )
-        edge_side = _col("_seam_edge_side", 0.0).astype(np.int8)
-        edge_span = _col("_seam_edge_span", 0.0)
-
-        cv = edge_coord[edge_axis == 1]
-        ch = edge_coord[edge_axis == 2]
-        seams = _detect_seam_bands(cv[~np.isnan(cv)], ch[~np.isnan(ch)], W, H, resolved_seam)
-        is_seam_cut, seam_dist = flag_seam_cells(edge_axis, edge_coord, edge_side, edge_span, seams, resolved_seam)
-
-        combined = combined.drop(columns=[c for c in _SEAM_EDGE_COLUMNS if c in combined.columns])
-        combined["is_seam_cut"] = is_seam_cut
-        combined["seam_dist"] = seam_dist
+        membrane = estimate_membrane_width(np.array([e["gap"] for e in all_edges], dtype=float))
+        scale = SeamScale(diameter=seam_diameter, membrane=membrane)
+        seams = _detect_seam_bands(all_edges, W, H, scale, resolved_seam)  # stage 1
+        edges_by_cell: dict[int, list[dict[str, Any]]] = {}
+        for e in all_edges:
+            edges_by_cell.setdefault(e["cell_id"], []).append(e)
+        flagged = flag_cells_on_seams(edges_by_cell, seams, scale, resolved_seam)  # stage 2
+        idx = combined.index
+        combined["is_seam_cut"] = np.fromiter((lid in flagged for lid in idx), dtype=bool, count=len(idx))
+        combined["seam_dist"] = np.fromiter((flagged.get(lid, np.nan) for lid in idx), dtype=float, count=len(idx))
         seams_uns = {
             axis: [{"coord": c, "half_width": h, "n_edges": int(k)} for c, h, k in bands]
             for axis, bands in seams.items()
