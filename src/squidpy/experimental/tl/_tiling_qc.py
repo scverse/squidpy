@@ -719,12 +719,12 @@ def calculate_tiling_qc(
     seams_uns: dict[str, list[dict[str, float]]] = {"v": [], "h": []}
     if resolved_seam is not None:
         membrane = estimate_membrane_width(np.array([e["gap"] for e in all_edges], dtype=float))
-        scale = SeamScale(diameter=seam_diameter, membrane=membrane)
-        seams = _detect_seam_bands(all_edges, W, H, scale, resolved_seam)  # stage 1
+        seam_scale = SeamScale(diameter=seam_diameter, membrane=membrane)  # note: not the `scale` arg
+        seams = _detect_seam_bands(all_edges, W, H, seam_scale, resolved_seam)  # stage 1
         edges_by_cell: dict[int, list[dict[str, Any]]] = {}
         for e in all_edges:
             edges_by_cell.setdefault(e["cell_id"], []).append(e)
-        flagged = flag_cells_on_seams(edges_by_cell, seams, scale, resolved_seam)  # stage 2
+        flagged = flag_cells_on_seams(edges_by_cell, seams, seam_scale, resolved_seam)  # stage 2
         idx = combined.index
         combined["is_seam_cut"] = np.fromiter((lid in flagged for lid in idx), dtype=bool, count=len(idx))
         combined["seam_dist"] = np.fromiter((flagged.get(lid, np.nan) for lid in idx), dtype=float, count=len(idx))
