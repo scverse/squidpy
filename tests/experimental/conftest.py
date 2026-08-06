@@ -222,3 +222,90 @@ def make_clean_sdata() -> SpatialData:
 def sdata_clean() -> SpatialData:
     """Fixture wrapper around :func:`make_clean_sdata`."""
     return make_clean_sdata()
+
+
+# Dense-tissue + wide-gap + single-sided seam fixture (stresses emergent-seam detection)
+
+_DENSE_SIZE = 420
+_DENSE_BORDERS = (140, 280)  # two internal seams per axis (3x3 tile grid)
+_DENSE_GAP = 8  # wide inter-FOV gap (>> the current stitcher's 3px max_gap)
+
+
+@dataclass
+class DenseSeamGroundTruth:
+    """Ground truth for the dense-tissue seam fixture."""
+
+    cut_cell_ids: frozenset[int] = field(default_factory=frozenset)
+    seam_coords: tuple[int, ...] = _DENSE_BORDERS
+    gap: int = _DENSE_GAP
+
+
+def make_dense_seam_sdata() -> tuple[SpatialData, DenseSeamGroundTruth]:
+    """Dense **touching** Voronoi cells cut by a wide seam, with single-sided drop-out.
+
+    Mimics CosMx-style per-FOV segmentation on dense tissue: convex Voronoi cells with
+    thin membranes, a wide zeroed seam band, and small remnants dropped so many cuts leave
+    only one segmentable half.  Convex cells never self-fragment, so the ground truth (a
+    cell is cut iff its pre-cut mask overlaps the seam band) is exact.
+    """
+    from scipy.spatial import cKDTree
+
+    rng = np.random.default_rng(0)
+    size, borders, gap = _DENSE_SIZE, _DENSE_BORDERS, _DENSE_GAP
+    pts = [(y + rng.integers(-4, 5), x + rng.integers(-4, 5)) for y in range(15, size, 15) for x in range(15, size, 15)]
+    tree = cKDTree(np.array(pts))
+    yy, xx = np.mgrid[0:size, 0:size]
+    d, idx = tree.query(np.column_stack([yy.ravel(), xx.ravel()]), k=2)
+    cell = (idx[:, 0] + 1).reshape(size, size).astype(np.int32)
+    cell[((d[:, 1] - d[:, 0]) < 1.5).reshape(size, size)] = 0  # thin membranes
+    orig = cell.copy()
+
+    half = gap // 2
+    seam = np.zeros((size, size), bool)
+    for b in borders:
+        seam[b - half : b - half + gap, :] = True
+        seam[:, b - half : b - half + gap] = True
+    cut_orig = set(np.unique(orig[seam & (orig > 0)])) - {0}
+    orig_area = {i: int((orig == i).sum()) for i in np.unique(orig) if i}
+
+    seg = orig.copy()
+    seg[seam] = 0
+    frag, nfrag = ndimage.label(seg > 0)
+    parent = np.zeros(nfrag + 1, np.int64)
+    frags_of: dict[int, list[int]] = {}
+    for f in range(1, nfrag + 1):
+        vals = orig[frag == f]
+        vals = vals[vals > 0]
+        parent[f] = np.bincount(vals).argmax() if vals.size else 0
+        frags_of.setdefault(int(parent[f]), []).append(f)
+
+    keep = np.ones(nfrag + 1, bool)
+    keep[0] = False
+    for o in cut_orig:
+        for f in frags_of.get(o, []):
+            if (frag == f).sum() / max(orig_area.get(o, 1), 1) < 0.45 and rng.random() < 0.75:
+                keep[f] = False
+    frag2, nf2 = ndimage.label(np.where(keep[frag], frag, 0) > 0)
+
+    cut_ids: set[int] = set()
+    for f in range(1, nf2 + 1):
+        vals = orig[frag2 == f]
+        vals = vals[vals > 0]
+        if vals.size and int(np.bincount(vals).argmax()) in cut_orig:
+            cut_ids.add(f)
+
+    labels_xr = xr.DataArray(da.from_array(frag2.astype(np.int32), chunks=(128, 128)), dims=["y", "x"])
+    image_xr = xr.DataArray(
+        rng.integers(0, 255, (3, size, size), dtype=np.uint8), dims=["c", "y", "x"], coords={"c": ["R", "G", "B"]}
+    )
+    sdata = SpatialData(
+        images={"image": Image2DModel.parse(image_xr)},
+        labels={"labels": Labels2DModel.parse(labels_xr)},
+    )
+    return sdata, DenseSeamGroundTruth(cut_cell_ids=frozenset(cut_ids))
+
+
+@pytest.fixture()
+def sdata_dense_seam() -> tuple[SpatialData, DenseSeamGroundTruth]:
+    """Fixture wrapper around :func:`make_dense_seam_sdata`."""
+    return make_dense_seam_sdata()
