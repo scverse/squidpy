@@ -30,17 +30,19 @@ class TestAssignStitchGroups:
             assert col in adata.obs.columns
 
     def test_confidence_convention(self, sdata_tile_boundary):
-        # NaN = not evaluated (non-outlier), 1.0 = solo outlier, composite = stitched.
+        # NaN = not evaluated (non-candidate), 1.0 = solo candidate, composite = stitched.
+        # The candidate gate defaults to `is_seam_cut` when present, else `is_outlier`.
         sdata, _ = sdata_tile_boundary
         obs = _run_qc_and_stitch(sdata, min_confidence=0.5).obs
+        gate = "is_seam_cut" if "is_seam_cut" in obs.columns else "is_outlier"
 
-        non_outliers = ~obs["is_outlier"].astype(bool)
-        assert non_outliers.sum() > 0
-        assert obs.loc[non_outliers, "stitch_confidence"].isna().all()
-        assert (obs.loc[non_outliers, "stitch_group_id"] == obs.loc[non_outliers, "label_id"]).all()
-        assert (obs.loc[non_outliers, "n_pieces"] == 1).all()
+        non_cands = ~obs[gate].astype(bool)
+        assert non_cands.sum() > 0
+        assert obs.loc[non_cands, "stitch_confidence"].isna().all()
+        assert (obs.loc[non_cands, "stitch_group_id"] == obs.loc[non_cands, "label_id"]).all()
+        assert (obs.loc[non_cands, "n_pieces"] == 1).all()
 
-        solo = obs["is_outlier"].astype(bool) & ~obs["is_stitched"].astype(bool)
+        solo = obs[gate].astype(bool) & ~obs["is_stitched"].astype(bool)
         if solo.sum() > 0:
             assert (obs.loc[solo, "stitch_confidence"] == 1.0).all()
 
