@@ -155,6 +155,7 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     experimental.im.calculate_image_features
     experimental.tl.calculate_tiling_qc
     experimental.tl.TilingQCParams
+    experimental.tl.SeamDetectionParams
     experimental.tl.assign_stitch_groups
     experimental.tl.StitchParams
     experimental.tl.make_stitched_labels
