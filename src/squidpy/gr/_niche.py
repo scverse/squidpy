@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Any, Literal
 
 import anndata as ad
@@ -71,15 +71,13 @@ def calculate_niche(
     Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
     The resulting niche labels with be stored in 'adata.obs'.
 
-    .. deprecated:: 1.8.3
-            ``calculate_niche`` is deprecated and will be removed in squidpy
-            v1.9.0. Use one of the flavor-specific functions instead:
-
-            - ``calculate_niche_neighborhood``
-            - ``calculate_niche_utag``
-            - ``calculate_niche_cellcharter``
-            - ``calculate_niche_spatialleiden``
-            - ``calculate_niche_custom``
+    See Also
+    --------
+    calculate_niche_neighborhood : Neighborhood-profile flavor with an explicit signature.
+    calculate_niche_utag : UTAG flavor with an explicit signature.
+    calculate_niche_cellcharter : CellCharter flavor with an explicit signature.
+    calculate_niche_spatialleiden : SpatialLeiden flavor with an explicit signature.
+    calculate_niche_custom : Custom embedder/clusterer combinations.
 
     Parameters
     ----------
@@ -1016,7 +1014,62 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
 ############
 
 
-class NicheEmbedder:
+def _setdiag(adjacency_matrix: sps.spmatrix, value: int) -> sps.spmatrix:
+    """remove self-loops"""
+
+    if issparse(adjacency_matrix):
+        adjacency_matrix = adjacency_matrix.tolil()
+    adjacency_matrix.setdiag(value)
+    adjacency_matrix = adjacency_matrix.tocsr()
+    if value == 0:
+        adjacency_matrix.eliminate_zeros()
+    return adjacency_matrix
+
+
+def _hop(
+    adj_hop: sps.spmatrix,
+    adj: sps.spmatrix,
+    adj_visited: sps.spmatrix = None,
+) -> tuple[sps.spmatrix, sps.spmatrix]:
+    """get nearest neighbor of neighbors"""
+
+    adj_hop = adj_hop @ adj
+
+    if adj_visited is not None:
+        adj_hop = adj_hop > adj_visited
+        adj_visited = adj_visited + adj_hop
+
+    return adj_hop, adj_visited
+
+
+def _normalize(adj: sps.spmatrix) -> sps.spmatrix:
+    """normalize adjacency matrix such that nodes with high degree don't disproportionately affect aggregation"""
+
+    deg = np.array(np.sum(adj, axis=1)).squeeze()
+    with np.errstate(divide="ignore"):
+        deg_inv = 1 / deg
+    deg_inv[deg_inv == float("inf")] = 0
+
+    return spdiags(deg_inv, 0, len(deg_inv), len(deg_inv)) * adj
+
+
+def _aggregate(adata: AnnData, normalized_adjacency_matrix: sps.spmatrix, aggregation: str = "mean") -> Any:
+    """aggregate count and adjacency matrix either by mean or variance"""
+    # TODO: add support for other aggregation methods
+    if aggregation == "mean":
+        aggregated_matrix = normalized_adjacency_matrix @ adata.X
+    elif aggregation == "variance":
+        mean_matrix = (normalized_adjacency_matrix @ adata.X).toarray()
+        X_to_arr = adata.X.toarray()
+        mean_squared_matrix = normalized_adjacency_matrix @ (X_to_arr * X_to_arr)
+        aggregated_matrix = mean_squared_matrix - mean_matrix * mean_matrix
+    else:
+        raise ValueError(f"Invalid aggregation method '{aggregation}'. Please choose either 'mean' or 'variance'.")
+
+    return aggregated_matrix
+
+
+class NicheEmbedder(ABC):
     """Base class for computing embeddings used in niche analysis.
 
     Subclasses must implement :meth:`get_embedding`, which transforms an
@@ -1070,7 +1123,6 @@ class NhoodProfileEmbedder(NicheEmbedder):
         abs_nhood: bool,
         n_hop_weights: list[float] | None,
     ):
-        super().__init__()
         self.groups = groups
         self.spatial_connectivities_key = spatial_connectivities_key
         self.scale = scale
@@ -1145,20 +1197,18 @@ class NhoodProfileEmbedder(NicheEmbedder):
 
         # Additionally use n-hop neighbors if distance > 1. This sums up the (weighted) neighborhood profiles of all n-hop neighbors.
         if self.distance > 1:
-            n_hop_adjacency_matrix = adata.obsp[self.spatial_connectivities_key].copy()
-            # if no weights are provided, use 1 for all n_hop neighbors
+            # keep weights local: the same embedder instance is reused across libraries
             if self.n_hop_weights is None:
-                self.n_hop_weights = [1] * self.distance
-            # if weights are provided, start with applying weight to the original neighborhood profile
+                weights = [1.0] * self.distance
             elif len(self.n_hop_weights) < self.distance:
                 # Extend weights if too few provided
-                self.n_hop_weights = self.n_hop_weights + [self.n_hop_weights[-1]] * (
-                    self.distance - len(self.n_hop_weights)
-                )
-                logg.debug(f"Extended weights to match distance: {self.n_hop_weights}")
+                weights = self.n_hop_weights + [self.n_hop_weights[-1]] * (self.distance - len(self.n_hop_weights))
+                logg.debug(f"Extended weights to match distance: {weights}")
+            else:
+                weights = self.n_hop_weights
 
             # Apply first weight to base profile
-            weighted_profile = self.n_hop_weights[0] * nhood_profile
+            weighted_profile = weights[0] * nhood_profile
 
             # Calculate higher-order hop profiles
             n_hop_adjacency_matrix = adata.obsp[self.spatial_connectivities_key].copy()
@@ -1172,10 +1222,10 @@ class NhoodProfileEmbedder(NicheEmbedder):
 
                 # Calculate and add weighted profile
                 hop_profile = self._calculate_neighborhood_profile(adata, matrix)
-                weighted_profile += self.n_hop_weights[n_hop] * hop_profile
+                weighted_profile += weights[n_hop] * hop_profile
 
             if not self.abs_nhood:
-                weighted_profile = weighted_profile / sum(self.n_hop_weights)
+                weighted_profile = weighted_profile / sum(weights)
 
             nhood_profile = weighted_profile
 
@@ -1215,7 +1265,6 @@ class UtagEmbedder(NicheEmbedder):
         self,
         spatial_connectivities_key: str,
     ):
-        super().__init__()
         self.spatial_connectivities_key = spatial_connectivities_key
 
     def get_embedding(self, adata: AnnData) -> NDArrayA:
@@ -1266,70 +1315,17 @@ class CellcharterEmbedder(NicheEmbedder):
 
     def __init__(
         self,
-        distance: int | None,
-        aggregation: str | None,
-        spatial_connectivities_key: str | None,
-        n_components: int | None,
+        distance: int,
+        aggregation: str,
+        spatial_connectivities_key: str,
+        n_components: int,
         use_rep: str | None,
     ):
-        super().__init__()
         self.distance = distance
         self.aggregation = aggregation
         self.spatial_connectivities_key = spatial_connectivities_key
         self.n_components = n_components
         self.use_rep = use_rep
-
-    def _setdiag(self, adjacency_matrix: sps.spmatrix, value: int) -> sps.spmatrix:
-        """remove self-loops"""
-
-        if issparse(adjacency_matrix):
-            adjacency_matrix = adjacency_matrix.tolil()
-        adjacency_matrix.setdiag(value)
-        adjacency_matrix = adjacency_matrix.tocsr()
-        if value == 0:
-            adjacency_matrix.eliminate_zeros()
-        return adjacency_matrix
-
-    def _hop(
-        self,
-        adj_hop: sps.spmatrix,
-        adj: sps.spmatrix,
-        adj_visited: sps.spmatrix = None,
-    ) -> tuple[sps.spmatrix, sps.spmatrix]:
-        """get nearest neighbor of neighbors"""
-
-        adj_hop = adj_hop @ adj
-
-        if adj_visited is not None:
-            adj_hop = adj_hop > adj_visited
-            adj_visited = adj_visited + adj_hop
-
-        return adj_hop, adj_visited
-
-    def _normalize(self, adj: sps.spmatrix) -> sps.spmatrix:
-        """normalize adjacency matrix such that nodes with high degree don't disproportionately affect aggregation"""
-
-        deg = np.array(np.sum(adj, axis=1)).squeeze()
-        with np.errstate(divide="ignore"):
-            deg_inv = 1 / deg
-        deg_inv[deg_inv == float("inf")] = 0
-
-        return spdiags(deg_inv, 0, len(deg_inv), len(deg_inv)) * adj
-
-    def _aggregate(self, adata: AnnData, normalized_adjacency_matrix: sps.spmatrix, aggregation: str = "mean") -> Any:
-        """aggregate count and adjacency matrix either by mean or variance"""
-        # TODO: add support for other aggregation methods
-        if aggregation == "mean":
-            aggregated_matrix = normalized_adjacency_matrix @ adata.X
-        elif aggregation == "variance":
-            mean_matrix = (normalized_adjacency_matrix @ adata.X).toarray()
-            X_to_arr = adata.X.toarray()
-            mean_squared_matrix = normalized_adjacency_matrix @ (X_to_arr * X_to_arr)
-            aggregated_matrix = mean_squared_matrix - mean_matrix * mean_matrix
-        else:
-            raise ValueError(f"Invalid aggregation method '{aggregation}'. Please choose either 'mean' or 'variance'.")
-
-        return aggregated_matrix
 
     # this will hold an if block checking if use_rep is not None. If not None, then it will simply
     # return that representation from adata
@@ -1359,8 +1355,8 @@ class CellcharterEmbedder(NicheEmbedder):
             layers = list(range(self.distance + 1))
 
             aggregated_matrices = []
-            adj_hop = self._setdiag(adjacency_matrix, 0)  # Remove self-loops, set diagonal to 0
-            adj_visited = self._setdiag(adjacency_matrix.copy(), 1)  # Track visited neighbors
+            adj_hop = _setdiag(adjacency_matrix, 0)  # Remove self-loops, set diagonal to 0
+            adj_visited = _setdiag(adjacency_matrix.copy(), 1)  # Track visited neighbors
             for k in layers:
                 if k == 0:
                     # get original count matrix (not aggregated)
@@ -1368,9 +1364,9 @@ class CellcharterEmbedder(NicheEmbedder):
                 else:
                     # get count and adjacency matrix for k-hop (neighbor of neighbor of neighbor ...) and aggregate them
                     if k > 1:
-                        adj_hop, adj_visited = self._hop(adj_hop, adjacency_matrix, adj_visited)
-                    adj_hop_norm = self._normalize(adj_hop)
-                    aggregated_matrix = self._aggregate(adata, adj_hop_norm, self.aggregation)
+                        adj_hop, adj_visited = _hop(adj_hop, adjacency_matrix, adj_visited)
+                    adj_hop_norm = _normalize(adj_hop)
+                    aggregated_matrix = _aggregate(adata, adj_hop_norm, self.aggregation)
                     aggregated_matrices.append(aggregated_matrix)
 
             concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
@@ -1388,7 +1384,7 @@ class CellcharterEmbedder(NicheEmbedder):
 ############
 
 
-class NicheClusterer:
+class NicheClusterer(ABC):
     """Base class for clustering embeddings into niche assignments.
 
     Subclasses must implement :meth:`cluster`, which assigns cluster labels
@@ -1427,7 +1423,6 @@ class LeidenClusterer(NicheClusterer):
         resolutions: float | list[float],
         base_colname: str = "niche_leiden",
     ):
-        super().__init__()
         self.n_neighbors = n_neighbors
         self.resolutions = resolutions if isinstance(resolutions, list) else [resolutions]
         self.base_colname = base_colname
@@ -1485,7 +1480,6 @@ class GMMClusterer(NicheClusterer):
         random_state: int,
         base_colname: str = "niche_gmm",
     ):
-        super().__init__()
         self.n_components = n_components
         self.random_state = random_state
         self.base_colname = base_colname
