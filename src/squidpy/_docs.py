@@ -208,6 +208,30 @@ _library_key = """\
 library_key
     Key in :attr:`anndata.AnnData.obs` containing library ids for which to build the spatial graphs separately."""
 
+# niche docs
+_niche_spatial_conn_key = """\
+spatial_connectivities_key
+    Key in :attr:`anndata.AnnData.obsp` containing the spatial connectivity matrix."""
+_niche_mask = """\
+mask
+    Boolean :class:`pandas.Series` indexed like :attr:`anndata.AnnData.obs`. Observations that
+    are `False` are excluded from niche assignment and labeled ``'not_a_niche'``, e.g.
+    ``Series([False, False, True], index=["a", "b", "c"])``."""
+_niche_min_niche_size = """\
+min_niche_size
+    Minimum number of observations required for a niche. Niches with fewer observations
+    are relabeled ``'not_a_niche'``."""
+_niche_inplace = """\
+inplace
+    If `True`, modify the table in place and return `None`.
+    If `False`, return a modified copy and leave the input unchanged."""
+# the postprocessing + output params every user-facing niche function shares, in signature order
+_niche_common_params = f"""\
+{_niche_min_niche_size}
+{_niche_mask}
+{_library_key}
+{_niche_inplace}"""
+
 # static plotting docs
 _plotting_kwargs_static = """\
 scalebar_kwargs
@@ -458,6 +482,11 @@ d = DocstringProcessor(
     groups=_groups,
     plotting_library_id=_plotting_library_id,
     library_key=_library_key,
+    niche_spatial_conn_key=_niche_spatial_conn_key,
+    niche_mask=_niche_mask,
+    niche_min_niche_size=_niche_min_niche_size,
+    niche_inplace=_niche_inplace,
+    niche_common_params=_niche_common_params,
     sdata_params=_sdata_params,
     graph_common_params=_graph_common_params,
     n_jobs_libraries=_n_jobs_libraries,

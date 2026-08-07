@@ -295,8 +295,7 @@ def calculate_niche_neighborhood(
         Number of neighbors used when constructing the graph for Leiden clustering.
     resolutions
         Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
-    spatial_connectivities_key
-        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    %(niche_spatial_conn_key)s
     scale
         Whether to z-score the neighborhood profile prior to clustering.
     distance
@@ -306,13 +305,7 @@ def calculate_niche_neighborhood(
         If ``True``, use absolute counts; otherwise normalize to proportions.
     n_hop_weights
         Weights for combining neighborhood profiles across hops.
-    min_niche_size
-        Minimum number of observations required for a niche; smaller niches are filtered.
-    mask
-        Boolean mask or index specifying observations to exclude from niche assignment.
-    %(library_key)s
-    inplace
-        Whether to modify ``adata`` in place.
+    %(niche_common_params)s
     %(table_key)s
 
     Returns
@@ -340,7 +333,16 @@ def calculate_niche_neighborhood(
     # Create instance of LeidenClusterer using provided inputs
     clusterer = LeidenClusterer(n_neighbors, resolutions, "nhood_niche")
 
-    return calculate_niche_custom(data, embedder, clusterer, mask, min_niche_size, library_key, inplace, table_key)
+    return calculate_niche_custom(
+        data,
+        embedder,
+        clusterer,
+        min_niche_size=min_niche_size,
+        mask=mask,
+        library_key=library_key,
+        inplace=inplace,
+        table_key=table_key,
+    )
 
 
 @d.dedent
@@ -368,15 +370,8 @@ def calculate_niche_utag(
         Number of neighbors used when constructing the graph for Leiden clustering.
     resolutions
         Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
-    spatial_connectivities_key
-        Key in ``adata.obsp`` containing the spatial connectivity matrix.
-    min_niche_size
-        Minimum number of observations required for a niche; smaller niches are filtered.
-    mask
-        Boolean mask or index specifying observations to exclude from niche assignment.
-    %(library_key)s
-    inplace
-        Whether to modify ``adata`` in place.
+    %(niche_spatial_conn_key)s
+    %(niche_common_params)s
     %(table_key)s
 
     Returns
@@ -395,7 +390,16 @@ def calculate_niche_utag(
 
     clusterer = LeidenClusterer(n_neighbors, resolutions, "utag_niche")
 
-    return calculate_niche_custom(data, embedder, clusterer, mask, min_niche_size, library_key, inplace, table_key)
+    return calculate_niche_custom(
+        data,
+        embedder,
+        clusterer,
+        min_niche_size=min_niche_size,
+        mask=mask,
+        library_key=library_key,
+        inplace=inplace,
+        table_key=table_key,
+    )
 
 
 @d.dedent
@@ -429,21 +433,14 @@ def calculate_niche_cellcharter(
         ``"variance"``.
     random_state
         Random seed used by the Gaussian mixture clustering step.
-    spatial_connectivities_key
-        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    %(niche_spatial_conn_key)s
     n_components
         Number of embedding components to retain when ``use_rep`` is provided,
         or number of mixture components used by the clusterer.
     use_rep
         Key in ``adata.obsm`` pointing to a precomputed representation to use
         instead of deriving a spatially aggregated embedding.
-    min_niche_size
-        Minimum number of observations required for a niche; smaller niches are filtered.
-    mask
-        Boolean mask or index specifying observations to exclude from niche assignment.
-    %(library_key)s
-    inplace
-        Whether to modify ``adata`` in place.
+    %(niche_common_params)s
     %(table_key)s
 
     Returns
@@ -462,7 +459,16 @@ def calculate_niche_cellcharter(
 
     clusterer = GMMClusterer(n_components, random_state, base_colname="cellcharter_niche")
 
-    return calculate_niche_custom(data, embedder, clusterer, mask, min_niche_size, library_key, inplace, table_key)
+    return calculate_niche_custom(
+        data,
+        embedder,
+        clusterer,
+        min_niche_size=min_niche_size,
+        mask=mask,
+        library_key=library_key,
+        inplace=inplace,
+        table_key=table_key,
+    )
 
 
 @d.dedent
@@ -494,8 +500,7 @@ def calculate_niche_spatialleiden(
     %(adata)s
     latent_connectivities_key
         Key in ``adata.obsp`` containing the latent-space connectivity matrix.
-    spatial_connectivities_key
-        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    %(niche_spatial_conn_key)s
     resolutions
         Resolution parameter(s) for the Leiden optimization. Can be a single
         float or a list of floats.
@@ -507,17 +512,14 @@ def calculate_niche_spatialleiden(
         Whether to use edge weights during clustering.
     random_state
         Random seed passed to the SpatialLeiden routine.
-    min_niche_size
-        Minimum number of observations required for a niche; smaller niches are filtered.
-    mask
-        Boolean mask or index specifying observations to exclude from niche assignment.
+    %(niche_min_niche_size)s
+    %(niche_mask)s
     prefix
         Prefix added to niche labels produced by SpatialLeiden.
         When stratifying by ``library_key``, a library-specific prefix is added
         automatically (something like "lib=").
     %(library_key)s
-    inplace
-        Whether to modify ``adata`` in place.
+    %(niche_inplace)s
     %(table_key)s
 
     Returns
@@ -636,8 +638,8 @@ def calculate_niche_custom(
     data: AnnData | SpatialData,
     embedder: NicheEmbedder,
     clusterer: NicheClusterer,
-    mask: pd.Series | None = None,
     min_niche_size: int | None = None,
+    mask: pd.Series | None = None,
     library_key: str | None = None,
     inplace: bool = True,
     table_key: str | None = None,
@@ -654,13 +656,7 @@ def calculate_niche_custom(
         Instance of :class:`NicheEmbedder` used to compute an embedding from ``adata``.
     clusterer
         Instance of :class:`NicheClusterer` used to assign niches based on the embedding.
-    mask
-        Boolean mask specifying observations to exclude from niche assignment.
-    min_niche_size
-        Minimum number of observations required for a niche; smaller niches are filtered.
-    %(library_key)s
-    inplace
-        Whether to modify ``adata`` in place.
+    %(niche_common_params)s
     %(table_key)s
 
     Returns
@@ -707,7 +703,9 @@ def calculate_niche_custom(
 
             lib_adata = adata[lib_indices].copy()
 
-            _run_niche_pipeline(lib_adata, embedder, clusterer, mask, min_niche_size, prefix=f"lib={lib_id}_")
+            _run_niche_pipeline(
+                lib_adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size, prefix=f"lib={lib_id}_"
+            )
 
             # from itr==1 onwards, adata will hold the columns that are being added hence,
             # added_columns will be empty. Hence only obtain added_columns when itr==0
@@ -721,7 +719,7 @@ def calculate_niche_custom(
                 adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
 
     else:
-        _run_niche_pipeline(adata, embedder, clusterer, mask, min_niche_size)
+        _run_niche_pipeline(adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size)
 
     # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
     # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
@@ -1096,8 +1094,7 @@ class NhoodProfileEmbedder(NicheEmbedder):
     ----------
     groups
         Column in ``adata.obs`` defining categorical labels.
-    spatial_connectivities_key
-        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    %(niche_spatial_conn_key)s
     scale
         Whether to z-score the resulting embedding.
     distance
@@ -1252,8 +1249,7 @@ class UtagEmbedder(NicheEmbedder):
 
     Parameters
     ----------
-    spatial_connectivities_key
-        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    %(niche_spatial_conn_key)s
 
     Notes
     -----
@@ -1298,8 +1294,7 @@ class CellcharterEmbedder(NicheEmbedder):
     aggregation
         Aggregation strategy to apply to neighborhood features, such as
         ``"mean"`` or ``"variance"``.
-    spatial_connectivities_key
-        Key in ``adata.obsp`` containing the spatial connectivity matrix.
+    %(niche_spatial_conn_key)s
     n_components
         Number of components to keep from the input representation when ``use_rep``
         is provided.

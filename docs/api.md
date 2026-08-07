@@ -36,6 +36,11 @@ import squidpy as sq
     gr.spatial_autocorr
     gr.sepal
     gr.calculate_niche
+    gr.calculate_niche_neighborhood
+    gr.calculate_niche_utag
+    gr.calculate_niche_cellcharter
+    gr.calculate_niche_spatialleiden
+    gr.calculate_niche_custom
 ```
 
 ## Image
