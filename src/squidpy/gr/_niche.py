@@ -36,10 +36,6 @@ __all__ = [
     "NicheClusterer",
     "LeidenClusterer",
     "GMMClusterer",
-    "NichePostprocessor",
-    "MinNicheSizePostprocessor",
-    "MaskPostprocessor",
-    "RenamePostprocessor",
 ]
 
 
@@ -346,16 +342,7 @@ def calculate_niche_neighborhood(
     # Create instance of LeidenClusterer using provided inputs
     clusterer = LeidenClusterer(n_neighbors, resolutions, "nhood_niche")
 
-    # generate the list of postprocessor objects using the supplied args
-    postprocessors_list = []
-    if mask is not None:
-        mask_postprocessor = MaskPostprocessor(mask)
-        postprocessors_list.append(mask_postprocessor)
-    if min_niche_size is not None:
-        min_niche_size_postprocessor = MinNicheSizePostprocessor(min_niche_size)
-        postprocessors_list.append(min_niche_size_postprocessor)
-
-    return calculate_niche_custom(data, embedder, clusterer, postprocessors_list, library_key, inplace, table_key)
+    return calculate_niche_custom(data, embedder, clusterer, mask, min_niche_size, library_key, inplace, table_key)
 
 
 @d.dedent
@@ -410,16 +397,7 @@ def calculate_niche_utag(
 
     clusterer = LeidenClusterer(n_neighbors, resolutions, "utag_niche")
 
-    # generate the list of postprocessor objects using the supplied args
-    postprocessors_list = []
-    if mask is not None:
-        mask_postprocessor = MaskPostprocessor(mask)
-        postprocessors_list.append(mask_postprocessor)
-    if min_niche_size is not None:
-        min_niche_size_postprocessor = MinNicheSizePostprocessor(min_niche_size)
-        postprocessors_list.append(min_niche_size_postprocessor)
-
-    return calculate_niche_custom(data, embedder, clusterer, postprocessors_list, library_key, inplace, table_key)
+    return calculate_niche_custom(data, embedder, clusterer, mask, min_niche_size, library_key, inplace, table_key)
 
 
 @d.dedent
@@ -486,16 +464,7 @@ def calculate_niche_cellcharter(
 
     clusterer = GMMClusterer(n_components, random_state, base_colname="cellcharter_niche")
 
-    # generate the list of postprocessor objects using the supplied args
-    postprocessors_list = []
-    if mask is not None:
-        mask_postprocessor = MaskPostprocessor(mask)
-        postprocessors_list.append(mask_postprocessor)
-    if min_niche_size is not None:
-        min_niche_size_postprocessor = MinNicheSizePostprocessor(min_niche_size)
-        postprocessors_list.append(min_niche_size_postprocessor)
-
-    return calculate_niche_custom(data, embedder, clusterer, postprocessors_list, library_key, inplace, table_key)
+    return calculate_niche_custom(data, embedder, clusterer, mask, min_niche_size, library_key, inplace, table_key)
 
 
 @d.dedent
@@ -651,19 +620,7 @@ def calculate_niche_spatialleiden(
         # obtain the result_columns, which are basically the difference in columns in orig_adata and adata
         result_columns = [f"spatialleiden_res={res}" for res in resolutions]
 
-        # generate the list of postprocessor objects using the supplied args
-        postprocessors_list = []
-        if mask is not None:
-            mask_postprocessor = MaskPostprocessor(mask)
-            postprocessors_list.append(mask_postprocessor)
-        if min_niche_size is not None:
-            min_niche_size_postprocessor = MinNicheSizePostprocessor(min_niche_size)
-            postprocessors_list.append(min_niche_size_postprocessor)
-        if prefix is not None:
-            renaming_postprocessor = RenamePostprocessor(prefix)
-            postprocessors_list.append(renaming_postprocessor)
-
-        _postprocess_niche_results(adata, result_columns, postprocessors_list)
+        _postprocess_niche_results(adata, result_columns, mask, min_niche_size, prefix)
 
     # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
     # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
@@ -681,10 +638,11 @@ def calculate_niche_custom(
     data: AnnData | SpatialData,
     embedder: NicheEmbedder,
     clusterer: NicheClusterer,
-    postprocessors_list: list[NichePostprocessor],
-    library_key: str | None,
-    inplace: bool,
-    table_key: str | None,
+    mask: pd.Series | None = None,
+    min_niche_size: int | None = None,
+    library_key: str | None = None,
+    inplace: bool = True,
+    table_key: str | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using user-defined embedding, clustering, and postprocessing.
 
@@ -698,8 +656,10 @@ def calculate_niche_custom(
         Instance of :class:`NicheEmbedder` used to compute an embedding from ``adata``.
     clusterer
         Instance of :class:`NicheClusterer` used to assign niches based on the embedding.
-    postprocessors_list
-        List of :class:`NichePostprocessor` objects applied sequentially to refine results.
+    mask
+        Boolean mask specifying observations to exclude from niche assignment.
+    min_niche_size
+        Minimum number of observations required for a niche; smaller niches are filtered.
     %(library_key)s
     inplace
         Whether to modify ``adata`` in place.
@@ -723,7 +683,6 @@ def calculate_niche_custom(
     calculate_niche_spatialleiden : Convenience wrapper for spatialleiden flavor niche analysis.
     NicheEmbedder : Base class for embedding strategies.
     NicheClusterer : Base class for clustering strategies.
-    NichePostprocessor : Base class for postprocessing steps.
     """
 
     # obtain adata if data was of sdata type
@@ -750,19 +709,7 @@ def calculate_niche_custom(
 
             lib_adata = adata[lib_indices].copy()
 
-            # append a renaming postprocessor to postprocessors_list_lib
-            renaming_postprocessor = RenamePostprocessor(prefix_for_niches=f"lib={lib_id}_")
-            postprocessors_list_lib = postprocessors_list + [renaming_postprocessor]
-
-            calculate_niche_custom(
-                lib_adata,
-                embedder,
-                clusterer,
-                postprocessors_list_lib,
-                library_key=None,
-                inplace=True,  # to save memory
-                table_key=None,
-            )
+            _run_niche_pipeline(lib_adata, embedder, clusterer, mask, min_niche_size, prefix=f"lib={lib_id}_")
 
             # from itr==1 onwards, adata will hold the columns that are being added hence,
             # added_columns will be empty. Hence only obtain added_columns when itr==0
@@ -776,14 +723,7 @@ def calculate_niche_custom(
                 adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
 
     else:
-        # supply the adata object to the embedder object, and obtain appropriate embedding matrix
-        embedding = embedder.get_embedding(adata)
-
-        # Supply to the clusterer object, the embedding matrix just obtained, and get the appropriate clustering.
-        result_columns = clusterer.cluster(adata, embedding)
-
-        # do postprocessing
-        _postprocess_niche_results(adata, result_columns, postprocessors_list)
+        _run_niche_pipeline(adata, embedder, clusterer, mask, min_niche_size)
 
     # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
     # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
@@ -796,34 +736,18 @@ def calculate_niche_custom(
         return adata
 
 
-def _postprocess_niche_results(
+def _run_niche_pipeline(
     adata: AnnData,
-    result_columns: list[str],
-    postprocessors_list: list[NichePostprocessor],
+    embedder: NicheEmbedder,
+    clusterer: NicheClusterer,
+    mask: pd.Series | None,
+    min_niche_size: int | None,
+    prefix: str | None = None,
 ) -> None:
-    """Apply a sequence of postprocessors to niche assignment results.
-
-    Parameters
-    ----------
-    adata
-        Annotated data matrix.
-    result_columns
-        List of column names in ``adata.obs`` containing initial niche assignments.
-    postprocessors_list
-        List of :class:`NichePostprocessor` objects applied sequentially.
-
-    Notes
-    -----
-    Each postprocessor may create new columns in ``adata.obs`` and returns
-    the updated list of result column names, which are passed to the next step.
-    """
-    # go through each postprocessor object, and apply it to the adata, and store
-    # results in the form of new columns in adata
-    for postprocessor in postprocessors_list:
-        # obtain the new columns in this process
-        result_columns = postprocessor.postprocess(adata, result_columns)
-
-    return
+    """Embed, cluster, and postprocess ``adata`` in place."""
+    embedding = embedder.get_embedding(adata)
+    result_columns = clusterer.cluster(adata, embedding)
+    _postprocess_niche_results(adata, result_columns, mask, min_niche_size, prefix)
 
 
 def _validate_niche_args(
@@ -1587,145 +1511,56 @@ class GMMClusterer(NicheClusterer):
 
 
 ############
-### postprocessor classes
+### postprocessing
 ############
 
 
-class NichePostprocessor:
-    """Base class for postprocessing niche assignments.
-
-    Postprocessors operate on clustering results stored in ``adata.obs`` and
-    typically generate new columns derived from existing niche columns.
-    """
-
-    def __init__(self, suffix: str):
-        self.suffix = suffix
-
-    @abstractmethod
-    def postprocess(self, adata: AnnData, result_columns: list[str]) -> list[str]:
-        """Logic to postprocess adata and return the names of columns added."""
-        # should append add self.suffix to the columns added
-
-
-@d.dedent
-class MinNicheSizePostprocessor(NichePostprocessor):
-    """Filter niches below a minimum size threshold.
+def _postprocess_niche_results(
+    adata: AnnData,
+    result_columns: list[str],
+    mask: pd.Series | None = None,
+    min_niche_size: int | None = None,
+    prefix: str | None = None,
+) -> None:
+    """Refine niche assignments in place, rewriting each column in ``result_columns``.
 
     Parameters
     ----------
-    min_niche_size
-        Minimum number of observations required for a niche.
-    suffix
-        Suffix appended to result column names.
-
-    Notes
-    -----
-    Niche labels with fewer than ``min_niche_size`` observations are replaced
-    with ``"not_a_niche"``.
-    """
-
-    def __init__(self, min_niche_size: int, suffix: str = "_size_filter"):
-        super().__init__(suffix=suffix)
-        self.min_niche_size = min_niche_size
-
-    def postprocess(self, adata: AnnData, result_columns: list[str]) -> list[str]:
-        new_result_columns = []
-        # filter niches with n_cells < min_niche_size
-        for result_column in result_columns:
-            # copy into new column
-            new_result_column = result_column + self.suffix
-            new_result_columns.append(new_result_column)
-            adata.obs[new_result_column] = list(adata.obs[result_column])
-
-            counts_by_niche = adata.obs[new_result_column].value_counts()
-            to_filter = counts_by_niche[counts_by_niche < self.min_niche_size].index
-
-            if new_result_column in adata.obs.columns:
-                logg.info(f"Overwriting existing column '{new_result_column}'")
-
-            adata.obs[new_result_column] = adata.obs[new_result_column].apply(
-                lambda x, to_filter=to_filter: "not_a_niche" if x in to_filter else x
-            )
-            adata.obs[new_result_column] = adata.obs.index.map(adata.obs[new_result_column]).fillna("not_a_niche")
-
-        return new_result_columns
-
-
-@d.dedent
-class MaskPostprocessor(NichePostprocessor):
-    """Mask selected observations from niche assignments.
-
-    Parameters
-    ----------
+    adata
+        Annotated data matrix.
+    result_columns
+        Columns in ``adata.obs`` holding the niche assignments to refine.
     mask
-        Boolean mask or index specifying observations to exclude.
-    suffix
-        Suffix appended to result column names.
+        Boolean :class:`~pandas.Series` indexed like ``adata.obs``. Observations that
+        are ``False`` get the label ``"not_a_niche"``, e.g.
+        ``Series([False, False, True], index=["a", "b", "c"])``.
+    min_niche_size
+        Niches with fewer than this many observations are relabeled ``"not_a_niche"``.
+    prefix
+        Prepended to every niche label, used to keep labels unique across libraries.
 
     Notes
     -----
-    Observations included in ``mask`` are assigned the label ``"not_a_niche"``.
-
-    Examples
-    -----
-    Mask can look like the following. Here, the index values would correspond to adata.obs.index.
-    The entries that are False are the ones ignored.
-    mask = Series([False, False, True], index = ["a", "b", "c"])
+    Columns are modified in place, so the niche column name does not depend on
+    which of these options were supplied.
     """
+    if mask is None and min_niche_size is None and prefix is None:
+        return
 
-    def __init__(self, mask: pd.Series, suffix: str = "_mask"):
-        super().__init__(suffix=suffix)
-        self.mask = mask
+    for col in result_columns:
+        # str, so that "not_a_niche" and prefixed labels can be assigned regardless of the clusterer's dtype
+        labels = adata.obs[col].astype(str)
 
-    def postprocess(self, adata: AnnData, result_columns: list[str]) -> list[str]:
-        new_result_columns = []
-        # mask obs to exclude cells for which no niche shall be assigned
-        for result_column in result_columns:
-            # copy into new column
-            new_result_column = result_column + self.suffix
-            new_result_columns.append(new_result_column)
-            adata.obs[new_result_column] = list(adata.obs[result_column])
+        if mask is not None:
+            aligned = mask[mask.index.isin(adata.obs.index)]
+            labels[~aligned] = "not_a_niche"
 
-            if new_result_column in adata.obs.columns:
-                logg.info(f"Overwriting existing column '{new_result_column}'")
+        if min_niche_size is not None:
+            counts = labels.value_counts()
+            too_small = counts[counts < min_niche_size].index
+            labels[labels.isin(too_small)] = "not_a_niche"
 
-            to_filter = self.mask[self.mask.index.isin(adata.obs.index)]
-            adata.obs.loc[~to_filter, new_result_column] = "not_a_niche"
+        if prefix is not None:
+            labels = prefix + labels
 
-        return new_result_columns
-
-
-@d.dedent
-class RenamePostprocessor(NichePostprocessor):
-    """Rename niche labels by adding a prefix.
-
-    Parameters
-    ----------
-    prefix_for_niches
-        Prefix added to each niche label.
-    suffix
-        Suffix appended to result column names.
-
-    Notes
-    -----
-    This is useful when combining results across subsets (e.g. libraries)
-    to ensure unique niche identifiers.
-    """
-
-    def __init__(self, prefix_for_niches: str, suffix: str = "_renamed"):
-        super().__init__(suffix=suffix)
-        self.prefix_for_niches = prefix_for_niches
-
-    def postprocess(self, adata: AnnData, result_columns: list[str]) -> list[str]:
-        new_result_columns = []
-        for result_column in result_columns:
-            # copy into new column
-            new_result_column = result_column + self.suffix
-            new_result_columns.append(new_result_column)
-
-            if new_result_column in adata.obs.columns:
-                logg.info(f"Overwriting existing column '{new_result_column}'")
-
-            adata.obs[new_result_column] = self.prefix_for_niches + adata.obs[result_column].astype(str)
-
-        return new_result_columns
+        adata.obs[col] = labels

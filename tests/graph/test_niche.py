@@ -107,7 +107,7 @@ def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
         dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.5, library_key="batch"
     )
 
-    assert "nhood_niche_res=1.5_renamed" in dummy_adata2.obs.columns
+    assert "nhood_niche_res=1.5" in dummy_adata2.obs.columns
 
     expected_niches = Series(
         [
@@ -127,7 +127,7 @@ def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
         dtype=str,
     )
 
-    assert (expected_niches == dummy_adata2.obs["nhood_niche_res=1.5_renamed"]).all()
+    assert (expected_niches == dummy_adata2.obs["nhood_niche_res=1.5"]).all()
 
 
 def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData):
@@ -159,7 +159,7 @@ def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData)
         library_key="batch",
     )
 
-    assert "spatialleiden_res=1.0_renamed" in dummy_adata2.obs.columns
+    assert "spatialleiden_res=1.0" in dummy_adata2.obs.columns
 
     expected_niches = Series(
         [
@@ -179,7 +179,7 @@ def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData)
         dtype=str,
     )
 
-    assert (expected_niches == dummy_adata2.obs["spatialleiden_res=1.0_renamed"]).all()
+    assert (expected_niches == dummy_adata2.obs["spatialleiden_res=1.0"]).all()
 
 
 def test_niche_calc_nhood_multipostprocessor_dummy_adata(dummy_adata2: AnnData):
@@ -197,13 +197,13 @@ def test_niche_calc_nhood_multipostprocessor_dummy_adata(dummy_adata2: AnnData):
         mask=mask,
         min_niche_size=3,
     )
-    assert "nhood_niche_res=1.0_mask_size_filter" in dummy_adata2.obs.columns
+    assert "nhood_niche_res=1.0" in dummy_adata2.obs.columns
     expected_niches = Series(
         ["not_a_niche", "not_a_niche", "0", "not_a_niche", "1", "0", "0", "1", "0", "1"],
         index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
         name="nhood_niche_res=1.0",
     )
-    assert (expected_niches == dummy_adata2.obs["nhood_niche_res=1.0_mask_size_filter"]).all()
+    assert (expected_niches == dummy_adata2.obs["nhood_niche_res=1.0"]).all()
 
 
 def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):
@@ -290,7 +290,7 @@ def test_niche_calc_nhood(adata_seqfish: AnnData):
         resolutions=[0.1],
         min_niche_size=100,
     )
-    niches = adata_seqfish.obs["nhood_niche_res=0.1_size_filter"]
+    niches = adata_seqfish.obs["nhood_niche_res=0.1"]
 
     # assert no nans, more niche labels than non-niche labels, and at least 100 obs per niche
     assert niches.isna().sum() == 0
