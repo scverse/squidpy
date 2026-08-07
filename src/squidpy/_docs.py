@@ -237,7 +237,7 @@ _plotting_kwargs_static = """\
 scalebar_kwargs
     Keyword arguments for :class:`matplotlib_scalebar.ScaleBar`.
 edges_kwargs
-    Keyword arguments for :func:`networkx.drawing.nx_pylab.draw_networkx_edges`.
+    Keyword arguments for :func:`networkx.drawing.nx_pylab.draw_networkx_edges` :cite:`networkx`.
 kwargs
     Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
 """
