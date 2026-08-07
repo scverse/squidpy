@@ -157,14 +157,15 @@ def calculate_niche(
         If 'False', return a new AnnData object with the niche labels.
     """
 
-    if flavor == "cellcharter" and aggregation is None:
-        aggregation = "mean"
-
+    # cellcharter-only defaults stay guarded: filling them for other flavors would trip
+    # the "not used for flavor" warning in _check_unnecessary_args
+    if flavor == "cellcharter":
+        if aggregation is None:
+            aggregation = "mean"
+        if n_components is None:
+            n_components = 10
     if distance is None:
         distance = 3 if flavor == "cellcharter" else 1
-
-    if flavor == "cellcharter" and n_components is None:
-        n_components = 10
 
     _validate_niche_args(
         data,
@@ -405,9 +406,9 @@ def calculate_niche_utag(
 @d.dedent
 def calculate_niche_cellcharter(
     data: AnnData | SpatialData,
-    distance: int = 2,
+    distance: int = 3,
     aggregation: str = "mean",
-    random_state: int = 0,
+    random_state: int = 42,
     spatial_connectivities_key: str = "spatial_connectivities",
     n_components: int = 10,
     use_rep: str | None = None,
