@@ -491,8 +491,8 @@ def calculate_niche_spatialleiden(
 ) -> AnnData | None:
     """Compute niche assignments using the SpatialLeiden algorithm.
 
-    This is a wrapper around :func:`spatialleiden.multiplex_leiden` that
-    uses :class:`AnnData` as input and works with two layers; one latent
+    This is a wrapper around the `SpatialLeiden <https://github.com/HiDiHlabs/SpatialLeiden>`_
+    algorithm that uses :class:`~anndata.AnnData` as input and works with two layers; one latent
     space and one spatial layer.
     Adapted from https://github.com/HiDiHlabs/SpatialLeiden/.
 
@@ -532,10 +532,6 @@ def calculate_niche_spatialleiden(
     -----
     If ``library_key`` is provided, clustering is performed independently for
     each library and the results are merged back into the parent object.
-
-    See Also
-    --------
-    spatialleiden.multiplex_leiden : SpatialLeiden implementation used internally.
     """
 
     try:
@@ -1072,7 +1068,7 @@ class NicheEmbedder(ABC):
     """Base class for computing embeddings used in niche analysis.
 
     Subclasses must implement :meth:`get_embedding`, which transforms an
-    :class:`AnnData` object into a feature matrix suitable for clustering.
+    :class:`~anndata.AnnData` object into a feature matrix suitable for clustering.
     The 0-index dimension of returned embedding (embedding.shape[0])
     should correspond to the rows in adata.obs (and adata.X), meaning in
     the same order and having same length.
