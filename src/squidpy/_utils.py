@@ -299,7 +299,7 @@ def thread_map(
     return _run(None)
 
 
-def get_n_threads(n_threads: int | None) -> int:
+def get_n_numba_threads(n_threads: int | None) -> int:
     """Resolve a thread count: `None`/``-1`` is numba's default, the rest raises.
 
     Use for numba kernels and thread pools over them, whose ceiling is numba's thread pool

@@ -6,7 +6,7 @@ import numba
 import pytest  # type: ignore[import]
 
 from squidpy import _utils
-from squidpy._utils import _cpu_count, get_n_processes, get_n_threads, thread_map
+from squidpy._utils import _cpu_count, get_n_numba_threads, get_n_processes, thread_map
 
 MAX_THREADS = numba.config.NUMBA_NUM_THREADS
 MAX_CORES = _cpu_count()
@@ -14,18 +14,18 @@ MAX_CORES = _cpu_count()
 
 def test_minus_one_uses_the_default():
     assert get_n_processes(-1) == MAX_CORES
-    assert get_n_threads(-1) == MAX_THREADS
+    assert get_n_numba_threads(-1) == MAX_THREADS
 
 
 def test_none_is_serial_for_processes_and_the_numba_default_for_threads():
     assert get_n_processes(None) == 1
-    assert get_n_threads(None) == MAX_THREADS
+    assert get_n_numba_threads(None) == MAX_THREADS
 
 
 # scanpy only supports `n_jobs >= -1`, so the countdown convention (`-2` == all but one) is
 # not silently reinterpreted -- it is rejected.
 @pytest.mark.parametrize("n_jobs", [0, -2, -3, -100])
-@pytest.mark.parametrize("resolve", [get_n_processes, get_n_threads])
+@pytest.mark.parametrize("resolve", [get_n_processes, get_n_numba_threads])
 def test_zero_and_below_minus_one_raise(resolve, n_jobs: int):
     with pytest.raises(ValueError, match=r"must be `-1` or a positive integer"):
         resolve(n_jobs)
@@ -33,7 +33,7 @@ def test_zero_and_below_minus_one_raise(resolve, n_jobs: int):
 
 @pytest.mark.parametrize(
     ("resolve", "maximum"),
-    [(get_n_processes, MAX_CORES), (get_n_threads, MAX_THREADS)],
+    [(get_n_processes, MAX_CORES), (get_n_numba_threads, MAX_THREADS)],
 )
 def test_too_many_warns_and_falls_back(resolve, maximum: int, monkeypatch):
     messages: list[str] = []
