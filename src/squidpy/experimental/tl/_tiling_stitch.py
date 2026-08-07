@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import spatialdata as sd
@@ -741,6 +741,7 @@ def assign_stitch_groups(
     min_confidence: float = 0.7,
     max_gap: float = 3.0,
     max_group_size: int = 4,
+    candidates: Literal["auto", "is_seam_cut", "is_outlier"] = "auto",
     stitch_params: StitchParams | Mapping[str, Any] | None = None,
     inplace: bool = True,
 ) -> ad.AnnData | None:
@@ -781,6 +782,12 @@ def assign_stitch_groups(
     max_group_size
         Cap on group size; oversized groups (likely false merges) collapse
         to singletons.
+    candidates
+        Which QC column gates the cells considered for stitching.  ``"auto"``
+        (default) uses ``is_seam_cut`` when present -- these are localised to
+        detected FOV seams, so pairing no longer merges touching interior
+        cells -- and otherwise falls back to ``is_outlier``.  Set explicitly
+        to ``"is_seam_cut"`` or ``"is_outlier"`` to force one.
     stitch_params
         Advanced tuning knobs as a :class:`StitchParams` instance or a
         ``Mapping`` of its field names to values.  See :class:`StitchParams`
@@ -810,10 +817,19 @@ def assign_stitch_groups(
         raise ValueError(f"QC table '{table_key}' not found.  Run calculate_tiling_qc first.")
     adata = sdata.tables[table_key].copy()
 
-    if "is_outlier" not in adata.obs.columns:
-        raise ValueError(f"QC table '{table_key}' is missing 'is_outlier'; re-run calculate_tiling_qc.")
     if "label_id" not in adata.obs.columns:
         raise ValueError(f"QC table '{table_key}' is missing 'label_id'.")
+    # Candidate gate: prefer the seam-aware `is_seam_cut` flag (localised to detected FOV seams,
+    # so pairing no longer merges touching interior cells); fall back to the MAD `is_outlier`.
+    if candidates == "auto":
+        gate_col = "is_seam_cut" if "is_seam_cut" in adata.obs.columns else "is_outlier"
+    else:
+        gate_col = candidates
+    if gate_col not in adata.obs.columns:
+        raise ValueError(
+            f"QC table '{table_key}' is missing '{gate_col}'; re-run calculate_tiling_qc "
+            f"(with detect_seams=True for 'is_seam_cut')."
+        )
 
     existing = [c for c in _STITCH_COLUMNS if c in adata.obs.columns]
     if existing:
@@ -826,11 +842,11 @@ def assign_stitch_groups(
     labels_da = resolve_labels_array(sdata, labels_key, scale)
 
     label_ids = adata.obs["label_id"].astype(int).to_numpy()
-    is_outlier = adata.obs["is_outlier"].to_numpy(dtype=bool)
+    is_outlier = adata.obs[gate_col].to_numpy(dtype=bool)
     outlier_ids = label_ids[is_outlier].tolist()
 
     n_outliers = len(outlier_ids)
-    logg.info(f"Stitching {n_outliers} outlier cells (out of {len(label_ids)} total).")
+    logg.info(f"Stitching {n_outliers} candidate cells ('{gate_col}', out of {len(label_ids)} total).")
 
     if n_outliers == 0:
         logg.warning("No outliers flagged; nothing to stitch.")
@@ -904,6 +920,7 @@ def assign_stitch_groups(
         "min_confidence": float(min_confidence),
         "max_gap": float(max_gap),
         "max_group_size": int(max_group_size),
+        "candidate_gate": gate_col,
         "stitch_params": asdict(params),
         "n_outliers": int(n_outliers),
         "n_candidate_pairs": int(len(pairs)),

@@ -50,11 +50,19 @@ from squidpy.experimental.im._tiling import (
     compute_cell_info_tiled,
     extract_labels_tile_lazy,
 )
+from squidpy.experimental.tl._seam import (
+    SeamDetectionParams,
+    SeamScale,
+    cell_flat_edges,
+    estimate_membrane_width,
+    flag_cells_on_seams,
+)
+from squidpy.experimental.tl._seam import detect_seams as _detect_seam_bands
 from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS, StitchParams
 from squidpy.experimental.utils._labels import resolve_labels_array
 from squidpy.experimental.utils._params import resolve_params
 
-__all__ = ["TilingQCParams", "calculate_tiling_qc"]
+__all__ = ["SeamDetectionParams", "TilingQCParams", "calculate_tiling_qc"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -334,7 +342,12 @@ def _score_tile(
     min_area: int = _QC_DEFAULTS.min_area,
     downsample: int = 1,
     max_contour_points: int = _QC_DEFAULTS.max_contour_points,
-) -> pd.DataFrame:
+    origin: tuple[int, int] = (0, 0),
+    seam_edges: bool = False,
+    seam_min_len: int = 0,
+    seam_flat_tol: float = 1.5,
+    seam_probe_depth: int = 8,
+) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     """Compute tiling QC metrics for all cells in a numpy label tile.
 
     Parameters
@@ -359,9 +372,10 @@ def _score_tile(
     """
     regions = regionprops(tile_labels)
     if not regions:
-        return pd.DataFrame(columns=_TILE_SCORE_COLUMNS, dtype=float)
+        return pd.DataFrame(columns=_TILE_SCORE_COLUMNS, dtype=float), []
 
     rows: dict[int, dict[str, float]] = {}
+    edges: list[dict[str, Any]] = []
 
     for region in regions:
         lid = region.label
@@ -394,8 +408,16 @@ def _score_tile(
             "cardinal_alignment_score": cas,
             "cut_score": cs,
         }
+        if seam_edges:
+            # All cardinal flat boundary runs of this cell (full-resolution mask/tile, so
+            # independent of `downsample`).  Seam detection + flagging happen globally later.
+            for e in cell_flat_edges(
+                region.image, tile_labels, region.bbox, origin, seam_min_len, seam_flat_tol, seam_probe_depth
+            ):
+                e["cell_id"] = lid
+                edges.append(e)
 
-    return pd.DataFrame.from_dict(rows, orient="index")
+    return pd.DataFrame.from_dict(rows, orient="index"), edges
 
 
 # Centroid computation (shared logic with _feature.py)
@@ -442,6 +464,8 @@ def calculate_tiling_qc(
     nmads_smoothed: float = 3,
     n_neighbors: int = 10,
     tiling_qc_params: TilingQCParams | Mapping[str, Any] | None = None,
+    detect_seams: bool = True,
+    seam_params: SeamDetectionParams | Mapping[str, Any] | None = None,
     n_jobs: int = -1,
     table_key_added: str | None = None,
     inplace: bool = True,
@@ -500,6 +524,19 @@ def calculate_tiling_qc(
         a ``Mapping`` of its field names to values.  See
         :class:`TilingQCParams` for each field's meaning and default.
         ``None`` (default) uses all defaults.
+    detect_seams
+        If ``True`` (default), also run emergent-seam detection: locate the
+        FOV seam grid from the collinear alignment of many cells' straight
+        cut-edges (no FOV size or tile overlap required) and flag cells whose
+        edge lies on a seam as ``is_seam_cut``.  Unlike the MAD-based
+        ``is_outlier`` gate, this stays reliable in dense tissue, tolerates a
+        wide inter-FOV gap, and works when a cut leaves only one segmentable
+        half.  The detected seams are recorded in ``.uns["tiling_qc"]["seams"]``.
+    seam_params
+        Advanced tuning knobs for seam detection as a
+        :class:`SeamDetectionParams` instance or a ``Mapping`` of its field
+        names.  ``None`` (default) uses all defaults.  Ignored when
+        ``detect_seams=False``.
     n_jobs
         Number of threads for tile processing.  ``-1`` (default) uses
         all available CPUs.  Ignored when an active
@@ -532,6 +569,14 @@ def calculate_tiling_qc(
       neighbors that are smoothed-score outliers (MAD-based).  Bounded
       [0, 1]; high values trace the tile grid.
 
+    When ``detect_seams=True`` two more columns are added:
+
+    - ``is_seam_cut``: boolean, ``True`` for cells whose straight cardinal
+      edge lies on (and faces) a detected FOV seam.  Recommended over
+      ``is_outlier`` for dense tissue / wide gaps / single-sided cuts.
+    - ``seam_dist``: distance (px) from the cell's edge to its seam-band
+      centre; ``NaN`` for cells that are not seam cuts.
+
     Notes
     -----
     Tile processing is parallelised via dask.  When an active
@@ -557,6 +602,7 @@ def calculate_tiling_qc(
     if n_neighbors < 1:
         raise ValueError(f"n_neighbors must be >= 1, got {n_neighbors}.")
     qc_params = _resolve_qc_params(tiling_qc_params)
+    resolved_seam = resolve_params(seam_params, SeamDetectionParams, label="seam_params") if detect_seams else None
 
     labels_da = resolve_labels_array(sdata, labels_key, scale)
 
@@ -572,6 +618,17 @@ def calculate_tiling_qc(
         f"Tiling QC: {len(specs)} tiles ({tile_size}x{tile_size}, margin={overlap_margin}, downsample={downsample}x)."
     )
 
+    # Data length scale D (median cell equivalent diameter) -> resolves every seam threshold to
+    # pixels at runtime, so no absolute-pixel constants are baked in.
+    _sizes = np.array([np.sqrt(ci.bbox_h * ci.bbox_w) for ci in cell_info.values()], dtype=float)
+    seam_diameter = float(np.median(_sizes)) if _sizes.size else 1.0
+    if resolved_seam is not None:
+        seam_min_len = max(3, int(round(resolved_seam.edge_len_frac * seam_diameter)))
+        seam_flat_tol = resolved_seam.flat_tol  # rasterisation constant (px), not size-scaled
+        seam_probe_depth = max(3, int(round(resolved_seam.probe_frac * seam_diameter)))
+    else:
+        seam_min_len, seam_flat_tol, seam_probe_depth = 0, 1.5, 8
+
     def _process_one(spec):
         tile_lbl = extract_labels_tile_lazy(labels_da, spec)
         return _score_tile(
@@ -580,12 +637,18 @@ def calculate_tiling_qc(
             min_area=qc_params.min_area,
             downsample=downsample,
             max_contour_points=qc_params.max_contour_points,
+            origin=(spec.crop[0], spec.crop[1]),
+            seam_edges=resolved_seam is not None,
+            seam_min_len=seam_min_len,
+            seam_flat_tol=seam_flat_tol,
+            seam_probe_depth=seam_probe_depth,
         )
 
     # `_score_tile` is numba `nogil`, so threads scale (no process/pickle cost).
     results = _run_tiled(specs, _process_one, n_jobs=n_jobs, kind="threads", desc="tiles")
 
-    tile_dfs = [df for df in results if not df.empty]
+    tile_dfs = [df for df, _edges in results if not df.empty]
+    all_edges = [e for _df, edges in results for e in edges]
 
     if not tile_dfs:
         raise ValueError("No cells scored - labels may be empty or all below min_area.")
@@ -648,6 +711,28 @@ def calculate_tiling_qc(
         neighbor_outlier_frac = combined["is_outlier"].values[neighbor_idx].mean(axis=1)
         combined["nhood_outlier_fraction"] = neighbor_outlier_frac
 
+    # --- Emergent-seam cut-cell detection (FOV-size-agnostic, single-sided-friendly) ---
+    # Two stages: (1) locate the seam grid from wide-gap edges (a consensus over many cells;
+    # a lone straight membrane between two touching cells is off-grid and ignored); (2) flag
+    # any cell with a cardinal edge on a detected seam -- the gap is no longer required, so
+    # partial-edge and two-sided close-gap cuts are caught. All thresholds derive from `scale`.
+    seams_uns: dict[str, list[dict[str, float]]] = {"v": [], "h": []}
+    if resolved_seam is not None:
+        membrane = estimate_membrane_width(np.array([e["gap"] for e in all_edges], dtype=float))
+        seam_scale = SeamScale(diameter=seam_diameter, membrane=membrane)  # note: not the `scale` arg
+        seams = _detect_seam_bands(all_edges, W, H, seam_scale, resolved_seam)  # stage 1
+        edges_by_cell: dict[int, list[dict[str, Any]]] = {}
+        for e in all_edges:
+            edges_by_cell.setdefault(e["cell_id"], []).append(e)
+        flagged = flag_cells_on_seams(edges_by_cell, seams, seam_scale, resolved_seam)  # stage 2
+        idx = combined.index
+        combined["is_seam_cut"] = np.fromiter((lid in flagged for lid in idx), dtype=bool, count=len(idx))
+        combined["seam_dist"] = np.fromiter((flagged.get(lid, np.nan) for lid in idx), dtype=float, count=len(idx))
+        seams_uns = {
+            axis: [{"coord": c, "half_width": h, "n_edges": int(k)} for c, h, k in bands]
+            for axis, bands in seams.items()
+        }
+
     adata = ad.AnnData(
         X=np.empty((n_cells, 0), dtype=np.float32),
     )
@@ -682,6 +767,9 @@ def calculate_tiling_qc(
         "nmads_smoothed": nmads_smoothed,
         "n_neighbors": n_neighbors,
         "tiling_qc_params": asdict(qc_params),
+        "detect_seams": detect_seams,
+        "seam_params": asdict(resolved_seam) if resolved_seam is not None else None,
+        "seams": seams_uns,
     }
 
     if inplace:
