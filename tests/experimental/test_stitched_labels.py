@@ -1,4 +1,4 @@
-"""Tests for sq.experimental.im.make_stitched_labels."""
+"""Tests for sq.experimental.tl.make_stitched_labels."""
 
 from __future__ import annotations
 
@@ -24,14 +24,14 @@ class TestMakeStitchedLabels:
         sdata, _ = sdata_tile_boundary
         _qc_and_stitch(sdata)
         assert "labels_stitched" not in sdata.labels
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels")
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels")
         assert "labels_stitched" in sdata.labels
 
     def test_original_labels_unchanged(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         original_arr = np.asarray(sdata.labels["labels"].values).copy()
         _qc_and_stitch(sdata)
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels")
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels")
         after_arr = np.asarray(sdata.labels["labels"].values)
         np.testing.assert_array_equal(original_arr, after_arr)
 
@@ -45,7 +45,7 @@ class TestMakeStitchedLabels:
         # below would otherwise silently pass without exercising the remap.
         assert len(stitched) > 0, "seeded fixture should yield stitched cells at min_confidence=0.5"
 
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels")
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels")
         new_arr = np.asarray(sdata.labels["labels_stitched"].values)
         old_arr = np.asarray(sdata.labels["labels"].values)
 
@@ -63,7 +63,7 @@ class TestMakeStitchedLabels:
     def test_unstitched_pieces_keep_their_id(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         _qc_and_stitch(sdata)
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels")
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels")
         old_arr = np.asarray(sdata.labels["labels"].values)
         new_arr = np.asarray(sdata.labels["labels_stitched"].values)
         # Pixels with label 0 (background) stay 0
@@ -81,7 +81,7 @@ class TestMakeStitchedLabels:
     def test_collapsed_table_one_row_per_group(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         _qc_and_stitch(sdata, min_confidence=0.5)
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=True)
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", write_table=True)
         assert "labels_stitched_table" in sdata.tables
         agg = sdata.tables["labels_stitched_table"]
         adata = sdata.tables["labels_qc"]
@@ -96,7 +96,7 @@ class TestMakeStitchedLabels:
         """Both stitched (collapsed) and unstitched (passthrough) rows present."""
         sdata, _ = sdata_tile_boundary
         _qc_and_stitch(sdata, min_confidence=0.5)
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=True)
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", write_table=True)
         agg = sdata.tables["labels_stitched_table"]
         # At least some unstitched cells should be in the output.
         assert (~agg.obs["is_stitched"].astype(bool)).sum() > 0, "expected unstitched rows"
@@ -111,7 +111,7 @@ class TestMakeStitchedLabels:
         adata = sdata.tables["labels_qc"]
         adata.obs["fake_area"] = 100.0
         sdata.tables["labels_qc"] = adata
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="sum")
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="sum")
         agg = sdata.tables["labels_stitched_table"]
         stitched = agg.obs[agg.obs["is_stitched"].astype(bool)]
         # Seeded fixture (default_rng(42)): deterministic precondition, not a maybe.
@@ -128,7 +128,7 @@ class TestMakeStitchedLabels:
         adata = sdata.tables["labels_qc"]
         adata.obs["fake_intensity"] = 42.0
         sdata.tables["labels_qc"] = adata
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="mean")
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="mean")
         agg = sdata.tables["labels_stitched_table"]
         stitched = agg.obs[agg.obs["is_stitched"].astype(bool)]
         if len(stitched) > 0:
@@ -140,7 +140,7 @@ class TestMakeStitchedLabels:
         adata = sdata.tables["labels_qc"]
         adata.obs["fake_count"] = 1
         sdata.tables["labels_qc"] = adata
-        sq.experimental.im.make_stitched_labels(
+        sq.experimental.tl.make_stitched_labels(
             sdata,
             labels_key="labels",
             write_table=True,
@@ -158,7 +158,7 @@ class TestMakeStitchedLabels:
         sdata, _ = sdata_tile_boundary
         _qc_and_stitch(sdata, min_confidence=0.5)
         adata_orig = sdata.tables["labels_qc"]
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="sum")
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="sum")
         agg = sdata.tables["labels_stitched_table"]
         # n_pieces should be in {1, 2, 3, 4} -- if "sum" had been applied to it,
         # a 4-piece group would show n_pieces = 16.
@@ -179,7 +179,7 @@ class TestMakeStitchedLabels:
         # User adds a custom obs column to simulate downstream annotation.
         adata.obs["my_custom_flag"] = True
         sdata.tables["labels_qc"] = adata
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=True)
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", write_table=True)
         agg = sdata.tables["labels_stitched_table"]
         # Original QC obs columns survive
         for col in (
@@ -207,7 +207,7 @@ class TestMakeStitchedLabels:
         element (the stitch_group_id values become the new instance keys)."""
         sdata, _ = sdata_tile_boundary
         _qc_and_stitch(sdata, min_confidence=0.5)
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=True)
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", write_table=True)
         agg = sdata.tables["labels_stitched_table"]
         new_arr = np.asarray(sdata.labels["labels_stitched"].values)
         unique_in_image = set(np.unique(new_arr).tolist()) - {0}
@@ -247,14 +247,14 @@ class TestMakeStitchedLabels:
         else:
             _qc_and_stitch(sdata)
         with pytest.raises(ValueError, match=match):
-            sq.experimental.im.make_stitched_labels(sdata, **kwargs)
+            sq.experimental.tl.make_stitched_labels(sdata, **kwargs)
 
     def test_idempotent(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         _qc_and_stitch(sdata)
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels")
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels")
         first = np.asarray(sdata.labels["labels_stitched"].values).copy()
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels")
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels")
         second = np.asarray(sdata.labels["labels_stitched"].values)
         np.testing.assert_array_equal(first, second)
 
@@ -267,7 +267,7 @@ class TestMakeStitchedLabels:
         stitched = adata.obs[adata.obs["is_stitched"].astype(bool)]
         # Seeded fixture (default_rng(42)): deterministic precondition, not a maybe.
         assert len(stitched) > 0, "seeded fixture should yield stitched cells at min_confidence=0.5"
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", join_labels=False)
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", join_labels=False)
         arr = np.asarray(sdata.labels["labels_stitched"].values)
         # At least one stitched group should have >1 connected component
         # (the unjoined behaviour leaves the cut stripe as background).
@@ -290,7 +290,7 @@ class TestMakeStitchedLabels:
         stitched = adata.obs[adata.obs["is_stitched"].astype(bool)]
         # Seeded fixture (default_rng(42)): deterministic precondition, not a maybe.
         assert len(stitched) > 0, "seeded fixture should yield stitched cells at min_confidence=0.5"
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", join_labels=True)
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", join_labels=True)
         arr = np.asarray(sdata.labels["labels_stitched"].values)
         for gid in stitched["stitch_group_id"].astype(int).unique():
             mask = arr == gid
@@ -305,9 +305,9 @@ class TestMakeStitchedLabels:
         adata = sdata.tables["labels_qc"]
         # Snapshot every non-stitched cell's pixel set before joining, then
         # confirm none of those pixels changed identity afterwards.
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", join_labels=False)
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", join_labels=False)
         before_arr = np.asarray(sdata.labels["labels_stitched"].values).copy()
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", join_labels=True)
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", join_labels=True)
         after_arr = np.asarray(sdata.labels["labels_stitched"].values)
         non_stitched_gids = (
             adata.obs.loc[~adata.obs["is_stitched"].astype(bool), "stitch_group_id"].astype(int).unique()
@@ -330,7 +330,7 @@ class TestScaleRework:
         import pandas as pd
         import xarray as xr
 
-        from squidpy.experimental.im._stitched_labels import _apply_lut, _build_lookup
+        from squidpy.experimental.tl._stitched_labels import _apply_lut, _build_lookup
 
         obs = pd.DataFrame({"label_id": [1, 2], "stitch_group_id": [1, 1]})
         labels = np.array([[0, 1, 2], [5, 5, 0]], dtype=np.int32)  # label 5 not in table
@@ -344,7 +344,7 @@ class TestScaleRework:
 
         sdata, _ = sdata_tile_boundary
         _qc_and_stitch(sdata, min_confidence=0.5)
-        res = sq.experimental.im.make_stitched_labels(
+        res = sq.experimental.tl.make_stitched_labels(
             sdata, labels_key="labels", join_labels=True, write_table=False, inplace=False
         )
         # The fixture labels are dask-backed; the joined output must remain lazy.
@@ -354,7 +354,7 @@ class TestScaleRework:
     def test_aggregate_X_sparse_matches_dense(self, strategy):
         from scipy import sparse
 
-        from squidpy.experimental.im._stitched_labels import _aggregate_X
+        from squidpy.experimental.tl._stitched_labels import _aggregate_X
 
         rng = np.random.default_rng(0)
         dense = rng.integers(0, 5, size=(6, 4)).astype(np.float64)
@@ -377,7 +377,7 @@ class TestReviewFixes:
         stitched = qc[qc["is_stitched"].astype(bool)]
         # Seeded fixture (default_rng(42)): deterministic precondition, not a maybe.
         assert not stitched.empty, "seeded fixture should yield stitched cells at min_confidence=0.5"
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="sum")
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="sum")
         agg = sdata.tables["labels_stitched_table"].obs
         h, w = np.asarray(sdata.labels["labels"].values).shape[-2:]
         gid = int(stitched["stitch_group_id"].iloc[0])
@@ -397,7 +397,7 @@ class TestReviewFixes:
         """M3: summing an integer .X must not wrap on cast-back to the input dtype."""
         from scipy import sparse
 
-        from squidpy.experimental.im._stitched_labels import _aggregate_X
+        from squidpy.experimental.tl._stitched_labels import _aggregate_X
 
         X = np.array([[40000], [30000], [20000]], dtype=np.uint16)  # sum 90000 > uint16 max
         groups = [np.array([0, 1, 2])]
@@ -408,7 +408,7 @@ class TestReviewFixes:
 
     def test_aggregate_X_callable_applied_to_singletons(self):
         """M5: a callable strategy must be applied to singleton groups too (obs/X parity)."""
-        from squidpy.experimental.im._stitched_labels import _aggregate_X
+        from squidpy.experimental.tl._stitched_labels import _aggregate_X
 
         X = np.array([[10.0], [20.0], [30.0]])
         groups = [np.array([0]), np.array([1, 2])]  # group 0 is a singleton
@@ -423,7 +423,7 @@ class TestReviewFixes:
         qc = sdata.tables["labels_qc"]
         qc.obs["int_feature"] = np.arange(1, qc.n_obs + 1, dtype=np.int64)
         sdata.tables["labels_qc"] = qc
-        sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="mean")
+        sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", write_table=True, merge_strategy="mean")
         agg = sdata.tables["labels_stitched_table"]
         assert agg.obs["int_feature"].dtype.kind == "f", "mean of an int column was truncated back to int"
         stitched = qc.obs[qc.obs["is_stitched"].astype(bool)]
@@ -455,14 +455,14 @@ class TestReviewFixes:
         qc.obs["label_id"] = lid
         sdata.tables["labels_qc"] = qc
         with pytest.raises(ValueError, match=match):
-            sq.experimental.im.make_stitched_labels(sdata, labels_key="labels")
+            sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels")
 
     def test_invalid_merge_strategy_raises_without_table(self, sdata_tile_boundary):
         """M9: merge_strategy is validated eagerly even when write_table=False."""
         sdata, _ = sdata_tile_boundary
         _qc_and_stitch(sdata)
         with pytest.raises(ValueError, match="Unknown merge_strategy"):
-            sq.experimental.im.make_stitched_labels(
+            sq.experimental.tl.make_stitched_labels(
                 sdata, labels_key="labels", write_table=False, merge_strategy="bogus"
             )
 
@@ -488,7 +488,7 @@ class TestReviewFixes:
             sdata, labels_key="labels", scale="scale1", tile_size=100, nmads_cut=1.0, nmads_smoothed=1.5
         )
         sq.experimental.tl.assign_stitch_groups(sdata, labels_key="labels")
-        res = sq.experimental.im.make_stitched_labels(sdata, labels_key="labels", write_table=False, inplace=False)
+        res = sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", write_table=False, inplace=False)
         out = res["labels"]
         resolved = resolve_labels_array(sdata, "labels", "scale1")
 
