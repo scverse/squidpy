@@ -4,7 +4,7 @@ from anndata import AnnData
 from pandas.testing import assert_frame_equal
 from scipy.sparse import issparse
 
-from squidpy.gr import calculate_niche, spatial_neighbors
+from squidpy.gr import calculate_niche, spatial_neighbors_knn
 from squidpy.gr._niche import _calculate_neighborhood_profile, _utag
 
 SPATIAL_CONNECTIVITIES_KEY = "spatial_connectivities"
@@ -14,7 +14,7 @@ GROUPS = "celltype_mapped_refined"
 
 def test_niche_calc_nhood(adata_seqfish: AnnData):
     """Check whether niche calculation using neighborhood profile approach works as intended."""
-    spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
+    spatial_neighbors_knn(adata_seqfish, n_neighs=N_NEIGHBORS)
     calculate_niche(
         adata_seqfish,
         groups=GROUPS,
@@ -53,7 +53,7 @@ def test_niche_calc_nhood(adata_seqfish: AnnData):
 
 def test_niche_calc_utag(adata_seqfish: AnnData):
     """Check whether niche calculation using UTAG approach works as intended."""
-    spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=N_NEIGHBORS)
+    spatial_neighbors_knn(adata_seqfish, n_neighs=N_NEIGHBORS)
     calculate_niche(adata_seqfish, flavor="utag", n_neighbors=N_NEIGHBORS, resolutions=[0.1, 1.0])
 
     niches = adata_seqfish.obs["utag_niche_res=1.0"]
@@ -71,7 +71,7 @@ def test_niche_calc_utag(adata_seqfish: AnnData):
     assert new_feature_matrix.shape == adata_seqfish.X.shape
     assert issparse(new_feature_matrix)
 
-    spatial_neighbors(adata_seqfish, coord_type="generic", delaunay=False, n_neighs=40)
+    spatial_neighbors_knn(adata_seqfish, n_neighs=40)
     new_feature_matrix_more_neighs = _utag(
         adata_seqfish,
         normalize_adj=True,

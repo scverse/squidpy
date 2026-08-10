@@ -29,45 +29,45 @@ sc.set_figure_params(dpi=40, color_map="viridis")
 
 class TestGraph(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_interaction(self, adata: AnnData):
-        gr.spatial_neighbors(adata)
+        gr.spatial_neighbors_grid(adata)
         gr.interaction_matrix(adata, cluster_key=C_KEY)
 
         pl.interaction_matrix(adata, cluster_key=C_KEY)
 
     def test_plot_interaction_dendro(self, adata: AnnData):
-        gr.spatial_neighbors(adata)
+        gr.spatial_neighbors_grid(adata)
         gr.interaction_matrix(adata, cluster_key=C_KEY)
 
         pl.interaction_matrix(adata, cluster_key=C_KEY, method="single")
 
     def test_plot_centrality_scores(self, adata: AnnData):
-        gr.spatial_neighbors(adata)
+        gr.spatial_neighbors_grid(adata)
         gr.centrality_scores(adata, cluster_key=C_KEY)
 
         pl.centrality_scores(adata, cluster_key=C_KEY)
 
     def test_plot_centrality_scores_single(self, adata: AnnData):
         selected_score = "degree_centrality"
-        gr.spatial_neighbors(adata)
+        gr.spatial_neighbors_grid(adata)
         gr.centrality_scores(adata, cluster_key=C_KEY)
 
         pl.centrality_scores(adata, cluster_key=C_KEY, score=selected_score, dpi=DPI)
 
     def test_plot_nhood_enrichment(self, adata: AnnData):
-        gr.spatial_neighbors(adata)
+        gr.spatial_neighbors_grid(adata)
         gr.nhood_enrichment(adata, cluster_key=C_KEY)
 
         pl.nhood_enrichment(adata, cluster_key=C_KEY)
 
     def test_plot_nhood_enrichment_ax(self, adata: AnnData):
-        gr.spatial_neighbors(adata)
+        gr.spatial_neighbors_grid(adata)
         gr.nhood_enrichment(adata, cluster_key=C_KEY)
 
         fig, ax = plt.subplots(figsize=(2, 2), constrained_layout=True)
         pl.nhood_enrichment(adata, cluster_key=C_KEY, ax=ax)
 
     def test_plot_nhood_enrichment_dendro(self, adata: AnnData):
-        gr.spatial_neighbors(adata)
+        gr.spatial_neighbors_grid(adata)
         gr.nhood_enrichment(adata, cluster_key=C_KEY)
 
         # use count to avoid nan for scipy.cluster.hierarchy
@@ -110,13 +110,13 @@ class TestGraph(PlotTester, metaclass=PlotTesterMeta):
 
 class TestHeatmap(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_cbar_vmin_vmax(self, adata: AnnData):
-        gr.spatial_neighbors(adata)
+        gr.spatial_neighbors_grid(adata)
         gr.nhood_enrichment(adata, cluster_key=C_KEY)
 
         pl.nhood_enrichment(adata, cluster_key=C_KEY, vmin=10, vmax=20)
 
     def test_plot_cbar_kwargs(self, adata: AnnData):
-        gr.spatial_neighbors(adata)
+        gr.spatial_neighbors_grid(adata)
         gr.nhood_enrichment(adata, cluster_key=C_KEY)
 
         pl.nhood_enrichment(adata, cluster_key=C_KEY, cbar_kwargs={"label": "FOOBARBAZQUUX"})

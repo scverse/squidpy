@@ -6,21 +6,29 @@ from collections.abc import Callable, Iterable, Sequence
 from functools import partial
 from typing import Any, NamedTuple
 
-import networkx as nx
 import numba.types as nt
 import numpy as np
 import pandas as pd
+import rustworkx as rx
 from anndata import AnnData
-from numba import njit
+from numba import njit, prange
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
+from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import (
+    NDArrayA,
+    Signal,
+    SigQueue,
+    _get_n_cores,
+    parallelize,
+    spawn_generators,
+)
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -153,6 +161,8 @@ def nhood_enrichment(
     """
     Compute neighborhood enrichment by permutation test.
 
+    %(seed_versionchanged)s
+
     Parameters
     ----------
     %(adata)s
@@ -200,6 +210,7 @@ def nhood_enrichment(
 
     n_jobs = _get_n_cores(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
+    generators = spawn_generators(seed, n_perms)
 
     perms = parallelize(
         _nhood_enrichment_helper,
@@ -215,7 +226,7 @@ def nhood_enrichment(
         int_clust=int_clust,
         libraries=libraries,
         n_cls=n_cls,
-        seed=seed,
+        generators=generators,
     )
     zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
 
@@ -256,7 +267,7 @@ def centrality_scores(
     %(table_key)s
     %(cluster_key)s
     score
-        Centrality measures as described in :mod:`networkx.algorithms.centrality` :cite:`networkx`.
+        Group centrality measures as implemented in ``rustworkx`` :cite:`rustworkx`.
         If `None`, use all the options below. Valid options are:
 
             - `{c.CLOSENESS.s!r}` - measure of how close the group is to other nodes.
@@ -286,7 +297,9 @@ def centrality_scores(
 
     centralities = [Centrality(c) for c in centrality]
 
-    graph = nx.Graph(adata.obsp[connectivity_key])
+    # a rustworkx graph mirrors the undirected connectivity graph for the group closeness/degree
+    # measures; a symmetric, self-loop-free CSR feeds the clustering-coefficient kernel.
+    graph, adj = _build_graph(adata.obsp[connectivity_key])
 
     cat = adata.obs[cluster_key].cat.categories.values
     clusters = adata.obs[cluster_key].values
@@ -294,11 +307,13 @@ def centrality_scores(
     fun_dict = {}
     for c in centralities:
         if c == Centrality.CLOSENESS:
-            fun_dict[c.s] = partial(nx.algorithms.centrality.group_closeness_centrality, graph)
+            fun_dict[c.s] = partial(rx.group_closeness_centrality, graph)
         elif c == Centrality.DEGREE:
-            fun_dict[c.s] = partial(nx.algorithms.centrality.group_degree_centrality, graph)
+            fun_dict[c.s] = partial(rx.group_degree_centrality, graph)
         elif c == Centrality.CLUSTERING:
-            fun_dict[c.s] = partial(nx.algorithms.cluster.average_clustering, graph)
+            # average the per-node clustering coefficients over the group (0 if the group is empty).
+            node_clustering = _local_clustering(adj.indptr, adj.indices, adj.shape[0])
+            fun_dict[c.s] = lambda idx, cc=node_clustering: float(cc[idx].mean()) if len(idx) else 0.0
         else:
             raise NotImplementedError(f"Centrality `{c}` is not yet implemented.")
 
@@ -414,6 +429,68 @@ def _interaction_matrix(
     return output
 
 
+def _build_graph(conn: Any) -> tuple[rx.PyGraph, csr_matrix]:
+    """Build the graph representations used by :func:`centrality_scores`.
+
+    Returns a :class:`rustworkx.PyGraph` mirroring the undirected connectivity graph
+    (used by the group closeness/degree measures) and a symmetric, self-loop-free,
+    index-sorted CSR matrix feeding the clustering-coefficient kernel.
+    """
+    from scipy.sparse import triu
+
+    adj = csr_matrix(conn)
+    # undirected, unweighted, no self-loops: matches ``networkx.Graph(conn)`` topology.
+    adj = (adj + adj.T).tocsr()
+    adj.setdiag(0)
+    adj.eliminate_zeros()
+    adj.sort_indices()  # the clustering kernel merges neighbor lists, which must be sorted.
+
+    n = adj.shape[0]
+    graph = rx.PyGraph(multigraph=False)
+    graph.add_nodes_from(range(n))
+    # the strict upper triangle lists each undirected edge exactly once.
+    rows, cols = triu(adj, k=1).nonzero()
+    graph.add_edges_from_no_data([(int(i), int(j)) for i, j in zip(rows, cols, strict=True)])
+    return graph, adj
+
+
+@njit(parallel=True, cache=True)
+def _local_clustering(indptr: NDArrayA, indices: NDArrayA, n: int) -> NDArrayA:
+    """Local clustering coefficient per node over a symmetric, index-sorted CSR graph.
+
+    ``c_v = 2 * T(v) / (k_v * (k_v - 1))`` where ``T(v)`` is the number of edges among the
+    neighbors of ``v`` and ``k_v`` its degree; ``c_v = 0`` when ``k_v < 2``. Triangles are
+    counted by intersecting sorted neighbor lists, so only existing edges are ever visited
+    (no length-2-path matrix is materialized). Matches :func:`networkx.clustering`.
+    """
+    out = np.zeros(n, dtype=np.float64)
+    for v in prange(n):
+        start = indptr[v]
+        end = indptr[v + 1]
+        k = end - start
+        if k < 2:
+            continue
+        # summing |N(u) ∩ N(v)| over u in N(v) counts each neighbor-neighbor edge twice,
+        # so it already equals 2 * T(v) -> c_v = that sum / (k * (k - 1)).
+        two_triangles = 0
+        for a in range(start, end):
+            u = indices[a]
+            i = start
+            j = indptr[u]
+            u_end = indptr[u + 1]
+            while i < end and j < u_end:
+                if indices[i] == indices[j]:
+                    two_triangles += 1
+                    i += 1
+                    j += 1
+                elif indices[i] < indices[j]:
+                    i += 1
+                else:
+                    j += 1
+        out[v] = two_triangles / (k * (k - 1))
+    return out
+
+
 def _centrality_scores_helper(
     cat: Iterable[Any],
     clusters: Sequence[str],
@@ -444,19 +521,22 @@ def _nhood_enrichment_helper(
     int_clust: NDArrayA,
     libraries: pd.Series[CategoricalDtype] | None,
     n_cls: int,
-    seed: int | None = None,
+    generators: Sequence[np.random.Generator],
     queue: SigQueue | None = None,
 ) -> NDArrayA:
     perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
-    int_clust = int_clust.copy()  # threading
-    rs = np.random.RandomState(seed=None if seed is None else seed + ixs[0])
+    int_clust = int_clust.copy()  # threading; used as a read-only base for each permutation
 
-    for i in range(len(ixs)):
+    for i, ix in enumerate(ixs):
+        # shuffle from the same base with a per-permutation generator, so each permutation is
+        # independent of the others and of how the permutations are split across jobs
+        rng = generators[ix]
         if libraries is not None:
-            int_clust = _shuffle_group(int_clust, libraries, rs)
+            shuffled = _shuffle_group(int_clust, libraries, rng)
         else:
-            rs.shuffle(int_clust)
-        perms[i, ...] = callback(indices, indptr, int_clust)
+            shuffled = int_clust.copy()
+            rng.shuffle(shuffled)
+        perms[i, ...] = callback(indices, indptr, shuffled)
 
         if queue is not None:
             queue.put(Signal.UPDATE)
