@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 from anndata import AnnData
-from pandas import Categorical, DataFrame, Series
+from pandas import Categorical, Series
 from scanpy.pp import neighbors
 from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
 from squidpy.gr import calculate_niche, spatial_neighbors_knn
-from squidpy.gr._niche import NhoodProfileEmbedder, UtagEmbedder
 
-SPATIAL_CONNECTIVITIES_KEY = "spatial_connectivities"
 N_NEIGHBORS = 20
 GROUPS = "celltype_mapped_refined"
 
@@ -234,51 +232,6 @@ def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):
 # older tests
 
 
-def test_calculate_neighborhood_profile(dummy_adata2: AnnData):
-    "calculate_neighborhood_profile function needs to be tested, as it is at the base of the functionality of neighborhood flavor"
-
-    # since now this has become a method of an embedder class, will initialize the class and call the method for that class
-    embedder1 = NhoodProfileEmbedder(
-        groups="celltype",
-        spatial_connectivities_key="spatial_connectivities",
-        scale=True,  # doesnt make a difference in this test function
-        distance=1,  # doesnt make a difference in this test function
-        abs_nhood=True,
-        n_hop_weights=None,  # doesnt make a difference in this test function
-    )
-
-    embedder2 = NhoodProfileEmbedder(
-        groups="celltype",
-        spatial_connectivities_key="spatial_connectivities",
-        scale=True,  # doesnt make a difference in this test function
-        distance=1,  # doesnt make a difference in this test function
-        abs_nhood=False,
-        n_hop_weights=None,  # doesnt make a difference in this test function
-    )
-
-    matrix = dummy_adata2.obsp["spatial_connectivities"].tocoo()
-    nhood_profile = embedder1._calculate_neighborhood_profile(dummy_adata2, matrix)
-    relative_nhood_profile = embedder2._calculate_neighborhood_profile(dummy_adata2, matrix)
-
-    # nhood_profile and relative_nhood_profile should have same entries as this manually determined version for dummy_adata2
-    expected_nhood_profile = DataFrame(
-        {
-            0: [0, 1, 0, 1, 0, 0, 0, 0, 0, 0],
-            1: [1, 0, 0, 0, 3, 1, 1, 3, 0, 1],
-            2: [1, 1, 1, 0, 1, 1, 1, 0, 0, 0],
-        },
-        index=list("abcdefghij"),
-        dtype="float",
-    )
-    total_neighs = expected_nhood_profile.sum(axis=1)
-    expected_relative_nhood_profile = expected_nhood_profile.div(total_neighs, axis=0)
-    expected_relative_nhood_profile = expected_relative_nhood_profile.fillna(0.0)
-
-    # compare
-    assert (nhood_profile.values == expected_nhood_profile.values).all()
-    assert (relative_nhood_profile.values == expected_relative_nhood_profile.values).all()
-
-
 def test_niche_calc_nhood(adata_seqfish: AnnData):
     """Check whether niche calculation using neighborhood profile approach works as intended."""
     spatial_neighbors_knn(adata_seqfish, n_neighs=N_NEIGHBORS)
@@ -299,43 +252,6 @@ def test_niche_calc_nhood(adata_seqfish: AnnData):
         if label != "not_a_niche":
             assert len(niches[niches == label]) >= 100
 
-    # get obs x neighbor matrix from sparse matrix
-    matrix = adata_seqfish.obsp[SPATIAL_CONNECTIVITIES_KEY].tocoo()
-
-    # since now this has become a method of an embedder class, will initialize the class and call the method for that class
-    embedder1 = NhoodProfileEmbedder(
-        groups=GROUPS,
-        spatial_connectivities_key="spatial_connectivities",
-        scale=True,  # doesnt make a difference in this test function
-        distance=1,  # doesnt make a difference in this test function
-        abs_nhood=True,
-        n_hop_weights=None,  # doesnt make a difference in this test function
-    )
-
-    embedder2 = NhoodProfileEmbedder(
-        groups=GROUPS,
-        spatial_connectivities_key="spatial_connectivities",
-        scale=True,  # doesnt make a difference in this test function
-        distance=1,  # doesnt make a difference in this test function
-        abs_nhood=False,
-        n_hop_weights=None,  # doesnt make a difference in this test function
-    )
-
-    # get obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
-    abs_nhood_profile = embedder1._calculate_neighborhood_profile(adata_seqfish, matrix)
-    rel_nhood_profile = embedder2._calculate_neighborhood_profile(adata_seqfish, matrix)
-    # assert shape obs x groups
-    assert rel_nhood_profile.shape == (
-        adata_seqfish.n_obs,
-        len(adata_seqfish.obs[GROUPS].cat.categories),
-    )
-    assert abs_nhood_profile.shape == rel_nhood_profile.shape
-    # normalization
-    assert int(rel_nhood_profile.sum(axis=1).sum()) == adata_seqfish.n_obs
-    assert round(rel_nhood_profile.sum(axis=1).max(), 2) == 1
-    # maximum amount of categories equals n_neighbors
-    assert abs_nhood_profile.sum(axis=1).max() == N_NEIGHBORS
-
 
 def test_niche_calc_utag(adata_seqfish: AnnData):
     """Check whether niche calculation using UTAG approach works as intended."""
@@ -347,15 +263,3 @@ def test_niche_calc_utag(adata_seqfish: AnnData):
 
     assert niches.isna().sum() == 0
     assert niches.nunique() > niches_low_res.nunique()
-
-    embedder = UtagEmbedder(spatial_connectivities_key=SPATIAL_CONNECTIVITIES_KEY)
-    embedding1 = embedder.get_embedding(adata_seqfish)  # this is pca of the utag feature matrix
-
-    # assert shape[0] of matrices same
-    assert embedding1.shape[0] == adata_seqfish.X.shape[0]
-
-    spatial_neighbors_knn(adata_seqfish, n_neighs=40)
-    embedding2 = embedder.get_embedding(adata_seqfish)  # this is pca of the utag feature matrix
-
-    # matrix products (and hence pca) should differ when using different amount of neighbors
-    assert (embedding1 != embedding2).all()

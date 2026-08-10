@@ -28,13 +28,6 @@ __all__ = [
     "calculate_niche_utag",
     "calculate_niche_cellcharter",
     "calculate_niche_spatialleiden",
-    "NicheEmbedder",
-    "NhoodProfileEmbedder",
-    "UtagEmbedder",
-    "CellcharterEmbedder",
-    "NicheClusterer",
-    "LeidenClusterer",
-    "GMMClusterer",
 ]
 
 
@@ -297,9 +290,8 @@ def calculate_niche_neighborhood(
 ) -> AnnData | None:
     """Compute niche neighborhoods using a neighborhood profile embedding and Leiden clustering.
 
-    This is a high-level convenience wrapper that constructs a
-    :class:`NhoodProfileEmbedder`, a :class:`LeidenClusterer`, and optional
-    postprocessors to compute niche assignments for each observation.
+    Each observation is represented by the frequency of ``groups`` labels in its
+    spatial neighborhood, which is then clustered with the Leiden algorithm.
 
     Parameters
     ----------
@@ -331,8 +323,8 @@ def calculate_niche_neighborhood(
 
     """
 
-    # Create instance of NhoodProfileEmbedder using provided inputs
-    embedder = NhoodProfileEmbedder(
+    # Create instance of _NhoodProfileEmbedder using provided inputs
+    embedder = _NhoodProfileEmbedder(
         groups,
         spatial_connectivities_key,
         scale,
@@ -341,8 +333,8 @@ def calculate_niche_neighborhood(
         n_hop_weights,
     )
 
-    # Create instance of LeidenClusterer using provided inputs
-    clusterer = LeidenClusterer(n_neighbors, resolutions, "nhood_niche")
+    # Create instance of _LeidenClusterer using provided inputs
+    clusterer = _LeidenClusterer(n_neighbors, resolutions, "nhood_niche")
 
     return _calculate_niche_custom(
         data,
@@ -370,9 +362,8 @@ def calculate_niche_utag(
 ) -> AnnData | None:
     """Compute niche assignments using a UTAG-style neighborhood embedding.
 
-    This wrapper constructs a :class:`UtagEmbedder`, a
-    :class:`LeidenClusterer`, and optional postprocessors to generate niche
-    labels from spatial neighborhoods.
+    Features are propagated over the spatial graph so each observation inherits
+    information from its immediate neighbors, then clustered with the Leiden algorithm.
 
     Parameters
     ----------
@@ -392,9 +383,9 @@ def calculate_niche_utag(
 
     """
 
-    embedder = UtagEmbedder(spatial_connectivities_key)
+    embedder = _UtagEmbedder(spatial_connectivities_key)
 
-    clusterer = LeidenClusterer(n_neighbors, resolutions, "utag_niche")
+    clusterer = _LeidenClusterer(n_neighbors, resolutions, "utag_niche")
 
     return _calculate_niche_custom(
         data,
@@ -425,9 +416,8 @@ def calculate_niche_cellcharter(
 ) -> AnnData | None:
     """Compute niche assignments using a CellCharter-style aggregation embedding.
 
-    This wrapper constructs a :class:`CellcharterEmbedder`, a
-    :class:`GMMClusterer`, and optional postprocessors to generate niche labels
-    from spatial neighborhoods.
+    Features are aggregated across multi-hop spatial neighborhoods, then clustered
+    with a Gaussian mixture model.
 
     Parameters
     ----------
@@ -456,9 +446,9 @@ def calculate_niche_cellcharter(
 
     """
 
-    embedder = CellcharterEmbedder(distance, aggregation, spatial_connectivities_key, n_components, use_rep)
+    embedder = _CellcharterEmbedder(distance, aggregation, spatial_connectivities_key, n_components, use_rep)
 
-    clusterer = GMMClusterer(n_components, random_state, base_colname="cellcharter_niche")
+    clusterer = _GMMClusterer(n_components, random_state, base_colname="cellcharter_niche")
 
     return _calculate_niche_custom(
         data,
@@ -633,8 +623,8 @@ def calculate_niche_spatialleiden(
 @d.dedent
 def _calculate_niche_custom(
     data: AnnData | SpatialData,
-    embedder: NicheEmbedder,
-    clusterer: NicheClusterer,
+    embedder: _NicheEmbedder,
+    clusterer: _NicheClusterer,
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
@@ -650,9 +640,9 @@ def _calculate_niche_custom(
     ----------
     %(adata)s
     embedder
-        Instance of :class:`NicheEmbedder` used to compute an embedding from ``adata``.
+        Instance of ``_NicheEmbedder`` used to compute an embedding from ``adata``.
     clusterer
-        Instance of :class:`NicheClusterer` used to assign niches based on the embedding.
+        Instance of ``_NicheClusterer`` used to assign niches based on the embedding.
     %(niche_common_params)s
     %(table_key)s
 
@@ -672,8 +662,8 @@ def _calculate_niche_custom(
     calculate_niche_utag : Convenience wrapper for utag flavor niche analysis.
     calculate_niche_cellcharter : Convenience wrapper for cellcharter flavor niche analysis.
     calculate_niche_spatialleiden : Convenience wrapper for spatialleiden flavor niche analysis.
-    NicheEmbedder : Base class for embedding strategies.
-    NicheClusterer : Base class for clustering strategies.
+    _NicheEmbedder : Base class for embedding strategies.
+    _NicheClusterer : Base class for clustering strategies.
     """
 
     # obtain adata if data was of sdata type
@@ -731,8 +721,8 @@ def _calculate_niche_custom(
 
 def _run_niche_pipeline(
     adata: AnnData,
-    embedder: NicheEmbedder,
-    clusterer: NicheClusterer,
+    embedder: _NicheEmbedder,
+    clusterer: _NicheClusterer,
     mask: pd.Series | None,
     min_niche_size: int | None,
     prefix: str | None = None,
@@ -1064,7 +1054,7 @@ def _aggregate(adata: AnnData, normalized_adjacency_matrix: sps.spmatrix, aggreg
     return aggregated_matrix
 
 
-class NicheEmbedder(ABC):
+class _NicheEmbedder(ABC):
     """Base class for computing embeddings used in niche analysis.
 
     Subclasses must implement :meth:`get_embedding`, which transforms an
@@ -1080,7 +1070,7 @@ class NicheEmbedder(ABC):
 
 
 @d.dedent
-class NhoodProfileEmbedder(NicheEmbedder):
+class _NhoodProfileEmbedder(_NicheEmbedder):
     """Compute neighborhood composition profiles as embeddings.
 
     Each observation is represented by the frequency of categorical labels
@@ -1237,7 +1227,7 @@ class NhoodProfileEmbedder(NicheEmbedder):
 
 
 @d.dedent
-class UtagEmbedder(NicheEmbedder):
+class _UtagEmbedder(_NicheEmbedder):
     """Compute a UTAG-style embedding by propagating features over spatial neighbors.
 
     The embedding is constructed by normalizing the spatial connectivity matrix,
@@ -1277,7 +1267,7 @@ class UtagEmbedder(NicheEmbedder):
 # it was before the refactor, and in that case, when use_rep was provided, then it simply returned
 # that as the embedding, so no cellcharter algorithm used in that case
 @d.dedent
-class CellcharterEmbedder(NicheEmbedder):
+class _CellcharterEmbedder(_NicheEmbedder):
     """Compute a CellCharter-style embedding from spatially aggregated features.
 
     The embedding can either be derived from a precomputed representation in
@@ -1376,7 +1366,7 @@ class CellcharterEmbedder(NicheEmbedder):
 ############
 
 
-class NicheClusterer(ABC):
+class _NicheClusterer(ABC):
     """Base class for clustering embeddings into niche assignments.
 
     Subclasses must implement :meth:`cluster`, which assigns cluster labels
@@ -1389,7 +1379,7 @@ class NicheClusterer(ABC):
 
 
 @d.dedent
-class LeidenClusterer(NicheClusterer):
+class _LeidenClusterer(_NicheClusterer):
     """Cluster embeddings using the Leiden algorithm.
 
     Parameters
@@ -1449,7 +1439,7 @@ class LeidenClusterer(NicheClusterer):
 
 
 @d.dedent
-class GMMClusterer(NicheClusterer):
+class _GMMClusterer(_NicheClusterer):
     """Cluster embeddings with a Gaussian mixture model.
 
     Parameters
