@@ -366,9 +366,6 @@ def sdata_with_qc(sdata_tile_boundary):
     return sdata
 
 
-# `sq.experimental.pl.tiling_qc` imports spatialdata-plot lazily, so this module
-# imports cleanly and only these tests need excluding when that stack is broken.
-@pytest.mark.spatialdata_plot
 class TestTilingQCVisual(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_tiling_qc_cut_score(self, sdata_with_qc):
         """Visual: labels coloured by cut_score."""
