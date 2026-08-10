@@ -19,10 +19,10 @@ from anndata import AnnData
 from dask import delayed
 from matplotlib.colors import ListedColormap
 from scanpy import logging as logg
-from scanpy.plotting.palettes import default_102 as default_palette
 from skimage.transform import rescale
 from skimage.util import img_as_float
 
+from squidpy._compat import default_palette
 from squidpy._constants._constants import InferDimensions
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
