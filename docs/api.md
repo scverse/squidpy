@@ -93,6 +93,14 @@ import squidpy as sq
     tl.var_by_distance
 ```
 
+## Settings
+
+```{eval-rst}
+.. data:: squidpy.settings
+
+    The global backend settings instance provided by :mod:`scverse_backends`.
+```
+
 ## Datasets
 ```{eval-rst}
 .. module:: squidpy.datasets
