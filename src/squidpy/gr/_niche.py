@@ -71,6 +71,16 @@ def calculate_niche(
     Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
     The resulting niche labels with be stored in 'adata.obs'.
 
+    .. deprecated:: 1.8.4
+        ``calculate_niche`` is deprecated and will be removed in squidpy
+        v1.9.0. Use one of the flavor-specific functions instead:
+
+        - :func:`calculate_niche_neighborhood`
+        - :func:`calculate_niche_utag`
+        - :func:`calculate_niche_cellcharter`
+        - :func:`calculate_niche_spatialleiden`
+        - :func:`calculate_niche_custom`
+
     See Also
     --------
     calculate_niche_neighborhood : Neighborhood-profile flavor with an explicit signature.
@@ -156,6 +166,15 @@ def calculate_niche(
         If 'True', perform the operation in place.
         If 'False', return a new AnnData object with the niche labels.
     """
+
+    warnings.warn(
+        "Calling `calculate_niche` is deprecated and will be removed in squidpy "
+        "v1.9.0. Use `calculate_niche_neighborhood`, `calculate_niche_utag`, "
+        "`calculate_niche_cellcharter`, `calculate_niche_spatialleiden`, or "
+        "`calculate_niche_custom` instead.",
+        FutureWarning,
+        stacklevel=2,
+    )
 
     # cellcharter-only defaults stay guarded: filling them for other flavors would trip
     # the "not used for flavor" warning in _check_unnecessary_args
