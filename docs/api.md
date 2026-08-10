@@ -40,7 +40,6 @@ import squidpy as sq
     gr.calculate_niche_utag
     gr.calculate_niche_cellcharter
     gr.calculate_niche_spatialleiden
-    gr.calculate_niche_custom
 ```
 
 ## Image

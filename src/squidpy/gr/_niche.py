@@ -28,7 +28,6 @@ __all__ = [
     "calculate_niche_utag",
     "calculate_niche_cellcharter",
     "calculate_niche_spatialleiden",
-    "calculate_niche_custom",
     "NicheEmbedder",
     "NhoodProfileEmbedder",
     "UtagEmbedder",
@@ -79,7 +78,6 @@ def calculate_niche(
         - :func:`calculate_niche_utag`
         - :func:`calculate_niche_cellcharter`
         - :func:`calculate_niche_spatialleiden`
-        - :func:`calculate_niche_custom`
 
     See Also
     --------
@@ -87,7 +85,6 @@ def calculate_niche(
     calculate_niche_utag : UTAG flavor with an explicit signature.
     calculate_niche_cellcharter : CellCharter flavor with an explicit signature.
     calculate_niche_spatialleiden : SpatialLeiden flavor with an explicit signature.
-    calculate_niche_custom : Custom embedder/clusterer combinations.
 
     Parameters
     ----------
@@ -170,8 +167,7 @@ def calculate_niche(
     warnings.warn(
         "Calling `calculate_niche` is deprecated and will be removed in squidpy "
         "v1.9.0. Use `calculate_niche_neighborhood`, `calculate_niche_utag`, "
-        "`calculate_niche_cellcharter`, `calculate_niche_spatialleiden`, or "
-        "`calculate_niche_custom` instead.",
+        "`calculate_niche_cellcharter`, or `calculate_niche_spatialleiden` instead.",
         FutureWarning,
         stacklevel=2,
     )
@@ -333,11 +329,6 @@ def calculate_niche_neighborhood(
     If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
     Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
 
-    See Also
-    --------
-    calculate_niche_custom : Lower-level API for custom embedding, clustering, and postprocessing.
-    NhoodProfileEmbedder : Default embedding strategy based on neighborhood composition.
-    LeidenClusterer : Default clustering strategy.
     """
 
     # Create instance of NhoodProfileEmbedder using provided inputs
@@ -353,7 +344,7 @@ def calculate_niche_neighborhood(
     # Create instance of LeidenClusterer using provided inputs
     clusterer = LeidenClusterer(n_neighbors, resolutions, "nhood_niche")
 
-    return calculate_niche_custom(
+    return _calculate_niche_custom(
         data,
         embedder,
         clusterer,
@@ -399,18 +390,13 @@ def calculate_niche_utag(
     If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
     Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
 
-    See Also
-    --------
-    UtagEmbedder : Embedding strategy based on UTAG neighborhood feature propagation.
-    LeidenClusterer : Leiden clustering backend used to assign niches.
-    calculate_niche_custom : Lower-level API for custom niche pipelines.
     """
 
     embedder = UtagEmbedder(spatial_connectivities_key)
 
     clusterer = LeidenClusterer(n_neighbors, resolutions, "utag_niche")
 
-    return calculate_niche_custom(
+    return _calculate_niche_custom(
         data,
         embedder,
         clusterer,
@@ -468,18 +454,13 @@ def calculate_niche_cellcharter(
     If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
     Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
 
-    See Also
-    --------
-    CellcharterEmbedder : Embedding strategy inspired by CellCharter.
-    GMMClusterer : Gaussian-mixture clustering backend used to assign niches.
-    calculate_niche_custom : Lower-level API for custom niche pipelines.
     """
 
     embedder = CellcharterEmbedder(distance, aggregation, spatial_connectivities_key, n_components, use_rep)
 
     clusterer = GMMClusterer(n_components, random_state, base_colname="cellcharter_niche")
 
-    return calculate_niche_custom(
+    return _calculate_niche_custom(
         data,
         embedder,
         clusterer,
@@ -650,7 +631,7 @@ def calculate_niche_spatialleiden(
 
 
 @d.dedent
-def calculate_niche_custom(
+def _calculate_niche_custom(
     data: AnnData | SpatialData,
     embedder: NicheEmbedder,
     clusterer: NicheClusterer,
