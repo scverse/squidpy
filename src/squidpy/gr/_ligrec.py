@@ -22,7 +22,7 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, deprecated_params, get_n_threads, numba_threads, spawn_generators
+from squidpy._utils import NDArrayA, deprecated_params, get_n_numba_threads, numba_threads, spawn_generators
 from squidpy._validators import assert_positive, check_tuple_needles
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -326,7 +326,7 @@ class PermutationTestABC(ABC):
         # much faster than applymap (tested on 1M interactions)
         interactions_ = np.vectorize(lambda g: gene_mapper[g])(interactions.values)
 
-        n_threads = get_n_threads(n_jobs)
+        n_threads = get_n_numba_threads(n_jobs)
         start = logg.info(
             f"Running `{n_perms}` permutations on `{len(interactions)}` interactions "
             f"and `{len(clusters)}` cluster combinations using `{n_threads}` thread(s)"
