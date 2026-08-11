@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from typing import Any, Literal
 
 import anndata as ad
@@ -20,6 +21,7 @@ from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, rng_to_random_state, spawn_generators
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
+from squidpy.gr._autok import DEFAULT_INIT_PARAMS, expand_n_clusters, sweep_auto_k
 from squidpy.gr._utils import extract_adata_if_sdata
 
 __all__ = [
@@ -424,11 +426,17 @@ def calculate_niche_cellcharter(
     library_key: str | None = None,
     inplace: bool = True,
     table_key: str | None = None,
+    *,
+    n_clusters: int | tuple[int, int] | Sequence[int] | None = None,
+    max_runs: int = 10,
+    convergence_tol: float = 1e-2,
+    store_labels: bool = False,
 ) -> AnnData | None:
     """Compute niche assignments using a CellCharter-style aggregation embedding.
 
     Features are aggregated across multi-hop spatial neighborhoods, then clustered
-    with a Gaussian mixture model.
+    with a Gaussian mixture model. The number of mixture components can either be fixed
+    or selected by the stability sweep of :func:`~squidpy.gr.cluster_auto_k`.
 
     Parameters
     ----------
@@ -450,17 +458,60 @@ def calculate_niche_cellcharter(
         instead of deriving a spatially aggregated embedding.
     %(niche_common_params)s
     %(table_key)s
+    n_clusters
+        Number of mixture components. ``None`` falls back to ``n_components``, an ``int``
+        fits that number directly, and a ``(min, max)`` tuple or a sequence of candidates
+        selects the most stable K by fitting each candidate ``max_runs`` times. Note that a
+        ``(min, max)`` tuple also fits ``min - 1`` and ``max + 1``, whereas an explicit
+        sequence does not, so its first and last entries can never be selected.
+    max_runs
+        Maximum number of repetitions per candidate K. Only used when ``n_clusters``
+        requests a sweep.
+    convergence_tol
+        Stop the sweep early once the mean absolute percentage error between the mean
+        stability curves of consecutive runs falls below this value.
+    store_labels
+        Also keep the labeling of every fitted K as ``cellcharter_niche_k{K}`` columns in
+        ``adata.obs``, for comparing resolutions.
 
     Returns
     -------
     If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
     Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
 
+    When ``n_clusters`` requests a sweep, per-K diagnostics are stored in
+    ``adata.uns["cellcharter_niche_autok"]`` (keyed by library id when ``library_key`` is
+    given, since each library selects its own K). The niche column is always
+    ``cellcharter_niche``, independent of the selected K.
+
+    Notes
+    -----
+    A sweep costs ``max_runs x len(K)`` mixture fits per library instead of a single fit --
+    110 fits for the default ``max_runs`` over ``n_clusters=(2, 10)``, which expands to
+    ``K=1..11``. All labelings of previous runs stay in memory, since each run is compared
+    against all of them.
     """
 
     embedder = _CellcharterEmbedder(distance, aggregation, spatial_connectivities_key, n_components, use_rep)
 
-    clusterer = _GMMClusterer(n_components, np.random.default_rng(seed), base_colname="cellcharter_niche")
+    clusterer: _NicheClusterer
+    rng = np.random.default_rng(seed)
+    if n_clusters is None or isinstance(n_clusters, int):
+        # `n_components` carries two meanings today: the rep truncation width above and the
+        # number of mixture components here. `n_clusters` takes over the latter.
+        clusterer = _GMMClusterer(
+            n_components if n_clusters is None else n_clusters, rng, base_colname="cellcharter_niche"
+        )
+    else:
+        clusterer = _AutoKGMMClusterer(
+            n_clusters,
+            rng,
+            max_runs=max_runs,
+            convergence_tol=convergence_tol,
+            store_labels=store_labels,
+            base_colname="cellcharter_niche",
+            uns_key="cellcharter_niche_autok",
+        )
 
     return _calculate_niche_custom(
         data,
@@ -677,6 +728,10 @@ def _calculate_niche_custom(
     If ``library_key`` is provided, the computation is performed independently
     for each library and results are merged back into ``adata``.
 
+    Any diagnostics returned by the clusterer are written to ``adata.uns`` under the keys it
+    provides -- keyed by library id when stratifying, since each library is clustered
+    independently. See :meth:`_NicheClusterer.cluster`.
+
     See Also
     --------
     calculate_niche_neighborhood : Convenience wrapper for neighborhood flavor niche analysis.
@@ -699,6 +754,10 @@ def _calculate_niche_custom(
         assert_key_in_adata(adata, library_key, attr="obs")
         logg.info(f"Stratifying by library_key '{library_key}'")
 
+        # diagnostics are keyed by library id: each library is clustered independently, so
+        # they describe that library only
+        diagnostics_per_library: dict[str, dict[str, Any]] = {}
+
         # go through each library_id and process the corresponding adata subset
         for itr, lib_id in enumerate(adata.obs[library_key].unique()):
             logg.info(f"Processing library '{lib_id}'")
@@ -711,9 +770,11 @@ def _calculate_niche_custom(
 
             lib_adata = adata[lib_indices].copy()
 
-            _run_niche_pipeline(
+            diagnostics = _run_niche_pipeline(
                 lib_adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size, prefix=f"lib={lib_id}_"
             )
+            if diagnostics is not None:
+                diagnostics_per_library[str(lib_id)] = diagnostics
 
             # from itr==1 onwards, adata will hold the columns that are being added hence,
             # added_columns will be empty. Hence only obtain added_columns when itr==0
@@ -726,8 +787,19 @@ def _calculate_niche_custom(
                     adata.obs[col] = "not_a_niche"
                 adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
 
+        # written once, at the end: the per-library `lib_adata.uns` is thrown away by the
+        # merge above, which only carries obs columns
+        for uns_key in {key for per_library in diagnostics_per_library.values() for key in per_library}:
+            adata.uns[uns_key] = {
+                lib_id: per_library[uns_key]
+                for lib_id, per_library in diagnostics_per_library.items()
+                if uns_key in per_library
+            }
+
     else:
-        _run_niche_pipeline(adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size)
+        diagnostics = _run_niche_pipeline(adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size)
+        if diagnostics is not None:
+            adata.uns.update(diagnostics)
 
     # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
     # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
@@ -747,11 +819,16 @@ def _run_niche_pipeline(
     mask: pd.Series | None,
     min_niche_size: int | None,
     prefix: str | None = None,
-) -> None:
-    """Embed, cluster, and postprocess ``adata`` in place."""
+) -> dict[str, Any] | None:
+    """Embed, cluster, and postprocess ``adata`` in place.
+
+    Returns any clusterer diagnostics as a ``{uns_key: payload}`` mapping, for the caller to
+    store; see :meth:`_NicheClusterer.cluster`.
+    """
     embedding = embedder.get_embedding(adata)
-    result_columns = clusterer.cluster(adata, embedding)
+    result_columns, diagnostics = clusterer.cluster(adata, embedding)
     _postprocess_niche_results(adata, result_columns, mask, min_niche_size, prefix)
+    return diagnostics
 
 
 def _validate_niche_args(
@@ -1397,8 +1474,18 @@ class _NicheClusterer(ABC):
     """
 
     @abstractmethod
-    def cluster(self, adata: AnnData, embedding: NDArrayA) -> list[str]:
-        """Adds column/s in adata.obs with the clustering done. Returns the names of the columns just added."""
+    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
+        """Add column/s in ``adata.obs`` with the clustering done.
+
+        Returns
+        -------
+        The names of the columns just added, and any diagnostics to store in ``adata.uns``
+        as a ``{uns_key: payload}`` mapping (``None`` when there are none).
+
+        Diagnostics are *returned* rather than written to ``adata.uns`` directly: under
+        ``library_key`` the clusterer runs on a per-library copy whose ``uns`` is discarded,
+        so only obs columns survive the merge. The caller collects them and writes once.
+        """
 
 
 @d.dedent
@@ -1432,7 +1519,7 @@ class _LeidenClusterer(_NicheClusterer):
         self.resolutions = resolutions if isinstance(resolutions, list) else [resolutions]
         self.base_colname = base_colname
 
-    def cluster(self, adata: AnnData, embedding: NDArrayA) -> list:
+    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
         # first create an adata object using the embedding provided
         adata_embedding = ad.AnnData(X=embedding, obs=pd.DataFrame(index=adata.obs.index))
 
@@ -1458,7 +1545,7 @@ class _LeidenClusterer(_NicheClusterer):
                 adata_embedding.obs[niche_key]
             )  # since constrain all embedders to return embedding with numrows==numcells and in same order, this should be fine
 
-        return niche_keys
+        return niche_keys, None
 
 
 @d.dedent
@@ -1493,15 +1580,16 @@ class _GMMClusterer(_NicheClusterer):
         self.rng = rng
         self.base_colname = base_colname
 
-    def cluster(self, adata: AnnData, embedding: NDArrayA) -> list:
+    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
         """Returns niche labels generated by GMM clustering.
         Compared to cellcharter this approach is simplified by using sklearn's GaussianMixture model without stability analysis.
+        See :class:`_AutoKGMMClusterer` for the stability-based selection of the number of components.
         """
         # cluster concatenated matrix with GMM, each cluster label equals to a niche label
         gmm = GaussianMixture(
             n_components=self.n_components,
             random_state=rng_to_random_state(self.rng),
-            init_params="random_from_data",
+            init_params=DEFAULT_INIT_PARAMS,
         )
         gmm.fit(embedding)
         niches = gmm.predict(embedding)
@@ -1510,7 +1598,101 @@ class _GMMClusterer(_NicheClusterer):
             logg.info(f"Overwriting existing column '{self.base_colname}'")
 
         adata.obs[self.base_colname] = pd.Categorical(niches)
-        return [self.base_colname]
+        return [self.base_colname], None
+
+
+@d.dedent
+class _AutoKGMMClusterer(_NicheClusterer):
+    """Cluster embeddings with a Gaussian mixture, choosing the number of components by stability.
+
+    Every candidate K is fitted ``max_runs`` times and scored by how stably its labeling
+    reproduces across runs; the labels of the most stable K become the niche assignment.
+
+    Parameters
+    ----------
+    n_clusters
+        Candidate numbers of clusters. A ``(min, max)`` tuple gains a ``+-1`` halo, see
+        :func:`~squidpy.gr._autok.expand_n_clusters`.
+    rng
+        Generator seeding every individual fit.
+    max_runs
+        Maximum number of repetitions per K.
+    convergence_tol
+        Stop early once the mean stability curve settles, see
+        :func:`~squidpy.gr._autok.sweep_auto_k`.
+    store_labels
+        Also keep the labeling of every fitted K, as ``{base_colname}_k{K}`` columns.
+    base_colname
+        Name of the output column added to ``adata.obs``.
+    uns_key
+        Key in ``adata.uns`` under which the per-K diagnostics are returned.
+
+    Notes
+    -----
+    One instance may be reused for several sweeps (e.g. once per library when stratifying by
+    ``library_key``), in which case each sweep runs independently and selects its own K.
+    """
+
+    def __init__(
+        self,
+        n_clusters: tuple[int, int] | Sequence[int],
+        rng: np.random.Generator,
+        max_runs: int = 10,
+        convergence_tol: float = 1e-2,
+        store_labels: bool = False,
+        base_colname: str = "niche_gmm",
+        uns_key: str = "niche_gmm_autok",
+    ):
+        self.n_clusters = expand_n_clusters(n_clusters)
+        self.rng = rng
+        self.max_runs = max_runs
+        self.convergence_tol = convergence_tol
+        self.store_labels = store_labels
+        self.base_colname = base_colname
+        self.uns_key = uns_key
+
+    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
+        """Returns the niche labels of the most stable number of clusters, plus the per-K diagnostics."""
+        logg.info(
+            f"Selecting the number of clusters over K={self.n_clusters} with up to {self.max_runs} runs each "
+            f"({len(self.n_clusters) * self.max_runs} mixture fits at most)"
+        )
+        result = sweep_auto_k(
+            embedding,
+            self.n_clusters,
+            max_runs=self.max_runs,
+            convergence_tol=self.convergence_tol,
+            rng=self.rng,
+        )
+        logg.info(f"Selected K={result.best_k} after {result.n_runs} runs (peaks at K={result.peaks})")
+
+        if self.base_colname in adata.obs.columns:
+            logg.info(f"Overwriting existing column '{self.base_colname}'")
+
+        # the column name stays independent of K: `best_k` belongs in `uns`, and a
+        # K-dependent name would make the column unpredictable for downstream code
+        adata.obs[self.base_colname] = pd.Categorical(result.labels[result.best_k])
+        result_columns = [self.base_colname]
+
+        if self.store_labels:
+            # returned as obs columns rather than written to obsm, so that masking,
+            # `min_niche_size`, `lib=` prefixing and the per-library merge all apply to them
+            for k in self.n_clusters:
+                colname = f"{self.base_colname}_k{k}"
+                adata.obs[colname] = pd.Categorical(result.labels[k])
+                result_columns.append(colname)
+
+        diagnostics = {
+            "table": result.to_frame(),
+            "stability": result.stability,
+            "n_clusters": result.n_clusters,
+            "interior": result.interior,
+            "best_k": result.best_k,
+            "peaks": result.peaks,
+            "n_runs": result.n_runs,
+            "converged": result.converged,
+        }
+        return result_columns, {self.uns_key: diagnostics}
 
 
 ############

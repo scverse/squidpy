@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import pytest
-from anndata import AnnData
+from anndata import AnnData, read_h5ad
 from pandas import Categorical, Series
+from pandas.testing import assert_frame_equal
 from scanpy.pp import neighbors
 from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
@@ -137,6 +138,114 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
 
     assert len(seen) == 2, "expected one mixture fit per library"
     assert seen[0] != seen[1], "libraries were fitted with the same seed"
+
+
+# selecting the number of clusters by stability
+
+
+def test_niche_cellcharter_n_clusters_none_keeps_a_single_fit(dummy_adata2: AnnData):
+    "`n_clusters=None` must behave exactly like today: one fit at `n_components`, no diagnostics."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    kwargs = {"distance": 2, "aggregation": "mean", "n_components": 4, "seed": 0, "inplace": False}
+
+    default = calculate_niche_cellcharter(dummy_adata2, **kwargs)
+    explicit = calculate_niche_cellcharter(dummy_adata2, n_clusters=4, **kwargs)
+
+    assert "cellcharter_niche_autok" not in default.uns
+    assert (default.obs["cellcharter_niche"] == explicit.obs["cellcharter_niche"]).all()
+
+
+def test_niche_cellcharter_auto_k_stores_per_k_diagnostics(dummy_adata2: AnnData):
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", seed=0, n_clusters=(2, 3), max_runs=2)
+
+    # the niche column stays independent of the selected K
+    assert "cellcharter_niche" in dummy_adata2.obs.columns
+
+    diagnostics = dummy_adata2.uns["cellcharter_niche_autok"]
+    assert diagnostics["n_clusters"] == [1, 2, 3, 4], "a (min, max) request gains a +-1 halo"
+    assert diagnostics["interior"] == [2, 3]
+    assert diagnostics["best_k"] in diagnostics["interior"]
+    assert diagnostics["stability"].shape[0] == len(diagnostics["interior"])
+
+    table = diagnostics["table"]
+    assert list(table.index) == diagnostics["n_clusters"]
+    assert table.loc[[1, 4], "stability_mean"].isna().all(), "the halo is fitted but not scored"
+    assert table.loc[diagnostics["interior"], "stability_mean"].notna().all()
+    assert table["nll"].notna().all()
+    assert table.index[table["is_best"]].tolist() == [diagnostics["best_k"]]
+
+
+def test_niche_cellcharter_auto_k_store_labels(dummy_adata2: AnnData):
+    "`store_labels` must emit one obs column per fitted K, usable as a `color=` key."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(
+        dummy_adata2, distance=2, aggregation="mean", seed=0, n_clusters=(2, 3), max_runs=2, store_labels=True
+    )
+
+    for k in dummy_adata2.uns["cellcharter_niche_autok"]["n_clusters"]:
+        column = f"cellcharter_niche_k{k}"
+        assert column in dummy_adata2.obs.columns
+        assert dummy_adata2.obs[column].nunique() <= k
+
+
+def test_niche_cellcharter_auto_k_labels_go_through_postprocessing(dummy_adata2: AnnData):
+    "Per-K columns are returned from `cluster()`, so `min_niche_size` must apply to them too."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(
+        dummy_adata2,
+        distance=2,
+        aggregation="mean",
+        seed=0,
+        n_clusters=(2, 3),
+        max_runs=2,
+        store_labels=True,
+        min_niche_size=100,  # larger than the object, so every label is dropped
+    )
+
+    for k in dummy_adata2.uns["cellcharter_niche_autok"]["n_clusters"]:
+        assert (dummy_adata2.obs[f"cellcharter_niche_k{k}"] == "not_a_niche").all()
+
+
+def test_niche_cellcharter_auto_k_is_keyed_by_library(dummy_adata2: AnnData):
+    "Each library sweeps independently, so the diagnostics must be stored per library id."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
+
+    calculate_niche_cellcharter(
+        dummy_adata2,
+        distance=2,
+        aggregation="mean",
+        seed=0,
+        n_clusters=(2, 3),
+        max_runs=2,
+        library_key="batch",
+        store_labels=True,
+    )
+
+    diagnostics = dummy_adata2.uns["cellcharter_niche_autok"]
+    assert sorted(diagnostics) == ["batch1", "batch2"]
+    for per_library in diagnostics.values():
+        assert per_library["best_k"] in per_library["interior"]
+
+    # the per-library merge carries obs columns, including the per-K ones, with a lib prefix
+    assert dummy_adata2.obs["cellcharter_niche"].str.startswith("lib=").all()
+    assert dummy_adata2.obs["cellcharter_niche_k2"].str.startswith("lib=").all()
+
+
+def test_niche_cellcharter_auto_k_diagnostics_roundtrip_h5ad(dummy_adata2: AnnData, tmp_path):
+    "The diagnostics land in `uns`, so they have to survive being written out."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", seed=0, n_clusters=(2, 3), max_runs=2)
+
+    path = tmp_path / "niche.h5ad"
+    dummy_adata2.write_h5ad(path)
+    restored = read_h5ad(path)
+
+    original = dummy_adata2.uns["cellcharter_niche_autok"]
+    reloaded = restored.uns["cellcharter_niche_autok"]
+    assert reloaded["best_k"] == original["best_k"]
+    assert_frame_equal(reloaded["table"], original["table"])
 
 
 # more special test cases
