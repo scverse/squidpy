@@ -280,18 +280,9 @@ python_files = [ "test_*.py" ]
 testpaths = [ "tests/" ]
 addopts = [
   "--ignore=docs",
-  # Local convenience only. The real exclusion is the `-m "not reference"` baked into
-  # hatch.toml's run/run-cov, because that is a CLI flag and so survives any pytest that
-  # does not read this table. Keeping both means a bare `pytest` is also quiet.
-  "-m",
-  "not reference",
 ]
 markers = [
   "internet: tests that require internet",
-  """\
-  reference: numerical comparison against the vendored STalign reference (slow, needs JAX_ENABLE_X64=1, scheduled runs \
-  only)\
-  """,
   # the below markers are just there because we import from anndata.tests.helpers,
   # which means pytest sees them despite us not using them.
   "gpu: tests that require GPU",
