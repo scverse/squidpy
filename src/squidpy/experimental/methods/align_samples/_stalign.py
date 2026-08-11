@@ -1,18 +1,20 @@
 """STalign estimator: JAX LDDMM point-cloud registration.
 
-Holds both the estimator adapter :func:`fit_stalign_obs` and its result type
-:class:`StalignResult`; the pure numerics live under :mod:`._stalign_impl`.
+Holds the estimator adapters :func:`fit_stalign_obs` / :func:`fit_stalign_image`, their
+result type :class:`StalignResult`, and the solver-kwargs TypedDicts the public wrappers
+in :mod:`squidpy.experimental.tl` are typed against; the pure numerics live under
+:mod:`._stalign_impl`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import numpy.typing as npt
 
-from squidpy.experimental.methods.registry import ALIGN
+from squidpy.experimental.methods._common import requires
 
 if TYPE_CHECKING:
     import jax
@@ -20,6 +22,66 @@ if TYPE_CHECKING:
     JaxArray = jax.Array
 else:  # pragma: no cover - typing only
     JaxArray = Any
+
+
+class StalignSolverKwargs(TypedDict, total=False):
+    """LDDMM solver tuning accepted by the ``align_stalign_*`` functions.
+
+    Every key is optional; defaults live on the estimator signatures
+    (:func:`fit_stalign_obs` / :func:`fit_stalign_image`) and differ between the two
+    where noted. See those functions for the full parameter semantics.
+
+    - ``initial_affine`` -- homogeneous ``(3, 3)`` affine in ``(x, y)`` to start from.
+    - ``initial_velocity``, ``velocity_grid`` -- continuation state from a prior fit,
+      in the solver's row-column convention.
+    - ``a``, ``p``, ``expand``, ``nt``, ``niter``, ``diffeo_start`` -- LDDMM controls:
+      kernel width, regularisation power, velocity-grid padding, integration steps,
+      iterations, and the iteration the diffeomorphic part starts updating.
+      Defaults obs/image: ``a`` 500/20, ``niter`` 5000/200, ``diffeo_start`` 0/100.
+    - ``epL``, ``epT``, ``epV`` -- gradient-descent step sizes for the linear part,
+      translation, and velocity field. Default ``epV`` obs/image: 2e3/1.0.
+    - ``sigmaM``, ``sigmaB``, ``sigmaA``, ``sigmaR``, ``sigmaP`` -- noise scales for
+      the matching, background, artifact, regularisation, and landmark terms.
+    - ``muA``, ``muB`` -- optional fixed per-channel artifact/background means;
+      ``None`` estimates them during fitting.
+    - ``tol``, ``patience`` -- early stopping on relative objective improvement;
+      ``tol=None`` (default) always runs ``niter``.
+    """
+
+    initial_affine: npt.ArrayLike
+    initial_velocity: npt.ArrayLike
+    velocity_grid: tuple[npt.ArrayLike, npt.ArrayLike]
+    a: float
+    p: float
+    expand: float
+    nt: int
+    niter: int
+    diffeo_start: int
+    epL: float
+    epT: float
+    epV: float
+    sigmaM: float
+    sigmaB: float
+    sigmaA: float
+    sigmaR: float
+    sigmaP: float
+    muA: npt.ArrayLike | None
+    muB: npt.ArrayLike | None
+    tol: float | None
+    patience: int
+
+
+class StalignObsSolverKwargs(StalignSolverKwargs, total=False):
+    """:class:`StalignSolverKwargs` plus the point-cloud rasterization knobs.
+
+    - ``dx`` -- grid spacing of the density rasters (default 30).
+    - ``blur`` -- Gaussian blur scale(s) applied to the rasters (default (2, 1, 0.5)).
+    - ``raster_expand`` -- field-of-view padding factor (default 1.1).
+    """
+
+    dx: float
+    blur: float | Sequence[float]
+    raster_expand: float
 
 
 @dataclass(slots=True)
@@ -67,7 +129,7 @@ class StalignResult:
             raise ValueError(
                 "This result was fitted on point clouds and carries no raster axes. "
                 "Pass both `query_axes=` and `ref_axes=`, or fit with "
-                "`align(in_='images/<name>', ...)`."
+                "`align_stalign_image`."
             )
         if direction == "backward":
             return _transform_grid_backward(target_axes, self.velocity_grid, self.velocity, self.affine)
@@ -143,13 +205,13 @@ class StalignResult:
         return transformed_rc[:, ::-1]
 
 
-@ALIGN.register("stalign", "obs", requires=("jax",))
+@requires("jax")
 def fit_stalign_obs(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,
     *,
-    landmarks_source: npt.ArrayLike | None = None,
-    landmarks_target: npt.ArrayLike | None = None,
+    landmarks_ref: npt.ArrayLike | None = None,
+    landmarks_query: npt.ArrayLike | None = None,
     initial_affine: npt.ArrayLike | None = None,
     initial_velocity: npt.ArrayLike | None = None,
     velocity_grid: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
@@ -186,9 +248,9 @@ def fit_stalign_obs(
         order; the query is aligned onto the reference. Both are plain in-memory
         arrays -- extracting them from an ``AnnData`` / ``SpatialData`` is the
         caller's responsibility.
-    landmarks_source, landmarks_target
+    landmarks_ref, landmarks_query
         Optional corresponding ``(x, y)`` landmark arrays used to initialise the
-        affine. Must be provided together.
+        affine, matched by row order. Must be provided together.
     initial_affine
         Optional homogeneous ``(3, 3)`` affine in public ``(x, y)`` coordinates.
         Mutually exclusive with landmark initialisation.
@@ -233,17 +295,17 @@ def fit_stalign_obs(
 
         jax.config.update("jax_enable_x64", True)
     """
-    # Import the JAX-backed solver only after the registry's requirements check
-    # passes, so callers without JAX get a clean ImportError rather than a
-    # confusing failure from a module-level `import jax`.
+    # Import the JAX-backed solver only after `requires` has checked the dependency,
+    # so callers without JAX get a clean ImportError rather than a confusing failure
+    # from a module-level `import jax`.
     import jax.numpy as jnp
 
     from ._stalign_impl._core import jax_dtype, lddmm, transform_points_row_col
     from ._stalign_impl._helpers import affine_from_points, rasterize_cloud, validate_points
 
-    if (landmarks_source is None) != (landmarks_target is None):
+    if (landmarks_ref is None) != (landmarks_query is None):
         raise ValueError("Expected both landmark arrays to be provided together.")
-    if initial_affine is not None and landmarks_source is not None:
+    if initial_affine is not None and landmarks_ref is not None:
         raise ValueError("`initial_affine` is mutually exclusive with landmark initialisation.")
 
     # The solver runs internally in row-col (y, x); inputs are (x, y) -- swap at the boundary.
@@ -261,12 +323,12 @@ def fit_stalign_obs(
         affine_rc = swap @ affine_xy @ swap
         linear, translation = affine_rc[:2, :2], affine_rc[:2, 2]
         src_lm = tgt_lm = None
-    elif landmarks_source is None:
+    elif landmarks_ref is None:
         linear, translation = jnp.eye(2, dtype=dtype), jnp.zeros(2, dtype=dtype)
         src_lm = tgt_lm = None
     else:
-        src_lm = validate_points(landmarks_source, name="landmarks_source")[:, ::-1]
-        tgt_lm = validate_points(landmarks_target, name="landmarks_target")[:, ::-1]
+        src_lm = validate_points(landmarks_query, name="landmarks_query")[:, ::-1]
+        tgt_lm = validate_points(landmarks_ref, name="landmarks_ref")[:, ::-1]
         linear_np, translation_np = affine_from_points(src_lm, tgt_lm)
         linear, translation = jnp.asarray(linear_np, dtype=dtype), jnp.asarray(translation_np, dtype=dtype)
 
@@ -317,7 +379,7 @@ def fit_stalign_obs(
     )
 
 
-@ALIGN.register("stalign", "images", requires=("jax",))
+@requires("jax")
 def fit_stalign_image(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,

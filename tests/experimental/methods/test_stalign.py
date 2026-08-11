@@ -16,7 +16,6 @@ import pytest
 
 pytest.importorskip("jax")
 
-from squidpy.experimental.methods import ALIGN
 from squidpy.experimental.methods.align_samples import StalignResult, fit_stalign_image, fit_stalign_obs
 
 # Flat solver kwargs (assembled into the config internally) -- smallest possible solve.
@@ -33,18 +32,6 @@ def _points_xy() -> np.ndarray:
             [12.0, 3.0],
         ]
     )
-
-
-def test_stalign_registered_for_obs_and_images() -> None:
-    method = ALIGN.get("stalign")
-    assert method.supports() == ("obs", "images")
-    assert method.implementation("obs") is fit_stalign_obs
-
-
-def test_stalign_declines_landmarks() -> None:
-    """A diffeomorphic solver has nothing to do with paired correspondences."""
-    with pytest.raises(ValueError, match="does not support landmarks"):
-        ALIGN.get("stalign").implementation("landmarks")
 
 
 def test_stalign_fit_returns_diffeomorphism() -> None:
@@ -101,7 +88,7 @@ def test_stalign_fit_with_landmarks() -> None:
     ref, query = _points_xy(), _points_xy()
     landmarks = ref[:3]
 
-    result = fit_stalign_obs(ref, query, landmarks_source=landmarks, landmarks_target=landmarks, **_TINY)
+    result = fit_stalign_obs(ref, query, landmarks_ref=landmarks, landmarks_query=landmarks, **_TINY)
 
     assert result.aligned_points.shape == query.shape
 

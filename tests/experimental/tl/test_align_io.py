@@ -3,9 +3,6 @@
 No estimator, no JAX -- these exercise registering a fitted affine on a coordinate
 system directly, including the copy semantics, which are easy to get subtly wrong
 because :func:`shallow_copy_sdata` shares element objects with the original.
-
-Array reads and writes at a path live in :mod:`._paths` and are covered by
-``test_align_paths.py``.
 """
 
 from __future__ import annotations
@@ -75,7 +72,7 @@ def test_writeback_affine_copy_leaves_original_untouched() -> None:
 
 def test_writeback_affine_requires_cs_names() -> None:
     pytest.importorskip("spatialdata")
-    with pytest.raises(ValueError, match="`cs_query` and `cs_ref` are required"):
+    with pytest.raises(ValueError, match="`moving_cs` and `target_cs` are required"):
         writeback_affine_sdata(
             AffineFitResult(matrix=np.eye(3)), _sdata_points(), output_mode="inplace", moving_cs=None, target_cs="tcs"
         )

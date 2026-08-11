@@ -1,9 +1,7 @@
 """``align_landmarks`` family: closed-form alignment from paired landmarks.
 
-Importing this package registers the family's estimators into
-:data:`~squidpy.experimental.methods.registry.ALIGN`. Only the
-implementations are re-exported here; the registry itself lives in (and is public
-from) :mod:`squidpy.experimental.methods`.
+Array-in / array-out estimators; container access lives in the public wrapper
+:func:`squidpy.experimental.tl.align_landmarks`.
 """
 
 from __future__ import annotations

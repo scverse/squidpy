@@ -259,7 +259,7 @@ def test_transform_grid_backward_matches_upstream(primitives, target_grid, veloc
 def test_warp_image_uses_the_upstream_grid(primitives, source_grid, target_grid, velocity_grid, record_property):
     """``StalignResult.warp_image`` vs sampling on *upstream's own* backward grid.
 
-    This is what ``align(by="images", out="images/...")`` materialises, and it had no
+    This is what ``align_stalign_image(key_added=...)`` materialises, and it had no
     reference coverage: the two halves were each compared to upstream separately, but
     nothing checked that the public method composes them the way upstream does. Feeding
     upstream's ``grid_backward`` through the same interpolation isolates the composition.
@@ -601,8 +601,8 @@ def test_affine_from_points_is_equivalent_when_well_conditioned(primitives, reco
     fit = fit_stalign_obs(
         primitives["ref"],
         primitives["query"],
-        landmarks_source=primitives["landmarks_query"],
-        landmarks_target=primitives["landmarks_ref"],
+        landmarks_query=primitives["landmarks_query"],
+        landmarks_ref=primitives["landmarks_ref"],
         niter=0,
         dx=F.RASTER_PARAMS["dx"],
         blur=F.RASTER_PARAMS["blur"],
@@ -740,7 +740,7 @@ def _run_image(fixture, axes_ref: bool = True):
 def test_image_path_matches_upstream(image_reference, name, record_property):
     """The image entry point vs upstream's LDDMM on the same images, axes and start.
 
-    Closes the last gap in the port's public surface: ``align(by="images")`` goes straight
+    Closes the last gap in the port's public surface: ``align_stalign_image`` goes straight
     through here and had no reference comparison at all.
 
     Note that ~11 % of the target grid samples the source through padding, because the two
@@ -771,7 +771,7 @@ def test_image_energy_trace_matches_upstream(image_reference, record_property):
 def test_image_warp_matches_upstream(image_reference, record_property):
     """``warp_image`` vs ``STalign.transform_image_source_to_target``.
 
-    Exactly what ``align(by="images", out="images/...")`` writes, against upstream's own
+    Exactly what ``align_stalign_image(key_added=...)`` writes, against upstream's own
     image-warping composition rather than a reassembled one.
     """
     result = _run_image(image_reference)

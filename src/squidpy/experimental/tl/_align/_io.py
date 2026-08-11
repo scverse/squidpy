@@ -1,8 +1,8 @@
 """SpatialData write-back for the public align functions.
 
-Reading and writing arrays at a path lives in :mod:`._paths`. What is left here is the
-one write that is *not* an array write: registering a fitted affine as a SpatialData
-transformation, which changes how elements are placed rather than materialising anything.
+Holds the one write that is *not* an array write: registering a fitted affine as a
+SpatialData transformation, which changes how elements are placed rather than
+materialising anything.
 
 The fit estimators in :mod:`squidpy.experimental.methods` operate on plain arrays and
 never see a container.
@@ -39,7 +39,7 @@ def writeback_affine_sdata(
     from spatialdata.transformations import Affine, Sequence, get_transformation, set_transformation
 
     if moving_cs is None or target_cs is None:
-        raise ValueError("`cs_query` and `cs_ref` are required to register a transform on a SpatialData.")
+        raise ValueError("`moving_cs` and `target_cs` are required to register a transform on a SpatialData.")
 
     out = sdata if output_mode == "inplace" else shallow_copy_sdata(sdata)
     sd_affine = Affine(np.asarray(result.matrix), input_axes=("x", "y"), output_axes=("x", "y"))

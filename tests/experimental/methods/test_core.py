@@ -1,3 +1,5 @@
+"""Unit tests for the shared estimator contracts in ``methods._common``."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -6,7 +8,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from squidpy.experimental.methods.registry import AlignMethod, Registry
+from squidpy.experimental.methods import AlignResult
+from squidpy.experimental.methods._common import requires
 
 
 @dataclass
@@ -37,93 +40,37 @@ def test_fit_then_transform_round_trip() -> None:
     assert result.metadata == {"method": "mean_shift"}
 
 
-def test_registry_register_get_keys() -> None:
-    reg = Registry("demo")
+def test_any_object_with_transform_satisfies_the_protocol() -> None:
+    """The public functions are typed against `AlignResult`, not a concrete result."""
+    assert isinstance(fit_mean_shift(np.ones((2, 2)), np.zeros((2, 2))), AlignResult)
+    assert not isinstance(object(), AlignResult)
 
-    @reg.register("mean_shift", "obs")
-    def _registered(ref: np.ndarray, query: np.ndarray) -> _MeanShiftResult:
+
+def test_requires_passes_through_when_installed() -> None:
+    @requires("numpy")
+    def fitted(ref: np.ndarray, query: np.ndarray) -> _MeanShiftResult:
         return fit_mean_shift(ref, query)
 
-    assert reg.keys() == ("mean_shift",)
-    assert reg.get("mean_shift").implementation("obs") is _registered
-    assert isinstance(reg.get("mean_shift").obs(np.ones((2, 2)), np.zeros((2, 2))), _MeanShiftResult)
+    assert isinstance(fitted(np.ones((2, 2)), np.zeros((2, 2))), _MeanShiftResult)
 
 
-def test_one_method_accumulates_several_modalities() -> None:
-    """A method is one record with a slot per modality, not one entry per modality."""
-    reg = Registry("demo")
-    reg.register("multi", "obs")(fit_mean_shift)
-    reg.register("multi", "images")(fit_mean_shift)
-
-    method = reg.get("multi")
-    assert reg.keys() == ("multi",)
-    assert method.supports() == ("obs", "images")
-    assert method.landmarks is None
-
-
-def test_unsupported_modality_says_what_is_supported() -> None:
-    reg = Registry("demo")
-    reg.register("obs_only", "obs")(fit_mean_shift)
-
-    with pytest.raises(ValueError, match="'obs_only' does not support landmarks alignment. It supports: obs"):
-        reg.get("obs_only").implementation("landmarks")
-
-
-def test_supporting_filters_by_modality() -> None:
-    reg = Registry("demo")
-    reg.register("a", "obs")(fit_mean_shift)
-    reg.register("b", "landmarks")(fit_mean_shift)
-    reg.register("c", "obs")(fit_mean_shift)
-
-    assert reg.supporting("obs") == ("a", "c")
-    assert reg.supporting("landmarks") == ("b",)
-    assert reg.supporting("images") == ()
-
-
-def test_registry_unknown_key_lists_available() -> None:
-    reg = Registry("demo")
-    reg.register("a", "obs")(fit_mean_shift)
-
-    with pytest.raises(ValueError, match=r"Unknown demo method 'b'. Available: \['a'\]"):
-        reg.get("b")
-
-
-def test_registry_rejects_duplicate_slot() -> None:
-    reg = Registry("demo")
-    reg.register("dup", "obs")(fit_mean_shift)
-
-    with pytest.raises(ValueError, match="already has a obs estimator"):
-        reg.register("dup", "obs")(fit_mean_shift)
-
-
-def test_registry_rejects_unknown_modality() -> None:
-    reg = Registry("demo")
-    with pytest.raises(ValueError, match="Unknown modality 'obsm'"):
-        reg.register("x", "obsm")  # type: ignore[arg-type]
-
-
-def test_align_method_supports_reports_filled_slots() -> None:
-    assert AlignMethod(name="empty").supports() == ()
-    assert AlignMethod(name="x", obs=fit_mean_shift, landmarks=fit_mean_shift).supports() == ("obs", "landmarks")
-
-
-def test_check_requirements_passes_when_none() -> None:
-    reg = Registry("demo")
-    # By default, registering without requires parameter does not wrap/check.
-    reg.register("mean_shift", "obs")(fit_mean_shift)
-    result = reg.get("mean_shift").implementation("obs")(np.ones((2, 2)), np.zeros((2, 2)))
-    assert isinstance(result, _MeanShiftResult)
-
-
-def test_check_requirements_raises_for_missing_dependency() -> None:
-    reg = Registry("demo")
-
-    @reg.register("needs_ghost", "obs", requires=("squidpy_nonexistent_pkg_xyz",))
-    def _needs_ghost(ref: np.ndarray, query: np.ndarray) -> _MeanShiftResult:
+def test_requires_raises_with_install_hint_for_missing_dependency() -> None:
+    @requires("squidpy_nonexistent_pkg_xyz")
+    def needs_ghost(ref: np.ndarray, query: np.ndarray) -> _MeanShiftResult:
         return fit_mean_shift(ref, query)
 
     with pytest.raises(
         ImportError,
-        match=r"Method 'needs_ghost' requires 'squidpy_nonexistent_pkg_xyz'.*squidpy\[squidpy_nonexistent_pkg_xyz\]",
+        match=r"`needs_ghost` requires 'squidpy_nonexistent_pkg_xyz'.*squidpy\[squidpy_nonexistent_pkg_xyz\]",
     ):
-        reg.get("needs_ghost").implementation("obs")(np.ones((2, 2)), np.zeros((2, 2)))
+        needs_ghost(np.ones((2, 2)), np.zeros((2, 2)))
+
+
+def test_requires_is_checked_at_call_time_not_import_time() -> None:
+    """Decorating must not import the dependency -- that is the whole point."""
+
+    @requires("squidpy_nonexistent_pkg_xyz")
+    def never_called() -> None:  # pragma: no cover - the assertion is that this line is reached
+        raise AssertionError
+
+    assert callable(never_called)
