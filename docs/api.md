@@ -144,23 +144,24 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     gr.neighbors.GridBuilder
 ```
 
-The ``method=`` argument of {func}`~squidpy.experimental.tl.align` and
-{func}`~squidpy.experimental.tl.align` dispatches to a registered
-fitting function. The method-specific arguments are documented on each function
-below; the fitted maps are returned (with ``output_mode="object"``) as the
-result types listed alongside.
+The ``align_*`` functions in {mod}`squidpy.experimental.tl` wrap array-in /
+array-out estimators from {mod}`squidpy.experimental.methods`. The solver
+parameters are documented on each estimator below; the fitted maps are returned
+(with ``key_added=None``) as the result types listed alongside.
 
 ```{eval-rst}
 .. currentmodule:: squidpy
 .. autosummary::
     :toctree: api
 
-    experimental.methods.align_samples._stalign.fit_stalign
-    experimental.methods.align_samples._stalign.fit_stalign_image
-    experimental.methods.align_landmarks._landmark.fit_similarity
-    experimental.methods.align_landmarks._landmark.fit_affine
-    experimental.methods.align_samples._stalign.StalignResult
-    experimental.methods.align_landmarks._landmark.AffineFitResult
+    experimental.methods.fit_stalign_obs
+    experimental.methods.fit_stalign_image
+    experimental.methods.fit_similarity
+    experimental.methods.fit_affine
+    experimental.methods.StalignResult
+    experimental.methods.AffineFitResult
+    experimental.methods.StalignSolverKwargs
+    experimental.methods.StalignObsSolverKwargs
 ```
 
 ## Experimental
@@ -173,7 +174,9 @@ result types listed alongside.
     experimental.im.calculate_image_features
     experimental.tl.calculate_tiling_qc
     experimental.tl.TilingQCParams
-    experimental.tl.align
+    experimental.tl.align_stalign_obs
+    experimental.tl.align_stalign_image
+    experimental.tl.align_landmarks
     experimental.tl.AlignResult
     experimental.tl.assign_stitch_groups
     experimental.tl.StitchParams

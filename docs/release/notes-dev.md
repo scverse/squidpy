@@ -9,26 +9,22 @@
   [theislab/squidpy-ports](https://github.com/theislab/squidpy-ports), so `torch` is not a squidpy
   dependency.
   [#1243](https://github.com/scverse/squidpy/issues/1243)
-- **Breaking (experimental):** {func}`squidpy.experimental.tl.align` now locates data with `in_`
-  and `out` paths instead of a stack of key arguments. `ref_key`, `query_key`, `spatial_key`,
-  `key_added` and `output_mode` are replaced by `in_` (e.g. `"obsm/spatial"`,
-  `"tables/slice1/obsm/spatial"`, `"images/he"`, `"shapes/landmarks"`), `out`, and `copy`.
-  `out=None` (the default) returns the fitted alignment and writes nothing. This follows the shape
-  proposed for scanpy in [scanpy#4007](https://github.com/scverse/scanpy/issues/4007).
-- **Breaking (experimental):** `squidpy.experimental.tl.align_by_landmarks` is folded into
-  {func}`squidpy.experimental.tl.align` as `by="landmarks"`. `on` becomes `by`, gaining a
-  `"landmarks"` value alongside `"obs"` and `"images"`; `in_` then names the correspondences and
-  `apply_to` names what moves. Writing to `out="cs/<name>"` registers the fitted affine on a whole
-  SpatialData coordinate system instead of materialising anything; because that moves every element
-  registered there, it refuses when the reference shares the query's coordinate system.
-- **Breaking (experimental):** the `align_samples`, `align_images` and `align_landmarks` registries
-  collapse into a single `ALIGN` registry of `AlignMethod` records, each declaring which modalities
-  it implements. Asking for one a method does not support now fails immediately and says what it
-  does support. `fit_stalign` is renamed `fit_stalign_obs` for symmetry with `fit_stalign_image`.
-- {func}`squidpy.experimental.tl.align` can now align on images. The fitted diffeomorphism cannot
-  be expressed as a SpatialData transformation, so writing to an `images/...` path materialises the
-  warped image rather than registering it lazily. Adds an `align_images` method family and
-  `squidpy.experimental.methods.align_samples.fit_stalign_image`.
+- Add experimental sample alignment, one public function per method (the
+  `calculate_niche_*` shape): {func}`squidpy.experimental.tl.align_stalign_obs` aligns
+  point clouds and {func}`squidpy.experimental.tl.align_stalign_image` aligns images
+  with the STalign diffeomorphic solver; {func}`squidpy.experimental.tl.align_landmarks`
+  fits a closed-form `"similarity"` or `"affine"` transform from paired landmarks. Data
+  is addressed with conventional key arguments (`spatial_key`, `table_key`, `image_key`,
+  `landmark_key`), each accepting a `(ref, query)` pair; `key_added=None` (the default)
+  returns the fitted alignment and writes nothing, and `inplace=False` writes into a
+  returned copy. LDDMM solver tuning is passed as flat, typed keyword arguments
+  (`squidpy.experimental.methods.StalignSolverKwargs`). A landmark fit can either
+  transform coordinates (`spatial_key` + `key_added`) or be registered on a whole
+  SpatialData coordinate system (`target_coordinate_system`); registration refuses when
+  the reference shares the query's coordinate system, since it would be dragged along.
+  A fitted diffeomorphism has no SpatialData transformation type, so
+  `align_stalign_image` materialises the warped image instead. The array-in/array-out
+  estimators live in `squidpy.experimental.methods`.
 - The experimental STalign solver now runs its whole gradient descent as a single compiled
   `lax.while_loop` instead of a Python loop around a jitted step, about **4.6x faster** per
   iteration (2.20 to 0.46 ms on the reference fixture, so `niter=5000` drops from ~11s to ~2.4s).
@@ -41,10 +37,6 @@
   accepts optional `tol` / `patience` early stopping. Off by default. Note the objective changes
   definition at iteration 50, when the mixture-weight E step engages, so the convergence window
   deliberately never spans that point.
-- **Breaking (experimental):** {func}`squidpy.experimental.tl.align_by_landmarks` takes `in_` /
-  `out` / `copy` in place of `spatial_key` / `key_added` / `output_mode`, and its coordinate-system
-  arguments are renamed `cs_ref` / `cs_query`. Because `out` is always named explicitly, the guard
-  that refused to overwrite an auto-derived key is gone.
 
 ## Bugfixes
 
