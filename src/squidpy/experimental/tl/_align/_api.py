@@ -195,12 +195,11 @@ def align_stalign_obs(
     solver_kwargs
         LDDMM solver tuning; see
         :class:`~squidpy.experimental.methods.StalignObsSolverKwargs` for the accepted
-        keys and :func:`~squidpy.experimental.methods.fit_stalign_obs` for their
-        semantics and defaults.
+        keys, their meaning, and their defaults.
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.methods.align_samples.StalignResult` when
+    The fitted :class:`~squidpy.experimental.methods.StalignResult` when
     ``key_added`` is ``None``; the modified copy when ``inplace=False``; otherwise
     ``None``.
     """
@@ -278,12 +277,11 @@ def align_stalign_image(
     solver_kwargs
         LDDMM solver tuning; see
         :class:`~squidpy.experimental.methods.StalignSolverKwargs` for the accepted
-        keys and :func:`~squidpy.experimental.methods.fit_stalign_image` for their
-        semantics and defaults.
+        keys, their meaning, and their defaults.
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.methods.align_samples.StalignResult` when
+    The fitted :class:`~squidpy.experimental.methods.StalignResult` when
     ``key_added`` is ``None``; the modified copy when ``inplace=False``; otherwise
     ``None``.
     """
@@ -369,7 +367,7 @@ def align_landmarks(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.methods.align_landmarks.AffineFitResult`
+    The fitted :class:`~squidpy.experimental.methods.AffineFitResult`
     when neither ``key_added`` nor ``target_coordinate_system`` is given; the modified
     copy when ``inplace=False``; otherwise ``None``.
     """

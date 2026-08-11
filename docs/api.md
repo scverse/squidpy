@@ -144,20 +144,15 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     gr.neighbors.GridBuilder
 ```
 
-The ``align_*`` functions in {mod}`squidpy.experimental.tl` wrap array-in /
-array-out estimators from {mod}`squidpy.experimental.methods`. The solver
-parameters are documented on each estimator below; the fitted maps are returned
-(with ``key_added=None``) as the result types listed alongside.
+The ``align_*`` functions in {mod}`squidpy.experimental.tl` accept their solver
+tuning as flat keyword arguments, listed below, and return the fitted map when
+``key_added`` is left unset.
 
 ```{eval-rst}
 .. currentmodule:: squidpy
 .. autosummary::
     :toctree: api
 
-    experimental.methods.fit_stalign_obs
-    experimental.methods.fit_stalign_image
-    experimental.methods.fit_similarity
-    experimental.methods.fit_affine
     experimental.methods.StalignResult
     experimental.methods.AffineFitResult
     experimental.methods.StalignSolverKwargs

@@ -27,9 +27,8 @@ else:  # pragma: no cover - typing only
 class StalignSolverKwargs(TypedDict, total=False):
     """LDDMM solver tuning accepted by the ``align_stalign_*`` functions.
 
-    Every key is optional; defaults live on the estimator signatures
-    (:func:`fit_stalign_obs` / :func:`fit_stalign_image`) and differ between the two
-    where noted. See those functions for the full parameter semantics.
+    Every key is optional. Defaults differ between the point-cloud and image solvers
+    where noted below, since a kernel width in cell coordinates is not one in pixels.
 
     - ``initial_affine`` -- homogeneous ``(3, 3)`` affine in ``(x, y)`` to start from.
     - ``initial_velocity``, ``velocity_grid`` -- continuation state from a prior fit,
