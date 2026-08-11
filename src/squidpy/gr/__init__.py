@@ -20,7 +20,13 @@ from squidpy.gr._nhood import (
     interaction_matrix,
     nhood_enrichment,
 )
-from squidpy.gr._niche import calculate_niche
+from squidpy.gr._niche import (
+    calculate_niche,
+    calculate_niche_cellcharter,
+    calculate_niche_neighborhood,
+    calculate_niche_spatialleiden,
+    calculate_niche_utag,
+)
 from squidpy.gr._ppatterns import co_occurrence, spatial_autocorr
 from squidpy.gr._ripley import ripley
 from squidpy.gr._sepal import sepal
@@ -38,11 +44,15 @@ __all__ = [
     "spatial_neighbors_radius",
     "spatial_neighbors_delaunay",
     "spatial_neighbors_grid",
+    "calculate_niche",
+    "calculate_niche_neighborhood",
+    "calculate_niche_utag",
+    "calculate_niche_cellcharter",
+    "calculate_niche_spatialleiden",
     "ligrec",
     "centrality_scores",
     "interaction_matrix",
     "nhood_enrichment",
-    "calculate_niche",
     "co_occurrence",
     "spatial_autocorr",
     "ripley",
