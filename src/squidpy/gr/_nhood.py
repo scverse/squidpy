@@ -25,7 +25,7 @@ from squidpy._utils import (
     NDArrayA,
     Signal,
     SigQueue,
-    _get_n_cores,
+    get_n_processes,
     parallelize,
     spawn_generators,
 )
@@ -208,7 +208,7 @@ def nhood_enrichment(
     _test = _create_function(n_cls, parallel=numba_parallel)
     count = _test(indices, indptr, int_clust)
 
-    n_jobs = _get_n_cores(n_jobs)
+    n_jobs = get_n_processes(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
     generators = spawn_generators(seed, n_perms)
 
@@ -317,7 +317,7 @@ def centrality_scores(
         else:
             raise NotImplementedError(f"Centrality `{c}` is not yet implemented.")
 
-    n_jobs = _get_n_cores(n_jobs)
+    n_jobs = get_n_processes(n_jobs)
     start = logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` core(s)")
 
     res_list = []

@@ -502,7 +502,8 @@ def calculate_tiling_qc(
         ``None`` (default) uses all defaults.
     n_jobs
         Number of threads for tile processing.  ``-1`` (default) uses
-        all available CPUs.  Ignored when an active
+        all available CPUs; ``0`` and values below ``-1`` raise.
+        Ignored when an active
         ``dask.distributed.Client`` is in scope (the client's own
         worker pool is used instead).
     table_key_added
