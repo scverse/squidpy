@@ -22,7 +22,7 @@ from skimage.measure import regionprops
 from spatialdata._logging import logger as logg
 from tqdm.auto import tqdm
 
-from squidpy._utils import _get_n_cores, thread_map
+from squidpy._utils import get_n_processes, thread_map
 
 
 def yx_size(da: xr.DataArray) -> tuple[int, int]:
@@ -444,15 +444,15 @@ def _run_tiled(
     specs: Sequence[Any],
     process_fn: Callable[..., Any],
     *,
-    n_jobs: int = 1,
+    n_jobs: int | None = 1,
     kind: Literal["threads", "processes"] = "processes",
     scatter: Sequence[Any] = (),
     desc: str = "tiles",
 ) -> list[Any]:
     """Run ``process_fn(spec, *scatter)`` over tile ``specs``; return results in spec order.
 
-    Engine selection: an active ``distributed.Client`` wins; else ``n_jobs`` (repo
-    ``_get_n_cores`` convention, ``1``/``0``/``None`` serial) picks workers and
+    Engine selection: an active ``distributed.Client`` wins; else ``n_jobs`` (``1``/`None`
+    serial, ``-1`` all available cores, ``0`` and ``< -1`` errors) picks workers and
     ``kind`` picks the scheduler -- ``"threads"`` for GIL-releasing work (numba
     ``nogil``), ``"processes"`` for GIL-bound work (a ``LocalCluster``, since the
     local multiprocessing scheduler does not fork). ``scatter`` holds large objects
@@ -465,12 +465,13 @@ def _run_tiled(
     if _has_distributed_client():
         from dask.distributed import get_client
 
-        # Warn only when an explicit worker count (not a default) is overridden.
-        if n_jobs not in (None, 1, -1):
+        # Warn only when an explicit worker count is overridden; every negative value means
+        # "the default", so none of them count as explicit.
+        if n_jobs is not None and n_jobs > 1:
             logg.warning("`n_jobs` is ignored when an active dask.distributed Client is in scope.")
         return _run_on_client(get_client(), specs, process_fn, scatter, desc)
 
-    workers = 1 if n_jobs in (None, 0) else _get_n_cores(n_jobs)
+    workers = get_n_processes(n_jobs)
     # Never spin up more workers than tiles: idle workers only add process-startup
     # and scatter cost. (n <= 1 also routes to the serial path below.)
     workers = min(workers, n)
