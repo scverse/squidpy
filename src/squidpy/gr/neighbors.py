@@ -88,7 +88,10 @@ class GraphBuilder[CoordT, GraphMatrixT](ABC):
 
     @abstractmethod
     def uns_params(self) -> dict[str, Any]:
-        """Parameters stored in :attr:`anndata.AnnData.uns` after graph construction."""
+        """Parameters stored in :attr:`anndata.AnnData.uns` after graph construction.
+
+        Values must be writable by :mod:`anndata`, e.g. a :class:`list`, not a :class:`tuple`.
+        """
 
     def combine(
         self,
@@ -234,7 +237,8 @@ class RadiusBuilder(GraphBuilderCSR):
             percentile=percentile,
             postprocessors=postprocessors,
         )
-        self.radius = radius
+        # Store intervals as a list: :mod:`anndata` cannot write tuples to ``uns``.
+        self.radius = list(radius) if isinstance(radius, tuple) else radius
 
     def uns_params(self) -> dict[str, Any]:
         return {
@@ -303,7 +307,8 @@ class DelaunayBuilder(GraphBuilderCSR):
             percentile=percentile,
             postprocessors=postprocessors,
         )
-        self.radius = radius
+        # Store intervals as a list: :mod:`anndata` cannot write tuples to ``uns``.
+        self.radius = list(radius) if isinstance(radius, tuple) else radius
 
     def uns_params(self) -> dict[str, Any]:
         return {
