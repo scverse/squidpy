@@ -123,6 +123,7 @@ docs = [
   "ipywidgets>=8",
   "myst-nb>=0.17.1",
   "nbsphinx>=0.8.1",
+  "scverse-misc[sphinx]>=0.1.2,<0.2",
   "sphinx>=5.3",
   "sphinx-autodoc-annotation",
   "sphinx-autodoc-typehints>=1.10.3",
