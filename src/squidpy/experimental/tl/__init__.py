@@ -8,12 +8,14 @@ from __future__ import annotations
 from squidpy.experimental.methods import AlignResult
 
 from ._align import align
+from ._stitched_labels import make_stitched_labels
 from ._tiling_qc import TilingQCParams, calculate_tiling_qc
 from ._tiling_stitch import StitchParams, assign_stitch_groups
 
 __all__ = [
     "align",
     "calculate_tiling_qc",
+    "make_stitched_labels",
     "TilingQCParams",
     "AlignResult",
     "StitchParams",

@@ -36,6 +36,10 @@ import squidpy as sq
     gr.spatial_autocorr
     gr.sepal
     gr.calculate_niche
+    gr.calculate_niche_neighborhood
+    gr.calculate_niche_utag
+    gr.calculate_niche_cellcharter
+    gr.calculate_niche_spatialleiden
 ```
 
 ## Image
@@ -173,7 +177,7 @@ result types listed alongside.
     experimental.tl.AlignResult
     experimental.tl.assign_stitch_groups
     experimental.tl.StitchParams
-    experimental.im.make_stitched_labels
+    experimental.tl.make_stitched_labels
     experimental.pl.tiling_qc
     experimental.im.fit_stain_reference
     experimental.im.normalize_stains

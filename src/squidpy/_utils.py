@@ -18,6 +18,7 @@ import joblib as jl
 import numba
 import numpy as np
 import xarray as xr
+from scanpy import logging as logg
 from spatialdata.models import Image2DModel, Labels2DModel
 
 if TYPE_CHECKING:
@@ -50,15 +51,10 @@ NDArrayA = NDArray[Any]
 
 
 def _cpu_count() -> int:
-    """Number of CPUs available to this process.
-
-    Uses :func:`os.sched_getaffinity` to respect cgroup limits set by
-    SLURM, Docker, or ``taskset``.  Falls back to :func:`os.cpu_count`
-    on platforms where affinity queries are unavailable (e.g. macOS).
-    """
+    """Number of CPUs available to this process, respecting cgroup/``taskset`` limits."""
     try:
         return len(os.sched_getaffinity(0))
-    except (AttributeError, OSError):
+    except (AttributeError, OSError):  # no affinity query, e.g. macOS
         return os.cpu_count() or 1
 
 
@@ -113,8 +109,9 @@ def parallelize(
     collection
         Sequence of items to split into chunks.
     n_jobs
-        Number of parallel jobs to use. If the function uses numba compiled functions, numba may
-        use cores depending on the number of threads set in the environment regardless of this argument.
+        Number of parallel jobs to use. `None` is serial and ``-1`` uses all available cores;
+        ``0`` and values below ``-1`` raise. If the function uses numba compiled functions, numba may use cores depending on the
+        number of threads set in the environment regardless of this argument.
     n_split
         Split ``collection`` into ``n_split`` chunks.
         If <= 0, ``collection`` is assumed to be already split into chunks.
@@ -215,12 +212,7 @@ def parallelize(
 
             return res if extractor is None else extractor(res)
 
-    if n_jobs is None:
-        n_jobs = 1
-    if n_jobs == 0:
-        raise ValueError("Number of jobs cannot be `0`.")
-    elif n_jobs < 0:
-        n_jobs = _cpu_count() + 1 + n_jobs
+    n_jobs = get_n_processes(n_jobs)
 
     if n_split is None:
         n_split = n_jobs
@@ -249,6 +241,22 @@ def spawn_generators(seed: int | None, n: int) -> list[np.random.Generator]:
     return [np.random.default_rng(s) for s in np.random.SeedSequence(seed).spawn(n)]
 
 
+@contextmanager
+def numba_threads(n_jobs: int | None) -> Generator[None, None, None]:
+    """Temporarily cap numba's thread pool to ``n_jobs``, restoring the previous value on exit.
+
+    ``n_jobs`` is clamped to ``[1, NUMBA_NUM_THREADS]``; ``None`` leaves the current setting untouched.
+    Use around a ``@njit(parallel=True)`` kernel so ``n_jobs`` controls the number of threads it uses.
+    """
+    previous = numba.get_num_threads()
+    if n_jobs is not None:
+        numba.set_num_threads(max(1, min(n_jobs, numba.config.NUMBA_NUM_THREADS)))
+    try:
+        yield
+    finally:
+        numba.set_num_threads(previous)
+
+
 def thread_map(
     fn: Callable[..., Any],
     items: Sequence[Any],
@@ -266,7 +274,8 @@ def thread_map(
     items
         Sequence of inputs passed one-by-one to *fn*.
     n_jobs
-        Number of worker threads. ``1`` runs sequentially (no pool overhead).
+        Number of worker threads; must already be a positive count resolved by the caller.
+        ``1`` runs sequentially (no pool overhead).
     show_progress_bar
         Whether to display a ``numba_progress`` progress bar.
     unit
@@ -306,28 +315,36 @@ def thread_map(
     return _run(None)
 
 
-def _get_n_cores(n_cores: int | None) -> int:
+def get_n_numba_threads(n_threads: int | None) -> int:
+    """Resolve a thread count: `None`/``-1`` is numba's default, the rest raises.
+
+    Use for numba kernels and thread pools over them, whose ceiling is numba's thread pool
+    rather than the cpu count.
     """
-    Make number of cores a positive integer.
+    max_threads = numba.config.NUMBA_NUM_THREADS
+    if n_threads is None or n_threads == -1:
+        return max_threads
+    if n_threads < -1 or n_threads == 0:
+        raise ValueError(f"Number of threads must be `-1` or a positive integer, got `{n_threads}`.")
+    if n_threads > max_threads:
+        logg.warning(f"Requested `n_jobs={n_threads}`, but numba allows at most `{max_threads}` thread(s).")
+        return max_threads
 
-    This is useful for especially logging.
+    return n_threads
 
-    Parameters
-    ----------
-    n_cores
-        Number of cores to use.
 
-    Returns
-    -------
-    int
-        Positive integer corresponding to how many cores to use.
-    """
-    if n_cores == 0:
-        raise ValueError("Number of cores cannot be `0`.")
+def get_n_processes(n_cores: int | None) -> int:
+    """Resolve a worker-process count: `None` is serial, ``-1`` is all cores, the rest raises."""
     if n_cores is None:
         return 1
-    if n_cores < 0:
-        return _cpu_count() + 1 + n_cores
+    max_cores = _cpu_count()
+    if n_cores == -1:
+        return max_cores
+    if n_cores < -1 or n_cores == 0:
+        raise ValueError(f"Number of cores must be `-1` or a positive integer, got `{n_cores}`.")
+    if n_cores > max_cores:
+        logg.warning(f"Requested `n_jobs={n_cores}`, but only `{max_cores}` core(s) are available.")
+        return max_cores
 
     return n_cores
 
