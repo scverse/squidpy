@@ -10,7 +10,7 @@ from scanpy import logging as logg
 
 from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
-from squidpy._utils import Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import Signal, SigQueue, get_n_processes, parallelize
 from squidpy.gr._utils import _save_data
 from squidpy.im._container import ImageContainer
 
@@ -84,7 +84,7 @@ def calculate_image_features(
         features = [features]
     features = sorted({ImageFeature(f).s for f in features})
 
-    n_jobs = _get_n_cores(n_jobs)
+    n_jobs = get_n_processes(n_jobs)
     start = logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
 
     res = parallelize(

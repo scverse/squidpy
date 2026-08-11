@@ -116,9 +116,15 @@ ax
 _plotting_returns = """\
 Nothing, just plots the figure and optionally saves the plot.
 """
-_parallelize = """\
+# Shared core-count rules, so the process-based ``n_jobs`` params document them once.
+_n_jobs_core_rules = """\
+    `None` is serial and ``-1`` uses all available cores; asking for more cores than are
+    available warns and falls back to all of them, while ``0`` and values below ``-1`` raise,
+    since :doc:`scanpy <scanpy:index>` only supports ``n_jobs >= -1``."""
+_parallelize = f"""\
 n_jobs
     Number of parallel jobs to use.
+{_n_jobs_core_rules}
     For ``backend="loky"``, the number of cores used by numba for
     each job spawned by the backend will be set to 1 in order to
     overcome the oversubscription issue in case you run
@@ -130,9 +136,19 @@ backend
     Parallelization backend to use. See :class:`joblib.Parallel` for available options.
 show_progress_bar
     Whether to show the progress bar or not."""
-_n_jobs = """\
+_n_jobs = f"""\
 n_jobs
-    Number of parallel jobs to use."""
+    Number of parallel jobs to use.
+{_n_jobs_core_rules}"""
+# Shared thread-count rules, so the thread-based ``n_jobs`` params document them once.
+_n_jobs_thread_rules = """\
+    `None` and ``-1`` use numba's default thread count (``NUMBA_NUM_THREADS``); asking for more
+    threads than that warns and falls back to it, while ``0`` and values below ``-1`` raise,
+    since :doc:`scanpy <scanpy:index>` only supports ``n_jobs >= -1``."""
+_n_jobs_threads = f"""\
+n_jobs
+    Number of parallel threads to use.
+{_n_jobs_thread_rules}"""
 _show_progress_bar = """\
 show_progress_bar
     Whether to show the progress bar or not."""
@@ -393,15 +409,15 @@ set_diag
     Whether to set the diagonal of the connectivities to ``1.0``.
 key_added
     Key which controls where the results are saved if ``copy = False``."""
-_n_jobs_libraries = """\
+_n_jobs_libraries = f"""\
 n_jobs
     Number of parallel jobs used to build the per-library graphs when ``library_key``
     is set. Each library's graph is computed independently, so this only has an effect
     for multi-library data. ``1`` (default) builds the graphs sequentially and does not
-    change behavior; ``-1`` uses all available CPUs. Has no effect when ``library_key``
-    is ``None``. Speedup is sub-linear (memory-bandwidth bound), and process-based
-    backends pay a one-time worker start-up cost, so parallelism mainly pays off for
-    many large libraries."""
+    change behavior, and it has no effect when ``library_key`` is ``None``.
+{_n_jobs_thread_rules}
+    Speedup is sub-linear (memory-bandwidth bound), so parallelism mainly pays off for many
+    large libraries."""
 _spatial_neighbors_returns = """\
 If ``copy = True``, returns a :class:`~squidpy.gr.SpatialNeighborsResult` with the
 spatial connectivities and distances matrices.
@@ -435,6 +451,7 @@ d = DocstringProcessor(
     plotting_returns=_plotting_returns,
     parallelize=_parallelize,
     n_jobs=_n_jobs,
+    n_jobs_threads=_n_jobs_threads,
     show_progress_bar=_show_progress_bar,
     channels=_channels,
     segment_kwargs=_segment_kwargs,
