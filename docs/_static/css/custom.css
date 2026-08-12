@@ -80,7 +80,8 @@ div.output_subarea.output_html.rendered_html.output_result {
 }
 
 /* function/class top bar */
-html.writer-html5 .rst-content
+html.writer-html5
+    .rst-content
     dl[class]:not(.option-list):not(.field-list):not(.footnote):not(
         .glossary
     ):not(.simple)
@@ -91,7 +92,8 @@ html.writer-html5 .rst-content
 }
 
 /* class params */
-html.writer-html5 .rst-content
+html.writer-html5
+    .rst-content
     dl[class]:not(.option-list):not(.field-list):not(.footnote):not(
         .glossary
     ):not(.simple)
