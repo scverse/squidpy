@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from anndata import AnnData
 
@@ -61,6 +62,25 @@ class TestVarDist:
             assert (
                 nan_ids <= zero_dist_ids
             )  # zero value indices must be subset of indices with NaN values in anchor column
+
+    def test_normalization_is_per_slide(self, adata_mibitof: AnnData):
+        """Each slide is scaled to its own maximum distance, so every slide reaches a normalized distance of 1.
+
+        This is what makes distances comparable across slides; a regression to global (cross-slide)
+        normalization would leave the slide with the smaller maximum below 1.
+        """
+        cluster_key, library_key, anchor = "Cluster", "point", "Endothelial"
+        df = var_by_distance(
+            adata_mibitof, cluster_key=cluster_key, groups=anchor, library_key=library_key, copy=True
+        )
+
+        per_slide_max = df.groupby(library_key, observed=True)[anchor].max().dropna()
+        assert len(per_slide_max) > 1  # more than one slide contributes
+        assert np.allclose(per_slide_max.to_numpy(), 1.0)  # every slide stretched to exactly 1
+
+        # raw distances are untouched, on different per-slide scales (not all 1)
+        raw_max = df.groupby(library_key, observed=True)[f"{anchor}_raw"].max().dropna()
+        assert not np.allclose(raw_max.to_numpy(), 1.0)
 
     @pytest.mark.parametrize("groups", ["Spinal cord"])
     @pytest.mark.parametrize("cluster_key", ["celltype_mapped_refined"])
