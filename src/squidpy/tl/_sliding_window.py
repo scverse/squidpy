@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from itertools import product
+import warnings
+from itertools import count, product
 from typing import Literal
 
 import numpy as np
@@ -14,6 +15,10 @@ from squidpy.gr._utils import _save_data, extract_adata_if_sdata
 
 __all__ = ["sliding_window"]
 
+# Label for cells that fall in no window (only possible for grid ``drop``/``adaptive``); kept as an
+# explicit category instead of ``NaN`` so downstream code (and the ordered sort) never sees a float NaN.
+UNASSIGNED = "unassigned"
+
 
 @d.dedent
 def sliding_window(
@@ -24,55 +29,87 @@ def sliding_window(
     coord_columns: tuple[str, str] = ("globalX", "globalY"),
     sliding_window_key: str = "sliding_window_assignment",
     spatial_key: str = "spatial",
-    partial_windows: Literal["adaptive", "drop", "split"] | None = None,
-    max_nr_cells: int | None = None,
+    drop_partial_windows: bool | None = None,
     copy: bool = False,
     *,
+    method: Literal["grid", "split"] = "grid",
+    partial_windows: Literal["keep", "drop", "adaptive"] = "keep",
+    max_nr_cells: int | None = None,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
-    Divide a tissue slice into regulary shaped spatially contiguous regions (windows).
+    Divide a tissue slice into spatially contiguous regions (windows).
+
+    Two tiling strategies are available via ``method``:
+
+    - ``"grid"`` (default) lays a regular grid of ``window_size`` windows (optionally overlapping).
+      ``partial_windows`` controls the windows at the tissue edge.
+    - ``"split"`` recursively splits the cells into windows of roughly equal cell count
+      (at most ``max_nr_cells`` each), ignoring ``window_size``/``overlap``.
 
     Parameters
     ----------
     %(adata)s
-    %(table_key)s
-    window_size: int
-        Size of the sliding window.
     %(library_key)s
-    coord_columns: Tuple[str, str]
-        Tuple of column names in `adata.obs` that specify the coordinates (x, y), e.i. ('globalX', 'globalY')
-    sliding_window_key: str
-        Base name for sliding window columns.
+    window_size: int | None
+        Size of each grid window (``method="grid"``). Inferred from the extent when ``None``.
     overlap: int
-        Overlap size between consecutive windows. (0 = no overlap)
+        Overlap between consecutive grid windows (0 = no overlap). Only used for ``method="grid"``.
+    coord_columns: tuple[str, str]
+        Column names in ``adata.obs`` holding the ``(x, y)`` coordinates, e.g. ``('globalX', 'globalY')``.
+    sliding_window_key: str
+        Base name for the sliding-window column(s) written to ``.obs``.
     %(spatial_key)s
-    partial_windows: Literal["adaptive", "drop", "split"] | None
-        If None, possibly small windows at the edges are kept.
-        If `adaptive`, all windows might be shrunken a bit to avoid small windows at the edges.
-        If `drop`, possibly small windows at the edges are removed.
-        If `split`, windows are split into subwindows until not exceeding `max_nr_cells`
-    max_nr_cells: int | None
-        The maximum number of cells allowed after merging two windows.
-        Required if `partial_windows = split`
+    drop_partial_windows: bool | None
+        Deprecated. Use ``partial_windows`` instead. ``True`` maps to ``partial_windows="drop"``.
     copy: bool
-        If True, return the result, otherwise save it to the adata object.
+        If ``True``, return the result; otherwise store it in ``adata.obs``.
+    method: Literal["grid", "split"]
+        Tiling strategy. ``"grid"`` for a regular grid, ``"split"`` for equal-cell-count windows.
+    partial_windows: Literal["keep", "drop", "adaptive"]
+        Edge-window handling for ``method="grid"`` (ignored for ``"split"``).
+        ``"keep"`` clips edge windows to the tissue bounds; ``"drop"`` removes windows that would extend
+        past the bounds (their cells become ``"unassigned"``); ``"adaptive"`` shrinks all windows slightly
+        so they tile the extent evenly.
+    max_nr_cells: int | None
+        Maximum number of cells per window. Required for (and only used by) ``method="split"``.
+    %(table_key)s
 
     Returns
     -------
-    If ``copy = True``, returns the sliding window annotation(s) as pandas dataframe
-    Otherwise, stores the sliding window annotation(s) in .obs.
+    If ``copy = True``, returns the sliding-window annotation(s) as a :class:`pandas.DataFrame`.
+    Otherwise, stores the annotation(s) in ``adata.obs`` and returns ``None``.
     """
-    if partial_windows == "split":
+    # --- deprecation: drop_partial_windows -> partial_windows ---
+    if drop_partial_windows is not None:
+        warnings.warn(
+            "`drop_partial_windows` is deprecated and will be removed in a future release; "
+            "use `partial_windows='drop'` (or 'keep') instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        if partial_windows != "keep":
+            raise ValueError("Pass either `drop_partial_windows` (deprecated) or `partial_windows`, not both.")
+        partial_windows = "drop" if drop_partial_windows else "keep"
+
+    # --- validate arguments ---
+    if method not in ("grid", "split"):
+        raise ValueError(f"`method` must be 'grid' or 'split', got {method!r}.")
+    if partial_windows not in ("keep", "drop", "adaptive"):
+        raise ValueError(f"`partial_windows` must be 'keep', 'drop' or 'adaptive', got {partial_windows!r}.")
+
+    if method == "split":
         if max_nr_cells is None:
-            raise ValueError("`max_nr_cells` must be set when `partial_windows == split`.")
-        if window_size is not None:
-            logg.warning(f"Ingoring `window_size` when using `{partial_windows}`")
-        if overlap != 0:
-            logg.warning("Ignoring `overlap` as it cannot be used with `split`")
-    else:
+            raise ValueError("`max_nr_cells` must be set when method='split'.")
+        if max_nr_cells < 1:
+            raise ValueError("`max_nr_cells` must be >= 1.")
+        if window_size is not None or overlap != 0 or partial_windows != "keep":
+            raise ValueError(
+                "`window_size`, `overlap` and `partial_windows` are not used with method='split'; leave them unset."
+            )
+    else:  # grid
         if max_nr_cells is not None:
-            logg.warning("Ignoring `max_nr_cells` as `partial_windows != split`")
+            raise ValueError("`max_nr_cells` is only used with method='split'.")
         if overlap < 0:
             raise ValueError("Overlap must be non-negative.")
 
@@ -82,7 +119,7 @@ def sliding_window(
     if copy:
         adata = adata.copy()
 
-    # extract coordinates of observations
+    # --- extract coordinates of observations ---
     x_col, y_col = coord_columns
     if x_col in adata.obs and y_col in adata.obs:
         coords = adata.obs[[x_col, y_col]].copy()
@@ -97,46 +134,50 @@ def sliding_window(
             f"Coordinates not found. Provide `{coord_columns}` in `adata.obs` or specify a suitable `spatial_key` in `adata.obsm`."
         )
 
-    # infer window size if not provided
-    if window_size is None:
-        coord_range = max(
-            coords[x_col].max() - coords[x_col].min(),
-            coords[y_col].max() - coords[y_col].min(),
-        )
-        # mostly arbitrary choice, except that full integers usually generate windows with 1-2 cells at the borders
-        window_size = max(int(np.floor(coord_range // 3.95)), 1)
-
-    if partial_windows != "split":
+    # --- grid: infer + validate window size ---
+    if method == "grid":
+        if window_size is None:
+            coord_range = max(
+                coords[x_col].max() - coords[x_col].min(),
+                coords[y_col].max() - coords[y_col].min(),
+            )
+            # mostly arbitrary choice, except that full integers usually generate windows with 1-2 cells at the borders
+            window_size = max(int(np.floor(coord_range // 3.95)), 1)
         if window_size <= 0:
             raise ValueError("Window size must be larger than 0.")
         if overlap >= window_size:
             raise ValueError("Overlap must be less than the window size.")
-        if overlap >= window_size // 2 and partial_windows == "adaptive":
-            raise ValueError("Overlap must be less than `window_size` // 2 when using `adaptive`.")
+        if partial_windows == "adaptive" and overlap >= window_size // 2:
+            raise ValueError("Overlap must be less than `window_size` // 2 when partial_windows='adaptive'.")
 
     if library_key is not None and library_key not in adata.obs:
         raise ValueError(f"Library key '{library_key}' not found in adata.obs")
 
     libraries = [None] if library_key is None else adata.obs[library_key].unique()
 
-    # Create a DataFrame to store the sliding window assignments
-    sliding_window_df = pd.DataFrame(index=adata.obs.index)
-
     if sliding_window_key in adata.obs:
         logg.warning(f"Overwriting existing column '{sliding_window_key}' in adata.obs.")
 
+    sliding_window_df = pd.DataFrame(index=adata.obs.index)
+    # For overlapping grids we emit one boolean column per window. Collect them all and concatenate once
+    # at the end: adding them one-by-one fragments the frame and is quadratic in the number of windows.
+    bool_columns: dict[str, pd.Series] = {}
+
     for lib in libraries:
-        if lib is not None:
-            lib_mask = adata.obs[library_key] == lib
-            lib_coords = coords.loc[lib_mask]
-        else:
-            lib_mask = np.ones(len(adata), dtype=bool)
-            lib_coords = coords
+        lib_coords = coords.loc[adata.obs[library_key] == lib] if lib is not None else coords
+        lib_key = f"{lib}_" if lib is not None else ""
+
+        if method == "split":
+            # each cell is assigned to exactly one window (non-overlapping by construction)
+            labels = _split_cells(lib_coords, coord_columns, max_nr_cells)
+            for label in np.unique(labels):
+                obs_indices = lib_coords.index[labels == label]
+                sliding_window_df.loc[obs_indices, sliding_window_key] = f"{lib_key}window_{label}"
+            continue
 
         min_x, max_x = lib_coords[x_col].min(), lib_coords[x_col].max()
         min_y, max_y = lib_coords[y_col].min(), lib_coords[y_col].max()
 
-        # precalculate windows
         windows = _calculate_window_corners(
             min_x=min_x,
             max_x=max_x,
@@ -145,181 +186,170 @@ def sliding_window(
             window_size=window_size,
             overlap=overlap,
             partial_windows=partial_windows,
-            lib_coords=lib_coords,
-            coord_columns=(x_col, y_col),
-            max_nr_cells=max_nr_cells,
         )
 
-        lib_key = f"{lib}_" if lib is not None else ""
-
-        # assign observations to windows
         for idx, window in windows.iterrows():
-            x_start = window["x_start"]
-            x_end = window["x_end"]
-            y_start = window["y_start"]
-            y_end = window["y_end"]
-
             mask = _get_window_mask(
-                coord_columns=(x_col, y_col),
+                coord_columns=coord_columns,
                 lib_coords=lib_coords,
-                x_start=x_start,
-                x_end=x_end,
-                y_start=y_start,
-                y_end=y_end,
+                x_start=window["x_start"],
+                x_end=window["x_end"],
+                y_start=window["y_start"],
+                y_end=window["y_end"],
             )
             obs_indices = lib_coords.index[mask]
-
-            if overlap == 0 or partial_windows == "split":
-                mask = (
-                    (lib_coords[x_col] >= x_start)
-                    & (lib_coords[x_col] <= x_end)
-                    & (lib_coords[y_col] >= y_start)
-                    & (lib_coords[y_col] <= y_end)
-                )
-                obs_indices = lib_coords.index[mask]
+            if overlap == 0:
                 sliding_window_df.loc[obs_indices, sliding_window_key] = f"{lib_key}window_{idx}"
-
             else:
                 col_name = f"{sliding_window_key}_{lib_key}window_{idx}"
-                sliding_window_df.loc[obs_indices, col_name] = True
-                # Avoid chained assignment for pandas CoW compatibility
-                sliding_window_df[col_name] = sliding_window_df[col_name].fillna(False)
+                col = bool_columns.setdefault(col_name, pd.Series(False, index=sliding_window_df.index))
+                col.loc[obs_indices] = True
 
-    if overlap == 0:
-        # create categorical variable for ordered windows
-        sliding_window_df[sliding_window_key] = pd.Categorical(
-            sliding_window_df[sliding_window_key],
-            ordered=True,
-            categories=sorted(
-                sliding_window_df[sliding_window_key].unique(),
-                key=lambda x: int(x.split("_")[-1]),
-            ),
-        )
+    if bool_columns:
+        sliding_window_df = pd.concat([sliding_window_df, pd.DataFrame(bool_columns)], axis=1)
 
-    sliding_window_df[x_col] = coords[x_col]
-    sliding_window_df[y_col] = coords[y_col]
+    if method == "split" or overlap == 0:
+        # single categorical column: order windows by their trailing index, put unassigned cells last
+        sliding_window_df[sliding_window_key] = _ordered_window_categorical(sliding_window_df[sliding_window_key])
 
     if copy:
         return sliding_window_df
     for col_name, col_data in sliding_window_df.items():
         _save_data(adata, attr="obs", key=col_name, data=col_data)
+    return None
+
+
+def _ordered_window_categorical(values: pd.Series) -> pd.Categorical:
+    """Ordered categorical of window labels sorted by trailing index; unassigned cells (``NaN``) go last.
+
+    Cells outside every window (grid ``drop``/``adaptive``) arrive as ``NaN``; they become an explicit
+    ``"unassigned"`` category so the ordered sort never calls ``int(...)`` on a float ``NaN``.
+    """
+    filled = values.fillna(UNASSIGNED)
+    present = list(pd.unique(filled))
+    windows = sorted((c for c in present if c != UNASSIGNED), key=lambda s: int(str(s).split("_")[-1]))
+    categories = windows + ([UNASSIGNED] if UNASSIGNED in present else [])
+    return pd.Categorical(filled, ordered=True, categories=categories)
 
 
 def _get_window_mask(
     coord_columns: tuple[str, str],
     lib_coords: pd.DataFrame,
-    x_start: int,
-    x_end: int,
-    y_start: int,
-    y_end: int,
+    x_start: float,
+    x_end: float,
+    y_start: float,
+    y_end: float,
 ) -> pd.Series:
-    """
-    Compute a boolean mask selecting coordinates that fall within a given window.
-
-    Parameters
-    ----------
-    coord_columns: Tuple[str, str]
-        Tuple of column names in `adata.obs` that specify the coordinates (x, y), i.e. ('globalX', 'globalY')
-    lib_coords: pd.DataFrame
-        DataFrame containing spatial coordinates (e.g. `adata.obs` subset for one library).
-        Coordinate values are expected to be integers.
-    x_start: int
-        Lower bound of the window in x-direction (inclusive).
-    x_end: int
-        Upper bound of the window in x-direction (inclusive).
-    y_start: int
-        Lower bound of the window in y-direction (inclusive).
-    y_end: int
-        Upper bound of the window in y-direction (inclusive).
-
-    Returns
-    -------
-    pd.Series
-        Boolean mask indicating which rows in `lib_coords` fall inside the specified window.
-    """
+    """Boolean mask selecting the rows of ``lib_coords`` inside the (inclusive) window."""
     x_col, y_col = coord_columns
-
-    mask = (
+    return (
         (lib_coords[x_col] >= x_start)
         & (lib_coords[x_col] <= x_end)
         & (lib_coords[y_col] >= y_start)
         & (lib_coords[y_col] <= y_end)
     )
 
-    return mask
 
+def _split_cells(coords: pd.DataFrame, coord_columns: tuple[str, str], max_cells: int) -> np.ndarray:
+    """Assign each cell to a window by recursive count-based (median) splitting.
 
-def _calculate_window_corners(
-    min_x: int,
-    max_x: int,
-    min_y: int,
-    max_y: int,
-    window_size: int,
-    overlap: int = 0,
-    partial_windows: Literal["adaptive", "drop", "split"] | None = None,
-    lib_coords: pd.DataFrame | None = None,
-    coord_columns: tuple[str, str] | None = None,
-    max_nr_cells: int | None = None,
-) -> pd.DataFrame:
-    """
-    Calculate the corner points of all windows covering the area from min_x to max_x and min_y to max_y,
-    with specified window_size and overlap.
+    Each window holds at most ``max_cells`` cells and, unless the whole input is smaller, at least
+    ``max_cells // 2``. The split is on cell *position* (the median index of the longer axis), so windows
+    are **non-overlapping by construction** — no cell can land in two windows, and every split strictly
+    shrinks both halves, so it always terminates (given ``max_cells >= 1``).
 
     Parameters
     ----------
-    min_x: float
-        minimum X coordinate
-    max_x: float
-        maximum X coordinate
-    min_y: float
-        minimum Y coordinate
-    max_y: float
-        maximum Y coordinate
-    window_size: float
-        size of each window
-    lib_coords: pd.DataFrame | None
-        coordinates of all samples for one library
-    coord_columns: Tuple[str, str]
-        Tuple of column names in `adata.obs` that specify the coordinates (x, y), i.e. ('globalX', 'globalY')
-    overlap: float
-        overlap between consecutive windows (must be less than window_size)
-    partial_windows: Literal["adaptive", "drop", "split"] | None
-        If None, possibly small windows at the edges are kept.
-        If 'adaptive', all windows might be shrunken a bit to avoid small windows at the edges.
-        If 'drop', possibly small windows at the edges are removed.
-        If 'split', windows are split into subwindows until not exceeding `max_nr_cells`
+    coords
+        Coordinates for one library (index-aligned to the cells).
+    coord_columns
+        ``(x_col, y_col)`` column names in ``coords``.
+    max_cells
+        Maximum number of cells per window.
 
     Returns
     -------
-    windows: pandas DataFrame with columns ['x_start', 'x_end', 'y_start', 'y_end']
+    Integer window label per row of ``coords`` (positional order).
     """
-    # adjust x and y window size if 'adaptive'
+    x_col, y_col = coord_columns
+    x = coords[x_col].to_numpy()
+    y = coords[y_col].to_numpy()
+    labels = np.empty(len(coords), dtype=int)
+    counter = count()
+
+    def recurse(idx: np.ndarray) -> None:
+        if len(idx) <= max_cells:
+            labels[idx] = next(counter)
+            return
+        xi, yi = x[idx], y[idx]
+        # split along the axis with the larger spatial extent, at the median cell
+        if (xi.max() - xi.min()) >= (yi.max() - yi.min()):
+            order = idx[np.argsort(xi, kind="stable")]
+        else:
+            order = idx[np.argsort(yi, kind="stable")]
+        mid = len(order) // 2
+        recurse(order[:mid])
+        recurse(order[mid:])
+
+    recurse(np.arange(len(coords), dtype=int))
+    return labels
+
+
+def _calculate_window_corners(
+    min_x: float,
+    max_x: float,
+    min_y: float,
+    max_y: float,
+    window_size: int,
+    overlap: int = 0,
+    partial_windows: Literal["keep", "drop", "adaptive"] = "keep",
+) -> pd.DataFrame:
+    """
+    Corner points of a regular grid of windows covering ``[min_x, max_x] x [min_y, max_y]``.
+
+    Parameters
+    ----------
+    min_x, max_x, min_y, max_y
+        Extent to tile.
+    window_size
+        Size of each window.
+    overlap
+        Overlap between consecutive windows (must be less than ``window_size``).
+    partial_windows
+        Edge handling: ``"keep"`` clips edge windows to the bounds; ``"drop"`` removes windows that would
+        extend past the bounds; ``"adaptive"`` shrinks all windows slightly to tile the extent evenly.
+
+    Returns
+    -------
+    DataFrame with columns ``['x_start', 'x_end', 'y_start', 'y_end']``.
+    """
+    if overlap < 0:
+        raise ValueError("Overlap must be non-negative.")
+    if overlap >= window_size:
+        raise ValueError("Overlap must be less than the window size.")
+
     if partial_windows == "adaptive":
         total_width = max_x - min_x
         total_height = max_y - min_y
-
-        # number of windows in x and y direction
-        number_x_windows = np.ceil((total_width - overlap) / (window_size - overlap))
-        number_y_windows = np.ceil((total_height - overlap) / (window_size - overlap))
-
-        # window size in x and y direction
-        x_window_size = (total_width + (number_x_windows - 1) * overlap) / number_x_windows
-        y_window_size = (total_height + (number_y_windows - 1) * overlap) / number_y_windows
-
-        # avoid float errors
-        x_window_size = np.ceil(x_window_size)
-        y_window_size = np.ceil(y_window_size)
+        # number of windows per axis; clamp to >= 1 so a library smaller than one window (e.g. span
+        # <= overlap, common when the global window_size is set from a larger library) yields a single
+        # window instead of dividing by zero.
+        number_x_windows = max(int(np.ceil((total_width - overlap) / (window_size - overlap))), 1)
+        number_y_windows = max(int(np.ceil((total_height - overlap) / (window_size - overlap))), 1)
+        # window size per axis (integer to avoid float drift)
+        x_window_size = np.ceil((total_width + (number_x_windows - 1) * overlap) / number_x_windows)
+        y_window_size = np.ceil((total_height + (number_y_windows - 1) * overlap) / number_y_windows)
     else:
         x_window_size = window_size
         y_window_size = window_size
 
-    # create the step sizes for each window
     x_step = x_window_size - overlap
     y_step = y_window_size - overlap
 
-    # Generate starting points
-    x_starts = np.arange(min_x, max_x, x_step)
-    y_starts = np.arange(min_y, max_y, y_step)
+    # Generate starting points. A non-positive step means one window already covers the whole span
+    # (span <= overlap) -> emit a single window at the minimum rather than an empty grid.
+    x_starts = np.arange(min_x, max_x, x_step) if x_step > 0 else np.array([min_x])
+    y_starts = np.arange(min_y, max_y, y_step) if y_step > 0 else np.array([min_y])
 
     # Create all combinations of x and y starting points
     starts = list(product(x_starts, y_starts))
@@ -327,114 +357,26 @@ def _calculate_window_corners(
     windows["x_end"] = windows["x_start"] + x_window_size
     windows["y_end"] = windows["y_start"] + y_window_size
 
-    # Adjust windows that extend beyond the bounds
-    if partial_windows is None:
+    if partial_windows == "keep":
         windows["x_end"] = windows["x_end"].clip(upper=max_x)
         windows["y_end"] = windows["y_end"].clip(upper=max_y)
     elif partial_windows == "adaptive":
-        # as window_size is an integer to avoid float errors, it can exceed max_x and max_y -> clip
+        # the integer window size can exceed max_x/max_y -> clip, then drop degenerate corner slivers.
+        # Only drop a thin window when its axis has neighbours (>1 window): a sole window covering a
+        # small library is thin but not redundant, and must be kept.
         windows["x_end"] = windows["x_end"].clip(upper=max_x)
         windows["y_end"] = windows["y_end"].clip(upper=max_y)
-
-        # remove redundant windows in the corners
-        redundant_windows = ((windows["x_end"] - windows["x_start"]) <= overlap) | (
-            (windows["y_end"] - windows["y_start"]) <= overlap
-        )
+        thin_x = (windows["x_end"] - windows["x_start"]) <= overlap
+        thin_y = (windows["y_end"] - windows["y_start"]) <= overlap
+        # a thin window is a redundant sliver only if its axis actually has more than one window;
+        # a lone window covering a small library is thin but must be kept.
+        redundant_windows = (thin_x & (len(x_starts) > 1)) | (thin_y & (len(y_starts) > 1))
         windows = windows[~redundant_windows]
     elif partial_windows == "drop":
         valid_windows = (windows["x_end"] <= max_x) & (windows["y_end"] <= max_y)
         windows = windows[valid_windows]
-    elif partial_windows == "split":
-        # split the slide recursively into windows with at most max_nr_cells
-        x_col, y_col = coord_columns
-
-        coord_x_sorted = lib_coords.sort_values(by=[x_col])
-        coord_y_sorted = lib_coords.sort_values(by=[y_col])
-
-        windows = _split_window(
-            max_nr_cells, (x_col, y_col), coord_x_sorted, coord_y_sorted, min_x, max_x, min_y, max_y
-        ).sort_values(["x_start", "x_end", "y_start", "y_end"])
     else:
-        raise ValueError(f"{partial_windows} is not a valid partial_windows argument.")
+        raise ValueError(f"{partial_windows} is not a valid `partial_windows` argument.")
 
     windows = windows.reset_index(drop=True)
     return windows[["x_start", "x_end", "y_start", "y_end"]]
-
-
-def _split_window(
-    max_cells: int,
-    coord_columns: tuple[str, str],
-    coord_x_sorted: pd.DataFrame,
-    coord_y_sorted: pd.DataFrame,
-    x_start: int,
-    x_end: int,
-    y_start: int,
-    y_end: int,
-) -> pd.DataFrame:
-    """
-    Recursively split a rectangular window into subwindows such that each subwindow
-    contains at most `max_cells` cells and at least `max_cells` // 2 cells.
-
-    Parameters
-    ----------
-    max_cells : int
-        Maximum number of cells allowed per window.
-    coord_columns: Tuple[str, str]
-        Tuple of column names in `adata.obs` that specify the coordinates (x, y), i.e. ('globalX', 'globalY')
-    coord_x_sorted : pandas.DataFrame
-        DataFrame containing cell coordinates, sorted by `x_col`.
-    coord_y_sorted : pandas.DataFrame
-        DataFrame containing cell coordinates, sorted by `y_col`.
-    x_start : int
-        Left (minimum) x coordinate of the current window.
-    x_end : int
-        Right (maximum) x coordinate of the current window.
-    y_start : int
-        Bottom (minimum) y coordinate of the current window.
-    y_end : int
-        Top (maximum) y coordinate of the current window.
-
-    Returns
-    -------
-    windows: pandas DataFrame with columns ['x_start', 'x_end', 'y_start', 'y_end']
-    """
-    x_col, y_col = coord_columns
-
-    # return current window if it contains less cells than max_cells
-    n_cells = _get_window_mask(coord_columns, coord_x_sorted, x_start, x_end, y_start, y_end).sum()
-
-    if n_cells <= max_cells:
-        return pd.DataFrame({"x_start": [x_start], "x_end": [x_end], "y_start": [y_start], "y_end": [y_end]})
-
-    # define start and stop indices of subsetted windows
-    sub_coord_x_sorted = coord_x_sorted[
-        _get_window_mask(coord_columns, coord_x_sorted, x_start, x_end, y_start, y_end)
-    ].reset_index(drop=True)
-
-    sub_coord_y_sorted = coord_y_sorted[
-        _get_window_mask(coord_columns, coord_y_sorted, x_start, x_end, y_start, y_end)
-    ].reset_index(drop=True)
-
-    middle_pos = len(sub_coord_x_sorted) // 2
-
-    if (x_end - x_start) > (y_end - y_start):
-        # vertical split
-        x_middle = sub_coord_x_sorted[x_col].iloc[middle_pos]
-
-        indices = ((x_start, x_middle, y_start, y_end), (x_middle, x_end, y_start, y_end))
-    else:
-        # horizontal split
-        y_middle = sub_coord_y_sorted.loc[middle_pos, y_col]
-
-        indices = ((x_start, x_end, y_start, y_middle), (x_start, x_end, y_middle, y_end))
-
-    # recursively continue with either left&right or upper&lower windows pairs
-    windows = []
-    for x_start, x_end, y_start, y_end in indices:
-        windows.append(
-            _split_window(
-                max_cells, (x_col, y_col), sub_coord_x_sorted, sub_coord_y_sorted, x_start, x_end, y_start, y_end
-            )
-        )
-
-    return pd.concat(windows)
