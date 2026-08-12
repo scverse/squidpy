@@ -414,3 +414,95 @@ class TestWiredKwargs:
         )
         assert isinstance(fig, Figure)
         plt.close(fig)
+
+
+class TestSpatialDataNativeInput:
+    """M2/M3: render directly from a user's SpatialData, no AnnData shim."""
+
+    @pytest.fixture()
+    def sdata_visium_like(self):
+        import anndata as ad
+        import geopandas as gpd
+        import numpy as np
+        import pandas as pd
+        from shapely.geometry import Point
+        from spatialdata import SpatialData
+        from spatialdata.models import Image2DModel, ShapesModel, TableModel
+        from spatialdata.transformations import Identity, set_transformation
+
+        cs = "lib1"
+        n = 20
+        rng = np.random.default_rng(0)
+        xy = rng.uniform(5, 95, size=(n, 2))
+        spots = ShapesModel.parse(gpd.GeoDataFrame({"radius": np.full(n, 2.0)}, geometry=[Point(*p) for p in xy]))
+        set_transformation(spots, Identity(), to_coordinate_system=cs)
+        img = Image2DModel.parse(np.zeros((3, 100, 100), dtype=np.float32), dims=("c", "y", "x"))
+        set_transformation(img, Identity(), to_coordinate_system=cs)
+        obs = pd.DataFrame(
+            {
+                "region": pd.Categorical(["spots"] * n),
+                "inst": np.arange(n),
+                "ct": pd.Categorical(["a", "b"] * (n // 2)),
+                "score": rng.random(n),
+            }
+        )
+        adata = ad.AnnData(X=np.zeros((n, 3), dtype=np.float32), obs=obs)
+        tab = TableModel.parse(adata, region="spots", region_key="region", instance_key="inst")
+        return SpatialData(images={"he": img}, shapes={"spots": spots}, tables={"table": tab})
+
+    def test_categorical_renders(self, sdata_visium_like) -> None:
+        fig = _spatial_scatter_via_sdata_plot(sdata_visium_like, color="ct", library_id="lib1")
+        assert isinstance(fig, Figure)
+        plt.close(fig)
+
+    def test_continuous_renders(self, sdata_visium_like) -> None:
+        fig = _spatial_scatter_via_sdata_plot(sdata_visium_like, color="score", library_id="lib1", img=False)
+        assert isinstance(fig, Figure)
+        plt.close(fig)
+
+    def test_use_raw_rejected(self, sdata_visium_like) -> None:
+        with pytest.raises(ValueError, match="use_raw"):
+            _spatial_scatter_via_sdata_plot(sdata_visium_like, color="ct", library_id="lib1", use_raw=True)
+
+    def test_library_key_rejected(self, sdata_visium_like) -> None:
+        with pytest.raises(ValueError, match="library_key"):
+            _spatial_scatter_via_sdata_plot(sdata_visium_like, color="ct", library_key="foo")
+
+    def test_ambiguous_shapes_raises(self, sdata_visium_like) -> None:
+        # add a second shapes element to the same coordinate system -> ambiguous without shapes_layer
+        import geopandas as gpd
+        import numpy as np
+        from shapely.geometry import Point
+        from spatialdata.models import ShapesModel
+        from spatialdata.transformations import Identity, set_transformation
+
+        extra = ShapesModel.parse(
+            gpd.GeoDataFrame({"radius": np.full(3, 1.0)}, geometry=[Point(i, i) for i in range(3)])
+        )
+        set_transformation(extra, Identity(), to_coordinate_system="lib1")
+        sdata_visium_like.shapes["spots2"] = extra
+        with pytest.raises(ValueError, match="Multiple shapes"):
+            _spatial_scatter_via_sdata_plot(sdata_visium_like, color="ct", library_id="lib1", img=False)
+
+    def test_shapes_layer_disambiguates(self, sdata_visium_like) -> None:
+        import geopandas as gpd
+        import numpy as np
+        from shapely.geometry import Point
+        from spatialdata.models import ShapesModel
+        from spatialdata.transformations import Identity, set_transformation
+
+        extra = ShapesModel.parse(
+            gpd.GeoDataFrame({"radius": np.full(3, 1.0)}, geometry=[Point(i, i) for i in range(3)])
+        )
+        set_transformation(extra, Identity(), to_coordinate_system="lib1")
+        sdata_visium_like.shapes["spots2"] = extra
+        fig = _spatial_scatter_via_sdata_plot(
+            sdata_visium_like, color="ct", library_id="lib1", img=False, shapes_layer="spots"
+        )
+        assert isinstance(fig, Figure)
+        plt.close(fig)
+
+    def test_anndata_input_deprecated(self, adata_hne_with_cluster: AnnData) -> None:
+        with pytest.warns(DeprecationWarning, match="deprecated"):
+            fig = _spatial_scatter_via_sdata_plot(adata_hne_with_cluster, color="cluster_path1")
+        plt.close(fig)

@@ -2,21 +2,25 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any
 
 from anndata import AnnData
 from matplotlib.colors import Normalize, TwoSlopeNorm
+from spatialdata import SpatialData
 
 from squidpy._constants._pkg_constants import Key
 
 from ._intent import (
     DataIntent,
+    ElementKind,
     Intent,
     LayoutIntent,
     PanelIntent,
     PostRenderIntent,
     RenderIntent,
 )
+from ._source import _AnnDataSource, _Source, _SpatialDataSource
 
 
 def _build_norm(
@@ -41,16 +45,46 @@ def _build_norm(
     return Normalize(vmin=vmin, vmax=vmax)
 
 
-def _normalize_library_ids(adata: AnnData, library_key: str | None, library_id: Any) -> tuple[str, ...]:
-    if library_id is not None:
-        ids = (library_id,) if isinstance(library_id, str) else tuple(library_id)
-    elif library_key is not None:
-        ids = tuple(map(str, adata.obs[library_key].cat.categories))
-    elif Key.uns.spatial in adata.uns:
-        ids = tuple(adata.uns[Key.uns.spatial].keys())
-    else:
-        raise ValueError("No library_id or library_key provided and no 'spatial' key in adata.uns.")
-    return ids
+def _make_source(
+    data: AnnData | SpatialData,
+    *,
+    shapes_layer: str | None,
+    labels_layer: str | None,
+    points_layer: str | None,
+    image_layer: str | None,
+    table: str | None,
+) -> _Source:
+    if isinstance(data, SpatialData):
+        return _SpatialDataSource(
+            data,
+            shapes_layer=shapes_layer,
+            labels_layer=labels_layer,
+            points_layer=points_layer,
+            image_layer=image_layer,
+            table=table,
+        )
+    return _AnnDataSource(data)
+
+
+def _assign_names(
+    panels: tuple[PanelIntent, ...],
+    source: _Source,
+    kind: ElementKind,
+    *,
+    needs_image: bool,
+    needs_graph: bool,
+) -> tuple[PanelIntent, ...]:
+    """Resolve and attach the SpatialData element names each panel renders."""
+    return tuple(
+        replace(
+            p,
+            element_name=source.element_name(p.library_id, kind),
+            image_name=source.image_name(p.library_id) if needs_image else None,
+            table_name=source.table_name(p.library_id),
+            graph_element_name=source.element_name(p.library_id, kind) if needs_graph else None,
+        )
+        for p in panels
+    )
 
 
 def _normalize_color(color: str | Sequence[str] | None) -> tuple[str, ...]:
@@ -200,13 +234,11 @@ def _apply_color_override(
     passed a single color string as `palette` and no explicit `color` column."""
     if color_override is None or color_tuple:
         return panels
-    from dataclasses import replace
-
     return tuple(replace(p, color=color_override) for p in panels)
 
 
 def capture_scatter_intent(
-    adata: AnnData,
+    data: AnnData | SpatialData,
     *,
     shape: str | None = "circle",
     color: str | Sequence[str] | None = None,
@@ -262,6 +294,10 @@ def capture_scatter_intent(
     ax: Any = None,
     save: str | None = None,
     return_ax: bool = False,
+    shapes_layer: str | None = None,
+    points_layer: str | None = None,
+    image_layer: str | None = None,
+    table: str | None = None,
     **unsupported: Any,
 ) -> Intent:
     """Capture squidpy spatial_scatter kwargs into an Intent.
@@ -290,7 +326,15 @@ def capture_scatter_intent(
     use_points = shape is None
 
     color_tuple = _normalize_color(color)
-    library_ids = _normalize_library_ids(adata, library_key, library_id)
+    source = _make_source(
+        data,
+        shapes_layer=shapes_layer,
+        labels_layer=None,
+        points_layer=points_layer,
+        image_layer=image_layer,
+        table=table,
+    )
+    library_ids = source.library_ids(library_key, library_id)
 
     crop_per_lib = _per_library(crop_coord, library_ids, "crop_coord")
     scalebar_dx_per_lib = _per_library(scalebar_dx, library_ids, "scalebar_dx")
@@ -310,7 +354,7 @@ def capture_scatter_intent(
 
     ax_seq = _validate_ax(ax, len(panels))
 
-    data = DataIntent(
+    data_intent = DataIntent(
         element_kind="points" if use_points else "shapes",
         needs_image=bool(img),
         needs_graph=connectivity_key is not None,
@@ -332,6 +376,13 @@ def capture_scatter_intent(
     resolved_cmap = palette_cmap if cmap is None else cmap
     groups_tuple = _normalize_groups(groups) or inferred_groups
     panels = _apply_color_override(panels, color_override, color_tuple)
+    panels = _assign_names(
+        panels,
+        source,
+        data_intent.element_kind,
+        needs_image=data_intent.needs_image,
+        needs_graph=data_intent.needs_graph,
+    )
 
     render = RenderIntent(
         shape=shape,
@@ -378,7 +429,7 @@ def capture_scatter_intent(
 
     return Intent(
         mode="scatter",
-        data=data,
+        data=data_intent,
         render=render,
         layout=layout,
         post=post,
@@ -387,7 +438,7 @@ def capture_scatter_intent(
 
 
 def capture_segment_intent(
-    adata: AnnData,
+    data: AnnData | SpatialData,
     *,
     seg_cell_id: str,
     color: str | Sequence[str] | None = None,
@@ -437,6 +488,9 @@ def capture_segment_intent(
     ax: Any = None,
     save: str | None = None,
     return_ax: bool = False,
+    labels_layer: str | None = None,
+    image_layer: str | None = None,
+    table: str | None = None,
     **unsupported: Any,
 ) -> Intent:
     """Capture squidpy spatial_segment kwargs into an Intent.
@@ -462,7 +516,15 @@ def capture_segment_intent(
         raise ValueError("seg_contourpx=1 is rejected by spatialdata-plot v0.3.4 (PR #645). Use >= 2 or None.")
 
     color_tuple = _normalize_color(color)
-    library_ids = _normalize_library_ids(adata, library_key, library_id)
+    source = _make_source(
+        data,
+        shapes_layer=None,
+        labels_layer=labels_layer,
+        points_layer=None,
+        image_layer=image_layer,
+        table=table,
+    )
+    library_ids = source.library_ids(library_key, library_id)
 
     crop_per_lib = _per_library(crop_coord, library_ids, "crop_coord")
     scalebar_dx_per_lib = _per_library(scalebar_dx, library_ids, "scalebar_dx")
@@ -482,7 +544,7 @@ def capture_segment_intent(
 
     ax_seq = _validate_ax(ax, len(panels))
 
-    data = DataIntent(
+    data_intent = DataIntent(
         element_kind="labels",
         needs_image=bool(img),
         library_ids=library_ids,
@@ -503,6 +565,13 @@ def capture_segment_intent(
     resolved_cmap = palette_cmap if cmap is None else cmap
     groups_tuple = _normalize_groups(groups) or inferred_groups
     panels = _apply_color_override(panels, color_override, color_tuple)
+    panels = _assign_names(
+        panels,
+        source,
+        data_intent.element_kind,
+        needs_image=data_intent.needs_image,
+        needs_graph=data_intent.needs_graph,
+    )
 
     render = RenderIntent(
         cmap=resolved_cmap,
@@ -544,7 +613,7 @@ def capture_segment_intent(
 
     return Intent(
         mode="segment",
-        data=data,
+        data=data_intent,
         render=render,
         layout=layout,
         post=post,

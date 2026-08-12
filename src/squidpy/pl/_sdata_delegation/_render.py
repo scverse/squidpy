@@ -12,7 +12,6 @@ from spatialdata import SpatialData
 
 from squidpy.pl._utils import save_fig
 
-from ._adapter import _image_name, _labels_name, _points_name, _shapes_name, _table_name
 from ._intent import Intent, PanelIntent
 
 # edges_kwargs keys we forward into render_graph; anything else is rejected (no silent drop).
@@ -55,7 +54,7 @@ def _color_kwargs(panel: PanelIntent, intent: Intent) -> dict[str, Any]:
         "norm": intent.render.norm,
         "na_color": intent.render.na_color,
         "groups": list(intent.render.groups) if intent.render.groups else None,
-        "table_name": _table_name(panel.library_id),
+        "table_name": panel.table_name,
         "table_layer": intent.data.layer,
         "gene_symbols": intent.data.alt_var,
     }
@@ -78,12 +77,12 @@ def _draw_panel(chain: SpatialData, panel: PanelIntent, intent: Intent) -> Spati
             img_kw["cmap"] = intent.render.img_cmap
         if intent.data.img_channel is not None:
             img_kw["channel"] = intent.data.img_channel
-        chain = chain.pl.render_images(_image_name(panel.library_id), **img_kw)
+        chain = chain.pl.render_images(panel.image_name, **img_kw)
 
     kind = intent.data.element_kind
 
     if intent.data.needs_graph and intent.data.graph_layer is not None:
-        element_name = _shapes_name(panel.library_id) if kind == "shapes" else _points_name(panel.library_id)
+        element_name = panel.graph_element_name
         unknown = set(intent.render.edges_kwargs) - _ALLOWED_EDGE_KWARGS
         if unknown:
             raise NotImplementedError(
@@ -94,7 +93,7 @@ def _draw_panel(chain: SpatialData, panel: PanelIntent, intent: Intent) -> Spati
             color=intent.render.edges_color if isinstance(intent.render.edges_color, str) else "grey",
             connectivity_key=intent.data.graph_layer,
             edge_width=intent.render.edges_width,
-            table_name=_table_name(panel.library_id),
+            table_name=panel.table_name,
             **intent.render.edges_kwargs,
         )
 
@@ -111,17 +110,17 @@ def _draw_panel(chain: SpatialData, panel: PanelIntent, intent: Intent) -> Spati
             kw["outline_color"] = (bg_color, gap_color)
             kw["outline_width"] = (bg_width + gap_width, gap_width)
             kw["outline_alpha"] = (1.0, 1.0)
-        chain = chain.pl.render_shapes(_shapes_name(panel.library_id), **kw)
+        chain = chain.pl.render_shapes(panel.element_name, **kw)
     elif kind == "labels":
         kw = dict(color_kw)
         kw["fill_alpha"] = intent.render.alpha
         kw["contour_px"] = intent.render.contour_px
         kw["outline_alpha"] = intent.render.outline_alpha
-        chain = chain.pl.render_labels(_labels_name(panel.library_id), **kw)
+        chain = chain.pl.render_labels(panel.element_name, **kw)
     else:  # points
         kw = dict(color_kw)
         kw["alpha"] = intent.render.alpha
-        chain = chain.pl.render_points(_points_name(panel.library_id), **kw)
+        chain = chain.pl.render_points(panel.element_name, **kw)
 
     return chain
 

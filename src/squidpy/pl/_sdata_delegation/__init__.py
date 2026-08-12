@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 from anndata import AnnData
@@ -10,6 +11,15 @@ from spatialdata import SpatialData
 from ._adapter import _make_tmp_sdata
 from ._capture import capture_scatter_intent, capture_segment_intent
 from ._render import _render_from_intent
+
+_ANNDATA_DEPRECATION = (
+    "Passing an AnnData to squidpy spatial plotting is deprecated and will be removed in "
+    "squidpy v2.0; pass a SpatialData object instead."
+)
+
+
+def _warn_anndata_input() -> None:
+    warnings.warn(_ANNDATA_DEPRECATION, DeprecationWarning, stacklevel=3)
 
 
 def _resolve_use_raw(adata: AnnData, use_raw: bool | None) -> AnnData:
@@ -32,15 +42,19 @@ def _spatial_scatter_via_sdata_plot(
     """Internal entrypoint for spatial_scatter delegation (Paths 1+2).
 
     Routes a squidpy-style spatial_scatter call through the
-    capture-intent -> adapter -> spatialdata-plot pipeline. Not wired into the
-    public `sq.pl.spatial_scatter` yet — callable from tests while we verify
-    feature parity on the happy paths.
+    capture-intent -> adapter -> spatialdata-plot pipeline. Accepts native
+    SpatialData (rendered directly) or AnnData (via a transient-sdata shim,
+    deprecated).
     """
     if isinstance(input_obj, SpatialData):
-        raise NotImplementedError("SpatialData input path lands in Stage 2 follow-up.")
+        if kwargs.get("use_raw"):
+            raise ValueError("`use_raw` is AnnData-only; SpatialData has no `.raw`.")
+        intent = capture_scatter_intent(input_obj, **kwargs)
+        return _render_from_intent(input_obj, intent)
     if not isinstance(input_obj, AnnData):
         raise TypeError(f"Expected AnnData or SpatialData, got {type(input_obj).__name__}.")
 
+    _warn_anndata_input()
     intent = capture_scatter_intent(input_obj, **kwargs)
     resolved_adata = _resolve_use_raw(input_obj, intent.data.use_raw)
     sdata = _make_tmp_sdata(resolved_adata, intent)
@@ -54,13 +68,19 @@ def _spatial_segment_via_sdata_plot(
     """Internal entrypoint for spatial_segment delegation (Path 3).
 
     Routes a squidpy-style spatial_segment call through the labels-flavoured
-    capture-intent -> adapter -> spatialdata-plot pipeline.
+    capture-intent -> adapter -> spatialdata-plot pipeline. Accepts native
+    SpatialData (rendered directly) or AnnData (via a transient-sdata shim,
+    deprecated).
     """
     if isinstance(input_obj, SpatialData):
-        raise NotImplementedError("SpatialData input path lands in Stage 2 follow-up.")
+        if kwargs.get("use_raw"):
+            raise ValueError("`use_raw` is AnnData-only; SpatialData has no `.raw`.")
+        intent = capture_segment_intent(input_obj, **kwargs)
+        return _render_from_intent(input_obj, intent)
     if not isinstance(input_obj, AnnData):
         raise TypeError(f"Expected AnnData or SpatialData, got {type(input_obj).__name__}.")
 
+    _warn_anndata_input()
     intent = capture_segment_intent(input_obj, **kwargs)
     resolved_adata = _resolve_use_raw(input_obj, intent.data.use_raw)
     sdata = _make_tmp_sdata(resolved_adata, intent)

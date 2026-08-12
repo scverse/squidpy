@@ -83,6 +83,13 @@ class PanelIntent:
     scalebar_dx: float | None = None
     scalebar_units: str | None = None
     title: str | None = None
+    # Resolved SpatialData element names for this panel. Populated at capture time by the
+    # source (shim names for AnnData input, real element names for SpatialData input) so
+    # _render never derives names itself.
+    element_name: str | None = None
+    image_name: str | None = None
+    table_name: str | None = None
+    graph_element_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
