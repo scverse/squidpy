@@ -1,16 +1,10 @@
 # -- Path setup --------------------------------------------------------------
 from __future__ import annotations
 
-import sys
 from datetime import datetime
 from importlib.metadata import metadata
-from pathlib import Path
 
 from sphinx.application import Sphinx
-
-HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE / "extensions"))
-
 
 # -- Project information -----------------------------------------------------
 info = metadata("squidpy")
@@ -41,7 +35,7 @@ extensions = [
     "sphinx_tabs.tabs",
     "myst_nb",
     "nbsphinx",
-    "typed_returns",
+    "scverse_misc.sphinx_ext",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
 intersphinx_mapping = dict(  # noqa: C408
