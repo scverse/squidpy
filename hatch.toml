@@ -13,9 +13,13 @@ scripts.download = "python ./.scripts/ci/download_data.py {args}"
 
 [envs.hatch-test]
 dependency-groups = ["test"]
+# to pass spatialleiden-using tests in test_niche.py
+features = [
+  "leiden"
+]
 extra-dependencies = ["diff-cover"]
 matrix = [
-  { deps = ["stable"], python = ["3.11", "3.12", "3.13", "3.14"] },
+  { deps = ["stable"], python = ["3.12", "3.13", "3.14"] },
   { deps = ["pre"], python = ["3.14"] },
 ]
 overrides.matrix.deps.env-vars = [

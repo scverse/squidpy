@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Generic, Literal, NamedTuple
+from typing import Any, NamedTuple
 
 import geopandas as gpd
 import numpy as np
@@ -26,7 +26,7 @@ from spatialdata.models.models import (
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, thread_map
+from squidpy._utils import NDArrayA, get_n_numba_threads, thread_map
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -37,14 +37,12 @@ from squidpy.gr._utils import (
 from squidpy.gr.neighbors import (
     DelaunayBuilder,
     GraphBuilder,
-    GraphMatrixT,
     GridBuilder,
     KNNBuilder,
     RadiusBuilder,
 )
 
 __all__ = [
-    "GraphMatrixT",
     "SpatialNeighborsResult",
     "spatial_neighbors",
     "spatial_neighbors_from_builder",
@@ -55,7 +53,7 @@ __all__ = [
 ]
 
 
-class SpatialNeighborsResult(NamedTuple, Generic[GraphMatrixT]):
+class SpatialNeighborsResult[GraphMatrixT](NamedTuple):
     """Result of spatial_neighbors function."""
 
     connectivities: GraphMatrixT
@@ -825,7 +823,7 @@ def _run_spatial_neighbors(
         mats = thread_map(
             builder.build,
             per_lib_coords,
-            n_jobs=n_jobs,
+            n_jobs=get_n_numba_threads(n_jobs),
             unit="library",
         )
         adj, dst = builder.combine(mats, idxs)

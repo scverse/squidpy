@@ -49,6 +49,13 @@ numba_parallel
 _seed = """\
 seed
     Random seed for reproducibility."""
+_seed_versionchanged = """\
+.. versionchanged:: 1.8.4
+    Every permutation now uses an independent :class:`numpy.random.Generator` spawned from a
+    :class:`numpy.random.SeedSequence`. Consequently the permutation-based results no
+    longer depend on ``n_jobs`` / ``backend``, but results obtained with a given ``seed``
+    differ from those produced by squidpy < 1.8.4. See `#1232 <https://github.com/scverse/squidpy/issues/1232>`_ and
+    `#1233 <https://github.com/scverse/squidpy/issues/1233>`_."""
 _n_perms = """\
 n_perms
     Number of permutations for the permutation test."""
@@ -109,9 +116,15 @@ ax
 _plotting_returns = """\
 Nothing, just plots the figure and optionally saves the plot.
 """
-_parallelize = """\
+# Shared core-count rules, so the process-based ``n_jobs`` params document them once.
+_n_jobs_core_rules = """\
+    `None` is serial and ``-1`` uses all available cores; asking for more cores than are
+    available warns and falls back to all of them, while ``0`` and values below ``-1`` raise,
+    since :doc:`scanpy <scanpy:index>` only supports ``n_jobs >= -1``."""
+_parallelize = f"""\
 n_jobs
     Number of parallel jobs to use.
+{_n_jobs_core_rules}
     For ``backend="loky"``, the number of cores used by numba for
     each job spawned by the backend will be set to 1 in order to
     overcome the oversubscription issue in case you run
@@ -121,6 +134,22 @@ n_jobs
     ``NUMBA_NUM_THREADS`` before running the program.
 backend
     Parallelization backend to use. See :class:`joblib.Parallel` for available options.
+show_progress_bar
+    Whether to show the progress bar or not."""
+_n_jobs = f"""\
+n_jobs
+    Number of parallel jobs to use.
+{_n_jobs_core_rules}"""
+# Shared thread-count rules, so the thread-based ``n_jobs`` params document them once.
+_n_jobs_thread_rules = """\
+    `None` and ``-1`` use numba's default thread count (``NUMBA_NUM_THREADS``); asking for more
+    threads than that warns and falls back to it, while ``0`` and values below ``-1`` raise,
+    since :doc:`scanpy <scanpy:index>` only supports ``n_jobs >= -1``."""
+_n_jobs_threads = f"""\
+n_jobs
+    Number of parallel threads to use.
+{_n_jobs_thread_rules}"""
+_show_progress_bar = """\
 show_progress_bar
     Whether to show the progress bar or not."""
 _channels = """\
@@ -195,12 +224,36 @@ _library_key = """\
 library_key
     Key in :attr:`anndata.AnnData.obs` containing library ids for which to build the spatial graphs separately."""
 
+# niche docs
+_niche_spatial_conn_key = """\
+spatial_connectivities_key
+    Key in :attr:`anndata.AnnData.obsp` containing the spatial connectivity matrix."""
+_niche_mask = """\
+mask
+    Boolean :class:`pandas.Series` indexed like :attr:`anndata.AnnData.obs`. Observations that
+    are `False` are excluded from niche assignment and labeled ``'not_a_niche'``, e.g.
+    ``Series([False, False, True], index=["a", "b", "c"])``."""
+_niche_min_niche_size = """\
+min_niche_size
+    Minimum number of observations required for a niche. Niches with fewer observations
+    are relabeled ``'not_a_niche'``."""
+_niche_inplace = """\
+inplace
+    If `True`, modify the table in place and return `None`.
+    If `False`, return a modified copy and leave the input unchanged."""
+# the postprocessing + output params every user-facing niche function shares, in signature order
+_niche_common_params = f"""\
+{_niche_min_niche_size}
+{_niche_mask}
+{_library_key}
+{_niche_inplace}"""
+
 # static plotting docs
 _plotting_kwargs_static = """\
 scalebar_kwargs
     Keyword arguments for :class:`matplotlib_scalebar.ScaleBar`.
 edges_kwargs
-    Keyword arguments for :func:`networkx.drawing.nx_pylab.draw_networkx_edges`.
+    Keyword arguments for :func:`networkx.drawing.nx_pylab.draw_networkx_edges` :cite:`networkx`.
 kwargs
     Keyword arguments for :func:`matplotlib.pyplot.scatter` or :func:`matplotlib.pyplot.imshow`.
 """
@@ -380,15 +433,15 @@ set_diag
     Whether to set the diagonal of the connectivities to ``1.0``.
 key_added
     Key which controls where the results are saved if ``copy = False``."""
-_n_jobs_libraries = """\
+_n_jobs_libraries = f"""\
 n_jobs
     Number of parallel jobs used to build the per-library graphs when ``library_key``
     is set. Each library's graph is computed independently, so this only has an effect
     for multi-library data. ``1`` (default) builds the graphs sequentially and does not
-    change behavior; ``-1`` uses all available CPUs. Has no effect when ``library_key``
-    is ``None``. Speedup is sub-linear (memory-bandwidth bound), and process-based
-    backends pay a one-time worker start-up cost, so parallelism mainly pays off for
-    many large libraries."""
+    change behavior, and it has no effect when ``library_key`` is ``None``.
+{_n_jobs_thread_rules}
+    Speedup is sub-linear (memory-bandwidth bound), so parallelism mainly pays off for many
+    large libraries."""
 _spatial_neighbors_returns = """\
 If ``copy = True``, returns a :class:`~squidpy.gr.SpatialNeighborsResult` with the
 spatial connectivities and distances matrices.
@@ -407,6 +460,7 @@ d = DocstringProcessor(
     copy_cont=_copy_cont,
     numba_parallel=_numba_parallel,
     seed=_seed,
+    seed_versionchanged=_seed_versionchanged,
     n_perms=_n_perms,
     img_layer=_img_layer,
     feature_name=_feature_name,
@@ -420,6 +474,9 @@ d = DocstringProcessor(
     cat_plotting=_cat_plotting,
     plotting_returns=_plotting_returns,
     parallelize=_parallelize,
+    n_jobs=_n_jobs,
+    n_jobs_threads=_n_jobs_threads,
+    show_progress_bar=_show_progress_bar,
     channels=_channels,
     segment_kwargs=_segment_kwargs,
     ligrec_test_returns=_ligrec_test_returns,
@@ -442,6 +499,11 @@ d = DocstringProcessor(
     groups=_groups,
     plotting_library_id=_plotting_library_id,
     library_key=_library_key,
+    niche_spatial_conn_key=_niche_spatial_conn_key,
+    niche_mask=_niche_mask,
+    niche_min_niche_size=_niche_min_niche_size,
+    niche_inplace=_niche_inplace,
+    niche_common_params=_niche_common_params,
     sdata_params=_sdata_params,
     graph_common_params=_graph_common_params,
     n_jobs_libraries=_n_jobs_libraries,

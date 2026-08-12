@@ -12,7 +12,13 @@ from spatialdata.datasets import blobs
 
 from squidpy._constants._constants import Transform
 from squidpy._constants._pkg_constants import Key
-from squidpy.gr import mask_graph, spatial_neighbors, spatial_neighbors_from_builder
+from squidpy.gr import (
+    mask_graph,
+    spatial_neighbors,
+    spatial_neighbors_delaunay,
+    spatial_neighbors_from_builder,
+    spatial_neighbors_radius,
+)
 from squidpy.gr.neighbors import (
     DelaunayBuilder,
     GridBuilder,
@@ -276,6 +282,23 @@ class TestSpatialNeighbors:
 
         np.testing.assert_array_equal(scalar.connectivities.toarray(), interval.connectivities.toarray())
         np.testing.assert_allclose(scalar.distances.toarray(), interval.distances.toarray())
+
+    @pytest.mark.parametrize(
+        ("func", "radius", "expected"),
+        [
+            (spatial_neighbors_radius, 5.0, 5.0),
+            (spatial_neighbors_radius, (2.0, 4.0), [2.0, 4.0]),
+            (spatial_neighbors_delaunay, (2.0, 4.0), [2.0, 4.0]),
+            (spatial_neighbors_delaunay, 5.0, [0.0, 5.0]),
+        ],
+        ids=["radius_scalar", "radius_interval", "delaunay_interval", "delaunay_scalar"],
+    )
+    def test_radius_stored_in_uns_is_writable(self, non_visium_adata: AnnData, tmp_path, func, radius, expected):
+        func(non_visium_adata, radius=radius)
+
+        # an interval radius is stored as a list: `anndata` cannot write tuples
+        assert non_visium_adata.uns[Key.uns.spatial_neighs()]["params"]["radius"] == expected
+        non_visium_adata.write_h5ad(tmp_path / "adata.h5ad")
 
     def test_delaunay_mode_warns_on_n_neighs(self, non_visium_adata: AnnData):
         with pytest.warns(FutureWarning, match=r"Parameter `n_neighs` is ignored when `delaunay=True`"):

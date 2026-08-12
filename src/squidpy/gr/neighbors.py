@@ -9,7 +9,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 import numpy as np
 from fast_array_utils import stats as fau_stats
@@ -45,12 +45,13 @@ __all__ = [
 ]
 
 
-CoordT = TypeVar("CoordT")
+# Kept module-level (not folded into GraphBuilder's params): types the public
+# `GraphPostprocessor` alias and is itself a public `squidpy.gr` export.
 GraphMatrixT = TypeVar("GraphMatrixT")
 GraphPostprocessor = Callable[[GraphMatrixT, GraphMatrixT], tuple[GraphMatrixT, GraphMatrixT]]
 
 
-class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
+class GraphBuilder[CoordT, GraphMatrixT](ABC):
     """Base class for spatial graph construction strategies.
 
     Custom builders must implement :meth:`build_graph`. Overriding
@@ -87,7 +88,10 @@ class GraphBuilder(ABC, Generic[CoordT, GraphMatrixT]):
 
     @abstractmethod
     def uns_params(self) -> dict[str, Any]:
-        """Parameters stored in :attr:`anndata.AnnData.uns` after graph construction."""
+        """Parameters stored in :attr:`anndata.AnnData.uns` after graph construction.
+
+        Values must be writable by :mod:`anndata`, e.g. a :class:`list`, not a :class:`tuple`.
+        """
 
     def combine(
         self,
@@ -233,7 +237,8 @@ class RadiusBuilder(GraphBuilderCSR):
             percentile=percentile,
             postprocessors=postprocessors,
         )
-        self.radius = radius
+        # Store intervals as a list: :mod:`anndata` cannot write tuples to ``uns``.
+        self.radius = list(radius) if isinstance(radius, tuple) else radius
 
     def uns_params(self) -> dict[str, Any]:
         return {
@@ -302,7 +307,8 @@ class DelaunayBuilder(GraphBuilderCSR):
             percentile=percentile,
             postprocessors=postprocessors,
         )
-        self.radius = radius
+        # Store intervals as a list: :mod:`anndata` cannot write tuples to ``uns``.
+        self.radius = list(radius) if isinstance(radius, tuple) else radius
 
     def uns_params(self) -> dict[str, Any]:
         return {

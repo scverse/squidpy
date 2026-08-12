@@ -3,8 +3,11 @@ changelog:
     labels:
       - release-ignore
     authors:
-      - pre-commit-ci
+      - "pre-commit-ci[bot]"
   categories:
+    - title: ⚠️ Breaking Changes
+      labels:
+        - "release-breaking"
     - title: Added
       labels:
         - "release-added"

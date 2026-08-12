@@ -25,7 +25,7 @@ from shapely import Point, Polygon
 
 import squidpy as sq
 from squidpy._constants._pkg_constants import Key
-from squidpy.gr import spatial_neighbors
+from squidpy.gr import spatial_neighbors_grid
 from squidpy.im._container import ImageContainer
 
 HERE: Path = Path(__file__).parent
@@ -59,7 +59,7 @@ def adata_hne() -> AnnData:
 @pytest.fixture(scope="session")
 def adata_hne_concat() -> AnnData:
     adata1 = sq.datasets.visium_hne_adata_crop()
-    spatial_neighbors(adata1)
+    spatial_neighbors_grid(adata1)
     adata2 = adata1[:100, :].copy()
     adata2.uns["spatial"] = {}
     adata2.uns["spatial"]["V2_Adult_Mouse_Brain"] = adata1.uns["spatial"]["V1_Adult_Mouse_Brain"]
@@ -101,7 +101,7 @@ def nhood_data(adata: AnnData) -> AnnData:
     sc.pp.pca(adata)
     sc.pp.neighbors(adata)
     sc.tl.leiden(adata, key_added="leiden")
-    sq.gr.spatial_neighbors(adata)
+    sq.gr.spatial_neighbors_grid(adata)
 
     return adata
 
@@ -112,8 +112,65 @@ def dummy_adata() -> AnnData:
     adata = AnnData(r.rand(200, 100), obs={"cluster": r.randint(0, 3, 200)})
 
     adata.obsm[Key.obsm.spatial] = np.stack([r.randint(0, 500, 200), r.randint(0, 500, 200)], axis=1)
-    sq.gr.spatial_neighbors(adata, spatial_key=Key.obsm.spatial, n_rings=2)
+    sq.gr.spatial_neighbors_knn(adata, spatial_key=Key.obsm.spatial)
 
+    return adata
+
+
+@pytest.fixture()
+def dummy_adata2() -> AnnData:
+    r = np.random.RandomState(100)
+    adata = AnnData(r.rand(10, 100), obs={"celltype": r.choice(["foo", "bar", "baz"], size=10)})
+    adata.obs.index = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
+
+    # Spatial layout of the 10 data points in the grid:
+    #
+    #   Y ▲
+    #     │
+    #   5 │       a    b         c    Points: (2,5), (3,5), (5,5)
+    #     │
+    #   4 │  d              e         Points: (1,4), (4,4)
+    #     │
+    #   3 │            f         g    Points: (3,3), (5,3)
+    #     │
+    #   2 │                 h         Points: (4,2)
+    #     │
+    #   1 │  i                   j    Points: (1,1), (5,1)
+    #     │
+    #     └─────────────────────────►
+    #        1    2    3    4    5   X
+    #
+    #
+    # celltypes-
+    # a      bar
+    # b      baz
+    # c      foo
+    # d      foo
+    # e      foo
+    # f      baz
+    # g      baz
+    # h      baz
+    # i      bar
+    # j      baz
+
+    adata.obsm["spatial"] = np.array(
+        [
+            [2, 5],
+            [3, 5],
+            [5, 5],
+            [1, 4],
+            [4, 4],
+            [3, 3],
+            [5, 3],
+            [4, 2],
+            [1, 1],
+            [5, 1],
+        ]
+    )
+
+    # using a radius of 1.5 will lead to, say e being a neighbor of b,c,f,g but not h. So all side-adjacent and diagonal-adjacent
+    # locations will be neighbors
+    sq.gr.spatial_neighbors_radius(adata, radius=1.5)
     return adata
 
 
@@ -257,10 +314,17 @@ def complexes(adata: AnnData) -> Sequence[tuple[str, str]]:
 
 
 @pytest.fixture(scope="session")
-def ligrec_no_numba() -> Mapping[str, pd.DataFrame]:
-    with open("tests/_data/ligrec_no_numba.pickle", "rb") as fin:
-        data = pickle.load(fin)
-        return {"means": data[0], "pvalues": data[1], "metadata": data[2]}
+def ligrec_pvalues_reference() -> Mapping[str, pd.DataFrame]:
+    # means/pvalues are cluster-pair x gene-pair matrices with a MultiIndex on both
+    # axes, stored as an AnnData (X=pvalues, layers["means"]=means) with the index
+    # levels kept as obs/var columns.
+    adata = ad.read_h5ad("tests/_data/ligrec_pvalues_reference.h5ad")
+    index = pd.MultiIndex.from_frame(adata.obs[["source", "target"]])
+    columns = pd.MultiIndex.from_frame(adata.var[["cluster_1", "cluster_2"]])
+    return {
+        "means": pd.DataFrame(adata.layers["means"], index=index, columns=columns),
+        "pvalues": pd.DataFrame(adata.X, index=index, columns=columns),
+    }
 
 
 @pytest.fixture(scope="session")

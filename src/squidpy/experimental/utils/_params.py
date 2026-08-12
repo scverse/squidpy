@@ -8,12 +8,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import fields
-from typing import Any, TypeVar
-
-_T = TypeVar("_T")
+from typing import Any
 
 
-def resolve_params(value: _T | Mapping[str, Any] | None, cls: type[_T], *, label: str) -> _T:
+def resolve_params[T](value: T | Mapping[str, Any] | None, cls: type[T], *, label: str) -> T:
     """Normalise a params argument (``None`` / instance / ``Mapping``) to a ``cls`` instance.
 
     Parameters

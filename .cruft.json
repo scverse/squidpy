@@ -1,7 +1,7 @@
 {
   "template": "https://github.com/scverse/cookiecutter-scverse",
-  "commit": "d383d94fadff9e4e6fdb59d77c68cb900d7cedec",
-  "checkout": "v0.6.0",
+  "commit": "6518dfa1abde7379ea7255daf0ce09c23f2b4c94",
+  "checkout": "v0.8.0",
   "context": {
     "cookiecutter": {
       "project_name": "squidpy",
@@ -13,6 +13,7 @@
       "github_repo": "squidpy",
       "license": "BSD 3-Clause License",
       "ide_integration": true,
+      "issue_categorization": "",
       "_copy_without_render": [
         ".github/workflows/build.yaml",
         ".github/workflows/test.yaml",
@@ -36,7 +37,7 @@
         "trim_blocks": true
       },
       "_template": "https://github.com/scverse/cookiecutter-scverse",
-      "_commit": "d383d94fadff9e4e6fdb59d77c68cb900d7cedec"
+      "_commit": "6518dfa1abde7379ea7255daf0ce09c23f2b4c94"
     }
   },
   "directory": null

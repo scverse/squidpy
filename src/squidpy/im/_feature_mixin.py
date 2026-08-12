@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 import skimage.measure
@@ -15,8 +15,8 @@ from squidpy._utils import NDArrayA
 from squidpy._validators import assert_non_empty_sequence
 from squidpy.im._coords import _NULL_PADDING, CropCoords
 
-Feature_t: TypeAlias = dict[str, Any]
-Channel_t: TypeAlias = int | Sequence[int]
+type Feature_t = dict[str, Any]
+type Channel_t = int | Sequence[int]
 
 
 def _get_channels(xr_img: NDArrayA | xr.DataArray, channels: Channel_t | None) -> list[int]:

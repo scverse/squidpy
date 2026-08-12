@@ -21,7 +21,7 @@ maintainers = [
 authors = [
   { name = "scverse" },
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
@@ -31,7 +31,6 @@ classifiers = [
   "Operating System :: MacOS :: MacOS X",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
@@ -45,8 +44,10 @@ dynamic = [
 dependencies = [
   "aiohttp>=3.8.1",
   "anndata>=0.9",
+  "centrosome>=1.2.3",
+  "cp-measure>=0.1.19,<0.2",
   "cycler>=0.11",
-  "dask[array]>=2021.2",
+  "dask[array,distributed]>=2021.2",    # distributed is the only scheduler that forks for GIL-bound featurization
   "dask-image>=0.5",
   "docrep>=0.3.1",
   "fast-array-utils",
@@ -56,19 +57,24 @@ dependencies = [
   "matplotlib-scalebar>=0.8",
   "networkx>=2.6",
   "numba>=0.56.4",
+  "numba-progress>=1.1",
   "numpy>=1.23",
   "omnipath>=1.0.7",
   "pandas>=2.1",
   "pillow>=8",
   "pooch>=1.6",
   "pyyaml>=6",
+  "rustworkx>=0.18",
   "scanpy>=1.9.3",
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
-  "spatialdata>=0.7.2",  # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
-  "spatialdata-plot>=0.3.3",
+  # dataset registry + downloader now live in scverse-misc
+  "scverse-misc[datasets]>=0.1.1,<0.2",
+  "spatialdata>=0.7.2",                 # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
+  "spatialdata-plot>=0.4.1",
   "statsmodels>=0.12",
+  "threadpoolctl>=3",                   # clamp BLAS/OpenMP per worker in tiled featurization
   # https://github.com/scverse/squidpy/issues/526
   "tifffile!=2022.4.22",
   "tqdm>=4.50.2",
@@ -117,6 +123,7 @@ docs = [
   "ipywidgets>=8",
   "myst-nb>=0.17.1",
   "nbsphinx>=0.8.1",
+  "scverse-misc[sphinx]>=0.1.2,<0.2",
   "sphinx>=5.3",
   "sphinx-autodoc-annotation",
   "sphinx-autodoc-typehints>=1.10.3",
@@ -135,15 +142,15 @@ include-package-data = true
 [tool.setuptools_scm]
 
 [tool.hatch]
+version.source = "vcs"
+metadata.allow-direct-references = true
 build.hooks.vcs.version-file = "_version.py"
 build.targets.wheel.packages = [ "src/squidpy" ]
-metadata.allow-direct-references = true
-version.source = "vcs"
 
 [tool.pixi]
 workspace.channels = [ "conda-forge" ]
 workspace.platforms = [ "linux-64", "osx-arm64" ]
-dependencies.python = ">=3.11"
+dependencies.python = ">=3.12"
 pypi-dependencies.squidpy = { path = ".", editable = true }
 tasks.format = "ruff format ."
 tasks.kernel-install = 'python -m ipykernel install --user --name pixi-dev --display-name "squidpy (dev)"'
@@ -152,14 +159,14 @@ tasks.lint = "ruff check ."
 tasks.pre-commit = "pre-commit run"
 tasks.pre-commit-install = "pre-commit install"
 tasks.test = "pytest -v --color=yes --tb=short --durations=10"
-feature.py311.dependencies.python = "3.11.*"
-feature.py313.dependencies.python = "3.13.*"
-environments.default = { features = [ "py313" ], solve-group = "py313" }
-environments.dev-py311 = { features = [ "dev", "test", "py311" ], solve-group = "py311" }
-environments.dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
-environments.docs-py311 = { features = [ "docs", "py311" ], solve-group = "py311" }
-environments.docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
-environments.test-py313 = { features = [ "test", "py313" ], solve-group = "py313" }
+feature.py312.dependencies.python = "3.12.*"
+feature.py314.dependencies.python = "3.14.*"
+environments.default = { features = [ "py314" ], solve-group = "py314" }
+environments.dev-py312 = { features = [ "dev", "test", "py312" ], solve-group = "py312" }
+environments.dev-py314 = { features = [ "dev", "test", "py314" ], solve-group = "py314" }
+environments.docs-py312 = { features = [ "docs", "py312" ], solve-group = "py312" }
+environments.docs-py314 = { features = [ "docs", "py314" ], solve-group = "py314" }
+environments.test-py314 = { features = [ "test", "py314" ], solve-group = "py314" }
 
 [tool.ruff]
 line-length = 120
@@ -184,7 +191,6 @@ lint.select = [
   "UP",  # pyupgrade
   "W",   # pycodestyle
 ]
-# "squidpy/*.py"= ["RST303"]
 lint.ignore = [
   # B008 Do not perform function calls in argument defaults.
   "B008",
@@ -206,6 +212,15 @@ lint.ignore = [
   "E731",
   # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
   "E741",
+  # PEP 695 generics (`class C[T]` / `def f[T]`) -> deferred to a dedicated rewrite.
+  # `GraphMatrixT`/`CoordT` are a shared TypeVar pair: defined in `gr.neighbors`, used by a
+  # module-level `Callable` alias, imported by `gr._build`, and re-exported from the public
+  # `squidpy.gr` API. ruff cannot autofix the cross-module use (`SpatialNeighborsResult`, which
+  # imports the TypeVar) and its fix for the local use (`GraphBuilder`) leaves the still-required
+  # exported TypeVars in place, creating dual same-name definitions. Converting correctly means
+  # deciding whether to keep exporting `GraphMatrixT` -- a public-API change, not a version bump.
+  "UP046",
+  "UP047",
   ## Flake8 rules not supported by ruff:
   # RST201 Block quote ends without a blank line; unexpected unindent.
   # "RST201",
@@ -251,19 +266,17 @@ lint.unfixable = [
 # Disallow all relative imports.
 lint.flake8-tidy-imports.ban-relative-imports = "all"
 lint.isort.required-imports = [ "from __future__ import annotations" ]
+# "squidpy/*.py" = [ "RST303" ]
 
 [tool.pytest]
-strict = true
+addopts = [
+  "--ignore=docs",
+]
 filterwarnings = [
   "error::numba.NumbaPerformanceWarning",
   "ignore::UserWarning",
   "ignore::anndata.OldFormatWarning",
   "ignore:.*pkg_resources:DeprecationWarning",
-]
-python_files = [ "test_*.py" ]
-testpaths = [ "tests/" ]
-addopts = [
-  "--ignore=docs",
 ]
 markers = [
   "internet: tests that require internet",
@@ -272,6 +285,9 @@ markers = [
   "gpu: tests that require GPU",
   "array_api: tests that require array-api-compat",
 ]
+python_files = [ "test_*.py" ]
+strict = true
+testpaths = [ "tests/" ]
 
 [tool.coverage]
 run.branch = true

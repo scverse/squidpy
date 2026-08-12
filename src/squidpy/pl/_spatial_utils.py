@@ -6,7 +6,7 @@ from copy import copy
 from functools import partial
 from numbers import Number
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import dask.array as da
 import numpy as np
@@ -29,13 +29,12 @@ from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib_scalebar.scalebar import ScaleBar
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scanpy import settings as sc_settings
 from skimage.color import label2rgb
 from skimage.morphology import erosion, square
 from skimage.segmentation import find_boundaries
 from skimage.util import map_array
 
-from squidpy._compat import add_categorical_legend
+from squidpy._compat import add_categorical_legend, default_frameon, vector_friendly
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
@@ -44,15 +43,15 @@ from squidpy.im._coords import CropCoords
 from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
 
-_AvailShapes: TypeAlias = Literal["circle", "square", "hex"]
-Palette_t: TypeAlias = str | ListedColormap | None
-_Normalize: TypeAlias = Normalize | Sequence[Normalize]
-_SeqStr: TypeAlias = str | Sequence[str]
-_SeqFloat: TypeAlias = float | Sequence[float]
-_SeqArray: TypeAlias = NDArrayA | Sequence[NDArrayA]
-_CoordTuple: TypeAlias = tuple[int, int, int, int]
-_FontWeight: TypeAlias = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
-_FontSize: TypeAlias = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
+type _AvailShapes = Literal["circle", "square", "hex"]
+type Palette_t = str | ListedColormap | None
+type _Normalize = Normalize | Sequence[Normalize]
+type _SeqStr = str | Sequence[str]
+type _SeqFloat = float | Sequence[float]
+type _SeqArray = NDArrayA | Sequence[NDArrayA]
+type _CoordTuple = tuple[int, int, int, int]
+type _FontWeight = Literal["light", "normal", "medium", "semibold", "bold", "heavy", "black"]
+type _FontSize = Literal["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
 
 
 # named tuples
@@ -569,7 +568,7 @@ def _plot_edges(
         ax=ax,
         **kwargs,
     )
-    edge_collection.set_rasterized(sc_settings._vector_friendly)
+    edge_collection.set_rasterized(vector_friendly())
     ax.add_collection(edge_collection)
 
 
@@ -904,7 +903,7 @@ def _panel_grid(
 
 def _set_ax_title(fig_params: FigParams, count: int, value_to_plot: str | None = None) -> Axes:
     ax = fig_params.axs[count] if fig_params.axs is not None else fig_params.ax
-    if not (sc_settings._frameon if fig_params.frameon is None else fig_params.frameon):
+    if not (default_frameon() if fig_params.frameon is None else fig_params.frameon):
         ax.axis("off")
 
     if fig_params.title is None:
@@ -959,7 +958,7 @@ def _plot_scatter(
             coords[:, 1],
             s=outline_params.bg_size,
             c=outline_params.bg_color,
-            rasterized=sc_settings._vector_friendly,
+            rasterized=vector_friendly(),
             cmap=cmap_params.cmap,
             norm=norm,
             **kwargs,
@@ -970,7 +969,7 @@ def _plot_scatter(
             coords[:, 1],
             s=outline_params.gap_size,
             c=outline_params.gap_color,
-            rasterized=sc_settings._vector_friendly,
+            rasterized=vector_friendly(),
             cmap=cmap_params.cmap,
             norm=norm,
             **kwargs,
@@ -981,7 +980,7 @@ def _plot_scatter(
         coords[:, 1],
         c=np.array(color_vector),
         s=size,
-        rasterized=sc_settings._vector_friendly,
+        rasterized=vector_friendly(),
         cmap=cmap_params.cmap,
         norm=norm,
         **kwargs,
