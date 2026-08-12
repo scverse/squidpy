@@ -423,6 +423,28 @@ class TestWiredKwargs:
         assert isinstance(fig, Figure)
         plt.close(fig)
 
+    def test_use_raw_default_matches_legacy(self, adata_hne: AnnData) -> None:
+        """Default (use_raw=None) plots raw counts when adata.raw exists, like legacy;
+        use_raw=False plots .X. Guards against a silent value-source change under the flag."""
+        assert adata_hne.raw is not None
+        gene = adata_hne.var_names[0]
+
+        def _color_vmax(fig: Figure) -> float:
+            vs = [
+                coll.norm.vmax
+                for ax in fig.axes
+                for coll in ax.collections
+                if coll.norm is not None and coll.norm.vmax is not None
+            ]
+            return max(vs)
+
+        fig_default = _spatial_scatter_via_sdata_plot(adata_hne, color=gene, img=False)
+        fig_x = _spatial_scatter_via_sdata_plot(adata_hne, color=gene, img=False, use_raw=False)
+        # raw counts have a larger dynamic range than normalized .X for this gene
+        assert _color_vmax(fig_default) > _color_vmax(fig_x)
+        plt.close(fig_default)
+        plt.close(fig_x)
+
 
 class TestSpatialDataNativeInput:
     """M2/M3: render directly from a user's SpatialData, no AnnData shim."""

@@ -22,8 +22,15 @@ def _warn_anndata_input() -> None:
     warnings.warn(_ANNDATA_DEPRECATION, DeprecationWarning, stacklevel=3)
 
 
-def _resolve_use_raw(adata: AnnData, use_raw: bool | None) -> AnnData:
-    """Swap adata.X with adata.raw.X when use_raw=True, preserving obs/obsm/uns."""
+def _resolve_use_raw(adata: AnnData, use_raw: bool | None, layer: str | None = None) -> AnnData:
+    """Swap adata.X with adata.raw.X when use_raw resolves True, preserving obs/obsm/uns.
+
+    Matches legacy squidpy/scanpy semantics: ``use_raw=None`` resolves to True when no
+    layer is requested and ``adata.raw`` exists. Without this, flipping the delegation
+    flag would silently plot ``.X`` where the legacy path plotted raw counts.
+    """
+    if use_raw is None:
+        use_raw = layer is None and adata.raw is not None
     if not use_raw:
         return adata
     if adata.raw is None:
@@ -56,7 +63,7 @@ def _spatial_scatter_via_sdata_plot(
 
     _warn_anndata_input()
     intent = capture_scatter_intent(input_obj, **kwargs)
-    resolved_adata = _resolve_use_raw(input_obj, intent.data.use_raw)
+    resolved_adata = _resolve_use_raw(input_obj, intent.data.use_raw, intent.data.layer)
     sdata = _make_tmp_sdata(resolved_adata, intent)
     return _render_from_intent(sdata, intent)
 
@@ -82,7 +89,7 @@ def _spatial_segment_via_sdata_plot(
 
     _warn_anndata_input()
     intent = capture_segment_intent(input_obj, **kwargs)
-    resolved_adata = _resolve_use_raw(input_obj, intent.data.use_raw)
+    resolved_adata = _resolve_use_raw(input_obj, intent.data.use_raw, intent.data.layer)
     sdata = _make_tmp_sdata(resolved_adata, intent)
     return _render_from_intent(sdata, intent)
 
