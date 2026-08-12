@@ -92,7 +92,6 @@ class PanelIntent:
     element_name: str | None = None
     image_name: str | None = None
     table_name: str | None = None
-    graph_element_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

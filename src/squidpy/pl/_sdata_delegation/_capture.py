@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import warnings
 from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any
@@ -72,19 +73,26 @@ def _assign_names(
     kind: ElementKind,
     *,
     needs_image: bool,
-    needs_graph: bool,
 ) -> tuple[PanelIntent, ...]:
-    """Resolve and attach the SpatialData element names each panel renders."""
-    return tuple(
-        replace(
-            p,
-            element_name=source.element_name(p.library_id, kind),
-            image_name=source.image_name(p.library_id) if needs_image else None,
-            table_name=source.table_name(p.library_id),
-            graph_element_name=source.element_name(p.library_id, kind) if needs_graph else None,
+    """Resolve and attach the SpatialData element names each panel renders.
+
+    Names depend only on ``library_id``, so resolve once per unique library and reuse
+    across that library's color panels (avoids re-running ``filter_by_coordinate_system``
+    for every (library x color) panel on SpatialData input).
+    """
+    resolved = {
+        lib: (
+            source.element_name(lib, kind),
+            source.image_name(lib) if needs_image else None,
+            source.table_name(lib),
         )
-        for p in panels
-    )
+        for lib in dict.fromkeys(p.library_id for p in panels)
+    }
+    out = []
+    for p in panels:
+        element_name, image_name, table_name = resolved[p.library_id]
+        out.append(replace(p, element_name=element_name, image_name=image_name, table_name=table_name))
+    return tuple(out)
 
 
 def _normalize_color(color: str | Sequence[str] | None) -> tuple[str, ...]:
@@ -101,6 +109,20 @@ def _normalize_groups(groups: str | Sequence[str] | None) -> tuple[str, ...] | N
     if isinstance(groups, str):
         return (groups,)
     return tuple(groups)
+
+
+def _downgrade_on_data_legend(legend_loc: str | None) -> str | None:
+    """Warn and fall back to the default for the unsupported ``legend_loc='on data'``."""
+    if legend_loc == "on data":
+        warnings.warn(
+            "legend_loc='on data' is deprecated for spatial plots: known to be unreliable "
+            "in coordinate space and slated for removal. Use the default 'right margin' or pass "
+            "legend_loc=None to hide.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return "right margin"
+    return legend_loc
 
 
 def _normalize_axis_label(axis_label: str | Sequence[str] | None) -> tuple[str, ...] | None:
@@ -157,8 +179,6 @@ def _resolve_palette(palette: Any) -> tuple[Any, Any, Any, tuple[str, ...] | Non
     if isinstance(palette, Colormap):
         return None, palette, None, None
     if isinstance(palette, (list, tuple)):
-        if all(isinstance(p, str) and is_color_like(p) for p in palette):
-            return None, ListedColormap(list(palette)), None, None
         return None, ListedColormap(list(palette)), None, None
     if isinstance(palette, str) and is_color_like(palette):
         return None, None, palette, None
@@ -314,17 +334,7 @@ def capture_scatter_intent(
     if unsupported:
         offenders = sorted(unsupported)
         raise NotImplementedError(f"spatial_scatter via spatialdata-plot does not yet support kwargs: {offenders}.")
-    if legend_loc == "on data":
-        import warnings
-
-        warnings.warn(
-            "legend_loc='on data' is deprecated for spatial plots: known to be unreliable "
-            "in coordinate space and slated for removal. Use the default 'right margin' or pass "
-            "legend_loc=None to hide.",
-            DeprecationWarning,
-            stacklevel=3,
-        )
-        legend_loc = "right margin"
+    legend_loc = _downgrade_on_data_legend(legend_loc)
 
     if shape is not None and shape not in {"circle", "hex", "square", "visium_hex"}:
         raise ValueError(f"shape must be None or one of {{'circle','hex','square','visium_hex'}}; got {shape!r}.")
@@ -387,7 +397,6 @@ def capture_scatter_intent(
         source,
         data_intent.element_kind,
         needs_image=data_intent.needs_image,
-        needs_graph=data_intent.needs_graph,
     )
 
     render = RenderIntent(
@@ -510,17 +519,7 @@ def capture_segment_intent(
     if unsupported:
         offenders = sorted(unsupported)
         raise NotImplementedError(f"spatial_segment via spatialdata-plot does not yet support kwargs: {offenders}.")
-    if legend_loc == "on data":
-        import warnings
-
-        warnings.warn(
-            "legend_loc='on data' is deprecated for spatial plots: known to be unreliable "
-            "in coordinate space and slated for removal. Use the default 'right margin' or pass "
-            "legend_loc=None to hide.",
-            DeprecationWarning,
-            stacklevel=3,
-        )
-        legend_loc = "right margin"
+    legend_loc = _downgrade_on_data_legend(legend_loc)
 
     if seg_contourpx == 1:
         raise ValueError("seg_contourpx=1 is rejected by spatialdata-plot v0.3.4 (PR #645). Use >= 2 or None.")
@@ -581,7 +580,6 @@ def capture_segment_intent(
         source,
         data_intent.element_kind,
         needs_image=data_intent.needs_image,
-        needs_graph=data_intent.needs_graph,
     )
 
     render = RenderIntent(

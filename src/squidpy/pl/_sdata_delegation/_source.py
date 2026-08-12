@@ -18,8 +18,6 @@ from squidpy._constants._pkg_constants import Key
 from ._adapter import _image_name, _labels_name, _points_name, _shapes_name, _table_name
 from ._intent import ElementKind
 
-_ELEMENT_CONTAINER: dict[ElementKind, str] = {"shapes": "shapes", "labels": "labels", "points": "points"}
-
 
 class _Source(Protocol):
     def library_ids(self, library_key: str | None, library_id: object) -> tuple[str, ...]: ...
@@ -118,7 +116,9 @@ class _SpatialDataSource:
         )
 
     def element_name(self, library_id: str, kind: ElementKind) -> str:
-        name = self._resolve(library_id, _ELEMENT_CONTAINER[kind], required=True)
+        # ElementKind values ("shapes"/"labels"/"points") are exactly the SpatialData
+        # element-container attribute names.
+        name = self._resolve(library_id, kind, required=True)
         assert name is not None  # required=True guarantees non-None
         return name
 

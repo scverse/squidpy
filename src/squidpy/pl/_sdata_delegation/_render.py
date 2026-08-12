@@ -82,7 +82,7 @@ def _draw_panel(chain: SpatialData, panel: PanelIntent, intent: Intent) -> Spati
     kind = intent.data.element_kind
 
     if intent.data.needs_graph and intent.data.graph_layer is not None:
-        element_name = panel.graph_element_name
+        element_name = panel.element_name
         unknown = set(intent.render.edges_kwargs) - _ALLOWED_EDGE_KWARGS
         if unknown:
             raise NotImplementedError(
