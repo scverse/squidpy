@@ -294,6 +294,7 @@ def capture_scatter_intent(
     ax: Any = None,
     save: str | None = None,
     return_ax: bool = False,
+    scale_factor: float | None = None,
     shapes_layer: str | None = None,
     points_layer: str | None = None,
     image_layer: str | None = None,
@@ -302,9 +303,13 @@ def capture_scatter_intent(
 ) -> Intent:
     """Capture squidpy spatial_scatter kwargs into an Intent.
 
-    Covers Paths 1+2 plus the stress-test parity surface. Kwargs still outside
-    scope (connectivity_key/edges, legend_loc='on data', spatial_key override)
-    raise NotImplementedError.
+    Accepts AnnData or SpatialData. Unknown kwargs raise NotImplementedError;
+    ``legend_loc='on data'`` emits a DeprecationWarning and falls back to the
+    default. ``spatial_key`` and ``connectivity_key`` are supported.
+
+    On SpatialData input, ``shapes_layer`` / ``points_layer`` / ``image_layer`` /
+    ``table`` disambiguate which element to render when a coordinate system holds
+    more than one candidate (they are ignored for AnnData input).
     """
     if unsupported:
         offenders = sorted(unsupported)
@@ -369,6 +374,7 @@ def capture_scatter_intent(
         alt_var=alt_var,
         size_key=size_key,
         graph_layer=connectivity_key,
+        scale_factor=scale_factor,
     )
 
     resolved_norm = _build_norm(vmin=vmin, vmax=vmax, vcenter=vcenter, norm=norm)
@@ -488,6 +494,7 @@ def capture_segment_intent(
     ax: Any = None,
     save: str | None = None,
     return_ax: bool = False,
+    scale_factor: float | None = None,
     labels_layer: str | None = None,
     image_layer: str | None = None,
     table: str | None = None,
@@ -495,7 +502,10 @@ def capture_segment_intent(
 ) -> Intent:
     """Capture squidpy spatial_segment kwargs into an Intent.
 
-    Routes through sdata-plot's render_labels at execution time.
+    Accepts AnnData or SpatialData; routes through sdata-plot's render_labels at
+    execution time. On SpatialData input, ``labels_layer`` / ``image_layer`` /
+    ``table`` disambiguate the element to render when a coordinate system holds
+    more than one candidate (ignored for AnnData input).
     """
     if unsupported:
         offenders = sorted(unsupported)
@@ -557,6 +567,7 @@ def capture_segment_intent(
         layer=layer,
         alt_var=alt_var,
         seg_cell_id=seg_cell_id,
+        scale_factor=scale_factor,
     )
 
     resolved_norm = _build_norm(vmin=vmin, vmax=vmax, vcenter=vcenter, norm=norm)

@@ -113,7 +113,12 @@ def _make_tmp_sdata(adata: AnnData, intent: Intent) -> SpatialData:
         try:
             spatial_meta = adata.uns[Key.uns.spatial][lib]
         except KeyError as e:
-            raise KeyError(f"Library {lib!r} not found in adata.uns[{Key.uns.spatial!r}].") from e
+            # ponytail: the AnnData shim only understands the Visium uns[spatial] layout.
+            raise KeyError(
+                f"Library {lib!r} not found in adata.uns[{Key.uns.spatial!r}]. The AnnData "
+                "shim only supports the Visium-style uns[spatial] layout; pass a SpatialData "
+                "object for other layouts."
+            ) from e
 
         if kind == "shapes":
             diameter = Key.uns.spot_diameter(adata, Key.uns.spatial, lib, spot_diameter_key=size_key)
@@ -137,8 +142,11 @@ def _make_tmp_sdata(adata: AnnData, intent: Intent) -> SpatialData:
             labels[region_name] = element
 
         if intent.data.needs_image and img_res_key is not None:
-            scalef_lookup = f"tissue_{img_res_key}_scalef"
-            scalef = float(spatial_meta["scalefactors"].get(scalef_lookup, 1.0))
+            if intent.data.scale_factor is not None:
+                scalef = float(intent.data.scale_factor)
+            else:
+                scalef_lookup = f"tissue_{img_res_key}_scalef"
+                scalef = float(spatial_meta["scalefactors"].get(scalef_lookup, 1.0))
             images[_image_name(lib)] = _build_image(spatial_meta["images"][img_res_key], scalef, lib)
 
         adata_sub.obs[_REGION_KEY] = pd.Categorical([region_name] * adata_sub.n_obs)

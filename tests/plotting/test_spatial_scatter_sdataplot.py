@@ -415,6 +415,14 @@ class TestWiredKwargs:
         assert isinstance(fig, Figure)
         plt.close(fig)
 
+    def test_scale_factor_accepted_and_stored(self, adata_hne_with_cluster: AnnData) -> None:
+        # previously rejected via **unsupported; now an image-scalef override (V1)
+        intent = capture_scatter_intent(adata_hne_with_cluster, color="cluster_path1", scale_factor=2.0)
+        assert intent.data.scale_factor == 2.0
+        fig = _spatial_scatter_via_sdata_plot(adata_hne_with_cluster, color="cluster_path1", scale_factor=2.0)
+        assert isinstance(fig, Figure)
+        plt.close(fig)
+
 
 class TestSpatialDataNativeInput:
     """M2/M3: render directly from a user's SpatialData, no AnnData shim."""
@@ -505,4 +513,30 @@ class TestSpatialDataNativeInput:
     def test_anndata_input_deprecated(self, adata_hne_with_cluster: AnnData) -> None:
         with pytest.warns(DeprecationWarning, match="deprecated"):
             fig = _spatial_scatter_via_sdata_plot(adata_hne_with_cluster, color="cluster_path1")
+        plt.close(fig)
+
+    @pytest.mark.parametrize("use_sdata", [False, True])
+    def test_render_parametrized_over_input_type(
+        self, use_sdata: bool, adata_hne_with_cluster: AnnData, sdata_visium_like
+    ) -> None:
+        """Both input types share a categorical-render assertion (W4.3)."""
+        if use_sdata:
+            fig = _spatial_scatter_via_sdata_plot(sdata_visium_like, color="ct", library_id="lib1")
+        else:
+            with pytest.warns(DeprecationWarning):
+                fig = _spatial_scatter_via_sdata_plot(adata_hne_with_cluster, color="cluster_path1")
+        assert isinstance(fig, Figure)
+        plt.close(fig)
+
+
+class TestPublicAPIFlag:
+    """The SQUIDPY_USE_SDATAPLOT flag routes the public sq.pl entrypoint through delegation."""
+
+    def test_public_spatial_scatter_routes_and_warns(self, adata_hne_with_cluster: AnnData, monkeypatch) -> None:
+        import squidpy as sq
+
+        monkeypatch.setenv("SQUIDPY_USE_SDATAPLOT", "1")
+        with pytest.warns(DeprecationWarning, match="deprecated"):
+            fig = sq.pl.spatial_scatter(adata_hne_with_cluster, color="cluster_path1")
+        assert isinstance(fig, Figure)
         plt.close(fig)

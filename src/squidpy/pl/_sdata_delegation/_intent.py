@@ -23,6 +23,9 @@ class DataIntent:
     size_key: str | None = None
     seg_cell_id: str | None = None
     graph_layer: str | None = None
+    # Manual override of the image scale factor for the AnnData shim path; None means
+    # derive from uns[spatial][lib]['scalefactors']. Ignored on SpatialData input.
+    scale_factor: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
