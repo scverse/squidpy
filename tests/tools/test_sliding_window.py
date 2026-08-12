@@ -110,10 +110,14 @@ class TestSlidingWindow:
         adata_squaregrid: AnnData,
     ):
         with pytest.raises(ValueError, match="Window size must be larger than 0."):
-            sliding_window(adata_squaregrid, window_size=-10, overlap=0, coord_columns=("globalX", "globalY"), copy=True)
+            sliding_window(
+                adata_squaregrid, window_size=-10, overlap=0, coord_columns=("globalX", "globalY"), copy=True
+            )
 
         with pytest.raises(ValueError, match="Overlap must be non-negative."):
-            sliding_window(adata_squaregrid, window_size=10, overlap=-10, coord_columns=("globalX", "globalY"), copy=True)
+            sliding_window(
+                adata_squaregrid, window_size=10, overlap=-10, coord_columns=("globalX", "globalY"), copy=True
+            )
 
         with pytest.raises(ValueError, match="`max_nr_cells` must be set when method='split'."):
             sliding_window(adata_squaregrid, method="split", coord_columns=("globalX", "globalY"), copy=True)
@@ -146,7 +150,9 @@ class TestSlidingWindow:
         with pytest.warns(FutureWarning, match="drop_partial_windows"):
             deprecated = sliding_window(adata, window_size=100, overlap=0, drop_partial_windows=True, copy=True)
         current = sliding_window(adata, window_size=100, overlap=0, partial_windows="drop", copy=True)
-        assert deprecated["sliding_window_assignment"].astype(str).equals(current["sliding_window_assignment"].astype(str))
+        assert (
+            deprecated["sliding_window_assignment"].astype(str).equals(current["sliding_window_assignment"].astype(str))
+        )
         with pytest.raises(ValueError, match="not both"):
             sliding_window(adata, drop_partial_windows=True, partial_windows="drop", copy=True)
 
