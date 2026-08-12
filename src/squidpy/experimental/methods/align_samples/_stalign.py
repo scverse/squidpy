@@ -71,7 +71,7 @@ class StalignSolverKwargs(TypedDict, total=False):
 
 
 class StalignObsSolverKwargs(StalignSolverKwargs, total=False):
-    """:class:`StalignSolverKwargs` plus the point-cloud rasterization knobs.
+    """:class:`~squidpy.experimental.methods.StalignSolverKwargs` plus the point-cloud rasterization knobs.
 
     - ``dx`` -- grid spacing of the density rasters (default 30).
     - ``blur`` -- Gaussian blur scale(s) applied to the rasters (default (2, 1, 0.5)).

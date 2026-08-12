@@ -155,6 +155,14 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
 
     experimental.methods.StalignResult
     experimental.methods.AffineFitResult
+```
+
+```{eval-rst}
+.. currentmodule:: squidpy
+.. autosummary::
+    :toctree: api
+    :template: typeddict.rst
+
     experimental.methods.StalignSolverKwargs
     experimental.methods.StalignObsSolverKwargs
 ```
@@ -162,6 +170,7 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
 ## Experimental
 ```{eval-rst}
 .. module:: squidpy.experimental
+.. module:: squidpy.experimental.tl
 .. currentmodule:: squidpy
 .. autosummary::
     :toctree: api
