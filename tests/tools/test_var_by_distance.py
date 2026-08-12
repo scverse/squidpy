@@ -70,9 +70,7 @@ class TestVarDist:
         normalization would leave the slide with the smaller maximum below 1.
         """
         cluster_key, library_key, anchor = "Cluster", "point", "Endothelial"
-        df = var_by_distance(
-            adata_mibitof, cluster_key=cluster_key, groups=anchor, library_key=library_key, copy=True
-        )
+        df = var_by_distance(adata_mibitof, cluster_key=cluster_key, groups=anchor, library_key=library_key, copy=True)
 
         per_slide_max = df.groupby(library_key, observed=True)[anchor].max().dropna()
         assert len(per_slide_max) > 1  # more than one slide contributes
