@@ -332,3 +332,85 @@ class TestPath3Segmentation:
         fig = _spatial_segment_via_sdata_plot(a, seg_cell_id="cell_id", color="Cluster", seg_contourpx=3)
         assert isinstance(fig, Figure)
         plt.close(fig)
+
+
+class TestWiredKwargs:
+    """M1: kwargs previously captured-then-dropped now produce an observable effect."""
+
+    def _panel_ax(self, fig: Figure):
+        return next(ax for ax in fig.axes if ax.get_subplotspec() is not None)
+
+    def test_save_writes_file(self, adata_hne_with_cluster: AnnData, tmp_path) -> None:
+        out = tmp_path / "scatter.png"
+        fig = _spatial_scatter_via_sdata_plot(adata_hne_with_cluster, color="cluster_path1", save=str(out))
+        assert out.exists() and out.stat().st_size > 0
+        plt.close(fig)
+
+    def test_colorbar_toggle(self, adata_hne: AnnData) -> None:
+        gene = adata_hne.var_names[0]
+        fig_on = _spatial_scatter_via_sdata_plot(adata_hne, color=gene, colorbar=True)
+        fig_off = _spatial_scatter_via_sdata_plot(adata_hne, color=gene, colorbar=False)
+        # continuous color: colorbar=True adds a dedicated colorbar axes, False does not.
+        assert len(fig_on.axes) > len(fig_off.axes)
+        plt.close(fig_on)
+        plt.close(fig_off)
+
+    def test_legend_toggle(self, adata_hne_with_cluster: AnnData) -> None:
+        fig_on = _spatial_scatter_via_sdata_plot(adata_hne_with_cluster, color="cluster_path1")
+        fig_off = _spatial_scatter_via_sdata_plot(adata_hne_with_cluster, color="cluster_path1", legend_loc=None)
+        assert self._panel_ax(fig_on).get_legend() is not None
+        assert self._panel_ax(fig_off).get_legend() is None
+        plt.close(fig_on)
+        plt.close(fig_off)
+
+    def test_axis_label_sets_labels(self, adata_hne_with_cluster: AnnData) -> None:
+        fig = _spatial_scatter_via_sdata_plot(adata_hne_with_cluster, color="cluster_path1", axis_label=["myX", "myY"])
+        ax = self._panel_ax(fig)
+        assert ax.get_xlabel() == "myX"
+        assert ax.get_ylabel() == "myY"
+        plt.close(fig)
+
+    def test_img_channel_and_alpha_render(self, adata_hne_with_cluster: AnnData) -> None:
+        fig = _spatial_scatter_via_sdata_plot(
+            adata_hne_with_cluster, color="cluster_path1", img_channel=0, img_alpha=0.5
+        )
+        assert isinstance(fig, Figure)
+        plt.close(fig)
+
+    def test_edges_kwargs_valid(self, adata_hne: AnnData) -> None:
+        from squidpy.gr import spatial_neighbors
+
+        a = adata_hne.copy()
+        spatial_neighbors(a)
+        a.obs["cluster_path1"] = (a.obs["array_col"] > a.obs["array_col"].median()).astype(str).astype("category")
+        fig = _spatial_scatter_via_sdata_plot(
+            a,
+            color="cluster_path1",
+            connectivity_key="spatial_connectivities",
+            edges_kwargs={"edge_alpha": 0.5},
+            img=False,
+        )
+        assert isinstance(fig, Figure)
+        plt.close(fig)
+
+    def test_edges_kwargs_unknown_raises(self, adata_hne: AnnData) -> None:
+        from squidpy.gr import spatial_neighbors
+
+        a = adata_hne.copy()
+        spatial_neighbors(a)
+        a.obs["cluster_path1"] = (a.obs["array_col"] > a.obs["array_col"].median()).astype(str).astype("category")
+        with pytest.raises(NotImplementedError, match="edges_kwargs"):
+            _spatial_scatter_via_sdata_plot(
+                a,
+                color="cluster_path1",
+                connectivity_key="spatial_connectivities",
+                edges_kwargs={"bogus_key": 1},
+                img=False,
+            )
+
+    def test_wspace_hspace_accepted(self, adata_hne_with_cluster: AnnData) -> None:
+        fig = _spatial_scatter_via_sdata_plot(
+            adata_hne_with_cluster, color=["cluster_path1", "cluster_path1"], wspace=0.4, hspace=0.3
+        )
+        assert isinstance(fig, Figure)
+        plt.close(fig)

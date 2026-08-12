@@ -51,7 +51,7 @@ class LayoutIntent:
     ncols: int = 4
     library_first: bool = True
     wspace: float | None = None
-    hspace: float = 0.25
+    hspace: float | None = None
     figsize: tuple[float, float] | None = None
     dpi: int | None = None
     frameon: bool | None = None
@@ -70,6 +70,7 @@ class PostRenderIntent:
     legend_fontoutline: int | None = None
     legend_na: bool = True
     colorbar: bool = True
+    scalebar_params: dict[str, Any] | None = None
     save: str | None = None
 
 

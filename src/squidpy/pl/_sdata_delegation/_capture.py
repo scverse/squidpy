@@ -69,6 +69,15 @@ def _normalize_groups(groups: str | Sequence[str] | None) -> tuple[str, ...] | N
     return tuple(groups)
 
 
+def _normalize_axis_label(axis_label: str | Sequence[str] | None) -> tuple[str, ...] | None:
+    """Normalize axis_label to a (xlabel[, ylabel]) tuple; a bare str sets the x-axis only."""
+    if axis_label is None:
+        return None
+    if isinstance(axis_label, str):
+        return (axis_label,)
+    return tuple(axis_label)
+
+
 def _per_library(
     value: Any, library_ids: tuple[str, ...], name: str, *, ambiguous_tuple: bool = True
 ) -> tuple[Any, ...]:
@@ -245,6 +254,8 @@ def capture_scatter_intent(
     legend_na: bool = True,
     ncols: int = 4,
     library_first: bool = True,
+    wspace: float | None = None,
+    hspace: float | None = None,
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     fig: Any = None,
@@ -343,6 +354,8 @@ def capture_scatter_intent(
     layout = LayoutIntent(
         ncols=ncols,
         library_first=library_first,
+        wspace=wspace,
+        hspace=hspace,
         figsize=figsize,
         dpi=dpi,
         frameon=frameon,
@@ -351,7 +364,17 @@ def capture_scatter_intent(
         ax=ax_seq,
     )
 
-    post = PostRenderIntent()
+    post = PostRenderIntent(
+        axis_label=_normalize_axis_label(axis_label),
+        legend_loc=legend_loc,
+        legend_fontsize=legend_fontsize,
+        legend_fontweight=legend_fontweight,
+        legend_fontoutline=legend_fontoutline,
+        legend_na=legend_na,
+        colorbar=colorbar,
+        scalebar_params=scalebar_kwargs,
+        save=save,
+    )
 
     return Intent(
         mode="scatter",
@@ -406,6 +429,8 @@ def capture_segment_intent(
     legend_na: bool = True,
     ncols: int = 4,
     library_first: bool = True,
+    wspace: float | None = None,
+    hspace: float | None = None,
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     fig: Any = None,
@@ -495,6 +520,8 @@ def capture_segment_intent(
     layout = LayoutIntent(
         ncols=ncols,
         library_first=library_first,
+        wspace=wspace,
+        hspace=hspace,
         figsize=figsize,
         dpi=dpi,
         frameon=frameon,
@@ -503,7 +530,17 @@ def capture_segment_intent(
         ax=ax_seq,
     )
 
-    post = PostRenderIntent()
+    post = PostRenderIntent(
+        axis_label=_normalize_axis_label(axis_label),
+        legend_loc=legend_loc,
+        legend_fontsize=legend_fontsize,
+        legend_fontweight=legend_fontweight,
+        legend_fontoutline=legend_fontoutline,
+        legend_na=legend_na,
+        colorbar=colorbar,
+        scalebar_params=scalebar_kwargs,
+        save=save,
+    )
 
     return Intent(
         mode="segment",
