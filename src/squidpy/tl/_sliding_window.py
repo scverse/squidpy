@@ -55,6 +55,9 @@ def sliding_window(
         Size of each grid window (``method="grid"``). Inferred from the extent when ``None``.
     overlap: int
         Overlap between consecutive grid windows (0 = no overlap). Only used for ``method="grid"``.
+        A positive overlap produces one boolean column per window (an ``n_obs`` x ``n_windows`` table),
+        which can be memory-heavy for grids with many windows; ``overlap=0`` yields a single categorical
+        column instead.
     coord_columns: tuple[str, str]
         Column names in ``adata.obs`` holding the ``(x, y)`` coordinates, e.g. ``('globalX', 'globalY')``.
     sliding_window_key: str
