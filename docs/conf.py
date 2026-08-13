@@ -139,6 +139,8 @@ nitpick_ignore = [
     ("py:data", "typing.Union"),
     # there seems to be a bug with autodoc for NamedTuple attributes
     ("py:class", "NDArray"),
+    # numpy.typing.NDArray canonicalizes to this private path, which has no doc target
+    ("py:class", "numpy._typing._array_like.NDArray"),
     ("py:class", "np.number"),
     ("py:class", "csr_matrix"),
     # no idea why those aren’t exported
