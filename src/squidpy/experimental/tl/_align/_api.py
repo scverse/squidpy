@@ -153,7 +153,7 @@ def align_stalign_obs(
     spatial_key: str | tuple[str, str] = "spatial",
     table_key: str | tuple[str | None, str | None] | None = None,
     key_added: str | None = None,
-    inplace: bool = True,
+    inplace: bool = False,
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignObsSolverKwargs],
@@ -178,8 +178,9 @@ def align_stalign_obs(
         (default) writes nothing and returns the fitted alignment instead -- fitting is
         expensive and usually worth inspecting before it overwrites anything.
     inplace
-        Whether to write into the query container itself. ``False`` writes into a copy
-        and returns it. Ignored when ``key_added`` is ``None``.
+        Whether to write into the query container itself. ``False`` (default) writes
+        into a copy and returns it, leaving the input untouched. Ignored when
+        ``key_added`` is ``None``.
     landmarks_ref, landmarks_query
         Optional paired ``(x, y)`` landmark arrays (matched by row order) used to
         initialise the affine.
@@ -191,8 +192,8 @@ def align_stalign_obs(
     Returns
     -------
     The fitted :class:`~squidpy.experimental.tl.StalignResult` when
-    ``key_added`` is ``None``; the modified copy when ``inplace=False``; otherwise
-    ``None``.
+    ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
+    ``inplace=True``.
     """
     ref_spatial, query_spatial = _resolve_pair(spatial_key, name="spatial_key")
     ref_table, query_table = (None, None) if table_key is None else _resolve_pair(table_key, name="table_key")
@@ -233,7 +234,7 @@ def align_stalign_image(
     *,
     image_key: str | tuple[str, str],
     key_added: str | None = None,
-    inplace: bool = True,
+    inplace: bool = False,
     ref_scale: tuple[float, float] = (1.0, 1.0),
     query_scale: tuple[float, float] = (1.0, 1.0),
     ref_axes: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
@@ -257,8 +258,9 @@ def align_stalign_image(
         new element. ``None`` (default) writes nothing and returns the fitted
         alignment instead.
     inplace
-        Whether to write into ``sdata_query`` itself. ``False`` writes into a copy and
-        returns it. Ignored when ``key_added`` is ``None``.
+        Whether to write into ``sdata_query`` itself. ``False`` (default) writes into a
+        copy and returns it, leaving the input untouched. Ignored when ``key_added`` is
+        ``None``.
     ref_scale, query_scale
         Physical size of one pixel as ``(y, x)``; pass these when the two images have
         different resolutions.
@@ -273,8 +275,8 @@ def align_stalign_image(
     Returns
     -------
     The fitted :class:`~squidpy.experimental.tl.StalignResult` when
-    ``key_added`` is ``None``; the modified copy when ``inplace=False``; otherwise
-    ``None``.
+    ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
+    ``inplace=True``.
     """
     ref_image, query_image = _resolve_pair(image_key, name="image_key")
     query_container = _query_of(
@@ -312,7 +314,7 @@ def align_landmarks(
     spatial_key: str | None = None,
     key_added: str | None = None,
     target_coordinate_system: str | None = None,
-    inplace: bool = True,
+    inplace: bool = False,
 ) -> AffineFitResult | AnnData | SpatialData | None:
     """Align a query sample onto a reference from paired landmarks (closed-form affine).
 
@@ -351,15 +353,15 @@ def align_landmarks(
         landmarks to come from shapes elements, and refuses when the reference sits in
         the same coordinate system of the same object (it would be dragged along).
     inplace
-        Whether to write into the query container itself. ``False`` writes into a copy
-        and returns it. Ignored when neither ``key_added`` nor
-        ``target_coordinate_system`` is given.
+        Whether to write into the query container itself. ``False`` (default) writes
+        into a copy and returns it, leaving the input untouched. Ignored when neither
+        ``key_added`` nor ``target_coordinate_system`` is given.
 
     Returns
     -------
     The fitted :class:`~squidpy.experimental.tl.AffineFitResult`
-    when neither ``key_added`` nor ``target_coordinate_system`` is given; the modified
-    copy when ``inplace=False``; otherwise ``None``.
+    when neither ``key_added`` nor ``target_coordinate_system`` is given; otherwise
+    the modified copy, or ``None`` when ``inplace=True``.
     """
     if fit not in {"similarity", "affine"}:
         raise ValueError(f"Unknown `fit={fit!r}`. Expected one of affine, similarity.")

@@ -76,25 +76,25 @@ def test_alignment_types_are_reachable_from_the_public_module() -> None:
 # --- writing ---------------------------------------------------------------------------
 
 
-def test_key_added_writes_in_place() -> None:
+def test_key_added_returns_a_copy_by_default() -> None:
     ref, query = _adata(), _adata()
-    assert align_stalign_obs(ref, query, key_added="aligned", **_TINY) is None
-    assert query.obsm["aligned"].shape == query.obsm["spatial"].shape
-
-
-def test_not_inplace_leaves_original_untouched() -> None:
-    ref, query = _adata(), _adata()
-    out = align_stalign_obs(ref, query, key_added="aligned", inplace=False, **_TINY)
+    out = align_stalign_obs(ref, query, key_added="aligned", **_TINY)
     assert isinstance(out, AnnData) and out is not query
     assert "aligned" in out.obsm
     assert "aligned" not in query.obsm
+
+
+def test_inplace_writes_into_the_query_and_returns_none() -> None:
+    ref, query = _adata(), _adata()
+    assert align_stalign_obs(ref, query, key_added="aligned", inplace=True, **_TINY) is None
+    assert query.obsm["aligned"].shape == query.obsm["spatial"].shape
 
 
 def test_key_added_may_overwrite_spatial_key() -> None:
     """``key_added`` equal to ``spatial_key`` is allowed -- destructive, but explicitly asked for."""
     ref, query = _adata(), _adata()
     original = query.obsm["spatial"].copy()
-    align_stalign_obs(ref, query, key_added="spatial", **_TINY)
+    align_stalign_obs(ref, query, key_added="spatial", inplace=True, **_TINY)
     assert list(query.obsm) == ["spatial"]
     assert not np.array_equal(query.obsm["spatial"], original)
 
@@ -117,7 +117,7 @@ def test_sdata_pair_of_tables() -> None:
 
 def test_sdata_writes_into_the_query_table_only() -> None:
     sdata = _sdata_tables(ref=_adata(), query=_adata())
-    align_stalign_obs(sdata, table_key=("ref", "query"), key_added="aligned", **_TINY)
+    align_stalign_obs(sdata, table_key=("ref", "query"), key_added="aligned", inplace=True, **_TINY)
     assert "aligned" in sdata.tables["query"].obsm
     assert "aligned" not in sdata.tables["ref"].obsm
 
@@ -126,7 +126,7 @@ def test_sdata_not_inplace_leaves_original_untouched() -> None:
     sd = pytest.importorskip("spatialdata")
 
     sdata = _sdata_tables(ref=_adata(), query=_adata())
-    out = align_stalign_obs(sdata, table_key=("ref", "query"), key_added="aligned", inplace=False, **_TINY)
+    out = align_stalign_obs(sdata, table_key=("ref", "query"), key_added="aligned", **_TINY)
     assert isinstance(out, sd.SpatialData) and out is not sdata
     assert "aligned" in out.tables["query"].obsm
     assert "aligned" not in sdata.tables["query"].obsm
@@ -135,7 +135,7 @@ def test_sdata_not_inplace_leaves_original_untouched() -> None:
 def test_two_sdata_objects_share_one_table_key() -> None:
     ref_sdata = _sdata_tables(slice=_adata())
     query_sdata = _sdata_tables(slice=_adata())
-    align_stalign_obs(ref_sdata, query_sdata, table_key="slice", key_added="aligned", **_TINY)
+    align_stalign_obs(ref_sdata, query_sdata, table_key="slice", key_added="aligned", inplace=True, **_TINY)
     assert "aligned" in query_sdata.tables["slice"].obsm
     assert "aligned" not in ref_sdata.tables["slice"].obsm
 
@@ -162,7 +162,7 @@ def test_images_key_added_materialises_a_warped_image() -> None:
     sdata = _sdata_images()
     expected = np.asarray(sdata.images["query"].data).shape
 
-    align_stalign_image(sdata, image_key=("ref", "query"), key_added="query_aligned", **_TINY_IMAGE)
+    align_stalign_image(sdata, image_key=("ref", "query"), key_added="query_aligned", inplace=True, **_TINY_IMAGE)
 
     assert "query_aligned" in sdata.images
     assert np.asarray(sdata.images["query_aligned"].data).shape == expected
@@ -172,7 +172,7 @@ def test_images_not_inplace_leaves_original_untouched() -> None:
     sd = pytest.importorskip("spatialdata")
 
     sdata = _sdata_images()
-    out = align_stalign_image(sdata, image_key=("ref", "query"), key_added="aligned", inplace=False, **_TINY_IMAGE)
+    out = align_stalign_image(sdata, image_key=("ref", "query"), key_added="aligned", **_TINY_IMAGE)
     assert isinstance(out, sd.SpatialData) and out is not sdata
     assert "aligned" in out.images
     assert "aligned" not in sdata.images
@@ -184,7 +184,7 @@ def test_image_alignment_recovers_a_known_shift() -> None:
     ref = np.asarray(sdata.images["ref"].data)
     query = np.asarray(sdata.images["query"].data)
 
-    align_stalign_image(sdata, image_key=("ref", "query"), key_added="query_aligned", a=4.0, nt=2)
+    align_stalign_image(sdata, image_key=("ref", "query"), key_added="query_aligned", inplace=True, a=4.0, nt=2)
     aligned = np.asarray(sdata.images["query_aligned"].data)
 
     before = float(np.sum((query - ref) ** 2))

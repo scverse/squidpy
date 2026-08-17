@@ -88,7 +88,7 @@ def test_unknown_fit_lists_available() -> None:
 def test_spatial_key_selects_what_moves() -> None:
     ref, query = _adata(_REF), _adata(_QUERY)
     out = align_landmarks(
-        ref, query, landmark_key="landmarks", fit="affine", spatial_key="spatial", key_added="aligned"
+        ref, query, landmark_key="landmarks", fit="affine", spatial_key="spatial", key_added="aligned", inplace=True
     )
 
     assert out is None
@@ -109,7 +109,7 @@ def test_spatial_key_without_key_added_is_rejected() -> None:
         align_landmarks(ref, query, landmark_key="landmarks", spatial_key="spatial")
 
 
-def test_not_inplace_leaves_original_untouched() -> None:
+def test_key_added_returns_a_copy_by_default() -> None:
     ref, query = _adata(_REF), _adata(_QUERY)
     out = align_landmarks(
         ref,
@@ -118,7 +118,6 @@ def test_not_inplace_leaves_original_untouched() -> None:
         fit="affine",
         spatial_key="spatial",
         key_added="aligned",
-        inplace=False,
     )
     assert isinstance(out, AnnData) and out is not query
     assert "aligned" in out.obsm
@@ -137,13 +136,15 @@ def test_registers_a_transformation_on_the_coordinate_system() -> None:
         shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")},
         points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Identity()})},
     )
-    out = align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), fit="affine", target_coordinate_system="ref_cs")
+    out = align_landmarks(
+        sdata, landmark_key=("lm_ref", "lm_query"), fit="affine", target_coordinate_system="ref_cs", inplace=True
+    )
 
     assert out is None
     assert "ref_cs" in get_transformation(sdata.points["pts"], get_all=True)
 
 
-def test_registering_not_inplace_leaves_original_untouched() -> None:
+def test_registering_returns_a_copy_by_default() -> None:
     sd = pytest.importorskip("spatialdata")
     from spatialdata.models import PointsModel
     from spatialdata.transformations import Identity, get_transformation
@@ -152,9 +153,7 @@ def test_registering_not_inplace_leaves_original_untouched() -> None:
         shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")},
         points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Identity()})},
     )
-    out = align_landmarks(
-        sdata, landmark_key=("lm_ref", "lm_query"), fit="affine", target_coordinate_system="ref_cs", inplace=False
-    )
+    out = align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), fit="affine", target_coordinate_system="ref_cs")
 
     assert out is not sdata
     assert "ref_cs" in get_transformation(out.points["pts"], get_all=True)
@@ -177,7 +176,9 @@ def test_registration_composes_with_an_existing_transform() -> None:
         shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY + offset, "query_cs")},
         points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Translation(offset, axes=("x", "y"))})},
     )
-    align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), fit="affine", target_coordinate_system="ref_cs")
+    align_landmarks(
+        sdata, landmark_key=("lm_ref", "lm_query"), fit="affine", target_coordinate_system="ref_cs", inplace=True
+    )
 
     matrix = get_transformation(sdata.points["pts"], to_coordinate_system="ref_cs").to_affine_matrix(
         input_axes=("x", "y"), output_axes=("x", "y")
@@ -190,7 +191,7 @@ def test_registered_result_is_stamped_with_the_coordinate_systems() -> None:
     sd = pytest.importorskip("spatialdata")
 
     sdata = sd.SpatialData(shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")})
-    align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), target_coordinate_system="aligned")
+    align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), target_coordinate_system="aligned", inplace=True)
     # write-back is exercised above; here we only care that no error is raised and the
     # transformation landed on the query landmarks element itself
     from spatialdata.transformations import get_transformation
@@ -219,7 +220,7 @@ def test_reference_in_another_object_is_fine() -> None:
     ref_sdata = sd.SpatialData(shapes={"lm": _shapes(_REF, "global")})
     query_sdata = sd.SpatialData(shapes={"lm": _shapes(_QUERY, "global")})
 
-    align_landmarks(ref_sdata, query_sdata, landmark_key="lm", target_coordinate_system="aligned")
+    align_landmarks(ref_sdata, query_sdata, landmark_key="lm", target_coordinate_system="aligned", inplace=True)
 
     assert "aligned" in get_transformation(query_sdata["lm"], get_all=True)
     assert "aligned" not in get_transformation(ref_sdata["lm"], get_all=True)
