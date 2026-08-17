@@ -12,6 +12,7 @@ import pytest
 from anndata import AnnData
 
 from squidpy.experimental.tl import AffineFitResult, align_landmarks
+from tests.experimental.conftest import make_adata
 
 # square corners; query = ref shifted by (5, 7) -> a pure translation both models recover
 _REF = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
@@ -19,11 +20,9 @@ _SHIFT = np.array([5.0, 7.0])
 _QUERY = _REF + _SHIFT
 
 
-def _adata(landmarks: np.ndarray, coords: np.ndarray, *, key: str = "spatial") -> AnnData:
-    adata = AnnData(np.zeros((coords.shape[0], 1)))
-    adata.obsm["landmarks"] = landmarks.copy()
-    adata.obsm[key] = coords.copy()
-    return adata
+def _adata(points: np.ndarray, *, key: str = "spatial") -> AnnData:
+    """The landmarks and the coordinates they move are the same points in these tests."""
+    return make_adata(points, key=key, landmarks=points)
 
 
 def _shapes(points: np.ndarray, cs: str = "global"):
@@ -43,7 +42,7 @@ def _shapes(points: np.ndarray, cs: str = "global"):
 
 @pytest.mark.parametrize("fit", ["similarity", "affine"])
 def test_returns_an_affine_result(fit: str) -> None:
-    ref, query = _adata(_REF, _REF), _adata(_QUERY, _QUERY)
+    ref, query = _adata(_REF), _adata(_QUERY)
     result = align_landmarks(ref, query, landmark_key="landmarks", fit=fit)
 
     assert isinstance(result, AffineFitResult)
@@ -63,7 +62,7 @@ def test_fit_defaults_to_similarity() -> None:
 def test_landmarks_need_not_live_in_a_shapes_element() -> None:
     """An ``obsm`` key works too -- requiring a SpatialData just to hold four points
     would tax AnnData users for nothing."""
-    ref, query = _adata(_REF, _REF), _adata(_QUERY, _QUERY)
+    ref, query = _adata(_REF), _adata(_QUERY)
     result = align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
     np.testing.assert_allclose(result.transform(_QUERY), _REF, atol=1e-6)
 
@@ -72,15 +71,13 @@ def test_table_key_reads_landmarks_from_a_table() -> None:
     sd = pytest.importorskip("spatialdata")
     from spatialdata.models import TableModel
 
-    sdata = sd.SpatialData(
-        tables={"r": TableModel.parse(_adata(_REF, _REF)), "q": TableModel.parse(_adata(_QUERY, _QUERY))}
-    )
+    sdata = sd.SpatialData(tables={"r": TableModel.parse(_adata(_REF)), "q": TableModel.parse(_adata(_QUERY))})
     result = align_landmarks(sdata, landmark_key="landmarks", table_key=("r", "q"), fit="affine")
     np.testing.assert_allclose(result.transform(_QUERY), _REF, atol=1e-6)
 
 
 def test_unknown_fit_lists_available() -> None:
-    ref, query = _adata(_REF, _REF), _adata(_QUERY, _QUERY)
+    ref, query = _adata(_REF), _adata(_QUERY)
     with pytest.raises(ValueError, match="Unknown `fit='nope'`.*affine, similarity"):
         align_landmarks(ref, query, landmark_key="landmarks", fit="nope")
 
@@ -89,7 +86,7 @@ def test_unknown_fit_lists_available() -> None:
 
 
 def test_spatial_key_selects_what_moves() -> None:
-    ref, query = _adata(_REF, _REF), _adata(_QUERY, _QUERY)
+    ref, query = _adata(_REF), _adata(_QUERY)
     out = align_landmarks(
         ref, query, landmark_key="landmarks", fit="affine", spatial_key="spatial", key_added="aligned"
     )
@@ -101,19 +98,19 @@ def test_spatial_key_selects_what_moves() -> None:
 
 def test_spatial_key_is_required_for_key_added() -> None:
     """The landmarks are correspondences, so they cannot also say which array to transform."""
-    ref, query = _adata(_REF, _REF), _adata(_QUERY, _QUERY)
+    ref, query = _adata(_REF), _adata(_QUERY)
     with pytest.raises(ValueError, match="`key_added` needs `spatial_key`"):
         align_landmarks(ref, query, landmark_key="landmarks", fit="affine", key_added="aligned")
 
 
 def test_spatial_key_without_key_added_is_rejected() -> None:
-    ref, query = _adata(_REF, _REF), _adata(_QUERY, _QUERY)
+    ref, query = _adata(_REF), _adata(_QUERY)
     with pytest.raises(ValueError, match="needs `key_added` to be set"):
         align_landmarks(ref, query, landmark_key="landmarks", spatial_key="spatial")
 
 
 def test_not_inplace_leaves_original_untouched() -> None:
-    ref, query = _adata(_REF, _REF), _adata(_QUERY, _QUERY)
+    ref, query = _adata(_REF), _adata(_QUERY)
     out = align_landmarks(
         ref,
         query,
@@ -261,7 +258,7 @@ def test_table_landmarks_cannot_target_a_coordinate_system() -> None:
 
 
 def test_key_added_and_target_coordinate_system_are_exclusive() -> None:
-    ref, query = _adata(_REF, _REF), _adata(_QUERY, _QUERY)
+    ref, query = _adata(_REF), _adata(_QUERY)
     with pytest.raises(ValueError, match="mutually exclusive"):
         align_landmarks(
             ref,
@@ -274,7 +271,7 @@ def test_key_added_and_target_coordinate_system_are_exclusive() -> None:
 
 
 def test_target_coordinate_system_needs_a_spatialdata() -> None:
-    ref, query = _adata(_REF, _REF), _adata(_QUERY, _QUERY)
+    ref, query = _adata(_REF), _adata(_QUERY)
     with pytest.raises(TypeError, match="only a SpatialData has"):
         align_landmarks(ref, query, landmark_key="landmarks", target_coordinate_system="aligned")
 
@@ -291,13 +288,13 @@ def test_missing_shapes_element_lists_what_is_available() -> None:
 
 
 def test_too_few_landmarks() -> None:
-    ref, query = _adata(_REF[:2], _REF[:2]), _adata(_QUERY[:2], _QUERY[:2])
+    ref, query = _adata(_REF[:2]), _adata(_QUERY[:2])
     with pytest.raises(ValueError, match="at least 3 landmark pairs"):
         align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
 
 
 def test_length_mismatch() -> None:
-    ref, query = _adata(_REF, _REF), _adata(_QUERY[:3], _QUERY[:3])
+    ref, query = _adata(_REF), _adata(_QUERY[:3])
     with pytest.raises(ValueError, match="same shape"):
         align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
 
@@ -305,6 +302,6 @@ def test_length_mismatch() -> None:
 def test_non_finite_landmarks_rejected() -> None:
     bad = _QUERY.copy()
     bad[0, 0] = np.nan
-    ref, query = _adata(_REF, _REF), _adata(bad, bad)
+    ref, query = _adata(_REF), _adata(bad)
     with pytest.raises(ValueError, match="finite"):
         align_landmarks(ref, query, landmark_key="landmarks", fit="affine")

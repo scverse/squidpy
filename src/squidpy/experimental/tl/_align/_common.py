@@ -2,9 +2,10 @@
 
 Two small pieces every estimator family uses:
 
-* :class:`AlignResult` -- the structural :class:`~typing.Protocol` the public align
-  functions are typed against, so they stay agnostic to which estimator produced the
-  fit (``StalignResult``, ``AffineFitResult``, ...).
+* :class:`AlignResult` -- the structural :class:`~typing.Protocol` every fit satisfies,
+  so a caller can consume one without knowing which estimator produced it. The align
+  functions declare their concrete return types (``StalignResult``, ``AffineFitResult``),
+  so this is the runtime contract rather than the declared signature.
 * :func:`validate_xy` -- the ``(n, 2)`` ``(x, y)`` contract every estimator's inputs
   have to satisfy, whichever array library the estimator itself works in.
 
