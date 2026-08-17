@@ -473,35 +473,40 @@ def lddmm(
     velocity_grid: tuple[np.ndarray | jax.Array, np.ndarray | jax.Array] | None = None,
     points_source: np.ndarray | jax.Array | None = None,
     points_target: np.ndarray | jax.Array | None = None,
-    a: float = 500.0,
-    p: float = 2.0,
-    expand: float = 2.0,
-    nt: int = 3,
-    niter: int = 5000,
-    diffeo_start: int = 0,
-    epL: float = 2e-8,
-    epT: float = 2e-1,
-    epV: float = 2e3,
-    sigmaM: float = 1.0,
-    sigmaB: float = 2.0,
-    sigmaA: float = 5.0,
-    sigmaR: float = 5e5,
-    sigmaP: float = 2e1,
-    muA: np.ndarray | jax.Array | None = None,
-    muB: np.ndarray | jax.Array | None = None,
-    tol: float | None = None,
-    patience: int = 25,
+    a: float,
+    p: float,
+    expand: float,
+    nt: int,
+    niter: int,
+    diffeo_start: int,
+    epL: float,
+    epT: float,
+    epV: float,
+    sigmaM: float,
+    sigmaB: float,
+    sigmaA: float,
+    sigmaR: float,
+    sigmaP: float,
+    muA: np.ndarray | jax.Array | None,
+    muB: np.ndarray | jax.Array | None,
+    tol: float | None,
+    patience: int,
 ) -> dict[str, Any]:
     """Fit an LDDMM registration of ``I`` onto ``J`` by gradient descent.
 
     The whole descent runs as a single ``lax.while_loop``, so XLA compiles the loop body
     once and fuses across it instead of paying per-iteration dispatch from Python.
 
+    Every tuning parameter is required: the defaults live in ``_stalign._SOLVER_DEFAULTS``
+    so they exist in exactly one place, and the ``fit_stalign_*`` wrappers resolve them
+    before calling in. Only the ``initial_velocity`` / ``velocity_grid`` / ``points_*``
+    sentinels default to ``None``, which means "not supplied" rather than a tuned value.
+
     Parameters
     ----------
     tol
         Stop once the objective's relative improvement over the last ``patience``
-        iterations falls below this. ``None`` (default) always runs the full ``niter``.
+        iterations falls below this. ``None`` always runs the full ``niter``.
     patience
         Window for the ``tol`` test. Compared against ``patience`` iterations ago rather
         than the previous step because the mixture weights only move every 5th iteration,

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, Unpack
 
 import numpy.typing as npt
 
@@ -81,6 +81,54 @@ class StalignObsSolverKwargs(StalignSolverKwargs, total=False):
     dx: float
     blur: float | Sequence[float]
     raster_expand: float
+
+
+#: Shared LDDMM defaults. Every key here is forwarded to :func:`._stalign_impl._core.lddmm`,
+#: which keeps the parameter names but carries no defaults of its own -- so these values
+#: exist in exactly one place. Annotating the dict with the TypedDict makes the type
+#: checker verify every value against its key.
+_SOLVER_DEFAULTS: StalignSolverKwargs = {
+    "a": 500.0,
+    "p": 2.0,
+    "expand": 2.0,
+    "nt": 3,
+    "niter": 5000,
+    "diffeo_start": 0,
+    "epL": 2e-8,
+    "epT": 2e-1,
+    "epV": 2e3,
+    "sigmaM": 1.0,
+    "sigmaB": 2.0,
+    "sigmaA": 5.0,
+    "sigmaR": 5e5,
+    "sigmaP": 2e1,
+    "muA": None,
+    "muB": None,
+    "tol": None,
+    "patience": 25,
+}
+
+#: Point-cloud case: the shared solver defaults plus the rasterization knobs.
+_OBS_DEFAULTS: StalignObsSolverKwargs = {
+    **_SOLVER_DEFAULTS,
+    "dx": 30.0,
+    "blur": (2.0, 1.0, 0.5),
+    "raster_expand": 1.1,
+}
+
+#: Image case: a kernel width of 500 would exceed most images, and starting the
+#: diffeomorphic part halfway lets the affine settle before the velocity field can
+#: absorb what is really a translation.
+_IMAGE_DEFAULTS: StalignSolverKwargs = {
+    **_SOLVER_DEFAULTS,
+    "a": 20.0,
+    "niter": 200,
+    "diffeo_start": 100,
+    "epV": 1.0,
+}
+
+#: Consumed while rasterizing rather than forwarded to the solver.
+_RASTER_KEYS = frozenset({"dx", "blur", "raster_expand"})
 
 
 @dataclass(slots=True)
@@ -212,31 +260,7 @@ def fit_stalign_obs(
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
     initial_affine: npt.ArrayLike | None = None,
-    initial_velocity: npt.ArrayLike | None = None,
-    velocity_grid: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
-    # rasterization
-    dx: float = 30.0,
-    blur: float | Sequence[float] = (2.0, 1.0, 0.5),
-    raster_expand: float = 1.1,
-    # LDDMM registration
-    a: float = 500.0,
-    p: float = 2.0,
-    expand: float = 2.0,
-    nt: int = 3,
-    niter: int = 5000,
-    diffeo_start: int = 0,
-    epL: float = 2e-8,
-    epT: float = 2e-1,
-    epV: float = 2e3,
-    sigmaM: float = 1.0,
-    sigmaB: float = 2.0,
-    sigmaA: float = 5.0,
-    sigmaR: float = 5e5,
-    sigmaP: float = 2e1,
-    muA: npt.ArrayLike | None = None,
-    muB: npt.ArrayLike | None = None,
-    tol: float | None = None,
-    patience: int = 25,
+    **solver_kwargs: Unpack[StalignObsSolverKwargs],
 ) -> StalignResult:
     """Fit a deformation mapping ``query`` onto ``ref``.
 
@@ -253,29 +277,9 @@ def fit_stalign_obs(
     initial_affine
         Optional homogeneous ``(3, 3)`` affine in public ``(x, y)`` coordinates.
         Mutually exclusive with landmark initialisation.
-    initial_velocity, velocity_grid
-        Optional continuation state. The velocity has shape ``(nt, rows, columns, 2)``;
-        its components and the two grid axes use the solver's row-column convention.
-    dx, blur, raster_expand
-        Rasterization of the point clouds into density images: grid spacing,
-        Gaussian blur scale(s), and field-of-view padding factor.
-    a, p, expand, nt, niter, diffeo_start
-        LDDMM controls: kernel width ``a``, regularisation power ``p``,
-        velocity-grid padding ``expand``, number of integration time steps
-        ``nt``, iterations ``niter``, and the iteration at which the
-        diffeomorphic (non-affine) part starts updating ``diffeo_start``.
-    epL, epT, epV
-        Gradient-descent step sizes for the linear part, translation, and
-        velocity field.
-    sigmaM, sigmaB, sigmaA, sigmaR, sigmaP
-        Noise scales for the matching, background, artifact, regularisation, and
-        landmark-point terms of the objective.
-    muA, muB
-        Optional per-channel artifact and background means. ``None`` estimates the
-        corresponding mean during fitting, matching upstream STalign's default.
-    tol, patience
-        Stop once the objective's relative improvement over the last ``patience``
-        iterations falls below ``tol``. ``tol=None`` (default) always runs ``niter``.
+    solver_kwargs
+        Rasterization and LDDMM solver tuning; see
+        :class:`StalignObsSolverKwargs` for the accepted keys and their meaning.
 
     Returns
     -------
@@ -307,11 +311,14 @@ def fit_stalign_obs(
     if initial_affine is not None and landmarks_ref is not None:
         raise ValueError("`initial_affine` is mutually exclusive with landmark initialisation.")
 
+    opts = _OBS_DEFAULTS | solver_kwargs
+
     # The solver runs internally in row-col (y, x); inputs are (x, y) -- swap at the boundary.
     source_rc = validate_points(query, name="query")[:, ::-1]
     target_rc = validate_points(ref, name="ref")[:, ::-1]
-    source_grid, source_image = rasterize_cloud(source_rc, dx=dx, blur=blur, expand=raster_expand)
-    target_grid, target_image = rasterize_cloud(target_rc, dx=dx, blur=blur, expand=raster_expand)
+    raster = {"dx": opts["dx"], "blur": opts["blur"], "expand": opts["raster_expand"]}
+    source_grid, source_image = rasterize_cloud(source_rc, **raster)
+    target_grid, target_image = rasterize_cloud(target_rc, **raster)
 
     dtype = jax_dtype()
     if initial_affine is not None:
@@ -338,28 +345,9 @@ def fit_stalign_obs(
         target_image,
         L=linear,
         T=translation,
-        initial_velocity=initial_velocity,
-        velocity_grid=velocity_grid,
         points_source=src_lm,
         points_target=tgt_lm,
-        a=a,
-        p=p,
-        expand=expand,
-        nt=nt,
-        niter=niter,
-        diffeo_start=diffeo_start,
-        epL=epL,
-        epT=epT,
-        epV=epV,
-        sigmaM=sigmaM,
-        sigmaB=sigmaB,
-        sigmaA=sigmaA,
-        sigmaR=sigmaR,
-        sigmaP=sigmaP,
-        muA=muA,
-        muB=muB,
-        tol=tol,
-        patience=patience,
+        **{key: value for key, value in opts.items() if key not in _RASTER_KEYS},
     )
     aligned_rc = transform_points_row_col(result["xv"], result["v"], result["A"], source_rc, direction="forward")
     return StalignResult(
@@ -388,27 +376,7 @@ def fit_stalign_image(
     ref_axes: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
     query_axes: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
     initial_affine: npt.ArrayLike | None = None,
-    initial_velocity: npt.ArrayLike | None = None,
-    velocity_grid: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
-    # LDDMM registration
-    a: float = 20.0,
-    p: float = 2.0,
-    expand: float = 2.0,
-    nt: int = 3,
-    niter: int = 200,
-    diffeo_start: int = 100,
-    epL: float = 2e-8,
-    epT: float = 2e-1,
-    epV: float = 1.0,
-    sigmaM: float = 1.0,
-    sigmaB: float = 2.0,
-    sigmaA: float = 5.0,
-    sigmaR: float = 5e5,
-    sigmaP: float = 2e1,
-    muA: npt.ArrayLike | None = None,
-    muB: npt.ArrayLike | None = None,
-    tol: float | None = None,
-    patience: int = 25,
+    **solver_kwargs: Unpack[StalignSolverKwargs],
 ) -> StalignResult:
     """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
 
@@ -426,29 +394,17 @@ def fit_stalign_image(
         they are mutually exclusive with non-unit ``ref_scale``/``query_scale``.
     initial_affine
         Optional homogeneous ``(3, 3)`` affine in public ``(x, y)`` coordinates.
-    initial_velocity, velocity_grid
-        Optional continuation state in the solver's row-column convention.
-    a, p, expand, nt, niter, diffeo_start
-        LDDMM controls, as in :func:`fit_stalign_obs`. Note ``a`` is a length in the *same*
-        units as ``ref_scale`` -- the default of 20 suits pixel units, where
-        :func:`fit_stalign_obs`'s 500 would exceed most images. ``diffeo_start`` defaults to
-        half of ``niter`` so the affine settles before the deformable part switches on;
-        starting both at once lets the velocity field absorb what is really a
-        translation, and it fits it worse than the affine would have.
-    epL, epT, epV
-        Gradient-descent step sizes for the linear part, translation, and velocity field.
-        These are **scale dependent**: they are tuned here for images in pixel units, so
-        a non-unit ``ref_scale`` will need them rescaled to match. ``epV`` is the one to
-        reach for first -- too large and the deformation overwhelms the affine.
-    sigmaM, sigmaB, sigmaA, sigmaR, sigmaP
-        Noise scales for the matching, background, artifact, regularisation, and
-        landmark-point terms of the objective.
-    muA, muB
-        Optional per-channel artifact and background means. ``None`` estimates the
-        corresponding mean during fitting, matching upstream STalign's default.
-    tol, patience
-        Stop once the objective's relative improvement over the last ``patience``
-        iterations falls below ``tol``. ``tol=None`` (default) always runs ``niter``.
+    solver_kwargs
+        LDDMM solver tuning; see :class:`StalignSolverKwargs` for the accepted keys.
+        The image defaults differ from :func:`fit_stalign_obs`'s in four places: ``a``
+        is a length in the same units as ``ref_scale``, so 20 suits pixel units where
+        the point-cloud default of 500 would exceed most images; ``diffeo_start`` sits
+        at half of ``niter`` so the affine settles before the deformable part switches
+        on, since starting both at once lets the velocity field absorb what is really a
+        translation and fit it worse than the affine would have. ``epL``, ``epT`` and
+        ``epV`` are **scale dependent** -- tuned here for pixel units, so a non-unit
+        ``ref_scale`` needs them rescaled. ``epV`` is the one to reach for first: too
+        large and the deformation overwhelms the affine.
 
     Returns
     -------
@@ -526,26 +482,7 @@ def fit_stalign_image(
         target_image,
         L=linear,
         T=translation,
-        initial_velocity=initial_velocity,
-        velocity_grid=velocity_grid,
-        a=a,
-        p=p,
-        expand=expand,
-        nt=nt,
-        niter=niter,
-        diffeo_start=diffeo_start,
-        epL=epL,
-        epT=epT,
-        epV=epV,
-        sigmaM=sigmaM,
-        sigmaB=sigmaB,
-        sigmaA=sigmaA,
-        sigmaR=sigmaR,
-        sigmaP=sigmaP,
-        muA=muA,
-        muB=muB,
-        tol=tol,
-        patience=patience,
+        **(_IMAGE_DEFAULTS | solver_kwargs),
     )
     return StalignResult(
         affine=result["A"],

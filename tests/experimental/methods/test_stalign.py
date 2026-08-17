@@ -133,17 +133,19 @@ def test_lddmm_accepts_zero_iterations() -> None:
     ``energy`` and the transformed landmarks used to be bound only inside the loop, so
     the return statement read unbound locals.
     """
+    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
     from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
     from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
 
     grid = rasterize_cloud(_points_xy()[:, ::-1], dx=0.5, blur=1.0, expand=1.1)
-    result = lddmm(*grid, *grid, L=np.eye(2), T=np.zeros(2), niter=0, a=1.0, nt=1)
+    result = lddmm(*grid, *grid, L=np.eye(2), T=np.zeros(2), **{**_SOLVER_DEFAULTS, "niter": 0, "a": 1.0, "nt": 1})
 
     assert result["v"].shape[0] == 1
     assert result["A"].shape == (3, 3)
 
 
 def test_lddmm_accepts_fixed_mixture_means() -> None:
+    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
     from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
     from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
 
@@ -156,23 +158,26 @@ def test_lddmm_accepts_fixed_mixture_means() -> None:
         rgb,
         L=np.eye(2),
         T=np.zeros(2),
-        niter=1,
-        a=1.0,
-        nt=1,
-        muA=np.ones(3),
-        muB=np.zeros(3),
+        **{**_SOLVER_DEFAULTS, "niter": 1, "a": 1.0, "nt": 1, "muA": np.ones(3), "muB": np.zeros(3)},
     )
 
     assert np.all(np.isfinite(np.asarray(result["A"])))
 
 
 def test_lddmm_rejects_wrong_mixture_mean_shape() -> None:
+    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
     from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
     from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
 
     grid = rasterize_cloud(_points_xy()[:, ::-1], dx=0.5, blur=1.0, expand=1.1)
     with pytest.raises(ValueError, match=r"Expected `muA` to have shape \(1,\)"):
-        lddmm(*grid, *grid, L=np.eye(2), T=np.zeros(2), niter=0, a=1.0, nt=1, muA=np.ones(3))
+        lddmm(
+            *grid,
+            *grid,
+            L=np.eye(2),
+            T=np.zeros(2),
+            **{**_SOLVER_DEFAULTS, "niter": 0, "a": 1.0, "nt": 1, "muA": np.ones(3)},
+        )
 
 
 def test_default_dtype_is_unchanged() -> None:
@@ -209,6 +214,7 @@ def _blobs(seed: int = 0) -> np.ndarray:
 
 
 def _solve_grids():
+    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
     from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
 
     ref = _blobs()
@@ -216,7 +222,9 @@ def _solve_grids():
     source = rasterize_cloud(query[:, ::-1], dx=_SOLVE["dx"], blur=_SOLVE["blur"], expand=1.1)
     target = rasterize_cloud(ref[:, ::-1], dx=_SOLVE["dx"], blur=_SOLVE["blur"], expand=1.1)
     solve = {k: v for k, v in _SOLVE.items() if k not in {"dx", "blur"}}
-    return source, target, {"L": np.eye(2), "T": np.zeros(2), **solve}
+    # `lddmm` carries no defaults of its own -- splatting `_SOLVER_DEFAULTS` in is also
+    # the check that the shipped defaults still satisfy the solver's signature.
+    return source, target, {**_SOLVER_DEFAULTS, "L": np.eye(2), "T": np.zeros(2), **solve}
 
 
 def test_lddmm_returns_an_energy_trace() -> None:
@@ -224,7 +232,7 @@ def test_lddmm_returns_an_energy_trace() -> None:
     from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
 
     source, target, common = _solve_grids()
-    result = lddmm(*source, *target, niter=30, **common)
+    result = lddmm(*source, *target, **(common | {"niter": 30}))
 
     assert result["energies"].shape == (30,)
     assert int(result["n_iter"]) == 30
@@ -234,12 +242,15 @@ def test_lddmm_returns_an_energy_trace() -> None:
 
 
 def test_early_stopping_is_off_by_default() -> None:
-    """``tol=None`` must run every iteration, so the default is bit-for-bit unchanged."""
+    """The shipped default must leave early stopping off and run every iteration."""
+    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
     from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
 
+    assert _SOLVER_DEFAULTS["tol"] is None, "the shipped default must not enable early stopping"
+
     source, target, common = _solve_grids()
-    plain = lddmm(*source, *target, niter=40, **common)
-    explicit = lddmm(*source, *target, niter=40, tol=None, **common)
+    plain = lddmm(*source, *target, **(common | {"niter": 40}))
+    explicit = lddmm(*source, *target, **(common | {"niter": 40, "tol": None}))
 
     assert int(plain["n_iter"]) == 40
     np.testing.assert_array_equal(np.asarray(plain["v"]), np.asarray(explicit["v"]))
@@ -255,7 +266,7 @@ def test_early_stopping_never_fires_before_the_weights_switch_on() -> None:
 
     source, target, common = _solve_grids()
     # A tolerance so loose it would stop at the first opportunity.
-    result = lddmm(*source, *target, niter=400, tol=1e9, patience=25, **common)
+    result = lddmm(*source, *target, **(common | {"niter": 400, "tol": 1e9, "patience": 25}))
 
     assert int(result["n_iter"]) >= MIXTURE_E_STEP_START + 2 + 25
     trace = np.asarray(result["energies"])
@@ -270,7 +281,7 @@ def test_early_stopping_shortens_the_run() -> None:
     source, target, common = _solve_grids()
     # Loose enough to fire on this fixture but not at the first opportunity: it stops
     # around iteration 157 of 400, whereas tol=1e-2 keeps improving through all 400.
-    stopped = lddmm(*source, *target, niter=400, tol=1e-1, patience=25, **common)
+    stopped = lddmm(*source, *target, **(common | {"niter": 400, "tol": 1e-1, "patience": 25}))
 
     ran = int(stopped["n_iter"])
     assert 77 < ran < 400
@@ -281,6 +292,7 @@ def test_early_stopping_shortens_the_run() -> None:
 
 def test_lddmm_energy_decreases() -> None:
     """More iterations must buy a lower objective. Catches a broken gradient or step."""
+    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
     from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
     from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
 
@@ -291,9 +303,9 @@ def test_lddmm_energy_decreases() -> None:
     target = rasterize_cloud(ref[:, ::-1], dx=_SOLVE["dx"], blur=_SOLVE["blur"], expand=1.1)
     solve = {k: v for k, v in _SOLVE.items() if k not in {"dx", "blur"}}
 
-    common = {"L": np.eye(2), "T": np.zeros(2), **solve}
-    first = lddmm(*source, *target, niter=1, **common)["E"]
-    later = lddmm(*source, *target, niter=60, **common)["E"]
+    common = {**_SOLVER_DEFAULTS, "L": np.eye(2), "T": np.zeros(2), **solve}
+    first = lddmm(*source, *target, **(common | {"niter": 1}))["E"]
+    later = lddmm(*source, *target, **(common | {"niter": 60}))["E"]
 
     assert float(later) < float(first), f"energy did not decrease: {float(first)} -> {float(later)}"
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import jax.numpy as jnp
@@ -25,7 +26,7 @@ __all__ = [
 
 
 def rasterize_cloud(
-    points_rc: JaxArray, *, dx: float, blur: float | list[float], expand: float
+    points_rc: JaxArray, *, dx: float, blur: float | Sequence[float], expand: float
 ) -> tuple[tuple[JaxArray, JaxArray], JaxArray]:
     """Rasterize a row-col cloud into a ``((grid_y, grid_x), image)`` density."""
     grid_x, grid_y, image = rasterize(points_rc[:, 1], points_rc[:, 0], dx=dx, blur=blur, expand=expand)
@@ -58,9 +59,9 @@ def rasterize(
     x: np.ndarray,
     y: np.ndarray,
     *,
-    dx: float = 30.0,
-    blur: float | list[float] = 1.0,
-    expand: float = 1.1,
+    dx: float,
+    blur: float | Sequence[float],
+    expand: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rasterize a point cloud into a multi-scale Gaussian density image.
 
