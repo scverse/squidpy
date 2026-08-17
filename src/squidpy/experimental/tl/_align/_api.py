@@ -146,6 +146,14 @@ def _query_of(
     return data_ref
 
 
+def check_inplace(inplace: bool, *targets: str | None, names: str) -> None:
+    if inplace and all(target is None for target in targets):
+        raise ValueError(
+            f"`inplace=True` has nothing to write: pass {names} to say what to write. "
+            f"Without it the fit is returned and nothing is modified."
+        )
+
+
 def align_stalign_obs(
     data_ref: AnnData | SpatialData,
     data_query: AnnData | SpatialData | None = None,
@@ -179,8 +187,8 @@ def align_stalign_obs(
         expensive and usually worth inspecting before it overwrites anything.
     inplace
         Whether to write into the query container itself. ``False`` (default) writes
-        into a copy and returns it, leaving the input untouched. Ignored when
-        ``key_added`` is ``None``.
+        into a copy and returns it, leaving the input untouched. Needs ``key_added``:
+        ``inplace=True`` with nothing to write raises rather than being ignored.
     landmarks_ref, landmarks_query
         Optional paired ``(x, y)`` landmark arrays (matched by row order) used to
         initialise the affine.
@@ -195,6 +203,7 @@ def align_stalign_obs(
     ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
     ``inplace=True``.
     """
+    check_inplace(inplace, key_added, names="`key_added`")
     ref_spatial, query_spatial = _resolve_pair(spatial_key, name="spatial_key")
     ref_table, query_table = (None, None) if table_key is None else _resolve_pair(table_key, name="table_key")
     query_container = _query_of(
@@ -259,8 +268,8 @@ def align_stalign_image(
         alignment instead.
     inplace
         Whether to write into ``sdata_query`` itself. ``False`` (default) writes into a
-        copy and returns it, leaving the input untouched. Ignored when ``key_added`` is
-        ``None``.
+        copy and returns it, leaving the input untouched. Needs ``key_added``:
+        ``inplace=True`` with nothing to write raises rather than being ignored.
     ref_scale, query_scale
         Physical size of one pixel as ``(y, x)``; pass these when the two images have
         different resolutions.
@@ -278,6 +287,7 @@ def align_stalign_image(
     ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
     ``inplace=True``.
     """
+    check_inplace(inplace, key_added, names="`key_added`")
     ref_image, query_image = _resolve_pair(image_key, name="image_key")
     query_container = _query_of(
         sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
@@ -354,8 +364,9 @@ def align_landmarks(
         the same coordinate system of the same object (it would be dragged along).
     inplace
         Whether to write into the query container itself. ``False`` (default) writes
-        into a copy and returns it, leaving the input untouched. Ignored when neither
-        ``key_added`` nor ``target_coordinate_system`` is given.
+        into a copy and returns it, leaving the input untouched. Needs one of
+        ``key_added`` or ``target_coordinate_system``: ``inplace=True`` with nothing to
+        write raises rather than being ignored.
 
     Returns
     -------
@@ -363,6 +374,7 @@ def align_landmarks(
     when neither ``key_added`` nor ``target_coordinate_system`` is given; otherwise
     the modified copy, or ``None`` when ``inplace=True``.
     """
+    check_inplace(inplace, key_added, target_coordinate_system, names="`key_added` or `target_coordinate_system`")
     if fit not in {"similarity", "affine"}:
         raise ValueError(f"Unknown `fit={fit!r}`. Expected one of affine, similarity.")
     fit_fn = fit_similarity if fit == "similarity" else fit_affine

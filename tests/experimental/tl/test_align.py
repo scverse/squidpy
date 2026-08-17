@@ -90,6 +90,17 @@ def test_inplace_writes_into_the_query_and_returns_none() -> None:
     assert query.obsm["aligned"].shape == query.obsm["spatial"].shape
 
 
+def test_inplace_without_key_added_is_rejected() -> None:
+    """`inplace=True` is always explicit now, so nowhere to write is a mistake, not a no-op."""
+    with pytest.raises(ValueError, match=r"`inplace=True` has nothing to write"):
+        align_stalign_obs(_adata(), _adata(), inplace=True, **_TINY)
+
+
+def test_inplace_without_key_added_is_rejected_for_images() -> None:
+    with pytest.raises(ValueError, match=r"`inplace=True` has nothing to write"):
+        align_stalign_image(_sdata_images(), image_key=("ref", "query"), inplace=True, **_TINY_IMAGE)
+
+
 def test_key_added_may_overwrite_spatial_key() -> None:
     """``key_added`` equal to ``spatial_key`` is allowed -- destructive, but explicitly asked for."""
     ref, query = _adata(), _adata()

@@ -109,6 +109,13 @@ def test_spatial_key_without_key_added_is_rejected() -> None:
         align_landmarks(ref, query, landmark_key="landmarks", spatial_key="spatial")
 
 
+def test_inplace_without_a_write_target_is_rejected() -> None:
+    """Neither `key_added` nor `target_coordinate_system` means there is nothing to write."""
+    ref, query = _adata(_REF), _adata(_QUERY)
+    with pytest.raises(ValueError, match=r"`inplace=True` has nothing to write"):
+        align_landmarks(ref, query, landmark_key="landmarks", inplace=True)
+
+
 def test_key_added_returns_a_copy_by_default() -> None:
     ref, query = _adata(_REF), _adata(_QUERY)
     out = align_landmarks(
