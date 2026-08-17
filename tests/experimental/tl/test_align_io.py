@@ -9,25 +9,12 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from anndata import AnnData
 
 from squidpy.experimental.methods.align_landmarks import AffineFitResult
 from squidpy.experimental.tl._align._io import shallow_copy_sdata, writeback_affine_sdata
-
-_PTS = np.array([[10.0, 1.0], [12.0, 1.0], [11.0, 2.0], [10.0, 3.0], [12.0, 3.0]])
-
-
-def _adata(coords: np.ndarray = _PTS, *, key: str = "spatial") -> AnnData:
-    adata = AnnData(np.zeros((coords.shape[0], 1)))
-    adata.obsm[key] = coords.copy()
-    return adata
-
-
-def _sdata_tables(**tables: AnnData):
-    sd = pytest.importorskip("spatialdata")
-    from spatialdata.models import TableModel
-
-    return sd.SpatialData(tables={name: TableModel.parse(adata) for name, adata in tables.items()})
+from tests.experimental.conftest import ALIGN_PTS as _PTS
+from tests.experimental.conftest import make_adata as _adata
+from tests.experimental.conftest import make_sdata_tables as _sdata_tables
 
 
 def _sdata_points(cs: str = "qcs"):
@@ -50,7 +37,7 @@ def test_writeback_affine_inplace_registers_transform() -> None:
 
     sdata = _sdata_points()
     out = writeback_affine_sdata(
-        AffineFitResult(matrix=np.eye(3)), sdata, output_mode="inplace", moving_cs="qcs", target_cs="tcs"
+        AffineFitResult(matrix=np.eye(3)), sdata, inplace=True, moving_cs="qcs", target_cs="tcs"
     )
     assert out is None
     assert "tcs" in get_transformation(sdata.points["pts"], get_all=True)
@@ -62,7 +49,7 @@ def test_writeback_affine_copy_leaves_original_untouched() -> None:
 
     sdata = _sdata_points()
     out = writeback_affine_sdata(
-        AffineFitResult(matrix=np.eye(3)), sdata, output_mode="copy", moving_cs="qcs", target_cs="tcs"
+        AffineFitResult(matrix=np.eye(3)), sdata, inplace=False, moving_cs="qcs", target_cs="tcs"
     )
     assert out is not sdata
     assert "tcs" in get_transformation(out.points["pts"], get_all=True)
@@ -74,7 +61,7 @@ def test_writeback_affine_requires_cs_names() -> None:
     pytest.importorskip("spatialdata")
     with pytest.raises(ValueError, match="`moving_cs` and `target_cs` are required"):
         writeback_affine_sdata(
-            AffineFitResult(matrix=np.eye(3)), _sdata_points(), output_mode="inplace", moving_cs=None, target_cs="tcs"
+            AffineFitResult(matrix=np.eye(3)), _sdata_points(), inplace=True, moving_cs=None, target_cs="tcs"
         )
 
 
@@ -83,7 +70,7 @@ def test_writeback_affine_no_matching_cs() -> None:
     sdata = _sdata_points(cs="qcs")
     with pytest.raises(KeyError, match="No elements .* registered to coordinate system 'other'"):
         writeback_affine_sdata(
-            AffineFitResult(matrix=np.eye(3)), sdata, output_mode="inplace", moving_cs="other", target_cs="tcs"
+            AffineFitResult(matrix=np.eye(3)), sdata, inplace=True, moving_cs="other", target_cs="tcs"
         )
 
 

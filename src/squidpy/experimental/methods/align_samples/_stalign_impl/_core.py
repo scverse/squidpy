@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import jax.scipy as jsp
 import numpy as np
 
-__all__ = ["jax_dtype", "lddmm", "transform_points_row_col"]
+__all__ = ["jax_dtype", "lddmm", "transform_grid_row_col", "transform_points_row_col"]
 
 #: Iteration at which the mixture-weight E step switches on (STalign.py:1233). Before
 #: this the weights are frozen at their initial values, so the objective changes
@@ -101,21 +101,19 @@ def transform_points_row_col(
     return pts
 
 
-def _transform_grid_backward(
-    x_target: tuple[jax.Array, jax.Array],
+def transform_grid_row_col(
+    axes: tuple[jax.Array, jax.Array],
     xv: tuple[jax.Array, jax.Array],
     velocity: jax.Array,
     affine: jax.Array,
+    *,
+    direction: Literal["forward", "backward"] = "forward",
 ) -> jax.Array:
-    target_grid = _grid_points(x_target)
-    affine_inv = jnp.linalg.inv(affine)
-    source_grid = jnp.einsum("ij,jhw->ihw", affine_inv[:2, :2], target_grid) + affine_inv[:2, -1][:, None, None]
-
-    for t in range(velocity.shape[0] - 1, -1, -1):
-        disp = _interp(xv, jnp.moveaxis(-velocity[t], -1, 0), source_grid, mode="nearest")
-        source_grid = source_grid + disp / velocity.shape[0]
-
-    return source_grid
+    """Map the dense grid spanned by ``axes``, returned as ``(2, rows, columns)``."""
+    grid = _grid_points(axes)
+    points = jnp.moveaxis(grid, 0, -1).reshape((-1, 2))
+    transformed = transform_points_row_col(xv, velocity, affine, points, direction=direction)
+    return jnp.moveaxis(transformed.reshape((*grid.shape[1:], 2)), -1, 0)
 
 
 def _contrast_transform(source_image: jax.Array, target_image: jax.Array, weights: jax.Array) -> jax.Array:
@@ -139,16 +137,19 @@ def _contrast_transform(source_image: jax.Array, target_image: jax.Array, weight
     return (coefficients.T @ design).reshape(target_image.shape)
 
 
-def _axis(start: float, stop: float, step: float) -> jax.Array:
+def _axis(start: float, stop: float, step: float) -> np.ndarray:
     """``step``-spaced samples covering ``[start, stop)``, with a stable length.
 
-    ``jnp.arange(start, stop, step)`` on floats derives its length from the arguments by
+    ``arange(start, stop, step)`` on floats derives its length from the arguments by
     floating-point division, so a ``stop`` that is itself a sum of floats can yield one
     more or one fewer sample than intended. Taking the count first makes the length a
     function of the interval alone.
+
+    NumPy rather than JAX so the point-cloud rasterizer in ``._helpers`` can share it;
+    the one JAX caller casts on the way out.
     """
     count = max(int(np.ceil((stop - start) / step)), 1)
-    return start + step * jnp.arange(count, dtype=jax_dtype())
+    return start + step * np.arange(count, dtype=float)
 
 
 def _build_velocity_grid(
@@ -159,9 +160,10 @@ def _build_velocity_grid(
     center = (minimum + maximum) / 2.0
     half_width = (maximum - minimum) * expand / 2.0
     step = a * 0.5
+    dtype = jax_dtype()
     return (
-        _axis(center[0] - half_width[0], center[0] + half_width[0], step),
-        _axis(center[1] - half_width[1], center[1] + half_width[1], step),
+        jnp.asarray(_axis(center[0] - half_width[0], center[0] + half_width[0], step), dtype=dtype),
+        jnp.asarray(_axis(center[1] - half_width[1], center[1] + half_width[1], step), dtype=dtype),
     )
 
 
@@ -259,7 +261,7 @@ def _lddmm_loss(
     sigmaP: float,
 ) -> tuple[jax.Array, tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]]:
     affine = _to_affine(linear, translation)
-    source_grid = _transform_grid_backward(x_target, xv, velocity, affine)
+    source_grid = transform_grid_row_col(x_target, xv, velocity, affine, direction="backward")
     warped_source = _interp(x_source, source_image, source_grid, mode="nearest")
     contrast_source = _contrast_transform(warped_source, target_image, match_weights)
 

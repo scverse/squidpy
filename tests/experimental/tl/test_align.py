@@ -14,24 +14,11 @@ pytest.importorskip("jax")
 
 from squidpy.experimental.methods.align_samples import StalignResult
 from squidpy.experimental.tl import align_stalign_image, align_stalign_obs
+from tests.experimental.conftest import TINY_SOLVER as _TINY
+from tests.experimental.conftest import make_adata as _adata
+from tests.experimental.conftest import make_sdata_tables as _sdata_tables
 
-# Flat solver kwargs -- smallest possible solve.
-_TINY = {"dx": 0.5, "blur": 1.0, "a": 1.0, "expand": 1.0, "nt": 1, "niter": 1, "epV": 1.0}
 _TINY_IMAGE = {"a": 4.0, "nt": 1, "niter": 1, "epV": 1.0}
-
-
-def _adata(*, key: str = "spatial") -> AnnData:
-    pts = np.array([[10.0, 1.0], [12.0, 1.0], [11.0, 2.0], [10.0, 3.0], [12.0, 3.0]])
-    adata = AnnData(np.zeros((pts.shape[0], 1)))
-    adata.obsm[key] = pts
-    return adata
-
-
-def _sdata_tables(**tables: AnnData):
-    sd = pytest.importorskip("spatialdata")
-    from spatialdata.models import TableModel
-
-    return sd.SpatialData(tables={name: TableModel.parse(adata) for name, adata in tables.items()})
 
 
 def _sdata_images():

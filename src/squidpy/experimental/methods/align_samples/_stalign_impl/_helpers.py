@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING, Any
 import jax.numpy as jnp
 import numpy as np
 
-from ._core import jax_dtype
+from squidpy.experimental.methods._common import validate_xy
+
+from ._core import _axis, jax_dtype
 
 if TYPE_CHECKING:
     import jax
@@ -19,6 +21,8 @@ else:  # pragma: no cover - typing only
 
 __all__ = [
     "affine_from_points",
+    "affine_xy_to_rc",
+    "as_chw",
     "rasterize",
     "rasterize_cloud",
     "validate_points",
@@ -35,24 +39,36 @@ def rasterize_cloud(
 
 def validate_points(points: Any, *, name: str) -> JaxArray:
     """Coerce ``points`` to a finite ``(n, 2)`` JAX array."""
-    arr = jnp.asarray(points, dtype=jax_dtype())
-    if arr.ndim != 2 or arr.shape[1] != 2:
-        raise ValueError(f"Expected `{name}` to have shape `(n, 2)`, found `{arr.shape}`.")
-    if not bool(jnp.all(jnp.isfinite(arr))):
-        raise ValueError(f"Expected `{name}` to contain only finite values.")
+    return jnp.asarray(validate_xy(points, name=name), dtype=jax_dtype())
+
+
+def as_chw(image: Any, *, name: str) -> JaxArray:
+    """Coerce an image to channels-first ``(c, y, x)``, promoting a bare ``(y, x)``.
+
+    Not :func:`jnp.atleast_3d`: it appends the new axis, turning a ``(y, x)`` image into
+    ``(y, x, 1)`` -- y channels of x by 1 -- instead of a single ``(1, y, x)`` channel.
+    """
+    arr = jnp.asarray(image, dtype=jax_dtype())
+    if arr.ndim == 2:
+        return arr[None]
+    if arr.ndim != 3:
+        raise ValueError(f"Expected `{name}` to be a `(y, x)` or `(c, y, x)` image, found shape {arr.shape}.")
     return arr
 
 
-def _axis(start: float, stop: float, step: float) -> np.ndarray:
-    """``step``-spaced samples covering ``[start, stop)``, with a stable length.
+def affine_xy_to_rc(matrix: Any, *, name: str = "initial_affine") -> tuple[JaxArray, JaxArray]:
+    """Split a homogeneous ``(3, 3)`` ``(x, y)`` affine into row-col ``(linear, translation)``.
 
-    ``np.arange`` on floats derives its length from the arguments by floating-point
-    division, so a ``stop`` that is itself a sum of floats can yield one more or one
-    fewer sample than intended. Taking the count first makes the length a function of
-    the interval alone.
+    The solver works in row-col; conjugating by the axis swap converts the caller's
+    ``(x, y)`` convention without them having to think in the solver's.
     """
-    count = max(int(np.ceil((stop - start) / step)), 1)
-    return start + step * np.arange(count, dtype=float)
+    dtype = jax_dtype()
+    affine_xy = jnp.asarray(matrix, dtype=dtype)
+    if affine_xy.shape != (3, 3):
+        raise ValueError(f"Expected `{name}` to have shape (3, 3), found {affine_xy.shape}.")
+    swap = jnp.asarray([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=dtype)
+    affine_rc = swap @ affine_xy @ swap
+    return affine_rc[:2, :2], affine_rc[:2, 2]
 
 
 def rasterize(

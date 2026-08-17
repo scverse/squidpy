@@ -19,7 +19,7 @@ pytest.importorskip("jax")
 from squidpy.experimental.methods.align_samples import StalignResult, fit_stalign_image, fit_stalign_obs
 
 # Flat solver kwargs (assembled into the config internally) -- smallest possible solve.
-_TINY = {"dx": 0.5, "blur": 1.0, "a": 1.0, "expand": 1.0, "nt": 1, "niter": 1, "epV": 1.0}
+from tests.experimental.conftest import TINY_SOLVER as _TINY
 
 
 def _points_xy() -> np.ndarray:
@@ -117,7 +117,7 @@ def test_stalign_image_accepts_explicit_axes_and_warps_both_directions() -> None
 
 
 def test_stalign_fit_rejects_non_2d_input() -> None:
-    with pytest.raises(ValueError, match=r"Expected `query` to have shape `\(n, 2\)`"):
+    with pytest.raises(ValueError, match=r"Expected `query` to be a sequence of \(x, y\) pairs"):
         fit_stalign_obs(_points_xy(), np.zeros((5, 3)), **_TINY)
 
 

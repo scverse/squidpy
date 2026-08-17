@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import numpy.typing as npt
 
 from squidpy._utils import NDArrayA
+from squidpy.experimental.methods._common import validate_xy
 
 
 @dataclass
@@ -33,29 +33,36 @@ class AffineFitResult:
         return coords @ self.matrix[:2, :2].T + self.matrix[:2, 2]
 
 
-def _fit_landmark_relation(
+def _fit(
     ref: np.ndarray,
     query: np.ndarray,
     *,
-    method: str,
-    solve_fn: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    source_cs: str | None = None,
-    target_cs: str | None = None,
+    method: Literal["similarity", "affine"],
+    source_cs: str | None,
+    target_cs: str | None,
 ) -> AffineFitResult:
-    ref = _validate_landmarks(ref, name="ref")
-    query = _validate_landmarks(query, name="query")
+    ref = validate_xy(ref, name="ref")
+    query = validate_xy(query, name="query")
     if ref.shape != query.shape:
         raise ValueError(f"`ref` and `query` must have the same shape; got {ref.shape} and {query.shape}.")
     if ref.shape[0] < 3:
         raise ValueError(f"`{method}` needs at least 3 landmark pairs, got {ref.shape[0]}.")
 
-    matrix = solve_fn(ref, query)
-    return AffineFitResult(
-        matrix=matrix,
-        source_cs=source_cs,
-        target_cs=target_cs,
-        metadata={"method": method},
-    )
+    if method == "similarity":
+        # spatialdata solves the 4-DOF case; skimage's "similarity" would do too, but
+        # this is the transform napari-spatialdata registers, so it matches interactively.
+        from spatialdata.models import PointsModel
+        from spatialdata.transformations import get_transformation_between_landmarks
+
+        matrix = _extract_affine_matrix(
+            get_transformation_between_landmarks(PointsModel.parse(ref), PointsModel.parse(query))
+        )
+    else:
+        from skimage.transform import estimate_transform
+
+        matrix = np.asarray(estimate_transform("affine", src=query, dst=ref).params)
+
+    return AffineFitResult(matrix=matrix, source_cs=source_cs, target_cs=target_cs, metadata={"method": method})
 
 
 def fit_similarity(
@@ -75,14 +82,7 @@ def fit_similarity(
         Optional coordinate-system labels stamped onto the result for
         traceability; they do not affect the fit.
     """
-    return _fit_landmark_relation(
-        ref,
-        query,
-        method="similarity",
-        solve_fn=_fit_similarity,
-        source_cs=source_cs,
-        target_cs=target_cs,
-    )
+    return _fit(ref, query, method="similarity", source_cs=source_cs, target_cs=target_cs)
 
 
 def fit_affine(
@@ -102,42 +102,7 @@ def fit_affine(
         Optional coordinate-system labels stamped onto the result for
         traceability; they do not affect the fit.
     """
-    return _fit_landmark_relation(
-        ref,
-        query,
-        method="affine",
-        solve_fn=_fit_affine,
-        source_cs=source_cs,
-        target_cs=target_cs,
-    )
-
-
-def _validate_landmarks(points: np.ndarray, *, name: str) -> np.ndarray:
-    arr = np.asarray(points, dtype=float)
-    if arr.ndim != 2 or arr.shape[1] != 2:
-        raise ValueError(f"`{name}` must be a sequence of (x, y) pairs, got shape {arr.shape}.")
-    if not np.all(np.isfinite(arr)):
-        raise ValueError(f"`{name}` must contain only finite values.")
-    return arr
-
-
-def _fit_similarity(ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarray:
-    """4-DOF similarity fit, delegated to spatialdata."""
-    from spatialdata.models import PointsModel
-    from spatialdata.transformations import get_transformation_between_landmarks
-
-    refs_pts = PointsModel.parse(ref_xy)
-    moving_pts = PointsModel.parse(query_xy)
-    sd_transform = get_transformation_between_landmarks(refs_pts, moving_pts)
-    return _extract_affine_matrix(sd_transform)
-
-
-def _fit_affine(ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarray:
-    """Full 6-DOF affine fit, delegated to skimage's least-squares estimator."""
-    from skimage.transform import estimate_transform
-
-    model_obj = estimate_transform("affine", src=query_xy, dst=ref_xy)
-    return np.asarray(model_obj.params)
+    return _fit(ref, query, method="affine", source_cs=source_cs, target_cs=target_cs)
 
 
 def _extract_affine_matrix(sd_transform: object) -> np.ndarray:

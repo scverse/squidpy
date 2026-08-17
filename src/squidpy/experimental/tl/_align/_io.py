@@ -26,7 +26,7 @@ def writeback_affine_sdata(
     result: AffineFitResult,
     sdata: SpatialData,
     *,
-    output_mode: str,
+    inplace: bool,
     moving_cs: str | None,
     target_cs: str | None,
 ) -> SpatialData | None:
@@ -41,7 +41,7 @@ def writeback_affine_sdata(
     if moving_cs is None or target_cs is None:
         raise ValueError("`moving_cs` and `target_cs` are required to register a transform on a SpatialData.")
 
-    out = sdata if output_mode == "inplace" else shallow_copy_sdata(sdata)
+    out = sdata if inplace else shallow_copy_sdata(sdata)
     sd_affine = Affine(np.asarray(result.matrix), input_axes=("x", "y"), output_axes=("x", "y"))
     touched = False
     for etype, name, element in list(out.gen_elements()):
@@ -49,7 +49,7 @@ def writeback_affine_sdata(
             continue
         if moving_cs not in get_transformation(element, get_all=True):
             continue
-        if output_mode == "copy":
+        if not inplace:
             # `shallow_copy_sdata` shares element objects with the original; deep-copy each
             # element we register a transform on so `copy=True` leaves the input untouched.
             element = sd_deepcopy(element)
@@ -62,7 +62,7 @@ def writeback_affine_sdata(
         touched = True
     if not touched:
         raise KeyError(f"No elements in the SpatialData are registered to coordinate system {moving_cs!r}.")
-    return None if output_mode == "inplace" else out
+    return None if inplace else out
 
 
 def shallow_copy_sdata(sdata: SpatialData) -> SpatialData:

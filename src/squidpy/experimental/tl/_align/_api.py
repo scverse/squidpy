@@ -36,12 +36,6 @@ def _resolve_pair(value: str | tuple[str | None, str | None], *, name: str) -> t
     raise ValueError(f"`{name}` must be a single key or a `(ref, query)` pair, got {value!r}.")
 
 
-def _resolve_optional_pair(
-    value: str | tuple[str | None, str | None] | None, *, name: str
-) -> tuple[str | None, str | None]:
-    return (None, None) if value is None else _resolve_pair(value, name=name)
-
-
 def _resolve_table(container: AnnData | SpatialData, table_key: str | None, *, side: str) -> AnnData:
     """Resolve a container plus ``table_key`` to the AnnData holding the data."""
     if isinstance(container, AnnData):
@@ -75,6 +69,16 @@ def _read_coords(adata: AnnData, key: str, *, side: str, name: str) -> np.ndarra
     return coords
 
 
+def _as_chw(value: npt.ArrayLike, *, what: str) -> np.ndarray:
+    """Promote a bare ``(y, x)`` array to a single-channel ``(c, y, x)``."""
+    array = np.asarray(value)
+    if array.ndim == 2:
+        array = array[None]
+    if array.ndim != 3:
+        raise ValueError(f"{what} must be a 2D or (c, y, x) image, found shape {array.shape}.")
+    return array
+
+
 def _read_image(container: SpatialData, key: str, *, side: str) -> np.ndarray:
     """Read a channels-first ``(c, y, x)`` array from a SpatialData image element."""
     if not isinstance(container, SpatialData):
@@ -88,21 +92,7 @@ def _read_image(container: SpatialData, key: str, *, side: str) -> np.ndarray:
         element = next(iter(element.values()))
         element = element[next(iter(element.data_vars))]
 
-    array = np.asarray(element.data)
-    if array.ndim == 2:
-        array = array[None]
-    if array.ndim != 3:
-        raise ValueError(f"`image_key={key!r}` must be a 2D or (c, y, x) image, found shape {array.shape}.")
-    return array
-
-
-def _write_image(sdata: SpatialData, key: str, value: np.ndarray) -> None:
-    from spatialdata.models import Image2DModel
-
-    array = np.asarray(value)
-    if array.ndim == 2:
-        array = array[None]
-    sdata.images[key] = Image2DModel.parse(array, dims=("c", "y", "x"))
+    return _as_chw(element.data, what=f"`image_key={key!r}`")
 
 
 def _copy_for_write(container: AnnData | SpatialData, table_key: str | None) -> AnnData | SpatialData:
@@ -204,7 +194,7 @@ def align_stalign_obs(
     ``None``.
     """
     ref_spatial, query_spatial = _resolve_pair(spatial_key, name="spatial_key")
-    ref_table, query_table = _resolve_optional_pair(table_key, name="table_key")
+    ref_table, query_table = (None, None) if table_key is None else _resolve_pair(table_key, name="table_key")
     query_container = _query_of(
         data_ref,
         data_query,
@@ -303,13 +293,12 @@ def align_stalign_image(
     if key_added is None:
         return result
 
+    from spatialdata.models import Image2DModel
+
     target = query_container if inplace else shallow_copy_sdata(query_container)
-    _write_image(target, key_added, np.asarray(result.warp_image(query_array)))
+    warped = _as_chw(result.warp_image(query_array), what=f"`key_added={key_added!r}`")
+    target.images[key_added] = Image2DModel.parse(warped, dims=("c", "y", "x"))
     return None if inplace else target
-
-
-#: The closed-form landmark fits `align_landmarks` dispatches between.
-_LANDMARK_FITS: dict[str, Callable[..., AffineFitResult]] = {"similarity": fit_similarity, "affine": fit_affine}
 
 
 def align_landmarks(
@@ -371,8 +360,9 @@ def align_landmarks(
     when neither ``key_added`` nor ``target_coordinate_system`` is given; the modified
     copy when ``inplace=False``; otherwise ``None``.
     """
-    if fit not in _LANDMARK_FITS:
-        raise ValueError(f"Unknown `fit={fit!r}`. Expected one of {', '.join(sorted(_LANDMARK_FITS))}.")
+    if fit not in {"similarity", "affine"}:
+        raise ValueError(f"Unknown `fit={fit!r}`. Expected one of affine, similarity.")
+    fit_fn = fit_similarity if fit == "similarity" else fit_affine
     if key_added is not None and target_coordinate_system is not None:
         raise ValueError(
             "`key_added` and `target_coordinate_system` are mutually exclusive: the first materialises "
@@ -382,7 +372,7 @@ def align_landmarks(
         raise ValueError("`spatial_key` says what `key_added` transforms, so it needs `key_added` to be set.")
 
     ref_lm_key, query_lm_key = _resolve_pair(landmark_key, name="landmark_key")
-    ref_table, query_table = _resolve_optional_pair(table_key, name="table_key")
+    ref_table, query_table = (None, None) if table_key is None else _resolve_pair(table_key, name="table_key")
     query_container = _query_of(
         data_ref,
         data_query,
@@ -396,7 +386,7 @@ def align_landmarks(
 
     if target_coordinate_system is not None:
         return _register_transformation(
-            _LANDMARK_FITS[fit],
+            fit_fn,
             ref_lm,
             query_lm,
             data_ref=data_ref,
@@ -409,7 +399,7 @@ def align_landmarks(
             inplace=inplace,
         )
 
-    result = _LANDMARK_FITS[fit](ref_lm, query_lm)
+    result = fit_fn(ref_lm, query_lm)
     if key_added is None:
         return result
     if spatial_key is None:
@@ -498,7 +488,7 @@ def _register_transformation(
     return writeback_affine_sdata(
         result,
         query_container,
-        output_mode="inplace" if inplace else "copy",
+        inplace=inplace,
         moving_cs=moving_cs,
         target_cs=target_coordinate_system,
     )

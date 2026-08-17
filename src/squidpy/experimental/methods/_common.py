@@ -17,13 +17,28 @@ import importlib.util
 from collections.abc import Callable
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
+import numpy as np
 import numpy.typing as npt
 
 from squidpy._utils import NDArrayA
 
-__all__ = ["AlignResult", "requires"]
+__all__ = ["AlignResult", "requires", "validate_xy"]
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+
+def validate_xy(points: npt.ArrayLike, *, name: str) -> NDArrayA:
+    """Coerce ``points`` to a finite ``(n, 2)`` float array of ``(x, y)`` pairs.
+
+    Shared by every estimator family: the landmark fits work in NumPy and the STalign
+    solver in JAX, but the contract they validate is the same one.
+    """
+    arr = np.asarray(points, dtype=float)
+    if arr.ndim != 2 or arr.shape[1] != 2:
+        raise ValueError(f"Expected `{name}` to be a sequence of (x, y) pairs, found shape {arr.shape}.")
+    if not np.all(np.isfinite(arr)):
+        raise ValueError(f"Expected `{name}` to contain only finite values.")
+    return arr
 
 
 @runtime_checkable

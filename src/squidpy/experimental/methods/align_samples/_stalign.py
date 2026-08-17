@@ -166,10 +166,10 @@ class StalignResult:
         ``"backward"`` evaluates the reference grid in the query frame. The returned
         array has shape ``(2, rows, columns)``.
         """
-        import jax.numpy as jnp
+        from ._stalign_impl._core import transform_grid_row_col
 
-        from ._stalign_impl._core import _grid_points, _transform_grid_backward, transform_points_row_col
-
+        if direction not in {"forward", "backward"}:
+            raise ValueError(f"Expected `direction` to be 'forward' or 'backward', found {direction!r}.")
         source_axes = query_axes if query_axes is not None else self.query_axes
         target_axes = ref_axes if ref_axes is not None else self.ref_axes
         if source_axes is None or target_axes is None:
@@ -178,17 +178,9 @@ class StalignResult:
                 "Pass both `query_axes=` and `ref_axes=`, or fit with "
                 "`align_stalign_image`."
             )
-        if direction == "backward":
-            return _transform_grid_backward(target_axes, self.velocity_grid, self.velocity, self.affine)
-        if direction != "forward":
-            raise ValueError(f"Expected `direction` to be 'forward' or 'backward', found {direction!r}.")
-
-        grid = _grid_points(source_axes)
-        points = jnp.moveaxis(grid, 0, -1).reshape((-1, 2))
-        transformed = transform_points_row_col(
-            self.velocity_grid, self.velocity, self.affine, points, direction="forward"
-        )
-        return jnp.moveaxis(transformed.reshape((*grid.shape[1:], 2)), -1, 0)
+        # Forward evaluates the query grid in the reference frame; backward the reverse.
+        axes = source_axes if direction == "forward" else target_axes
+        return transform_grid_row_col(axes, self.velocity_grid, self.velocity, self.affine, direction=direction)
 
     def warp_image(
         self,
@@ -207,13 +199,10 @@ class StalignResult:
         grid. Explicit axes allow results fitted from point clouds to warp their density
         rasters without pretending those rasters are original image elements.
         """
-        import jax.numpy as jnp
+        from ._stalign_impl._core import _interp
+        from ._stalign_impl._helpers import as_chw
 
-        from ._stalign_impl._core import _interp, jax_dtype
-
-        arr = jnp.asarray(image, dtype=jax_dtype())
-        if arr.ndim == 2:
-            arr = arr[None]
+        arr = as_chw(image, name="image")
         if direction not in {"forward", "backward"}:
             raise ValueError(f"Expected `direction` to be 'forward' or 'backward', found {direction!r}.")
         source_axes = query_axes if query_axes is not None else self.query_axes
@@ -304,7 +293,7 @@ def fit_stalign_obs(
     import jax.numpy as jnp
 
     from ._stalign_impl._core import jax_dtype, lddmm, transform_points_row_col
-    from ._stalign_impl._helpers import affine_from_points, rasterize_cloud, validate_points
+    from ._stalign_impl._helpers import affine_from_points, affine_xy_to_rc, rasterize_cloud, validate_points
 
     if (landmarks_ref is None) != (landmarks_query is None):
         raise ValueError("Expected both landmark arrays to be provided together.")
@@ -322,12 +311,7 @@ def fit_stalign_obs(
 
     dtype = jax_dtype()
     if initial_affine is not None:
-        affine_xy = jnp.asarray(initial_affine, dtype=dtype)
-        if affine_xy.shape != (3, 3):
-            raise ValueError(f"Expected `initial_affine` to have shape (3, 3), found {affine_xy.shape}.")
-        swap = jnp.asarray([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=dtype)
-        affine_rc = swap @ affine_xy @ swap
-        linear, translation = affine_rc[:2, :2], affine_rc[:2, 2]
+        linear, translation = affine_xy_to_rc(initial_affine)
         src_lm = tgt_lm = None
     elif landmarks_ref is None:
         linear, translation = jnp.eye(2, dtype=dtype), jnp.zeros(2, dtype=dtype)
@@ -415,21 +399,12 @@ def fit_stalign_image(
     import jax.numpy as jnp
 
     from ._stalign_impl._core import jax_dtype, lddmm
+    from ._stalign_impl._helpers import affine_xy_to_rc, as_chw
 
     dtype = jax_dtype()
 
-    def as_chw(image: npt.ArrayLike, name: str) -> JaxArray:
-        # Not `jnp.atleast_3d`: it appends the new axis, turning a (y, x) image into
-        # (y, x, 1) -- y channels of x by 1 -- instead of a single (1, y, x) channel.
-        arr = jnp.asarray(image, dtype=dtype)
-        if arr.ndim == 2:
-            return arr[None]
-        if arr.ndim != 3:
-            raise ValueError(f"Expected `{name}` to be a `(y, x)` or `(c, y, x)` image, found shape {arr.shape}.")
-        return arr
-
-    source_image = as_chw(query, "query")
-    target_image = as_chw(ref, "ref")
+    source_image = as_chw(query, name="query")
+    target_image = as_chw(ref, name="ref")
     if source_image.shape[0] != target_image.shape[0]:
         raise ValueError(
             f"Expected `ref` and `query` to have the same number of channels, found "
@@ -468,12 +443,7 @@ def fit_stalign_image(
     if initial_affine is None:
         linear, translation = jnp.eye(2, dtype=dtype), jnp.zeros(2, dtype=dtype)
     else:
-        affine_xy = jnp.asarray(initial_affine, dtype=dtype)
-        if affine_xy.shape != (3, 3):
-            raise ValueError(f"Expected `initial_affine` to have shape (3, 3), found {affine_xy.shape}.")
-        swap = jnp.asarray([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=dtype)
-        affine_rc = swap @ affine_xy @ swap
-        linear, translation = affine_rc[:2, :2], affine_rc[:2, 2]
+        linear, translation = affine_xy_to_rc(initial_affine)
 
     result = lddmm(
         source_grid,
