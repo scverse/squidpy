@@ -9,7 +9,8 @@ import numpy as np
 import numpy.typing as npt
 
 from squidpy._utils import NDArrayA
-from squidpy.experimental.methods._common import validate_xy
+
+from ._common import validate_xy
 
 
 @dataclass

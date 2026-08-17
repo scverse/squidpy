@@ -16,7 +16,8 @@ import pytest
 
 pytest.importorskip("jax")
 
-from squidpy.experimental.methods.align_samples import StalignResult, fit_stalign_image, fit_stalign_obs
+from squidpy.experimental.tl import StalignResult
+from squidpy.experimental.tl._align._stalign import fit_stalign_image, fit_stalign_obs
 
 # Flat solver kwargs (assembled into the config internally) -- smallest possible solve.
 from tests.experimental.conftest import TINY_SOLVER as _TINY
@@ -133,9 +134,9 @@ def test_lddmm_accepts_zero_iterations() -> None:
     ``energy`` and the transformed landmarks used to be bound only inside the loop, so
     the return statement read unbound locals.
     """
-    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
-    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
-    from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
+    from squidpy.experimental.tl._align._stalign import _SOLVER_DEFAULTS
+    from squidpy.experimental.tl._align._stalign_impl._core import lddmm
+    from squidpy.experimental.tl._align._stalign_impl._helpers import rasterize_cloud
 
     grid = rasterize_cloud(_points_xy()[:, ::-1], dx=0.5, blur=1.0, expand=1.1)
     result = lddmm(*grid, *grid, L=np.eye(2), T=np.zeros(2), **{**_SOLVER_DEFAULTS, "niter": 0, "a": 1.0, "nt": 1})
@@ -145,9 +146,9 @@ def test_lddmm_accepts_zero_iterations() -> None:
 
 
 def test_lddmm_accepts_fixed_mixture_means() -> None:
-    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
-    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
-    from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
+    from squidpy.experimental.tl._align._stalign import _SOLVER_DEFAULTS
+    from squidpy.experimental.tl._align._stalign_impl._core import lddmm
+    from squidpy.experimental.tl._align._stalign_impl._helpers import rasterize_cloud
 
     axes, image = rasterize_cloud(_points_xy()[:, ::-1], dx=0.5, blur=1.0, expand=1.1)
     rgb = np.repeat(np.asarray(image), 3, axis=0)
@@ -165,9 +166,9 @@ def test_lddmm_accepts_fixed_mixture_means() -> None:
 
 
 def test_lddmm_rejects_wrong_mixture_mean_shape() -> None:
-    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
-    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
-    from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
+    from squidpy.experimental.tl._align._stalign import _SOLVER_DEFAULTS
+    from squidpy.experimental.tl._align._stalign_impl._core import lddmm
+    from squidpy.experimental.tl._align._stalign_impl._helpers import rasterize_cloud
 
     grid = rasterize_cloud(_points_xy()[:, ::-1], dx=0.5, blur=1.0, expand=1.1)
     with pytest.raises(ValueError, match=r"Expected `muA` to have shape \(1,\)"):
@@ -190,7 +191,7 @@ def test_default_dtype_is_unchanged() -> None:
     import jax
     import jax.numpy as jnp
 
-    from squidpy.experimental.methods.align_samples._stalign_impl._core import jax_dtype
+    from squidpy.experimental.tl._align._stalign_impl._core import jax_dtype
 
     expected = jnp.float64 if jax.config.jax_enable_x64 else jnp.float32
     assert jax_dtype() == expected
@@ -214,8 +215,8 @@ def _blobs(seed: int = 0) -> np.ndarray:
 
 
 def _solve_grids():
-    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
-    from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
+    from squidpy.experimental.tl._align._stalign import _SOLVER_DEFAULTS
+    from squidpy.experimental.tl._align._stalign_impl._helpers import rasterize_cloud
 
     ref = _blobs()
     query = ref @ np.array([[np.cos(0.12), -np.sin(0.12)], [np.sin(0.12), np.cos(0.12)]]).T + np.array([6.0, -4.0])
@@ -229,7 +230,7 @@ def _solve_grids():
 
 def test_lddmm_returns_an_energy_trace() -> None:
     """Without this a caller cannot tell a converged run from a diverged one."""
-    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
+    from squidpy.experimental.tl._align._stalign_impl._core import lddmm
 
     source, target, common = _solve_grids()
     result = lddmm(*source, *target, **(common | {"niter": 30}))
@@ -243,8 +244,8 @@ def test_lddmm_returns_an_energy_trace() -> None:
 
 def test_early_stopping_is_off_by_default() -> None:
     """The shipped default must leave early stopping off and run every iteration."""
-    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
-    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
+    from squidpy.experimental.tl._align._stalign import _SOLVER_DEFAULTS
+    from squidpy.experimental.tl._align._stalign_impl._core import lddmm
 
     assert _SOLVER_DEFAULTS["tol"] is None, "the shipped default must not enable early stopping"
 
@@ -262,7 +263,7 @@ def test_early_stopping_never_fires_before_the_weights_switch_on() -> None:
     A stopping rule that compares across that boundary sees the jump as "no longer
     improving" and quits immediately, which is what a naive implementation does.
     """
-    from squidpy.experimental.methods.align_samples._stalign_impl._core import MIXTURE_E_STEP_START, lddmm
+    from squidpy.experimental.tl._align._stalign_impl._core import MIXTURE_E_STEP_START, lddmm
 
     source, target, common = _solve_grids()
     # A tolerance so loose it would stop at the first opportunity.
@@ -276,7 +277,7 @@ def test_early_stopping_never_fires_before_the_weights_switch_on() -> None:
 
 
 def test_early_stopping_shortens_the_run() -> None:
-    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
+    from squidpy.experimental.tl._align._stalign_impl._core import lddmm
 
     source, target, common = _solve_grids()
     # Loose enough to fire on this fixture but not at the first opportunity: it stops
@@ -292,9 +293,9 @@ def test_early_stopping_shortens_the_run() -> None:
 
 def test_lddmm_energy_decreases() -> None:
     """More iterations must buy a lower objective. Catches a broken gradient or step."""
-    from squidpy.experimental.methods.align_samples._stalign import _SOLVER_DEFAULTS
-    from squidpy.experimental.methods.align_samples._stalign_impl._core import lddmm
-    from squidpy.experimental.methods.align_samples._stalign_impl._helpers import rasterize_cloud
+    from squidpy.experimental.tl._align._stalign import _SOLVER_DEFAULTS
+    from squidpy.experimental.tl._align._stalign_impl._core import lddmm
+    from squidpy.experimental.tl._align._stalign_impl._helpers import rasterize_cloud
 
     ref = _blobs()
     query = ref @ np.array([[np.cos(0.12), -np.sin(0.12)], [np.sin(0.12), np.cos(0.12)]]).T + np.array([6.0, -4.0])

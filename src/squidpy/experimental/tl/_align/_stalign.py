@@ -2,7 +2,7 @@
 
 Holds the estimator adapters :func:`fit_stalign_obs` / :func:`fit_stalign_image`, their
 result type :class:`StalignResult`, and the solver-kwargs TypedDicts the public wrappers
-in :mod:`squidpy.experimental.tl` are typed against; the pure numerics live under
+in :mod:`._api` are typed against; the pure numerics live under
 :mod:`._stalign_impl`.
 """
 
@@ -13,8 +13,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, Unpack
 
 import numpy.typing as npt
-
-from squidpy.experimental.methods._common import requires
 
 if TYPE_CHECKING:
     import jax
@@ -71,7 +69,7 @@ class StalignSolverKwargs(TypedDict, total=False):
 
 
 class StalignObsSolverKwargs(StalignSolverKwargs, total=False):
-    """:class:`~squidpy.experimental.methods.StalignSolverKwargs` plus the point-cloud rasterization knobs.
+    """:class:`~squidpy.experimental.tl.StalignSolverKwargs` plus the point-cloud rasterization knobs.
 
     - ``dx`` -- grid spacing of the density rasters (default 30).
     - ``blur`` -- Gaussian blur scale(s) applied to the rasters (default (2, 1, 0.5)).
@@ -129,6 +127,8 @@ _IMAGE_DEFAULTS: StalignSolverKwargs = {
 
 #: Consumed while rasterizing rather than forwarded to the solver.
 _RASTER_KEYS = frozenset({"dx", "blur", "raster_expand"})
+
+_JAX_REQUIRED = 'STalign alignment requires JAX: `pip install "squidpy[jax]"`.'
 
 
 @dataclass(slots=True)
@@ -241,7 +241,6 @@ class StalignResult:
         return transformed_rc[:, ::-1]
 
 
-@requires("jax")
 def fit_stalign_obs(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,
@@ -287,10 +286,12 @@ def fit_stalign_obs(
 
         jax.config.update("jax_enable_x64", True)
     """
-    # Import the JAX-backed solver only after `requires` has checked the dependency,
-    # so callers without JAX get a clean ImportError rather than a confusing failure
-    # from a module-level `import jax`.
-    import jax.numpy as jnp
+    # JAX is imported here rather than at module scope so `squidpy.experimental` stays
+    # cheap to import and installable without it.
+    try:
+        import jax.numpy as jnp
+    except ImportError as e:
+        raise ImportError(_JAX_REQUIRED) from e
 
     from ._stalign_impl._core import jax_dtype, lddmm, transform_points_row_col
     from ._stalign_impl._helpers import affine_from_points, affine_xy_to_rc, rasterize_cloud, validate_points
@@ -350,7 +351,6 @@ def fit_stalign_obs(
     )
 
 
-@requires("jax")
 def fit_stalign_image(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,
@@ -396,7 +396,10 @@ def fit_stalign_image(
     in query pixel coordinates into the reference frame, and
     :meth:`~StalignResult.warp_image` resamples a query image onto the reference grid.
     """
-    import jax.numpy as jnp
+    try:
+        import jax.numpy as jnp
+    except ImportError as e:
+        raise ImportError(_JAX_REQUIRED) from e
 
     from ._stalign_impl._core import jax_dtype, lddmm
     from ._stalign_impl._helpers import affine_xy_to_rc, as_chw

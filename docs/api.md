@@ -153,8 +153,8 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
 .. autosummary::
     :toctree: api
 
-    experimental.methods.StalignResult
-    experimental.methods.AffineFitResult
+    experimental.tl.StalignResult
+    experimental.tl.AffineFitResult
 ```
 
 ```{eval-rst}
@@ -163,8 +163,8 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
     :toctree: api
     :template: typeddict.rst
 
-    experimental.methods.StalignSolverKwargs
-    experimental.methods.StalignObsSolverKwargs
+    experimental.tl.StalignSolverKwargs
+    experimental.tl.StalignObsSolverKwargs
 ```
 
 ## Experimental

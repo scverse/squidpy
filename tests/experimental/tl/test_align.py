@@ -12,8 +12,7 @@ from anndata import AnnData
 
 pytest.importorskip("jax")
 
-from squidpy.experimental.methods.align_samples import StalignResult
-from squidpy.experimental.tl import align_stalign_image, align_stalign_obs
+from squidpy.experimental.tl import StalignResult, align_stalign_image, align_stalign_obs
 from tests.experimental.conftest import TINY_SOLVER as _TINY
 from tests.experimental.conftest import make_adata as _adata
 from tests.experimental.conftest import make_sdata_tables as _sdata_tables
@@ -54,13 +53,24 @@ def test_result_satisfies_align_result_protocol() -> None:
     assert isinstance(align_stalign_obs(_adata(), _adata(), **_TINY), AlignResult)
 
 
-def test_public_surface_is_align_result_only() -> None:
+def test_alignment_types_are_reachable_from_the_public_module() -> None:
+    """Everything a caller needs to read a fit lives on `squidpy.experimental.tl`.
+
+    `AlignResult` is the method-agnostic contract; the concrete results and the
+    solver-tuning TypedDicts are here because a caller cannot use the returned fit,
+    or tune the solver, without them. Nothing is reachable only via a private path.
+    """
     import squidpy.experimental.tl as tl
 
-    # `AlignResult` is the only result type exposed; concretes stay in their home modules.
-    assert "AlignResult" in tl.__all__
-    assert not hasattr(tl, "StalignResult")
-    assert not hasattr(tl, "AffineFitResult")
+    for name in (
+        "AlignResult",
+        "StalignResult",
+        "AffineFitResult",
+        "StalignSolverKwargs",
+        "StalignObsSolverKwargs",
+    ):
+        assert name in tl.__all__, name
+        assert hasattr(tl, name), name
 
 
 # --- writing ---------------------------------------------------------------------------

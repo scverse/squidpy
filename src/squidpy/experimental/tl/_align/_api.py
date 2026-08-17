@@ -1,4 +1,4 @@
-"""The public alignment functions, built on the :mod:`squidpy.experimental.methods` core.
+"""The public alignment functions, built on the array-in / array-out estimators.
 
 Thin orchestrators, one per method: resolve the ``*_key`` arguments to in-memory arrays,
 call the estimator, write the result back. The estimators themselves never see a
@@ -13,16 +13,17 @@ import numpy as np
 from anndata import AnnData
 from spatialdata import SpatialData
 
-from squidpy.experimental.methods import fit_affine, fit_similarity, fit_stalign_image, fit_stalign_obs
-from squidpy.experimental.methods.align_samples import StalignObsSolverKwargs, StalignSolverKwargs
-from squidpy.experimental.tl._align._io import shallow_copy_sdata, writeback_affine_sdata
+from ._io import shallow_copy_sdata, writeback_affine_sdata
+from ._landmark import fit_affine, fit_similarity
+from ._stalign import StalignObsSolverKwargs, StalignSolverKwargs, fit_stalign_image, fit_stalign_obs
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     import numpy.typing as npt
 
-    from squidpy.experimental.methods import AffineFitResult, StalignResult
+    from ._landmark import AffineFitResult
+    from ._stalign import StalignResult
 
 __all__ = ["align_landmarks", "align_stalign_image", "align_stalign_obs"]
 
@@ -184,12 +185,12 @@ def align_stalign_obs(
         initialise the affine.
     solver_kwargs
         LDDMM solver tuning; see
-        :class:`~squidpy.experimental.methods.StalignObsSolverKwargs` for the accepted
+        :class:`~squidpy.experimental.tl.StalignObsSolverKwargs` for the accepted
         keys, their meaning, and their defaults.
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.methods.StalignResult` when
+    The fitted :class:`~squidpy.experimental.tl.StalignResult` when
     ``key_added`` is ``None``; the modified copy when ``inplace=False``; otherwise
     ``None``.
     """
@@ -266,12 +267,12 @@ def align_stalign_image(
         scales.
     solver_kwargs
         LDDMM solver tuning; see
-        :class:`~squidpy.experimental.methods.StalignSolverKwargs` for the accepted
+        :class:`~squidpy.experimental.tl.StalignSolverKwargs` for the accepted
         keys, their meaning, and their defaults.
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.methods.StalignResult` when
+    The fitted :class:`~squidpy.experimental.tl.StalignResult` when
     ``key_added`` is ``None``; the modified copy when ``inplace=False``; otherwise
     ``None``.
     """
@@ -356,7 +357,7 @@ def align_landmarks(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.methods.AffineFitResult`
+    The fitted :class:`~squidpy.experimental.tl.AffineFitResult`
     when neither ``key_added`` nor ``target_coordinate_system`` is given; the modified
     copy when ``inplace=False``; otherwise ``None``.
     """

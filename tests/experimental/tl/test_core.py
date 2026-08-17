@@ -6,10 +6,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-import pytest
 
-from squidpy.experimental.methods import AlignResult
-from squidpy.experimental.methods._common import requires
+from squidpy.experimental.tl import AlignResult
 
 
 @dataclass
@@ -46,31 +44,14 @@ def test_any_object_with_transform_satisfies_the_protocol() -> None:
     assert not isinstance(object(), AlignResult)
 
 
-def test_requires_passes_through_when_installed() -> None:
-    @requires("numpy")
-    def fitted(ref: np.ndarray, query: np.ndarray) -> _MeanShiftResult:
-        return fit_mean_shift(ref, query)
+def test_importing_the_estimators_does_not_import_jax() -> None:
+    """The optional dependency must stay unimported until a fit actually runs.
 
-    assert isinstance(fitted(np.ones((2, 2)), np.zeros((2, 2))), _MeanShiftResult)
+    Guards the reason the JAX imports sit inside the fit functions rather than at
+    module scope: `import squidpy` must not pay for, or require, JAX.
+    """
+    import subprocess
+    import sys
 
-
-def test_requires_raises_with_install_hint_for_missing_dependency() -> None:
-    @requires("squidpy_nonexistent_pkg_xyz")
-    def needs_ghost(ref: np.ndarray, query: np.ndarray) -> _MeanShiftResult:
-        return fit_mean_shift(ref, query)
-
-    with pytest.raises(
-        ImportError,
-        match=r"`needs_ghost` requires 'squidpy_nonexistent_pkg_xyz'.*squidpy\[squidpy_nonexistent_pkg_xyz\]",
-    ):
-        needs_ghost(np.ones((2, 2)), np.zeros((2, 2)))
-
-
-def test_requires_is_checked_at_call_time_not_import_time() -> None:
-    """Decorating must not import the dependency -- that is the whole point."""
-
-    @requires("squidpy_nonexistent_pkg_xyz")
-    def never_called() -> None:  # pragma: no cover - the assertion is that this line is reached
-        raise AssertionError
-
-    assert callable(never_called)
+    probe = "import sys; import squidpy.experimental.tl; assert 'jax' not in sys.modules"
+    subprocess.run([sys.executable, "-c", probe], check=True)

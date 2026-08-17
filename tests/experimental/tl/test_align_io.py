@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from squidpy.experimental.methods.align_landmarks import AffineFitResult
+from squidpy.experimental.tl import AffineFitResult
 from squidpy.experimental.tl._align._io import shallow_copy_sdata, writeback_affine_sdata
 from tests.experimental.conftest import ALIGN_PTS as _PTS
 from tests.experimental.conftest import make_adata as _adata

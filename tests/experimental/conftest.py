@@ -225,7 +225,7 @@ def sdata_clean() -> SpatialData:
     return make_clean_sdata()
 
 
-# Alignment fixtures, shared by tests/experimental/tl and tests/experimental/methods
+# Alignment fixtures, shared across tests/experimental/tl
 
 #: A small asymmetric point cloud: enough structure to align, small enough to be instant.
 ALIGN_PTS = np.array([[10.0, 1.0], [12.0, 1.0], [11.0, 2.0], [10.0, 3.0], [12.0, 3.0]])

@@ -8,8 +8,7 @@ from typing import TYPE_CHECKING, Any
 import jax.numpy as jnp
 import numpy as np
 
-from squidpy.experimental.methods._common import validate_xy
-
+from .._common import validate_xy
 from ._core import _axis, jax_dtype
 
 if TYPE_CHECKING:

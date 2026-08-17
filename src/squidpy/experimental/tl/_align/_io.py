@@ -4,7 +4,7 @@ Holds the one write that is *not* an array write: registering a fitted affine as
 SpatialData transformation, which changes how elements are placed rather than
 materialising anything.
 
-The fit estimators in :mod:`squidpy.experimental.methods` operate on plain arrays and
+The fit estimators in :mod:`._stalign` / :mod:`._landmark` operate on plain arrays and
 never see a container.
 """
 
@@ -17,7 +17,7 @@ from anndata import AnnData
 from spatialdata import SpatialData
 
 if TYPE_CHECKING:
-    from squidpy.experimental.methods.align_landmarks import AffineFitResult
+    from ._landmark import AffineFitResult
 
 __all__ = ["shallow_copy_sdata", "writeback_affine_sdata"]
 
