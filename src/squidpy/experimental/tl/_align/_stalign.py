@@ -125,8 +125,9 @@ _IMAGE_DEFAULTS: StalignSolverKwargs = {
     "epV": 1.0,
 }
 
-#: Consumed while rasterizing rather than forwarded to the solver.
-_RASTER_KEYS = frozenset({"dx", "blur", "raster_expand"})
+#: Keys the fit functions consume themselves rather than forwarding to the solver:
+#: the rasterization knobs, and the affine that becomes the solver's `L`/`T`.
+_CONSUMED_KEYS = frozenset({"dx", "blur", "raster_expand", "initial_affine"})
 
 _JAX_REQUIRED = 'STalign alignment requires JAX: `pip install "squidpy[jax]"`.'
 
@@ -247,7 +248,6 @@ def fit_stalign_obs(
     *,
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
-    initial_affine: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignObsSolverKwargs],
 ) -> StalignResult:
     """Fit a deformation mapping ``query`` onto ``ref``.
@@ -298,10 +298,10 @@ def fit_stalign_obs(
 
     if (landmarks_ref is None) != (landmarks_query is None):
         raise ValueError("Expected both landmark arrays to be provided together.")
+    opts = _OBS_DEFAULTS | solver_kwargs
+    initial_affine = opts.get("initial_affine")
     if initial_affine is not None and landmarks_ref is not None:
         raise ValueError("`initial_affine` is mutually exclusive with landmark initialisation.")
-
-    opts = _OBS_DEFAULTS | solver_kwargs
 
     # The solver runs internally in row-col (y, x); inputs are (x, y) -- swap at the boundary.
     source_rc = validate_points(query, name="query")[:, ::-1]
@@ -332,7 +332,7 @@ def fit_stalign_obs(
         T=translation,
         points_source=src_lm,
         points_target=tgt_lm,
-        **{key: value for key, value in opts.items() if key not in _RASTER_KEYS},
+        **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
     aligned_rc = transform_points_row_col(result["xv"], result["v"], result["A"], source_rc, direction="forward")
     return StalignResult(
@@ -359,7 +359,6 @@ def fit_stalign_image(
     query_scale: tuple[float, float] = (1.0, 1.0),
     ref_axes: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
     query_axes: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
-    initial_affine: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignSolverKwargs],
 ) -> StalignResult:
     """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
@@ -404,6 +403,8 @@ def fit_stalign_image(
     from ._stalign_impl._core import jax_dtype, lddmm
     from ._stalign_impl._helpers import affine_xy_to_rc, as_chw
 
+    opts = _IMAGE_DEFAULTS | solver_kwargs
+    initial_affine = opts.get("initial_affine")
     dtype = jax_dtype()
 
     source_image = as_chw(query, name="query")
@@ -455,7 +456,7 @@ def fit_stalign_image(
         target_image,
         L=linear,
         T=translation,
-        **(_IMAGE_DEFAULTS | solver_kwargs),
+        **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
     return StalignResult(
         affine=result["A"],
