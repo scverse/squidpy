@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from anndata import AnnData
 from pandas import Categorical, Series
 from scanpy.pp import neighbors
@@ -20,7 +21,7 @@ def test_niche_calc_nhood_dummy_adata(dummy_adata2: AnnData):
     calculate_niche(dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0)
     assert "nhood_niche_res=1.0" in dummy_adata2.obs.columns
     expected_niches = Series(
-        ["0", "2", "0", "2", "1", "0", "0", "1", "0", "1"],
+        ["0", "0", "0", "1", "2", "0", "0", "2", "1", "2"],
         index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
         name="nhood_niche_res=1.0",
     )
@@ -32,7 +33,7 @@ def test_niche_calc_utag_dummy_adata(dummy_adata2: AnnData):
     calculate_niche(dummy_adata2, flavor="utag", n_neighbors=3, resolutions=1.0)
     assert "utag_niche_res=1.0" in dummy_adata2.obs.columns
     expected_niches = Series(
-        Categorical(["1", "0", "0", "0", "1", "0", "0", "1", "1", "0"], categories=["0", "1"]),
+        Categorical(["0", "1", "1", "0", "0", "1", "1", "0", "0", "1"], categories=["0", "1"]),
         index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
         name="utag_niche_res=1.0",
     )
@@ -59,6 +60,7 @@ def test_niche_calc_cellcharter_dummy_adata(dummy_adata2: AnnData):
 
 def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
     "Check whether niche calculation using spatialleiden approach works as intended for dummy_adata2."
+    pytest.importorskip("spatialleiden")
 
     # need the latent_connectivities_key, meaning have to run the graph construction
     neighbors(dummy_adata2, n_neighbors=3, use_rep="X")
@@ -109,15 +111,15 @@ def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
 
     expected_niches = Series(
         [
+            "lib=batch1_0",
+            "lib=batch1_1",
             "lib=batch1_1",
             "lib=batch1_0",
             "lib=batch1_2",
-            "lib=batch1_0",
-            "lib=batch1_1",
-            "lib=batch2_2",
             "lib=batch2_0",
             "lib=batch2_1",
-            "lib=batch2_0",
+            "lib=batch2_2",
+            "lib=batch2_2",
             "lib=batch2_1",
         ],
         index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
@@ -130,6 +132,7 @@ def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
 
 def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData):
     "Check whether niche calculation for spatialleiden works as intended for dummy_adata2 when library_key is supplied."
+    pytest.importorskip("spatialleiden")
 
     # need the latent_connectivities_key, meaning have to run the graph construction
     neighbors(dummy_adata2, n_neighbors=3, use_rep="X")
@@ -197,7 +200,7 @@ def test_niche_calc_nhood_multipostprocessor_dummy_adata(dummy_adata2: AnnData):
     )
     assert "nhood_niche_res=1.0" in dummy_adata2.obs.columns
     expected_niches = Series(
-        ["not_a_niche", "not_a_niche", "0", "not_a_niche", "1", "0", "0", "1", "0", "1"],
+        ["not_a_niche", "not_a_niche", "0", "not_a_niche", "2", "0", "0", "2", "not_a_niche", "2"],
         index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
         name="nhood_niche_res=1.0",
     )
