@@ -12,6 +12,7 @@ never materialize the full image or label array.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -481,13 +482,28 @@ def _run_tiled(
     # LocalCluster. (dask's ProgressBar cannot observe a distributed cluster; the
     # tqdm bar in _run_on_client drives progress there.)
     if kind == "processes" and workers > 1 and n > 1:
+        import psutil  # ships with distributed
         from dask.distributed import Client, LocalCluster
 
-        with (
-            LocalCluster(n_workers=workers, threads_per_worker=1, processes=True, dashboard_address=None) as cluster,
-            Client(cluster) as client,
-        ):
-            return _run_on_client(client, specs, process_fn, scatter, desc)
+        # Under Python 3.14, distributed can leave spawned worker/nanny processes alive
+        # after teardown. An orphan that inherited this process's stdout/stderr keeps the
+        # pipe open, so a consumer waiting for EOF (e.g. CI log capture) hangs forever.
+        # Track the cluster's own children and reap any survivor as a backstop. See #1267.
+        self_proc = psutil.Process()
+        before = {c.pid for c in self_proc.children(recursive=True)}
+        cluster = LocalCluster(n_workers=workers, threads_per_worker=1, processes=True, dashboard_address=None)
+        try:
+            with Client(cluster) as client:
+                return _run_on_client(client, specs, process_fn, scatter, desc)
+        finally:
+            cluster.close()
+            # Reap any process the cluster spawned (workers, nannies, resource tracker)
+            # that outlived close(); leave the host app's pre-existing children untouched.
+            victims = [c for c in self_proc.children(recursive=True) if c.pid not in before]
+            for child in victims:
+                with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+                    child.kill()
+            psutil.wait_procs(victims, timeout=10)
 
     # Local path: reuse the shared threaded map (serial for 1 worker / 1 tile,
     # threads otherwise). Bind scatter into the closure rather than passing the
